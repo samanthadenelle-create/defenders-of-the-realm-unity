@@ -31,6 +31,34 @@
 //     plate, so the override painted dark ink on a dark grey button - a second,
 //     genuinely label-less row. Dropped: the kit owns label ink (Parchment).
 //   * TMP strings are ASCII-only (the toast bullets + em dash rendered as tofu).
+//
+// WO-884 (2026-08-06) - ONLY ONE ROW OF FIVE. Owner, live felt-test: "in settings
+// everything is missing ... only see report an issue". CAPTURED PROOF, Player.log
+// (single play session, no exception anywhere between the two lines):
+//   [Flow:UI] BuildObsidianPanel 'Help' frame=frame_core ... bodyYMin 0.075->0.378
+//             footerY 0.155->0.233 reservedYMin=0.378 panelAnchors=(0.26,0.12)-(0.74,0.88)
+//             canvasH=1035 closeBandTop=0.218
+//   [Flow:UI] HelpMenu: 5 entr(ies) stamped from HelpMenuVM (dev context=True, ...)
+// So all five rows WERE built (not data-empty, not thrown) - they were CULLED BY
+// LAYOUT. Arithmetic off those exact captured numbers:
+//   panel 0.76*1035 = 786.6 px; FrameCore declares a 0.130-tall FOOTER band this
+//   menu never fills; the kit re-seats it above the shared Close box (0.233-0.363)
+//   and floors the BODY above THAT (0.378). Body = 359.6 px, well = 330.9 px.
+//   ScrollWellRowSnap: pass 1 -> 2 whole rows; 5 > 2 so the hint band is paid for
+//   (60 px) -> pass 2 -> ONE row. Row 1 is "Report a Bug". Exactly the report.
+// THREE fixes, all here, none in the shared kit:
+//   1. FOOTER RECLAIM - this menu has no footer content, so take the dead band back:
+//      re-seat layout.body's bottom edge a fixed 20 px above the Close box (the same
+//      "the screen re-seats its own zone" idiom SettingsController uses for header).
+//   2. LANDSCAPE PANEL - 0.26-0.74 x 0.12-0.88 is a portrait window. The target
+//      surface is 2670x1200 LANDSCAPE: height is the scarce axis, width is free.
+//   3. COLUMN WRAP - a single column of five 132 px rows needs 732 px and cannot fit
+//      any panel on a 1035 px canvas (proven, not guessed). Rows now lay out in a
+//      fixed-pixel GRID that wraps to TWO columns when one column cannot seat every
+//      entry - 5 entries become 3 rows (432 px) and all of them are on screen.
+// The snap + the "showing N of M" hint STAY as the safety net (a narrower canvas can
+// still overflow); they are no longer the thing standing between the owner and her
+// menu. Row height is untouched (CanonCtaHeight) - fix layout, never shrink controls.
 // =============================================================================
 
 using System;
@@ -53,7 +81,10 @@ namespace DeNelle.HUD
 
         // ── WO-882 view state: the VM owns WHAT is listed, these own HOW it lays out ──
         private HelpMenuVM _vm;
-        private RectTransform _stack;          // the kit button column (ScrollRect content)
+        private RectTransform _stack;          // the row grid (ScrollRect content)
+        private RectTransform _wellRt;         // the masked well the grid scrolls inside
+        private RectTransform _bodyZone;       // layout.body, when the frame carries one (WO-884)
+        private UnityEngine.UI.GridLayoutGroup _grid;   // WO-884: 1 or 2 columns, fixed-px cells
         private ScrollWellRowSnap _wellSnap;   // keeps the well a whole number of rows tall
         private TMPro.TMP_Text _moreHint;      // fixed-pixel "showing N of M" band
 
@@ -68,6 +99,23 @@ namespace DeNelle.HUD
 
         /// <summary>Fixed breathing gap between the well's snapped bottom and the hint band.</summary>
         public const float HintGapPx = 8f;
+
+        // ── WO-884 footer reclaim + column wrap ──────────────────────────────────
+        /// <summary>Lower edge of the kit's ONE shared Close band, as a fraction of the panel.
+        /// Mirrors the private ElarionUiKit.DefaultCloseZone.y (ElarionUiKit.cs:296) - the box is
+        /// seated there and grown UP by CanonCtaHeight (SeatSharedCloseInside).</summary>
+        public const float CloseBandBottomFrac = 0.050f;
+
+        /// <summary>Fixed clearance in canvas px between the top of that Close box and the body's
+        /// reclaimed floor. Matches the kit's own 0.020-of-panel gap at the reference panel size.</summary>
+        public const float CloseClearPx = 20f;
+
+        /// <summary>A second column is only worth taking when each cell stays this wide in canvas
+        /// px - narrower and FitSingleLine would shrink "Grant Resources (dev)" to a squint.</summary>
+        public const float MinCellWidthPx = 260f;
+
+        /// <summary>Hard ceiling on the wrap: two columns is a menu, three is a keypad.</summary>
+        public const int MaxColumns = 2;
 
         // DEF-212 modal arbiter handle. The Help menu is a full-screen modal, so it
         // MUST route through PanelManager like every other panel — otherwise it stacks
@@ -157,11 +205,17 @@ namespace DeNelle.HUD
             if (_modal != null && _modal.canvas != null) return;
 
             // Taller modal so the action rows fit without overlap (owner 2026-07-16 "layers stacked").
+            // WO-884: widened 0.26-0.74 -> 0.18-0.82 and heightened 0.12-0.88 -> 0.08-0.92. The old
+            // window was portrait-shaped; the shipping surface is 2670x1200 LANDSCAPE, where height
+            // is the scarce axis (canvasH=1035 in the capture) and width is nearly free. This buys
+            // the well ~157 px of the ~400 px the row list needs; the footer reclaim + column wrap
+            // below buy the rest.
             _modal = ElarionUiKit.BuildObsidianModal("HelpMenuUI", "Help",
-                new Vector2(0.26f, 0.12f), new Vector2(0.74f, 0.88f), Close,
+                new Vector2(0.18f, 0.08f), new Vector2(0.82f, 0.92f), Close,
                 frameName: RpgUiCatalog.FrameCore, medallionIcon: "settings");
 
             bool bodyIsZone = _modal.chrome.layout != null && _modal.chrome.layout.body != null;
+            _bodyZone = bodyIsZone ? _modal.chrome.layout.body : null;
             var body = bodyIsZone
                 ? _modal.chrome.layout.body.transform
                 : _modal.chrome.content.transform;
@@ -188,20 +242,37 @@ namespace DeNelle.HUD
             wellRt.offsetMin = Vector2.zero;
             wellRt.offsetMax = Vector2.zero;
             wellGo.GetComponent<UnityEngine.UI.Image>().color = new Color(0f, 0f, 0f, 0.001f); // drag catcher
+            _wellRt = wellRt;
 
-            // Common spaced button column (ElarionUiKit) — guaranteed spacing + no overlap at any
-            // screen size (owner "fix in common"). Close is the chrome's ONE shared Close.
-            // The column now doubles as the ScrollRect CONTENT: re-anchor it top-stretched
-            // (pivot 0.5,1) inside the well - its insets moved onto the well above - and let a
-            // ContentSizeFitter grow it to the rows' preferred height so overflow scrolls
-            // instead of spilling into the Close band. Rows/behaviors unchanged.
-            var stack = ElarionUiKit.BuildButtonColumn(wellGo.transform);
+            // -- WO-884: the row host is a GRID, not a single column. ----------------
+            // A VerticalLayoutGroup can only ever stack ONE row per line, and a single
+            // column of five CanonCtaHeight rows needs 5*150-18 = 732 canvas px - more
+            // than any panel can offer on the captured 1035 px canvas. The grid wraps to
+            // a second column when (and only when) one column cannot seat every entry,
+            // which turns 5 rows into 3 and puts the whole menu on screen. Cell size is
+            // set in FIXED CANVAS PIXELS by LayoutColumns once the well has a resolved
+            // rect - never a fraction of the parent, so ClampMinTouch can never inflate a
+            // cell over its neighbour. It doubles as the ScrollRect CONTENT: top-stretched
+            // (pivot 0.5,1) with a ContentSizeFitter, so any residual overflow scrolls
+            // instead of spilling into the Close band.
+            var gridGo = new GameObject("ButtonGrid", typeof(RectTransform),
+                typeof(UnityEngine.UI.GridLayoutGroup), typeof(UnityEngine.UI.ContentSizeFitter));
+            gridGo.transform.SetParent(wellGo.transform, false);
+            var stack = (RectTransform)gridGo.transform;
             stack.anchorMin = new Vector2(0f, 1f);
             stack.anchorMax = new Vector2(1f, 1f);
             stack.pivot     = new Vector2(0.5f, 1f);
             stack.offsetMin = Vector2.zero;
             stack.offsetMax = Vector2.zero;
-            var stackFit = stack.gameObject.AddComponent<UnityEngine.UI.ContentSizeFitter>();
+            _grid = gridGo.GetComponent<UnityEngine.UI.GridLayoutGroup>();
+            _grid.startCorner    = UnityEngine.UI.GridLayoutGroup.Corner.UpperLeft;
+            _grid.startAxis      = UnityEngine.UI.GridLayoutGroup.Axis.Horizontal;  // reading order
+            _grid.childAlignment = TextAnchor.UpperCenter;
+            _grid.constraint     = UnityEngine.UI.GridLayoutGroup.Constraint.FixedColumnCount;
+            _grid.constraintCount = 1;                       // resolved in LayoutColumns
+            _grid.spacing        = new Vector2(RowGapPx, RowGapPx);
+            _grid.cellSize       = new Vector2(MinCellWidthPx, RowHeightPx);  // width resolved later
+            var stackFit = gridGo.GetComponent<UnityEngine.UI.ContentSizeFitter>();
             stackFit.verticalFit   = UnityEngine.UI.ContentSizeFitter.FitMode.PreferredSize;
             stackFit.horizontalFit = UnityEngine.UI.ContentSizeFitter.FitMode.Unconstrained;
 
@@ -293,7 +364,7 @@ namespace DeNelle.HUD
             for (int i = _stack.childCount - 1; i >= 0; i--)
             {
                 var child = _stack.GetChild(i).gameObject;
-                child.transform.SetParent(null, false);   // detach NOW so the VLG stops counting it
+                child.transform.SetParent(null, false);   // detach NOW so the grid stops counting it
                 // The headless UI capture builds this modal in EDIT mode, where Destroy is illegal.
                 if (Application.isPlaying) Destroy(child); else DestroyImmediate(child);
             }
@@ -312,35 +383,118 @@ namespace DeNelle.HUD
                 + _vm.IsDevContext + ", dev unlocked=" + _vm.DevUnlocked + ")");
         }
 
-        /// <summary>Snap the well to whole rows, then text-encode how much is off-screen.
-        /// Two passes: measure without a reserve, and only pay for the hint band when the
-        /// list actually overflows.</summary>
+        /// <summary>
+        /// WO-884 FOOTER RECLAIM. FrameCore declares a footer band (ZonesFor, ElarionUiKit.cs:422)
+        /// that THIS menu never fills. The kit re-seats that band above the shared Close box and
+        /// then floors the BODY above the band, which on the captured build cost 0.303 of the panel
+        /// - 238 canvas px of empty strip - and starved the row well down to a single visible row.
+        /// Take it back: drop the body's bottom edge to a FIXED clearance above the Close box.
+        ///
+        /// Runs from RefreshWell (post <c>Canvas.ForceUpdateCanvases</c>) rather than EnsureBuilt
+        /// because the panel rect reads RAW SCREEN PIXELS on the canvas's creation frame - the exact
+        /// trap the kit documents at ElarionUiKit.cs:612. Idempotent, and re-runs on rotation.
+        /// </summary>
+        private void ReclaimFooterBand()
+        {
+            if (_bodyZone == null) return;
+            var panel = _bodyZone.parent as RectTransform;
+            if (panel == null) return;
+
+            float panelPx = panel.rect.height;
+            if (panelPx <= 1f) return;                       // layout not resolved yet - try next open
+
+            // The shared Close is a fixed CanonCtaHeight box grown UP from CloseBandBottomFrac.
+            float floorFrac = (CloseBandBottomFrac * panelPx + ElarionUiKit.CanonCtaHeight + CloseClearPx)
+                              / panelPx;
+
+            // Never invert or hair-thin the body on a degenerate (very short) panel - in that case
+            // the kit's own conservative floor is the safer answer and the well scrolls instead.
+            if (floorFrac >= _bodyZone.anchorMax.y - 0.05f) return;
+            if (_bodyZone.anchorMin.y <= floorFrac + 0.001f) return;   // already at/below the floor
+
+            _bodyZone.anchorMin = new Vector2(_bodyZone.anchorMin.x, floorFrac);
+            _bodyZone.offsetMin = new Vector2(_bodyZone.offsetMin.x, 0f);
+            FlowTrace.Step("UI", "HelpMenu: footer band reclaimed - body floor "
+                + _bodyZone.anchorMin.y.ToString("F3") + " (panel " + panelPx.ToString("F0") + "px)");
+        }
+
+        /// <summary>
+        /// WO-884 COLUMN WRAP. One column while every entry fits in the well; two when it does not
+        /// and the cells stay legible. Cell size is FIXED CANVAS PIXELS measured off the resolved
+        /// well - never a fraction - so a cell can never resolve under the kit touch floor and get
+        /// grown symmetrically over its neighbour. Row HEIGHT is never reduced (owner law: fix the
+        /// layout, do not shrink the controls).
+        /// </summary>
+        private void LayoutColumns()
+        {
+            if (_grid == null || _stack == null || _wellRt == null || _vm == null) return;
+
+            // offsetMin.y is ScrollWellRowSnap's own trim, so the UNTRIMMED well height - the space
+            // actually available to lay out into - is rect.height + that trim.
+            float wellPx = _wellRt.rect.height + _wellRt.offsetMin.y;
+            // The grid is anchor-stretched to the well, so either rect answers; take whichever has
+            // resolved (a ContentSizeFitter can leave the content's own width at 0 on frame one).
+            float widthPx = Mathf.Max(_stack.rect.width, _wellRt.rect.width);
+            if (wellPx <= 1f || widthPx <= 1f) return;       // not measured yet
+
+            int count = Mathf.Max(1, _vm.Entries.Count);
+            float pitch = RowHeightPx + RowGapPx;
+
+            int cols = 1;
+            while (cols < MaxColumns)
+            {
+                int rows = Mathf.CeilToInt(count / (float)cols);
+                if (rows * pitch - RowGapPx <= wellPx) break;             // this many columns fits
+                float nextCell = (widthPx - RowGapPx * cols) / (cols + 1);
+                if (nextCell < MinCellWidthPx) break;                     // another column would squint
+                cols++;
+            }
+
+            _grid.constraintCount = cols;
+            _grid.cellSize = new Vector2((widthPx - RowGapPx * (cols - 1)) / cols, RowHeightPx);
+        }
+
+        /// <summary>Reclaim the dead footer band, wrap the rows into as many columns as it takes,
+        /// snap the well to whole rows, then text-encode anything still off-screen. Two snap
+        /// passes: measure without a reserve, and only pay for the hint band when the list
+        /// actually overflows.</summary>
         private void RefreshWell()
         {
             if (_wellSnap == null || _vm == null) return;
 
             Canvas.ForceUpdateCanvases();
+            // Reclaim FIRST - it changes the well's height, which every step below measures.
+            ReclaimFooterBand();
+            Canvas.ForceUpdateCanvases();
+            LayoutColumns();
             if (_stack != null) UnityEngine.UI.LayoutRebuilder.ForceRebuildLayoutImmediate(_stack);
 
             _wellSnap.reserveBottomPx = 0f;
             _wellSnap.Snap(true);
 
             int total = _vm.Entries.Count;
+            int cols = Mathf.Max(1, _grid != null ? _grid.constraintCount : 1);
+            int totalRows = Mathf.CeilToInt(total / (float)cols);
             // VisibleRows stays 0 until a layout pass resolves the well - never claim
             // "showing 0 of N" off an unmeasured rect; the next open re-runs this.
-            bool overflows = _wellSnap.VisibleRows > 0 && total > _wellSnap.VisibleRows;
+            bool overflows = _wellSnap.VisibleRows > 0 && totalRows > _wellSnap.VisibleRows;
             if (overflows)
             {
                 _wellSnap.reserveBottomPx = HintBandPx + HintGapPx;
                 _wellSnap.Snap(true);
-                overflows = _wellSnap.VisibleRows > 0 && total > _wellSnap.VisibleRows;
+                overflows = _wellSnap.VisibleRows > 0 && totalRows > _wellSnap.VisibleRows;
             }
+
+            FlowTrace.Step("UI", "HelpMenu: well laid out - " + total + " entries in " + cols
+                + " column(s), " + totalRows + " row(s), " + _wellSnap.VisibleRows + " visible row(s)");
 
             if (_moreHint == null) return;
             if (overflows)
             {
-                // Text-encoded state (never colour alone), ASCII only.
-                _moreHint.text = "Showing " + _wellSnap.VisibleRows + " of " + total + " - drag the list for more";
+                // Text-encoded state (never colour alone), ASCII only. Counts ENTRIES, not rows -
+                // with two columns a "row" is two menu items and the player counts items.
+                int shown = Mathf.Min(total, _wellSnap.VisibleRows * cols);
+                _moreHint.text = "Showing " + shown + " of " + total + " - drag the list for more";
                 _moreHint.gameObject.SetActive(true);
             }
             else

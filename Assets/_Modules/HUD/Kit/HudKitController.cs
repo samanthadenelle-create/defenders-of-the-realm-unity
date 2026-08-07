@@ -103,7 +103,23 @@ namespace DeNelle.HUD.Kit
         // changes) sized so the 7-button MAX packs the ActionBar zone exactly; smaller
         // sets keep the SAME width and the group centers ((1 - gap*(max-1)) / max).
         private const float BarGap = 0.01f;
-        private const float BarSlotW = (1f - BarGap * 6f) / 7f;
+
+        // WO-911 (ruling Q10+Q13) — the section-3b FLAGGED check, settled AT SOURCE.
+        // ---------------------------------------------------------------------------------
+        // The question was whether a 6-face bar built on 7-slot geometry leaves a dead trailing
+        // slot. Read together, HudActionBarModel and ApplyActionBar answer it: the bar renders
+        // HudActionBarModel.Active (a LIST whose length varies), NOT ButtonCount, and
+        // ApplyActionBar CENTRES the group (x = (1 - groupW) / 2). A shorter set therefore cannot
+        // leave a hole or a trailing gap — it just occupies less width, centred.
+        //
+        // So the fix is not "drop ButtonCount to 6": that const is the ENUM-IDENTITY bound and the
+        // face arrays are indexed by ordinal (Upgrade = 6, with Map kept dormant at 4), so lowering
+        // it would put Upgrade out of bounds. The number that genuinely went 7 -> 6 is the maximum
+        // number of faces that can be VISIBLE at once, and that is what the slot width must derive
+        // from. Both literals are now derived from HudActionBarModel.MaxVisibleFaces, so the next
+        // face added or removed cannot silently overflow or under-fill the zone again.
+        private const float BarSlotW =
+            (1f - BarGap * (HudActionBarModel.MaxVisibleFaces - 1)) / HudActionBarModel.MaxVisibleFaces;
         private const float BarY0 = 0.10f, BarY1 = 0.95f;
         // Raids dim visuals (WO-820 semantics preserved: dim toward Disabled, never
         // uninteractable — the tap still reaches the drillmaster redirect). The DECISION
@@ -510,20 +526,14 @@ namespace DeNelle.HUD.Kit
             if (_raidsButtonImage != null) _raidsImageBuiltColor = _raidsButtonImage.color;
             if (_raidsButtonLabel != null) _raidsLabelBuiltColor = _raidsButtonLabel.color;
 
-            // MAP (WO-826): the Realm Map parchment overworld. Kit button -> Core
-            // PanelRouter -> RealmMapPanel (DeNelle.Village registers the opener at boot),
-            // reflection-free — HUD never names a Village type. WO-825 R4 semantics kept:
-            // the face appears once Onboarded — now via the model's MapUnlocked input, and
-            // the bar REPACKS (WO-835 kills the old fixed-slot hole).
-            var map = ElarionUiKit.BuildObsidianButton(pool, "Map",
-                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                slot0Min, slot0Max, () =>
-                {
-                    FlowTrace.Step("RealmMap", "HUD Map tapped -> PanelRouter.Open(RealmMap)");
-                    if (!PanelRouter.Open(PanelId.RealmMap))
-                        FlowTrace.Warn("RealmMap", "PanelId.RealmMap has no registered opener - map did not open");
-                });
-            RegisterBarButton(ActionBarButtonId.Map, "mapButton", map);
+            // MAP — ⚠ NO LONGER A BAR FACE (WO-911, owner ruling Q10+Q13, 2026-08-06).
+            // The Realm Map moved INTO Bag as a tab, which is half of how the bar went 7 -> 6
+            // faces without needing an 8th slot. The route itself is unchanged and still live:
+            // PanelId.RealmMap -> RealmMapPanel (registered by DeNelle.Village at boot), now
+            // reached from the Bag tab row. Nothing is built here, so no widget is registered
+            // under "mapButton" and the hud-areas.json calm(town) row drops it in the same
+            // commit. ActionBarButtonId.Map stays DORMANT at ordinal 4 (never masked in) so the
+            // other faces keep their indices.
 
             // QUESTS (WO-835 §3c): its OWN always-in-town face — the 07-06 Quests<->Upgrade
             // relabel hijack is retired (owner: "allows quests to be active more often").
@@ -532,12 +542,20 @@ namespace DeNelle.HUD.Kit
                 slot0Min, slot0Max, OnQuestsAction);
             RegisterBarButton(ActionBarButtonId.Quests, "questButton", quests);
 
-            // UPGRADE (WO-835 §3c split-out): its own CONTEXT face — the model packs it in
-            // only while a building holds focus (HudBuildingFocus), out when it doesn't.
-            var upgrade = ElarionUiKit.BuildObsidianButton(pool, "Upgrade",
+            // MANAGE — the RE-POINTED Upgrade face (WO-911, ruling Q10+Q13).
+            // -----------------------------------------------------------------
+            // Same enum value (ActionBarButtonId.Upgrade = 6), same widget id
+            // ("upgradeButton"), same hud-areas.json row — RE-POINTED, NOT ADDED. That is what
+            // dissolves the 8th-face problem: no enum extension, no ButtonCount bump, no new
+            // canonical row. Only the LABEL and the DESTINATION change.
+            //
+            // It is no longer a context face: the model now packs it in whenever the town bar is
+            // up, because it is the single door onto all three production lines. Gating it on a
+            // focused building is exactly the undiscoverability WO-911 exists to remove.
+            var manage = ElarionUiKit.BuildObsidianButton(pool, "Manage",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                slot0Min, slot0Max, OnUpgradeAction);
-            RegisterBarButton(ActionBarButtonId.Upgrade, "upgradeButton", upgrade);
+                slot0Min, slot0Max, OnManageAction);
+            RegisterBarButton(ActionBarButtonId.Upgrade, "upgradeButton", manage);
 
             // ── moveCluster -> HudMoveInput ──
             if (FeatureFlags.CombatHud611)
@@ -772,19 +790,25 @@ namespace DeNelle.HUD.Kit
             Register("queueStatusChip", WrapAsWidget("queueStatusChip", root));
         }
 
-        // The Builders chip is the ONE Queues entry point (owner 2026-08-01; the bar's
-        // Queues button is retired and ObsidianQueueRegression 7c enforces it). So the
-        // chip must still reach ObsidianQueueGate.RequestToggle: tap once to PEEK the
-        // inline card rail, tap the open chip again to hand off to the full Work Queue
-        // (which hosts the same QueueRailView, arbitrated by PanelManager). The inline
-        // section collapses on that hand-off, so the rail never stacks under a modal.
+        // ⚠ WO-911 (ruling Q10, 2026-08-06) — THE CHIP IS NO LONGER A DOOR.
+        // ---------------------------------------------------------------------
+        // The 2026-08-01 rule was "there is exactly ONE Queues entry". That rule is intact; what
+        // changed is WHICH entry. The bar's re-pointed Manage face is now the single door, so the
+        // chip SURVIVES as a STATUS GLANCE ONLY (count + timer + the inline peek rail) and its
+        // second tap no longer raises ObsidianQueueGate.RequestToggle. Leaving both would give the
+        // player two doors and the "one Queues entry" rule nothing left to mean.
+        //
+        // This also retires B4: the only way into the queue used to be an undiscoverable
+        // DOUBLE-TAP on a status chip (ObsidianQueueHud.OpenWorkQueue had zero live callers).
+        //
+        // The chip's own oracle row (queueStatusChip in hud-areas.json) is unaffected.
         private void OnBuildersChipTapped()
         {
+            // Plain toggle: tap to peek the inline card rail, tap again to collapse it.
             if (_railOpen == RailSection.Builders)
             {
                 SetRailSection(RailSection.None);
-                FlowTrace.Step("HudKit", "Builders chip tapped while open -> ObsidianQueueGate.RequestToggle");
-                ObsidianQueueGate.RequestToggle();
+                FlowTrace.Step("HudKit", "Builders chip collapsed (status glance only — the Manage bar face is the door).");
                 return;
             }
             SetRailSection(RailSection.Builders);
@@ -1698,13 +1722,32 @@ namespace DeNelle.HUD.Kit
                 FlowTrace.Warn("HudKit", "RumorBoard opener not registered — quest board unreachable");
         }
 
-        private void OnUpgradeAction()
+        /// <summary>
+        /// WO-911 — the RE-POINTED bar face: the SINGLE door onto the unified Manage/Queues screen.
+        /// -------------------------------------------------------------------------------------
+        /// It raises <see cref="ObsidianQueueGate.RequestToggle"/>, the existing queue verb, which
+        /// ManageScreenPanel now subscribes to. Going through the gate (rather than straight to the
+        /// router) keeps ONE opening verb for the queues no matter who raises it, and keeps this
+        /// controller's call to it — the thing the [obsidian-queue] oracle requires.
+        ///
+        /// PanelRouter.Open(PanelId.Manage) is the fallback for the case where the gate has no
+        /// subscriber yet (a boot race), so the face is never a dead tap.
+        ///
+        /// The old context behaviour (focused-building -> BuildingUpgrade panel) is NOT lost: the
+        /// Manage screen's tabs list every upgradable building and drill in to that very panel, and
+        /// walking up to a building still opens it directly via BuildingInteractable.
+        /// </summary>
+        private void OnManageAction()
         {
-            string id = HudBuildingFocus.CurrentBuildingId;
-            var custom = HudBuildingFocus.CurrentUpgradeAction;
-            if (custom != null) { FlowTrace.Step("HudKit", "upgrade action -> custom upgrade"); custom(); }
-            else if (!string.IsNullOrEmpty(id)) PanelRouter.Open(PanelId.BuildingUpgrade, id);
-            else FlowTrace.Warn("HudKit", "Upgrade tapped with no focused building — stale repack?");
+            FlowTrace.Step("HudKit", "Manage face tapped -> ObsidianQueueGate.RequestToggle (WO-911 single door)");
+            if (ObsidianQueueGate.HasSubscriber)
+            {
+                ObsidianQueueGate.RequestToggle();
+                return;
+            }
+            if (!PanelRouter.Open(PanelId.Manage))
+                FlowTrace.Warn("HudKit",
+                    "Manage tapped but neither the queue gate nor PanelId.Manage has a listener — screen unreachable.");
         }
 
         // WO-439: the LEFT slide-out dock — a gear tab pinned to the left screen edge (collapsed by

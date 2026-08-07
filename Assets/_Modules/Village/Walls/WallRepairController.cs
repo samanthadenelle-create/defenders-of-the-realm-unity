@@ -407,7 +407,20 @@ namespace DeNelle.Village
 
             var target = RepairTarget.TryWrap(hit.collider);
             if (target == null)
+            {
+                // NO SILENT FAILURE (CLAUDE.md section 12.2). This early return is the exact
+                // path a player walks when they tap a BURNING tower / harvest site / collector
+                // and nothing happens: RepairTarget wraps only WallSegment / Gate / Building,
+                // so every other damageable surface taps to null here and is silently ignored.
+                // Name what was actually hit so a capture distinguishes "tapped scenery" from
+                // "tapped a damaged structure this controller cannot address".
+                var hitGo = hit.collider != null ? hit.collider.gameObject : null;
+                FlowTrace.Throttle("Repair", "tap-not-repairable", 2f,
+                    $"tap hit '{(hitGo != null ? hitGo.name : "<null>")}' but RepairTarget could not wrap it - " +
+                    "no repair prompt. RepairTarget covers WallSegment/Gate/Building only; towers, " +
+                    "harvest sites and collectors are reachable ONLY through Repair-All.");
                 return; // tapped something that is not a repairable structure.
+            }
 
             Select(target);
         }
@@ -790,6 +803,29 @@ namespace DeNelle.Village
             ClearSelection();
             Rescan();
             return (repaired, spent, remaining);
+        }
+
+        /// <summary>
+        /// DIAGNOSTIC SEAM (read-only, no mutation) - a one-line description of everything
+        /// the Repair-All sweep currently considers repairable, as
+        /// "name(dmg=frac,cost); ...". Exists because "there is no option to repair" is
+        /// ambiguous from the outside: it can mean the backend never offered the structure
+        /// (a LOGIC gap) or that it offered it and no surface showed it (a UI gap). Reading
+        /// this line next to a burning structure's name settles which, with no guessing.
+        /// Used by <see cref="RepairAvailabilityProbe"/>; safe to call at any time.
+        /// </summary>
+        public string DescribeRepairAllSet()
+        {
+            var items = CollectRepairAllSet();
+            if (items.Count == 0) return "<empty - nothing is currently repairable>";
+            var sb = new System.Text.StringBuilder();
+            foreach (var item in items)
+            {
+                if (sb.Length > 0) sb.Append("; ");
+                sb.Append(item.Name).Append("(dmg=").Append(item.DamageFraction.ToString("0.00"))
+                  .Append(',').Append(DescribeMaterials(item.Cost)).Append(')');
+            }
+            return sb.ToString();
         }
 
         /// <summary>Compact wallet line for FlowTrace (in-session EconomyService pools).</summary>

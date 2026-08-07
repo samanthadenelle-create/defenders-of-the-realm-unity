@@ -265,6 +265,245 @@ namespace DeNelle.Village
             return false;
         }
 
+        // =====================================================================
+        //  THE BAKED-BARRACKS ADOPTION (owner ruling 2026-08-06)
+        //  "place it, give it the NPC, make it COUNT, and do NOT offer it as a
+        //   buildable item."
+        // =====================================================================
+        //
+        // OWNER, VERBATIM: "there's no person that stands with the barracks that comes out
+        // of the shipped version, which means that it doesn't count as one. so it's just
+        // counting as an object just as scenery."
+        //
+        // WHAT WAS WRONG (verified at source, not inferred): the shipped 'CastleBarracks'
+        // is a raw polyperfect prefab seated by an EDITOR MENU TOOL
+        // (Assets/Editor/WallTools/CastleBarracksPlacer.cs) that attaches NO components at
+        // all - confirmed in the scene YAML (m_AddedComponents: []). No Building, no
+        // BuildingInteractable, no PlacedStructure, no BaseLayout record, no
+        // VillageController registration. So StructureSingleton.IsPlayerBuilt("barracks")
+        // answered FALSE and the structure counted as scenery. Two symptoms, ONE root:
+        //   1. it is not owned, not on the roster, not upgradeable; and
+        //   2. THE LIVE TRAP - the Barracks build card still read BUILDABLE, and placing
+        //      one fired NotifyPlaced -> Enforce -> StandDownBakedTwins, which SILENTLY
+        //      DELETED the shipped barracks (the catalog row is repo.singleton with
+        //      repo.bakedTwins ["CastleBarracks"] - ONE per town).
+        //
+        // THE FIX: ADOPT it. Convert the shipped barracks into a real, owned BaseLayout
+        // record at its own pose, materialise the catalog structure live through the ONE
+        // creation path (BaseLayoutLoader.Spawn -> StructureFactory "GameplayBuilding" =
+        // Building + BuildingInteractable + VillageController registration => owned,
+        // rostered, upgradeable), then hand the singleton to it via
+        // StructureSingleton.NotifyPlaced, which (a) stands the raw bake down so only ever
+        // ONE exists and (b) raises SingletonResolved('barracks') - the seam
+        // BarracksNpcInjector already subscribes to, which reseats the drillmaster.
+        // NOTHING IN THE NPC PATH IS REBUILT: this rings the exact bell the owner's own
+        // accidental delete/respawn cycle rang ("IT MIGHT HAVE BEEN FROM THE WALL I DELETED
+        // AND RESPAWNED AND NOW HAS A NPC") - the proof that the spawn logic already works.
+        // Once the record exists, IsPlayerBuilt is TRUE, so the build card renders "Built"
+        // and the id can no longer be armed or placed: the trap closes with no change to
+        // the build-menu gate itself (BuildModeController.IsSingletonBuilt already asks
+        // IsPlayerBuilt - it was being told the truth about a structure that genuinely was
+        // not owned).
+        //
+        // ── WHY 'barracks' IS DELIBERATELY *NOT* A BakedRows ENTRY ────────────────────
+        // A one-line add to the table above is NOT the fix, and would be a regression.
+        // Adding it makes IsManagedId("barracks") true, which switches on three behaviours
+        // the barracks must NOT have:
+        //   (a) StanddownActiveForBaked would start answering for 'CastleBarracks',
+        //       taking the standdown decision away from the WO-724 unlock rule;
+        //   (b) ShouldReplayRecord('barracks') would become conditional on StanddownActive,
+        //       so the record would be WITHHELD from replay for a whole session; and
+        //   (c) the WO-673 latch in StructureSingleton.EnforceInternal would SKIP the
+        //       baked-twin standdown whenever StanddownActive is false - a placed barracks
+        //       and the raw bake standing at the same time = two barracks.
+        // On top of that the timing is wrong at the root: the one-shot writer runs on the
+        // FOUNDING hub load, where the barracks is still LOCKED (WO-724 =
+        // BarracksUnlock.IsUnlocked = ff.barracks AND founding-complete), therefore
+        // DEACTIVATED and invisible to the writer's active-only scan - and a record written
+        // there would replay a barracks that WO-724 says must not exist yet.
+        // So 'barracks' stays OUT of BakedRows: IsManagedId('barracks') remains FALSE, the
+        // WO-673 latch never engages for it, ShouldReplayRecord stays unconditionally true,
+        // StanddownActiveForBaked keeps returning false for 'CastleBarracks', and the twin
+        // standdown remains the ordinary StructureSingleton placed-wins path that already
+        // works today. The adoption is instead timed to the WO-724 UNLOCK - the first
+        // moment the shipped barracks legitimately exists.
+        //
+        // ── WO-834 IS PRESERVED ──────────────────────────────────────────────────────
+        // The "is this the predefined map?" test is StructureSingleton.MayBakedTwinSurface
+        // ("barracks"): OPEN on Default-Town / legacy saves (the template grant written by
+        // RunIfNeeded below, and SaveMigrator's v36 seed), CLOSED on a Build-Your-Own blank
+        // founding. A blank town therefore NEVER adopts - its player builds a barracks from
+        // the palette exactly as before, and WO-834's "Fresh Default Town: unchanged" is
+        // honoured in the only direction that matters (nothing is taken away; the town
+        // simply now OWNS the barracks it was always shown). everBuiltStructureIds is still
+        // read ONLY as the WO-834 surface permission - never as ownership.
+        //
+        // ── WO-843 IS PRESERVED ──────────────────────────────────────────────────────
+        // A baked twin still does not count as player-built. Adoption does not change that
+        // rule; it removes the twin from the equation by making a REAL placed structure.
+        // And it is deliberately ONE-WAY per session: if the player later sells or destroys
+        // the barracks, the twin resurfaces as the WO-819 stand-in and the card correctly
+        // reads BUILDABLE again (rebuild fresh at full cost) - adoption does not re-fire and
+        // re-gift it.
+
+        private const string BarracksItemId    = "barracks";
+        private const string BarracksBakedName = "CastleBarracks";
+
+        // Terminal latch: set once the adoption has RUN or has been RULED OUT, so the
+        // bootstrap poll stops asking (and the trace never spams). Domain-load scoped.
+        private static bool _barracksAdoptionSettled;
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetAdoptionStatics()
+        {
+            _barracksAdoptionSettled = false;
+        }
+
+        // The castle-hub merge convention used by every barracks surface
+        // (BarracksNpcInjector.IsCastleHubScene / StructureSingletonBootstrap): the chrome
+        // fires on BOTH hub scene names, because SceneRouter.Castle is flag-dependent.
+        internal static bool IsCastleHubScene(string n) =>
+            n == "MainCastle_Hall" || n == "Main_Castle_Overworld";
+
+        /// <summary>
+        /// Adopt the SHIPPED baked barracks into the player's base as a real, owned
+        /// structure (see the block comment above for the ruling, the root cause, and why
+        /// this is NOT a <see cref="BakedRows"/> entry).
+        /// <para>Returns TRUE when the question is SETTLED for this domain load - either it
+        /// adopted, or it ruled the adoption out - so the caller's poll can stop. Returns
+        /// FALSE while the answer is still pending (not in the hub yet, save service not up,
+        /// the WO-724 unlock has not flipped yet, or a transient refusal worth retrying).</para>
+        /// </summary>
+        public static bool AdoptBakedBarracksIfNeeded()
+        {
+            if (_barracksAdoptionSettled) return true;
+
+            var svc = GameStateService.Instance;
+            var state = svc != null ? svc.State : null;
+            if (state == null) return false;                       // save service not up yet - ask again
+
+            string sceneName = SceneManager.GetActiveScene().name;
+            if (!IsCastleHubScene(sceneName)) return false;        // the shipped barracks only exists in the hub
+
+            // WO-724 UNLOCK GATE - the ONE reason this is not part of the one-shot writer.
+            // Until ff.barracks is ON *and* founding is complete the shipped barracks does
+            // not exist (HubStructureVisualInjector.TrySwap deactivates it), so there is
+            // nothing to adopt. The unlock can flip LIVE mid-session (the FTUE completes
+            // in-hub with no scene reload), which is why the caller polls instead of asking
+            // once. NOT settled - keep watching.
+            if (!BarracksUnlock.IsUnlocked) return false;
+
+            // Already owned: the player built one, or a previous pass/session adopted.
+            // StructureSingleton already owns the twin standdown from here.
+            if (StructureSingleton.IsPlayerBuilt(BarracksItemId))
+                return SettleAdoption(
+                    "a placed/recorded barracks already owns the singleton - nothing to adopt (build card correctly reads Built)");
+
+            // WO-834 blank-town gate = the "is this the PREDEFINED map?" test.
+            if (!StructureSingleton.MayBakedTwinSurface(BarracksItemId))
+                return SettleAdoption(
+                    "blank-town surface gate CLOSED (Build Your Own founding) - the shipped barracks is not this save's; " +
+                    "the player builds one from the palette (WO-834 unchanged)");
+
+            if (CatalogRegistry.Get(BarracksItemId) == null)
+            {
+                FlowTrace.Warn("Barracks",
+                    $"adoption: no structures-catalog row for '{BarracksItemId}' - the shipped barracks cannot be adopted " +
+                    "(it stays scenery). Restore the row and the adoption runs on the next hub load.");
+                return SettleAdoption("no structures-catalog row for 'barracks'");
+            }
+
+            if (FindByNameInclInactive(BarracksBakedName) == null)
+                return SettleAdoption(
+                    $"no baked '{BarracksBakedName}' in scene '{sceneName}' - this is not the predefined map, nothing to adopt");
+
+            using var _ = FlowTrace.Enter("Barracks", "StrategicPlacementMigration.AdoptBakedBarracksIfNeeded");
+
+            // ORDER MATTERS - the pose OF RECORD must be read only AFTER the visual injector
+            // has surfaced, skinned and re-seated the bake: the 'CastleBarracks' swap row
+            // carries setLocalPos (38.3, 0, 36), and while the barracks was LOCKED TrySwap
+            // returned BEFORE applying it. Reading the transform first would therefore record
+            // a stale spot and the adopted barracks would replay somewhere else.
+            bool stands = Guard.Try("Barracks", "EnsureBarracksSurfaced (settle the pose before adopting)",
+                HubStructureVisualInjector.EnsureBarracksSurfaced, fallback: false);
+            if (!stands)
+            {
+                FlowTrace.Warn("Barracks",
+                    "adoption: EnsureBarracksSurfaced refused this pass (one of its own gates said no) - " +
+                    "NOT settling; retrying on the next poll.");
+                return false;
+            }
+
+            var baked = FindByNameInclInactive(BarracksBakedName);
+            if (baked == null)
+            {
+                FlowTrace.Warn("Barracks",
+                    $"adoption: '{BarracksBakedName}' disappeared between the gate and the pose read - retrying on the next poll.");
+                return false;
+            }
+
+            var grid = PlacementGrid.Instance;
+            if (grid == null)
+                grid = new GameObject("PlacementGrid").AddComponent<PlacementGrid>();
+            if (state.BaseLayout == null)
+                state.BaseLayout = new List<PlacedStructureData>();
+
+            Vector3 pose = baked.position;
+            float yaw = baked.eulerAngles.y;
+            FlowTrace.Step("Barracks",
+                $"adoption: shipped '{BarracksBakedName}' stands at {pose} yaw {yaw:0.#} - converting it into an OWNED BaseLayout record.");
+
+            if (!TryWriteRecord(state, grid, BarracksItemId, pose, yaw))
+            {
+                FlowTrace.Warn("Barracks",
+                    "adoption: no record was written (see the line above for why) - the shipped barracks stays scenery.");
+                return SettleAdoption("record write refused");
+            }
+
+            // The RECORD is the ownership. MarkEverBuilt is a belt for legacy saves whose
+            // template grant predates this path - it is the WO-834 SURFACE PERMISSION only,
+            // never ownership, and nothing reads it as such.
+            state.MarkEverBuilt(BarracksItemId);
+            Guard.Try("Barracks", "persist the adopted barracks record", () => svc.Save());
+
+            var adopted = state.BaseLayout[state.BaseLayout.Count - 1];
+
+            // Materialise it NOW, through the ONE creation path, so the owner never needs a
+            // place/delete cycle - or even a scene reload - for the shipped barracks to count.
+            var loader = BaseLayoutLoader.Instance != null
+                ? BaseLayoutLoader.Instance : BaseLayoutLoader.EnsureExists();
+            PlacedStructure placed = Guard.Try<PlacedStructure>("Barracks",
+                "spawn the adopted barracks (BaseLayoutLoader.Spawn)",
+                () => loader != null ? loader.Spawn(adopted, grid) : null, fallback: null);
+            if (placed == null)
+                FlowTrace.Fail("Barracks",
+                    "adoption: the record persisted but the owned barracks did NOT spawn this session - it replays on the " +
+                    "next hub load, and the build card already reads Built (the trap is closed either way).");
+            else
+                FlowTrace.Step("Barracks",
+                    $"adoption: spawned the OWNED barracks at cell ({adopted.cellX},{adopted.cellZ}) - Building + " +
+                    "BuildingInteractable + VillageController registration (counted, rostered, upgradeable).");
+
+            // Hand the singleton over: stands the raw shipped bake down (only ever ONE,
+            // placed wins) and raises SingletonResolved('barracks'), which BarracksNpcInjector
+            // already subscribes to - it reseats the drillmaster onto the owned barracks. This
+            // is the SAME seam the owner's accidental delete/respawn cycle rang; the NPC path
+            // is reused verbatim, not rebuilt.
+            Guard.Try("Barracks", "StructureSingleton.NotifyPlaced('barracks') after adoption",
+                () => StructureSingleton.NotifyPlaced(BarracksItemId, placed != null ? placed.gameObject : null));
+
+            return SettleAdoption(
+                "ADOPTED - the shipped barracks is now an owned, counted, upgradeable structure with its drillmaster, " +
+                "and the Barracks build card reads Built (no longer offered)");
+        }
+
+        private static bool SettleAdoption(string reason)
+        {
+            _barracksAdoptionSettled = true;
+            FlowTrace.Step("Barracks", $"baked-barracks adoption SETTLED: {reason}.");
+            return true;
+        }
+
         // ── THE ONE-SHOT WRITER ──────────────────────────────────────────────────
 
         /// <summary>
@@ -407,6 +646,19 @@ namespace DeNelle.Village
                 if (t != null && t.name == name) return t;
             return null;
         }
+
+        // Name match INCLUDING inactive objects. The plain FindByName above is active-only,
+        // and the shipped 'CastleBarracks' is DEACTIVATED for the whole pre-unlock life of a
+        // save (WO-724) — an active-only scan reads that as "not in this scene" and would
+        // rule the adoption out on a map that plainly has one. Mirrors
+        // StructureSingleton.FindByNameInclInactive / CastleVendorNpcInjector.
+        private static Transform FindByNameInclInactive(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return null;
+            foreach (var t in Object.FindObjectsByType<Transform>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+                if (t != null && t.name == name) return t;
+            return null;
+        }
     }
 
     /// <summary>
@@ -469,6 +721,35 @@ namespace DeNelle.Village
                 yield break;
             }
             StrategicPlacementMigration.RunIfNeeded();
+
+            // OWNER RULING 2026-08-06 — the SHIPPED barracks must COUNT. Its adoption cannot
+            // ride the one-shot writer above: at founding the barracks is still LOCKED
+            // (WO-724 = ff.barracks AND founding-complete) and therefore deactivated, and a
+            // record written then would replay a barracks the unlock says must not exist yet.
+            // So watch for the unlock instead — it can flip LIVE mid-session (the FTUE
+            // completes in-hub with no reload, the same reason BarracksNpcInjector runs its
+            // own 1 Hz poll) — and adopt the moment it does. See
+            // StrategicPlacementMigration.AdoptBakedBarracksIfNeeded for the full ruling and
+            // for why 'barracks' is deliberately NOT a BakedRows entry.
+            yield return AdoptBarracksWhenUnlocked();
+        }
+
+        // 0.5 s cadence: this bounds the ONLY residual window in which the shipped barracks
+        // can be standing while the Barracks build card still reads BUILDABLE (the
+        // silent-delete trap). Realtime so a paused / time-scaled hub still adopts.
+        private const float AdoptionPollSeconds = 0.5f;
+
+        private IEnumerator AdoptBarracksWhenUnlocked()
+        {
+            while (StrategicPlacementMigration.IsCastleHubScene(SceneManager.GetActiveScene().name))
+            {
+                // fallback TRUE on a throw: a permanently-throwing adoption must settle rather
+                // than re-throw twice a second forever. The Guard line names the failure.
+                bool settled = Guard.Try("Barracks", "baked-barracks adoption poll",
+                    StrategicPlacementMigration.AdoptBakedBarracksIfNeeded, fallback: true);
+                if (settled) yield break;
+                yield return new WaitForSecondsRealtime(AdoptionPollSeconds);
+            }
         }
     }
 }

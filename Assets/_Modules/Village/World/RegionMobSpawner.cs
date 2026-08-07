@@ -156,6 +156,20 @@ namespace DeNelle.Village
             // onboarding completes (TutorialFlow.HostilesSuppressedForTutorial).
             if (TutorialFlow.HostilesSuppressedForTutorial) return;
 
+            // TOWN SUSPENSION (owner ruling 2026-08-07): this spawner is DontDestroyOnLoad and
+            // spawns relative to the PLAYER, so with the player in a dungeon it would seed
+            // overworld roamers into the dungeon and keep the town's ambient hostile population
+            // churning while she cannot see it. Both are the "town keeps running while the
+            // player is away" defect, from two directions. Added as a fourth line in this
+            // existing stand-down block rather than a new mechanism.
+            if (DeNelle.Core.TownSuspension.SuspendedFor(this))
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Throttle("Region", "town-suspend", 10f,
+                    "region roamers suppressed - town suspended (" +
+                    DeNelle.Core.TownSuspension.Reason + "). Harvesting is unaffected.");
+                return;
+            }
+
             _tickTimer -= Time.deltaTime;
             if (_tickTimer > 0f) return;
             _tickTimer = TickInterval;

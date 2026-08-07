@@ -42,6 +42,7 @@ using UnityEngine.UI;
 using TMPro;
 using DeNelle.Core.Diagnostics;
 using DeNelle.Core.UI;
+using DeNelle.Village.Buildings.Progression;
 using CoreCost = DeNelle.Core.Catalog.ResourceCost;
 
 namespace DeNelle.Village
@@ -68,8 +69,17 @@ namespace DeNelle.Village
         private float _timer;
 
         // Last-announced state so FlowTrace logs transitions, not every poll.
-        private enum Vis { Uninit, Hidden, AvailableAffordable, AvailableShort }
+        private enum Vis { Uninit, HiddenInBattle, HiddenNothingDamaged, AvailableAffordable, AvailableShort }
         private Vis _last = Vis.Uninit;
+
+        /// <summary>
+        /// DIAGNOSTIC SEAM (read-only) - what this affordance is currently showing, for the
+        /// F8 repair capture. The two HIDDEN cases are deliberately DISTINCT: "hidden because
+        /// a wave is active" and "hidden because nothing is damaged" are opposite diagnoses
+        /// for the same reported symptom, and they used to share one log line, which made a
+        /// capture unable to tell them apart.
+        /// </summary>
+        public string DiagnosticState => _last.ToString();
 
         // =====================================================================
         //  Self-install (mirrors WaveFeedbackDirector's spawn pattern)
@@ -88,7 +98,24 @@ namespace DeNelle.Village
         private static void TrySpawn()
         {
             if (UnityEngine.Object.FindAnyObjectByType<HubRepairAffordance>() != null) return;
-            if (!SceneHasRepairables()) return;   // Title / HeroSelect / menus: nothing to repair.
+            if (!SceneHasRepairables())
+            {
+                // NO SILENT FAILURE (CLAUDE.md section 12.2). This bare `return` used to be
+                // invisible, and it is the single point at which the player can end up with
+                // NO repair affordance at all: nothing else installs a WallRepairController
+                // in a non-wave scene, so when this bails the Manage screen's "Repair all"
+                // offer (which looks the controller up by FindFirstObjectByType) goes quiet
+                // too. Meanwhile StructureDamageVisuals installs UNCONDITIONALLY, so fire
+                // still renders. Fire with no repair option is exactly that asymmetry, and
+                // this line is what proves or clears it in a capture.
+                FlowTrace.Warn("Repair",
+                    $"hub repair affordance NOT installed (scene='{SceneManager.GetActiveScene().name}') - " +
+                    "no WallSegment/Gate/Building/Tower/DefenseTower/ArcaneTower/HarvestSite/collector " +
+                    "found at scene-load time. This check runs ONCE per scene load and never retries, so " +
+                    "structures rebuilt AFTER load (saved placement restore) would leave the player with " +
+                    "no repair surface in this scene.");
+                return;   // Title / HeroSelect / menus: nothing to repair.
+            }
 
             var go = new GameObject("HubRepairAffordance");
             go.AddComponent<HubRepairAffordance>();
@@ -96,13 +123,27 @@ namespace DeNelle.Village
                 $"hub repair affordance installed (scene='{SceneManager.GetActiveScene().name}')");
         }
 
-        /// <summary>True when the scene has at least one repairable structure kind present.</summary>
+        /// <summary>
+        /// True when the scene has at least one repairable structure kind present.
+        ///
+        /// COVERAGE FIX: this gate previously tested only WallSegment / Gate / Building /
+        /// Tower, while the backend it gates (<see cref="WallRepairController.RepairAllCost"/>)
+        /// prices FOUR more surfaces - DefenseTower, ArcaneTower, HarvestSite and
+        /// ResourceCollector. Those four are also full members of the damage-visual set, so a
+        /// scene holding only those could show a structure ON FIRE and still refuse to install
+        /// the one affordance able to repair it. The installer's reach now matches the
+        /// backend's exactly; anything RepairAllCost can price, this can install for.
+        /// </summary>
         private static bool SceneHasRepairables()
         {
             return UnityEngine.Object.FindAnyObjectByType<WallSegment>() != null
                 || UnityEngine.Object.FindAnyObjectByType<Gate>() != null
                 || UnityEngine.Object.FindAnyObjectByType<Building>() != null
-                || UnityEngine.Object.FindAnyObjectByType<Tower>() != null;
+                || UnityEngine.Object.FindAnyObjectByType<Tower>() != null
+                || UnityEngine.Object.FindAnyObjectByType<DefenseTower>() != null
+                || UnityEngine.Object.FindAnyObjectByType<ArcaneTower>() != null
+                || UnityEngine.Object.FindAnyObjectByType<DeNelle.Village.World.HarvestSite>() != null
+                || ResourceCollectorRegistry.All.Count > 0;
         }
 
         // =====================================================================
@@ -168,7 +209,11 @@ namespace DeNelle.Village
                 || wave.Phase == WavePhase.Idle || wave.Phase == WavePhase.Countdown;
             if (!outOfBattle)
             {
-                Announce(Vis.Hidden, default, default, false);
+                // DISTINCT from the nothing-damaged case below. This branch is the one that
+                // fires while a wave is Active/Breached - i.e. exactly when structures are
+                // catching fire - so "on fire with no repair option" during a wave is this
+                // line, and it is currently BY DESIGN (repair is a between-waves action).
+                Announce(Vis.HiddenInBattle, default, default, false);
                 SetVisible(false);
                 return;
             }
@@ -177,8 +222,10 @@ namespace DeNelle.Village
             CoreCost cost = repair != null ? repair.RepairAllCost() : default;
             if (WallRepairController.MaterialsZero(cost))
             {
-                // Nothing damaged - no affordance.
-                Announce(Vis.Hidden, default, default, false);
+                // Nothing damaged - no affordance. If a structure is visibly ON FIRE while
+                // this branch is the live state, the damage-visual set and the repair set
+                // disagree about the same structure, and THAT is the defect.
+                Announce(Vis.HiddenNothingDamaged, default, default, false);
                 SetVisible(false);
                 return;
             }
@@ -212,8 +259,16 @@ namespace DeNelle.Village
             _last = state;
             switch (state)
             {
-                case Vis.Hidden:
-                    FlowTrace.Step("Repair", "hub repair affordance: hidden (no damage / in battle)");
+                case Vis.HiddenInBattle:
+                    FlowTrace.Step("Repair",
+                        "hub repair affordance: HIDDEN because a wave is Active/Breached " +
+                        "(repair is a between-waves action) - structures can burn here with no repair button");
+                    break;
+                case Vis.HiddenNothingDamaged:
+                    FlowTrace.Step("Repair",
+                        "hub repair affordance: HIDDEN because RepairAllCost() priced NOTHING " +
+                        "(the backend sees no damaged structure). If something is visibly on fire " +
+                        "right now, the damage-visual set and the repair set disagree.");
                     break;
                 case Vis.AvailableAffordable:
                     FlowTrace.Step("Repair",

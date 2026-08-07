@@ -722,6 +722,50 @@ namespace DeNelle.Village
                 return;
             }
 
+            // ── TOWN-SUSPENSION PER-TICK STAND-DOWN (owner ruling 2026-08-07) ────────
+            // "everything pauses except harvesting, while player is active." The player
+            // being in a dungeon does not mean they are ABSENT - they are present, just
+            // elsewhere in their own game - so the town holds still until they are back.
+            // Offline is the OPPOSITE case and is deliberately untouched here: an offline
+            // town stays exposed, because that pressure is the reason to fortify it.
+            //
+            // PER-TICK, not at the door, for exactly the reason the FTUE stand-down above
+            // is per-tick: a gate checked only in BeginLoop lets an already-armed countdown
+            // run to zero and spawn anyway. This is the same lesson, applied to the same
+            // clock. The precedent seam is RepEngageWatcher.PauseAll/ResumeAll.
+            //
+            // SuspendedFor(this) carries the active-scene exemption, so this can never
+            // freeze a wave belonging to the scene the player is standing in - which is why
+            // this is a deliberate per-system suspend and NOT Time.timeScale.
+            if (TownSuspension.SuspendedFor(this))
+            {
+                if (_phase == WavePhase.Countdown || _phase == WavePhase.Active)
+                {
+                    // OPEN QUESTION, owner has not ruled: what happens to a wave that is
+                    // ALREADY IN PROGRESS when the player leaves. Both answers are built.
+                    if (TownSuspension.WavePolicy == InProgressWavePolicy.CancelOnEntry &&
+                        _phase == WavePhase.Active)
+                    {
+                        FlowTrace.Warn("Wave",
+                            $"town suspended ({TownSuspension.Reason}) with wave {_currentWaveId} ACTIVE - " +
+                            "policy=CancelOnEntry, returning the loop to Idle (the in-flight wave is abandoned).");
+                        _phase = WavePhase.Idle;
+                        _countdownRemaining = 0f;
+                        OnCountdownTick.Invoke(0f);
+                        WaveCountdownUI.Instance?.StartCountdown(0f);
+                        return;
+                    }
+
+                    // DEFAULT policy=SuspendAndResume: freeze in place. Nothing is zeroed and
+                    // no phase is rewritten, so the wave resumes exactly as the player left it
+                    // once the return grace elapses. Throttled - this runs every frame.
+                    FlowTrace.Throttle("Wave", "town-suspend-hold", 5f,
+                        $"town suspended ({TownSuspension.Reason}) - wave {_currentWaveId} HELD at " +
+                        $"phase={_phase} cd={_countdownRemaining:F1}s. Harvesting continues; this clock does not.");
+                }
+                return;
+            }
+
             switch (_phase)
             {
                 case WavePhase.Countdown:
@@ -1870,13 +1914,32 @@ namespace DeNelle.Village
                 // was still draining — stop releasing if so.
                 if (_phase != WavePhase.Active) return;
 
+                // TOWN SUSPENSION, checked HERE and not only in Update(). SpawnBatch is a
+                // fire-and-forget UniTask with no CancellationToken: it runs on the PlayerLoop
+                // and outlives both component disable AND a scene change (the same property
+                // that produced the captured SpawnOne NRE documented below). So a stand-down
+                // that lived only in Update() would still let an already-queued batch keep
+                // releasing enemies into the town while the player is in a dungeon - the
+                // suspension would look correct in the trace and leak in the world.
+                if (TownSuspension.SuspendedFor(this))
+                {
+                    FlowTrace.Warn("Wave",
+                        $"town suspended ({TownSuspension.Reason}) mid-batch - ABANDONING the remaining " +
+                        $"{Mathf.Max(0, batch.Count) - i} spawn(s) of this batch (fire-and-forget UniTask, " +
+                        "cannot be held). The wave phase itself is preserved by the Update stand-down.");
+                    return;
+                }
+
                 // DEF-48: simultaneous enemy cap — stall the spawn if we're at capacity.
                 // _liveEnemies is pruned in TickActiveWave so the count is current.
                 if (_maxSimultaneousEnemies > 0 && _liveEnemies.Count >= _maxSimultaneousEnemies)
                 {
                     await UniTask.WaitUntil(
-                        () => _liveEnemies.Count < _maxSimultaneousEnemies || _phase != WavePhase.Active);
+                        () => _liveEnemies.Count < _maxSimultaneousEnemies
+                              || _phase != WavePhase.Active
+                              || TownSuspension.SuspendedFor(this));
                     if (_phase != WavePhase.Active) return;
+                    if (TownSuspension.SuspendedFor(this)) return;
                 }
 
                 SpawnOne(def, point, pinnedBossHp);

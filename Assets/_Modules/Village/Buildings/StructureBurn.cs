@@ -40,6 +40,7 @@
 
 using System;
 using UnityEngine;
+using DeNelle.Core;
 using DeNelle.Core.Combat;
 using DeNelle.Core.Diagnostics;
 
@@ -193,6 +194,21 @@ namespace DeNelle.Village
 
         private void Update()
         {
+            // TOWN SUSPENSION (owner ruling 2026-08-07): a burning TOWN structure must not
+            // keep losing HP while the player is active but elsewhere - a building lost to a
+            // fire the player could not see or reach is exactly the damage the ruling exists
+            // to stop. The burn is HELD, not cancelled: _burning stays true and the fire VFX
+            // keeps showing, so the structure is still visibly in trouble when they return.
+            //
+            // SuspendedFor(this) carries the active-scene exemption, so a burning structure
+            // inside the dungeon the player is standing in keeps burning normally. This is a
+            // deliberate per-system hold and NOT Time.timeScale for exactly that reason.
+            //
+            // Deliberately NOT gated on the extinguish check either: holding the tick holds
+            // the whole burn, and a repair performed on return is detected on the next
+            // un-suspended tick by the same upward-fraction test as always.
+            if (TownSuspension.SuspendedFor(this)) return;
+
             if (_burning) TickBurn(Time.deltaTime);
         }
 

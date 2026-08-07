@@ -74,6 +74,24 @@ namespace DeNelle.HUD
         private static void Bootstrap()
         {
             if (Instance != null) return;
+
+            // OWNER RULING 2026-08-07: "remove the flag and dev button ... for better screenshots."
+            //
+            // This overlay had NO GATE AT ALL - it spawned unconditionally in every build, release
+            // included, and drew its own "DEV" corner chip (:147). Gating ResourceDevTool (the
+            // OTHER "DEV" chip) did not touch it, which is why the chip survived the last EXE.
+            // TryActivateForOwner() only asks "is the signed-in user the owner" - that is an
+            // identity check, not a build or flag check, so it never kept the chip out of shot.
+            //
+            // Same flag as the resource tool so ONE switch controls every dev chip:
+            // ff.devresourcetool=1 brings them all back. F8 capture is untouched.
+            if (!DeNelle.Core.FeatureFlags.DevResourceTool)
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Once("OwnerDev", "overlay-suppressed",
+                    "OwnerDevToolsOverlay suppressed (ff.devresourcetool=0) - no DEV chip. " +
+                    "Set ff.devresourcetool=1 to restore it.");
+                return;
+            }
             try
             {
                 var go = new GameObject("OwnerDevToolsOverlay");

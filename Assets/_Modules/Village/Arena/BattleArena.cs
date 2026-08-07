@@ -408,6 +408,24 @@ namespace DeNelle.Village.Arena
             // resume on Resolve. (Static so no per-rep FindObjectsByType scan is needed.)
             RepEngageWatcher.PauseAll();
 
+            // TOWN SUSPENSION - THE ARENA GETS THE SAME PAUSE AS A DUNGEON (owner ruling
+            // 2026-08-07). This is a deliberate call, stated rather than implied:
+            //
+            // The arena is the THIRD case, and it is the hardest one to see, because unlike a
+            // dungeon there is NO scene change - the fight is staged 7 km away at ArenaCentre
+            // in the SAME scene, so the scene-driven evaluator in TownSuspension never fires
+            // for it. It has to be driven by hand, from here.
+            //
+            // It qualifies on the ruling's own terms: the player is ACTIVE, the town is
+            // unattended, and they cannot reach it to defend it. It is also the case that
+            // PROVED the defect - a village wave cleared 2.7 s after an arena victory and
+            // stranded the player, because the wave clock ran the whole fight with the hero
+            // 7 km away. The return grace exists precisely so that cannot happen again.
+            //
+            // Reversible in one line: delete this call and the arena reverts to a running
+            // town, with dungeons still paused.
+            DeNelle.Core.TownSuspension.Suspend("arena battle staged at ArenaCentre (hero 7km away, player active)");
+
             // WO-556 ITEM 2: roll the rare boss. On a hit, append the boss id to the family so
             // SpawnFamily stages it alongside the rest. Instrumented so the rate is PROVABLE from
             // the break-log / Editor.log (CLAUDE.md S12) rather than inferred from the const.
@@ -2131,6 +2149,11 @@ namespace DeNelle.Village.Arena
             // of the session. No post-loss grace / QuietNonPursuers — neither outcome happened.
             RepEngageWatcher.ResumeAll();
 
+            // Same teardown, same leak class: an abandoned battle that skipped this would leave
+            // the TOWN suspended for the rest of the session - a village that never ticks again.
+            // Idempotent, so it is safe here even though this path never "resolved".
+            DeNelle.Core.TownSuspension.Resume("arena battle abandoned");
+
             // Hand the camera back (a death-cam hold may have disabled the follow rig) and drop the
             // stale reticle/lock framing. Both are Guard-wrapped + hero-null-safe. Still NO WarpHero.
             ReacquireFollowCamera();
@@ -2369,6 +2392,16 @@ namespace DeNelle.Village.Arena
             // live in the home scene; while the masked return fades, the hero is still at the far
             // arena, so a resumed rep reads a ~7km distance and cannot aggro until the warp lands.
             RepEngageWatcher.ResumeAll();
+
+            // Release the town, with the return grace. This pairs with the Suspend in
+            // BeginEncounter and MUST run on every exit path for the same reason ResumeAll
+            // above must: a freeze that leaks is permanent for the rest of the session. It is
+            // idempotent and safe when not suspended, so the abandon/watchdog teardowns that
+            // force-resolve specifically to reach ResumeAll() cover this call too.
+            //
+            // The grace is the fix for the captured "wave cleared 2.7s after an arena victory"
+            // stranding: the held wave cannot land while the hero is still being warped home.
+            DeNelle.Core.TownSuspension.Resume("arena battle resolved");
 
             // RETURN TO PEACEFUL (owner F8 2026-07-10 "after battle is over should return to peaceful if not
             // being aggroed"): on a WIN, quiet every NON-pursuing rep back to calm roam so the overworld does
