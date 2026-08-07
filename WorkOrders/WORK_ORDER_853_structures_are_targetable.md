@@ -100,7 +100,45 @@ masks on layer `Enemy` (7).
   risks corrupting the player's persisted layout.
 - **Do not touch `Enemy.ProbeForStructure`.** The enemy→structure path already works.
 
-## 7. ⚠ THE ONE OWNER DECISION — raid scoring weights
+## 7. ✅ RULED + SHIPPED 2026-08-07 — raid scoring weights
+
+> **OWNER RULING: 50% spire · 30% structures · 20% garrison.** The proposal below was taken as authored.
+> Implemented in `RaidScoring.cs` the same day. `COMPILE_GATE_OK` + `REGRESSION_OK 128/128 suites`,
+> `RAID_SCORING_OK`, trace line reads `destruction split: spire 50 % / structures 30 % / garrison 20 %`.
+>
+> **What actually shipped, beyond the number:**
+> - `SpireWeight` 0.60 → **0.50**; new `StructuresWeight` = **0.30**; `GarrisonWeight` is **derived**
+>   (`1 - Spire - Structures`), never a fourth literal — three hand-typed weights are three chances to
+>   publish a split that does not sum to 1.
+> - `StructuresRazedPct` = census of `WallSegment` + **non-PlayerOwned** `DefenseTower`, denominator
+>   captured once in `CaptureStructureCensus()` at raid start. Components are **cached**, not re-found
+>   per frame — `DestructionPct` is read by the HUD every frame.
+> - **Read through `HpFraction`, NOT the `1 - Damage/100` this section proposed.** A wall stores an
+>   inverted 0–100 track (`WallSegment.cs:99-100`), so that expression is only equal to HpFraction while
+>   `MaxHp` happens to be exactly 100. Reading the shared abstraction means a later change to that
+>   constant cannot silently skew raid scores. An oracle now rejects the hardcoded form.
+> - **Absent terms are RENORMALISED, not scored as zero.** A legacy base with no spire, or with no walls
+>   and no turrets, would otherwise cap its razed bar at 70% or 50% forever — silently breaking star
+>   thresholds and the loot scale for every scene predating the term. With neither present it collapses
+>   to the original pure-garrison count, so nothing that shipped before WO-771.6 regresses.
+>
+> **Correction to this section's ⚠ warning:** it said any change trips
+> `RaidArenaShapeRegression:531-542`, `RaidScoringTests.cs` and `RaidScoringRegression:115-116`. It did
+> not. Those `0.60f` values are `destructionPct` **arguments** to `ComputeStars`, not the weight, and
+> `:533` only asserts the literal string `"SpireWeight"` still appears. **Nothing anywhere pinned the
+> split**, so the ruling would have landed with no guard at all and could have drifted silently. New
+> section (D) in `RaidScoringRegression` now pins all three weights as *executed* assertions, asserts
+> they sum to 1, and fails loudly if `StructuresWeight` ever returns to 0 — the exact defect §1 opened
+> with — or if the spire stops being the largest term.
+>
+> **Also worth recording:** §1's "nothing in this game can damage a wall, gate, or enemy tower" was
+> already fixed before this ruling. `WallSegment`, `Gate` and `DefenseTower` all implement `IDamageable`
+> and `PlayerAttackController` reaches structures (all tagged WO-853 in source). Scoring was the last
+> piece, which is why one number was the whole blocker.
+
+---
+
+## 7-original. ⚠ THE ONE OWNER DECISION — raid scoring weights *(kept for provenance)*
 
 `RaidScoring.DestructionPct` (`:126-155`) has two terms. It needs a third.
 

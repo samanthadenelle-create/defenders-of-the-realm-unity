@@ -516,6 +516,35 @@ row (`ObsidianQueueHud.cs:274`) or toasts a generic *"Ad skip unavailable right 
 
 ## 9. OPEN RULINGS + POLICY
 
+> ### ✅ OWNER RULED 2026-08-07 — D1, D2, D4, D5, D7, D8 ALL TAKEN AS RECOMMENDED
+>
+> | # | Ruling |
+> |---|---|
+> | **D1** | **Two SKUs, lead with +5 watches/window.** Minutes priced x2 higher. Do not stack uncapped. |
+> | **D2** | **Unity LevelPlay.** *(See the Seeker-check banner at the top of this file — the check that was named in sec.10.3 and never run has now been run, and it removes LevelPlay's only weakness. Unity's demand restriction is about the USER's Play access, and Seeker users have it. Unity now wins both scored axes: full demand AND the only documented crypto pre-approval path. sec.10.5's "two-horse race" framing is superseded.)* |
+> | **D4** | **No.** Ads stay strictly on queue timers for V1 — no offline-harvest doubling, no daily chest. |
+> | **D5** | **Neon + the existing `api/` rail.** No new Android dependency. |
+> | **D7** | **Retire `place.defeat.continue`.** It is combat power. |
+> | **D8** | **Hide ad offers on web for V1.** |
+>
+> **D3 STILL BINDS AND IS NOT WAIVED.** No SDK is added until the Unity pre-approval comes back **in
+> writing**. D2 selects the provider; it does not authorise integration. Unity's Content Policy names
+> *"cryptocurrency trading"* a Regulated Activity permitted only *"with prior approval by Unity"* — the
+> path exists, but they still have to say yes. **If Unity declines or stalls, the fallback is AppLovin
+> MAX and Q2a becomes live again.**
+>
+> **D6 and D9 are NOT ruled** and do not block: D6 (server-stamped vs monotonic window) is required
+> before real ad volume, not before shipping; D9 (does the 480s cooldown survive alongside the window)
+> is explicitly a *measure-first* decision — sec.10.7 says do not tune blind.
+>
+> **Q3a is defused** by the Seeker check (the device has Play Services) and was AppLovin-specific anyway.
+> **Q2a survives only if AppLovin becomes the fallback.**
+>
+> **PREREQUISITE THAT IS THE CLI's, NOT THE OWNER's:** sec.10.1 risk 4 — the Seeker is **API 36** while
+> `AndroidTargetSdkVersion: 0` (unpinned, so it is whatever the build machine has). Ad SDKs carry hard
+> targetSdk floors and AD_ID behaviour that changes at API 33. **Pin the target SDK before any SDK
+> lands**, in its own change with its own build verification — not folded into the integration commit.
+
 ### 9.1 OWNER-DECISION table
 
 | # | Decision | Recommendation |

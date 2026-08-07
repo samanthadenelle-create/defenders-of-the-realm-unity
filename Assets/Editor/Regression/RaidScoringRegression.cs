@@ -114,6 +114,30 @@ namespace DeNelle.Editor
                 {
                     RequireAll(failures, "RaidScoring.cs", scoringSrc,
                         "ComputeStars", "ComputeLoot", "Finalize", "OnTimeExpired");
+
+                    // WO-853 sec.7 — the structures term must be REAL, not a constant that
+                    // nothing reads. Checked against COMMENT-STRIPPED source: a token that only
+                    // appears in a doc comment proves nothing, and the whole point of these four
+                    // is that live code touches them.
+                    string scoringCode = StripComments(scoringSrc);
+                    RequireAll(failures, "RaidScoring.cs (code)", scoringCode,
+                        "StructuresWeight",     // the 30% exists
+                        "StructuresRazedPct",   // and something computes it
+                        "CaptureStructureCensus",
+                        "TowerAllegiance.PlayerOwned");   // and the census respects ownership
+
+                    // The wall term must read the SHARED 0..1 abstraction. WallSegment stores an
+                    // INVERTED 0-100 damage track, so hand-rolling the division is only correct
+                    // while MaxHp happens to be 100 - it would silently skew every raid score the
+                    // day that constant moves.
+                    //
+                    // STRIPPED source, and that is not incidental: on its first run this check
+                    // failed against RaidScoring.cs's own doc comment, which quotes the forbidden
+                    // expression while explaining why not to write it. An oracle that cannot tell
+                    // code from prose punishes the author for documenting the trap.
+                    if (scoringCode.Contains("Damage / 100") || scoringCode.Contains("Damage/100"))
+                        failures.Add("RaidScoring.cs derives wall health from a hardcoded /100 instead of " +
+                                     "WallSegment.HpFraction - that breaks silently if WallSegment.MaxHp changes");
                 }
 
                 // (B) RaidVictoryController grants loot on the victory path via the
@@ -154,6 +178,42 @@ namespace DeNelle.Editor
                 catch { /* enumeration best-effort */ }
             }
 
+            // =================================================================
+            //  (D) THE OWNER'S DESTRUCTION SPLIT — WO-853 sec.7, ruled 2026-08-07.
+            //
+            //  EXECUTED, not source-linted: this suite already references DeNelle.Village,
+            //  so it reads the real constants. Before today NOTHING pinned these numbers -
+            //  the 0.60f values elsewhere in this file are destructionPct ARGUMENTS to
+            //  ComputeStars, not the weight - so the split could have drifted silently.
+            //  That is exactly the class of miss the 4-day audit kept turning up.
+            // =================================================================
+            log.AppendLine($"  destruction split: spire {RaidScoring.SpireWeight:P0} / " +
+                           $"structures {RaidScoring.StructuresWeight:P0} / " +
+                           $"garrison {RaidScoring.GarrisonWeight:P0}");
+
+            AssertWeight(failures, "spire", RaidScoring.SpireWeight, 0.50f);
+            AssertWeight(failures, "structures", RaidScoring.StructuresWeight, 0.30f);
+            AssertWeight(failures, "garrison (derived)", RaidScoring.GarrisonWeight, 0.20f);
+
+            float weightSum = RaidScoring.SpireWeight + RaidScoring.StructuresWeight + RaidScoring.GarrisonWeight;
+            if (Mathf.Abs(weightSum - 1f) > 0.0001f)
+                failures.Add($"[split] the destruction weights sum to {weightSum:0.###}, not 1.0 - " +
+                             "the razed bar can no longer reach 100% (or overshoots it)");
+
+            // The regression that matters most: structures must carry REAL weight. The whole
+            // defect WO-853 opened with was "a raid is a fight, never a demolition" - which is
+            // what a 0% structures term means, whatever the seam underneath can damage.
+            if (RaidScoring.StructuresWeight <= 0f)
+                failures.Add("[split] StructuresWeight is 0 - breaking walls and turrets scores NOTHING again, " +
+                             "which is the exact WO-853 defect. The owner ruled 50/30/20 on 2026-08-07.");
+
+            // The spire must stay the single largest term or it stops reading as the objective.
+            if (RaidScoring.SpireWeight < RaidScoring.StructuresWeight ||
+                RaidScoring.SpireWeight < RaidScoring.GarrisonWeight)
+                failures.Add($"[split] the spire ({RaidScoring.SpireWeight:P0}) is no longer the largest term " +
+                             $"(structures {RaidScoring.StructuresWeight:P0}, garrison {RaidScoring.GarrisonWeight:P0}) - " +
+                             "the objective must remain the primary objective");
+
             if (failures.Count == 0)
             {
                 reason = null;
@@ -164,6 +224,56 @@ namespace DeNelle.Editor
             reason = "raid-scoring: " + string.Join("; ", failures);
             Debug.LogError(log.ToString() + "RAID_SCORING_FAIL: " + reason);
             return false;
+        }
+
+        /// <summary>
+        /// Blank out // line comments and block comments so a source-lint tests CODE, not prose.
+        /// Deliberately replaces each comment with a space rather than deleting it, so a token
+        /// cannot be forged by two identifiers on either side of a stripped comment.
+        /// Not a C# parser: a "//" inside a string literal is also stripped. That is acceptable
+        /// here (this file's checks look for identifiers, not string content) and is the same
+        /// trade RegressionMarkerRegression.StripLineComments already makes.
+        /// </summary>
+        private static string StripComments(string src)
+        {
+            if (string.IsNullOrEmpty(src)) return src ?? string.Empty;
+
+            var sb = new StringBuilder(src.Length);
+            for (int i = 0; i < src.Length; i++)
+            {
+                // Block comment
+                if (i + 1 < src.Length && src[i] == '/' && src[i + 1] == '*')
+                {
+                    int end = src.IndexOf("*/", i + 2);
+                    if (end < 0) { sb.Append(' '); break; }
+                    sb.Append(' ');
+                    i = end + 1;
+                    continue;
+                }
+                // Line comment (covers /// doc comments too)
+                if (i + 1 < src.Length && src[i] == '/' && src[i + 1] == '/')
+                {
+                    int nl = src.IndexOf('\n', i);
+                    sb.Append(' ');
+                    if (nl < 0) break;
+                    sb.Append('\n');
+                    i = nl;
+                    continue;
+                }
+                sb.Append(src[i]);
+            }
+            return sb.ToString();
+        }
+
+        /// <summary>
+        /// Pin one destruction weight to the owner-ruled value. Tolerance is float-noise only -
+        /// these are design numbers, so "close enough" is not a thing.
+        /// </summary>
+        private static void AssertWeight(List<string> failures, string label, float actual, float expected)
+        {
+            if (Mathf.Abs(actual - expected) > 0.0001f)
+                failures.Add($"[split] {label} weight is {actual:0.###}, owner ruled {expected:0.###} " +
+                             "(WO-853 sec.7, 2026-08-07). Change the ruling, not just the constant.");
         }
 
         private static void AssertStars(List<string> failures, string label,

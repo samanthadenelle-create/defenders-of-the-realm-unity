@@ -66,6 +66,23 @@ namespace DeNelle.Village
         private RaidGarrisonSpawner _spawner;
         private RaidSpire _spire;         // the OBJECTIVE (null in a legacy spire-less raid)
         private int _garrisonTotalPeak;   // stable total once the staggered spawn settles
+
+        // ── The STRUCTURES census (WO-853 sec.7) ──────────────────────────────
+        // CAPTURED ONCE at raid start, then only read. Walls and turrets are baked into the
+        // scene and exist from load, so unlike the staggered garrison this needs no peak
+        // tracking - the denominator is simply how many stood when the raid began.
+        //
+        // The COMPONENTS are cached, not re-found per frame: DestructionPct is read by the
+        // HUD every frame, and a FindObjectsByType sweep per frame in a property getter is
+        // how a scorer becomes a profiler entry.
+        //
+        // A razed structure that Unity later destroys becomes fake-null in these arrays and
+        // is skipped, contributing 0 to the surviving-HP sum while the denominator holds -
+        // so "destroyed and removed" and "standing at 0 HP" score identically, which is the
+        // behaviour we want and the reason the denominator is captured rather than counted live.
+        private WallSegment[] _startWalls = System.Array.Empty<WallSegment>();
+        private DefenseTower[] _startTowers = System.Array.Empty<DefenseTower>();
+        private int _structuresTotalAtStart;
         private int _deployedCount;
         private readonly RaidDeployLog _deployLog = new RaidDeployLog();
         private RaidResult _result;
@@ -99,11 +116,32 @@ namespace DeNelle.Village
         /// Share of the destruction readout owned by the SPIRE. The remainder is the
         /// garrison clear. Kept public so the HUD copy, the loot floor and the oracle all
         /// read the same number instead of re-deriving it.
-        /// WHY THE GARRISON KEEPS 40%: the objective decides WIN/LOSE, but a player who
+        /// WHY THE GARRISON IS STILL PAID: the objective decides WIN/LOSE, but a player who
         /// rushes the spire past a full, living garrison should not be paid the same as
         /// one who dismantled the base. Splitting it keeps both worth doing.
         /// </summary>
-        public const float SpireWeight = 0.60f;
+        public const float SpireWeight = 0.50f;
+
+        /// <summary>
+        /// Share of the destruction readout owned by the enemy base's STRUCTURES - its walls
+        /// and its garrison turrets (<see cref="StructuresRazedPct"/>).
+        ///
+        /// OWNER RULING 2026-08-07 (WO-853 sec.7): the split is 50% spire / 30% structures /
+        /// 20% garrison. It was 60/0/40 - structures counted for NOTHING, which is why a raid
+        /// read as a fight and never a demolition. This term is the whole point of WO-853: the
+        /// seam that made walls, gates and enemy turrets damageable already shipped, but until
+        /// now breaking them changed no number the player could see.
+        ///
+        /// The spire stays the largest single term, so the objective is still the objective.
+        /// </summary>
+        public const float StructuresWeight = 0.30f;
+
+        /// <summary>
+        /// Share owned by the garrison clear - whatever the spire and structures do not take.
+        /// DERIVED, never a fourth literal: three hand-typed weights are three chances to
+        /// publish a split that does not sum to 1.
+        /// </summary>
+        public static float GarrisonWeight => 1f - SpireWeight - StructuresWeight;
 
         /// <summary>True when this raid actually has a spire objective (false in a legacy raid base).</summary>
         public bool HasObjective => _spire != null;
@@ -137,20 +175,88 @@ namespace DeNelle.Village
         }
 
         /// <summary>
-        /// Live destruction fraction 0..1. WITH a spire this is the OBJECTIVE-weighted
-        /// blend (<see cref="SpireWeight"/> spire damage + the rest garrison razed), which
-        /// is what the HUD's "Base Razed" bar shows. WITHOUT one it degrades to the legacy
-        /// pure garrison count. Before this it was corpse-count only, which is why the HUD
-        /// could read "Razed 100%" with every building untouched.
+        /// True when this raid base actually had structures to raze at start. False in a
+        /// legacy base with no walls and no garrison turrets - the structures term then
+        /// carries no information and is redistributed rather than scored as untouched.
+        /// </summary>
+        public bool HasStructures => _structuresTotalAtStart > 0;
+
+        /// <summary>Structures standing at raid start (walls + enemy-owned turrets).</summary>
+        public int StructuresTotal => _structuresTotalAtStart;
+
+        /// <summary>
+        /// Fraction of the base's STRUCTURES razed, 0..1 (1 = every wall and turret flattened).
+        ///
+        /// Both terms are read through <c>HpFraction</c>, the shared 0..1 abstraction, NOT
+        /// through WallSegment's raw <c>Damage</c>. A wall stores an INVERTED 0-100 damage
+        /// track (WallSegment.cs:99-100, 180-189), so "1 - Damage/100" is only equal to
+        /// HpFraction while MaxHp happens to be exactly 100. Reading HpFraction means a later
+        /// change to that constant cannot silently skew raid scores.
+        ///
+        /// Turrets are counted only when NOT PlayerOwned - a raid scores the defender's base,
+        /// and any tower the player owns is not part of what they came to demolish.
+        /// </summary>
+        public float StructuresRazedPct
+        {
+            get
+            {
+                if (_structuresTotalAtStart <= 0) return 0f;
+
+                float standing = 0f;
+                for (int i = 0; i < _startWalls.Length; i++)
+                {
+                    var w = _startWalls[i];
+                    if (w != null) standing += Mathf.Clamp01(w.HpFraction);
+                }
+                for (int i = 0; i < _startTowers.Length; i++)
+                {
+                    var t = _startTowers[i];
+                    if (t != null) standing += Mathf.Clamp01(t.HpFraction);
+                }
+
+                return Mathf.Clamp01(1f - standing / _structuresTotalAtStart);
+            }
+        }
+
+        /// <summary>
+        /// Live destruction fraction 0..1 - the number behind the HUD's "Base Razed" bar.
+        ///
+        /// FULL FORM (spire + structures present): the owner's 50/30/20 blend of spire damage,
+        /// structures razed and garrison razed (WO-853 sec.7, ruled 2026-08-07). Before this
+        /// it was 60/0/40 and breaking a wall moved nothing.
+        ///
+        /// DEGRADATION - why the missing term is REDISTRIBUTED, not scored as zero. A legacy
+        /// base with no spire, or one with no walls or turrets, would otherwise be incapable
+        /// of ever reaching 100% razed: the absent term would sit permanently at 0 and cap the
+        /// bar at 70% or 50%. That silently breaks the star thresholds and the loot scale for
+        /// every scene that predates the term. So an absent term's weight is dropped and the
+        /// survivors are RENORMALISED, which preserves their ratio to each other and keeps the
+        /// ceiling at 1.0. With no spire AND no structures this collapses to the original
+        /// pure-garrison count, so nothing that shipped before WO-771.6 regresses.
         /// </summary>
         public float DestructionPct
         {
             get
             {
                 float garrison = GarrisonRazedPct;
-                if (_spire == null) return garrison;
-                float spire = Mathf.Clamp01(_spire.DamagedFraction);
-                return Mathf.Clamp01(spire * SpireWeight + garrison * (1f - SpireWeight));
+                bool hasSpire = _spire != null;
+                bool hasStructures = _structuresTotalAtStart > 0;
+
+                if (!hasSpire && !hasStructures) return garrison;   // legacy: corpse count only
+
+                float wSpire = hasSpire ? SpireWeight : 0f;
+                float wStruct = hasStructures ? StructuresWeight : 0f;
+                float wGarrison = GarrisonWeight;
+
+                float total = wSpire + wStruct + wGarrison;
+                if (total <= 0f) return garrison;                   // unreachable; never divide by 0
+
+                float blended = 0f;
+                if (hasSpire) blended += Mathf.Clamp01(_spire.DamagedFraction) * wSpire;
+                if (hasStructures) blended += StructuresRazedPct * wStruct;
+                blended += garrison * wGarrison;
+
+                return Mathf.Clamp01(blended / total);
             }
         }
 
@@ -345,8 +451,51 @@ namespace DeNelle.Village
                                        "Re-bake it with RaidBaseGenerator.BuildAllRaidScenes to get the spire.");
             else
                 FlowTrace.Step("Raid", $"RaidScoring bound to the OBJECTIVE: spire '{_spire.name}' " +
-                                       $"({_spire.MaxHp:0} HP). Razing it wins the raid; destruction% is " +
-                                       $"{SpireWeight:P0} spire / {1f - SpireWeight:P0} garrison.");
+                                       $"({_spire.MaxHp:0} HP). Razing it wins the raid.");
+
+            CaptureStructureCensus();
+
+            FlowTrace.Step("Raid", $"destruction% split = {SpireWeight:P0} spire / " +
+                                   $"{StructuresWeight:P0} structures / {GarrisonWeight:P0} garrison " +
+                                   $"(spire={(_spire != null ? "yes" : "NO")}, " +
+                                   $"structures={_structuresTotalAtStart}). " +
+                                   "Absent terms are renormalised away, not scored as 0.");
+        }
+
+        /// <summary>
+        /// Snapshot the structures that stood when the raid began - the denominator for
+        /// <see cref="StructuresRazedPct"/>. Run ONCE, after the spawner/spire bind, because
+        /// walls and turrets are baked into the scene and present from load.
+        /// </summary>
+        private void CaptureStructureCensus()
+        {
+            _startWalls = FindObjectsByType<WallSegment>(FindObjectsSortMode.None);
+
+            // Only the DEFENDER's turrets count. A raid scores what the player came to
+            // demolish, and a PlayerOwned tower is not part of that - it is also the exact
+            // ownership axis DefenseTower keeps its two IsAlive answers apart on (see
+            // DefenseTower.cs:192-238), so scoring must respect it rather than count every
+            // tower in the scene.
+            var allTowers = FindObjectsByType<DefenseTower>(FindObjectsSortMode.None);
+            var enemyTowers = new System.Collections.Generic.List<DefenseTower>(allTowers.Length);
+            for (int i = 0; i < allTowers.Length; i++)
+            {
+                var t = allTowers[i];
+                if (t != null && t.Allegiance != TowerAllegiance.PlayerOwned) enemyTowers.Add(t);
+            }
+            _startTowers = enemyTowers.ToArray();
+
+            _structuresTotalAtStart = _startWalls.Length + _startTowers.Length;
+
+            if (_structuresTotalAtStart == 0)
+                FlowTrace.Warn("Raid", "RaidScoring: this raid base has NO walls and NO enemy turrets - " +
+                                       "the structures term carries no information and its 30% is " +
+                                       "renormalised into spire/garrison. Re-bake with " +
+                                       "RaidBaseGenerator.BuildAllRaidScenes if that is unexpected.");
+            else
+                FlowTrace.Step("Raid", $"structures census at raid start: {_startWalls.Length} wall segment(s) + " +
+                                       $"{_startTowers.Length} enemy turret(s) = {_structuresTotalAtStart} " +
+                                       "(denominator fixed for the whole raid).");
         }
 
         private void Update()
