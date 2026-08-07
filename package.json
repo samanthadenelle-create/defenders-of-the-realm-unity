@@ -7,9 +7,10 @@
     "node": ">=18"
   },
   "dependencies": {
-    "@neondatabase/serverless": "^0.10.4",
+    "@ardrive/turbo-sdk": "^1.42.0",
     "@msgpack/msgpack": "^2.8.0",
-    "tweetnacl": "^1.0.3",
-    "bs58": "^5.0.0"
+    "@neondatabase/serverless": "^0.10.4",
+    "bs58": "^5.0.0",
+    "tweetnacl": "^1.0.3"
   }
 }
