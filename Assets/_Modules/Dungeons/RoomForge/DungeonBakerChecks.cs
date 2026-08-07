@@ -211,8 +211,9 @@ namespace DeNelle.Dungeons.RoomForge
 
         /// <summary>
         /// Seal one unmated socket. Secret => invisible marker (matedTo="SEALED_SECRET", NO
-        /// geometry). Normal => a Seal_&lt;id&gt; wall cube scaled to halfWidth*2 and
-        /// matedTo="SEALED_WALL". Returns true if wall geometry was spawned.
+        /// geometry). Vertical/stair => invisible marker (matedTo="SEALED_VERTICAL", NO geometry).
+        /// Normal => a Seal_&lt;id&gt; wall cube scaled to halfWidth*2 and matedTo="SEALED_WALL".
+        /// Returns true if wall geometry was spawned.
         /// </summary>
         public static bool SealSocket(RoomSocket s)
         {
@@ -220,6 +221,17 @@ namespace DeNelle.Dungeons.RoomForge
             if (s.isSecret)
             {
                 s.matedTo = "SEALED_SECRET";
+                return false;
+            }
+            // WO-1001: a stair socket is a hole in the FLOOR, not a gap in a wall - there is no
+            // wall to build, so a vertical slab is meaningless here at ANY height. It also became
+            // actively visible once slice 1 moved these sockets half a floor off the room origin:
+            // an unmated StairUp would have hung a 2.4 x 2.5 slab three metres up in mid-air.
+            // Seal it invisibly. (sealedN counts every seal regardless of geometry, so the sample
+            // layouts' pinned sealed counts are unaffected.)
+            if (IsVertical(s.type))
+            {
+                s.matedTo = "SEALED_VERTICAL";
                 return false;
             }
             var wall = GameObject.CreatePrimitive(PrimitiveType.Cube);
@@ -359,9 +371,11 @@ namespace DeNelle.Dungeons.RoomForge
                     foreach (var s in kv.Value.GetComponentsInChildren<RoomSocket>(true))
                     {
                         if (s == null || s.IsMated) continue;
-                        bool wall = SealSocket(s);
+                        SealSocket(s);
                         outcome.sealedN++;
-                        FlowTrace.Step(Sys, $"seal {(wall ? "WALL" : "SECRET")} socket='{s.id}' room='{kv.Key}'");
+                        // Report the actual seal kind: the old ternary printed "SECRET" for
+                        // anything without geometry, which now also covers vertical stair sockets.
+                        FlowTrace.Step(Sys, $"seal {s.matedTo} socket='{s.id}' room='{kv.Key}'");
                     }
                 }
             }

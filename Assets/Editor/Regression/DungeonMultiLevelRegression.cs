@@ -59,6 +59,7 @@ namespace DeNelle.Editor.Regression
                 Case(failures, "stack-not-overlap", () => Case3_StackIsNotOverlap(failures));
                 Case(failures, "door-planar", () => Case4_DoorsKeepPlanarNudge(failures));
                 Case(failures, "prefab-poses", () => Case5_PrefabsCarryThePoses(failures));
+                Case(failures, "vertical-seal", () => Case6_UnmatedStairSealsInvisibly(failures));
             }
             finally
             {
@@ -67,9 +68,10 @@ namespace DeNelle.Editor.Regression
 
             if (failures.Count == 0)
             {
-                reason = "DUNGEON-MULTILEVEL OK - 5/5 cases pass (stair sockets oppose, " +
+                reason = "DUNGEON-MULTILEVEL OK - 6/6 cases pass (stair sockets oppose, " +
                          $"floor drop == {DungeonBakerChecks.FloorSeparationY:0}u, stacked rooms are not " +
-                         "an overlap, doors keep the planar-only nudge, shipped stair prefabs carry the poses)";
+                         "an overlap, doors keep the planar-only nudge, shipped stair prefabs carry the poses, " +
+                         "unmated stair sockets seal invisibly)";
                 return true;
             }
             reason = "DUNGEON-MULTILEVEL FAIL x" + failures.Count + ": " + string.Join(" | ", failures);
@@ -236,6 +238,46 @@ namespace DeNelle.Editor.Regression
             if (dot < 0.99f)
                 failures.Add($"[prefab-poses] {path} socket '{socketId}' points {sock.transform.forward}, expected {expectOutward} " +
                              $"(dot={dot:0.###}). Stale prefabs - re-run DefaultDungeonRoomsBuilder.BuildAll.");
+        }
+
+        // =====================================================================
+        //  CASE 6 — an UNMATED stair socket seals invisibly, not as a floating slab
+        // =====================================================================
+        private static void Case6_UnmatedStairSealsInvisibly(List<string> failures)
+        {
+            float h = DungeonBakerChecks.FloorSeparationY * 0.5f;
+
+            // dg_starter_loop has StairUp/StairDown rooms whose stair sockets are in NO edge, so
+            // they get sealed. A wall slab is meaningless on a floor hole at any height, and once
+            // slice 1 moved the socket half a floor up it would hang in mid-air in a room the
+            // owner actually plays. Must be an invisible marker.
+            var up = MakeRoom("ML_seal_up", StairSock("stair_up_01", RoomSocketType.StairUp, h, Vector3.up));
+            var sock = Sk(up, "stair_up_01");
+            bool spawnedGeometry = DungeonBakerChecks.SealSocket(sock);
+
+            if (spawnedGeometry)
+                failures.Add("[vertical-seal] an unmated stair socket spawned wall geometry - it would float half a floor up");
+            if (sock.matedTo != "SEALED_VERTICAL")
+                failures.Add($"[vertical-seal] expected matedTo=SEALED_VERTICAL, got '{sock.matedTo}' - the seal kind must stay distinguishable from SECRET in the bake trace");
+            if (sock.transform.childCount != 0)
+                failures.Add($"[vertical-seal] the stair socket gained {sock.transform.childCount} child object(s) - an invisible seal must spawn nothing");
+
+            // A normal unmated DOOR must still get its wall - this fix must not blank real walls.
+            var room = MakeRoom("ML_seal_door", Sock("n", RoomSocketType.Door, new Vector3(0, 0, 3), Vector3.forward));
+            var door = Sk(room, "n");
+            if (!DungeonBakerChecks.SealSocket(door))
+                failures.Add("[vertical-seal] an unmated DOOR must still be sealed with wall geometry");
+            if (door.matedTo != "SEALED_WALL")
+                failures.Add($"[vertical-seal] door seal expected matedTo=SEALED_WALL, got '{door.matedTo}'");
+
+            // And a secret socket must still seal invisibly (unchanged contract).
+            var secretRoom = MakeRoom("ML_seal_secret", Sock("s", RoomSocketType.Door, new Vector3(0, 0, -3), Vector3.back));
+            var sec = Sk(secretRoom, "s");
+            sec.isSecret = true;
+            if (DungeonBakerChecks.SealSocket(sec))
+                failures.Add("[vertical-seal] a secret socket must not spawn wall geometry");
+            if (sec.matedTo != "SEALED_SECRET")
+                failures.Add($"[vertical-seal] secret seal expected matedTo=SEALED_SECRET, got '{sec.matedTo}'");
         }
 
         // -------- helpers --------
