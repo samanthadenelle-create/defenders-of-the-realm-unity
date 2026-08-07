@@ -142,6 +142,24 @@ torch recipe unlock, first-clear recorded). `Dungeon_FolksGranary` is a STUB wit
 
 ## 4. Decisions waiting on the owner
 
+> **Added overnight 2026-08-07 (fast ones first — each is a one-line change once ruled):**
+>
+> **A. Dungeon difficulty (task #38) — a felt playtest closes it.** Making `enemies.json`
+> authoritative made dungeon hollows tougher: hollow-rogue Hp **34 → 70**, walker 40 → 52,
+> acolyte 60 → 90. Spawn stream unchanged. If it plays too hard, tune the JSON — **never** put
+> numbers back in C#, that was the bug.
+>
+> **B. App label vs store name (task #36) — needed BEFORE store submission.** The APK installs as
+> **"Defenders of the Realm"** while the listing and the Firebase app both say **"Echoes of
+> Elarion"**. ⚠ Not a simple rename: `productName` feeds `Application.persistentDataPath` on
+> **desktop**, so changing it orphans every existing EXE save. Android is keyed on the package name
+> and is unaffected. Needs either a save-path migration or a platform-scoped override.
+>
+> **C. Stair traversal model (task #37).** Multi-level dungeons now PLACE correctly but are not
+> WALKABLE between floors. Before slice 1b is built: is descending a **walk-through staircase**
+> (needs stair geometry + a floor cut + a NavMeshLink) or a **triggered transition** (cheaper, but
+> reads as a loading seam)?
+
 1. **Structure height ladder.** Normalization runs, but 20 of 29 structures have NO authored
    `heightMul` and sit on a flat 4.00 m. A **farm (5.60 m) is taller than every tower (4.80 m) and
    the Cathedral (4.00 m)**, which is level with a garden wall.
