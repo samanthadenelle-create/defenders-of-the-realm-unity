@@ -613,6 +613,7 @@ namespace DeNelle.Editor.RoomForge
             int carved = 0, dead = 0, internallyWhole = 0;
             int bottomJoins = 0, topJoins = 0, noRoomAbove = 0;
             var firstDead = "";
+            var samples = new List<RampSample>();
 
             foreach (var r in ramps)
             {
@@ -644,13 +645,26 @@ namespace DeNelle.Editor.RoomForge
                 }
 
                 carved++;
+                bool whole = false;
                 if (bOk && tOk)
                 {
                     var p = new NavMeshPath();
-                    if (NavMesh.CalculatePath(bHit.position, tHit.position, NavMesh.AllAreas, p) &&
-                        p.status == NavMeshPathStatus.PathComplete)
-                        internallyWhole++;
+                    whole = NavMesh.CalculatePath(bHit.position, tHit.position, NavMesh.AllAreas, p) &&
+                            p.status == NavMeshPathStatus.PathComplete;
+                    if (whole) internallyWhole++;
                 }
+
+                // ── LENGTH vs WHOLENESS ───────────────────────────────────────
+                //  Slope is dead as an explanation: 40.6deg turn legs fragmented MORE than 42.7deg
+                //  Vertical ramps (0/8 vs 2/4). Two unmeasured differences remain — a turn leg is
+                //  SHORTER (3.5m run vs ~6.5m) and it carries a landing box between legs. Record
+                //  length and rise per ramp against whether it survived, so the correlation is
+                //  read off data instead of argued. Bucketed on output; per-ramp lines would be
+                //  40+ per bake and nobody reads those.
+                float lenXZ = new Vector2(axis.x, axis.z).magnitude * 2f;   // full planar run
+                float riseM = Mathf.Abs(axis.y) * 2f;
+                float deg = lenXZ > 0.01f ? Mathf.Atan2(riseM, lenXZ) * Mathf.Rad2Deg : 90f;
+                samples.Add(new RampSample { run = lenXZ, rise = riseM, slopeDeg = deg, whole = whole });
 
                 // ── WHICH END IS BROKEN? ──────────────────────────────────────
                 //  A ramp can be a perfect walkable strip and still connect nothing, which is
@@ -693,6 +707,8 @@ namespace DeNelle.Editor.RoomForge
                     $"RAMP CARVE: all {ramps.Count} ramp(s) carve navmesh; {internallyWhole}/{ramps.Count} are " +
                     "walkable end-to-end along their own length.");
 
+            ReportRampShapeCorrelation(samples);
+
             // The seam verdict — the line that says WHICH END to fix.
             FlowTrace.Step(Sys,
                 $"RAMP SEAMS: bottom->own floor {bottomJoins}/{ramps.Count} | " +
@@ -701,6 +717,51 @@ namespace DeNelle.Editor.RoomForge
                 " -- 0 bottoms means the flight never meets the floor it stands on; 0 tops means it " +
                 "arrives at a landing it cannot step onto; both non-zero with the dungeon still " +
                 "PathPartial would mean the break is somewhere other than the stair.");
+        }
+
+        /// <summary>One ramp's measured shape and whether its navmesh survived end to end.</summary>
+        private struct RampSample
+        {
+            public float run;        // planar length, metres
+            public float rise;       // vertical gain, metres
+            public float slopeDeg;
+            public bool whole;
+        }
+
+        /// <summary>
+        /// Report wholeness bucketed by RUN LENGTH and by SLOPE, so the driver is read off data
+        /// rather than argued. Slope has already been eliminated once — 40.6° turn legs fragmented
+        /// more than 42.7° Vertical ramps — so length is the live suspect and both are printed
+        /// side by side to keep the comparison honest.
+        /// </summary>
+        private static void ReportRampShapeCorrelation(List<RampSample> s)
+        {
+            if (s.Count == 0) return;
+
+            var byRun = new SortedDictionary<int, Vector2Int>();    // run bucket (m) -> (whole, total)
+            var bySlope = new SortedDictionary<int, Vector2Int>();  // slope bucket (deg) -> (whole, total)
+
+            foreach (var r in s)
+            {
+                int runKey = Mathf.RoundToInt(r.run);
+                int slopeKey = Mathf.RoundToInt(r.slopeDeg);
+                byRun.TryGetValue(runKey, out var a);
+                byRun[runKey] = new Vector2Int(a.x + (r.whole ? 1 : 0), a.y + 1);
+                bySlope.TryGetValue(slopeKey, out var b);
+                bySlope[slopeKey] = new Vector2Int(b.x + (r.whole ? 1 : 0), b.y + 1);
+            }
+
+            var runTxt = new List<string>();
+            foreach (var kv in byRun) runTxt.Add($"{kv.Key}m:{kv.Value.x}/{kv.Value.y}");
+            var slopeTxt = new List<string>();
+            foreach (var kv in bySlope) slopeTxt.Add($"{kv.Key}deg:{kv.Value.x}/{kv.Value.y}");
+
+            FlowTrace.Step(Sys,
+                $"RAMP SHAPE vs WHOLE (whole/total) -- by RUN: {string.Join("  ", runTxt)} " +
+                $"| by SLOPE: {string.Join("  ", slopeTxt)}. " +
+                "Slope was already eliminated (40.6deg legs fragmented MORE than 42.7deg ramps), so a clean " +
+                "split on RUN and a muddled one on SLOPE means short ramps are the driver; the reverse would " +
+                "mean neither and the cause is something not measured here.");
         }
 
         /// <summary>Nearest ancestor carrying <see cref="RoomPrefabMeta"/> — the room a ramp lives in.</summary>
