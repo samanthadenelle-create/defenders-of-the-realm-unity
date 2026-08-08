@@ -458,12 +458,14 @@ namespace DeNelle.Editor
                 PrefabM  = PolyMedievalDir + "House_Medieval_Large.prefab",
                 PrefabM2 = PolyMedievalDir + "Marketplace_Stand_Simple.prefab",
                 PlaceholderColor = new Color(0.78f, 0.55f, 0.30f), FenceKind = "stone" },
-            // Sawmill (catalog id "lumbermill", BuildingType.Lumbermill = 5) — owner ask
+            // Lumber Mill (catalog id "lumbermill", BuildingType.Lumbermill = 5) — owner ask
             // "farm sawmill armorer". Upgrade-district building in the SW outer quadrant.
             // Position (-22, 0, -22): >24 m from every cardinal gate (clears the 8 m
             // DEF-101 guard) and >=12 m from the arcane-tower plot. Fbx building_lumbermill
-            // (KayKit Medieval Hexagon). Player-facing nameplate "Sawmill" via DisplayLabel.
-            new BuildingPlacement { Type = 5, Id = "lumbermill", Label = "Sawmill",
+            // (KayKit Medieval Hexagon). Player-facing nameplate "Lumber Mill" via DisplayLabel
+            // — owner ruling 2026-08-08 ("it is called the lumber mill for the lumber mill");
+            // retires "Sawmill" and matches building-tiers.json, which already said "Lumber Mill".
+            new BuildingPlacement { Type = 5, Id = "lumbermill", Label = "Lumber Mill",
                 X = -22f, Z = -22f, YawDeg = 45f, Fbx = "building_lumbermill",
                 PlaceholderColor = new Color(0.62f, 0.45f, 0.28f), FenceKind = "wood" },
             // Armorer (catalog id "forge", BuildingType.Forge = 6) — owner ask. NOTE the

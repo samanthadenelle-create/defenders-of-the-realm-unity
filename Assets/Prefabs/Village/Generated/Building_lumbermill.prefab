@@ -69,7 +69,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: DeNelle.Village::DeNelle.Village.Building
   _type: 5
   _buildingId: lumbermill
-  _displayLabel: Sawmill
+  _displayLabel: Lumber Mill
   _displayNameKey: lumbermill
   _crystalCost: 70
   _hp: 130

@@ -371,16 +371,16 @@
     },
     {
       "id": "building_sawmill",
-      "tab": "Sawmill",
-      "title": "Sawmill",
+      "tab": "Lumber Mill",
+      "title": "Lumber Mill",
       "status": "live",
       "body": [
-        "The Sawmill cuts timber into planks, producing Wood, the most common building and crafting resource and the bones of your walls and gear. Its blade hums against the timber the green places of Elarion still spare.",
-        "Upgrade it along its yield path to bring in more Wood per cycle. Wood is also one of the things your Echoes harvest, so the Sawmill and your workforce both feed the same pile.",
+        "The Lumber Mill cuts timber into planks, producing Wood, the most common building and crafting resource and the bones of your walls and gear. Its blade hums against the timber the green places of Elarion still spare.",
+        "Upgrade it along its yield path to bring in more Wood per cycle. Wood is also one of the things your Echoes harvest, so the Lumber Mill and your workforce both feed the same pile.",
         "Plentiful Wood keeps crafting cheap and your defenses well supplied."
       ],
       "tips": [
-        "Wood is your most-used resource; a strong Sawmill keeps everything affordable.",
+        "Wood is your most-used resource; a strong Lumber Mill keeps everything affordable.",
         "Echoes can gather Wood too, stacking with the mill's output.",
         "Upgrade early so you are never short on the basics."
       ]

@@ -141,7 +141,7 @@
         },
         {
           "stageId": "plant-sapling",
-          "objectiveText": "Carry a sapling from the Heart of Elarion, plant it, and raise a Sawmill to tend the new growth.",
+          "objectiveText": "Carry a sapling from the Heart of Elarion, plant it, and raise a Lumber Mill to tend the new growth.",
           "reward": { "crystals": 0, "food": 0, "magic": 0, "grantItemId": "" },
           "requiresFlag": "",
           "grantsKeystone": false,
@@ -351,7 +351,7 @@
       "stages": [
         {
           "stageId": "gather-the-four",
-          "objectiveText": "Meet the four crafts of Elarion - the Forge, the Blacksmith, the Sawmill, the Mill - and hear Borin Emberhand tell the legend of the broken Aegis of Elarion.",
+          "objectiveText": "Meet the four crafts of Elarion - the Forge, the Blacksmith, the Lumber Mill, the Mill - and hear Borin Emberhand tell the legend of the broken Aegis of Elarion.",
           "reward": { "crystals": 0, "food": 0, "magic": 0, "grantItemId": "" },
           "requiresFlag": "",
           "grantsKeystone": false,
