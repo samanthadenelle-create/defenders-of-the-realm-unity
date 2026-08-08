@@ -475,6 +475,20 @@ Assets/google-services.json.meta
 # Agent-skill symlinks are machine-local; the real skill content lives in .agents/skills/
 .claude/skills/levelplay-unity-integration
 
+# SECRETS -- key.json is an Arweave/permaweb RSA wallet key in JWK form (kty:RSA with the
+# private components), generated at the repo root by `npx github:permaweb/wallet` on 2026-08-07.
+# It was NEVER committed (verified against --all), but it was sitting unignored where a single
+# `git add -A` would have pushed a live wallet private key to GitHub. Ignored defensively here.
+# .gitignore is NOT security: a private key does not belong in a source tree at all. Move it to
+# somewhere outside the repo and point whatever consumes it at the new path.
+key.json
+*.jwk
+**/arweave-key*.json
+
+# Seeker/adb logcat captures -- multi-MB transient dumps from felt-test sessions.
+Logs/*.txt
+Logs/*.jsonl
+
 # com.unity.test-framework.performance writes its run metadata into Assets/Resources/,
 # which means every player build would BAKE these in and load them at runtime. They are
 # regenerated on each test run and hold nothing (MeasurementCount:-1, Results:[]).
