@@ -22,6 +22,39 @@ Measured from tonight's full recompose (`COMPOSE_ALL_OK 5/5`, all `matesFail=0`,
 **The only dungeon that completes is the only one with no stairs.** That is not a coincidence and it is not a
 pathfinding tuning problem — there is no walkable surface between floors at all.
 
+### ★ IT IS NOT JUST TRAVERSAL — THE DESIGN ALREADY ASSUMES REAL STAIRS ★
+
+Owner, from a play capture (2026-08-07): *"this shows why we need the stairs to be real."*
+
+The layout data agrees, by name. `dg_descent_probe.json`:
+
+```json
+"locks":  [{ "id": "gate-to-stairs", "keyId": "probe-key",
+             "fromRoomId": "corr1", "toRoomId": "stair_down" }]
+"keys":   [{ "id": "probe-key", "roomId": "corr1" }]
+"extracts": [{ "id": "extract-entry", "roomId": "entry",      "label": "Extract" },
+             { "id": "extract-deep",  "roomId": "deep_vault", "label": "Extract (deep)" }]
+```
+
+**There is a keyed gate whose destination is literally `stair_down`.** The intended loop is: find
+`probe-key` → open `gate-to-stairs` → descend. The key, the lock and the destination all exist. **Only the
+stairs do not.** So the gate opens onto nothing walkable.
+
+**Two consequences, and the second is the one that matters:**
+
+1. **The `Extract` button is a WORKAROUND, not a feature.** Each layout ships two of them because, with no
+   descent, a run has no other way to resolve. A dungeon whose exit is a UI button rather than a *place* is one
+   the player **dismisses** rather than **escapes** — and that is a different feeling entirely. Tension has
+   nowhere to land.
+2. **It explains why the gate looks the way it does** (§3.1). Nobody ever had to make that slab read as *an
+   entrance to somewhere*, because there was no somewhere. It is a flat unlit rectangle by neglect, not by
+   choice. Build the stairwell and the gate stops being a green wall and becomes a doorway with steps falling
+   away behind it, lit from below — which is a *moment*. That is also why §3.1 should be solved **after** this,
+   not before: re-shading a gate that opens onto void is polishing the wrong thing.
+
+**So the priority argument is not "traversal is missing."** It is: **the extract loop is currently
+non-diegetic, and the stairs are what make it real.**
+
 ### Why it happens
 
 The composer solves the graph, mates the stair sockets and places the upper room exactly `FloorSeparationY`
