@@ -1,6 +1,10 @@
+> ## RECONCILED 2026-08-08 - true status is NOT STARTED
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: its required outputs are absent - ZERO RESULT files existed anywhere in the 900-926 range before the 2026-08-08 reconcile. Note the irony worth recording: this is the exact WO that would have PREVENTED the 2026-08-08 audit, and its own sec.0 predicted precisely this outcome.
+> The previous Status line read "READY TO IMPLEMENT" and was wrong.
+
 # WORK ORDER 918 — Board hygiene: close shipped work orders + RESULT files (audit wave)
 
-**Status: READY TO IMPLEMENT**  
+**Status: NOT STARTED** (reconciled 2026-08-08, see banner)  
 **Minted:** 2026-08-07 (CLI / Grok — process residual after the five-findings audit + WO-899/1001 wave)  
 **Silo:** Process / Notion board / docs (no gameplay code required)  
 **Roles:** CLI (sole git committer for RESULT files) + whoever has Notion access for board rows  

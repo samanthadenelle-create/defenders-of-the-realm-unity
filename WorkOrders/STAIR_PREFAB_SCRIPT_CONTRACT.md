@@ -1,5 +1,12 @@
+> ## RECONCILED 2026-08-08 - true status is SATISFIED - contract consumed
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: `DefaultStairConnectorRoomsBuilder.cs`
+> plus 6 shipped prefabs - `StairConnector_{Left,Right,Vertical}_{Up,Down}.prefab` - honour this contract.
+> Keep this file as the reference for why each constraint exists; do NOT re-do the work it briefs.
+> A Status line has been added - the file previously had none.
+
 # Stair prefab script — the integration contract
 
+**Status:** SATISFIED - contract consumed (reconciled 2026-08-08)
 **For:** whoever writes the stair-builder script (Grok) · **Date:** 2026-08-07 · **From:** CLI seat
 
 Hand this over with the script brief. These are the things a from-scratch stair builder **cannot guess from

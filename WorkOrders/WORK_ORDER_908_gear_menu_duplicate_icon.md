@@ -1,6 +1,10 @@
+> ## RECONCILED 2026-08-08 - true status is DONE
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: shipped in `fce950ae`. Note the WO's own premise was REFUTED - NEITHER glyph was a duplicate; the gilt one is the drawer handle. So the WO TITLE ("duplicate gear icon") is now factually wrong, not merely its Status: there never was a duplicate. Read the title as "side menu glyph formatting", and do not open a follow-up hunting a duplicate that does not exist.
+> The previous Status line read "READY TO IMPLEMENT" and was wrong.
+
 # WORK ORDER 908 — Side menu: duplicate gear icon + wrong icon formatting
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE (`fce950ae`; reconciled 2026-08-08 — premise refuted, see banner; not felt-verified)
 **Minted:** 2026-08-05 (CLI, main-line block; banner bumped 908 -> 909 in the same edit)
 **Lane:** HUD / UI — presentation only. No gameplay, no data, no scene edits.
 **Reported by:** Owner (PO), felt-test on Seeker, native **2670x1200** landscape, build `2026.08.05.312200`

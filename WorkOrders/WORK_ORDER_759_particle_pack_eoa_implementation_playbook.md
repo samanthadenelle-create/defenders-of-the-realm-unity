@@ -1,6 +1,11 @@
+> ## RECONCILED 2026-08-08 - true status is DONE
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: Boss_FireBreath.prefab shipped; a12c6d22 built 14 Particle Pack recipes.
+> The previous Status line read "Status: SPEC - READY TO HAND TO ANY AGENT (owner validated structures in D:\Flames sandbox, 2026-08-05)." and was wrong; the board understated this.
+> WARNING - WO NUMBER COLLISION: a SECOND work order is also numbered 759 (`WORK_ORDER_759_vfx_manual_picks_gameplay_wire.RESULT.md`, 'Wire VfxManualPicks into gameplay'). Do not treat 759 as a single ticket.
+
 # WORK ORDER 759 — Particle Pack → EoA implementation playbook
 
-**Status:** SPEC — READY TO HAND TO ANY AGENT (owner validated structures in `D:\Flames` sandbox, 2026-08-05).  
+**Status:** DONE  
 **Classification:** VFX knowledge + implementation rules + first-ship checklist (Syndrath breath).  
 **Silo:** Village combat / VFX.  
 **PO:** Elden.  

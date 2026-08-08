@@ -1,6 +1,10 @@
+> ## RECONCILED 2026-08-08 - true status is DONE
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: shipped in commit 572f1289; QueueRailView.cs +61 lines and EchoCardVM.cs +30 lines.
+> The previous Status line read "READY (low - polish on shipped WO-864 + WO-852)." and was wrong.
+
 # WORK ORDER 883 — Polish: QueueCardRail truncation/clock + EchoCard chip-note clip
 
-**Status:** READY (low — polish on shipped WO-864 + WO-852). **Lane:** HUD/UI. **WO#:** UI-seat block; **883**.
+**Status:** DONE (reconciled 2026-08-08) — polish on shipped WO-864 + WO-852. **Lane:** HUD/UI. **WO#:** UI-seat block; **883**.
 **Source:** `docs/ui-review/screens-2026-08-04/QueueCardRail_2340x1080.png` + `EchoCard_2340x1080.png`.
 Both screens LANDED well (three-rail queue + fixed Echo picker) — these are small residuals.
 

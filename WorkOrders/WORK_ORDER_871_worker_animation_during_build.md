@@ -1,6 +1,10 @@
+> ## RECONCILED 2026-08-08 - true status is DONE
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: 55d4df9b; ConstructionWorker.cs 538 lines new plus BuilderWorkerWork.controller.
+> The previous Status line read "Status: READY TO IMPLEMENT" and was wrong; the board understated this.
+
 # WORK ORDER 871 — Worker animation during build / upgrade timers
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE
 **Author:** UI/QA triage (read-only, §13) — Claude UI
 **Lane:** World/VFX + Animation. **WO#:** UI-seat block; **871**=this.
 **Origin:** owner 2026-08-04 — *"is it possible to have worker animation play during upgrades or building timers?"*

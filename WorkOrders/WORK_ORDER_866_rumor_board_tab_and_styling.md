@@ -1,6 +1,10 @@
+> ## RECONCILED 2026-08-08 - true status is DONE
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: 91ba5137; RumorBoardLayoutRegression.cs 450 lines new.
+> The previous Status line read "Status: READY TO IMPLEMENT" and was wrong; the board understated this.
+
 # WORK ORDER 866 — Brom's Rumor Board: clipped-tab bug + frame/content styling pass
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE
 **Author:** UI/QA triage (read-only, §13) — Claude UI
 **Lane:** HUD/UI — `RumorBoardPanel.cs`. **WO#:** UI-seat block; **866**=this.
 **Source:** `docs/ui-review/2026-08-04-seeker/README.md` §2 + `04-rumor-board.png` / `05-rumor-board-b.png` (Seeker).

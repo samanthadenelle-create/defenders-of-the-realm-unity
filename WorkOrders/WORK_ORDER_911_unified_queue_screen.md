@@ -1,6 +1,17 @@
+> ## RECONCILED 2026-08-08 - true status is DONE
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: shipped in `21d166c9` - `ManageScreenPanel.cs` (843 lines) + `ManageScreenVM.cs` (848 lines) + `ManageScreenBootstrap.cs`; corroborated by `f6703eaf`, which retired the Builders chip double-tap door.
+> The previous Status line read "READY TO IMPLEMENT - FULLY RULED. No open questions." and was wrong.
+
+> ## !! WO NUMBER COLLISION - "911" IS TWO UNRELATED WORK ORDERS !!
+> This file is **WO-911 unified Manage/Queues screen**, and it is DONE. A SECOND, entirely unrelated WO
+> also numbered 911 exists: `WorkOrders/WORK_ORDER_911_timer_speedup_crystals_all_channels.md` (crystal +
+> ad timer speed-ups), and THAT one is only PARTIAL (crystals done, ads not). **Commits crediting
+> "WO-911" refer to THIS screen, not to the timer work.** A RESULT file or a board row keyed to the bare
+> number "911" cannot be correct for both - always disambiguate by file suffix.
+
 # WORK ORDER 911 - Unified Manage/Queues Screen (bar face re-pointed, tabbed channels, Finish Now, cancel/refund, 5-per-line cap)
 
-**Status: READY TO IMPLEMENT - FULLY RULED. No open questions.**
+**Status: DONE** (`21d166c9`; reconciled 2026-08-08, see banner; not felt-verified)
 
 > ## Q12 - RULED (owner, 2026-08-06). THE LAST ONE; NOTHING IS OPEN.
 >

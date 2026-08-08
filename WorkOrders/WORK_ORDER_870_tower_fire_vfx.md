@@ -1,6 +1,10 @@
+> ## RECONCILED 2026-08-08 - true status is PARTIAL
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: T7 is done (ArcaneTower.cs:82 BoltVisualElement = Aether) but T2's primitive projectile bodies remain (DefenseTower.cs:972/991/1002/1020 still call CreatePrimitive) and T8's windup is absent; four items are HELD pending owner VFX tags.
+> The previous Status line read "Status: READY TO IMPLEMENT - child of WO-872 (VFX pass master)." and was wrong; the board understated this.
+
 # WORK ORDER 870 — Tower VFX: cast → projectile → impact, by TYPE × TIER (+ fix Aether/Fire mismatch)
 
-**Status:** READY TO IMPLEMENT — child of WO-872 (VFX pass master).
+**Status:** PARTIAL — child of WO-872 (VFX pass master).
 **Author:** UI/QA triage + audit (read-only, §13) — Claude UI
 **Lane:** Buildings/VFX. **WO#:** UI-seat block; **870**=this.
 **Origin:** owner 2026-08-04 — *"the fire from the towers is horrible … from casting to projectiles from towers by

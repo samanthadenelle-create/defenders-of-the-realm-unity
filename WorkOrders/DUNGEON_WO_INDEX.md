@@ -1,4 +1,17 @@
+> ## RECONCILED 2026-08-08 - true status is STALE (routing map still valid, row states are not)
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: this is the canonical map for 8
+> dungeon WOs and it carried NO Status line, so it could not tell a reader which rows are done.
+> Rows that have LANDED since it was written: **919** (roomforge enclose), **922** (wider rooms),
+> **1000** (starter-outpost overhaul, commit 6c740b08), and **1004** (composed-pipeline visual fixes,
+> commits fab50709 + 94c23be3 - PARTIAL, sec. 1.3 candle light is still only a seat).
+> Row **1001** is authored complete through Phase 2 but its descents do not function at runtime
+> (canon 2026-08-08: PathPartial, floor delta 0.00m). Rows **920**, **921** and **1005** are NOT STARTED.
+> The build order and overlap reconciliation below remain valid; the row states do not.
+> A Status line has been added - the file previously had none.
+
 # Dungeon Work-Order Index (canonical map — UI seat maintains)
+
+**Status:** STALE (reconciled 2026-08-08) - routing/build order valid; 919, 922, 1000 landed, 1004 partial, 1001 authored-but-broken, 920/921/1005 not started.
 
 **Purpose:** one map of every dungeon WO across both number ranges, with overlaps reconciled and a single build order — so CLI runs them as one coherent effort, not 8 competing docs. **Grok's 919–922 are folded in here as guidance;** this index is the canonical reconciliation (UI refines Grok → CLI implements).
 **Date:** 2026-08-07 · **Author:** UI seat.

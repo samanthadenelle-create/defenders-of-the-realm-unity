@@ -1,5 +1,11 @@
+> ## RECONCILED 2026-08-08 - true status is SENT - NO ANSWER RECORDED
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: Q1 is load-bearing for the stitch
+> design and remains UNPROVEN in-tree - no two-room stitch test scene exists. No answer to this brief
+> has been recorded anywhere in the repo. A Status line has been added - the file previously had none.
+
 # Research brief for Grok — modular dungeon navmesh: does per-room baking actually stitch?
 
+**Status:** SENT - NO ANSWER RECORDED (reconciled 2026-08-08)
 **Paste this whole file to Grok.** It is written to be self-contained — no repo access needed.
 **Date:** 2026-08-07 · **Asked by:** CLI seat, in parallel with an internal architect review.
 

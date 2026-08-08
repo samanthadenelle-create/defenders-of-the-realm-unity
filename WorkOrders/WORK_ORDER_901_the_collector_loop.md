@@ -1,6 +1,10 @@
+> ## RECONCILED 2026-08-08 - true status is PARTIAL
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: phases 0 / A / B / C / D AND F all shipped; only phase E is deferred. CRITICAL: the phase table below still said row F was "WITHHELD" - but commit `177b24a7` landed `TownBankCapacity.cs` (708 lines) + `storage-caps.json` + `TownBankCapRegression.cs` (779 lines) the SAME DAY. That row was the most misleading line on the board: it would have sent a session off to rebuild the town bank cap that already exists. Row F is corrected in place below.
+> The previous Status line read "IN PROGRESS (collector half implementing 2026-08-04; bank half withheld)" and was wrong.
+
 # WORK ORDER 901 — THE COLLECTOR LOOP (umbrella)
 
-**Status:** IN PROGRESS (collector half implementing 2026-08-04; bank half withheld)
+**Status:** PARTIAL — phases 0/A/B/C/D and F shipped; only E deferred (reconciled 2026-08-08, see banner)
 **Owner directive, 2026-08-04:** *"consolidate those into one idea and implement."*
 **Supersedes as a PLAN:** WO-857, WO-858 (Grok), WO-859, WO-900 (CLI). Those files remain as the
 **detailed appendices** — this document is the single idea, the sequence, and the overlap ruling.
@@ -63,7 +67,7 @@ is unrelated to the tell and survives as its own ticket.
 | **C** | **Offline / away accrual** | WO-859 §4 | implementing |
 | **D** | Wire the **"I am full" tell** (Part A only) | WO-900 §3 | implementing |
 | **E** | Ambient **HUD collector chip** | WO-900 §4 | DEFERRED |
-| **F** | **Town bank cap** + `current/max` chips | WO-857 | ⚠ **WITHHELD — see §5** |
+| **F** | **Town bank cap** + `current/max` chips | WO-857 | **SHIPPED** (reconciled 2026-08-08) — `177b24a7` landed `TownBankCapacity.cs` (708L) + `storage-caps.json` + `TownBankCapRegression.cs` (779L). This row previously read "WITHHELD — see §5" and was wrong; §5 below is SUPERSEDED. |
 | **G** | `siegeValue` / `highValueTarget` raid targeting | WO-858 (Grok) | not started |
 
 ### Phase A — the P0 the last fix missed
@@ -105,6 +109,9 @@ Collect instantly refills from a frozen backlog and the cap bounds nothing. Pinn
 ---
 
 ## 5. ⚠ WHY PHASE F IS WITHHELD
+
+> **SUPERSEDED 2026-08-08.** Phase F SHIPPED in `177b24a7`. The reasoning below is preserved as the
+> historical record of why it was held; it no longer describes current state. Do not rebuild the bank cap.
 
 Phase F clamps `EconomyService.Grant` — the single path every income source in the game flows through.
 Getting it wrong makes resources **silently vanish**, and it interacts with quest rewards, raid loot, Echo

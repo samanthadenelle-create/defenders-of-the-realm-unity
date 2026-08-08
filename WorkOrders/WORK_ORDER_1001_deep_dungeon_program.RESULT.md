@@ -1,6 +1,17 @@
+> ## RECONCILED 2026-08-08 - this RESULT understated what shipped; corrected below
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. This was the single most wrong status on the board.
+> The previous Status line read "slices 1-2 + 1b + 3-5 foundation LANDED; slice 6-7 + Phase 2 NOT started"
+> and was FALSE. Evidence: 1ea03b84 (slices 6-8) and 335f6b81 (Phase 2 - three themed dungeons bake as
+> real descents) are BOTH ancestors of HEAD, along with 6e2ceb1b, 05e112ba, 33354ea9, a77384f0, 195ae8c8.
+> The authored scope is complete through Phase 2.
+> The offsetting correction: it is still NOT working. Canon 2026-08-08 records PathPartial and a floor
+> delta start-to-stop of 0.00m, so the descents do not function at runtime. True status is PARTIAL -
+> authored complete through Phase 2, traversal broken. The body below is frozen as written on 2026-08-07;
+> read it as a point-in-time slice report, not as current state.
+
 # WORK ORDER 1001 — RESULT (PARTIAL: Phase 1 slices 1–5 foundation)
 
-**Date:** 2026-08-07 · **Seat:** CLI · **Status:** slices 1–2 + 1b + 3–5 foundation LANDED; slice 6–7 + Phase 2 NOT started  
+**Date:** 2026-08-07 · **Seat:** CLI · **Status (reconciled 2026-08-08):** slices 1-2 + 1b + 3-5 + 6-8 AND Phase 2 all LANDED; traversal broken at runtime (PathPartial, floor delta 0.00m)  
 **Follow-up (same day, owner: assume defaults + proceed):**  
 - **1b** triggered stair ports (Descend/Climb) in `DungeonBaker` + `HeroLocomotion.WarpTo` on `DungeonPortLink`  
 - **3** boss: `EncounterSpec.isBoss` / `enemyType` → spawner count=1 + MiniBoss role  

@@ -1,6 +1,11 @@
+> ## RECONCILED 2026-08-08 - true status is PARTIAL (stale index)
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: this index presents 873-883 as one uniform READY block; the truth is 6 shipped, 4 never started, 1 blocked on an owner ruling.
+> The previous Status line read "READY (master/index). Audit-backed 2026-08-04 (read-only agent)." and was wrong.
+> WARNING: do NOT plan off this index as written. Doing so will BOTH re-do finished work (878-883 shipped) AND skip unstarted work (875, 876, 877 never began; 874 is blocked on the owner). Check each child WO's own reconciled banner before scheduling anything here.
+
 # WORK ORDER 872 — Combat VFX + Animation pass — MASTER
 
-**Status:** READY (master/index). Audit-backed 2026-08-04 (read-only agent).
+**Status:** PARTIAL (stale index) — reconciled 2026-08-08 (master/index). Audit-backed 2026-08-04 (read-only agent).
 **Author:** UI/QA triage + audit (read-only, §13) — Claude UI
 **Lane:** VFX + Animation (Combat/AI + Buildings + Hero). **WO#:** UI-seat block; **872**=this. Children below.
 **Origin:** owner 2026-08-04 — *"I want the vfx to work well … from casting to projectiles from towers by type

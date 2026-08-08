@@ -1,6 +1,10 @@
+> ## RECONCILED 2026-08-08 - true status is DONE
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: commit 0414d44d; ArmyComposition.cs, ArmyMusterService.cs, ArmyMusterPanel.cs and ArmyMusterRegression.cs are all new.
+> The previous Status line read "SPEC - READY (grounding note in sec.3)" and was wrong.
+
 # WORK ORDER 897 — Army composition presets that auto-queue the build-outs
 
-**Status:** SPEC — READY (grounding note in §3) · **Silo:** Troops / queue / UI · **For:** CLAUDE CLI · **Date:** 2026-08-05
+**Status:** DONE (reconciled 2026-08-08) · **Silo:** Troops / queue / UI · **For:** CLAUDE CLI · **Date:** 2026-08-05
 **PO:** Samantha (owner) · **Author:** UI seat
 **Owner ruling:** *"create armies and they will auto-queue the build-outs."*
 

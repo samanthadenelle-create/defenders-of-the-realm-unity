@@ -1,6 +1,10 @@
+> ## RECONCILED 2026-08-08 - true status is DONE
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: commit 4c1da079; SupportFieldStructure.cs was created.
+> The previous Status line read "READY TO IMPLEMENT" and was wrong.
+
 # WORK ORDER 891 — VFX + behavior: healer structure + the reusable structure pattern
 
-**Status:** READY TO IMPLEMENT · **Silo:** Structures/VFX · **For:** CLAUDE CLI · **Date:** 2026-08-05
+**Status:** DONE (reconciled 2026-08-08) · **Silo:** Structures/VFX · **For:** CLAUDE CLI · **Date:** 2026-08-05
 **Context (read once):** WO-884 §0.2 · `VFX_PREFAB_HANDBOOK.md` §7 · `VFX_CREATIVE_PICKS_REGISTRY.md` §6f. Enum LANDED — healer field reuses `Aura_Healer` (no new value).
 **Depends on:** WO-884 Phase 0 platform + WO-888 (heal recipes).
 

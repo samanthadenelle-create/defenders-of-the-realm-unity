@@ -1,6 +1,10 @@
+> ## RECONCILED 2026-08-08 - true status is PARTIAL
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: `crystalsPerBracket` = 0 hits repo-wide (VERIFIED at source) - the headline data-driven pricing mechanic was never built; there is no impulse dialog and no Jupiter fallback. Only the progress bars shipped. Note also that the monetization premise MOVED when commit ef40c0e7 purged premium-currency ad rewards.
+> The previous Status line read "SPEC - READY (grounding in sec.3)" and was wrong.
+
 # WORK ORDER 898 — Queue: progress bars + "Complete now" with crystals (any item, any channel)
 
-**Status:** SPEC — READY (grounding in §3) · **Silo:** Queue / economy / monetization / UI · **For:** CLAUDE CLI · **Date:** 2026-08-05
+**Status:** PARTIAL (reconciled 2026-08-08) · **Silo:** Queue / economy / monetization / UI · **For:** CLAUDE CLI · **Date:** 2026-08-05
 **PO:** Samantha (owner) · **Author:** UI seat
 **Owner rulings:** *"show progress bars for items and offer an option to complete now, purchase with crystal to complete"* · *"can choose ANY item in the queue and complete now (X crystals)"* · *"if an invasion is starting they might opt to spend for it."*
 

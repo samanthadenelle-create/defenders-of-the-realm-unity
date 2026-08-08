@@ -1,6 +1,10 @@
+> ## RECONCILED 2026-08-08 - true status is DONE
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: shipped in commit 31888576; PlacedTowerListVM.cs +322 lines plus TowerManagerRegression.cs new at 467 lines.
+> The previous Status line read "READY." and was wrong.
+
 # WORK ORDER 880 — Tower Manager: row clipped mid-height + towers show rng 0 / dmg 0
 
-**Status:** READY. **Lane:** HUD/UI + data — `TowerManagerPanel.cs` / `PlacedTowerListVM`. **WO#:** UI-seat block; **880**.
+**Status:** DONE (reconciled 2026-08-08). **Lane:** HUD/UI + data — `TowerManagerPanel.cs` / `PlacedTowerListVM`. **WO#:** UI-seat block; **880**.
 **Source:** `docs/ui-review/screens-2026-08-04/TowerManagerPanel_2340x1080.png`.
 
 ## 1. Bad (from the capture)

@@ -1,6 +1,10 @@
+> ## RECONCILED 2026-08-08 - true status is PARTIAL
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: commit a35163e1's own body says "NOT DONE, and not smuggled: WO-899 section 4" and "Appearance is NOT verified - no UI capture was taken", while this WO's acceptance requires UI_CAPTURE_OK.
+> The previous Status line read "READY TO IMPLEMENT" and was wrong.
+
 # WORK ORDER 899 — HUD polish: analog joystick + wide compass + attack-button blend
 
-**Status:** READY TO IMPLEMENT · **Silo:** HUD/UI · **For:** CLAUDE CLI · **Date:** 2026-08-07
+**Status:** PARTIAL (reconciled 2026-08-08) · **Silo:** HUD/UI · **For:** CLAUDE CLI · **Date:** 2026-08-07
 **PO:** Samantha (owner) · **Author:** UI seat
 **Owner asks (felt-test):** (1) replace the boxy joypad with a cleaner analog joystick; (2) make the compass wider so heading changes + enemy bearings read clearly; (3) blend the attack/sword button so it stops looking amateur.
 All three are code-built HUD (no prefabs) via `HudKitController` + `ElarionUiKit`/`ElarionUiKitObsidian`. `FeatureFlags.CombatHud611` defaults ON (`FeatureFlags.cs:589`) — the live branches.

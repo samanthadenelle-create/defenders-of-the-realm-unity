@@ -1,6 +1,10 @@
+> ## RECONCILED 2026-08-08 - true status is PARTIAL - surface half NEEDS-OWNER-RULING
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: the element half is real (commit 4ef2d532); the surface half was correctly REFUSED with measurements - no SurfaceType, MaterialType or HitSurface enum exists anywhere in the tree. That half is an owner design task, not engineering debt.
+> The previous Status line read "ELEMENT HALF LANDED 2026-08-05 (4ef2d532) - SURFACE HALF REFUSED WITH MEASUREMENTS" and was substantially correct; it is restated here in the reconciled vocabulary, with the surface half routed to the owner rather than left open as engineering work.
+
 # WORK ORDER 887 — VFX: on-hit surface + element impacts
 
-**Status: ELEMENT HALF LANDED 2026-08-05 (`4ef2d532`) · SURFACE HALF REFUSED WITH MEASUREMENTS** — gate
+**Status:** PARTIAL - surface half NEEDS-OWNER-RULING (reconciled 2026-08-08) — ELEMENT HALF LANDED 2026-08-05 (`4ef2d532`) · SURFACE HALF REFUSED WITH MEASUREMENTS — gate
 `COMPILE_GATE_OK`. **What landed:** `TowerCombat.OnProjectileImpact` computed the projectile's element
 EIGHT LINES BELOW the impact pick and never used it, so **every empowered tower detonated as
 `Impact_ExplosionAether`**; element now decides flavour, tier decides size, and the paired `SfxId` follows.

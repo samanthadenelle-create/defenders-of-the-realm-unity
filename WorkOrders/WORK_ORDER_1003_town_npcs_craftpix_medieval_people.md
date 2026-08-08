@@ -1,6 +1,12 @@
+> ## RECONCILED 2026-08-08 - true status is DONE
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: shipped in 500e5b84;
+> `Assets/Art/People/CraftPix/` holds 14 FBX; `CastleTownsfolkInjector.cs:85` pools
+> `NPCs/CraftPixPeople/NPC_*`; guarded by `TownsfolkBodyPoolRegression.cs`.
+> The previous Status line read "READY TO IMPLEMENT" and was wrong.
+
 # WORK ORDER 1003 — Replace town NPCs with the CraftPix medieval people pack
 
-**Status:** READY TO IMPLEMENT · **Silo:** World/characters/art · **For:** CLAUDE CLI · **Date:** 2026-08-07
+**Status:** DONE (reconciled 2026-08-08; owner felt-verification outstanding) · **Silo:** World/characters/art · **For:** CLAUDE CLI · **Date:** 2026-08-07
 **PO:** Samantha (owner) · **Author:** UI seat · **UI-seat block:** 1000–1099
 **Owner:** picked the **CraftPix Free Medieval 3D People Low Poly** pack to replace the KayKit town NPCs with proper dressed people (the "people first, then walls" cohesion pass).
 

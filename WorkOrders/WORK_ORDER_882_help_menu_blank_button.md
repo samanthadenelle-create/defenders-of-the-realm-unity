@@ -1,6 +1,10 @@
+> ## RECONCILED 2026-08-08 - true status is DONE
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: shipped in commit d185f43c; HelpMenuVM.cs created, +268 lines.
+> The previous Status line read "READY (small)." and was wrong.
+
 # WORK ORDER 882 — Help menu: a blank/empty third button
 
-**Status:** READY (small). **Lane:** HUD/UI — `HelpMenu.cs` / its VM. **WO#:** UI-seat block; **882**.
+**Status:** DONE (reconciled 2026-08-08). **Lane:** HUD/UI — `HelpMenu.cs` / its VM. **WO#:** UI-seat block; **882**.
 **Source:** `docs/ui-review/screens-2026-08-04/HelpMenu_2340x1080.png`.
 
 ## 1. Bad (from the capture)

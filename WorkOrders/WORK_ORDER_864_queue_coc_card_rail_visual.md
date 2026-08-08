@@ -1,6 +1,10 @@
+> ## RECONCILED 2026-08-08 - true status is DONE
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: d431848d; QueueRailView.cs 647 lines new plus QueueIconResolver.cs.
+> The previous Status line read "Status: READY TO IMPLEMENT" and was wrong; the board understated this.
+
 # WORK ORDER 864 — Queue UI: CoC-style horizontal icon-card rail
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE
 **Author:** UI/QA triage (read-only RCA, §13) — Claude UI
 **Lane:** HUD/UI — `ObsidianQueueHud.cs` (the Work Queue modal). Presentation only; no timer/economy logic change.
 **WO#:** UI-seat block (860–899); 860–863 used, **864**=this.

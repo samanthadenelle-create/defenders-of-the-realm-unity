@@ -1,6 +1,10 @@
+> ## RECONCILED 2026-08-08 - true status is NOT STARTED
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: commit `6e0cde93` added this `.md` file ONLY - no VFX code changed with it.
+> The previous Status line read "READY TO IMPLEMENT" and was wrong.
+
 # WORK ORDER 925 — Kill or condition permanent foot fire / spark VFX under the hero
 
-**Status: READY TO IMPLEMENT**  
+**Status: NOT STARTED** (reconciled 2026-08-08, see banner)  
 **Minted:** 2026-08-07 (Grok Imagine visual review — Development Build 52s recording)  
 **Silo:** VFX / Hero  
 **Roles:** CLI implement; instrument first if multiple candidates  

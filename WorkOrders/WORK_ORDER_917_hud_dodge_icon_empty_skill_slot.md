@@ -1,6 +1,10 @@
+> ## RECONCILED 2026-08-08 - true status is NOT STARTED
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: `HudModelProducers.cs:421` still sets `icon = "text:Dodge/\nAttack"` - the literal defect this WO describes, untouched. CONFIRMED VISUALLY in the owner's 2026-08-08 F8 screenshot, which shows "Dodge/Attack" rendered as raw text on the HUD.
+> The previous Status line read "READY TO IMPLEMENT" and was wrong.
+
 # WORK ORDER 917 — HUD residual (WO-899 §4): dodge icon + empty skill-slot placeholder
 
-**Status: READY TO IMPLEMENT** (blocked only on owner art pick for dodge glyph if no existing icon key fits)  
+**Status: NOT STARTED** (reconciled 2026-08-08, see banner) — blocked only on owner art pick for dodge glyph if no existing icon key fits  
 **Minted:** 2026-08-07 (CLI / Grok — residual of WO-899; explicitly **not** done in `a35163e1`)  
 **Silo:** HUD / UI  
 **Roles:** CLI implement; owner creative pick if no in-catalog dodge/roll icon  

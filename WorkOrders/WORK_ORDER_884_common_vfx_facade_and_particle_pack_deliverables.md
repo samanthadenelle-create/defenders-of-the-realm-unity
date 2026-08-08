@@ -1,6 +1,10 @@
+> ## RECONCILED 2026-08-08 - true status is PARTIAL
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: 4 of the 5 sec.9 CREATE files do NOT exist - VfxFacade.cs, VfxSocket.cs, VfxElement.cs and VfxEmitter.cs are all absent (VERIFIED at source 2026-08-08). Only the particle-pack half shipped (a12c6d22). `Vfx.On(` = 0 hits, `VfxBones` = 0 hits.
+> The previous Status line read "READY TO IMPLEMENT" and was wrong.
+
 # WORK ORDER 884 — Common VFX facade (one low-cost class) + 5 Particle-Pack deliverables
 
-**Status:** READY TO IMPLEMENT
+**Status:** PARTIAL (reconciled 2026-08-08) — particle-pack half shipped, facade half never landed
 **Silo:** Village combat / VFX (parallel-safe with the boss-breath slice — see §0.1)
 **PO:** Samantha (owner)
 **Author:** UI seat

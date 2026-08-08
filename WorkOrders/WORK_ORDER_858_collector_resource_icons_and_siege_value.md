@@ -1,6 +1,10 @@
+> ## RECONCILED 2026-08-08 - true status is SUPERSEDED
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: WO-901 section 5 supersedes this as a plan, and the resource-type icon half was never built (CollectorStackView.cs:478 billboards only the info canvas).
+> The previous Status line read "Status: READY TO IMPLEMENT" and was wrong; the board overstated this.
+
 # WORK ORDER 858 — Collector collect icons + high-value invasion targets
 
-**Status: READY TO IMPLEMENT**  
+**Status: SUPERSEDED**  
 **Minted:** 2026-08-04 (CLI / Grok — owner: visual icon for what to collect; extra collectors are high-value invasion targets)  
 **Silo:** Village collectors / presentation / siege targeting  
 **Roles:** CLI implement; Claude may author icon placement mock only  

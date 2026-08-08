@@ -20,9 +20,14 @@
 >
 > **Still owed (owner):** approved screenshots. The section is REMOVED rather than left as empty slots;
 > restore it per the comment in `site/index.html` when real frames exist.
+
+> ## RECONCILED 2026-08-08 - true status is DONE
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: 03942cc5 + 60a6f42f; site/index.html and site/privacy.html are live, and the DEPLOYED banner at the top of this same file already said so while the Status line still read READY TO IMPLEMENT - that self-contradiction is now removed.
+> The previous Status line read "Status: READY TO IMPLEMENT" and was wrong; the board understated this.
+
 # WORK ORDER 863 — Vercel one-pager + hosted privacy policy (dApp Store listing URLs)
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE
 **Author:** UI/QA triage (read-only RCA, §13) — Claude UI
 **Lane:** Web/Backend (static site on Vercel). No Unity/game code.
 **WO#:** UI-seat block (860–899); 860=weapons, 861=characters, 862=treasure, **863**=this.

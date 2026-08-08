@@ -1,6 +1,10 @@
+> ## RECONCILED 2026-08-08 - true status is NEEDS-OWNER-RULING
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: `AddComponent<EliteVFXController>` returns 0 hits in any .cs (VERIFIED at source 2026-08-08). Commit 4c1da079 promoted SpawnVfxFor / PlayDeathShake to statics called from Enemy.cs:720 and Enemy.cs:2701, delivering the tell but silently routing AROUND the owner's WIRE ruling with no reversal recorded. The aura and OnEliteAttack have never run.
+> The previous Status line read "READY - child of WO-872." and was wrong.
+
 # WORK ORDER 874 — Elite/Boss VFX: wire or kill `EliteVFXController` (+ DragonBoss spawn)
 
-**Status:** READY — child of WO-872. **Lane:** Combat/AI VFX. **WO#:** UI-seat block; **874**.
+**Status:** NEEDS-OWNER-RULING (reconciled 2026-08-08) — child of WO-872. **Lane:** Combat/AI VFX. **WO#:** UI-seat block; **874**.
 **Origin:** owner 2026-08-04 VFX pass. Audit-backed (WO-872 §2, E6/E8/E9). **Layer:** B/D.
 **OWNER RULING 2026-08-04: WIRE it** (not kill) — do §2's "Wire it" path: attach `EliteVFXController`, map the
 `Boss_*`/`Elite_*` rows to real Mirza Beig prefabs, add the DragonBoss spawn entrance.

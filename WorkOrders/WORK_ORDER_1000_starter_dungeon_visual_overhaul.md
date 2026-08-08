@@ -1,6 +1,12 @@
+> ## RECONCILED 2026-08-08 - true status is DONE
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: commit 6c740b08 rewrote
+> `KayKitChallengeOutpostBuilder.cs` (+929 lines) and rebaked `KayKitChallengeOutpost.unity`
+> from 88,484 bytes to 569,188 bytes.
+> The previous Status line read "READY TO IMPLEMENT" and was wrong.
+
 # WORK ORDER 1000 — Starter dungeon (KayKit Challenge Outpost) visual overhaul
 
-**Status:** READY TO IMPLEMENT · **Silo:** World/art/dungeon · **For:** CLAUDE CLI · **Date:** 2026-08-07
+**Status:** DONE (reconciled 2026-08-08; owner felt-verification outstanding) · **Silo:** World/art/dungeon · **For:** CLAUDE CLI · **Date:** 2026-08-07
 **PO:** Samantha (owner) · **Author:** UI seat · **UI-seat block:** 1000–1099 (new; 860–899 closed)
 **Owner:** *"STARTER DUNGEON IS HORRIBLY NOT DONE WELL VISUALLY."* Bring it up to the **Healer's Cottage** bar.
 

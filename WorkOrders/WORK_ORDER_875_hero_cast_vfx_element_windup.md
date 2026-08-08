@@ -1,6 +1,10 @@
+> ## RECONCILED 2026-08-08 - true status is NOT STARTED
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: HeroAbilities.cs:1887 still has `RegistryOnlyMotionVfx = true` (VERIFIED at source) - the exact mask sec.4 of this WO forbids, still gating 4 call sites.
+> The previous Status line read "READY - child of WO-872." and was wrong.
+
 # WORK ORDER 875 — Hero cast VFX: element-coded flash + windup telegraph (cast-on-magic)
 
-**Status:** READY — child of WO-872. **Lane:** Combat/Hero VFX. **WO#:** UI-seat block; **875**.
+**Status:** NOT STARTED (reconciled 2026-08-08) — child of WO-872. **Lane:** Combat/Hero VFX. **WO#:** UI-seat block; **875**.
 **Origin:** owner 2026-08-04 — *"cast on magic."* Audit-backed (WO-872 §2, H1/H3/H7). **Layer:** B/D.
 **Ties:** feeds WO-861 (Thrain/Sylas kits) — their cast VFX ride this.
 

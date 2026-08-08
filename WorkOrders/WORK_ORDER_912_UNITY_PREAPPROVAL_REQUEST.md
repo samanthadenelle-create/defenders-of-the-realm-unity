@@ -1,6 +1,10 @@
+> ## RECONCILED 2026-08-08 - true status is READY TO SEND - NOT YET SENT
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: the draft is complete in the tree, but NO artifact anywhere proves it was ever sent, and nothing downstream of it has moved. This is an OWNER action taken off-repo, so git can never confirm it - only the owner can.
+> The previous Status line read "READY TO SEND" and was wrong (it reads as an action already taken).
+
 # WO-912 — Unity pre-approval request (DRAFT for the owner to send)
 
-**Status: READY TO SEND** · **Drafted:** 2026-08-07 (CLI) · **Blocks:** WO-912 D3 (no SDK until this returns in writing)
+**Status: READY TO SEND — NOT YET SENT** (reconciled 2026-08-08, see banner) · **Drafted:** 2026-08-07 (CLI) · **Blocks:** WO-912 D3 (no SDK until this returns in writing)
 
 > ### ★★ D2 SETTLED 2026-08-07 (LATEST — SUPERSEDES THE AMENDMENT BELOW): **UNITY LEVELPLAY** ★★
 >

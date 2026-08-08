@@ -1,6 +1,10 @@
+> ## RECONCILED 2026-08-08 - true status is DONE
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: commit 1534dffb; GearAura.cs, HeroHpStateAura.cs, GearAuraMap.cs and VfxLoopModulator.cs are all new.
+> The previous Status line read "LANDED 2026-08-05 (1534dffb)" and was already correct; it is restated here in the reconciled vocabulary. Owner felt-verification is still outstanding.
+
 # WORK ORDER 888 — VFX: heal + HP-state auras + item auras (colourblind accessibility fix)
 
-**Status: LANDED 2026-08-05 (`1534dffb`)** — gates `COMPILE_GATE_OK` + `REGRESSION_OK 120/120`.
+**Status:** DONE (reconciled 2026-08-08) — LANDED 2026-08-05 (`1534dffb`) — gates `COMPILE_GATE_OK` + `REGRESSION_OK 120/120`.
 The low-health tell now reads by **pulse rate (0.85 -> 3.2 Hz)**, **guttering depth** (trough to a tenth of
 authored density) and **simulation speed**, with a **recipe swap to a candle gutter below a quarter health**
 — a shape change, not a hue change. **The vignette STAYS as a redundant cue; colour-ONLY was the bug.**

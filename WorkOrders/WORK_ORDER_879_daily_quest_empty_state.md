@@ -1,6 +1,10 @@
+> ## RECONCILED 2026-08-08 - true status is DONE
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: shipped in commit d185f43c; DailyQuestVM.cs +68 lines plus DailyQuestVMTests.cs.
+> The previous Status line read "READY." and was wrong.
+
 # WORK ORDER 879 — Daily Quests: duplicated empty-state across two mismatched columns
 
-**Status:** READY. **Lane:** HUD/UI — `DailyQuestHud.cs` / `DailyQuestVM`. **WO#:** UI-seat block; **879**.
+**Status:** DONE (reconciled 2026-08-08). **Lane:** HUD/UI — `DailyQuestHud.cs` / `DailyQuestVM`. **WO#:** UI-seat block; **879**.
 **Source:** `docs/ui-review/screens-2026-08-04/DailyQuestHud_2340x1080.png`.
 
 ## 1. Bad (from the capture)

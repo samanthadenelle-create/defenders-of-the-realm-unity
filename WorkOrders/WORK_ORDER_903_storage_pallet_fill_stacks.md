@@ -1,6 +1,10 @@
+> ## RECONCILED 2026-08-08 - true status is NOT STARTED
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: no pallet stack view exists anywhere in the tree; every `storageResource` consumer is caps / build-mode only.
+> The previous Status line read "READY TO IMPLEMENT" and was wrong.
+
 # WORK ORDER 903 — Storage pallet fill stacks (logs / sacks / ingots ~5%)
 
-**Status: READY TO IMPLEMENT**  
+**Status: NOT STARTED** (reconciled 2026-08-08, see banner)  
 **Minted:** 2026-08-04 (CLI / Grok — owner: pallets show items as bank fills)  
 **Silo:** Village presentation / storage  
 **Size:** **SMALL** — reuse collector stack pattern; no economy rewrite  

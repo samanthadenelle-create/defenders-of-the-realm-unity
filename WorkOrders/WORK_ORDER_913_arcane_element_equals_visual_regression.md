@@ -1,6 +1,10 @@
+> ## RECONCILED 2026-08-08 - true status is DONE
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: shipped in `7225d897`; `TowerProjectileMapRegression.cs` gained +54 lines locking the element == visual mapping.
+> The previous Status line read "READY TO IMPLEMENT" and was wrong.
+
 # WORK ORDER 913 — Arcane Spire: element == visual regression (close the Flame-over-Aether gap)
 
-**Status: READY TO IMPLEMENT**  
+**Status: DONE** (`7225d897`; reconciled 2026-08-08, see banner; not felt-verified)  
 **Minted:** 2026-08-07 (CLI / Grok — residual of the work-order audit five-findings fix)  
 **Silo:** Combat / VFX / Regression (code only; no scene files)  
 **Roles:** CLI implement + gate  

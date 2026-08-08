@@ -1,6 +1,10 @@
+> ## RECONCILED 2026-08-08 - true status is NOT STARTED
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: commit `6e0cde93` added this `.md` file ONLY - no climb/exit volume code landed with it. CONFIRMED VISUALLY in the owner's 2026-08-08 F8 screenshot of `dg_bonecrypt`: a flat Unlit green pillar still rises out of the Descend socket.
+> The previous Status line read "READY TO IMPLEMENT" and was wrong.
+
 # WORK ORDER 924 — Kill neon-green climb/exit debug volumes (EXIT beams + portal placeholders)
 
-**Status: READY TO IMPLEMENT**  
+**Status: NOT STARTED** (reconciled 2026-08-08, see banner)  
 **Minted:** 2026-08-07 (Grok Imagine visual review + owner 52s Development Build recording)  
 **Silo:** Dungeons / presentation  
 **Roles:** CLI implement  

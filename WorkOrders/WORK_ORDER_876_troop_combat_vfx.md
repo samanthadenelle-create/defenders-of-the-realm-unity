@@ -1,6 +1,10 @@
+> ## RECONCILED 2026-08-08 - true status is NOT STARTED
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: TroopController.cs has zero matches for VFXManager, VfxPool, or ProjectileVFXCatalog.
+> The previous Status line read "READY - child of WO-872." and was wrong.
+
 # WORK ORDER 876 — Troop combat VFX: on-hit impact, death, + ranged archer projectile
 
-**Status:** READY — child of WO-872. **Lane:** Combat/AI VFX. **WO#:** UI-seat block; **876**.
+**Status:** NOT STARTED (reconciled 2026-08-08) — child of WO-872. **Lane:** Combat/AI VFX. **WO#:** UI-seat block; **876**.
 **Origin:** owner 2026-08-04 — *"on hit with troops."* Audit-backed (WO-872 §2, Tr1–Tr4). **Layer:** B/C.
 
 ## 1. Gaps (audit, `TroopController.cs`)

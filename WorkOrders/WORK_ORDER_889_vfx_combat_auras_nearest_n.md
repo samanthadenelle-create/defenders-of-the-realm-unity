@@ -1,6 +1,10 @@
+> ## RECONCILED 2026-08-08 - true status is DONE
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: commit 4c1da079; VfxAuraProximityCuller.cs and VfxLoopBudget.cs were both created.
+> The previous Status line read "READY TO IMPLEMENT" and was wrong.
+
 # WORK ORDER 889 — VFX: persistent combat auras + loop-budget guard (nearest-N)
 
-**Status:** READY TO IMPLEMENT · **Silo:** Combat/VFX/ops · **For:** CLAUDE CLI · **Date:** 2026-08-05
+**Status:** DONE (reconciled 2026-08-08) · **Silo:** Combat/VFX/ops · **For:** CLAUDE CLI · **Date:** 2026-08-05
 **Context (read once):** WO-884 §0.2 · `VFX_PREFAB_HANDBOOK.md` §2/§10 · `VFX_CREATIVE_PICKS_REGISTRY.md` §6d. Enum LANDED — reference names only.
 **Depends on:** WO-884 Phase 0 platform. **The loop-budget guard (below) MUST land before the mass aura wiring in this WO.**
 

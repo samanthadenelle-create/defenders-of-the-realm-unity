@@ -1,6 +1,10 @@
+> ## RECONCILED 2026-08-08 - true status is DONE
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: QuestCompletabilityRegression.cs:213 sets MinCompletableStages = 63, the phase-7 endpoint; shipped in 6a144a51 with marker QUEST_REACH_OK 63/63, so the 'phases 3-7 gated on owner rulings' claim is dead.
+> The previous Status line read "Status: READY TO IMPLEMENT (Phases 0-2); PHASES 3-7 GATED ON OWNER RULINGS section 6" and was wrong; the board understated this.
+
 # WORK ORDER 854 — Quest Completability Program
 
-**Status: READY TO IMPLEMENT (Phases 0–2); PHASES 3–7 GATED ON OWNER RULINGS §6**
+**Status: DONE**
 **Minted:** 2026-08-03 · **Type:** Program, 7 phases, file-disjoint silos
 **Roles:** Architect specs (this doc) · CLI implements + batch-gates + sole-commits · Owner rules §6 · PO felt-closes
 **Owner directive, verbatim:** *"Have an architect and team resolve quests and create all the missing

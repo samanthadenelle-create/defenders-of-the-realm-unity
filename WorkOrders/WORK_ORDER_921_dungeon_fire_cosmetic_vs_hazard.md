@@ -1,6 +1,10 @@
+> ## RECONCILED 2026-08-08 - true status is PARTIAL
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: `DungeonDresser.cs:66-67` already encodes the cosmetic-vs-hazard product rule and names its own remaining Phase C (the hazard fire recipe) as future work. WHY IT WAS MISLABELLED: this WO file was FIRST ADDED in the very commit that implemented its shipped part - it was BORN STALE, never neglected.
+> The previous Status line read "READY TO IMPLEMENT" and was wrong.
+
 # WORK ORDER 921 — Dungeon fire: stop “encased in fire that does nothing”
 
-**Status: READY TO IMPLEMENT**  
+**Status: PARTIAL — Phase C (hazard fire recipe) outstanding** (reconciled 2026-08-08, see banner)  
 **Minted:** 2026-08-07 (CLI / Grok — owner: fire is there but does nothing; start level encased in fire)  
 **Silo:** Dungeons / VFX / hazards (composed Pipeline A)  
 **Roles:** CLI implement + re-dress/re-bake as needed; PO felt-closes  

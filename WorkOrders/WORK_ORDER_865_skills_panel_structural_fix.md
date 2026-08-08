@@ -1,6 +1,10 @@
+> ## RECONCILED 2026-08-08 - true status is DONE
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: d93124e3; SkillsPanelLayoutRegression.cs 623 lines new.
+> The previous Status line read "Status: READY TO IMPLEMENT - P0, the only genuinely broken screen in the 08-04 review." and was wrong; the board understated this.
+
 # WORK ORDER 865 — Skills panel: structural fix (overflow / z-order / truncation) — BROKEN, do first
 
-**Status:** READY TO IMPLEMENT — **P0, the only genuinely broken screen in the 08-04 review.**
+**Status:** DONE
 **Author:** UI/QA triage (read-only, §13) — Claude UI
 **Lane:** HUD/UI — the "Grom (Knight) Skills" panel (`TalentTreePanel.cs` / `HeroSkillTreePanelMvvm.cs` — CLI confirm).
 **WO#:** UI-seat block (860–899); 860–864 used, **865**=this.

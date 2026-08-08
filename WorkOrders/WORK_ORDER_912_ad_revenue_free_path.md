@@ -1,6 +1,10 @@
+> ## RECONCILED 2026-08-08 - true status is PARTIAL - BLOCKED ON D3
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: D1/D2/D4 are already RULED (D2 settled to Unity LevelPlay by eligibility; D4 reversed by the owner) and the seam SHIPPED (`IAdService.cs`, `AD_SEAM_OK`, `AD_COVENANT_OK`). D3 is the sole hard blocker, and NO IronSource/LevelPlay SDK exists under `Assets/` - only skill docs.
+> The previous Status line read "READY FOR OWNER RULING" and was wrong - most of the rulings are in; the block is D3.
+
 # WORK ORDER 912 - Ad revenue for the FREE PATH (provider, rolling window, remote config, ad-boost packs)
 
-**Status: READY FOR OWNER RULING**
+**Status: PARTIAL - BLOCKED ON D3** (reconciled 2026-08-08, see banner)
 **Minted:** 2026-08-06 (UI seat audit; number from the `CLI_LANES_WO_NUMBERS.md` banner, main line next-free = 912)
 **Silo:** Monetization / Backend (CLAUDE.md sec.9 - isolated lane; no scene files, no VillageSceneBuilder)
 **Roles:** Owner rules sec.9 open questions; CLI implements only after those rulings

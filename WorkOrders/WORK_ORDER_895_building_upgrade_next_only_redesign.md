@@ -1,6 +1,10 @@
+> ## RECONCILED 2026-08-08 - true status is DONE
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: commit 21d166c9; BuildingUpgradePanelMvvm.cs 1024 lines changed, and BuildingUpgradePanelLayoutTests.cs exists.
+> The previous Status line read "READY TO IMPLEMENT" and was wrong.
+
 # WORK ORDER 895 — Building upgrade panel: "next upgrade only" redesign (kill the crammed tier rail)
 
-**Status:** READY TO IMPLEMENT · **Silo:** UI / building upgrades · **For:** CLAUDE CLI · **Date:** 2026-08-05
+**Status:** DONE (reconciled 2026-08-08) · **Silo:** UI / building upgrades · **For:** CLAUDE CLI · **Date:** 2026-08-05
 **PO:** Samantha (owner) · **Author:** UI seat
 **Owner ruling:** *"we don't need to see all the upgrades, just details on what they can get to next."* + "cleaner, not all smashed together."
 

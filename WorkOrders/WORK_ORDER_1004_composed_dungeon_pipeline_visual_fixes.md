@@ -1,6 +1,13 @@
+> ## RECONCILED 2026-08-08 - true status is PARTIAL (mostly done)
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: issues 1 and 2 fixed by fab50709
+> (`RoomForgeMaterials.cs:29` + `StripAllTextures` + `ROOM_SURFACES_OK`); issue 3 fixed by 94c23be3
+> (`DungeonBaker.cs:331-338` fog). Residual: sec. 1.3 is only a SEAT - `DungeonDresser.cs:351` is a
+> marker for the Env_Candle wick flame, not a light.
+> The previous Status line read "READY TO IMPLEMENT" and was wrong.
+
 # WORK ORDER 1004 — Composed-dungeon (Pipeline A) visual fixes: rainbow floor, stray markers, enclose + relight
 
-**Status:** READY TO IMPLEMENT · **Silo:** Dungeons/art/pipeline · **For:** CLAUDE CLI · **Date:** 2026-08-07
+**Status:** PARTIAL - mostly done; sec. 1.3 candle light still a seat (reconciled 2026-08-08) · **Silo:** Dungeons/art/pipeline · **For:** CLAUDE CLI · **Date:** 2026-08-07
 **PO:** Samantha (owner) · **Author:** UI seat · **UI-seat block:** 1000–1099
 **Owner (felt-test 2026-08-07):** "dungeon issues" on the composed dungeon (`dg_starter_loop`).
 **Fix at the PIPELINE level** (the bake), so every composed dungeon — incl. the WO-1001 deep dungeons — comes out clean by default. Complements WO-1000 (which fixed the hand-coded outpost) and WO-1001 (which extends this pipeline).

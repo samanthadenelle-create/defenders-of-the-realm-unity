@@ -1,6 +1,10 @@
+> ## RECONCILED 2026-08-08 - true status is NEEDS-OWNER-RULING
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: `FeatureFlags.cs:581` still has `RealmStorePurchase` at `defaultOn: true` - the flag is STILL ON and has not been re-gated. Nothing in this WO has been implemented; it is waiting on the owner, not on a CLI seat.
+> The previous Status line read "READY FOR OWNER RULING on sec.2; READY TO IMPLEMENT after rulings" and was wrong - the "READY TO IMPLEMENT" half reads as pickup-able work when the ruling is still outstanding.
+
 # WORK ORDER 915 — Realm Store: public-release re-gate + complete the payment path
 
-**Status: READY FOR OWNER RULING on §2; READY TO IMPLEMENT after rulings**  
+**Status: NEEDS-OWNER-RULING** on §2 — nothing implemented (reconciled 2026-08-08, see banner)  
 **Minted:** 2026-08-07 (CLI / Grok — residual of audit finding #1 / WO-911 Q9)  
 **Silo:** Monetization / Wallet / FeatureFlags (isolated lane)  
 **Roles:** Owner rules open questions; CLI implements after rulings  

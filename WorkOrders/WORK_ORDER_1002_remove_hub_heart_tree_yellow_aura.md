@@ -1,6 +1,12 @@
+> ## RECONCILED 2026-08-08 - true status is NOT STARTED
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: `HeartAuraController.cs:302-322`
+> `StartGreenTreeAura` still calls `VFXManager.PlayKey` unconditionally, and zero commits mention 1002.
+> The previous Status line read "READY TO IMPLEMENT" and was CORRECT - this WO was checked on
+> 2026-08-08 and confirmed accurate, not skipped.
+
 # WORK ORDER 1002 — Remove the yellow aura at the hub Heart of Elarion tree
 
-**Status:** READY TO IMPLEMENT · **Silo:** Hub/VFX · **For:** CLAUDE CLI · **Date:** 2026-08-07
+**Status:** READY TO IMPLEMENT - NOT STARTED (verified accurate 2026-08-08) · **Silo:** Hub/VFX · **For:** CLAUDE CLI · **Date:** 2026-08-07
 **PO:** Samantha (owner) · **Author:** UI seat · **UI-seat block:** 1000–1099
 **Owner (felt-test 2026-08-07):** *"remove the yellow."* A big yellow glowing plume engulfs the base/roots of the Heart of Elarion tree in the hub. It's the same over-hot yellow class as the harvest-node plume (WO-890 subtlety ruling).
 

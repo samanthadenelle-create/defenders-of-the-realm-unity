@@ -1,5 +1,13 @@
+> ## RECONCILED 2026-08-08 - true status is ROUTING MAP VALID - ALL TARGETS NOT STARTED
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. The priority-to-WO routing below is sound, but
+> every WO it routes to (920, 921, 923, 924, 925, 926) is NOT STARTED at HEAD.
+> WARNING: commit 6e0cde93's subject says "land WO 923-926" - it did NOT land that code. Its diff is
+> `.gitignore` plus `TimelineSettings.asset` plus 5 `.md` files. It landed the DOCUMENTS, not the code.
+> Do not read that commit subject as completion. A Status line has been added - the file previously had none.
+
 # Visual review map — Grok Imagine (Development Build 52s) → WOs
 
+**Status:** ROUTING MAP VALID - ALL TARGETS NOT STARTED (reconciled 2026-08-08)  
 **Date:** 2026-08-07 · **Recording:** dungeon Grom Lv5 + exit to Heart of Elarion  
 **Contrast noted:** outdoor Heart looks polished; dungeon reads unfinished.
 

@@ -1,6 +1,10 @@
+> ## RECONCILED 2026-08-08 - true status is PARTIAL
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: the tree is GREEN - `site/index.html:86` carries the canon tagline, landed in `f329c8d5`. Only the Vercel PROD deploy is outstanding, and a deploy leaves no repo artifact, so this WO can never be closed from git alone - someone must check the live site.
+> The previous Status line read "READY TO IMPLEMENT" and was wrong.
+
 # WORK ORDER 916 — Marketing site: ship canon tagline to production (Vercel)
 
-**Status: READY TO IMPLEMENT**  
+**Status: PARTIAL — tree green, Vercel prod deploy outstanding** (reconciled 2026-08-08, see banner)  
 **Minted:** 2026-08-07 (CLI / Grok — residual of audit finding #5)  
 **Silo:** Site / Ops (no Unity gameplay code)  
 **Roles:** CLI or owner with Vercel auth — deploy only after tree is green on the tagline  

@@ -1,6 +1,10 @@
+> ## RECONCILED 2026-08-08 - true status is NOT STARTED
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: `ElementalAffinity` and `AffinityMatch` return 0 hits across the tree.
+> The previous Status line read "SPEC - not started. Blocks nothing, but see sec.6: this must be decided BEFORE the VFX pass picks per-tower visuals." and was wrong.
+
 # WORK ORDER 907 — Elemental affinity: towers, enemies, and a match bonus that is never a lock
 
-**Status:** SPEC — not started. **Blocks nothing, but see §6: this must be decided BEFORE the VFX pass picks per-tower visuals.**
+**Status:** NOT STARTED (reconciled 2026-08-08, see banner). **Blocks nothing, but see §6: this must be decided BEFORE the VFX pass picks per-tower visuals.**
 **Minted:** 2026-08-04 (CLI), owner ruling
 **Lane:** Combat / balance + data. Touches the damage path — treat with the care that implies.
 **Adjacent:** WO-872 (combat VFX master), WO-870 (tower type x tier VFX), WO-855 (economy balance, just shipped)

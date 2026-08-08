@@ -1,6 +1,10 @@
+> ## RECONCILED 2026-08-08 - true status is DONE
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: commit 4c1da079; HarvestAura.cs was created.
+> The previous Status line read "READY TO IMPLEMENT" and was wrong.
+
 # WORK ORDER 890 — VFX: harvest resource auras + ready-to-collect beacon
 
-**Status:** READY TO IMPLEMENT · **Silo:** Economy/VFX · **For:** CLAUDE CLI · **Date:** 2026-08-05
+**Status:** DONE (reconciled 2026-08-08) · **Silo:** Economy/VFX · **For:** CLAUDE CLI · **Date:** 2026-08-05
 **Context (read once):** WO-884 §0.2 · `VFX_PREFAB_HANDBOOK.md` (Step 1–8) · `VFX_CREATIVE_PICKS_REGISTRY.md` §6e. Enum LANDED — reference names only.
 **Depends on:** WO-884 Phase 0 platform + WO-889 nearest-N guard (harvest auras are loops — gate them).
 

@@ -1,6 +1,10 @@
+> ## RECONCILED 2026-08-08 - true status is DONE
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: 29c80b0b; SafeAreaInset.cs is a new file in the tree.
+> The previous Status line read "Status: READY TO IMPLEMENT (small - can ride with any other 08-04 WO)" and was wrong; the board understated this.
+
 # WORK ORDER 868 — Title: safe-area inset for "Connect Wallet" (+ do-NOT-crop the art)
 
-**Status:** READY TO IMPLEMENT (small — can ride with any other 08-04 WO)
+**Status:** DONE
 **Author:** UI/QA triage (read-only, §13) — Claude UI
 **Lane:** HUD/UI — the title/main-menu overlay. **WO#:** UI-seat block; **868**=this.
 **Source:** `docs/ui-review/2026-08-04-seeker/README.md` §4 + `01-title-screen.png` (Seeker).

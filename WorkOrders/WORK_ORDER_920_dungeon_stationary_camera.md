@@ -1,6 +1,10 @@
+> ## RECONCILED 2026-08-08 - true status is DONE
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: shipped in `3b344919` - new `DungeonCameraProfile.cs` (118 lines) + `SmartMobileCamera.cs` (+134) + `DungeonFpvRegression.cs` (+219). Note the WO TEXT described the wrong pipeline: composed dungeons bake NO camera at all. WHY IT WAS MISLABELLED: this WO file was FIRST ADDED in the very commit that implemented it - it was BORN STALE, never neglected.
+> The previous Status line read "READY TO IMPLEMENT" and was wrong.
+
 # WORK ORDER 920 — Dungeon camera: stationary exploration (stop the bounce)
 
-**Status: READY TO IMPLEMENT**  
+**Status: DONE** (`3b344919`; reconciled 2026-08-08, see banner; not felt-verified)  
 **Minted:** 2026-08-07 (CLI / Grok — owner: “stationary camera view for in dungeons” + bounce)  
 **Silo:** Dungeons / Camera (runtime code; no scene hand-edit)  
 **Roles:** CLI implement; PO felt-closes motion sickness / stability  

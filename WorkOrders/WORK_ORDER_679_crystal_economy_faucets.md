@@ -1,3 +1,7 @@
+> ## RECONCILED 2026-08-08 - true status is NOT STARTED
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: no streak/faucet code exists; grep DailyStreak/StreakModal returns 0 files.
+> The previous Status line read "Status: SPEC - needs owner pin sign-off, then READY" and was wrong; the board overstated this.
+
 # WORK ORDER 679 — Crystal economy: earn loop, login streaks, purchasable packs
 
 > **STALE: 2026-08-04 (WO-856).** The faucet table below is wrong on its first row. It calls
@@ -11,7 +15,7 @@
 > *"LIVE as of 2026-08-04"*. The rest of this WO (login streak, crystal packs, the dead-end daily
 > quests) is unaffected and still open. Body frozen per CLAUDE.md §15 — not rewritten.
 
-**Status: SPEC — needs owner pin sign-off, then READY** (owner ask 2026-07-12, from the live
+**Status: NOT STARTED** (owner ask 2026-07-12, from the live
 Forge Enhancements preview: "we pay in crystals — how do we earn crystals? Could crystals be
 earned through consecutive login days / additional purchases?").
 **Classification (pipeline §13): NEW FEATURE** (login streak + crystal packs) **+ wiring gaps**

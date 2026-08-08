@@ -1,6 +1,10 @@
+> ## RECONCILED 2026-08-08 - true status is PARTIAL
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: 35b1020f shipped StructureTargetableRegression.cs and f2069890 ruled section 7's 50/30/20 split (RaidScoring.cs:123/137/144), but section 11 of this file records acceptance 1's pathing half as deferred and acceptance 2 as unmet.
+> The previous Status line read "Status: READY TO IMPLEMENT" and was wrong; the board understated this.
+
 # WORK ORDER 853 — Structures are targetable (the disjoint-contract seam)
 
-**Status: READY TO IMPLEMENT**
+**Status: PARTIAL**
 **Minted:** 2026-08-03 (CLI, main-line block; banner bumped 853 → 854 in the same edit)
 **Lane:** Combat/AI + Village structures. Touches Core contract, Village structures, troop/hero targeting, raid scoring.
 **Owner ruling needed on one number only** — see §7.

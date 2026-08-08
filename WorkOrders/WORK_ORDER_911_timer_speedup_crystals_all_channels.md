@@ -1,6 +1,17 @@
+> ## RECONCILED 2026-08-08 - true status is PARTIAL
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: the CRYSTAL channel is DONE - `BuildTimerService.cs:732/818/856` carry a channel-aware `InstantFinishPrice` / `TryInstantFinish`. The AD channel is NOT done - there is no `TryAdSkip` in `BuildTimerService`.
+> The previous Status line read "READY TO IMPLEMENT" and was wrong.
+
+> ## !! WO NUMBER COLLISION - "911" IS TWO UNRELATED WORK ORDERS !!
+> This file is **WO-911 timer speed-ups** (crystals + ads). A SECOND, entirely unrelated WO also numbered
+> 911 exists: `WorkOrders/WORK_ORDER_911_unified_queue_screen.md` (the unified Manage/Queues screen),
+> and THAT one is DONE. **Commits and board rows crediting "WO-911" refer to the SCREEN, not to this
+> timer work.** A RESULT file or a board row keyed to the bare number "911" cannot be correct for both -
+> always disambiguate by file suffix (`_timer_speedup_crystals_all_channels` vs `_unified_queue_screen`).
+
 # WORK ORDER 911 — Timer speed-ups actually available (crystals + ads, all channels)
 
-**Status: READY TO IMPLEMENT**  
+**Status: PARTIAL — crystal channel DONE, ad channel NOT** (reconciled 2026-08-08, see banner)  
 **Minted:** 2026-08-05 (CLI / Grok — owner: “nothing is available as a speed up”)  
 **Silo:** Queue / Economy / Store (HUD presentation + BuildTimerService)  
 **Roles:** CLI implement  

@@ -1,6 +1,10 @@
+> ## RECONCILED 2026-08-08 - true status is DONE
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: 9a43e83a; CrystalMine.cs rewritten and buildings.json carries the yield curve [2,4,7].
+> The previous Status line read "Status: READY TO IMPLEMENT" and was wrong; the board understated this.
+
 # WORK ORDER 856 — Crystal Mine actually pays out (level authority + authored yield curve)
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE
 **Author:** read-only RCA agent (§13 triage), orchestrated by CLI, 2026-08-04
 **Classification (§13):** EXISTING — built system, silently dead. NOT a new feature.
 **Lane (§9):** Economy / Buildings — code + data only, no `.unity` scene files.

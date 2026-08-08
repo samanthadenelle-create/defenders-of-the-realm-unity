@@ -1,6 +1,10 @@
+> ## RECONCILED 2026-08-08 - true status is NOT STARTED
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: commit `6e0cde93` added this `.md` file ONLY; `applyRootMotion=false` is unchanged in the tree.
+> The previous Status line read "SPEC / READY FOR OWNER PRIORITY" and was wrong.
+
 # WORK ORDER 926 — Combat animation: legs/hips, foot slide, recovery, shield clip
 
-**Status: SPEC / READY FOR OWNER PRIORITY**  
+**Status: NOT STARTED** (reconciled 2026-08-08, see banner)  
 **Minted:** 2026-08-07 (Grok Imagine visual review — Development Build)  
 **Silo:** Animation / Hero combat  
 **Roles:** CLI implement after owner picks priority vs dungeon WOs; may need anim clip retarget  

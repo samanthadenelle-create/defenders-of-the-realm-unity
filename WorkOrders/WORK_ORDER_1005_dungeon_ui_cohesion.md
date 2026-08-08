@@ -1,6 +1,12 @@
+> ## RECONCILED 2026-08-08 - true status is NOT STARTED
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: no descend-prompt UI exists at all;
+> `DungeonExitInteractable.cs:249` still sets `tm.text = "EXIT"` and the beacon billboard is unchanged.
+> The previous Status line read "READY TO IMPLEMENT" and was CORRECT - this WO was checked on
+> 2026-08-08 and confirmed accurate, not skipped.
+
 # WORK ORDER 1005 — Dungeon UI cohesion: Descend button + EXIT label to the Obsidian kit
 
-**Status:** READY TO IMPLEMENT · **Silo:** Dungeons/UI · **For:** CLAUDE CLI · **Date:** 2026-08-07
+**Status:** READY TO IMPLEMENT - NOT STARTED (verified accurate 2026-08-08) · **Silo:** Dungeons/UI · **For:** CLAUDE CLI · **Date:** 2026-08-07
 **PO:** Samantha (owner) · **Author:** UI seat · **UI-seat block:** 1000–1099
 **Owner (felt-test 2026-08-07):** "needs cohesion." The composed dungeon's UI/labels don't match the game's obsidian+gold theme — they read as placeholders.
 **Complements:** WO-1004 (dungeon art/materials/enclose), WO-899 (HUD), WO-1001 (descent mechanic).

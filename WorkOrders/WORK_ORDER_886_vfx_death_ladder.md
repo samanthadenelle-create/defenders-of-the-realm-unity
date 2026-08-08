@@ -1,6 +1,10 @@
+> ## RECONCILED 2026-08-08 - true status is DONE
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: commit 29f9ac2b; 5 death prefabs plus VFXCatalog.asset +30 lines.
+> The previous Status line read "LANDED 2026-08-05 (29f9ac2b)" and was already correct; it is restated here in the reconciled vocabulary. Owner felt-verification is still outstanding.
+
 # WORK ORDER 886 — VFX: enemy death ladder
 
-**Status: LANDED 2026-08-05 (`29f9ac2b`)** — gates `COMPILE_GATE_OK` + `REGRESSION_OK 120/120` +
+**Status:** DONE (reconciled 2026-08-08) — LANDED 2026-08-05 (`29f9ac2b`) — gates `COMPILE_GATE_OK` + `REGRESSION_OK 120/120` +
 `PARTICLE_PACK_VFX_BUILD_OK` + `VFX_ART_MIRROR_OK`. ⚠ **Read before re-opening:** the **0.7 boss death
 shake in this WO's own acceptance criteria has NEVER FIRED** — `EliteVFXController` is attached to nothing
 (zero prefabs, zero scenes), so every kill including bosses got the flat 0.18; the tier rule was lifted

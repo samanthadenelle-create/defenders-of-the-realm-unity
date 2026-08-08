@@ -1,5 +1,13 @@
+> ## RECONCILED 2026-08-08 - true status is STILL LIVE - the stated P0 is unresolved at HEAD
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: the headline claim below (floors
+> placed but not connected) is still true at HEAD. Canon 2026-08-08 records PathPartial and a floor
+> delta start-to-stop of 0.00m, and there are ZERO instantiated `NavMeshLink`/`OffMeshLink` components
+> anywhere in the dungeon code - only a comment and a diagnostic string. No `NavMeshAgent` can cross
+> floors. A Status line has been added - the file previously had none.
+
 # HANDOFF → GROK — Multi-level dungeon traversal is not connected, plus 8 open visual defects
 
+**Status:** STILL LIVE - the stated P0 is unresolved at HEAD (reconciled 2026-08-08)
 **Date:** 2026-08-07 · **From:** CLI seat · **For:** Grok (spec/design pass) · **Then:** UI refines → CLI implements
 **Everything below was read from source or measured from a bake TODAY.** Where something is inference, it says so.
 

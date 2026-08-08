@@ -1,6 +1,10 @@
+> ## RECONCILED 2026-08-08 - true status is DONE
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: shipped under WO-901's number in 5cd1ceb9; CollectorIncomeRegression.cs:31 case 7 [offline-capped], marker COLLECTOR_INCOME_OK.
+> The previous Status line read "Status: READY TO IMPLEMENT" and was wrong; the board understated this.
+
 # WORK ORDER 859 — Per-collector capacity in hours + offline collector accrual
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE
 **Author:** read-only RCA agent (§13), orchestrated by CLI, 2026-08-04
 **Silo:** Economy / Harvest (Village). No scene files. No HUD files.
 **Depends on:** `35485f31` (phantom-income gate), WO-834 (`everBuiltStructureIds`, v36), WO-855 (rate re-scale)

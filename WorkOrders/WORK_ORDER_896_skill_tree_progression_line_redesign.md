@@ -1,6 +1,10 @@
+> ## RECONCILED 2026-08-08 - true status is PARTIAL
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: commit 287ac354 shipped it, but the commit itself concedes overflow remains and mitigates it with a MORE BELOW cue - against this WO's acceptance criterion "Nothing is clipped".
+> The previous Status line read "READY TO IMPLEMENT" and was wrong.
+
 # WORK ORDER 896 — Skill tree: simplify to a connected progression line (kill the dense grid)
 
-**Status:** READY TO IMPLEMENT · **Silo:** UI / talents · **For:** CLAUDE CLI · **Date:** 2026-08-05
+**Status:** PARTIAL (reconciled 2026-08-08) · **Silo:** UI / talents · **For:** CLAUDE CLI · **Date:** 2026-08-05
 **PO:** Samantha (owner) · **Author:** UI seat
 **Owner ruling:** *"this skill tree is hard to read — simplify the tree, just have the skills connected by a line showing progression."*
 **Obsidian toolkit (owner pointer):** build with `docs/UI_BLINK_TEMPLATE_CANON.md` + `ElarionUiKit` (the Obsidian kit) — same chrome, node plates, and gold/parchment palette the rest of the game uses.

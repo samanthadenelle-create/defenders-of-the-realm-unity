@@ -1,6 +1,10 @@
+> ## RECONCILED 2026-08-08 - true status is DONE
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: 29c80b0b; HudUiRegression.cs +505 lines.
+> The previous Status line read "Status: READY TO IMPLEMENT" and was wrong; the board understated this.
+
 # WORK ORDER 867 — Combat HUD: nameplate composition + right-edge grouping
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE
 **Author:** UI/QA triage (read-only, §13) — Claude UI
 **Lane:** HUD/UI — combat HUD (`BattleArenaHud.cs` + the enemy nameplate + the right-edge ability column; CLI confirm).
 **WO#:** UI-seat block; **867**=this.

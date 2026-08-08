@@ -1,6 +1,10 @@
+> ## RECONCILED 2026-08-08 - true status is PARTIAL - BLOCKED ON RESEARCH
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: the prefab-kit half EXISTS (`StairConnector_*_{Up,Down}.prefab`, landed `15d1081d`), but acceptance sec.6 (`dg_descent_probe` = `PathComplete`) is UNMET after FOUR failed hypothesis rounds - see WO-927. Marking this "READY TO IMPLEMENT" understates a hard research blocker and would send a session in expecting a straightforward build.
+> The previous Status line read "READY TO IMPLEMENT" and was wrong.
+
 # WORK ORDER 923 — Walkable multi-level stairs (prefab kit: visual steps + invisible ramp)
 
-**Status: READY TO IMPLEMENT**  
+**Status: PARTIAL — BLOCKED ON RESEARCH (see WO-927)** (reconciled 2026-08-08, see banner)  
 **Minted:** 2026-08-07 (Grok — from `HANDOFF_GROK_DUNGEON_MULTILEVEL_NAV.md` + owner video/context)  
 **Silo:** Dungeons / RoomForge bake  
 **Roles:** CLI implement (Claude thrashing on plane maths — this WO freezes the recipe)  

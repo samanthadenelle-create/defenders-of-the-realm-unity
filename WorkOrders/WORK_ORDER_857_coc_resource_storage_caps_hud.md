@@ -1,6 +1,10 @@
+> ## RECONCILED 2026-08-08 - true status is DONE
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: 177b24a7 (the commit does not name the WO); TownBankCapacity.cs 708 lines + storage-caps.json + TownBankCapRegression.cs 779 lines.
+> The previous Status line read "Status: READY TO IMPLEMENT" and was wrong; the board understated this.
+
 # WORK ORDER 857 — CoC-style resource storage caps + HUD “have / max”
 
-**Status: READY TO IMPLEMENT**  
+**Status: DONE**  
 **Minted:** 2026-08-04 · **Owner-locked model:** 2026-08-04 (owner confirmed “yes” on three-full split)  
 **Silo:** Economy / HUD / Catalog data  
 **Roles:** CLI implement; Claude may do chip layout wireframe only (no `.cs` if house rule)  

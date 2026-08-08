@@ -1,6 +1,11 @@
+> ## RECONCILED 2026-08-08 - true status is PARTIAL
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: the ADR is ratified but the three files section 8 mandates (Vfx.cs, VfxBones.cs, VfxSocket.cs) do NOT exist in the tree.
+> The previous Status line read "Status: RATIFIED (owner 2026-08-05) - ARCHITECTURE DECISION. This WO is the ADR (why + apply matrix)." and was wrong; the board overstated this.
+> WARNING - WO NUMBER COLLISION: a SECOND work order is also numbered 760 (`WORK_ORDER_760_dragon_syndrath_fly_land_burn_tree.md`), and that dragon WO owns EVERY commit that cites WO-760. Do not read 760 commits as evidence for this ADR.
+
 # WORK ORDER 760 — Common VFX attach class (architect determination)
 
-**Status:** ✅ RATIFIED (owner 2026-08-05) — ARCHITECTURE DECISION. This WO is the ADR (why + apply matrix).
+**Status:** PARTIAL — ARCHITECTURE DECISION ratified, implementation not shipped. This WO is the ADR (why + apply matrix).
 **⚠ The LOCKED implementation contract lives in WO-884 §0.2** and OVERRIDES this WO where they differ:
 (1) canonical API = the fluent `Vfx.On(root).Add{Family}(element).OnBone(...).Play()` (the flat `Vfx.Projectile(...)`
 here is optional 1:1 sugar); (2) resolution goes through `VfxElementTables` which DELEGATES to `SpellVfxFactory`

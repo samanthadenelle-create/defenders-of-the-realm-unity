@@ -1,6 +1,10 @@
+> ## RECONCILED 2026-08-08 - true status is NOT STARTED
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: the `hud-areas.json` calm(town) `status` area still lists `compass` and `waveBlock` co-occupying it; no re-anchor has landed.
+> The previous Status line read "READY TO IMPLEMENT" and was wrong.
+
 # WORK ORDER 914 — Status mount: compass strip vs waveBlock layout (no collision)
 
-**Status: READY TO IMPLEMENT**  
+**Status: NOT STARTED** (reconciled 2026-08-08, see banner)  
 **Minted:** 2026-08-07 (CLI / Grok — residual after WO-899 heading strip)  
 **Silo:** HUD / UI  
 **Roles:** CLI implement + headless UI capture; PO felt-closes appearance  

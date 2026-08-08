@@ -1,6 +1,11 @@
+> ## RECONCILED 2026-08-08 - true status is DONE (with documented deviation)
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: commit afa50e44; EndStateView.cs +702 lines.
+> LATENT TRAP (recorded here so it is not lost): the arena + FLAWLESS + 5-spoils case still compresses to 0.992 and is only unreachable because nothing currently sets `perfect` true. It regresses the moment `perfect` is wired.
+> The previous Status line read "LANDED 2026-08-05 (afa50e44) WITH A DOCUMENTED DEVIATION FROM THIS WO'S OWN WIREFRAME" and was already correct; it is restated here in the reconciled vocabulary. Owner felt-verification is still outstanding.
+
 # WORK ORDER 894 — Victory screen: real spinning stars + exact wireframe layout
 
-**Status: LANDED 2026-08-05 (`afa50e44`) WITH A DOCUMENTED DEVIATION FROM THIS WO'S OWN WIREFRAME** —
+**Status:** DONE (with documented deviation) (reconciled 2026-08-08) — LANDED 2026-08-05 (`afa50e44`) WITH A DOCUMENTED DEVIATION FROM THIS WO'S OWN WIREFRAME —
 gate `COMPILE_GATE_OK`. ⚠ **Read before treating §2/§3 as binding again:** **this WO's own spec made the
 crush WORSE** — raising the star band 48 -> 72 pushed arena-win from 0.893 to 0.859. **The crush is
 arithmetic, not layout, and it is not `ClampMinTouch`:** landscape has **965 reference px** of height and an

@@ -1,6 +1,10 @@
+> ## RECONCILED 2026-08-08 - true status is DONE
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: a8bbd368; BuildEconomyRegression.cs (455 lines) plus 5 canonical JSONs retuned.
+> The previous Status line read "Status: READY TO IMPLEMENT" and was wrong; the board understated this.
+
 # WORK ORDER 855 — Economy balance pass: costs, times, gather, spam softcap, difficulty (data-first)
 
-**Status: READY TO IMPLEMENT**  
+**Status: DONE**  
 **Minted:** 2026-08-03 (CLI / Grok — owner: mobile-game grind + challenge; **tweak not rewrite**)  
 **Silo:** Economy / Data / light BuildMode cost hook  
 **Roles:** CLI (or Claude CLI) implements **numbers + thin cost multiplier only**; no system rewrites  

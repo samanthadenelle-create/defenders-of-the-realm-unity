@@ -1,6 +1,10 @@
+> ## RECONCILED 2026-08-08 - true status is DONE
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: shipped in commit 31888576; BuildMenuLayout.cs is new and BuildMenuLayoutRegression.cs is new at 534 lines.
+> The previous Status line read "READY." and was wrong.
+
 # WORK ORDER 878 — Build "Upgrade Tower" panel: text overlaps a hidden button
 
-**Status:** READY. **Lane:** HUD/UI — `BuildMenu.cs` / `BuildMenuVM` (upgrade-tower view). **WO#:** UI-seat block; **878**.
+**Status:** DONE (reconciled 2026-08-08). **Lane:** HUD/UI — `BuildMenu.cs` / `BuildMenuVM` (upgrade-tower view). **WO#:** UI-seat block; **878**.
 **Source:** `docs/ui-review/screens-2026-08-04/BuildMenuUpgradeTower_2340x1080.png`.
 
 ## 1. Bad (from the capture)

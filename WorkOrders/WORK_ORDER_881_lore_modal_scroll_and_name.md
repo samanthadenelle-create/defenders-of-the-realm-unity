@@ -1,6 +1,10 @@
+> ## RECONCILED 2026-08-08 - true status is DONE
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: shipped in commit 572f1289; LoreReadingModal.cs +199 lines.
+> The previous Status line read "READY." and was wrong.
+
 # WORK ORDER 881 — Lore Reading modal: long text clipped by Close (no scroll) + Alduin/Aldwin name
 
-**Status:** READY. **Lane:** HUD/UI + data — `LoreReadingModal` (+ the lore text source). **WO#:** UI-seat block; **881**.
+**Status:** DONE (reconciled 2026-08-08). **Lane:** HUD/UI + data — `LoreReadingModal` (+ the lore text source). **WO#:** UI-seat block; **881**.
 **Source:** `docs/ui-review/screens-2026-08-04/LoreReadingModal_2340x1080.png`.
 
 > ## ⚠ CORRECTION 2026-08-05 — §1/§2/§3's "Alduin is a typo" premise is WRONG. NOT ACTIONED.

@@ -1,6 +1,11 @@
+> ## RECONCILED 2026-08-08 - true status is NOT STARTED
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. The Status line below reads
+> "diagnosed, NOT fixed" and was CORRECT - this brief was checked on 2026-08-08 and confirmed
+> accurate, not skipped. Still no WO number minted.
+
 # BRIEF FOR GROK — `BowProp` corrupt renderer bounds (`bounds.min.y = -33.56`)
 
-**Status:** diagnosed, NOT fixed. Root fix is an ASSET IMPORT setting + a frozen prefab AABB,
+**Status:** diagnosed, NOT fixed (verified accurate 2026-08-08). Root fix is an ASSET IMPORT setting + a frozen prefab AABB,
 not application code. No WO number minted (the `CLI_LANES_WO_NUMBERS.md` banner is the sole
 numbering authority — take one from there if this becomes a WO).
 

@@ -1,6 +1,10 @@
+> ## RECONCILED 2026-08-08 - true status is DONE
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: shipped in `94c23be3` ("BAKE WAVE 1 (919 + 922)"); `RoomForgeCanon.cs:59` sets `WallHeight = 4f` with a doc-comment naming WO-919 verbatim, and 17 room prefabs were rebuilt. WHY IT WAS MISLABELLED: this WO file was FIRST ADDED in the very commit that implemented it - it was BORN STALE, never neglected. Do not read the old status as a sign the work was dropped.
+> The previous Status line read "READY TO IMPLEMENT" and was wrong.
+
 # WORK ORDER 919 — RoomForge dungeons: taller walls + ceilings + kill blue sky
 
-**Status: READY TO IMPLEMENT**  
+**Status: DONE** (`94c23be3`; reconciled 2026-08-08, see banner; not felt-verified)  
 **Minted:** 2026-08-07 (CLI / Grok — owner screenshots 12:29 / 12:30 + review)  
 **Silo:** World / Dungeon bake (RoomForge — no hand-edit of `.unity`)  
 **Roles:** CLI implement + batch re-bake; PO felt-closes “reads as interior”  

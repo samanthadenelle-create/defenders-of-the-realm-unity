@@ -1,6 +1,10 @@
+> ## RECONCILED 2026-08-08 - true status is PARTIAL
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: sec.3 tell is DONE - `StructureFactory.cs:776` now calls `CollectorStackView.Attach`, and two regression suites fail if that caller disappears. sec.4 (ambient HUD collector chip) is deliberately DEFERRED per WO-901:65.
+> The previous Status line read "READY TO IMPLEMENT" and was wrong.
+
 # WORK ORDER 900 — The collector "I am full" tell
 
-**Status:** READY TO IMPLEMENT
+**Status:** PARTIAL — sec.3 shipped; sec.4 HUD chip deferred (reconciled 2026-08-08, see banner)
 **Author:** read-only RCA agent (§13), orchestrated by CLI, 2026-08-04
 **Origin:** owner, 2026-08-04 — *"we need to somehow convey to player when capacity is full."*
 **Lane (§9):** Presentation / UI. **File-disjoint from WO-859** — 859 touches `ResourceCollector`'s state

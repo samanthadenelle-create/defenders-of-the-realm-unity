@@ -1,6 +1,12 @@
+> ## RECONCILED 2026-08-08 - true status is PARTIAL (authored complete through Phase 2; traversal broken)
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: slices 1, 2, 1b, 3-5, 6-8 and Phase 2
+> all landed (6e2ceb1b, 05e112ba, 33354ea9, 1ea03b84, 335f6b81, a77384f0, 195ae8c8). BUT canon
+> 2026-08-08 records PathPartial and floor delta start-to-stop = 0.00m, so the descents do not function.
+> The previous Status line read "SPEC - READY (phased)" and was wrong.
+
 # WORK ORDER 1001 — Deep Dungeon Program: large multi-level dungeons as data + the engine to run them
 
-**Status:** SPEC — READY (phased) · **Silo:** Dungeons / content / systems · **For:** CLAUDE CLI · **Date:** 2026-08-07
+**Status:** PARTIAL - authored complete through Phase 2; traversal broken (reconciled 2026-08-08) · **Silo:** Dungeons / content / systems · **For:** CLAUDE CLI · **Date:** 2026-08-07
 **PO:** Samantha (owner) · **Author:** UI seat · **UI-seat block:** 1000–1099
 **Owner:** *"create other full complex dungeon instructions … for large real depth levels … we use a portal that takes you to a new scene."*
 **Related:** WO-1000 (starter-dungeon visual overhaul), the VFX facade (WO-884/885 — candles/fog), the harvest-VFX subtlety ruling (WO-890).

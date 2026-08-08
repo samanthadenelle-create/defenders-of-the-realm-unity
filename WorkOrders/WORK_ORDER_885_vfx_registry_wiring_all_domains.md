@@ -1,6 +1,10 @@
+> ## RECONCILED 2026-08-08 - true status is PARTIAL
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: this is an umbrella index. Its own precondition - the WO-884 facade - never landed, so children 886-893 wired straight to VFXManager instead, and this WO's "LOCKED contract" was silently voided by the very WOs it indexes.
+> The previous Status line read "READY TO IMPLEMENT (after WO-884 Phase 0 platform + P1 land)" and was wrong.
+
 # WORK ORDER 885 — VFX registry wiring: all remaining domains (phases 2–7)
 
-**Status:** READY TO IMPLEMENT (after WO-884 Phase 0 platform + P1 land)
+**Status:** PARTIAL (reconciled 2026-08-08) — umbrella index; the WO-884 Phase 0 platform precondition never landed
 **Silo:** Village combat / VFX / economy / structures / dungeon
 **PO:** Samantha (owner)
 **Author:** UI seat · **For:** CLAUDE CLI (sole committer, build-verifier)

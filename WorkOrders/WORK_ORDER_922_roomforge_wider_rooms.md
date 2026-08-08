@@ -1,6 +1,10 @@
+> ## RECONCILED 2026-08-08 - true status is DONE
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: shipped in `94c23be3` ("BAKE WAVE 1 (919 + 922)"); `RoomForgeCanon.cs:45` now sets `Cell = 10f`. WHY IT WAS MISLABELLED: this WO file was FIRST ADDED in the very commit that implemented it - it was BORN STALE, never neglected. Do not read the old status as a sign the work was dropped.
+> The previous Status line read "READY TO IMPLEMENT" and was wrong.
+
 # WORK ORDER 922 — RoomForge: all rooms much wider
 
-**Status: READY TO IMPLEMENT**  
+**Status: DONE** (`94c23be3`; reconciled 2026-08-08, see banner; not felt-verified)  
 **Minted:** 2026-08-07 (CLI / Grok — owner: “all rooms can be much wider”)  
 **Silo:** World / Dungeon bake (RoomForge prefabs + recompose + rebake)  
 **Roles:** CLI implement; batch rebuild prefabs + graphs + scenes  

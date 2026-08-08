@@ -1,6 +1,10 @@
+> ## RECONCILED 2026-08-08 - true status is SUPERSEDED
+> Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: superseded by WO-886; commit 29f9ac2b shipped the same artifacts (Enemy.cs:2846 SpeciesDeathVfx, plus the Death_Generic / Death_Brute / Death_Tiefling prefabs).
+> The previous Status line read "READY - child of WO-872." and was wrong.
+
 # WORK ORDER 873 — Enemy death + melee-impact VFX (highest player-felt)
 
-**Status:** READY — child of WO-872. **Lane:** Combat/AI VFX. **WO#:** UI-seat block; **873**.
+**Status:** SUPERSEDED by WO-886 (reconciled 2026-08-08) — child of WO-872. **Lane:** Combat/AI VFX. **WO#:** UI-seat block; **873**.
 **Origin:** owner 2026-08-04 VFX pass. Audit-backed (WO-872 §2). **Layer:** A/B.
 
 ## 1. Gaps (audit, `Enemy.cs`)
