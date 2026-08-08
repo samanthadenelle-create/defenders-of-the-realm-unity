@@ -416,6 +416,16 @@ namespace DeNelle.Editor.RoomForge
             surface.collectObjects = CollectObjects.All;
             surface.useGeometry = NavMeshCollectGeometry.PhysicsColliders;
             surface.layerMask = ~0;
+
+            // ⚠ TILE SIZE IS DELIBERATELY LEFT AT THE DEFAULT — do not "fix" it. Tried and
+            //   measured 2026-08-08: the default 256-voxel tile is ~42.7 m, smaller than these
+            //   dungeons, so each was baking as several independently-voxelised tiles stitched at
+            //   their edges — a promising suspect, since a flat floor stitches across a seam fine
+            //   but a SLOPE must agree on span heights from both sides. Set to 1024 (~170 m, one
+            //   tile per dungeon, seams gone entirely) and re-baked all six: ramp wholeness came
+            //   back BIT-IDENTICAL (2/4, 0/1, 3/5, 0/5, 0/1, 1/3). Tiling is not the cause, so the
+            //   override is reverted rather than kept as a change that provably does nothing.
+            //   The RAMP TILE diagnostic below stays, and stays meaningful, because of this.
             surface.BuildNavMesh();
             bool walkable = NavMesh.SamplePosition(Vector3.zero, out _, 8f, NavMesh.AllAreas);
             string navResult = "walkable=" + walkable;
@@ -664,7 +674,33 @@ namespace DeNelle.Editor.RoomForge
                 float lenXZ = new Vector2(axis.x, axis.z).magnitude * 2f;   // full planar run
                 float riseM = Mathf.Abs(axis.y) * 2f;
                 float deg = lenXZ > 0.01f ? Mathf.Atan2(riseM, lenXZ) * Mathf.Rad2Deg : 90f;
-                samples.Add(new RampSample { run = lenXZ, rise = riseM, slopeDeg = deg, whole = whole });
+
+                // Voxel phase: the navmesh rasteriser lays a grid of `voxel` metres anchored at the
+                // WORLD ORIGIN, so what matters is the ramp's position modulo that cell, not its
+                // absolute coordinate. Two identical flights offset by half a voxel present a
+                // different set of spans to the rasteriser.
+                float voxel = VoxelSize();
+                float px = Mathf.Repeat(mid.x, voxel) / voxel;
+                float pz = Mathf.Repeat(mid.z, voxel) / voxel;
+
+                // Tile straddle: compare which tile each END of the flight falls in. `bot`/`top`
+                // are the inboard 80% probe points, which is the right span to ask about — the
+                // overhanging tips belong to the landings.
+                float tile = TileWorldSize();
+                int botTx = Mathf.FloorToInt(bot.x / tile), botTz = Mathf.FloorToInt(bot.z / tile);
+                int topTx = Mathf.FloorToInt(top.x / tile), topTz = Mathf.FloorToInt(top.z / tile);
+                float edgeX = Mathf.Min(Mathf.Repeat(mid.x, tile), tile - Mathf.Repeat(mid.x, tile));
+                float edgeZ = Mathf.Min(Mathf.Repeat(mid.z, tile), tile - Mathf.Repeat(mid.z, tile));
+
+                samples.Add(new RampSample
+                {
+                    run = lenXZ, rise = riseM, slopeDeg = deg, whole = whole,
+                    yawDeg = Mathf.Repeat(r.eulerAngles.y, 360f),
+                    phaseX = px, phaseZ = pz,
+                    overlaps = CountOverlaps(r),
+                    crossesTile = (botTx != topTx) || (botTz != topTz),
+                    tileEdgeM = Mathf.Min(edgeX, edgeZ),
+                });
 
                 // ── WHICH END IS BROKEN? ──────────────────────────────────────
                 //  A ramp can be a perfect walkable strip and still connect nothing, which is
@@ -726,6 +762,93 @@ namespace DeNelle.Editor.RoomForge
             public float rise;       // vertical gain, metres
             public float slopeDeg;
             public bool whole;
+
+            // ── PER-INSTANCE CONTEXT (added 2026-08-08) ──────────────────────
+            //  Shape is exhausted as an explanation: run, rise and slope have all been measured
+            //  against wholeness and none of them splits it — every Vertical ramp is the identical
+            //  7 m / 43deg flight and they still disagree (2/4, 3/5, 1/3, 0/1). Whatever decides
+            //  the outcome is a property of WHERE the ramp sits, not WHAT it is. These are the
+            //  three cheapest candidates that had never been recorded.
+            public float yawDeg;     // world Y rotation — a ramp askew to the voxel grid rasterises
+                                     // as a staircase of voxels; an axis-aligned one does not
+            public float phaseX;     // position within one voxel cell, 0..1 — the same flight
+            public float phaseZ;     // anchored half a voxel over rasterises to a different span
+            public int overlaps;     // other colliders intersecting the flight's bounds
+
+            // TILE STRADDLE (added 2026-08-08, second pass). The bake is TILED — tileSize voxels
+            // square, ~42.7 m by default — and each tile is voxelised independently, then stitched
+            // at its edges. A flat floor stitches across a tile seam without trouble; a SLOPE
+            // crossing one has to agree on span heights from both sides, which is exactly the
+            // case that fails. It is positional, per-instance, and invisible to every property
+            // measured so far, which fits what the data keeps saying.
+            public bool crossesTile;   // does the flight's XZ span cross a tile boundary
+            public float tileEdgeM;    // metres from the flight's centre to the nearest boundary
+        }
+
+        /// <summary>
+        /// The navmesh rasteriser's voxel edge, in metres. Honours an explicit override; otherwise
+        /// Unity derives it as agentRadius/3, which for our Humanoid (radius 0.5) is 0.1667.
+        /// </summary>
+        /// <remarks>
+        /// Read from the live agent settings rather than hardcoded: a radius change would silently
+        /// invalidate every phase number below, and a diagnostic that lies confidently is worse
+        /// than none — this file has already shipped two of those.
+        /// </remarks>
+        private static float VoxelSize()
+        {
+            var s = NavMesh.GetSettingsByIndex(0);
+            if (s.overrideVoxelSize && s.voxelSize > 0.0001f) return s.voxelSize;
+            return Mathf.Max(0.0001f, s.agentRadius / 3f);
+        }
+
+        /// <summary>
+        /// The world-space edge length of one bake tile, in metres (tileSize is in VOXELS).
+        /// </summary>
+        /// <remarks>
+        /// ⚠ Anchored at the world origin here. That is correct only while the NavMeshSurface sits
+        /// at the origin, which the composed dungeons do; a surface moved off origin would shift
+        /// the tile grid with it and make these numbers wrong. Assert the surface position before
+        /// trusting a straddle result on any other scene.
+        /// </remarks>
+        private static float TileWorldSize()
+        {
+            var s = NavMesh.GetSettingsByIndex(0);
+            int tiles = s.overrideTileSize && s.tileSize > 0 ? s.tileSize : 256;
+            return Mathf.Max(1f, tiles * VoxelSize());
+        }
+
+        /// <summary>
+        /// How many OTHER colliders intersect this ramp's bounds — the "neighbouring geometry"
+        /// candidate, made measurable.
+        /// </summary>
+        /// <remarks>
+        /// Deliberately excludes the ramp itself and anything parented to it. A wall, slab or prop
+        /// pushed through the flight raises the rasterised height along part of the span, and a
+        /// span that loses head clearance mid-flight is exactly how a ramp carves at both ends and
+        /// still fails to be walkable end to end.
+        ///
+        /// Uses <c>OverlapBox</c> on the collider's own oriented bounds. Triggers are IGNORED —
+        /// they do not contribute geometry to the bake, so counting them would inflate the number
+        /// with things that provably cannot be the cause.
+        /// </remarks>
+        private static int CountOverlaps(Transform ramp)
+        {
+            var col = ramp.GetComponent<Collider>();
+            if (col == null) return 0;
+
+            Vector3 half = col.bounds.extents;
+            if (half.x < 0.01f || half.y < 0.01f || half.z < 0.01f) return 0;
+
+            var hits = Physics.OverlapBox(col.bounds.center, half, Quaternion.identity,
+                                          ~0, QueryTriggerInteraction.Ignore);
+            int n = 0;
+            foreach (var h in hits)
+            {
+                if (h == null || h == col) continue;
+                if (h.transform.IsChildOf(ramp)) continue;
+                n++;
+            }
+            return n;
         }
 
         /// <summary>
@@ -762,6 +885,79 @@ namespace DeNelle.Editor.RoomForge
                 "Slope was already eliminated (40.6deg legs fragmented MORE than 42.7deg ramps), so a clean " +
                 "split on RUN and a muddled one on SLOPE means short ramps are the driver; the reverse would " +
                 "mean neither and the cause is something not measured here.");
+
+            ReportRampContextCorrelation(s);
+        }
+
+        /// <summary>
+        /// Correlate wholeness against the ramp's SITUATION — yaw, voxel-grid phase, and how much
+        /// other geometry intersects the flight.
+        /// </summary>
+        /// <remarks>
+        /// Added 2026-08-08, after run/rise/slope were all measured and all failed to split the
+        /// outcome. Identical 7 m / 43° Vertical flights disagree (2/4, 3/5, 1/3, 0/1), so the
+        /// deciding variable is positional. These three are the cheapest untested candidates.
+        ///
+        /// ⚠ READ THIS AS A SCREEN, NOT AS AN ANSWER. With only ~15 ramps across the whole set, a
+        /// bucket of 1 proves nothing and any of these can split by coincidence. What it is for is
+        /// pointing at ONE candidate worth a controlled test — build the same flight twice, differing
+        /// only in the suspected variable. Three hypotheses have already died here, each of which
+        /// looked reasonable in prose; do not promote a bucket split to a cause.
+        /// </remarks>
+        private static void ReportRampContextCorrelation(List<RampSample> s)
+        {
+            if (s.Count == 0) return;
+
+            // Yaw in 15° buckets: enough to separate axis-aligned (0/90/180/270) from askew
+            // without scattering 15 samples across 360 one-degree bins.
+            var byYaw = new SortedDictionary<int, Vector2Int>();
+            // Phase in quarter-cell buckets, and X/Z folded together — the rasteriser has no
+            // preferred horizontal axis, so keeping them apart would just halve the sample count.
+            var byPhase = new SortedDictionary<int, Vector2Int>();
+            var byOverlap = new SortedDictionary<int, Vector2Int>();
+            var byStraddle = new SortedDictionary<int, Vector2Int>();   // 0 = inside a tile, 1 = crosses
+            var byEdgeDist = new SortedDictionary<int, Vector2Int>();   // metres to nearest tile edge
+
+            foreach (var r in s)
+            {
+                Accumulate(byYaw, Mathf.RoundToInt(r.yawDeg / 15f) * 15 % 360, r.whole);
+                Accumulate(byPhase, Mathf.Clamp(Mathf.FloorToInt(r.phaseX * 4f), 0, 3), r.whole);
+                Accumulate(byPhase, Mathf.Clamp(Mathf.FloorToInt(r.phaseZ * 4f), 0, 3), r.whole);
+                Accumulate(byOverlap, Mathf.Min(r.overlaps, 6), r.whole);
+                Accumulate(byStraddle, r.crossesTile ? 1 : 0, r.whole);
+                Accumulate(byEdgeDist, Mathf.Min(Mathf.FloorToInt(r.tileEdgeM / 5f) * 5, 20), r.whole);
+            }
+
+            FlowTrace.Step(Sys,
+                $"RAMP CONTEXT vs WHOLE (whole/total) -- by YAW: {Fmt(byYaw, "deg")} " +
+                $"| by VOXEL PHASE (quarter-cell of {VoxelSize():F4}m, X and Z pooled): {Fmt(byPhase, "/4")} " +
+                $"| by OVERLAPPING COLLIDERS: {Fmt(byOverlap, "x")}. " +
+                "Shape is exhausted -- run, rise and slope all failed to split wholeness, and identical 7m/43deg " +
+                "flights still disagree, so the variable is positional. A candidate that splits CLEANLY here earns " +
+                "ONE controlled test (same flight twice, differing only in that variable); it does not earn a fix. " +
+                "Buckets of 1 prove nothing at this sample size.");
+
+            FlowTrace.Step(Sys,
+                $"RAMP TILE (whole/total) -- tile={TileWorldSize():F1}m | CROSSES A TILE BOUNDARY: " +
+                $"{Fmt(byStraddle, "=crosses")} | metres to nearest tile edge: {Fmt(byEdgeDist, "m+")}. " +
+                "The bake is TILED and each tile is voxelised independently, then stitched at its edges. A flat " +
+                "floor stitches across a seam fine; a SLOPE crossing one must agree on span heights from both " +
+                "sides. If 1=crosses is near 0/n while 0=crosses carries the whole ramps, that is the first " +
+                "candidate to survive contact with data -- and the fix is to move the flight off the seam, or " +
+                "raise tileSize so the dungeon bakes as one tile.");
+        }
+
+        private static void Accumulate(SortedDictionary<int, Vector2Int> d, int key, bool whole)
+        {
+            d.TryGetValue(key, out var v);
+            d[key] = new Vector2Int(v.x + (whole ? 1 : 0), v.y + 1);
+        }
+
+        private static string Fmt(SortedDictionary<int, Vector2Int> d, string unit)
+        {
+            var parts = new List<string>();
+            foreach (var kv in d) parts.Add($"{kv.Key}{unit}:{kv.Value.x}/{kv.Value.y}");
+            return parts.Count == 0 ? "(none)" : string.Join("  ", parts);
         }
 
         /// <summary>Nearest ancestor carrying <see cref="RoomPrefabMeta"/> — the room a ramp lives in.</summary>
