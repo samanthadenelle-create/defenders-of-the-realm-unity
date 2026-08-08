@@ -94,8 +94,29 @@ namespace DeNelle.Editor.RoomForge
         private const float EntryPadDepth = 2.0f;
         /// <summary>Solid floor depth beyond the top nose on the straight shape.</summary>
         private const float TopLandingDepth = 1.5f;
-        /// <summary>Planar run of ONE leg of a Left/Right turn shape.</summary>
-        private const float TurnRun = 4.0f;
+        /// <summary>
+        /// Planar run of ONE leg of a Left/Right turn shape.
+        ///
+        /// <para>4.0 -> 3.5 (2026-08-07). At 4.0 the second leg's top nose landed at x = ∓4.0,
+        /// and the wall inner face sits at 4.8 — leaving a <b>0.80 m</b> landing against a
+        /// <b>1.000 m</b> minimum walkable slot (2 × agentRadius 0.5, read live from
+        /// <c>NavMesh.GetSettingsByID(0)</c>). NavMesh erosion takes 0.5 m off each side, so
+        /// 0.80 − 1.00 &lt; 0: <b>no polygon survives at the top of the flight</b>, the stair top
+        /// becomes an island, and every Left/Right descent reports PathPartial. The builder has
+        /// been printing that diagnosis at itself since the landing check was added — it simply
+        /// had nothing listening.</para>
+        ///
+        /// <para>3.5 puts the nose at ∓3.5 for a <b>1.30 m</b> landing — parity with the straight
+        /// shape, which is the one variant that clears today. The cost is slope: a 3.0 m half-rise
+        /// over 3.5 m instead of 4.0 m is <b>40.6°</b> rather than 36.9°, still under the agent's
+        /// 45° maximum but with less margin. Shortening the leg is the right lever because the
+        /// landing is a hard navmesh threshold while the slope has 4.4° of headroom.</para>
+        ///
+        /// <para>⚠ Do NOT push this lower to gain more landing. At 3.0 the slope reaches 45.0° —
+        /// exactly the agent maximum, i.e. the ramp stops carving at all. The usable band is
+        /// narrow and it is bounded on both sides.</para>
+        /// </summary>
+        private const float TurnRun = 3.5f;
         /// <summary>Opening widened this far past the stair each side so the agent capsule never brushes the slab edge.</summary>
         private const float ShaftMargin = 0.6f;
         /// <summary>
