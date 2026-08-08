@@ -258,30 +258,98 @@ namespace DeNelle.Village
         }
 
         /// <summary>
-        /// Highest-damageMult MAIN-HAND weapon the given class+level can equip, or null.
+        /// The outcome of ONE main-hand auto-best query, together with the counts that EXPLAIN it.
+        ///
+        /// WHY THE COUNTS ARE PART OF THE RETURN (CLAUDE.md §12). A bare <see cref="WeaponDef"/>
+        /// cannot tell a capture apart: "the class has no eligible rows at this level" and "the
+        /// class has forty eligible rows but the player OWNS none of them" both read as a null,
+        /// and they have two completely different fixes. Carrying the counts out of the ranking
+        /// loop is the only place they can be measured without walking the catalog a second time.
+        /// </summary>
+        public readonly struct WeaponPick
+        {
+            /// <summary>The winning weapon, or null when nothing passed the gates.</summary>
+            public readonly WeaponDef Weapon;
+            /// <summary>Rows that passed the SLOT + class + level gates (before any ownership filter).</summary>
+            public readonly int Eligible;
+            /// <summary>Of those, how many survived the ownership filter (== Eligible when unfiltered).</summary>
+            public readonly int Owned;
+            /// <summary>True when an ownership predicate was supplied and applied.</summary>
+            public readonly bool OwnershipApplied;
+
+            public WeaponPick(WeaponDef weapon, int eligible, int owned, bool ownershipApplied)
+            {
+                Weapon = weapon;
+                Eligible = eligible;
+                Owned = owned;
+                OwnershipApplied = ownershipApplied;
+            }
+        }
+
+        /// <summary>
+        /// THE one main-hand ranking loop. Highest-damageMult MAIN-HAND weapon the given class+level
+        /// can equip, optionally restricted to the ids the player actually OWNS.
         ///
         /// EXCLUDES off-hand items (shields). weapons.json carries shields as rows too, so without
         /// this gate a shield could win the main-hand pick on a damageMult tie and be handed to
         /// EnforceHandSlots, which moves it to the off hand and leaves the MAIN HAND EMPTY. That is
         /// exactly what happened when mage_starter was removed on 2026-08-02: 'tripo_shield_a' tied
         /// 'tripo_staff_a' at damageMult 1.0, won on file order, and a level-1 Mage spawned unarmed.
-        /// Every caller of this method wants a main-hand pick (starter loadout, arena/outpost loot
-        /// rolls, the armed-hero oracles), so the exclusion is correct at all of them.
+        ///
+        /// ── THE OWNERSHIP GATE (owner-felt defect, 2026-08-08) ────────────────────────────────
+        /// <paramref name="owns"/> is the fix for the FREE-FORGE-ITEM leak. This loop ranks purely
+        /// by damageMult, and it used to rank across the WHOLE CATALOG — so the moment a knight
+        /// reached level 2 (where GearLoadout's authored starter kit stops applying, StarterKit.
+        /// MainHandUpToLevel == 1) it handed over `knight_flameblade` (damageMult 1.2) instead of
+        /// `knight_starter` (1.0). knight_flameblade is a PURCHASABLE Forge item — every knight who
+        /// levelled once without ever shopping was given a paid weapon for free, which is why the
+        /// owner opened her demo recording holding a flaming sword. Auto-upgrade-on-level-up is
+        /// INTENDED (WO-860) and stays; what was wrong was its CANDIDATE SET.
+        ///
+        /// Pass <paramref name="owns"/> = null for the legacy CATALOG-WIDE behaviour. That is
+        /// correct — and deliberately kept — for the callers that are NOT asking "what should the
+        /// hero auto-equip": the arena / outpost LOOT rolls (they are choosing a prize to GRANT,
+        /// so the player necessarily does not own it yet) and the armed-hero oracles (which assert
+        /// the catalog can serve every class at every level, independent of any save).
+        ///
+        /// <paramref name="oneHandedOnly"/> narrows the slot gate from "not a shield" to
+        /// "one-handed main hand" — the hand-slot fall-back case (see BestOneHandedWeapon).
         /// </summary>
-        public static WeaponDef BestWeapon(string job, int level)
+        public static WeaponPick PickBestWeapon(string job, int level, Func<string, bool> owns,
+                                                bool oneHandedOnly = false)
         {
             EnsureLoaded();
             WeaponDef best = null;
+            int eligible = 0;
+            int owned = 0;
+            bool applied = owns != null;
+
             if (_weapons != null)
             {
                 foreach (var w in _weapons)
                 {
-                    if (w == null || w.IsOffHandItem) continue;
+                    if (w == null) continue;
+                    if (oneHandedOnly ? !w.IsOneHandedMain : w.IsOffHandItem) continue;
                     if (!JobMatches(w.job, job) || !MeetsReq(w.req, level)) continue;
+                    eligible++;
+                    if (applied && !owns(w.id)) continue;
+                    owned++;
                     if (best == null || w.damageMult > best.damageMult) best = w;
                 }
             }
-            return best;
+
+            return new WeaponPick(best, eligible, owned, applied);
+        }
+
+        /// <summary>
+        /// Highest-damageMult MAIN-HAND weapon the given class+level can equip, or null.
+        /// CATALOG-WIDE (no ownership gate) — see <see cref="PickBestWeapon"/> for why that is
+        /// correct here and wrong for the hero's auto-equip. Kept as the loot-roll / oracle entry
+        /// point so those callers read exactly as before.
+        /// </summary>
+        public static WeaponDef BestWeapon(string job, int level)
+        {
+            return PickBestWeapon(job, level, null).Weapon;
         }
 
         /// <summary>Highest-defense armor the given class+level can equip, or null.
@@ -309,18 +377,7 @@ namespace DeNelle.Village
         /// </summary>
         public static WeaponDef BestOneHandedWeapon(string job, int level)
         {
-            EnsureLoaded();
-            WeaponDef best = null;
-            if (_weapons != null)
-            {
-                foreach (var w in _weapons)
-                {
-                    if (w == null || !w.IsOneHandedMain) continue;
-                    if (!JobMatches(w.job, job) || !MeetsReq(w.req, level)) continue;
-                    if (best == null || w.damageMult > best.damageMult) best = w;
-                }
-            }
-            return best;
+            return PickBestWeapon(job, level, null, oneHandedOnly: true).Weapon;
         }
 
         // ── Class restriction surface (equip UI + auto-equip) ────────────────────

@@ -45,6 +45,35 @@
 // Every refusal returns its reason so the call site can trace it once instead of going
 // quiet, which is how "my fire sword has no aura" gets diagnosed from a log rather than
 // from a code read.
+//
+// ## WHY FIRE IS STILL Aura_Flame AFTER THE 2026-08-08 SURVEY (do not re-derive this)
+//
+// The owner asked, for the flaming-blade read: "I wanna use something like the VFX prefabs that
+// are coming out of Unity. There are some good ones we can use." The tree WAS surveyed and the
+// candidate is real and specific:
+//   Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire & Explosion Effects/Prefabs/
+//       TinyFlames.prefab  (guid ea4fb55d0227e604386f44f905cfe7c0)
+// It is already CATALOGUED as the key "PP_TinyFlames" in Resources/VFX/HovlVfxCatalog.asset
+// (IsLoop:1, Recolorable:1, PoolSize:6), its material is URP-shaded (same shader guid as the
+// working Lana particle materials), and it is a single clean flame layer with NO smoke child -
+// so wiring it would be one call to VFXManager.PlayKey with no new plumbing.
+//
+// IT IS NOT WIRED, for two reasons, and BOTH are the owner's call to overrule:
+//   1. THE PACK IS GITIGNORED. `git check-ignore` resolves the prefab to .gitignore:453
+//      ("Assets/UnityTechnologies/"). It exists on this machine and NOT in the repo, so any build
+//      made from a clean checkout resolves the catalog row to a null Prefab and PlayKey spawns
+//      NOTHING - a flame blade with no flame, silently. That is the invisible-effect class this
+//      project keeps paying for, one step subtler than a wrong path.
+//   2. THIS EXACT SWAP WAS ALREADY RULED ON AND REFUSED, with measurements, in
+//      Assets/Editor/ParticlePackVfxBatchBuilder.cs ("WO-889 Aura_Ice / Aura_Flame ... REPOINTS:
+//      REFUSED"): layer count 5 vs 1, the incumbent already derives continuous, and "trading
+//      tracked art for untracked art is the WO-785 exposure moving backwards". That note ends
+//      "A human must rule explicitly if the thinner pack look is wanted anyway."
+//
+// So the 2026-08-08 work fixed the SEATING and the LAYER MIX of the incumbent recipe instead
+// (GearAura: blade-length emitter above the grip, smoke + ground-shell layers muted) rather than
+// swapping in art the repo does not carry. If the owner wants TinyFlames anyway, the decision is
+// hers and the cost is that Assets/UnityTechnologies/ must be un-gitignored and committed first.
 // =============================================================================
 
 namespace DeNelle.Village

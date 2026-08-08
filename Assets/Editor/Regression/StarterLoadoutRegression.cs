@@ -47,6 +47,13 @@
 //                     BYTE-IDENTICAL to the retired global "dotr-loadout-knight-v1"
 //                     - which is the entire migration story: an existing save's
 //                     Knight bar is read back unchanged, with no copy step.
+//   9 [auto-best-owned-only] Above MainHandUpToLevel the auto-best power curve
+//                     resumes - and it may only rank gear the player OWNS. A
+//                     level-5 hero owning ONLY the granted starter kit resolves
+//                     the STARTER weapon, not knight_flameblade (a 40w/120i Forge
+//                     item auto-best used to hand over free the instant a knight
+//                     hit level 2). Ranking + wiring are both pinned, plus the
+//                     never-weaponless floor.
 //
 // Markers: STARTER_LOADOUT_OK / STARTER_LOADOUT_FAIL.
 // Standalone: run-unity-method DeNelle.Editor.Regression.StarterLoadoutRegression.RunAll
@@ -58,6 +65,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using Newtonsoft.Json.Linq;
 using UnityEngine;
 using DeNelle.Core.State;
@@ -76,6 +84,7 @@ namespace DeNelle.Editor.Regression
         private const string GameStateSrc = "Assets/_Modules/Core/State/GameStateService.cs";
         private const string ResolverSrc = "Assets/_Modules/Village/Hero/VendorStockResolver.cs";
         private const string HeroSelectSrc = "Assets/_Modules/Onboarding/HeroSelectController.cs";
+        private const string LoadoutSrc = "Assets/_Modules/Village/Hero/GearLoadout.cs";
 
         // The class whose starter kit is authored today. WO-861 adds ranger + mage rows;
         // this suite widens by adding them to this array, nothing else.
@@ -106,6 +115,7 @@ namespace DeNelle.Editor.Regression
                 Case(failures, "vendor-data", () => Case6_VendorData(failures));
                 Case(failures, "roster-truth", () => Case7_RosterTruth(failures));
                 Case(failures, "loadout-key", () => Case8_LoadoutKey(failures));
+                Case(failures, "auto-best-owned-only", () => Case9_AutoBestOwnedOnly(failures, notes));
             }
             catch (Exception ex)
             {
@@ -119,7 +129,8 @@ namespace DeNelle.Editor.Regression
                          "ResetToNewGame really deletes every dotr-equip-*/dotr-loadout-* key, the gear " +
                          "shelf is capped per level with zero locked and zero placeholder rows and matches " +
                          "an independent sort oracle, the knobs are vendors.json data in both dual-copies, " +
-                         "the playable roster has one definition, and the W/E/R key is per class" + noteStr;
+                         "the playable roster has one definition, the W/E/R key is per class, and auto-best " +
+                         "above the starter band ranks ONLY owned gear behind a never-weaponless floor" + noteStr;
                 return true;
             }
             reason = "starter-loadout FAIL x" + failures.Count + ": " + string.Join(" | ", failures) + noteStr;
@@ -599,8 +610,182 @@ namespace DeNelle.Editor.Regression
         }
 
         // =====================================================================
+        //  CASE 9 - auto-best may only rank gear the player OWNS
+        // =====================================================================
+        //  THE DEFECT (captured Player.log, 2026-08-08):
+        //      [Flow:Gear] Refresh: job='knight' level=2 bestWeapon='knight_flameblade'
+        //                  source=auto-best offHand='<null>' bestArmor='armor_knight_common'
+        //  The authored starter kit only applies while level <= MainHandUpToLevel (== 1). At
+        //  level 2 GearCatalog.BestWeapon took over, and it ranked by damageMult across the
+        //  WHOLE CATALOG - so it returned `knight_flameblade` (1.2) over `knight_starter` (1.0).
+        //  knight_flameblade is a PURCHASABLE Forge item. Every knight who levelled once without
+        //  ever shopping was handed a paid weapon free, undercutting the Forge economy for every
+        //  player; it is why the owner opened her demo recording holding a flaming sword.
+        //
+        //  THE RULING: auto-upgrade-on-level-up STAYS (WO-860's intended feature). Its CANDIDATE
+        //  SET is what changes - auto-best may only rank OWNED gear.
+        //
+        //  WHAT THIS CASE CAN AND CANNOT DRIVE. The end-to-end statement is "a LEVEL-5 hero who
+        //  owns ONLY the starter kit holds the starter weapon". A live GearLoadout probe cannot
+        //  express the level half: level comes from HeroProgression, which has no public setter
+        //  and restores from a GameStateService that is null in batchmode - so a probe is pinned
+        //  at level 1, where the starter wins anyway and the assertion would be VACUOUS. This case
+        //  therefore splits the statement in two and asserts BOTH halves rather than pretending:
+        //    (a) the RANKING, driven for real at level 5 through the shipped GearCatalog.
+        //        PickBestWeapon with a starter-kit-only ownership predicate;
+        //    (b) the WIRING, source-linted, so the ranking cannot be correct while GearLoadout
+        //        still calls the catalog-wide query. (a) without (b) passes on a dead code path.
+        // =====================================================================
+        private static void Case9_AutoBestOwnedOnly(List<string> failures, List<string> notes)
+        {
+            const int Level = 5;   // above every authored MainHandUpToLevel: auto-best territory
+
+            foreach (var job in AuthoredStarterClasses)
+            {
+                var kit = StarterLoadout.For(job);
+                if (kit == null || string.IsNullOrEmpty(kit.MainHand)) continue;   // Case 1 owns that failure
+
+                // The owned set of a player who has NEVER shopped: the GRANTED starter kit and
+                // nothing else. The kit is deliberately included - it is never written to
+                // VillageInventory (it is granted, not purchased), so if the shipped ownership
+                // resolver forgot it the hero's own starter would be filtered out of its own
+                // fallback, which is the one way this fix could leave a hero unarmed.
+                var ownedIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { kit.MainHand };
+                if (!string.IsNullOrEmpty(kit.OffHand)) ownedIds.Add(kit.OffHand);
+
+                var wide  = GearCatalog.PickBestWeapon(job, Level, null);
+                var owned = GearCatalog.PickBestWeapon(job, Level, id => ownedIds.Contains(id ?? string.Empty));
+
+                if (!owned.OwnershipApplied)
+                    failures.Add($"[auto-best-owned-only] PickBestWeapon('{job}', {Level}, <predicate>) reports " +
+                                 "OwnershipApplied=false - a predicate was supplied and IGNORED, so every caller " +
+                                 "that thinks it is filtering is still ranking the whole paid catalog");
+
+                if (owned.Weapon == null)
+                {
+                    failures.Add($"[auto-best-owned-only] '{job}' at level {Level} owning ONLY the starter kit " +
+                                 $"({string.Join("+", new List<string>(ownedIds).ToArray())}) resolves a NULL " +
+                                 "main hand - the ownership gate has made the hero WEAPONLESS, which is a far " +
+                                 "worse ship-day bug than the free flameblade it was added to stop");
+                }
+                else if (!string.Equals(owned.Weapon.id, kit.MainHand, StringComparison.OrdinalIgnoreCase))
+                {
+                    failures.Add($"[auto-best-owned-only] '{job}' at level {Level} owning ONLY the starter kit " +
+                                 $"resolves '{owned.Weapon.id}', not the starter '{kit.MainHand}' - the owned set " +
+                                 "contains two ids and the winner is neither of the two the player has; the " +
+                                 "ownership predicate is not gating the ranking loop");
+                }
+
+                if (owned.Owned > ownedIds.Count)
+                    failures.Add($"[auto-best-owned-only] '{job}' L{Level}: PickBestWeapon counted {owned.Owned} " +
+                                 $"owned candidates from an owned set of {ownedIds.Count} id(s) - the filter is " +
+                                 "letting unowned rows through the count, so the trace line would lie about it");
+
+                // Is the guard even doing anything? If the catalog-wide pick ALREADY returns the
+                // starter at this level, this case can no longer catch the felt bug. Reported as a
+                // NOTE (a legitimate catalog retune) exactly as Case 2 does, never as a silent pass.
+                if (wide.Weapon == null)
+                {
+                    failures.Add($"[auto-best-owned-only] catalog-wide PickBestWeapon('{job}', {Level}) is NULL - " +
+                                 "the class has no eligible main-hand row at all at this level, so nothing about " +
+                                 "the ownership gate can be judged and the armed-hero floor has nothing to fall to");
+                }
+                else if (string.Equals(wide.Weapon.id, kit.MainHand, StringComparison.OrdinalIgnoreCase))
+                {
+                    notes.Add($"'{job}' L{Level}: catalog-wide auto-best ALREADY returns the starter " +
+                              $"'{kit.MainHand}', so this case is currently vacuous - the free-shop-item leak it " +
+                              "pins would not be caught by it anymore");
+                }
+                else
+                {
+                    notes.Add($"'{job}' L{Level}: catalog-wide would hand over '{wide.Weapon.id}' " +
+                              $"(dmgMult {wide.Weapon.damageMult:0.00}, {wide.Eligible} eligible rows); owned-gated " +
+                              $"returns '{owned.Weapon?.id}' from {owned.Owned} owned candidate(s)");
+                }
+            }
+
+            // ---- (b) the WIRING: GearLoadout must actually use the gated query ----
+            string src = ReadSource(LoadoutSrc, failures);
+            if (src == null) return;
+            string code = StripComments(src);   // prose about the old call must never satisfy a lint
+
+            if (Regex.IsMatch(code, @"starter\s*\?\?\s*GearCatalog\.BestWeapon"))
+                failures.Add("[auto-best-owned-only] GearLoadout.Refresh still reads " +
+                             "`starter ?? GearCatalog.BestWeapon(job, level)` - that is the catalog-wide, " +
+                             "damageMult-only pick verbatim, i.e. the original defect has returned and the " +
+                             "level-2 knight is handed the Forge's flameblade again");
+
+            if (code.IndexOf("ResolveAutoBestMainHand", StringComparison.Ordinal) < 0)
+                failures.Add("[auto-best-owned-only] GearLoadout has no ResolveAutoBestMainHand - the ownership " +
+                             "gate is not wired into the main-hand resolution chain at all, so case (a) above is " +
+                             "asserting a code path the hero never takes");
+
+            if (!Regex.IsMatch(code, @"PickBestWeapon\s*\([^;]*Owns"))
+                failures.Add("[auto-best-owned-only] nothing in GearLoadout passes an ownership predicate to " +
+                             "GearCatalog.PickBestWeapon - the gated overload exists but is called with null, " +
+                             "which is byte-identical to the unfixed behaviour");
+
+            // The hand-slot refill is the SECOND door onto the same paid shelf: EnforceHandSlots
+            // refills the main hand after evicting a shield / dropping a conflicting 2H, and both
+            // of its refill sites used to call the catalog-wide 1H query directly.
+            //
+            // Counted, not pattern-matched on the call site, because the fix KEEPS exactly one
+            // catalog-wide call of each kind as the deliberate never-weaponless FLOOR - a lint
+            // that banned the call outright would fail on the very safety net it should protect.
+            // The invariant that actually matters is "there is only ONE of them, and it is the
+            // floor": a second occurrence means someone re-opened a direct path.
+            int wideOneHanded = CountOccurrences(code, "GearCatalog.BestOneHandedWeapon");
+            if (wideOneHanded != 1)
+                failures.Add($"[auto-best-owned-only] GearLoadout calls GearCatalog.BestOneHandedWeapon " +
+                             $"{wideOneHanded} time(s); exactly ONE is expected (the never-weaponless floor inside " +
+                             "ResolveOwnedOneHandedRefill). More than one means a hand-slot refill went back to an " +
+                             "unowned catalog-wide pick, so a shield eviction or a 2H conflict re-opens the " +
+                             "free-gear door Refresh just closed; zero means the floor itself was deleted");
+
+            int wideBest = CountOccurrences(code, "GearCatalog.BestWeapon");
+            if (wideBest != 1)
+                failures.Add($"[auto-best-owned-only] GearLoadout calls GearCatalog.BestWeapon {wideBest} time(s); " +
+                             "exactly ONE is expected (the floor inside StarterOrCatalogFloor, for classes with no " +
+                             "authored starter kit). A second call is the ungated damageMult pick coming back");
+
+            // Both EnforceHandSlots refill sites must route through the gated helper (1 declaration
+            // + 2 call sites). Fewer means one of them slipped back to a direct catalog query.
+            int refillUses = CountOccurrences(code, "ResolveOwnedOneHandedRefill");
+            if (refillUses < 3)
+                failures.Add($"[auto-best-owned-only] ResolveOwnedOneHandedRefill appears {refillUses} time(s) in " +
+                             "GearLoadout; 3 are expected (its declaration plus BOTH EnforceHandSlots refill sites: " +
+                             "the shield-evicted main hand and the 2H-vs-off-hand conflict). One unrouted site is " +
+                             "enough to hand a knight a Forge weapon he never bought");
+
+            // And the never-weaponless floor must still exist: an ownership gate with no floor is
+            // how "no free flameblade" becomes "no weapon at all".
+            if (code.IndexOf("StarterOrCatalogFloor", StringComparison.Ordinal) < 0)
+                failures.Add("[auto-best-owned-only] GearLoadout has no StarterOrCatalogFloor - the ownership gate " +
+                             "has no fallback for an empty/unresolvable owned set, so a hero whose bag the resolver " +
+                             "cannot read spawns with EMPTY HANDS");
+        }
+
+        // =====================================================================
         //  HELPERS
         // =====================================================================
+
+        /// <summary>Strips // and block comments so a source lint can never be satisfied by prose
+        /// (this file's own headers name the retired calls it lints for).</summary>
+        private static string StripComments(string src)
+        {
+            if (string.IsNullOrEmpty(src)) return string.Empty;
+            string noBlock = Regex.Replace(src, @"/\*.*?\*/", " ", RegexOptions.Singleline);
+            return Regex.Replace(noBlock, @"//[^\r\n]*", " ");
+        }
+
+        /// <summary>Non-overlapping occurrences of a literal needle. Ordinal.</summary>
+        private static int CountOccurrences(string haystack, string needle)
+        {
+            if (string.IsNullOrEmpty(haystack) || string.IsNullOrEmpty(needle)) return 0;
+            int n = 0, i = 0;
+            while ((i = haystack.IndexOf(needle, i, StringComparison.Ordinal)) >= 0) { n++; i += needle.Length; }
+            return n;
+        }
 
         private static int ReqLevelOf(VendorWare ware)
         {
