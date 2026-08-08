@@ -1,6 +1,16 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ RECONCILED 2026-08-08: main line next free = **928**. **782–859 + 900–927 CONSUMED.**
+> ## ⚠ RECONCILED 2026-08-08: main line next free = **929**. **782–859 + 900–928 CONSUMED.**
+> - **928** = **Archer Tower: orientation, materials, footprint parity, and the Move path** — one
+>   owner-ruled cluster from the 2026-08-08 felt-test (F8 2181-2192). All four root causes CAPTURED:
+>   `VisualFactory.cs:140` wipes the L3 prefab's baked 270deg to identity, so the height-fit then
+>   measures the wrong axis (scale 8.34x vs L1's 4.74x, bounds 4.91 x 4.80 x 8.34 against a 3x3 m
+>   blocker and a declared footprint of 1.75); L3 wears the raw Tripo `wooden_watchtower_3d_model_basecolor`
+>   instead of the built material; and PLACE on a Move ends in `CancelArmed` (`armed cleared`) with
+>   `Two-step RE-DROP` never running. Two theories are already KILLED in the WO - do not re-run them.
+>   File `WORK_ORDER_928_archer_tower_orientation_materials_footprint_move.md`. **READY TO IMPLEMENT.**
+>
+> *(banner bumped 928 -> 929 in the SAME edit as the 928 mint - the rule that broke five times on 08-02.)*
 > - **927** = **PathPartial seam revalidation** — the design doc's §5.5.2 erosion justification is DEAD
 >   (landing measured 1.30 m, path outcome unchanged). Capture M1–M7 on ONE failing seam (attachment-point
 >   world coords, delta vector, connector scale/bounds/span, connector-disabled check, and a
@@ -246,8 +256,12 @@
 > ## ⚠ TWO-BLOCK ALLOCATION IN USE (2026-08-02 evening) — the collision fix, in practice
 > | Block | Owner | Next free |
 > |---|---|---|
-> | **main line** | CLI | **928** (782–859 + 900–**927** consumed; 860–899 was the UI seat's old block) |
-> | **1000–1099 reserved** | UI seat | **1006** (1000–1005 consumed) |
+> | **main line** | CLI | **929** (782–859 + 900–**928** consumed; 860–899 was the UI seat's old block) |
+> | **1000–1099 reserved** | UI seat | **1007** (1000–1006 consumed) |
+>
+> *(UI-seat bumped 1006 → 1007 with the WO-1006 mint — Manage becomes a launcher: the long combined upgrade
+> scroll moves OUT into dedicated per-category browser panels reached by buttons on Manage, each row showing
+> cost + benefit + time-to-build + affordability, drilling into the existing single-item detail panels.)*
 >
 > *(UI-seat bumped 1005 → 1006 with the WO-1005 mint — dungeon UI cohesion: reskin the flat-purple "Descend"
 > prompt to the Obsidian kit + fix the mirrored "EXIT" world label + one obsidian-gold theme for all dungeon overlays.)*
