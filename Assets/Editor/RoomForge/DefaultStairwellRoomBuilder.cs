@@ -57,6 +57,12 @@ namespace DeNelle.Editor.RoomForge
         private const string RoomsFolder = "Assets/Dungeon/Rooms";
         private const string Sys = "RoomForgeStairwell";
 
+        /// <summary>The prefab stem, the root GameObject name, and RoomPrefabMeta.roomId — ONE source.
+        /// Every shipping graph/layout references this exact string ("prefab": "StairwellRoom"), and
+        /// DungeonBaker resolves a placement by that stem, so the three must never be able to drift
+        /// apart. The siblings get this for free by threading spec.id through all of them.</summary>
+        private const string RoomId = "StairwellRoom";
+
         // ── Footprint ────────────────────────────────────────────────────────
         // Claims TWO cells on the long axis and one on the short. The owner's rule:
         // "it is still limited to a room, but that room is owned as a stairs object,
@@ -135,7 +141,47 @@ namespace DeNelle.Editor.RoomForge
             // changes, and the owner's whole point is that this reads as one continuous space.
             RoomForgeMaterials.EnsureMenu();
 
-            var go = new GameObject("StairwellRoom");
+            var go = new GameObject(RoomId);
+
+            // ── CATALOG META — stamped FIRST, exactly as both sibling builders do
+            //    (DefaultDungeonRoomsBuilder:269, DefaultStairConnectorRoomsBuilder:247).
+            //
+            //    WHY THIS IS NOT COSMETIC. DungeonBakerChecks.HalfExtents falls back to ONE canon
+            //    cell when a placed room carries no meta (DungeonBakerChecks.cs:204). This room is
+            //    TWO cells on X, so without the stamp the overlap gate measured a 20x10 m room as
+            //    10x10 - and it is the only room in the kit that was missing it, in all four
+            //    shipping dungeons. A neighbour could be seated straight through the west half of
+            //    the stairwell and RoomsOverlap would never object. GraphDungeonComposer:574 was
+            //    also emitting archetype=null for every stairwell node off the same gap.
+            //
+            //    footprintCells is DERIVED from the same two constants the shell is built from, so
+            //    the declaration cannot drift from the geometry - re-typing (2,1) here is precisely
+            //    the copy that goes stale the day CellsX changes and leaves the gate under-measuring
+            //    again, silently.
+            //
+            //    archetype "hub": the existing value every vertical-circulation room in the kit
+            //    already uses (StairDown/StairUp at DefaultDungeonRoomsBuilder:222/:231, all six
+            //    stair connectors at DefaultStairConnectorRoomsBuilder:249). It is circulation, not
+            //    content - DungeonBaker.LintPacing counts it as "other" rather than inflating the
+            //    combat/lore/reward ratios, and RoomForgeMaterials only accents "reward"/"boss", so
+            //    the skin is byte-identical to what this room already ships.
+            //
+            //    floorShafts / ceilingShafts stay EMPTY by default and must stay that way: the WO-930
+            //    design cuts nothing, the flight rises through the GAP between the two upper floors.
+            //
+            //    ⚠ THIS DOES NOT FULLY FIX OVERLAP FOR THIS ROOM. RoomPrefabMeta has no vertical
+            //    extent field, so DungeonBakerChecks.cs:190 still early-outs any two rooms more than
+            //    half a floor apart in Y as non-overlapping. That is right for a one-storey room and
+            //    WRONG for this one, which IS two storeys - a room seated on the upper level inside
+            //    this stairwell's own volume is still invisible to the gate. Fixing it needs a
+            //    vertical-extent API that does not exist yet (WO-930 §6 owns it). Do not assume the
+            //    stamp below closed that hole.
+            var meta = go.AddComponent<RoomPrefabMeta>();
+            meta.roomId = RoomId;                       // the stem the graphs reference, by construction
+            meta.archetype = "hub";
+            meta.themePalette = "default";
+            meta.footprintCells = new Vector2Int(CellsX, CellsZ);
+            meta.cellSize = RoomForgeCanon.Cell;
 
             BuildLowerFloor(go.transform, hx, hz);
             BuildUpperFloors(go.transform, hx, hz, rise);
@@ -148,17 +194,43 @@ namespace DeNelle.Editor.RoomForge
             // its MeshRenderer is destroyed, and ApplyToRoomRoot only walks renderers.
             RoomForgeMaterials.ApplyToRoomRoot(go, useAccentFloor: false);
 
-            int badSurfaces = RoomForgeMaterials.VerifyRoomSurfaces(go, "StairwellRoom", false);
+            int badSurfaces = RoomForgeMaterials.VerifyRoomSurfaces(go, RoomId, false);
             if (badSurfaces > 0)
                 FlowTrace.Warn(Sys, $"{badSurfaces} surface(s) did not take the shared material - " +
                     "the stairwell will read as untextured next to the rooms it connects.");
 
-            string path = $"{RoomsFolder}/StairwellRoom.prefab";
-            PrefabUtility.SaveAsPrefabAsset(go, path);
+            // The meta was added ABOVE, before this call. SaveAsPrefabAsset serialises the object
+            // tree as it stands right now; a component added after this line would live only on the
+            // throwaway scene object and be destroyed on the next line without ever reaching disk.
+            string path = $"{RoomsFolder}/{RoomId}.prefab";
+            var saved = PrefabUtility.SaveAsPrefabAsset(go, path);
             Object.DestroyImmediate(go);
             AssetDatabase.SaveAssets();
 
+            // Read the meta back OFF THE SAVED ASSET, not off the builder's own variable. The
+            // variable would prove only that AddComponent was called - and it is a destroyed
+            // UnityEngine.Object by this point anyway, so touching it here throws. Reading the asset
+            // proves the thing that actually matters: the stamp SURVIVED serialisation onto the
+            // prefab the composer will instantiate. That is the difference between a log line and a
+            // proof. (Guarded, never assumed: a null here is the defect coming straight back.)
+            var savedMeta = saved != null ? saved.GetComponent<RoomPrefabMeta>() : null;
+            if (savedMeta == null)
+            {
+                FlowTrace.Fail(Sys, $"STAIRWELL_BUILD_FAIL: '{path}' saved with NO RoomPrefabMeta on its root. " +
+                    "DungeonBakerChecks.HalfExtents would fall back to ONE cell for this TWO-cell room, so the " +
+                    "overlap gate could not see a neighbour placed through it, and the composer would emit " +
+                    "archetype=null for every stairwell node. Do NOT bake dungeons against this prefab.");
+                return;
+            }
+
+            // The stamped footprint is stated here on purpose: an unlogged stamp is one nobody can
+            // confirm landed from a bake log, and this metadata is invisible in play - it only ever
+            // shows up as an overlap the gate failed to catch.
             FlowTrace.Step(Sys, $"STAIRWELL_BUILD_OK: {path} - footprint {hx * 2:F0}x{hz * 2:F0} m, " +
+                $"meta roomId='{savedMeta.roomId}' archetype='{savedMeta.archetype}' " +
+                $"footprintCells ({savedMeta.footprintCells.x},{savedMeta.footprintCells.y}) @ " +
+                $"{savedMeta.cellSize:F0} m/cell = {savedMeta.FootprintWorld.x:F0}x" +
+                $"{savedMeta.FootprintWorld.y:F0} m declared to the overlap gate, " +
                 $"rise {rise:F1} m over run {run:F1} m = {slopeDeg:F1} deg " +
                 $"({MaxSlopeDeg - slopeDeg:F1} deg of margin to the {MaxSlopeDeg} limit, " +
                 $"{45f - slopeDeg:F1} to the agent cliff), {StepCount} steps, " +

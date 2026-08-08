@@ -1467,6 +1467,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 4061325960202406838}
+  - component: {fileID: 396366825791262232}
   m_Layer: 0
   m_Name: StairwellRoom
   m_TagString: Untagged
@@ -1509,6 +1510,25 @@ Transform:
   - {fileID: 5333908913461766817}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &396366825791262232
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4073410110492882073}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 56d98e17c2148f041b1f152dec14038b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: DeNelle.Dungeons::DeNelle.Dungeons.RoomForge.RoomPrefabMeta
+  roomId: StairwellRoom
+  archetype: hub
+  themePalette: default
+  footprintCells: {x: 2, y: 1}
+  cellSize: 10
+  floorShafts: []
+  ceilingShafts: []
 --- !u!1 &4518687611288310897
 GameObject:
   m_ObjectHideFlags: 0

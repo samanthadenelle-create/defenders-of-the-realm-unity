@@ -86,7 +86,7 @@
         25
       ],
       "yawDeg": 270.0,
-      "archetype": null,
+      "archetype": "hub",
       "encounter": null,
       "chests": null
     },
@@ -166,7 +166,7 @@
         75
       ],
       "yawDeg": 270.0,
-      "archetype": null,
+      "archetype": "hub",
       "encounter": null,
       "chests": null
     },
@@ -244,7 +244,7 @@
         90
       ],
       "yawDeg": 0.0,
-      "archetype": null,
+      "archetype": "hub",
       "encounter": null,
       "chests": null
     },

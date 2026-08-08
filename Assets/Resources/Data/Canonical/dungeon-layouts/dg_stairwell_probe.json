@@ -25,7 +25,7 @@
         15
       ],
       "yawDeg": 270.0,
-      "archetype": null,
+      "archetype": "hub",
       "encounter": null,
       "chests": null
     },
