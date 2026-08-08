@@ -474,3 +474,12 @@ Assets/google-services.json.meta
 
 # Agent-skill symlinks are machine-local; the real skill content lives in .agents/skills/
 .claude/skills/levelplay-unity-integration
+
+# com.unity.test-framework.performance writes its run metadata into Assets/Resources/,
+# which means every player build would BAKE these in and load them at runtime. They are
+# regenerated on each test run and hold nothing (MeasurementCount:-1, Results:[]).
+# Ignored AND deleted -- ignoring alone still ships them.
+Assets/Resources/PerformanceTestRunInfo.json
+Assets/Resources/PerformanceTestRunInfo.json.meta
+Assets/Resources/PerformanceTestRunSettings.json
+Assets/Resources/PerformanceTestRunSettings.json.meta
