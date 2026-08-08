@@ -84,6 +84,17 @@ namespace DeNelle.Editor.RoomForge
         /// <summary>Hard ceiling on derived slope. The agent max is 45; we refuse anything near it.</summary>
         private const float MaxSlopeDeg = 40f;
 
+        // ── Stair lighting. Colour and intensity are DungeonDresser's own values (:93, :73) so the
+        // stairwell reads as the same space as the rooms it joins. Count is held low against the
+        // URP per-object realtime cap of 4 (DeNelle-URP.asset L48).
+        private static readonly Color FlameColor = new Color(1f, 0.62f, 0.28f);
+        private const float TorchIntensity = 0.85f;
+        private const int StairLightCount = 3;
+        private const float StairLightRange = 7f;
+        /// <summary>How far above the tread line each candle rides - head height, so it lights the
+        /// steps ahead of you rather than glaring off the one you are standing on.</summary>
+        private const float StairLightHeight = 1.8f;
+
         [MenuItem("Defenders/Dungeon/Build Stairwell Room Prefab")]
         public static void BuildAll()
         {
@@ -130,6 +141,7 @@ namespace DeNelle.Editor.RoomForge
             BuildUpperFloors(go.transform, hx, hz, rise);
             BuildPerimeter(go.transform, hx, hz, rise);
             BuildFlight(go.transform, startX, run, rise);
+            BuildStairLighting(go.transform, startX, run, rise);
             BuildSockets(go.transform, hx, rise);
 
             // Walls/floors/ceiling take the shared KayKit stone. The ramp is skipped for free -
@@ -260,6 +272,57 @@ namespace DeNelle.Editor.RoomForge
 
             var mr = ramp.GetComponent<MeshRenderer>();
             if (mr != null) Object.DestroyImmediate(mr);      // invisible, but solid
+        }
+
+        /// <summary>
+        /// Candle lights down the flight itself (owner ask 2026-08-08: "add some candle lighting and
+        /// stuff like that ... that with the candles would give a good ambiance").
+        /// </summary>
+        /// <remarks>
+        /// WHY THE STAIRWELL LIGHTS ITSELF. DungeonDresser already seats torches in this room - the
+        /// bake reports flameLights=8 for the probe - but it is FOOTPRINT-based: it derives corner
+        /// anchors from the room's plan and knows nothing about a flight or an upper level. So the
+        /// corners get lit and the descent, which is the whole point of the room, does not. A room
+        /// that owns geometry no dresser can see has to own its lighting too.
+        ///
+        /// VALUES ARE THE DRESSER'S, NOT NEW ONES. FlameColor (1, 0.62, 0.28) and intensity 0.85 are
+        /// read off DungeonDresser:93 and :73. Re-typing a different warm orange here is how a
+        /// stairwell ends up looking like a different game to the corridor it opens into - the same
+        /// reason the shell reuses RoomForgeMaterials instead of skinning itself.
+        ///
+        /// ⚠ COUNT IS DELIBERATELY SMALL. The URP per-object realtime cap is 4 (DeNelle-URP.asset
+        /// L48) and every bake already reports "suppressed=4" against it. Three lights down a 12 m
+        /// flight stay inside the budget; a candle per step would blow it and silently drop the ones
+        /// that matter.
+        /// </remarks>
+        private static void BuildStairLighting(Transform parent, float startX, float run, float rise)
+        {
+            var root = new GameObject("StairLights");
+            root.transform.SetParent(parent, false);
+
+            for (int i = 0; i < StairLightCount; i++)
+            {
+                // Spread along the flight, inset from both noses so the landings stay lit by the
+                // room's own corner torches rather than doubling up here.
+                float t = (i + 1f) / (StairLightCount + 1f);
+                float x = startX + run * t;
+                float y = rise - rise * t + StairLightHeight;   // rides above the treads
+
+                var go = new GameObject($"StairCandle_{i:00}");
+                go.transform.SetParent(root.transform, false);
+                go.transform.localPosition = new Vector3(x, y, 0f);
+
+                var lt = go.AddComponent<Light>();
+                lt.type = LightType.Point;
+                lt.color = FlameColor;
+                lt.intensity = TorchIntensity;
+                lt.range = StairLightRange;
+                lt.shadows = LightShadows.None;   // budget is for illumination, not shadow casting
+            }
+
+            FlowTrace.Step(Sys, $"stair lighting: {StairLightCount} candle point light(s) down the " +
+                $"flight at intensity {TorchIntensity:F2}, range {StairLightRange:F1} m - colour and " +
+                "intensity matched to DungeonDresser so the stairwell reads as the same space.");
         }
 
         /// <summary>Four sockets: both ends of the LOWER floor, both ends of the UPPER floors.
