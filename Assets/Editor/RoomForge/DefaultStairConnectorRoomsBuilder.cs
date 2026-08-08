@@ -788,6 +788,34 @@ namespace DeNelle.Editor.RoomForge
             root.transform.SetParent(parent, false);
             root.transform.localPosition = Vector3.zero;
 
+            // ── OWNER OFFSET, walked in the editor 2026-08-07 ─────────────────
+            //  "the first floor needs entire stair assembly Y rotated 180"
+            //  "so v_up stair assembly is y rotation 180"
+            //
+            //  NOTE THE SCOPE IS ALREADY CORRECT BY CONSTRUCTION: StairDown returns above
+            //  without building an assembly at all (ONE OWNER, contract §5), so this rotation
+            //  can only ever reach an _Up room. The owner's "v_up" and this code path are the
+            //  same set — no per-variant guard is needed to honour it.
+            //
+            //  Applied to the ASSEMBLY ROOT, not to individual flights, so every part that
+            //  belongs to the stair — steps, ramp collider, landing pads — turns together and
+            //  stays registered to each other. Rotating the flights individually would spin
+            //  each one about its own origin and pull the ramp off its own nose line.
+            //
+            //  WHY THE ROOT AND NOT THE PLAN: the FlightPlan is also what derives the floor
+            //  and ceiling shaft cuts. Rotating the plan would move the stair and leave the
+            //  holes behind. Rotating the root turns geometry and openings as one — the shafts
+            //  are cut from the same plan and inherit this transform.
+            //
+            //  ⚠ THIS IS A UNIFORM CHANGE, and the owner verified it on the VERTICAL pair only
+            //  (the first descent in dg_stair_rig). Left/Right could not be reached on that
+            //  walk — their top landing is 0.80 m against a 1.00 m minimum walkable slot, so
+            //  navmesh erosion removes it. If Left/Right turn out to need a DIFFERENT yaw, this
+            //  becomes per-shape rather than a single constant. Do not assume it generalises
+            //  until someone has actually walked them.
+            const float AssemblyYaw = 180f;
+            root.transform.localRotation = Quaternion.Euler(0f, AssemblyYaw, 0f);
+
             var legs = FlightPlan(shape, rise, hx, hz);
             float steepest = 0f;
             int steps = 0;
