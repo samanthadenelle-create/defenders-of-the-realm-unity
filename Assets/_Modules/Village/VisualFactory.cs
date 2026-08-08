@@ -90,9 +90,27 @@ namespace DeNelle.Village
         /// catalog row — applying it from the row would double-apply on top of the prefab, and
         /// ReskinForLevel deliberately does not apply entry.orientation at all, so a tier model has
         /// nothing BUT its prefab pose to stand it up.</summary>
+        // ⛔ PreservePrefabRotation was set TRUE here on 2026-08-08 and REVERTED the same day.
+        //
+        // It fixed the L3 Archer Tower, whose baked -90 is the only thing standing it up. It also
+        // reached EVERY structure, because StructureFactory.OptsFor builds from this factory - and
+        // most Tripo building prefabs also instantiate at euler (270, 0, 0), where that same 270 is
+        // precisely what DEF-232's identity reset exists to CANCEL. Preserving it laid the whole
+        // town on its side.
+        //
+        // Captured (owner felt-test, returning to town from a dungeon):
+        //     after instantiate (prefab-native pose): euler=(270.00, 0.00, 0.00)
+        //     prefab rotation PRESERVED (WO-928):     euler=(270.00, 0.00, 0.00)   x10 structures
+        //
+        // It only surfaced on RE-ENTRY because the first town load seats buildings from the
+        // bake/injector path; coming back re-creates them through BaseLayoutLoader ->
+        // StructureFactory.Create -> here. A first-load-only test would have missed it entirely.
+        //
+        // THE LESSON, and it is the reason this comment is long: an opt-in is only as narrow as the
+        // thing you opt in. "Structures" is not a narrow set. The correct scope is PER CATALOG
+        // ENTRY - the wooden watchtower ladder specifically - not per factory. See WO-928 defect A.
         public static SkinOptions Structure(float largest) =>
-            new SkinOptions { FitLargest = largest, SeatOnGround = true, FixTripoMaterials = true,
-                              PreservePrefabRotation = true };
+            new SkinOptions { FitLargest = largest, SeatOnGround = true, FixTripoMaterials = true };
 
         /// <summary>A small prop: fit to largest dimension, seat on ground.</summary>
         public static SkinOptions Prop(float largest) =>
