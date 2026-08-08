@@ -428,6 +428,7 @@ namespace DeNelle.Editor.RoomForge
                         "carved partially; a stop at the target's floor means the descent worked and something above it did not.");
                 }
             }
+            ReportRampCarve(root);
             FlowTrace.Step(Sys, $"navmesh baked; {navResult}");
 
             // Optional: seat a playable hero + hero-aggro enemy spawners on the walkable NavMesh
@@ -535,6 +536,101 @@ namespace DeNelle.Editor.RoomForge
         /// the variant seam). A missing connector DEGRADES to the original socket-only prefab with
         /// a warning — today's behaviour, never a throw and never a blocked bake.
         /// </summary>
+        /// <summary>
+        /// Does the stair ramp CARVE navmesh, and if so does it JOIN the floors?
+        ///
+        /// <para>The corner report proved nothing below the starting floor is reachable — floor
+        /// delta 0.00 m on every multi-level dungeon. That leaves exactly two possibilities with
+        /// opposite fixes:</para>
+        /// <list type="number">
+        /// <item><b>No carve</b> — the ramp collider produces no navmesh at all, so there is
+        /// nothing to connect. Fix is geometry/slope/collider.</item>
+        /// <item><b>Carve, no join</b> — polygons exist on the ramp but form a third island
+        /// touching neither floor. Fix is the seam at top and bottom.</item>
+        /// </list>
+        ///
+        /// <para>Samples the ramp's own bottom, middle and top, then paths bottom→top. One read
+        /// separates them. <c>SamplePosition</c> uses a deliberately TIGHT radius: a generous one
+        /// would snap to the floor below and report a carve that is not there — which is the
+        /// failure mode this diagnostic exists to rule out, so it must not commit it itself.</para>
+        /// </summary>
+        private static void ReportRampCarve(Transform root)
+        {
+            var ramps = new List<Transform>();
+            foreach (var t in root.GetComponentsInChildren<Transform>(true))
+                if (t != null && t.name.StartsWith("RampCollider", System.StringComparison.Ordinal))
+                    ramps.Add(t);
+
+            if (ramps.Count == 0)
+            {
+                FlowTrace.Step(Sys, "RAMP CARVE: no RampCollider in this dungeon (single-floor, or " +
+                                    "the stair connectors were not placed)");
+                return;
+            }
+
+            // Tight enough that a hit means "on the ramp", not "on the floor underneath it".
+            const float Tight = 0.35f;
+            int carved = 0, dead = 0, internallyWhole = 0;
+            var firstDead = "";
+
+            foreach (var r in ramps)
+            {
+                // BuildFlight orients the collider with LookRotation(noseDir, up), so world
+                // FORWARD runs along the flight and lossyScale.z is its length.
+                //
+                //  ⚠ SAMPLE INBOARD, NOT AT THE TIPS. totalLen = noseLen + landingOverlap*2 —
+                //  the ramp deliberately OVERHANGS ~0.35 m past each nose to seam into the
+                //  landings. The extreme ends therefore hang out over (or into) the landing, and
+                //  sampling them at a tight radius misses for reasons that have nothing to do
+                //  with the ramp. The first version of this check did exactly that and reported
+                //  0/N "not walkable end-to-end", which was the instrument, not the geometry.
+                //  10%/90% keeps both probes on the ramp proper.
+                Vector3 mid = r.position;
+                Vector3 axis = r.forward * (r.lossyScale.z * 0.5f);
+                Vector3 bot = mid - axis * 0.8f, top = mid + axis * 0.8f;
+
+                bool bOk = NavMesh.SamplePosition(bot, out var bHit, Tight, NavMesh.AllAreas);
+                bool mOk = NavMesh.SamplePosition(mid, out _, Tight, NavMesh.AllAreas);
+                bool tOk = NavMesh.SamplePosition(top, out var tHit, Tight, NavMesh.AllAreas);
+
+                if (!bOk && !mOk && !tOk)
+                {
+                    dead++;
+                    if (firstDead.Length == 0)
+                        firstDead = $"'{r.name}' under '{(r.parent != null ? r.parent.name : "?")}' " +
+                                    $"mid=({mid.x:F1},{mid.y:F1},{mid.z:F1})";
+                    continue;
+                }
+
+                carved++;
+                if (bOk && tOk)
+                {
+                    var p = new NavMeshPath();
+                    if (NavMesh.CalculatePath(bHit.position, tHit.position, NavMesh.AllAreas, p) &&
+                        p.status == NavMeshPathStatus.PathComplete)
+                        internallyWhole++;
+                }
+            }
+
+            if (dead == ramps.Count)
+                FlowTrace.Fail(Sys,
+                    $"RAMP CARVE: NONE of {ramps.Count} ramp(s) carve any navmesh (sampled bottom/mid/top " +
+                    $"at r={Tight:F2}). First: {firstDead}. The stairs are geometry the bake cannot see - " +
+                    "check the collider is present and enabled, that the object is not on an excluded layer, " +
+                    "and that the slope is under the agent maximum. There is nothing here to CONNECT yet, so " +
+                    "no amount of seam work at top or bottom will help.");
+            else if (dead > 0)
+                FlowTrace.Fail(Sys,
+                    $"RAMP CARVE: {carved}/{ramps.Count} carve, {dead} do NOT (first: {firstDead}) - " +
+                    "the ramps are not behaving uniformly, so this is per-instance (placement/rotation/overlap), " +
+                    "not a systemic slope or collider problem.");
+            else
+                FlowTrace.Step(Sys,
+                    $"RAMP CARVE: all {ramps.Count} ramp(s) carve navmesh; {internallyWhole}/{ramps.Count} are " +
+                    "walkable end-to-end along their own length. The ramps EXIST as navmesh - so the break is " +
+                    "the SEAM to the floors, not the ramp. Next: whether the bottom joins the lower floor.");
+        }
+
         private static GameObject LoadRoomPrefab(string prefabStem)
         {
             if (!string.IsNullOrEmpty(prefabStem) &&
