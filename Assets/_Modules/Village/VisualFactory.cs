@@ -73,24 +73,36 @@ namespace DeNelle.Village
         // huge" are ONE defect, not two.
         //
         // This is opt-in, not a default flip, precisely because DEF-232's identity is load-bearing for
-        // hero/companion bodies (they import facing +X and are corrected via LocalRotation). Only
-        // callers whose art carries its correction IN THE PREFAB set this — see SkinOptions.Structure.
+        // hero/companion bodies (they import facing +X and are corrected via LocalRotation). It is also
+        // NOT a per-FACTORY opt-in — see the ⛔ block on SkinOptions.Structure for the 2026-08-08 revert
+        // that proved "structures" is far too wide a set. The ONE correct granularity is PER CATALOG
+        // ENTRY: StructureFactory.OptsFor reads it off `entry.repo.preservePrefabRotation`, so a single
+        // row whose art carries its correction in the asset opts in and every other row is byte-unchanged.
         // ARCHITECTURE_PRINCIPLES law 4: an authored/manual correction is canon and is NEVER
         // overwritten by an automatic pass. Flattening it to identity was exactly that overwrite.
         public bool PreservePrefabRotation;
+
+        // WO-928 instrumentation: an OPTIONAL caller-supplied identity (the catalog entry id) stamped
+        // into every Xform trace line this skin emits. `prefab.name` alone cannot answer "which ROW put
+        // a sideways model on my screen" — several rows share one model (GenericContainer serves
+        // lumberyard/foundry/silo; House_Medieval_Medium serves armorer AND collector_forge), and the
+        // rotation POLICY is now per-row, so the row is the only thing that identifies the decision.
+        // The owner should never have to felt-test a second sideways structure: with this, the
+        // preserve-vs-identity branch is `grep "entry='<id>'"` away. Null/empty = unstamped (unchanged
+        // line shape for every non-catalog caller: enemies, troops, props, hero bodies).
+        public string TraceId;
 
         /// <summary>An enemy/creature: fit to height, strip its colliders (the root carries the trigger capsule).</summary>
         public static SkinOptions Enemy(float height) =>
             new SkinOptions { FitHeight = height, StripColliders = true };
 
         /// <summary>A tower/building: fit to largest dimension, seat on ground, URP-fix Tripo materials.
-        /// Keeps the prefab's authored rotation (WO-928): structure art carries its orientation
-        /// correction baked in by its builder (e.g. DeNelle.Editor.WoodenWatchtowerBuilder), and
-        /// structures-catalog's own orientation note records WHY it lives there rather than on the
-        /// catalog row — applying it from the row would double-apply on top of the prefab, and
-        /// ReskinForLevel deliberately does not apply entry.orientation at all, so a tier model has
-        /// nothing BUT its prefab pose to stand it up.</summary>
-        // ⛔ PreservePrefabRotation was set TRUE here on 2026-08-08 and REVERTED the same day.
+        /// DELIBERATELY leaves <see cref="PreservePrefabRotation"/> FALSE — the identity reset is the
+        /// known-good default for the structure class as a whole. The rotation policy is a PER-ROW
+        /// decision now and is applied by StructureFactory.OptsFor from
+        /// <c>entry.repo.preservePrefabRotation</c>, never from this factory. Read the ⛔ block.</summary>
+        // ⛔ PreservePrefabRotation was set TRUE **HERE** on 2026-08-08 and REVERTED the same day.
+        //    DO NOT SET IT HERE AGAIN. It is set per catalog row, in StructureFactory.OptsFor.
         //
         // It fixed the L3 Archer Tower, whose baked -90 is the only thing standing it up. It also
         // reached EVERY structure, because StructureFactory.OptsFor builds from this factory - and
@@ -105,6 +117,14 @@ namespace DeNelle.Village
         // It only surfaced on RE-ENTRY because the first town load seats buildings from the
         // bake/injector path; coming back re-creates them through BaseLayoutLoader ->
         // StructureFactory.Create -> here. A first-load-only test would have missed it entirely.
+        //
+        // WHY A BLANKET FLIP CANNOT WORK, stated as mechanism rather than as a caution: THIRTEEN
+        // catalog rows already carry a manual orientation of exactly (-90, 0, 0) — tower_wall_wizard,
+        // pet-house, workshop, market, forge, jeweler, arcane-tower, collector_farm,
+        // collector_lumbermill, lumberyard, foundry, silo, barracks. Those rows are stood up by
+        // StructureFactory.Create APPLYING that -90 on top of an identity-reset root. Preserve the
+        // native 270 as well and the two COMPOSE to 180 — upside down, not merely sideways. Any row
+        // with a non-zero manual orientation is therefore permanently ineligible for this flag.
         //
         // THE LESSON, and it is the reason this comment is long: an opt-in is only as narrow as the
         // thing you opt in. "Structures" is not a narrow set. The correct scope is PER CATALOG
@@ -172,10 +192,20 @@ namespace DeNelle.Village
             // from selecting fbx to placement" — the euler ping-pong RCA): one line per mutation
             // stage with the ACTUAL local euler/pos/scale, so a single placement prints the whole
             // transform journey. Companion census: docs/STRUCTURE_TRANSFORM_CENSUS (agent).
+            //
+            // WO-928: the line is now stamped with the CALLER'S ENTRY ID as well as the model name.
+            // The model name alone is ambiguous by construction — GenericContainer is the model for
+            // lumberyard AND foundry AND silo, House_Medieval_Medium for armorer AND collector_forge —
+            // and since the preserve-vs-identity branch below is decided PER ROW, the row is the only
+            // thing that identifies which decision ran. A future sideways structure is now one grep
+            // ("entry='<id>'" or "prefab rotation PRESERVED") away instead of one felt-test away.
+            string who = string.IsNullOrEmpty(opts.TraceId)
+                ? $"'{prefab.name}'"
+                : $"'{prefab.name}' (entry='{opts.TraceId}')";
             void TraceXform(string stage)
             {
                 var t = go.transform;
-                FlowTrace.Step("Xform", $"'{prefab.name}' after {stage}: " +
+                FlowTrace.Step("Xform", $"{who} after {stage}: " +
                     $"euler={t.localEulerAngles} pos={t.localPosition} scale={t.localScale}");
             }
             TraceXform("instantiate (prefab-native pose)");
@@ -193,9 +223,13 @@ namespace DeNelle.Village
             else if (!opts.PreservePrefabRotation)
                 go.transform.localRotation = Quaternion.identity;
 
+            // The stage string IS the decision record: three mutually exclusive branches, each naming
+            // WHY the pose is what it is, on a line that now also carries the entry id (see `who`).
+            // "prefab rotation PRESERVED (WO-928, opt-in row)" is the only branch that can leave a
+            // native Tripo 270 standing, so grepping it lists exactly the rows running the opt-in.
             TraceXform(opts.LocalRotation.HasValue ? "opts.LocalRotation"
-                     : opts.PreservePrefabRotation ? "prefab rotation PRESERVED (WO-928)"
-                     : "LocalRotation identity");
+                     : opts.PreservePrefabRotation ? "prefab rotation PRESERVED (WO-928, opt-in row)"
+                     : "LocalRotation identity (DEF-232 default)");
 
             // FLAT-SEAT: derive the natural resting orientation from geometry (narrowest world-bounds
             // axis → +Y, §4) so the model sits flat side down. Runs BEFORE Fit/SeatOnGround so the

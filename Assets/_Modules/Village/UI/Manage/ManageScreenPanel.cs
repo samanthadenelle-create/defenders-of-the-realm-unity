@@ -755,11 +755,13 @@ namespace DeNelle.Village.UI
             // including when the player cannot afford it. The price is on the face as TEXT.
             if (r.FinishPrice > 0)
             {
-                string finishText = r.CanAffordFinish
-                    ? "Finish " + r.FinishPrice + "c"
-                    : "Finish " + r.FinishPrice + "c (short)";
-                var fin = ElarionUiKit.BuildObsidianButton(row, finishText,
-                    ElarionUiKit.ObsidianButtonStyle.Style1,
+                // TWO-LINE CTA (owner felt-test 2026-08-08): verb on top, cost UNDERNEATH in a
+                // smaller font. The old face was "Finish 5c" / "Finish 5c (short)" — "5c" assumed
+                // the player already knew that c meant crystals AND that the price scales with the
+                // time remaining, and "(short)" silently meant "you cannot afford this" while
+                // reading like part of the price. Both strings are the VM's (FinishCostText); this
+                // only renders them.
+                var fin = BuildTwoLineCta(row, "Finish", r.FinishCostText,
                     r.CanAffordFinish ? ElarionUiKit.ObsidianButtonColor.Yellow : ElarionUiKit.ObsidianButtonColor.Gray,
                     new Vector2(0.455f, RowCtrlY0), new Vector2(0.655f, RowCtrlY1),
                     () => { _vm?.FinishNow(channel, jobId); FlushNotice(); });
@@ -809,6 +811,84 @@ namespace DeNelle.Village.UI
                                                 TextAlignmentOptions.Left, x0, 0.44f);
                 ElarionUiKit.FitSingleLine(refund);
             }
+        }
+
+        // =====================================================================
+        //  Two-line CTA (verb over cost)
+        // =====================================================================
+
+        /// <summary>Verb line size. Below FontBody(50) because it shares the box with a second
+        /// line, and comfortably over the kit's mobile floor (<c>ElarionUiKit.FontFloor</c> = 30).</summary>
+        private const float CtaVerbPx = 42f;
+
+        /// <summary>Cost line size — SMALLER than the verb, as the owner asked, but still 2px over
+        /// the floor. "Smaller" means smaller than the verb, never small enough to fail the floor.</summary>
+        private const float CtaSubPx = 32f;
+
+        // Band split inside the button box. At RowHeightPx 132 the control band (RowCtrlY0..Y1 =
+        // 0.88) resolves to 116 reference px, so:
+        //   verb 0.50-0.96 -> 0.46 * 116 = 53.4px, holding a 42px line box (~48px)   OK
+        //   cost 0.06-0.46 -> 0.40 * 116 = 46.4px, holding a 32px line box (~37px)   OK
+        // 99.8px of the 116 is spent, leaving ~16px of air top and bottom. The button's own touch
+        // floor is unaffected: 116 >= MinTouchPx (112), so ClampMinTouch never grows it.
+        private const float CtaVerbY0 = 0.50f, CtaVerbY1 = 0.96f;
+        private const float CtaSubY0  = 0.06f, CtaSubY1  = 0.46f;
+
+        /// <summary>
+        /// An Obsidian CTA carrying a VERB over a smaller SUB-LINE, e.g. "Finish" / "5 crystals".
+        ///
+        /// Built here rather than in the kit because no kit button has a sub-label affordance — its
+        /// <c>BuildObsidianButton</c> stamps ONE label across the whole face and FitSingleLine's it.
+        /// This reuses that button whole (art, tint feedback, contrast law, touch floor) and only
+        /// RESEATS the label it already made into the upper band, then adds the second line beneath
+        /// in the SAME ink — so the sub-line inherits the kit's face-vs-label contrast rule instead
+        /// of re-deriving it. If a two-line CTA is ever wanted elsewhere, THIS is the thing to lift
+        /// into the kit; until then a second caller is the trigger, not a guess.
+        ///
+        /// COLOURBLIND LAW: the affordable/unaffordable difference is carried by the sub-line's TEXT
+        /// ("5 crystals" vs "Short 3 crystals"). The Yellow/Gray face is a redundant second signal,
+        /// never the only one — the owner is red/green colourblind.
+        ///
+        /// Both lines are floored at <c>ElarionUiKit.FontFloor</c> (30): FitSingleLine may shrink
+        /// each toward the floor to fit the width, but can never take either below it — it
+        /// ellipsizes instead of going sub-legible.
+        /// </summary>
+        private Button BuildTwoLineCta(Transform parent, string verb, string subLine,
+            ElarionUiKit.ObsidianButtonColor color, Vector2 anchorMin, Vector2 anchorMax, Action onClick)
+        {
+            var btn = ElarionUiKit.BuildObsidianButton(parent, ManageScreenVM.Ascii(verb ?? ""),
+                ElarionUiKit.ObsidianButtonStyle.Style1, color, anchorMin, anchorMax, onClick);
+            if (btn == null) return null;
+
+            // No sub-line to add: leave the kit's single centred label exactly as built.
+            string sub = ManageScreenVM.Ascii(subLine ?? "");
+            if (string.IsNullOrEmpty(sub)) return btn;
+
+            var primary = btn.GetComponentInChildren<TMP_Text>();
+            if (primary == null)
+            {
+                // The button exists but carries no label — the verb would be invisible and the cost
+                // would have nothing to sit under. Say so rather than silently shipping a blank face.
+                FlowTrace.Warn("Manage",
+                    "two-line CTA '" + verb + "': the kit button has no TMP label, so the cost line '" +
+                    sub + "' was not drawn. The face shows art only.");
+                return btn;
+            }
+
+            var prt = primary.rectTransform;
+            prt.anchorMin = new Vector2(prt.anchorMin.x, CtaVerbY0);
+            prt.anchorMax = new Vector2(prt.anchorMax.x, CtaVerbY1);
+            prt.offsetMin = new Vector2(prt.offsetMin.x, 0f);
+            prt.offsetMax = new Vector2(prt.offsetMax.x, 0f);
+            primary.fontSize = CtaVerbPx;
+            ElarionUiKit.FitSingleLine(primary, ElarionUiKit.FontFloor, CtaVerbPx);
+
+            var cost = ElarionUiKit.Label(btn.transform, sub, CtaSubY0, CtaSubY1,
+                                          primary.color, (int)CtaSubPx,
+                                          TextAlignmentOptions.Center, 0.04f, 0.96f);
+            cost.raycastTarget = false;                 // the whole face stays one tap target
+            ElarionUiKit.FitSingleLine(cost, ElarionUiKit.FontFloor, CtaSubPx);
+            return btn;
         }
 
         private void AddBrowseRow(BrowseRowVM r)

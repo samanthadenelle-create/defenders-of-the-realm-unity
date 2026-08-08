@@ -125,6 +125,24 @@ namespace DeNelle.Village.UI
         public int FinishPrice;
         /// <summary>True when the player can afford <see cref="FinishPrice"/> right now.</summary>
         public bool CanAffordFinish;
+
+        /// <summary>
+        /// The Finish CTA's SECOND LINE, in ASCII words: the price with its currency SPELLED OUT,
+        /// plus the shortfall when the player is short ("5 crystals" / "5 crystals - need 3 more").
+        ///
+        /// Owner felt-test 2026-08-08: "finish five c is a little vague ... it's really hard to tell
+        /// if five c doesn't really say anything". "5c" assumed the player already knew that c meant
+        /// crystals AND that the price scales with time remaining (cheap because the job is nearly
+        /// done, not because finishing is cheap) - neither is knowable on day one. The old
+        /// unaffordable face said "(short)", which silently meant "you cannot afford this" and read
+        /// like part of the price.
+        ///
+        /// Composed HERE, not in the View: this is the same MVVM law the rest of the row follows
+        /// (StateText / RefundText / CostText are all VM-composed ASCII), and the crystal balance
+        /// needed for the shortfall is already in hand at the one place rows are built. The PRICE
+        /// ITSELF IS UNTOUCHED - this is presentation only.
+        /// </summary>
+        public string FinishCostText;
         /// <summary>True when a rewarded-ad skip is offered (running jobs only).</summary>
         public bool AdAvailable;
         /// <summary>True when this row may be cancelled (never on a collapsed stack header).</summary>
@@ -216,6 +234,14 @@ namespace DeNelle.Village.UI
         public string RepairOfferText { get; private set; }
 
         private readonly HashSet<string> _expandedStacks = new HashSet<string>();
+
+        /// <summary>
+        /// Placed ids already reported by <see cref="WarnNoLadder"/>. STATIC on purpose: the warning
+        /// is about the DATA (an unauthored ladder row), not about one screen instance, so opening
+        /// Manage a second time must not re-print the same to-do list.
+        /// </summary>
+        private static readonly HashSet<string> _noLadderWarned =
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         // =====================================================================
         //  Tab -> channel. The ONE place the crossing is expressed.
@@ -417,6 +443,7 @@ namespace DeNelle.Village.UI
                 // job runs, plus a get-crystals route when broke") — never hidden on price.
                 FinishPrice = price,
                 CanAffordFinish = price > 0 && crystals >= price,
+                FinishCostText = DescribeFinishCost(price, crystals),
                 // RELEASE BLOCKER GATE (2026-08-07): no ad SDK is wired, so the ad affordance is
                 // ABSENT on every row of every channel until FeatureFlags.RewardedAdSkip's two
                 // prerequisites land (real SDK + WO-912 server-side ad-window validation). The
@@ -564,27 +591,211 @@ namespace DeNelle.Village.UI
             }
         }
 
+        /// <summary>How many buildings of ONE ladder id stand in this town, and the placed catalog
+        /// ids that folded into it (kept for the diagnostics — a warning must be able to name the
+        /// id the player actually placed, not just the id its ladder is spelled with).</summary>
+        private sealed class PlacedTally
+        {
+            /// <summary>Live BaseLayout instances resolving to this ladder id.</summary>
+            public int Count;
+            /// <summary>Distinct placed catalog ids that resolved here (e.g. "collector_farm").</summary>
+            public readonly List<string> SourceIds = new List<string>();
+        }
+
+        /// <summary>
+        /// The LIVE placements of THIS town, counted per UPGRADE-LADDER id.
+        ///
+        /// ⚠ KEYED THROUGH <see cref="CatalogRegistry.ResolveUpgradeId"/>, THE SHIPPED RESOLVER —
+        /// not a mapping table written here (owner 2026-08-08 forbade INVENTING a translation layer
+        /// that would drift; this is the opposite move, REUSE). A resource COLLECTOR is placed under
+        /// its catalog id ("collector_farm") while its ladder is authored under the bare
+        /// <c>repo.collectorBuildingId</c> ("farm") — the mapping is AUTHORED IN structures-catalog.json,
+        /// not hardcoded, and this is the same resolver <c>BuildingUpgradeVM</c> (:139) and
+        /// <c>BuildModeController.UpgradeSelected</c> (:2275) already call. Using anything else here
+        /// would make Manage and the in-world upgrade panel disagree about the same building.
+        ///
+        /// It also settles the duplicate-row question: "lumbermill" (catalog "Sawmill") and
+        /// "collector_lumbermill" BOTH resolve to ladder "lumbermill", and the tier is stored per
+        /// LADDER id (GameState.BuildingTiers["lumbermill"]), so they are one upgradable kind and
+        /// must fold into ONE row. Counting on the raw itemId would emit the same row twice.
+        ///
+        /// ⚠ READS <see cref="GameState.BaseLayout"/> ON PURPOSE — and must keep doing so (owner
+        /// ruling 2026-08-08). BaseLayout is the only per-TOWN answer to "do I own one of these
+        /// right now"; it drops the record when a building is sold or destroyed, which IS the
+        /// owner's "if destroyed = 0" rule, already implemented. The two nearby sets are the wrong
+        /// question and would BOTH be wrong in a second town, which is where this breaks visibly:
+        ///
+        ///   * <c>GameState.FreeBuildsUsed</c> (v32) — ACCOUNT-scoped and monotonic: it burns at
+        ///     the committed placement and never resets. It answers "have you had your free one",
+        ///     not "do you own one HERE". On a prefab/Default Town the buildings are already
+        ///     placed, so it is largely spent and would hide things you own while offering things
+        ///     you do not.
+        ///   * <c>GameState.EverBuiltStructureIds</c> (v36) — MONOTONIC BY DESIGN: selling never
+        ///     removes an id, because the WO-819 sell -> baked-twin-resurface contract depends on
+        ///     that. A destroyed building would keep offering upgrades forever.
+        ///
+        /// Both are correct for their own jobs. Here, "their other town has everything, this town
+        /// doesn't" is the deciding case: the player is looking at the town they are standing in.
+        /// When multi-town lands and BaseLayout shards per base, this counting site is correct for
+        /// free; anything reading the account-scoped sets would have to be unpicked.
+        /// </summary>
+        private static Dictionary<string, PlacedTally> CountPlacedThisTown()
+        {
+            var counts = new Dictionary<string, PlacedTally>(StringComparer.OrdinalIgnoreCase);
+            var state = GameStateService.Instance != null ? GameStateService.Instance.State : null;
+            if (state == null || state.BaseLayout == null) return counts;
+
+            for (int i = 0; i < state.BaseLayout.Count; i++)
+            {
+                string placedId = state.BaseLayout[i].itemId;
+                if (string.IsNullOrEmpty(placedId)) continue;
+
+                // Pass-through for every non-collector id (and for any id the registry has not
+                // loaded), so this is a no-op everywhere except the three collectors.
+                string ladderId = CatalogRegistry.ResolveUpgradeId(placedId);
+                if (string.IsNullOrEmpty(ladderId)) ladderId = placedId;
+
+                if (!counts.TryGetValue(ladderId, out var tally))
+                {
+                    tally = new PlacedTally();
+                    counts[ladderId] = tally;
+                }
+                tally.Count++;
+                if (!tally.SourceIds.Contains(placedId)) tally.SourceIds.Add(placedId);
+            }
+            return counts;
+        }
+
+        /// <summary>
+        /// The BUILDINGS tab — every building STANDING IN THIS TOWN that has a next tier authored,
+        /// offered at that tier's real price.
+        ///
+        /// ⚠ TWO DIFFERENT QUESTIONS, DELIBERATELY KEPT APART (owner ruling 2026-08-08, felt-test
+        /// "no building upgrades are on the manage button anywhere"):
+        ///     WHETHER a row appears -> do you OWN one right now?  -> COUNT the placements.
+        ///     WHICH   row appears   -> what tier are you on?      -> ModifierService.TierOf.
+        /// Conflating them is the defect this replaces. The old code asked TierOf for BOTH and
+        /// skipped on <c>tier &lt; 1</c> under the comment "not built / locked" — but TierOf reads
+        /// GameState.BuildingTiers, which only ever contains ids that have been UPGRADED, so the
+        /// filter really asked "have you already upgraded this?" and the tab was EMPTY for exactly
+        /// the player the browser exists for: the one who has never bought a tier.
+        ///
+        /// ⛔ DO NOT "fix" a future variant of this by writing tier=1 at placement. Tier 1 is a PAID
+        /// upgrade (barracks T1 = 900 wood / 750 food / 150 crystals) and it grants
+        /// <c>structureHpBonusPct 0.20</c> through ModifierService.StructureHpMultFor (which returns
+        /// 1f below tier 1 and 1.2 at tier 1), so seeding it would gift every newly placed building
+        /// a free upgrade. The ladder is 1-based for UPGRADES, not for existence: tier 0 = placed.
+        ///
+        /// The lookup is a STRAIGHT read of building-tiers.json under the id the SHIPPED resolver
+        /// gives (<see cref="CountPlacedThisTown"/> keys on <c>CatalogRegistry.ResolveUpgradeId</c>).
+        /// No mapping table is written here — the owner's 2026-08-08 objection was to INVENTING a
+        /// translation layer that would drift, and inventing a second resolver beside the game's own
+        /// is exactly that; reusing hers is not. A resolved id with nothing authored under it is a
+        /// CONTENT GAP, and <see cref="WarnNoLadder"/> announces it as the to-do list.
+        /// </summary>
         private void BuildBuildingsBrowse()
         {
-            var all = BuildingTierCatalog.All;
-            if (all == null) return;
-
-            for (int i = 0; i < all.Count; i++)
+            var placed = CountPlacedThisTown();
+            if (placed.Count == 0)
             {
-                var def = all[i];
-                if (def == null || string.IsNullOrEmpty(def.Id)) continue;
-
-                int tier = ModifierService.TierOf(def.Id);
-                if (tier < 1) continue;                                  // not built / locked
-                var next = BuildingTierCatalog.TierOf(def.Id, tier + 1);
-                if (next == null) continue;                              // already at max tier
-
-                var cost = new CoreCost { wood = next.CostWood, food = next.CostFood, crystals = next.CostCrystal };
-                string label = (string.IsNullOrEmpty(def.DisplayName) ? def.Id : def.DisplayName)
-                             + " -> T" + next.Tier;
-                string id = def.Id;
-                AddBrowseRow(label, cost, "Open", () => OpenUpgradePanel(id));
+                // NO SILENT EMPTY LIST (§12): an empty tab must be diagnosable from a log line
+                // rather than a felt-test. This is the "nothing placed / no town state" case.
+                FlowTrace.Step("Manage", "buildings browse (this town): 0 placements in BaseLayout -> no rows.");
+                return;
             }
+
+            int rows = 0, maxed = 0, noLadder = 0, onDefenseTab = 0;
+            foreach (var kv in placed)
+            {
+                string ladderId = kv.Key;                                // already resolved
+                var tally = kv.Value;
+
+                // WHICH row: the tier ABOVE the one you own. A placed, never-upgraded building is
+                // tier 0, so it offers tier 1 at tier 1's real price — nothing is granted here.
+                var next = BuildingTierCatalog.TierOf(ladderId, ModifierService.TierOf(ladderId) + 1);
+                if (next == null)
+                {
+                    if (BuildingTierCatalog.IsUpgradable(ladderId)) { maxed++; continue; }   // topped out
+
+                    // Not a gap: this id runs the OTHER ladder. Towers/walls/mines/stockpiles carry
+                    // a per-instance repo.maxLevel and are already browsed by BuildDefenseBrowse, so
+                    // naming them in the "author some rows" warning would make that to-do list lie.
+                    if (HasLevelLadder(tally)) { onDefenseTab++; continue; }
+
+                    noLadder++;
+                    WarnNoLadder(ladderId, tally);
+                    continue;
+                }
+
+                var def = BuildingTierCatalog.Find(ladderId);
+                string name = (def != null && !string.IsNullOrEmpty(def.DisplayName)) ? def.DisplayName : ladderId;
+                var cost = new CoreCost { wood = next.CostWood, food = next.CostFood, crystals = next.CostCrystal };
+                // The CTA opens the panel on the LADDER id — the same id BuildingUpgradeVM would
+                // resolve the placed id to anyway, so the row and the panel can never disagree.
+                string rowId = ladderId;                                 // captured by the CTA closure
+                AddBrowseRow(Ascii(name) + " -> T" + next.Tier, cost, "Open", () => OpenUpgradePanel(rowId));
+                rows++;
+            }
+
+            FlowTrace.Step("Manage",
+                "buildings browse (this town): " + placed.Count + " placed type(s) -> " + rows +
+                " upgrade row(s); " + maxed + " at max tier, " + onDefenseTab +
+                " on the level ladder (Defense tab), " + noLadder + " with no authored ladder.");
+        }
+
+        /// <summary>
+        /// True when ANY of the placed ids behind this tally carries a per-instance level ladder
+        /// (<c>repo.maxLevel &gt; 1</c>) — i.e. it upgrades through <see cref="BuildDefenseBrowse"/>
+        /// on the Defense tab. Such an id is NOT missing an upgrade path, so it must never land on
+        /// the "author some rows" to-do list.
+        /// </summary>
+        private static bool HasLevelLadder(PlacedTally tally)
+        {
+            if (tally == null) return false;
+            for (int i = 0; i < tally.SourceIds.Count; i++)
+            {
+                var entry = CatalogRegistry.Get(tally.SourceIds[i]);
+                if (entry != null && entry.repo != null && entry.repo.maxLevel > 1) return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// LOUD, ONCE PER LADDER ID PER SESSION: a building is standing in this town, its id has
+        /// already been through the shipped resolver, and building-tiers.json STILL has nothing
+        /// authored under the result — so Manage can offer it nothing.
+        ///
+        /// This is the TO-DO LIST of buildings that still need upgrade rows authored. Do not downgrade
+        /// it to a Step: a silently skipped id is precisely how the empty-tab defect hid for so long.
+        ///
+        /// Because the id is resolved BEFORE this point, the collector case ("collector_farm" -> "farm")
+        /// no longer reaches here at all. If one ever does, the message says so explicitly and that is
+        /// a REAL SECOND DEFECT to chase, not noise: it means <c>repo.collectorBuildingId</c> points at
+        /// a ladder that does not exist, so the in-world upgrade panel is equally dead for that
+        /// building. Never fix that by authoring rows under the PLACED id — tiers persist under the
+        /// RESOLVED id (GameState.BuildingTiers), so the copy would be a ghost that never advances.
+        /// </summary>
+        private static void WarnNoLadder(string ladderId, PlacedTally tally)
+        {
+            // Deduped HERE rather than through FlowTrace.Once because Once logs at INFO and this
+            // must stay at WARNING level to survive an F8 harvest. Rebuild() runs on every tab
+            // change / economy tick, so an undeduped Warn would bury the rest of the capture.
+            if (!_noLadderWarned.Add(ladderId)) return;
+
+            int count = tally != null ? tally.Count : 0;
+            string sources = (tally != null) ? string.Join(", ", tally.SourceIds.ToArray()) : "";
+            bool resolvedAway = !string.IsNullOrEmpty(sources) &&
+                                !string.Equals(sources, ladderId, StringComparison.OrdinalIgnoreCase);
+
+            FlowTrace.Warn("Manage",
+                "no upgrade ladder authored for '" + ladderId + "' (x" + count + " in this town, placed as: " +
+                sources + ") - the Buildings tab can offer it nothing. " +
+                (resolvedAway
+                    ? "SECOND DEFECT: that id came from repo.collectorBuildingId, so the resolver points at " +
+                      "a ladder that does not exist and the in-world upgrade panel is dead for it too. " +
+                      "Fix the pointer or author '" + ladderId + "' - never author rows under the placed id, " +
+                      "because tiers persist under the resolved one."
+                    : "CONTENT GAP: author tier rows for '" + ladderId + "' in building-tiers.json."));
         }
 
         private void BuildTroopsBrowse()
@@ -637,12 +848,28 @@ namespace DeNelle.Village.UI
 
             int gold = GoldBalance();
 
+            // SAME DEFECT AS THE BUILDINGS TAB, SAME FIX (2026-08-08). This gate used to be
+            // `ModifierService.TierOf(def.Id) < 1  // not built`, which is NOT what TierOf answers:
+            // BuildingTiers only holds ids that have been UPGRADED, so a player who owned a barracks
+            // but had never bought a tier saw an empty Research tab too. Ownership is the LIVE
+            // per-town placement count (CountPlacedThisTown); the tier gate is BuildingPerkService's
+            // job and it already states the requirement in words ("Upgrade the building to Tier N
+            // first"), which is the sentence that teaches the loop instead of hiding it.
+            //
+            // CountPlacedThisTown is keyed on the RESOLVED ladder id, which is the same id space
+            // building-tiers.json uses — so this ContainsKey compares like with like, and a placed
+            // collector ("collector_lumbermill" -> "lumbermill") correctly unlocks its perks.
+            var placedThisTown = CountPlacedThisTown();
+            int owned = 0;
+            int before = BrowseRows.Count;
+
             for (int i = 0; i < all.Count; i++)
             {
                 var def = all[i];
                 if (def == null || string.IsNullOrEmpty(def.Id) || def.Tiers == null) continue;
-                if (ModifierService.TierOf(def.Id) < 1) continue;        // not built -> nothing to research
+                if (!placedThisTown.ContainsKey(def.Id)) continue;       // you do not own one HERE
 
+                owned++;
                 string buildingName = Ascii(string.IsNullOrEmpty(def.DisplayName) ? def.Id : def.DisplayName);
 
                 for (int t = 0; t < def.Tiers.Count; t++)
@@ -689,6 +916,14 @@ namespace DeNelle.Village.UI
                     }
                 }
             }
+
+            // NO SILENT EMPTY LIST (§12): say how many ladder buildings this town actually owns and
+            // how many perk rows that produced, so an empty Research tab is read off a log instead
+            // of a felt-test. owned==0 with placements present means no PLACED id matches a
+            // building-tiers.json id — see the [Flow:Manage] "no upgrade ladder authored" warnings.
+            FlowTrace.Step("Manage",
+                "research browse (this town): " + placedThisTown.Count + " placed type(s), " + owned +
+                " with a tier ladder -> " + (BrowseRows.Count - before) + " perk row(s).");
         }
 
         private void AddBrowseRow(string label, CoreCost cost, string actionText, Action activate)
@@ -936,6 +1171,31 @@ namespace DeNelle.Village.UI
             string msg = BuildModeController.ShortfallMessage(cost);
             return string.IsNullOrEmpty(msg) ? "Short on resources" : Ascii(msg);
         }
+
+        /// <summary>
+        /// The Finish CTA's cost sub-line (see <see cref="QueueRowVM.FinishCostText"/>): the currency
+        /// SPELLED OUT and singular/plural correct, plus the shortfall in words when the player is
+        /// short. ASCII only - a currency glyph renders as tofu in TMP.
+        ///
+        /// The shortfall is stated as a NUMBER OF CRYSTALS rather than left to a grey face, because
+        /// the owner is red/green colourblind and no affordance may convey its meaning by colour
+        /// alone: "cannot afford" has to be readable as text.
+        /// </summary>
+        public static string DescribeFinishCost(int price, int crystals)
+        {
+            if (price <= 0) return "";
+            int missing = price - crystals;
+            // "Short N <currency>" is THIS screen's existing shortfall idiom (BuildResearchBrowse
+            // already says "Short 40 gold"), so the two tabs read alike. It also stays inside the
+            // CTA's width budget, which "5 crystals - need 3 more" would not: the sub-line has only
+            // ~313-350 reference px, and a 20+ character string auto-shrinks to the font floor and
+            // then ellipsizes — which would put us right back at an unreadable face.
+            return missing > 0 ? "Short " + Crystals(missing) : Crystals(price);
+        }
+
+        /// <summary>"1 crystal" / "5 crystals" — the currency SPELLED OUT, singular/plural correct.
+        /// Never "5c": the owner's felt-test is that the abbreviation says nothing to a new player.</summary>
+        private static string Crystals(int n) => n + (n == 1 ? " crystal" : " crystals");
 
         /// <summary>ASCII cost summary ("400 wood, 200 food"); "free" when nothing is charged.</summary>
         public static string DescribeCost(CoreCost c)

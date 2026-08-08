@@ -188,6 +188,26 @@ namespace DeNelle.Village
                         "Structures/Tower_Wooden_Watchtower_L2",   // L2
                         "Structures/Tower_Wooden_Watchtower_L3",   // L3
                     },
+                    // MIRRORS the catalog row's "upgradeTexturePath". Only L3 reskins; the empty
+                    // string is L2's "no texture override" slot and must be preserved, because the
+                    // array is indexed by upgrade step - dropping it would shift the L3 basecolor
+                    // onto L2. This was ABSENT here while the catalog carried it, and gate 12
+                    // [fallback-parity] only caught it once WO-928 brought this row under the
+                    // deep-compare; the gap had been latent, so a fallback-path L3 tower rendered
+                    // untextured. Parity is the point: every public RepoProps field, or a red build.
+                    upgradeTexturePath = new[]
+                    {
+                        "",                                                                    // L2 - no override
+                        "Structures/Tower_Wooden_Watchtower_L3_Tex/WoodenWatchtowerL3_basecolor", // L3
+                    },
+                    // WO-928 defect A - MIRRORS the catalog row's "preservePrefabRotation": true.
+                    // This row's art keeps its own authored root rotation instead of DEF-232's
+                    // identity reset (that reset is what shipped the L3 tower on its side, and then
+                    // let VisualFactory.Fit measure its short axis and oversize it 8.34x). It is the
+                    // ONLY row in the catalog that sets it. Required here, not optional: gate 12
+                    // [fallback-parity] deep-compares EVERY public RepoProps field between this
+                    // constructed row and the parsed catalog row, so a missing bool is a red build.
+                    preservePrefabRotation = true,
                     navSurface = NavSurfaceKind.Blocker,
                     heightMul = 1.2f,    // owner 2026-08-05: archer tower = 1.2 Ã— base (4 m) = 4.8 m
                     range = 14f, damage = 6f, fireRate = 2.5f,

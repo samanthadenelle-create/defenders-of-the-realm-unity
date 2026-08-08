@@ -78,19 +78,36 @@ namespace DeNelle.Village
                 ? Mathf.Max(1f, entry.repo.placement.footprint)
                 : 3f;
 
-            // WYSIWYG SCALE (TKT-12): match StructureFactory.Create's fit EXACTLY, or the ghost and the
-            // PLACED object end up different sizes. The placed path uses FitHeight when the entry sets a
-            // visualHeight (DEF-208 tall-structure fix) and FitLargest(footprint) otherwise — so the ghost
-            // must do the SAME, not always FitLargest. Mirrors StructureFactory.cs:79-94. (`fit` stays
-            // method-scoped — the pack-missing fallback disc below also uses it.)
-            // WO-764: EVERY structure now fits-to-HEIGHT = YHeightVariable * repo.heightMul (uniform
-            // base × the per-item multiplier; buildings inherit 1.0, towers 1.25, the archer tower 1.2
-            // per the owner's 2026-08-05 "go with 1.2 on the tower" ruling). The ghost must match
-            // Create's centralized formula EXACTLY or the dragged ghost and the placed building end up
-            // different sizes.
-            SkinOptions opts = SkinOptions.Structure(0f);
-            float ghostMul = (entry.repo != null && entry.repo.heightMul > 0f) ? entry.repo.heightMul : 1f;
-            opts.FitHeight = StructureFactory.YHeightVariable * ghostMul;
+            // WYSIWYG SKIN OPTIONS (TKT-12 → WO-928) — THE MATCH IS NOW GUARANTEED BY CALLING THE
+            // SHARED BUILDER, NOT BY MIRRORING IT. `StructureFactory.OptsFor(entry)` is the SAME call
+            // StructureFactory.Create and ReskinForLevel make, so the ghost cannot fit/rotate
+            // differently from the thing it places — by construction, not by promise.
+            //
+            // WHY THE MIRROR HAD TO GO (this comment is the evidence; do not delete it): this site used
+            // to hand-roll `SkinOptions.Structure(0f)` + `FitHeight = YHeightVariable * repo.heightMul`
+            // under a comment insisting it matched Create "EXACTLY". A comment cannot keep that promise
+            // — a second copy of a formula matches only until the first one grows, and there is no gate
+            // that notices. It grew: WO-928 added the PER-ROW rotation policy
+            // (`repo.preservePrefabRotation`) to OptsFor and the copy here never carried it, so the
+            // `tower_ground_archer` ghost rendered LYING DOWN AND OVERSIZED (one defect, not two —
+            // flattening the prefab's own upright 270 also makes VisualFactory.Fit measure the SHORT
+            // axis to reach the height target) while the placed tower stood upright. The player aimed
+            // with one shape and got another. Anything added to OptsFor from here on reaches the ghost
+            // for free. DO NOT RE-DERIVE THESE OPTIONS HERE — re-deriving them IS the bug.
+            SkinOptions opts = StructureFactory.OptsFor(entry);   // fit-to-height + per-row rotation policy + trace id
+
+            // GHOST-ONLY DIVERGENCES — deliberate, and layered ON TOP of the shared options rather than
+            // replacing them, so the next reader can tell an intentional difference from a drift:
+            //   • translucent materials + valid/blocked tint (ApplyTransparentMaterials, below) — a
+            //     preview must read through; the placed structure is opaque.
+            //   • colliders stripped (StripColliders, below) — the ghost must not block its own overlap
+            //     test nor catch the placement ray (see the file header).
+            //   • flat-disc fallback on a missing pack (uses `fit`, below) — Create refuses to seat a
+            //     meshless structure and returns null, but the ghost still has to show the player
+            //     SOMETHING under the cursor rather than nothing.
+            // All three are POST-skin presentation. Nothing about SHAPE — fit height, rotation policy —
+            // is decided here; that all comes from OptsFor above.
+            // (`fit`, computed above, stays method-scoped because the fallback disc consumes it.)
 
             GameObject skinned = null;
             if (!string.IsNullOrEmpty(entry.visualPrefabPath))

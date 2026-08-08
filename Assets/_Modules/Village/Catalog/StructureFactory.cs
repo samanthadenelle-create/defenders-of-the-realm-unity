@@ -119,10 +119,16 @@ namespace DeNelle.Village
             if (!string.IsNullOrEmpty(entry.visualPrefabPath))
             {
                 float targetHeight = EffectiveVisualHeight(entry, out bool heightOverride);
-                var opts = SkinOptions.Structure(0f);   // clear FitLargest
-                opts.FitHeight = targetHeight;           // fit to real-world height (override or default)
+
+                // WO-928: build the opts through the ONE shared helper instead of assembling them
+                // inline. The inline copy here had drifted from ReskinForLevel's OptsFor - it carried
+                // the height and nothing else - so any per-row skin policy added to OptsFor would have
+                // reached tier models and MISSED the base visual, i.e. an L1 tower and its L3 tower
+                // would obey different rules. That is precisely the class of split this defect is.
+                var opts = OptsFor(entry);   // fit-to-height + per-row rotation policy + trace id
                 FlowTrace.Step("Structure", $"'{entry.id}' fit-to-height target={targetHeight:0.##}m " +
-                    $"(source={(heightOverride ? "override" : "default")}).");
+                    $"(source={(heightOverride ? "override" : "default")}), " +
+                    $"preservePrefabRotation={opts.PreservePrefabRotation}.");
 
                 // G: Guard the Skin — a throwing VisualFactory (bad prefab path / Addressables
                 // hiccup) logs + rolls up instead of aborting the whole create. null => meshless.
@@ -386,14 +392,53 @@ namespace DeNelle.Village
             return true;
         }
 
-        /// <summary>WO-764 skin options for an entry - fit-to-HEIGHT always:
+        /// <summary>
+        /// WO-764 skin options for an entry - fit-to-HEIGHT always:
         /// YHeightVariable * repo.heightMul (uniform base × the per-item multiplier). Shared by
-        /// Create + ReskinForLevel so a tier reskin fits to the SAME height as the base skin
-        /// (no size jump on upgrade).</summary>
-        private static SkinOptions OptsFor(CatalogEntry entry)
+        /// Create + ReskinForLevel + MeasureUprightFootprintMetres so a tier reskin and the
+        /// placement ghost fit to the SAME height AND wear the SAME rotation policy as the base
+        /// skin (no size jump on upgrade, no ghost/placed disagreement).
+        /// <para>
+        /// WO-928 - THE ROTATION POLICY IS READ HERE, PER ROW, AND NOWHERE ELSE. VisualFactory
+        /// normally flattens an instantiated model's root to identity (DEF-232), which is correct
+        /// for the structure class as a whole: most Tripo building FBXs instantiate at euler
+        /// (270,0,0) and that 270 is exactly what the reset exists to CANCEL. A HANDFUL of rows are
+        /// the opposite case - the model's own 270 IS its upright correction, and flattening it
+        /// ships the structure on its side AND then lets VisualFactory.Fit measure the SHORT axis
+        /// to reach the height target, so it is oversized as well (orientation and "the footprint is
+        /// huge" are ONE defect). Those rows author <c>repo.preservePrefabRotation: true</c>.
+        /// </para>
+        /// <para>
+        /// SETTING IT ON <c>SkinOptions.Structure</c> INSTEAD WAS TRIED AND REVERTED ON 2026-08-08
+        /// (it laid the whole town down - the ⛔ block on that factory has the captured trace). The
+        /// row is the correct granularity because the correction is a property of one PIECE OF ART,
+        /// not of the structure class. Default false =&gt; every row that does not author the key is
+        /// byte-identical in behaviour to before this landed.
+        /// </para>
+        /// <para>
+        /// PUBLIC as of WO-928 so the WYSIWYG paths can stop re-deriving it. <c>GhostPreview</c>
+        /// (BuildMode/GhostPreview.cs) still hand-rolls FitHeight from
+        /// <c>YHeightVariable * repo.heightMul</c> under a comment insisting it must match Create
+        /// "EXACTLY" - a promise a second copy cannot keep, and it does NOT carry the rotation policy,
+        /// so the ghost of a preserve-row renders lying down while the placed structure stands. That
+        /// caller should become <c>opts = StructureFactory.OptsFor(entry)</c>; it is a one-line change
+        /// and it retires the third copy of this formula.
+        /// </para>
+        /// </summary>
+        public static SkinOptions OptsFor(CatalogEntry entry)
         {
             var o = SkinOptions.Structure(0f);   // clear FitLargest
             o.FitHeight = EffectiveVisualHeight(entry, out _);
+
+            // Per-row rotation policy (WO-928). Null-guarded the same way EffectiveVisualHeight
+            // guards repo: a sparse / missing repo means "no opt-in", i.e. the known-good default.
+            o.PreservePrefabRotation = entry != null && entry.repo != null && entry.repo.preservePrefabRotation;
+
+            // Instrumentation (§12): stamp the ROW id into every Xform line VisualFactory emits, so
+            // the preserve-vs-identity branch is attributable to a row by grep. The model name alone
+            // cannot do it - GenericContainer is the model for lumberyard AND foundry AND silo.
+            o.TraceId = entry != null ? entry.id : null;
+
             return o;
         }
 
@@ -620,8 +665,13 @@ namespace DeNelle.Village
                     // WO-764: match Create's fit-to-height (YHeightVariable * heightMul) so the
                     // measured XZ footprint reflects the ACTUAL placed scale, not a footprint-fit
                     // scale - otherwise ghost/placement footprint disagrees with the placed size.
-                    var opts = SkinOptions.Structure(0f);   // clear FitLargest
-                    opts.FitHeight = EffectiveVisualHeight(entry, out _);
+                    // WO-928: go through OptsFor for the SAME reason, now extended to the rotation
+                    // policy. This probe must measure the model in the pose it will actually be
+                    // placed in: a preserve-row measured with the reset applied would report the
+                    // LYING-DOWN footprint (long in one axis), and BuildModeController claims grid
+                    // cells from this number - so the ghost would claim the wrong cells and the
+                    // placed structure would not match what the player was shown.
+                    var opts = OptsFor(entry);
 
                     var visual = VisualFactory.Skin(probe.transform, entry.visualPrefabPath, opts);
                     if (visual == null)

@@ -78,6 +78,55 @@ namespace DeNelle.Village
     public sealed class WaveBossEvent : UnityEvent<DragonBoss> { }
 
     /// <summary>
+    /// WHAT THE LAST CLEARED WAVE ACTUALLY BANKED — the exact integers
+    /// <c>WaveManager.AwardWaveResources</c> handed <c>EconomyService.Grant</c> and
+    /// <c>WaveManager.AwardWaveCrystals</c> handed <c>GameStateService.AddCrystals</c>,
+    /// captured AT the grant site.
+    ///
+    /// WHY A RECORD AND NOT A RE-DERIVATION (owner felt-test 2026-08-08, "I'm not
+    /// seeing rewards after waves"): the payout is a RANDOM ROLL
+    /// (<c>ScaledRoll</c> — <c>Random.Range</c> inside a wave-scaled band) folded
+    /// through a talent multiplier. Any presentation layer that re-computed it
+    /// would roll DIFFERENT numbers than the wallet received, and the banner would
+    /// quietly lie about the balance the player is about to spend. So the brain
+    /// publishes what it paid; presentation only reads.
+    ///
+    /// <see cref="WaveId"/> is the ANTI-STALENESS KEY: a reader must ask for a
+    /// specific wave (<see cref="WaveManager.TryGetPayoutFor"/>), so wave 4's
+    /// banner can never render wave 3's spoils. A wave that paid nothing still
+    /// stamps its id with zero amounts — that is a recorded "paid nothing", not a
+    /// missing record.
+    /// </summary>
+    public readonly struct WaveClearPayout
+    {
+        /// <summary>The wave this payout belongs to; -1 = nothing recorded yet.</summary>
+        public readonly int WaveId;
+        public readonly int Wood;
+        public readonly int Iron;
+        public readonly int Food;
+        public readonly int Crystals;
+
+        public WaveClearPayout(int waveId, int wood, int iron, int food, int crystals)
+        {
+            WaveId = waveId;
+            Wood = wood; Iron = iron; Food = food; Crystals = crystals;
+        }
+
+        /// <summary>True when at least one resource actually landed in the wallet.</summary>
+        public bool Any => Wood > 0 || Iron > 0 || Food > 0 || Crystals > 0;
+
+        /// <summary>How many DISTINCT resource lines this payout would render (0..4).
+        /// The end-state banner budgets its rows against this before it builds any.</summary>
+        public int LineCount =>
+            (Wood > 0 ? 1 : 0) + (Iron > 0 ? 1 : 0) + (Food > 0 ? 1 : 0) + (Crystals > 0 ? 1 : 0);
+
+        /// <summary>Same payout with the boss/event crystal faucet folded in (that faucet
+        /// runs after the wood/iron/food grant, on the same wave, in the same breath).</summary>
+        public WaveClearPayout WithCrystals(int crystals) =>
+            new WaveClearPayout(WaveId, Wood, Iron, Food, crystals);
+    }
+
+    /// <summary>
     /// Drives the village wave loop: countdown, spawn, breach detection, ATB
     /// hand-off. A self-contained sub-system MonoBehaviour for the Village scene.
     /// </summary>
@@ -271,6 +320,41 @@ namespace DeNelle.Village
                  "(WO-125 Bug 3). The loop halts (phase Defeated); bind a defeat screen here.")]
         public UnityEvent OnDefeat = new UnityEvent();
 
+        // ── The wave-clear PAYOUT record (owner felt-test 2026-08-08) ─────────
+        //
+        // THE DEFECT this closes: rewards were being paid and NOTHING showed it. Every
+        // OnWaveCleared listener in the tree is persistence / quests / dialogue / tutorial /
+        // audio / pose — no UI. The one presentation attempt, ShowRewardToast below, resolves
+        // "ShowBanner(string)" / "ShowToast(string)" on the live HUD by reflection and
+        // VillageHudController declares NEITHER (it has ShowWaveClearBanner(int,int,string)
+        // only), so `m` was always null and `m?.Invoke` was a SILENT no-op. Defend -> earn ->
+        // build lost its "earn" beat entirely.
+        //
+        // STATIC on purpose: the reader is the presentation layer (EndStateVM.FromWaveClear,
+        // built by WaveCelebrationManager from an OnWaveCleared listener), which must not have
+        // to find and hold a WaveManager reference just to read a number the brain already
+        // knows. Staleness is impossible by construction — every read is keyed on a wave id.
+        //
+        // WRITE ORDER (CompleteWave): AwardWaveResources stamps -> AwardWaveCrystals folds in
+        // -> OnWaveCleared.Invoke. So the record is COMPLETE before any listener runs.
+        private static WaveClearPayout s_lastPayout = new WaveClearPayout(-1, 0, 0, 0, 0);
+
+        /// <summary>The last recorded wave-clear payout (WaveId -1 = none yet this session).
+        /// Prefer <see cref="TryGetPayoutFor"/> — it enforces the wave-id match.</summary>
+        public static WaveClearPayout LastPayout => s_lastPayout;
+
+        /// <summary>
+        /// The payout banked for <paramref name="waveId"/>, if any. Returns FALSE when no
+        /// payout was recorded for that exact wave (a different wave, nothing recorded yet, or
+        /// a wave that genuinely paid nothing) — a caller that respects the bool can never
+        /// render another wave's numbers.
+        /// </summary>
+        public static bool TryGetPayoutFor(int waveId, out WaveClearPayout payout)
+        {
+            payout = s_lastPayout;
+            return waveId >= 0 && payout.WaveId == waveId && payout.Any;
+        }
+
         // ── Runtime state ─────────────────────────────────────────────────────
 
         private WaveSchedule _schedule;
@@ -398,6 +482,10 @@ namespace DeNelle.Village
             // business running at SubsystemRegistration. The reset itself happens on the first wave
             // kickoff of the session (EnsureDifficultySessionReset).
             s_difficultySessionReset = false;
+            // Same WO-139 #12 hazard for the wave-clear payout record: with domain reload
+            // disabled a stale wave-1 payout from the PREVIOUS play session would still match
+            // the id of this session's wave 1 and render spoils that were never banked here.
+            s_lastPayout = new WaveClearPayout(-1, 0, 0, 0, 0);
         }
 
         /// <summary>The phase the wave loop is in.</summary>
@@ -2530,6 +2618,12 @@ namespace DeNelle.Village
         /// </summary>
         private void AwardWaveResources(int waveId)
         {
+            // ARM THE RECORD FIRST, before any early return. Stamping the wave id with zero
+            // amounts is what makes staleness structurally impossible: from this line on,
+            // TryGetPayoutFor(waveId) answers for THIS wave and can never hand a presentation
+            // layer the previous wave's spoils, no matter which branch below returns.
+            s_lastPayout = new WaveClearPayout(waveId, 0, 0, 0, 0);
+
             if (!_awardResourcesOnWaveClear) return;
 
             var economy = EconomyService.Instance;
@@ -2570,6 +2664,14 @@ namespace DeNelle.Village
             if (wood <= 0 && iron <= 0 && food <= 0) return;
 
             economy.Grant(new ResourceCost(wood: wood, food: food, iron: iron));
+
+            // PUBLISH WHAT WAS BANKED — the same three integers Grant just took, captured on
+            // the line after the grant so the record and the wallet can never disagree. The
+            // wave-clear banner (EndStateVM.FromWaveClear) reads THIS; it never re-rolls.
+            s_lastPayout = new WaveClearPayout(waveId, wood, iron, food, 0);
+            FlowTrace.Step("Wave",
+                $"wave {waveId} payout RECORDED for the clear banner: wood={wood} iron={iron} food={food} " +
+                $"(x{scale:0.0##} scale) - presentation reads these, it never re-derives them.");
 
             // Brief on-victory loot toast (reuses the existing combat feedback if present).
             ShowRewardToast(wood, iron, food);
@@ -2629,7 +2731,23 @@ namespace DeNelle.Village
                      ?? t.GetMethod("ShowToast",
                             System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance,
                             null, new[] { typeof(string) }, null);
-                m?.Invoke(hud, new object[] { msg });
+                if (m == null)
+                {
+                    // §12, NO SILENT FAILURE. This is the line that should have existed since
+                    // WO-330: the live HUD (VillageHudController) declares NEITHER
+                    // ShowBanner(string) NOR ShowToast(string) — only
+                    // ShowWaveClearBanner(int,int,string) — so this reflection has ALWAYS
+                    // resolved null and `m?.Invoke` swallowed the whole reward announcement.
+                    // The reward moment now lives on the wave-clear end-state banner (fed by
+                    // s_lastPayout above); this toast stays a best-effort SECOND surface, but
+                    // it no longer disappears without saying so.
+                    FlowTrace.Once("Wave", "reward-toast-no-seam",
+                        "reward toast has NO seam on the live HUD (" + t.Name + " exposes neither " +
+                        "ShowBanner(string) nor ShowToast(string)) - the wave-clear banner is the " +
+                        "surface that tells the player what they earned. Message was: " + msg);
+                    return;
+                }
+                m.Invoke(hud, new object[] { msg });
             }
             catch (System.Exception e)
             {
@@ -2693,7 +2811,15 @@ namespace DeNelle.Village
             }
 
             if (totalAward > 0)
+            {
                 GameStateService.Instance?.AddCrystals(totalAward);
+                // Fold the crystal faucet into THIS wave's payout record (guarded on the id so
+                // a future caller outside CompleteWave cannot graft crystals onto another
+                // wave's line). AwardWaveResources always armed the id first, so the match
+                // holds on the normal path.
+                if (s_lastPayout.WaveId == waveId)
+                    s_lastPayout = s_lastPayout.WithCrystals(totalAward);
+            }
         }
 
         // =====================================================================

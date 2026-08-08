@@ -273,6 +273,33 @@ namespace DeNelle.Core.Catalog
         /// </summary>
         public float visualHeight = 0f;
 
+        /// <summary>
+        /// WO-928 (2026-08-08, owner felt-test "the L3 Archer Tower is lying on its side") — KEEP the
+        /// skinned model's OWN authored root rotation instead of flattening it to identity.
+        /// <para>THE DEFAULT (false) IS THE KNOWN-GOOD BEHAVIOUR AND MUST STAY THE DEFAULT.
+        /// VisualFactory.Skin resets an instantiated model's root to identity (DEF-232). That is
+        /// RIGHT for almost every structure here: most Tripo building FBXs instantiate at euler
+        /// (270,0,0) and the reset is exactly what CANCELS that. A handful of assets are the
+        /// opposite case — their native 270 IS the upright correction — and for those the reset both
+        /// lays the model down AND makes VisualFactory.Fit measure the SHORT axis to reach the height
+        /// target, so it ships sideways *and* oversized (one defect, not two).</para>
+        /// <para>ELIGIBILITY, read off the data rather than guessed: a row that authors a NON-ZERO
+        /// manual <see cref="CatalogEntry.orientation"/> is PERMANENTLY INELIGIBLE. Thirteen rows
+        /// carry a manual (-90,0,0) which StructureFactory.Create applies on top of the identity-reset
+        /// root; preserve the native 270 as well and the two COMPOSE to 180 — upside down. Only a row
+        /// whose correction lives in the ASSET, with nothing to apply from the row, may opt in.</para>
+        /// <para>SCOPE IS THE ROW, DELIBERATELY. The same flag was set for the whole structure CLASS
+        /// (on SkinOptions.Structure) earlier the same day and laid the entire town down; see the ⛔
+        /// block there for the captured trace. The single reader is StructureFactory.OptsFor.</para>
+        /// <para>VERIFYING A CHANGE HERE REQUIRES A RETURN-TO-TOWN PASS, NOT A FIRST LOAD: the first
+        /// town load seats buildings from the bake/injector path, and only re-entry (exit to a dungeon
+        /// and come back) rebuilds them through BaseLayoutLoader → StructureFactory.Create →
+        /// VisualFactory.Skin, the ONLY route that reads this field. That is why the class-wide flip
+        /// shipped unnoticed.</para>
+        /// JSON deserializes "preservePrefabRotation" straight in.
+        /// </summary>
+        public bool preservePrefabRotation = false;
+
         // --- Combat stats (Tower defs) — copied straight off DefenseTower's public fields ---
         public float         range     = 0f;
         public float         damage    = 0f;

@@ -208,9 +208,24 @@ namespace DeNelle.Village.UI
         private const float MaxPanelHalf = 0.47f;
         private const float MinPanelHalf = 0.14f;
 
+        // ── COMPACT BANNER GEOMETRY (the wave-clear / outpost variant) ────────────
+        /// <summary>Compact body-well TOP as a fraction of the banner panel — pulled below the
+        /// tall splash header band so the headline and the content can never overlap.</summary>
+        private const float CompactBodyTopY = 0.745f;
+        /// <summary>Compact body-well FLOOR. This is FrameCore's OWN art-measured well floor
+        /// (ElarionUiKit ZonesFor, case FrameCore: z.body = (0.055, 0.075, 0.945, 0.835)) — it
+        /// clears the frame's ornate bottom border. Used only when the banner shows no CTA at
+        /// all, to reclaim the close band the kit reserves for a Close this template hides.</summary>
+        private const float CompactBodyFloorY = 0.075f;
+
         /// <summary>Deterministic body-well height in reference px for the OWNED geometry path
         /// (0 = not owned; BuildBody then measures). Set by the geometry pass in Bind.</summary>
         private float _wellPx;
+
+        /// <summary>Compact banner only: the body well's height as a fraction of the PANEL,
+        /// captured once so the downward-growth block can re-solve <see cref="_wellPx"/>
+        /// against the grown panel instead of re-measuring a live rect.</summary>
+        private float _compactBodyFrac;
 
         /// <summary>Content-sized panel HALF-height (fraction of screen), solved in REAL PIXELS.
         /// The old body of this method summed fictional "units" (2.4 for an emblem, 1.1 per
@@ -439,9 +454,64 @@ namespace DeNelle.Village.UI
                 var hdr = chrome.layout.header;
                 hdr.anchorMin = new Vector2(hdr.anchorMin.x, 0.760f);   // was ~0.900
                 hdr.anchorMax = new Vector2(hdr.anchorMax.x, 0.985f);   // was ~0.972
-                if (chrome.layout.body != null && chrome.layout.body.anchorMax.y > 0.745f)
+                if (chrome.layout.body != null && chrome.layout.body.anchorMax.y > CompactBodyTopY)
                     chrome.layout.body.anchorMax =                       // body top clears the band
-                        new Vector2(chrome.layout.body.anchorMax.x, 0.745f);
+                        new Vector2(chrome.layout.body.anchorMax.x, CompactBodyTopY);
+
+                // ── COMPACT: RECLAIM THE DEAD CLOSE BAND ─────────────────────────────
+                // The SAME reclaim the full modal's owned-geometry pass performs above, valid
+                // for the SAME reason: Show() hides this template's shared Close (owner button
+                // law), so every pixel the kit reserved for it is dead space.
+                //
+                // HOW MUCH: BuildObsidianPanel's close-band reservation runs against the
+                // banner's BUILD-TIME height (0.30 of screen). On a 965 ref-px landscape canvas
+                // that is a 290px panel, so the fixed 132px Close box measures 0.456 of it, the
+                // footer band relocates to 0.40-0.53 and the body floor lands on the
+                // reservation's own 0.45 sanity clamp. The banner therefore handed its content
+                // 0.45..0.745 = 0.295 of the panel — 55% of a wave-clear banner reserved for a
+                // button that is switched off. At the growth clamp that is a 222px well, which
+                // seats exactly ONE spoils row; the F8-45 damage report has been rendering up
+                // to EIGHT into it (canon issue #28, the "body rows COMPRESSED" line).
+                //
+                // Reclaimed: the body floor drops to the frame art's OWN measured well floor
+                // (ZonesFor FrameCore z.body.y = 0.075 — not an invented number), giving
+                // 0.075..0.745 = 0.670 of the panel and a ~504px well at the clamp. That is the
+                // budget EndStateVM.CompactMaxSpoilRows is derived against.
+                //
+                // GATED ON "NO CTA AT ALL": when the banner carries the WO-672 Repair-All CTA
+                // that CTA is seated in chrome.layout.footer, which the reservation relocated
+                // into this same region — dropping the floor under it would put rows behind the
+                // button. That path keeps today's geometry, unchanged. THE FULL MODAL IS NOT
+                // TOUCHED: this whole branch is the `else` of `ownGeometry`.
+                bool compactNoCta = vm.Compact
+                                    && string.IsNullOrEmpty(vm.PrimaryLabel)
+                                    && string.IsNullOrEmpty(vm.CtaLabel);
+                if (vm.Compact && chrome.layout.body != null && chrome.root != null)
+                {
+                    var bdy = chrome.layout.body;
+                    if (compactNoCta)
+                    {
+                        bdy.anchorMin = new Vector2(bdy.anchorMin.x, CompactBodyFloorY);
+                        bdy.offsetMin = new Vector2(bdy.offsetMin.x, 0f);
+                        bdy.offsetMax = new Vector2(bdy.offsetMax.x, 0f);
+                    }
+
+                    // DETERMINISTIC well height, in the SAME reference-px space as the band
+                    // constants — the full modal's lesson (ElarionUiKit.cs:1014-1018): reading
+                    // rect.height on the creation frame can return RAW SCREEN pixels, which
+                    // BuildBody would then compare against reference-px band totals. Measured
+                    // off the body's OWN anchors, so it is correct on BOTH compact paths
+                    // (reclaimed floor, or the untouched CTA geometry).
+                    var rootRt0 = (RectTransform)chrome.root.transform;
+                    float panelFrac0 = Mathf.Max(0.05f, rootRt0.anchorMax.y - rootRt0.anchorMin.y);
+                    _compactBodyFrac = Mathf.Max(0.01f, bdy.anchorMax.y - bdy.anchorMin.y);
+                    _wellPx = _compactBodyFrac * _canvasH * panelFrac0;
+                    Canvas.ForceUpdateCanvases();
+                    FlowTrace.Step("EndState",
+                        $"compact banner geometry: body {bdy.anchorMin.y:0.###}-{bdy.anchorMax.y:0.###} " +
+                        $"({_compactBodyFrac:0.###} of a {(_canvasH * panelFrac0):0}px panel) = {_wellPx:0}px well, " +
+                        $"need={RequiredBodyPx(vm, _canvasH):0}px, closeBandReclaimed={compactNoCta}");
+                }
             }
 
             // Drop-zones (sprite-first contract: layout is null on the procedural
@@ -599,7 +669,9 @@ namespace DeNelle.Village.UI
             if (vm.Compact && chrome.root != null)
             {
                 Canvas.ForceUpdateCanvases();
-                float wellPx = rewardWell.rect.height;
+                // Prefer the well the reclaim pass SOLVED (reference px). Falls back to the
+                // live rect only on the CTA path, where no reclaim ran — unchanged behaviour.
+                float wellPx = _wellPx > 1f ? _wellPx : rewardWell.rect.height;
                 float needPx = RequiredBodyPx(vm, _canvasH);
                 if (wellPx > 1f && needPx > wellPx + 1f)
                 {
@@ -617,8 +689,15 @@ namespace DeNelle.Village.UI
                     {
                         rootRt.anchorMin = new Vector2(rootRt.anchorMin.x, y1 - grownH);
                         Canvas.ForceUpdateCanvases();
+                        // Keep the SOLVED well in step with the panel it was solved against —
+                        // otherwise BuildBody would measure the content against the PRE-growth
+                        // height and report a compression that no longer exists.
+                        if (_wellPx > 1f && _compactBodyFrac > 0f)
+                            _wellPx = _compactBodyFrac * _canvasH * grownH;
                         FlowTrace.Step("EndState",
-                            $"compact banner extended down for damage report: need={needPx:0}px well {wellPx:0}->{rewardWell.rect.height:0}px h {hNow:0.###}->{grownH:0.###}");
+                            $"compact banner extended down for its rows: need={needPx:0}px well {wellPx:0}->" +
+                            $"{(_wellPx > 1f ? _wellPx : rewardWell.rect.height):0}px h {hNow:0.###}->{grownH:0.###}" +
+                            (grownH >= y1 - 0.08f - 0.0005f ? " (AT THE GROWTH CLAMP)" : string.Empty));
                     }
                 }
             }
@@ -825,10 +904,27 @@ namespace DeNelle.Village.UI
             // under their rotated bbox, the rows under their icon. A screen that ships like that
             // is broken, and a Warn is exactly how it shipped unnoticed. Fail is loud, and the F8
             // harness captures it.
-            if (scale < 1f)
+            //
+            // EPSILON (owner captures 2026-08-08, twice: "need=412px well=412px scale=1").
+            // BOTH solves are SELF-FITTING: the full modal sets panelPx = (need + CanonCta) /
+            // BodyFracOfPanel and then derives wellPx back out of it, and the compact banner
+            // grows by exactly need/well — so when neither hits its clamp the well resolves to
+            // need to within float residue, and `scale < 1f` tripped a FAIL at scale 0.9997.
+            // That is why the captured line printed IDENTICAL need and well numbers: a real
+            // clamp leaves them different (a clamped well is visibly SHORTER than the need).
+            // A hairline residue is not "every band below its content size" — it is the solve
+            // landing on target. Fail below 0.995 (a real clamp lands far below that: the
+            // 8-row damage report measured 0.71, the F8-35 case 0.36); log the exact fit as a
+            // Step so the number is still on the record.
+            const float CompressFailBelow = 0.995f;
+            if (scale < CompressFailBelow)
                 FlowTrace.Fail("EndState",
                     $"body rows COMPRESSED to fit: need={totalPx:0}px well={wellH:0}px scale={scale:0.###} " +
                     "- the panel hit its screen-height clamp; every band is now below its own content size");
+            else if (scale < 1f)
+                FlowTrace.Step("EndState",
+                    $"body solved to an EXACT fit: need={totalPx:0.#}px well={wellH:0.#}px scale={scale:0.#####} " +
+                    "- float residue from the self-fitting solve, not a clamp");
             float y = 0f;
             foreach (var (px, build) in bands)
             {

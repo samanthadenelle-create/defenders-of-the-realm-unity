@@ -19,6 +19,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using DeNelle.Core.UI;
+using DeNelle.Core.Diagnostics;   // Guard / FlowTrace — §12: the banner never breaks the wave loop
 
 namespace DeNelle.Village.UI
 {
@@ -338,16 +339,34 @@ namespace DeNelle.Village.UI
         }
 
         /// <summary>Wave-clear RESULTS banner (replaces WaveCelebrationManager's IMGUI
-        /// toast / prefab text): compact, non-blocking, auto-dismissing. F8-45 (owner
-        /// 2026-07-11): carries the DAMAGE REPORT — one spoils row per damaged/destroyed
-        /// structure (worst-first, capped by <see cref="WaveDamageReport.MaxRows"/>),
+        /// toast / prefab text): compact, non-blocking, auto-dismissing.
+        ///
+        /// OWNER FELT-TEST 2026-08-08 ("I'm not seeing rewards after waves. Shouldn't we have
+        /// a rewards banner?"): this banner now leads with THE EARN BEAT — the resources the
+        /// wave actually banked, read from <see cref="WaveManager.TryGetPayoutFor"/> and never
+        /// re-derived. Wave rewards were paid all along (WaveManager.AwardWaveResources /
+        /// AwardWaveCrystals) with no surface at all: every OnWaveCleared listener in the tree
+        /// is persistence / quests / dialogue / tutorial / audio / pose, and the one
+        /// presentation attempt (WaveManager.ShowRewardToast) reflected for
+        /// "ShowBanner(string)" / "ShowToast(string)", neither of which VillageHudController
+        /// declares — so it resolved null and no-opped silently, every wave, forever.
+        ///
+        /// Reward rows come FIRST (the beat the player is owed), then the damage report, both
+        /// inside the ONE hard row budget (<see cref="CompactMaxSpoilRows"/>) this banner can
+        /// seat without EndStateView.BuildBody having to compress every band.
+        ///
+        /// F8-45 (owner 2026-07-11): carries the DAMAGE REPORT — one spoils row per
+        /// damaged/destroyed structure (worst-first; <see cref="WaveDamageReport.MaxRows"/>
+        /// caps what is collected, the row budget caps what is SHOWN and the subtitle states
+        /// the shortfall),
         /// with the IN-KIND MATERIALS repair cost (owner ruling 2026-07-11: damage
         /// fraction x the row's own catalog build cost; destroyed rows read "Rebuild"
         /// at the full build cost; crystals are never charged) where a
         /// WallRepairController exists to price it, and the production hit for damaged
         /// collectors (accrual scales with HP). State is carried by TEXT
-        /// ("damaged 40%" / "DESTROYED"), never color alone (colorblind law). A clean
-        /// wave keeps today's 4s row-less banner unchanged.</summary>
+        /// ("damaged 40%" / "DESTROYED" / a leading "+" on every earned amount), never color
+        /// alone (colorblind law). A wave that paid nothing AND took no damage keeps today's
+        /// 4s row-less banner, unchanged.</summary>
         public static EndStateVM FromWaveClear(int waveNumber)
         {
             var vm = new EndStateVM
@@ -365,8 +384,32 @@ namespace DeNelle.Village.UI
             };
 
             // Damage report (model-side aggregation; this factory is the MVVM adapter).
-            foreach (var e in WaveDamageReport.Collect())
+            // COLLECTED FIRST, BUILT SECOND: the row budget below has to know how many damage
+            // entries exist before it decides how many reward rows it may spend.
+            var damage = Guard.Try<List<WaveDamageReport.Entry>>(
+                "EndState", "wave " + waveNumber + " damage report",
+                () => WaveDamageReport.Collect(), null);
+            int damageAvailable = damage != null ? damage.Count : 0;
+
+            // ── THE EARN BEAT (owner felt-test 2026-08-08: "I'm not seeing rewards after
+            //    waves. Shouldn't we have a rewards banner?") ─────────────────────────────
+            // Rewards were ALWAYS being paid (WaveManager.AwardWaveResources /
+            // AwardWaveCrystals) and NOTHING rendered them. These rows read the integers
+            // WaveManager BANKED (WaveManager.TryGetPayoutFor — keyed on this wave's id so a
+            // previous wave's spoils can never leak in); the payout is a random roll, so a
+            // re-derivation here would print numbers the wallet never received.
+            // Guarded (§12): a malformed payout must never take the wave loop down with it.
+            int rewardRows = 0;
+            Guard.Try("EndState", "wave " + waveNumber + " reward rows",
+                () => { rewardRows = AppendWavePayoutRows(vm, waveNumber, damageAvailable); });
+
+            // Damage rows fill whatever the reward rows left of the compact budget. When any
+            // damage exists the reward side is capped at MaxRows-1, so this is always >= 1.
+            int damageBudget = Mathf.Max(0, CompactMaxSpoilRows - rewardRows);
+            int damageRows = Mathf.Min(damageAvailable, damageBudget);
+            for (int i = 0; i < damageRows; i++)
             {
+                var e = damage[i];
                 if (e == null) continue;
                 int pct = Mathf.Clamp(Mathf.RoundToInt(e.DamageFraction * 100f), 1, 100);
                 string state;
@@ -396,13 +439,32 @@ namespace DeNelle.Village.UI
                 });
             }
 
-            if (vm.Spoils.Count > 0)
+            // The subtitle is the ONE place the banner's overall verdict is stated, and it is
+            // now keyed on DAMAGE ROWS, not on Spoils.Count — a reward-only banner previously
+            // would have inherited "it took damage" simply because it had rows.
+            // Never colour-only (colourblind law): the verdict is the words themselves.
+            if (damageRows > 0)
             {
-                // The report needs reading time: 4s -> 8s, and the subtitle names the hit
-                // so the banner never reads as an all-clear over a damage list.
                 vm.Subtitle = "The realm holds - but it took damage.";
-                vm.AutoDismissSeconds = 8f;
+                vm.AutoDismissSeconds = 8f;   // a report needs reading time
+            }
+            else if (rewardRows > 0)
+            {
+                vm.Subtitle = "The realm holds. Spoils claimed.";
+                vm.AutoDismissSeconds = 6f;
+            }
 
+            // TRUNCATION IS STATED, NEVER SILENT. WaveDamageReport hands back up to MaxRows (8)
+            // entries; the compact banner can legibly seat 4 rows TOTAL (see the budget note on
+            // CompactMaxSpoilRows). Dropping the tail without saying so would read as "those
+            // buildings are fine". An explicit '\n' segment is used because EndStateView's
+            // SubtitleLines measures each segment independently — the panel solve therefore
+            // BUDGETS this second line instead of discovering it after layout.
+            if (damageAvailable > damageRows)
+                vm.Subtitle += "\nShowing " + damageRows + " of " + damageAvailable + " damaged structures.";
+
+            if (damageRows > 0)
+            {
                 // WO-672 Slice E (owner 2026-07-11: "i saw a damage report but could not
                 // repair"): the CTA seat returns for THIS one case — "Repair All" wired to
                 // WallRepairController.RepairAll (the one wallet/repair authority; this
@@ -428,6 +490,141 @@ namespace DeNelle.Village.UI
                 }
             }
             return vm;
+        }
+
+        // ── THE COMPACT BANNER'S ROW BUDGET (derived, not picked) ─────────────────────
+        //
+        // Canon issue #28 is real and it fires on THIS template: EndStateView.BuildBody
+        // uniform-compresses every band when the content is taller than the body well, and
+        // logs "body rows COMPRESSED to fit". A wave banner that quietly crushed itself would
+        // be a worse defect than the missing rewards it is fixing, so the ceiling is computed
+        // here rather than discovered on device.
+        //
+        // THE ARITHMETIC (all constants read at source, this session):
+        //   Compact banner frame  = y 0.56 .. 0.86, grows DOWN, capped at y1-0.08 = 0.78
+        //                           of screen height          (EndStateView.Show / the
+        //                           compact extension block)
+        //   Body well             = 0.075 .. 0.745 of the panel = 0.670 of it
+        //                           (ElarionUiKit ZonesFor FrameCore z.body.y = 0.075, top
+        //                           clamped to 0.745 by EndStateView's compact branch — with
+        //                           the dead close band reclaimed, see EndStateView)
+        //   Post-scale canvas H   = 965 ref px on BOTH the owner's 2670x1200 desktop and a
+        //                           2400x1080 Seeker (CanvasScaler match 0.5 -> the same
+        //                           1.24 / 1.12 scale factors land within 1px of each other)
+        //   => body well AT THE CLAMP = 0.670 x 0.78 x 965 = ~504 ref px
+        //
+        //   Band costs (EndStateView): Emblem 64, Subtitle 60 PER WRAPPED LINE, Row 64,
+        //   plus an 8px gap BETWEEN bands.
+        //   Wave banner BANDS = emblem(1) + subtitle(1 band, L wrapped lines) + R rows,
+        //   so n = R + 2 bands and (n-1) = R + 1 gaps:
+        //       need = 64 + 60L + 64R + 8(R + 1)
+        //   Solving need <= 504:
+        //       L=1 -> R <= 5.3     L=2 -> R <= 4.4
+        //   So FOUR rows is the largest count that survives BOTH a one-line and a two-line
+        //   subtitle (worst case L=2, R=4: 64 + 120 + 256 + 40 = 480 <= 504, 24px spare).
+        //
+        // WHAT THIS REPLACED: WaveDamageReport hands back up to MaxRows = 8 entries and the
+        // old code rendered every one. Eight rows demand 64 + 60 + 512 + 72 = 708 px into a
+        // well that could not exceed 504 -> scale 0.71, i.e. the F8-35 class the extension
+        // block itself was written to avoid. The cap is therefore a FIX to the pre-existing
+        // damage path as well as the budget for the new reward rows, and the shortfall is
+        // stated in the subtitle instead of silently dropped.
+        /// <summary>Hard ceiling on spoils ROWS for the compact wave-clear banner. See the
+        /// derivation above — four rows is what the banner can seat at its growth clamp
+        /// without BuildBody having to compress every band below its own content size.</summary>
+        private const int CompactMaxSpoilRows = 4;
+
+        /// <summary>
+        /// Appends the wave's EARNED-RESOURCE rows and returns how many it added.
+        ///
+        /// SOURCE OF TRUTH: <see cref="WaveManager.TryGetPayoutFor"/> — the integers the wave
+        /// loop actually banked, keyed on <paramref name="waveNumber"/>. Returns 0 when this
+        /// wave paid nothing (the staggered WO-361 intervals mean many waves legitimately
+        /// don't), and the banner then reads exactly as it does today.
+        ///
+        /// ROW SHAPE: one row per resource while they fit — short label left, short "+N"
+        /// right, which is the column split BuildSpoilRow is built for (label gets ~0.62 of
+        /// the plate, the amount ~0.34). When the payout has MORE lines than the budget
+        /// allows, the TAIL folds into a single combined row rather than being dropped: no
+        /// earned resource ever goes unmentioned, and no cell ever carries a string long
+        /// enough to be shrunk past the font floor.
+        ///
+        /// Icons are deliberately left NULL: EndStateView.BuildSpoilRow then resolves the
+        /// CONCEPT icon from the row's own label ("wood"/"iron"/"food"/"crystals" are all
+        /// keyed in concept-icons.json) — the same data-decides path FromBattleVictory's Iron
+        /// row and FromRaidVictory's loot rows use, and the reason those rows render real
+        /// currency PNGs instead of a placeholder square.
+        /// </summary>
+        private static int AppendWavePayoutRows(EndStateVM vm, int waveNumber, int damageAvailable)
+        {
+            if (vm == null) return 0;
+            if (!WaveManager.TryGetPayoutFor(waveNumber, out var pay))
+            {
+                FlowTrace.Step("EndState",
+                    $"wave {waveNumber} clear banner: no payout recorded for this wave " +
+                    "(staggered intervals - nothing was due), reward rows omitted.");
+                return 0;
+            }
+
+            var lines = new List<KeyValuePair<string, int>>(4);
+            if (pay.Wood     > 0) lines.Add(new KeyValuePair<string, int>("Wood",     pay.Wood));
+            if (pay.Iron     > 0) lines.Add(new KeyValuePair<string, int>("Iron",     pay.Iron));
+            if (pay.Food     > 0) lines.Add(new KeyValuePair<string, int>("Food",     pay.Food));
+            if (pay.Crystals > 0) lines.Add(new KeyValuePair<string, int>("Crystals", pay.Crystals));
+            if (lines.Count == 0) return 0;
+
+            // THE SPLIT: when the wave also took damage, the damage list keeps at least one
+            // row, so the reward side may claim at most CompactMaxSpoilRows-1. A clean wave
+            // gives the whole budget to the spoils.
+            int budget = Mathf.Max(1, damageAvailable > 0 ? CompactMaxSpoilRows - 1 : CompactMaxSpoilRows);
+
+            if (lines.Count <= budget)
+            {
+                foreach (var l in lines) vm.Spoils.Add(ResourceRow(l.Key, l.Value));
+                FlowTrace.Step("EndState",
+                    $"wave {waveNumber} clear banner: {lines.Count} reward row(s) from the BANKED payout " +
+                    $"(wood={pay.Wood} iron={pay.Iron} food={pay.Food} crystals={pay.Crystals}), " +
+                    $"budget={budget} of {CompactMaxSpoilRows}.");
+                return lines.Count;
+            }
+
+            // Overflow (reachable: a live ServerConfig event pays crystals EVERY wave, so a
+            // wave divisible by 2/3/4 with damage hits four resource lines against a budget of
+            // three). Emit the first budget-1 rows individually, then ONE combined tail row.
+            for (int i = 0; i < budget - 1; i++)
+                vm.Spoils.Add(ResourceRow(lines[i].Key, lines[i].Value));
+
+            var tailLabel = new System.Text.StringBuilder();
+            var tailAmount = new System.Text.StringBuilder();
+            for (int i = budget - 1; i < lines.Count; i++)
+            {
+                if (tailLabel.Length > 0) { tailLabel.Append(" + "); tailAmount.Append(", "); }
+                tailLabel.Append(lines[i].Key);
+                tailAmount.Append('+').Append(ElarionUi.CompactNumber(lines[i].Value));
+            }
+            vm.Spoils.Add(new SpoilRowVM
+            {
+                // No Icon: the combined label resolves no single concept, so BuildSpoilRow's
+                // generic kit fallback (a chest) stands in — apt for "mixed spoils".
+                Label = tailLabel.ToString(),
+                Amount = tailAmount.ToString(),
+            });
+            FlowTrace.Step("EndState",
+                $"wave {waveNumber} clear banner: {lines.Count} paid resources folded into {budget} row(s) " +
+                $"(budget {budget} of {CompactMaxSpoilRows}, damage entries={damageAvailable}) - the tail is " +
+                "COMBINED, never dropped.");
+            return budget;
+        }
+
+        /// <summary>One earned-resource row. ASCII only, and the "+" prefix (not colour) is
+        /// what marks it as a gain — the damage rows on the same banner carry no "+".</summary>
+        private static SpoilRowVM ResourceRow(string label, int amount)
+        {
+            return new SpoilRowVM
+            {
+                // WO-697: every reward number renders through the ONE kit formatter.
+                Label = label, Amount = "+" + ElarionUi.CompactNumber(amount),
+            };
         }
     }
 }
