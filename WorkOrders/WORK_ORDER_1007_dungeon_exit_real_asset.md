@@ -1,6 +1,6 @@
 # WORK ORDER 1007 — A real dungeon EXIT asset (retire the primitive emerald archway)
 
-**Status:** SPEC — READY pending ONE owner creative pick (§4). Everything else is settled.
+**Status:** READY TO IMPLEMENT (owner picked §4 = Option C, freestanding decorated arch, 2026-08-08)
 **Minted:** 2026-08-08 (UI seat, owner directive) — number from `CLI_LANES_WO_NUMBERS.md` banner (UI block, bumped 1007 → 1008 in the same edit)
 **Lane:** Dungeons / Art-integration. Presentation only — swap the exit's built visual for a real prop.
 **Provenance:** owner felt-test 2026-08-08, verbatim: *"in dungeons this is the exit. It needs a real asset not something stupid like this. look into full assets in docs we have a collection and design something as work order."*
@@ -64,10 +64,15 @@ the doorway clears the ~2.6m hero arch the current primitives span.
 
 ---
 
-## 4. ⚠ THE ONE OWNER CREATIVE PICK — which exit archetype
+## 4. THE EXIT ARCHETYPE — OWNER PICKED: Option C, freestanding decorated arch (2026-08-08)
 
-I recommend **Option A** and will finalise the WO the moment the owner picks. All three keep the exact
-same walk-in trigger + beacon behaviour (§5); only the mesh differs.
+> **BUILD OPTION C.** `wall_arched.fbx` + two `pillar_decorated.fbx` as a freestanding monument arch, with a
+> green-gold glow plane filling the opening and the WO-1008 beacon light above it. Closest to the current
+> silhouette (so the walk-in trigger + `ResolveExitPosition` do not move), most "portal-like," reads as a
+> way out on its own with minimal surrounding architecture. Keep it emerald/green-gold — DISTINCT from the
+> purple ENTRY portal (WO-869). (Rejected: A lit doorway, B stairs-up.)
+
+All options below kept the same walk-in trigger + beacon behaviour (§5); only the mesh differs.
 
 **Option A — Lit stone DOORWAY / portal (recommended).**
 `wall_doorway_sides.fbx` as the frame, flanked by two `torch_lit.fbx`, a **green-gold glow plane** filling
@@ -149,7 +154,7 @@ silhouette, most "portal-like," least architectural context needed.
 
 ## 9. Open questions for the owner
 
-1. **§4 — pick the archetype (A doorway / B stairs-up / C arch).** Default = A.
+1. RESOLVED (owner 2026-08-08): **§4 = Option C, freestanding decorated arch.** See §4.
 2. **Keep the floating "EXIT" text?** With a real, self-evident exit prop + beacon, the text may be
    redundant. Options: keep it (corrected, smaller), keep only the Interact-button prompt, or drop the
    world label entirely. Recommend: keep a small corrected label for the from-across-the-room read.
