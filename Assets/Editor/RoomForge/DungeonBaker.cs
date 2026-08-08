@@ -571,6 +571,7 @@ namespace DeNelle.Editor.RoomForge
             // Tight enough that a hit means "on the ramp", not "on the floor underneath it".
             const float Tight = 0.35f;
             int carved = 0, dead = 0, internallyWhole = 0;
+            int bottomJoins = 0, topJoins = 0, noRoomAbove = 0;
             var firstDead = "";
 
             foreach (var r in ramps)
@@ -610,6 +611,29 @@ namespace DeNelle.Editor.RoomForge
                         p.status == NavMeshPathStatus.PathComplete)
                         internallyWhole++;
                 }
+
+                // ── WHICH END IS BROKEN? ──────────────────────────────────────
+                //  A ramp can be a perfect walkable strip and still connect nothing, which is
+                //  exactly what dg_bonecrypt shows: 2 of 4 ramps whole, zero vertical
+                //  reachability. So test each seam SEPARATELY against a floor, because "the
+                //  stairs don't work" is three different bugs wearing one symptom.
+                //
+                //  BOTTOM joins the ramp's OWN room (the _Up room owns the flight and stands on
+                //  its own floor). TOP joins the room one floor above - found by origin height
+                //  rather than by walking the graph, because the baker does not hold the mate
+                //  pairing here and an approximate answer is enough to say WHICH END.
+                var ownRoom = FindOwningRoom(r);
+                if (ownRoom != null)
+                {
+                    if (bOk && SamplePosition(ownRoom.position, out var ownFloor))
+                        bottomJoins += Reaches(bHit.position, ownFloor) ? 1 : 0;
+
+                    var above = FindRoomNearHeight(root, tHit.position.y, ownRoom);
+                    if (tOk && above != null && SamplePosition(above.position, out var upFloor))
+                        topJoins += Reaches(tHit.position, upFloor) ? 1 : 0;
+                    else if (tOk && above == null)
+                        noRoomAbove++;
+                }
             }
 
             if (dead == ramps.Count)
@@ -627,8 +651,60 @@ namespace DeNelle.Editor.RoomForge
             else
                 FlowTrace.Step(Sys,
                     $"RAMP CARVE: all {ramps.Count} ramp(s) carve navmesh; {internallyWhole}/{ramps.Count} are " +
-                    "walkable end-to-end along their own length. The ramps EXIST as navmesh - so the break is " +
-                    "the SEAM to the floors, not the ramp. Next: whether the bottom joins the lower floor.");
+                    "walkable end-to-end along their own length.");
+
+            // The seam verdict — the line that says WHICH END to fix.
+            FlowTrace.Step(Sys,
+                $"RAMP SEAMS: bottom->own floor {bottomJoins}/{ramps.Count} | " +
+                $"top->floor above {topJoins}/{ramps.Count}" +
+                (noRoomAbove > 0 ? $" ({noRoomAbove} had no room at the top's height)" : "") +
+                " -- 0 bottoms means the flight never meets the floor it stands on; 0 tops means it " +
+                "arrives at a landing it cannot step onto; both non-zero with the dungeon still " +
+                "PathPartial would mean the break is somewhere other than the stair.");
+        }
+
+        /// <summary>Nearest ancestor carrying <see cref="RoomPrefabMeta"/> — the room a ramp lives in.</summary>
+        private static Transform FindOwningRoom(Transform t)
+        {
+            for (var p = t; p != null; p = p.parent)
+                if (p.GetComponent<RoomPrefabMeta>() != null) return p;
+            return null;
+        }
+
+        /// <summary>
+        /// The room whose origin sits closest to <paramref name="y"/>, excluding
+        /// <paramref name="skip"/>. Found by HEIGHT rather than by walking the mate graph: the
+        /// baker does not hold the pairing at this point, and for a "which end is broken" readout
+        /// an approximate neighbour is sufficient. Tolerance is half a floor so it cannot pick a
+        /// room two levels away.
+        /// </summary>
+        private static Transform FindRoomNearHeight(Transform root, float y, Transform skip)
+        {
+            Transform best = null;
+            float bestDy = DungeonBakerChecks.FloorSeparationY * 0.5f;
+            foreach (var m in root.GetComponentsInChildren<RoomPrefabMeta>(true))
+            {
+                if (m == null || m.transform == skip) continue;
+                float dy = Mathf.Abs(m.transform.position.y - y);
+                if (dy < bestDy) { bestDy = dy; best = m.transform; }
+            }
+            return best;
+        }
+
+        private static bool SamplePosition(Vector3 at, out Vector3 hit)
+        {
+            // Generous here on purpose — this is finding a room's FLOOR, not proving a ramp
+            // carved, so snapping down to the nearest walkable surface is the desired behaviour.
+            if (NavMesh.SamplePosition(at, out var h, 6f, NavMesh.AllAreas)) { hit = h.position; return true; }
+            hit = Vector3.zero;
+            return false;
+        }
+
+        private static bool Reaches(Vector3 from, Vector3 to)
+        {
+            var p = new NavMeshPath();
+            return NavMesh.CalculatePath(from, to, NavMesh.AllAreas, p) &&
+                   p.status == NavMeshPathStatus.PathComplete;
         }
 
         private static GameObject LoadRoomPrefab(string prefabStem)
