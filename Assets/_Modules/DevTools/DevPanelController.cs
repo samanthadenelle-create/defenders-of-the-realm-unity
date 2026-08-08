@@ -220,8 +220,24 @@ namespace DeNelle.DevTools
             // can dismiss the console and opening it closes any other open panel.
             if (_panelHandle == null)
                 _panelHandle = PanelMgr.Register("DevConsole", Close, () => _isOpen);
+
+            // WO-928/owner ruling 2026-08-08: the on-screen DEV chips are gone
+            // (ff.devresourcetool now defaults OFF everywhere), so Settings is the door in.
+            // Registering the id here rather than exposing the type keeps the seam clean:
+            // DeNelle.Settings references Core only and never DevTools, and because THIS
+            // assembly is compiled out of release builds, nothing registers the id there and
+            // PanelRouter.IsRegistered stays false - which is what lets the Settings entry hide
+            // itself instead of offering a button that does nothing. Same reflection-free
+            // pattern RealmMapPanel uses.
+            DeNelle.Core.UI.PanelRouter.Register(DeNelle.Core.UI.PanelId.DevPanel, OpenFromRouter);
+
             SetOpen(_openOnStart);
         }
+
+        /// <summary>Router entry: force the console OPEN (never a toggle). A Settings row that
+        /// sometimes closes the thing it just opened is the kind of affordance that reads as
+        /// broken, and the router's contract is "open this panel".</summary>
+        private void OpenFromRouter() => SetOpen(true);
 
         private void OnDisable()
         {
@@ -231,6 +247,11 @@ namespace DeNelle.DevTools
             // Clear our slot if we were the open panel, so we never leave a stale
             // "open" record that suppresses world prompts after we're gone.
             if (_panelHandle != null) PanelMgr.NotifyClosed(_panelHandle);
+
+            // Symmetry with OnEnable. A router id left registered against a destroyed
+            // controller is a Settings button that survives its own panel and throws on tap.
+            DeNelle.Core.UI.PanelRouter.Unregister(DeNelle.Core.UI.PanelId.DevPanel, OpenFromRouter);
+
             _bound = false;
         }
 

@@ -314,8 +314,21 @@ namespace DeNelle.Core
         // about chips appearing in DEVICE captures, and Android/iOS stay OFF, so the Seeker shots
         // and any store APK are unaffected. Desktop is where she iterates and where F8 already
         // works from the keyboard, so the DEV chip earns its space there.
+        // OWNER RULING 2026-08-08 (third pass): "let's go ahead and remove the dev flag on the left
+        // side, and let's hide the dev panel ... let's stick it under settings."
+        // Default OFF EVERYWHERE, desktop included.
+        //
+        // ⚠ THIS IS NOT A REVERSAL OF THE 08-07 SECOND PASS, and the difference is the whole point.
+        // That pass turned it ON for desktop because turning it OFF had taken away her only way IN;
+        // the chip was paying for itself as an access route. This pass removes the chip AND ADDS THE
+        // DOOR: DevPanel is reachable from Settings (SettingsController), so access survives without
+        // anything sitting in shot. Flipping the flag alone would have re-created the exact problem
+        // the second pass existed to fix - which is why the two changes ship together, not apart.
+        //
+        // ONE SWITCH, still: OwnerDevToolsOverlay gates on this same flag (:88), so both DEV chips
+        // go together. F8 capture is untouched.
         // Still overridable either way: ff.devresourcetool = 0 hides it, = 1 forces it on device.
-        public static bool DevResourceTool => Get("devresourcetool", defaultOn: IsDesktop);
+        public static bool DevResourceTool => Get("devresourcetool", defaultOn: false);
 
         /// <summary>MOBILE FLAG BUTTON (owner felt-tests on Android and CANNOT press F8 - no keyboard).
         /// Gates the on-screen tap-to-capture chip <see cref="DeNelle.Core.Dev.FlagCaptureButton"/>, the

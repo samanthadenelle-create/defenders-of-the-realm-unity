@@ -249,6 +249,25 @@ namespace DeNelle.Settings
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Red,
                 new Vector2(0.52f, y - Frac(120f)), new Vector2(0.94f, y), OnResetClicked);
 
+            // ── Developer (owner ruling 2026-08-08) ──────────────────────────
+            // "remove the dev flag on the left side, and let's hide the dev panel ... let's stick it
+            // under settings." The on-screen DEV chips are gone (ff.devresourcetool defaults OFF
+            // everywhere now) and this is the replacement door, so access survives without anything
+            // sitting in shot during a capture.
+            //
+            // GATED ON IsRegistered, NOT on a build symbol. DeNelle.DevTools is compiled out of
+            // release builds, so in a store APK nothing registers PanelId.DevPanel and this section
+            // never renders - no dead button, and no #if in a settings screen. Settings still
+            // references Core only; it never learns that DevTools exists.
+            if (PanelRouter.IsRegistered(PanelId.DevPanel))
+            {
+                y = Caption(body, "Developer", y);
+                ElarionUiKit.BuildObsidianButton(body, "Dev Panel",
+                    ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
+                    new Vector2(0.06f, y - Frac(120f)), new Vector2(0.48f, y), OnDevPanelClicked);
+                y -= Frac(120f);
+            }
+
             BuildSelectorButtons();
             _modal.canvas.SetActive(false);   // built hidden; Open shows it
         }
@@ -466,6 +485,14 @@ namespace DeNelle.Settings
         {
             Close();
             PanelRouter.Open(PanelId.GameGuide);
+        }
+
+        /// <summary>Opens the developer console. Mirrors the Game Guide route exactly - close
+        /// Settings first so the single-modal arbiter is not asked to hold two panels open.</summary>
+        private void OnDevPanelClicked()
+        {
+            Close();
+            PanelRouter.Open(PanelId.DevPanel);
         }
 
         // =====================================================================

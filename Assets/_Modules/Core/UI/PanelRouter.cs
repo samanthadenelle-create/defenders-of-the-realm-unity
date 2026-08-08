@@ -98,6 +98,16 @@ namespace DeNelle.Core.UI
         /// opens (owner ruling Q10+Q13, 2026-08-06); it SUPERSEDES the old ObsidianQueueHud modal
         /// and the undiscoverable Builders-chip double-tap.</summary>
         Manage = 16,
+        /// <summary>The developer console (DevPanelController). Registered ONLY by
+        /// <c>DeNelle.DevTools</c>, which is compiled out of release builds — so in a store APK
+        /// nothing registers this id and <see cref="IsRegistered"/> returns false, which is what lets
+        /// the Settings entry hide itself rather than offering a dead button.
+        ///
+        /// Owner ruling 2026-08-08: "remove the dev flag on the left side, and let's hide the dev
+        /// panel ... let's stick it under settings." The on-screen DEV chips are gone
+        /// (ff.devresourcetool now defaults OFF everywhere); this id is the replacement door, so
+        /// access survives without anything sitting in shot. Append-only: values are load-bearing.</summary>
+        DevPanel = 17,
     }
 
     /// <summary>

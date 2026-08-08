@@ -1,7 +1,7 @@
 {
-  "version": 12,
+  "version": 13,
   "_heightCadence": "OWNER RULING 2026-08-05 (verbatim): 'take whatever the y height that we use across the board, we're gonna take that as y and make this maybe one point five or one point two higher. It's only gonna be half as wide as the diameter of any of the houses. I want all of the other structures to stay within that cadence. I want all of them to be relatively the same size. Wide heights, all of that should be similar. Doesn't have to be exact, but it must be similar, all scaled to the same point.' ONE FAMILY, NOT ONE NUMBER. The dial is repo.heightMul against StructureFactory.YHeightVariable (4 m base). The fit is a UNIFORM scale, so heightMul moves HEIGHT AND FOOTPRINT TOGETHER: BuildModeController claims grid cells from StructureFactory.MeasureUprightFootprintMetres (the height-fitted model's XZ bounds), never from placement.footprint, which is only the prefab-missing fallback. There is no width dial and none is needed. GROUPS: (1) BUILDING BASE 1.0 = 4.0 m: houses, production, vendors, storage containers, collectors, civic. This is the WIDTH REFERENCE the ruling measures against; House_Medieval_Medium fits to 5.562 m across = a 2x2 claim at the 3 m cell. (2) TOWER 1.2 = 4.8 m: reads 20 percent taller than a house and 2.778 m across = 49.9 percent of a house diameter, exactly the ruling's 'half as wide', and a 1x1 claim. 1.2 is the OWNER-RULED anchor from commit 0ac59581 (archer tower); on 2026-08-05 the rest of the tower class came off the old WO-764 1.25 onto it, so no tower is an outlier against the anchor any more. (3) SIEGE ENGINE 0.75 = 3.0 m: tower_catapult and tower_siege_tower. Machines, not architecture, so they sit deliberately UNDER the house line and read as equipment; it also keeps the wall-walk Sky Ballista from out-topping the towers once stacked on a wall. (4) LANDMARK 1.25 = 5.0 m: arcane-tower (Cathedral of Magic) ONLY. The single apex of the town, which the ruling's 'relatively the same size, doesn't have to be exact' allows for one building. (5) DECORATION, well under the family: deco_torch 0.35 = 1.4 m. EXCEPTION, NOT A CADENCE VALUE: collector_farm 1.4. heightMul fits BOUNDS, so a spindly silhouette reads smaller than a boxy one at the same number; the farm's windmill blades inflate its Y bounds and 1.4 is the owner felt-report compensation from commit 31b41d19 that makes its BODY read at the 4 m base. Do NOT normalize it to 1.0 - that re-ships the shrunk farm the owner already reported. DELIBERATELY LEFT UNAUTHORED: wall_wood, wall_stone and gate_stone stay on the 1.0 base. See their per-row _heightNote - lowering a wall narrows it by the same factor and opens pathable GAPS in already-saved wall runs, which is a save-compat break rather than a visual tweak. TIERS 2 AND 3 NEED NO KEYS: ReskinForLevel re-fits every tier model through the same OptsFor/EffectiveVisualHeight call, so an upgrade inherits its row's heightMul automatically; there are no per-level height fields anywhere in RepoProps.",
-  "notes": "Build-mode structure catalog \u2014 DATA-DRIVEN. Add a row here (+ keep the Resources/Data/Canonical copy byte-equal) and it flows into CatalogRegistry at startup via CatalogBootstrap. 'type' / 'mustSitOn' / 'navSurface' / 'element' are enum NAMES (StringEnumConverter). 'visualPrefabPath' is a Resources-relative path (LogWarning-safe on miss per CLAUDE.md \u00a74). 'behaviorId' is resolved to a Village component by StructureFactory.AttachBehavior \u2014 only DefenseTower / WallSegment / CrystalMine / Gate are wired; null = inert decoration. S4: 'repo.cost' is the multi-resource build cost (wood/food/iron/crystals); it is charged + refunded through the persisted ResourceLedger (EconomyService). When 'cost' is omitted / all-zero, placement falls back to charging 'buildCost' Crystals (back-compat). S5 (the CoC upgrade sink): 'repo.maxLevel' (default 1 = not upgradeable; ceiling 3 = the StructureTierVisual tier cap) is the highest level the UPGRADE verb can reach; 'repo.upgradeCost' is an optional per-step multi-resource table indexed by the level being upgraded TO minus 2 (entry [0] = L1->L2, [1] = L2->L3). When 'upgradeCost' is omitted, the upgrade cost falls back to the build 'cost' scaled by the level being left (L1->L2 = 1x, L2->L3 = 2x). StructureTierVisual steps the look (scale + bronze/silver/gold accent); DefenseTower range/damage and WallSegment toughness step the stats. v5 (StructureSingleton v2, owner only-ever-one ruling): 'repo.bakedTwins' lists the legacy baked scene-root GameObject names that REPRESENT a singleton row (twin standdown/resurface + IsBuilt, enforced generically by StructureSingleton with zero per-row code); null/absent = none; only meaningful with 'repo.singleton': true.",
+  "notes": "Build-mode structure catalog — DATA-DRIVEN. Add a row here (+ keep the Resources/Data/Canonical copy byte-equal) and it flows into CatalogRegistry at startup via CatalogBootstrap. 'type' / 'mustSitOn' / 'navSurface' / 'element' are enum NAMES (StringEnumConverter). 'visualPrefabPath' is a Resources-relative path (LogWarning-safe on miss per CLAUDE.md §4). 'behaviorId' is resolved to a Village component by StructureFactory.AttachBehavior — only DefenseTower / WallSegment / CrystalMine / Gate are wired; null = inert decoration. S4: 'repo.cost' is the multi-resource build cost (wood/food/iron/crystals); it is charged + refunded through the persisted ResourceLedger (EconomyService). When 'cost' is omitted / all-zero, placement falls back to charging 'buildCost' Crystals (back-compat). S5 (the CoC upgrade sink): 'repo.maxLevel' (default 1 = not upgradeable; ceiling 3 = the StructureTierVisual tier cap) is the highest level the UPGRADE verb can reach; 'repo.upgradeCost' is an optional per-step multi-resource table indexed by the level being upgraded TO minus 2 (entry [0] = L1->L2, [1] = L2->L3). When 'upgradeCost' is omitted, the upgrade cost falls back to the build 'cost' scaled by the level being left (L1->L2 = 1x, L2->L3 = 2x). StructureTierVisual steps the look (scale + bronze/silver/gold accent); DefenseTower range/damage and WallSegment toughness step the stats. v5 (StructureSingleton v2, owner only-ever-one ruling): 'repo.bakedTwins' lists the legacy baked scene-root GameObject names that REPRESENT a singleton row (twin standdown/resurface + IsBuilt, enforced generically by StructureSingleton with zero per-row code); null/absent = none; only meaningful with 'repo.singleton': true.",
   "entries": [
     {
       "id": "tower_ground_archer",
@@ -41,8 +41,8 @@
         ],
         "navSurface": "Blocker",
         "heightMul": 1.2,
-        "range": 14.0,
-        "damage": 6.0,
+        "range": 14,
+        "damage": 6,
         "fireRate": 2.5,
         "canHitAir": false,
         "element": "None",
@@ -52,22 +52,27 @@
           "footprint": 1.75,
           "noOverlap": true,
           "checkAffordable": true
-        }
+        },
+        "upgradeTexturePath": [
+          "",
+          "Structures/Tower_Wooden_Watchtower_L3_Tex/WoodenWatchtowerL3_basecolor"
+        ],
+        "_upgradeTextureNote": "WO-928 defect B, 2026-08-08 (owner: \"that tower is now the right way, but the color is wrong\"). L3 was authored with upgradeVisualPath and NO upgradeTexturePath, so StructureFactory.TexturePathForLevel returned null, the tier reskin added a FRESH TripoMaterialFixer with no forced albedo, and L3 rendered a scraped material (wooden_watchtower_3d_model_basecolor) instead of its own. This is the WO-719 mechanism and tower_arcane_spire already uses it verbatim (ArcaneSpire_2_Albedo / _3_Albedo). L2 is DELIBERATELY EMPTY: it is a NINE-PART Tripo export with a basecolor per part, and one forced albedo cannot represent nine - flattening it would trade a wrong colour for a wrong model. L2 therefore falls through to visualTexturePath, which stays null, i.e. unchanged behaviour. Only L3 moves."
       },
       "orientation": {
         "corrected": false,
         "manual": true,
         "euler": [
-          0.0,
-          0.0,
-          0.0
+          0,
+          0,
+          0
         ],
         "offset": [
-          0.0,
-          0.0,
-          0.0
+          0,
+          0,
+          0
         ],
-        "scale": 1.0,
+        "scale": 1,
         "note": "INTENTIONALLY ZERO, AND LOCKED. manual:true at (0,0,0) follows the tower_arcane_spire precedent: it marks the row human-verified so no tool re-bakes an advisory euler here, because one WOULD double-apply on top of the correction that already lives in the prefabs. The owner measured all three wooden-watchtower models in Offset Forge on 2026-08-06 and all three need X -90; that -90 is BAKED INTO EACH PREFAB (on the model child) by DeNelle.Editor.WoodenWatchtowerBuilder, NOT applied from here. DO NOT COPY THE -90 INTO THIS ROW - two reasons, both read at source. (1) ReskinForLevel deliberately does not apply entry.orientation ('Tier models rely on their prefab-native orientation'), so this block can only ever reach the BASE visual - L2 and L3 would stay on their sides. (2) This block is applied AFTER the fit, not before: VisualFactory.Skin fits to height internally, then Create applies the orientation and only ReseatCorrectedBottom follows, which translates in Y and never re-fits. On a lying-down model the fit therefore measures the SHORT axis - L2 reads 0.519 instead of 1.000, so scale becomes 4.8/0.519 = 9.25x instead of 4.80x and the later rotation stands up a 9.25 m tower, 1.93x oversized. Baking in the prefab puts the correction upstream of that measurement. CORRECTING AN EARLIER WRONG INFERENCE ON THIS ROW: it previously claimed these FBXs 'import upright on their own' because each Tripo node carries Lcl Rotation (-90,0,0). That reasoning is WRONG - all three carry identical node data yet the measured need differs from what it implies, so the import RESULT cannot be derived from the node data. Only measurement settles it; the builder now measures the as-imported aspect and refuses to bake onto an already-standing model. Facing (Y and Z) is deliberately zero: X is a defect correction, Y/Z is a preference, and which way a building faces is the player's choice at placement (owner ruling 2026-08-06 - note that after a -90 X the yaw for this family lives on Z, not Y)."
       },
       "canHitAir": false
@@ -104,8 +109,8 @@
         ],
         "navSurface": "Blocker",
         "heightMul": 1.2,
-        "range": 22.0,
-        "damage": 30.0,
+        "range": 22,
+        "damage": 30,
         "fireRate": 0.5,
         "canHitAir": true,
         "element": "None",
@@ -121,17 +126,17 @@
         "corrected": false,
         "manual": true,
         "euler": [
-          -90.0,
-          0.0,
-          0.0
+          -90,
+          0,
+          0
         ],
         "offset": [
-          0.0,
-          0.0,
-          0.0
+          0,
+          0,
+          0
         ],
-        "scale": 1.0,
-        "note": "manual \u2014 owner ruling 2026-07-08: the model IS a ballista (renamed); Tripo fbx stands upright with the standard X-90 (supersedes the dialed (0,45,-90)). Base visual only; L2 Tower_Medieval_Big is upright polyperfect (ReskinForLevel skips base-authored orientation)."
+        "scale": 1,
+        "note": "manual — owner ruling 2026-07-08: the model IS a ballista (renamed); Tripo fbx stands upright with the standard X-90 (supersedes the dialed (0,45,-90)). Base visual only; L2 Tower_Medieval_Big is upright polyperfect (ReskinForLevel skips base-authored orientation)."
       },
       "canHitAir": true
     },
@@ -139,7 +144,7 @@
       "id": "tower_siege_tower",
       "_heightNote": "SIEGE-ENGINE group, 0.75 (3.0 m), kept in the 2026-08-05 cadence pass. This one is also the only mustSitOn WallWalk row: it sits ON TOP of a wall, so holding it under the house line is what keeps the stacked wall-plus-engine silhouette from out-topping the 4.8 m towers.",
       "displayName": "Sky Ballista (Anti-Air)",
-      "description": "Wall-mounted spear thrower \u2014 fires spears at flying creatures; ignores ground. The strategic counter to the sky dragon.",
+      "description": "Wall-mounted spear thrower — fires spears at flying creatures; ignores ground. The strategic counter to the sky dragon.",
       "type": "Tower",
       "kind": "Cell",
       "visualPrefabPath": "Structures/Ballista",
@@ -169,8 +174,8 @@
         ],
         "navSurface": "Blocker",
         "heightMul": 0.75,
-        "range": 36.0,
-        "damage": 20.0,
+        "range": 36,
+        "damage": 20,
         "fireRate": 1.5,
         "canHitAir": true,
         "airOnly": true,
@@ -187,17 +192,17 @@
         "corrected": false,
         "manual": false,
         "euler": [
-          0.0,
-          0.0,
-          0.0
+          0,
+          0,
+          0
         ],
         "offset": [
-          0.0,
-          0.0,
-          0.0
+          0,
+          0,
+          0
         ],
-        "scale": 1.0,
-        "note": "zeroed \u2014 polyperfect _M prefabs are upright (no -90X needed)"
+        "scale": 1,
+        "note": "zeroed — polyperfect _M prefabs are upright (no -90X needed)"
       }
     },
     {
@@ -233,8 +238,8 @@
         ],
         "navSurface": "Blocker",
         "heightMul": 0.75,
-        "range": 28.0,
-        "damage": 24.0,
+        "range": 28,
+        "damage": 24,
         "fireRate": 0.8,
         "canHitAir": false,
         "element": "None",
@@ -249,17 +254,17 @@
         "corrected": false,
         "manual": false,
         "euler": [
-          0.0,
-          0.0,
-          0.0
+          0,
+          0,
+          0
         ],
         "offset": [
-          0.0,
-          0.0,
-          0.0
+          0,
+          0,
+          0
         ],
-        "scale": 1.0,
-        "note": "zeroed \u2014 polyperfect _M prefabs are upright (no -90X needed)"
+        "scale": 1,
+        "note": "zeroed — polyperfect _M prefabs are upright (no -90X needed)"
       }
     },
     {
@@ -305,17 +310,17 @@
         "corrected": false,
         "manual": false,
         "euler": [
-          0.0,
-          0.0,
-          0.0
+          0,
+          0,
+          0
         ],
         "offset": [
-          0.0,
-          0.0,
-          0.0
+          0,
+          0,
+          0
         ],
-        "scale": 1.0,
-        "note": "prefab 'polyperfect/Wall_Wood_Horizontal_3x3m' not found \u2014 no correction computed"
+        "scale": 1,
+        "note": "prefab 'polyperfect/Wall_Wood_Horizontal_3x3m' not found — no correction computed"
       }
     },
     {
@@ -361,17 +366,17 @@
         "corrected": false,
         "manual": false,
         "euler": [
-          0.0,
-          0.0,
-          0.0
+          0,
+          0,
+          0
         ],
         "offset": [
-          0.0,
-          0.0,
-          0.0
+          0,
+          0,
+          0
         ],
-        "scale": 1.0,
-        "note": "prefab 'polyperfect/Wall_Medieval_Stone' not found \u2014 no correction computed"
+        "scale": 1,
+        "note": "prefab 'polyperfect/Wall_Medieval_Stone' not found — no correction computed"
       }
     },
     {
@@ -395,7 +400,7 @@
           "mustSitOn": "Ground",
           "footprint": 2.8,
           "noOverlap": true,
-          "minDistanceFromGate": 8.0,
+          "minDistanceFromGate": 8,
           "checkAffordable": true
         }
       },
@@ -403,17 +408,17 @@
         "corrected": false,
         "manual": false,
         "euler": [
-          0.0,
-          0.0,
-          0.0
+          0,
+          0,
+          0
         ],
         "offset": [
-          0.0,
-          0.0,
-          0.0
+          0,
+          0,
+          0
         ],
-        "scale": 1.0,
-        "note": "prefab 'polyperfect/Gate_Medieval_Medium' not found \u2014 no correction computed"
+        "scale": 1,
+        "note": "prefab 'polyperfect/Gate_Medieval_Medium' not found — no correction computed"
       }
     },
     {
@@ -458,17 +463,17 @@
         "corrected": false,
         "manual": false,
         "euler": [
-          0.0,
-          0.0,
-          0.0
+          0,
+          0,
+          0
         ],
         "offset": [
-          0.0,
-          0.0,
-          0.0
+          0,
+          0,
+          0
         ],
-        "scale": 1.0,
-        "note": "prefab 'polyperfect/House_Medieval_Small' not found \u2014 no correction computed"
+        "scale": 1,
+        "note": "prefab 'polyperfect/House_Medieval_Small' not found — no correction computed"
       }
     },
     {
@@ -505,16 +510,16 @@
         "corrected": false,
         "manual": false,
         "euler": [
-          0.0,
-          0.0,
-          0.0
+          0,
+          0,
+          0
         ],
         "offset": [
-          0.0,
-          0.0,
-          0.0
+          0,
+          0,
+          0
         ],
-        "scale": 1.0,
+        "scale": 1,
         "note": "Wellspring of Elarion support heal fountain; visual reuses Structures/Well until fountain meshes exist"
       }
     },
@@ -537,8 +542,8 @@
         "maxLevel": 1,
         "navSurface": "Blocker",
         "heightMul": 1.2,
-        "range": 10.0,
-        "damage": 6.0,
+        "range": 10,
+        "damage": 6,
         "fireRate": 0.5,
         "canHitAir": false,
         "element": "None",
@@ -553,16 +558,16 @@
         "corrected": false,
         "manual": false,
         "euler": [
-          0.0,
-          0.0,
-          0.0
+          0,
+          0,
+          0
         ],
         "offset": [
-          0.0,
-          0.0,
-          0.0
+          0,
+          0,
+          0
         ],
-        "scale": 1.0,
+        "scale": 1,
         "note": "heightMul pinned to the 1.2 tower cadence anchor (see tower_ground_archer's _heightNote) so the healer stands in the tower family. repo.damage is the HEAL magnitude per tick - a support structure shares the row's one magnitude field rather than adding a parallel one. repo.element stays None: the wheel element is a presentation tag owned by StructureFactory's case, not a DamageElement (that enum has no Holy)."
       }
     },
@@ -586,7 +591,7 @@
         "heightMul": 0.35,
         "placement": {
           "mustSitOn": "AnyTerrain",
-          "footprint": 1.0,
+          "footprint": 1,
           "noOverlap": false,
           "checkAffordable": true
         }
@@ -595,17 +600,17 @@
         "corrected": false,
         "manual": false,
         "euler": [
-          0.0,
-          0.0,
-          0.0
+          0,
+          0,
+          0
         ],
         "offset": [
-          0.0,
-          0.0,
-          0.0
+          0,
+          0,
+          0
         ],
-        "scale": 1.0,
-        "note": "prefab 'polyperfect/Torche_Wall' not found \u2014 no correction computed"
+        "scale": 1,
+        "note": "prefab 'polyperfect/Torche_Wall' not found — no correction computed"
       }
     },
     {
@@ -640,16 +645,16 @@
         "corrected": false,
         "manual": true,
         "euler": [
-          -90.0,
-          0.0,
-          0.0
+          -90,
+          0,
+          0
         ],
         "offset": [
-          0.0,
-          0.0,
-          0.0
+          0,
+          0,
+          0
         ],
-        "scale": 1.0,
+        "scale": 1,
         "note": "owner hand-dialed 2026-06-21 via HubStructureVisualInjector swap table (PetHouse2: pitch -90 / roll 270, sizeM 7); ported WO-707 after the owner's F8 showed the Hollow ghost lying on its side -- manual:true FACING ZEROED 2026-08-06 (owner ruling): the -90 X is the UPRIGHT fix and stays; the Y/Z were a baked FACING, which belongs to the player at placement, not the catalog. Was [-90.0, 0.0, 270.0]."
       }
     },
@@ -685,16 +690,16 @@
         "corrected": false,
         "manual": true,
         "euler": [
-          -90.0,
-          0.0,
-          0.0
+          -90,
+          0,
+          0
         ],
         "offset": [
-          0.0,
-          0.0,
-          0.0
+          0,
+          0,
+          0
         ],
-        "scale": 1.0,
+        "scale": 1,
         "note": "owner hand-dialed 2026-06-21 via HubStructureVisualInjector swap table (sizeM 7 -> footprint fit, pitch -90 / roll 180); ported WO-707 -- manual:true so no tool overwrites it FACING ZEROED 2026-08-06 (owner ruling): the -90 X is the UPRIGHT fix and stays; the Y/Z were a baked FACING, which belongs to the player at placement, not the catalog. Was [-90.0, 0.0, 180.0]."
       }
     },
@@ -730,16 +735,16 @@
         "corrected": false,
         "manual": true,
         "euler": [
-          -90.0,
-          0.0,
-          0.0
+          -90,
+          0,
+          0
         ],
         "offset": [
-          0.0,
-          0.0,
-          0.0
+          0,
+          0,
+          0
         ],
-        "scale": 1.0,
+        "scale": 1,
         "note": "owner hand-dialed 2026-06-21 via HubStructureVisualInjector swap table (sizeM 8 -> footprint fit, yaw 90 / pitch -90); ported WO-707 -- manual:true so no tool overwrites it FACING ZEROED 2026-08-06 (owner ruling): the -90 X is the UPRIGHT fix and stays; the Y/Z were a baked FACING, which belongs to the player at placement, not the catalog. Was [-90.0, 90.0, 0.0]."
       }
     },
@@ -772,17 +777,17 @@
         "corrected": false,
         "manual": false,
         "euler": [
-          0.0,
-          0.0,
-          0.0
+          0,
+          0,
+          0
         ],
         "offset": [
-          0.0,
-          0.0,
-          0.0
+          0,
+          0,
+          0
         ],
-        "scale": 1.0,
-        "note": "zeroed \u2014 polyperfect _M prefabs are upright (no -90X needed)"
+        "scale": 1,
+        "note": "zeroed — polyperfect _M prefabs are upright (no -90X needed)"
       }
     },
     {
@@ -812,17 +817,17 @@
         "corrected": false,
         "manual": false,
         "euler": [
-          0.0,
-          0.0,
-          0.0
+          0,
+          0,
+          0
         ],
         "offset": [
-          0.0,
-          0.0,
-          0.0
+          0,
+          0,
+          0
         ],
-        "scale": 1.0,
-        "note": "zeroed \u2014 polyperfect _M prefabs are upright (no -90X needed)"
+        "scale": 1,
+        "note": "zeroed — polyperfect _M prefabs are upright (no -90X needed)"
       }
     },
     {
@@ -857,16 +862,16 @@
         "corrected": false,
         "manual": true,
         "euler": [
-          -90.0,
-          0.0,
-          0.0
+          -90,
+          0,
+          0
         ],
         "offset": [
-          0.0,
-          0.0,
-          0.0
+          0,
+          0,
+          0
         ],
-        "scale": 1.0,
+        "scale": 1,
         "note": "owner hand-dialed 2026-06-21 via HubStructureVisualInjector swap table (sizeM 7 -> footprint fit, yaw 90 / pitch -90); ported WO-707 -- manual:true so no tool overwrites it FACING ZEROED 2026-08-06 (owner ruling): the -90 X is the UPRIGHT fix and stays; the Y/Z were a baked FACING, which belongs to the player at placement, not the catalog. Was [-90.0, 90.0, 0.0]."
       }
     },
@@ -899,16 +904,16 @@
         "corrected": false,
         "manual": false,
         "euler": [
-          0.0,
-          0.0,
-          0.0
+          0,
+          0,
+          0
         ],
         "offset": [
-          0.0,
-          0.0,
-          0.0
+          0,
+          0,
+          0
         ],
-        "scale": 1.0,
+        "scale": 1,
         "note": "WO-673 additive row (L4 vendor anchor): the Blacksmith storefront as a player-placeable GameplayBuilding -- vendor structureId 'armorer' (StructureFactory maps blacksmith->BuildingType.Armorer); visual reuses House_Medieval_Medium like its workshop/forge siblings"
       }
     },
@@ -944,16 +949,16 @@
         "corrected": false,
         "manual": true,
         "euler": [
-          -90.0,
-          0.0,
-          0.0
+          -90,
+          0,
+          0
         ],
         "offset": [
-          0.0,
-          0.0,
-          0.0
+          0,
+          0,
+          0
         ],
-        "scale": 1.0,
+        "scale": 1,
         "note": "owner hand-dialed 2026-06-21 via HubStructureVisualInjector swap table (pitch -90 / roll 110.4); ported WO-707 -- manual:true. Swap-table ABSOLUTE scale 5.4/3.77/3.6 NOT portable (catalog scales multiply the footprint fit) -- size rides the fit; owner Orient trim if it reads small. FACING ZEROED 2026-08-06 (owner ruling): the -90 X is the UPRIGHT fix and stays; the Y/Z were a baked FACING, which belongs to the player at placement, not the catalog. Was [-90.0, 0.0, 110.4]."
       }
     },
@@ -980,7 +985,7 @@
           "crystals": 0
         },
         "navSurface": "Blocker",
-        "heightMul": 1.0,
+        "heightMul": 1,
         "placement": {
           "mustSitOn": "Ground",
           "footprint": 8.4,
@@ -992,16 +997,16 @@
         "corrected": false,
         "manual": true,
         "euler": [
-          -90.0,
-          0.0,
-          0.0
+          -90,
+          0,
+          0
         ],
         "offset": [
-          0.0,
-          0.0,
-          0.0
+          0,
+          0,
+          0
         ],
-        "scale": 1.0,
+        "scale": 1,
         "note": "owner hand-dialed 2026-06-21 via HubStructureVisualInjector swap table (sizeM 12 -> footprint fit, pitch -90, texPath forced -- FBX material lost its map link); ported WO-707 -- manual:true so no tool overwrites it. Swap posY -0.6 sink intentionally dropped: ReseatCorrectedBottom pins the corrected base to the placement ground (owner 2026-07-04 base-on-ground rule)"
       },
       "canHitAir": true
@@ -1047,13 +1052,13 @@
         ],
         "navSurface": "Blocker",
         "heightMul": 1.2,
-        "range": 16.0,
-        "damage": 20.0,
+        "range": 16,
+        "damage": 20,
         "fireRate": 0.6,
         "canHitAir": true,
         "element": "Aether",
         "projectileStyle": "spell",
-        "aoeRadius": 6.0,
+        "aoeRadius": 6,
         "slowSeconds": 2.5,
         "splashFraction": 0.7,
         "placement": {
@@ -1067,17 +1072,17 @@
         "corrected": false,
         "manual": true,
         "euler": [
-          0.0,
-          0.0,
-          0.0
+          0,
+          0,
+          0
         ],
         "offset": [
-          0.0,
-          0.0,
-          0.0
+          0,
+          0,
+          0
         ],
-        "scale": 1.0,
-        "note": "manual \u2014 owner 2026-07-08 'needs 0 0 0' (local overlay save 01:47Z agrees): after the Tripo extraction reimport ArcaneSpire_1 stands natively; the earlier (-90,90,90) double-rotated it. manual=true kept so the auto baker never re-tips it."
+        "scale": 1,
+        "note": "manual — owner 2026-07-08 'needs 0 0 0' (local overlay save 01:47Z agrees): after the Tripo extraction reimport ArcaneSpire_1 stands natively; the earlier (-90,90,90) double-rotated it. manual=true kept so the auto baker never re-tips it."
       },
       "canHitAir": true
     },
@@ -1117,16 +1122,16 @@
         "corrected": false,
         "manual": true,
         "euler": [
-          -90.0,
-          0.0,
-          0.0
+          -90,
+          0,
+          0
         ],
         "offset": [
-          0.0,
-          0.0,
-          0.0
+          0,
+          0,
+          0
         ],
-        "scale": 1.0,
+        "scale": 1,
         "note": "owner hand-dialed 2026-06-21 via HubStructureVisualInjector swap table (sizeM 8 -> footprint fit, pitch -90 / roll 212); ported WO-707 -- manual:true so no tool overwrites it. Roll 212 is 32deg off-axis: catalog fits the RAW bounds while the swap fit the ROTATED bounds, so size may read slightly larger -- trim via Orient tool if felt FACING ZEROED 2026-08-06 (owner ruling): the -90 X is the UPRIGHT fix and stays; the Y/Z were a baked FACING, which belongs to the player at placement, not the catalog. Was [-90.0, 0.0, 212.0]."
       }
     },
@@ -1164,16 +1169,16 @@
         "corrected": false,
         "manual": true,
         "euler": [
-          -90.0,
-          0.0,
-          0.0
+          -90,
+          0,
+          0
         ],
         "offset": [
-          0.0,
-          0.0,
-          0.0
+          0,
+          0,
+          0
         ],
-        "scale": 1.0,
+        "scale": 1,
         "note": "owner hand-dialed 2026-06-21 via HubStructureVisualInjector swap table (sizeM 7 -> footprint fit, pitch -90); ported WO-707 -- manual:true so no tool overwrites it. Swap posY +1.5 lift intentionally dropped: it compensated the BAKED root's y; ReseatCorrectedBottom pins the corrected base to the placement ground (owner 2026-07-04 base-on-ground rule)"
       }
     },
@@ -1206,17 +1211,17 @@
         "corrected": false,
         "manual": false,
         "euler": [
-          0.0,
-          0.0,
-          0.0
+          0,
+          0,
+          0
         ],
         "offset": [
-          0.0,
-          0.0,
-          0.0
+          0,
+          0,
+          0
         ],
-        "scale": 1.0,
-        "note": "zeroed \u2014 polyperfect _M prefabs are upright (no -90X needed)"
+        "scale": 1,
+        "note": "zeroed — polyperfect _M prefabs are upright (no -90X needed)"
       }
     },
     {
@@ -1250,16 +1255,16 @@
         "corrected": false,
         "manual": true,
         "euler": [
-          -90.0,
-          0.0,
-          0.0
+          -90,
+          0,
+          0
         ],
         "offset": [
-          0.0,
-          0.0,
-          0.0
+          0,
+          0,
+          0
         ],
-        "scale": 1.0,
+        "scale": 1,
         "note": "standard Tripo import pose (pitch -90; owner 2026-07-13 'most Tripo are similar'); GenericContainer real model landed same day -- owner Orient trim as needed"
       }
     },
@@ -1294,16 +1299,16 @@
         "corrected": false,
         "manual": true,
         "euler": [
-          -90.0,
-          0.0,
-          0.0
+          -90,
+          0,
+          0
         ],
         "offset": [
-          0.0,
-          0.0,
-          0.0
+          0,
+          0,
+          0
         ],
-        "scale": 1.0,
+        "scale": 1,
         "note": "standard Tripo import pose (pitch -90; owner 2026-07-13 'most Tripo are similar'); GenericContainer real model landed same day -- owner Orient trim as needed"
       }
     },
@@ -1338,16 +1343,16 @@
         "corrected": false,
         "manual": true,
         "euler": [
-          -90.0,
-          0.0,
-          0.0
+          -90,
+          0,
+          0
         ],
         "offset": [
-          0.0,
-          0.0,
-          0.0
+          0,
+          0,
+          0
         ],
-        "scale": 1.0,
+        "scale": 1,
         "note": "standard Tripo import pose (pitch -90; owner 2026-07-13 'most Tripo are similar'); GenericContainer real model landed same day -- owner Orient trim as needed"
       }
     },
@@ -1370,7 +1375,7 @@
         "navSurface": "Blocker",
         "placement": {
           "mustSitOn": "Ground",
-          "footprint": 5.0,
+          "footprint": 5,
           "noOverlap": true,
           "checkAffordable": true
         },
@@ -1383,16 +1388,16 @@
         "corrected": false,
         "manual": true,
         "euler": [
-          -90.0,
-          0.0,
-          0.0
+          -90,
+          0,
+          0
         ],
         "offset": [
-          0.0,
-          0.0,
-          0.0
+          0,
+          0,
+          0
         ],
-        "scale": 1.0,
+        "scale": 1,
         "note": "WO-812: the army train hub, placeable at last (the hub redesign never re-added it). Pitch -90 matches the Tripo fbx family (workshop/forge); Orient-tool trim if felt. FIRST place is FREE via the 2026-07-24 first-of-each-type freebie lane (non-tower building); singleton so no doubles vs a legacy baked CastleBarracks. Train entry = the drillmaster (BarracksNpcInjector anchors to baked OR placed instance) + BuildingInteractable panel; progression stays BarracksService level, not structure tier. FACING ZEROED 2026-08-06 (owner ruling): the -90 X is the UPRIGHT fix and stays; the Y/Z were a baked FACING, which belongs to the player at placement, not the catalog. Was [-90.0, 0.0, 180.0]."
       }
     },
@@ -1414,7 +1419,7 @@
         "navSurface": "None",
         "placement": {
           "mustSitOn": "Ground",
-          "footprint": 1.0,
+          "footprint": 1,
           "noOverlap": false,
           "checkAffordable": false
         }
