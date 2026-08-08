@@ -8,20 +8,39 @@
 // default: seated just behind + slightly above the Keeper's shoulder at eyeline
 // height, looking FORWARD down the corridor.
 //
-// OWNER RULING 2026-07-26, RE-AFFIRMED 2026-07-30: **FIRST-PERSON is the shipped
-// DEFAULT** - ff.dungeonfpv is defaultOn:TRUE (Core/FeatureFlags.cs:650), chosen
-// over raising the ~4u ceiling. ResolveMode() therefore returns FirstPerson unless
-// a PlayerPref says otherwise. Over-the-shoulder is the A/B (ff.dungeonfpv=0);
-// the legacy top-down iso is one further PlayerPref away (ff.dungeoniso), and it
-// LOSES to FPV when both are set. The "OverShoulder (DEFAULT)" label below is the
-// mode-list's historical framing - the live default is FirstPerson.
+// OWNER RULING 2026-08-07 (WO-920) - **THE 2026-07-26 FPV DEFAULT IS REVERSED.**
+// ff.dungeonfpv is now defaultOn:FALSE, so ResolveMode() returns OverShoulder and the
+// LOCKED over-the-shoulder rig is the shipped explore camera. FPV survives intact as an
+// opt-in A/B (ff.dungeonfpv=1) - nothing about it was deleted.
+//
+// WHY the reversal: FPV-by-default was a WORKAROUND, not a preference. It was chosen
+// 2026-07-26 INSTEAD OF raising the ceiling, because the top-down iso rig floated at the
+// roofline and the room could not be seen. WO-919 removed that premise - composed rooms
+// are now 4 m walls WITH a ceiling slab and are relit dark - so an under-ceiling OTS seat
+// works, and the owner asked for a stationary/calm view rather than a drifting free-look.
+// (The free-look drift was real and specific: SampleLookDelta below reads the raw mouse
+// delta with NO button held, so on desktop an idle mouse nudge rotates the view.)
+//
+// ⚠ SCOPE - THE THING THAT IS EASIEST TO GET WRONG ABOUT THIS FILE. Verified at source
+// 2026-08-07: this rig exists in exactly TWO scenes, Dungeon_HealersCottage and
+// Dungeon_FolksGranary (built by DungeonSceneBuilder / FolksGranaryBuilder, which also
+// bake the Main Camera + CinemachineBrain). The COMPOSED dungeons
+// (Assets/Scenes/DungeonCompose/dg_*.unity, RoomForge/DungeonBaker) and the hand-coded
+// KayKitChallengeOutpost bake NO camera and NO rig at all - grep either .unity for the
+// Camera class id (!u!20) and you get zero hits; DungeonBaker L230-237 says so outright.
+// In those scenes HeroControlEnsurer L283-295 creates "GameplayCamera (ensured)" and the
+// dungeon camera is DeNelle.Village.SmartMobileCamera, whose matching locked seat lives in
+// its ApplyDungeonProfileIfNeeded. Editing only this file changes only those two scenes.
+// The seat numbers for BOTH rigs come from DeNelle.Core.World.DungeonCameraProfile.
 //
 // -- Three modes (chosen once at Bind, off FeatureFlags - NOT a serialized field,
 //    so the choice applies to the already-baked dungeon scenes with no re-bake) --
-//   - OverShoulder (DEFAULT)  - CinemachineThirdPersonFollow behind+above a
+//   - OverShoulder (THE DEFAULT, WO-920) - CinemachineThirdPersonFollow behind+above a
 //                               heading-corrected pivot; rotates to stay behind
 //                               the Keeper as they turn, looks down the corridor.
-//   - FirstPerson (ff.dungeonfpv, DEFAULT-ON 2026-07-26) - the SAME ThirdPersonFollow
+//                               LOCKED: no look layer, AvoidObstacles OFF, and no
+//                               combat reframe (see SetCombatFraming).
+//   - FirstPerson (ff.dungeonfpv, OPT-IN since WO-920) - the SAME ThirdPersonFollow
 //                               with ~0 distance + eyeline offset, now a FULL FPV:
 //                               an independent yaw+pitch LOOK layer drives the pivot's
 //                               WORLD rotation each LateUpdate (decoupled from
@@ -50,11 +69,14 @@
 //   - SetCombatFraming(bool) forces OverShoulder for arena fights and restores FPV.
 //
 // -- Occlusion / ceiling --
-// OTS seats the camera ~1.9u up and ~3u back - well under the ~4u ceiling, so no
-// roof clip. The one real risk is a wall directly behind the Keeper in a tight
-// room; ThirdPersonFollow's built-in AvoidObstacles (physics module) pulls the
-// camera in when that happens. It ignores the "Player"-tagged hero so the Keeper's
-// own capsule never yanks the camera.
+// OTS seats the camera at DungeonCameraProfile.CameraHeight + VerticalArmLength
+// (1.9 + 0.35 = 2.25u) and CameraDistance back - well under the 4u ceiling, no roof clip.
+// AvoidObstacles is now OFF BY DEFAULT (WO-920 §3 Phase A.3). It was on, and in a tight
+// room it is a bounce generator: a wall behind the Keeper yanks the camera in and it
+// slides back out again every time you turn a corner, which is a large part of what the
+// owner felt. The trade is that the seat can pass through a wall when the Keeper backs
+// flat against one; the shorter seat makes that rare, and the WO rules that no yank beats
+// no clip-through. Re-enabling it is one serialized bool - document the reason if you do.
 //
 // DungeonController owns scene orchestration and calls Bind() once the hero is
 // placed; this component owns ONLY the camera maths so the rig can be tuned and
@@ -64,6 +86,7 @@
 using System.Collections.Generic;
 using DeNelle.Core;
 using DeNelle.Core.Diagnostics;
+using DeNelle.Core.World;   // WO-920: DungeonCameraProfile — the seat shared with SmartMobileCamera
 using Unity.Cinemachine;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -85,22 +108,23 @@ namespace DeNelle.Dungeons
 
         // -- Tuning - over-the-shoulder (DEFAULT) -----------------------------
 
-        [Header("Over-the-shoulder (default)")]
+        [Header("Over-the-shoulder (THE DEFAULT - WO-920)")]
         [Tooltip("Shoulder pivot offset from the Keeper origin, target-local " +
                  "(X = right of the hero for the shoulder, Y = up to the eyeline, " +
-                 "Z = forward). ~1.55u Y keeps the camera at head height - well " +
-                 "under the ~4u room ceiling, no roof clip.")]
-        [SerializeField] private Vector3 _otsShoulderOffset = new Vector3(0.5f, 2.2f, 0f); // felt-test 2026-07-26: taller (was 1.55 eyeline)
+                 "Z = forward). Y comes from DungeonCameraProfile.CameraHeight and is " +
+                 "re-forced at Bind, so the baked scene value cannot fight it.")]
+        [SerializeField] private Vector3 _otsShoulderOffset = new Vector3(0.5f, 1.9f, 0f); // WO-920: was 2.2 (2026-07-26 "taller"), now profile-sourced
 
         [Tooltip("Extra vertical lift of the camera 'hand' above the shoulder " +
                  "pivot - a small value tips the view slightly down so the floor " +
-                 "ahead reads. Keep modest to stay under the ceiling.")]
-        [SerializeField] private float _otsVerticalArmLength = 0.7f; // felt-test 2026-07-26: taller/more top-down (was 0.35)
+                 "ahead reads. Sourced from DungeonCameraProfile.VerticalArmLength; " +
+                 "shoulder Y + this is the real camera height and must clear the ceiling.")]
+        [SerializeField] private float _otsVerticalArmLength = 0.35f; // WO-920: was 0.7 (2026-07-26), back to the WO cap
 
-        [Tooltip("How far BEHIND the Keeper the camera sits (world units). ~3u " +
-                 "frames the hero in the lower third and shows the corridor ahead " +
-                 "without floating far back into the wall behind.")]
-        [SerializeField] private float _otsCameraDistance = 3.8f; // felt-test 2026-07-26: pulled back a touch (was 3.0)
+        [Tooltip("How far BEHIND the Keeper the camera sits (world units). Sourced from " +
+                 "DungeonCameraProfile.CameraDistance - close enough to stay inside a " +
+                 "10u room (RoomForgeCanon.Cell) instead of floating into the wall behind.")]
+        [SerializeField] private float _otsCameraDistance = 3.2f; // WO-920: was 3.8 (2026-07-26), now profile-sourced
 
         [Tooltip("Which shoulder the camera favours: 0 = left, 0.5 = centred, " +
                  "1 = right. ~0.6 gives a gentle right-shoulder over-the-shoulder bias.")]
@@ -117,18 +141,20 @@ namespace DeNelle.Dungeons
                  "hero rig that has NO model-yaw offset.")]
         [SerializeField] private float _headingYawOffset = 90f;
 
-        [Tooltip("Enable ThirdPersonFollow's built-in obstacle avoidance so a wall " +
-                 "directly behind the Keeper pulls the camera in instead of clipping. " +
-                 "Ignores the 'Player'-tagged hero so its own capsule never pulls.")]
-        [SerializeField] private bool _otsAvoidObstacles = true;
+        [Tooltip("ThirdPersonFollow's built-in obstacle avoidance. WO-920 turns this OFF by " +
+                 "default: in a tight room it pulls the camera in on the wall behind the Keeper " +
+                 "and slides back out on every corner, which is bounce. OFF = the seat never " +
+                 "yanks; the cost is an occasional clip-through when the Keeper backs into a " +
+                 "wall. Was true until 2026-08-07.")]
+        [SerializeField] private bool _otsAvoidObstacles = false;
 
         [Tooltip("Layers the over-the-shoulder camera treats as view-blocking " +
                  "geometry (dungeon walls). KayKit walls sit on the Default layer.")]
         [SerializeField] private LayerMask _otsObstacleMask = 1 << 0; // Default
 
-        // -- Tuning - first-person (ff.dungeonfpv, the SHIPPED DEFAULT) -------
+        // -- Tuning - first-person (ff.dungeonfpv, OPT-IN A/B since WO-920) ---
 
-        [Header("First-person (ff.dungeonfpv - DEFAULT ON)")]
+        [Header("First-person (ff.dungeonfpv - OPT-IN, default OFF)")]
         [Tooltip("Eyeline pivot offset for FPV, target-local. Y ~1.62 is head " +
                  "height; a small +Z pushes the camera to the face plane so it is " +
                  "not buried in the chest mesh. The independent yaw+pitch look " +
@@ -255,14 +281,18 @@ namespace DeNelle.Dungeons
             _boundHero = hero;
             _mode = ResolveMode();
 
-            // Felt-test 2026-07-26 ("the dungeon needs a taller camera"): lift the over-the-shoulder rig
-            // from the old eyeline (~1.55u) to an elevated, slightly-down-looking third-person view.
-            // Applied at RUNTIME so the ALREADY-BAKED rig gets the new framing with NO re-bake (the
-            // SerializeField defaults are updated to match for future bakes). Kept under the ~4u room
-            // ceiling (2.2 + 0.7 arm ≈ 2.9u camera height) so it never clips the roof.
-            _otsShoulderOffset = new Vector3(_otsShoulderOffset.x, 2.2f, _otsShoulderOffset.z);
-            _otsVerticalArmLength = 0.7f;
-            _otsCameraDistance = 3.8f;
+            // WO-920: force the OTS seat from the SHARED profile at RUNTIME, so the two
+            // already-baked dungeon scenes get it with NO re-bake (the SerializeField defaults
+            // are updated to match for future bakes). This REPLACES the 2026-07-26 "the dungeon
+            // needs a taller camera" force-assign, which hardcoded 2.2 / 0.7 / 3.8 here and put
+            // the camera at ~2.9u - authored against the OLD 2.8u walls, i.e. ABOVE them, which
+            // is exactly why the owner's screenshots show an elevated view over a short maze.
+            // Now 1.9 + 0.35 = 2.25u, comfortably under the WO-919 4u ceiling, sharing its
+            // numbers with SmartMobileCamera's dungeon profile so the two pipelines cannot drift.
+            _otsShoulderOffset = new Vector3(
+                _otsShoulderOffset.x, DungeonCameraProfile.CameraHeight, _otsShoulderOffset.z);
+            _otsVerticalArmLength = DungeonCameraProfile.VerticalArmLength;
+            _otsCameraDistance = DungeonCameraProfile.CameraDistance;
 
             ApplyLens();
 
@@ -287,13 +317,33 @@ namespace DeNelle.Dungeons
 
         // -- Mode selection ---------------------------------------------------
 
+        /// <summary>
+        /// Picks the framing. Priority is unchanged (WO-920 §3 Phase D): FPV &gt; Iso &gt; OTS —
+        /// FPV still wins if both opt-in flags are set. What changed is that BOTH flags now
+        /// default OFF, so the fall-through OverShoulder is the shipped default.
+        /// <para>§12: the decision is TRACED with its reason, so a log or a headless capture
+        /// answers "which camera am I in, and why" without a playtest. Exactly one
+        /// <c>[Flow:DungeonCam] mode=</c> line fires per dungeon across both pipelines — this
+        /// one, or SmartMobileCamera.ApplyDungeonProfileIfNeeded's — which also tells you which
+        /// pipeline owns the view.</para>
+        /// </summary>
         private static CamMode ResolveMode()
         {
-            // FPV wins the A/B if both preview flags are set; otherwise the
-            // over-the-shoulder default unless the legacy iso is explicitly asked for.
-            if (FeatureFlags.DungeonFpv) return CamMode.FirstPerson;
-            if (FeatureFlags.DungeonCameraIso) return CamMode.Iso;
-            return CamMode.OverShoulder;
+            bool fpv = FeatureFlags.DungeonFpv;
+            bool iso = FeatureFlags.DungeonCameraIso;
+
+            CamMode mode = fpv ? CamMode.FirstPerson
+                         : iso ? CamMode.Iso
+                               : CamMode.OverShoulder;
+
+            string why = fpv ? "ff.dungeonfpv=1 opted IN (FPV wins over iso)"
+                       : iso ? "ff.dungeoniso=1 opted IN (legacy top-down A/B)"
+                             : "both opt-in flags OFF -> WO-920 locked over-the-shoulder default";
+
+            FlowTrace.Step("DungeonCam",
+                $"mode={mode} (DungeonCameraRig) why={why} [ff.dungeonfpv={fpv} ff.dungeoniso={iso}]");
+
+            return mode;
         }
 
         // -- Over-the-shoulder / first-person ---------------------------------
@@ -490,15 +540,35 @@ namespace DeNelle.Dungeons
 
         /// <summary>
         /// Temporarily forces OVER-THE-SHOULDER framing (for an arena fight) and restores
-        /// the resolved mode (FPV / iso) when cleared. DungeonController calls
-        /// <c>SetCombatFraming(true)</c> when a real-time BattleArena encounter stages and
-        /// <c>SetCombatFraming(false)</c> when it ends — giving OTS combat + FPV traversal.
-        /// Null-safe: a no-op until the rig is bound.
+        /// the resolved mode when cleared. DungeonController calls <c>SetCombatFraming(true)</c>
+        /// when a real-time BattleArena encounter stages and <c>SetCombatFraming(false)</c>
+        /// when it ends. Null-safe: a no-op until the rig is bound.
+        /// <para><b>WO-920 §3 Phase B — POLICY B1 ON THE DEFAULT PATH.</b> When the resolved
+        /// traversal mode is already OverShoulder (the shipped default), this is a NO-OP: there
+        /// is nothing to swap to, and re-running ApplyThirdPerson would rebuild the pivot, re-seat
+        /// the rig and re-run SeatThirdPersonImmediate on every fight start AND end — a visible
+        /// pop at both edges for zero framing change. That double pop per encounter is the
+        /// "combat thrash" half of the owner's bounce report. So: ONE calm seat for explore and
+        /// arena alike.</para>
+        /// <para>The swap is PRESERVED, not deleted, for the opted-in modes (effectively B3): with
+        /// ff.dungeonfpv=1 or ff.dungeoniso=1 a fight still forces OTS and restores the chosen mode
+        /// afterwards, because fighting in first-person or top-down genuinely is unreadable. The
+        /// DungeonController wiring is untouched either way.</para>
         /// </summary>
         public void SetCombatFraming(bool on)
         {
             if (_boundHero == null) return;
             if (on == _combatFramingActive) return;
+
+            // B1: the default locked-OTS traversal mode IS the combat framing. Do not re-seat.
+            if (_mode == CamMode.OverShoulder)
+            {
+                FlowTrace.Step("DungeonCam",
+                    $"SetCombatFraming({on}): NO-OP — traversal mode is already the locked " +
+                    "over-the-shoulder seat (WO-920 policy B1: one calm seat for explore + arena, " +
+                    "so there is no stage-in/stage-out pop).");
+                return;
+            }
 
             if (on)
             {

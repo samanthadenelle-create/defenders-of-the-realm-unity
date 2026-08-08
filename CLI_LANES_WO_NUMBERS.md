@@ -1,6 +1,22 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ RECONCILED 2026-08-07 (CLI / Grok wider rooms): main line next free = **923**. **782–859 + 900–922 CONSUMED.**
+> ## ⚠ RECONCILED 2026-08-07 (CLI / Grok Imagine dungeon review): main line next free = **927**. **782–859 + 900–926 CONSUMED.**
+> - **926** = **Combat anim: legs/hips, foot slide, recovery, shield clip** (Imagine review P2).
+>   File `WORK_ORDER_926_combat_anim_root_motion_recovery.md`. **SPEC / owner priority.**
+> - **925** = **Kill/condition permanent foot fire VFX** under hero (Imagine — always-on sparks).
+>   Instrument HeroHpStateAura first. File `WORK_ORDER_925_kill_persistent_foot_fire_vfx.md`. **READY.**
+> - **924** = **Kill neon-green exit/climb debug volumes** — DungeonExitInteractable Unlit beams +
+>   EXIT labels; stop pairing Climb/Descend with debug pillars. File
+>   `WORK_ORDER_924_dungeon_green_debug_exit_climb_volumes.md`. **READY.** Map:
+>   `REVIEW_MAP_IMAGINE_DUNGEON_2026-08-07.md`.
+>
+> *(banner bumped 924 → 927 in the SAME edit as the 924–926 mint — the rule that broke five times on 08-02.)*
+> - **923** = **Walkable multi-level stairs** — prefab kit (visual steps + invisible Cube ramp on
+>   nose line, NOT Plane); rise=FloorSeparationY 6m; PathComplete on all multi-level bakes; retire
+>   Descend ports when stair present. Source: `HANDOFF_GROK_DUNGEON_MULTILEVEL_NAV.md` + owner video.
+>   File `WORK_ORDER_923_walkable_stair_prefab_kit.md`. **READY.**
+>
+> *(banner bumped 923 → 924 in the SAME edit as the 923 mint — the rule that broke five times on 08-02.)*
 > - **922** = **RoomForge: all rooms much wider** — master `Cell` 6→**10** m (optional 12);
 >   1×1 rooms 6×6→10×10; rebuild prefabs + recompose graphs + rebake. Combine bake with WO-919.
 >   File `WORK_ORDER_922_roomforge_wider_rooms.md`. **READY.**
