@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "levelplay-unity-integration": {
+      "source": "Unity-Technologies/skills",
+      "sourceType": "github",
+      "skillPath": "skills/levelplay-unity-integration/SKILL.md",
+      "computedHash": "41334a7dfc2ee69ab3cc6cc7f0e7ded670361f1a11bb3b34597624a63edec74d"
+    }
+  }
+}
