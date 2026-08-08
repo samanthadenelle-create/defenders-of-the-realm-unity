@@ -236,6 +236,91 @@ Suggested order, each step independently shippable:
 
 ---
 
+## 5.5 ★ THE STITCH MODEL — bake per room, link per door, no final bake ★
+
+**Owner, 2026-08-07:**
+> *"if we bake each prefab room … each time we connect a room, a navlink automatic on the door"*
+> *"do we ever need a final bake"*
+> *"if we know each room works … and the step (rooms) work — it's connecting room to room in a stitch"*
+
+This is the architecture the rest of the document was building toward. **Rooms are proven cloth. The dungeon is
+what you get by stitching edge to edge.**
+
+### 5.5.1 Bake the navmesh into each room prefab; link at every door
+
+Each room prefab carries its own baked `NavMeshData`. At placement, each mated connector pair gets a
+`NavMeshLink` spanning the doorway.
+
+**The links are NOT a convenience on top — they ARE the mechanism.** Separate `NavMeshData` instances do not
+stitch to each other by proximity; Unity joins surfaces through links. So "auto-link on each door" is the
+required half, not the optional half.
+
+⚠ **VERIFY THIS BEFORE BUILDING ON IT.** That two overlapping `NavMeshData` never auto-connect is the
+load-bearing assumption of this whole design and it is stated here from recollection, not from a test. **Prove
+it in a two-room scene first.** If they do connect under some tolerance, half of this section changes.
+
+### 5.5.2 It likely fixes the CURRENT failure, for a specific reason
+
+Today's `PathPartial` is an **erosion** problem, not a geometry problem: the Left/Right top landing is 0.80 m
+against a 1.00 m minimum walkable slot, so the whole-dungeon voxel bake eats it and the stair top becomes an
+island. **A `NavMeshLink` does not erode.** It bridges exactly the gaps voxelization destroys — so links may
+connect the stairs *without* the landing fix, though `TurnRun 4.0 → 3.5` is still worth doing on its own merits.
+
+### 5.5.3 Verification splits — prove the unit once, then only prove the joins
+
+| Level | When | What is checked | Cost |
+|---|---|---|---|
+| **Room** | once, at prefab build | walkable navmesh, connector poses, ramp reaches both landings | `[room-shell]` / `[stair-shell]` oracles |
+| **Assembly** | per dungeon | did every edge produce a link, and does entry reach every leaf | **a graph walk** |
+
+If a room is verified, that is true **every time it is placed**. Re-voxelizing it inside a 22-room bake spends
+real time rediscovering what is already known.
+
+So the assembly check collapses from *"voxelize 22 rooms and pathfind"* to *"traverse a 22-node graph."*
+Milliseconds instead of seconds — and cheap enough to run **at runtime, before the player enters**, on a dungeon
+generated moments earlier.
+
+### 5.5.4 Do we ever need a final bake? — **No for navmesh. Always for proof.**
+
+The whole-dungeon `BuildNavMesh()` has nothing left to do. But keep a final **query**: `CalculatePath(entry →
+deepest target) == PathComplete`. Per-room meshes can each be perfect and the dungeon still be severed if one
+link failed to spawn. **The bake goes; the proof stays** — and the proof is orders of magnitude cheaper than the
+bake it replaces.
+
+Pathfinding demotes from primary check to belt-and-braces: a link that exists but is malformed passes the graph
+walk and fails a real path. Keep both; stop *relying* on the expensive one.
+
+**Everything else the current bake does stays put** — `PopulateForPlay` (hero seat, spawners, chests, keys,
+locks, extracts), the dresser, `RenderSettings`, pacing lint, mate/overlap validation. Those are placement and
+population, not navigation.
+
+⚠ **Watch for a whole-scene bake returning through the back door:** occlusion culling, static batching, and
+**lightmaps** all need scene-wide knowledge. Dungeons are fully realtime today (`shadows = None`, ~80 point
+lights), so none of these bite — but the day lighting gets baked, a required scene step is back.
+
+### 5.5.5 The prize: runtime generation
+
+If nothing *requires* a final bake, dungeons can be generated **at runtime**. Today they cannot — a dungeon is
+an editor artifact because its navmesh must be baked offline into a `.unity`. Per-room data plus links removes
+the only hard dependency on the editor.
+
+That is a much bigger door than fixing the current `PathPartial`: it is the difference between five authored
+dungeons and generated ones. **Worth designing toward even if it is not taken yet, because keeping a required
+final bake quietly forecloses it.**
+
+### 5.5.6 ⚠ THE CONSTRAINT THIS ALL RESTS ON — write it down before someone breaks it
+
+**A room prefab must never have its collision geometry modified after placement.**
+
+The moment the composer or the dresser mutates a placed room's colliders, the room-level proof expires and the
+whole-dungeon check is back. The dresser seats props today — and this holds **only** because those are
+visual-only with no colliders, which is already the rule for steps and ceilings.
+
+This is exactly the kind of invariant a future *"just add a collider to the barrel so it blocks"* change breaks
+**silently**: nothing fails, the proof simply stops being true. It needs an oracle, not a comment.
+
+---
+
 ## 6. What this does NOT change
 
 - `RoomForgeCanon` metrics. `Cell = 10`, `WallHeight = 4`, `FloorSeparationY = 6` are unaffected; a stairwell
