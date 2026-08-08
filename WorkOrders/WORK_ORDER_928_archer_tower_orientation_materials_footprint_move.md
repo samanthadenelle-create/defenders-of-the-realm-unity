@@ -1,6 +1,21 @@
 # WO-928 — Archer Tower: orientation, materials, footprint parity, and the Move path
 
-**Status: READY TO IMPLEMENT** (§5 instrumented run is a hard gate on §6 — do not fix before it)
+> ## ⏸ PARKED 2026-08-08 — owner ruling: "I'm not as focused on the tower... stick that aside"
+>
+> **Defect A (on its side) is FIXED AND READY TO TEST.** `SkinOptions.PreservePrefabRotation` shipped
+> in `bb6dc010`, gated `COMPILE_GATE_OK` + `REGRESSION_OK 130/130`. It reaches both `Create` and
+> `ReskinForLevel` via `StructureFactory.OptsFor:393`. **Not felt-verified** — the owner needs to see
+> the L3 tower stand up in a fresh exe.
+>
+> **Defect C (footprint) is expected to fall out of A** — upright, `Fit` measures the right axis and
+> the 8.34x scale should drop to ~4.8x. **Unverified. Do not claim it without the numbers.**
+>
+> **Defects B (material) and D (Move path) are UNSTARTED**, root causes known, parked deliberately.
+>
+> The dungeon stairs (WO-927) take priority: they block every dungeon, which blocks the store
+> screenshots, which blocks submission. Return here after.
+
+**Status: DEFECT A FIXED, READY TO TEST · B/C/D PARKED** (was: READY TO IMPLEMENT; §5 instrumented run is a hard gate on §6)
 **Date:** 2026-08-08 · **Priority:** High · **Lane:** Structures / BuildMode / VFX-materials
 **Reported by:** the owner, felt-test 2026-08-08, F8 seq 2181-2189 (`Main_Castle_Overworld`)
 **Owner ruling 2026-08-08:** these four ship as ONE cluster. Footprint parity requires **explicit

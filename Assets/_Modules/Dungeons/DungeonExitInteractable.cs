@@ -229,8 +229,37 @@ namespace DeNelle.Dungeons
             light.range = 14f;
             beaconGo.transform.localPosition = new Vector3(0f, 3.2f, 0f);
 
-            // Tall glow beam above the lintel - visible over a mob standing on the exit.
-            AddDecor("Beacon_Beam", new Vector3(0f, 6.2f, 0f), new Vector3(0.28f, 6.4f, 0.28f), glow, false);
+            // Glow beam above the lintel - visible over a mob standing on the exit.
+            //
+            // WO-1008 (owner felt-test 2026-08-08: "big green bar doesnt make sense"). Was
+            // localPos y 6.2 x scale y 6.4 - i.e. spanning world y 3.0 to 9.4 - as an OPAQUE
+            // Unlit cube. Two defects in one object:
+            //
+            //   1. HEIGHT. RoomForgeCanon.WallHeight is 4 m. A 6.4 m beam starting at 3.0
+            //      cleared the ceiling by 5.4 m. In a dungeon where the exits are seated in
+            //      STAIR rooms (all five of dg_ember_deep's extracts sit in stair_up_*), it
+            //      punched up through the floor above and stood proud of it - which is the
+            //      "green bar rising out of the descent hole" the owner photographed. It was
+            //      an exit marker from the floor BELOW, showing through.
+            //   2. OPACITY. AddDecor only sets _Surface=1 (transparent) when asQuad is true,
+            //      and this passes false - so it was a SOLID box on an Unlit shader, ignoring
+            //      every light in the scene. Invisible as a defect while dungeons were bright;
+            //      screaming since WO-919/1004 dropped ambient to #0a0a10.
+            //
+            // Now: translucent, and capped to sit between the lintel top (2.925) and the
+            // ceiling (4.0). The point light above is what carries the "come here" cue from
+            // range - the beam only has to read as a shaft, not as architecture.
+            //
+            // ⚠ THE NAME IS PINNED. DungeonRoomOwnershipRegression.cs:366 does
+            // exit.transform.Find("Beacon_Beam") and fails the suite without it. Change the
+            // look, never the name.
+            //
+            // ⚠ Colour is deliberately UNCHANGED - it stays `glow`, the owner's. She is
+            // red/green colourblind, so the beacon must not depend on hue to be identified;
+            // it reads by SHAPE and POSITION (a vertical shaft over an arch). Any recolour is
+            // her call, not this fix's.
+            AddDecor("Beacon_Beam", new Vector3(0f, 3.45f, 0f), new Vector3(0.28f, 1.1f, 0.28f),
+                     glow, asQuad: false, translucent: true);
 
             // ASCII label. Legacy TextMesh (code-built UI law - no UXML); billboarded by
             // the beacon component. Skipped with a Warn if no built-in font resolves.
@@ -268,7 +297,11 @@ namespace DeNelle.Dungeons
                 $"(light range {light.range:F0}, beam, label={(label != null ? "yes" : "no")})");
         }
 
-        private void AddDecor(string label, Vector3 localPos, Vector3 localScale, Color color, bool asQuad)
+        /// <param name="translucent">WO-1008: force the transparent surface on a NON-quad too.
+        /// Previously only <paramref name="asQuad"/> got _Surface=1, so a beam built as a cube was
+        /// opaque - a solid box on an Unlit shader reads as debug geometry, not as light.</param>
+        private void AddDecor(string label, Vector3 localPos, Vector3 localScale, Color color, bool asQuad,
+                              bool translucent = false)
         {
             var prim = GameObject.CreatePrimitive(asQuad ? PrimitiveType.Quad : PrimitiveType.Cube);
             prim.name = label;
@@ -287,8 +320,22 @@ namespace DeNelle.Dungeons
                     var mat = new Material(sh);
                     if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", color);
                     if (mat.HasProperty("_Color")) mat.SetColor("_Color", color);
-                    // Translucent glow sheet (Surface=1 -> transparent on URP/Unlit).
-                    if (asQuad && mat.HasProperty("_Surface")) mat.SetFloat("_Surface", 1f);
+                    // Translucent glow (Surface=1 -> transparent on URP/Unlit). The sheet has always
+                    // been translucent; WO-1008 lets a beam opt in too, so it reads as a shaft of
+                    // light instead of a painted box. Transparent needs the render state to match,
+                    // or URP keeps it in the opaque queue and the alpha does nothing.
+                    if ((asQuad || translucent) && mat.HasProperty("_Surface"))
+                    {
+                        mat.SetFloat("_Surface", 1f);
+                        mat.SetOverrideTag("RenderType", "Transparent");
+                        mat.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+                        if (mat.HasProperty("_SrcBlend"))
+                            mat.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
+                        if (mat.HasProperty("_DstBlend"))
+                            mat.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+                        if (mat.HasProperty("_ZWrite")) mat.SetFloat("_ZWrite", 0f);
+                        mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+                    }
                     rend.sharedMaterial = mat;
                 }
             }

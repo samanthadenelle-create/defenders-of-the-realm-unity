@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "graphId": "dg_stairwell_probe",
+  "entry": "entry",
+  "_comment": "WO-930 PROOF GRAPH - the owner's one-room stairwell. Deliberately the smallest graph that changes floors: a room, the StairwellRoom, a room. No encounters, traps, keys, locks or chests - if this fails to path, it is the stairwell, because there is nothing else it could be. Compare against dg_descent_probe, which is the SAME test under the old _Up/_Down pair model and reports PathPartial with 0/1 ramps whole. The two graphs exist side by side ON PURPOSE: one number against another is the only honest way to say whether the new model is better. Keep this minimal; it is a probe, not content.",
+  "nodes": [
+    {
+      "id": "entry",
+      "prefab": "EntryHall"
+    },
+    {
+      "id": "stairwell",
+      "prefab": "StairwellRoom"
+    },
+    {
+      "id": "deep_vault",
+      "prefab": "RewardVault"
+    }
+  ],
+  "edges": [
+    {
+      "from": "entry",
+      "fromSocket": "n_door_01",
+      "to": "stairwell",
+      "toSocket": "s_upper_w"
+    },
+    {
+      "from": "stairwell",
+      "fromSocket": "s_lower_e",
+      "to": "deep_vault",
+      "toSocket": "s_door_01"
+    }
+  ],
+  "rules": {
+    "spineOnly": false,
+    "minShrines": 0,
+    "maxMateDistance": 1.25,
+    "sealUnmated": true,
+    "pacingCombat": 0.0,
+    "pacingLore": 0.0,
+    "pacingReward": 1.0
+  }
+}

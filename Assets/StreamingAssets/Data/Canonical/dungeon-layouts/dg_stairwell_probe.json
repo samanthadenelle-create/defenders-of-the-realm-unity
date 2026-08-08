@@ -1,0 +1,74 @@
+{
+  "version": 1,
+  "dungeonId": "dg_stairwell_probe",
+  "cellSize": 1.0,
+  "rooms": [
+    {
+      "prefab": "EntryHall",
+      "instanceId": "entry",
+      "cell": [
+        0,
+        0,
+        0
+      ],
+      "yawDeg": 0.0,
+      "archetype": "hub",
+      "encounter": null,
+      "chests": null
+    },
+    {
+      "prefab": "StairwellRoom",
+      "instanceId": "stairwell",
+      "cell": [
+        0,
+        -6,
+        15
+      ],
+      "yawDeg": 270.0,
+      "archetype": null,
+      "encounter": null,
+      "chests": null
+    },
+    {
+      "prefab": "RewardVault",
+      "instanceId": "deep_vault",
+      "cell": [
+        0,
+        -6,
+        30
+      ],
+      "yawDeg": 0.0,
+      "archetype": "reward",
+      "encounter": null,
+      "chests": null
+    }
+  ],
+  "connections": [
+    {
+      "fromInstance": "entry",
+      "fromSocket": "n_door_01",
+      "toInstance": "stairwell",
+      "toSocket": "s_upper_w"
+    },
+    {
+      "fromInstance": "stairwell",
+      "fromSocket": "s_lower_e",
+      "toInstance": "deep_vault",
+      "toSocket": "s_door_01"
+    }
+  ],
+  "rules": {
+    "spineOnly": false,
+    "minShrines": 0,
+    "maxMateDistance": 1.25,
+    "sealUnmated": true,
+    "pacingCombat": 0.0,
+    "pacingLore": 0.0,
+    "pacingReward": 1.0
+  },
+  "oilStones": [],
+  "traps": [],
+  "keys": [],
+  "locks": [],
+  "extracts": []
+}

@@ -1,6 +1,23 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ RECONCILED 2026-08-08: main line next free = **929**. **782–859 + 900–928 CONSUMED.**
+> ## ⚠ RECONCILED 2026-08-08: main line next free = **931**. **782–859 + 900–930 CONSUMED.**
+> - **930** = **The stairwell is ONE room: midpoint to midpoint** — the owner's design, and the
+>   replacement for the `_Up`/`_Down` pair model. A stairwell is a single room owning its subrooms,
+>   connecting the MIDPOINT of the upper floor to the MIDPOINT of the lower; run is the footprint,
+>   slope is DERIVED (25-31 deg, never near the 45 deg carve cliff); the upper level is a GALLERY so
+>   the stair rises through OPEN AIR instead of squeezing under a slab with 0.36 m to spare.
+>   **The composer needs NO change** — a socket already carries its own Y and `SolveMate` resolves
+>   height for free. DELETES `StairUp`/`StairDown`, the vertical mate branch, `IsVertical`,
+>   `SEALED_VERTICAL`, the floor holes and the ceiling shafts.
+>   File `WORK_ORDER_930_stairwell_is_one_room_midpoint_to_midpoint.md`. **READY TO IMPLEMENT.**
+> - **929** = **VFX aura reparented during activate/deactivate** — a real thrown Unity error, 3x in one
+>   session, on POOLED enemies (`Cannot set the parent ... while activating or deactivating`).
+>   File `WORK_ORDER_929_vfx_aura_reparent_during_activation.md`. **READY TO IMPLEMENT.**
+>
+> *(banner bumped 929 -> 931 in the SAME edit as the 930 mint. ⚠ 929 was minted earlier today WITHOUT
+> bumping this banner — the CLI's own violation of the rule it had been enforcing all day, caught and
+> corrected here. It is the same slip that caused five collisions on 08-02: the mint and the bump must
+> be ONE edit.)*
 > - **928** = **Archer Tower: orientation, materials, footprint parity, and the Move path** — one
 >   owner-ruled cluster from the 2026-08-08 felt-test (F8 2181-2192). All four root causes CAPTURED:
 >   `VisualFactory.cs:140` wipes the L3 prefab's baked 270deg to identity, so the height-fit then
@@ -256,7 +273,7 @@
 > ## ⚠ TWO-BLOCK ALLOCATION IN USE (2026-08-02 evening) — the collision fix, in practice
 > | Block | Owner | Next free |
 > |---|---|---|
-> | **main line** | CLI | **929** (782–859 + 900–**928** consumed; 860–899 was the UI seat's old block) |
+> | **main line** | CLI | **931** (782–859 + 900–**930** consumed; 860–899 was the UI seat's old block) |
 > | **1000–1099 reserved** | UI seat | **1010** (1000–1009 consumed) |
 >
 > *(UI-seat bumped 1009 -> 1010 in the SAME edit as the WO-1009 mint — composed-dungeon interactable ART +

@@ -104,7 +104,71 @@ namespace DeNelle.Editor.RoomForge
             var scene = EditorSceneManager.OpenScene(scenePath, OpenSceneMode.Single);
             if (!scene.IsValid()) { Debug.LogError($"[{Sys}] failed to open {scenePath}"); return; }
 
+            ApplyInspectionLighting(graphId);
+
             Report(graphId, scenePath);
+        }
+
+        /// <summary>
+        /// The DIAGNOSTIC rigs are tools, not content — light them for INSPECTION.
+        /// </summary>
+        /// <remarks>
+        /// Owner ask 2026-08-08, walking the stair defect: "can you add lots of lights or make it
+        /// bright for the test one so i can see". She is right, and the reason is not comfort — the
+        /// WO-919/WO-1004 relight deliberately made dungeons dark (4 m walls, ceilings, ambient
+        /// #0a0a10, linear fog 14->42 m) and that is CORRECT for shipped content, but it means a
+        /// geometry defect is being hunted in near-black. The 2026-08-07 capture of the composed
+        /// ceiling hole was recorded as "unconfirmed since the overview capture is now dark-on-dark".
+        /// You cannot eyeball a stair you cannot see.
+        ///
+        /// SCOPED TO THE RIGS ON PURPOSE. `dg_stair_rig` and `dg_descent_probe` are fixtures that
+        /// never ship — the rig is flat-stair-flat with no encounters, traps, chests or locks, built
+        /// so that anything failing to path there IS the stairs. Brightening them costs nothing.
+        /// Every real dungeon (starter loop, sunken vault, bonecrypt, ember deep) is left EXACTLY as
+        /// baked, so this can never leak atmosphere out of shipped content even if the scene is saved.
+        ///
+        /// Applied AFTER OpenScene and left DIRTY-but-unsaved by default, matching this command's
+        /// existing contract. Nothing here is baked by the composer, so a re-compose reverts it.
+        /// </remarks>
+        private static void ApplyInspectionLighting(string graphId)
+        {
+            if (graphId != "dg_stair_rig" && graphId != "dg_descent_probe") return;
+
+            // Flat white ambient at full strength + fog OFF. Fog is the bigger readability thief of
+            // the two: at fogEnd 42 m the far end of a 5-room probe is already half-swallowed.
+            RenderSettings.ambientMode      = UnityEngine.Rendering.AmbientMode.Flat;
+            RenderSettings.ambientLight     = new Color(0.85f, 0.85f, 0.88f);
+            RenderSettings.ambientIntensity = 1f;
+            RenderSettings.fog              = false;
+
+            var root = new GameObject("[INSPECTION LIGHTS - rig only, not shipped]");
+
+            // One key light from above-front so steps read as steps: a pure top-down light flattens
+            // a staircase into stripes, which is the one thing we need to be able to SEE here.
+            var keyGo = new GameObject("Inspection_Key");
+            keyGo.transform.SetParent(root.transform);
+            keyGo.transform.rotation = Quaternion.Euler(50f, -30f, 0f);
+            var key = keyGo.AddComponent<Light>();
+            key.type      = LightType.Directional;
+            key.intensity = 1.6f;
+            key.color     = Color.white;
+            key.shadows   = LightShadows.Soft;   // shadows are what make a tread read as a tread
+
+            // A dim fill from the opposite side kills the black side-faces without washing out the
+            // key's shadowing — an unlit underside reads as a HOLE, which is exactly the thing the
+            // owner is trying to tell apart from a real hole.
+            var fillGo = new GameObject("Inspection_Fill");
+            fillGo.transform.SetParent(root.transform);
+            fillGo.transform.rotation = Quaternion.Euler(30f, 150f, 0f);
+            var fill = fillGo.AddComponent<Light>();
+            fill.type      = LightType.Directional;
+            fill.intensity = 0.5f;
+            fill.color     = new Color(0.8f, 0.85f, 1f);
+            fill.shadows   = LightShadows.None;
+
+            FlowTrace.Step(Sys, $"INSPECTION LIGHTING applied to '{graphId}' " +
+                "(ambient flat 0.85, fog OFF, key+fill directionals). Rig only - shipped dungeons " +
+                "keep their authored dark. Not saved unless you save the scene; a re-compose reverts it.");
         }
 
         /// <summary>
