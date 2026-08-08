@@ -119,6 +119,11 @@ namespace DeNelle.Editor.RoomForge
                 return;
             }
 
+            // Same material path the rest of the kit uses. REUSED, never re-authored: a stairwell
+            // that skins itself would drift from the room it opens into the first time the atlas
+            // changes, and the owner's whole point is that this reads as one continuous space.
+            RoomForgeMaterials.EnsureMenu();
+
             var go = new GameObject("StairwellRoom");
 
             BuildLowerFloor(go.transform, hx, hz);
@@ -126,6 +131,15 @@ namespace DeNelle.Editor.RoomForge
             BuildPerimeter(go.transform, hx, hz, rise);
             BuildFlight(go.transform, startX, run, rise);
             BuildSockets(go.transform, hx, rise);
+
+            // Walls/floors/ceiling take the shared KayKit stone. The ramp is skipped for free -
+            // its MeshRenderer is destroyed, and ApplyToRoomRoot only walks renderers.
+            RoomForgeMaterials.ApplyToRoomRoot(go, useAccentFloor: false);
+
+            int badSurfaces = RoomForgeMaterials.VerifyRoomSurfaces(go, "StairwellRoom", false);
+            if (badSurfaces > 0)
+                FlowTrace.Warn(Sys, $"{badSurfaces} surface(s) did not take the shared material - " +
+                    "the stairwell will read as untextured next to the rooms it connects.");
 
             string path = $"{RoomsFolder}/StairwellRoom.prefab";
             PrefabUtility.SaveAsPrefabAsset(go, path);
@@ -135,7 +149,8 @@ namespace DeNelle.Editor.RoomForge
             FlowTrace.Step(Sys, $"STAIRWELL_BUILD_OK: {path} - footprint {hx * 2:F0}x{hz * 2:F0} m, " +
                 $"rise {rise:F1} m over run {run:F1} m = {slopeDeg:F1} deg " +
                 $"({MaxSlopeDeg - slopeDeg:F1} deg of margin to the {MaxSlopeDeg} limit, " +
-                $"{45f - slopeDeg:F1} to the agent cliff), {StepCount} steps.");
+                $"{45f - slopeDeg:F1} to the agent cliff), {StepCount} steps, " +
+                $"skinned with the shared RoomForge stone ({badSurfaces} bad surface(s)).");
         }
 
         /// <summary>Solid, FULL footprint, top face at local y = 0 — the same contract every
