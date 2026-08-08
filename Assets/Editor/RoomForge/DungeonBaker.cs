@@ -384,10 +384,49 @@ namespace DeNelle.Editor.RoomForge
                 instances.TryGetValue(placedOrder[placedOrder.Count - 1], out var lastGo))
             {
                 var path = new NavMeshPath();
-                bool got = NavMesh.SamplePosition(firstGo.transform.position, out var fHit, 8f, NavMesh.AllAreas) &&
-                           NavMesh.SamplePosition(lastGo.transform.position, out var lHit, 8f, NavMesh.AllAreas) &&
+                // Samples hoisted OUT of the && chain: short-circuiting leaves the later `out`
+                // definitely-unassigned as far as the compiler is concerned, so the corner
+                // reporting below could not read them (CS0165). Same behaviour, both readable.
+                NavMeshHit fHit = default, lHit = default;
+                bool fOk = NavMesh.SamplePosition(firstGo.transform.position, out fHit, 8f, NavMesh.AllAreas);
+                bool lOk = NavMesh.SamplePosition(lastGo.transform.position, out lHit, 8f, NavMesh.AllAreas);
+                bool got = fOk && lOk &&
                            NavMesh.CalculatePath(fHit.position, lHit.position, NavMesh.AllAreas, path);
                 navResult += $" path[{placedOrder[0]}->{placedOrder[placedOrder.Count - 1]}]={(got ? path.status.ToString() : "NoSample")}";
+
+                // ── WHERE DOES THE WALK ACTUALLY STOP? ────────────────────────
+                //  This check has reported PathPartial on every multi-level dungeon for weeks and
+                //  never said WHERE. The corner list was computed each time and thrown away, so
+                //  every investigation started by re-deriving something the bake already knew.
+                //
+                //  Two hypotheses have now been tested and killed by CHANGING GEOMETRY rather than
+                //  by reading data - the stair-socket drift, then the 0.80m eroded landing (fixed,
+                //  measured, path unchanged). That is two full cycles spent on what one printed
+                //  line would have settled. CLAUDE.md §12: instrument first, let the data pinpoint
+                //  the dead step, fix THAT.
+                if (got && path.status != NavMeshPathStatus.PathComplete && path.corners.Length > 0)
+                {
+                    Vector3 last = path.corners[path.corners.Length - 1];
+                    float shortBy = Vector3.Distance(last, lHit.position);
+
+                    // Name the room the walk dies IN. A coordinate needs a map; a room id does not.
+                    string diedIn = "(outside every room)";
+                    float best = float.MaxValue;
+                    foreach (var kv in instances)
+                    {
+                        if (kv.Value == null) continue;
+                        float d = Vector3.Distance(kv.Value.transform.position, last);
+                        if (d < best) { best = d; diedIn = $"{kv.Key} ({d:F1}m from its origin)"; }
+                    }
+
+                    FlowTrace.Fail(Sys,
+                        $"PATH DIES at ({last.x:F2},{last.y:F2},{last.z:F2}) - nearest room: {diedIn}. " +
+                        $"Still {shortBy:F2}m short of the target at ({lHit.position.x:F2},{lHit.position.y:F2},{lHit.position.z:F2}). " +
+                        $"corners={path.corners.Length}. " +
+                        $"Floor delta start->stop = {last.y - fHit.position.y:F2}m, stop->target = {lHit.position.y - last.y:F2}m " +
+                        "-- a stop with ~0 rise means the walk never began the descent; a stop MID-rise means the ramp " +
+                        "carved partially; a stop at the target's floor means the descent worked and something above it did not.");
+                }
             }
             FlowTrace.Step(Sys, $"navmesh baked; {navResult}");
 
