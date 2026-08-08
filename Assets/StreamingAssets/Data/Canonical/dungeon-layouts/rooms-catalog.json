@@ -573,6 +573,216 @@
           ]
         }
       ]
+    },
+    {
+      "id": "StairConnector_Vertical_Down",
+      "prefabPath": "Assets/Dungeon/Rooms/StairConnector_Vertical_Down.prefab",
+      "archetype": "hub",
+      "themePalette": "default",
+      "footprintCells": [
+        1,
+        1
+      ],
+      "cellSize": 10.0,
+      "sockets": [
+        {
+          "id": "s_door_01",
+          "type": "Door",
+          "facing": "S",
+          "isSecret": false,
+          "localPosition": [
+            0.0,
+            0.0,
+            -5.0
+          ]
+        },
+        {
+          "id": "stair_down_01",
+          "type": "StairDown",
+          "facing": "U",
+          "isSecret": false,
+          "localPosition": [
+            0.0,
+            -3.0,
+            0.0
+          ]
+        }
+      ]
+    },
+    {
+      "id": "StairConnector_Vertical_Up",
+      "prefabPath": "Assets/Dungeon/Rooms/StairConnector_Vertical_Up.prefab",
+      "archetype": "hub",
+      "themePalette": "default",
+      "footprintCells": [
+        1,
+        1
+      ],
+      "cellSize": 10.0,
+      "sockets": [
+        {
+          "id": "s_door_01",
+          "type": "Door",
+          "facing": "S",
+          "isSecret": false,
+          "localPosition": [
+            0.0,
+            0.0,
+            -5.0
+          ]
+        },
+        {
+          "id": "stair_up_01",
+          "type": "StairUp",
+          "facing": "U",
+          "isSecret": false,
+          "localPosition": [
+            0.0,
+            3.0,
+            0.0
+          ]
+        }
+      ]
+    },
+    {
+      "id": "StairConnector_Left_Down",
+      "prefabPath": "Assets/Dungeon/Rooms/StairConnector_Left_Down.prefab",
+      "archetype": "hub",
+      "themePalette": "default",
+      "footprintCells": [
+        1,
+        1
+      ],
+      "cellSize": 10.0,
+      "sockets": [
+        {
+          "id": "s_door_01",
+          "type": "Door",
+          "facing": "S",
+          "isSecret": false,
+          "localPosition": [
+            0.0,
+            0.0,
+            -5.0
+          ]
+        },
+        {
+          "id": "stair_down_01",
+          "type": "StairDown",
+          "facing": "U",
+          "isSecret": false,
+          "localPosition": [
+            0.0,
+            -3.0,
+            0.0
+          ]
+        }
+      ]
+    },
+    {
+      "id": "StairConnector_Left_Up",
+      "prefabPath": "Assets/Dungeon/Rooms/StairConnector_Left_Up.prefab",
+      "archetype": "hub",
+      "themePalette": "default",
+      "footprintCells": [
+        1,
+        1
+      ],
+      "cellSize": 10.0,
+      "sockets": [
+        {
+          "id": "s_door_01",
+          "type": "Door",
+          "facing": "S",
+          "isSecret": false,
+          "localPosition": [
+            0.0,
+            0.0,
+            -5.0
+          ]
+        },
+        {
+          "id": "stair_up_01",
+          "type": "StairUp",
+          "facing": "U",
+          "isSecret": false,
+          "localPosition": [
+            0.0,
+            3.0,
+            0.0
+          ]
+        }
+      ]
+    },
+    {
+      "id": "StairConnector_Right_Down",
+      "prefabPath": "Assets/Dungeon/Rooms/StairConnector_Right_Down.prefab",
+      "archetype": "hub",
+      "themePalette": "default",
+      "footprintCells": [
+        1,
+        1
+      ],
+      "cellSize": 10.0,
+      "sockets": [
+        {
+          "id": "s_door_01",
+          "type": "Door",
+          "facing": "S",
+          "isSecret": false,
+          "localPosition": [
+            0.0,
+            0.0,
+            -5.0
+          ]
+        },
+        {
+          "id": "stair_down_01",
+          "type": "StairDown",
+          "facing": "U",
+          "isSecret": false,
+          "localPosition": [
+            0.0,
+            -3.0,
+            0.0
+          ]
+        }
+      ]
+    },
+    {
+      "id": "StairConnector_Right_Up",
+      "prefabPath": "Assets/Dungeon/Rooms/StairConnector_Right_Up.prefab",
+      "archetype": "hub",
+      "themePalette": "default",
+      "footprintCells": [
+        1,
+        1
+      ],
+      "cellSize": 10.0,
+      "sockets": [
+        {
+          "id": "s_door_01",
+          "type": "Door",
+          "facing": "S",
+          "isSecret": false,
+          "localPosition": [
+            0.0,
+            0.0,
+            -5.0
+          ]
+        },
+        {
+          "id": "stair_up_01",
+          "type": "StairUp",
+          "facing": "U",
+          "isSecret": false,
+          "localPosition": [
+            0.0,
+            3.0,
+            0.0
+          ]
+        }
+      ]
     }
   ]
 }

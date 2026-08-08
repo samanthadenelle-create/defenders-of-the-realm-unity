@@ -33,6 +33,70 @@ namespace DeNelle.Editor.RoomForge
         // any scene behind (WO-745 §2 fix 1).
         private const string SaveFailedScenesPref = "DungeonBaker.SaveFailedScenes";
 
+        // =====================================================================
+        // WO-923 — STAIR CONNECTOR RESOLUTION
+        // ---------------------------------------------------------------------
+        // The graphs/layouts author the SOCKET-ONLY stair nodes "StairDown"/"StairUp". Those
+        // prefabs carry the vertical socket and NOTHING ELSE — no flight, no landing — which is
+        // why every multi-level bake produced floors that stack but never connect. Verified at
+        // source 2026-08-07 by reading the prefab YAML, not by trusting a comment:
+        //
+        //   Assets/Dungeon/Rooms/StairDown.prefab              -> exactly 2 RoomSockets, 0 geometry
+        //     Socket_s_door_01        localPos (0,0,-5)  rot (0,1,0,0)
+        //                             id=s_door_01      type=0 facing=S halfWidth=1.1
+        //     Socket_stair_StairDown  localPos (0,-3,0)  rot (0.7071068,0,0,0.7071068)
+        //                             id=stair_down_01  type=3 facing=U halfWidth=1.2
+        //     RoomPrefabMeta          archetype=hub footprintCells {1,1} cellSize=10
+        //
+        //   Assets/Dungeon/Rooms/StairConnector_Vertical_Down.prefab
+        //     -> IDENTICAL on EVERY one of those fields (same socket names, ids, types, facings,
+        //        halfWidths, local positions AND local rotations; same footprint/cell/archetype).
+        //        Only RoomPrefabMeta.roomId differs. It additionally carries the real
+        //        StairAssembly/StairShape_Vertical geometry.
+        //
+        // That socket parity is the whole reason this can be a NAME-LEVEL swap at the resolution
+        // point instead of a graph edit: GraphDungeonComposer already SOLVED and wrote the layout
+        // JSON against those socket offsets, and DungeonBakerChecks.Compose re-verifies mate
+        // distance + opposing alignment against a hard gate (L176: any failure aborts the bake).
+        // Because the connector puts the same sockets in the same places, that gate sees exactly
+        // the geometry it saw before and the pre-solved layouts stay valid unedited.
+        //
+        // VARIANT SEAM — DELIBERATELY NOT CLOSED HERE. Left/Right connectors exist on disk and are
+        // catalogued (rooms-catalog.json, both dual copies), but NOTHING in the schema selects a
+        // variant: a layout room is {prefab, instanceId, cell, yawDeg, archetype, encounter} and a
+        // graph node is {id, prefab, ...} — there is no shape field. Inventing one is a schema
+        // change and a separate work order. Until then EVERY stair resolves to VERTICAL. The seam
+        // to close is in GraphDungeonComposer (GraphNode ~L69 / the layout write ~L508): let the
+        // node name its variant and have the composer emit the CONCRETE connector stem into
+        // `prefab`. At that point this alias simply stops firing for those nodes — no edit needed
+        // here, because a concrete stem is not a key in this map.
+        private static readonly Dictionary<string, string> StairConnectorAliases =
+            new Dictionary<string, string>(System.StringComparer.OrdinalIgnoreCase)
+            {
+                { "StairDown", "StairConnector_Vertical_Down" },
+                { "StairUp",   "StairConnector_Vertical_Up"   },
+            };
+
+        // Per-bake tally of how the stair nodes actually resolved (reset at the top of every bake).
+        // Read by DressVerticalStairPorts to decide + REPORT which traversal mode ran.
+        private static int _stairConnectorsResolved;
+        private static int _stairConnectorsFellBack;
+
+        // WO-923 — are the DungeonPortLink "Descend"/"Climb" teleport prompts STILL placed once a
+        // real walkable connector is in the scene?
+        //
+        // DEFAULT TRUE = KEEP THEM. The ramp is UNPROVEN until a bake reports PathComplete across
+        // the floors (today the FlowTrace path check at L293-302 only walks first->last placed
+        // room). The ports are the only vertical traversal that has ever worked; removing the
+        // working path before its replacement is proven is how a dungeon becomes unplayable. Both
+        // can coexist — a port is a prompt the player opts into, not a wall.
+        //
+        // Flip via EditorPrefs (same idiom as SaveFailedScenesPref above — no recompile, and the
+        // shipped DEFAULT is what every clean machine bakes with) ONLY after a multi-level bake
+        // reports PathComplete over the connector.
+        private const string StairPortsWithConnectorPref = "DungeonBaker.StairPortsWithConnector";
+        private const bool StairPortsWithConnectorDefault = true;
+
         [MenuItem("Defenders/Dungeon/Bake Compose Layout (default spine)")]
         public static void BakeDefault()
         {
@@ -122,6 +186,11 @@ namespace DeNelle.Editor.RoomForge
             var instanceMeta = new Dictionary<string, string>(); // instanceId -> archetype
             var placedOrder = new List<string>();                // instantiate order (for navmesh first/last)
 
+            // WO-923: per-bake stair tally, zeroed here so a second bake in the same editor
+            // session never reports the previous bake's connectors (statics survive between bakes).
+            _stairConnectorsResolved = 0;
+            _stairConnectorsFellBack = 0;
+
             foreach (var place in layout.rooms)
             {
                 if (place == null || string.IsNullOrEmpty(place.prefab)) continue;
@@ -158,6 +227,12 @@ namespace DeNelle.Editor.RoomForge
                 }
                 instanceMeta[instId] = arch ?? "combat";
             }
+
+            // WO-923: one captured line per bake saying whether the walkable stair geometry
+            // actually landed. 0/0 on a flat layout is the expected reading.
+            FlowTrace.Step(Sys, $"STAIR RESOLUTION: connectors={_stairConnectorsResolved} " +
+                                $"fallbacks={_stairConnectorsFellBack} (WO-923; a fallback means socket-only " +
+                                "stubs and NO walkable link between floors)");
 
             // Mate + re-verify (drift) + overlap + seal — the shared DungeonBakerChecks.Compose is
             // the SINGLE source of truth the RoomForgeRegression oracle also drives. It emits the
@@ -266,6 +341,9 @@ namespace DeNelle.Editor.RoomForge
             // torch point lights, so the hero never spawns inside the glow. Which rooms those are
             // is layout knowledge, so the BAKER decides and the dresser just obeys.
             var entryRoomIds = ResolveEntryRoomIds(layout);
+            // Zero the dresser's per-dungeon realtime-light tally (its statics survive between
+            // bakes) so the count logged below is THIS dungeon's, not a running total.
+            DungeonDresser.BeginDungeon();
             int dressedRooms = 0, dressedProps = 0, roomIdx = 0, entryRooms = 0;
             foreach (var kv in instances)
             {
@@ -278,6 +356,17 @@ namespace DeNelle.Editor.RoomForge
             }
             FlowTrace.Step("Dungeon", $"DRESS complete: rooms={dressedRooms}/{instances.Count} props={dressedProps} " +
                                       $"entryRooms={entryRooms} (torch LIGHTS skipped there - WO-921 A3)");
+
+            // WO-1004 candle pass: the ONE number that says whether this dungeon is within the
+            // render budget. dresserLights are the torch flame lights (now seated on each
+            // CandleAnchor); +1 is the DirLight created above. Nothing else in a composed bake
+            // creates a Light, so this total is the scene's whole realtime light count.
+            int dresserLights = DungeonDresser.DungeonLightsSeated;
+            FlowTrace.Step("Dungeon", $"LIGHT COUNT dungeon='{layout.dungeonId}': flameLights={dresserLights} " +
+                                      $"suppressed={DungeonDresser.DungeonLightsSuppressed} directional=1 " +
+                                      $"TOTAL={dresserLights + 1} realtime " +
+                                      $"(per-object cap is 4 - DeNelle-URP.asset L48 - and rooms are capped to " +
+                                      "that; shadows=None on every one, L49 disallows additional-light shadows)");
 
             // NavMesh + path-connectivity (stronger than a single origin sample): confirm a path
             // from the first placed room centre to the last actually completes.
@@ -401,7 +490,36 @@ namespace DeNelle.Editor.RoomForge
                 AssetDatabase.CreateFolder("Assets/Scenes", "DungeonCompose");
         }
 
+        /// <summary>
+        /// Resolve a layout's room prefab stem to an asset, applying the WO-923 stair-connector
+        /// alias FIRST (see <see cref="StairConnectorAliases"/> for the socket-parity proof and
+        /// the variant seam). A missing connector DEGRADES to the original socket-only prefab with
+        /// a warning — today's behaviour, never a throw and never a blocked bake.
+        /// </summary>
         private static GameObject LoadRoomPrefab(string prefabStem)
+        {
+            if (!string.IsNullOrEmpty(prefabStem) &&
+                StairConnectorAliases.TryGetValue(prefabStem, out string connectorStem))
+            {
+                var connector = LoadRoomPrefabByStem(connectorStem);
+                if (connector != null)
+                {
+                    _stairConnectorsResolved++;
+                    FlowTrace.Step(Sys, $"STAIR CONNECTOR '{prefabStem}' -> '{connectorStem}' (WO-923; " +
+                                        "VERTICAL is the default variant - no schema field selects Left/Right yet)");
+                    return connector;
+                }
+                _stairConnectorsFellBack++;
+                FlowTrace.Warn(Sys, $"STAIR CONNECTOR MISSING '{connectorStem}' - falling back to the socket-only " +
+                                    $"'{prefabStem}'. Floors will STACK BUT NOT CONNECT; vertical traversal stays on " +
+                                    "the DungeonPortLink ports. Rebuild via " +
+                                    "DeNelle.Editor.RoomForge.DefaultStairConnectorRoomsBuilder.BuildAllBatch.");
+            }
+            return LoadRoomPrefabByStem(prefabStem);
+        }
+
+        /// <summary>Raw stem -> prefab lookup (Rooms folder, then Resources, then a GUID search).</summary>
+        private static GameObject LoadRoomPrefabByStem(string prefabStem)
         {
             // Prefer Assets/Dungeon/Rooms/<stem>.prefab
             string p1 = $"Assets/Dungeon/Rooms/{prefabStem}.prefab";
@@ -672,6 +790,26 @@ namespace DeNelle.Editor.RoomForge
                     list.Add(s);
                 }
             }
+
+            // WO-923 — WHICH TRAVERSAL MODE RAN. Once a real walkable connector is placed the
+            // ports become the FALLBACK path rather than the primary one, but they are not ripped
+            // out: see StairPortsWithConnectorPref for why the default keeps them. Whichever way
+            // this lands, it lands as a captured line — never a silent difference between bakes.
+            bool keepPorts = EditorPrefs.GetBool(StairPortsWithConnectorPref, StairPortsWithConnectorDefault);
+            bool connectorPresent = _stairConnectorsResolved > 0;
+            if (connectorPresent && !keepPorts)
+            {
+                FlowTrace.Step(Sys, $"STAIR PORT MODE=connector-only: {_stairConnectorsResolved} walkable connector " +
+                                    $"room(s) placed and EditorPref '{StairPortsWithConnectorPref}'=false, so " +
+                                    $"{byConn.Count} mated vertical pair(s) get NO DungeonPortLink (walk the ramp).");
+                return 0;
+            }
+            FlowTrace.Step(Sys, "STAIR PORT MODE=" +
+                                (connectorPresent
+                                    ? "connector+ports (WO-923 default: the ramp is unproven until a bake reports PathComplete)"
+                                    : "ports-only (no walkable connector resolved - ports ARE the traversal)") +
+                                $" connectors={_stairConnectorsResolved} fallbacks={_stairConnectorsFellBack} " +
+                                $"pairs={byConn.Count} keepPorts={keepPorts}");
 
             var portType = FindType("DeNelle.Dungeons.DungeonPortLink");
             if (portType == null)

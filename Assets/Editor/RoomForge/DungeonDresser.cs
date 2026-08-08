@@ -86,6 +86,47 @@ namespace DeNelle.Editor.RoomForge
         private const float TorchRangeFactor = 1.2f;   // x corner-to-centre distance
         private const float TorchRangeMin = 4.5f;
         private const float TorchRangeMax = 12f;       // caps the pool on 2x2+ rooms
+
+        // Warm flame colour. Was an inline literal in SeatProp; named because
+        // KayKitChallengeOutpostBuilder (L55) explicitly copies THIS dial and a second copy of a
+        // magic triple is how the two dungeon pipelines drift apart.
+        private static readonly Color FlameColor = new Color(1f, 0.62f, 0.28f);
+
+        // ---- REALTIME LIGHT BUDGET (WO-1004 candle pass) ---------------------
+        // NOT a taste number — read off the render pipeline this project actually ships:
+        //   Assets/Settings/DeNelle-UniversalRenderer.asset L50  m_RenderingMode: 0        -> FORWARD
+        //   Assets/Settings/DeNelle-URP.asset               L47  m_AdditionalLightsRenderingMode: 1 -> PerPixel
+        //   Assets/Settings/DeNelle-URP.asset               L48  m_AdditionalLightsPerObjectLimit: 4
+        //   Assets/Settings/DeNelle-URP.asset               L49  m_AdditionalLightShadowsSupported: 0
+        //
+        // Under classic Forward (NOT Forward+, which would be m_RenderingMode: 2) that per-object
+        // limit is HARD: any single renderer — a room's floor slab, a wall — is lit by at most FOUR
+        // additional lights, and URP silently drops the rest by importance. A room already seats up
+        // to four corner torches, so the floor object is ALREADY AT THE LIMIT. Every further light
+        // in that room does not add illumination; it evicts an existing one from some object's list,
+        // and which one gets evicted shifts with view/importance — that is the "pop" this budget
+        // exists to prevent. L49 also means shadows=None below is not merely a mobile-cost choice,
+        // it is the only supported setting in this pipeline.
+        private const int MaxRoomAdditionalLights = 4;
+
+        // ---- dungeon-wide realtime-light accounting ---------------------------
+        // Statics survive between bakes, so DungeonBaker zeroes these via BeginDungeon() before its
+        // dress loop and reads them after, to LOG the final per-dungeon light count.
+        private static int _dungeonLightsSeated;
+        private static int _dungeonLightsSuppressed;
+
+        /// <summary>Zero the per-dungeon light tally. DungeonBaker calls this before its dress loop.</summary>
+        public static void BeginDungeon()
+        {
+            _dungeonLightsSeated = 0;
+            _dungeonLightsSuppressed = 0;
+        }
+
+        /// <summary>Realtime Lights seated since the last <see cref="BeginDungeon"/>.</summary>
+        public static int DungeonLightsSeated => _dungeonLightsSeated;
+
+        /// <summary>Lights NOT seated since the last <see cref="BeginDungeon"/> (entry room + budget).</summary>
+        public static int DungeonLightsSuppressed => _dungeonLightsSuppressed;
         // Floor clutter seated against the walls (barrels / crates / boxes / a chest).
         private static readonly string[] FloorTokens =
             { "barrel_large", "barrel_small", "crates_stacked", "box_small", "box_large", "chest" };
@@ -155,18 +196,27 @@ namespace DeNelle.Editor.RoomForge
             string torchToken = PickTorchToken();
             int torchLights = 0;
 
+            int lightsSuppressed = 0;
             for (int i = 0; i < corners.Length; i++)
             {
                 if (NearSocket(corners[i], socketLocal, 1.2f)) continue;
+
+                // Whether THIS torch gets its flame light, decided before the seat so the tally and
+                // the budget agree. Two independent reasons to withhold it:
+                //   A3       - the entry/spawn room (hero must not spawn inside the glow)
+                //   budget   - MaxRoomAdditionalLights, the URP per-object cap (see the constant)
+                bool wantLight = !isEntryRoom && torchLights < MaxRoomAdditionalLights;
+
                 // Yaw FACES THE ROOM, replacing rng.Next(4)*90f. torch_mounted's back plate sits
                 // at local z=0 and its arm projects to +z (bounds measured on the glTF, see
                 // TorchTokens), so a random cardinal yaw pointed the bracket INTO the wall three
                 // times out of four. From a corner, "into the room" is the diagonal.
                 if (SeatProp(room.transform, torchToken, corners[i], YawTowardCentre(corners[i]),
-                             torch: true, idx: count, torchRange: torchRange, torchLight: !isEntryRoom))
+                             torch: true, idx: count, torchRange: torchRange, torchLight: wantLight))
                 {
                     count++;
-                    if (!isEntryRoom) torchLights++;
+                    if (wantLight) { torchLights++; _dungeonLightsSeated++; }
+                    else { lightsSuppressed++; _dungeonLightsSuppressed++; }
                 }
             }
 
@@ -203,7 +253,8 @@ namespace DeNelle.Editor.RoomForge
             }
 
             FlowTrace.Step(Sys, $"DRESS room='{room.name}' props={count} (torches+floor, seed={seedIndex}) " +
-                                $"torch='{torchToken}' lights={torchLights} " +
+                                $"torch='{torchToken}' lights={torchLights}/{MaxRoomAdditionalLights} " +
+                                $"suppressed={lightsSuppressed} onFlameTip=CandleAnchor " +
                                 $"intensity={(torchLights > 0 ? TorchIntensity : 0f):F2} range={torchRange:F1}m" +
                                 (isEntryRoom ? " ENTRY: torch lights suppressed (WO-921 A3)" : ""));
             return count;
@@ -248,22 +299,48 @@ namespace DeNelle.Editor.RoomForge
 
                 if (torch)
                 {
-                    SeatCandleAnchor(holder.transform, token);
+                    var anchor = SeatCandleAnchor(holder.transform, token);
 
                     // WO-921 Phase A: a warm point light regardless of whether the model resolved.
                     // COSMETIC ONLY — no collider, no trigger, no damage path of any kind touches
                     // this object. Hazard fire is ComposedTrapHazard and stays a separate recipe.
                     // Suppressed entirely in the entry/spawn room (A3) so the hero never spawns
-                    // inside the glow; the mesh above still seats, so the room still reads dressed.
+                    // inside the glow, and past MaxRoomAdditionalLights; the mesh above still
+                    // seats either way, so the room still reads dressed.
                     if (!torchLight) return;
-                    var lt = holder.AddComponent<Light>();
+
+                    // WO-1004 candle pass: the light is seated ON THE CandleAnchor — i.e. AT the
+                    // measured flame tip — instead of on the holder root, which sat 0.70 m below
+                    // and 0.30 m behind the flame at the torch model's ORIGIN. The anchors were
+                    // already positioned from the glTF bounds; nothing was lighting them.
+                    //
+                    // It is a MOVE, not an ADD, and that is the whole design decision. Every
+                    // CandleAnchor in this dresser sits on a TORCH (SeatCandleAnchor is only ever
+                    // called from the torch branch, four lines up), so a *separate* small
+                    // candle-dial light per anchor would be a SECOND light co-located with one
+                    // ~3x brighter — spending a per-object light slot to add nothing. Under
+                    // Forward + m_AdditionalLightsPerObjectLimit: 4 (see MaxRoomAdditionalLights)
+                    // the four corner torches already saturate the room floor's budget, so that
+                    // second light would not brighten anything; it would evict a torch from some
+                    // object's list. Moving the emitter to the flame costs ZERO extra lights and
+                    // is strictly more correct — the glow now comes from the fire.
+                    //
+                    // The torch DIAL is deliberately unchanged (WO-921's tuned 0.85 / derived
+                    // range): what moved is WHERE it emits from, not how bright the room is. A
+                    // distinct dimmer "candle" dial would only be meaningful for a light that is
+                    // NOT the room's illumination — i.e. an actual candle PROP, which this dresser
+                    // does not seat. Reported as a seam rather than faked with an unused constant.
+                    var host = anchor != null ? anchor.gameObject : holder;
+                    var lt = host.AddComponent<Light>();
                     lt.type = LightType.Point;
-                    lt.color = new Color(1f, 0.62f, 0.28f);
+                    lt.color = FlameColor;
                     lt.intensity = TorchIntensity;   // was 2.0
                     lt.range = torchRange;           // was a flat 10 (= the whole 10 m cell)
                     // Four shadow-casting point lights per room x N rooms is a per-frame shadow
                     // pass the mobile target cannot pay for, and an accent light casts nothing
-                    // worth seeing. DungeonSceneBuilder.LitFixture does the same.
+                    // worth seeing. DungeonSceneBuilder.LitFixture does the same — and
+                    // DeNelle-URP.asset L49 m_AdditionalLightShadowsSupported: 0 means additional
+                    // light shadows are not even available in this pipeline.
                     lt.shadows = LightShadows.None;
                 }
             });
@@ -272,7 +349,8 @@ namespace DeNelle.Editor.RoomForge
 
         /// <summary>
         /// WO-1004 §1.3 seat for the <c>Env_Candle</c> wick flame: an empty marker at the torch's
-        /// FLAME TIP, in the holder's local space.
+        /// FLAME TIP, in the holder's local space. Returns the anchor so the caller can hang the
+        /// torch's point light on it (the light now emits FROM the flame — see <see cref="SeatProp"/>).
         ///
         /// This is the ANCHOR ONLY — it deliberately does not instantiate any VFX. The candle is a
         /// LOOPING, POOLED runtime effect (VFXCatalogGenerator L287: Env_Candle isLoop:true,
@@ -286,7 +364,7 @@ namespace DeNelle.Editor.RoomForge
         /// bracket's flame sits at the top of an arm that projects to +z, the floor torches' at the
         /// top of a radially symmetric stick.
         /// </summary>
-        private static void SeatCandleAnchor(Transform holder, string token)
+        private static Transform SeatCandleAnchor(Transform holder, string token)
         {
             var anchor = new GameObject("CandleAnchor");
             anchor.transform.SetParent(holder, false);
@@ -294,6 +372,7 @@ namespace DeNelle.Editor.RoomForge
                 ? new Vector3(0f, 0.70f, 0.30f)   // torch_mounted: y max 0.682, arm z 0 -> 0.616
                 : new Vector3(0f, 0.75f, 0f);     // torch_lit / torch: y max 0.731 / 0.647
             anchor.transform.localRotation = Quaternion.identity;
+            return anchor.transform;
         }
 
         // Resolve a KayKit dungeon model by filename-substring token, instantiate + strip
