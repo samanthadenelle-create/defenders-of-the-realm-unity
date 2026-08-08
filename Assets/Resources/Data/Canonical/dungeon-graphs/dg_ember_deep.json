@@ -2,134 +2,435 @@
   "version": 1,
   "graphId": "dg_ember_deep",
   "entry": "entry",
-  "_comment": "WO-1001 Phase 2C - The Ember Deep. A magma-lit deep hold seized by orcs; the hottest, deepest crawl. SIX LEVELS. Orc-group throughout, handing over to troll-group on the last floor so the final approach reads as a different threat rather than more of the same. Boss = an Ogre warlord. Oil burns fastest here by design intent, so stones are placed on levels 0, -2 and -4 - present but never generous, which is what makes the push-vs-extract call bite. Extract pads on every landing so banking is always an option. Richest loot in the game: dungeon-deepboss on the warlord plus two dungeon-chest vaults on the way down.",
+  "_comment": "WO-930 CONVERSION 2026-08-08: 5 StairDown/StairUp PAIRS replaced by 5 single StairwellRoom instances. Pairs were DISCOVERED from the vertical edges, not assumed from ids. Each stairwell enters at s_upper_w and leaves at s_lower_e - ordinary Door sockets, no vertical mate. WO-1001 Phase 2C - The Ember Deep. A magma-lit deep hold seized by orcs; the hottest, deepest crawl. SIX LEVELS. Orc-group throughout, handing over to troll-group on the last floor so the final approach reads as a different threat rather than more of the same. Boss = an Ogre warlord. Oil burns fastest here by design intent, so stones are placed on levels 0, -2 and -4 - present but never generous, which is what makes the push-vs-extract call bite. Extract pads on every landing so banking is always an option. Richest loot in the game: dungeon-deepboss on the warlord plus two dungeon-chest vaults on the way down.",
   "nodes": [
-    { "id": "entry", "prefab": "EntryHall" },
-    { "id": "hub0", "prefab": "Intersection" },
-    { "id": "vault0", "prefab": "RewardVault",
+    {
+      "id": "entry",
+      "prefab": "EntryHall"
+    },
+    {
+      "id": "hub0",
+      "prefab": "Intersection"
+    },
+    {
+      "id": "vault0",
+      "prefab": "RewardVault",
       "chests": [
-        { "id": "ed-vault0-chest", "lootTableId": "dungeon-chest", "visual": "chest", "offset": [0, 0, 1.2] }
+        {
+          "id": "ed-vault0-chest",
+          "lootTableId": "dungeon-chest",
+          "visual": "chest",
+          "offset": [
+            0,
+            0,
+            1.2
+          ]
+        }
       ]
     },
-    { "id": "shrine0", "prefab": "LoreShrine" },
-    { "id": "stair_dn_0", "prefab": "StairDown" },
-
-    { "id": "stair_up_1", "prefab": "StairUp" },
-    { "id": "corr1", "prefab": "Straight",
+    {
+      "id": "shrine0",
+      "prefab": "LoreShrine"
+    },
+    {
+      "id": "stairwell_0",
+      "prefab": "StairwellRoom"
+    },
+    {
+      "id": "corr1",
+      "prefab": "Straight",
       "encounter": {
-        "kind": "orc-group", "min": 3, "max": 5,
-        "seatMode": "ring", "formationRadius": 3.5,
-        "confine": { "mode": "room", "slack": 2.0, "returnHome": true, "wakeRadius": 6.0 }
+        "kind": "orc-group",
+        "min": 3,
+        "max": 5,
+        "seatMode": "ring",
+        "formationRadius": 3.5,
+        "confine": {
+          "mode": "room",
+          "slack": 2,
+          "returnHome": true,
+          "wakeRadius": 6
+        }
       }
     },
-    { "id": "stair_dn_1", "prefab": "StairDown" },
-
-    { "id": "stair_up_2", "prefab": "StairUp" },
-    { "id": "combat2", "prefab": "CombatChamber",
+    {
+      "id": "stairwell_1",
+      "prefab": "StairwellRoom"
+    },
+    {
+      "id": "combat2",
+      "prefab": "CombatChamber",
       "encounter": {
-        "kind": "orc-group", "min": 4, "max": 6,
-        "seatMode": "ring", "formationRadius": 4.5,
-        "confine": { "mode": "room", "slack": 2.0, "returnHome": true, "wakeRadius": 7.0 }
+        "kind": "orc-group",
+        "min": 4,
+        "max": 6,
+        "seatMode": "ring",
+        "formationRadius": 4.5,
+        "confine": {
+          "mode": "room",
+          "slack": 2,
+          "returnHome": true,
+          "wakeRadius": 7
+        }
       },
       "chests": [
-        { "id": "ed-combat2-barrel", "lootTableId": "barrel-common", "visual": "barrel", "offset": [2.2, 0, -2.0] }
+        {
+          "id": "ed-combat2-barrel",
+          "lootTableId": "barrel-common",
+          "visual": "barrel",
+          "offset": [
+            2.2,
+            0,
+            -2
+          ]
+        }
       ]
     },
-    { "id": "stair_dn_2", "prefab": "StairDown" },
-
-    { "id": "stair_up_3", "prefab": "StairUp" },
-    { "id": "tj3", "prefab": "TJunction" },
-    { "id": "vault3", "prefab": "RewardVault",
+    {
+      "id": "stairwell_2",
+      "prefab": "StairwellRoom"
+    },
+    {
+      "id": "tj3",
+      "prefab": "TJunction"
+    },
+    {
+      "id": "vault3",
+      "prefab": "RewardVault",
       "chests": [
-        { "id": "ed-vault3-chest", "lootTableId": "dungeon-chest", "visual": "chest", "offset": [0, 0, 1.2] }
+        {
+          "id": "ed-vault3-chest",
+          "lootTableId": "dungeon-chest",
+          "visual": "chest",
+          "offset": [
+            0,
+            0,
+            1.2
+          ]
+        }
       ]
     },
-    { "id": "corr3", "prefab": "Straight",
+    {
+      "id": "corr3",
+      "prefab": "Straight",
       "encounter": {
-        "kind": "orc-group", "min": 4, "max": 6,
-        "seatMode": "ring", "formationRadius": 3.5,
-        "confine": { "mode": "room", "slack": 2.0, "returnHome": true, "wakeRadius": 6.5 }
+        "kind": "orc-group",
+        "min": 4,
+        "max": 6,
+        "seatMode": "ring",
+        "formationRadius": 3.5,
+        "confine": {
+          "mode": "room",
+          "slack": 2,
+          "returnHome": true,
+          "wakeRadius": 6.5
+        }
       }
     },
-    { "id": "stair_dn_3", "prefab": "StairDown" },
-
-    { "id": "stair_up_4", "prefab": "StairUp" },
-    { "id": "choke4", "prefab": "ChokePoint",
+    {
+      "id": "stairwell_3",
+      "prefab": "StairwellRoom"
+    },
+    {
+      "id": "choke4",
+      "prefab": "ChokePoint",
       "encounter": {
-        "kind": "orc-group", "min": 5, "max": 7,
-        "seatMode": "ring", "formationRadius": 3.0,
-        "confine": { "mode": "room", "slack": 1.5, "returnHome": true, "wakeRadius": 6.0 }
+        "kind": "orc-group",
+        "min": 5,
+        "max": 7,
+        "seatMode": "ring",
+        "formationRadius": 3,
+        "confine": {
+          "mode": "room",
+          "slack": 1.5,
+          "returnHome": true,
+          "wakeRadius": 6
+        }
       }
     },
-    { "id": "stair_dn_4", "prefab": "StairDown" },
-
-    { "id": "stair_up_5", "prefab": "StairUp" },
-    { "id": "approach5", "prefab": "ChokePoint",
+    {
+      "id": "stairwell_4",
+      "prefab": "StairwellRoom"
+    },
+    {
+      "id": "approach5",
+      "prefab": "ChokePoint",
       "encounter": {
-        "kind": "troll-group", "min": 2, "max": 3,
-        "seatMode": "ring", "formationRadius": 3.5,
-        "confine": { "mode": "room", "slack": 2.0, "returnHome": true, "wakeRadius": 7.0 }
+        "kind": "troll-group",
+        "min": 2,
+        "max": 3,
+        "seatMode": "ring",
+        "formationRadius": 3.5,
+        "confine": {
+          "mode": "room",
+          "slack": 2,
+          "returnHome": true,
+          "wakeRadius": 7
+        }
       }
     },
-    { "id": "warlord_keep", "prefab": "BossKeep",
+    {
+      "id": "warlord_keep",
+      "prefab": "BossKeep",
       "encounter": {
-        "kind": "troll-group", "isBoss": true,
+        "kind": "troll-group",
+        "isBoss": true,
         "enemyType": "ogre",
         "displayName": "The Ember Warlord",
-        "min": 1, "max": 1,
-        "seatMode": "ring", "formationRadius": 2.0,
-        "confine": { "mode": "room", "slack": 3.0, "returnHome": false, "wakeRadius": 10.0 }
+        "min": 1,
+        "max": 1,
+        "seatMode": "ring",
+        "formationRadius": 2,
+        "confine": {
+          "mode": "room",
+          "slack": 3,
+          "returnHome": false,
+          "wakeRadius": 10
+        }
       },
       "chests": [
-        { "id": "ed-warlord-hoard", "lootTableId": "dungeon-deepboss", "visual": "chest", "offset": [0, 0, 2.0] },
-        { "id": "ed-warlord-crate", "lootTableId": "chest-rare", "visual": "crate", "offset": [2.4, 0, 1.2] }
+        {
+          "id": "ed-warlord-hoard",
+          "lootTableId": "dungeon-deepboss",
+          "visual": "chest",
+          "offset": [
+            0,
+            0,
+            2
+          ]
+        },
+        {
+          "id": "ed-warlord-crate",
+          "lootTableId": "chest-rare",
+          "visual": "crate",
+          "offset": [
+            2.4,
+            0,
+            1.2
+          ]
+        }
       ]
     }
   ],
   "oilStones": [
-    { "id": "ed-oil-entry", "roomId": "entry", "offset": [1.8, 0, 0], "radius": 2.5 },
-    { "id": "ed-oil-l2", "roomId": "combat2", "offset": [-2.5, 0, 2.0], "radius": 2.5 },
-    { "id": "ed-oil-l4", "roomId": "choke4", "offset": [0, 0, 1.8], "radius": 2.5 }
+    {
+      "id": "ed-oil-entry",
+      "roomId": "entry",
+      "offset": [
+        1.8,
+        0,
+        0
+      ],
+      "radius": 2.5
+    },
+    {
+      "id": "ed-oil-l2",
+      "roomId": "combat2",
+      "offset": [
+        -2.5,
+        0,
+        2
+      ],
+      "radius": 2.5
+    },
+    {
+      "id": "ed-oil-l4",
+      "roomId": "choke4",
+      "offset": [
+        0,
+        0,
+        1.8
+      ],
+      "radius": 2.5
+    }
   ],
   "extracts": [
-    { "id": "ed-extract-l1", "roomId": "stair_up_1", "offset": [1.6, 0, 0], "label": "Extract" },
-    { "id": "ed-extract-l2", "roomId": "stair_up_2", "offset": [1.6, 0, 0], "label": "Extract" },
-    { "id": "ed-extract-l3", "roomId": "stair_up_3", "offset": [1.6, 0, 0], "label": "Extract" },
-    { "id": "ed-extract-l4", "roomId": "stair_up_4", "offset": [1.6, 0, 0], "label": "Extract" },
-    { "id": "ed-extract-l5", "roomId": "stair_up_5", "offset": [1.6, 0, 0], "label": "Extract" }
+    {
+      "id": "ed-extract-l1",
+      "roomId": "stairwell_0",
+      "offset": [
+        1.6,
+        0,
+        0
+      ],
+      "label": "Extract"
+    },
+    {
+      "id": "ed-extract-l2",
+      "roomId": "stairwell_1",
+      "offset": [
+        1.6,
+        0,
+        0
+      ],
+      "label": "Extract"
+    },
+    {
+      "id": "ed-extract-l3",
+      "roomId": "stairwell_2",
+      "offset": [
+        1.6,
+        0,
+        0
+      ],
+      "label": "Extract"
+    },
+    {
+      "id": "ed-extract-l4",
+      "roomId": "stairwell_3",
+      "offset": [
+        1.6,
+        0,
+        0
+      ],
+      "label": "Extract"
+    },
+    {
+      "id": "ed-extract-l5",
+      "roomId": "stairwell_4",
+      "offset": [
+        1.6,
+        0,
+        0
+      ],
+      "label": "Extract"
+    }
   ],
   "traps": [
-    { "id": "ed-trap-l1", "roomId": "corr1", "kind": "grate", "damage": 12.0, "radius": 1.4, "offset": [0, 0, 0] },
-    { "id": "ed-trap-l3", "roomId": "corr3", "kind": "spike", "damage": 16.0, "radius": 1.4, "offset": [0, 0, 0] },
-    { "id": "ed-trap-l4", "roomId": "choke4", "kind": "spike", "damage": 20.0, "radius": 1.4, "offset": [0, 0, -1.5] }
+    {
+      "id": "ed-trap-l1",
+      "roomId": "corr1",
+      "kind": "grate",
+      "damage": 12,
+      "radius": 1.4,
+      "offset": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "id": "ed-trap-l3",
+      "roomId": "corr3",
+      "kind": "spike",
+      "damage": 16,
+      "radius": 1.4,
+      "offset": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "id": "ed-trap-l4",
+      "roomId": "choke4",
+      "kind": "spike",
+      "damage": 20,
+      "radius": 1.4,
+      "offset": [
+        0,
+        0,
+        -1.5
+      ]
+    }
   ],
   "edges": [
-    { "from": "entry", "fromSocket": "n_door_01", "to": "hub0", "toSocket": "s_door_01" },
-    { "from": "hub0", "fromSocket": "w_door_01", "to": "vault0", "toSocket": "s_door_01" },
-    { "from": "hub0", "fromSocket": "e_door_01", "to": "shrine0", "toSocket": "s_door_01" },
-    { "from": "hub0", "fromSocket": "n_door_01", "to": "stair_dn_0", "toSocket": "s_door_01" },
-
-    { "from": "stair_dn_0", "fromSocket": "stair_down_01", "to": "stair_up_1", "toSocket": "stair_up_01" },
-    { "from": "stair_up_1", "fromSocket": "s_door_01", "to": "corr1", "toSocket": "n_door_01" },
-    { "from": "corr1", "fromSocket": "s_door_01", "to": "stair_dn_1", "toSocket": "s_door_01" },
-
-    { "from": "stair_dn_1", "fromSocket": "stair_down_01", "to": "stair_up_2", "toSocket": "stair_up_01" },
-    { "from": "stair_up_2", "fromSocket": "s_door_01", "to": "combat2", "toSocket": "n_door_01" },
-    { "from": "combat2", "fromSocket": "s_door_01", "to": "stair_dn_2", "toSocket": "s_door_01" },
-
-    { "from": "stair_dn_2", "fromSocket": "stair_down_01", "to": "stair_up_3", "toSocket": "stair_up_01" },
-    { "from": "stair_up_3", "fromSocket": "s_door_01", "to": "tj3", "toSocket": "s_door_01" },
-    { "from": "tj3", "fromSocket": "w_door_01", "to": "vault3", "toSocket": "s_door_01" },
-    { "from": "tj3", "fromSocket": "e_door_01", "to": "corr3", "toSocket": "n_door_01" },
-    { "from": "corr3", "fromSocket": "s_door_01", "to": "stair_dn_3", "toSocket": "s_door_01" },
-
-    { "from": "stair_dn_3", "fromSocket": "stair_down_01", "to": "stair_up_4", "toSocket": "stair_up_01" },
-    { "from": "stair_up_4", "fromSocket": "s_door_01", "to": "choke4", "toSocket": "n_door_01" },
-    { "from": "choke4", "fromSocket": "s_door_01", "to": "stair_dn_4", "toSocket": "s_door_01" },
-
-    { "from": "stair_dn_4", "fromSocket": "stair_down_01", "to": "stair_up_5", "toSocket": "stair_up_01" },
-    { "from": "stair_up_5", "fromSocket": "s_door_01", "to": "approach5", "toSocket": "n_door_01" },
-    { "from": "approach5", "fromSocket": "s_door_01", "to": "warlord_keep", "toSocket": "s_door_01" }
+    {
+      "from": "entry",
+      "fromSocket": "n_door_01",
+      "to": "hub0",
+      "toSocket": "s_door_01"
+    },
+    {
+      "from": "hub0",
+      "fromSocket": "w_door_01",
+      "to": "vault0",
+      "toSocket": "s_door_01"
+    },
+    {
+      "from": "hub0",
+      "fromSocket": "e_door_01",
+      "to": "shrine0",
+      "toSocket": "s_door_01"
+    },
+    {
+      "from": "hub0",
+      "fromSocket": "n_door_01",
+      "to": "stairwell_0",
+      "toSocket": "s_upper_w"
+    },
+    {
+      "from": "stairwell_0",
+      "fromSocket": "s_lower_e",
+      "to": "corr1",
+      "toSocket": "n_door_01"
+    },
+    {
+      "from": "corr1",
+      "fromSocket": "s_door_01",
+      "to": "stairwell_1",
+      "toSocket": "s_upper_w"
+    },
+    {
+      "from": "stairwell_1",
+      "fromSocket": "s_lower_e",
+      "to": "combat2",
+      "toSocket": "n_door_01"
+    },
+    {
+      "from": "combat2",
+      "fromSocket": "s_door_01",
+      "to": "stairwell_2",
+      "toSocket": "s_upper_w"
+    },
+    {
+      "from": "stairwell_2",
+      "fromSocket": "s_lower_e",
+      "to": "tj3",
+      "toSocket": "s_door_01"
+    },
+    {
+      "from": "tj3",
+      "fromSocket": "w_door_01",
+      "to": "vault3",
+      "toSocket": "s_door_01"
+    },
+    {
+      "from": "tj3",
+      "fromSocket": "e_door_01",
+      "to": "corr3",
+      "toSocket": "n_door_01"
+    },
+    {
+      "from": "corr3",
+      "fromSocket": "s_door_01",
+      "to": "stairwell_3",
+      "toSocket": "s_upper_w"
+    },
+    {
+      "from": "stairwell_3",
+      "fromSocket": "s_lower_e",
+      "to": "choke4",
+      "toSocket": "n_door_01"
+    },
+    {
+      "from": "choke4",
+      "fromSocket": "s_door_01",
+      "to": "stairwell_4",
+      "toSocket": "s_upper_w"
+    },
+    {
+      "from": "stairwell_4",
+      "fromSocket": "s_lower_e",
+      "to": "approach5",
+      "toSocket": "n_door_01"
+    },
+    {
+      "from": "approach5",
+      "fromSocket": "s_door_01",
+      "to": "warlord_keep",
+      "toSocket": "s_door_01"
+    }
   ],
   "rules": {
     "spineOnly": false,

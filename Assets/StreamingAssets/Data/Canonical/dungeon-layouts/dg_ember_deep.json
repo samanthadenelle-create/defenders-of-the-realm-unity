@@ -67,28 +67,15 @@
       "chests": null
     },
     {
-      "prefab": "StairDown",
-      "instanceId": "stair_dn_0",
-      "cell": [
-        0,
-        0,
-        20
-      ],
-      "yawDeg": 0.0,
-      "archetype": "hub",
-      "encounter": null,
-      "chests": null
-    },
-    {
-      "prefab": "StairUp",
-      "instanceId": "stair_up_1",
+      "prefab": "StairwellRoom",
+      "instanceId": "stairwell_0",
       "cell": [
         0,
         -6,
-        20
+        25
       ],
-      "yawDeg": 0.0,
-      "archetype": "hub",
+      "yawDeg": 270.0,
+      "archetype": null,
       "encounter": null,
       "chests": null
     },
@@ -98,9 +85,9 @@
       "cell": [
         0,
         -6,
-        10
+        40
       ],
-      "yawDeg": 0.0,
+      "yawDeg": 180.0,
       "archetype": "combat",
       "encounter": {
         "kind": "orc-group",
@@ -121,28 +108,15 @@
       "chests": null
     },
     {
-      "prefab": "StairDown",
-      "instanceId": "stair_dn_1",
-      "cell": [
-        0,
-        -6,
-        0
-      ],
-      "yawDeg": 180.0,
-      "archetype": "hub",
-      "encounter": null,
-      "chests": null
-    },
-    {
-      "prefab": "StairUp",
-      "instanceId": "stair_up_2",
+      "prefab": "StairwellRoom",
+      "instanceId": "stairwell_1",
       "cell": [
         0,
         -12,
-        0
+        55
       ],
-      "yawDeg": 0.0,
-      "archetype": "hub",
+      "yawDeg": 270.0,
+      "archetype": null,
       "encounter": null,
       "chests": null
     },
@@ -152,9 +126,9 @@
       "cell": [
         0,
         -12,
-        -15
+        75
       ],
-      "yawDeg": 0.0,
+      "yawDeg": 180.0,
       "archetype": "combat",
       "encounter": {
         "kind": "orc-group",
@@ -186,28 +160,15 @@
       ]
     },
     {
-      "prefab": "StairDown",
-      "instanceId": "stair_dn_2",
-      "cell": [
-        0,
-        -12,
-        -30
-      ],
-      "yawDeg": 180.0,
-      "archetype": "hub",
-      "encounter": null,
-      "chests": null
-    },
-    {
-      "prefab": "StairUp",
-      "instanceId": "stair_up_3",
+      "prefab": "StairwellRoom",
+      "instanceId": "stairwell_2",
       "cell": [
         0,
         -18,
-        -30
+        95
       ],
-      "yawDeg": 0.0,
-      "archetype": "hub",
+      "yawDeg": 270.0,
+      "archetype": null,
       "encounter": null,
       "chests": null
     },
@@ -217,9 +178,9 @@
       "cell": [
         0,
         -18,
-        -40
+        110
       ],
-      "yawDeg": 180.0,
+      "yawDeg": 0.0,
       "archetype": "combat",
       "encounter": null,
       "chests": null
@@ -228,11 +189,11 @@
       "prefab": "RewardVault",
       "instanceId": "vault3",
       "cell": [
-        10,
+        -10,
         -18,
-        -40
+        110
       ],
-      "yawDeg": 90.00002,
+      "yawDeg": 270.0,
       "archetype": "reward",
       "encounter": null,
       "chests": [
@@ -252,11 +213,11 @@
       "prefab": "Straight",
       "instanceId": "corr3",
       "cell": [
-        -10,
+        10,
         -18,
-        -40
+        110
       ],
-      "yawDeg": 90.0,
+      "yawDeg": 270.0,
       "archetype": "combat",
       "encounter": {
         "kind": "orc-group",
@@ -277,28 +238,15 @@
       "chests": null
     },
     {
-      "prefab": "StairDown",
-      "instanceId": "stair_dn_3",
+      "prefab": "StairwellRoom",
+      "instanceId": "stairwell_3",
       "cell": [
-        -20,
-        -18,
-        -40
-      ],
-      "yawDeg": 270.0,
-      "archetype": "hub",
-      "encounter": null,
-      "chests": null
-    },
-    {
-      "prefab": "StairUp",
-      "instanceId": "stair_up_4",
-      "cell": [
-        -20,
+        25,
         -24,
-        -40
+        110
       ],
       "yawDeg": 0.0,
-      "archetype": "hub",
+      "archetype": null,
       "encounter": null,
       "chests": null
     },
@@ -306,11 +254,11 @@
       "prefab": "ChokePoint",
       "instanceId": "choke4",
       "cell": [
-        -20,
+        40,
         -24,
-        -50
+        110
       ],
-      "yawDeg": 0.0,
+      "yawDeg": 270.0,
       "archetype": "combat",
       "encounter": {
         "kind": "orc-group",
@@ -331,28 +279,15 @@
       "chests": null
     },
     {
-      "prefab": "StairDown",
-      "instanceId": "stair_dn_4",
+      "prefab": "StairwellRoom",
+      "instanceId": "stairwell_4",
       "cell": [
-        -20,
-        -24,
-        -60
-      ],
-      "yawDeg": 180.0,
-      "archetype": "hub",
-      "encounter": null,
-      "chests": null
-    },
-    {
-      "prefab": "StairUp",
-      "instanceId": "stair_up_5",
-      "cell": [
-        -20,
+        55,
         -30,
-        -60
+        110
       ],
       "yawDeg": 0.0,
-      "archetype": "hub",
+      "archetype": null,
       "encounter": null,
       "chests": null
     },
@@ -360,11 +295,11 @@
       "prefab": "ChokePoint",
       "instanceId": "approach5",
       "cell": [
-        -20,
+        70,
         -30,
-        -70
+        110
       ],
-      "yawDeg": 0.0,
+      "yawDeg": 270.0,
       "archetype": "combat",
       "encounter": {
         "kind": "troll-group",
@@ -388,11 +323,11 @@
       "prefab": "BossKeep",
       "instanceId": "warlord_keep",
       "cell": [
-        -20,
+        85,
         -30,
-        -85
+        110
       ],
-      "yawDeg": 180.0,
+      "yawDeg": 90.00001,
       "archetype": "boss",
       "encounter": {
         "kind": "troll-group",
@@ -444,8 +379,8 @@
     {
       "fromInstance": "hub0",
       "fromSocket": "n_door_01",
-      "toInstance": "stair_dn_0",
-      "toSocket": "s_door_01"
+      "toInstance": "stairwell_0",
+      "toSocket": "s_upper_w"
     },
     {
       "fromInstance": "hub0",
@@ -460,50 +395,32 @@
       "toSocket": "s_door_01"
     },
     {
-      "fromInstance": "stair_dn_0",
-      "fromSocket": "stair_down_01",
-      "toInstance": "stair_up_1",
-      "toSocket": "stair_up_01"
-    },
-    {
-      "fromInstance": "stair_up_1",
-      "fromSocket": "s_door_01",
+      "fromInstance": "stairwell_0",
+      "fromSocket": "s_lower_e",
       "toInstance": "corr1",
       "toSocket": "n_door_01"
     },
     {
       "fromInstance": "corr1",
       "fromSocket": "s_door_01",
-      "toInstance": "stair_dn_1",
-      "toSocket": "s_door_01"
+      "toInstance": "stairwell_1",
+      "toSocket": "s_upper_w"
     },
     {
-      "fromInstance": "stair_dn_1",
-      "fromSocket": "stair_down_01",
-      "toInstance": "stair_up_2",
-      "toSocket": "stair_up_01"
-    },
-    {
-      "fromInstance": "stair_up_2",
-      "fromSocket": "s_door_01",
+      "fromInstance": "stairwell_1",
+      "fromSocket": "s_lower_e",
       "toInstance": "combat2",
       "toSocket": "n_door_01"
     },
     {
       "fromInstance": "combat2",
       "fromSocket": "s_door_01",
-      "toInstance": "stair_dn_2",
-      "toSocket": "s_door_01"
+      "toInstance": "stairwell_2",
+      "toSocket": "s_upper_w"
     },
     {
-      "fromInstance": "stair_dn_2",
-      "fromSocket": "stair_down_01",
-      "toInstance": "stair_up_3",
-      "toSocket": "stair_up_01"
-    },
-    {
-      "fromInstance": "stair_up_3",
-      "fromSocket": "s_door_01",
+      "fromInstance": "stairwell_2",
+      "fromSocket": "s_lower_e",
       "toInstance": "tj3",
       "toSocket": "s_door_01"
     },
@@ -522,36 +439,24 @@
     {
       "fromInstance": "corr3",
       "fromSocket": "s_door_01",
-      "toInstance": "stair_dn_3",
-      "toSocket": "s_door_01"
+      "toInstance": "stairwell_3",
+      "toSocket": "s_upper_w"
     },
     {
-      "fromInstance": "stair_dn_3",
-      "fromSocket": "stair_down_01",
-      "toInstance": "stair_up_4",
-      "toSocket": "stair_up_01"
-    },
-    {
-      "fromInstance": "stair_up_4",
-      "fromSocket": "s_door_01",
+      "fromInstance": "stairwell_3",
+      "fromSocket": "s_lower_e",
       "toInstance": "choke4",
       "toSocket": "n_door_01"
     },
     {
       "fromInstance": "choke4",
       "fromSocket": "s_door_01",
-      "toInstance": "stair_dn_4",
-      "toSocket": "s_door_01"
+      "toInstance": "stairwell_4",
+      "toSocket": "s_upper_w"
     },
     {
-      "fromInstance": "stair_dn_4",
-      "fromSocket": "stair_down_01",
-      "toInstance": "stair_up_5",
-      "toSocket": "stair_up_01"
-    },
-    {
-      "fromInstance": "stair_up_5",
-      "fromSocket": "s_door_01",
+      "fromInstance": "stairwell_4",
+      "fromSocket": "s_lower_e",
       "toInstance": "approach5",
       "toSocket": "n_door_01"
     },
@@ -646,7 +551,7 @@
   "extracts": [
     {
       "id": "ed-extract-l1",
-      "roomId": "stair_up_1",
+      "roomId": "stairwell_0",
       "offset": [
         1.6,
         0.0,
@@ -656,7 +561,7 @@
     },
     {
       "id": "ed-extract-l2",
-      "roomId": "stair_up_2",
+      "roomId": "stairwell_1",
       "offset": [
         1.6,
         0.0,
@@ -666,7 +571,7 @@
     },
     {
       "id": "ed-extract-l3",
-      "roomId": "stair_up_3",
+      "roomId": "stairwell_2",
       "offset": [
         1.6,
         0.0,
@@ -676,7 +581,7 @@
     },
     {
       "id": "ed-extract-l4",
-      "roomId": "stair_up_4",
+      "roomId": "stairwell_3",
       "offset": [
         1.6,
         0.0,
@@ -686,7 +591,7 @@
     },
     {
       "id": "ed-extract-l5",
-      "roomId": "stair_up_5",
+      "roomId": "stairwell_4",
       "offset": [
         1.6,
         0.0,
