@@ -1,3 +1,19 @@
+> # ⚠ HYPOTHESIS KILLED — 2026-08-08. Read this before using §5.5.2.
+>
+> **This document's stated justification for the stitch / connector architecture is dead.** §5.5.2 argued
+> that today's `PathPartial` is an **erosion** problem — a 0.80 m top landing against the 1.00 m minimum
+> walkable slot. That was tested and killed: `TurnRun 4.0 → 3.5` shipped (`4ec16f96`), the landing measures
+> **1.30 m**, and **the path outcome did not move** (`CANON_GROUND_TRUTH_2026-08-08.md:59`). The remedy was
+> applied in full and bought nothing.
+>
+> **The architecture in §5.5 may still be correct — it can no longer rest on this reason.** A fresh,
+> measurement-based justification is required before any implementation decision.
+>
+> **Formal record + the blocking measurements:** `WorkOrders/WORK_ORDER_927_pathpartial_seam_revalidation.md`.
+>
+> Everything else in this document (the connector model §1–§4, the placement-gate §3.3, the stitch model
+> §5.5.1/.3/.4/.5/.6, the costs §3.1/§3.2) is **unaffected** — none of it depended on the erosion claim.
+
 # Design — the connector is the only contract
 
 **Owner, 2026-08-07, in three statements:**
@@ -259,12 +275,28 @@ required half, not the optional half.
 load-bearing assumption of this whole design and it is stated here from recollection, not from a test. **Prove
 it in a two-room scene first.** If they do connect under some tolerance, half of this section changes.
 
-### 5.5.2 It likely fixes the CURRENT failure, for a specific reason
+### 5.5.2 ~~It likely fixes the CURRENT failure, for a specific reason~~ — ⛔ STRUCK 2026-08-08, THE PREMISE IS DEAD
 
-Today's `PathPartial` is an **erosion** problem, not a geometry problem: the Left/Right top landing is 0.80 m
+> **Do not cite this section.** It is retained verbatim below only so the refuted reasoning stays legible to
+> future readers — deleting it would let the same theory be re-derived from scratch. The claim it rests on
+> was measured and killed; see the banner at the top of this file and **WO-927**.
+
+~~Today's `PathPartial` is an **erosion** problem, not a geometry problem: the Left/Right top landing is 0.80 m
 against a 1.00 m minimum walkable slot, so the whole-dungeon voxel bake eats it and the stair top becomes an
 island. **A `NavMeshLink` does not erode.** It bridges exactly the gaps voxelization destroys — so links may
-connect the stairs *without* the landing fix, though `TurnRun 4.0 → 3.5` is still worth doing on its own merits.
+connect the stairs *without* the landing fix, though `TurnRun 4.0 → 3.5` is still worth doing on its own merits.~~
+
+**What actually happened:** `TurnRun 4.0 → 3.5` **shipped** (`4ec16f96`). The landing measures **1.30 m** —
+0.30 m *above* the minimum this section called the cause. Slope 40.6°, also measured. **The path outcome did
+not change.** Three further hypotheses (slope, ramp length, navmesh tiling) were tested and killed after it,
+the last by a controlled `tileSize = 1024` test whose wholeness came back **bit-identical**
+(`CANON_GROUND_TRUTH_2026-08-08.md:55-92`).
+
+**The surviving claim — narrower, and still worth something:** *a `NavMeshLink` does not erode.* That remains
+true and is still an argument for §5.5.1's stitch model. It is no longer an argument that links will fix
+**this** failure, because erosion is no longer believed to be **this** failure's cause. The link model must be
+justified on its own merits (modularity, per-room proof, runtime generation — §5.5.3/.4/.5), not as a remedy
+for a defect it has not been shown to address.
 
 ### 5.5.3 Verification splits — prove the unit once, then only prove the joins
 

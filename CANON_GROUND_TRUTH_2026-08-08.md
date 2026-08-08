@@ -91,6 +91,17 @@ is to stop correlating and *look*: dump the actual navmesh triangles over one kn
 (`NavMesh.CalculateTriangulation`, filtered to the flight's bounds) and read **where** the strip
 breaks. One picture of a real failure beats a fifth scalar.
 
+**★ That move is now a ticket: `WorkOrders/WORK_ORDER_927_pathpartial_seam_revalidation.md`** (owner-authored
+2026-08-08). It captures ground truth on **one** failing seam — both attachment points' world coords, the
+residual delta vector, connector local/lossy scale, mesh bounds, world span, a connector-disabled check, and
+the triangulation dump — rather than bucketing a population against a fifth scalar. **Measure the FIRST
+failing descent out of the entry**, not a convenient one (see the `dg_bonecrypt` note above).
+
+⚠ **Fallout the WO also records:** `WorkOrders/DESIGN_CONNECTOR_IS_THE_ONLY_CONTRACT.md` §5.5.2 justified the
+whole stitch/connector architecture on hypothesis #1 — *"today's `PathPartial` is an erosion problem, the top
+landing is 0.80 m against a 1.00 m slot."* That premise died here. §5.5.2 is now **struck** and the file
+carries a hypothesis-killed banner. The architecture may still be right; it needs a new reason.
+
 ### The diagnostics are permanent — start from them, not from source
 
 Every bake now prints, unasked:

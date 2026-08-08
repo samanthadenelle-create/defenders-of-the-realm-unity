@@ -1,6 +1,13 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ RECONCILED 2026-08-07 (CLI / Grok Imagine dungeon review): main line next free = **927**. **782–859 + 900–926 CONSUMED.**
+> ## ⚠ RECONCILED 2026-08-08: main line next free = **928**. **782–859 + 900–927 CONSUMED.**
+> - **927** = **PathPartial seam revalidation** — the design doc's §5.5.2 erosion justification is DEAD
+>   (landing measured 1.30 m, path outcome unchanged). Capture M1–M7 on ONE failing seam (attachment-point
+>   world coords, delta vector, connector scale/bounds/span, connector-disabled check, and a
+>   `NavMesh.CalculateTriangulation` dump), then re-justify or retire the connector.
+>   File `WORK_ORDER_927_pathpartial_seam_revalidation.md`. **READY TO IMPLEMENT** (owner-authored).
+>
+> *(banner bumped 927 → 928 in the SAME edit as the 927 mint — the rule that broke five times on 08-02.)*
 > - **926** = **Combat anim: legs/hips, foot slide, recovery, shield clip** (Imagine review P2).
 >   File `WORK_ORDER_926_combat_anim_root_motion_recovery.md`. **SPEC / owner priority.**
 > - **925** = **Kill/condition permanent foot fire VFX** under hero (Imagine — always-on sparks).
@@ -239,7 +246,7 @@
 > ## ⚠ TWO-BLOCK ALLOCATION IN USE (2026-08-02 evening) — the collision fix, in practice
 > | Block | Owner | Next free |
 > |---|---|---|
-> | **main line** | CLI | **923** (782–859 + 900–**922** consumed; 860–899 was the UI seat's old block) |
+> | **main line** | CLI | **928** (782–859 + 900–**927** consumed; 860–899 was the UI seat's old block) |
 > | **1000–1099 reserved** | UI seat | **1006** (1000–1005 consumed) |
 >
 > *(UI-seat bumped 1005 → 1006 with the WO-1005 mint — dungeon UI cohesion: reskin the flat-purple "Descend"
