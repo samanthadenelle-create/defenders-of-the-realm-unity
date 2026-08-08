@@ -88,8 +88,36 @@ namespace DeNelle.Editor
             }
         }
 
+        /// <summary>
+        /// RELEASE desktop player — no Development flag, so no watermark and no DevTools.
+        /// </summary>
+        /// <remarks>
+        /// Owner ask 2026-08-08, mid store-capture: "flag is still on ... cant record with that ...
+        /// can you do a prod build."
+        ///
+        /// WHY A FLAG FLIP WAS NOT ENOUGH. ff.devresourcetool now defaults OFF, but FeatureFlags.Get
+        /// (:796-802) reads PlayerPrefs FIRST and only falls back to the default when nothing is
+        /// stored - and this machine carries ff.devresourcetool=1 from the 08-07 "enable the dev tab"
+        /// pass. A stored 1 beats any default, on her machine and on anyone else's who ever set it.
+        /// A release build settles it structurally instead: DeNelle.DevTools is gated
+        /// #if UNITY_EDITOR || DEVELOPMENT_BUILD, so with Development OFF the chips and the panel
+        /// cannot exist whatever PlayerPrefs says.
+        ///
+        /// AND IT REMOVES THE WATERMARK. A Development player paints "Development Build" in the
+        /// corner of every frame - which was about to appear in the store screenshots. KEY_FACTS has
+        /// carried "desktop release still ships Development (open item)" for weeks; this is that item.
+        ///
+        /// The QA build is UNCHANGED and still the default: BuildWindows keeps
+        /// BuildOptions.Development so the F1 panel, force-wave and grant-materials survive for
+        /// felt-testing. Use this one for capture and release, that one to play.
+        /// </remarks>
+        [MenuItem("Defenders/Build/Windows x64 Player (RELEASE - no dev tools)")]
+        public static void BuildWindowsRelease() => BuildWindows(development: false);
+
         [MenuItem("Defenders/Build/Windows x64 Player")]
-        public static void BuildWindows()
+        public static void BuildWindows() => BuildWindows(development: true);
+
+        private static void BuildWindows(bool development)
         {
             string[] scenes = EditorBuildSettings.scenes
                 .Where(s => s.enabled)
@@ -107,7 +135,11 @@ namespace DeNelle.Editor
             Directory.CreateDirectory(dir);
             string exePath = Path.Combine(dir, ExeName);
 
-            Debug.Log($"[DesktopBuild] Building {scenes.Length} scene(s) -> {exePath}");
+            // Say WHICH build this is, loudly. The two differ in whether dev tools and the
+            // watermark exist, and "which exe am I looking at" is exactly the question a capture
+            // session needs answered from the log rather than from the corner of a screenshot.
+            Debug.Log($"[DesktopBuild] Building {scenes.Length} scene(s) -> {exePath} " +
+                      $"[{(development ? "DEVELOPMENT - dev tools + watermark" : "RELEASE - no dev tools, no watermark")}]");
             foreach (string s in scenes)
                 Debug.Log($"[DesktopBuild]   scene: {s}");
 
@@ -200,7 +232,10 @@ namespace DeNelle.Editor
                 target = BuildTarget.StandaloneWindows64,
                 // Development build so the DevTools QA panel (gear / F1: force-wave,
                 // grant-materials) compiles in — it is gated #if DEVELOPMENT_BUILD.
-                options = BuildOptions.Development,
+                // RELEASE (development:false) strips that assembly entirely AND drops the
+                // "Development Build" watermark — see BuildWindowsRelease for why a feature-flag
+                // flip could not achieve either.
+                options = development ? BuildOptions.Development : BuildOptions.None,
             };
 
             BuildReport report = BuildPipeline.BuildPlayer(options);
