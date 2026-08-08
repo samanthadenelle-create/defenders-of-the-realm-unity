@@ -70,11 +70,51 @@ namespace DeNelle.Editor.RoomForge
         // node name its variant and have the composer emit the CONCRETE connector stem into
         // `prefab`. At that point this alias simply stops firing for those nodes — no edit needed
         // here, because a concrete stem is not a key in this map.
+        /// <summary>
+        /// Which stair shape every descent uses. **TURN, not Vertical** (owner ruling 2026-08-07).
+        ///
+        /// <para>⚠ <b>THIS WAS "Left" FOR ONE BAKE AND IS REVERTED. THE SLOPE HYPOTHESIS IS DEAD.</b>
+        /// The reasoning was: Vertical's ramp is 42.7° against a 45° agent maximum, close enough
+        /// that per-column quantisation breaks the strip, while the turns run 40.6° and should
+        /// hold. Measured, that is simply false — switching every descent to Left made it
+        /// <i>worse</i> on every metric:</para>
+        /// <code>
+        ///                  Vertical (42.7°)      Left (40.6°)
+        ///   bonecrypt      4 ramps, 2/4 whole    8 ramps, 0/8 whole
+        ///   ember_deep     5 ramps, 3/5 whole   10 ramps, 0/10 whole
+        ///   sunken_vault   3 ramps, 1/3 whole    6 ramps, 0/6 whole
+        /// </code>
+        /// <para>The SHALLOWER ramp fragmented MORE, and not one turn leg was walkable end to end.
+        /// So slope is not the driver. What else differs about a turn leg is unmeasured: it is
+        /// SHORTER (3.5 m run vs ~6.5 m) and carries a landing box between the two legs. Do not
+        /// re-argue slope without new data — this is the second hypothesis about the stairs that
+        /// looked sound and died on contact with a measurement.</para>
+        ///
+        /// <para>Reverted to Vertical because 2/4 beats 0/8, not because Vertical is good. Locking
+        /// in a worse configuration while hunting the real cause only makes the next reading harder
+        /// to interpret.</para>
+        ///
+        /// <para>⚠ <b>BOTH HALVES OF A PAIR MUST SHARE THIS SHAPE.</b> The _Down room's floor hole
+        /// is cut from ITS shape's FlightPlan and the _Up room's flight comes from ITS shape, and
+        /// the two regions are nowhere near each other — Vertical's hole sits at x[-1.8..1.8]
+        /// z[0.83..3.5], Left's at x[-4.0..-0.83] z[-0.8..2.8]. Mismatch them and the arriving
+        /// flight comes up under solid floor. One constant, used for both halves, makes that
+        /// impossible by construction.</para>
+        ///
+        /// <para>Hence NO per-descent Left/Right alternation here, tempting as it is for variety:
+        /// this alias resolves each half independently BY STEM and has no idea which _Up pairs with
+        /// which _Down, so alternating on anything derived from the instance id would mismatch
+        /// pairs. Alternation belongs where the pairing is known — the composer emitting a concrete
+        /// stem per node (GraphNode ~L69 / the layout write ~L508), which is the same seam already
+        /// noted below. Until then, one shape for everything.</para>
+        /// </summary>
+        private const string StairShapeInUse = "Vertical";
+
         private static readonly Dictionary<string, string> StairConnectorAliases =
             new Dictionary<string, string>(System.StringComparer.OrdinalIgnoreCase)
             {
-                { "StairDown", "StairConnector_Vertical_Down" },
-                { "StairUp",   "StairConnector_Vertical_Up"   },
+                { "StairDown", "StairConnector_" + StairShapeInUse + "_Down" },
+                { "StairUp",   "StairConnector_" + StairShapeInUse + "_Up"   },
             };
 
         // Per-bake tally of how the stair nodes actually resolved (reset at the top of every bake).
@@ -717,7 +757,9 @@ namespace DeNelle.Editor.RoomForge
                 {
                     _stairConnectorsResolved++;
                     FlowTrace.Step(Sys, $"STAIR CONNECTOR '{prefabStem}' -> '{connectorStem}' (WO-923; " +
-                                        "VERTICAL is the default variant - no schema field selects Left/Right yet)");
+                                        $"shape={StairShapeInUse}. Both halves of a pair share this shape by " +
+                                        "construction - mismatching them puts the arriving flight under solid floor, " +
+                                        "since each variant's hole is cut from ITS OWN FlightPlan)");
                     return connector;
                 }
                 _stairConnectorsFellBack++;
