@@ -52,13 +52,19 @@ GRID_OK on all 86 rooms
 **Not for want of stairs.** Connectors resolve (`connectors=8/10/2, fallbacks=0`), geometry is
 placed, mates pass, every ramp carves navmesh.
 
-### ★ THREE HYPOTHESES TESTED AND KILLED. Do not re-run them. ★
+### ★ FOUR HYPOTHESES TESTED AND KILLED. Do not re-run them. ★
 
 | # | Hypothesis | How it died |
 |---|---|---|
 | 1 | **Landing width** — 0.80 m eroded below the 1.00 m walkable slot | `TurnRun 4.0 → 3.5` shipped. Landing 1.30 m, slope 40.6°, both measured. **Path unchanged.** |
 | 2 | **Slope** — 42.7° too close to the 45° agent max | Switched every descent to the 40.6° turn shape. **Worse:** 0/8 whole vs Vertical's 2/4. The *shallower* ramp fragmented *more*. Reverted. |
 | 3 | **Ramp length** — turn legs are 3.5 m vs Vertical's ~6.5 m | Bucketed wholeness by run and slope. **Every Vertical ramp is identical (7 m, 43°) and they disagree: 2/4, 3/5, 1/3, 0/1.** |
+| 4 | **NavMesh tiling** — the default 256-voxel tile is ~42.7 m, *smaller* than these dungeons, so each baked as several independently-voxelised tiles stitched at their edges. A flat floor stitches across a seam fine; a **slope** must agree on span heights from both sides. | The only one killed by a **controlled test** rather than a bucket count: set `tileSize` 1024 (~170 m — one tile per dungeon, seams gone entirely) and re-baked all six. Wholeness came back **bit-identical** (2/4, 0/1, 3/5, 0/5, 0/1, 1/3). Override reverted. |
+
+**Also measured 2026-08-08, all negative** (`RAMP CONTEXT` diagnostic): **yaw** — nearly every ramp
+is 180° and the bucket splits *within itself* (2/4 vs 0/3 vs 3/5) · **overlapping colliders** —
+almost every ramp reports exactly 6 · **voxel phase** — `0/4:3/12 1/4:0/6 2/4:6/13 3/4:3/7`; the
+`1/4` bucket never being whole is the only flicker and rests on ~3 underlying ramps.
 
 ### What the data actually says
 
@@ -74,11 +80,16 @@ And it explains the apparent contradiction in `dg_bonecrypt`: two ramps there **
 floor, but the **first** descent out of the entry is a broken one, so the working stairs sit behind
 it unreachable. **Reachability is gated by the first failure on the path, not by the average.**
 
-### Unmeasured candidates for the next session
+### Where to go next — the cheap moves are spent
 
-Voxel-grid phase (`cellSize 0.1667` — a ramp landing on a different sub-voxel offset rasterises
-differently) · room **yaw** · neighbouring geometry overlapping the ramp span · a slab or ceiling
-intersecting the flight. **None of these has been measured. Do not argue one into being the answer.**
+The four candidates listed here as "unmeasured" on 08-07 (voxel phase, yaw, neighbouring geometry,
+tiling) **have now all been measured, and all came back negative.** Nothing cheap remains.
+
+**Four rounds of correlation have each cost one bake and each returned nothing. That pattern is
+itself the signal** — a 15-ramp sample bucketed against scalars cannot resolve this. The next move
+is to stop correlating and *look*: dump the actual navmesh triangles over one known-bad ramp
+(`NavMesh.CalculateTriangulation`, filtered to the flight's bounds) and read **where** the strip
+breaks. One picture of a real failure beats a fifth scalar.
 
 ### The diagnostics are permanent — start from them, not from source
 
@@ -87,6 +98,8 @@ Every bake now prints, unasked:
 - `RAMP CARVE` — how many ramps carve, how many are whole end to end
 - `RAMP SEAMS` — bottom→own floor and top→floor above, separately
 - `RAMP SHAPE vs WHOLE` — wholeness bucketed by run and by slope
+- `RAMP CONTEXT vs WHOLE` — by yaw, voxel phase, overlapping colliders
+- `RAMP TILE` — by tile straddle and distance to the nearest tile edge
 
 ⚠ **The instruments have been wrong twice, and both times looked confident.** `ReportRampCarve`
 first sampled the ramp's extreme tips (which overhang ~0.35 m past each nose for the landing seam)
