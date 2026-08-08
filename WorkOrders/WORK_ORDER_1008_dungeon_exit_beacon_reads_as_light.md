@@ -93,6 +93,26 @@ the wrong place* — file the seating fix separately and say so in this WO's RES
 
 ---
 
+## 3a. ⚠ A REGRESSION PINS THE OBJECT NAME — do not trip it
+
+`Assets/Editor/Regression/DungeonRoomOwnershipRegression.cs:366-368`:
+
+```csharp
+Transform beam = exit.transform.Find("Beacon_Beam");
+if (beam == null)
+    failures.Add("[exit-beacon] spawned exit has no Beacon_Beam glow pillar");
+```
+
+**A suite asserts a child named exactly `Beacon_Beam`.** Replace the Unlit cube without keeping that
+name (or updating this oracle in the SAME change) and a correct fix turns the gate red. Prefer keeping
+the name — it is the contract "the exit has a visible beacon", which stays true and is worth pinning;
+only the *material and mesh* should change.
+
+The exit's other authored children, for reference: `Beacon_Label` (`:245`, the billboarded `EXIT`
+TextMesh — mirrored from one side, WO-1005) and `Pillar_L` / `Pillar_R` (`:205-206`, 0.35 x 2.6 x 0.35
+emerald). The owner refers to the whole cluster as the **exit points**; there are FIVE of them in
+`dg_ember_deep` alone.
+
 ## 4. Acceptance
 
 - [ ] The beacon reads as emitted light in a dark dungeon: it is affected by / contributes to lighting,
