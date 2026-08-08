@@ -57,13 +57,42 @@ namespace DeNelle.Village
         // side. Robust to import pivot — measured live per instance, no per-prop hand-tuning.
         public bool SeatFlat;
 
+        // WO-928: KEEP the prefab's own authored rotation instead of flattening it to identity.
+        // The default below (identity when no LocalRotation is supplied) is DEF-232's and stays —
+        // but it silently DESTROYS an orientation correction that was deliberately baked into a
+        // prefab, which is how the L3 Archer Tower shipped lying on its side.
+        //
+        // Captured 2026-08-08, owner felt-test:
+        //   after instantiate (prefab-native pose): euler=(270.00, 0.00, 0.00)   <- the bake is THERE
+        //   after LocalRotation identity:           euler=(0.00, 0.00, 0.00)     <- and gone
+        //   after Fit+SeatOnGround:                 scale=(8.34, 8.34, 8.34)
+        //   skinned ... boundsSize=(4.91, 4.80, 8.34)
+        // The second-order damage is worse than the wrong pose: once the model is flat, Fit measures
+        // the WRONG AXIS to reach its height target, so the tower scales 8.34x instead of L1's 4.74x
+        // and sprawls 8.34 m across a 3x3 m nav/physics blocker. Orientation and "the footprint is
+        // huge" are ONE defect, not two.
+        //
+        // This is opt-in, not a default flip, precisely because DEF-232's identity is load-bearing for
+        // hero/companion bodies (they import facing +X and are corrected via LocalRotation). Only
+        // callers whose art carries its correction IN THE PREFAB set this — see SkinOptions.Structure.
+        // ARCHITECTURE_PRINCIPLES law 4: an authored/manual correction is canon and is NEVER
+        // overwritten by an automatic pass. Flattening it to identity was exactly that overwrite.
+        public bool PreservePrefabRotation;
+
         /// <summary>An enemy/creature: fit to height, strip its colliders (the root carries the trigger capsule).</summary>
         public static SkinOptions Enemy(float height) =>
             new SkinOptions { FitHeight = height, StripColliders = true };
 
-        /// <summary>A tower/building: fit to largest dimension, seat on ground, URP-fix Tripo materials.</summary>
+        /// <summary>A tower/building: fit to largest dimension, seat on ground, URP-fix Tripo materials.
+        /// Keeps the prefab's authored rotation (WO-928): structure art carries its orientation
+        /// correction baked in by its builder (e.g. DeNelle.Editor.WoodenWatchtowerBuilder), and
+        /// structures-catalog's own orientation note records WHY it lives there rather than on the
+        /// catalog row — applying it from the row would double-apply on top of the prefab, and
+        /// ReskinForLevel deliberately does not apply entry.orientation at all, so a tier model has
+        /// nothing BUT its prefab pose to stand it up.</summary>
         public static SkinOptions Structure(float largest) =>
-            new SkinOptions { FitLargest = largest, SeatOnGround = true, FixTripoMaterials = true };
+            new SkinOptions { FitLargest = largest, SeatOnGround = true, FixTripoMaterials = true,
+                              PreservePrefabRotation = true };
 
         /// <summary>A small prop: fit to largest dimension, seat on ground.</summary>
         public static SkinOptions Prop(float largest) =>
@@ -137,8 +166,18 @@ namespace DeNelle.Village
             // measured + centred in its FINAL facing. A post-Skin rotation (the old pattern)
             // swung the off-pivot bounds sideways. Default is identity (unchanged for callers
             // that don't pass LocalRotation, e.g. enemies/structures).
-            go.transform.localRotation = opts.LocalRotation ?? Quaternion.identity;
-            TraceXform(opts.LocalRotation.HasValue ? "opts.LocalRotation" : "LocalRotation identity");
+            // WO-928: an explicit LocalRotation always wins. Otherwise we only FORCE identity when the
+            // caller has not asked us to preserve the prefab's authored pose — flattening a baked
+            // correction is what laid the L3 Archer Tower on its side and then let Fit measure the
+            // wrong axis (see SkinOptions.PreservePrefabRotation for the captured trace).
+            if (opts.LocalRotation.HasValue)
+                go.transform.localRotation = opts.LocalRotation.Value;
+            else if (!opts.PreservePrefabRotation)
+                go.transform.localRotation = Quaternion.identity;
+
+            TraceXform(opts.LocalRotation.HasValue ? "opts.LocalRotation"
+                     : opts.PreservePrefabRotation ? "prefab rotation PRESERVED (WO-928)"
+                     : "LocalRotation identity");
 
             // FLAT-SEAT: derive the natural resting orientation from geometry (narrowest world-bounds
             // axis → +Y, §4) so the model sits flat side down. Runs BEFORE Fit/SeatOnGround so the

@@ -257,7 +257,29 @@
 > | Block | Owner | Next free |
 > |---|---|---|
 > | **main line** | CLI | **929** (782–859 + 900–**928** consumed; 860–899 was the UI seat's old block) |
-> | **1000–1099 reserved** | UI seat | **1007** (1000–1006 consumed) |
+> | **1000–1099 reserved** | UI seat | **1010** (1000–1009 consumed) |
+>
+> *(UI-seat bumped 1009 -> 1010 in the SAME edit as the WO-1009 mint — composed-dungeon interactable ART +
+> AFFORDANCE pass: chests are gold PRIMITIVE CUBES (BreakableContainer.Create), key pickups + locked ports
+> are INVISIBLE triggers (the locked door has NO mesh) — give each a real KayKit prop + a self-explaining
+> "what/how" cue. Exit = WO-1007; exit beacon = WO-1008. Owner felt-test 2026-08-08 "dont understand the action".)*
+>
+> *(bumped 1008 -> 1009 in the SAME edit as the WO-1008 mint — dungeon EXIT beacon must read as LIGHT.
+> `DungeonExitInteractable.cs:233` builds a `PrimitiveType.Cube` on `Universal Render Pipeline/**Unlit**`
+> (`:284`), so it ignores every light in the scene: invisible as a defect while dungeons were bright,
+> screaming since WO-919/1004 dropped ambient to #0a0a10. Owner 2026-08-08: "big green bar doesnt make
+> sense". **PAIR IT WITH WO-1007** — that one replaces the archway and explicitly keeps this beacon.)*
+>
+> ⚠ **COLLISION, RESOLVED 2026-08-08 09:26.** Both seats minted **1007** within two minutes, on the same
+> object. `WORK_ORDER_1007_dungeon_exit_real_asset.md` (09:24) was first on disk AND banner-referenced,
+> so it KEEPS 1007 per the §2 rule; the beacon WO renumbered to 1008. **This is the failure mode the two
+> disjoint blocks were meant to prevent, and it still happened — because both seats were working the
+> SAME 1000-block.** The block split protects CLI-vs-UI, not UI-vs-UI. If two sessions are going to mint
+> in the 1000s at once, they need sub-ranges or one of them has to stop minting.
+>
+> *(UI-seat bumped 1007 → 1008 with the WO-1007 mint — real dungeon EXIT asset: replace the primitive
+> emerald-cube archway in DungeonExitInteractable.BuildVisual with a KayKit Dungeon Remastered prop
+> (lit stone doorway/portal or stairs-up), keeping the walk-in trigger + beacon; distinct from the purple entry.)*
 >
 > *(UI-seat bumped 1006 → 1007 with the WO-1006 mint — Manage becomes a launcher: the long combined upgrade
 > scroll moves OUT into dedicated per-category browser panels reached by buttons on Manage, each row showing
