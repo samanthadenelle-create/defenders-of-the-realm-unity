@@ -847,6 +847,13 @@ MonoBehaviour:
   themePalette: default
   footprintCells: {x: 1, y: 1}
   cellSize: 10
+  floorShafts:
+  - serializedVersion: 2
+    x: -1.8000001
+    y: 0.8333335
+    width: 3.6000001
+    height: 2.6666665
+  ceilingShafts: []
 --- !u!1 &6226341272284979487
 GameObject:
   m_ObjectHideFlags: 0

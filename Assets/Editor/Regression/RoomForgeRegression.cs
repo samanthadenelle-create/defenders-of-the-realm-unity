@@ -563,14 +563,14 @@ namespace DeNelle.Editor.Regression
 
                 Vector2 fp = meta.FootprintWorld;
 
-                // --- WO-922: the floor slab actually spans the widened footprint ---
-                var floor = FindChild(prefab.transform, "Floor");
-                if (floor == null)
-                    failures.Add($"[room-shell] '{entry.id}' has no 'Floor' child");
-                else if (Mathf.Abs(floor.localScale.x - fp.x) > 0.01f ||
-                         Mathf.Abs(floor.localScale.z - fp.y) > 0.01f)
-                    failures.Add($"[room-shell] '{entry.id}' floor spans {floor.localScale.x:0.##}x{floor.localScale.z:0.##} " +
-                                 $"but the authored footprint is {fp.x:0.##}x{fp.y:0.##} - stale prefab");
+                // --- WO-922 + shaft rework: the FLOOR covers the footprint MINUS its shafts ---
+                //  Was: FindChild("Floor") and assert its localScale == the footprint exactly.
+                //  That demanded ONE child covering everything, which no floor with a stairwell
+                //  hole in it can be - it reported "has no 'Floor' child" on six correct prefabs.
+                //  Now: sample the footprint and require every point to be covered UNLESS it is
+                //  inside a declared shaft, and every point inside a shaft to be OPEN.
+                AssertSurface(failures, entry.id, prefab.transform, "Floor", fp,
+                              meta.floorShafts, meta.cellSize);
 
                 // --- WO-919: walls reach the canon height ---
                 float tallest = 0f;
@@ -585,37 +585,45 @@ namespace DeNelle.Editor.Regression
                     failures.Add($"[room-shell] '{entry.id}' tallest wall is {tallest:0.##}u, expected " +
                                  $"{RoomForgeCanon.WallHeight:0.##}u (WO-919) - stale prefab, re-run BuildAll");
 
-                // --- WO-919: a ceiling exists, roofs the whole footprint, and is nav-inert ---
-                var ceiling = FindChild(prefab.transform, "Ceiling");
-                if (ceiling == null)
+                // --- WO-919 + shaft rework: the CEILING roofs the footprint minus its shafts ---
+                var ceilPieces = CollectSurface(prefab.transform, "Ceil");
+                if (ceilPieces.Count == 0)
                 {
-                    failures.Add($"[room-shell] '{entry.id}' has NO 'Ceiling' child - the room is open to sky " +
+                    failures.Add($"[room-shell] '{entry.id}' has NO 'Ceil*' children - the room is open to sky " +
                                  "(WO-919). Re-run BuildAll.");
                     continue;
                 }
-                // Must cover at least the full footprint, or sky shows at the wall seam.
-                if (ceiling.localScale.x + 0.01f < fp.x || ceiling.localScale.z + 0.01f < fp.y)
-                    failures.Add($"[room-shell] '{entry.id}' ceiling spans {ceiling.localScale.x:0.##}x{ceiling.localScale.z:0.##} " +
-                                 $"- smaller than the {fp.x:0.##}x{fp.y:0.##} footprint, sky leaks at the edge");
-                // Underside must sit ON the wall top: no gap band, no slab dropped into head height.
-                float underside = ceiling.localPosition.y - ceiling.localScale.y * 0.5f;
-                if (Mathf.Abs(underside - RoomForgeCanon.WallHeight) > 0.01f)
-                    failures.Add($"[room-shell] '{entry.id}' ceiling underside y={underside:0.##}, expected " +
-                                 $"{RoomForgeCanon.WallHeight:0.##} (flush with the wall top)");
-                // A collider here would voxelize into a WALKABLE roof under the baker's
-                // PhysicsColliders NavMesh, which SamplePosition can then snap a hero seat or an
-                // enemy spawner onto. Nav-static would be the same bug by a different route.
-                if (ceiling.GetComponent<Collider>() != null)
-                    failures.Add($"[room-shell] '{entry.id}' ceiling has a Collider - the NavMesh bakes from " +
-                                 "PhysicsColliders and would produce a walkable roof surface");
-                var flags = GameObjectUtility.GetStaticEditorFlags(ceiling.gameObject);
-                if ((flags & StaticEditorFlags.NavigationStatic) != 0)
-                    failures.Add($"[room-shell] '{entry.id}' ceiling is NavigationStatic - it must be geometry only");
+                AssertSurface(failures, entry.id, prefab.transform, "Ceil", fp,
+                              meta.ceilingShafts, meta.cellSize);
+
+                // Per-piece assertions now run over EVERY piece, not just a single named child.
+                // That is the half the old check could not do: a multi-piece ceiling could have
+                // had one compliant slab and three that were collider-bearing or dropped to head
+                // height, and only the first was ever looked at.
+                float shellTop = 0f;
+                foreach (var c in ceilPieces)
+                {
+                    float underside = c.localPosition.y - c.localScale.y * 0.5f;
+                    if (Mathf.Abs(underside - RoomForgeCanon.WallHeight) > 0.01f)
+                        failures.Add($"[room-shell] '{entry.id}' ceiling piece '{c.name}' underside y={underside:0.##}, " +
+                                     $"expected {RoomForgeCanon.WallHeight:0.##} (flush with the wall top)");
+
+                    // A collider here would voxelize into a WALKABLE roof under the baker's
+                    // PhysicsColliders NavMesh, which SamplePosition can then snap a hero seat or
+                    // an enemy spawner onto. Nav-static would be the same bug by a different route.
+                    if (c.GetComponent<Collider>() != null)
+                        failures.Add($"[room-shell] '{entry.id}' ceiling piece '{c.name}' has a Collider - the NavMesh " +
+                                     "bakes from PhysicsColliders and would produce a walkable roof surface");
+                    if ((GameObjectUtility.GetStaticEditorFlags(c.gameObject) & StaticEditorFlags.NavigationStatic) != 0)
+                        failures.Add($"[room-shell] '{entry.id}' ceiling piece '{c.name}' is NavigationStatic - " +
+                                     "it must be geometry only");
+
+                    shellTop = Mathf.Max(shellTop, c.localPosition.y + c.localScale.y * 0.5f);
+                }
 
                 // --- the whole shell has to fit inside one floor of a descent ---
-                float top = ceiling.localPosition.y + ceiling.localScale.y * 0.5f;
-                if (top + RoomForgeCanon.FloorSlabThickness >= DungeonBakerChecks.FloorSeparationY)
-                    failures.Add($"[room-shell] '{entry.id}' occupies {top + RoomForgeCanon.FloorSlabThickness:0.##}u " +
+                if (shellTop + RoomForgeCanon.FloorSlabThickness >= DungeonBakerChecks.FloorSeparationY)
+                    failures.Add($"[room-shell] '{entry.id}' occupies {shellTop + RoomForgeCanon.FloorSlabThickness:0.##}u " +
                                  $"of vertical space but floors are stacked {DungeonBakerChecks.FloorSeparationY:0.##}u " +
                                  "apart - a multi-level bake would interpenetrate");
             }
@@ -628,6 +636,105 @@ namespace DeNelle.Editor.Regression
             foreach (var t in root.GetComponentsInChildren<Transform>(true))
                 if (t != null && t.name == name) return t;
             return null;
+        }
+
+        /// <summary>
+        /// Every child whose name starts with <paramref name="prefix"/> — "Floor" catches both the
+        /// single slab and a multi-piece "Floor_Landing_00..03"; "Ceil" catches "Ceiling",
+        /// "Ceiling_Shaft_*" and the older "Ceil_N/S/E/W".
+        /// </summary>
+        private static List<Transform> CollectSurface(Transform root, string prefix)
+        {
+            var hits = new List<Transform>();
+            foreach (var t in root.GetComponentsInChildren<Transform>(true))
+                if (t != null && t != root && t.name.StartsWith(prefix, StringComparison.Ordinal))
+                    hits.Add(t);
+            return hits;
+        }
+
+        /// <summary>
+        /// A surface covers the footprint EXCEPT where a shaft is declared, and every declared
+        /// shaft is genuinely OPEN.
+        ///
+        /// <para>SAMPLED rather than computed from bounds, and that choice is the whole point.
+        /// Union-bounds — "do the pieces' combined extents reach the footprint" — is the cheap
+        /// version, and it would have PASSED the bug found on 2026-08-07: the stair connectors
+        /// shipped a ceiling built as Ceil_N/S/E/W, a perimeter RING whose union bounds covered
+        /// the room perfectly while its centre was open to sky. Union bounds cannot see a hole.
+        /// Sampling can.</para>
+        ///
+        /// <para>Assumes axis-aligned pieces (localPosition = centre, localScale = size), which is
+        /// true of everything RoomForge builds — and is asserted, not assumed, below.</para>
+        /// </summary>
+        private static void AssertSurface(List<string> failures, string roomId, Transform root,
+                                          string prefix, Vector2 fp, List<Rect> shafts, float cellSize)
+        {
+            var pieces = CollectSurface(root, prefix);
+            if (pieces.Count == 0)
+            {
+                failures.Add($"[room-shell] '{roomId}' has no '{prefix}*' children - the {prefix.ToLowerInvariant()} " +
+                             "surface was not built");
+                return;
+            }
+
+            // A rotated piece breaks the centre±scale/2 reasoning below. Say so rather than
+            // silently mis-measuring it.
+            foreach (var p in pieces)
+            {
+                var e = p.localRotation.eulerAngles;
+                if (Mathf.Abs(Mathf.DeltaAngle(e.x, 0f)) > 0.5f || Mathf.Abs(Mathf.DeltaAngle(e.z, 0f)) > 0.5f)
+                    failures.Add($"[room-shell] '{roomId}' {prefix} piece '{p.name}' is tilted " +
+                                 $"({e.x:0.#},{e.y:0.#},{e.z:0.#}) - this check measures axis-aligned slabs " +
+                                 "and cannot verify coverage of a tilted one");
+            }
+
+            float hx = fp.x * 0.5f, hz = fp.y * 0.5f;
+            const float Step = 0.25f;          // 40x40 samples on a 10m room - cheap, and finer
+                                               // than any gap that would matter to a player
+            const float EdgeInset = 0.05f;     // ignore the outermost sliver: pieces legitimately
+                                               // end flush with the wall line and float noise there
+                                               // is not a hole
+
+            int uncovered = 0, blocked = 0;
+            Vector2 firstUncovered = Vector2.zero, firstBlocked = Vector2.zero;
+
+            for (float x = -hx + EdgeInset; x <= hx - EdgeInset; x += Step)
+            for (float z = -hz + EdgeInset; z <= hz - EdgeInset; z += Step)
+            {
+                bool inShaft = RoomPrefabMeta.InAnyShaft(shafts, x, z);
+                bool covered = false;
+                for (int i = 0; i < pieces.Count && !covered; i++)
+                {
+                    var p = pieces[i];
+                    float pxHalf = Mathf.Abs(p.localScale.x) * 0.5f;
+                    float pzHalf = Mathf.Abs(p.localScale.z) * 0.5f;
+                    covered = Mathf.Abs(x - p.localPosition.x) <= pxHalf &&
+                              Mathf.Abs(z - p.localPosition.z) <= pzHalf;
+                }
+
+                if (inShaft && covered)
+                {
+                    if (blocked == 0) firstBlocked = new Vector2(x, z);
+                    blocked++;
+                }
+                else if (!inShaft && !covered)
+                {
+                    if (uncovered == 0) firstUncovered = new Vector2(x, z);
+                    uncovered++;
+                }
+            }
+
+            if (uncovered > 0)
+                failures.Add($"[room-shell] '{roomId}' {prefix} surface has a HOLE: {uncovered} sample(s) " +
+                             $"uncovered, first at local ({firstUncovered.x:0.##},{firstUncovered.y:0.##}), " +
+                             $"over a {fp.x:0.##}x{fp.y:0.##} footprint with {(shafts == null ? 0 : shafts.Count)} " +
+                             "declared shaft(s). Either the surface is incomplete, or the opening is real and " +
+                             "must be DECLARED on RoomPrefabMeta so it can be checked instead of tolerated.");
+
+            if (blocked > 0)
+                failures.Add($"[room-shell] '{roomId}' {prefix} surface BLOCKS a declared shaft: {blocked} sample(s) " +
+                             $"covered inside it, first at local ({firstBlocked.x:0.##},{firstBlocked.y:0.##}). " +
+                             "A stairwell that is declared open and built solid is a flight into a slab.");
         }
 
         // ---- shared helpers -----------------------------------------------------

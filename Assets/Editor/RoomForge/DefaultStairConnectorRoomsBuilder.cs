@@ -230,6 +230,22 @@ namespace DeNelle.Editor.RoomForge
                 meta.footprintCells = new Vector2Int(1, 1);
                 meta.cellSize = Cell;
 
+                // ── DECLARE THE SHAFTS (architect review §3.2) ────────────────
+                //  The floor hole and the ceiling shaft are cut from the SAME FlightPlan that
+                //  builds the flight, so they cannot drift off the stair. Declaring them here
+                //  means the [room-shell] oracle can assert two things instead of tolerating
+                //  one: that the surface covers everything OUTSIDE the opening, and that the
+                //  opening is genuinely OPEN.
+                //
+                //  Without this, the oracle correctly reports the stairwell as a HOLE - because
+                //  from the outside that is exactly what an undeclared opening is. The previous
+                //  answer was to weaken the check; this is the answer that keeps its teeth.
+                //
+                //  Derived from the same call the geometry uses. A second hand-typed rect here
+                //  would be a copy that drifts the first time a leg run changes.
+                meta.floorShafts = DeclareShafts(spec.shape, spec.stairType, rise, hx, hz, isCeiling: false);
+                meta.ceilingShafts = DeclareShafts(spec.shape, spec.stairType, rise, hx, hz, isCeiling: true);
+
                 // Floor. TOP face = local y = 0 (same contract as DefaultDungeonRoomsBuilder).
                 // _Up  -> solid (the flight stands on it).
                 // _Down -> solid MINUS the shaft the arriving flight comes up through.
@@ -414,6 +430,38 @@ namespace DeNelle.Editor.RoomForge
         /// turns, so the opening carries on around the corner or the outer corner of the turn is
         /// left capped over the walkable surface.</para>
         /// </summary>
+        /// <summary>
+        /// The openings this variant actually cuts, as <see cref="Rect"/> in local XZ, for
+        /// <see cref="RoomPrefabMeta"/>. Calls the SAME <see cref="PlaneCuts"/> the geometry uses,
+        /// against the SAME plane, so the declaration and the cut cannot disagree.
+        ///
+        /// <para>Which surface is cut depends on the variant, and getting this backwards is how a
+        /// declaration silently stops matching:</para>
+        /// <list type="bullet">
+        /// <item><b>_Down</b> — a bare landing. Its FLOOR carries the hole the arriving flight
+        /// comes up through (plane = <c>rise</c>). Its ceiling is SOLID: the flight terminates at
+        /// this room's floor plane and nothing crosses above.</item>
+        /// <item><b>_Up</b> — owns the flight. Its FLOOR is solid (the flight stands on it) and its
+        /// CEILING carries the shaft (plane = <c>WallHeight</c>) because the flight climbs through
+        /// its own roof on the way to the room above.</item>
+        /// </list>
+        /// </summary>
+        private static List<Rect> DeclareShafts(StairShape shape, RoomSocketType stairType,
+                                                float rise, float hx, float hz, bool isCeiling)
+        {
+            var declared = new List<Rect>();
+            bool isDown = stairType == RoomSocketType.StairDown;
+
+            // _Down cuts its FLOOR only; _Up cuts its CEILING only.
+            if (isDown == isCeiling) return declared;
+
+            float planeY = isCeiling ? RoomForgeCanon.WallHeight : rise;
+            foreach (var c in PlaneCuts(shape, rise, hx, hz, planeY))
+                declared.Add(new Rect(c.x0, c.z0, c.x1 - c.x0, c.z1 - c.z0));
+
+            return declared;
+        }
+
         private static List<FloorRect> PlaneCuts(StairShape shape, float rise, float hx, float hz, float planeY)
         {
             var nav = ReadNavAgent();
