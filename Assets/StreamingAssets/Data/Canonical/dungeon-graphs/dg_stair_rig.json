@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "graphId": "dg_stair_rig",
+  "entry": "flat_0",
+  "_comment": "STAIR TEST RIG (owner-designed, 2026-08-07). NOT CONTENT - a diagnostic fixture. Its only job is to isolate the multi-level traversal defect: after wiring the StairConnector prefabs the bake still reports PathPartial on every multi-level dungeon, and hunting that through dg_bonecrypt's 21 rooms and 4 stair pairs is a way to spend twenty minutes learning what four rooms would show. So this chains ONE FLAT ROOM between every stair pair and contains NOTHING ELSE - no encounters, no traps, no chests, no keys, no locks. Anything that fails to path here is the stairs, because there is nothing else it could be. Walk it top to bottom; the first descent you cannot make names the variant that is broken. Owner hand-edits the connector prefabs, hands the offsets back, and they are folded into DefaultStairConnectorRoomsBuilder - the SCRIPT stays the source of truth, the prefabs are never the authority (BuildAll overwrites Assets/Dungeon/Rooms).",
+  "_variants": "Each pair names its connector prefab DIRECTLY rather than the StairDown/StairUp archetype, so the rig tests all three shapes. The baker's alias (StairDown -> StairConnector_Vertical_Down) only covers the archetype path; naming a concrete stem bypasses it, which is exactly what the alias's own note says self-retires once the composer emits concrete stems.",
+  "_knownIssue": "Left/Right land 0.80m clear of the wall against a 1.00m minimum walkable slot (2 x agentRadius 0.5), so navmesh erosion removes their top landing and they are EXPECTED to fail until TurnRun 4.0 -> 3.5 lands. Vertical lands 1.30m clear and is the one that should work. If Vertical also fails, the defect is not the landing width.",
+  "nodes": [
+    { "id": "flat_0", "prefab": "EntryHall" },
+
+    { "id": "v_down",  "prefab": "StairConnector_Vertical_Down" },
+    { "id": "v_up",    "prefab": "StairConnector_Vertical_Up" },
+    { "id": "flat_1",  "prefab": "Straight" },
+
+    { "id": "l_down",  "prefab": "StairConnector_Left_Down" },
+    { "id": "l_up",    "prefab": "StairConnector_Left_Up" },
+    { "id": "flat_2",  "prefab": "Straight" },
+
+    { "id": "r_down",  "prefab": "StairConnector_Right_Down" },
+    { "id": "r_up",    "prefab": "StairConnector_Right_Up" },
+    { "id": "flat_3",  "prefab": "DeadEnd" }
+  ],
+  "edges": [
+    { "from": "flat_0", "fromSocket": "n_door_01",     "to": "v_down", "toSocket": "s_door_01" },
+    { "from": "v_down", "fromSocket": "stair_down_01", "to": "v_up",   "toSocket": "stair_up_01" },
+    { "from": "v_up",   "fromSocket": "s_door_01",     "to": "flat_1", "toSocket": "s_door_01" },
+
+    { "from": "flat_1", "fromSocket": "n_door_01",     "to": "l_down", "toSocket": "s_door_01" },
+    { "from": "l_down", "fromSocket": "stair_down_01", "to": "l_up",   "toSocket": "stair_up_01" },
+    { "from": "l_up",   "fromSocket": "s_door_01",     "to": "flat_2", "toSocket": "s_door_01" },
+
+    { "from": "flat_2", "fromSocket": "n_door_01",     "to": "r_down", "toSocket": "s_door_01" },
+    { "from": "r_down", "fromSocket": "stair_down_01", "to": "r_up",   "toSocket": "stair_up_01" },
+    { "from": "r_up",   "fromSocket": "s_door_01",     "to": "flat_3", "toSocket": "s_door_01" }
+  ],
+  "extracts": [
+    { "id": "rig-extract", "roomId": "flat_0", "offset": [0.0, 0.0, -2.5], "label": "Extract" }
+  ]
+}
