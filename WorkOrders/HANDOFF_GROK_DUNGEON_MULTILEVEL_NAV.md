@@ -55,6 +55,53 @@ stairs do not.** So the gate opens onto nothing walkable.
 **So the priority argument is not "traversal is missing."** It is: **the extract loop is currently
 non-diegetic, and the stairs are what make it real.**
 
+### ⚠ CORRECTION — "unfinishable" was WRONG. The floors ARE reachable, by TELEPORT.
+
+An earlier draft of this doc (and my report to the owner) said multi-level dungeons are unfinishable. **That is
+not true and the correction matters**, because it changes what the stairs are actually fixing.
+
+`DungeonPortLink.WarpHero()` **warps the hero** between floors — `DungeonHero.Teleport` (the
+CharacterController-safe path) or `HeroLocomotion.WarpTo` — behind an interact prompt reading **"Climb"**.
+`DungeonBaker.cs:648` states the design intent verbatim:
+
+> *"Reuses the cottage WO-711 port idiom — **no staircase mesh, no NavMeshLink**"*
+
+So descent works today. It is a **deliberate teleport**, not a bug. The bake reports `stairPorts=8`
+(bonecrypt), `10` (ember deep), `2` (probe) — those ports exist and function.
+
+**WHAT IS ACTUALLY BROKEN, and it is worse in one specific way:**
+
+Grep for `NavMeshLink` / `OffMeshLink` across `Assets/_Modules/Dungeons` and `Assets/Editor/RoomForge`:
+**zero hits.** The navmesh is genuinely two disconnected islands. So:
+
+- **NO `NavMeshAgent` CAN CROSS FLOORS.** Every enemy, companion and pet is **stranded on the floor it spawned
+  on.** You descend and the fight simply ends — nothing follows you down. That is a combat-design failure, not
+  a traversal inconvenience, and nothing in the ticket list had named it.
+- `NavMesh.CalculatePath(entry → deep target)` returns `PathPartial` — which is exactly what the bake oracle
+  measures. The oracle is honest; it was reporting the navmesh, not the player's ability to progress.
+
+**So the real statement is:** the dungeons are *completable* and *not diegetic* — the entire vertical axis is a
+UI interaction (locked gate → prompt → warp), and **no AI can use it at all.**
+
+**This also sharpens what the ramp must deliver.** A ramp is not just nicer than a warp; it is the only one of
+the two that **enemies can use**. If a design ever chooses to keep warping for the hero, it still needs a
+`NavMeshLink` for the AI — otherwise chases end at every floor.
+
+### ⚠ OPEN DESIGN QUESTION — which room owns the flight?
+
+The connector model pairs a `StairDown` room (upper floor) with a `StairUp` room (lower floor), mated on the
+vertical socket. **A 6 m flight physically spans both**: it starts on the upper floor, passes through that
+room's floor slab, and lands inside the lower room's volume.
+
+So the kit has to decide, explicitly, one of:
+- **One owner** — e.g. the `StairDown` prefab carries the whole flight and the `StairUp` room is a bare landing
+  (its prefab must then contain **no** stair geometry, or the two interpenetrate); **or**
+- **Split** — each carries a half-flight meeting at a shared landing at the mid-height.
+
+**Whichever is chosen, the other room must NOT also place a flight.** Both prefabs placing one is two
+interpenetrating staircases, and it will look like a rendering bug rather than a design mistake. The
+`[stair-shell]` oracle should assert the chosen invariant so it cannot regress.
+
 ### Why it happens
 
 The composer solves the graph, mates the stair sockets and places the upper room exactly `FloorSeparationY`
