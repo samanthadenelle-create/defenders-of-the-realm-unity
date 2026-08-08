@@ -1,4 +1,12 @@
-> ## ⚠ STALE as of 2026-08-07 02:30 — read `CANON_GROUND_TRUTH_2026-08-07.md` FIRST
+> ## ⚠ STALE as of 2026-08-08 01:00 — read `CANON_GROUND_TRUTH_2026-08-08.md` FIRST
+>
+> **08-08 anchor supersedes the 08-07 one.** ⛔ **The machine cannot build players** — commit charge
+> 119.5 GB of a 127.8 GB limit with no Unity process running; EXE/APK/WebGL all OOM. **Reboot first.**
+> Editor batchmode (gates, bakes, regression) still works. Also new since 08-07: `REGRESSION_OK
+> 130/130`, two guards shipped and proven-red, WO-853 §7 ruled 50/30/20, WO-912 D2 settled to
+> LevelPlay, and **three dungeon-stair hypotheses tested and killed** — do not re-run them.
+>
+> ## ⚠ (previous) STALE as of 2026-08-07 02:30 — read `CANON_GROUND_TRUTH_2026-08-07.md` FIRST
 >
 > This file was last refreshed 2026-08-06 ~10:50, BEFORE the overnight run. It does not know about:
 > the wallet main-thread fix, the arena stranding fix, the Manage/Queues screen (bottom bar is now

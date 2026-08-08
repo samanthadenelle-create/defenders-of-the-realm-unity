@@ -1,0 +1,145 @@
+# CANON GROUND TRUTH — 2026-08-08
+
+**Supersedes `CANON_GROUND_TRUTH_2026-08-07.md`.** Per CLAUDE.md §15 this is the single live anchor:
+every other doc loses to it on conflict. Written at the end of the 08-07 overnight run.
+
+**Branch:** `wip/village2-and-f8-tickets` · **committed, NOT pushed** · master is stale.
+
+---
+
+## 0. ⛔ THE MACHINE IS BLOCKED — READ THIS BEFORE PLANNING ANY BUILD
+
+**Commit charge is 119.5 GB of a 127.8 GB limit** with **13 GB of physical RAM free and NO Unity
+process running.** It is committed memory the OS has not reclaimed after a night of batchmode runs
+— not attributable to any live process, so there is nothing to kill.
+
+```
+Fatal Error! Could not allocate memory: System out of memory!
+```
+
+**A REBOOT IS THE FIX.** Until then, blocked:
+
+| | Status |
+|---|---|
+| **Windows EXE** | ❌ OOM mid-build. `Builds/Windows/` still holds the **08-07 18:14** build — verify the timestamp before trusting it |
+| **Android APK** | ❌ not attempted. IL2CPP/ARM64 needs far more than the 8 GB of headroom left |
+| **Firebase release** | ❌ blocked behind the APK |
+| **WebGL / web deploy** | ❌ `vercel.json` serves `Builds/WebGL`, which is a Unity build — same wall |
+
+Batchmode *editor* methods (gates, bakes, regression) still run fine; only player builds fail.
+
+**MORNING ORDER: reboot → EXE → APK → Firebase → WebGL.** Everything else below is done and green.
+
+---
+
+## 1. Gate state
+
+```
+COMPILE_GATE_OK
+REGRESSION_OK 130/130 suites      ← fully green
+COMPOSE_ALL_OK 6/6
+GRID_OK on all 86 rooms
+```
+
+---
+
+## 2. The dungeon stairs — where the hunt actually stands
+
+**Symptom, unchanged:** every multi-level dungeon reports `PathPartial`. Only single-floor
+`dg_starter_loop` is `PathComplete`. **Nothing below the starting floor is reachable at all**
+(`floor delta start->stop = 0.00m`).
+
+**Not for want of stairs.** Connectors resolve (`connectors=8/10/2, fallbacks=0`), geometry is
+placed, mates pass, every ramp carves navmesh.
+
+### ★ THREE HYPOTHESES TESTED AND KILLED. Do not re-run them. ★
+
+| # | Hypothesis | How it died |
+|---|---|---|
+| 1 | **Landing width** — 0.80 m eroded below the 1.00 m walkable slot | `TurnRun 4.0 → 3.5` shipped. Landing 1.30 m, slope 40.6°, both measured. **Path unchanged.** |
+| 2 | **Slope** — 42.7° too close to the 45° agent max | Switched every descent to the 40.6° turn shape. **Worse:** 0/8 whole vs Vertical's 2/4. The *shallower* ramp fragmented *more*. Reverted. |
+| 3 | **Ramp length** — turn legs are 3.5 m vs Vertical's ~6.5 m | Bucketed wholeness by run and slope. **Every Vertical ramp is identical (7 m, 43°) and they disagree: 2/4, 3/5, 1/3, 0/1.** |
+
+### What the data actually says
+
+**The variable is PER-INSTANCE, not per-shape.** Identical geometry, different outcomes. Every
+hypothesis so far has been a property of *the stair*, and the data keeps answering that the stair
+is fine and its *situation* is not.
+
+Also settled: **there is ONE defect, not two.** `top` seam joins track `whole` **exactly** on every
+dungeon (2/4↔2/4, 3/5↔3/5, 1/3↔1/3, 0/5↔0/5) — a fragmented ramp has no navmesh at its top to path
+*from*, so the "top seam" is a symptom. Bottoms are largely fine (4/4, 4/5, 3/5, 2/3).
+
+And it explains the apparent contradiction in `dg_bonecrypt`: two ramps there **do** work floor to
+floor, but the **first** descent out of the entry is a broken one, so the working stairs sit behind
+it unreachable. **Reachability is gated by the first failure on the path, not by the average.**
+
+### Unmeasured candidates for the next session
+
+Voxel-grid phase (`cellSize 0.1667` — a ramp landing on a different sub-voxel offset rasterises
+differently) · room **yaw** · neighbouring geometry overlapping the ramp span · a slab or ceiling
+intersecting the flight. **None of these has been measured. Do not argue one into being the answer.**
+
+### The diagnostics are permanent — start from them, not from source
+
+Every bake now prints, unasked:
+- `PATH DIES` — last reachable corner, distance short, **nearest room by id**, floor deltas
+- `RAMP CARVE` — how many ramps carve, how many are whole end to end
+- `RAMP SEAMS` — bottom→own floor and top→floor above, separately
+- `RAMP SHAPE vs WHOLE` — wholeness bucketed by run and by slope
+
+⚠ **The instruments have been wrong twice, and both times looked confident.** `ReportRampCarve`
+first sampled the ramp's extreme tips (which overhang ~0.35 m past each nose for the landing seam)
+and reported a uniform `0/N` everywhere; probing inboard gave the mixed truth. Probe radii are
+deliberately opposite — **tight (0.35 m)** on the ramp so a hit cannot be the floor underneath,
+**generous (6 m)** when finding a room's floor. Do not unify them.
+
+---
+
+## 3. New guards shipped (both proven RED before being trusted)
+
+**Grid + floor-plane guard** — `GraphDungeonComposer`, asserted **before** the `RoundToInt` emit,
+which is where the evidence is destroyed. Every solved room must already be an integer; every
+non-vertical connector must sit at local Y 0. This file stated the invariant *in prose* since it was
+written and nothing checked it; the 2026-08 drift fix was applied to the instance, not the class.
+Vertical sockets are exempt and **the exemption is the point** — the 8 stair sockets at
+±`FloorSeparationY/2` are the only connectors off the floor plane, and the connector-model redesign
+deletes them.
+
+**`[room-shell]` rework** — `RoomPrefabMeta` gains `floorShafts`/`ceilingShafts`; the oracle **samples**
+the footprint at 0.25 m and asserts coverage outside a declared shaft **and** that the shaft is
+genuinely open. Union-bounds was the cheap alternative and **would have passed the ring-ceiling bug
+found the same day** — a perimeter `Ceil_N/S/E/W` whose union covered the room while its centre was
+open to sky. Union bounds cannot see a hole.
+
+---
+
+## 4. Also landed 08-07
+
+- **WO-853 §7 ruled + shipped** — raid destruction **50 spire / 30 structures / 20 garrison**. §1's
+  targetability seam was already fixed; scoring was the last piece. Nothing pinned the split before.
+- **WO-912 D2 SETTLED = Unity LevelPlay** — by *eligibility*, not preference: AppLovin will not
+  onboard without a published store listing. Q2a/Q3a moot. **D3 still blocks the SDK** until Unity's
+  Regulated Activities pre-approval returns **in writing**. Draft ready in
+  `WorkOrders/WORK_ORDER_912_UNITY_PREAPPROVAL_REQUEST.md`; org `samanthadenelle`, project
+  `435f5e1e-b8bf-4f9f-8143-7d5eca669c67`. Three ad units created and recorded.
+- **Ad placements purged** — `place.store.crystals` paid **150 crystals** for an ad view and was
+  ENABLED. Crystals are the SKR on-ramp; that is exactly the convertibility AdMob and Unity prohibit,
+  and it was live while the pre-approval was being drafted. Guarded by `AD_COVENANT_OK`.
+  Owner then re-enabled harvest doubler + daily chest (D4 reversed) — both legal, crystals stayed out.
+- **Wave 1 step 2/3** — composed dungeons and the hand-coded outpost relit and enclosed; outpost
+  floor z-fight fixed and `NAV_OK 5/5` (cause was `BuildChoke` splitting on the wrong axis, giving two
+  parallel barriers with no door — pre-existing, revealed by a check that did not exist before).
+- **WO-920 camera** — the WO described the pipeline the owner is *not* looking at. Composed dungeons
+  and the outpost bake **no camera at all**; they inherit the village `SmartMobileCamera`.
+
+---
+
+## 5. Open, needing the owner
+
+- **#51** stairs (above) · **#42** WO-874 `EliteVFXController` — 13 references, **never attached**
+- **Send the Unity pre-approval** — the one action that unblocks D3
+- **#49** pin `AndroidTargetSdkVersion` (currently `0`, device is API 36) **before** any ad SDK
+- Known-visible and unfixed: the green legendary gate / EXIT beacons render **Unlit** and read as neon
+  against the new dark ambient (**WO-924** minted for it) · a green cast on upper wall surfaces,
+  undiagnosed · the composed ceiling hole, unconfirmed since the overview capture is now dark-on-dark
