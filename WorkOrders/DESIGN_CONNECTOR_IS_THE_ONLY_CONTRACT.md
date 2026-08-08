@@ -122,6 +122,83 @@ this is the same job, not an extra one. Do it once, for the right shape:
 
 ---
 
+## 3.3 ★ CHECK COLLISIONS BEFORE PLACING, not after (owner, 2026-08-07) ★
+
+> *"we could easily check for collisions before placing each component"*
+
+**Verified at source: the composer has NO collision awareness at all.** `GraphDungeonComposer` calls
+`SolveMate(pSock, cSock, childGo)` (`:428`), which sets the child's transform and moves on. Every overlap test
+lives downstream in `DungeonBakerChecks.Compose`, where the only available response is to **abort the whole
+bake**. That is generate-then-validate, and it is why `dg_bonecrypt` and `dg_ember_deep` died wholesale on the
+socket-drift bug instead of reporting one bad room.
+
+### Why this idea and §1's connector model are the same idea
+
+A pre-check only helps if there is something to **do** when it fails. Today `SolveMate` derives exactly one
+position from the socket pair — there is no choice, so a pre-check could refuse but never resolve.
+
+**The generic connector model is what creates the choice.** Once every room is interchangeable on any
+connector, a blocked placement has alternatives: a different shape, a different socket on the parent, a
+different traversal order. Collision-aware placement turns a hard abort into a **solver**. Without the
+connector model there is nothing to try; with it, there is a search space.
+
+So these are not two features. §1 makes §3.3 useful, and §3.3 is what makes §1 safe to place freely.
+
+### Two payoffs that land before any backtracking exists
+
+1. **Diagnostics.** *"room `stair_dn_1` cannot be placed at `[0,-6,20]` — collides with `corr3`"* names the
+   offending **edge**. The current abort prints a pair list and kills the run.
+2. **It absorbs §3.1 entirely.** The vertical-extent gap (a two-storey stairwell's lower half never being
+   checked, because `RoomsOverlap` short-circuits on floor difference) simply cannot exist if the candidate's
+   real occupied **volume** is tested before placement. The check stops depending on an assumption about how
+   tall a room is.
+
+### ★ The pattern already exists — town build mode (owner: *"a validator like with builder … enforces you work as allowed"*) ★
+
+`Assets/_Modules/Village/BuildMode/PlacementGrid.cs` is the proven shape. **Copy it; do not invent one.**
+
+```csharp
+public bool   CanPlace(Vector2Int cell, Vector2Int footprint)   // bounds + occupancy, PURE
+public string OccupantAt(Vector2Int cell)                       // NAMES the blocker
+public bool   InBounds(...)                                     // separate, so "outside the area" != "no space"
+```
+
+**Three properties worth stealing verbatim:**
+
+1. **It is PURE.** No side effects, no placement — ask, then act. That is what lets it be called speculatively
+   while a player drags a building, and it is exactly what a composer needs to try a candidate before committing.
+2. **It NAMES the blocker.** `OccupantAt`'s own comment records why it exists: an F8 *"anonymous Occupied storm"*
+   — the gate could say no but not say what. **A validator that only says no is a validator you end up
+   debugging.** The dungeon composer should inherit this lesson rather than re-learn it.
+3. **It separates the REASONS.** Out-of-bounds and occupied are different answers, because they lead to
+   different fixes. A dungeon needs at least: out-of-extent · overlaps room X · violates rule Y.
+
+### Rules should be DATA (owner: *"could have rules dynamic"*)
+
+Occupancy is one constraint. Once placement is gated, the gate is the natural home for **every** placement
+rule, and those should be authored rather than compiled:
+
+- no reward room within N rooms of the entry
+- at most one stairwell per floor per wing
+- the boss room is the furthest node from the entry
+- no two lore shrines adjacent
+- a stairwell may not open directly onto another stairwell
+
+**None of these are expressible today** — `LintPacing` can only *report* pacing after the fact, exactly the
+same generate-then-validate shape as the overlap check. Moving them into a data-driven placement gate turns
+"the dungeon came out badly, here is a warning" into "the dungeon cannot come out that way."
+
+Keep the rule set in the graph's existing `rules` block (`dg_*.json` already carries one), so a dungeon can
+declare its own constraints without a code change.
+
+### Keep the downstream check
+
+Move the test **earlier**; do not delete the late one. `DungeonBakerChecks.Compose` is the hard gate that has
+caught real drift, and a solver that believes its own placement is a solver with no independent verifier. Cheap
+to keep, and it is what proves the pre-check is working rather than merely running.
+
+---
+
 ## 4. How it composes with the four-door / mask idea
 
 These are the same design, not two.
