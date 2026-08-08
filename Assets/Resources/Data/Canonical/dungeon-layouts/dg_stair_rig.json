@@ -1,0 +1,218 @@
+{
+  "version": 1,
+  "dungeonId": "dg_stair_rig",
+  "cellSize": 1.0,
+  "rooms": [
+    {
+      "prefab": "EntryHall",
+      "instanceId": "flat_0",
+      "cell": [
+        0,
+        0,
+        0
+      ],
+      "yawDeg": 0.0,
+      "archetype": "hub",
+      "encounter": null,
+      "chests": null
+    },
+    {
+      "prefab": "StairConnector_Vertical_Down",
+      "instanceId": "v_down",
+      "cell": [
+        0,
+        0,
+        10
+      ],
+      "yawDeg": 0.0,
+      "archetype": "hub",
+      "encounter": null,
+      "chests": null
+    },
+    {
+      "prefab": "StairConnector_Vertical_Up",
+      "instanceId": "v_up",
+      "cell": [
+        0,
+        -6,
+        10
+      ],
+      "yawDeg": 0.0,
+      "archetype": "hub",
+      "encounter": null,
+      "chests": null
+    },
+    {
+      "prefab": "Straight",
+      "instanceId": "flat_1",
+      "cell": [
+        0,
+        -6,
+        0
+      ],
+      "yawDeg": 180.0,
+      "archetype": "combat",
+      "encounter": null,
+      "chests": null
+    },
+    {
+      "prefab": "StairConnector_Left_Down",
+      "instanceId": "l_down",
+      "cell": [
+        0,
+        -6,
+        -10
+      ],
+      "yawDeg": 180.0,
+      "archetype": "hub",
+      "encounter": null,
+      "chests": null
+    },
+    {
+      "prefab": "StairConnector_Left_Up",
+      "instanceId": "l_up",
+      "cell": [
+        0,
+        -12,
+        -10
+      ],
+      "yawDeg": 0.0,
+      "archetype": "hub",
+      "encounter": null,
+      "chests": null
+    },
+    {
+      "prefab": "Straight",
+      "instanceId": "flat_2",
+      "cell": [
+        0,
+        -12,
+        -20
+      ],
+      "yawDeg": 180.0,
+      "archetype": "combat",
+      "encounter": null,
+      "chests": null
+    },
+    {
+      "prefab": "StairConnector_Right_Down",
+      "instanceId": "r_down",
+      "cell": [
+        0,
+        -12,
+        -30
+      ],
+      "yawDeg": 180.0,
+      "archetype": "hub",
+      "encounter": null,
+      "chests": null
+    },
+    {
+      "prefab": "StairConnector_Right_Up",
+      "instanceId": "r_up",
+      "cell": [
+        0,
+        -18,
+        -30
+      ],
+      "yawDeg": 0.0,
+      "archetype": "hub",
+      "encounter": null,
+      "chests": null
+    },
+    {
+      "prefab": "DeadEnd",
+      "instanceId": "flat_3",
+      "cell": [
+        0,
+        -18,
+        -40
+      ],
+      "yawDeg": 180.0,
+      "archetype": "lore",
+      "encounter": null,
+      "chests": null
+    }
+  ],
+  "connections": [
+    {
+      "fromInstance": "flat_0",
+      "fromSocket": "n_door_01",
+      "toInstance": "v_down",
+      "toSocket": "s_door_01"
+    },
+    {
+      "fromInstance": "v_down",
+      "fromSocket": "stair_down_01",
+      "toInstance": "v_up",
+      "toSocket": "stair_up_01"
+    },
+    {
+      "fromInstance": "v_up",
+      "fromSocket": "s_door_01",
+      "toInstance": "flat_1",
+      "toSocket": "s_door_01"
+    },
+    {
+      "fromInstance": "flat_1",
+      "fromSocket": "n_door_01",
+      "toInstance": "l_down",
+      "toSocket": "s_door_01"
+    },
+    {
+      "fromInstance": "l_down",
+      "fromSocket": "stair_down_01",
+      "toInstance": "l_up",
+      "toSocket": "stair_up_01"
+    },
+    {
+      "fromInstance": "l_up",
+      "fromSocket": "s_door_01",
+      "toInstance": "flat_2",
+      "toSocket": "s_door_01"
+    },
+    {
+      "fromInstance": "flat_2",
+      "fromSocket": "n_door_01",
+      "toInstance": "r_down",
+      "toSocket": "s_door_01"
+    },
+    {
+      "fromInstance": "r_down",
+      "fromSocket": "stair_down_01",
+      "toInstance": "r_up",
+      "toSocket": "stair_up_01"
+    },
+    {
+      "fromInstance": "r_up",
+      "fromSocket": "s_door_01",
+      "toInstance": "flat_3",
+      "toSocket": "s_door_01"
+    }
+  ],
+  "rules": {
+    "spineOnly": false,
+    "minShrines": 1,
+    "maxMateDistance": 1.25,
+    "sealUnmated": true,
+    "pacingCombat": 0.6,
+    "pacingLore": 0.2,
+    "pacingReward": 0.2
+  },
+  "oilStones": [],
+  "traps": [],
+  "keys": [],
+  "locks": [],
+  "extracts": [
+    {
+      "id": "rig-extract",
+      "roomId": "flat_0",
+      "offset": [
+        0.0,
+        0.0,
+        -2.5
+      ],
+      "label": "Extract"
+    }
+  ]
+}

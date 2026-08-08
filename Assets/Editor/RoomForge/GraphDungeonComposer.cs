@@ -109,6 +109,14 @@ namespace DeNelle.Editor.RoomForge
         // coords (default kit is grid-aligned to integer units) with no quantization loss.
         private const float EmitCellSize = 1f;
 
+        /// <summary>
+        /// How far a solved coordinate may sit from an integer before it counts as drift.
+        /// 1e-3 is float-noise tolerance, NOT a design allowance: the composer's arithmetic is
+        /// exact (SolveMate does <c>pos = pPos - rotatedSocket</c> with no rounding), so a real
+        /// residual means an authored socket is off-grid, not that a float wobbled.
+        /// </summary>
+        private const float GridEpsilon = 1e-3f;
+
         // -------- Menu / batch entry points --------
 
         [MenuItem("Defenders/Dungeon/Compose Dungeon From Graph (Selected JSON)")]
@@ -493,6 +501,70 @@ namespace DeNelle.Editor.RoomForge
                     locks = graph.locks ?? new List<ComposeLock>(),
                     extracts = graph.extracts ?? new List<ComposeExtract>(),
                 };
+
+                // ---- THE GRID GUARD (architect review 2026-08-07, Part 6) --------
+                //  This file's own header states the invariant in PROSE at L20-27: sockets sit on
+                //  the half-cell grid and yaws are multiples of 90, "so the emitted layout uses
+                //  cellSize=1 with cell=[round(x),round(y),round(z)] -> lossless round-trip ...
+                //  an odd cell would put sockets on halves and RoundToInt would quantise a whole
+                //  unit of drift per stairwell (the dg_bonecrypt / dg_ember_deep abort)."
+                //
+                //  NOTHING CHECKED IT. The 2026-08 fix removed the offending 0.5 offset from the
+                //  stair socket but never added the guard - it was applied to the INSTANCE, not to
+                //  the CLASS. Any future socket at a non-integer X, Y or Z silently re-runs the
+                //  same abort, and the round below is where the evidence is destroyed: after it,
+                //  drift is indistinguishable from a correct placement.
+                //
+                //  So the assertion goes HERE, before the round, while the exact solve still
+                //  exists. Cheapest possible version of the review's central point: every
+                //  invariant either fails a build or does not exist.
+                var gridDrift = new List<string>();
+                var socketOffPlane = new List<string>();
+
+                foreach (var n in graph.nodes)
+                {
+                    if (n == null || !go.ContainsKey(n.id)) continue;
+                    var gp = go[n.id].transform.position;
+
+                    // 1. The solved position must already BE an integer. Name the axis and the
+                    //    residual - "drift" without a number is a second investigation.
+                    float dx = Mathf.Abs(gp.x - Mathf.Round(gp.x));
+                    float dy = Mathf.Abs(gp.y - Mathf.Round(gp.y));
+                    float dz = Mathf.Abs(gp.z - Mathf.Round(gp.z));
+                    if (dx > GridEpsilon || dy > GridEpsilon || dz > GridEpsilon)
+                        gridDrift.Add($"'{n.id}' ({nodePrefab[n.id]}) solved to ({gp.x:F4},{gp.y:F4},{gp.z:F4}) " +
+                                      $"- residual ({dx:F4},{dy:F4},{dz:F4}) exceeds {GridEpsilon:F4}; " +
+                                      "RoundToInt below would silently absorb it");
+
+                    // 2. THE TUNNEL RULE: a connector defines a floor plane, and SolveMate makes
+                    //    both sides coincide exactly - so coplanarity is FREE if the connector sits
+                    //    on the floor. True today for all 30 door sockets across the kit, and
+                    //    asserted nowhere until now.
+                    //
+                    //    VERTICAL SOCKETS ARE EXEMPT, and the exemption IS the point: the 8 stair
+                    //    sockets at +/-FloorSeparationY/2 are the only connectors in the project off
+                    //    the floor plane, and they are exactly what the connector-model redesign
+                    //    deletes. Delete this exemption with them.
+                    foreach (var s in go[n.id].GetComponentsInChildren<RoomSocket>(true))
+                    {
+                        if (s == null || DungeonBakerChecks.IsVertical(s.type)) continue;
+                        float localY = s.transform.localPosition.y;
+                        if (Mathf.Abs(localY) > GridEpsilon)
+                            socketOffPlane.Add($"'{n.id}' socket '{s.id}' ({s.type}) sits at local Y {localY:F4}, " +
+                                               "not the room's floor plane (0) - two rooms mated through it would " +
+                                               "not be coplanar and the doorway would carry a step");
+                    }
+                }
+
+                if (gridDrift.Count > 0)
+                    FlowTrace.Fail(Sys, $"GRID_DRIFT x{gridDrift.Count} - the half-cell invariant (this file, L20-27) " +
+                                        "is broken and the emit would quantise it away: " + string.Join(" | ", gridDrift));
+                if (socketOffPlane.Count > 0)
+                    FlowTrace.Fail(Sys, $"CONNECTOR_OFF_FLOOR_PLANE x{socketOffPlane.Count}: " +
+                                        string.Join(" | ", socketOffPlane));
+                if (gridDrift.Count == 0 && socketOffPlane.Count == 0)
+                    FlowTrace.Step(Sys, $"GRID_OK {graph.nodes.Count} room(s) on the integer grid; " +
+                                        "every non-vertical connector on its floor plane");
 
                 foreach (var n in graph.nodes)
                 {
