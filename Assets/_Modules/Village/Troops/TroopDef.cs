@@ -62,6 +62,13 @@ namespace DeNelle.Village
         /// slash (e.g. <c>Structures/Catapult</c>) load as a full Resources path.
         /// </summary>
         [JsonProperty("model")] public string Model;
+
+        /// <summary>
+        /// Optional Resources/Heroes controller stem (no path/ext), e.g. <c>Knight</c>,
+        /// <c>Ranger</c>, <c>Mage</c>. Empty → resolved from role/model:
+        /// melee → Knight (Attack/stab), ranged → Ranger (bow Attack), caster/Mage body → Mage (Cast).
+        /// </summary>
+        [JsonProperty("animator")] public string Animator;
         /// <summary>Yaw (deg) the factory applies so the body faces +Z (the move direction).
         /// Tripo/AccuRIG bodies import facing +X → <c>-90</c> (historic default). Supercyan
         /// humanoids already face +Z → set <c>0</c>. Data-driven so each art pack's facing is

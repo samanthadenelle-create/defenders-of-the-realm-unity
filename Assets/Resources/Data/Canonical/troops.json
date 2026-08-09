@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "_comment": "Buildable troops (WO-732 roster + WO-933 Siege Catapult (8 types)). A troop is a lightweight friendly fighter that hunts the nearest hostile and is itself damageable. unlockBarracksTier = minimum Barracks building tier required to train this troop (1 = day-one Footman+Archer; 2..6 unlock as the Barracks is upgraded). JSON is the source of truth - the roster is NEVER hard-coded in C#. DUAL-COPY RULE (BINDING): this file is mirrored byte-identical at Assets/StreamingAssets/Data/Canonical/troops.json AND Assets/Resources/Data/Canonical/troops.json; WebGL loads the Resources copy first, so any edit MUST be written to BOTH or builds silently load the wrong roster. Stats/costs are authoritative from WORK_ORDER_PROGRAM_732_736 economy table (do not invent). model maps to Resources/Heroes/<model>; modelYaw is per art-pack (SC_* face +Z -> 0; Tripo/Knight/Ranger/Mage face +X -> -90). weapon/offhand are optional Resources paths (TroopGear/*) attached at spawn by TroopGearApplier so roles do not share bare skins. Missing models fall back to a tinted capsule (WO-735 owns real art/portraits). maxOwned=0 unlimited; siege uses maxOwned=1. role siege prefers structures. structureDamageMult/unitDamageMult bias siege DPS.",
+  "_comment": "Buildable troops (WO-732 roster + WO-933 Siege Catapult (8 types)). A troop is a lightweight friendly fighter that hunts the nearest hostile and is itself damageable. unlockBarracksTier = minimum Barracks building tier required to train this troop (1 = day-one Footman+Archer; 2..6 unlock as the Barracks is upgraded). JSON is the source of truth - the roster is NEVER hard-coded in C#. DUAL-COPY RULE (BINDING): this file is mirrored byte-identical at Assets/StreamingAssets/Data/Canonical/troops.json AND Assets/Resources/Data/Canonical/troops.json; WebGL loads the Resources copy first, so any edit MUST be written to BOTH or builds silently load the wrong roster. Stats/costs are authoritative from WORK_ORDER_PROGRAM_732_736 economy table (do not invent). model maps to Resources/Heroes/<model>; modelYaw is per art-pack (SC_* face +Z -> 0; Tripo/Knight/Ranger/Mage face +X -> -90). weapon/offhand are optional Resources paths (TroopGear/*) attached at spawn by TroopGearApplier so roles do not share bare skins. Missing models fall back to a tinted capsule (WO-735 owns real art/portraits). maxOwned=0 unlimited; siege uses maxOwned=1. role siege prefers structures. structureDamageMult/unitDamageMult bias siege DPS. animator = Heroes controller stem (Knight melee Attack, Ranger bow Attack, Mage Cast).",
   "troops": [
     {
       "id": "troop-footman",
@@ -23,7 +23,8 @@
       "buildSeconds": 45,
       "unlockBarracksTier": 1,
       "shortDescription": "Front-line melee bruiser. Day-one workhorse.",
-      "iconId": "icon_sword"
+      "iconId": "icon_sword",
+      "animator": "Knight"
     },
     {
       "id": "troop-archer",
@@ -46,7 +47,8 @@
       "buildSeconds": 60,
       "unlockBarracksTier": 1,
       "shortDescription": "Back-line ranged DPS. Fragile but hits hard.",
-      "iconId": "icon_combat"
+      "iconId": "icon_combat",
+      "animator": "Ranger"
     },
     {
       "id": "troop-spearman",
@@ -69,7 +71,8 @@
       "buildSeconds": 120,
       "unlockBarracksTier": 2,
       "shortDescription": "Reach melee. Anti-clump front fighter.",
-      "iconId": "icon_sword"
+      "iconId": "icon_sword",
+      "animator": "Knight"
     },
     {
       "id": "troop-shieldguard",
@@ -93,7 +96,8 @@
       "buildSeconds": 180,
       "unlockBarracksTier": 3,
       "shortDescription": "Heavy tank. Holds the choke and soaks damage.",
-      "iconId": "icon_shield"
+      "iconId": "icon_shield",
+      "animator": "Knight"
     },
     {
       "id": "troop-outrider",
@@ -116,7 +120,8 @@
       "buildSeconds": 270,
       "unlockBarracksTier": 4,
       "shortDescription": "Fast flanker. Runs down towers and stragglers.",
-      "iconId": "icon_compass"
+      "iconId": "icon_compass",
+      "animator": "Knight"
     },
     {
       "id": "troop-catapult",
@@ -164,7 +169,8 @@
       "buildSeconds": 360,
       "unlockBarracksTier": 5,
       "shortDescription": "High-damage ranged caster. Very fragile.",
-      "iconId": "icon_energy_sword"
+      "iconId": "icon_energy_sword",
+      "animator": "Mage"
     },
     {
       "id": "troop-echo-legionnaire",
@@ -188,7 +194,8 @@
       "buildSeconds": 600,
       "unlockBarracksTier": 6,
       "shortDescription": "Elite flex unit of the Legion of Elarion. Expensive.",
-      "iconId": "icon_tree"
+      "iconId": "icon_tree",
+      "animator": "Knight"
     }
   ]
 }

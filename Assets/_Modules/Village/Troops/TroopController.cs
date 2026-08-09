@@ -128,11 +128,15 @@ namespace DeNelle.Village
         // ── Animation (guarded — a troop with no rig still fights) ────────────
         private Animator _animator;
         private Vector3 _lastPosition;
-        private static readonly int AnimSpeed  = Animator.StringToHash("Speed");
-        private static readonly int AnimAttack = Animator.StringToHash("Attack");
-        private static readonly int AnimHit    = Animator.StringToHash("Hit");
-        private static readonly int AnimDead   = Animator.StringToHash("Dead");
-        private bool _hasSpeed, _hasAttack, _hasHit, _hasDead;
+        private static readonly int AnimSpeed    = Animator.StringToHash(AnimParams.Speed);
+        private static readonly int AnimAttack   = Animator.StringToHash(AnimParams.Attack);
+        private static readonly int AnimCast     = Animator.StringToHash(AnimParams.Cast);
+        private static readonly int AnimInCombat = Animator.StringToHash(AnimParams.InCombat);
+        private static readonly int AnimHit      = Animator.StringToHash(AnimParams.Hit);
+        private static readonly int AnimDead     = Animator.StringToHash(AnimParams.Dead);
+        private bool _hasSpeed, _hasAttack, _hasCast, _hasInCombat, _hasHit, _hasDead;
+        /// <summary>Mage/Cleric controllers: strike fires Cast; melee/ranged fire Attack.</summary>
+        private bool _useCastStrike;
 
         // §12 instrumentation (owner defect 2026-08-02 "troops slide / T-pose"): the LAST step of the
         // chain — proof that a parameter was actually written to a live Animator. One line per troop,
@@ -302,6 +306,8 @@ namespace DeNelle.Village
                 _preferStructures = string.Equals(def.Role, "siege", System.StringComparison.OrdinalIgnoreCase);
                 _structureDamageMult = def.StructureDamageMult > 0f ? def.StructureDamageMult : 1f;
                 _unitDamageMult = def.UnitDamageMult > 0f ? def.UnitDamageMult : 1f;
+                // Melee → Knight Attack; archer → Ranger Attack; mage → Mage Cast.
+                _useCastStrike = TroopFactory.UsesCastStrike(def, def.Model);
             }
 
             // WO-771.9: seed the re-base baseline from the def; ApplyUpgradeStats overwrites it
@@ -338,10 +344,12 @@ namespace DeNelle.Village
             {
                 foreach (var p in _animator.parameters)
                 {
-                    if (p.nameHash == AnimSpeed)  _hasSpeed  = true;
-                    if (p.nameHash == AnimAttack) _hasAttack = true;
-                    if (p.nameHash == AnimHit)    _hasHit    = true;
-                    if (p.nameHash == AnimDead)   _hasDead   = true;
+                    if (p.nameHash == AnimSpeed)    _hasSpeed    = true;
+                    if (p.nameHash == AnimAttack)   _hasAttack   = true;
+                    if (p.nameHash == AnimCast)     _hasCast     = true;
+                    if (p.nameHash == AnimInCombat) _hasInCombat = true;
+                    if (p.nameHash == AnimHit)      _hasHit      = true;
+                    if (p.nameHash == AnimDead)     _hasDead     = true;
                 }
             }
 
@@ -372,7 +380,8 @@ namespace DeNelle.Village
             {
                 FlowTrace.Step("TroopVisual",
                     $"id={_troopId}: driver armed on controller '{_animator.runtimeAnimatorController.name}' " +
-                    $"- Speed={_hasSpeed} Attack={_hasAttack} Hit={_hasHit} Dead={_hasDead}.");
+                    $"- Speed={_hasSpeed} Attack={_hasAttack} Cast={_hasCast} InCombat={_hasInCombat} " +
+                    $"Hit={_hasHit} Dead={_hasDead} useCastStrike={_useCastStrike}.");
             }
 
             _lastPosition = transform.position;
@@ -440,6 +449,7 @@ namespace DeNelle.Village
             var foe = foeValid ? _cachedFoe : null;
             if (foe == null)
             {
+                SetInCombat(false);
                 // No foe — RALLY (WO-453 Step 4): if a global rally point is set and we are
                 // farther than the arrival epsilon, walk toward it; otherwise idle in place.
                 // Foe-in-range always wins (this branch only runs when there's no foe), so
@@ -457,6 +467,7 @@ namespace DeNelle.Village
                 return;
             }
 
+            SetInCombat(true);
             Vector3 foePos = foe.WorldPosition;
             float dist = Vector3.Distance(transform.position, foePos);
 
@@ -472,6 +483,12 @@ namespace DeNelle.Village
                 if (_attackCdRemaining <= 0f)
                     Attack(foe);
             }
+        }
+
+        private void SetInCombat(bool on)
+        {
+            if (_animator != null && _hasInCombat)
+                _animator.SetBool(AnimInCombat, on);
         }
 
         // =====================================================================
@@ -556,8 +573,18 @@ namespace DeNelle.Village
             }
             foe.TakeDamage(dmg, _element);
 
-            // Fire the strike animation in sync with the damage tick (guarded).
-            if (_animator != null && _hasAttack) _animator.SetTrigger(AnimAttack);
+            // Strike anim by class:
+            //   Mage/Cleric → Cast (spell), melee → Attack (slash/stab), archer → Attack (draw/loose).
+            // Prefer the class-correct trigger; fall back so a misbound controller still reads as striking.
+            if (_animator != null)
+            {
+                if (_useCastStrike && _hasCast)
+                    _animator.SetTrigger(AnimCast);
+                else if (_hasAttack)
+                    _animator.SetTrigger(AnimAttack);
+                else if (_hasCast)
+                    _animator.SetTrigger(AnimCast);
+            }
         }
 
         // =====================================================================

@@ -324,23 +324,69 @@ namespace DeNelle.Village
         }
 
         /// <summary>
-        /// Controllers to try, most specific first. A troop model that HAS a same-named controller
-        /// (Knight -> Resources/Heroes/Knight.controller) uses its own; everything else falls back to
-        /// the shared humanoid controller for its ROLE (ranged -> Ranger, melee -> Knight), which is
-        /// data-driven off troops.json rather than a per-model hard-coded table. All four hero
-        /// controllers declare the identical AnimParams set, so any of them can drive a troop.
+        /// Controllers to try, most specific first. Order:
+        /// authored <c>TroopDef.Animator</c> → model-stem match → role/body heuristic
+        /// (melee=Knight Attack, ranged=Ranger bow Attack, caster/Mage=Mage Cast) → Knight last resort.
+        /// All four hero controllers declare AnimParams (Speed/Attack/Cast/Hit/Dead).
         /// </summary>
         private static string[] ControllerCandidates(TroopDef def, string model)
         {
-            string role = (def != null && def.Role != null) ? def.Role.Trim().ToLowerInvariant() : "melee";
-            string roleCtrl = role == "ranged" ? "Ranger" : "Knight";
-            // Deduped, order preserved: a duplicate candidate would double the Resources.Load and the
-            // trace line for no gain, and "tried Knight, Knight" reads like a bug in the log.
-            var list = new List<string>(3);
-            if (!string.IsNullOrEmpty(model)) list.Add(model);
-            if (!list.Contains(roleCtrl)) list.Add(roleCtrl);
-            if (!list.Contains("Knight")) list.Add("Knight");   // last resort: always a driveable controller
+            var list = new List<string>(5);
+            void Add(string s)
+            {
+                if (string.IsNullOrEmpty(s)) return;
+                s = s.Trim();
+                // Full Resources paths are not controller stems.
+                if (s.IndexOf('/') >= 0 || s.IndexOf('\\') >= 0) return;
+                if (!list.Contains(s)) list.Add(s);
+            }
+
+            if (def != null) Add(def.Animator);
+            // Bare model name only (SC_Archer has no matching controller — skips harmlessly).
+            Add(model);
+            Add(ResolveRoleController(def, model));
+            Add("Knight");   // always a driveable Humanoid fallback
             return list.ToArray();
+        }
+
+        /// <summary>
+        /// Primary combat controller for a troop: casters/Mage bodies → Mage (Cast);
+        /// ranged → Ranger (bow Attack); melee/siege → Knight (melee Attack).
+        /// </summary>
+        public static string ResolveRoleController(TroopDef def, string model)
+        {
+            string authored = def != null ? def.Animator : null;
+            if (!string.IsNullOrEmpty(authored)
+                && authored.IndexOf('/') < 0 && authored.IndexOf('\\') < 0)
+                return authored.Trim();
+
+            string m = model ?? "";
+            string role = (def != null && def.Role != null) ? def.Role.Trim().ToLowerInvariant() : "melee";
+            string id = def != null && def.Id != null ? def.Id.ToLowerInvariant() : "";
+
+            // Caster first: battlemage is combat-role "ranged" but must CAST, not bow-draw.
+            if (role == "caster" || role == "mage"
+                || id.IndexOf("mage", System.StringComparison.Ordinal) >= 0
+                || id.IndexOf("wizard", System.StringComparison.Ordinal) >= 0
+                || m.IndexOf("Mage", System.StringComparison.OrdinalIgnoreCase) >= 0
+                || m.IndexOf("Wizard", System.StringComparison.OrdinalIgnoreCase) >= 0)
+                return "Mage";
+
+            if (role == "ranged"
+                || m.IndexOf("Archer", System.StringComparison.OrdinalIgnoreCase) >= 0
+                || m.IndexOf("Ranger", System.StringComparison.OrdinalIgnoreCase) >= 0)
+                return "Ranger";
+
+            // Melee (and siege if it ever binds) — Knight Attack/stab chain.
+            return "Knight";
+        }
+
+        /// <summary>True when this troop should fire the Cast trigger (not Attack) on strike.</summary>
+        public static bool UsesCastStrike(TroopDef def, string model)
+        {
+            string ctrl = ResolveRoleController(def, model);
+            return string.Equals(ctrl, "Mage", System.StringComparison.OrdinalIgnoreCase)
+                || string.Equals(ctrl, "Cleric", System.StringComparison.OrdinalIgnoreCase);
         }
 
         /// <summary>

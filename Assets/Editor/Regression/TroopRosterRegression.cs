@@ -161,6 +161,28 @@ namespace DeNelle.Editor
                     failures.Add($"troop-catapult model='{catapult.Model}' — expected a Catapult machine path.");
             }
 
+            // Animator class map: melee→Knight, archer→Ranger, battlemage→Mage (Cast).
+            if (seen.TryGetValue("troop-archer", out var archerDef))
+            {
+                string a = TroopFactory.ResolveRoleController(archerDef, archerDef.Model);
+                if (!string.Equals(a, "Ranger", System.StringComparison.OrdinalIgnoreCase))
+                    failures.Add($"troop-archer ResolveRoleController='{a}' — expected Ranger (bow Attack).");
+            }
+            if (seen.TryGetValue("troop-footman", out var footDef))
+            {
+                string a = TroopFactory.ResolveRoleController(footDef, footDef.Model);
+                if (!string.Equals(a, "Knight", System.StringComparison.OrdinalIgnoreCase))
+                    failures.Add($"troop-footman ResolveRoleController='{a}' — expected Knight (melee Attack).");
+            }
+            if (seen.TryGetValue("troop-battlemage", out var mageDef))
+            {
+                string a = TroopFactory.ResolveRoleController(mageDef, mageDef.Model);
+                if (!string.Equals(a, "Mage", System.StringComparison.OrdinalIgnoreCase))
+                    failures.Add($"troop-battlemage ResolveRoleController='{a}' — expected Mage (Cast spells).");
+                if (!TroopFactory.UsesCastStrike(mageDef, mageDef.Model))
+                    failures.Add("troop-battlemage UsesCastStrike=false — should fire Cast, not Attack.");
+            }
+
             // Real TroopUnlock.LockedReason ties WO-733 (tier number) + WO-734 (tier
             // name): a locked troop's reason must carry both.
             if (seen.TryGetValue("troop-echo-legionnaire", out var legionnaire))
