@@ -544,6 +544,24 @@ namespace DeNelle.Editor
         // "could not resolve both sources - skipped" and returns green, so renaming
         // BuildRoamerDef silently disarms it (the plan pass flagged this shape at :555-558).
         // An oracle that cannot reach its subject has not passed; it has stopped working.
+        /// <summary>The spawn[] context TribeManager operates in (roaming raider tribes).</summary>
+        private const string TribeSpawnContext = "roam";
+
+        /// <summary>
+        /// DATED, RATCHETED spawn-context violations (2026-08-09). A pinned entry is a
+        /// recorded content decision still owed; a NEW violation hard-fails.
+        /// </summary>
+        private static readonly HashSet<string> KnownSpawnContextViolations =
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                // boss:true, role:elite, spawn:["wave"], 1700 Hp / 220 xp - "Alduin's
+                // Necromancer". TribeManager emits the same id as a 90 Hp / 28 xp roaming
+                // "Wound Necromancer". One id, two creatures. The fix is a content call:
+                // give the tribe caster its own id + catalog row, point it at an existing
+                // legal id, or drop it. NOT to raise the raider to boss stats.
+                "necromancer",
+            };
+
         private static void CheckSynthesizerVsCatalog(List<string> failures, StringBuilder log)
         {
             using var _ = FlowTrace.Enter("CombatAtb", "CheckSynthesizerVsCatalog");
@@ -603,6 +621,48 @@ namespace DeNelle.Editor
                         FlowTrace.Fail("CombatAtb", $"{id} Hp synth={built.Hp} catalog={cat.Hp}");
                         log.AppendLine($"  [synth-vs-catalog] DIVERGENCE '{id}' Hp: TribeManager={built.Hp:0.#} vs " +
                                        $"enemies.json={cat.Hp:0.#}");
+                    }
+
+                    // --- SPAWN-CONTEXT CONTRACT (the necromancer finding) ---------------
+                    // enemies.json declares WHERE each enemy may appear via spawn[], and the
+                    // contract is already implemented at WaveData.cs:214-221 (family +
+                    // spawnContext filter). TribeManager does not use it, so it can - and
+                    // does - spawn an id whose declaration forbids the context.
+                    //
+                    // 'necromancer' is boss:true, role:elite, spawn:["wave"] - "Alduin's
+                    // Necromancer", 1700 Hp / 220 xp. TribeManager emits that SAME id as a
+                    // roaming raider at 90 Hp / 28 xp. That is not a stat typo, it is an ID
+                    // COLLISION: one id, two creatures. Raising the raider to 1700 would be
+                    // the WRONG fix - it drops a wave boss into a roaming tribe.
+                    //
+                    // Ratcheted rather than hard-failed: the violation is pre-existing and
+                    // its remedy (which creature the tribe caster should actually be) is a
+                    // content decision, not a gate action. Known entries are recorded; a NEW
+                    // context violation fails.
+                    var declared = cat.Spawn ?? new List<string>();
+                    bool roamOk = false;
+                    foreach (var s in declared)
+                        if (string.Equals(s, TribeSpawnContext, StringComparison.OrdinalIgnoreCase)) { roamOk = true; break; }
+
+                    if (!roamOk)
+                    {
+                        string ctx = declared.Count == 0 ? "<none>" : string.Join(",", declared.ToArray());
+                        if (KnownSpawnContextViolations.Contains(id))
+                        {
+                            log.AppendLine($"  [synth-vs-catalog] KNOWN spawn-context violation '{id}': declares " +
+                                           $"spawn[{ctx}] but TribeManager spawns it as '{TribeSpawnContext}'" +
+                                           (cat.Boss ? " AND IT IS A BOSS (boss:true)" : "") +
+                                           " - pinned, awaiting a content ruling on what the tribe variant should be.");
+                        }
+                        else
+                        {
+                            FlowTrace.Fail("CombatAtb", $"NEW spawn-context violation: {id} declares [{ctx}]");
+                            failures.Add($"[synth-vs-catalog] NEW SPAWN-CONTEXT VIOLATION '{id}': enemies.json declares " +
+                                         $"spawn[{ctx}], which does not include '{TribeSpawnContext}', yet TribeManager " +
+                                         "spawns it there. The contract is already implemented at WaveData.cs:214-221; " +
+                                         "this spawner bypasses it. Either declare the context in the catalog or stop " +
+                                         "emitting this id from the tribe roster.");
+                        }
                     }
                 }
             }

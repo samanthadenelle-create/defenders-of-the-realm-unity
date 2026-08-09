@@ -77,7 +77,18 @@ namespace DeNelle.Village
         /// Where this enemy appears ("wave" / "roam" / "camp" / "world"). A list;
         /// an enemy can do more than one. Absent ⇒ ["wave"] for back-compat.
         /// </summary>
-        [JsonProperty("spawn")] public List<string> Spawn = new List<string> { "wave" };
+        // ObjectCreationHandling.Replace is LOAD-BEARING, not style. Json.NET's default
+        // (Auto) REUSES this field's existing list instance and APPENDS to it, so the
+        // initializer's "wave" was never cleared: `["wave"]` deserialised to
+        // ["wave","wave"] and `["roam","camp"]` to ["wave","roam","camp"]. Every enemy in
+        // the catalog silently gained "wave" as a declared spawn context, so the data said
+        // something no author wrote. Found 2026-08-09 when a spawn-context oracle printed
+        // `declares spawn[wave,wave]` for a row whose JSON reads ["wave"].
+        // Harmless at the time ONLY because nothing consumes the field - MembersOf's
+        // spawnContext parameter has no caller that passes one - but a defaulted value
+        // masquerading as authored data is exactly the class that bites later.
+        [JsonProperty("spawn", ObjectCreationHandling = ObjectCreationHandling.Replace)]
+        public List<string> Spawn = new List<string> { "wave" };
         /// <summary>Display name shown on the HP bar / codex.</summary>
         [JsonProperty("displayName")] public string DisplayName;
         /// <summary>KayKit mesh key — resolved to Assets/Models/KayKit/enemies/&lt;key&gt;.glb.</summary>
