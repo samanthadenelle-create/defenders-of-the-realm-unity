@@ -76,6 +76,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
+using DeNelle.Core.Diagnostics;
 using Newtonsoft.Json.Linq;
 using UnityEngine;
 
@@ -87,6 +88,33 @@ namespace DeNelle.Editor
 
         // Catalogs that never carried a top-level "version" (flat string maps /
         // plain recipe lists) — verified by parsing 2026-07-12.
+        // RESOURCES-ONLY BY DESIGN (F23, 2026-08-09).
+        // Declared with a REASON each, not pattern-matched: IsNonDualCopyByDesign keys off
+        // filename prefixes (skr_/battle_/.sample.json), which cannot express "this one
+        // file is deliberately unpaired and here is why". A reason string makes each entry
+        // falsifiable later; a prefix rule silently absorbs any future file that happens to
+        // match it.
+        //
+        // These three surfaced the moment the Resources direction was walked for the first
+        // time - they had been unpaired, unversioned and unchecked while being the copy that
+        // WINS at runtime. Declaring them is not silencing the gate: the gate's job is to
+        // make unpaired state DECLARED rather than accidental, and an undeclared arrival
+        // still hard-fails.
+        private static readonly Dictionary<string, string> ResourcesOnlyByDesign =
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            { "ad-placements.json",
+              "ad covenant data; read at runtime from Resources only and pinned by " +
+              "AdPlacementCovenantRegression. No StreamingAssets consumer exists." },
+            { "widget-params.json",
+              "HUD widget tuning params, Resources-only. NOTE: carries no version field, " +
+              "which is why the StreamingAssets-only version walk never saw it." },
+            { "ad-creatives.json",
+              "DEBT, NOT A DESIGN: audit F61 found ZERO readers repo-wide - no .cs, editor " +
+              "or runtime, references it. Declared here so the gate stays honest about the " +
+              "rest, but this file is a REMOVAL CANDIDATE, not a sanctioned exception." },
+        };
+
         private static readonly HashSet<string> VersionlessByDesign =
             new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -185,6 +213,7 @@ namespace DeNelle.Editor
                 CheckWebglOmission(streamingRoot, resourcesRoot, failures, log);
                 CheckAllParse(streamingRoot, resourcesRoot, failures, log);
                 CheckVersionFields(streamingRoot, resourcesRoot, failures, log);
+                CheckResourcesOnlyFiles(streamingRoot, resourcesRoot, failures, log);   // F23
                 CheckGearCuration(streamingRoot, resourcesRoot, failures, log);   // WO-747
             }
 
@@ -395,6 +424,80 @@ namespace DeNelle.Editor
                 }
             }
             log.AppendLine($"version fields: {checkedCount} catalog(s) checked, {VersionlessByDesign.Count} allowlisted");
+        }
+
+        // ── (4b) RESOURCES-ONLY files: the side that WINS, never walked ─────────
+        // Audit finding F23. CheckDualCopyDrift and CheckVersionFields both iterate
+        // CanonicalJsonFiles(streamingRoot) ONLY. Every assertion about drift and about
+        // version fields is therefore blind to a file that exists solely under
+        // Resources/Data/Canonical - and Resources is the copy that WINS at runtime
+        // (LocalJsonCatalogSource probes Resources first). The gate was walking the
+        // losing side and reporting on the whole contract.
+        //
+        // This is the audit's headline pattern once more: an assertion that proves the
+        // part that was never broken. A StreamingAssets-only file is inert; a
+        // Resources-only file is what the player actually loads.
+        //
+        // Two distinct failures live here:
+        //   * an UNDECLARED Resources-only file - it wins at runtime with no recorded
+        //     reason for being unpaired, which is how a stray copy comes to shadow the
+        //     canonical pair unnoticed.
+        //   * a declared-by-design Resources-only file with NO version field - invisible
+        //     to CheckVersionFields for its whole life (widget-params.json is exactly
+        //     this today).
+        private static void CheckResourcesOnlyFiles(string streamingRoot, string resourcesRoot,
+                                                    List<string> failures, StringBuilder log)
+        {
+            using var _ = FlowTrace.Enter("DataWeb", "CheckResourcesOnlyFiles");
+
+            int resourcesOnly = 0, versionChecked = 0;
+            foreach (var rPath in CanonicalJsonFiles(resourcesRoot))
+            {
+                string rel = RelativePath(resourcesRoot, rPath);
+                string fileName = Path.GetFileName(rel);
+
+                string sPath = Path.Combine(streamingRoot, rel);
+                if (File.Exists(sPath)) continue;   // paired - the StreamingAssets walk covers it
+
+                resourcesOnly++;
+
+                string why;
+                bool declared = ResourcesOnlyByDesign.TryGetValue(fileName, out why);
+
+                if (!declared && !IsNonDualCopyByDesign(fileName))
+                {
+                    FlowTrace.Fail("DataWeb", "undeclared Resources-only file: " + rel);
+                    failures.Add($"RESOURCES-ONLY, UNDECLARED '{rel}': this file exists under Resources but NOT under " +
+                                 "StreamingAssets, and is not declared in ResourcesOnlyByDesign. Resources WINS at " +
+                                 "runtime, so the player loads a catalog that has no counterpart and no recorded reason " +
+                                 "for being unpaired - either mirror it or declare it by design WITH A REASON.");
+                    continue;
+                }
+
+                if (declared) log.AppendLine($"  '{rel}' Resources-only by design - {why}");
+
+                // Declared unpaired is fine. Being versionless is still reported - but as a
+                // NOTE on a declared file rather than a failure, because the declaration
+                // already carries the reason. An UNDECLARED versionless file still fails above.
+                if (VersionlessByDesign.Contains(fileName))
+                { log.AppendLine($"  '{rel}' Resources-only + versionless by design - skipped"); continue; }
+
+                JObject rObj = TryParseObject(rPath);
+                if (rObj == null) continue;   // parse failures already reported by (3)
+                versionChecked++;
+
+                if (rObj["version"] == null)
+                {
+                    FlowTrace.Warn("DataWeb", "declared Resources-only file has no version field: " + rel);
+                    log.AppendLine($"  NOTE '{rel}' has no \"version\" field - invisible to the version walk for its " +
+                                   "entire life because that walk only ever visited StreamingAssets (F23). Declared, " +
+                                   "so not failed; recorded so it cannot be forgotten.");
+                }
+            }
+
+            FlowTrace.Step("DataWeb", "resources-only=" + resourcesOnly + " version-checked=" + versionChecked);
+            log.AppendLine($"resources-only files: {resourcesOnly} found, {versionChecked} version-checked " +
+                           "(this direction was unwalked before 2026-08-09 - F23)");
         }
 
         // ── (5) Gear curation (WO-747, ADDITIVE model) ──────────────────────────
