@@ -1,15 +1,125 @@
-> ## ⚠ STALE as of 2026-08-07 02:30 — read `CANON_GROUND_TRUTH_2026-08-07.md` FIRST
+> ## ▶ REFRESHED 2026-08-09 — the live anchor is `CANON_GROUND_TRUTH_2026-08-09.md`
 >
-> This file was last refreshed 2026-08-06 ~10:50, BEFORE the overnight run. It does not know about:
-> the wallet main-thread fix, the arena stranding fix, the Manage/Queues screen (bottom bar is now
-> **6 faces**, Upgrade re-pointed, Map moved into Bag and flag-gated off), **save schema v37**, the
-> rewarded-ad gate, town suspension while in a dungeon, the barracks adoption, the F8 harness
-> un-blinding, or the UI seat moving to the **1000-block**.
+> The **08-09 LIVE THREAD** below is current; every thread under it is SUPERSEDED and kept as history.
+> The 08-08 anchor is bannered and is **INVERTED** on its two headline sections (the machine block is
+> resolved; the dungeon-stair hunt is closed) — do not act on it.
 >
-> Per CLAUDE.md §15 this is a `STALE:` flag rather than a rewrite — the anchor wins on any conflict.
+> Per CLAUDE.md §15 the newest `CANON_GROUND_TRUTH_<date>.md` wins on any conflict with this file.
 # DeNelle Studios — Project Canon Loader
 
-> ## ▶ LIVE THREAD (2026-08-06) — READ BEFORE WORKING
+> ## ▶ LIVE THREAD (2026-08-09) — READ BEFORE WORKING
+> **Reality anchor = `CANON_GROUND_TRUTH_2026-08-09.md`** (supersedes 08-08, bannered). Branch
+> `wip/village2-and-f8-tickets`, **HEAD `c8320434`, PUSHED — local == origin, 0/0** (push landed 08-08
+> 19:52:45). **30 commits landed 2026-08-08.** ⚠ Working tree NOT clean, and it is a SHARED tree
+> (CLAUDE.md §11): `ProjectSettings.asset` (exactly two auto-stamped keys — an Android build ran AFTER
+> HEAD, not a hand edit) plus **4 DELETED files under `tools/webbot/`**. One committer, staged by
+> explicit path, never `git add -A`.
+> Gates last emitted, **read off the marker files**: `Builds/gate-ship3.log` → `COMPILE_GATE_OK` ·
+> `Builds/regression-ship3.log` → `REGRESSION_OK 130/130 suites` · `Builds/ui-capture-ship.log` →
+> `UI_CAPTURE_OK 44`. ⚠ `Builds/test-results-EditMode.xml` is 930/930 green but **stamped 2026-08-04 —
+> five days stale; not current evidence.** Save schema **v37** (`SaveSchema.cs:36`).
+> **Never restate a suite count from a doc.** The three entry points emit DISTINCT markers
+> (`REGRESSION_OK` / `CHECKIN_SUITE_OK` / `SESSION_GUARDS_OK`).
+>
+> **✅ THE 08-08 MACHINE BLOCK IS RESOLVED.** Rebooted 08-08 08:07:21; commit charge **45.7 GB of
+> 127.8 GB**, 11.9 GB free, no Unity running. **Windows EXE 08-08 14:33 · Android APK 08-08 20:00
+> (572,202,338 bytes) · Firebase ran.** ⚠ **Only the WebGL / web-deploy step never happened** —
+> `Builds/WebGL` is still 2026-08-05 and there is **no `Builds/webgl-chain-status.txt`.**
+>
+> **★ THE DUNGEON STAIRS ARE SOLVED — the PathPartial hunt is CLOSED.** WO-930's one-room stairwell:
+> `3ab1bfb6` (**the first floor-to-floor `PathComplete` in project history**) → `e7163c9c` (skinned,
+> 0 bad surfaces) → `5f0e23aa` (candle lights + **a caught RED gate: `dg_sunken_vault.json` dual-copy
+> drift — Resources held the OLD 17-room layout, and Resources WINS at runtime**) → `cb092b7f`
+> (**all 4 content dungeons PathComplete, 12 descents, 0 mate failures, 14/14 dual-copy parity**;
+> `dg_descent_probe`/`dg_stair_rig` left on the old model as controls) → `51a89364` (`RoomPrefabMeta` on
+> `StairwellRoom` — the overlap gate had been measuring a **20x10 m room as one 10 m cell**).
+> **ROOT CAUSE = STAIR YAW:** `GraphDungeonComposer.SolveMate` hardcoded `yaw = 0f` on vertical sockets,
+> so only a Delta of 180 landed the flight in the floor hole. **It was never a property of the stair** —
+> which is why four rounds of bucketing the stair's scalars all returned nothing. The 08-08 anchor's
+> "dump navmesh triangles next" move is DEAD; keep its killed-hypotheses table as history only.
+>
+> **⚠ HEADLESS GATES CANNOT SEE ORIENTATION — the lesson of the day.** `70a86c17` **reverts** `bb6dc010`:
+> `SkinOptions.PreservePrefabRotation` on ALL structures **laid the whole town on its side** (13 catalog
+> rows carry a manual -90 that composes to 180), reproducing only on the **dungeon → town return path**
+> via `BaseLayoutLoader`, with every marker green throughout. This class needs **eyes**, not markers.
+> Narrow fix `439e03ee`: per-catalog-row `RepoProps.preservePrefabRotation` (default false, **exactly one
+> opt-in: `tower_ground_archer`**), `StructureFactory.OptsFor` the single reader. ⚠ Still live:
+> `Resources/Structures` holds a `.fbx` AND a same-stem `.prefab` — `Resources.Load` is **ambiguous**.
+>
+> **⚠ STORE PURCHASES ARE RE-GATED OFF AND LOCKED** (`576601e3`). `StubWalletProvider` has **no
+> `#if UNITY_EDITOR`/`DEVELOPMENT_BUILD` guard**, ships in every player, fabricates a wallet + a **2000 SKR
+> mock balance** + a base58 signature, and `ApplyPackContents` **grants the pack for ZERO payment** while
+> firing `purchase_completed` with the fake txSig. **The submitted store build had a tappable Buy button.**
+> = **WO-931 READY TO IMPLEMENT**, precondition **3 of 3** before `FeatureFlags.RealmStorePurchase` may
+> ever flip on.
+>
+> **Legal / publishing:** app installs as **"Echoes of Elarion"** (`640bfc1c`); Terms of Use authored and
+> hosted verbatim at `site/terms.html`, live at `https://echoes-of-elarion.vercel.app/terms` (verified 200),
+> governing law Texas, ⚠ **no arbitration / class-action / jury-trial waiver — left for the attorney**;
+> publishing scaffold under `publishing/`. ⚠ **TWO OPEN FLAGS:** `PRIVACY_POLICY.md:87-89` carries **one
+> false sentence on a LIVE page** (it describes an Ad button that is now **absent from the UI**; the core
+> no-ads claim is TRUE) — **do not edit it, live legal copy is the owner's/attorney's call**; and
+> `docs/PUBLISHING_STEPS.md` Rail 1 is **obsolete** (bannered) — `dapp-store-cli@1.0.0` has no
+> init/create/validate/publish, the app must already exist in the portal with an App NFT, and publisher +
+> app are created **in the web portal with a browser wallet**.
+>
+> **⚠ `tools/webbot/` WAS DELETED OUTSIDE GIT** — all four files present at HEAD, **no commit ever deleted
+> them**, not gitignored, absent on disk. That is the Playwright web-build self-test rig (the eyes on the
+> deployed build). `git checkout -- tools/webbot/` restores it — **NOT run; open decision for the owner.**
+>
+> **⚠ F8 — ONE UNACKNOWLEDGED capture, seq 2248** (08-08 13:17:10, `Main_Castle_Overworld`):
+> `Cannot set the parent of the GameObject '[VFX_Harvest_Wood]' while activating or deactivating the parent
+> GameObject 'Lumbermill'.` This is the **WO-929** class, but **every proving line in WO-929 is
+> `OutpostEnemy (...)`, a POOLED ENEMY** — so a fix scoped to the pooled-enemy path is **incomplete**.
+>
+> **★ FOUR CANON CLAIMS REFUTED AT SOURCE 2026-08-09 — CLOSED, stop carrying them** (anchor §9):
+> **"THE SEAM" IS CLOSED** — WO-853 dual-implemented `IDamageable`+`IDamageableStructure` on
+> `WallSegment.cs:53`/`Gate.cs:67`/`DefenseTower.cs:57`/`RaidSpire.cs:61` and widened the troop mask on
+> both entry points (`TroopController.cs:189`, `:201-202`, `:394`, buffer 48 → 128 at `:104`); ⚠ **the
+> raid-roadmap prerequisite is SATISFIED, so WO-774.0's posture ruling is NO LONGER FREE TO DEFER** ·
+> the **"orphan third copy"** of the gear catalogs is GONE (`Assets/Data/Canonical` does not exist,
+> deleted in `c55a5561`; `LocalJsonCatalogSource.Read` probes only Resources then StreamingAssets) ·
+> **`CatalogBootstrap.RegisterFallback` drift is FIXED** — all three rows field-equal, the pure-white
+> `visualTexturePath` defect CLOSED, guarded by `[fallback-parity]` · **dual-copy is HEALTHY** — 80 files
+> per side, 77 paired, **only `weapons.json`+`armor.json` drift and both are the deliberate owner gear
+> ruling**; the 08-08 `dg_sunken_vault.json` drift is FIXED (v1 / 14 rooms both sides).
+>
+> **⚠ AND FIVE NEW GAPS, all OPEN and UNCOVERED** (anchor §10): **three of the five difficulty multipliers
+> are computed with ZERO gameplay consumers** — `EnemyCountMultiplier`/`BossHpMultiplier`/
+> `BossDamageMultiplier` (`Core/Difficulty/DynamicDifficulty.cs:119,122,125`), so **every boss wave ignores
+> the softer boss curve**; *(canon's "adaptive difficulty is INERT" is HALF-FALSE — all six
+> `EncounterSample` fields ARE recorded, `WaveManager.cs:2471-2484`/`:2341`/`:1761-1762`/`:1876-1877`.
+> ⚠ folder is `Core/Difficulty/`, namespace is `DeNelle.Core.Adaptive` — both right, fix neither)* ·
+> **`DataWebRegression` iterates the StreamingAssets root only** (`:208`, `:356`), so a **Resources-only
+> file — the copy that WINS at runtime — is never drift- or version-checked** (`widget-params.json` has no
+> `version` field at all) · the version check **never asserts that a change bumps it** — 24 catalogs
+> changed content with no bump on their latest commit · **`RoomForgeRegression.cs:162` is a hardcoded
+> 3-file dual-copy list with NO `dg_*` layout** in it, including the one that actually drifted ·
+> **`DungeonBaker` probes ONE path and is log-only** — `SaveScene` runs unconditionally after a
+> `PathPartial` (`:432-445`, `:457-479`, `:490-494`).
+>
+> **⚠ WO-930 did NOT delete `StairUp`/`StairDown`/`IsVertical`/`SEALED_VERTICAL`/floor holes/ceiling
+> shafts — BY DESIGN.** They are a **quarantined, gated CONTROL GROUP**
+> (`DungeonMultiLevelRegression.cs:41-63`, "⚠ DO NOT DELETE"). **`dg_stair_rig` and `dg_descent_probe` are
+> TEST FIXTURES, not regressions or stale content.** Converted layouts, verified: `dg_bonecrypt`,
+> `dg_ember_deep`, `dg_sunken_vault`, `dg_stairwell_probe`.
+>
+> **CARRIED FORWARD, still open** (the 08-08 anchor dropped these): the VFX **ONESHOT pool saturates
+> 40/40** — different pool, different reclaim path, **NOT closed** by the 08-06 loop-cap fix · the
+> **absence** of `SKIPPED - active loops 20/20` across a full wave has **never been proven** (owed a fleet
+> run) · **`VFXType` serialises by ORDINAL — appends only**, and `Build()` does
+> `entries.arraySize = rows.Count` so a builder-only row is silently dropped · **WO-910 READY FOR OWNER
+> RULING** (31 dead nodes of 40 player-reachable Ranger/Mage talents) · **hero select SELF-SKIPS** when the
+> save records a class — use New Game / Play Intro, never Continue · **`api/` is PREVIEW-only** and prod's
+> nonce endpoint has **no CORS** · still colour-only and OPEN: the build placement ghost + the hero health
+> bar · height cadence 1.25/1.2/1.0/0.75/0.35 with **walls DELIBERATELY excluded** (a uniform fit narrows a
+> wall and **opens PATHABLE GAPS** in saved runs; `collector_farm` 1.4 is a COMPENSATION, not an outlier) ·
+> the bar is **6 visible faces** with `Upgrade` re-pointed to Manage/Queues, `ButtonCount` stays **7**,
+> `MaxVisibleFaces` is what went 7 → 6, and **`Map` stays dormant at ordinal 4 — never renumber it.**
+>
+> **The 08-06 thread below is SUPERSEDED.**
+>
+> ## ▶ LIVE THREAD (2026-08-06) — SUPERSEDED (see 08-09 above)
 > **Reality anchor = `CANON_GROUND_TRUTH_2026-08-06.md`** (supersedes 08-05, which is bannered; note the
 > 08-05 anchor itself was never threaded here, so this line jumps two days). Branch
 > `wip/village2-and-f8-tickets`, **HEAD `1534dffb`, local is 43 commits AHEAD of origin — NOT PUSHED.**
@@ -249,13 +359,17 @@ binding depth lives in `CLAUDE.md`, `docs/ARCHITECTURE_PRINCIPLES.md`, `docs/HAN
   (implement + headless-verify) → PO (felt-verify + close). Shared board = the Task list; log
   every hand-off. Full spec: `docs/TICKET_PIPELINE.md`.
 
-## Current State (anchored to `CANON_GROUND_TRUTH_2026-08-06.md`; the bullets below carry earlier detail — where they disagree with the LIVE THREAD above, the thread wins)
+## Current State (anchored to `CANON_GROUND_TRUTH_2026-08-09.md`; the bullets below carry earlier detail — where they disagree with the LIVE THREAD above, the thread wins)
 
-> **Fast reconciliation (07-22/07-26 corrections — trust these over the older bullets):** home hub =
+> **Fast reconciliation (corrected 2026-08-09 — trust these over the older bullets):** home hub =
 > `Main_Castle_Overworld` (MergedWorld ON, one navmesh; `Village.unity` and `OuterWorld.unity` are
 > DELETED — the "MainCastle_Hall + OuterWorld streams additively" bullet below is stale). Save schema =
-> **v36** (v35 = WO-773 Obsidian queue; v36 = WO-834 `everBuiltStructureIds`). Dungeon real-time gate is `ff.dungeonrealtime` (there is no
-> `ff.atbdungeon`). Raid loop = COC Teleport/Deploy (WO-771). Dungeons are a functional end-to-end loop.
+> **v37** (`SaveSchema.cs:36`; v35 = WO-773 Obsidian queue, v36 = WO-834 `everBuiltStructureIds`,
+> **v37 = WO-911 the per-job PAID BASKET** — cancel refunds 100% of what was paid, flat; a pre-v37 job
+> refunds ZERO and says so). **HEAD = `c8320434`, PUSHED, local == origin** (the `e60b19e5` bullet below
+> is stale). Dungeon real-time gate is `ff.dungeonrealtime` (there is no `ff.atbdungeon`). Raid loop =
+> COC Teleport/Deploy (WO-771). Dungeons are a functional end-to-end loop — and as of 2026-08-08 the
+> **multi-level stairs work**: all 4 content dungeons bake `PathComplete` (WO-930).
 - **Strategic placement = ALWAYS ON (2026-07-13, WO-695 ex-682):** `ff.strategicplacement` is REMOVED —
   Build → Town/Defenses/Walls tabs, movable functional storefronts and the 260w/210i core-kit seed are
   the unconditional path; New Game = the BLANK template (+ one FTUE grace-default Forge record);
@@ -279,7 +393,8 @@ binding depth lives in `CLAUDE.md`, `docs/ARCHITECTURE_PRINCIPLES.md`, `docs/HAN
   tower glow (`ff.hubambientvfx`).
 - **Economy:** Echo workforce wired (offline real-clock, WO-587 Population & Echo growth; save **v36**); gold on kills; research costs. **Echo harvest affinity is a MATCH BONUS, never a lock** (WO-830: the player picks each Echo's resource; matching its affinity doubles the yield; token grammar `<resource>:<level>`; Maren = Crystals).
 ## Key Files to Remember
-- `CANON_GROUND_TRUTH_2026-08-06.md` (the single live anchor of current reality — read FIRST; a delta over 08-05 → 08-03 → 08-02 → 08-01 → 07-26 → the deep `CANON_GROUND_TRUTH_2026-07-22.md` module anchor. All earlier anchors are SUPERSEDED/frozen)
+- `CANON_GROUND_TRUTH_2026-08-09.md` (the single live anchor of current reality — read FIRST; a delta over 08-08 → 08-07 → 08-06 → 08-05 → 08-03 → 08-02 → 08-01 → 07-26 → the deep `CANON_GROUND_TRUTH_2026-07-22.md` module anchor. All earlier anchors are SUPERSEDED/frozen — and the **08-08 one is INVERTED** on its machine-blocked and dungeon-stair sections, so do not act on it)
+- `docs/reference/WO_TRUE_STATUS_2026-08-08.md` (the WO audit that found **52 of ~91 statuses wrong**; frozen, dated)
 - `docs/reference/SESSION_INDEX_2026-08-06.md` (tonight as a known dictionary: every defect with its proving line, every REFUTED belief with the evidence that killed it, the owner rulings, the open items) · `docs/reference/DEFECT_INDEX_2026-08-05.md` (the same for the earlier half of 08-05; frozen)
 - `docs/qa/UI_REVIEW_2026-08-01.md` (frozen 20-panel real-pixel readability review) · `docs/GROK_MEMORY.md` (Grok fast path)
 - `docs/qa/SUNDAY_STATUS_2026-07-26.md` (current WO/ticket status table) + `docs/qa/dungeon-raid-validation-2026-07-26.md` (dungeon/raid sign-off)

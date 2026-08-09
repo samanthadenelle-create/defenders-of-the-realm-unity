@@ -1,10 +1,23 @@
 # MASTER CATALOG — Project Index
 
-> # ▶ DELTA 2026-08-06 — read this before the banners below
-> **Live anchor = `../CANON_GROUND_TRUTH_2026-08-06.md`** (every "live anchor" reference further down this
-> file naming 08-02 or 08-03 is stale). **HEAD `1534dffb`, 43 commits ahead of origin, NOT pushed.**
-> Gates last emitted `COMPILE_GATE_OK` + `REGRESSION_OK 120/120 suites` — ⚠ **read the count off the
-> marker; it moved 117 → 120 in eight hours on 2026-08-05.** Save **v36**, unchanged.
+> # ▶ DELTA 2026-08-09 — read this before the banners below
+> **Live anchor = `../CANON_GROUND_TRUTH_2026-08-09.md`** (every "live anchor" reference further down this
+> file naming 08-02, 08-03 or 08-06 is stale). **HEAD `c8320434`, PUSHED — local == origin, 0/0.**
+> Save schema **v37** (`SaveSchema.cs:36`). ⚠ **Read every gate count off the marker file, never off this
+> doc** — the three entry points emit DISTINCT markers (`REGRESSION_OK` / `CHECKIN_SUITE_OK` /
+> `SESSION_GUARDS_OK`), and the newest run's markers are named in the anchor's gate block.
+>
+> **⚠ THE BODY OF THIS INDEX IS A FILENAME LIST ONLY — the `docs/MASTER_CATALOG/<area>.md` files are the
+> trustworthy layer.** §1–§3 below were never refreshed by WO-836 and remain known-stale in a way that
+> needs a real code-verified pass; they were deliberately **not** touched by the 2026-08-09 canon
+> re-anchor. Use them to find a file, never to assert a fact.
+>
+> **Moved on 2026-08-08 — read the anchor, not this index:** the **dungeon stairs are SOLVED** (WO-930,
+> `3ab1bfb6` → `cb092b7f`; all 4 content dungeons `PathComplete`; root cause was `SolveMate` hardcoding
+> `yaw = 0f` on vertical sockets) · **structure orientation** now has a per-catalog-row
+> `RepoProps.preservePrefabRotation` (default false, one opt-in) after a global apply laid the town on its
+> side — **headless gates cannot see orientation** · **store purchases are re-gated OFF and locked**
+> (WO-931, `StubWalletProvider` free-grant hole) · the desktop player now ships **RELEASE**.
 >
 > **Areas that moved on 2026-08-05/06 — read the anchor + the area file's own dated delta, not this index:**
 > - **VFX (the night's headline, two P0s):** `IsLoop` was a hand-authored sticky checkbox, **53 of 122 picks

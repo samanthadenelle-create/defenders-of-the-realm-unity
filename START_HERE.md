@@ -13,7 +13,7 @@ ANYTHING until the boot sequence below is complete and reported.**
 |---|------|-----|
 | 0 | `KEY_FACTS.md` (repo root) | The LIVING fact sheet + ⭐ NORTH STAR state. Always current; update in place. |
 | 0b | `docs/GROK_MEMORY.md` | Grok session fast path — program WOs, overnight orders, distance snapshot. |
-| 1 | `CANON_GROUND_TRUTH_<latest date>.md` (repo root — **take the NEWEST by date, always; as of 2026-08-02 that is `CANON_GROUND_TRUTH_2026-08-02.md`**, a delta over 08-01 → 07-26 → the deep `2026-07-22` module anchor) | Current reality. If any doc contradicts it, the doc is stale. **Sort the anchors by date and open the newest — do not trust this line's example to be current.** |
+| 1 | `CANON_GROUND_TRUTH_<latest date>.md` (repo root — **take the NEWEST by date, always; as of 2026-08-09 that is `CANON_GROUND_TRUTH_2026-08-09.md`**, a delta over 08-08 → 08-07 → 08-06 → 08-03 → 08-02 → 08-01 → 07-26 → the deep `2026-07-22` module anchor) | Current reality. If any doc contradicts it, the doc is stale. **Sort the anchors by date and open the newest — do not trust this line's example to be current.** |
 | 2 | `SESSION_CANON_LOADER.md` | The SME primer: live thread, core rules, current state, key files. |
 | 3 | `SAMANTHA.md` | The boot-confirmation gate: verify state with evidence → report → WAIT for the owner's go. |
 | 4 | `PREFLIGHT_GATE.md` | Gate A before ANY code, Gate B before ANY debugging, Gate C before "done". Answer YES + proof, out loud. |

@@ -1,3 +1,17 @@
+> # ⚠ STALE 2026-08-09 — **Rail 1 below is OBSOLETE. Do not follow its Steps 1-6.**
+>
+> Verified while scaffolding the submission (HEAD `c8320434`): **`dapp-store-cli@1.0.0` has NO `init`,
+> `create`, `validate` or `publish` subcommands.** Its entire surface is
+> `dapp-store --apk-file <apk> --whats-new <text>` — and it requires that **the app ALREADY EXISTS in the
+> portal with an App NFT.**
+>
+> **What actually happens now:** the **publisher and the app are created in the WEB PORTAL with a browser
+> wallet**, not from the CLI. `publishing/config.yaml` is kept as the **verified paste-source** for that
+> web form — it is no longer CLI input. See `publishing/SUBMIT_CHECKLIST.md`.
+>
+> Rail 2 (Google Play) and the fee/policy framing below are unaffected. Per CLAUDE.md §15 this is a banner,
+> not a rewrite — the body is preserved as the record of what was believed.
+
 # Publishing / Getting Listed — the real steps
 
 Two rails, very different. **Solana dApp Store (Seeker) is primary (0% fees); Google Play is

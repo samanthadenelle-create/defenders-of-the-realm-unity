@@ -1,6 +1,13 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ RECONCILED 2026-08-08: main line next free = **932**. **782–859 + 900–931 CONSUMED.**
+> ## ⚠ RECONCILED 2026-08-08 (CLI / Grok raids audit): main line next free = **933**. **782–859 + 900–932 CONSUMED.**
+> - **932** = **Raids full functional audit + step-by-step fix ladder** — Path A teleport/deploy is
+>   LOCKED V1 (raidwalk OFF); spine exists (HUD→select→deploy→RaidBase→score→victory→return) with
+>   headless gates; gaps = prereq teach, full-army feel, Auto Recommend stub, scene honesty, win/
+>   soft-lock integrity, eliteCount dead key, IronBastion orphan. Phases 0–6 to fully functional
+>   Regular clear. File `WORK_ORDER_932_raids_full_functional_audit_and_fix.md`. **READY.**
+>
+> *(banner bumped 932 → 933 in the SAME edit as the 932 mint — the rule that broke five times on 08-02.)*
 > - **931** = **Close the StubWalletProvider free-grant hole** — `StubWalletProvider.cs` has NO
 >   `#if UNITY_EDITOR`/`DEVELOPMENT_BUILD` guard, so it compiles into every shipped build and
 >   `WalletService` auto-selects it on release desktop/WebGL (and Android without `SOLANA_SDK`). Chain:
@@ -286,7 +293,7 @@
 > ## ⚠ TWO-BLOCK ALLOCATION IN USE (2026-08-02 evening) — the collision fix, in practice
 > | Block | Owner | Next free |
 > |---|---|---|
-> | **main line** | CLI | **931** (782–859 + 900–**930** consumed; 860–899 was the UI seat's old block) |
+> | **main line** | CLI | **932** (782–859 + 900–**931** consumed; 860–899 was the UI seat's old block) — *(table row corrected 2026-08-09: it still read 931/930 and contradicted the reconciled-2026-08-08 HEADER above, which is the authority. The header already recorded the 931 → 932 bump made in the same edit as the 931 mint.)* |
 > | **1000–1099 reserved** | UI seat | **1010** (1000–1009 consumed) |
 >
 > *(UI-seat bumped 1009 -> 1010 in the SAME edit as the WO-1009 mint — composed-dungeon interactable ART +

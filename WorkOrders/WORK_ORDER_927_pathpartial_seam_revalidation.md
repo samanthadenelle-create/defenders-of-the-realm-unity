@@ -77,7 +77,11 @@ several mirrored `EXIT` labels stack through the floors in one frame. Visual hal
 
 ---
 
-**Status: SUPERSEDED BY §0 — root cause found. Original status: READY TO IMPLEMENT** (measurement first — §5 is a hard gate on §6)
+**Status: SUPERSEDED BY §0 — root cause found (stair YAW), and the FIX HAS SHIPPED.** The replacement is
+WO-930, delivered 2026-08-08 in `3ab1bfb6` → `cb092b7f` (all 4 content dungeons `PathComplete`,
+12 descents, 0 mate failures). **Do not re-run §5 M1-M7.** ⚠ No `.RESULT.md` exists for this WO —
+recorded as debt in `CANON_GROUND_TRUTH_2026-08-09.md` §7.
+**Original status: READY TO IMPLEMENT** (measurement first — §5 is a hard gate on §6)
 **Date:** 2026-08-08 · **Priority:** High · **Lane:** Dungeons / navmesh
 **Authored by:** the owner (2026-08-08). *CLI refinement pass: sharpened §2 row 3, added measurement M7, recorded the alignment-with-anchor note in §8. Content and disposition are the owner's.*
 **Related:** `WorkOrders/DESIGN_CONNECTOR_IS_THE_ONLY_CONTRACT.md` (written 2026-08-07 22:25)

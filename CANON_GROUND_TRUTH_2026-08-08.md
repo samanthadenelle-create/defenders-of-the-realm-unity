@@ -1,3 +1,17 @@
+> # ⚠ SUPERSEDED 2026-08-09 — read `CANON_GROUND_TRUTH_2026-08-09.md` FIRST
+>
+> **This file is INVERTED on BOTH of its headline sections — not merely stale.**
+> - **§0 "THE MACHINE IS BLOCKED / a reboot is the fix" is RESOLVED.** The machine rebooted 2026-08-08
+>   08:07:21; commit charge is back to 45.7 GB of 127.8 GB, and the Windows EXE (08-08 14:33) and Android
+>   APK (08-08 20:00) both built. Only the WebGL/web-deploy step of that morning order never ran.
+> - **§2 "the dungeon stairs — where the hunt actually stands" is CLOSED.** The stairs were SOLVED the
+>   same morning (WO-930, `3ab1bfb6` → `cb092b7f`: all 4 content dungeons `PathComplete`). Root cause was
+>   **stair YAW** — `GraphDungeonComposer.SolveMate` hardcoded `yaw = 0f` on vertical sockets — never a
+>   property of the stair. §2's "nothing cheap remains / next move is to dump navmesh triangles" is dead
+>   guidance. Its killed-hypotheses table survives as history: it still stops re-runs.
+>
+> Per CLAUDE.md §15 dated ledgers are frozen — this is a banner, not a rewrite. Nothing below is changed.
+
 # CANON GROUND TRUTH — 2026-08-08
 
 **Supersedes `CANON_GROUND_TRUTH_2026-08-07.md`.** Per CLAUDE.md §15 this is the single live anchor:

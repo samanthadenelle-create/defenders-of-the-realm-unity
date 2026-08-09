@@ -1,7 +1,14 @@
 # WO-930 — The stairwell is ONE room: midpoint to midpoint, run derived from footprint
 
-**Status: READY TO IMPLEMENT**
-**Date:** 2026-08-08 · **Priority:** SHIP-BLOCKING (every multi-level dungeon depends on it)
+**Status: ✅ SHIPPED 2026-08-08** — `3ab1bfb6` (the one-room stairwell; **the first floor-to-floor
+`PathComplete` in project history**, old pair-model probe kept as a control) → `e7163c9c` (skinned via
+shared `RoomForgeMaterials`, 0 bad surfaces) → `5f0e23aa` (candle lights + a caught RED gate:
+`dg_sunken_vault.json` dual-copy drift) → `cb092b7f` (**all 4 content dungeons PathComplete, 12 descents,
+0 mate failures, 14/14 dual-copy parity**; `dg_descent_probe`/`dg_stair_rig` deliberately left on the old
+model as controls) → `51a89364` (`RoomPrefabMeta` on `StairwellRoom`; oracle rewritten, 8 new cases,
+3 legacy quarantined). **Original status: READY TO IMPLEMENT · SHIP-BLOCKING.**
+⚠ **No `.RESULT.md` exists for this WO** — recorded as debt in `CANON_GROUND_TRUTH_2026-08-09.md` §7.
+**Date:** 2026-08-08 · **Priority:** ~~SHIP-BLOCKING~~ (delivered; every multi-level dungeon depended on it)
 **Lane:** Dungeons / RoomForge · **Author:** the owner (design + diagram). CLI wrote it up.
 **Replaces:** the `_Up`/`_Down` pair model. **Supersedes as an approach:**
 `DESIGN_CONNECTOR_IS_THE_ONLY_CONTRACT.md`, which reached for the same idea the harder way.
