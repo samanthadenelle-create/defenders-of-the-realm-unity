@@ -663,6 +663,11 @@ namespace DeNelle.Village
                 ? BuildHudState.Placing
                 : (_selected != null ? BuildHudState.Selected : BuildHudState.Browse));
 
+            // WO-1010 P1: the ghost carries its own controls, so the HUD needs the ghost's
+            // PROJECTED SCREEN POINT every frame. The projection happens HERE because the
+            // brain owns the camera — the HUD is presentation and must not reach for one.
+            PushGhostAnchorToHud();
+
             // While the 3-axis orient editor is open, the placement loops are frozen so a tap
             // behind the modal can't drop a piece (the modal owns its own confirm/cancel).
             if (_orientEditor != null && _orientEditor.isActiveAndEnabled && _orientEditor.IsOpen)
@@ -1216,9 +1221,37 @@ namespace DeNelle.Village
         /// PENDING point (camera-relative XZ, clamped to the grid) instead of panning
         /// the camera — "d-pad nudges adjust the pending ghost freely".
         /// </summary>
+        /// <summary>
+        /// WO-1010 P1: project the live ghost to screen space and hand it to the HUD, with
+        /// the validity the ghost was last set to. Cheap and guarded — a missing camera or
+        /// ghost simply means no push this frame, and the HUD keeps its last anchor until
+        /// SetState drops it.
+        /// </summary>
+        private void PushGhostAnchorToHud()
+        {
+            if (_hud == null || _ghost == null) return;
+            var cam = _camera != null ? _camera : Camera.main;
+            if (cam == null) return;
+
+            Vector3 world = _ghost.CurrentPosition;
+            Vector3 sp = cam.WorldToScreenPoint(world);
+            // Behind the camera projects to a mirrored point that would fling the chips to
+            // the wrong side of the screen; skip rather than draw a lie.
+            if (sp.z <= 0f) return;
+
+            _hud.TrackGhost(new Vector2(sp.x, sp.y), _ghost.IsValid, _ghost.BlockedReason);
+        }
+
         private void NudgePendingDropFromDpad()
         {
-            Vector2 dpad = ReadHudDpadMove();
+            // WO-1010 P1: the build-owned nudge pad (corner "+" toggle) feeds the SAME
+            // pending-drop nudge as the legacy shared-HUD pad. Either source may drive it;
+            // the build pad wins when both are live because it is the one the player opened
+            // deliberately for this placement.
+            Vector2 buildPad = _hud != null ? _hud.NudgeVector : Vector2.zero;
+            Vector2 dpad = buildPad.sqrMagnitude > DpadDeadZone * DpadDeadZone
+                ? buildPad
+                : ReadHudDpadMove();
             if (dpad.sqrMagnitude <= DpadDeadZone * DpadDeadZone) return;
             if (_camera == null) return;
             dpad = Vector2.ClampMagnitude(dpad, 1f);

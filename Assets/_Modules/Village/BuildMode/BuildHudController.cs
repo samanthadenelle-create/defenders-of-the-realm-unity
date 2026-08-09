@@ -65,6 +65,23 @@ namespace DeNelle.Village
         private const float PlaceBtnW  = 240f;
         private const float ExitBtnW   = 200f;
 
+        // ── WO-1010 P1: CHIPS ON THE GHOST (CoC grammar) ───────────────────────
+        // External testers (2026-08-08) could not read the build screen: "buttons
+        // everywhere". The four word-buttons sat at the bottom edge while the thing they
+        // acted on was under the player's finger in the middle of the field, so the
+        // controls and their subject were never in the same place. The chips move TO the
+        // ghost. Visual circle is small; the HIT AREA is a full MinTouch box around it —
+        // invisible padding, NOT visual growth (the chip must not become a slab).
+        private const float ChipVisualPx = 52f;
+        private const float ChipHitPx    = ElarionUiKit.MinTouchPx;   // 112
+        private const float ChipGapPx    = 12f;
+        private const float GhostPillW   = 460f;
+        private const float GhostPillH   = 56f;
+        private const float GhostPillLiftPx = 96f;   // pill floats ABOVE the ghost anchor
+        private const float ChipDropPx      = 78f;   // chips sit BELOW/beside the anchor
+        private const float SafePadPx       = 24f;   // never let a chip touch the screen edge
+        private const float DpadToggleW     = 96f;
+
         // Callbacks into the BRAIN (BuildModeController wires these).
         private Action _onRotateLeft;
         private Action _onRotateRight;
@@ -73,10 +90,33 @@ namespace DeNelle.Village
         private Action _onExit;
 
         private GameObject _canvas;
-        private GameObject _intentBar;       // shown only in Placing
+        private GameObject _intentBar;       // shown only in Placing (WO-1010: now the CHIP cluster)
         private BuildWalletRow _wallet;
         private BuildHudState _state = BuildHudState.Browse;
-        private TextMeshProUGUI _placeName;  // "Placing: <name>" — folded into the intent cluster
+        private TextMeshProUGUI _placeName;  // name + cost, floated above the ghost
+
+        // ── WO-1010 P1 state ───────────────────────────────────────────────────
+        private RectTransform _canvasRect;
+        private RectTransform _ghostPill;    // name + cost, above the ghost
+        private RectTransform _chipCluster;  // OK / Rot / X, beside the ghost
+        private Button _okChip;
+        private TextMeshProUGUI _okChipLabel;
+        private Image _okChipRing;
+        private GameObject _dpadHost;        // the nudge pad — OFF unless toggled
+        private TextMeshProUGUI _dpadToggleLabel;
+        private bool _dpadShown;
+
+        private bool _hasGhostAnchor;
+        private Vector2 _ghostScreenPoint;
+        private bool _ghostValid = true;
+        private string _ghostBlockReason = string.Empty;
+
+        /// <summary>
+        /// Live direction from the build-owned nudge pad (zero when released or hidden).
+        /// The BRAIN polls this and folds it into its existing pending-drop nudge, so the
+        /// pad needs NO cross-assembly reach into the shared HUD's pad.
+        /// </summary>
+        public Vector2 NudgeVector { get; private set; }
 
         /// <summary>
         /// Create the HUD host (one per session). <paramref name="parent"/> is the
@@ -114,9 +154,11 @@ namespace DeNelle.Village
             scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
             scaler.matchWidthOrHeight = 0.5f;
             _canvas.AddComponent<GraphicRaycaster>();
+            _canvasRect = _canvas.transform as RectTransform;
 
             BuildTopBar();
             BuildIntentBar();
+            BuildDpadToggle();
             FlowTrace.Step("BuildHud",
                 "chrome-built: consistent button sizes enforced (h=" +
                 ElarionUiKit.CanonCtaHeight + ", capped widths — no thin bars)");
@@ -164,77 +206,153 @@ namespace DeNelle.Village
             exit.gameObject.name = "CloseButton";
         }
 
+        // =====================================================================
+        //  WO-1010 P1 — the ghost carries its own controls
+        // =====================================================================
+        /// <summary>
+        /// Builds the name+cost pill and the OK / Rot / X chip cluster. Both are SCREEN-SPACE
+        /// UI that follows the ghost's projected point (pushed by the brain via TrackGhost) —
+        /// deliberately NOT world-space billboards, which shrink with zoom and would fall
+        /// under the MinTouch floor exactly when the player is placing a small wall piece.
+        /// </summary>
         private void BuildIntentBar()
         {
-            // The ONE control cluster shown while Placing, hugging the BOTTOM edge (CoC).
-            // Because BuildPaletteUI.Collapse now hides EVERY dock background, the whole
-            // map/ghost ABOVE this row is visible — no black wall. The bar's own rect
-            // carries NO Image (fully transparent) and the pill below is non-raycast, so
-            // world taps used to set the drop location pass straight through; only the four
-            // buttons eat a tap.
-            _intentBar = new GameObject("BuildIntentBar", typeof(RectTransform));
+            _intentBar = new GameObject("BuildGhostControls", typeof(RectTransform));
             _intentBar.transform.SetParent(_canvas.transform, false);
             var irt = (RectTransform)_intentBar.transform;
             irt.anchorMin = Vector2.zero; irt.anchorMax = Vector2.one;
             irt.offsetMin = Vector2.zero; irt.offsetMax = Vector2.zero;
 
-            // ── Slim "Placing: <name>" + one-line hint pill, folded into this cluster
-            //    (owner: "at most a THIN label, or fold that into the intent bar"). Narrow +
-            //    centred + rounded so it reads as a pill, NEVER a wall. Sits just ABOVE the
-            //    verb row (both in the bottom third) so the drop zone (screen centre) stays
-            //    clear. NON-raycast on the pill AND both text lines so it can never eat the
-            //    world tap. The name line is filled by SetPlacingLabel() on Arm/move. ──────
-            var hintBack = ElarionUiKit.AddImage(_intentBar.transform, "PlaceHintBack",
-                new Vector2(0.30f, 0.185f), new Vector2(0.70f, 0.305f),
-                ElarionUiKit.ObsidianFill, rounded: true);
-            var hintBackImg = hintBack.GetComponent<Image>();
-            if (hintBackImg != null) hintBackImg.raycastTarget = false;
-            _placeName = MakeText(hintBack.transform, "Placing: structure",
-                22, ElarionUi.Gilt, FontStyles.Bold, TextAlignmentOptions.Center,
-                new Vector2(0.04f, 0.50f), new Vector2(0.96f, 0.98f));
+            // ── Name + cost pill, floating above the ghost. One line, one place — this
+            //    absorbs the old "Placing: <name>" hint pill AND the cost readout the
+            //    player previously had to find back on the card. Non-raycast so it can
+            //    never eat a world tap meant for the ground.
+            var pill = ElarionUiKit.AddImage(_intentBar.transform, "GhostPill",
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), ElarionUiKit.ObsidianFill, rounded: true);
+            _ghostPill = pill.transform as RectTransform;
+            if (_ghostPill != null)
+            {
+                _ghostPill.anchorMin = _ghostPill.anchorMax = new Vector2(0.5f, 0.5f);
+                _ghostPill.pivot = new Vector2(0.5f, 0.5f);
+                _ghostPill.sizeDelta = new Vector2(GhostPillW, GhostPillH);
+            }
+            var pillImg = pill.GetComponent<Image>();
+            if (pillImg != null) pillImg.raycastTarget = false;
+
+            _placeName = MakeText(pill.transform, "structure", 24, ElarionUi.Gilt,
+                FontStyles.Bold, TextAlignmentOptions.Center,
+                new Vector2(0.03f, 0.02f), new Vector2(0.97f, 0.98f));
             _placeName.raycastTarget = false;
-            var placeHint = MakeText(hintBack.transform, "Tap to set location, then rotate.",
-                18, ElarionUi.Parchment, FontStyles.Normal, TextAlignmentOptions.Center,
-                new Vector2(0.04f, 0.02f), new Vector2(0.96f, 0.50f));
-            placeHint.raycastTarget = false;
 
-            // ── ONE verb row hugging the bottom edge. Each button is PinSize'd to a FIXED
-            //    box centred on its anchor, so a wide LANDSCAPE canvas never stretches it
-            //    into a thin bar AND a narrow PORTRAIT canvas scales it proportionally
-            //    (fraction anchors + fixed PinSize = the SAME relative row in both
-            //    orientations, never truncated/crammed). Centres spread 0.18/0.38/0.60/0.82
-            //    so the four boxes seat with even gaps. Row centred at y=0.095 (bottom). ────
-            var rotL = ElarionUiKit.BuildObsidianButton(_intentBar.transform, "Rotate Left",
-                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                new Vector2(0.14f, 0.035f), new Vector2(0.22f, 0.155f),
-                () => _onRotateLeft?.Invoke());
-            PinSize(rotL, IntentBtnW, ElarionUiKit.CanonCtaHeight);
-            AllowTwoLineLabel(rotL);   // never truncate "Rotate Left" -> wrap to 2 lines
+            // ── The chip cluster. Three round chips in a row, pivoted CENTRE so the
+            //    clamp math below can keep the whole cluster on-screen as one unit.
+            var cluster = new GameObject("GhostChips", typeof(RectTransform));
+            cluster.transform.SetParent(_intentBar.transform, false);
+            _chipCluster = (RectTransform)cluster.transform;
+            _chipCluster.anchorMin = _chipCluster.anchorMax = new Vector2(0.5f, 0.5f);
+            _chipCluster.pivot = new Vector2(0.5f, 0.5f);
+            _chipCluster.sizeDelta = new Vector2(ChipHitPx * 3f + ChipGapPx * 2f, ChipHitPx);
 
-            var rotR = ElarionUiKit.BuildObsidianButton(_intentBar.transform, "Rotate Right",
-                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                new Vector2(0.34f, 0.035f), new Vector2(0.42f, 0.155f),
-                () => _onRotateRight?.Invoke());
-            PinSize(rotR, IntentBtnW, ElarionUiKit.CanonCtaHeight);
-            AllowTwoLineLabel(rotR);   // never truncate "Rotate Right" -> wrap to 2 lines
+            float step = ChipHitPx + ChipGapPx;
+            _okChip = MakeChip(_chipCluster, "OkChip", "OK", ElarionUi.Gilt, -step,
+                () => _onPlace?.Invoke(), out _okChipLabel, out _okChipRing);
+            MakeChip(_chipCluster, "RotChip", "Rot", ElarionUi.Parchment, 0f,
+                () => _onRotateRight?.Invoke(), out _, out _);
+            MakeChip(_chipCluster, "CancelChip", "X", new Color(0.86f, 0.32f, 0.30f), step,
+                () => _onCancel?.Invoke(), out _, out _);
 
-            var place = ElarionUiKit.BuildObsidianButton(_intentBar.transform, "PLACE",
-                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
-                new Vector2(0.55f, 0.035f), new Vector2(0.65f, 0.155f),
-                () => _onPlace?.Invoke());
-            PinSize(place, PlaceBtnW, ElarionUiKit.CanonCtaHeight);
-
-            var cancel = ElarionUiKit.BuildObsidianButton(_intentBar.transform, "Cancel",
-                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                new Vector2(0.78f, 0.035f), new Vector2(0.86f, 0.155f),
-                () => _onCancel?.Invoke());
-            PinSize(cancel, IntentBtnW, ElarionUiKit.CanonCtaHeight);
-            cancel.gameObject.name = "BuildHudPlaceCancel";
+            // Kept as the canonical cancel name so any probe/close convention still resolves
+            // it after the word-button retirement.
+            var cancelChip = _chipCluster.Find("CancelChip");
+            if (cancelChip != null) cancelChip.gameObject.name = "BuildHudPlaceCancel";
 
             _intentBar.SetActive(false);   // Placing state shows it
             FlowTrace.Step("BuildHud",
-                "intent bar rebuilt: bottom-edge [Rotate Left][Rotate Right][PLACE][Cancel] row " +
-                "+ slim Placing pill above; map/ghost stays visible (dock fully collapsed)");
+                "WO-1010 P1: intent bar RETIRED -> chips on the ghost [OK][Rot][X] + name/cost pill; " +
+                "controls now sit where the player is looking, not at the bottom edge");
+        }
+
+        /// <summary>
+        /// One chip: a MinTouch-sized INVISIBLE hit box with a small visible circle inside it.
+        /// The transparent parent Image is the raycast target, so the tappable area is ~112px
+        /// while the art stays ~52px — the WO's invisible-padding rule. Growing the visual
+        /// instead would put three slabs over the field and undo the point of the redesign.
+        /// </summary>
+        private static Button MakeChip(RectTransform parent, string name, string label,
+            Color accent, float xOffset, Action onClick,
+            out TextMeshProUGUI labelOut, out Image ringOut)
+        {
+            var go = new GameObject(name, typeof(RectTransform));
+            go.transform.SetParent(parent, false);
+            var rt = (RectTransform)go.transform;
+            rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.sizeDelta = new Vector2(ChipHitPx, ChipHitPx);
+            rt.anchoredPosition = new Vector2(xOffset, 0f);
+
+            var hit = go.AddComponent<Image>();
+            hit.color = new Color(0f, 0f, 0f, 0f);   // invisible padding, still raycastable
+            hit.raycastTarget = true;
+            var btn = go.AddComponent<Button>();
+            btn.targetGraphic = hit;
+            if (onClick != null) btn.onClick.AddListener(() => onClick());
+
+            // The visible circle, centred inside the hit box and NON-raycast.
+            var ring = ElarionUiKit.AddImage(go.transform, "Ring",
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), ElarionUiKit.ObsidianFill, rounded: true);
+            var ringRt = ring.transform as RectTransform;
+            if (ringRt != null)
+            {
+                ringRt.anchorMin = ringRt.anchorMax = new Vector2(0.5f, 0.5f);
+                ringRt.pivot = new Vector2(0.5f, 0.5f);
+                ringRt.sizeDelta = new Vector2(ChipVisualPx, ChipVisualPx);
+            }
+            ringOut = ring.GetComponent<Image>();
+            if (ringOut != null) ringOut.raycastTarget = false;
+
+            labelOut = MakeText(ring.transform, label, 22, accent, FontStyles.Bold,
+                TextAlignmentOptions.Center, Vector2.zero, Vector2.one);
+            labelOut.raycastTarget = false;
+            return btn;
+        }
+
+        /// <summary>
+        /// The nudge pad's corner toggle. The pad is OFF by default (it was permanently
+        /// on-screen before, and testers counted it among the "buttons everywhere"), but it
+        /// stays reachable because pixel-precise nudging is what makes a long wall run
+        /// placeable at all. Built on the Core kit's own d-pad seam, so no new reflection
+        /// bridge into the HUD assembly is introduced.
+        /// </summary>
+        private void BuildDpadToggle()
+        {
+            var toggle = ElarionUiKit.BuildObsidianButton(_canvas.transform, "+",
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
+                new Vector2(0.02f, 0.04f), new Vector2(0.09f, 0.16f),
+                ToggleDpad);
+            PinSize(toggle, DpadToggleW, ElarionUiKit.CanonCtaHeight);
+            toggle.gameObject.name = "BuildNudgePadToggle";
+            _dpadToggleLabel = toggle.GetComponentInChildren<TMP_Text>(true) as TextMeshProUGUI;
+
+            var padHost = new GameObject("BuildNudgePad", typeof(RectTransform));
+            padHost.transform.SetParent(_canvas.transform, false);
+            var prt = (RectTransform)padHost.transform;
+            prt.anchorMin = Vector2.zero; prt.anchorMax = Vector2.one;
+            prt.offsetMin = Vector2.zero; prt.offsetMax = Vector2.zero;
+            ElarionUiKit.BuildVirtualDPad(padHost.transform, new Vector2(0.12f, 0.26f),
+                v => NudgeVector = v);
+            _dpadHost = padHost;
+            _dpadHost.SetActive(false);
+            _dpadShown = false;
+        }
+
+        private void ToggleDpad()
+        {
+            _dpadShown = !_dpadShown;
+            if (_dpadHost != null) _dpadHost.SetActive(_dpadShown);
+            if (!_dpadShown) NudgeVector = Vector2.zero;   // a hidden pad must not keep steering
+            if (_dpadToggleLabel != null) _dpadToggleLabel.text = _dpadShown ? "-" : "+";
+            FlowTrace.Step("BuildHud", "nudge pad toggled " + (_dpadShown ? "ON" : "OFF") +
+                " (off by default — WO-1010 retires the always-on d-pad)");
         }
 
         // ── Rotate labels never truncate (owner felt-test 2026-07-16) ───────────
@@ -278,10 +396,20 @@ namespace DeNelle.Village
         public void SetState(BuildHudState state)
         {
             _state = state;
-            // The place-intent bar is exclusive to Placing; Browse/Selected hide it
+            // The ghost controls are exclusive to Placing; Browse/Selected hide them
             // (Selected verbs render on BuildSelectionUI's bar, owned by the brain).
-            if (_intentBar != null && _intentBar.activeSelf != (state == BuildHudState.Placing))
-                _intentBar.SetActive(state == BuildHudState.Placing);
+            bool placing = state == BuildHudState.Placing;
+            if (_intentBar != null && _intentBar.activeSelf != placing)
+                _intentBar.SetActive(placing);
+
+            // The nudge pad only makes sense while something is being positioned. Leaving it
+            // up in Browse would put back a permanent on-screen control, which is the thing
+            // WO-1010 set out to remove.
+            if (!placing && _dpadShown) ToggleDpad();
+
+            // Leaving a stale anchor behind would park the chips wherever the last ghost
+            // died until the next push; drop it with the state.
+            if (!placing) _hasGhostAnchor = false;
         }
 
         /// <summary>
@@ -294,8 +422,102 @@ namespace DeNelle.Village
         {
             if (_placeName == null) return;
             string n = string.IsNullOrEmpty(displayName) ? "structure" : displayName;
-            _placeName.text = "Placing: " + n;
-            FlowTrace.Step("BuildHud", "placing label folded into intent bar: " + n);
+            _placeName.text = n;
+            FlowTrace.Step("BuildHud", "ghost pill label: " + n);
+        }
+
+        /// <summary>
+        /// WO-1010: name AND cost on the ghost's own pill. The cost used to live only on the
+        /// card the player already dismissed, so during placement — the exact moment they are
+        /// deciding whether to commit — the price was off-screen. ASCII only.
+        /// </summary>
+        public void SetPlacingLabel(string displayName, string costLine)
+        {
+            if (_placeName == null) return;
+            string n = string.IsNullOrEmpty(displayName) ? "structure" : displayName;
+            _placeName.text = string.IsNullOrEmpty(costLine) ? n : n + " - " + costLine;
+            FlowTrace.Step("BuildHud", "ghost pill: " + _placeName.text);
+        }
+
+        /// <summary>
+        /// Push the ghost's PROJECTED SCREEN POINT plus its validity. The BRAIN projects
+        /// (it owns the camera) — presentation never touches a world object or a camera,
+        /// which is the layering rule this HUD exists to keep.
+        ///
+        /// <paramref name="blockedReason"/> is shown on the OK chip when placement is
+        /// invalid, so the refusal is READABLE TEXT rather than a colour the player has to
+        /// interpret — validity here is shape + word, never tint alone.
+        /// </summary>
+        public void TrackGhost(Vector2 screenPoint, bool valid, string blockedReason)
+        {
+            _ghostScreenPoint = screenPoint;
+            _hasGhostAnchor = true;
+            if (valid != _ghostValid)
+            {
+                _ghostValid = valid;
+                FlowTrace.Step("BuildHud", "ghost validity -> " + (valid ? "OK" : "BLOCKED"));
+            }
+            _ghostBlockReason = blockedReason ?? string.Empty;
+        }
+
+        /// <summary>
+        /// Follow the ghost. LateUpdate so the anchor pushed this frame is already current.
+        /// Runs only while Placing, so Browse costs nothing.
+        /// </summary>
+        private void LateUpdate()
+        {
+            LayoutGhostControlsNow();
+        }
+
+        /// <summary>
+        /// The follow/clamp pass, callable directly. LateUpdate drives it at runtime; the
+        /// headless UI capture calls it explicitly because MonoBehaviour ticks do NOT run in
+        /// edit mode — without this the capture would photograph the chips parked at the
+        /// canvas centre and the screenshot would prove nothing about the edge-clamp rule it
+        /// is meant to verify.
+        /// </summary>
+        public void LayoutGhostControlsNow()
+        {
+            if (_state != BuildHudState.Placing || !_hasGhostAnchor) return;
+            if (_canvasRect == null || _chipCluster == null) return;
+
+            // Screen -> canvas-local. Overlay canvases take a NULL camera here; passing one
+            // silently offsets everything.
+            Vector2 local;
+            if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                    _canvasRect, _ghostScreenPoint, null, out local))
+                return;
+
+            Vector2 half = _canvasRect.rect.size * 0.5f;
+
+            // CLAMP AS A UNIT. A chip that walks off-screen when the ghost nears an edge is
+            // an unplaceable building — the acceptance criteria call this out because it is
+            // the failure the old bottom-edge bar could not have.
+            Vector2 chipHalf = _chipCluster.sizeDelta * 0.5f;
+            Vector2 chipPos = new Vector2(local.x, local.y - ChipDropPx);
+            chipPos.x = Mathf.Clamp(chipPos.x, -half.x + chipHalf.x + SafePadPx, half.x - chipHalf.x - SafePadPx);
+            chipPos.y = Mathf.Clamp(chipPos.y, -half.y + chipHalf.y + SafePadPx, half.y - chipHalf.y - SafePadPx);
+            _chipCluster.anchoredPosition = chipPos;
+
+            if (_ghostPill != null)
+            {
+                Vector2 pillHalf = _ghostPill.sizeDelta * 0.5f;
+                Vector2 pillPos = new Vector2(local.x, local.y + GhostPillLiftPx);
+                pillPos.x = Mathf.Clamp(pillPos.x, -half.x + pillHalf.x + SafePadPx, half.x - pillHalf.x - SafePadPx);
+                pillPos.y = Mathf.Clamp(pillPos.y, -half.y + pillHalf.y + SafePadPx, half.y - pillHalf.y - SafePadPx);
+                _ghostPill.anchoredPosition = pillPos;
+            }
+
+            // OK chip carries the verdict in WORDS. Kept interactable-looking but refusing,
+            // with the reason on the face, rather than greyed into ambiguity.
+            if (_okChipLabel != null)
+            {
+                string want = _ghostValid ? "OK"
+                    : (string.IsNullOrEmpty(_ghostBlockReason) ? "Blocked" : _ghostBlockReason);
+                if (_okChipLabel.text != want) _okChipLabel.text = want;
+                _okChipLabel.color = _ghostValid ? ElarionUi.Gilt : new Color(0.86f, 0.32f, 0.30f);
+            }
+            if (_okChip != null) _okChip.interactable = _ghostValid;
         }
 
         /// <summary>Re-read the live wallet (called by the brain on transitions).</summary>

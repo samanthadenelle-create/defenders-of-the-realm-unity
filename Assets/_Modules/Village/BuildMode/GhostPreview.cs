@@ -199,9 +199,20 @@ namespace DeNelle.Village
             if (!_visual.activeSelf) _visual.SetActive(true);
         }
 
+        /// <summary>
+        /// Last validity set on this ghost. WO-1010: the tint below is the ONLY signal today,
+        /// which fails colour-vision-deficient players outright — exposing it lets the HUD say
+        /// "OK" or "Blocked" in WORDS on the confirm chip alongside the colour.
+        /// </summary>
+        public bool IsValid { get; private set; } = true;
+
+        /// <summary>Last reason passed to <see cref="SetReason"/> (empty when unblocked).</summary>
+        public string BlockedReason { get; private set; } = string.Empty;
+
         /// <summary>Tint the ghost green (valid) or red (blocked) via the shared MPB.</summary>
         public void SetValid(bool valid)
         {
+            IsValid = valid;
             if (_mpb == null) _mpb = new MaterialPropertyBlock();
             var color = valid ? s_validColor : s_invalidColor;
             foreach (var r in _renderers)
@@ -223,6 +234,7 @@ namespace DeNelle.Village
         /// </summary>
         public void SetReason(string message)
         {
+            BlockedReason = message ?? string.Empty;
             bool show = !string.IsNullOrEmpty(message) && _visual != null && _visual.activeSelf;
             try
             {
