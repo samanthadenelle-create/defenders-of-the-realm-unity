@@ -304,8 +304,12 @@ namespace DeNelle.Village
         private static readonly int[] OrcWeights = { 4, 3, 2, 1 };
 
         // troll-group: family "troll" fields exactly two members in enemies.json.
-        private static readonly string[] TrollIds = { "troll", "ogre" };
-        private static readonly int[] TrollWeights = { 3, 2 };
+        // 2026-08-09: the troll family gained real art (Troll_Mage / Troll_Overlord), so the
+        // group is no longer two brutes — it is a brute core with a caster pair behind it, which
+        // is what makes a troll room play differently from an orc room. The Overlord is a camp
+        // BOSS and is deliberately NOT here; group tables carry no boss ids.
+        private static readonly string[] TrollIds = { "troll", "ogre", "troll-mage", "troll-shaman" };
+        private static readonly int[] TrollWeights = { 4, 2, 2, 1 };
 
         // mixed: a cross-faction room - mostly hollow rank-and-file with orc muscle and
         // a rare troll. Deliberately excludes every elite/boss id.
@@ -417,6 +421,13 @@ namespace DeNelle.Village
                 case "orc-berserker":   return EnemyRole.Tank;      // json role "brute"
                 case "orc-necromancer": return EnemyRole.MiniBoss;  // json role "elite"
                 case "troll":           return EnemyRole.Tank;      // the heavy of its pair
+                // 2026-08-09 troll family. The pair of casters shares one mesh and is separated
+                // HERE: the Bonesinger is the support the player must drop first, the Stonecaller
+                // is ranged damage. Without these cases both fall to the DPS default and the
+                // healer never heals — the role, not the json "caster" string, is what the brain reads.
+                case "troll-shaman":    return EnemyRole.Healer;    // heals faster + more often than the orc shaman
+                case "troll-mage":      return EnemyRole.DPS;       // ranged damage (explicit, not defaulted)
+                case "troll-overlord":  return EnemyRole.MiniBoss;  // json role "elite"
                 default:                return EnemyRole.DPS;       // walker / rogue / warrior / raider / ogre
             }
         }

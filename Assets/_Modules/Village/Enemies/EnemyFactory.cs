@@ -437,7 +437,7 @@ namespace DeNelle.Village
         /// TripoTex wins on collision (Orc_Mage exists in both): the mesh was REPLACED on 2026-08-09,
         /// so the older OrcTex atlas no longer matches its UVs.
         /// </summary>
-        private static string ResolveBasecolor(string model)
+        public static string ResolveBasecolor(string model)
         {
             if (string.IsNullOrEmpty(model)) return null;
 
@@ -571,6 +571,13 @@ namespace DeNelle.Village
                 // LargeHumanoid controller) and enemies.json has asked for modelKey "Troll" the
                 // whole time — the data was already correct, only the mesh was missing.
                 case "troll":            return "Troll";             // real Cave Troll
+                // The troll family's two casters SHARE one mesh on purpose — Troll_Mage is the
+                // only caster silhouette the family has, and the pair is differentiated by stats
+                // and role (DPS vs healer), not by model. Distinct ids so a spawner can pick one
+                // without the other, and so the healer can be focus-fired as its own target.
+                case "troll-mage":       return "Troll_Mage";        // DPS caster
+                case "troll-shaman":     return "Troll_Mage";        // healer / buffer
+                case "troll-overlord":   return "Troll_Overlord";    // camp boss
                 case "ogre":             return "Orc_Shaman";        // STAND-IN: ogre brute (was "OgreMage" — missing)
                 case "ogre-mage":        return "Orc_Shaman";        // STAND-IN: ogre caster (was "OgreMage" — missing)
                 case "demon":            return "Demon";             // demon

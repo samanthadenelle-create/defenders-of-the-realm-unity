@@ -148,7 +148,21 @@ namespace DeNelle.Editor
                     }
 
                     // ---------- COLORED (per-family authority) ----------
-                    if (rig == EnemyRig.OrcHumanoid &&
+                    // FIRST ASK THE RUNTIME'S OWN LOOKUP. EnemyFactory.ResolveBasecolor is the exact
+                    // call that binds a real skin as the Tripo fixer's fallback, so if it resolves,
+                    // this enemy IS coloured and the untextured prefab sheet underneath is expected.
+                    // This branch exists because the checks below RE-DERIVED the runtime's folder
+                    // list: when the 2026-08-09 TripoTex intake landed, the game bound those skins
+                    // correctly while this audit -- still hardcoded to OrcTex -- called them
+                    // uncoloured. An audit that restates a rule instead of asking for it will
+                    // eventually disagree with the code it is guarding.
+                    string boundSkin = DeNelle.Village.EnemyFactory.ResolveBasecolor(model);
+                    if (boundSkin != null)
+                    {
+                        orcTexColored++;
+                        notes.Add($"'{id}'->'{model}' coloured at runtime by '{boundSkin}' (EnemyFactory.ResolveBasecolor)");
+                    }
+                    else if (rig == EnemyRig.OrcHumanoid &&
                         (model == "Orc_Warrior" || model == "Orc_Tank" || model == "Orc_Mage"))
                     {
                         // Coloured at runtime by binding the per-orc OrcTex basecolor as the Tripo
