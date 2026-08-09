@@ -145,6 +145,10 @@ useful one — and the gap between them is exactly the existence-vs-consumption 
 
 ## 6a. ★★ THE MONETIZATION SURFACE IS DELIBERATELY DISABLED — DECLARED, NOT ORPHAN
 
+> **➡ FULL RECORD: `docs/reference/MONETIZATION_ACTIVATION_LADDER.md`** — the intended state, the
+> five-rung activation sequence, and the two independent switches (`SOLANA_SDK` define; `WalletNetwork`
+> Devnet⇄Mainnet). **Read that before filing any monetization finding.**
+
 **Owner ruling, 2026-08-08.** The **entire** monetization surface — rewarded ads, pack purchasing,
 crystal top-ups, the SKR storefront — was **switched off on purpose**, to clear the store review cycle
 and to get the Terms of Use exactly right before anything can take money.
