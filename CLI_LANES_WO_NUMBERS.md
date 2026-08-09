@@ -1,6 +1,20 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ RECONCILED 2026-08-09 (CLI / Army loadouts): main line next free = **935**. **782–859 + 900–934 CONSUMED.**
+> ## ⚠ RECONCILED 2026-08-09 (CLI / catalog gating truth): main line next free = **937**. **782–859 + 900–936 CONSUMED.**
+> - **936** = **Catalog gating + progression truth pass** — `LockedIds` is READ-ONLY with no unlock
+>   path, so "unlock-gated" ids (jeweler) are permanently hidden, not temporarily; the three
+>   stockpiles declare `maxLevel:3` with NO tier rows, capping the wood/iron/food economy; and the
+>   live `collector_lumbermill` routes its upgrades through the RETIRED `lumbermill` row. File
+>   `WORK_ORDER_936_catalog_gating_and_progression_truth.md`. **READY TO IMPLEMENT.**
+>
+> *(banner bumped 936 → 937 in the SAME edit as the 936 mint — the rule that broke five times on 08-02.)*
+> - **935** = **Paid animation + VFX pack connection program** — inventory $1000s of Asset Store
+>   packs (Hovl/Mirza/Spells/UT Particle/Supercyan/KayKit/Action), map what ships vs sits idle,
+>   wire troop/hero combat anim+VFX end-to-end WITHOUT rebuying or forking catalogs; protect
+>   self-containment (`Resources/VFX/_Shared`). File
+>   `WORK_ORDER_935_paid_anim_vfx_connection_program.md`. **READY TO IMPLEMENT.**
+>
+> *(banner bumped 935 → 936 in the SAME edit as the 935 mint — the rule that broke five times on 08-02.)*
 > - **934** = **Army loadout bank (3 named presets + persist + muster polish)** — save/load/quick-fill
 >   Raid Push / Wall Hold / Siege Prep; save schema v38; Armies button on Barracks. File
 >   `WORK_ORDER_934_army_loadout_bank.md`. **IMPLEMENTED.**
@@ -305,7 +319,12 @@
 > | Block | Owner | Next free |
 > |---|---|---|
 > | **main line** | CLI | **932** (782–859 + 900–**931** consumed; 860–899 was the UI seat's old block) — *(table row corrected 2026-08-09: it still read 931/930 and contradicted the reconciled-2026-08-08 HEADER above, which is the authority. The header already recorded the 931 → 932 bump made in the same edit as the 931 mint.)* |
-> | **1000–1099 reserved** | UI seat | **1010** (1000–1009 consumed) |
+> | **1000–1099 reserved** | UI seat | **1011** (1000–1010 consumed) |
+>
+> *(UI-seat bumped 1010 -> 1011 in the SAME edit as the WO-1010 mint — build-mode UI redesign from real
+> tester feedback ("buttons everywhere"): owner-picked Direction B "Carousel + minimize" (first pick C,
+> reversed to B on re-read, 2026-08-08) — card carousel that minimizes to an edge tab on select, contextual
+> chips on the ghost, optional D-pad toggle; retires the Rotate/PLACE/Cancel intent bar + always-on D-pad.)*
 >
 > *(UI-seat bumped 1009 -> 1010 in the SAME edit as the WO-1009 mint — composed-dungeon interactable ART +
 > AFFORDANCE pass: chests are gold PRIMITIVE CUBES (BreakableContainer.Create), key pickups + locked ports
