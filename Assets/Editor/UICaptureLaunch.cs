@@ -2435,6 +2435,7 @@ namespace DeNelle.Editor
             {
                 int saved = 0;
                 GameObject hostGo = null;
+                GameObject canvasGo = null;
                 try
                 {
                     // The registry is populated at RUNTIME by the game's bootstrap, which never
@@ -2450,13 +2451,20 @@ namespace DeNelle.Editor
                     palette.Show();
 
                     var canvasTf = hostGo.transform.Find("BuildPaletteCanvas");
-                    GameObject canvasGo = canvasTf != null ? canvasTf.gameObject : null;
+                    canvasGo = canvasTf != null ? canvasTf.gameObject : null;
                     if (canvasGo == null)
                     {
-                        // The kit may parent the modal canvas elsewhere; fall back to a scan
-                        // rather than reporting a silent zero.
+                        // ElarionUiKit.BuildModalCanvas parents the canvas at the SCENE ROOT,
+                        // not under the palette host — so this scan is the normal path, not a
+                        // fallback. That distinction caused a real bug: destroying only the
+                        // host leaked the canvas, canvases ACCUMULATED across the three target
+                        // sizes, and this scan then returned target 1's stale, already-COLLAPSED
+                        // canvas. The 2340 and 2670 "open" shots were byte-identical to their
+                        // own collapsed shots and showed nothing but the restore tab. The
+                        // capture reported green the whole time. Take the NEWEST match, and
+                        // destroy it explicitly below.
                         foreach (var c in UnityEngine.Object.FindObjectsByType<Canvas>(FindObjectsSortMode.None))
-                            if (c != null && c.gameObject.name == "BuildPaletteCanvas") { canvasGo = c.gameObject; break; }
+                            if (c != null && c.gameObject.name == "BuildPaletteCanvas") canvasGo = c.gameObject;
                     }
                     if (canvasGo == null)
                     {
@@ -2486,7 +2494,14 @@ namespace DeNelle.Editor
                 }
                 finally
                 {
+                    // Destroy the ROOT canvas too, not just the host — see the scan comment
+                    // above. Sweep by name so a canvas from an earlier target that somehow
+                    // survived cannot poison the next one either.
                     if (hostGo != null) UnityEngine.Object.DestroyImmediate(hostGo);
+                    if (canvasGo != null) UnityEngine.Object.DestroyImmediate(canvasGo);
+                    foreach (var c in UnityEngine.Object.FindObjectsByType<Canvas>(FindObjectsSortMode.None))
+                        if (c != null && c.gameObject.name == "BuildPaletteCanvas")
+                            UnityEngine.Object.DestroyImmediate(c.gameObject);
                 }
                 return saved;
             });

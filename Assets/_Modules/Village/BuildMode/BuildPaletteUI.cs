@@ -114,6 +114,9 @@ namespace DeNelle.Village
         private GameObject _restoreTabGo;
         private TextMeshProUGUI _restoreTabLabel;
         private const float RestoreTabW = 260f;
+        /// <summary>Bottom breathing room under the card tray so a device safe-area inset
+        /// (gesture bar / rounded corner) cannot clip the cost line off the cards.</summary>
+        private const float TrayBottomInsetPx = 28f;
 
         // WO-673 category switcher (always on — WO-682): the owner-ruled three build
         // categories — Town / Defenses / Walls — as a tab row between the header and
@@ -285,6 +288,15 @@ namespace DeNelle.Village
             var tray = ElarionUiKit.AddImage(dock.transform, "CardTray",
                 new Vector2(0f, 0f), new Vector2(1f, trayTop),
                 new Color(0f, 0f, 0f, 0.55f), rounded: false);
+            // SAFE-AREA INSET AT THE BOTTOM. The tray anchored flush to 0, so the card plates
+            // ran to the very edge of the canvas with the COST LINE sitting on it — the first
+            // card capture shows it. On any device with a gesture bar or a rounded corner, the
+            // price is the first thing the inset eats, and a card whose cost you cannot read is
+            // exactly the confusion WO-1010 exists to remove. A fixed pixel inset (not a
+            // fraction) per the WO's fixed-pixel-band rule, so it does not scale away on a
+            // short canvas.
+            var trayRt = tray.transform as RectTransform;
+            if (trayRt != null) trayRt.offsetMin = new Vector2(trayRt.offsetMin.x, TrayBottomInsetPx);
             _trayGo = tray;
 
             var scrollGo = new GameObject("Scroll", typeof(RectTransform), typeof(ScrollRect), typeof(RectMask2D), typeof(Image));
