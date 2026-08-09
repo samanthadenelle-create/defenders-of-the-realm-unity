@@ -47,6 +47,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
+using DeNelle.Core.Diagnostics;
 using UnityEditor;
 using UnityEngine;
 
@@ -54,6 +55,8 @@ namespace DeNelle.Editor.Regression
 {
     public static class VfxResourceSelfContainmentRegression
     {
+        private const string FlowSys = "VfxSelfContain";
+
         /// <summary>The curated, git-TRACKED VFX tree. Everything a shipped prefab needs must live here.</summary>
         public const string VfxRoot = "Assets/Resources/VFX/";
 
@@ -103,6 +106,44 @@ namespace DeNelle.Editor.Regression
         // How many offending paths to name per prefab before summarising. Naming
         // them is the point -- a count with no path is not actionable.
         private const int MaxNamedPerPrefab = 6;
+
+        // =====================================================================
+        //  KNOWN CATALOG EXPOSURE - a DATED, RATCHETED baseline (2026-08-09)
+        // =====================================================================
+        // Extending this oracle to ScriptableObjects (audit F1/F2/F38) surfaced a
+        // PRE-EXISTING P0 that the prefab-only scan could never see: the two VFX
+        // catalogs resolve 679 references over 675 distinct assets into gitignored
+        // art roots. On a fresh clone every PlayKey(...) row backed by those entries
+        // resolves to NOTHING.
+        //
+        // WHY THIS IS A BASELINE AND NOT AN IMMEDIATE FAIL. The obvious remedy -
+        // "run VfxResourceArtMirror" - is WRONG here and would be an expensive
+        // mistake. The 08-06 mirror pulled 73 loose materials/textures (~23.85 MB).
+        // These 675 are largely whole PACK PREFABS ("Flash 1 nature arrow.prefab"),
+        // so mirroring them would import a large slice of a DELIBERATELY gitignored
+        // pack into git, against the standing big-art-out-of-git policy (owner
+        // ruling 2026-07-15: two machines, no CI, no fresh clones - the policy holds).
+        // The likely-correct fix is to TRIM the catalogs to the rows gameplay can
+        // actually reach (the audit measured 26 of 79 enum values with ZERO gameplay
+        // callers) and mirror only that reachable subset. That is an owner-scoped
+        // decision about content, not a gate action - so the gate RECORDS the debt
+        // exactly and refuses to let it GROW, rather than pretending it is absent or
+        // blocking every other lane until it is resolved.
+        //
+        // THE RATCHET, deliberately three-sided:
+        //   * an asset NOT in this baseline that reaches gitignored art  -> HARD FAIL
+        //   * a baseline entry whose exposure COUNT GROWS                -> HARD FAIL
+        //   * a baseline entry that has become CLEAN                     -> FAIL, refresh me
+        // The third is not pedantry: a baseline that silently keeps passing after the
+        // debt is paid is how a stale allowlist comes to protect code that no longer
+        // exists (see UiObsidianConformanceRegression's dead PauseHudBootstrap entry,
+        // audit finding G10).
+        private static readonly Dictionary<string, int> KnownCatalogExposure =
+            new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+            {
+                { "Assets/Resources/VFX/HovlVfxCatalog.asset", 645 },
+                { "Assets/Resources/VFX/VFXCatalog.asset",      34 },
+            };
 
         // =====================================================================
         //  Shared rule -- the mirror builder calls these; it does not re-derive them
@@ -166,6 +207,39 @@ namespace DeNelle.Editor.Regression
             return paths;
         }
 
+        /// <summary>
+        /// The TRACKED SCRIPTABLEOBJECTS under the VFX root - the catalogs (HovlVfxCatalog.asset,
+        /// VFXCatalog.asset) that map a PlayKey string to a prefab.
+        ///
+        /// WHY THIS EXISTS (2026-08-09 audit, finding F1/F2/F38). VfxPrefabPaths asks
+        /// AssetDatabase for "t:Prefab" and then filters on ".prefab", so a ScriptableObject
+        /// was STRUCTURALLY INVISIBLE to this oracle. The gate built to prove "nothing reaches
+        /// gitignored art" was scanning only half the tree, and the half it skipped is the half
+        /// that holds the references: HovlVfxCatalog.asset alone resolved 100 of its 110
+        /// distinct GUIDs into Hovl Studio / UnityTechnologies / Spells Pack.
+        ///
+        /// The failure mode is the SAME one the prefab half exists to stop, and it is worse:
+        /// a catalog that cannot resolve does not render a magenta particle, it renders
+        /// NOTHING - every PlayKey(...) effect (tower projectiles, casts, impacts, Heal_Aura,
+        /// upgrade fireworks) silently resolves null on a fresh clone.
+        ///
+        /// This is the audit's headline pattern in one line: the gate asserted the PREFABS
+        /// were clean, never that the CATALOGS were - it proved the part that was never broken.
+        /// </summary>
+        public static List<string> VfxCatalogAssetPaths()
+        {
+            var paths = new List<string>();
+            var guids = AssetDatabase.FindAssets("t:ScriptableObject", new[] { VfxRoot.TrimEnd('/') });
+            for (int i = 0; i < guids.Length; i++)
+            {
+                string p = AssetDatabase.GUIDToAssetPath(guids[i]);
+                if (IsInVfxRoot(p) && p.EndsWith(".asset", StringComparison.OrdinalIgnoreCase) && !paths.Contains(p))
+                    paths.Add(p);
+            }
+            paths.Sort(StringComparer.Ordinal);
+            return paths;
+        }
+
         // =====================================================================
         //  Entry points
         // =====================================================================
@@ -202,7 +276,28 @@ namespace DeNelle.Editor.Regression
             var log = new StringBuilder();
             log.AppendLine("--- VFX SELF-CONTAINMENT (every Resources/VFX prefab, recursive deps vs gitignored art roots) ---");
 
-            var prefabs = VfxPrefabPaths();
+            using var _scope = FlowTrace.Enter(FlowSys, "VfxSelfContainment.RunCore");
+
+            List<string> prefabs;
+            using (FlowTrace.Enter(FlowSys, "scan prefabs (t:Prefab)"))
+            {
+                prefabs = VfxPrefabPaths();
+                FlowTrace.Step(FlowSys, "prefabs found=" + prefabs.Count + " under " + VfxRoot);
+            }
+
+            // F1/F2/F38: the catalogs were never scanned. Absence here is NOT a pass - a run
+            // that finds zero catalogs is a run that proved nothing about them, and it says so.
+            List<string> catalogs;
+            using (FlowTrace.Enter(FlowSys, "scan catalogs (t:ScriptableObject)"))
+            {
+                catalogs = VfxCatalogAssetPaths();
+                if (catalogs.Count == 0)
+                    FlowTrace.Warn(FlowSys, "NO ScriptableObject catalogs found under " + VfxRoot +
+                                            " - the catalog half of this oracle asserted nothing this run");
+                else
+                    FlowTrace.Step(FlowSys, "catalogs found=" + catalogs.Count + " (these were INVISIBLE to this gate before 2026-08-09)");
+            }
+
             if (prefabs.Count == 0)
             {
                 // NOT a hollow pass: finding no prefabs is itself the failure. The curated
@@ -218,13 +313,61 @@ namespace DeNelle.Editor.Regression
             int totalExposed = 0;
             var exposedAssets = new List<string>();
 
-            for (int i = 0; i < prefabs.Count; i++)
+            // Prefabs AND catalogs walk the SAME dependency rule. Two derivations of one rule
+            // is how a tool and its gate come to disagree while both report success (the
+            // standing lesson in this file's header), so the scan list is unified rather than
+            // forked into a second loop with its own copy of the logic.
+            var scanned = new List<string>(prefabs);
+            scanned.AddRange(catalogs);
+
+            using var _walk = FlowTrace.Enter(FlowSys, "walk deps of " + scanned.Count +
+                                                       " asset(s) (" + prefabs.Count + " prefab, " + catalogs.Count + " catalog)");
+
+            for (int i = 0; i < scanned.Count; i++)
             {
-                string p = prefabs[i];
+                string p = scanned[i];
                 var offenders = PackDependenciesOf(p);
                 log.Append(Short(p)).Append(" packDeps=").Append(offenders.Count).AppendLine();
 
-                if (offenders.Count == 0) continue;
+                // --- the three-sided ratchet (see KnownCatalogExposure) -------------
+                int baselined;
+                bool isBaselined = KnownCatalogExposure.TryGetValue(p, out baselined);
+
+                if (offenders.Count == 0)
+                {
+                    if (isBaselined)
+                    {
+                        // Side 3: the debt was PAID. Refuse to keep passing on a stale entry.
+                        FlowTrace.Warn(FlowSys, "baseline entry is now CLEAN, refresh required: " + Short(p));
+                        failures.Add(Short(p) + " is now CLEAN (baseline expected " + baselined +
+                                     " exposed asset(s)). The debt was paid - REMOVE this entry from " +
+                                     "KnownCatalogExposure so the ratchet keeps its teeth. A baseline that " +
+                                     "passes after the fix is how a stale allowlist comes to guard nothing.");
+                    }
+                    continue;
+                }
+
+                if (isBaselined && offenders.Count <= baselined)
+                {
+                    // Side 0: known, dated, not growing. Recorded loudly, not failed.
+                    FlowTrace.Step(FlowSys, "baselined exposure " + Short(p) + " = " + offenders.Count +
+                                            "/" + baselined + " (known debt, not growing)");
+                    log.Append("  BASELINED ").Append(Short(p)).Append(' ')
+                       .Append(offenders.Count).Append('/').Append(baselined).AppendLine();
+                    continue;
+                }
+
+                if (isBaselined)
+                {
+                    // Side 2: the debt GREW.
+                    FlowTrace.Fail(FlowSys, "baselined exposure GREW: " + Short(p) + " " +
+                                            baselined + " -> " + offenders.Count);
+                    failures.Add(Short(p) + " exposure GREW from a baselined " + baselined + " to " +
+                                 offenders.Count + " asset(s) in gitignored art roots. The ratchet only " +
+                                 "ever moves down; something added new pack references to a catalog that " +
+                                 "was already the single largest exposure in the project.");
+                    continue;
+                }
 
                 totalExposed += offenders.Count;
                 for (int k = 0; k < offenders.Count; k++)
@@ -248,8 +391,11 @@ namespace DeNelle.Editor.Regression
 
             if (failures.Count > 0)
             {
-                reason = "vfx-self-contained FAIL: " + failures.Count + " of " + prefabs.Count +
-                         " prefab(s) still reach gitignored art (" + totalExposed + " reference(s) over " +
+                FlowTrace.Fail(FlowSys, "exposed=" + failures.Count + "/" + scanned.Count +
+                                        " asset(s) reach gitignored art; refs=" + totalExposed +
+                                        " distinct=" + exposedAssets.Count);
+                reason = "vfx-self-contained FAIL: " + failures.Count + " of " + scanned.Count +
+                         " asset(s) still reach gitignored art (" + totalExposed + " reference(s) over " +
                          exposedAssets.Count + " distinct asset(s)). CopyAsset duplicates the PREFAB ONLY - " +
                          "run DeNelle.Editor.VfxResourceArtMirror.Run to mirror the art into " + SharedRoot +
                          " and remap the references. || " + string.Join(" | ", failures.ToArray());
@@ -257,9 +403,41 @@ namespace DeNelle.Editor.Regression
                 return false;
             }
 
-            reason = "vfx-self-contained OK - all " + prefabs.Count + " prefab(s) under " + VfxRoot +
-                     " are genuinely self-contained: 0 recursive dependencies resolve into any of the " +
-                     GitignoredArtRoots.Length + " gitignored art roots, so nothing renders magenta on a fresh clone";
+            // HONESTY: a pass here does NOT mean zero exposure while the baseline is non-empty.
+            // Stating "0 dependencies resolve into gitignored roots" with 679 baselined
+            // references live would be the exact dishonest-gate pattern this oracle exists to
+            // kill - a marker that proves the part that was never broken. The pass line
+            // therefore always carries the outstanding debt.
+            int baselinedAssets = 0, baselinedRefs = 0;
+            foreach (var kv in KnownCatalogExposure)
+            {
+                if (!scanned.Contains(kv.Key)) continue;
+                baselinedAssets++;
+                baselinedRefs += kv.Value;
+            }
+
+            if (baselinedAssets > 0)
+            {
+                FlowTrace.Step(FlowSys, "PASS with debt: " + baselinedAssets + " baselined asset(s), " +
+                                        baselinedRefs + " reference(s) still in gitignored art");
+                reason = "vfx-self-contained OK (WITH RECORDED DEBT) - " + prefabs.Count +
+                         " prefab(s) are genuinely self-contained, and " + baselinedAssets +
+                         " catalog(s) carry a DATED, RATCHETED exposure of " + baselinedRefs +
+                         " reference(s) into gitignored art roots that is pinned and NOT GROWING. " +
+                         "This is NOT zero exposure: on a machine without the packs those rows still " +
+                         "resolve to nothing. Remedy is to TRIM the catalogs to gameplay-reachable rows " +
+                         "and mirror only that subset - not a blanket VfxResourceArtMirror run, which " +
+                         "would import a gitignored pack into git. Baseline: KnownCatalogExposure.";
+            }
+            else
+            {
+                FlowTrace.Step(FlowSys, "clean: 0 of " + scanned.Count + " asset(s) reach a gitignored art root");
+                reason = "vfx-self-contained OK - all " + scanned.Count + " asset(s) under " + VfxRoot +
+                         " (" + prefabs.Count + " prefab, " + catalogs.Count + " catalog) are genuinely " +
+                         "self-contained: 0 recursive dependencies resolve into any of the " +
+                         GitignoredArtRoots.Length + " gitignored art roots, so nothing renders magenta " +
+                         "on a fresh clone AND no PlayKey row resolves null";
+            }
             Debug.Log(log.ToString() + MarkerOk + " - " + reason);
             return true;
         }
