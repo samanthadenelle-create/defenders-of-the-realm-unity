@@ -54,6 +54,14 @@ namespace DeNelle.Village
         public event Action OnExitRequested;
 
         /// <summary>
+        /// WO-1010 P2: the player tapped the minimized "^ Buildings (n)" tab and wants the
+        /// carousel back. The BRAIN decides what that means — it routes to the SAME no-charge
+        /// cancel every other return-to-carousel uses, so an un-placed ghost is dropped
+        /// without a refund path of its own.
+        /// </summary>
+        public event Action OnRestoreRequested;
+
+        /// <summary>
         /// Raised when the "Orient" button is tapped (only shown while an entry is armed).
         /// The controller opens the 3-axis orient editor ON THE ARMED ENTRY — no typing an
         /// id. Arg is the armed entry id.
@@ -101,6 +109,11 @@ namespace DeNelle.Village
         private GameObject _topBarGo;         // the dock header band (hidden while collapsed)
         private GameObject _trayGo;           // the scroll well (hidden while collapsed)
         private GameObject _tabRowGo;         // the category tab band (hidden while collapsed)
+        // WO-1010 P2: the "^ Buildings (n)" edge tab — the ONLY chrome Collapse leaves up,
+        // and the way back to the carousel without cancelling out of build intent entirely.
+        private GameObject _restoreTabGo;
+        private TextMeshProUGUI _restoreTabLabel;
+        private const float RestoreTabW = 260f;
 
         // WO-673 category switcher (always on — WO-682): the owner-ruled three build
         // categories — Town / Defenses / Walls — as a tab row between the header and
@@ -333,9 +346,55 @@ namespace DeNelle.Village
             if (_topBarGo != null) _topBarGo.SetActive(false);
             if (_trayGo != null) _trayGo.SetActive(false);
             if (_tabRowGo != null) _tabRowGo.SetActive(false);
+            ShowRestoreTab(true);   // WO-1010 P2: the way BACK to the carousel
             UpdateOrientButton();   // keep the dev Orient button correct while armed
             FlowTrace.Step("BuildHud",
                 "palette collapsed: all dock chrome hidden (no black wall) — Placing label folded into intent bar");
+        }
+
+        // ── WO-1010 P2: the minimized edge tab ─────────────────────────────────
+        /// <summary>
+        /// Show or hide the "^ Buildings (n)" edge tab that Collapse leaves behind.
+        ///
+        /// WHY THIS EXISTS. Collapse hides EVERY piece of dock chrome, which is what clears
+        /// the field — but it also left the player with NO WAY BACK to the carousel except
+        /// cancelling the placement, so picking the wrong card was a dead end you had to back
+        /// out of. That is a real part of what the external testers hit as "too hard to use".
+        /// The tab is the one affordance that makes minimize-on-select reversible.
+        ///
+        /// It carries the COUNT so the collapsed state still says what is behind it — a bare
+        /// chevron would read as decoration rather than a door.
+        /// </summary>
+        private void ShowRestoreTab(bool show)
+        {
+            if (show && _restoreTabGo == null) BuildRestoreTab();
+            if (_restoreTabGo == null) return;
+            if (_restoreTabGo.activeSelf != show) _restoreTabGo.SetActive(show);
+            if (show && _restoreTabLabel != null)
+            {
+                int n = _vm != null && _vm.Cards != null ? _vm.Cards.Count : 0;
+                _restoreTabLabel.text = n > 0 ? "^ Buildings (" + n + ")" : "^ Buildings";
+            }
+        }
+
+        private void BuildRestoreTab()
+        {
+            if (_canvas == null) return;
+            var btn = ElarionUiKit.BuildObsidianButton(_canvas.transform, "^ Buildings",
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
+                new Vector2(0.02f, 0.86f), new Vector2(0.20f, 0.98f),
+                () =>
+                {
+                    FlowTrace.Step("BuildPalette",
+                        "restore tab tapped -> returning to the carousel (standard no-charge cancel)");
+                    OnRestoreRequested?.Invoke();
+                });
+            if (btn == null) return;
+            btn.gameObject.name = "BuildPaletteRestoreTab";
+            PinSize(btn, RestoreTabW, ElarionUiKit.CanonCtaHeight);
+            _restoreTabGo = btn.gameObject;
+            _restoreTabLabel = btn.GetComponentInChildren<TMP_Text>(true) as TextMeshProUGUI;
+            _restoreTabGo.SetActive(false);
         }
 
         /// <summary>
@@ -356,6 +415,7 @@ namespace DeNelle.Village
             if (_topBarGo != null) _topBarGo.SetActive(true);
             if (_tabRowGo != null) _tabRowGo.SetActive(true);
             if (_trayGo != null) _trayGo.SetActive(true);
+            ShowRestoreTab(false);   // WO-1010 P2: the carousel IS back; the door closes with it
             _armedId = null;
             if (_canvas.activeSelf) Render();
             else UpdateOrientButton();

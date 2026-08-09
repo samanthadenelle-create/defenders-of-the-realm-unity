@@ -3737,6 +3737,10 @@ namespace DeNelle.Village
             _palette.OnEntrySelected += Arm;
             _palette.OnExitRequested += Exit;
             _palette.OnOrientRequested += OpenOrientEditorForArmed;
+            // WO-1010 P2: the minimized "^ Buildings (n)" tab routes to the SAME no-charge
+            // cancel every other return-to-carousel already uses (CancelArmed -> Expand), so
+            // the tab introduces a new DOOR, never a second set of refund/teardown rules.
+            _palette.OnRestoreRequested += () => CancelArmed();
 
             // WO-352 preview (tap card -> Structure Info Preview -> "Place" -> arm) is
             // DISABLED 2026-06-19 (owner playtest): its UIToolkit panel adopted a bad/null
