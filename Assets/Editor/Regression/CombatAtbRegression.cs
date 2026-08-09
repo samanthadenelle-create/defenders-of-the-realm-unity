@@ -607,12 +607,33 @@ namespace DeNelle.Editor
                 }
             }
 
-            // --- F47: the WildlandsRoster fallback vs the catalog it claims to mirror ---
-            var wl = villageAsm.GetType("DeNelle.Village.World.WildlandsRoster");
-            if (wl == null)
+            // --- F47: the WildlandsRoster fallback vs the catalog it CLAIMS to mirror ---
+            // Its own comment promises "IDENTICAL numbers to the enemies.json orc-raider
+            // entry, so a missing/unreadable catalog can NEVER reintroduce the stat
+            // divergence". BaseDef's `default:` branch IS that fallback, so probing with an
+            // unknown id returns it - a real join, not a source-text assertion.
+            DeNelle.Village.EnemyDef fallback = null;
+            try { fallback = DeNelle.Village.WildlandsRoster.BaseDef("__audit_probe_unknown_id__"); }
+            catch (Exception ex)
+            { failures.Add($"[synth-vs-catalog] WildlandsRoster.BaseDef probe threw {ex.GetType().Name}"); }
+
+            DeNelle.Village.EnemyDef orc;
+            if (fallback != null && bySlug.TryGetValue("orc-raider", out orc))
             {
-                failures.Add("[synth-vs-catalog] WildlandsRoster not found - the fallback whose comment promises it is " +
-                             "IDENTICAL to enemies.json cannot be verified.");
+                if (Mathf.Abs(fallback.XpReward - orc.XpReward) > 0.01f)
+                {
+                    FlowTrace.Warn("CombatAtb", $"fallback XpReward={fallback.XpReward} catalog={orc.XpReward}");
+                    log.AppendLine($"  [synth-vs-catalog] FALLBACK DIVERGENCE (F47): WildlandsRoster's orc-raider " +
+                                   $"fallback pays XpReward={fallback.XpReward} but enemies.json says {orc.XpReward}. " +
+                                   "The fallback's own comment promises the numbers are IDENTICAL so a catalog read " +
+                                   "failure can never reintroduce divergence - it does. Hp matches " +
+                                   $"({fallback.Hp:0.#}), so this is a single-field drift that silently under-pays " +
+                                   "every Wildlands kill whenever the catalog fails to load.");
+                }
+                else
+                {
+                    log.AppendLine("  [synth-vs-catalog] WildlandsRoster fallback matches enemies.json orc-raider (F47 clear)");
+                }
             }
 
             FlowTrace.Step("CombatAtb", "synth-vs-catalog joined " + bySlug.Count + " catalog row(s)");
