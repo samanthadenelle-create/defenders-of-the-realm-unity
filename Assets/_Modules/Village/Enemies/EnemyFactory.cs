@@ -107,8 +107,9 @@ namespace DeNelle.Village
             // that Enemy.DriveNav's face-velocity drives. The KayKit Skeleton_* / Boss /
             // Dragon rigs already face +Z and must NOT be rotated. Family is resolved by
             // the single authoritative source (EnemyAnimatorFactory.RigFor) so we never
-            // blanket-rotate. ⚠ "Troll" is mapped but RigFor falls it to KayKit
-            // (HumanoidMedium) → 0 rotation here; playtest if a Tripo Troll lands.
+            // blanket-rotate. (The old warning here — that "Troll" fell through to KayKit
+            // HumanoidMedium and got 0 rotation — is DEAD as of 2026-08-09: Troll.fbx landed,
+            // RigFor routes it to LargeHumanoid, and the AccuRigIntake branch rotates it.)
             var skinOpts = SkinOptions.Enemy(height);
             // WO-482: resolve the rig ONCE here so the orc-yaw/material block AND the post-Skin
             // basecolor fallback below both read the same authority (EnemyAnimatorFactory.RigFor).
@@ -140,8 +141,11 @@ namespace DeNelle.Village
                 // FixTripoMaterials is unnecessary.
                 skinOpts.LocalRotation = Quaternion.Euler(0f, -90f, 0f);
             }
-            else if (model == "Troll")
+            else if (AccuRigIntake.Contains(model))
             {
+                // 2026-08-09: the intake joins the proven Troll case below — same CC_Base export,
+                // same upright +X-forward convention, same raw-Tripo materials. Without the fixer
+                // they import FbxSurfacePhong and render magenta/unlit in a URP player build.
                 // Ticket #2 (DATA-PROVEN 2026-06-21, DiagGarrisonRoster oracle): the old X=-90 pitch
                 // (Euler(-90,-90,0)) laid the troll ON ITS BACK — captured worldUp=(1,0,0), localEuler
                 // (270,270,0), tipped=True. The Troll imports UPRIGHT like Demon/OgreMage (same rig class,
@@ -192,10 +196,11 @@ namespace DeNelle.Village
                 // fallback NOW — synchronous, before the fixer's deferred Start() — so it paints the atlas.
                 if (rigForModel == EnemyRig.OrcHumanoid)
                 {
-                    string orcTex =
-                        model == "Orc_Warrior" ? "Enemies/OrcTex/Orc_Warrior_basecolor" :
-                        model == "Orc_Tank"    ? "Enemies/OrcTex/Orc_Tank_basecolor"    :
-                        model == "Orc_Mage"    ? "Enemies/OrcTex/Orc_Mage_basecolor"    : null;
+                    // 2026-08-09: resolved rather than hardcoded, so Orc_Warlord (new) and the
+                    // REPLACED Orc_Mage pick up their TripoTex maps. The old three-way ternary
+                    // returned null for any orc it did not name, which rendered the warlord solid
+                    // white — a new model silently had no skin path at all.
+                    string orcTex = ResolveBasecolor(model);
                     if (!string.IsNullOrEmpty(orcTex))
                     {
                         // Explicit Unity null-check (NOT ?. — GetComponent returns a fake-null the
@@ -204,7 +209,7 @@ namespace DeNelle.Village
                         if (orcFixer != null) orcFixer.SetFallbackTexture(orcTex);
                     }
                 }
-                else if (rigForModel == EnemyRig.OrcWarband || model == "Troll")
+                else if (rigForModel == EnemyRig.OrcWarband || AccuRigIntake.Contains(model))
                 {
                     // VILLAGE2 GARRISON FIX (RCA 2026-06-28, DiagGarrisonRoster): the village2_stronghold
                     // garrison (orc-berserker/orc-shaman/orc-raider → OrcWarband: Orc_Berserker/Shaman/
@@ -228,8 +233,8 @@ namespace DeNelle.Village
                         // (TripoMaterialFixer.cs:331), so texture-or-tint must be EXCLUSIVE or the
                         // restored skin renders green-multiplied. Absent (today) => optional load
                         // misses quietly and the tint carries the look exactly as before.
-                        string warbandTex = "Enemies/OrcTex/" + model + "_basecolor";
-                        if (DeNelle.Core.HeroTextureLoader.Load(warbandTex, optional: true) != null)
+                        string warbandTex = ResolveBasecolor(model);
+                        if (warbandTex != null)
                         {
                             warbandFixer.SetFallbackTexture(warbandTex, optional: true);
                             FlowTrace.Step("Enemy",
@@ -406,6 +411,42 @@ namespace DeNelle.Village
             return grounded;
         }
 
+        /// <summary>
+        /// The 2026-08-09 AccuRig intake. These share ONE export convention with the orcs and
+        /// Demon/OgreMage — CC_Base Humanoid, +X-forward, raw Tripo materials — so they all need
+        /// the same -90 yaw and the runtime Tripo→URP fixer. Listed by NAME rather than by rig
+        /// class because rig class does not imply export convention: the KayKit Skeleton_*/Boss
+        /// rigs already face +Z and must NOT be rotated.
+        /// </summary>
+        private static readonly System.Collections.Generic.HashSet<string> AccuRigIntake =
+            new System.Collections.Generic.HashSet<string>(System.StringComparer.Ordinal)
+            {
+                "Troll", "Troll_Mage", "Troll_Overlord", "Skeleton_Golem_NEW", "Necromancer_NEW",
+                // Orc_Warlord + Orc_Mage are in the intake too, but resolve to the OrcHumanoid rig,
+                // which already applies the same yaw + fixer in the branch above.
+            };
+
+        /// <summary>
+        /// Resolves a model's real basecolor, preferring the 2026-08-09 TripoTex maps over the older
+        /// OrcTex ones. Returns null when neither exists, which is the signal to fall back to a tint.
+        ///
+        /// ⚠ TEXTURE AND TINT ARE EXCLUSIVE. TripoMaterialFixer MULTIPLIES tint over the texture
+        /// (TripoMaterialFixer.cs:331), so binding both renders the authored skin green-multiplied —
+        /// which is precisely how good art comes to look like a material bug. Callers bind ONE.
+        ///
+        /// TripoTex wins on collision (Orc_Mage exists in both): the mesh was REPLACED on 2026-08-09,
+        /// so the older OrcTex atlas no longer matches its UVs.
+        /// </summary>
+        private static string ResolveBasecolor(string model)
+        {
+            if (string.IsNullOrEmpty(model)) return null;
+            string tripo = "Enemies/TripoTex/" + model + "_basecolor";
+            if (DeNelle.Core.HeroTextureLoader.Load(tripo, optional: true) != null) return tripo;
+            string orc = "Enemies/OrcTex/" + model + "_basecolor";
+            if (DeNelle.Core.HeroTextureLoader.Load(orc, optional: true) != null) return orc;
+            return null;
+        }
+
         /// <summary>Enemy id/role → skeleton model. Grouped by family (Hollow/Skeleton Legion,
         /// Orc Warband, Troll/Stonebelly, etc.) with class variety (Tank=brute/golem,
         /// DPS=rogue/warrior, Healer=mage/shaman). Basic strategy in EnemyBrain (DPS
@@ -471,7 +512,10 @@ namespace DeNelle.Village
                 // faction. Keyed by ID (the one signal BuildBossDef sets) to the heaviest
                 // VERIFIED orc model so the warlord is visibly a bigger orc than its
                 // raiders (orc-raider → Orc_Berserker), keeping the orc faction read.
-                case "orc-warlord":      return "Orc_Necromancer";   // outpost raid boss — heaviest orc silhouette
+                // 2026-08-09: the warlord gets its OWN mesh. It previously borrowed
+                // Orc_Necromancer, so the raid boss shared a silhouette with a camp elite the
+                // player also fights — the boss read as a re-skin rather than an escalation.
+                case "orc-warlord":      return "Orc_Warlord";       // outpost raid boss — dedicated mesh
 
                 // ── BLINK STYLIZED ORCS (WO-680) — vendor Humanoid family, ADDITIVE ─
                 // Staged by BlinkOrcImporter into Resources/Enemies/Blink/ (committed
@@ -491,7 +535,10 @@ namespace DeNelle.Village
                 // Tripo troll/ogre art lands. troll → big Orc_Berserker, ogre → Orc_Shaman.
                 // Both go through the OrcWarband SetFallbackTint path below, so the tint block
                 // paints troll grey-green and ogre grey to keep them visually distinct.
-                case "troll":            return "Orc_Berserker";     // STAND-IN: big brute (was "Troll" — missing)
+                // 2026-08-09: the stand-in is RETIRED. Troll.fbx now exists (AccuRig, Humanoid,
+                // LargeHumanoid controller) and enemies.json has asked for modelKey "Troll" the
+                // whole time — the data was already correct, only the mesh was missing.
+                case "troll":            return "Troll";             // real Cave Troll
                 case "ogre":             return "Orc_Shaman";        // STAND-IN: ogre brute (was "OgreMage" — missing)
                 case "ogre-mage":        return "Orc_Shaman";        // STAND-IN: ogre caster (was "OgreMage" — missing)
                 case "demon":            return "Demon";             // demon
@@ -511,7 +558,7 @@ namespace DeNelle.Village
             switch (family)
             {
                 case "orc":   return def != null && def.Role == "caster" ? "Orc_Shaman" : "Orc_Berserker";
-                case "troll": return "Orc_Berserker";   // STAND-IN (no Troll.fbx) — tinted grey-green below
+                case "troll": return "Troll";          // real mesh as of 2026-08-09 (stand-in retired)
                 case "ogre":  return "Orc_Shaman";      // STAND-IN (no OgreMage.fbx) — tinted grey below
                 case "demon":
                 case "cult":  return "Demon";
