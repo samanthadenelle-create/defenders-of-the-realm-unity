@@ -53,6 +53,316 @@ broken**. Answer yes to all five before anything else.
 
 ---
 
+# ⚡ QUICK REFERENCE — "…and where do I start / how do I debug / how do I build?"
+
+Orientation, not prohibition. **These lines are NOT numbered rules** — rules 1–102 below are the binding
+index and are untouched. Same law applies: **each line is a pointer, not a copy.** Every fact here was
+read at source on 2026-08-09; where a source doc disagreed with the disk, the disk is written here and
+the disagreement is filed in CONFLICTS at the bottom. Cite the source, never this page.
+
+---
+
+## QR-1 · KEY ARCHITECTURE — what you must know before touching code
+
+**Assemblies** *(the authority is the `.asmdef` files themselves — read them, not a table)*
+- **QR-1.1** 19 `.asmdef` under `Assets/_Modules/` + `Assets/Data/DeNelle.Data.asmdef` + the editor asmdefs.
+  → `Assets/_Modules/README.md` (per-module map) · `docs/ARCHITECTURE.md` (the hub — read before any
+  single `*_ARCHITECTURE.md`). **CLAUDE.md §5's six-row table is a subset, not the map — see C-6.**
+- **QR-1.2** **The load-bearing invariant is HUD ⇸ Village: `DeNelle.HUD` never references
+  `DeNelle.Village`, in either direction.** Verified at source in `Assets/_Modules/HUD/DeNelle.HUD.asmdef`
+  (references `DeNelle.Core` + `DeNelle.Data` only) — `Assets/_Modules/HUD/AdminOverlay.cs` reaches a
+  Village type by reflection *precisely because* the asmdef forbids the reference. → CLAUDE.md §5 · rule 30
+- **QR-1.3** **Cross-module calls go through `CoreServices`** — `Assets/_Modules/Core/CoreServices.cs`
+  (`CoreServices.Hud`, `CoreServices.Audio`), always with `?.` (rule 32). → CLAUDE.md §5, §6
+- **QR-1.4** Regression/editor code lives in the nested editor asmdef, never a runtime assembly. → rule 40
+
+**Key interfaces** *(all `DeNelle.Core.*`; open the file, don't infer the contract)*
+- **QR-1.5** `IDamageableStructure` → `Assets/_Modules/Core/Combat/IDamageableStructure.cs` — implementers
+  need `using DeNelle.Core.Combat;` (rule 31). → CLAUDE.md §6
+- **QR-1.6** `IVillageHud` → `Assets/_Modules/Core/HUD/IVillageHud.cs`, resolved via `CoreServices.Hud`.
+- **QR-1.7** `IAudioService` → `Assets/_Modules/Core/Audio/IAudioService.cs`, resolved via `CoreServices.Audio`.
+
+**Live scenes** *(all under `Assets/Scenes/`; verified present/absent on disk)*
+- **QR-1.8** **Home hub = `Assets/Scenes/Main_Castle_Overworld.unity`** (merged world, one navmesh).
+  → CLAUDE.md §7, §8
+- **QR-1.9** **`Assets/Scenes/Village2.unity` = the raid target.** Raid/garrison/dungeon scenes sit
+  beside it (`RaidBase_*`, `Garrison_*`, `DungeonCompose/*`). → CLAUDE.md §8
+- **QR-1.10** **`Village.unity` and `OuterWorld.unity` are DELETED** — confirmed absent from the tree. A
+  doc naming either is stale. → CLAUDE.md §7 · **C-4**
+- **QR-1.11** ⚠ **`Assets/Scenes/MainCastle_Hall.unity` still EXISTS on disk and is NOT the hub** — a
+  LEGACY file. That ambiguity is what keeps re-seeding stale docs. → CLAUDE.md §7
+- **QR-1.12** Never hand-edit a curated `.unity`; rebuild through its builder (rule 56).
+
+**Naming canon that bites**
+- **QR-1.13** **Elarion**, never "Avalon". → CLAUDE.md §7 · `DESIGN-DECISIONS.md` #1
+- **QR-1.14** **Hero tag = `Player`**, one tag per GameObject; set in `HeroControlEnsurer.Ensure`. → CLAUDE.md §7
+- **QR-1.15** **Enemy AI finds the hero by COMPONENT** (`FindFirstObjectByType<HeroLocomotion>()`), **never
+  by a tag** — the old `HeroTarget` tag was never declared. → CLAUDE.md §7 · rule 61
+- **QR-1.16** Player-facing strings come from `canon-strings.json`, and **a display name is never an id**
+  — see QR-5.7, the single most expensive naming trap in the repo.
+
+**Shape of the code**
+- **QR-1.17** **UXML does not work in player builds — UI is code-built uGUI.** `.uxml` assets DO still
+  exist in-tree (e.g. `Assets/_Modules/HUD/VillageHud.uxml`); their presence is legacy, not permission.
+  → CLAUDE.md §8 · rule 34
+- **QR-1.18** **Presentation is a separate layer that NEVER touches the objects** — the doc's own
+  most-violated principle. → `docs/ARCHITECTURE_PRINCIPLES.md` §2 · rule 19
+- **QR-1.19** **One Model:** capability is a property on the entry; every system is a READER of the
+  collection — never hard-code per type/tag. → `docs/ARCHITECTURE_PRINCIPLES.md` §2b · rule 20
+- **QR-1.20** Be the SME from `docs/MASTER_CATALOG.md` + the `docs/MASTER_CATALOG/<area>.md` for what you
+  are about to touch — **verified from CODE, because the comments lie**. → CLAUDE.md mandatory-first-step
+
+---
+
+## QR-2 · DEBUGGING — FlowTrace, Guard, and the F8 loop
+
+- **QR-2.1** ★ **THE HARD GATE: no code edit on a non-trivial bug until you can cite CAPTURED DATA that
+  proves the cause.** Static reading LOCATES candidates; it never CONCLUDES. → CLAUDE.md §12 · rules 44–48
+
+**FlowTrace — `Assets/_Modules/Core/Diagnostics/FlowTrace.cs` (`DeNelle.Core.Diagnostics`)**
+*API surface read at source; do not add a call you have not confirmed exists.*
+- **QR-2.2** Point calls: **`Step`** (reached it) · **`Warn`** (fallback/anomaly) · **`Fail`** (error level
+  → break-log). Never downgrade a real failure to `Warn` (rule 38).
+- **QR-2.3** Hot paths: **`Throttle(system, key, everySeconds, msg)`** · **`Once(system, key, msg)`**;
+  `ResetSession()` clears both. → rule 39
+- **QR-2.4** Scoped: **`Measure(system, what, warnAboveMs)`** returns a `FlowTrace.Scope`;
+  **`Enter(system, what)`** returns a `FlowTrace.FlowScope` (`using var _ = …`) that indents by call depth.
+  **There is NO `FlowTrace.Exit` — the exit side is `FlowScope.Dispose()`,** which fires on scope end.
+- **QR-2.5** `FlowTrace.Try(system, what, action)` / `Try<T>(…, fn, fallback)` log an exception at error
+  level **independently of `Enabled`**, so a real throw can never be silenced.
+- **QR-2.6** Toggles: `Enabled` (**defaults to `Application.isEditor || Debug.isDebugBuild`** — a release
+  player ships tracing OFF), plus `Only(…)` / `Mute(…)` / `AllOn()` category filters and a swappable
+  `Sink` (`ITraceSink`) reconfigured through `Configure(TraceConfig)`.
+- **QR-2.7** ⛔ **NEVER STRIP FLOWTRACE (owner ruling 2026-08-09, BINDING).** Flagging OFF is allowed
+  (`FlowTrace.Enabled=false`); **the calls STAY IN THE CODE.** A stripped `Warn`/`Fail`/`Guard` turns a
+  logged failure back into a silent one. → CLAUDE.md §12 (the ⛔ block) · `docs/INSTRUMENTATION_STANDARD.md` §1.4
+
+**Guard — `Assets/_Modules/Core/Diagnostics/Guard.cs`**
+- **QR-2.8** `Guard.Try(system, what, action)` → `bool`; `Guard.Try<T>(…, func, fallback)` → `T`;
+  **`Guard.TryEach(…)` → `(int built, int failed)`** — any loop building a list/grid/screen from N objects
+  uses `TryEach`, so one bad object never blanks a screen. → rule 37
+- **QR-2.9** **A `catch` that swallows without logging is forbidden.** No silent failures; every fallback
+  is a `Warn`, every empty/skip/early-return is traced. → `docs/INSTRUMENTATION_STANDARD.md` §2 · rule 36
+- **QR-2.10** Write the instrumentation IN as you author the method, not after a bug. → rule 35 · §2
+
+**The F8 live-triage loop** *(watcher scripts in `.claude/skills/run-defenders/`)*
+- **QR-2.11** **Start once:** `f8-watch-start.ps1` (idempotent; runs `f8-watch-daemon.ps1` hidden).
+  **Poll:** `f8-check-inbox.ps1` FIRST every turn. **After triage:** `f8-ack.ps1`. **Stop:**
+  `f8-watch-stop.ps1`. Legacy one-shot fallback: `f8-watch.sh`. → CLAUDE.md §14
+- **QR-2.12** ★ **TRIAGE FROM THE HARVESTED LINES FIRST** — read `logs/f8-inbox/LATEST_CAPTURE.md` before
+  any code-read, any agent, any theory. Spawning a code-reader before reading the harvest is the banned
+  failure. → CLAUDE.md §14 · rule 47 · memory `never-inference-fix`
+- **QR-2.13** The owner is NEVER the bug detector. → CLAUDE.md §14 · rule 53
+- **QR-2.14** Prefer HEADLESS capture to self-serve before asking the owner to retest. → rule 50
+
+**Where logs land** — *root-relative only; **the repo root is MACHINE-DEPENDENT — never hardcode it**
+(CLAUDE.md §0 and `PREFLIGHT_GATE.md` B11 both name stale absolute paths, see **C-3**).*
+- **QR-2.15** `logs/f8-inbox/` — daemon inbox: `LATEST_CAPTURE.md` + `PING.json`.
+- **QR-2.16** `logs/debug/` — escalation logs. `logs/` — batchmode run logs.
+- **QR-2.17** `Builds/<LogName>` — every `run-unity-method.ps1` run; `Builds/build.log` — the player build.
+- **QR-2.18** **`break-log.jsonl` is written to the PLAYER's `Application.persistentDataPath`, not the
+  repo** (+ a PNG per capture) — `Assets/_Modules/Core/Diagnostics/BreakCaptureHarness.cs`. The daemon is
+  what brings it into `logs/f8-inbox/`.
+
+---
+
+## QR-3 · BUILD — the commands that actually work
+
+- **QR-3.1** ★ **THE MARKER IS THE EVIDENCE — NEVER THE EXIT CODE.** `run-unity-method.ps1` judges from
+  *log text* (`Exiting batchmode successfully`), not from a marker, so it **can exit 0 on a run that
+  refused or FAILED**. Verify the marker, the log's freshness, and its size. → rule 79 · CLAUDE.md §8 ·
+  memory `gates-report-success-without-proving-it`
+- **QR-3.2** **Unity must be CLOSED for batchmode** (project lock). Both `run-unity-method.ps1` and
+  `build-windows.ps1` refuse with **exit 3** if a `Unity` process is running. → CLAUDE.md §3 · rule 57
+
+**The gates** *(entry points verified at source — all four classes are namespace **`DeNelle.Editor`**)*
+- **QR-3.3** `DeNelle.Editor.CompileGate.Run` → **`COMPILE_GATE_OK`** — `Assets/Editor/CompileGate.cs`.
+  Also scans every `.cs` for NUL bytes and withholds the marker on a hit (rule 29).
+- **QR-3.4** `DeNelle.Editor.DataRegression.RunAll` → **`REGRESSION_OK <n>/<n> suites`** — **THE** gate.
+  `Assets/Editor/Regression/DataRegression.cs`. ⚠ **Namespace is `DeNelle.Editor`, NOT
+  `DeNelle.Editor.Regression`** — the folder is `Regression/`, the namespace is not. This has bitten before.
+- **QR-3.5** `DeNelle.Editor.RegressionSuite.RunAll` → **`CHECKIN_SUITE_OK <p>/<n> cases`** (legacy smoke
+  battery) — `Assets/Editor/RegressionSuite.cs`.
+- **QR-3.6** `DeNelle.Editor.SessionRegression.RunAll` → **`SESSION_GUARDS_OK <n>/<n> checks`** —
+  `Assets/Editor/Regression/SessionRegression.cs`.
+- **QR-3.7** `DeNelle.Editor.UICaptureLaunch.RunCaptureHeadless` → **`UI_CAPTURE_OK <count>`** —
+  `Assets/Editor/UICaptureLaunch.cs`. **Green marker ≠ correct screen: OPEN THE PNGs.** → rules 78, 83
+- **QR-3.8** **These markers are DISTINCT on purpose** (2026-08-02). Until then all three regression entry
+  points printed a bare `REGRESSION_OK`, so a 22-case battery read as the full gate. Never read one as
+  another; never restate a count from a doc — read it off the marker. → rules 80, 81
+- **QR-3.9** Runner: `run-unity-method.ps1 -Method <FullyQualified.Method> -LogName <name>.log`
+  (`-TimeoutMin`, `-BuildTarget`). Worked examples + the marker table: **`.claude/skills/run-defenders/SKILL.md`**.
+
+**The Windows player build**
+- **QR-3.10** `build-windows.ps1` → **`Builds/Windows/DefendersOfTheRealm.exe`**, log `Builds/build.log`.
+  It wipes `Builds/Windows` first (a stale exe stub against fresh scenes = native crash) and stops a
+  running player by name. Method: `DeNelle.Editor.DesktopBuild.BuildWindows`, target pinned `Win64`.
+- **QR-3.11** ⚠ **After ANY Android/APK build, pass `-BuildTarget Win64`** — the APK leaves the project's
+  active target on Android and the next desktop build dies in SBP/Addressables ("Native extension for
+  Android target not found"), which the runner reports as a *generic* failure. → `run-unity-method.ps1`
+  header · memory `desktop-build-after-android-target`
+- **QR-3.12** Wipe + rebuild the exe unprompted after a gate-green commit wave. → memory `wipe-rebuild-exe-on-ready`
+- **QR-3.13** A **"LICENSE ERROR"** line is usually a MISDIAGNOSIS — see QR-5.9.
+
+---
+
+## QR-4 · SERVICES / INFRA — what runs where
+
+Resolved from the tree on 2026-08-09, not from assumption. Where the tree could not settle it, it says so.
+
+- **QR-4.1** **Vercel — the `api/` serverless backend IS IN THIS REPO**, git-tracked; it is *not* a separate
+  project. ~21 routes under `api/` (`api/bug-report.js`, `api/trace.js`, `api/admin/db.js`,
+  `api/game/save.js`, `api/game/load.js`, `api/auth/nonce.js`, `api/events/track.js`, `api/leaderboard/*`,
+  `api/profile/*`, `api/promo/*`, `api/referral/*`, `api/pi/verify.js`, `api/tower-swap/log.js`, …). ⚠
+  There is **no `api/wallet-auth` endpoint** — wallet auth is the shared lib `api/_lib/wallet-auth.js`
+  and the challenge route is `api/auth/nonce.js`. Config: `vercel.json`, `.vercelignore`,
+  `.vercel/project.json` (project `defenders-of-the-realm-v2`). → `api/DEPLOY.md` · memory `api-backend-in-repo`
+- **QR-4.2** **Vercel also serves the WebGL build** — `vercel.json` sets `outputDirectory: Builds/WebGL`,
+  `git.deploymentEnabled: false` (CLI-only). Deploy scripts `overnight-webgl-deploy.ps1` /
+  `webgl-vercel-overnight.ps1` are **PREVIEW-ONLY by design — never `--prod`.** A second, separate Vercel
+  project holds the marketing/legal one-pager: `site/` (`site/.vercel/project.json` → `echoes-of-elarion`).
+- **QR-4.3** **Neon Postgres — ONE database. There is NO prod/dev split.** The only env var is
+  **`DATABASE_URL`** (22 call sites in `api/`; no `POSTGRES_URL`, no `NEON_*`, no Neon branch anywhere in
+  the tree). Preview and production therefore read and write the SAME database. Schema: `api/schema.sql`
+  (`player_data`, `analytics_events`, `bug_reports`, `auth_nonces`, `leaderboard_scores`, …). Saves:
+  `api/game/save.js` + `api/game/load.js`. **The secret is not in the repo** — it is a Vercel dashboard
+  env var. → `api/DB_SETUP.md` §1.3, §6.1
+- **QR-4.4** **Firebase — Auth and App Distribution are REAL; Firestore is NOT used.** Auth (email/password
+  + Google) is live C#: `Assets/_Modules/Core/Auth/FirebaseAuthService.cs`, consumed by
+  `Assets/_Modules/Onboarding/LoginViewModel.cs`; the Unity SDK **is** imported
+  (`Assets/Firebase/Plugins/*.dll`). App Distribution ships the Seeker APK via `distribute-android.ps1`
+  (chained by `morning-ship-chain.ps1`). **Zero Firestore references in `Assets/_Modules`; no
+  `firebase.json`, no `.firebaserc`.** Firebase is **ACCESS ONLY** — it binds no save key; the save key is
+  the wallet address and backend auth is the `X-Wallet`/`X-Nonce`/`X-Signature` scheme in
+  `api/_lib/wallet-auth.js`. The SDK has no WebGL support, so a stub compiles under `UNITY_WEBGL`.
+  Config: `Assets/google-services.json` + `firebase-appid.txt` (**both gitignored, local-only**).
+  → memory `firebase-app-distribution`
+- **QR-4.5** **itch.io — USED, and it is the live public web host.** Not merely referenced: `ship-webgl.ps1`
+  pushes `Builds/WebGL` with `butler` to `denellestudios/defenders-of-the-realm-defend-the-tower:html5`
+  (also `-Ship` in `build-webgl-isolated.ps1`, an itch packaging path in `build-webgl.ps1`). itch rejects
+  the uncompressed build (per-file limit), so it ships **Brotli + `decompressionFallback=true`**. Credential
+  is butler's own machine-local login — nothing in-repo. → `DEPLOY_WEBGL_ITCH_GUIDE.md`
+- **QR-4.6** **Solana — DEVNET only, and hard-blocked off mainnet.** Network default:
+  `Assets/_Modules/Wallet/WalletService.cs` (`DefaultNetwork = WalletNetwork.Devnet`); endpoints/mints:
+  `Assets/_Modules/Wallet/WalletEndpoints.cs` (the SKR mints are **deliberately empty strings** so a
+  transfer fails loudly); `Assets/_Modules/Wallet/SolanaWalletProvider.cs` **hard-blocks** Mainnet in
+  `SendPayment`. `SOLANA_SDK` is defined for **Android only** (`ProjectSettings/ProjectSettings.asset`), so
+  desktop/WebGL fall to the stub provider. Wallet = identity + payments; non-custodial, no key in the tree.
+  → memory `android-seeker-distribution-and-wallet-strategy`
+- **QR-4.7** **Monetization is DELIBERATELY OFF.** The gate is
+  `FeatureFlags.RealmStorePurchase` (`defaultOn: false`) in `Assets/_Modules/Core/FeatureFlags.cs`,
+  re-gated OFF and locked on 2026-08-08. **Do not restate the ladder — read it:**
+  `docs/reference/MONETIZATION_ACTIVATION_LADDER.md`. ⚠ `Get()` reads **PlayerPrefs first**, so a stored
+  `ff.realmstorepurchase=1` beats the default (QR-5.10).
+- **QR-4.8** ⚠ **AMBIGUOUS — needs an owner ruling: is the `site/` project actually deployed?**
+  `site/README.md` says in bold **"⛔ NOT DEPLOYED"** with a pre-publication banner and `noindex`, while
+  `KEY_FACTS.md` and `docs/HANDOVER.md` claim `echoes-of-elarion.vercel.app/terms` is live and
+  HTTP-200-verified. The tree cannot settle it. **Do not paper over this — ask.**
+- **QR-4.9** ⚠ **AMBIGUOUS — needs an owner ruling: should `defenders-of-the-realm-v2` PRODUCTION be
+  promoted?** Canon says `api/` is preview-only, yet the client hardcodes the prod domain in 11 places
+  (e.g. `Assets/_Modules/Core/State/GameStateService.cs`, `Assets/_Modules/Core/Diagnostics/WebTrace.cs`).
+  The newest `CANON_GROUND_TRUTH_<date>.md` marks it explicitly as an owner call.
+
+---
+
+## QR-5 · TIPS & TRICKS — the scar tissue
+
+> **THE INCLUSION BAR: only failures this repo has hit ~10+ times.** Judge frequency from the repo's own
+> evidence — how many `WorkOrders/*.md`, `*.RESULT.md`, `docs/reference/AUDIT_*`, RCA notes and code
+> comments name the same failure. **One occurrence is not a tip.** A list that accepts everything stops
+> being read, which is the exact failure this bar prevents. Adding an entry? Cite the recurrence.
+
+*The family resemblance across QR-5.1, QR-5.2 and QR-5.3: **a thing that looks wrong in the world is
+almost always an IMPORT / CONVENTION / MATERIAL fault — not a mesh fault and not an animation fault.***
+
+- **QR-5.1 · MAGENTA / PINK RENDER** *(the archetype — the single most-referenced failure in the repo)*
+  **SYMPTOM:** an object or the ground renders pink/magenta **in the built player**, fine in the editor.
+  **CAUSE:** the material sits on a Built-in/Standard/Legacy/Phong shader (or an unreferenced Shader
+  Graph) → **stripped from the URP build** → resolves to `Hidden/InternalErrorShader`. Never a mesh fault.
+  **FIX:** the global net is `Assets/_Modules/Core/MagentaGuard.cs` (`IsBrokenShader` / `ResolveUrpLitShader`
+  are the single authority for "would this render magenta"); targeted fixers
+  `Assets/_Modules/Core/TripoMaterialFixer.cs` and the editor menu **`Defenders/Art/Fix Polyperfect URP
+  Materials`** (`Assets/Editor/PolyperfectUrpFix.cs`). ⚠ **An editor-only scan finds nothing** — the strip
+  only happens in a build. The "pink floor" is the §12 origin story (3 wrong cycles guessed; one headless
+  `FloorDiag` dump named it in one read). → CLAUDE.md §12
+- **QR-5.2 · THE TRIPO ROTATION** *(named repeat offender; RCA is verbatim in the source)*
+  **SYMPTOM:** a Tripo/AccuRig/CC enemy faces the wrong way — or is **lying on its back**.
+  **CAUSE:** export-convention axis mismatch. Vendor rigs author **+X-forward**; the KayKit rigs already
+  face **+Z** and must NOT be rotated. **Applying a PITCH instead of a YAW tips the model over.**
+  **FIX:** a **-90 YAW ONLY** — `Quaternion.Euler(0f, -90f, 0f)` — applied to the **visual child** via
+  `skinOpts.LocalRotation`, in `Assets/_Modules/Village/Enemies/EnemyFactory.cs`. Opt in by **NAME**: add
+  to the `AccuRigIntake` set (`Troll`, `Troll_Mage`, `Troll_Overlord`, `Skeleton_Golem_NEW`,
+  `Necromancer_NEW`) — **rig CLASS does not imply export convention, so nothing blanket-rotates.**
+  ⚠ **The RCA, in that file's comments:** the old `Euler(-90,-90,0)` **X-pitch laid the troll ON ITS BACK**
+  — *proven by captured data* (`DiagGarrisonRoster`: `worldUp=(1,0,0)`, `localEuler (270,270,0)`,
+  `tipped=True`), not guessed. Oracle: `Assets/_Modules/DevTools/AutoPilotDriver.cs` (`DiagGarrisonRoster`).
+- **QR-5.3 · T-POSE + SLIDING**
+  **SYMPTOM:** the character holds a bind/T-pose while the NavMeshAgent slides it — "the sliding statue".
+  **CAUSE:** a **RIG/IMPORT** fault, not an animation fault — no valid Humanoid avatar, or a **Generic**
+  clip against a Humanoid rig (or the inverse). A Generic clip cannot retarget onto a Humanoid avatar.
+  **FIX:** guard in `Assets/_Modules/Village/Enemies/EnemyAnimatorFactory.cs` (checks BOTH directions —
+  the original guard was gated on `isHuman` and let Generic rigs straight through); hero side
+  `Assets/_Modules/Village/Hero/HeroBodySwapper.cs`; repair via the editor menu **`Defenders/Maintenance/
+  Fix AccuRig Enemy Rigs (Generic -> Humanoid)`** (`Assets/Editor/Maintenance/HumanoidRigFixup.cs`) —
+  which then *verifies*, because "a flipped flag is not an avatar".
+- **QR-5.4 · A CARD OR ICON SHOWING A BARE LETTER**
+  **SYMPTOM:** a build card renders a single gilt letter on a dark plate.
+  **CAUSE:** **the art exists and the RESOLVER missed it** — the letter is a fallback, not missing art.
+  Usually a portrait filename that doesn't match the catalog id, or art hung off a *display-name slug*
+  creative later renamed. **FIX:** add the alias to `PortraitAliases` in
+  `Assets/_Modules/Village/BuildMode/BuildPaletteUI.cs` (the fallback lives in the same file); ratcheted by
+  `Assets/Editor/Regression/BuildCardArtRegression.cs`. Law in the source: *a portrait must not hang off a
+  label creative can change at any time.*
+- **QR-5.5 · BLACK-ON-BLACK UI**
+  **SYMPTOM:** a panel floating over the world is invisible or has no discernible edge.
+  **CAUSE:** `ObsidianFill` is `(0.02, 0.02, 0.025, 0.98)` — **near-black** (~#050506).
+  **FIX:** it is only legible because it ships with **its own gold edge** (`ObsidianTrim` +
+  `ObsidianTrimPx`) — build through `ElarionUiKit.BuildObsidianPanel`, in
+  `Assets/_Modules/Core/UI/ElarionUiKit.cs`. Anything bypassing it inherits the near-black with no edge.
+- **QR-5.6 · DUAL-COPY JSON — `Resources` WINS**
+  **SYMPTOM:** you edited a catalog and nothing changed in-game.
+  **CAUSE:** `Assets/Resources/Data/Canonical/` is read FIRST on every platform; the `StreamingAssets`
+  copy is only a desktop fallback — so a StreamingAssets-only edit is invisible. **The two copies must
+  stay BYTE-IDENTICAL. FIX/authority:** `Assets/_Modules/Core/Data/CanonicalJson.cs` →
+  `Assets/_Modules/Core/Data/LocalJsonCatalogSource.cs`; enforced by cases in
+  `Assets/Editor/Regression/DataRegression.cs` (`catalog-byte-equal`).
+- **QR-5.7 · DISPLAY NAMES ARE NOT IDS** *(the WO-840 "naming inversion")*
+  **SYMPTOM:** you edit the building you think you named, and a different one changes.
+  **CAUSE:** the names are **inverted** relative to intuition. Verified in
+  `Assets/Resources/Data/Canonical/buildings.json` + `canon-strings.json`: id **`workshop`** renders
+  **"Forge"** (the WEAPONS shop) · id **`forge`** renders **"Armorer"** (the ARMOR shop) · id **`armorer`**
+  renders **"Blacksmith"** — *it is NOT the Armorer* · **"Lumber Mill" is TWO ids** (`lumbermill` and
+  `collector_lumbermill`). **FIX:** always route through the id. Related: a `displayName` key missing from
+  `canon-strings.json` renders the literal `[[missing:<key>]]` on the nameplate, and a *shared* key gives
+  two buildings one name — both have shipped.
+- **QR-5.8 · THE MARKER, NEVER THE EXIT CODE** — a gate "passed" (exit 0) but nothing built or ran.
+  Unity forks, so the wrapper's exit code is meaningless. **FIX:** QR-3.1 + rules 79–81. *Corollary from
+  the same family: **two artifacts that should differ but have IDENTICAL FILE SIZES are a defect signal**
+  — the tell is visible in the listing before the wrong picture is (`WORK_ORDER_1010…RESULT.md`).*
+- **QR-5.9 · "LICENSE ERROR" IS USUALLY A MISDIAGNOSIS**
+  **SYMPTOM:** a batchmode log carries `ResponseCode: 505` / `HandshakeResponse reported an error`.
+  **CAUSE:** Unity 6 routinely fails the FIRST license handshake and auto-recovers; the line prints on
+  fully successful runs. `build-windows.ps1` only flags it when there is **no** subsequent
+  "Successfully updated license" recovery line. **FIX:** judge by the success marker.
+  ⛔ **NEVER `Stop-Process` Unity Hub or `Licensing.Client`** — that breaks the license channel and costs a
+  reboot. → `CLI_GATEKEEPER_PLAYBOOK.md`
+- **QR-5.10 · A FLAG DEFAULT CHANGE DOES NOTHING ON A USED MACHINE**
+  **SYMPTOM:** you flip a `FeatureFlags` default, rebuild, and behaviour is unchanged — on your machine.
+  **CAUSE:** `FeatureFlags.Get` reads **PlayerPrefs FIRST**, so a previously-set local value shadows the
+  new default — and the machine that "verified" it is the one holding the stale pref.
+  **FIX:** clear the pref or test a clean profile — `Assets/_Modules/Core/FeatureFlags.cs`; verify a flag's
+  SCOPE too, before assuming its reach. → `KEY_FACTS.md` (⚠ TRAP entries)
+- **QR-5.11 · TOFU BOXES, AND MEANING CARRIED BY COLOUR ALONE**
+  **SYMPTOM:** UI text renders as `□□□` on device; or two states are genuinely indistinguishable.
+  **CAUSE:** a non-ASCII glyph missing from the TMP atlas; and **the owner is red/green colourblind**, so
+  an affordable-vs-unaffordable TINT carries zero information. **FIX:** keep TMP strings ASCII, and give
+  every state a **word + shape**, never a colour alone (e.g. `NEED 80W 30I`). → `KEY_FACTS.md` · CLAUDE.md §7
+- **QR-5.12 · NEVER INFERENCE-FIX** — the meta-tip the other eleven keep proving. A plausible fix *feels*
+  like progress and costs N blind cycles; instrumenting *feels* slow and costs one read. **If you cannot
+  point at the data line, you have not earned the edit.** → CLAUDE.md §12 · rules 44–48
+
+---
+
 # A. Before you touch anything
 
 6. **Answer PREFLIGHT GATE A out loud, unprompted, before your first edit of a session.** One NO or one
@@ -312,6 +622,24 @@ is no stated builder for the scenes that replaced it.
 only** and **KEEP every `Warn`/`Fail` and every `Guard`** — those are the permanent no-silent-failure net,
 not scaffolding. A seat reading §12 alone can legitimately strip the net.
 **Owner call: point §12's closing line at §1.4 instead of restating it.**
+
+**C-6 — CLAUDE.md §5's assembly table does not match the `.asmdef` files on disk.** §5 lists six
+assemblies and states the cross-assembly rule as "**Village → Core only. HUD → Core only.**" On disk there
+are **19 `.asmdef` under `Assets/_Modules/`** plus `Assets/Data/DeNelle.Data.asmdef`, and
+`Assets/_Modules/Village/DeNelle.Village.asmdef` references **`DeNelle.BattleATB`, `DeNelle.AI`,
+`DeNelle.Cosmetics`, `DeNelle.Data`, `DeNelle.Pets`, `DeNelle.Wallet`, `DeNelle.Audio`** in addition to
+`DeNelle.Core` — so "Village → Core only" is not what the project builds. The invariant that IS true and
+IS load-bearing is **HUD ⇸ Village** (`DeNelle.HUD.asmdef` → `DeNelle.Core` + `DeNelle.Data` only; see
+QR-1.2). A seat reading §5 literally would reject legitimate existing references as violations.
+**Owner call: restate §5 as the HUD ⇸ Village invariant + "read the `.asmdef`", and stop maintaining a
+six-row table that a 19-assembly project has outgrown.**
+
+**C-7 — Is the `site/` (marketing/legal) Vercel project deployed?** `site/README.md` says in bold
+"⛔ **NOT DEPLOYED.** Do not deploy until this checklist is clear", with a pre-publication banner and
+`noindex`. `KEY_FACTS.md` and `docs/HANDOVER.md` state the Terms page is live at
+`echoes-of-elarion.vercel.app/terms` and "verified HTTP 200". Both are binding; the tree cannot settle
+which is current, and this is a **legal-surface** page. See QR-4.8.
+**Owner call: confirm live-or-not, then fix the losing doc in the same breath (§15).**
 
 ---
 
