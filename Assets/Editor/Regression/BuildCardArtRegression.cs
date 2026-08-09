@@ -49,10 +49,22 @@ namespace DeNelle.Editor.Regression
         private static readonly HashSet<string> KnownArtlessIds =
             new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
-                "tower_siege_tower", "wall_wood", "wall_stone", "gate_stone",
-                "mine_crystal", "fountain_healing", "tower_healer", "deco_torch",
-                "mill", "collector_lumbermill", "lumberyard", "foundry", "silo",
-                "repair_default",
+                // -- 2026-08-09: SIX ids left this list when the owner authored the stockpile
+                //    and wall art and the aliases landed. The ratchet tightened; it must not
+                //    loosen again. Removed: lumberyard, foundry, silo, wall_wood, wall_stone,
+                //    collector_lumbermill.
+                "tower_siege_tower",   // Sky Ballista (Anti-Air) - Defenses tab, VISIBLE today
+                "gate_stone",          // Stone Gate              - Defenses tab, VISIBLE today
+                "mine_crystal",        // Crystal Mine            - Town tab,     VISIBLE today
+                "mill",                // Mill (windmill)         - Town tab,     VISIBLE today
+                "fountain_healing",    // legacy Support verb only - not player-reachable today
+                "tower_healer",        // legacy Support verb only - not player-reachable today
+                // Type 'Decoration', and NO build verb maps to Decoration - these can never be
+                // rendered as a card at all, so they need no art. Kept listed (rather than
+                // deleted) so a future verb that DOES surface Decoration fails loudly here
+                // instead of quietly shipping two letter glyphs.
+                "deco_torch",
+                "repair_default",      // a repair-economy DATA row, not a building
             };
 
         /// <summary>Shape of Data/Canonical/structures-catalog.json.</summary>

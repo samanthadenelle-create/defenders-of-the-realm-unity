@@ -755,12 +755,43 @@ namespace DeNelle.Village
         /// (id / slug / catalog type token) via ConceptIconResolver. Null when no
         /// art exists — the caller renders the glyph fallback plate, never blank.
         /// </summary>
+        /// <summary>
+        /// Portrait files whose NAME does not match the catalog id they belong to.
+        ///
+        /// The three WO-707 stockpile containers were authored as storage_&lt;resource&gt; while the
+        /// catalog calls them by building name — so the art shipped, sat in Resources/Portraits,
+        /// and the resolver never looked for it. The cards rendered as bare letter glyphs and
+        /// read as missing art. They were not missing; the lookup simply had no way to know
+        /// "the Lumberyard is the WOOD store". Aliases here rather than renaming the files,
+        /// because the storage_&lt;resource&gt; naming is the more meaningful one — it says what the
+        /// building holds, which is what a future foundry/silo variant would also want.
+        /// </summary>
+        private static readonly System.Collections.Generic.Dictionary<string, string> PortraitAliases =
+            new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                // WO-707 stockpiles — authored by WHAT THEY HOLD, not by building name.
+                { "lumberyard", "storage_wood" },   // stores Wood
+                { "foundry",    "storage_iron" },   // stores Iron
+                { "silo",       "storage_food" },   // stores Grain/food
+                // Walls — authored Title_Case by material. Exact case matters: Resources.Load
+                // is case-insensitive on Windows but NOT on every platform, so a lowercase key
+                // here would resolve on this machine and silently return null on a device.
+                { "wall_wood",  "Wooden_Wall" },
+                { "wall_stone", "Stone_Wall" },
+                // The collector variant IS the Lumber Mill — reuse its existing portrait rather
+                // than commissioning a second image of the same building.
+                { "collector_lumbermill", "lumbermill" },
+            };
+
         private static Sprite ResolveEntryArt(CatalogEntry e)
         {
             if (e == null) return null;
             string slug = SlugOf(e.displayName);
             var s = LoadPortrait(e.id);
             if (s == null) s = LoadPortrait(slug);
+            if (s == null && !string.IsNullOrEmpty(e.id) &&
+                PortraitAliases.TryGetValue(e.id, out var aliased))
+                s = LoadPortrait(aliased);
             if (s != null) return s;
             return ConceptIconResolver.ResolveAny(e.id, slug, e.type.ToString());
         }
