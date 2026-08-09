@@ -170,8 +170,27 @@ NULs that poison a commit and break compilation.
 | `DeNelle.BattleATB` | `DeNelle.BattleATB` | ATBCombatManager, BattleController |
 | `DeNelle.Editor` | `DeNelle.Editor` | VillageSceneBuilder, AnimatorSetup — editor-only |
 
-**Cross-assembly rule:** Village → Core only. HUD → Core only. Never Village ↔ HUD directly.
-Use `CoreServices.Hud` and `CoreServices.Audio` for cross-module calls.
+> ### ⚠ THE TABLE ABOVE IS A SUBSET, NOT THE MAP (corrected 2026-08-09, owner ruling on RULES.md C-6)
+> There are **19 `.asmdef` under `Assets/_Modules/`** plus `Assets/Data/DeNelle.Data.asmdef`.
+> **READ THE `.asmdef` — it is the authority on what may reference what.** The six rows above are a
+> convenience list of the ones you touch most; they are not the dependency graph.
+
+**Cross-assembly rule — ONE invariant, and it is the one that is actually enforced:**
+
+> ## ⛔ `DeNelle.HUD` NEVER REFERENCES `DeNelle.Village`, in either direction.
+> `Assets/_Modules/HUD/DeNelle.HUD.asmdef` references `DeNelle.Core` + `DeNelle.Data` ONLY.
+> `Assets/_Modules/HUD/AdminOverlay.cs` reaches a Village type by **reflection precisely because the
+> asmdef forbids the reference** — that reflection is evidence of the rule, not a violation of it.
+> Cross-module calls go through `CoreServices.Hud` / `CoreServices.Audio`, always with `?.`.
+
+**⚠ THE OLD RULE HERE — *"Village → Core only. HUD → Core only"* — WAS FALSE AND IS RETIRED.**
+`DeNelle.Village.asmdef` legitimately references `DeNelle.BattleATB`, `DeNelle.AI`,
+`DeNelle.Cosmetics`, `DeNelle.Data`, `DeNelle.Pets`, `DeNelle.Wallet` and `DeNelle.Audio` besides
+`DeNelle.Core`. A seat reading the old line literally would have rejected working code as a
+violation, or "fixed" references the project depends on. It was accurate when written and the project
+outgrew it — the same duplicated-state drift that produced the stale WO number block (§2) and the
+hardcoded repo root (§0). **Do not restore a hand-maintained dependency table here; point at the
+`.asmdef` instead.**
 
 ---
 

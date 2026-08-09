@@ -631,8 +631,11 @@ are **19 `.asmdef` under `Assets/_Modules/`** plus `Assets/Data/DeNelle.Data.asm
 `DeNelle.Core` — so "Village → Core only" is not what the project builds. The invariant that IS true and
 IS load-bearing is **HUD ⇸ Village** (`DeNelle.HUD.asmdef` → `DeNelle.Core` + `DeNelle.Data` only; see
 QR-1.2). A seat reading §5 literally would reject legitimate existing references as violations.
-**Owner call: restate §5 as the HUD ⇸ Village invariant + "read the `.asmdef`", and stop maintaining a
-six-row table that a 19-assembly project has outgrown.**
+**✅ RULED 2026-08-09 (owner agreed): APPLIED to CLAUDE.md §5.** The false "Village → Core only" line
+is retired; §5 now states the ONE enforced invariant (HUD ⇸ Village, with `AdminOverlay.cs`'s reflection
+cited as evidence OF the rule) and points at the `.asmdef` files as the authority. The six-row table is
+kept but explicitly labelled a convenience SUBSET, with a standing instruction not to restore a
+hand-maintained dependency table.
 
 **C-7 — Is the `site/` (marketing/legal) Vercel project deployed?** `site/README.md` says in bold
 "⛔ **NOT DEPLOYED.** Do not deploy until this checklist is clear", with a pre-publication banner and
