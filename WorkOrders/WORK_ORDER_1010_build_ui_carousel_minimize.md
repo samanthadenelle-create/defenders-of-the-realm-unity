@@ -202,11 +202,13 @@ plus one new defect class:
 - **D11 (owner ruling, verbatim "Remove Fully" → the dev `Flag` button):** remove the on-screen F8
   Flag BUTTON from build mode entirely. ⚠ Scope: the BUTTON only — the F8 capture harness, hotkey and
   break-log stay (§12/§14: instrumentation is permanent; this is UI chrome, not instrumentation).
-- **D12 (owner ruling, clarified 2026-08-08: "remove this and replace with virtual Dpad"):** the fixed
-  4-arrow button pad is REMOVED and replaced with a **virtual D-pad/joystick** — the same analog-stick
-  style control the gameplay HUD already uses (reuse that component; do not write a second stick).
-  It drives the fine-nudge of the ghost. D5/D6 still apply on top: it exists ONLY in the PLACE phase,
-  hidden until summoned by the toggle, never during PICK, never overlapping the carousel.
+- **D12 (owner ruling, clarified 2026-08-08 twice: "remove this and replace with virtual Dpad" +
+  "not till tapped, the v dpad should only appear after a item is selected from the right bar"):**
+  the fixed 4-arrow pad is REMOVED, replaced by a **virtual D-pad/joystick** (reuse the gameplay HUD's
+  analog-stick component — do not write a second stick) for fine-nudging the ghost. **Two-stage
+  visibility, both stages gated:** (1) the TOGGLE itself appears ONLY once an item has been selected
+  from the right bar and a ghost is active — the idle build screen and the PICK phase carry NO toggle
+  at all; (2) the stick appears only after the toggle is tapped. Cancel/place dismisses both.
 - **D13 — Defenses-tab card previews render as RAW 3D MODELS spilled over the world.** Ballista /
   Arcane Spire / a giant tree render unclipped at world scale over the field and panel (no obsidian
   card frames), with their cost text ("NEED 60W 30I 70C") floating loose. The Archer Tower card alone
@@ -226,6 +228,57 @@ ONE owner amendment on top:
   ever sits on or beside the piece. This SUPERSEDES D3's "flank the ghost" wording — same three verbs,
   new fixed home. The compact corner Done (D10) sits above the rail's top; the rail must clear the
   Echoes chip's reserved zone (D7).
+
+- **D15 (owner ruling 2026-08-08, verbatim "in the minimized component on right, have a tab for
+  defensive buildings and Castle Structures"):** the MINIMIZED carousel component joins the lean right
+  section and carries **category quick-tabs** instead of one generic reopen: **`Defense`** (defensive
+  buildings — the towers/support of the Defenses category) and **`Castle Structures`** (the castle
+  fabric — walls + gates, and the verticality pieces (stairs/floors/rooms) when they ship). Tapping a
+  quick-tab reopens the carousel PRE-FILTERED to that category; a third entry (`Town` or the existing
+  `^ Buildings`) keeps the economy buildings one tap away. ⚠ CATEGORY MAPPING IS PROPOSED, not ruled —
+  "Castle Structures" is a NEW grouping name; the mapping above (Defense = towers/support, Castle
+  Structures = walls/gates/verticality, Town = economy) is the UI seat's best reading of the WO-673
+  taxonomy. Confirm with the owner before renaming any `build-categories.json` keys; if she means only
+  a relabel of the existing Defenses/Walls tabs, this collapses to a rename + placement change.
+
+- **D20 (owner ruling 2026-08-08, verbatim: "dont show anything on first build just nothing, only
+  afterwards" + "less is more idea" + "they dont need to know first is free" + "they will see it didnt
+  cost them to place"):** **the FREE label is REMOVED from cards entirely — this supersedes D9's
+  labeling clause.** While the first-build-free rule applies to a card, its price slot shows **NOTHING
+  (blank)**; once a real cost applies, the cost shows. Never "FREE", never "First build FREE" — the
+  player discovers the first one is free by simply not being charged. The verification half of D9
+  stands (confirm the charge logic at source; a card the player cannot afford must still state its
+  cost + shortfall once costs apply).
+
+- **D19 (owner ruling 2026-08-08: "make the Wood Iron Food Gold bottom middle thin frame"):** the
+  resource strip (Wood / Iron / Food / Crystals / Gold) moves from the top-left to a **THIN
+  bottom-center frame** — one slim obsidian band, icons + numbers, no fat panel. In the PICK phase it
+  seats directly UNDER the carousel (or the carousel rests on it) — never overlapping the cards; in
+  the PLACE phase it shares the bottom band with the one hint line (hint above the strip). Fixed-px
+  height, MinTouch not required (display-only, not tappable).
+
+- **D18 (owner-prompted 2026-08-08: "where is the value of adding echos on this screen" — answer:
+  there is none):** the **Echoes chip is HIDDEN in build mode entirely.** It is town-HUD carryover;
+  nothing in build mode acts on the count (Echo awakening is not reachable here, and the Echo-gated
+  extra slot explains itself on the Manage screen). Hide on build-mode enter, restore on exit — same
+  pattern as whatever else the build HUD already suppresses. This DISSOLVES D7 (no reserved zone
+  needed; the right edge belongs to the lean section alone).
+
+- **D17 (owner ruling 2026-08-08: "should not say rot, should be the symbol"):** the rail's rotate
+  control renders the **circular-arrow SYMBOL, not the text "Rot"** — and by extension the rail verbs
+  match the mockup's icon language: check-mark for confirm, rotate-arrow, X for cancel. ⚠ These MUST be
+  **SPRITE icons** (Image), never TMP glyph characters — the ASCII/tofu rule means a "⟳" typed into TMP
+  renders as a box. Source them from the RpgUiCatalog icon roles (or add three small sprites); the
+  colorblind law holds because the three shapes are distinct, and any disabled state still explains
+  itself in the ghost pill's text ("Blocked"), never by tint alone.
+
+- **D16 (owner ruling 2026-08-08: "the tutorial will need updated to reflect"):** the build TUTORIAL
+  updates in the SAME pass as the layout — every step that names or points at retired chrome
+  (PLACE/Cancel/Rotate buttons, the old D-pad, the old palette, bottom-center tab) re-targets the new
+  homes: the right-edge rail verbs, the right-side quick-tabs (D15), the compact corner Done (D10),
+  the virtual D-pad toggle (D12). Banner copy stays ASCII; the two-skip nit resolves here too (ONE
+  skip affordance). A tutorial pointing at controls that no longer exist is a worse tester experience
+  than the clutter this WO removes — the pass is not done until the tutorial walks the NEW screen.
 
 Concretely, the delivered screen passes when: the right edge holds the lean rail (OK/Rot/X), the close
 control is a SMALL ROUND corner button (D10), ONE minimized tab sits at the bottom, ONE thin hint line,
