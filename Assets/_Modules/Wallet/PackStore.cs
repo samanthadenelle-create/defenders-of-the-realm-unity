@@ -367,10 +367,16 @@ namespace DeNelle.Wallet
                 MakeText(card, "Owned", 20, new Color(0.55f, 0.90f, 0.55f, 1f), FontStyles.Bold,
                     TextAlignmentOptions.Center, buyMin, buyMax);
             }
-            // SECURITY (store-hardening Path A, M1): the Buy CTA is gated by FeatureFlags.RealmStorePurchase
-            // (default OFF in release/store, ON in Editor/Development). In a zero-crypto public build the
-            // pack still renders cosmetically (above) but NO dead "Buy" button routed to the stub wallet
-            // ships — a "Coming soon" placeholder fills the right rail so the card is not blank.
+            // SECURITY (store-hardening Path A, M1): the Buy CTA is gated by FeatureFlags.RealmStorePurchase,
+            // which declares defaultOn: false — OFF on EVERY build (Editor, Development and RELEASE alike)
+            // as of the 2026-08-08 store-submission re-gate. (This comment previously claimed "OFF in
+            // release/store, ON in Editor/Development"; that split no longer exists — do not restore it.)
+            // In a zero-crypto public build the pack still renders cosmetically (above) but NO dead "Buy"
+            // button routed to the stub wallet ships — a "Coming soon" placeholder fills the right rail so
+            // the card is not blank.
+            // CAVEAT WHEN VERIFYING ON A DEVICE: FeatureFlags.Get reads PlayerPrefs FIRST, so a STORED
+            // "ff.realmstorepurchase" = 1 BEATS this default. A device that ever had the rail on keeps the
+            // Buy button until that key is cleared/zeroed — clear prefs before concluding the gate is off.
             else if (!DeNelle.Core.FeatureFlags.RealmStorePurchase)
             {
                 MakeText(card, "Coming soon", 16, ElarionUi.ParchmentDim, FontStyles.Italic,

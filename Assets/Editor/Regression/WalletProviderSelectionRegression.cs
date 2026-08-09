@@ -27,7 +27,9 @@
 //   4. Safety invariant (spec 766 s3): transfer construction exists ONLY in
 //      SolanaWalletProvider.cs (inside its #if SOLANA_SDK block) - no other
 //      module file builds a SystemProgram/TokenProgram transfer - and
-//      PackStore.Purchase stays gated by FeatureFlags.RealmStorePurchase.
+//      PackStore.Purchase stays gated by FeatureFlags.RealmStorePurchase, which
+//      still DECLARES defaultOn: false (added 2026-08-08 - see case 4b; the gate
+//      existing is worthless if its default silently flips back to ON).
 //   5. MWA Android wiring: the .androidlib manifest with the solana-wallet
 //      <queries> block exists (package visibility - without it, connect finds
 //      no wallet apps on API 30+).
@@ -38,6 +40,7 @@
 
 using System.Collections.Generic;
 using System.IO;
+using System.Text.RegularExpressions;
 using UnityEngine;
 
 namespace DeNelle.Editor
@@ -157,6 +160,56 @@ namespace DeNelle.Editor
             else if (!File.ReadAllText(packStorePath).Contains("FeatureFlags.RealmStorePurchase"))
                 failures.Add("PackStore lost the FeatureFlags.RealmStorePurchase gate (purchase rail unguarded)");
 
+            // -- 4b. ...and that gate must still DEFAULT OFF -------------------
+            //
+            // WHY THIS IS A SOURCE-TEXT LINT AND MUST STAY ONE: FeatureFlags.Get reads
+            // PlayerPrefs FIRST and only falls through to the declared default. A RUNTIME
+            // read (FeatureFlags.RealmStorePurchase) therefore returns whatever the machine
+            // running the gate happens to have stored under "ff.realmstorepurchase" - green
+            // on a clean box, red on a dev box that once toggled it, and never a statement
+            // about what SHIPS. The DECLARED default is the only deterministic oracle for
+            // what a FRESH INSTALL gets, so do NOT "improve" this into a runtime check.
+            // Same technique and reason as the rewardedadskip pin in
+            // AdGateAndArenaReturnRegression.CheckAdGate.
+            //
+            // PROVE IT BITES: in Assets/_Modules/Core/FeatureFlags.cs change the one token
+            // on the RealmStorePurchase line - Get("realmstorepurchase", defaultOn: false)
+            // to defaultOn: true - and re-run DataRegression.RunAll. [wallet-provider] must
+            // go RED with the free-pack message below. Revert the token; it must go green.
+            //
+            string flagsPath = Path.Combine(Application.dataPath, "_Modules/Core/FeatureFlags.cs");
+            if (!File.Exists(flagsPath))
+                failures.Add("FeatureFlags.cs missing (cannot verify the RealmStorePurchase default)");
+            else
+            {
+                string flagsSrc = File.ReadAllText(flagsPath);
+
+                // Anchored to the RealmStorePurchase declaration specifically so no other
+                // flag's defaultOn can satisfy it. Whitespace-tolerant around =>, the comma
+                // and the colon; the trailing \s*\) is what stops "defaultOn: falsey" or
+                // any other false-prefixed token from passing.
+                const string declPattern =
+                    @"RealmStorePurchase\s*=>\s*Get\(\s*""realmstorepurchase""\s*,\s*defaultOn\s*:\s*false\s*\)";
+
+                if (!Regex.IsMatch(flagsSrc, @"bool\s+RealmStorePurchase\s*=>"))
+                    failures.Add("FeatureFlags.RealmStorePurchase is GONE - the pack-store purchase rail " +
+                                 "has no gate at all. StubWalletProvider (see below) then grants packs for free " +
+                                 "in every shipped build.");
+                else if (!Regex.IsMatch(flagsSrc, declPattern))
+                    failures.Add("FeatureFlags.RealmStorePurchase no longer declares defaultOn: false - the pack " +
+                                 "purchase rail is ON for FRESH INSTALLS. That is a FREE-PACK hole, not a dead " +
+                                 "button: StubWalletProvider has NO #if UNITY_EDITOR / DEVELOPMENT_BUILD guard, so " +
+                                 "it compiles into EVERY shipped build, and on release desktop/WebGL (and on " +
+                                 "Android without SOLANA_SDK) WalletService auto-selects it. The chain is then " +
+                                 "Buy -> stub Connect (fabricates a wallet address) -> SendPayment (checks a MOCK " +
+                                 "balance seeded at 2000 SKR) -> fabricated base58 signature -> " +
+                                 "PackStore.ApplyPackContents grants the pack IN FULL for ZERO payment, and fires " +
+                                 "a purchase_completed analytics event carrying the fake txSig. This flag is the " +
+                                 "ONLY gate on that path. Do NOT re-flip it until the unguarded stub is closed " +
+                                 "(separate fix) AND a real settling payment rail ships - see the DO NOT TURN THIS " +
+                                 "BACK ON block above the declaration in FeatureFlags.cs.");
+            }
+
             // -- 5. MWA manifest wiring ---------------------------------------
             if (!File.Exists(mwaManifest))
                 failures.Add("MobileWalletAdapter.androidlib/AndroidManifest.xml missing (MWA wallet discovery breaks on API 30+)");
@@ -219,7 +272,9 @@ namespace DeNelle.Editor
             reason = "WALLET PROVIDER OK - SDK pinned (v-tag), WalletService auto-selects on " +
                      "IsSupportedOnThisPlatform (Android device only) with the stub fallback and the " +
                      "StubWalletProvider attestation exclusion intact, transfer code confined to " +
-                     "SolanaWalletProvider behind the RealmStorePurchase gate, MWA queries manifest present, " +
+                     "SolanaWalletProvider behind the RealmStorePurchase gate (which still declares " +
+                     "defaultOn: false, so fresh installs ship no stub-backed Buy button), " +
+                     "MWA queries manifest present, " +
                      "dapp identity named + icon relative and served (api/icon.js + rewrite), " +
                      "BindWallet identity chain wired";
             return true;

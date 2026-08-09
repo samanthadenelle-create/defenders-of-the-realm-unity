@@ -572,26 +572,39 @@ namespace DeNelle.Core
         /// <summary>STORE-HARDENING (Path A, M1) — gates the pack-store PURCHASE rail (the "Buy" CTA in
         /// <see cref="DeNelle.Wallet.PackStore"/> BuildPackCard + the <c>Purchase</c> entry itself). The
         /// pack cards ALWAYS render cosmetically (name / tagline / USD reference / contents); this flag
-        /// only controls whether a buy button is offered. Default is <see cref="IsDevBuild"/> — ON in
-        /// Editor/Development so the owner can exercise the (stub-wallet) purchase flow, but OFF in a
-        /// RELEASE/store APK so the honest ZERO-CRYPTO build ships NO dead "Buy" button routed to the
-        /// stub wallet. Reversible: PlayerPrefs "ff.realmstorepurchase" = 1 re-enables the rail on any
-        /// build. NOT URL-activatable (monetization surface — excluded from the allow-list).</summary>
-        // OWNER RULING 2026-08-07 (WO-911 Q9, resolved): default ON. The gate existed so a public
-        // ZERO-CRYPTO build would not ship a dead Buy button - but we are DEVNET-ONLY and the owner
-        // is the only registered tester, so there is no player to hand a failing button to. Leaving
-        // it dev-gated was the worse harm: every broke-case Finish-Now route dead-ended on
-        // "Coming soon", which the ruling calls out as worse than no route at all.
+        /// only controls whether a buy button is offered. Default is <c>false</c> — OFF on EVERY build
+        /// (Editor, Development and RELEASE alike) as of the 2026-08-08 store-submission re-gate, so the
+        /// honest ZERO-CRYPTO build ships NO dead "Buy" button routed to the stub wallet. Reversible per
+        /// DEVICE: PlayerPrefs "ff.realmstorepurchase" = 1 re-enables the rail on any build. NOT
+        /// URL-activatable (monetization surface — excluded from the allow-list).</summary>
+        // HISTORY 2026-08-07 (WO-911 Q9): the default was flipped ON. The reasoning was that we were
+        // DEVNET-ONLY with the owner as the only registered tester, so there was no player to hand a
+        // failing button to, while every broke-case Finish-Now route dead-ended on "Coming soon".
         //
-        // ⛔ SHIP BLOCKER - RE-GATE OR COMPLETE THE PAYMENT PATH BEFORE A PUBLIC STORE RELEASE.
-        // Two independent things still make a real purchase impossible, both verified at source:
+        // RE-GATED **OFF** 2026-08-08 (owner decision, store-submission build — WO-915).
+        // The Q9 premise expires the moment the build reaches a public store: a STORE REVIEWER will tap
+        // Buy, and the tap cannot settle. Both blockers below are still true at source, so the button
+        // could only ever dead-end — which is itself a rejection risk:
         //   * SolanaWalletProvider.SendPayment HARD-BLOCKS WalletNetwork.Mainnet (defence in depth
         //     that survives this flag - a mainnet build still cannot take money), and
         //   * WalletEndpoints.SkrMintDevnet is "" so even a DEVNET **SKR** transfer cannot resolve
         //     a mint. SKR is the default currency, so an SKR buy fails today; USDC/SOL is the only
         //     rail with a chance of completing.
-        // Reversible on any build with PlayerPrefs "ff.realmstorepurchase" = 0.
-        public static bool RealmStorePurchase => Get("realmstorepurchase", defaultOn: true);
+        // Third reason this default matters off-Android: StubWalletProvider.SendPayment FAKE-SUCCEEDS
+        // (fabricated signature, mock balance debited) and PackStore then grants the full pack for zero
+        // payment. WalletService auto-selects that stub on desktop/WebGL/no-SDK builds, so an ON flag is
+        // a free-entitlement hole there, not merely a dead button.
+        //
+        // ⛔ DO NOT TURN THIS BACK ON until BOTH are true (not either):
+        //   1. A LIVE, resolvable mint for the default rail — WalletEndpoints.SkrMintDevnet (and its
+        //      mainnet equivalent) is non-empty and the transfer resolves it, and
+        //   2. The mainnet block in SolanaWalletProvider.SendPayment is deliberately lifted with a
+        //      real, tested, settling payment path behind it.
+        // NOTE FOR WHOEVER FLIPS IT: Get() reads PlayerPrefs FIRST, so a STORED value BEATS this
+        // default. A device that ever set "ff.realmstorepurchase" = 1 keeps the Buy rail until that key
+        // is cleared/zeroed. Changing this default protects FRESH INSTALLS (every store reviewer and
+        // every real player); it does not retroactively re-gate an existing device.
+        public static bool RealmStorePurchase => Get("realmstorepurchase", defaultOn: false);
 
         /// <summary>RELEASE BLOCKER GATE (2026-08-07) — gates the WHOLE rewarded-ad timer-skip path:
         /// the "Ad" CTA on every queue row (ManageScreenPanel + ObsidianQueueHud) and
