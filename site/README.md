@@ -15,7 +15,18 @@ only (Heart-of-Elarion tree sigil + brand mark). Atmosphere is pure CSS (gold + 
 obsidian ink, gold lantern, life-force teal; sticky top nav; hero + four pillars + support
 card. Canon copy unchanged (build-accurate claims only). No fake “Available now” CTAs.
 
-## ⛔ NOT DEPLOYED. Do not deploy until this checklist is clear.
+## ✅ DEPLOYED (owner-confirmed 2026-08-09) — Vercel project `echoes-of-elarion`
+
+> **This heading used to read "⛔ NOT DEPLOYED. Do not deploy until this checklist is clear."**
+> That was STALE and it contradicted `KEY_FACTS.md` + `docs/HANDOVER.md`, which record the Terms page
+> live at `echoes-of-elarion.vercel.app/terms`. The site IS deployed: `site/.vercel/project.json`
+> links this directory to Vercel project `echoes-of-elarion` (written by `vercel link`/`deploy`, not
+> by hand), and commit `c8320434` "host a Terms of Use" shipped `site/terms.html`.
+>
+> ⚠ **This is a LEGAL surface** (Terms + Privacy) and it is PUBLIC. Two binding docs disagreeing about
+> whether it was published is the worst place in the repo for canon drift — resolved as RULES.md
+> conflict **C-7**. Treat the checklist below as **post-publication maintenance**, not a pre-flight
+> gate: the pages are already reachable, so an unticked item is a live defect, not a pending task.
 
 Both pages currently render a bright pink **PRE-PUBLICATION DRAFT — DO NOT DEPLOY** banner
 and are marked `noindex`. That is on purpose: the page is not publishable yet.

@@ -639,7 +639,12 @@ six-row table that a 19-assembly project has outgrown.**
 `noindex`. `KEY_FACTS.md` and `docs/HANDOVER.md` state the Terms page is live at
 `echoes-of-elarion.vercel.app/terms` and "verified HTTP 200". Both are binding; the tree cannot settle
 which is current, and this is a **legal-surface** page. See QR-4.8.
-**Owner call: confirm live-or-not, then fix the losing doc in the same breath (§15).**
+**✅ RULED 2026-08-09 (owner): the site IS DEPLOYED.** Corroborated in-tree — `site/.vercel/project.json`
+links to Vercel project `echoes-of-elarion` (that file is written by `vercel link`/`deploy`, not by
+hand), `site/terms.html` is present, and commit `c8320434` "host a Terms of Use" shipped it.
+`KEY_FACTS.md` + `docs/HANDOVER.md` were correct; `site/README.md`'s "NOT DEPLOYED" banner was the
+stale loser and has been corrected, with its checklist re-framed as POST-publication maintenance —
+on a live legal surface an unticked item is a defect, not a pending task.
 
 ---
 
