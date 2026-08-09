@@ -2329,23 +2329,21 @@ namespace DeNelle.Editor
                     if (RenderCanvasToPng(canvasGo, OutDir + "BuildGhostChips_edgeclamp_" + target.Tag + ".png",
                         target.W, target.H)) saved++;
 
-                    // (4) NUDGE PAD ON — via the real toggle button, so the shot proves the
-                    //     player-reachable path and not a private field poke.
-                    var toggle = canvasGo.transform.Find("BuildNudgePadToggle");
-                    var toggleBtn = toggle != null ? toggle.GetComponent<Button>() : null;
-                    if (toggleBtn != null)
-                    {
-                        toggleBtn.onClick.Invoke();
-                        hud.TrackGhost(new Vector2(target.W * 0.5f, target.H * 0.55f), true, null);
-                        hud.LayoutGhostControlsNow();
-                        if (RenderCanvasToPng(canvasGo, OutDir + "BuildGhostChips_padon_" + target.Tag + ".png",
-                            target.W, target.H)) saved++;
-                    }
-                    else
-                    {
-                        Debug.LogWarning("[UICap-HL] BuildNudgePadToggle not found -- pad-on shot skipped " +
-                                         "(the toggle is an acceptance criterion; this is a REAL gap, not noise).");
-                    }
+                    // (4) NUDGE PAD — it now follows STATE, with no toggle for the player to
+                    //     find (owner ruling 2026-08-09: "it should be smart... user should not
+                    //     need to do anything"). The pad is therefore already up from the
+                    //     SetState(Placing) above; the shot proves it appears unaided.
+                    //     The assertion is inverted from the old one: a surviving toggle button
+                    //     would now be the defect, so its ABSENCE is what gets checked.
+                    if (canvasGo.transform.Find("BuildNudgePadToggle") != null)
+                        Debug.LogWarning("[UICap-HL] a BuildNudgePadToggle still exists -- the '+' toggle was " +
+                                         "RETIRED; the pad follows placement state. REAL gap, not noise.");
+                    var pad = canvasGo.transform.Find("BuildNudgePad");
+                    if (pad == null || !pad.gameObject.activeInHierarchy)
+                        Debug.LogWarning("[UICap-HL] BuildNudgePad is absent/hidden while PLACING -- the player " +
+                                         "has no way to nudge a piece and no toggle to summon one.");
+                    if (RenderCanvasToPng(canvasGo, OutDir + "BuildGhostChips_padon_" + target.Tag + ".png",
+                        target.W, target.H)) saved++;
                 }
                 catch (Exception e)
                 {

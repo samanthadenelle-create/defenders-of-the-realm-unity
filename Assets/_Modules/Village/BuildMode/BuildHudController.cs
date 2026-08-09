@@ -79,9 +79,9 @@ namespace DeNelle.Village
         private const float GhostPillW   = 620f;  // widened: the first capture wrapped the
         private const float GhostPillH   = 56f;   // name+cost onto 2 lines and overflowed
         private const float GhostPillLiftPx = 96f;   // pill floats ABOVE the ghost anchor
-        private const float ChipDropPx      = 78f;   // chips sit BELOW/beside the anchor
+        private const float ChipDropPx      = 24f;   // slight drop so the cluster reads as attached
+        private const float ChipFlankPx     = 56f;   // clearance from the ghost's edge (D3: flank, never overlap)
         private const float SafePadPx       = 24f;   // never let a chip touch the screen edge
-        private const float DpadToggleW     = 96f;
 
         // Callbacks into the BRAIN (BuildModeController wires these).
         private Action _onRotateLeft;
@@ -104,8 +104,6 @@ namespace DeNelle.Village
         private TextMeshProUGUI _okChipLabel;
         private Image _okChipRing;
         private GameObject _dpadHost;        // the nudge pad — OFF unless toggled
-        private TextMeshProUGUI _dpadToggleLabel;
-        private bool _dpadShown;
 
         private bool _hasGhostAnchor;
         private Vector2 _ghostScreenPoint;
@@ -369,34 +367,51 @@ namespace DeNelle.Village
         /// </summary>
         private void BuildDpadToggle()
         {
-            var toggle = ElarionUiKit.BuildObsidianButton(_canvas.transform, "+",
-                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                new Vector2(0.02f, 0.04f), new Vector2(0.09f, 0.16f),
-                ToggleDpad);
-            PinSize(toggle, DpadToggleW, ElarionUiKit.CanonCtaHeight);
-            toggle.gameObject.name = "BuildNudgePadToggle";
-            _dpadToggleLabel = toggle.GetComponentInChildren<TMP_Text>(true) as TextMeshProUGUI;
-
+            // ── NO TOGGLE. The pad follows the STATE. (owner ruling 2026-08-09) ────
+            // The first pass gave the nudge pad a corner "+" button. That was the wrong trade:
+            // it removed a permanent control by adding a permanent control, and it made
+            // pixel-nudging a thing the player has to DISCOVER on a screen already accused of
+            // having buttons everywhere. The pad is only ever meaningful while something is
+            // being positioned, and that is a state the HUD already knows — so it appears on
+            // Placing and leaves with it. The player does nothing.
             var padHost = new GameObject("BuildNudgePad", typeof(RectTransform));
             padHost.transform.SetParent(_canvas.transform, false);
             var prt = (RectTransform)padHost.transform;
             prt.anchorMin = Vector2.zero; prt.anchorMax = Vector2.one;
             prt.offsetMin = Vector2.zero; prt.offsetMax = Vector2.zero;
-            ElarionUiKit.BuildVirtualDPad(padHost.transform, new Vector2(0.12f, 0.26f),
+            // ── SAME MOVE WIDGET AS THE REGULAR HUD (owner, 2026-08-09). ──────────
+            // The first pass built this with BuildVirtualDPad — which is the OLDER WO-611
+            // widget. The live HUD builds an ANALOG STICK (HudKitController, FeatureFlags.
+            // CombatHud611 defaults ON) and keeps the virtual d-pad only as a
+            // construction-failure fallback. The result was two different move controls in one
+            // game: a stick while walking, a boxy d-pad the moment you entered build mode.
+            // Mirroring the HUD's exact construction — stick first, d-pad only if the stick
+            // fails to build — so the movement grammar is the same everywhere and a future
+            // change to the HUD's widget does not silently leave build mode behind.
+            var stick = ElarionUiKit.BuildAnalogStick(padHost.transform, new Vector2(0.12f, 0.26f),
                 v => NudgeVector = v);
+            if (stick == null || stick.root == null)
+            {
+                FlowTrace.Warn("BuildHud",
+                    "analog stick unavailable — falling back to the WO-611 virtual D-pad for the build nudge.");
+                ElarionUiKit.BuildVirtualDPad(padHost.transform, new Vector2(0.12f, 0.26f),
+                    v => NudgeVector = v);
+            }
             _dpadHost = padHost;
-            _dpadHost.SetActive(false);
-            _dpadShown = false;
+            _dpadHost.SetActive(false);   // Browse has nothing to nudge
         }
 
-        private void ToggleDpad()
+        /// <summary>
+        /// Show the virtual d-pad exactly while a piece is being positioned. Driven by
+        /// <see cref="SetState"/>, never by the player.
+        /// </summary>
+        private void SetNudgePadVisible(bool show)
         {
-            _dpadShown = !_dpadShown;
-            if (_dpadHost != null) _dpadHost.SetActive(_dpadShown);
-            if (!_dpadShown) NudgeVector = Vector2.zero;   // a hidden pad must not keep steering
-            if (_dpadToggleLabel != null) _dpadToggleLabel.text = _dpadShown ? "-" : "+";
-            FlowTrace.Step("BuildHud", "nudge pad toggled " + (_dpadShown ? "ON" : "OFF") +
-                " (off by default — WO-1010 retires the always-on d-pad)");
+            if (_dpadHost == null || _dpadHost.activeSelf == show) return;
+            _dpadHost.SetActive(show);
+            if (!show) NudgeVector = Vector2.zero;   // a hidden pad must never keep steering
+            FlowTrace.Step("BuildHud", "nudge pad " + (show ? "SHOWN (placing)" : "HIDDEN (not placing)") +
+                " — follows state, no player action");
         }
 
         // ── Rotate labels never truncate (owner felt-test 2026-07-16) ───────────
@@ -446,10 +461,10 @@ namespace DeNelle.Village
             if (_intentBar != null && _intentBar.activeSelf != placing)
                 _intentBar.SetActive(placing);
 
-            // The nudge pad only makes sense while something is being positioned. Leaving it
-            // up in Browse would put back a permanent on-screen control, which is the thing
-            // WO-1010 set out to remove.
-            if (!placing && _dpadShown) ToggleDpad();
+            // The nudge pad only makes sense while something is being positioned, and that is
+            // a state the HUD already knows — so it comes and goes on its own. No toggle, no
+            // discovery burden, and no permanent control left on screen in Browse.
+            SetNudgePadVisible(placing);
 
             // Leaving a stale anchor behind would park the chips wherever the last ghost
             // died until the next push; drop it with the state.
@@ -539,9 +554,27 @@ namespace DeNelle.Village
             // CLAMP AS A UNIT. A chip that walks off-screen when the ghost nears an edge is
             // an unplaceable building — the acceptance criteria call this out because it is
             // the failure the old bottom-edge bar could not have.
+            // ── FLANK THE GHOST, DO NOT SIT ON IT (WO-1010 §7 D3). ────────────────
+            // The first build dropped the cluster straight BELOW the anchor, which put the
+            // chips on top of the green ghost art — the owner's screenshot caught it. That
+            // defeats the entire redesign: the controls moved to the ghost so the player can
+            // SEE the piece being placed, and covering it with its own buttons is worse than
+            // the bottom bar it replaced. The cluster now sits to one SIDE, and flips to the
+            // other side when the preferred flank would run off-screen, so it clears the piece
+            // at every screen position instead of only in the middle.
             Vector2 chipHalf = _chipCluster.sizeDelta * 0.5f;
-            Vector2 chipPos = new Vector2(local.x, local.y - ChipDropPx);
-            chipPos.x = Mathf.Clamp(chipPos.x, -half.x + chipHalf.x + SafePadPx, half.x - chipHalf.x - SafePadPx);
+            float leftLimit  = -half.x + chipHalf.x + SafePadPx;
+            float rightLimit =  half.x - chipHalf.x - SafePadPx;
+
+            float flankX = local.x + ChipFlankPx + chipHalf.x;      // prefer the ghost's right
+            if (flankX > rightLimit)
+            {
+                float mirrored = local.x - ChipFlankPx - chipHalf.x; // no room -> flip left
+                flankX = mirrored >= leftLimit ? mirrored : Mathf.Clamp(flankX, leftLimit, rightLimit);
+            }
+
+            Vector2 chipPos = new Vector2(flankX, local.y - ChipDropPx);
+            chipPos.x = Mathf.Clamp(chipPos.x, leftLimit, rightLimit);
             chipPos.y = Mathf.Clamp(chipPos.y, -half.y + chipHalf.y + SafePadPx, half.y - chipHalf.y - SafePadPx);
             _chipCluster.anchoredPosition = chipPos;
 
