@@ -351,6 +351,13 @@ namespace DeNelle.Village
         /// BuildModeController.Arm. <paramref name="armedDisplayName"/> is retained for API
         /// compat (the label is now owned by the HUD). Safe before build (no-op).
         /// </summary>
+        /// <summary>
+        /// True while the shop is minimized to the `^ Buildings` tab. WO-1010 D12: the build nudge
+        /// stick is gated on item-selected AND carousel-minimized (owner 2026-08-09), so the HUD
+        /// needs the second condition and the brain reads it from here rather than inferring it.
+        /// </summary>
+        public bool IsCollapsed { get; private set; }
+
         public void Collapse(string armedDisplayName)
         {
             if (_canvas == null) return;
@@ -358,6 +365,7 @@ namespace DeNelle.Village
             if (_topBarGo != null) _topBarGo.SetActive(false);
             if (_trayGo != null) _trayGo.SetActive(false);
             if (_tabRowGo != null) _tabRowGo.SetActive(false);
+            IsCollapsed = true;
             ShowRestoreTab(true);   // WO-1010 P2: the way BACK to the carousel
             UpdateOrientButton();   // keep the dev Orient button correct while armed
             FlowTrace.Step("BuildHud",
@@ -434,7 +442,8 @@ namespace DeNelle.Village
             if (_topBarGo != null) _topBarGo.SetActive(true);
             if (_tabRowGo != null) _tabRowGo.SetActive(true);
             if (_trayGo != null) _trayGo.SetActive(true);
-            ShowRestoreTab(false);   // WO-1010 P2: the carousel IS back; the door closes with it
+            IsCollapsed = false;
+            ShowRestoreTab(false);  // WO-1010 P2: the carousel IS back; the door closes with it
             _armedId = null;
             if (_canvas.activeSelf) Render();
             else UpdateOrientButton();

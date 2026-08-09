@@ -405,6 +405,17 @@ namespace DeNelle.Village
         /// Show the virtual d-pad exactly while a piece is being positioned. Driven by
         /// <see cref="SetState"/>, never by the player.
         /// </summary>
+        /// <summary>
+        /// WO-1010 D12 — the BRAIN's per-frame verdict on whether the nudge stick may show:
+        /// an item is selected AND the carousel is minimized. Both conditions are automatic;
+        /// there is no toggle and the player does nothing. Placement ending (placed OR cancelled)
+        /// flips this false, which is what "after placed removes" means in practice.
+        /// </summary>
+        public void SetNudgePadAllowed(bool allowed)
+        {
+            SetNudgePadVisible(allowed && _state == BuildHudState.Placing);
+        }
+
         private void SetNudgePadVisible(bool show)
         {
             if (_dpadHost == null || _dpadHost.activeSelf == show) return;
@@ -464,7 +475,9 @@ namespace DeNelle.Village
             // The nudge pad only makes sense while something is being positioned, and that is
             // a state the HUD already knows — so it comes and goes on its own. No toggle, no
             // discovery burden, and no permanent control left on screen in Browse.
-            SetNudgePadVisible(placing);
+            // State alone is no longer sufficient — D12 gates on carousel-minimized too, pushed
+            // each frame by the brain via SetNudgePadAllowed. Leaving Placing always hides it.
+            if (!placing) SetNudgePadVisible(false);
 
             // Leaving a stale anchor behind would park the chips wherever the last ghost
             // died until the next push; drop it with the state.

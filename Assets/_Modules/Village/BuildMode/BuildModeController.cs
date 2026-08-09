@@ -668,6 +668,14 @@ namespace DeNelle.Village
             // brain owns the camera — the HUD is presentation and must not reach for one.
             PushGhostAnchorToHud();
 
+            // WO-1010 D12 (owner 2026-08-09): the nudge stick shows on TWO conditions, both
+            // automatic — an item is selected AND the carousel is minimized — and it leaves the
+            // moment the piece is placed. No toggle: "the + doesn't help ... user should not need
+            // to do anything." Placing alone is not enough, because the player can reopen the
+            // carousel over a live ghost; the stick must not sit under the shop.
+            _hud.SetNudgePadAllowed(
+                (_armed != null || _movingSelected) && _palette != null && _palette.IsCollapsed);
+
             // While the 3-axis orient editor is open, the placement loops are frozen so a tap
             // behind the modal can't drop a piece (the modal owns its own confirm/cancel).
             if (_orientEditor != null && _orientEditor.isActiveAndEnabled && _orientEditor.IsOpen)
