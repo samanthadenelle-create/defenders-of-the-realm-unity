@@ -382,7 +382,14 @@ namespace DeNelle.Village
             if (_canvas == null) return;
             var btn = ElarionUiKit.BuildObsidianButton(_canvas.transform, "^ Buildings",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
-                new Vector2(0.02f, 0.86f), new Vector2(0.20f, 0.98f),
+                // BOTTOM-CENTRE, not a top corner. The first capture put it at top-left, which
+                // lands squarely on the HUD's wallet chips — the HUD top band is y 0.90-1.0
+                // with the resource readout on its left, and this canvas sorts BELOW the HUD,
+                // so the tab would have been half-hidden behind the numbers it was competing
+                // with. Bottom-centre is where the retired intent bar freed space, it is clear
+                // of the nudge-pad toggle in the bottom-left corner, and it is the one place
+                // where an up-chevron reads literally: the shop lives down here, tap to raise it.
+                new Vector2(0.40f, 0.015f), new Vector2(0.60f, 0.135f),
                 () =>
                 {
                     FlowTrace.Step("BuildPalette",

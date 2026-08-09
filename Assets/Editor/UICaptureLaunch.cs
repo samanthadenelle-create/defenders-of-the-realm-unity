@@ -514,6 +514,7 @@ namespace DeNelle.Editor
                 count += CaptureRealmMap();
                 count += CaptureQueueRail();         // WO-864: the CoC queue card rail
                 count += CaptureBuildGhostChips();   // WO-1010 P1: chips on the ghost
+                count += CapturePaletteCollapsed();  // WO-1010 P2: dock open + collapsed w/ restore tab
 
                 Debug.Log("[UICap-HL] done -> " + Path.GetFullPath(OutDir));
             }
@@ -2349,6 +2350,75 @@ namespace DeNelle.Editor
                 catch (Exception e)
                 {
                     Debug.LogError("[UICap-HL] build ghost chips capture threw: " + e);
+                }
+                finally
+                {
+                    if (hostGo != null) UnityEngine.Object.DestroyImmediate(hostGo);
+                }
+                return saved;
+            });
+        }
+
+        // =====================================================================
+        //  WO-1010 P2 — the collapsed dock and its "^ Buildings (n)" way back
+        // =====================================================================
+        /// <summary>
+        /// Shoot the palette dock in BOTH states: the open carousel, and collapsed-for-placing
+        /// where the ONLY chrome left standing must be the restore tab.
+        ///
+        /// The collapsed shot is the point of this case. Collapse() hides every dock
+        /// background so the field is clear, and until P2 that left NO route back to the
+        /// carousel — so what this photograph has to establish is a negative plus a positive:
+        /// the dock really is gone, AND exactly one labelled door remains. Neither half is
+        /// visible to a compile gate or a data oracle.
+        /// </summary>
+        private static int CapturePaletteCollapsed()
+        {
+            return ForEachTarget("BuildPaletteDock", target =>
+            {
+                int saved = 0;
+                GameObject hostGo = null;
+                try
+                {
+                    hostGo = new GameObject("BuildPaletteUI_Capture");
+                    var palette = hostGo.AddComponent<DeNelle.Village.BuildPaletteUI>();
+                    palette.Configure(DeNelle.Core.Catalog.BuildType.Town);
+                    palette.Show();
+
+                    var canvasTf = hostGo.transform.Find("BuildPaletteCanvas");
+                    GameObject canvasGo = canvasTf != null ? canvasTf.gameObject : null;
+                    if (canvasGo == null)
+                    {
+                        // The kit may parent the modal canvas elsewhere; fall back to a scan
+                        // rather than reporting a silent zero.
+                        foreach (var c in UnityEngine.Object.FindObjectsByType<Canvas>(FindObjectsSortMode.None))
+                            if (c != null && c.gameObject.name == "BuildPaletteCanvas") { canvasGo = c.gameObject; break; }
+                    }
+                    if (canvasGo == null)
+                    {
+                        Debug.LogWarning("[UICap-HL] BuildPaletteCanvas not found -- palette dock capture skipped.");
+                        return 0;
+                    }
+
+                    // (1) OPEN — tabs + card carousel, the state the player picks from.
+                    if (RenderCanvasToPng(canvasGo, OutDir + "BuildPaletteDock_open_" + target.Tag + ".png",
+                        target.W, target.H)) saved++;
+
+                    // (2) COLLAPSED — dock chrome gone, restore tab standing.
+                    palette.Collapse("Arcane Spire");
+                    if (RenderCanvasToPng(canvasGo, OutDir + "BuildPaletteDock_collapsed_" + target.Tag + ".png",
+                        target.W, target.H)) saved++;
+
+                    // The tab is the WHOLE point of the collapsed state; if it is absent the
+                    // png would look like a correct empty field and hide a dead end.
+                    var tab = canvasGo.transform.Find("BuildPaletteRestoreTab");
+                    if (tab == null || !tab.gameObject.activeInHierarchy)
+                        Debug.LogWarning("[UICap-HL] collapsed palette has NO active BuildPaletteRestoreTab -- " +
+                                         "the player would have no way back to the carousel. REAL gap, not noise.");
+                }
+                catch (Exception e)
+                {
+                    Debug.LogError("[UICap-HL] palette dock capture threw: " + e);
                 }
                 finally
                 {
