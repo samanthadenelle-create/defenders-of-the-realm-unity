@@ -662,7 +662,7 @@
     },
     {
       "id": "workshop",
-      "displayName": "Forge",
+      "displayName": "Weaponsmith",
       "type": "Resource",
       "kind": "Cell",
       "visualPrefabPath": "Structures/Forge",

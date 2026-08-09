@@ -778,6 +778,12 @@ namespace DeNelle.Village
                 // here would resolve on this machine and silently return null on a device.
                 { "wall_wood",  "Wooden_Wall" },
                 { "wall_stone", "Stone_Wall" },
+                // 'workshop' is the WEAPONS building (displayed "Weaponsmith" from 2026-08-09;
+                // it read "Forge" before). Its art had been resolving purely by the old
+                // display-name slug -> forge.jpg, so the rename would have silently turned the
+                // card into a letter glyph. Pinned to the file explicitly: a portrait must not
+                // hang off a label that creative can change at any time.
+                { "workshop",          "forge" },
                 { "mine_crystal",      "Crystal_Mines" },
                 { "tower_siege_tower", "Sky_Ballista" },     // id says siege, the building is the anti-air ballista
                 { "healing_caravan",   "Healing_Caravan" },  // renamed 2026-08-09 (was fountain_healing)
