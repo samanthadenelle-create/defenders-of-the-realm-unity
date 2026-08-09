@@ -12,8 +12,12 @@
 # Step/Warn go to Player.log (overwritten per fleet — not reliable for fleets).
 
 set -u
-RUNDIR="${1:-$HOME/AppData/LocalLow/DeNelle/Defenders of the Realm/autopilot-runs}"
-# Windows Git-Bash HOME may not map to LocalLow; fall back to the known absolute path.
+# persistentDataPath = LocalLow/<companyName>/<productName>; productName became "Echoes of
+# Elarion" on 2026-08-08 (store-listing match), which MOVES this folder. Try the new name, then
+# the legacy name, then the known absolute path (Windows Git-Bash HOME may not map to LocalLow).
+RUNDIR="${1:-$HOME/AppData/LocalLow/DeNelle/Echoes of Elarion/autopilot-runs}"
+[ -d "$RUNDIR" ] || RUNDIR="$HOME/AppData/LocalLow/DeNelle/Defenders of the Realm/autopilot-runs"
+[ -d "$RUNDIR" ] || RUNDIR="/c/Users/Kayden-Laptop/AppData/LocalLow/DeNelle/Echoes of Elarion/autopilot-runs"
 [ -d "$RUNDIR" ] || RUNDIR="/c/Users/Kayden-Laptop/AppData/LocalLow/DeNelle/Defenders of the Realm/autopilot-runs"
 
 if [ ! -d "$RUNDIR" ]; then echo "no autopilot-runs dir at: $RUNDIR"; exit 2; fi

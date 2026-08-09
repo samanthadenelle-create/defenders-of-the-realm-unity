@@ -44,7 +44,28 @@ namespace DeNelle.Editor
         // 2026-07-16: the live package is com.denellestudios.echoesofelarion). The old
         // com.denelle.defenders would install as a SEPARATE app.
         private const string PackageId = "com.denellestudios.echoesofelarion";
-        private const string ProductName = "Defenders of the Realm";
+        // The HOME-SCREEN LABEL. Unity generates launcher/src/main/res/values/strings.xml from
+        // PlayerSettings.productName and the launcher manifest carries
+        // android:label="@string/app_name" (both verified in the generated Gradle project), so
+        // productName IS the installed app's name. Owner decision 2026-08-08: it must MATCH the
+        // store listing, which reads "Echoes of Elarion" — consistent with the live legal pages,
+        // which name the App "Echoes of Elarion (a chapter of Defenders of the Realm)".
+        //
+        // SAFE FOR EXISTING TESTERS — their saves are NOT keyed off this string. Unity keys
+        // Android persistence off the PACKAGE NAME: PlayerPrefs lives in
+        // /data/data/<pkg>/shared_prefs/<pkg>.v2.playerprefs.xml and Application.persistentDataPath
+        // in /storage/emulated/<user>/Android/data/<pkg>/files. MEASURED on the Seeker, not assumed
+        // — Logs/seeker-wallet-fresh.txt:688 shows this build resolving persistentDataPath to
+        // /storage/emulated/0/Android/data/com.denellestudios.echoesofelarion/files, with the
+        // product name appearing nowhere in the path. PackageId is unchanged, so the save
+        // location is byte-identical and testers update in place with progress intact.
+        //
+        // NOTE productName is a GLOBAL PlayerSetting (Unity has no per-platform productName), so
+        // this assignment also lands in ProjectSettings.asset and therefore governs the desktop
+        // and WebGL players. ProjectSettings.asset carries the SAME value deliberately — see the
+        // report; desktop PlayerPrefs (HKCU\Software\DeNelle\<productName>) and persistentDataPath
+        // (LocalLow\DeNelle\<productName>) move with it.
+        private const string ProductName = "Echoes of Elarion";
         private const string CompanyName = "DeNelle";
 
         [MenuItem("Defenders/Build/Android APK (Seeker)")]

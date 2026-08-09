@@ -52,7 +52,12 @@ Write-Host "[fleet] (player builds need no license; -nographics = logic/flow/cra
 # re-reports ALREADY-FIXED issues every fleet forever -> corrupted truth/coverage
 # metrics (a fixed bug never appears "resolved"). Wipe before launching so each
 # fleet's ranked tickets reflect ONLY this fleet's fresh runs.
-$pdp = Join-Path $env:USERPROFILE 'AppData\LocalLow\DeNelle\Defenders of the Realm'
+# persistentDataPath = LocalLow\<companyName>\<productName>; productName became "Echoes of
+# Elarion" on 2026-08-08. Prefer the new folder, fall back to the legacy one (a fleet run by an
+# older player still needs wiping/archiving, and archiving the WRONG folder loses F8 captures).
+$pdp = Join-Path $env:USERPROFILE 'AppData\LocalLow\DeNelle\Echoes of Elarion'
+$pdpLegacy = Join-Path $env:USERPROFILE 'AppData\LocalLow\DeNelle\Defenders of the Realm'
+if ((-not (Test-Path $pdp)) -and (Test-Path $pdpLegacy)) { $pdp = $pdpLegacy }
 $runsDir = Join-Path $pdp 'autopilot-runs'
 $rootBreak = Join-Path $pdp 'break-log.jsonl'
 

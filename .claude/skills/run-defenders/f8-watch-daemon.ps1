@@ -13,7 +13,12 @@ $PidFile  = Join-Path $Inbox 'daemon.pid'
 $PingFile = Join-Path $Inbox 'PING.json'
 $Latest   = Join-Path $Inbox 'LATEST_CAPTURE.md'
 
-$BreakLogDir = Join-Path $env:USERPROFILE 'AppData\LocalLow\DeNelle\Defenders of the Realm'
+# Desktop persistentDataPath = LocalLow\<companyName>\<productName>. productName became
+# "Echoes of Elarion" on 2026-08-08 (store-listing match), which MOVES this folder. Prefer the
+# new one; fall back to the legacy folder so captures made by an older player still triage.
+$BreakLogDir = Join-Path $env:USERPROFILE 'AppData\LocalLow\DeNelle\Echoes of Elarion'
+$LegacyLogDir = Join-Path $env:USERPROFILE 'AppData\LocalLow\DeNelle\Defenders of the Realm'
+if ((-not (Test-Path $BreakLogDir)) -and (Test-Path $LegacyLogDir)) { $BreakLogDir = $LegacyLogDir }
 $BreakLog    = Join-Path $BreakLogDir 'break-log.jsonl'
 $PlayerLog   = Join-Path $BreakLogDir 'Player.log'
 $EditorLog   = Join-Path $env:LOCALAPPDATA 'Unity\Editor\Editor.log'

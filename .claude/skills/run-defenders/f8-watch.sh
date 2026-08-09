@@ -17,7 +17,10 @@
 #
 # Usage: bash .claude/skills/run-defenders/f8-watch.sh [windowMinutes]   (default 60)
 # =============================================================================
-DIR="$HOME/AppData/LocalLow/DeNelle/Defenders of the Realm"
+# LocalLow/<companyName>/<productName>; productName became "Echoes of Elarion" 2026-08-08.
+# Prefer the new folder, fall back to the legacy one so older captures still triage.
+DIR="$HOME/AppData/LocalLow/DeNelle/Echoes of Elarion"
+[ -d "$DIR" ] || DIR="$HOME/AppData/LocalLow/DeNelle/Defenders of the Realm"
 BL="$DIR/break-log.jsonl"
 PLAYER_LOG="$DIR/Player.log"
 EDITOR_LOG="$HOME/AppData/Local/Unity/Editor/Editor.log"

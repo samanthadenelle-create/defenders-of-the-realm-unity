@@ -112,14 +112,36 @@ namespace DeNelle.Wallet
             }
         }
 
+        // ── MWA app identity (MIRROR of walletConfig.ts — NOT the live wire values) ──
+        // The identity triplet that actually goes on the wire is
+        // SolanaWalletProvider.DappIdentityUri / DappIconUri / DappIdentityName
+        // (SolanaWalletProvider.cs:186/219/222) — those are what
+        // TargetedLocalAssociationScenario.Authorize/Reauthorize pass to
+        // MobileWalletAdapterClient. The three constants below are an unreferenced
+        // port-parity mirror of the React walletConfig.ts; nothing reads them.
+        //
+        // SCOPING: `name` is DISPLAY-ONLY — MobileWalletAdapterClient.PrepareAuthRequest
+        // (:60-87) puts it in the request's `identity.name` purely for the approval
+        // sheet, and Reauthorize (:34-46) re-keys off the stored `auth_token`, with the
+        // dapp's real identity verified from the identity URI's
+        // /.well-known/assetlinks.json + the APK package/signing cert. So renaming the
+        // app never invalidates an existing authorization. The URI IS the scoping key —
+        // do NOT casually change it: it must remain the host that actually serves
+        // assetlinks.json, or every wallet re-verification fails.
+
         /// <summary>
         /// The MWA app-identity name advertised to mobile wallets during the
         /// connect handshake — shown on the Seeker's approval screen
-        /// (walletConfig.ts WALLET_APP_IDENTITY.name).
+        /// (walletConfig.ts WALLET_APP_IDENTITY.name). Display-only.
         /// </summary>
-        public const string AppIdentityName = "Defenders of the Realm";
+        public const string AppIdentityName = "Echoes of Elarion";
 
-        /// <summary>The MWA app-identity URI (walletConfig.ts WALLET_APP_IDENTITY.uri).</summary>
+        /// <summary>
+        /// The MWA app-identity URI (walletConfig.ts WALLET_APP_IDENTITY.uri).
+        /// NOTE: this host does not resolve (NXDOMAIN as of 2026-08-08) — it is dead
+        /// mirror data only. The live, assetlinks-serving identity URI is
+        /// SolanaWalletProvider.DappIdentityUri. Left as-is deliberately.
+        /// </summary>
         public const string AppIdentityUri = "https://defenders-of-the-realm.app";
 
         /// <summary>The MWA app-identity icon path (walletConfig.ts WALLET_APP_IDENTITY.icon).</summary>

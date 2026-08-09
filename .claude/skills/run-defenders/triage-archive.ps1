@@ -6,7 +6,10 @@ param([string]$Label = "")
 
 $ErrorActionPreference = "Stop"
 $repo    = (Resolve-Path "$PSScriptRoot\..\..\..").Path
-$ll      = "$env:USERPROFILE\AppData\LocalLow\DeNelle\Defenders of the Realm"
+# LocalLow\<companyName>\<productName>; productName became "Echoes of Elarion" 2026-08-08.
+$ll      = "$env:USERPROFILE\AppData\LocalLow\DeNelle\Echoes of Elarion"
+$llLegacy = "$env:USERPROFILE\AppData\LocalLow\DeNelle\Defenders of the Realm"
+if ((-not (Test-Path $ll)) -and (Test-Path $llLegacy)) { $ll = $llLegacy }
 $archive = "$repo\logs\archive"
 $ledger  = "$repo\logs\RECURRING_ISSUES.md"
 $stamp   = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHHmmssZ")

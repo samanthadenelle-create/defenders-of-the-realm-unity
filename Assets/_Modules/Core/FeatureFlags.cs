@@ -595,11 +595,17 @@ namespace DeNelle.Core
         // payment. WalletService auto-selects that stub on desktop/WebGL/no-SDK builds, so an ON flag is
         // a free-entitlement hole there, not merely a dead button.
         //
-        // ⛔ DO NOT TURN THIS BACK ON until BOTH are true (not either):
+        // ⛔ DO NOT TURN THIS BACK ON until ALL THREE are true (not any one of them):
         //   1. A LIVE, resolvable mint for the default rail — WalletEndpoints.SkrMintDevnet (and its
         //      mainnet equivalent) is non-empty and the transfer resolves it, and
         //   2. The mainnet block in SolanaWalletProvider.SendPayment is deliberately lifted with a
         //      real, tested, settling payment path behind it.
+        //   3. **THE FREE-GRANT HOLE IS CLOSED** — Assets/_Modules/Wallet/StubWalletProvider.cs carries
+        //      NO #if UNITY_EDITOR / DEVELOPMENT_BUILD guard, so it compiles into EVERY shipped build and
+        //      WalletService auto-selects it on release desktop/WebGL (and on Android without SOLANA_SDK).
+        //      Either build-guard that file out of release players, OR make the payment path REFUSE when
+        //      the resolved provider is the stub. This is the one that costs money, not just a dead
+        //      button: turning the flag on before it is closed ships FREE PACKS. See WO-931.
         // NOTE FOR WHOEVER FLIPS IT: Get() reads PlayerPrefs FIRST, so a STORED value BEATS this
         // default. A device that ever set "ff.realmstorepurchase" = 1 keeps the Buy rail until that key
         // is cleared/zeroed. Changing this default protects FRESH INSTALLS (every store reviewer and

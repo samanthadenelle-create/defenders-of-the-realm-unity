@@ -108,6 +108,6 @@ No Android device in 'device' state. Confirm:
     }
 
     Write-Host "=== Done ===" -ForegroundColor Green
-    Write-Host "Launch 'Defenders of the Realm' from the Seeker's app drawer."
+    Write-Host "Launch 'Echoes of Elarion' from the Seeker's app drawer."
     Write-Host "To pull live logs: $adb logcat -s Unity"
 }

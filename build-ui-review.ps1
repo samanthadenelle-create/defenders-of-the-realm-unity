@@ -83,7 +83,10 @@ if ($null -eq $rows -or $rows.Count -eq 0) {
 # "$env:LOCALAPPDATA\..\LocalLow" -> AppData\LocalLow  (robust resolve)
 $localLowRoot = Join-Path $env:LOCALAPPDATA '..\LocalLow'
 try { $localLowRoot = (Resolve-Path $localLowRoot).Path } catch { }
-$shotsDir = Join-Path $localLowRoot 'DeNelle\Defenders of the Realm\ui-shots'
+# productName became "Echoes of Elarion" 2026-08-08, which moves LocalLow\DeNelle\<productName>.
+$shotsDir = Join-Path $localLowRoot 'DeNelle\Echoes of Elarion\ui-shots'
+$shotsDirLegacy = Join-Path $localLowRoot 'DeNelle\Defenders of the Realm\ui-shots'
+if ((-not (Test-Path $shotsDir)) -and (Test-Path $shotsDirLegacy)) { $shotsDir = $shotsDirLegacy }
 Write-Host "Shots dir : $shotsDir"
 if (-not (Test-Path $shotsDir)) {
     Write-Host "  (shots dir not present yet -- delivered shots will be marked pending)" -ForegroundColor Yellow

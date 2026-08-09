@@ -13,7 +13,7 @@
 // ?trace=1 latency. (The DB path still works and is the record; this is the fast loop.)
 //
 // SCREENSHOTS: writes panel_<Screen>.png into the shots dir that build-ui-review.ps1 already
-// reads (LocalLow/DeNelle/Defenders of the Realm/ui-shots), so the EXISTING image-pair
+// reads (LocalLow/DeNelle/<productName>/ui-shots), so the EXISTING image-pair
 // assembler pairs them against the Blink mockups in UI_REVIEW/_mapping.json. Reuses that
 // system; does not invent a second one.
 //
@@ -39,7 +39,12 @@ const URL      = arg('url', 'https://defenders-of-the-realm-v2.vercel.app');
 const SECONDS  = parseInt(arg('seconds', '120'), 10);
 const HEADED   = !!arg('headed', false);
 const UICAPTURE = !!arg('uicapture', false);   // drive UICaptureMode's per-panel sweep
-const SHOTS    = arg('shots', path.join(process.env.USERPROFILE || '', 'AppData', 'LocalLow', 'DeNelle', 'Defenders of the Realm', 'ui-shots'));
+// LocalLow/<companyName>/<productName>; productName became "Echoes of Elarion" 2026-08-08
+// (store-listing match), which MOVES this folder. Prefer the new one, fall back to the legacy
+// folder so shots captured by an older player still pair.
+const SHOTS_NEW    = path.join(process.env.USERPROFILE || '', 'AppData', 'LocalLow', 'DeNelle', 'Echoes of Elarion', 'ui-shots');
+const SHOTS_LEGACY = path.join(process.env.USERPROFILE || '', 'AppData', 'LocalLow', 'DeNelle', 'Defenders of the Realm', 'ui-shots');
+const SHOTS    = arg('shots', (!fs.existsSync(SHOTS_NEW) && fs.existsSync(SHOTS_LEGACY)) ? SHOTS_LEGACY : SHOTS_NEW);
 const OUT      = arg('out', path.join(__dirname, 'out'));
 
 fs.mkdirSync(SHOTS, { recursive: true });

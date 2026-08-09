@@ -1,6 +1,19 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ RECONCILED 2026-08-08: main line next free = **931**. **782–859 + 900–930 CONSUMED.**
+> ## ⚠ RECONCILED 2026-08-08: main line next free = **932**. **782–859 + 900–931 CONSUMED.**
+> - **931** = **Close the StubWalletProvider free-grant hole** — `StubWalletProvider.cs` has NO
+>   `#if UNITY_EDITOR`/`DEVELOPMENT_BUILD` guard, so it compiles into every shipped build and
+>   `WalletService` auto-selects it on release desktop/WebGL (and Android without `SOLANA_SDK`). Chain:
+>   Buy → fake Connect → mock 2000 SKR balance → fabricated base58 sig → `ApplyPackContents` grants the
+>   pack for ZERO payment + fires `purchase_completed` with the fake txSig. `FeatureFlags.RealmStorePurchase`
+>   (default OFF) is the ONLY gate, so it is **not urgent today, hard blocker the moment monetization
+>   flips** — now precondition **3 of 3** in that flag's DO-NOT-TURN-ON block. Candidate fixes
+>   (a) build-guard / (b) runtime refusal at the WalletService seam / (c) both are left UNPICKED —
+>   architecture call. `WalletService.PayFlat` is in scope: same stub path, gated by NOTHING, dead only
+>   because both callers are scene-absent (GUID sweep).
+>   File `WORK_ORDER_931_stub_wallet_free_grant_hole.md`. **READY TO IMPLEMENT.**
+>
+> *(banner bumped 931 -> 932 in the SAME edit as the 931 mint — the rule that broke five times on 08-02.)*
 > - **930** = **The stairwell is ONE room: midpoint to midpoint** — the owner's design, and the
 >   replacement for the `_Up`/`_Down` pair model. A stairwell is a single room owning its subrooms,
 >   connecting the MIDPOINT of the upper floor to the MIDPOINT of the lower; run is the footprint,
