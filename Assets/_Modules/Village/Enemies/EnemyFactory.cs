@@ -440,9 +440,41 @@ namespace DeNelle.Village
         private static string ResolveBasecolor(string model)
         {
             if (string.IsNullOrEmpty(model)) return null;
-            string tripo = "Enemies/TripoTex/" + model + "_basecolor";
+
+            string hit = TryBasecolor(model);
+            if (hit != null) return hit;
+
+            // "_NEW" DISAMBIGUATES A MESH FILE, NOT A CHARACTER. Skeleton_Golem_NEW and
+            // Necromancer_NEW carry the suffix only because a LEGACY Generic mesh of the same
+            // name already occupies Resources/Enemies — their authored maps ship under the base
+            // name (Skeleton_Golem_basecolor, Necromancer_basecolor). Without this retry the
+            // lookup misses and the model silently falls back to a solid tint, because
+            // HeroTextureLoader's optional load fails QUIETLY by design. That is the exact
+            // silent-failure shape the debugging directive forbids, so the alias is explicit
+            // rather than left to whoever notices the enemy looks flat.
+            if (model.EndsWith("_NEW", System.StringComparison.Ordinal))
+            {
+                hit = TryBasecolor(model.Substring(0, model.Length - 4));
+                if (hit != null) return hit;
+            }
+
+            // NO SILENT TINT for a model we shipped art for. The caller's fallback is a solid
+            // colour, which looks like a deliberate style choice rather than a missing lookup —
+            // so an intake model with no resolvable skin says so ONCE, by name, in the trace.
+            if (AccuRigIntake.Contains(model))
+                FlowTrace.Once("Enemy", "basecolor-miss-" + model,
+                    $"model '{model}' has NO basecolor under Enemies/TripoTex or Enemies/OrcTex — " +
+                    "falling back to a SOLID TINT. The authored skin is not being used; check the " +
+                    "map is named '<model>_basecolor' and lives in a Resources folder.");
+            return null;
+        }
+
+        /// <summary>One basecolor probe: TripoTex (2026-08-09 art) first, then the older OrcTex.</summary>
+        private static string TryBasecolor(string name)
+        {
+            string tripo = "Enemies/TripoTex/" + name + "_basecolor";
             if (DeNelle.Core.HeroTextureLoader.Load(tripo, optional: true) != null) return tripo;
-            string orc = "Enemies/OrcTex/" + model + "_basecolor";
+            string orc = "Enemies/OrcTex/" + name + "_basecolor";
             if (DeNelle.Core.HeroTextureLoader.Load(orc, optional: true) != null) return orc;
             return null;
         }
