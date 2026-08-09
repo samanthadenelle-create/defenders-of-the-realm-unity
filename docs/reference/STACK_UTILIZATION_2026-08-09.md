@@ -63,11 +63,11 @@ via `[RuntimeInitializeOnLoadMethod]` and ARE LIVE** — `QuestCastNpcInjector.c
 |---|---|---|---|
 | 1 | **`widget-params.json`** | **337 KB, ~4,000 authored values** | **SCHEMA MISMATCH, and a FALSE GREEN.** Reader expects `name` + `nodes[]` with flat props; file authors `prefab` + `file` + `objects[]` with nested `rect{}`/`image{}`. `JsonUtility` yields 58 prefabs with `name == null`, every lookup falls through to hardcoded constants — **while logging "widget-params loaded: 58 prefabs"** (`ElarionUiKitObsidian.cs:239`, `:256`) |
 | 2 | **78 Hovl VFX keys** | 78 of 140 rows | zero code reference — incl. 55 `PP_*` ParticlePack rows and authored combat keys `DragonFire_Cast/_Impact`, `Thunderbolt_Cast`, `Dash_Blink`, `Aegis_Cast`, `MageMeoteorAOE_Cast` |
-| 3 | **The whole rewarded-ad economy** | `ad-placements.json` 3×13 + 5 rewards + 3 covenant blocks; `ad-creatives.json` 6×10 | **only reader is a regression suite** (`AdPlacementCovenantRegression.cs:41`). A covenant enforced on data no runtime loads |
+| ~~3~~ | ~~The whole rewarded-ad economy~~ | — | ⛔ **RECLASSIFIED — see §6a. This is DECLARED, not orphan.** The entire monetization surface was deliberately disabled by the owner (2026-08-08) to clear store review and settle the Terms of Use. **Do not "clean up."** |
 | 4 | **`HeroTalentModifiers` — the Steward economy lane** | 14 of 29 accessors | `CollectorCapBonus`, `RepairCostReduction`, `BuildTimeReduction`, `SalvageBonus`, `WaveRewardBonus`, `TowerDamageBonus`, `TowerRangeBonusMeters` + the Mage spell-unlock set — **zero callers** |
 | 5 | **`EnemyTypeVfxSet` + `EnemyVfxSet_Default.asset`** | telegraph, per-type audio, cast/projectile/impact overrides, ranged tint | GUID `e6cfb68d…` -> **0 prefab/scene hits**; `Enemy.cs:339` `_typeVfxSet` never assigned. Sole creator is an editor tool |
 | 6 | **`enemy-roles.json`** | 9 roles × 4 + 25 creatures × 7 | only a doc comment (`EnemyTaxonomy.cs:79`) + `DataWebRegression`. The live `EnemyRole` is a **separate hardcoded Village enum** |
-| 7 | **`skr_store.json`** | 7 SKUs + 3 acquisition packs | an entire second-currency storefront, no runtime loader |
+| ~~7~~ | ~~`skr_store.json`~~ | — | ⛔ **RECLASSIFIED — see §6a.** Part of the deliberately-disabled monetization surface. |
 | 8 | `DragonCinematicFlyby.cs` | 355 L | only attacher is `VillageSceneBuilder.Content.cs:329`; GUID absent from every `.unity` |
 | 9 | `audio-mix.json` | 10 crossfades + 5 volume nudges | `AudioService` implements the concept with hardcoded values |
 | 10 | `WallTierData.cs` | 215 L | editor-tooling only (3 `Assets/Editor/WallTools/*` callers) |
@@ -76,7 +76,7 @@ via `[RuntimeInitializeOnLoadMethod]` and ARE LIVE** — `QuestCastNpcInjector.c
 | 13 | Tower-empowerment UI entry | 244 L (`TowerEmpowerButton` + `EmpowermentDebugTrigger`) | 0 refs — the whole entry point is dark |
 | 14 | `weaponskill-animations.json` | 29 × 10 | editor-only (`KnightPackageControllerBuilder.cs:69`) |
 | 15 | `BlinkOrc` / `BlinkOrcBoss` controllers | 2 controllers | GUIDs -> 0 asset refs; `"BlinkOrc"` string -> 0 hits |
-| 16 | **`Core/Ads/IAdService.cs`** | ~190 L: interface + `NullAdService` + 3 result enums | zero runtime consumers — **`RewardedAdManager` never routes through it.** Highest ceremony-to-reach ratio in Core. The flag is declared-off; the **seam being unwired is NOT declared** |
+| ~~16~~ | ~~`Core/Ads/IAdService.cs`~~ | — | ⛔ **RECLASSIFIED — see §6a.** The unwired ad seam is the deliberate state, not an oversight. |
 | 17 | **`Core/Addressables/**`** | 5 files: group configs, `SkinController`/`ISkinnable`, `HeroAssetLoader`, `HeroTextureLoader`, `AddressablesMemoryProfiler` | **a whole asset-streaming layer with 0 code refs and 0 scene refs.** Corroborates the WO reconciliation: no `Heroes` group exists, 314 `Resources.Load` remain, `GroupAndMigrateHeroes` never run |
 | 18 | **`Core/Promo` + `Core/Referral`** | service + a full uGUI screen **each** | built end-to-end **including UI**, never spawned. GUIDs `cc8ab86…`, `f290397…` -> 0 scene/prefab refs |
 | 19 | **`CoreServices.SceneLinkResolver` + `SceneLink.cs` + host** | a data-driven world-graph router | self-bootstraps, registers, and is **never asked to route**. `CoreServices.cs:176` even documents the intended `TravelTo(id)` call nobody makes |
@@ -143,7 +143,48 @@ useful one — and the gap between them is exactly the existence-vs-consumption 
 
 ---
 
+## 6a. ★★ THE MONETIZATION SURFACE IS DELIBERATELY DISABLED — DECLARED, NOT ORPHAN
+
+**Owner ruling, 2026-08-08.** The **entire** monetization surface — rewarded ads, pack purchasing,
+crystal top-ups, the SKR storefront — was **switched off on purpose**, to clear the store review cycle
+and to get the Terms of Use exactly right before anything can take money.
+
+**This is a business decision, and it is the correct state today. DO NOT re-enable, re-wire, or
+"clean up" any of it as dead weight.** It looks identical to an orphan from a static sweep, which is
+precisely why it is recorded here.
+
+Covered by this ruling — every one of these was mis-filed as ORPHAN in an earlier draft of this doc:
+
+| Surface | Why it reads as dead |
+|---|---|
+| `ad-placements.json`, `ad-creatives.json` | only reader is `AdPlacementCovenantRegression` — the covenant is *guarding* a disabled surface, which is exactly its job |
+| `Core/Ads/IAdService.cs` + `NullAdService` + result enums | `RewardedAdManager` does not route through the seam **because nothing should show an ad** |
+| `skr_store.json` | second-currency storefront, no runtime loader |
+| `PackStore` purchase path | gated by `FeatureFlags.RealmStorePurchase`, **re-gated `defaultOn:false` and locked** in `576601e3` |
+| Crystal top-up | same gate |
+
+**Corroborating evidence in the tree** (this ruling is visible in the history, and a static sweep
+should have joined the dots): commit `576601e3` — *"fix(store): re-gate real-money purchases OFF, and
+lock the default so it cannot silently flip back"* — and the ad-placement purge on 08-07, which removed
+a placement paying **150 crystals** for an ad view because crystals are the SKR on-ramp and that
+convertibility is prohibited by AdMob/Unity.
+
+**The live risks recorded elsewhere still stand and are NOT contradicted by this ruling** —
+`AUDIT_2026-08-09.md` F8/F9/F10/F73: `StubWalletProvider` ships unguarded in every player,
+`FeatureFlags.Get` reads PlayerPrefs FIRST so a device that ever stored `ff.realmstorepurchase=1` keeps
+a live Buy rail, `WalletService.PayFlat` is gated by nothing, and `TowerSwapMenu` is an ungated USDC
+rail. **Those are reasons the OFF state must hold, not reasons to turn anything on.**
+
+**Lesson for this registry's method:** a static sweep cannot distinguish "never wired" from
+"deliberately unwired." Both look like zero consumers. The DECLARED bucket only works if the reason is
+written down where the sweep can find it — which is why this section exists.
+
+---
+
 ## 6. WHAT IS LEGITIMATELY DECLARED-UNUSED (do not "fix" these)
+
+- **The entire monetization surface — see §6a above.** Owner ruling 2026-08-08, for store review and
+  Terms of Use. The single largest DECLARED cluster in the project.
 
 - Echo Crafting / Defense / Exploration lanes — `EchoLaneBonuses.cs:21-23` names each stub and its
   intended consumer.
