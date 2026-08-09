@@ -35,8 +35,9 @@ Tapping a card **minimizes the carousel to a corner edge-tab** — `^ Buildings 
 clear. The ghost appears and the controls live ON it, CoC-style:
 - **Ghost + footprint:** valid/invalid read by BOTH tint AND shape (solid vs dashed/broken outline —
   colorblind law).
-- **Chip cluster beside the ghost** (three ~52px round chips, MinTouch-clamped, repositioned to stay
-  on-screen near edges):
+- **⚠ SUPERSEDED BY D14 (§7, owner 2026-08-08): the three verbs live in a LEAN RIGHT-EDGE RAIL, not
+  beside the ghost.** Original spec kept for history — the verbs and their behavior are unchanged, only
+  the home moved:
   - `OK` chip (gold) — confirm placement; disabled-with-reason as text when invalid ("Blocked").
   - `Rot` chip — 90° step per tap.
   - `X` chip (red-bordered) — cancel this placement, restore the carousel.
@@ -191,9 +192,51 @@ selection underline, art cards with names + price labels, crystals readout. Addi
   Town/Defenses tabs sit far apart with a large centered gap — tighten the bands when in there (fixed-px
   bands, §3).
 
-Re-gate after fixes: `UI_CAPTURE_OK` on BOTH phases — PICK (carousel open: no D-pad, Echoes chip clear
-of the panel, three category tabs, price labels verified) and PLACE (banner clear of F8 box, no Orient
-button, chips flanking the ghost, Echoes chip whole, D-pad absent until toggled).
+**Third screenshot (owner-annotated markup, same session).** Three OWNER RULINGS drawn on the capture
+plus one new defect class:
+
+- **D10 (owner ruling, verbatim "Move to Corner Remove the X, Size smaller and more minized"):** the
+  big `X Done` button becomes a COMPACT corner control — smaller, tucked into the true corner, label
+  `Done` (drop the "X" glyph). Keep MinTouch on the hit area (visual can shrink; the invisible pad
+  carries the 112px).
+- **D11 (owner ruling, verbatim "Remove Fully" → the dev `Flag` button):** remove the on-screen F8
+  Flag BUTTON from build mode entirely. ⚠ Scope: the BUTTON only — the F8 capture harness, hotkey and
+  break-log stay (§12/§14: instrumentation is permanent; this is UI chrome, not instrumentation).
+- **D12 (owner ruling, clarified 2026-08-08: "remove this and replace with virtual Dpad"):** the fixed
+  4-arrow button pad is REMOVED and replaced with a **virtual D-pad/joystick** — the same analog-stick
+  style control the gameplay HUD already uses (reuse that component; do not write a second stick).
+  It drives the fine-nudge of the ghost. D5/D6 still apply on top: it exists ONLY in the PLACE phase,
+  hidden until summoned by the toggle, never during PICK, never overlapping the carousel.
+- **D13 — Defenses-tab card previews render as RAW 3D MODELS spilled over the world.** Ballista /
+  Arcane Spire / a giant tree render unclipped at world scale over the field and panel (no obsidian
+  card frames), with their cost text ("NEED 60W 30I 70C") floating loose. The Archer Tower card alone
+  renders as a proper dark card. Likely the card preview path (RenderTexture or model-in-UI parenting)
+  failing for all but the first card — §12: instrument the card-build path and read the trace before
+  fixing. Also stray prop models scatter across the bottom band — probably the same spill.
+
+**THE VISUAL BENCHMARK (owner re-affirmed 2026-08-08 by holding the mockup up against the build —
+verdict on the delivered screen: "does not match"):** the PLACE-phase frame in
+`UI_REVIEW/build_ui_redesign_mockups.html` is the cleanliness bar — *"this needs to be clean"* — with
+ONE owner amendment on top:
+
+- **D14 (owner ruling 2026-08-08, verbatim "i want a lean section on right"): the placement controls
+  live in a LEAN RIGHT-EDGE RAIL, not floating beside the ghost.** A slim fixed vertical column hugging
+  the right edge (right-thumb territory in landscape): confirm `OK`, `Rot`, cancel `X`, stacked with
+  gutters, MinTouch hit areas, compact visuals. The ghost carries ONLY its name+cost pill; no chrome
+  ever sits on or beside the piece. This SUPERSEDES D3's "flank the ghost" wording — same three verbs,
+  new fixed home. The compact corner Done (D10) sits above the rail's top; the rail must clear the
+  Echoes chip's reserved zone (D7).
+
+Concretely, the delivered screen passes when: the right edge holds the lean rail (OK/Rot/X), the close
+control is a SMALL ROUND corner button (D10), ONE minimized tab sits at the bottom, ONE thin hint line,
+and NOTHING else floats on the field — no D-pad (until summoned, D12 virtual stick), no Flag (D11), no
+Orient (D1), no second skip. Compare the capture side by side before calling the defect pass done.
+
+Re-gate after fixes: `UI_CAPTURE_OK` on BOTH phases — PICK (carousel open: no D-pad, no Flag button,
+compact corner Done, Echoes chip clear of the panel, three category tabs, every card framed with sane
+preview scale, price labels verified) and PLACE (banner clear of F8 box, no Orient button, chips
+flanking the ghost, Echoes chip whole, virtual D-pad absent until toggled) — each judged against the
+mockup benchmark above.
 
 ---
 
