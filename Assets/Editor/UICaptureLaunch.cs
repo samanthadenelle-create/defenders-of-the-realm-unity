@@ -2372,6 +2372,63 @@ namespace DeNelle.Editor
         /// the dock really is gone, AND exactly one labelled door remains. Neither half is
         /// visible to a compile gate or a data oracle.
         /// </summary>
+        /// <summary>Shape of Data/Canonical/structures-catalog.json (mirrors the economy oracle's).</summary>
+        private sealed class CaptureStructuresFile
+        {
+            [JsonProperty("version")] public int Version;
+            [JsonProperty("entries")] public List<DeNelle.Core.Catalog.CatalogEntry> Entries
+                = new List<DeNelle.Core.Catalog.CatalogEntry>();
+        }
+
+        /// <summary>
+        /// Populate CatalogRegistry from the canonical structures file so the palette has real
+        /// cards to draw. Idempotent, and it registers ONLY ids that are absent, so it can never
+        /// stomp a row a different capture case set up. Reads through CanonicalJson — the same
+        /// source of truth the game and the economy oracle use — rather than a hand-rolled path,
+        /// so a capture can never show cards the shipped catalog does not contain.
+        /// </summary>
+        private static void HydrateCatalogForCapture()
+        {
+            try
+            {
+                if (DeNelle.Core.Catalog.CatalogRegistry.Count > 0) return;
+
+                string json = DeNelle.Core.CanonicalJson.Read("Data/Canonical/structures-catalog.json");
+                if (string.IsNullOrEmpty(json))
+                {
+                    Debug.LogWarning("[UICap-HL] structures-catalog.json unreadable -- palette cards cannot be " +
+                                     "captured; the dock will render empty and prove nothing about cards.");
+                    return;
+                }
+
+                var settings = new JsonSerializerSettings
+                {
+                    Converters = { new Newtonsoft.Json.Converters.StringEnumConverter() },
+                    NullValueHandling = NullValueHandling.Ignore,
+                    MissingMemberHandling = MissingMemberHandling.Ignore,
+                };
+                var file = JsonConvert.DeserializeObject<CaptureStructuresFile>(json, settings);
+                if (file == null || file.Entries == null || file.Entries.Count == 0)
+                {
+                    Debug.LogWarning("[UICap-HL] structures-catalog.json deserialized to 0 entries -- no cards to capture.");
+                    return;
+                }
+
+                int n = 0;
+                foreach (var e in file.Entries)
+                {
+                    if (e == null || string.IsNullOrEmpty(e.id)) continue;
+                    if (DeNelle.Core.Catalog.CatalogRegistry.Get(e.id) == null)
+                    { DeNelle.Core.Catalog.CatalogRegistry.Register(e); n++; }
+                }
+                Debug.Log("[UICap-HL] hydrated CatalogRegistry with " + n + " entry(ies) for the palette capture");
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("[UICap-HL] catalog hydration threw: " + e);
+            }
+        }
+
         private static int CapturePaletteCollapsed()
         {
             return ForEachTarget("BuildPaletteDock", target =>
@@ -2380,6 +2437,13 @@ namespace DeNelle.Editor
                 GameObject hostGo = null;
                 try
                 {
+                    // The registry is populated at RUNTIME by the game's bootstrap, which never
+                    // runs in an edit-mode capture — the first version of this case shot a dock
+                    // reading "No buildables registered" and still reported green, which would
+                    // have made the cards look verified when nothing about them was. Hydrate
+                    // from the same canonical file the economy oracle uses.
+                    HydrateCatalogForCapture();
+
                     hostGo = new GameObject("BuildPaletteUI_Capture");
                     var palette = hostGo.AddComponent<DeNelle.Village.BuildPaletteUI>();
                     palette.Configure(DeNelle.Core.Catalog.BuildType.Town);

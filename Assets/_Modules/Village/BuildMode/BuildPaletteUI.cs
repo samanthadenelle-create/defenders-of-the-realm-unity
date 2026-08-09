@@ -683,7 +683,18 @@ namespace DeNelle.Village
                 // A live freebie says "FREE" in so many words — the WORD carries the meaning
                 // (owner is red/green colorblind; never color-alone). After the one-shot flag
                 // is consumed the label reverts to the normal per-resource cost. ASCII only.
-                var costLabel = MakeText(cardGo.transform, freebie ? "FREE" : CostLabel(cost), 13,
+                // WO-1010: UNAFFORDABLE SAYS SO IN A WORD. The freebie case above already
+                // honoured "never color-alone" — but the unaffordable case did NOT: the string
+                // was byte-identical whether you could afford it or not, and the ONLY difference
+                // was ElarionUi.Danger vs ElarionUi.Affordable. Red-vs-green is precisely the
+                // discrimination this project cannot rely on (the owner is red/green
+                // colorblind), so an unaffordable card was indistinguishable from an affordable
+                // one for the person it matters most to. Found by looking at the capture, not
+                // by any gate. "NEED" leads so the state is read before the numbers; the colour
+                // stays as a redundant second cue, never the only one.
+                string costText = freebie ? "FREE"
+                    : (affordable ? CostLabel(cost) : "NEED " + CostLabel(cost));
+                var costLabel = MakeText(cardGo.transform, costText, 13,
                     affordable ? ElarionUi.Affordable : ElarionUi.Danger, FontStyles.Bold,
                     TextAlignmentOptions.Center, new Vector2(0.06f, 0.03f), new Vector2(0.94f, 0.24f));
                 costLabel.raycastTarget = false;
