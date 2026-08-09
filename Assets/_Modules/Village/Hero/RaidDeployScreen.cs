@@ -19,7 +19,9 @@
 //   Center   a battle-preview placeholder + an "Estimated Clear Time" readout
 //            (FIRST PASS: static from the config; TODO live update as troops change).
 //   Bottom   total troops / a simple power rating (sum of deployable), an
-//            "Auto Recommend" button (FIRST PASS: stub — selects all deployable),
+//            a quiet "Army Ready?" peek (the old "Auto Recommend" stub was REMOVED in
+//            the 2026-08-09 honesty pass — it was toast-only with no loadout AI; the
+//            handler is still named OnAutoRecommend, which is the stale part),
 //            and a big glowing DEPLOY button -> SceneRouter.GoRaid(def.sceneName).
 //
 // Open(SceneConfigDef) / Close() API; RaidSelectionScreen taps a card -> Open(def).

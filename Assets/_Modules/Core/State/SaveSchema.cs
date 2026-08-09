@@ -8,7 +8,12 @@
 //   - Validate()             (the C# port of `safeParse` — rejects NaN/Infinity,
 //                             clamps numerics via NonNegInt/FiniteInt rules)
 //
-// CurrentVersion = 36, FileFormat = 1. (v36 appended everBuiltStructureIds — the
+// CurrentVersion: DO NOT restate it here — read the const below (it is the authority).
+// This header said "CurrentVersion = 36" while the const read 38, two versions stale
+// (audit F78, 2026-08-09): a doc-comment lying about the value 25 lines beneath it, in
+// the most load-bearing constant in the save system. FileFormat = 1.
+// (v38 = WO-934 army loadout bank; v37 = WO-911 the per-job PAID BASKET;
+//  v36 appended everBuiltStructureIds — the
 // WO-834 blank-founding baked-standdown ledger; v35 appended obsidianQueue — the
 // WO-773 common multi-channel work queue — see the CurrentVersion const changelog.)
 // PlayerPrefs key
