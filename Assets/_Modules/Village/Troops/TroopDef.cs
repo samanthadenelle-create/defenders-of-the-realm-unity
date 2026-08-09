@@ -32,17 +32,55 @@ namespace DeNelle.Village
         [JsonProperty("id")] public string Id;
         /// <summary>Display name — verbatim (Footman / Archer).</summary>
         [JsonProperty("displayName")] public string DisplayName;
-        /// <summary>Combat role — <c>melee</c> or <c>ranged</c> (ranged = reach, not a projectile yet).</summary>
+        /// <summary>
+        /// Combat role — <c>melee</c>, <c>ranged</c> (reach, not projectile yet), or
+        /// <c>siege</c> (WO-933: structure-preferring hunt, machine visual path).
+        /// </summary>
         [JsonProperty("role")] public string Role;
         /// <summary>Army slots this troop occupies (population cost).</summary>
         [JsonProperty("slots")] public int Slots = 1;
-        /// <summary>Resources/Heroes model id the factory skins — e.g. <c>Knight</c> / <c>Ranger</c>.</summary>
+        /// <summary>
+        /// Hard ownership cap (CoC scarcity). <c>0</c> = unlimited (default, back-compat).
+        /// <c>1</c> = at most one of this def may be owned (roster + in-flight train jobs,
+        /// including wounded). Enforced at train enqueue — never only in UI.
+        /// </summary>
+        [JsonProperty("maxOwned")] public int MaxOwned;
+        /// <summary>
+        /// Multiplier applied when this troop damages a Hostile structure
+        /// (walls/towers/gates/spire — targets that also implement <c>IDamageableStructure</c>).
+        /// Default 1. Siege pieces author &gt;1 (WC Demolisher-style structure bias).
+        /// </summary>
+        [JsonProperty("structureDamageMult")] public float StructureDamageMult = 1f;
+        /// <summary>
+        /// Multiplier applied when this troop damages a Hostile non-structure (garrison units).
+        /// Default 1. Siege pieces author &lt;1 so they are bad at anti-infantry.
+        /// </summary>
+        [JsonProperty("unitDamageMult")] public float UnitDamageMult = 1f;
+        /// <summary>
+        /// Resources model path the factory skins. Bare names (e.g. <c>Knight</c>,
+        /// <c>SC_Footman</c>) load under <c>Heroes/</c>. Paths that already contain a
+        /// slash (e.g. <c>Structures/Catapult</c>) load as a full Resources path.
+        /// </summary>
         [JsonProperty("model")] public string Model;
         /// <summary>Yaw (deg) the factory applies so the body faces +Z (the move direction).
         /// Tripo/AccuRIG bodies import facing +X → <c>-90</c> (historic default). Supercyan
         /// humanoids already face +Z → set <c>0</c>. Data-driven so each art pack's facing is
         /// authored per-troop, not hard-coded.</summary>
         [JsonProperty("modelYaw")] public float ModelYaw = -90f;
+
+        /// <summary>
+        /// Optional main-hand gear Resources path (no extension), e.g. <c>TroopGear/Sword</c>.
+        /// Attached to RightHand (bows → LeftHand) by <see cref="TroopGearApplier"/> after skin.
+        /// Empty = unarmed body mesh only.
+        /// </summary>
+        [JsonProperty("weapon")] public string Weapon;
+
+        /// <summary>
+        /// Optional off-hand gear Resources path, e.g. <c>TroopGear/Shield</c>.
+        /// Attached to LeftHand. Empty = none.
+        /// </summary>
+        [JsonProperty("offhand")] public string Offhand;
+
         /// <summary>Element — None for the Step-1 starter troops.</summary>
         [JsonProperty("element")] public string Element;
         /// <summary>Max HP — drives the damageable health pool.</summary>

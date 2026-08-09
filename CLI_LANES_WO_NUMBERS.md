@@ -1,6 +1,17 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ RECONCILED 2026-08-08 (CLI / Grok raids audit): main line next free = **933**. **782–859 + 900–932 CONSUMED.**
+> ## ⚠ RECONCILED 2026-08-09 (CLI / Army loadouts): main line next free = **935**. **782–859 + 900–934 CONSUMED.**
+> - **934** = **Army loadout bank (3 named presets + persist + muster polish)** — save/load/quick-fill
+>   Raid Push / Wall Hold / Siege Prep; save schema v38; Armies button on Barracks. File
+>   `WORK_ORDER_934_army_loadout_bank.md`. **IMPLEMENTED.**
+>
+> *(banner bumped 934 → 935 in the SAME edit as the 934 mint — the rule that broke five times on 08-02.)*
+> - **933** = **Siege Catapult troop (CoC scarcity + WC Demolisher)** — 8th roster unit at Barracks
+>   T4 beside Outrider; `maxOwned:1` (wounded still blocks); role `siege` structure-prefer hunt;
+>   range ~26 / slow / fragile / heavy cost; structure vs unit damage mult; machine visual
+>   `Structures/Catapult`. File `WORK_ORDER_933_siege_catapult_troop.md`. **IMPLEMENTED.**
+>
+> *(banner bumped 933 → 934 in the SAME edit as the 933 mint — the rule that broke five times on 08-02.)*
 > - **932** = **Raids full functional audit + step-by-step fix ladder** — Path A teleport/deploy is
 >   LOCKED V1 (raidwalk OFF); spine exists (HUD→select→deploy→RaidBase→score→victory→return) with
 >   headless gates; gaps = prereq teach, full-army feel, Auto Recommend stub, scene honesty, win/

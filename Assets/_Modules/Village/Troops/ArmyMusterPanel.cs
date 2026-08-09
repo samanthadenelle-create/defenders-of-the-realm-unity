@@ -1,22 +1,15 @@
 // =============================================================================
-// ArmyMusterPanel — the "Armies" surface (WO-897): compose an army, see its total
-// cost + total time, and MUSTER it onto the existing Train queue in one action.
+// ArmyMusterPanel — Armies loadout bank + one-tap muster (WO-897 + WO-934).
 // -----------------------------------------------------------------------------
-// Assembly: DeNelle.Village   Namespace: DeNelle.Village
+// Assembly: DeNelle.Village
 //
-// CODE-BUILT uGUI over ElarionUiKit. NO UXML — UXML does not work in builds (canon §8).
+// CODE-BUILT uGUI (no UXML). Colourblind-safe TEXT state. ASCII only.
 //
-// Layout (kit master-detail chrome, FrameCrafting):
-//   bodyLeft  (dark well)      = scrollable ladder of UNLOCKED troops; each row is
-//                                name / per-unit cost + time / a [-] N [+] stepper.
-//   bodyRight (parchment well) = the composition readout: the rows, TOTAL COST,
-//                                TOTAL TIME (parallel-aware), the Train-line state
-//                                ("Queue: 2 of 5 used"), and the LAST MUSTER RESULT.
-//   footer                     = the wallet row + the Muster CTA.
-//
-// COLOURBLIND-SAFE (owner is red/green colourblind): every state is carried by TEXT
-// and COUNTS - "Queued 3 of 5 - 2 did not fit." - never by hue alone.
-// ASCII ONLY in every visible string ("-" and "...", never an em-dash or ellipsis glyph).
+// Player loop (fun + value):
+//   1. Pick one of 3 saved loadout slots (Raid Push / Wall Hold / Siege Prep)
+//   2. Quick-fill a recipe OR step troops with [+] / [-]
+//   3. Save to slot (persists)  OR  Muster army (auto-queues Train jobs)
+//   4. Watch Obsidian Train queue fill — army prepares while you play
 // =============================================================================
 
 using System.Collections.Generic;
@@ -25,49 +18,35 @@ using UnityEngine;
 using UnityEngine.UI;
 using DeNelle.Core.UI;
 using DeNelle.Core.Diagnostics;
-using Ledger = DeNelle.Village.Buildings.Progression;   // the GameState-backed wallet the spend charges
+using DeNelle.Core.State;
 
 namespace DeNelle.Village
 {
-    /// <summary>
-    /// The Armies panel: build an <see cref="ArmyComposition"/> and muster it onto the Train
-    /// channel with one button. Opened via <see cref="Show"/> (self-heals its own host).
-    /// </summary>
     public sealed class ArmyMusterPanel : MonoBehaviour
     {
-        // The session's working composition (see ArmyComposition's header: not persisted yet).
-        private static readonly ArmyComposition s_composition = new ArmyComposition { Name = "New Army" };
+        private static readonly ArmyComposition s_composition = new ArmyComposition { Name = "Raid Push" };
 
         private GameObject _ui;
         private RectTransform _listContent;
         private Transform _detailHost;
+        private Transform _footerHost;
         private Button _musterCta;
         private TextMeshProUGUI _musterCtaLabel;
         private ElarionUiKit.CurrencyChipHandle[] _wallet;
         private PanelHandle _panelHandle;
 
-        // The last muster's player-facing text, held so the readout survives a repaint.
         private string _lastResultHeadline = "";
         private string _lastResultDetail = "";
+        private int _activeSlot;
 
-        private const float RowHeightPx = 112f;   // MinTouchPx floor - the stepper buttons live here
+        private const float RowHeightPx = 112f;
         private const float RowGapPx = 8f;
-
         private static readonly Color Ink = new Color(0.16f, 0.12f, 0.08f, 1f);
         private static readonly Color RowPlate = new Color(0.16f, 0.16f, 0.18f, 0.92f);
 
         public bool IsOpen => _ui != null;
-
-        /// <summary>Cached host - see Show(). Avoids a scene-wide FindAnyObjectByType per open.</summary>
         private static ArmyMusterPanel s_host;
 
-        // ── Entry point ───────────────────────────────────────────────────────
-
-        /// <summary>
-        /// Opens the Armies panel, self-healing a host if none exists (mirrors
-        /// TroopDialogueCommands.ShowTrainingUI's verb pattern). Refuses with a toast while the
-        /// Barracks is locked - there is nothing to muster before it exists.
-        /// </summary>
         public static void Show()
         {
             if (!BarracksUnlock.IsUnlocked)
@@ -76,27 +55,32 @@ namespace DeNelle.Village
                 ElarionUiKit.ShowToast("The Barracks is not built yet.", ElarionUiKit.ToastTone.Danger);
                 return;
             }
-            // Cached host instead of FindAnyObjectByType. The scan was flagged by the UI-MVVM
-            // conformance oracle, and it is also a full-scene search on every open for an object
-            // this class itself creates - the instance is knowable without looking.
             if (s_host == null) s_host = new GameObject("ArmyMusterPanelHost").AddComponent<ArmyMusterPanel>();
             s_host.Open();
         }
 
-        // ── Lifecycle ─────────────────────────────────────────────────────────
-
         public void Open()
         {
-            FlowTrace.Step("Muster", "ArmyMusterPanel.Open - building the armies UI (kit chrome, no UXML).");
+            FlowTrace.Step("Muster", "ArmyMusterPanel.Open - loadout bank + muster UI.");
             Close();
+
+            // Hydrate working set from the active saved slot (or seed a fun recipe).
+            var army = ArmyLoadoutService.Ensure();
+            _activeSlot = army != null ? army.ActiveLoadoutIndex : 0;
+            ArmyLoadoutService.LoadInto(_activeSlot, s_composition);
+            if (s_composition.TotalUnits <= 0 && string.IsNullOrEmpty(_lastResultHeadline))
+            {
+                // First open with empty slot: stage Raid Push so the panel never feels blank.
+                ArmyLoadoutService.ApplyRecipe(s_composition, 0);
+            }
 
             _ui = ElarionUiKit.BuildModalCanvas("ArmyMusterPanelUI", 31000);
             var canvas = _ui.GetComponent<Canvas>();
             if (canvas != null) canvas.overrideSorting = true;
             ElarionUiKit.Scrim(_ui.transform, onTapClose: Close);
 
-            var chrome = ElarionUiKit.BuildObsidianPanel(_ui.transform, "Armies - Muster",
-                new Vector2(0.08f, 0.07f), new Vector2(0.92f, 0.93f), Close,
+            var chrome = ElarionUiKit.BuildObsidianPanel(_ui.transform, "Armies - Loadouts",
+                new Vector2(0.06f, 0.05f), new Vector2(0.94f, 0.95f), Close,
                 frameName: RpgUiCatalog.FrameCrafting, medallionIcon: "sword");
 
             var layout = chrome.layout;
@@ -110,19 +94,19 @@ namespace DeNelle.Village
             var scroll = ElarionUiKit.MakeScrollZone(listHost, RowGapPx, 6);
             _listContent = scroll != null ? scroll.content : null;
 
-            Transform footHost = layout != null && layout.footer != null
+            _footerHost = layout != null && layout.footer != null
                 ? (Transform)layout.footer : chrome.content.transform;
 
-            _wallet = ElarionUiKit.BuildWalletRow(footHost, new[]
+            _wallet = ElarionUiKit.BuildWalletRow(_footerHost, new[]
             {
                 ElarionUiKit.CurrencyKind.Wood,
                 ElarionUiKit.CurrencyKind.Iron,
                 ElarionUiKit.CurrencyKind.Food,
             });
 
-            // The ONE action. Canonical CTA size (132px height floor) + touch clamp from the kit.
+            // Primary CTA pinned low on the detail well.
             _musterCta = ElarionUiKit.Button(_detailHost, "Muster army", ElarionUiKit.ButtonKind.Confirm,
-                new Vector2(0.06f, 0.02f), new Vector2(0.94f, 0.12f), OnMuster);
+                new Vector2(0.04f, 0.02f), new Vector2(0.96f, 0.11f), OnMuster);
             if (_musterCta != null)
             {
                 ElarionUiKit.PinCanonicalCtaSize(_musterCta);
@@ -152,12 +136,6 @@ namespace DeNelle.Village
             BarracksService.Changed -= Rebuild;
             ArmyMusterService.Mustered -= Rebuild;
 
-            // Release the single-modal arbiter slot. Open() already does Register + NotifyOpened;
-            // this was the MISSING third leg the modal-registration oracle wanted. Without it the
-            // arbiter still believes this modal is up after it is gone, so the next modal is
-            // treated as stacking over a live panel and the back-button target is stale.
-            // Guarded on _ui so a Close() called defensively at the TOP of Open() (it is) does not
-            // release a slot that was never taken.
             if (_ui != null && _panelHandle != null)
                 PanelManager.NotifyClosed(_panelHandle);
 
@@ -165,6 +143,7 @@ namespace DeNelle.Village
             _ui = null;
             _listContent = null;
             _detailHost = null;
+            _footerHost = null;
             _musterCta = null;
             _musterCtaLabel = null;
         }
@@ -175,25 +154,78 @@ namespace DeNelle.Village
             ArmyMusterService.Mustered -= Rebuild;
         }
 
-        // ── The one action ────────────────────────────────────────────────────
+        // ── Actions ───────────────────────────────────────────────────────────
 
         private void OnMuster()
         {
+            // Auto-save active slot so muster never loses a staged plan.
+            ArmyLoadoutService.SaveFrom(_activeSlot, s_composition);
+
             var report = ArmyMusterService.Muster(s_composition);
             _lastResultHeadline = report.Headline;
             _lastResultDetail = report.Detail;
 
-            // Tone is a SECOND cue only - the counts are in the text, per the colourblind rule.
             var tone = report.Complete ? ElarionUiKit.ToastTone.Confirm
                      : report.AnyQueued ? ElarionUiKit.ToastTone.Gold
                      : ElarionUiKit.ToastTone.Danger;
             ElarionUiKit.ShowToast(report.Summary, tone, 3.2f);
 
-            // Rows that fully queued leave the composition; a shortfall stays so the player can
-            // retry it once the queue drains (never silently cleared, never silently kept whole).
             foreach (var r in report.Rows)
                 if (r.Queued > 0) s_composition.Add(r.TroopId, -r.Queued);
 
+            // Keep the saved slot as the full plan; working set drops what queued.
+            Rebuild();
+        }
+
+        private void OnSaveSlot()
+        {
+            ArmyLoadoutService.SaveFrom(_activeSlot, s_composition);
+            ElarionUiKit.ShowToast(
+                "Saved '" + s_composition.Name + "' to slot " + (_activeSlot + 1) + ".",
+                ElarionUiKit.ToastTone.Confirm);
+            Rebuild();
+        }
+
+        private void OnSelectSlot(int index)
+        {
+            if (index == _activeSlot)
+            {
+                // Re-tap reloads saved version (discard unsaved edits).
+                ArmyLoadoutService.LoadInto(index, s_composition);
+                ElarionUiKit.ShowToast("Reloaded " + ArmyLoadoutService.SlotName(index) + ".", ElarionUiKit.ToastTone.Info);
+            }
+            else
+            {
+                // Auto-save previous working set into the slot we leave (never lose work).
+                ArmyLoadoutService.SaveFrom(_activeSlot, s_composition);
+                _activeSlot = index;
+                ArmyLoadoutService.LoadInto(index, s_composition);
+                ElarionUiKit.ShowToast("Editing " + ArmyLoadoutService.SlotName(index) + ".", ElarionUiKit.ToastTone.Info);
+            }
+            Rebuild();
+        }
+
+        private void OnRecipe(int recipe)
+        {
+            string msg = ArmyLoadoutService.ApplyRecipe(s_composition, recipe);
+            ElarionUiKit.ShowToast(msg, ElarionUiKit.ToastTone.Gold);
+            Rebuild();
+        }
+
+        private void OnCycleName()
+        {
+            // Fun: cycle default names so the player can "feel" ownership without a soft keyboard.
+            string[] names =
+            {
+                "Raid Push", "Wall Hold", "Siege Prep",
+                "Night Watch", "Quick Strike", "Last Stand", "New Army",
+            };
+            string cur = s_composition.Name ?? "";
+            int idx = 0;
+            for (int i = 0; i < names.Length; i++)
+                if (string.Equals(names[i], cur, System.StringComparison.OrdinalIgnoreCase))
+                { idx = (i + 1) % names.Length; break; }
+            s_composition.Name = names[idx];
             Rebuild();
         }
 
@@ -202,19 +234,15 @@ namespace DeNelle.Village
         private void Rebuild()
         {
             if (_ui == null || _detailHost == null) return;
-
             UpdateWallet();
             BuildTroopLadder();
-            BuildComposition();
+            BuildDetail();
             UpdateCta();
         }
 
         private void UpdateWallet()
         {
             if (_wallet == null || _wallet.Length < 3) return;
-            // Through the service, not the ledger. See ArmyMusterService.WalletBalances - a View
-            // reading game state directly is the UI-MVVM violation the conformance oracle catches,
-            // and it also risks the footer disagreeing with the CTA's affordability check.
             var bal = ArmyMusterService.WalletBalances();
             _wallet[0]?.SetAmount(bal.Wood);
             _wallet[1]?.SetAmount(bal.Iron);
@@ -228,7 +256,6 @@ namespace DeNelle.Village
 
             for (int i = host.childCount - 1; i >= 0; i--) Destroy(host.GetChild(i).gameObject);
 
-            // Only UNLOCKED troops are offered (WO-897 AC 3) - a locked troop cannot be mustered.
             var offered = new List<TroopDef>();
             var all = TroopCatalog.All;
             if (all != null)
@@ -249,7 +276,6 @@ namespace DeNelle.Village
             Guard.TryEach("Muster", "troop-row", offered, def => BuildTroopRow(host, def));
         }
 
-        /// <summary>One offered troop: name / per-unit cost + time on the left, a [-] N [+] stepper right.</summary>
         private void BuildTroopRow(Transform parent, TroopDef def)
         {
             string id = def.Id;
@@ -266,7 +292,9 @@ namespace DeNelle.Village
             plate.color = RowPlate;
 
             string name = string.IsNullOrEmpty(def.DisplayName) ? id : def.DisplayName;
-            var nameLabel = ElarionUiKit.Label(row.transform, name, 0.52f, 0.94f,
+            // Cap note for siege maxOwned
+            string capTag = def.MaxOwned == 1 ? " (max 1)" : "";
+            var nameLabel = ElarionUiKit.Label(row.transform, name + capTag, 0.52f, 0.94f,
                 ElarionUi.Parchment, ElarionUi.FontLabel, TextAlignmentOptions.MidlineLeft, 0.04f, 0.62f, bold: true);
             nameLabel.raycastTarget = false;
 
@@ -274,8 +302,6 @@ namespace DeNelle.Village
                 ElarionUi.ParchmentDim, ElarionUi.FontMicro, TextAlignmentOptions.MidlineLeft, 0.04f, 0.62f);
             costLabel.raycastTarget = false;
 
-            // Stepper. The COUNT is text, the buttons are labelled "-" / "+" (ASCII), so the row
-            // never relies on a colour to say how many are staged.
             var minus = ElarionUiKit.Button(row.transform, "-", ElarionUiKit.ButtonKind.Quiet,
                 new Vector2(0.64f, 0.14f), new Vector2(0.745f, 0.86f), () => Step(id, -1));
             if (minus != null) ElarionUiKit.ClampMinTouch(minus);
@@ -291,23 +317,35 @@ namespace DeNelle.Village
 
         private void Step(string troopId, int delta)
         {
+            // Honour maxOwned in the composer so the UI can't stage 2 catapults.
+            var def = TroopCatalog.Find(troopId);
+            if (def != null && def.MaxOwned > 0 && delta > 0)
+            {
+                int want = s_composition.CountOf(troopId) + delta;
+                if (want > def.MaxOwned)
+                {
+                    ElarionUiKit.ShowToast(
+                        "Only " + def.MaxOwned + "x " +
+                        (string.IsNullOrEmpty(def.DisplayName) ? troopId : def.DisplayName) +
+                        " in a loadout.",
+                        ElarionUiKit.ToastTone.Info);
+                    return;
+                }
+            }
             s_composition.Add(troopId, delta);
             Rebuild();
         }
 
-        /// <summary>"25 Wood, 10 Iron - 45s each" (ASCII, no glyphs).</summary>
         private static string PerUnitLine(TroopDef def)
         {
             var cost = new ArmyCost { Wood = def.CostWood, Iron = def.CostIron, Food = def.CostFood };
             return cost.ToString() + " - " + ArmyMusterPlanner.FormatDuration(def.BuildSeconds) + " each";
         }
 
-        /// <summary>The parchment readout: composition rows, totals, queue-line state, last result.</summary>
-        private void BuildComposition()
+        private void BuildDetail()
         {
             if (_detailHost == null) return;
 
-            // Clear everything EXCEPT the CTA (it is a persistent child of this zone).
             for (int i = _detailHost.childCount - 1; i >= 0; i--)
             {
                 var child = _detailHost.GetChild(i).gameObject;
@@ -315,13 +353,53 @@ namespace DeNelle.Village
                 Destroy(child);
             }
 
+            // ── Slot tabs (3 loadouts) ────────────────────────────────────────
+            float tabW = 0.30f;
+            float gap = 0.02f;
+            for (int s = 0; s < ArmyLoadoutService.SlotCount; s++)
+            {
+                float x0 = 0.04f + s * (tabW + gap);
+                float x1 = x0 + tabW;
+                bool active = s == _activeSlot;
+                int units = ArmyLoadoutService.SlotUnitCount(s);
+                string label = (s + 1) + " " + ShortName(ArmyLoadoutService.SlotName(s));
+                if (units > 0) label += " (" + units + ")";
+                int capture = s;
+                var kind = active ? ElarionUiKit.ButtonKind.Gold : ElarionUiKit.ButtonKind.Quiet;
+                var btn = ElarionUiKit.Button(_detailHost, label, kind,
+                    new Vector2(x0, 0.90f), new Vector2(x1, 0.98f), () => OnSelectSlot(capture));
+                if (btn != null) ElarionUiKit.ClampMinTouch(btn);
+            }
+
+            // ── Quick recipes ─────────────────────────────────────────────────
+            ElarionUiKit.Button(_detailHost, "Raid", ElarionUiKit.ButtonKind.Quiet,
+                new Vector2(0.04f, 0.80f), new Vector2(0.27f, 0.88f), () => OnRecipe(0));
+            ElarionUiKit.Button(_detailHost, "Hold", ElarionUiKit.ButtonKind.Quiet,
+                new Vector2(0.29f, 0.80f), new Vector2(0.52f, 0.88f), () => OnRecipe(1));
+            ElarionUiKit.Button(_detailHost, "Siege", ElarionUiKit.ButtonKind.Quiet,
+                new Vector2(0.54f, 0.80f), new Vector2(0.77f, 0.88f), () => OnRecipe(2));
+            ElarionUiKit.Button(_detailHost, "Clear", ElarionUiKit.ButtonKind.Quiet,
+                new Vector2(0.79f, 0.80f), new Vector2(0.96f, 0.88f), () => OnRecipe(3));
+
+            // ── Name + save ───────────────────────────────────────────────────
+            ElarionUiKit.Button(_detailHost, "Name: " + ShortName(s_composition.Name), ElarionUiKit.ButtonKind.Quiet,
+                new Vector2(0.04f, 0.70f), new Vector2(0.62f, 0.78f), OnCycleName);
+            ElarionUiKit.Button(_detailHost, "Save slot", ElarionUiKit.ButtonKind.Gold,
+                new Vector2(0.64f, 0.70f), new Vector2(0.96f, 0.78f), OnSaveSlot);
+
+            // ── Composition body ──────────────────────────────────────────────
             var preview = ArmyMusterService.Preview(s_composition);
             var body = new System.Text.StringBuilder();
 
-            body.Append("ARMY: ").Append(s_composition.Name).Append('\n');
+            body.Append("STAGED: ").Append(s_composition.Name).Append("  (slot ")
+                .Append(_activeSlot + 1).Append(")\n");
+
             if (preview.TotalUnits <= 0)
             {
-                body.Append("\nNo troops staged yet.\nUse [+] on the left to add troops,\nthen Muster army to queue them all at once.");
+                body.Append("\nEmpty plan.\n");
+                body.Append("Tap Raid / Hold / Siege for a quick fill,\n");
+                body.Append("or [+] troops on the left.\n");
+                body.Append("Then Save slot and Muster army.\n");
             }
             else
             {
@@ -332,22 +410,20 @@ namespace DeNelle.Village
                     string name = def != null && !string.IsNullOrEmpty(def.DisplayName) ? def.DisplayName : r.TroopId;
                     body.Append("  ").Append(r.Count).Append("x ").Append(name).Append('\n');
                 }
-                body.Append("\nTotal cost: ").Append(preview.Cost).Append('\n');
-                body.Append("Total time: ").Append(ArmyMusterPlanner.FormatDuration(preview.TotalSeconds))
-                    .Append(" (").Append(preview.TrainSlots).Append(" slot")
+                body.Append("\nCost: ").Append(preview.Cost).Append('\n');
+                body.Append("Time: ").Append(ArmyMusterPlanner.FormatDuration(preview.TotalSeconds))
+                    .Append(" (").Append(preview.TrainSlots).Append(" train slot")
                     .Append(preview.TrainSlots == 1 ? "" : "s").Append(")\n");
                 if (!preview.Affordable)
                     body.Append("Short of: ").Append(preview.ShortOf).Append('\n');
             }
 
-            // The queue line, always in TEXT with both numbers - never a colour or a bar alone.
-            body.Append("\nTraining queue: ").Append(preview.LineDepth).Append(" of ")
+            body.Append("\nTrain queue: ").Append(preview.LineDepth).Append(" of ")
                 .Append(ArmyMusterPlanner.TrainQueueDepthCap).Append(" used, ")
                 .Append(preview.LineRoom).Append(" free.\n");
             if (preview.WouldNotFit > 0)
-                body.Append("Only ").Append(preview.WouldFit).Append(" of ").Append(preview.TotalUnits)
-                    .Append(" will fit right now - ").Append(preview.WouldNotFit)
-                    .Append(" will be left staged.\n");
+                body.Append("Fits now: ").Append(preview.WouldFit).Append(" of ")
+                    .Append(preview.TotalUnits).Append(" (rest stays staged).\n");
 
             if (!string.IsNullOrEmpty(_lastResultHeadline))
             {
@@ -355,17 +431,22 @@ namespace DeNelle.Village
                 if (!string.IsNullOrEmpty(_lastResultDetail)) body.Append(_lastResultDetail).Append('\n');
             }
 
-            var text = ElarionUiKit.Label(_detailHost, body.ToString(), 0.14f, 0.97f,
+            body.Append("\nTip: Muster auto-saves this slot. Fill the army, then Raids.");
+
+            var text = ElarionUiKit.Label(_detailHost, body.ToString(), 0.13f, 0.68f,
                 Ink, ElarionUi.FontLabel, TextAlignmentOptions.TopLeft, 0.05f, 0.95f);
             text.raycastTarget = false;
             text.enableWordWrapping = true;
-            ElarionUiKit.FitBlock(text, 30f, ElarionUi.FontLabel);   // font floor 30 (mobile legibility)
+            ElarionUiKit.FitBlock(text, 28f, ElarionUi.FontLabel);
         }
 
-        /// <summary>
-        /// The CTA reflects the LIVE Train queue (WO-897 §1): what it will queue now, and how many
-        /// trainings are already in flight. Text-only state - no colour-only tell.
-        /// </summary>
+        private static string ShortName(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return "Army";
+            if (name.Length <= 12) return name;
+            return name.Substring(0, 11) + ".";
+        }
+
         private void UpdateCta()
         {
             if (_musterCta == null) return;
@@ -376,8 +457,8 @@ namespace DeNelle.Village
             if (preview.TotalUnits <= 0)
             {
                 label = preview.LineDepth > 0
-                    ? "Mustering - " + preview.LineDepth + " in queue"
-                    : "Add troops to muster";
+                    ? "Queue busy - " + preview.LineDepth + " training"
+                    : "Stage troops first";
                 interactable = false;
             }
             else if (preview.LineRoom <= 0)
@@ -393,8 +474,8 @@ namespace DeNelle.Village
             else
             {
                 label = preview.LineDepth > 0
-                    ? "Muster " + preview.TotalUnits + " (" + preview.LineDepth + " in queue)"
-                    : "Muster army - " + preview.TotalUnits;
+                    ? "Muster " + preview.TotalUnits + " (+" + preview.LineDepth + " queued)"
+                    : "Muster " + preview.TotalUnits + " - auto train";
                 interactable = true;
             }
 

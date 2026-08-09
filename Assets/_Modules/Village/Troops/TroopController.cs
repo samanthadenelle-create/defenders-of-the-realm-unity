@@ -71,6 +71,10 @@ namespace DeNelle.Village
         private float _moveSpeed = 4.0f;
         private float _huntScanRadius = 14f;
         private DamageElement _element = DamageElement.None;
+        // WO-933 siege: prefer Hostile structures; bias damage structure vs unit.
+        private bool _preferStructures;
+        private float _structureDamageMult = 1f;
+        private float _unitDamageMult = 1f;
 
         // WO-771.9 spawn-wiring: the EFFECTIVE baseline the veterancy/perk multipliers re-base
         // from. Set to the def stats in Configure; overwritten by ApplyUpgradeStats when the
@@ -294,6 +298,10 @@ namespace DeNelle.Village
                 _moveSpeed      = def.MoveSpeed;
                 _huntScanRadius = def.HuntScanRadius;
                 _element        = ParseElement(def.Element);
+                // WO-933: role "siege" → structure-prefer hunt (WC Demolisher / CoC wall-breaker).
+                _preferStructures = string.Equals(def.Role, "siege", System.StringComparison.OrdinalIgnoreCase);
+                _structureDamageMult = def.StructureDamageMult > 0f ? def.StructureDamageMult : 1f;
+                _unitDamageMult = def.UnitDamageMult > 0f ? def.UnitDamageMult : 1f;
             }
 
             // WO-771.9: seed the re-base baseline from the def; ApplyUpgradeStats overwrites it
@@ -474,13 +482,18 @@ namespace DeNelle.Village
         /// The nearest living hostile <see cref="IDamageable"/> within the hunt-scan
         /// radius, or null. Discovery is via an enemy-LayerMask overlap — the troop
         /// never references the concrete Village Enemy type (copied from Pet).
+        /// WO-933 siege: when <see cref="_preferStructures"/> is set, any Hostile that
+        /// also implements <see cref="IDamageableStructure"/> beats pure units (nearest
+        /// among structures first; else nearest unit — never freezes idle).
         /// </summary>
         private IDamageable NearestHostile()
         {
             int count = Physics.OverlapSphereNonAlloc(
                 transform.position, _huntScanRadius, _overlap, _enemyMask, QueryTriggerInteraction.Collide);
-            IDamageable best = null;
-            float bestSqr = float.MaxValue;
+            IDamageable bestUnit = null;
+            IDamageable bestStruct = null;
+            float bestUnitSqr = float.MaxValue;
+            float bestStructSqr = float.MaxValue;
             for (int i = 0; i < count; i++)
             {
                 var col = _overlap[i];
@@ -488,20 +501,60 @@ namespace DeNelle.Village
                 var dmg = col.GetComponentInParent<IDamageable>();
                 if (dmg == null || !dmg.IsAlive || dmg.Faction != CombatFaction.Hostile) continue;
                 float sqr = (dmg.WorldPosition - transform.position).sqrMagnitude;
-                if (sqr < bestSqr)
+                if (_preferStructures && IsHostileStructure(dmg))
                 {
-                    bestSqr = sqr;
-                    best = dmg;
+                    if (sqr < bestStructSqr)
+                    {
+                        bestStructSqr = sqr;
+                        bestStruct = dmg;
+                    }
+                }
+                else if (sqr < bestUnitSqr)
+                {
+                    bestUnitSqr = sqr;
+                    bestUnit = dmg;
                 }
             }
-            return best;
+            if (_preferStructures && bestStruct != null)
+            {
+                if (_cachedFoe != bestStruct)
+                    FlowTrace.Step("TroopSiege",
+                        $"id={_troopId}: prefer structure '{DescribeTarget(bestStruct)}' " +
+                        $"(unit-fallback={(bestUnit != null ? DescribeTarget(bestUnit) : "none")}).");
+                return bestStruct;
+            }
+            return bestUnit;
+        }
+
+        /// <summary>
+        /// Hostile structures dual-implement <see cref="IDamageable"/> +
+        /// <see cref="IDamageableStructure"/> (walls, towers, gates, spire). Pure
+        /// garrison units typically only implement <see cref="IDamageable"/>.
+        /// </summary>
+        private static bool IsHostileStructure(IDamageable dmg)
+        {
+            if (dmg == null || dmg.Faction != CombatFaction.Hostile) return false;
+            return dmg is IDamageableStructure;
+        }
+
+        private static string DescribeTarget(IDamageable dmg)
+        {
+            if (dmg is Component c && c != null) return c.GetType().Name;
+            return dmg != null ? dmg.GetType().Name : "?";
         }
 
         /// <summary>Lands one attack on <paramref name="foe"/> and resets the attack cooldown.</summary>
         private void Attack(IDamageable foe)
         {
             _attackCdRemaining = _attackCooldown;
-            foe.TakeDamage(_attackDamage, _element);
+            float dmg = _attackDamage;
+            if (_preferStructures || _structureDamageMult != 1f || _unitDamageMult != 1f)
+            {
+                bool structure = IsHostileStructure(foe);
+                float mult = structure ? _structureDamageMult : _unitDamageMult;
+                if (mult > 0f) dmg *= mult;
+            }
+            foe.TakeDamage(dmg, _element);
 
             // Fire the strike animation in sync with the damage tick (guarded).
             if (_animator != null && _hasAttack) _animator.SetTrigger(AnimAttack);

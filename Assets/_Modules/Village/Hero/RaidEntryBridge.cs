@@ -141,7 +141,11 @@ namespace DeNelle.Village.Hero
         {
             if (!DeNelle.Core.FeatureFlags.Raid)
             {
-                FlowTrace.Step("Raid", "raid icon fired but RAID is feature-flagged OFF (victory/return not built) — ignored.");
+                // WO-932: victory/return ARE built — flag OFF is an intentional product gate only.
+                FlowTrace.Step("Raid", "raid icon fired but FeatureFlags.Raid is OFF — ignored.");
+                DeNelle.Core.UI.ElarionUiKit.ShowToast(
+                    "Raids are turned off in this build.",
+                    DeNelle.Core.UI.ElarionUiKit.ToastTone.Info);
                 return;
             }
 

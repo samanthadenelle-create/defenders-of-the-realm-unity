@@ -9,14 +9,14 @@
 // 2 Outriders"). ArmyMusterService turns it into Train-channel jobs; ArmyMusterPlan
 // (same file) is the display projection (total cost / total time / what fits).
 //
-// NOT PERSISTED (deliberate, WO-897 §2 "optional: save/name a preset"): persisting a
-// preset would need a SaveSchema field + a version bump, which collides with the
-// coordinated v36->v37 bump WO-911 already owns. The composition lives for the
-// session; naming/saving it is a follow-up that lands with that bump.
+// PERSISTENCE (WO-934): named slots live on ArmyStorage.Loadouts (Core DTO). This
+// type is still the session WORKING SET the Armies UI edits; ArmyLoadoutService
+// copies to/from the saved slots.
 // =============================================================================
 
 using System;
 using System.Collections.Generic;
+using DeNelle.Core.State;
 
 namespace DeNelle.Village
 {
@@ -104,6 +104,61 @@ namespace DeNelle.Village
 
         /// <summary>Empties the composition (keeps the name).</summary>
         public void Clear() => Rows?.Clear();
+
+        /// <summary>Deep-copy rows + name from another composition.</summary>
+        public void CopyFrom(ArmyComposition other)
+        {
+            if (other == null) { Clear(); return; }
+            Name = other.Name ?? "New Army";
+            if (Rows == null) Rows = new List<ArmyCompositionRow>();
+            else Rows.Clear();
+            if (other.Rows == null) return;
+            foreach (var r in other.Rows)
+            {
+                if (r == null || string.IsNullOrEmpty(r.TroopId) || r.Count <= 0) continue;
+                Rows.Add(new ArmyCompositionRow(r.TroopId, r.Count));
+            }
+        }
+
+        /// <summary>Build a working composition from a persisted loadout slot.</summary>
+        public static ArmyComposition FromLoadout(ArmyLoadoutSlot slot)
+        {
+            var c = new ArmyComposition();
+            if (slot == null)
+            {
+                c.Name = "New Army";
+                return c;
+            }
+            c.Name = string.IsNullOrEmpty(slot.Name) ? "New Army" : slot.Name;
+            if (slot.Rows != null)
+            {
+                foreach (var r in slot.Rows)
+                {
+                    if (r == null || string.IsNullOrEmpty(r.TroopId) || r.Count <= 0) continue;
+                    c.Set(r.TroopId, r.Count);
+                }
+            }
+            return c;
+        }
+
+        /// <summary>Snapshot this composition into a save DTO (does not touch GameState).</summary>
+        public ArmyLoadoutSlot ToLoadout()
+        {
+            var slot = new ArmyLoadoutSlot
+            {
+                Name = string.IsNullOrEmpty(Name) ? "New Army" : Name,
+                Rows = new List<ArmyLoadoutRow>(),
+            };
+            if (Rows != null)
+            {
+                foreach (var r in Rows)
+                {
+                    if (r == null || string.IsNullOrEmpty(r.TroopId) || r.Count <= 0) continue;
+                    slot.Rows.Add(new ArmyLoadoutRow(r.TroopId, r.Count));
+                }
+            }
+            return slot;
+        }
     }
 
     /// <summary>Summed resource cost of a composition — the four resources troops.json prices in.</summary>

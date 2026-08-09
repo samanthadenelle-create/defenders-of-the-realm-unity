@@ -96,6 +96,14 @@ namespace DeNelle.Editor
             if (!(lootFull.Food > lootHalf.Food && lootHalf.Food > lootNone.Food))
                 failures.Add($"ComputeLoot food not monotonic: none {lootNone.Food} <= half {lootHalf.Food} <= full {lootFull.Food}");
 
+            // Honesty: scene rewardMultiplier scales payout (Hard x1.5 / Extreme x2.2).
+            var lootBase = RaidScoring.ComputeLoot(3, 1f, 40, 60, 15, 20, 1f);
+            var lootHard = RaidScoring.ComputeLoot(3, 1f, 40, 60, 15, 20, 1.5f);
+            if (lootHard.Crystals < lootBase.Crystals * 1.4f)
+                failures.Add($"ComputeLoot x1.5 mult did not scale crystals: base {lootBase.Crystals} hard {lootHard.Crystals}");
+            if (System.Math.Abs(RaidScoring.DefaultClockSeconds - 180f) > 0.01f)
+                failures.Add($"DefaultClockSeconds is {RaidScoring.DefaultClockSeconds}, expected 180 (UI/scorer honesty).");
+
             // =================================================================
             //  (B)/(C) SOURCE-LINT — the victory grant + the code-built HUD.
             // =================================================================

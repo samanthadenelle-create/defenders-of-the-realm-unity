@@ -21,7 +21,8 @@
 //     CampSystem / NodeDiscoverySystem exactly.
 //   * Proximity interaction reuses the SHARED MobileInteractButton (touch). While the
 //     camp-select owns the screen, RaidSelectionScreen.IsScreenOpen gates the re-request
-//     (the list is not a PanelManager modal, so the herald suppresses it explicitly).
+//     (WO-932: the list ALSO registers PanelManager, but herald still polls IsScreenOpen
+//     so world "Enter Arena" never stacks on top of the camp grid).
 //   * Entry MIRRORS the HUD raid-icon path (RaidEntryBridge): RaidSelectionScreen.Open().
 //
 // DDOL singleton: Destroy(this), NOT the host (CLAUDE.md "singleton dedup destroys

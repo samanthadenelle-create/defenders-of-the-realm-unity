@@ -9,12 +9,12 @@
 // contract exactly: public static bool Run(out string reason); true = pass + a
 // one-line summary, false = fail + the offending detail. Never throws.
 //
-// INVARIANTS ASSERTED (from WORK_ORDER_PROGRAM_732_736 locked product table):
-//   1. TroopCatalog loads EXACTLY the 7 required ids (footman/archer/spearman/
-//      shieldguard/outrider/battlemage/echo-legionnaire) — no missing, no extras,
-//      no duplicate ids. (Resources-path load == the 7 ids == the dual-copy proof.)
+// INVARIANTS ASSERTED (from WORK_ORDER_PROGRAM_732_736 locked product table + WO-933):
+//   1. TroopCatalog loads EXACTLY the 8 required ids (footman/archer/spearman/
+//      shieldguard/outrider/siege-catapult/battlemage/echo-legionnaire) — no missing,
+//      no extras, no duplicate ids. (Resources-path load == dual-copy proof.)
 //   2. Defaults: footman + archer UnlockBarracksTier == 1 (day-one).
-//   3. Ladder: spearman 2, shieldguard 3, outrider 4, battlemage 5, legionnaire 6.
+//   3. Ladder: spearman 2, shieldguard 3, outrider 4, catapult 4, battlemage 5, legionnaire 6.
 //   4. Costs: wood/iron/food >= 0; slots >= 1 (economy sanity, WO-732 table).
 //   5. Visuals (WO-735): every troop carries a non-empty model + iconId.
 //   6. Barracks tier copy (WO-734): the building-tiers.json barracks effect text at
@@ -22,6 +22,7 @@
 //   7. Unlock gate (WO-733): the ladder gates correctly at tier 1 (only day-one pair)
 //      and a higher tier (T3 -> 4 trainable, outrider still locked); TroopUnlock's
 //      real LockedReason ties 733+734 (tier number + authored tier name).
+//   8. WO-933 Siege Catapult: role siege, maxOwned 1, slots heavy, range standoff.
 // =============================================================================
 
 using System.Collections.Generic;
@@ -32,15 +33,15 @@ using DeNelle.Village;
 namespace DeNelle.Editor
 {
     /// <summary>
-    /// Data/logic regression for the Barracks troop roster: exact 7-id set, the
+    /// Data/logic regression for the Barracks troop roster: exact 8-id set, the
     /// unlock-tier ladder, cost/slot sanity, the WO-735 visual keys, the WO-734
-    /// barracks tier announce copy, and the WO-733 unlock gate. Real static game
-    /// code in, asserted out. Returns true (summary) / false (detail); never throws.
+    /// barracks tier announce copy, the WO-733 unlock gate, and WO-933 siege rules.
+    /// Real static game code in, asserted out. Returns true (summary) / false (detail); never throws.
     /// </summary>
     public static class TroopRosterRegression
     {
-        // The seven stable ids and their authored unlock tier (the locked product
-        // table in WORK_ORDER_PROGRAM_732_736 — authoritative, do not drift).
+        // The eight stable ids and their authored unlock tier (WO-732 table + WO-933
+        // Siege Catapult at T4 beside Outrider — authoritative, do not drift).
         private static readonly (string Id, int Tier, string Display)[] Expected =
         {
             ("troop-footman",          1, "Footman"),
@@ -48,6 +49,7 @@ namespace DeNelle.Editor
             ("troop-spearman",         2, "Spearman"),
             ("troop-shieldguard",      3, "Shieldguard"),
             ("troop-outrider",         4, "Outrider"),
+            ("troop-catapult",         4, "Siege Catapult"),
             ("troop-battlemage",       5, "Battlemage"),
             ("troop-echo-legionnaire", 6, "Echo Legionnaire"),
         };
@@ -67,7 +69,7 @@ namespace DeNelle.Editor
                 return false;
             }
 
-            // --- 1) exact 7-id set: no missing, no extras, no duplicates -----------
+            // --- 1) exact 8-id set: no missing, no extras, no duplicates -----------
             var seen = new Dictionary<string, TroopDef>();
             foreach (var t in all)
             {
@@ -87,10 +89,10 @@ namespace DeNelle.Editor
                     failures.Add($"required troop '{e.Id}' is MISSING from troops.json.");
             foreach (var id in seen.Keys)
                 if (!expectedIds.Contains(id))
-                    failures.Add($"unexpected troop id '{id}' in troops.json (roster is the fixed 7-type set).");
+                    failures.Add($"unexpected troop id '{id}' in troops.json (roster is the fixed 8-type set).");
 
             if (seen.Count != Expected.Length)
-                failures.Add($"troops.json has {seen.Count} unique troop(s) — the roster is exactly {Expected.Length} (WO-732 locked table).");
+                failures.Add($"troops.json has {seen.Count} unique troop(s) — the roster is exactly {Expected.Length} (WO-732 + WO-933).");
 
             // --- 2+3) unlock ladder: each troop's authored tier matches the table --
             foreach (var e in Expected)
@@ -137,6 +139,27 @@ namespace DeNelle.Editor
                 failures.Add($"at Barracks tier 3, {trainableAtT3} troop(s) train — expected exactly 4 (Footman/Archer/Spearman/Shieldguard).");
             if (seen.TryGetValue("troop-outrider", out var outrider) && outrider.UnlockBarracksTier <= 3)
                 failures.Add("Outrider is trainable at Barracks tier 3 — it must stay locked until tier 4.");
+            if (seen.TryGetValue("troop-catapult", out var catapultEarly) && catapultEarly.UnlockBarracksTier <= 3)
+                failures.Add("Siege Catapult is trainable at Barracks tier 3 — it must stay locked until tier 4.");
+
+            // --- 8) WO-933 Siege Catapult product rules (CoC scarcity + WC siege) ---
+            if (seen.TryGetValue("troop-catapult", out var catapult))
+            {
+                if (!string.Equals(catapult.Role, "siege", System.StringComparison.OrdinalIgnoreCase))
+                    failures.Add($"troop-catapult role='{catapult.Role}' — expected 'siege' (structure-prefer hunt).");
+                if (catapult.MaxOwned != 1)
+                    failures.Add($"troop-catapult maxOwned={catapult.MaxOwned} — expected 1 (one owned at a time).");
+                if (catapult.Slots < 3)
+                    failures.Add($"troop-catapult slots={catapult.Slots} — expected >= 3 (army housing tax).");
+                if (catapult.AttackRange < 22f)
+                    failures.Add($"troop-catapult attackRange={catapult.AttackRange} — expected >= 22 (standoff vs T1 towers).");
+                if (catapult.MoveSpeed > 2.5f)
+                    failures.Add($"troop-catapult moveSpeed={catapult.MoveSpeed} — expected <= 2.5 (slow vulnerability tax).");
+                if (catapult.MaxHp > 70f)
+                    failures.Add($"troop-catapult maxHp={catapult.MaxHp} — expected fragile (<= 70).");
+                if (string.IsNullOrEmpty(catapult.Model) || catapult.Model.IndexOf("Catapult", System.StringComparison.OrdinalIgnoreCase) < 0)
+                    failures.Add($"troop-catapult model='{catapult.Model}' — expected a Catapult machine path.");
+            }
 
             // Real TroopUnlock.LockedReason ties WO-733 (tier number) + WO-734 (tier
             // name): a locked troop's reason must carry both.
@@ -151,9 +174,9 @@ namespace DeNelle.Editor
 
             if (failures.Count == 0)
             {
-                reason = $"TROOP_ROSTER_OK — {seen.Count} troops, unique ids, unlock ladder 1/1/2/3/4/5/6, " +
+                reason = $"TROOP_ROSTER_OK — {seen.Count} troops, unique ids, unlock ladder 1/1/2/3/4+catapult/5/6, " +
                          $"costs+slots sane, every troop has model+iconId (WO-735), barracks T2-6 announce their unit (WO-734), " +
-                         $"gate: 2 train @T1 / 4 @T3 (WO-733).";
+                         $"gate: 2 train @T1 / 4 @T3 (WO-733), siege maxOwned=1 (WO-933).";
                 return true;
             }
 

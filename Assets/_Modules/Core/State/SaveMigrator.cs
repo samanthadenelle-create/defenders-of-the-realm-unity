@@ -76,6 +76,7 @@ namespace DeNelle.Core.State
                 { 35, MigrateToV35 },
                 { 36, MigrateToV36 },
                 { 37, MigrateToV37 },
+                { 38, MigrateToV38 },
             };
 
         /// <summary>
@@ -670,6 +671,17 @@ namespace DeNelle.Core.State
         /// migrator's top step must equal <see cref="SaveSchema.CurrentVersion"/>) and so the
         /// no-op is a decision on the record rather than a gap someone later "fixes" by guessing.
         /// </summary>
+        /// <summary>
+        /// v37 → v38 (WO-934) — seed 3 empty named army loadout slots on ArmyStorage.
+        /// Additive; older saves had no loadouts key. EnsureLoadouts fills defaults.
+        /// </summary>
+        private static PersistedState MigrateToV38(PersistedState s)
+        {
+            if (s.Army == null) s.Army = new ArmyStorage();
+            s.Army.EnsureLoadouts();
+            return s;
+        }
+
         private static PersistedState MigrateToV37(PersistedState s)
         {
             int legacy = 0;

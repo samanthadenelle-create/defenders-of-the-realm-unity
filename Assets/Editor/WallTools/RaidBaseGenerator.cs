@@ -32,8 +32,8 @@
 //   towers[]        -> the turret TYPE palette (weighted by count)(ResolveTowerTypes)
 //   difficulty      -> spire HP + the tower DPS budget            (TierFor)
 //   baseRadius      -> the ring half-extent (was ignored here)    (BuildConfigLayout)
-// Still dead and DELIBERATELY not faked: `eliteCount` and `props` - their only honest
-// consumer is RaidGarrisonSpawner / a prop dresser, which this lane does not own.
+// Still dead and DELIBERATELY not faked: `props` (no prop dresser for raid bases yet).
+// WO-932: `eliteCount` is LIVE — RaidGarrisonSpawner.ExpandComposition consumes it.
 //
 // BALANCE (the reason this is not just "more towers"): every turret's damage is
 // scaled by a single factor k so that the WORST point in the arena - found by

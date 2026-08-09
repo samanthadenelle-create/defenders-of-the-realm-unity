@@ -8,7 +8,7 @@
 // the View reads NO game state, never names EconomyService / GameStateService.
 // -----------------------------------------------------------------------------
 // WO-737 layout contract (owner-ratified FrameCrafting master-detail template):
-//   * bodyLeft  (dark well)      = a SCROLLABLE ladder of ALL 7 troops (kit
+//   * bodyLeft  (dark well)      = a SCROLLABLE ladder of ALL troops (kit
 //                                  MakeScrollZone), sorted by UnlockBarracksTier then
 //                                  catalog order. LOCKED troops stay VISIBLE (ladder
 //                                  education) — selected=Yellow, unlocked=Gray,
@@ -154,6 +154,15 @@ namespace DeNelle.Village.Hero
                 ElarionUiKit.CurrencyKind.Food,
                 ElarionUiKit.CurrencyKind.Crystal,
             });
+
+            // WO-934: Armies loadout bank is one tap from Barracks (discoverable, not Yarn-only).
+            var armiesBtn = ElarionUiKit.Button(footHost, "Armies", ElarionUiKit.ButtonKind.Gold,
+                new Vector2(0.72f, 0.08f), new Vector2(0.98f, 0.92f), () =>
+                {
+                    Close();
+                    ArmyMusterPanel.Show();
+                });
+            if (armiesBtn != null) ElarionUiKit.ClampMinTouch(armiesBtn);
 
             // WO-714 P8: the ONE shared open ease (scale target = the panel rect).
             ElarionUiKit.AttachPanelOpenFx(_ui,
@@ -446,6 +455,8 @@ namespace DeNelle.Village.Hero
                 // B / C — a one-line readiness note in the state band (never colour alone).
                 string note; Color noteCol;
                 if (canTrain) { note = "Ready to train."; noteCol = InkGood; }
+                else if (!hasRoom && !string.IsNullOrEmpty(d.LockedReason))
+                { note = d.LockedReason; noteCol = InkBad; }
                 else if (!hasRoom) { note = "Army cap full - deploy or expand."; noteCol = InkBad; }
                 else { note = "Not enough resources."; noteCol = InkBad; }
                 MakeText(_detailHost, note, 13, noteCol, FontStyles.Bold,
@@ -592,7 +603,10 @@ namespace DeNelle.Village.Hero
                         ElarionUiKit.ToastTone.Confirm);
                     break;
                 default:
-                    ElarionUiKit.ShowToast("Couldn't train " + result.Name + " - army cap full or not enough resources.",
+                    ElarionUiKit.ShowToast(
+                        !string.IsNullOrEmpty(result.Reason)
+                            ? result.Reason
+                            : ("Couldn't train " + result.Name + " - army cap full or not enough resources."),
                         ElarionUiKit.ToastTone.Danger);
                     break;
             }
@@ -601,7 +615,8 @@ namespace DeNelle.Village.Hero
         // Role glyph fallback when no icon sprite resolves (ASCII initial).
         private static string RoleGlyph(string role)
         {
-            if (role == "ranged") return "R";
+            if (string.Equals(role, "siege", System.StringComparison.OrdinalIgnoreCase)) return "S";
+            if (string.Equals(role, "ranged", System.StringComparison.OrdinalIgnoreCase)) return "R";
             return "M";
         }
 

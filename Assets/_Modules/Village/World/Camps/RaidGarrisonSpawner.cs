@@ -91,6 +91,9 @@ namespace DeNelle.Village.World.Camps
         private int _aliveCount;
         private bool _activated;
 
+        /// <summary>scene-configs.json id this base was generated from (empty if unset).</summary>
+        public string ConfigId => configId;
+
         /// <summary>Test/inspect hook: set the config id in code before Start.</summary>
         public void SetConfigId(string id) => configId = id;
 
@@ -185,6 +188,13 @@ namespace DeNelle.Village.World.Camps
             }
             else
             {
+                // WO-932 Phase 3: loud start line for playtest probes (garrison + objective).
+                var spire = RaidSpire.Active != null ? RaidSpire.Active : FindAnyObjectByType<RaidSpire>();
+                FlowTrace.Step("Raid",
+                    $"RAID START config='{configId}' garrisonAlive={_aliveCount} " +
+                    $"enemyLevel={enemyLevel} difficultyx{difficulty:F2} " +
+                    $"spire={(spire != null ? spire.MaxHp.ToString("0") + "hp" : "NONE")} " +
+                    $"scene='{gameObject.scene.name}'.");
                 FlowTrace.Step("Garrison", $"'{configId}' garrison spawned: {_aliveCount} defender(s), " +
                           $"enemyLevel {enemyLevel} (player {playerLevel}), difficulty x{difficulty:F2}, ring {ring:F1}m.");
             }
@@ -218,7 +228,9 @@ namespace DeNelle.Village.World.Camps
         }
 
         // Flatten composition[{enemyId,count}] into a per-unit id list (count>0 guarded).
-        private static List<string> ExpandComposition(GarrisonDef g)
+        // WO-932 Phase 4: also append eliteCount copies of the strongest composition id
+        // (or boss id) so the authored eliteCount field is no longer dead data.
+        private List<string> ExpandComposition(GarrisonDef g)
         {
             var ids = new List<string>();
             if (g == null || g.composition == null) return ids;
@@ -228,6 +240,38 @@ namespace DeNelle.Village.World.Camps
                 if (entry == null || string.IsNullOrEmpty(entry.enemyId)) continue;
                 int count = Mathf.Max(0, entry.count);
                 for (int c = 0; c < count; c++) ids.Add(entry.enemyId);
+            }
+
+            // eliteCount lives on SceneConfigDef, not GarrisonDef — read from catalog.
+            int elites = 0;
+            string eliteId = null;
+            Guard.Try("Garrison", "resolve eliteCount for " + configId, () =>
+            {
+                var cfg = SceneConfigCatalog.Find(configId);
+                if (cfg == null) return;
+                elites = Mathf.Max(0, cfg.eliteCount);
+                if (elites <= 0) return;
+                // Prefer last composition entry (often the heavier unit), else boss.
+                if (g.composition != null && g.composition.Count > 0)
+                {
+                    for (int i = g.composition.Count - 1; i >= 0; i--)
+                    {
+                        var e = g.composition[i];
+                        if (e != null && !string.IsNullOrEmpty(e.enemyId))
+                        {
+                            eliteId = e.enemyId;
+                            break;
+                        }
+                    }
+                }
+                if (string.IsNullOrEmpty(eliteId))
+                    eliteId = string.IsNullOrEmpty(g.boss) ? "orc-berserker" : g.boss;
+            });
+            if (elites > 0 && !string.IsNullOrEmpty(eliteId))
+            {
+                for (int e = 0; e < elites; e++) ids.Add(eliteId);
+                FlowTrace.Step("Garrison",
+                    $"'{configId}' eliteCount={elites} as '{eliteId}' appended to garrison list.");
             }
             return ids;
         }

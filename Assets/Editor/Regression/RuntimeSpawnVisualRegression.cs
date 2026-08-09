@@ -439,14 +439,16 @@ namespace DeNelle.Editor.Regression
                     continue;
                 }
 
-                if (!HeroAssetExists(model))
+                if (!TroopModelAssetExists(model))
                     failures.Add("[troop-controllers] '" + id + "' points at model '" + model + "' but no asset " +
-                                 "resolves at Resources/Heroes/" + model + " (.prefab/.fbx) - VisualFactory.Skin " +
-                                 "returns null and the troop deploys as a capsule");
+                                 "resolves at Resources/" + ResolveTroopModelRel(model) +
+                                 " (.prefab/.fbx) - VisualFactory.Skin returns null and the troop deploys as a capsule");
 
                 // The fallback ladder TroopFactory walks: the model's own controller, then the shared
                 // controller for its ROLE, then Knight. At least the role controller must be drivable.
-                neededControllers.Add(role == "ranged" ? "Ranger" : "Knight");
+                // WO-933 siege machines skip humanoid animator bind entirely — no role controller needed.
+                if (role != "siege")
+                    neededControllers.Add(role == "ranged" ? "Ranger" : "Knight");
             }
 
             neededControllers.Add("Knight");   // the last-resort fallback, always required
@@ -471,13 +473,32 @@ namespace DeNelle.Editor.Regression
             notes.Add("troops=" + rows + ", fallback controllers=" + string.Join("/", new List<string>(neededControllers).ToArray()));
         }
 
-        /// <summary>True if Resources/Heroes carries a loadable asset for this model id.</summary>
-        private static bool HeroAssetExists(string model)
+        /// <summary>
+        /// Resolves a troops.json model field the same way TroopFactory does:
+        /// bare names → Heroes/&lt;name&gt;; slash paths → full Resources path
+        /// (e.g. Structures/Catapult for WO-933 siege machines).
+        /// </summary>
+        private static string ResolveTroopModelRel(string model)
         {
+            if (string.IsNullOrEmpty(model)) return "";
+            if (model.IndexOf('/') >= 0 || model.IndexOf('\\') >= 0)
+                return model.Replace('\\', '/');
+            return "Heroes/" + model;
+        }
+
+        /// <summary>True if Resources carries a loadable asset for this troop model field.</summary>
+        private static bool TroopModelAssetExists(string model)
+        {
+            string rel = ResolveTroopModelRel(model);
+            if (string.IsNullOrEmpty(rel)) return false;
+            string basePath = "Assets/Resources/" + rel;
             foreach (string ext in new[] { ".prefab", ".fbx", ".FBX" })
-                if (File.Exists(HeroesRes + "/" + model + ext)) return true;
+                if (File.Exists(basePath + ext)) return true;
             return false;
         }
+
+        /// <summary>True if Resources/Heroes carries a loadable asset for this model id.</summary>
+        private static bool HeroAssetExists(string model) => TroopModelAssetExists(model);
 
         /// <summary>
         /// Reads the .controller YAML and reports whether it declares <paramref name="param"/> in its

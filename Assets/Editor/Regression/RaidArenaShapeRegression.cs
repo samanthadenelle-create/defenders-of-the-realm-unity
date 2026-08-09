@@ -10,7 +10,7 @@
 //                        (a ~21.6 m square). The ring size fell out of
 //                        wallSegmentsPerSide * 1.5 m; the authored `baseRadius` was
 //                        read by NOTHING. -> Case 1.
-//   DEFECT 2 (dead keys) `centralBuilding`, `towers[]` and `eliteCount` were declared
+//   DEFECT 2 (dead keys) `centralBuilding`, `towers[]` (and formerly `eliteCount`) were declared
 //                        on SceneConfigDef and authored in the JSON, and NOTHING in
 //                        the repo read them. That whole CLASS of rot is what Case 2
 //                        catches - generally, for every key, not just those three.
@@ -95,8 +95,8 @@ namespace DeNelle.Editor.Regression
                 { "themeColor",  "banner/accent hex; the raid selection UI does not tint yet." },
                 { "props",       "prop dressing set; no prop dresser exists for raid bases." },
                 { "oneStarTime", "documented as 'no upper bound' (always 0) - informational only." },
-                { "eliteCount",  "elite garrison units. Its only honest consumer is RaidGarrisonSpawner, " +
-                                 "which the raid-arena lane does not own - patch handed to the committer." },
+                // WO-932: eliteCount REMOVED from this ledger — RaidGarrisonSpawner.ExpandComposition
+                // now appends eliteCount copies of the strongest composition / boss id.
             };
 
         // =====================================================================

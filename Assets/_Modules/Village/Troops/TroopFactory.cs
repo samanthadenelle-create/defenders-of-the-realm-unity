@@ -64,54 +64,73 @@ namespace DeNelle.Village
             // Leave the GameObject on layer 0 (Default) explicitly.
             go.layer = 0;
 
+            // WO-933 siege machines need a wider footprint than humanoids.
+            bool isSiege = def != null
+                && string.Equals(def.Role, "siege", System.StringComparison.OrdinalIgnoreCase);
+            float bodyHeight = isSiege ? 2.4f : 1.8f;
+            float bodyRadius = isSiege ? 0.85f : 0.42f;
+
             // NON-TRIGGER capsule so enemies can physically reach + damage the troop.
             // Offset up to wrap the body; root stays unit-scale (scaling a NavMeshAgent
             // root misbehaves) — only the visual is fit bigger.
             var col = go.AddComponent<CapsuleCollider>();
             col.isTrigger = false;
-            col.radius = 0.42f;
-            col.height = 1.8f;
-            col.center = new Vector3(0f, 0.9f, 0f);
+            col.radius = bodyRadius;
+            col.height = bodyHeight;
+            col.center = new Vector3(0f, bodyHeight * 0.5f, 0f);
 
             // Skin (load -> fit -> strip colliders) + animator; tinted-capsule fallback
             // only if the model is genuinely missing (so a troop still spawns damageable).
             // Hero/companion bodies import facing +X and need a -90° yaw to face +Z
             // (DEF-232 — set on SkinOptions so it's applied BEFORE fit/seat).
+            // WO-933: model may be a full Resources path ("Structures/Catapult") or a
+            // bare Heroes name ("SC_Footman" / "Knight").
             string model = def != null ? def.Model : null;
-            float height = 1.8f;
+            string resourcesPath = ResolveModelResourcesPath(model);
             GameObject vis = null;
             string troopId = def != null ? def.Id : "troop";
             FlowTrace.Step("TroopVisual",
                 $"id={troopId}: model resolved from def = '{model ?? "<none>"}' (yaw={(def != null ? def.ModelYaw : 0f)}) " +
-                $"-> Resources 'Heroes/{model ?? "<none>"}'.");
-            if (!string.IsNullOrEmpty(model))
+                $"-> Resources '{resourcesPath ?? "<none>"}' siege={isSiege}.");
+            if (!string.IsNullOrEmpty(resourcesPath))
             {
-                var skinOpts = SkinOptions.Enemy(height);
+                var skinOpts = isSiege
+                    ? SkinOptions.Structure(bodyHeight)
+                    : SkinOptions.Enemy(bodyHeight);
+                skinOpts.StripColliders = true;
                 // Body facing is per-pack and authored on the def (Tripo bodies face +X → -90;
                 // Supercyan humanoids face +Z → 0). Default -90 keeps legacy bodies correct.
-                skinOpts.LocalRotation = Quaternion.Euler(0f, def.ModelYaw, 0f);
-                vis = VisualFactory.Skin(go.transform, "Heroes/" + model, skinOpts);
+                if (def != null)
+                    skinOpts.LocalRotation = Quaternion.Euler(0f, def.ModelYaw, 0f);
+                vis = VisualFactory.Skin(go.transform, resourcesPath, skinOpts);
             }
 
             // ANIMATOR (owner defect 2026-08-02: "raid troops slide / T-pose instead of walking
             // and attacking"). MUST run BEFORE the TroopController AddComponent below — AddComponent
             // runs Awake SYNCHRONOUSLY, and TroopController.Awake caches which of Speed/Attack/Hit/
             // Dead the bound controller declares. Bind after that and every param write is skipped
-            // for the life of the troop.
-            if (vis != null) ApplyTroopAnimator(vis, def, model);
+            // for the life of the troop. Siege machines are static props — skip humanoid bind.
+            if (vis != null && !isSiege) ApplyTroopAnimator(vis, def, model);
+
+            // WO-troop-gear: seat weapon / offhand so roles do not share bare skins.
+            // Runs AFTER animator bind so Humanoid bones resolve. Siege = no hand sockets.
+            if (vis != null && def != null && !isSiege)
+                TroopGearApplier.Apply(vis, def);
 
             if (vis == null)
             {
                 // Model missing → tinted-capsule fallback (mirrors EnemyFactory ~139-153)
                 // so the troop is still visible + damageable, just without a silhouette.
-                Debug.LogWarning($"[TroopFactory] model 'Heroes/{model}' " +
+                Debug.LogWarning($"[TroopFactory] model '{resourcesPath ?? model}' " +
                                  $"(id '{(def != null ? def.Id : "?")}') had no loadable mesh — " +
                                  "FALLBACK to a tinted capsule.");
                 var cap = GameObject.CreatePrimitive(PrimitiveType.Capsule);
                 if (cap.TryGetComponent(out Collider cc)) Object.Destroy(cc);
                 cap.transform.SetParent(go.transform, false);
-                cap.transform.localPosition = new Vector3(0f, 0.9f, 0f);
-                cap.transform.localScale = Vector3.one;
+                cap.transform.localPosition = new Vector3(0f, bodyHeight * 0.5f, 0f);
+                cap.transform.localScale = isSiege
+                    ? new Vector3(1.4f, bodyHeight * 0.5f, 1.8f)
+                    : Vector3.one;
                 TintCapsule(cap.GetComponent<Renderer>());
             }
 
@@ -120,8 +139,8 @@ namespace DeNelle.Village
             // these (radius/height/Move-driven) but set them here too so it's path-ready.
             var agent = go.AddComponent<NavMeshAgent>();
             agent.agentTypeID = 0;
-            agent.radius = 0.4f;
-            agent.height = 1.8f;
+            agent.radius = isSiege ? 0.8f : 0.4f;
+            agent.height = bodyHeight;
 
             var troop = go.AddComponent<TroopController>();
             troop.Configure(def, pos);
@@ -167,6 +186,18 @@ namespace DeNelle.Village
         //       clips play once the NavMeshAgent drives position" — that assertion is FALSE, nothing
         //       drives that controller's parameters.
         //
+        /// <summary>
+        /// Bare model names load under <c>Heroes/</c>. Paths that already contain a slash
+        /// (e.g. <c>Structures/Catapult</c>) are full Resources paths (WO-933 siege machines).
+        /// </summary>
+        private static string ResolveModelResourcesPath(string model)
+        {
+            if (string.IsNullOrEmpty(model)) return null;
+            if (model.IndexOf('/') >= 0 || model.IndexOf('\\') >= 0)
+                return model.Replace('\\', '/');
+            return "Heroes/" + model;
+        }
+
         // THE FIX binds a controller whose parameters ARE the vocabulary TroopController already
         // speaks (AnimParams). All four Resources/Heroes controllers (Knight/Ranger/Cleric/Mage)
         // declare the full Speed/InCombat/Attack/Combo/Cast/WindUp/Block/Hit/HitDir/Dead/DeathDir/

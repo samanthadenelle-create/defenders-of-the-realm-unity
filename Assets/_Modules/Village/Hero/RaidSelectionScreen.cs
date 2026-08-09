@@ -91,11 +91,15 @@ namespace DeNelle.Village.Hero
             var readiness = ArmyReadiness.Compute(st);
             if (!readiness.Ready)
             {
+                // WO-932: concrete fill numbers so the gate never feels like a silent softlock.
+                int have = readiness.DeployableSlots + readiness.QueuedSlots;
+                int cap = Mathf.Max(1, readiness.CapSlots);
                 DeNelle.Core.Diagnostics.FlowTrace.Step("Raid",
                     "full-army redirect: raids opened with " + readiness.DeployableSlots +
                     " deployable + " + readiness.QueuedSlots + " queued of cap " +
                     readiness.CapSlots + " -> drillmaster training panel.");
-                ElarionUiKit.ShowToast("Your army is not full. Visit the drillmaster to queue more troops.",
+                ElarionUiKit.ShowToast(
+                    "Army " + have + "/" + cap + " — fill every slot at the Barracks, then open Raids.",
                     ElarionUiKit.ToastTone.Info);
                 TroopDialogueCommands.ShowTrainingUI();
                 return;
@@ -253,7 +257,7 @@ namespace DeNelle.Village.Hero
             // gold diamonds instead (EndStateView's pattern via StarRatingRow).
             StarRatingRow.Build(card.transform, 3, 3, 0.05f, 0.40f, 0.20f, 0.58f, sizePx: 11f);
             var timeLabel = ElarionUiKit.Label(card.transform,
-                "Target: " + FormatTime(_vm.TargetTimeFor(id)), 0.38f, 0.60f,
+                "Clock: " + FormatTime(_vm.TargetTimeFor(id)), 0.38f, 0.60f,
                 ElarionUi.Parchment, ElarionUi.FontBody, TMPro.TextAlignmentOptions.Left, 0.22f, 0.95f);
             timeLabel.raycastTarget = false;
 
@@ -304,21 +308,15 @@ namespace DeNelle.Village.Hero
             return m + ":" + s.ToString("00");
         }
 
-        // A short reward hint from rewardMultiplier + shardDropChance: a resource yield
-        // multiplier ("x1.5 Loot") plus an Echo-Shard drop chance ("+ Echo Shard 25%").
+        // Honest loot mult: RaidScoring.ComputeLoot applies rewardMultiplier to crystals/food.
+        // Echo-Shard % is NOT a live currency grant path — do not show it as a drop chance.
         private static string RewardHint(float rewardMultiplier, float shardDropChance)
         {
-            var parts = new List<string>();
             float mult = rewardMultiplier <= 0f ? 1f : rewardMultiplier;
-            // SWEEP 9413 R2 (#3): "◆" is not in the build TMP font — rendered as tofu "□"
-            // before every loot line. ASCII marker only (same rule as the jukebox "»" fix).
-            parts.Add("- x" + mult.ToString("0.#") + " Loot");
-            if (shardDropChance > 0f)
-            {
-                int pct = Mathf.RoundToInt(Mathf.Clamp01(shardDropChance) * 100f);
-                parts.Add("Echo Shard " + pct + "%");
-            }
-            return string.Join("   ", parts);
+            // SWEEP 9413 R2 (#3): "◆" is not in the build TMP font — ASCII only.
+            // shardDropChance intentionally unused until a real shard grant ships.
+            _ = shardDropChance;
+            return "- x" + mult.ToString("0.#") + " Loot";
         }
 
         // ── Scroll list — the kit scroll zone owns all plumbing (WO-714 W4) ────

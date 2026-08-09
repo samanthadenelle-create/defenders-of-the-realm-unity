@@ -308,9 +308,27 @@ namespace DeNelle.Village
             int committed = committedBefore;
             int cap = readiness.CapSlots;
 
+            // WO-933: per-type ownership cap (CoC scarcity). maxOwned 0 = unlimited.
+            // Counts roster (incl. wounded) + in-flight Train jobs of this def — wounded
+            // still blocks a second train until recovery (preferred product ruling).
+            int maxOwned = def.MaxOwned;
+            int ownedOfType = state.Army.CountOfDef(troopId);
+            int inFlightOfType = CountInFlightTrainOf(troopId);
+
             int enqueued = 0;
             for (int i = 0; i < qty; i++)
             {
+                if (maxOwned > 0 && ownedOfType + inFlightOfType + enqueued >= maxOwned)
+                {
+                    string name = string.IsNullOrEmpty(def.DisplayName) ? troopId : def.DisplayName;
+                    stopReason = maxOwned == 1
+                        ? "Only one " + name + " may be owned at a time."
+                        : "Owned limit reached for " + name + ".";
+                    FlowTrace.Step("Barracks",
+                        $"train refused maxOwned id={troopId} owned={ownedOfType} " +
+                        $"inFlight={inFlightOfType} enqueued={enqueued} max={maxOwned}.");
+                    break;
+                }
                 if (rosterSlots + committed + unitSlots > cap)
                 {
                     stopReason = "Army is full.";                       // cap full (incl. in-flight jobs)
@@ -378,6 +396,32 @@ namespace DeNelle.Village
             if (string.IsNullOrEmpty(j.StructureId) || !j.StructureId.StartsWith(TrainPrefix))
                 return 0;
             return TroopDialogueCommands.SlotOf(TroopIdFromTrain(j.StructureId));
+        }
+
+        /// <summary>
+        /// WO-933 — how many Train-channel jobs (active + pending) are training
+        /// <paramref name="troopDefId"/>. Used with <see cref="ArmyStorage.CountOfDef"/> to
+        /// enforce <c>maxOwned</c> before a second siege piece can be paid for.
+        /// </summary>
+        public static int CountInFlightTrainOf(string troopDefId)
+        {
+            if (string.IsNullOrEmpty(troopDefId)) return 0;
+            var queue = BuildTimerService.Instance;
+            if (queue == null) return 0;
+            int n = 0;
+            foreach (var j in queue.ActiveJobsOf(ChannelId.Train))
+                if (TrainJobMatchesTroop(j, troopDefId)) n++;
+            foreach (var j in queue.PendingJobsOf(ChannelId.Train))
+                if (TrainJobMatchesTroop(j, troopDefId)) n++;
+            return n;
+        }
+
+        private static bool TrainJobMatchesTroop(BuildJobData j, string troopDefId)
+        {
+            // BuildJobData is a class-like payload; StructureId is the train job key.
+            if (string.IsNullOrEmpty(j.StructureId) || !j.StructureId.StartsWith(TrainPrefix))
+                return false;
+            return string.Equals(TroopIdFromTrain(j.StructureId), troopDefId, System.StringComparison.Ordinal);
         }
 
         // ── Internals ─────────────────────────────────────────────────────────

@@ -16,10 +16,10 @@
 // no silent failure (CLAUDE.md §12). SceneOwnership can later read ownership off
 // this instead of its own private slice; for now it is the generator's source.
 //
-// NOTE on data-for-later fields: garrison composition, eliteCount, shardDropChance,
-// rewardMultiplier and the clear-time thresholds are consumed by the SPAWNER and
-// the SCORING system, NOT the geometry generator — they live on the def so the one
-// contract carries everything, but the generator ignores them.
+// NOTE: garrison composition + eliteCount → RaidGarrisonSpawner. rewardMultiplier →
+// RaidScoring.ComputeLoot (paid). recommendedClearTime should match the live raid
+// clock (180s default). shardDropChance is NOT a live grant yet — selection UI must
+// not present it as a drop. Geometry generator ignores all of the above.
 // =============================================================================
 
 using System;
@@ -144,6 +144,25 @@ namespace DeNelle.Village
             EnsureLoaded();
             if (string.IsNullOrEmpty(id) || _byId == null) return null;
             return _byId.TryGetValue(id, out var def) ? def : null;
+        }
+
+        /// <summary>
+        /// First def whose <see cref="SceneConfigDef.sceneName"/> matches
+        /// <paramref name="sceneName"/> (ordinal ignore case), or null.
+        /// Used by raid loot to resolve rewardMultiplier when only the loaded scene is known.
+        /// </summary>
+        public static SceneConfigDef FindBySceneName(string sceneName)
+        {
+            EnsureLoaded();
+            if (string.IsNullOrEmpty(sceneName) || _all == null) return null;
+            for (int i = 0; i < _all.Count; i++)
+            {
+                var d = _all[i];
+                if (d != null && !string.IsNullOrEmpty(d.sceneName)
+                    && string.Equals(d.sceneName, sceneName, StringComparison.OrdinalIgnoreCase))
+                    return d;
+            }
+            return null;
         }
 
         /// <summary>Force a fresh reload on next access (e.g. after an editor JSON edit).</summary>

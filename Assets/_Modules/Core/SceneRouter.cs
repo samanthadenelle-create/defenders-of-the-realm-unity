@@ -658,6 +658,14 @@ namespace DeNelle.Core
         public static PatriciaLightParams PendingPatriciaLight { get; private set; }
 
         // ── Helpers ──────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// WO-932: public probe for raid deploy CTAs — true when <paramref name="sceneName"/>
+        /// is in the player Build Settings (same gate <see cref="GoRaid"/> uses). False =
+        /// toast "under construction", never a silent strand.
+        /// </summary>
+        public static bool IsSceneInBuild(string sceneName) => IsSceneRegistered(sceneName);
+
         private static bool IsSceneRegistered(string sceneName)
         {
             if (string.IsNullOrEmpty(sceneName)) return false;

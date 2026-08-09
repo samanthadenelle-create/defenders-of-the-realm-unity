@@ -23,6 +23,7 @@ using System.IO;
 using System.Reflection;
 using System.Text;
 using UnityEngine;
+using DeNelle.Core.State;
 using DeNelle.Village;
 
 namespace DeNelle.Editor
@@ -43,6 +44,7 @@ namespace DeNelle.Editor
                 CheckDurationFormatting(failures, log);
                 CheckNoSecondQueue(failures, log);
                 CheckNoSilentCap(failures, log);
+                CheckLoadoutBank(failures, log);
                 CheckAsciiOnly(failures, log);
             }
             catch (Exception ex)
@@ -223,6 +225,47 @@ namespace DeNelle.Editor
                 failures.Add("BarracksService does not emit a per-unit 'train job enqueued' Step — a muster leaves no per-troop proving line");
 
             log.AppendLine("  no silent cap — reason overload + report counts + Warn/Guard instrumentation OK");
+        }
+
+        // ── 6b. WO-934 loadout bank: 3 slots + convert round-trip ──────────────
+        private static void CheckLoadoutBank(List<string> failures, StringBuilder log)
+        {
+            if (ArmyLoadoutBank.SlotCount != 3)
+                failures.Add($"ArmyLoadoutBank.SlotCount is {ArmyLoadoutBank.SlotCount}, expected 3");
+
+            var army = new ArmyStorage();
+            army.EnsureLoadouts();
+            if (army.Loadouts == null || army.Loadouts.Count != 3)
+                failures.Add($"EnsureLoadouts left {army.Loadouts?.Count ?? -1} slots, expected 3");
+
+            var working = new ArmyComposition { Name = "Test Raid" };
+            working.Set("troop-footman", 3);
+            working.Set("troop-archer", 2);
+            var slot = working.ToLoadout();
+            if (slot.TotalUnits != 5)
+                failures.Add($"ToLoadout TotalUnits={slot.TotalUnits}, expected 5");
+            var back = ArmyComposition.FromLoadout(slot);
+            if (back.TotalUnits != 5 || back.CountOf("troop-footman") != 3)
+                failures.Add("FromLoadout did not restore footman/archer counts");
+            if (!string.Equals(back.Name, "Test Raid", StringComparison.Ordinal))
+                failures.Add($"FromLoadout name='{back.Name}', expected 'Test Raid'");
+
+            // Service type surface.
+            var svc = typeof(ArmyLoadoutService);
+            foreach (string m in new[] { "LoadInto", "SaveFrom", "ApplyRecipe", "Ensure" })
+                if (svc.GetMethod(m, BindingFlags.Public | BindingFlags.Static) == null)
+                    failures.Add($"ArmyLoadoutService.{m} is missing");
+
+            string panel = ReadSource("Assets/_Modules/Village/Troops/ArmyMusterPanel.cs", failures);
+            if (panel != null)
+            {
+                if (panel.IndexOf("ArmyLoadoutService", StringComparison.Ordinal) < 0)
+                    failures.Add("ArmyMusterPanel does not use ArmyLoadoutService — loadouts would be dead UI");
+                if (panel.IndexOf("Save slot", StringComparison.Ordinal) < 0)
+                    failures.Add("ArmyMusterPanel missing Save slot control");
+            }
+
+            log.AppendLine("  loadout bank — 3 slots + To/FromLoadout + service surface OK");
         }
 
         // ── 7. ASCII-only player-visible strings ──────────────────────────────

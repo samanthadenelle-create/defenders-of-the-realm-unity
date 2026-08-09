@@ -25,7 +25,7 @@
     "archerTowerCount": "Watchtower_Archer_* turrets placed. archer+mage is the TOTAL turret count (4 / 7 / 10 by tier); ~60% go on the wall line, the rest guard the spire so neither the approach nor the objective is safe.",
     "mageTowerCount": "Watchtower_Mage_* turrets placed (see archerTowerCount).",
     "difficulty": "Regular | Hard | Extreme — drives the SPIRE HP (1200/2200/3500) and the arena-wide tower DPS budget (12/16/20), which caps what the most-covered point in the arena can take.",
-    "eliteCount": "elite garrison units. AUTHORED BUT NOT YET CONSUMED — its only honest home is RaidGarrisonSpawner (see the raid-arena-shape oracle's dead-key allowlist).",
+    "eliteCount": "elite garrison units. CONSUMED by RaidGarrisonSpawner.ExpandComposition (WO-932) — appends N copies of the heaviest composition unit (or boss).",
     "shardDropChance": "0..1 chance of a shard drop (3-star-only gating applied later by scoring — not geometry)"
   },
   "configs": [
@@ -56,7 +56,7 @@
       ],
       "props": {
         "set": [],
-        "count": 8
+        "count": 0
       },
       "garrison": null,
       "themeColor": "#6fb7ff"
@@ -80,7 +80,7 @@
       ],
       "props": {
         "set": [],
-        "count": 12
+        "count": 0
       },
       "garrison": {
         "composition": [
@@ -99,8 +99,8 @@
         "levelOffset": 0
       },
       "themeColor": "#5a8f3a",
-      "recommendedClearTime": 270,
-      "twoStarTime": 350,
+      "recommendedClearTime": 180,
+      "twoStarTime": 150,
       "oneStarTime": 0,
       "rewardMultiplier": 1.0,
       "entranceCount": 2,
@@ -134,7 +134,7 @@
       ],
       "props": {
         "set": [],
-        "count": 15
+        "count": 0
       },
       "garrison": {
         "composition": [
@@ -161,8 +161,8 @@
         "levelOffset": 2
       },
       "themeColor": "#8a6b3a",
-      "recommendedClearTime": 330,
-      "twoStarTime": 430,
+      "recommendedClearTime": 180,
+      "twoStarTime": 150,
       "oneStarTime": 0,
       "rewardMultiplier": 1.5,
       "entranceCount": 1,
@@ -192,7 +192,7 @@
       ],
       "props": {
         "set": [],
-        "count": 10
+        "count": 0
       },
       "garrison": {
         "composition": [
@@ -215,8 +215,8 @@
         "levelOffset": 3
       },
       "themeColor": "#7a5fb0",
-      "recommendedClearTime": 420,
-      "twoStarTime": 545,
+      "recommendedClearTime": 180,
+      "twoStarTime": 150,
       "oneStarTime": 0,
       "rewardMultiplier": 2.2,
       "entranceCount": 1,
@@ -225,7 +225,7 @@
       "archerTowerCount": 7,
       "mageTowerCount": 3,
       "eliteCount": 3,
-      "shardDropChance": 0.20
+      "shardDropChance": 0.2
     }
   ]
 }

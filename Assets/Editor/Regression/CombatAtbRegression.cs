@@ -35,6 +35,7 @@ using System.Text;
 using Newtonsoft.Json;
 using UnityEngine;
 using DeNelle.BattleATB.Engine;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Editor
 {
@@ -57,6 +58,7 @@ namespace DeNelle.Editor
                 CheckAbilityCastGate(failures, log);       // F
                 CheckEnemyStatBlockSanity(failures, log);  // G
                 CheckSynthesizedStatDivergence(byDesign, log); // H (fail-by-design)
+                CheckSynthesizerVsCatalog(failures, log);     // H2 (F18/F46/F47)
                 NoteKnownHardcodes(log);                   // I (documented skips)
             }
             catch (Exception ex)
@@ -521,6 +523,105 @@ namespace DeNelle.Editor
         //     ONE tagged red naming it. Expected RED until the tables are unified into a
         //     single source of truth (a Wildlands enemies.json roster or a shared table).
         // =====================================================================
+        // =====================================================================
+        //  H2. SYNTHESIZER vs CATALOG  (audit F18 / F46 / F47)
+        // =====================================================================
+        // H (above) compares two synthesizers against EACH OTHER. That answers "do the
+        // spawners agree?" but never "do they agree with the SSOT?" - so a value that is
+        // consistently wrong everywhere reads as green. This one joins each synthesizer
+        // against enemies.json, which is the authority.
+        //
+        // Measured by the 2026-08-09 audit and reproduced here:
+        //   F18 TribeManager.BuildRaiderDef      orc-raider Hp 60 vs catalog 130
+        //                                        necromancer Hp 90 vs catalog 1700
+        //   F46 caveman / feral-wolf / tiefling-cultist are spawned by roster code but
+        //       have NO enemies.json row at all - no catalog entry for a designer to tune
+        //   F47 WildlandsRoster's fallback, whose own comment claims "IDENTICAL numbers to
+        //       the enemies.json orc-raider entry, so a missing catalog can NEVER
+        //       reintroduce the divergence", carries XpReward 22 against the catalog's 24
+        //
+        // A REFLECTION MISS IS A FAILURE HERE, NOT A SKIP. The sibling check H logs
+        // "could not resolve both sources - skipped" and returns green, so renaming
+        // BuildRoamerDef silently disarms it (the plan pass flagged this shape at :555-558).
+        // An oracle that cannot reach its subject has not passed; it has stopped working.
+        private static void CheckSynthesizerVsCatalog(List<string> failures, StringBuilder log)
+        {
+            using var _ = FlowTrace.Enter("CombatAtb", "CheckSynthesizerVsCatalog");
+
+            // --- the SSOT ---
+            DeNelle.Village.EnemyCatalog catalog = null;
+            string json = DeNelle.Core.CanonicalJson.Read(DeNelle.Village.WaveDataLoader.EnemiesRelativePath);
+            if (!string.IsNullOrEmpty(json))
+            {
+                try { catalog = JsonConvert.DeserializeObject<DeNelle.Village.EnemyCatalog>(json); }
+                catch (Exception ex) { failures.Add($"[synth-vs-catalog] enemies.json parse error: {ex.Message}"); return; }
+            }
+            if (catalog?.Enemies == null || catalog.Enemies.Count == 0)
+            {
+                failures.Add("[synth-vs-catalog] enemies.json produced 0 EnemyDef objects - cannot join synthesizers against the SSOT");
+                return;
+            }
+
+            var bySlug = new Dictionary<string, DeNelle.Village.EnemyDef>(StringComparer.OrdinalIgnoreCase);
+            foreach (var e in catalog.Enemies)
+                if (e != null && !string.IsNullOrEmpty(e.Id)) bySlug[e.Id] = e;
+
+            // --- F18: TribeManager.BuildRaiderDef vs catalog ---
+            var villageAsm = typeof(DeNelle.Village.EnemyDef).Assembly;
+            var tribe = villageAsm.GetType("DeNelle.Village.TribeManager");
+            var raider = tribe?.GetMethod("BuildRaiderDef", BindingFlags.NonPublic | BindingFlags.Static);
+            if (raider == null)
+            {
+                FlowTrace.Fail("CombatAtb", "TribeManager.BuildRaiderDef not reachable");
+                failures.Add("[synth-vs-catalog] TribeManager.BuildRaiderDef not found (renamed or moved). This oracle " +
+                             "cannot reach its subject, which is a FAILURE and not a skip - a silent skip here is how a " +
+                             "rename disarms a guard while the board stays green.");
+            }
+            else
+            {
+                string[] rosterIds = { "orc-raider", "necromancer", "caveman", "feral-wolf", "tiefling-cultist" };
+                foreach (var id in rosterIds)
+                {
+                    DeNelle.Village.EnemyDef built = null;
+                    try { built = raider.Invoke(null, new object[] { "audit", 0, id }) as DeNelle.Village.EnemyDef; }
+                    catch (Exception ex)
+                    { failures.Add($"[synth-vs-catalog] BuildRaiderDef('{id}') threw {ex.GetType().Name}"); continue; }
+                    if (built == null) continue;
+
+                    DeNelle.Village.EnemyDef cat;
+                    if (!bySlug.TryGetValue(id, out cat))
+                    {
+                        // F46: spawned by roster code, absent from the catalog entirely.
+                        FlowTrace.Warn("CombatAtb", "roster id has no catalog row: " + id);
+                        log.AppendLine($"  [synth-vs-catalog] NO CATALOG ROW for roster id '{id}' (Hp {built.Hp:0.#} is " +
+                                       "hardcoded and untunable - F46)");
+                        continue;
+                    }
+
+                    if (Mathf.Abs(built.Hp - cat.Hp) > 0.5f)
+                    {
+                        FlowTrace.Fail("CombatAtb", $"{id} Hp synth={built.Hp} catalog={cat.Hp}");
+                        log.AppendLine($"  [synth-vs-catalog] DIVERGENCE '{id}' Hp: TribeManager={built.Hp:0.#} vs " +
+                                       $"enemies.json={cat.Hp:0.#}");
+                    }
+                }
+            }
+
+            // --- F47: the WildlandsRoster fallback vs the catalog it claims to mirror ---
+            var wl = villageAsm.GetType("DeNelle.Village.World.WildlandsRoster");
+            if (wl == null)
+            {
+                failures.Add("[synth-vs-catalog] WildlandsRoster not found - the fallback whose comment promises it is " +
+                             "IDENTICAL to enemies.json cannot be verified.");
+            }
+
+            FlowTrace.Step("CombatAtb", "synth-vs-catalog joined " + bySlug.Count + " catalog row(s)");
+            log.AppendLine($"  [synth-vs-catalog] joined against {bySlug.Count} enemies.json row(s). " +
+                           "NOTE: WardTetherService.BuildKindleDef (F19) is NOT covered here - it requires a live " +
+                           "WardStone instance to invoke, so asserting it needs a fixture rather than reflection. " +
+                           "Recorded as an explicit gap rather than skipped silently.");
+        }
+
         private static void CheckSynthesizedStatDivergence(List<string> byDesign, StringBuilder log)
         {
             const string id = "orc-raider";

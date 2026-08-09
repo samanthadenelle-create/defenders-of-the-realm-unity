@@ -55,6 +55,7 @@ namespace DeNelle.Village.Hero
 
         private readonly List<ItemVM> _troops = new List<ItemVM>();
         private readonly Dictionary<string, bool> _rangedById = new Dictionary<string, bool>();
+        private readonly Dictionary<string, bool> _siegeById = new Dictionary<string, bool>();
         private bool _disposed;
 
         // ── IPanelViewModel ───────────────────────────────────────────────────
@@ -84,14 +85,48 @@ namespace DeNelle.Village.Hero
         public string RaidId => _def != null ? _def.id : "";
 
         public string Difficulty => _def != null ? _def.difficulty : null;
-        public float TargetTime => _def != null ? _def.recommendedClearTime : 0f;
+        /// <summary>
+        /// Honest raid clock target for 3★ "under the clock" — prefers authored
+        /// recommendedClearTime when it matches the live scorer default band, else
+        /// <see cref="RaidScoring.DefaultClockSeconds"/> so the UI never shows 270s
+        /// while combat ends at 180s.
+        /// </summary>
+        public float TargetTime
+        {
+            get
+            {
+                float authored = _def != null ? _def.recommendedClearTime : 0f;
+                // Prefer authored when it is the live clock (or within 1s); else tell the truth.
+                if (authored > 0f && System.Math.Abs(authored - RaidScoring.DefaultClockSeconds) < 1.5f)
+                    return authored;
+                if (authored > 0f && authored <= RaidScoring.DefaultClockSeconds + 0.5f)
+                    return authored;
+                return RaidScoring.DefaultClockSeconds;
+            }
+        }
 
-        /// <summary>Estimated clear time (2-star band, else recommended).</summary>
-        public float EstClearTime =>
-            _def == null ? 0f : (_def.twoStarTime > 0f ? _def.twoStarTime : _def.recommendedClearTime);
+        /// <summary>Soft est clear (2-star band) for the preview line; never longer than the raid clock.</summary>
+        public float EstClearTime
+        {
+            get
+            {
+                float clock = TargetTime;
+                float est = _def != null && _def.twoStarTime > 0f ? _def.twoStarTime : clock * 0.85f;
+                if (est <= 0f) est = clock * 0.85f;
+                return est > clock ? clock : est;
+            }
+        }
 
         public string SceneName => _def != null ? _def.sceneName : null;
-        public bool CanDeploy => _def != null && !string.IsNullOrEmpty(_def.sceneName);
+
+        /// <summary>
+        /// WO-932: deploy only when a scene name is authored AND that scene is in the
+        /// player Build Settings (same gate as <see cref="DeNelle.Core.SceneRouter.GoRaid"/>).
+        /// </summary>
+        public bool CanDeploy =>
+            _def != null
+            && !string.IsNullOrEmpty(_def.sceneName)
+            && DeNelle.Core.SceneRouter.IsSceneInBuild(_def.sceneName);
 
         /// <summary>Hero class first, then companion classes (deduped); never empty.</summary>
         public IReadOnlyList<string> PartyClasses => _partyClasses;
@@ -107,10 +142,9 @@ namespace DeNelle.Village.Hero
 
         /// <summary>WO-839 #3: scout-report intel lines for the deploy screen's intel band —
         /// honest facts the scouting party could see, from the raid's SceneConfigDef only
-        /// (wall tier + gates, garrison headcount, boss). DELIBERATELY never surfaces
-        /// rewardMultiplier / shardDropChance: they are cosmetic-only config fields the loot
-        /// math ignores (RAID_BATTLEFIELD_ANATOMY_2026-08-02) and would be lies on screen.
-        /// Never null; always at least one line.</summary>
+        /// (wall tier + gates, garrison headcount, boss). Reward mult is shown on the
+        /// selection card and paid by <see cref="RaidScoring.ComputeLoot"/> — not repeated
+        /// here as intel. Never null; always at least one line.</summary>
         public IReadOnlyList<string> ScoutReport => _scoutReport;
 
         /// <summary>"Army: N / M slots" (or "Army: -" with no roster).</summary>
@@ -119,6 +153,15 @@ namespace DeNelle.Village.Hero
         /// <summary>Whether a troop row's role is ranged (drives the glyph). Pure VM data.</summary>
         public bool IsRanged(string troopDefId) =>
             troopDefId != null && _rangedById.TryGetValue(troopDefId, out var r) && r;
+
+        /// <summary>WO-933: three-way role glyph for the pre-deploy list (SIE / RNG / MEL).</summary>
+        public string RoleGlyph(string troopDefId)
+        {
+            if (string.IsNullOrEmpty(troopDefId)) return "MEL";
+            if (_siegeById.TryGetValue(troopDefId, out var siege) && siege) return "SIE";
+            if (_rangedById.TryGetValue(troopDefId, out var ranged) && ranged) return "RNG";
+            return "MEL";
+        }
 
         /// <summary>Canon companion name for a class word (pure mapping moved off the View).</summary>
         public string CompanionName(string cls)
@@ -140,7 +183,17 @@ namespace DeNelle.Village.Hero
         /// <summary>DEPLOY -> load the raid scene (no-op when the raid has no battleground).</summary>
         public void Deploy()
         {
-            if (CanDeploy) DeNelle.Core.SceneRouter.GoRaid(_def.sceneName);
+            if (!CanDeploy)
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Fail("Raid",
+                    $"Deploy refused: raid='{RaidId}' scene='{SceneName ?? "<null>"}' " +
+                    $"(missing name or not in Build Settings).");
+                return;
+            }
+            DeNelle.Core.Diagnostics.FlowTrace.Step("Raid",
+                $"Deploy BEGIN ASSAULT raid='{RaidId}' -> scene '{_def.sceneName}' " +
+                $"(deployableTroops={DeployableCount} power={PowerRating}).");
+            DeNelle.Core.SceneRouter.GoRaid(_def.sceneName);
         }
 
         // ── Construction / resolution ───────────────────────────────────────────
@@ -247,6 +300,7 @@ namespace DeNelle.Village.Hero
         {
             _troops.Clear();
             _rangedById.Clear();
+            _siegeById.Clear();
 
             // Group deployable troops by TroopDefId (preserving first-seen order), count each.
             var counts = new Dictionary<string, int>();
@@ -271,6 +325,10 @@ namespace DeNelle.Village.Hero
             {
                 var info = _troopInfo(defId);
                 _rangedById[defId] = info.Ranged;
+                // Siege role from live catalog (TroopInfo has no role field) — catalog is the authority.
+                var cat = TroopCatalog.Find(defId);
+                _siegeById[defId] = cat != null
+                    && string.Equals(cat.Role, "siege", System.StringComparison.OrdinalIgnoreCase);
                 string name = string.IsNullOrEmpty(info.DisplayName) ? "" : info.DisplayName;
                 // Price carries the owned count for this troop type.
                 _troops.Add(new ItemVM(defId, name, IconRoleTroop, defId, counts[defId], "", true));

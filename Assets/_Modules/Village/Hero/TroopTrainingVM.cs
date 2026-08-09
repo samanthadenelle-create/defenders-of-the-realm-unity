@@ -41,12 +41,15 @@ namespace DeNelle.Village.Hero
         public readonly TrainOutcome Outcome;
         public readonly int Count;
         public readonly string Name;
+        /// <summary>Player-facing refuse reason when Outcome is Failed (maxOwned, army full, etc.).</summary>
+        public readonly string Reason;
 
-        public TrainResult(TrainOutcome outcome, int count, string name)
+        public TrainResult(TrainOutcome outcome, int count, string name, string reason = null)
         {
             Outcome = outcome;
             Count = count;
             Name = name;
+            Reason = reason;
         }
     }
 
@@ -126,6 +129,8 @@ namespace DeNelle.Village.Hero
         /// <see cref="BarracksService.EnqueueTraining"/>.
         /// </summary>
         private readonly Func<string, int, int> _trainAction;
+        /// <summary>Last enqueue refuse reason from BarracksService (WO-933 maxOwned etc.).</summary>
+        private string _lastTrainStopReason;
 
         private readonly Action<ResourceSnapshot> _ecoHandler;
         private bool _disposed;
@@ -146,8 +151,21 @@ namespace DeNelle.Village.Hero
             var army = svc != null && svc.State != null ? svc.State.Army : null;
             return new TroopTrainingVM(EconomyService.Instance, army, onClose,
                                        () => GameStateService.Instance?.Save(),
-                                       (id, qty) => BarracksService.EnqueueTraining(id, qty));
+                                       (id, qty) =>
+                                       {
+                                           int n = BarracksService.EnqueueTraining(id, qty, out string stop);
+                                           // Stash on the static-less path: CreateDefault wires a
+                                           // closure over the instance via the ctor after construct —
+                                           // so stop is returned only through TrainInternal below.
+                                           // EnqueueTraining out-param is the ONE refuse authority.
+                                           s_lastEnqueueStopReason = stop;
+                                           return n;
+                                       });
         }
+
+        // Capture stop reason from CreateDefault's EnqueueTraining out-param without
+        // re-threading every trainAction injection site.
+        private static string s_lastEnqueueStopReason;
 
         /// <param name="trainAction">
         /// Optional. When null, falls back to instant TrainNow (legacy / unit tests).
@@ -227,6 +245,8 @@ namespace DeNelle.Village.Hero
             }
             else
             {
+                _lastTrainStopReason = null;
+                s_lastEnqueueStopReason = null;
                 int trained = TrainInternal(troopId, qty);
                 if (trained > 0)
                 {
@@ -238,7 +258,10 @@ namespace DeNelle.Village.Hero
                 }
                 else
                 {
-                    result = new TrainResult(TrainOutcome.Failed, 0, name);
+                    string reason = _lastTrainStopReason ?? s_lastEnqueueStopReason;
+                    if (string.IsNullOrEmpty(reason))
+                        reason = OwnedCapReason(def) ?? "Army cap full or not enough resources.";
+                    result = new TrainResult(TrainOutcome.Failed, 0, name, reason);
                 }
             }
 
@@ -348,9 +371,17 @@ namespace DeNelle.Village.Hero
             bool armyKnown = _army != null;
             int slotsUsed = armyKnown ? _army.SlotsUsed(TroopDialogueCommands.SlotOf) : 0;
             int maxArmy   = armyKnown ? _army.MaxArmySize : 0;
-            bool hasRoom  = _army == null || _army.CanTrain(def.Id, TroopDialogueCommands.SlotOf);
+            // WO-933: capacity = army slots AND per-type maxOwned (incl. wounded + in-flight train).
+            bool atOwnedCap = IsAtOwnedCap(def);
+            bool hasRoom  = !atOwnedCap
+                            && (_army == null
+                                || _army.CanTrain(def.Id, TroopDialogueCommands.SlotOf, MaxOwnedOf));
             bool econKnown = _economy != null;
             bool canTrain = trainable && affordable && hasRoom;
+
+            string lockedReason = null;
+            if (!trainable) lockedReason = TroopUnlock.LockedReason(def);
+            else if (atOwnedCap) lockedReason = OwnedCapReason(def);
 
             return new TroopDetail(
                 DisplayName(def, def.Id),
@@ -359,7 +390,7 @@ namespace DeNelle.Village.Hero
                 def.UnlockBarracksTier,
                 string.IsNullOrEmpty(def.IconId) ? "" : def.IconId,
                 trainable,
-                trainable ? null : TroopUnlock.LockedReason(def),
+                lockedReason,
                 owned,
                 wounded,
                 armyKnown,
@@ -373,6 +404,34 @@ namespace DeNelle.Village.Hero
                 RoundToInt(def.AttackDamage),
                 def.AttackRange,
                 CostString(def));
+        }
+
+        /// <summary>TroopDef.MaxOwned lookup for ArmyStorage.CanTrain (0 = unlimited).</summary>
+        private static int MaxOwnedOf(string troopId)
+        {
+            var d = TroopCatalog.Find(troopId);
+            return d != null && d.MaxOwned > 0 ? d.MaxOwned : 0;
+        }
+
+        /// <summary>
+        /// True when maxOwned is set and roster + in-flight train jobs already fill it
+        /// (wounded still occupy the cap — CoC scarcity / WO-933 preferred ruling).
+        /// </summary>
+        private bool IsAtOwnedCap(TroopDef def)
+        {
+            if (def == null || def.MaxOwned <= 0) return false;
+            int owned = _army != null ? _army.CountOfDef(def.Id) : 0;
+            int inFlight = BarracksService.CountInFlightTrainOf(def.Id);
+            return owned + inFlight >= def.MaxOwned;
+        }
+
+        private static string OwnedCapReason(TroopDef def)
+        {
+            if (def == null || def.MaxOwned <= 0) return null;
+            string name = string.IsNullOrEmpty(def.DisplayName) ? def.Id : def.DisplayName;
+            if (def.MaxOwned == 1)
+                return "Only one " + name + " may be owned (including wounded).";
+            return "Owned limit reached for " + name + " (" + def.MaxOwned + ").";
         }
 
         private int OwnedCount(string troopId)

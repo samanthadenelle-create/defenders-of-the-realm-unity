@@ -457,6 +457,17 @@ namespace DeNelle.Village
 
         private void DoRetreat()
         {
+            // WO-932 next set: settle score + partial loot BEFORE army reconcile / leave.
+            // Victory path grants loot in RaidVictoryController; retreat/timeout used to
+            // skip Finalize entirely so a half-razed base paid nothing and left scorer open.
+            if (_scoring == null) _scoring = RaidScoring.Instance;
+            if (_scoring != null && !_scoring.Finalized)
+            {
+                RaidResult result = _scoring.Finalize(false);
+                ResourceCost loot = _scoring.LootFor(result);
+                GrantRetreatLoot(loot, result);
+            }
+
             // A retreat / clock-expiry exit is never a 3-star clear -> 0 stars, no veterancy.
             ReconcileRaidEnd(0);
 
@@ -464,6 +475,34 @@ namespace DeNelle.Village
             GameStateService.Instance?.Save();
             SetStatus("Retreating to the castle...");
             SceneRouter.GoCastle();
+        }
+
+        /// <summary>WO-932: partial loot on retreat/timeout (stars may still be 1 from ≥50% razed).</summary>
+        private static void GrantRetreatLoot(ResourceCost loot, RaidResult result)
+        {
+            int stars = result != null ? result.Stars : 0;
+            if (loot.IsZero)
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Raid",
+                    $"retreat settle: stars={stars} loot=0 (no grant).");
+                return;
+            }
+            var eco = EconomyService.Instance;
+            if (eco != null)
+            {
+                eco.Grant(loot);
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Raid",
+                    $"retreat LOOT via EconomyService: stars={stars} +{loot.Crystals}c +{loot.Food}f.");
+                return;
+            }
+            var gs = GameStateService.Instance;
+            if (gs != null)
+            {
+                if (loot.Crystals != 0) gs.AddCrystals(loot.Crystals);
+                if (loot.Food != 0) gs.AddFood(loot.Food);
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Raid",
+                    $"retreat LOOT via GameState: stars={stars} +{loot.Crystals}c +{loot.Food}f.");
+            }
         }
 
         // =====================================================================

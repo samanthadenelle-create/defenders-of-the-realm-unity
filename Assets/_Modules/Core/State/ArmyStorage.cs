@@ -91,6 +91,47 @@ namespace DeNelle.Core.State
         /// </summary>
         [JsonProperty("lastRecoveryTickMs")] public double LastRecoveryTickMs;
 
+        // ── v38 — Named army loadout presets (WO-934) ─────────────────────────
+        /// <summary>
+        /// Fixed bank of named composition presets the player can save/load and
+        /// muster into the Train queue (WO-897 + WO-934). Always length
+        /// <see cref="ArmyLoadoutBank.SlotCount"/> after <see cref="EnsureLoadouts"/>.
+        /// Additive: absent on older saves → null → seeded empty slots on first access.
+        /// </summary>
+        [JsonProperty("loadouts")] public List<ArmyLoadoutSlot> Loadouts;
+
+        /// <summary>Which loadout slot is active in the Armies UI (0..SlotCount-1).</summary>
+        [JsonProperty("activeLoadout")] public int ActiveLoadoutIndex;
+
+        /// <summary>
+        /// Ensures <see cref="Loadouts"/> has exactly <see cref="ArmyLoadoutBank.SlotCount"/>
+        /// slots with default names. Safe to call every open; never shrinks authored rows.
+        /// </summary>
+        public void EnsureLoadouts()
+        {
+            if (Loadouts == null) Loadouts = new List<ArmyLoadoutSlot>();
+            while (Loadouts.Count < ArmyLoadoutBank.SlotCount)
+            {
+                int i = Loadouts.Count;
+                Loadouts.Add(new ArmyLoadoutSlot
+                {
+                    Name = ArmyLoadoutBank.DefaultName(i),
+                    Rows = new List<ArmyLoadoutRow>(),
+                });
+            }
+            if (ActiveLoadoutIndex < 0) ActiveLoadoutIndex = 0;
+            if (ActiveLoadoutIndex >= ArmyLoadoutBank.SlotCount)
+                ActiveLoadoutIndex = ArmyLoadoutBank.SlotCount - 1;
+        }
+
+        /// <summary>Loadout slot at index, or null if out of range (after Ensure).</summary>
+        public ArmyLoadoutSlot GetLoadout(int index)
+        {
+            EnsureLoadouts();
+            if (index < 0 || index >= Loadouts.Count) return null;
+            return Loadouts[index];
+        }
+
         // ── Capacity ─────────────────────────────────────────────────────────
 
         /// <summary>
@@ -119,16 +160,39 @@ namespace DeNelle.Core.State
         }
 
         /// <summary>
+        /// How many roster members (incl. wounded) carry <paramref name="troopDefId"/>.
+        /// Used for per-type ownership caps (WO-933 siege maxOwned) — wounded still count.
+        /// </summary>
+        public int CountOfDef(string troopDefId)
+        {
+            if (string.IsNullOrEmpty(troopDefId) || Owned == null) return 0;
+            int n = 0;
+            foreach (var t in Owned)
+                if (t != null && string.Equals(t.TroopDefId, troopDefId, StringComparison.Ordinal))
+                    n++;
+            return n;
+        }
+
+        /// <summary>
         /// True when <paramref name="troopId"/> is a known def (slot &gt; 0) AND the
         /// remaining army slots cover that def's slot cost. Pure capacity check — does
         /// NOT consider resource cost (that is <see cref="TrainNow"/>'s affordability seam).
+        /// Optional <paramref name="maxOwnedOf"/>: when it returns &gt; 0 for the def, also
+        /// refuses once <see cref="CountOfDef"/> is at the cap (WO-933). In-flight train
+        /// jobs are NOT visible here — BarracksService.EnqueueTraining counts those.
         /// </summary>
-        public bool CanTrain(string troopId, Func<string, int> slotOf)
+        public bool CanTrain(string troopId, Func<string, int> slotOf, Func<string, int> maxOwnedOf = null)
         {
             if (string.IsNullOrEmpty(troopId)) return false;
             int cost = slotOf != null ? slotOf(troopId) : 0;
             if (cost <= 0) return false;                 // unknown def → not trainable
-            return SlotsRemaining(slotOf) >= cost;
+            if (SlotsRemaining(slotOf) < cost) return false;
+            if (maxOwnedOf != null)
+            {
+                int max = maxOwnedOf(troopId);
+                if (max > 0 && CountOfDef(troopId) >= max) return false;
+            }
+            return true;
         }
 
         /// <summary>

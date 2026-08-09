@@ -183,7 +183,8 @@ namespace DeNelle.Village.Hero
             // builds. Procedural gold diamonds instead (EndStateView's pattern via
             // the shared StarRatingRow), then a plain font-safe "Target:" label.
             StarRatingRow.Build(host, 3, 3, 0.19f, y0, 0.28f, y1, sizePx: 12f);
-            var timeLbl = ElarionUiKit.Label(host, "Target: " + FormatTime(_vm != null ? _vm.TargetTime : 0f),
+            // Honesty: this is the LIVE raid clock (3★ under-time), not a longer decorative target.
+            var timeLbl = ElarionUiKit.Label(host, "Clock: " + FormatTime(_vm != null ? _vm.TargetTime : 0f),
                 y0, y1, ElarionUi.Gilt, ElarionUi.FontBody, TMPro.TextAlignmentOptions.Left, 0.305f, 0.75f, bold: true);
             timeLbl.raycastTarget = false;
         }
@@ -325,7 +326,7 @@ namespace DeNelle.Village.Hero
             var well = ElarionUiKit.AddImage(row.transform, "IconWell",
                 new Vector2(0.03f, 0.15f), new Vector2(0.20f, 0.85f), new Color(0f, 0f, 0f, 0.30f));
             well.GetComponent<Image>().raycastTarget = false;
-            string glyph = (_vm != null && _vm.IsRanged(troopDefId)) ? "RNG" : "MEL";
+            string glyph = _vm != null ? _vm.RoleGlyph(troopDefId) : "MEL";
             var ic = ElarionUiKit.Label(well.transform, glyph, 0f, 1f, ElarionUi.Gilt,
                 ElarionUi.FontHead, TMPro.TextAlignmentOptions.Center, 0f, 1f, bold: true);
             ic.raycastTarget = false;
@@ -379,13 +380,13 @@ namespace DeNelle.Village.Hero
             var pvTitle = ElarionUiKit.Label(preview.transform, "ENEMY BASE", 0.28f, 0.40f,
                 ElarionUi.Gilt, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f, bold: true);
             pvTitle.raycastTarget = false;
-            var pvLbl = ElarionUiKit.Label(preview.transform, "Scout sketch not yet available", 0.14f, 0.26f,
+            var pvLbl = ElarionUiKit.Label(preview.transform, "Assault to recon — drop troops on the field", 0.14f, 0.26f,
                 ElarionUi.ParchmentDim, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f);
             pvLbl.raycastTarget = false;
 
-            // Estimated Clear Time readout (FIRST PASS: static from the config; TODO live).
+            // Soft est band (never longer than the live raid clock).
             string est = _vm != null ? FormatTime(_vm.EstClearTime) : "--:--";
-            var estLbl = ElarionUiKit.Label(body, "Est. Clear Time: ~" + est, 0.34f, 0.40f, ElarionUi.Gilt,
+            var estLbl = ElarionUiKit.Label(body, "Est. clear (soft): ~" + est, 0.34f, 0.40f, ElarionUi.Gilt,
                 ElarionUi.FontBody, TMPro.TextAlignmentOptions.Center, RightColX0, 1.00f, bold: true);
             estLbl.raycastTarget = false;
 
@@ -427,9 +428,11 @@ namespace DeNelle.Village.Hero
         // band underneath.
         private void BuildDeployBar(Transform footer)
         {
-            // Auto Recommend — FIRST PASS stub: selects all deployable (no comp logic yet).
-            ElarionUiKit.Button(footer, "Auto Recommend", ElarionUiKit.ButtonKind.Quiet,
-                new Vector2(0.00f, 0.05f), new Vector2(0.34f, 0.95f), OnAutoRecommend);
+            // Honesty pass 2026-08-09: removed the "Auto Recommend" stub (toast-only, no
+            // loadout AI). Full-width BEGIN ASSAULT — the army is always the full deployable
+            // roster on the battleground tray. Quiet "Army ready" peek stays as optional info.
+            ElarionUiKit.Button(footer, "Army Ready?", ElarionUiKit.ButtonKind.Quiet,
+                new Vector2(0.00f, 0.05f), new Vector2(0.28f, 0.95f), OnAutoRecommend);
 
             // DEPLOY — the big glowing primary CTA. WO-839 #5: the old DeployGlow was a
             // flat gilt RECT deliberately larger than the button on every side
@@ -437,14 +440,15 @@ namespace DeNelle.Village.Hero
             // ROUNDED halo hugging the button (~1% margin, rounded sprite corners), so a
             // soft gold rim reads as the ember glow with no hard slab edge.
             var glow = ElarionUiKit.AddImage(footer, "DeployGlow",
-                new Vector2(0.385f, 0.00f), new Vector2(1.00f, 1.00f),
+                new Vector2(0.30f, 0.00f), new Vector2(1.00f, 1.00f),
                 new Color(ElarionUi.Gilt.r, ElarionUi.Gilt.g, ElarionUi.Gilt.b, 0.30f));
             var glowImg = glow.GetComponent<Image>();
             glowImg.raycastTarget = false;
             ElarionUiKit.ApplyRounded(glowImg);
 
-            var deployBtn = ElarionUiKit.Button(footer, "DEPLOY", ElarionUiKit.ButtonKind.Confirm,
-                new Vector2(0.40f, 0.05f), new Vector2(0.985f, 0.95f), OnDeploy);
+            // WO-932: "BEGIN ASSAULT" — distinct from in-raid ground DROP of troops.
+            var deployBtn = ElarionUiKit.Button(footer, "BEGIN ASSAULT", ElarionUiKit.ButtonKind.Confirm,
+                new Vector2(0.32f, 0.05f), new Vector2(0.985f, 0.95f), OnDeploy);
             // WO-839 #6: scouting stays the default (GateDeployAtZeroTroops=false). Either
             // way the WO-820 readiness gate upstream (RaidEntryGate / ArmyReadiness.Compute
             // at the HUD button + selection grid) stays the ONE authority — this screen
@@ -455,23 +459,46 @@ namespace DeNelle.Village.Hero
 
         private void OnAutoRecommend()
         {
-            // FIRST PASS stub: "select all deployable" is the whole roster already shown.
-            // A real comp picker (driven by a scout report) is a later increment (see TODO).
+            // WO-932: no longer a silent stub. Pre-deploy does not pick a subset — the full
+            // deployable army is available on the battleground tray. This CTA confirms that
+            // and surfaces power/count so the tap is never a dead button.
             int n = _vm != null ? _vm.DeployableCount : 0;
-            // WO-714 P5: transient feedback through the ONE kit toast — a button tap must
-            // never be a silent no-op (dead-button law), and no status label to go stale.
-            ElarionUiKit.ShowToast("Auto Recommend: all " + n + " deployable troop(s) selected.",
+            int power = _vm != null ? _vm.PowerRating : 0;
+            if (n <= 0)
+            {
+                ElarionUiKit.ShowToast(
+                    "No deployable troops yet. Train at the Barracks, then return.",
+                    ElarionUiKit.ToastTone.Info);
+                return;
+            }
+            ElarionUiKit.ShowToast(
+                "Full army ready: " + n + " troop(s), power " + power +
+                ". Begin Assault — drop them on the field.",
                 ElarionUiKit.ToastTone.Info);
-            Debug.Log($"[RaidDeployScreen] Auto Recommend (stub) — would deploy all {n} deployable troop(s).");
+            Debug.Log($"[RaidDeployScreen] Auto Recommend — full army n={n} power={power}.");
         }
 
         private void OnDeploy()
         {
-            if (_vm == null || !_vm.CanDeploy)
+            if (_vm == null)
             {
-                // WO-714 P5: player-visible transient feedback, not just a console line.
+                ElarionUiKit.ShowToast("Raid briefing is not ready.", ElarionUiKit.ToastTone.Danger);
+                return;
+            }
+            if (string.IsNullOrEmpty(_vm.SceneName))
+            {
                 ElarionUiKit.ShowToast("This raid has no battleground yet.", ElarionUiKit.ToastTone.Danger);
-                Debug.LogWarning("[RaidDeployScreen] DEPLOY: no scene to load for this raid.");
+                Debug.LogWarning("[RaidDeployScreen] DEPLOY: empty sceneName.");
+                return;
+            }
+            if (!DeNelle.Core.SceneRouter.IsSceneInBuild(_vm.SceneName))
+            {
+                // WO-932 Phase 2: honest under-construction — never silent strand.
+                ElarionUiKit.ShowToast(
+                    "Raid under construction — battleground not in this build.",
+                    ElarionUiKit.ToastTone.Danger);
+                DeNelle.Core.Diagnostics.FlowTrace.Fail("Raid",
+                    $"BEGIN ASSAULT refused: scene '{_vm.SceneName}' not in Build Settings.");
                 return;
             }
             // WO-839 #6 (flag OFF by default — scouting with 0 troops is deliberate).
@@ -481,7 +508,9 @@ namespace DeNelle.Village.Hero
                 Debug.Log("[RaidDeployScreen] DEPLOY blocked: 0 deployable troops (GateDeployAtZeroTroops).");
                 return;
             }
-            Debug.Log($"[RaidDeployScreen] DEPLOY -> SceneRouter.GoRaid('{_vm.SceneName}').");
+            string name = !string.IsNullOrEmpty(_vm.DisplayNameRaw) ? _vm.DisplayNameRaw : _vm.RaidId;
+            ElarionUiKit.ShowToast("Assaulting " + name + "…", ElarionUiKit.ToastTone.Info);
+            Debug.Log($"[RaidDeployScreen] BEGIN ASSAULT -> SceneRouter.GoRaid('{_vm.SceneName}').");
             // SHARED CONTRACT: the VM loads the raid scene; the in-raid deploy tray handles
             // the actual unit placement.
             _vm.Deploy();

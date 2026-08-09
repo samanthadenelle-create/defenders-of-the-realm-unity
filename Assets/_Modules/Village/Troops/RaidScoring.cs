@@ -44,10 +44,17 @@ namespace DeNelle.Village
         /// <summary>The live scorer for the current raid scene (null outside a raid).</summary>
         public static RaidScoring Instance { get; private set; }
 
+        /// <summary>
+        /// The LIVE raid clock default (seconds). Selection/deploy UI must display this
+        /// (or the authored config time only when it matches) — never a longer "target"
+        /// that scoring does not use (honesty pass 2026-08-09).
+        /// </summary>
+        public const float DefaultClockSeconds = 180f;
+
         [Header("Clock")]
         [Tooltip("Raid clock in seconds (design B5 = 180s). A full clear UNDER this earns the 3rd star; " +
                  "when it runs out the raid ends (OnTimeExpired). Owner tunes by feel.")]
-        [SerializeField] private float _clockSeconds = 180f;
+        [SerializeField] private float _clockSeconds = DefaultClockSeconds;
 
         [Header("Loot (owner tunes by feel)")]
         [Tooltip("Crystals granted at 100% destruction, before the per-star bonus.")]
@@ -365,16 +372,22 @@ namespace DeNelle.Village
         /// <summary>
         /// Loot payout (crystals + food) scaled by destruction AND the star tier. At
         /// 100% + 3 stars a raid pays the base + 3x the per-star bonus; a light raid
-        /// pays proportionally less. Reused by the victory grant + the HUD ticker.
+        /// pays proportionally less. <paramref name="rewardMultiplier"/> is the
+        /// scene-config difficulty mult (Regular 1.0 / Hard 1.5 / Extreme 2.2) —
+        /// applied AFTER stars+destruction so the selection-card "xLoot" is honest.
         /// Static + pure so a regression can assert the scaling with no scene.
         /// </summary>
         public static ResourceCost ComputeLoot(int stars, float destructionPct,
-            int crystalsBase, int foodBase, int crystalsPerStar, int foodPerStar)
+            int crystalsBase, int foodBase, int crystalsPerStar, int foodPerStar,
+            float rewardMultiplier = 1f)
         {
             float frac = Mathf.Clamp01(destructionPct);
             int st = Mathf.Clamp(stars, 0, 3);
-            int crystals = Mathf.RoundToInt(Mathf.Max(0, crystalsBase) * frac) + Mathf.Max(0, crystalsPerStar) * st;
-            int food     = Mathf.RoundToInt(Mathf.Max(0, foodBase)     * frac) + Mathf.Max(0, foodPerStar)     * st;
+            float mult = rewardMultiplier > 0f ? rewardMultiplier : 1f;
+            int crystals = Mathf.RoundToInt(
+                (Mathf.Max(0, crystalsBase) * frac + Mathf.Max(0, crystalsPerStar) * st) * mult);
+            int food = Mathf.RoundToInt(
+                (Mathf.Max(0, foodBase) * frac + Mathf.Max(0, foodPerStar) * st) * mult);
             return new ResourceCost(food: food, crystals: crystals);
         }
 
@@ -460,6 +473,10 @@ namespace DeNelle.Village
                                    $"(spire={(_spire != null ? "yes" : "NO")}, " +
                                    $"structures={_structuresTotalAtStart}). " +
                                    "Absent terms are renormalised away, not scored as 0.");
+
+            // WO-932: one clock line for the Phase 0 probe matrix.
+            FlowTrace.Step("Raid",
+                $"RAID CLOCK armed: {_clockSeconds:0}s · loot base crystals={_lootCrystalsBase} food={_lootFoodBase}.");
         }
 
         /// <summary>
@@ -583,14 +600,39 @@ namespace DeNelle.Village
         }
 
         /// <summary>
-        /// The loot payout for a settled result, using THIS scorer's tunables.
-        /// (Thin instance wrapper over the pure <see cref="ComputeLoot"/>.)
+        /// The loot payout for a settled result, using THIS scorer's tunables and the
+        /// live scene-config <c>rewardMultiplier</c> (so card "x1.5 Loot" is paid).
         /// </summary>
         public ResourceCost LootFor(RaidResult result)
         {
             if (result == null) return default(ResourceCost);
+            float mult = ResolveRewardMultiplier();
             return ComputeLoot(result.Stars, result.DestructionPct,
-                _lootCrystalsBase, _lootFoodBase, _lootCrystalsPerStar, _lootFoodPerStar);
+                _lootCrystalsBase, _lootFoodBase, _lootCrystalsPerStar, _lootFoodPerStar, mult);
+        }
+
+        /// <summary>
+        /// Scene-config rewardMultiplier for the active raid (1 when unknown).
+        /// Prefers the garrison spawner's config id; falls back to matching scene name.
+        /// </summary>
+        public float ResolveRewardMultiplier()
+        {
+            try
+            {
+                string configId = null;
+                if (_spawner != null) configId = _spawner.ConfigId;
+                SceneConfigDef def = null;
+                if (!string.IsNullOrEmpty(configId))
+                    def = SceneConfigCatalog.Find(configId);
+                if (def == null)
+                {
+                    string scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name;
+                    def = SceneConfigCatalog.FindBySceneName(scene);
+                }
+                if (def != null && def.rewardMultiplier > 0f) return def.rewardMultiplier;
+            }
+            catch { /* catalog optional in unit tests */ }
+            return 1f;
         }
     }
 }
