@@ -513,6 +513,7 @@ namespace DeNelle.Editor
                 count += CaptureRumorBoard();
                 count += CaptureRealmMap();
                 count += CaptureQueueRail();         // WO-864: the CoC queue card rail
+                count += CaptureBuildGhostChips();   // WO-1010 P1: chips on the ghost
 
                 Debug.Log("[UICap-HL] done -> " + Path.GetFullPath(OutDir));
             }
@@ -2261,6 +2262,100 @@ namespace DeNelle.Editor
             measure = "distinct=" + buckets.Count + " ink=" + ink.ToString("F4") +
                       " (floors " + BlankMinDistinctBuckets + " / " + BlankMinInkFraction.ToString("F4") + ")";
             return buckets.Count < BlankMinDistinctBuckets || ink < BlankMinInkFraction;
+        }
+
+        // =====================================================================
+        //  WO-1010 P1 — the chips that replaced the build intent bar
+        // =====================================================================
+        /// <summary>
+        /// Shoot the Build HUD's ghost controls in the four states the WO's acceptance
+        /// criteria name: valid, blocked, clamped against a screen corner, and with the nudge
+        /// pad toggled on. The clamp shot is the one that matters most -- chips that walk
+        /// off-screen when the ghost nears an edge make a building unplaceable, and that is a
+        /// failure the OLD bottom-edge bar could not have had, so it is new risk this redesign
+        /// introduced and must be photographed rather than reasoned about.
+        ///
+        /// Positioning is invoked EXPLICITLY via LayoutGhostControlsNow() because
+        /// MonoBehaviour ticks do not run in edit mode -- without that call this would
+        /// photograph the chips parked at the canvas centre in all four shots and prove
+        /// nothing at all.
+        /// </summary>
+        private static int CaptureBuildGhostChips()
+        {
+            return ForEachTarget("BuildGhostChips", target =>
+            {
+                int saved = 0;
+                GameObject hostGo = null;
+                try
+                {
+                    var hud = DeNelle.Village.BuildHudController.Create(null,
+                        null, null, null, null, null);
+                    if (hud == null)
+                    {
+                        Debug.LogWarning("[UICap-HL] BuildHudController.Create returned null -- build chips skipped.");
+                        return 0;
+                    }
+                    hostGo = hud.gameObject;
+
+                    var canvasTf = hostGo.transform.Find("BuildHudCanvas");
+                    if (canvasTf == null)
+                    {
+                        Debug.LogWarning("[UICap-HL] BuildHudCanvas not found under the HUD host -- build chips skipped.");
+                        return 0;
+                    }
+                    GameObject canvasGo = canvasTf.gameObject;
+
+                    hud.Show();
+                    hud.SetState(DeNelle.Village.BuildHudState.Placing);
+                    hud.SetPlacingLabel("Arcane Spire", "88 wood, 88 iron, 187 crystals");
+
+                    // (1) VALID — chips near the middle of the field, OK chip affirmative.
+                    hud.TrackGhost(new Vector2(target.W * 0.5f, target.H * 0.55f), true, null);
+                    hud.LayoutGhostControlsNow();
+                    if (RenderCanvasToPng(canvasGo, OutDir + "BuildGhostChips_valid_" + target.Tag + ".png",
+                        target.W, target.H)) saved++;
+
+                    // (2) BLOCKED — the refusal must be READABLE, not just red.
+                    hud.TrackGhost(new Vector2(target.W * 0.5f, target.H * 0.55f), false, "Not enough Wood");
+                    hud.LayoutGhostControlsNow();
+                    if (RenderCanvasToPng(canvasGo, OutDir + "BuildGhostChips_blocked_" + target.Tag + ".png",
+                        target.W, target.H)) saved++;
+
+                    // (3) EDGE — ghost jammed into the bottom-right corner. Every chip must
+                    //     still be fully on-screen and still be tappable.
+                    hud.TrackGhost(new Vector2(target.W - 2f, 2f), true, null);
+                    hud.LayoutGhostControlsNow();
+                    if (RenderCanvasToPng(canvasGo, OutDir + "BuildGhostChips_edgeclamp_" + target.Tag + ".png",
+                        target.W, target.H)) saved++;
+
+                    // (4) NUDGE PAD ON — via the real toggle button, so the shot proves the
+                    //     player-reachable path and not a private field poke.
+                    var toggle = canvasGo.transform.Find("BuildNudgePadToggle");
+                    var toggleBtn = toggle != null ? toggle.GetComponent<Button>() : null;
+                    if (toggleBtn != null)
+                    {
+                        toggleBtn.onClick.Invoke();
+                        hud.TrackGhost(new Vector2(target.W * 0.5f, target.H * 0.55f), true, null);
+                        hud.LayoutGhostControlsNow();
+                        if (RenderCanvasToPng(canvasGo, OutDir + "BuildGhostChips_padon_" + target.Tag + ".png",
+                            target.W, target.H)) saved++;
+                    }
+                    else
+                    {
+                        Debug.LogWarning("[UICap-HL] BuildNudgePadToggle not found -- pad-on shot skipped " +
+                                         "(the toggle is an acceptance criterion; this is a REAL gap, not noise).");
+                    }
+                }
+                catch (Exception e)
+                {
+                    Debug.LogError("[UICap-HL] build ghost chips capture threw: " + e);
+                }
+                finally
+                {
+                    if (hostGo != null) UnityEngine.Object.DestroyImmediate(hostGo);
+                }
+                return saved;
+            });
         }
 
         private static bool RenderCanvasToPng(GameObject canvasGo, string path, int w, int h)

@@ -75,8 +75,9 @@ namespace DeNelle.Village
         private const float ChipVisualPx = 52f;
         private const float ChipHitPx    = ElarionUiKit.MinTouchPx;   // 112
         private const float ChipGapPx    = 12f;
-        private const float GhostPillW   = 460f;
-        private const float GhostPillH   = 56f;
+        private const float ChipEdgePx   = 3f;    // accent border thickness on each chip
+        private const float GhostPillW   = 620f;  // widened: the first capture wrapped the
+        private const float GhostPillH   = 56f;   // name+cost onto 2 lines and overflowed
         private const float GhostPillLiftPx = 96f;   // pill floats ABOVE the ghost anchor
         private const float ChipDropPx      = 78f;   // chips sit BELOW/beside the anchor
         private const float SafePadPx       = 24f;   // never let a chip touch the screen edge
@@ -110,6 +111,9 @@ namespace DeNelle.Village
         private Vector2 _ghostScreenPoint;
         private bool _ghostValid = true;
         private string _ghostBlockReason = string.Empty;
+        /// <summary>Name + cost as authored, kept separate so the blocked reason can be
+        /// appended and removed without the base line being lost to string surgery.</summary>
+        private string _pillBase = "structure";
 
         /// <summary>
         /// Live direction from the build-owned nudge pad (zero when released or hidden).
@@ -227,22 +231,42 @@ namespace DeNelle.Village
             //    absorbs the old "Placing: <name>" hint pill AND the cost readout the
             //    player previously had to find back on the card. Non-raycast so it can
             //    never eat a world tap meant for the ground.
-            var pill = ElarionUiKit.AddImage(_intentBar.transform, "GhostPill",
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), ElarionUiKit.ObsidianFill, rounded: true);
-            _ghostPill = pill.transform as RectTransform;
+            // Gold edge around a near-black fill, for the same reason as the chips: the pill
+            // floats over live terrain and cannot rely on the ground behind it for contrast.
+            var pillEdge = ElarionUiKit.AddImage(_intentBar.transform, "GhostPill",
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), ElarionUi.Gilt, rounded: true);
+            _ghostPill = pillEdge.transform as RectTransform;
             if (_ghostPill != null)
             {
                 _ghostPill.anchorMin = _ghostPill.anchorMax = new Vector2(0.5f, 0.5f);
                 _ghostPill.pivot = new Vector2(0.5f, 0.5f);
                 _ghostPill.sizeDelta = new Vector2(GhostPillW, GhostPillH);
             }
-            var pillImg = pill.GetComponent<Image>();
-            if (pillImg != null) pillImg.raycastTarget = false;
+            var pillEdgeImg = pillEdge.GetComponent<Image>();
+            if (pillEdgeImg != null) pillEdgeImg.raycastTarget = false;
 
-            _placeName = MakeText(pill.transform, "structure", 24, ElarionUi.Gilt,
+            var pillFill = ElarionUiKit.AddImage(pillEdge.transform, "GhostPillFill",
+                new Vector2(0f, 0f), new Vector2(1f, 1f), ElarionUiKit.ObsidianFill, rounded: true);
+            var pillFillRt = pillFill.transform as RectTransform;
+            if (pillFillRt != null)
+            {
+                pillFillRt.offsetMin = new Vector2(ChipEdgePx, ChipEdgePx);
+                pillFillRt.offsetMax = new Vector2(-ChipEdgePx, -ChipEdgePx);
+            }
+            var pillFillImg = pillFill.GetComponent<Image>();
+            if (pillFillImg != null) pillFillImg.raycastTarget = false;
+
+            _placeName = MakeText(pillFill.transform, "structure", 22, ElarionUi.Gilt,
                 FontStyles.Bold, TextAlignmentOptions.Center,
                 new Vector2(0.03f, 0.02f), new Vector2(0.97f, 0.98f));
             _placeName.raycastTarget = false;
+            // ONE LINE. The first capture wrapped "Arcane Spire - 88 wood, 88 iron, 187
+            // crystals" onto two lines and pushed it out of the pill. A long name shrinks to
+            // fit rather than escaping its own background.
+            _placeName.textWrappingMode = TextWrappingModes.NoWrap;
+            _placeName.enableAutoSizing = true;
+            _placeName.fontSizeMin = 14f;
+            _placeName.fontSizeMax = 22f;
 
             // ── The chip cluster. Three round chips in a row, pivoted CENTRE so the
             //    clamp math below can keep the whole cluster on-screen as one unit.
@@ -297,20 +321,40 @@ namespace DeNelle.Village
             btn.targetGraphic = hit;
             if (onClick != null) btn.onClick.AddListener(() => onClick());
 
-            // The visible circle, centred inside the hit box and NON-raycast.
-            var ring = ElarionUiKit.AddImage(go.transform, "Ring",
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), ElarionUiKit.ObsidianFill, rounded: true);
-            var ringRt = ring.transform as RectTransform;
-            if (ringRt != null)
+            // ── The visible chip: an ACCENT-COLOURED EDGE around a near-black fill. ──
+            // The first build used a plain ObsidianFill circle, and the capture showed why
+            // that fails: ObsidianFill is (0.02,0.02,0.025) — effectively black — so the chip
+            // was black-on-black and only the bare label floated over the field. A chip that
+            // follows the ghost sits over ARBITRARY terrain (pale sand, dark water, grass), so
+            // it cannot borrow contrast from whatever happens to be behind it; it has to carry
+            // its own edge. The edge also gives each chip a second, non-textual identity
+            // (gold confirm / grey rotate / red cancel) WITHOUT meaning ever resting on colour
+            // alone, because the label already says which is which.
+            var edge = ElarionUiKit.AddImage(go.transform, "ChipEdge",
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), accent, rounded: true);
+            var edgeRt = edge.transform as RectTransform;
+            if (edgeRt != null)
             {
-                ringRt.anchorMin = ringRt.anchorMax = new Vector2(0.5f, 0.5f);
-                ringRt.pivot = new Vector2(0.5f, 0.5f);
-                ringRt.sizeDelta = new Vector2(ChipVisualPx, ChipVisualPx);
+                edgeRt.anchorMin = edgeRt.anchorMax = new Vector2(0.5f, 0.5f);
+                edgeRt.pivot = new Vector2(0.5f, 0.5f);
+                edgeRt.sizeDelta = new Vector2(ChipVisualPx, ChipVisualPx);
             }
-            ringOut = ring.GetComponent<Image>();
+            var edgeImg = edge.GetComponent<Image>();
+            if (edgeImg != null) edgeImg.raycastTarget = false;
+
+            var fill = ElarionUiKit.AddImage(edge.transform, "ChipFill",
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), ElarionUiKit.ObsidianFill, rounded: true);
+            var fillRt = fill.transform as RectTransform;
+            if (fillRt != null)
+            {
+                fillRt.anchorMin = fillRt.anchorMax = new Vector2(0.5f, 0.5f);
+                fillRt.pivot = new Vector2(0.5f, 0.5f);
+                fillRt.sizeDelta = new Vector2(ChipVisualPx - ChipEdgePx * 2f, ChipVisualPx - ChipEdgePx * 2f);
+            }
+            ringOut = fill.GetComponent<Image>();
             if (ringOut != null) ringOut.raycastTarget = false;
 
-            labelOut = MakeText(ring.transform, label, 22, accent, FontStyles.Bold,
+            labelOut = MakeText(fill.transform, label, 20, accent, FontStyles.Bold,
                 TextAlignmentOptions.Center, Vector2.zero, Vector2.one);
             labelOut.raycastTarget = false;
             return btn;
@@ -422,6 +466,7 @@ namespace DeNelle.Village
         {
             if (_placeName == null) return;
             string n = string.IsNullOrEmpty(displayName) ? "structure" : displayName;
+            _pillBase = n;
             _placeName.text = n;
             FlowTrace.Step("BuildHud", "ghost pill label: " + n);
         }
@@ -435,8 +480,9 @@ namespace DeNelle.Village
         {
             if (_placeName == null) return;
             string n = string.IsNullOrEmpty(displayName) ? "structure" : displayName;
-            _placeName.text = string.IsNullOrEmpty(costLine) ? n : n + " - " + costLine;
-            FlowTrace.Step("BuildHud", "ghost pill: " + _placeName.text);
+            _pillBase = string.IsNullOrEmpty(costLine) ? n : n + " - " + costLine;
+            _placeName.text = _pillBase;
+            FlowTrace.Step("BuildHud", "ghost pill: " + _pillBase);
         }
 
         /// <summary>
@@ -501,23 +547,54 @@ namespace DeNelle.Village
 
             if (_ghostPill != null)
             {
+                // ── THE PILL IS PLACED RELATIVE TO THE *CLAMPED* CHIPS, NOT THE GHOST. ──
+                // Clamping the two independently is what the first edge capture caught: in a
+                // corner they each satisfied "fully on-screen" and then landed ON TOP OF EACH
+                // OTHER, with the chips covering the cost text. Two separately-correct clamps
+                // can still produce one unreadable result, so the pair is positioned as a unit.
                 Vector2 pillHalf = _ghostPill.sizeDelta * 0.5f;
-                Vector2 pillPos = new Vector2(local.x, local.y + GhostPillLiftPx);
+                float gap = 14f;
+                float topLimit    = half.y - pillHalf.y - SafePadPx;
+                float bottomLimit = -half.y + pillHalf.y + SafePadPx;
+
+                // Prefer above the chips; if there is no room up there, sit below them.
+                float pillY = chipPos.y + chipHalf.y + pillHalf.y + gap;
+                if (pillY > topLimit)
+                {
+                    float below = chipPos.y - chipHalf.y - pillHalf.y - gap;
+                    if (below >= bottomLimit) pillY = below;
+                    else pillY = Mathf.Clamp(pillY, bottomLimit, topLimit);
+                }
+
+                Vector2 pillPos = new Vector2(local.x, pillY);
                 pillPos.x = Mathf.Clamp(pillPos.x, -half.x + pillHalf.x + SafePadPx, half.x - pillHalf.x - SafePadPx);
-                pillPos.y = Mathf.Clamp(pillPos.y, -half.y + pillHalf.y + SafePadPx, half.y - pillHalf.y - SafePadPx);
                 _ghostPill.anchoredPosition = pillPos;
             }
 
-            // OK chip carries the verdict in WORDS. Kept interactable-looking but refusing,
-            // with the reason on the face, rather than greyed into ambiguity.
+            // ── THE VERDICT: short word on the chip, full reason on the PILL. ──────
+            // The first capture put the whole reason ON the chip and "Not enough Wood" wrapped
+            // to four lines and spilled outside a 52px circle — unreadable, and it covered the
+            // other chips. A sentence needs the WIDE surface; the chip only ever has room for
+            // a verb. So the chip says OK / No, and the pill — which is already 620px and
+            // right above the ghost — carries the why. Both are words, so the refusal is still
+            // never communicated by colour alone.
             if (_okChipLabel != null)
             {
-                string want = _ghostValid ? "OK"
-                    : (string.IsNullOrEmpty(_ghostBlockReason) ? "Blocked" : _ghostBlockReason);
+                string want = _ghostValid ? "OK" : "No";
                 if (_okChipLabel.text != want) _okChipLabel.text = want;
                 _okChipLabel.color = _ghostValid ? ElarionUi.Gilt : new Color(0.86f, 0.32f, 0.30f);
             }
+            if (_okChipRing != null) { /* fill stays obsidian; the EDGE carries chip identity */ }
             if (_okChip != null) _okChip.interactable = _ghostValid;
+
+            if (_placeName != null)
+            {
+                string want = (!_ghostValid && !string.IsNullOrEmpty(_ghostBlockReason))
+                    ? _pillBase + " - " + _ghostBlockReason
+                    : _pillBase;
+                if (_placeName.text != want) _placeName.text = want;
+                _placeName.color = _ghostValid ? ElarionUi.Gilt : new Color(0.93f, 0.55f, 0.45f);
+            }
         }
 
         /// <summary>Re-read the live wallet (called by the brain on transitions).</summary>
