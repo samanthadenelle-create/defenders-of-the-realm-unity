@@ -614,6 +614,40 @@ namespace DeNelle.Editor
             int suitesRed   = failures.Count - suiteFailuresBefore;
             int suitesTotal = suitesGreen + suitesRed;
 
+            // --- G1: the denominator must be PINNED, not self-reported -------------
+            // suitesTotal is derived from what the run PRODUCED (tag lines + failures).
+            // A suite registered inside Guard.Try that THROWS produces neither, so it
+            // silently leaves this total and the marker still reads green at a smaller
+            // number. Joining the runtime count against the count of registration
+            // call-sites in SOURCE makes a vanished suite loud. Both sides are measured;
+            // neither is a literal (a hardcoded expectation would be audit finding G8).
+            int expectedSuites;
+            string expectDetail;
+            if (!DeNelle.Editor.Regression.RegressionMarkerRegression.TryGetExpectedSuiteCount(out expectedSuites, out expectDetail))
+            {
+                failures.Add("[suite-count] could not derive the expected registered-suite count from source (" +
+                             expectDetail + "). The denominator is therefore UNPINNED: a suite that throws " +
+                             "inside Guard.Try would vanish from the total and the marker would still read green.");
+            }
+            else if (expectedSuites != suitesTotal)
+            {
+                failures.Add("[suite-count] SUITE VANISHED FROM THE DENOMINATOR: source registers " +
+                             expectedSuites + " oracle suite(s) between the fences, but this run only " +
+                             "accounted for " + suitesTotal + " (" + suitesGreen + " green + " + suitesRed +
+                             " red). The difference threw inside its Guard.Try, which swallows the exception " +
+                             "and returns false, so it emitted no [tag] line and no failure. Search the log " +
+                             "for 'FAILED at' to find it. " + expectDetail);
+                // Deliberately NOT adjusting suitesRed/suitesTotal here: those are the
+                // measurement of what this run produced, and doctoring them to match the
+                // expectation would erase the very discrepancy being reported. The marker
+                // keeps reporting the honest (smaller) number; this failure explains it.
+            }
+            else
+            {
+                log.AppendLine("[suite-count] denominator pinned: source registers " + expectedSuites +
+                               " suite(s) and the run accounted for all " + suitesTotal + ".");
+            }
+
             // --- Store/Inventory icon coverage (key data: real art vs glyph fallback) ---
             CheckItemIconCoverage(weapons, armors, failures, log);
 

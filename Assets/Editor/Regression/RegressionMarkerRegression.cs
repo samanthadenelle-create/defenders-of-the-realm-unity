@@ -417,6 +417,91 @@ namespace DeNelle.Editor.Regression
         }
 
         /// <summary>The brace-matched body of DataRegression.RunAll (the suite registry).</summary>
+        // =====================================================================
+        //  EXPECTED REGISTERED-SUITE COUNT  (audit finding G1)
+        // =====================================================================
+        // THE HOLE THIS CLOSES. DataRegression computes its headline number as
+        //   suitesTotal = suitesGreen + suitesRed
+        // where green counts "[tag]" lines in the log and red counts entries in
+        // `failures`. 78 of the ~130 suites are registered inside Guard.Try(...)
+        // with the return value DISCARDED. A suite that THROWS therefore appends
+        // no [tag] line and adds no failure - it silently LEAVES THE DENOMINATOR,
+        // and the marker still reads green at a smaller number
+        // ("REGRESSION_OK 125/125 suites"). Nothing anywhere pinned the count, so
+        // a vanished suite was indistinguishable from a suite that never existed.
+        //
+        // WHY THIS IS DERIVED AND NOT A LITERAL. Writing `const int Expected = 130`
+        // would BE the defect it is meant to catch - the same shape as
+        // SessionRegression's hardcoded "SESSION_GUARDS_OK 6/6 checks" (audit G8),
+        // a count that is a LABEL rather than a measurement. So both sides are
+        // measured: the expected count is counted from the SOURCE registration
+        // call-sites between DataRegression's own START/END fences, and compared
+        // against the count the RUN actually produced. Adding a suite moves both
+        // numbers together and needs no edit here; a suite disappearing at runtime
+        // moves only one, which is exactly the event we want to be loud.
+        //
+        // Counting rule: occurrences of ".Run(out ..." inside the fenced region of
+        // RunAll's body, with line comments stripped first so a commented-out or
+        // documented registration cannot inflate the expectation.
+        public static bool TryGetExpectedSuiteCount(out int expected, out string detail)
+        {
+            expected = -1;
+            detail = string.Empty;
+            try
+            {
+                string projectRoot = Directory.GetParent(Application.dataPath).FullName;
+                string registryPath = Path.Combine(projectRoot, "Assets", "Editor", "Regression", RegistryFileName);
+                if (!File.Exists(registryPath))
+                {
+                    detail = RegistryFileName + " not found at " + registryPath;
+                    return false;
+                }
+
+                string body = ExtractRunAllBody(ReadOrEmpty(registryPath));
+                if (string.IsNullOrEmpty(body))
+                {
+                    detail = "could not locate DataRegression.RunAll's body";
+                    return false;
+                }
+
+                // ORDER MATTERS, and getting it wrong is a self-inflicted blind spot:
+                // the fence markers THEMSELVES live inside `//` comments, so stripping
+                // comments first deletes the very landmarks used to find the region.
+                // Locate the fences in the RAW body, slice, and only THEN strip comments
+                // from inside the slice (so a commented-out registration cannot inflate
+                // the expectation).
+                // Anchor on the "<<<" suffix, NOT the bare words. The fence block's own
+                // instructional comment says "ADD NEW SUITE REGISTRATIONS ABOVE THE END
+                // FENCE, NOT BELOW IT", so a bare IndexOf("END FENCE") matches that prose
+                // ~12 lines in and slices a window containing no registrations at all -
+                // which then reads as "0 call-sites" and looks like a broken regex rather
+                // than a mis-anchored search. Only the real markers carry "<<<".
+                // The markers also contain a non-ASCII em dash, so neither anchor spans it.
+                int start = body.IndexOf("START FENCE <<<", StringComparison.Ordinal);
+                int end = body.IndexOf("END FENCE <<<", StringComparison.Ordinal);
+                if (start < 0 || end < 0 || end <= start)
+                {
+                    detail = "START/END FENCE markers not found in RunAll's body (or out of order) - " +
+                             "the fenced registry region is what makes the count derivable";
+                    return false;
+                }
+
+                string fenced = StripLineComments(body.Substring(start, end - start));
+                expected = RunSiteInFence.Matches(fenced).Count;
+                detail = "counted " + expected + " registration call-site(s) between the fences";
+                return expected > 0;
+            }
+            catch (Exception ex)
+            {
+                detail = "threw " + ex.GetType().Name + ": " + ex.Message;
+                return false;
+            }
+        }
+
+        /// <summary>A registration call-site: `Something.Run(out var r)` / `Run(out r)`.</summary>
+        private static readonly Regex RunSiteInFence = new Regex(
+            @"\.Run\s*\(\s*out\s+(?:var\s+)?\w+\s*\)", RegexOptions.Compiled);
+
         private static string ExtractRunAllBody(string src)
         {
             if (string.IsNullOrEmpty(src)) return string.Empty;
