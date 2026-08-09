@@ -16,16 +16,34 @@ namespace DeNelle.Core.Diagnostics
     ///   FlowTrace.Once("Roster", "spawned-sylas", "Sylas spawned");           // first time only
     ///
     /// Every line is prefixed [Flow:<system>] so logs are greppable per-system.
-    /// Set Enabled=false (or strip the calls) once a system is proven stable.
+    /// NEVER STRIP THE CALLS (owner ruling 2026-08-09) and Enabled DEFAULTS TRUE in every build,
+    /// including release players — the trace you most need comes from a tester's device. Flip
+    /// Enabled=false deliberately per-build/session if you must; the calls stay in the code.
     /// </summary>
     public static class FlowTrace
     {
-        /// <summary>Master switch. Defaults ON only in the editor / a development build — a
-        /// release/WebGL player ships with tracing OFF so the hot-path Debug.Log lines (which
-        /// can carry wallet ids, save-blob lengths, roster) never reach a production log. The
-        /// runtime setter is preserved so remote triage (Configure / TraceConfig) can still opt
-        /// a shipped build back IN on demand.</summary>
-        public static bool Enabled = Application.isEditor || Debug.isDebugBuild;
+        /// <summary>Master switch — <b>DEFAULTS TRUE IN EVERY BUILD, including release/WebGL</b>
+        /// (owner ruling 2026-08-09). The old default gated it to editor/development builds; that
+        /// rationale was written when this app was effectively a DEV VIEW, and it stopped holding
+        /// the moment real testers started running shipped builds.
+        /// <para/>
+        /// ⚠ The retired rationale named a real cost, and it does not disappear: these lines reach a
+        /// PRODUCTION log and can carry wallet ids, save-blob lengths and roster detail. The owner
+        /// has weighed that against being able to triage a tester's device and ruled for tracing.
+        /// Treat it as a live constraint on WHAT YOU LOG, not a reason to flip this back: do not add
+        /// secrets, tokens or full save blobs to a trace line. Use <see cref="Mute"/> / <see cref="Only"/>
+        /// to narrow a noisy category rather than disabling the master switch.</summary>
+        // ⛔ ON EVERYWHERE, INCLUDING RELEASE PLAYERS (owner ruling 2026-08-09).
+        // This used to read `Application.isEditor || Debug.isDebugBuild`, so a shipped release build
+        // ran SILENT. That inverted the whole point of the instrument-first directive (CLAUDE.md
+        // §12): the run you most need a trace from is the one on a TESTER'S device, doing something
+        // you cannot reproduce — and that was precisely the build with tracing off. Keeping the calls
+        // compiled in (never strip, same ruling) while defaulting them off preserved the cost and
+        // discarded the benefit.
+        // Still a runtime FIELD, so a build or a session can flip it off deliberately; what changed
+        // is the DEFAULT. The !Enabled early-out in ShouldLog remains the zero-cost path for anyone
+        // who does.
+        public static bool Enabled = true;
 
         // --- pluggable SINK (owner spec 2026-06-18: "log OR weblog") --------------
         // ALL FlowTrace output is routed through Sink.{Info,Warn,Error} instead of
