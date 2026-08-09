@@ -43,6 +43,19 @@ namespace DeNelle.Village
                 case "Troll":
                 case "Demon":
                 case "OgreMage":       return EnemyRig.LargeHumanoid;
+                // 2026-08-09 AccuRig intake. These meshes arrived Generic-by-default and were
+                // re-imported Humanoid in place (HumanoidRigFixup, HUMANOID_RIG_OK 7/7), so they
+                // MUST land on a Humanoid-clip controller. Routing any of them to Boss/LargeEnemy
+                // would T-pose them: those two are built from KayKit's GENERIC Rig_Medium/Rig_Large,
+                // and a Generic clip cannot pose a Humanoid avatar. EnemyRigControllerCoherence-
+                // Regression now fails the gate on exactly that mismatch.
+                case "Troll_Mage":                  // large brute caster
+                case "Troll_Overlord":              // outpost boss-scale brute
+                case "Skeleton_Golem_NEW": return EnemyRig.LargeHumanoid;
+                // The AccuRig Necromancer is Humanoid; the LEGACY "Necromancer" below is Generic and
+                // keeps the Generic Boss controller. Both names coexist on purpose — the suffix is
+                // what keeps the two rig types from colliding on one controller.
+                case "Necromancer_NEW":    return EnemyRig.SkeletonHumanoid;
                 case "Necromancer":    return EnemyRig.Boss;
                 case "Dragon":         return EnemyRig.Dragon;
                 // DEF-221: the orc family is HUMANOID (Tripo), so it CANNOT use the
@@ -57,6 +70,10 @@ namespace DeNelle.Village
                 case "Orc_Warrior":
                 case "Orc_Tank":
                 case "Orc_Mage":        return EnemyRig.OrcHumanoid;
+                // 2026-08-09: the orc-family boss. Falls to the shared OrcHumanoid base (there is no
+                // OrcHumanoid_Warlord override yet) — correct and Humanoid-coherent; a dedicated
+                // override is a later polish step, not a correctness gap.
+                case "Orc_Warlord":     return EnemyRig.OrcHumanoid;
                 // AccuRig skeleton family (2026-07-05) — CC_Base Humanoid rigs retarget
                 // through SkeletonHumanoid (Mixamo), not KayKit Generic HumanoidEnemy.
                 case "Skeleton_Mage":
@@ -211,9 +228,21 @@ namespace DeNelle.Village
             }
         }
 
+        /// <summary>
+        /// The controller name <see cref="Apply"/> will load for <paramref name="modelName"/>.
+        /// PUBLIC so the build-time oracle (EnemyRigControllerCoherenceRegression) asks the SAME
+        /// authority the runtime uses instead of re-deriving the mapping — two derivations of one
+        /// rule is how a gate and the game come to disagree while both report success.
+        /// </summary>
+        public static string ResolveControllerName(string modelName)
+        {
+            return ControllerForModel(RigFor(modelName), modelName);
+        }
+
         /// <summary>True if any clip on the controller is Humanoid motion — such a clip
-        /// can only pose the rig through a valid Humanoid avatar (Generic rig = T-pose).</summary>
-        private static bool ControllerHasHumanoidClips(RuntimeAnimatorController ctrl)
+        /// can only pose the rig through a valid Humanoid avatar (Generic rig = T-pose).
+        /// PUBLIC for the same shared-authority reason as <see cref="ResolveControllerName"/>.</summary>
+        public static bool ControllerHasHumanoidClips(RuntimeAnimatorController ctrl)
         {
             if (ctrl == null) return false;
             var clips = ctrl.animationClips;

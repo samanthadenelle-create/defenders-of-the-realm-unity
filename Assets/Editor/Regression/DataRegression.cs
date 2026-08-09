@@ -581,6 +581,14 @@ namespace DeNelle.Editor
             // it silently coming back ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "vfx-self-contained suite", () => { if (!DeNelle.Editor.Regression.VfxResourceSelfContainmentRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[vfx-self-contained] " + r); });
 
+            // --- ENEMY RIG <-> CONTROLLER COHERENCE (2026-08-09): a Humanoid model on a
+            // Generic-clip controller (or the reverse) T-poses and slides. The runtime
+            // ALREADY detects this -- but only for an enemy that actually spawns in a play
+            // session, so a rarely-spawned boss ships broken in silence. This asks the same
+            // question statically, over every model in Resources/Enemies, and fails the gate.
+            // It is what stopped the seven AccuRig intakes from being wired to Boss/LargeEnemy. ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "enemy-rig-coherence suite", () => { if (!DeNelle.Editor.Regression.EnemyRigControllerCoherenceRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[enemy-rig-coherence] " + r); });
+
             // --- DUNGEON ENCOUNTER FAMILY (WO-1001 slice 2): EncounterSpec.kind was
             // compared ONLY to "none" by DungeonBaker, and OutpostEnemyGroupSpawner's
             // id picker was four hardcoded hollow-* literals whose hand-written stats
