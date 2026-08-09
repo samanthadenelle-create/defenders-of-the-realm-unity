@@ -1,0 +1,107 @@
+# BOARD.md — how the work-order board works (WO-1011)
+
+**The board is `BOARD.html` at the repo root. It is GENERATED. Never hand-edit it.**
+
+```
+python tools/board_build.py          # ~2 s — regenerate the view
+python tools/board_build.py --check  # same, but exits 1 if any WO is Unlabeled
+```
+
+---
+
+## 1. The model — the repo IS the board
+
+`WorkOrders/*.md` **`**Status:**` lines**, `*.RESULT.md` markers, and the
+`CLI_LANES_WO_NUMBERS.md` banner **are the data**. `BOARD.html` is a two-second derived **view** of
+them.
+
+There is nothing to sync, mirror, or update in a second system. The consequence is the whole point:
+
+> **The board is exactly as truthful as the status lines in the WO files.**
+> A finished work order whose file still says `READY` is a lie the board will faithfully render.
+
+So status hygiene is not paperwork — **it IS the board**. This is also why the board cannot drift the
+way the retired Notion mirror did: there is no second copy to fall behind.
+
+---
+
+## 2. The protocol
+
+1. **Regenerate at session boot, and before any board read.** Never read a stale `BOARD.html`;
+   never hand-edit it (it is generated output — your edit is destroyed on the next run).
+2. **Flip the status line IN THE SAME COMMIT as the work.** This is the §15 canon rule extended to
+   statuses: finishing an implementation means flipping `**Status:**` *and* writing the `.RESULT.md`
+   in that same commit. A status flip deferred to "later" is a board that lies until later.
+3. **Never mirror to Notion — no writes, and no reads**, regardless of what older docs say.
+   `NOTION_SOURCE_OF_TRUTH.md` is superseded. Any doc still pointing at Notion as the board gets a
+   `STALE:` flag when touched (banner only on frozen dated ledgers, §15).
+4. **The status vocabulary below is canon.** It is read from the **first** `**Status:**` line in the
+   file, by keyword priority.
+
+---
+
+## 3. Status vocabulary (keyword priority, first match wins)
+
+| Keyword in the `**Status:**` line | Bucket |
+|---|---|
+| `SUPERSEDED` / `CLOSED` / `CANCELLED` | **Closed** |
+| `DONE` / `IMPLEMENTED` / `COMPLETE` — **or a `.RESULT.md` exists** | **Done** |
+| `BLOCKED` | **Blocked** |
+| `READY` (any phrasing containing it) | **Ready** |
+| `DRAFT` / `SPEC` / `NOT STARTED` / `PROPOSAL` | **Spec** |
+| anything else | **Unlabeled** |
+
+**`Unlabeled` is a DEFECT in the WO file, not a category.** It means the status line carries no
+canonical keyword, so the row cannot be bucketed and silently drops out of every real query.
+
+Compound statuses are read left-to-right by that priority, which trips people up:
+
+- ❌ `DELIVERED — defect pass open` → contains neither `DONE` nor `READY` → **Unlabeled**
+- ❌ `IN PROGRESS — defect pass open, DELIVERED core` → still **Unlabeled**
+- ✅ `READY TO IMPLEMENT (defect pass)` → **Ready**
+- ✅ `DONE (pending felt-verify)` → **Done**
+
+Write the truth *and* include one canonical keyword. The nuance belongs after it, not instead of it.
+
+> ⚠ **A `.RESULT.md` forces the Done bucket** regardless of the status line. If you file a RESULT for
+> partially-complete work, say so loudly in the status line **and** the RESULT body — the board will
+> call it Done either way, so the file has to carry the caveat the bucket cannot.
+
+---
+
+## 4. Adding a new status keyword
+
+Edit **both** in the **same commit**, or the doc and the parser start disagreeing:
+
+1. `bucket_of()` in `tools/board_build.py`
+2. the table in §3 above
+
+A keyword the parser knows but this doc does not is invisible to every human; a keyword this doc
+promises but the parser does not know silently produces `Unlabeled` rows.
+
+---
+
+## 5. `--check` and the check-in gate
+
+`python tools/board_build.py --check` regenerates as normal, then **exits 1** if any WO is
+`Unlabeled`, printing the offending numbers and files (capped at 40, with a remainder count) so the
+output is a to-do list rather than a bare number.
+
+A plain run is **report-only** and always exits 0 — adding the flag to a gate is a deliberate act, and
+no one's build should start failing because a WO file is sloppy.
+
+---
+
+## 6. What this board is NOT
+
+- Not a service, not CI, not a database. It is one Python file and one HTML output.
+- Not a place to record work: the WO markdown is. The board only *shows* what the markdown says.
+- Not a Notion replacement to be re-mirrored anywhere. The retired mirror's failure mode — a second
+  copy nobody could reach — is exactly what "derive it in 2 seconds" prevents.
+
+## 7. Related
+
+- `CLI_LANES_WO_NUMBERS.md` — the **sole** numbering authority (bump the banner in the same edit as a mint)
+- `WorkOrders/` — the data
+- `tools/board_build.py` — the generator
+- `docs/HANDOVER.md`, `SESSION_CANON_LOADER.md` — session boot, which instructs the regen
