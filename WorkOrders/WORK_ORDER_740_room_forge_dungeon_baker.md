@@ -1,5 +1,7 @@
 # WORK ORDER 740 — Room Forge + Dungeon Baker (socketed room pipeline)
 
+**Status:** DONE (reconciled 2026-08-09 from the tree - the scaffold branch was MERGED to mainline (`ecb55e53` feat, `070f955f` merge, `a87cdee2` meta pairs) and the pipeline is in production: WO-930 records `cb092b7f` baking all four content dungeons PathComplete through RoomForge / DungeonBaker. NOT felt-verified; no `.RESULT.md`)
+
 **Status:** IN PROGRESS (scaffold landed on `feat/room-forge-dungeon-baker`)  
 **Priority:** P1 (dungeon authoring; parallel to barracks CoC)  
 **Silo:** Editor / Dungeons  

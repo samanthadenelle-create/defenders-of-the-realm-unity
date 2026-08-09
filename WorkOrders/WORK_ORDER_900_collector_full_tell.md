@@ -4,6 +4,8 @@
 
 # WORK ORDER 900 — The collector "I am full" tell
 
+**Status:** READY TO IMPLEMENT - partial (reconciled 2026-08-09, per this file's own 08-08 banner - sec.3's tell is delivered (`StructureFactory.cs:776` calls `CollectorStackView.Attach`, pinned by two regression suites); sec.4's ambient HUD collector chip is still outstanding, deliberately deferred per WO-901 line 65)
+
 **Status:** PARTIAL — sec.3 shipped; sec.4 HUD chip deferred (reconciled 2026-08-08, see banner)
 **Author:** read-only RCA agent (§13), orchestrated by CLI, 2026-08-04
 **Origin:** owner, 2026-08-04 — *"we need to somehow convey to player when capacity is full."*

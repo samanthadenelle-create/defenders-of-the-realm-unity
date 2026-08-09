@@ -1,5 +1,7 @@
 # WORK ORDER 850 — Deepest-room treasure cache (torch recipe + crafting supply)
 
+**Status:** DONE (reconciled 2026-08-09 from the tree - commit `0bb46258` landed the deepest-room treasure cache with the torch recipe unlock and the fixed crafting supply, with a follow-up balance pass in `64b1f48b`. NOT felt-verified; no `.RESULT.md`)
+
 **Status:** IN FLIGHT (2026-08-02, CLI + 2 lane agents). **Lane:** Dungeons / Crafting.
 **Origin:** owner request during live felt-testing, 2026-08-02 — *"can we add treasure at deepest, simple crafting supply"*.
 

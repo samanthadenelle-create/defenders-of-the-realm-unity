@@ -4,6 +4,8 @@
 
 # WORK ORDER 885 — VFX registry wiring: all remaining domains (phases 2–7)
 
+**Status:** READY TO IMPLEMENT - partial (reconciled 2026-08-09, per this file's own 08-08 banner - an umbrella index whose own precondition, the WO-884 facade, never landed; children 886-893 wired straight to `VFXManager` instead, silently voiding this WO's LOCKED contract)
+
 **Status:** PARTIAL (reconciled 2026-08-08) — umbrella index; the WO-884 Phase 0 platform precondition never landed
 **Silo:** Village combat / VFX / economy / structures / dungeon
 **PO:** Samantha (owner)

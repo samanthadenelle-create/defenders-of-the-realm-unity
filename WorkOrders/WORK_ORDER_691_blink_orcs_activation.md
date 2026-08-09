@@ -2,6 +2,8 @@
 
 # 🛠️ Work Order: Activate Blink Stylized Orcs (Backlog Item #5)
 
+**Status:** DONE (reconciled 2026-08-09 from the tree - `Assets/Editor/BlinkOrcImporter.cs` stages the pack into `Assets/Resources/Enemies/Blink/` (folder present) and `EnemyFactory.cs:559-562` maps all four archetypes: blink-orc-warrior, blink-orc-hunter, blink-orc-warlock, blink-orc-boss. NOT felt-verified; no `.RESULT.md`)
+
 **Priority:** P1  
 **Effort:** Low–Medium  
 **Impact:** High — instant high-quality enemy roster

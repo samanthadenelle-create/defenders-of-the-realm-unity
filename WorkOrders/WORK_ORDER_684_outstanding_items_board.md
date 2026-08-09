@@ -1,5 +1,7 @@
 # WORK ORDER 684 — Outstanding items board (post 07-12 evening wave)
 
+**Status:** SPEC - dated triage board (reconciled 2026-08-09 - a 2026-07-12 snapshot of outstanding items to be tagged and routed individually, not itself an implementable work order; the live board is now the generated `BOARD.html` (WO-1011). Frozen dated ledger, body untouched per sec.15)
+
 **Status: TRIAGE BOARD** (owner directive 2026-07-12: "give me a work order of outstanding items
 and we tag them after these currently running land"). Tag/route each after the in-flight lanes
 land. Numbering: this consumes 684 → **next free = 685** (bumped in CLI_LANES_WO_NUMBERS.md).

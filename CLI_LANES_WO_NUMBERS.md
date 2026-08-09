@@ -1,6 +1,22 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ RECONCILED 2026-08-09 (CLI / catalog gating truth): main line next free = **937**. **782–859 + 900–936 CONSUMED.**
+> ## ⚠ RECONCILED 2026-08-09 (CLI / THE RULES): main line next free = **939**. **782–859 + 900–938 CONSUMED.**
+> - **938** = **`RULES.md` — the one page the owner can point at** — the binding rules are currently
+>   spread across CLAUDE.md, PREFLIGHT_GATE.md, SESSION_CANON_LOADER.md, docs/HANDOVER.md,
+>   docs/TICKET_PIPELINE.md, docs/ARCHITECTURE_PRINCIPLES.md, docs/INSTRUMENTATION_STANDARD.md and
+>   docs/BOARD.md, so "read the rules" has no single target. ONE numbered, non-negotiable list that
+>   POINTS AT the deep docs rather than duplicating them (a copy is a future contradiction). File
+>   `WORK_ORDER_938_rules_single_page.md`. **READY TO IMPLEMENT.**
+>
+> *(banner bumped 938 → 939 in the SAME edit as the 938 mint — the rule that broke five times on 08-02.)*
+> - **937** = **Board status-line hygiene + parser scope** — `--check` reports 91 Unlabeled, but it is
+>   TWO problems: **20 are not work orders at all** (audits/briefs/handoffs/README living in
+>   `WorkOrders/`, filename not `WORK_ORDER_<n>`) → parser SCOPE fix, not a status fix; and **71 are
+>   real WOs with a missing/empty `**Status:**` line** → the actual defects. Fix scope first so the
+>   count means something, then sweep the 71. File
+>   `WORK_ORDER_937_board_status_hygiene_and_parser_scope.md`. **READY TO IMPLEMENT.**
+>
+> *(banner bumped 937 → 938 in the SAME edit as the 937 mint — the rule that broke five times on 08-02.)*
 > - **936** = **Catalog gating + progression truth pass** — `LockedIds` is READ-ONLY with no unlock
 >   path, so "unlock-gated" ids (jeweler) are permanently hidden, not temporarily; the three
 >   stockpiles declare `maxLevel:3` with NO tier rows, capping the wood/iron/food economy; and the
@@ -319,7 +335,12 @@
 > | Block | Owner | Next free |
 > |---|---|---|
 > | **main line** | CLI | **932** (782–859 + 900–**931** consumed; 860–899 was the UI seat's old block) — *(table row corrected 2026-08-09: it still read 931/930 and contradicted the reconciled-2026-08-08 HEADER above, which is the authority. The header already recorded the 931 → 932 bump made in the same edit as the 931 mint.)* |
-> | **1000–1099 reserved** | UI seat | **1011** (1000–1010 consumed) |
+> | **1000–1099 reserved** | UI seat | **1012** (1000–1011 consumed) |
+>
+> *(UI-seat bumped 1011 -> 1012 in the SAME edit as the WO-1011 mint — BOARD workflow acclimation for the
+> CLI: adopt BOARD.html/board_build.py as the live board (Notion retired 2026-08-08), wire regeneration
+> into session boot, canonize the status-line vocabulary + same-commit status hygiene, then sweep the
+> ~516-stale-READY status debt.)*
 >
 > *(UI-seat bumped 1010 -> 1011 in the SAME edit as the WO-1010 mint — build-mode UI redesign from real
 > tester feedback ("buttons everywhere"): owner-picked Direction B "Carousel + minimize" (first pick C,

@@ -1,5 +1,7 @@
 # WORK ORDER 190 — Import + optimize the Orc Necromancer as an enemy (OVERNIGHT)
 
+**Status:** READY TO IMPLEMENT (reconciled 2026-08-09 from the tree - the source FBX was never imported: no orc-necromancer asset exists under `Assets/` (the only Necromancer hits are Blink spell-icon art under `Assets/Blink/Art/`), and no commit references WO-190. Prior line: QUEUED for overnight, 2026-05-31)
+
 **Status: QUEUED for overnight** · **Date:** 2026-05-31 · **Lane:** Art/Enemy pipeline (CLI gatekeeper gates the build)
 **Source folder (NOT yet in project):** `C:\Users\Kayden-Laptop\Downloads\orc+necromancer` (~99.6 MB)
 **Owner ask:** "the size is big and i cant decimate it and keep color" — deferred to overnight.

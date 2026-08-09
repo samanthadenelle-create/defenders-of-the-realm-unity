@@ -1,5 +1,7 @@
 # WO-812 — ADD the Barracks (design changed; placeable path was never shipped)
 
+**Status:** DONE (reconciled 2026-08-09 from the tree - commit `c2665a9c` made the Barracks placeable and gave the train/raid ladder a world entry, with the drillmaster anchor fix in `c5a1ee65`. NOT felt-verified; no `.RESULT.md`)
+
 **Status:** SHIPPED 2026-07-31 (c2665a9c — Barracks placeable, train/raid ladder gets a world entry).  
 **Minted:** 2026-07-30 · **Clarified:** 2026-07-30 (owner: *“since we changed it, we never added it”*)  
 **Lane:** Village build catalog + Barracks entry (single lane)  

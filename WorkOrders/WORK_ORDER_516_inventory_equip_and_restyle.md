@@ -1,5 +1,7 @@
 # WORK ORDER 516 — Inventory panel: add Equip action + restyle to match the store
 
+**Status:** DONE (reconciled 2026-08-09 from the tree - `Assets/_Modules/Village/Hero/InventoryUIBuilder.cs:116` now builds the selected item's name, stats and an explicit Equip/Use CTA, and the panel was restyled under the Obsidian conformance program (WO-713/714). NOT felt-verified; no `.RESULT.md`)
+
 **Status:** CAPTURED (F8 ticket, 2026-06-26) · **Silo:** UI/Presentation (code) · **Type:** EXISTING (reuse, not greenfield)
 **Source:** owner F8 in `MainCastle_Hall` — *"no equip button and have creative look at this UI to match others"*
 (flag_00.png = the INVENTORY panel open).

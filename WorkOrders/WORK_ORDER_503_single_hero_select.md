@@ -1,5 +1,7 @@
 # WORK ORDER 503 — Single-Hero Select Screen + Remove Pet-Select Step
 
+**Status:** DONE (reconciled 2026-08-09 from the tree - delivered by the WO-559 hero-select rebuild: `Assets/_Modules/Onboarding/HeroSelectController.cs` presents one playable hero with LOCKED / Coming Soon previews for the rest and routes straight to the hub, and the pet step is bypassed by `FeatureFlags.BypassPetSelect`. NOT felt-verified; no `.RESULT.md`)
+
 Status: READY TO IMPLEMENT
 Lane: L4 (UI / onboarding) — code-built UI only; no scene hand-edit
 Author: Design/Creative agent (read-only RCA pass, 2026-06-24)

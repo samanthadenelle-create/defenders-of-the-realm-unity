@@ -1,5 +1,7 @@
 # WORK ORDER 591 — Base-Defense V2 Pillar (damage/repair · threat AI · anti-air · resource cost)
 
+**Status:** SPEC (reconciled 2026-08-09 - restates this file's own DESIGN CAPTURED line: a V2 pillar to be built behind `ff.basebuilding`, explicitly not V1 polish; no commit references WO-591)
+
 **Status:** DESIGN CAPTURED — build with the V2 base-building layer (`ff.basebuilding`), NOT V1 polish.
 **Owner design stream:** 2026-06-29 felt-test. One coherent base-defense loop emerged from testing the
 flying dragon + a Heart/Tree death. Single-hero north star puts base-defense in V2 — so this is

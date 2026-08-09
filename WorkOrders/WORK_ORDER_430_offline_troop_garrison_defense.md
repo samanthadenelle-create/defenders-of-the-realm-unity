@@ -1,5 +1,7 @@
 # WORK ORDER 430 — Offline Troop Garrison Defense (RECONCILED)
 
+**Status:** SPEC - queued post-V1 (reconciled 2026-08-09 - restates this file's own SPEC - queued (post V1 / post Pi-loop) line in the canonical vocabulary; no commit references WO-430. DUPLICATE NUMBER: six files claim 430)
+
 Status: **SPEC — queued (post V1 / post Pi-loop).** Priority: V1 loop polish (NOT Pi critical path).
 Origin: owner/Grok concept 2026-06-26. **Reconciled against real code 2026-06-26** (read-only pass).
 WO number per `CLI_LANES_WO_NUMBERS.md` numbering authority (next free = 430).

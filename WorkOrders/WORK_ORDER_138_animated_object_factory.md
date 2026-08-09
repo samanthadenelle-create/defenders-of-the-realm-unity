@@ -1,5 +1,7 @@
 # VOID — withdrawn (do not implement)
 
+**Status:** CLOSED - CANCELLED (reconciled 2026-08-09 - this file's own body reads VOID - withdrawn (do not implement): number collision with `WORK_ORDER_138_cc5_character_pipeline_first_hero.md`, a fabricated source quote, and a premise already satisfied by `VisualFactory.cs`. DUPLICATE NUMBER: two files claim 138)
+
 This draft was created in error and is withdrawn:
 
 1. **Number collision** — `WORK_ORDER_138_cc5_character_pipeline_first_hero.md` already owns 138.

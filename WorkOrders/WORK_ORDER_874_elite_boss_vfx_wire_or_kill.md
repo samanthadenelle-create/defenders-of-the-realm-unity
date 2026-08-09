@@ -4,6 +4,8 @@
 
 # WORK ORDER 874 — Elite/Boss VFX: wire or kill `EliteVFXController` (+ DragonBoss spawn)
 
+**Status:** BLOCKED - NEEDS OWNER RULING (reconciled 2026-08-09 - `AddComponent<EliteVFXController>` returns zero hits repo-wide; commit `4c1da079` delivered the tell via statics called from `Enemy.cs:720` and `Enemy.cs:2701` but routed AROUND the owner's WIRE ruling with no reversal recorded, so the aura and `OnEliteAttack` have never run)
+
 **Status:** NEEDS-OWNER-RULING (reconciled 2026-08-08) — child of WO-872. **Lane:** Combat/AI VFX. **WO#:** UI-seat block; **874**.
 **Origin:** owner 2026-08-04 VFX pass. Audit-backed (WO-872 §2, E6/E8/E9). **Layer:** B/D.
 **OWNER RULING 2026-08-04: WIRE it** (not kill) — do §2's "Wire it" path: attach `EliteVFXController`, map the

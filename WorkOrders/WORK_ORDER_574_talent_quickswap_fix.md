@@ -1,5 +1,7 @@
 # WORK ORDER 574 — Talent panel: quick-swap assignment + passive/active clarity
 
+**Status:** DONE (reconciled 2026-08-09 from the tree - the fix is in code: `HeroSkillTreeVM.cs:1232` records that Assign now MOVES a skill already on the bar (WO-574). NOT felt-verified; no `.RESULT.md`)
+
 Status: IMPLEMENTED (edit-only agent; not gated/committed — orchestrator batch-gates per §11)
 Date: 2026-06-28
 Silo: Combat/AI + UI (file-disjoint from world/scene lanes)

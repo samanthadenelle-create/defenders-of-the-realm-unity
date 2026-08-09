@@ -4,6 +4,8 @@
 
 # WORK ORDER 921 — Dungeon fire: stop “encased in fire that does nothing”
 
+**Status:** READY TO IMPLEMENT - partial (reconciled 2026-08-09, per this file's own 08-08 banner - `DungeonDresser.cs:66-67` already encodes the cosmetic-versus-hazard product rule (landed in `fab50709`) and names its own Phase C, the hazard fire recipe, as remaining work)
+
 **Status: PARTIAL — Phase C (hazard fire recipe) outstanding** (reconciled 2026-08-08, see banner)  
 **Minted:** 2026-08-07 (CLI / Grok — owner: fire is there but does nothing; start level encased in fire)  
 **Silo:** Dungeons / VFX / hazards (composed Pipeline A)  

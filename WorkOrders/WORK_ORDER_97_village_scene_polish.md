@@ -1,5 +1,7 @@
 # ⚠ WORK ORDER 97 — Village Scene Polish: World-Space "9", Purple Gate Material, Cooldown HUD, Debug Compass — **SUPERSEDED 2026-07-04**
 
+**Status:** CLOSED - SUPERSEDED (reconciled 2026-08-09 - this file's own 2026-07-04 banner supersedes it: Defend-the-Tower was removed 2026-06-09 and the target scene `Village.unity` is deleted from the tree. Prior line: PARTIALLY OBSOLETE)
+
 > **SUPERSEDED:** Some issues reference the removed Defend-the-Tower system. Verify any remaining Village issues against current canon before re-implementing.
 
 **Status:** PARTIALLY OBSOLETE — review before implementation

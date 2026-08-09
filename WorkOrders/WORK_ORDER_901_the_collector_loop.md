@@ -4,6 +4,8 @@
 
 # WORK ORDER 901 — THE COLLECTOR LOOP (umbrella)
 
+**Status:** READY TO IMPLEMENT - partial (reconciled 2026-08-09, per this file's own 08-08 banner - phases 0, A, B, C, D and F all shipped (F landed in `177b24a7`: `TownBankCapacity.cs` plus `storage-caps.json` plus `TownBankCapRegression.cs`); only phase E remains)
+
 **Status:** PARTIAL — phases 0/A/B/C/D and F shipped; only E deferred (reconciled 2026-08-08, see banner)
 **Owner directive, 2026-08-04:** *"consolidate those into one idea and implement."*
 **Supersedes as a PLAN:** WO-857, WO-858 (Grok), WO-859, WO-900 (CLI). Those files remain as the

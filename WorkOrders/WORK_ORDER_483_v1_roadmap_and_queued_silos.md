@@ -1,5 +1,7 @@
 # WORK_ORDER_483 — V1 Roadmap + Queued Silos (resume point, 2026-06-23)
 
+**Status:** CLOSED - SUPERSEDED (reconciled 2026-08-09 - a dated 2026-06-23 resume point whose purpose has expired; current state is carried by `CANON_GROUND_TRUTH_2026-08-09.md` and the generated `BOARD.html`. Frozen dated ledger, body untouched per sec.15)
+
 **Purpose:** durable hand-off so a fresh session (post `/clear`) resumes WITHOUT the chat transcript.
 Pairs with memory `overworld-encounter-isolated-battle` + `follow-canon-orchestrate-not-solo-guess` (BINDING).
 

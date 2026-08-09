@@ -1,5 +1,7 @@
 # WORK ORDER 573 — Inventory screen felt-bug fix (portrait blob + empty grid)
 
+**Status:** DONE (reconciled 2026-08-09 from the tree - both fixes are in code: `InventoryPaperDoll.cs:29` carries the WO-573 FIX for the gold oval blob, and `InventoryGrid.cs:28/101/272` carries the WO-573 instrumentation plus the styled empty state. NOT felt-verified; no `.RESULT.md`)
+
 Status: IMPLEMENTED (edit-only; awaiting CLI batch-gate + commit + PO felt-verify)
 Date: 2026-06-28
 Branch base: wip/village2-and-f8-tickets (ff-merged to tip before edits)

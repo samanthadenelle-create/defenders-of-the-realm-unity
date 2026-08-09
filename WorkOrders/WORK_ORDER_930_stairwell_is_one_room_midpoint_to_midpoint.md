@@ -1,5 +1,7 @@
 # WO-930 — The stairwell is ONE room: midpoint to midpoint, run derived from footprint
 
+**Status:** DONE (reconciled 2026-08-09 from the tree - commit `3ab1bfb6` shipped the one-room stairwell (the first floor-to-floor PathComplete in project history), followed by `e7163c9c`, `5f0e23aa`, `cb092b7f` (all four content dungeons PathComplete) and `51a89364`. WARNING: no `.RESULT.md` exists - recorded as debt in `CANON_GROUND_TRUTH_2026-08-09.md` sec.7)
+
 **Status: ✅ SHIPPED 2026-08-08** — `3ab1bfb6` (the one-room stairwell; **the first floor-to-floor
 `PathComplete` in project history**, old pair-model probe kept as a control) → `e7163c9c` (skinned via
 shared `RoomForgeMaterials`, 0 bad surfaces) → `5f0e23aa` (candle lights + a caught RED gate:

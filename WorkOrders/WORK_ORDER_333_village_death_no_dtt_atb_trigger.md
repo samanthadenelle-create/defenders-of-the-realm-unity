@@ -1,5 +1,7 @@
 # ⚠ WORK ORDER 333 — Re-wire Tree of Life <30% HP → Defense Modal (Broken) — **CHECK CANON 2026-07-04**
 
+**Status:** CLOSED - SUPERSEDED (reconciled 2026-08-09 - both destinations of the modal this WO restores are retired: Defend-the-Tower / `PatriciaLight_TD` was REMOVED 2026-06-09 (CLAUDE.md sec.8) and ATB is frozen/dormant per WO-483 sec.C0. DUPLICATE NUMBER: two files claim 333. Prior line: REVIEW - verify against current canon)
+
 > **NOTE:** This WO references "no DTT/ATB trigger" but the Defend-the-Tower system was removed 2026-06-09. Verify this WO is still valid against current combat flow (BattleArena vs ATB).
 
 **Status:** REVIEW — verify against current canon (no DTT)  

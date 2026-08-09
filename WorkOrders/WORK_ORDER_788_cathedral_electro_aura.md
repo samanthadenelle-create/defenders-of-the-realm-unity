@@ -1,5 +1,7 @@
 # WORK ORDER 788 — Cathedral of Magic: swap the shield aura for an electro rune circle
 
+**Status:** DONE (reconciled 2026-08-09 from the tree - commit `fe87a943` landed the Cathedral of Magic electro aura from the owner-tagged pick, with follow-ups `d7e1844f` and `4fab809f`. NOT felt-verified; no `.RESULT.md`)
+
 **Status:** SHIPPED 2026-07-30 (fe87a943; follow-ups f83d4c9f foot-point anchor + fcf5a249 particle bounds).
 **Lane:** Lane 9 (VFX/Audio)
 **Type:** EXISTING (the aura is wired; only the tagged key changes — a SWAPPABLE default)

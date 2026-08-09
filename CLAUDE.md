@@ -51,9 +51,15 @@ it indexes the per-area deep-dives). Read it before the individual `*_ARCHITECTU
 **UI (Claude) must NEVER edit `.cs` files via bash or the Linux mount path.**
 
 The Linux mount (`/sessions/.../mnt/defenders-unity/`) does NOT sync reliably
-to the Windows project path (`C:\EoA\` — the project's home as of 2026-06-16; cloned
-fresh from GitHub `feat/tower-core-loop`, with the gitignored `Assets/polyperfect` and
-`Assets/Quaternius` packs copied in from the old `Documents\defenders-unity` location).
+to the Windows **repo root**.
+
+**⚠ THE REPO ROOT IS MACHINE-DEPENDENT — never hardcode it (owner ruling 2026-08-09).** It is
+`C:\eoa` on one machine and `D:\eoa` on another. This line used to name `C:\EoA\` as "the project's
+home", which is why a seat on the other machine could follow canon to a path that does not exist.
+Write paths **relative to the repo root** (`Assets/...`, `logs/debug/...`, `tools/...`) in every doc,
+work order and script; resolve the absolute root at runtime, never from a doc.
+*(History: cloned fresh from GitHub `feat/tower-core-loop`, with the gitignored `Assets/polyperfect`
+and `Assets/Quaternius` packs copied in from the old `Documents\defenders-unity` location.)*
 Writes via bash can truncate, duplicate, or interleave — producing garbled Windows
 files that fail to compile even though the mount shows them as correct.
 
@@ -112,14 +118,24 @@ NULs that poison a commit and break compilation.
 - Mark **Status: READY TO IMPLEMENT** when spec is complete
 - Include files to edit, acceptance criteria, and what NOT to touch
 - **WO-numbering authority = the `CLI_LANES_WO_NUMBERS.md` banner. SOLE authority — nothing else.** Not the filesystem max, not `MASTER_PIPELINES_BACKLOG_2026-06-06.md` (that is a lane/backlog doc, NOT a number source — treating it as a second authority is how numbers collide), and **never a number copied into any other doc** (every copy goes stale; point at the banner instead).
-  - **TWO DISJOINT BLOCKS are in use** (2026-08-02, after FIVE two-seat collisions in one day): **main line → CLI** and **860–899 reserved → the UI seat**. The blocks are disjoint so both seats mint in parallel without reading each other's state.
+  - **TWO DISJOINT BLOCKS are in use** (2026-08-02, after FIVE two-seat collisions in one day): **main line → CLI**, and **a reserved block → the UI seat**. The blocks are disjoint so both seats mint in parallel without reading each other's state. **⚠ THE BLOCK RANGES ARE DELIBERATELY NOT WRITTEN HERE — read them off the banner.** This line used to name "860–899" for the UI seat; that block was CLOSED (full at 899) and the seat moved on, so the number sat here stale and kept re-seeding the very collision it was meant to prevent. A number copied into a second doc is the bug, even when it was right the day it was written.
   - **THE RULE: each seat bumps ITS OWN banner row in the SAME edit as the mint.** A mint written to disk without bumping the banner is the collision — that is what broke 5× on 08-02, including by the CLI. Collisions resolve **first-on-disk-and-referenced-wins**.
   - Still slot every new WO into a lane in the master backlog doc — but take the NUMBER from the banner.
-- **LIVE BOARD (source of truth mirror) = Notion "Work Orders" DB** in *Defenders of the Realm — Pipelines*: https://app.notion.com/p/f3115f05ecf940cf8968bd82bbbdff9f (data source `5f66b263-c732-4075-b94a-f5f4de9f8087`). The git docs + Notion are kept in sync; full WO spec files stay in the repo. We migrated off Linear (free-tier 250-issue cap). See `NOTION_SOURCE_OF_TRUTH.md`.
+- **LIVE BOARD = `BOARD.html` (repo root), GENERATED from the repo** — run `python tools/board_build.py`
+  (2 s; parses `WorkOrders/*.md` statuses + RESULT markers + the numbering banner). The repo IS the
+  source of truth; the board is a derived view and cannot drift. Regenerate at session boot and before
+  any board read. **Notion is RETIRED as the board (owner ruling 2026-08-08):** the old mirror's
+  workspace was reachable by NO seat (CLI has no MCP auth; the UI connector authed to a different
+  personal workspace — the DB 404s), which is how items were getting lost. Do not hand-mirror to
+  Notion; `NOTION_SOURCE_OF_TRUTH.md` is superseded. (History: Linear → Notion → derived board.)
 
 ### Completing work orders
 - CLI saves a `WorkOrders/WORK_ORDER_NNN_short_name.RESULT.md` when done and verified
-- UI marks the matching Linear issue as Done
+- **The WO's own `**Status:**` line is flipped to DONE in the SAME COMMIT as the work** — the board
+  is DERIVED from it (`python tools/board_build.py`), so there is no second system to mark.
+  **⚠ LINEAR IS RETIRED and so is Notion (owner ruling 2026-08-09 / 2026-08-08).** The history is
+  Linear → Notion → the derived board; this line used to say "UI marks the matching Linear issue as
+  Done" and that instruction was dead. Do not mark, mirror, or read either. See `docs/BOARD.md`.
 
 ---
 
@@ -327,8 +343,16 @@ on a hypothesis wastes credits and owner time. The standing loop:
    (spawns, roster, seam-online, catalog load) before asking the owner to retest.
 
 Helpers live in `Assets/_Modules/Core/Diagnostics/` (`FlowTrace.cs`, `Guard.cs`,
-`BreakCaptureHarness.cs`). Set `FlowTrace.Enabled=false` (or strip calls) once a system
-is proven stable — leave traces in while a system is being stabilised.
+`BreakCaptureHarness.cs`).
+
+**⛔ NEVER STRIP FLOWTRACE (owner ruling 2026-08-09, BINDING).** Instrumentation is PERMANENT. Once a
+system is proven stable you may eventually **FLAG IT OFF** (`FlowTrace.Enabled=false`) — the calls
+**STAY IN THE CODE**. This line used to read *"set `FlowTrace.Enabled=false` **(or strip calls)**"*,
+which licensed deleting the very net §12 exists to build: a stripped `Warn`/`Fail`/`Guard` turns a
+logged failure back into a SILENT one, and the next regression in that system starts from zero
+evidence instead of a trace. Removing instrumentation is never "cleanup" — it discards the only asset
+that makes the NEXT bug cheap. Leave traces in while a system is being stabilised, and leave them in
+afterwards. See `docs/INSTRUMENTATION_STANDARD.md` §1.4.
 
 **Authoring standard:** how to write code to this directive from the first line —
 toggle/lifecycle, where-to-instrument checklist, Guard usage, regression authoring,
@@ -350,8 +374,12 @@ In one breath:
 - **CLI** (this seat, **sole committer**) validates + implements + **headless-verifies**
   (`CompileGate` + AutoPilot fleet / `DataRegression`) + deploys → hands to PO. Never claims
   fixed on faith (§5/§12).
-- **Shared board = the Task list** (one task per ticket; metadata `{ticket,type,silo,stage,
-  handoffLog}` is the hand-off log). **Log every hand-off.**
+- **Shared board = `BOARD.html`, DERIVED from `WorkOrders/*.md`** (`python tools/board_build.py`).
+  The hand-off log is the WO / ticket markdown itself — stage + silo + who-has-it live in the file,
+  so the record and the work are the same artifact. **Log every hand-off there.**
+  **⚠ THE TASK LIST IS RETIRED (owner ruling 2026-08-09)**, as are Notion (08-08) and Linear (08-09).
+  This line used to name the Task list as the shared board. There is now exactly ONE board and it is
+  derived — nothing to mirror, nothing to fall behind. See `docs/BOARD.md`.
 - **Role separation is non-negotiable:** QA doesn't write, CLI doesn't classify-triage, PO closes
   (not CLI). Read-only constraint on early triage.
 

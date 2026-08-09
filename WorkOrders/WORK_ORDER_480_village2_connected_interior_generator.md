@@ -1,5 +1,7 @@
 # WORK ORDER 480 — Village2 (EnemyStrongholdBuilder): connected, walkable interior
 
+**Status:** DONE (reconciled 2026-08-09 from this file's own recorded resolution - pass 4, 2026-06-21: the interior traverses arrival to chokepoint to keep ramp, and the regenerated connected Village2 is the shipped scene. NOT felt-verified; no `.RESULT.md`)
+
 **Status: SOLVED (pass 4, 2026-06-21) — interior traverses arrival -> chokepoint -> keep ramp**
 
 ## RESOLUTION (pass 4)

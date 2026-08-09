@@ -1,5 +1,7 @@
 # WORK_ORDER_494 — ARENA COMBAT DESIGN: family synergy, counterplay, clarity (Grok-guided)
 
+**Status:** SPEC (reconciled 2026-08-09 - restates this file's own DESIGN / TABLED line in the canonical vocabulary: a design capture that feeds WO-491/493/496, with no ship of its own; no commit references WO-494)
+
 **Status:** DESIGN / TABLED · Combat lane · captured 2026-06-23 (Grok review of the open-kite arena)
 **Relates:** WO-491 (animation/telegraphs), WO-493 (game feel), the themed arena scene, the immersion
 research agent. This is the DESIGN layer — what makes the open-kite arena fight *tactical*, not flat.

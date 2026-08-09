@@ -1,5 +1,7 @@
 # WORK ORDER 836 — MASTER_CATALOG full SME refresh (the 14-agent fleet)
 
+**Status:** DONE (reconciled 2026-08-09 from the tree - commit `1812f3f8` landed the full MASTER_CATALOG SME refresh with all 19 areas rewritten from code, and `b65ce61b` minted/banner-bumped it. Docs-only work order)
+
 **Status:** IN FLIGHT 2026-08-02 (owner-ordered: "fan out a full team to become an explicit SME in
 every section ... I know its an expensive ask but I want it done")
 **Silo:** Docs/canon only (no code).

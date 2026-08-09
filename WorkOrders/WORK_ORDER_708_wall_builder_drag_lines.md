@@ -1,5 +1,7 @@
 # WORK ORDER 708 — Wall Builder: drag-to-draw wall lines (the last base-creation tool)
 
+**Status:** SPEC - NOT STARTED, parked post-V1 (reconciled 2026-08-09 - restates the owner's 2026-07-13 PARKED ruling in the canonical vocabulary; no commit references WO-708)
+
 **Status: PARKED — POST-V1** (owner 2026-07-13: "lets figure those out after we ship v1" — pins
 + implementation wait for the V1 ship; the vision is canon now, the tool comes after).
 (owner vision statement 2026-07-13, verbatim:

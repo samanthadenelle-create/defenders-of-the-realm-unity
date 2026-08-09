@@ -5,6 +5,8 @@
 
 # WORK ORDER 872 — Combat VFX + Animation pass — MASTER
 
+**Status:** READY TO IMPLEMENT - partial, stale index (reconciled 2026-08-09 - umbrella index for 873-883: six shipped, four never started (875, 876, 877), one held on an owner ruling (874). WARNING: do NOT plan off the index table as written - read each child WO's own reconciled banner first)
+
 **Status:** PARTIAL (stale index) — reconciled 2026-08-08 (master/index). Audit-backed 2026-08-04 (read-only agent).
 **Author:** UI/QA triage + audit (read-only, §13) — Claude UI
 **Lane:** VFX + Animation (Combat/AI + Buildings + Hero). **WO#:** UI-seat block; **872**=this. Children below.

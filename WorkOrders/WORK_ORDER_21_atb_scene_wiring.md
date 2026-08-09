@@ -1,5 +1,7 @@
 # WORK ORDER 21 — ATB scene wiring: restore BattleController refs
 
+**Status:** CLOSED - SUPERSEDED (reconciled 2026-08-09 from the tree - the cited defect is already gone: `Assets/Scenes/ATBBattle.unity` now reads `_runtimeState: {fileID: 11400000, guid: 2e5ba38cb6a90334898284f491fd675e}`, not `{fileID: 0}`; and ATB is frozen/dormant per WO-483 sec.C0, with the real-time BattleArena as V1 combat)
+
 **Date:** 2026-05-24 (filed by WO-11 ATB verification)
 **Owner:** Samantha Denelle
 **Authority:** Standing Authority #35 + WO-025 (safe-scene-edit).

@@ -1,5 +1,7 @@
 # WORK ORDER 25 — Rebuild GameAudioMixer (volume sliders dead)
 
+**Status:** READY TO IMPLEMENT (reconciled 2026-08-09 from the tree - still unfixed: `Assets/Audio/Resources/Audio/GameAudioMixer.mixer` still reads `m_ExposedParameters: []`, and no commit references WO-25)
+
 **Date:** 2026-05-24 (filed from owner playtest triage). **Authority:** #35 + WO-025.
 **Priority:** Medium-High. **Depends on:** WO-05. **Class:** TRACKED-ASSET rebuild (needs the Audio Mixer GUI — NOT a code change).
 

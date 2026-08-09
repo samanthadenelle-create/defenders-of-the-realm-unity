@@ -1,5 +1,7 @@
 # WORK ORDER BATCH — Combat + VFX Directive Burst (2026-07-10)
 
+**Status:** SPEC (reconciled 2026-08-09 - a dated 2026-07-10 durable capture of the owner's combat and VFX directive burst. Its sections carry PROVISIONAL WO-VFX-* handles and were never minted real numbers, so nothing here is individually schedulable yet. Overlaps the later WO-872 combat VFX and animation program (872-877, minted `0ab0eece`) - reconcile before minting. Frozen dated capture, body untouched per sec.15)
+
 **Purpose:** durable capture of this session's combat + VFX directive burst so nothing
 is lost. Each section below is a self-contained work order (its own Goal / directive /
 files / seams / acceptance / not-touch / deps). Slot each into the master pipeline doc

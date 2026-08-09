@@ -1,5 +1,7 @@
 # WORK_ORDER_497 — COMBAT FEEDBACK REUSE MAP (don't greenfield — it's built)
 
+**Status:** SPEC (reconciled 2026-08-09 - restates this file's own REFERENCE / BINDING line: a reuse inventory to be read BEFORE WO-493/494/496, with no ship of its own; no commit references WO-497)
+
 **Status:** REFERENCE / BINDING before any WO-493/494/496 work · inventory agent, 2026-06-23
 **Owner directive:** "most of that already exists and is tested if you look back." CONFIRMED. The battle-feel
 layer is almost entirely BUILT + TESTED and — because the arena reuses the existing combat stack (Enemy.cs,

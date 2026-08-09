@@ -2,6 +2,8 @@
 
 # 🛠️ Work Order: Import Blink 608 Spell/Class Icons (Backlog Item #6)
 
+**Status:** DONE (reconciled 2026-08-09 from the tree - delivered under WO-681 by `Assets/Editor/BlinkIconImporter.cs`, which mirrors 500 spell icons, 25 class emblems and 28 action-bar slot frames into Resources; `Assets/Resources/RpgUi/spellicons/` exists and `RpgUiCatalog` serves those roles. NOT felt-verified; no `.RESULT.md`)
+
 **Priority:** P1  
 **Effort:** Low  
 **Impact:** Medium–High (massive UI quality jump)

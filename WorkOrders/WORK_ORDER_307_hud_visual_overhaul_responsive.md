@@ -1,5 +1,7 @@
 # WORK_ORDER_307 — HUD visual overhaul (sleek, grouped, responsive web + mobile)
 
+**Status:** READY TO IMPLEMENT (reconciled 2026-08-09 - queued as post-core polish by the owner 2026-06-07; no `.RESULT.md` and no commit references WO-307. RE-SCOPE FIRST: the HUD has since been rebuilt under the Obsidian / `HudKitController` program (WO-899 and siblings), so much of this list may be moot)
+
 **Status: QUEUED — later/polish (post-core; owner 2026-06-07).** Visual targets:
 `docs/design/hud-landscape-concept.jpg` (Grok, landscape) + `docs/design/hud-vertical-mobile-concept.jpg`
 (portrait). Sibling: WO-331 inventory/character screen (`docs/design/inventory-screen-concept.png`).

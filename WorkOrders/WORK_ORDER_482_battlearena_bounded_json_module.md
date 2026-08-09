@@ -1,5 +1,7 @@
 # WORK_ORDER_482 (Arena refinement) — BattleArena as a BOUNDED JSON MODULE + SceneDirector lifecycle
 
+**Status:** READY TO IMPLEMENT - partial (reconciled 2026-08-09 from the tree - the data boundary LANDED: `Assets/_Modules/Core/Arena/ArenaContracts.cs` names this WO as its spec and carries the ArenaRequest / ArenaResult seam. The dedicated arena SCENE and the SceneDirector lifecycle do NOT exist: no arena scene under `Assets/Scenes` and no `SceneDirector*.cs` anywhere. DUPLICATE NUMBER: two files claim 482)
+
 **Status:** DESIGN LOCKED (owner-directed, 2026-06-23). Supersedes the far-offset arena hack
 in `BattleArena.cs` (region at (5000,5000) inside the live scene). Extends WO-482 / memory
 `overworld-encounter-isolated-battle`. Pairs with WO-483 roadmap.

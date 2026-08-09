@@ -2,6 +2,8 @@
 
 # 🛠️ Work Order: Wire Remaining Sword & Shield Clips (Backlog Item #4)
 
+**Status:** READY TO IMPLEMENT (reconciled 2026-08-09 from the tree - only the 11-clip owner-pick subset is extracted by `Assets/Editor/SwordShieldMovesImporter.cs` (shieldswipe01/02, shieldcharge, jump, the four slashes, stab, spin). This WO's headline asks return ZERO hits in that importer: the six directional hold-blocks, the parry chain, `atk_kick`, and the eight strafe / backward locomotion clips)
+
 **Priority:** P1  
 **Effort:** Medium  
 **Impact:** High — free combat depth

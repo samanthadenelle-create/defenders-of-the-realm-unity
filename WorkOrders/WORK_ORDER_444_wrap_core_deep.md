@@ -1,5 +1,7 @@
 # WORK ORDER 444 — Wrap the core DEEP: instrument + guard + watchdog every critical flow
 
+**Status:** READY TO IMPLEMENT (reconciled 2026-08-09 - a standing standard plus a phased coverage pass; no `.RESULT.md` and no commit references WO-444, so the phased coverage is unproven. Prior line: STANDING STANDARD + phased coverage pass)
+
 **Status: STANDING STANDARD + phased coverage pass.** Owner (2026-06-17): "the whole core should be
 wrapped deep… add a debugger and tries at all critical logic." Operationalizes `ARCHITECTURE_PRINCIPLES`/
 `CLAUDE.md §12` + `docs/INSTRUMENTATION_STANDARD.md` as COVERAGE, not just per-bug. The wave-start

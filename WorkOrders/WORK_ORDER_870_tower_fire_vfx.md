@@ -4,6 +4,8 @@
 
 # WORK ORDER 870 — Tower VFX: cast → projectile → impact, by TYPE × TIER (+ fix Aether/Fire mismatch)
 
+**Status:** READY TO IMPLEMENT - partial (reconciled 2026-08-09, per this file's own 08-08 banner - T7 is delivered (`ArcaneTower.cs:82` BoltVisualElement = Aether), but T2's primitive projectile bodies remain (`DefenseTower.cs:972/991/1002/1020` still call CreatePrimitive) and T8's windup is absent; four further items are HELD pending owner VFX tags)
+
 **Status:** PARTIAL — child of WO-872 (VFX pass master).
 **Author:** UI/QA triage + audit (read-only, §13) — Claude UI
 **Lane:** Buildings/VFX. **WO#:** UI-seat block; **870**=this.

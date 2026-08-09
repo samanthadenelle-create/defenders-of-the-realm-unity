@@ -4,6 +4,8 @@
 
 # WORK ORDER 896 — Skill tree: simplify to a connected progression line (kill the dense grid)
 
+**Status:** READY TO IMPLEMENT - partial (reconciled 2026-08-09, per this file's own 08-08 banner - commit `287ac354` shipped the progression line, but the commit itself concedes overflow remains and mitigates it with a MORE BELOW cue, against this WO's acceptance criterion that nothing is clipped)
+
 **Status:** PARTIAL (reconciled 2026-08-08) · **Silo:** UI / talents · **For:** CLAUDE CLI · **Date:** 2026-08-05
 **PO:** Samantha (owner) · **Author:** UI seat
 **Owner ruling:** *"this skill tree is hard to read — simplify the tree, just have the skills connected by a line showing progression."*

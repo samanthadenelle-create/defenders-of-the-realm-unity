@@ -4,6 +4,8 @@
 
 # WORK ORDER 853 — Structures are targetable (the disjoint-contract seam)
 
+**Status:** READY TO IMPLEMENT - partial (reconciled 2026-08-09, per this file's own 08-08 banner - `35b1020f` shipped `StructureTargetableRegression.cs` and `f2069890` ruled sec.7's 50/30/20 split (`RaidScoring.cs:123/137/144`), but sec.11 records acceptance 1's pathing half as deferred and acceptance 2 as unmet)
+
 **Status: PARTIAL**
 **Minted:** 2026-08-03 (CLI, main-line block; banner bumped 853 → 854 in the same edit)
 **Lane:** Combat/AI + Village structures. Touches Core contract, Village structures, troop/hero targeting, raid scoring.

@@ -1,5 +1,7 @@
 # WORK ORDER — Duplicate "Grom" companion (second body in MainCastle_Hall)
 
+**Status:** READY TO IMPLEMENT (reconciled 2026-08-09 - this file records DIAGNOSED-PARTIAL with the root cause NOT proven and one probe still un-run; three candidate causes are ruled out with trace evidence, but no fix was written and no commit references it. Its branch context (feat/tower-core-loop, `adf1f2d9`) predates the current tree - re-confirm the symptom before working it)
+
 **Status: DIAGNOSED-PARTIAL — root cause NOT yet proven. Ruled-out list + one probe below.**
 **Branch:** `feat/tower-core-loop` (committed build `adf1f2d9`).
 **Reported:** 2026-06-16, owner F8 flag in MainCastle_Hall: *"second grom (companion wrong)."*

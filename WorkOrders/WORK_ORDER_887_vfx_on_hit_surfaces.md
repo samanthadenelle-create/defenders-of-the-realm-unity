@@ -4,6 +4,8 @@
 
 # WORK ORDER 887 — VFX: on-hit surface + element impacts
 
+**Status:** BLOCKED - surface half NEEDS OWNER RULING (reconciled 2026-08-09 - the element half landed in `4ef2d532` (element now decides flavour, tier decides size); the surface half was refused with measurements because no SurfaceType, MaterialType or HitSurface enum exists anywhere in the tree - that half is an owner design task, not engineering debt)
+
 **Status:** PARTIAL - surface half NEEDS-OWNER-RULING (reconciled 2026-08-08) — ELEMENT HALF LANDED 2026-08-05 (`4ef2d532`) · SURFACE HALF REFUSED WITH MEASUREMENTS — gate
 `COMPILE_GATE_OK`. **What landed:** `TowerCombat.OnProjectileImpact` computed the projectile's element
 EIGHT LINES BELOW the impact pick and never used it, so **every empowered tower detonated as

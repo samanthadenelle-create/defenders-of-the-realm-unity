@@ -1,5 +1,7 @@
 # WO-780 — FTUE first-tower affordability (tutorial stall risk)
 
+**Status:** DONE (reconciled 2026-08-09 from the tree - commit `5dbe9574` landed the WO-780 founding_defense grant.prepaidTower so the first tower is affordable. NOT felt-verified; no `.RESULT.md`)
+
 **Status:** SHIPPED 2026-07-27 (5dbe9574 — founding_defense grant.prepaidTower).
 **Minted:** 2026-07-26 (CLI, from gameplay-gap ledger — P1 onboarding)
 **Lane:** FTUE/tutorial (single lane). Dispatch on the clean committed base.

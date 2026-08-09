@@ -1,5 +1,7 @@
 # WORK ORDER 823 — Post-review hardening pack (army readiness + founding card + oracles + RESULT hygiene)
 
+**Status:** BLOCKED - on an owner ruling (reconciled 2026-08-09 - Phases A through D SHIPPED in `8560fced`; the single outstanding item, Phase E (optional PO-tunable first-raid softness, P3), is explicitly awaiting the owner's ruling and cannot move without it)
+
 **Status: PHASES A-D SHIPPED 2026-08-01 (8560fced); Phase E (optional PO-tunable first-raid softness, P3) NOT BUILT — awaiting owner ruling.**  
 **Minted:** 2026-08-01 (CLI / Grok — from PM code review of Claude Fable check-ins)  
 **Silo:** Core/Troops + Village/Onboarding + Editor/Regression (file-disjoint phases; can fan-out)  

@@ -1,6 +1,6 @@
 # WORK ORDER 779 — UI Spacing / Layout / Legibility Conformance Sweep
 
-- **Status:** READY TO IMPLEMENT — thin slice landed (1b3b9364 Echoes-button safe area); 55-screen rubric NOT run. Overlaps WO-795 waves 1-2.
+**Status:** READY TO IMPLEMENT — thin slice landed (1b3b9364 Echoes-button safe area); 55-screen rubric NOT run. Overlaps WO-795 waves 1-2.
 > ⚠ Cross-reference 2026-08-01: overlaps WO-795 (no-stacked-screens scroll standard) — 795's waves 1-2 already shipped (4461f9ee, 583bc0ac) and `docs/qa/UI_REVIEW_2026-08-01.md` carries fresh findings; reconcile with 795 before running this WO's 55-screen sweep.
 - **Lane:** 4 (UI/HUD)
 - **Minted:** 2026-07-27 (UI seat)

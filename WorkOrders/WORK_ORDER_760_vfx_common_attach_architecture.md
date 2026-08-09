@@ -5,6 +5,8 @@
 
 # WORK ORDER 760 — Common VFX attach class (architect determination)
 
+**Status:** READY TO IMPLEMENT - partial (reconciled 2026-08-09 - this file's own line records the architecture decision as ratified but the implementation as not shipped, and no `.RESULT.md` exists. Note the WO-760 commits in git (`27de1aff`, `08b912bf`, `3dd024a9`) belong to the OTHER WO-760, `WORK_ORDER_760_dragon_syndrath_fly_land_burn_tree.md`. DUPLICATE NUMBER: two files claim 760)
+
 **Status:** PARTIAL — ARCHITECTURE DECISION ratified, implementation not shipped. This WO is the ADR (why + apply matrix).
 **⚠ The LOCKED implementation contract lives in WO-884 §0.2** and OVERRIDES this WO where they differ:
 (1) canonical API = the fluent `Vfx.On(root).Add{Family}(element).OnBone(...).Play()` (the flat `Vfx.Projectile(...)`

@@ -4,6 +4,8 @@
 
 # WORK ORDER 898 — Queue: progress bars + "Complete now" with crystals (any item, any channel)
 
+**Status:** READY TO IMPLEMENT - partial (reconciled 2026-08-09, per this file's own 08-08 banner - only the progress bars shipped (`e03aecf6`, `11f57266`); `crystalsPerBracket` returns zero hits repo-wide, so the data-driven crystal-finish pricing, the impulse dialog and the Jupiter fallback were never built. Note the monetization premise MOVED when `ef40c0e7` purged premium-currency ad rewards)
+
 **Status:** PARTIAL (reconciled 2026-08-08) · **Silo:** Queue / economy / monetization / UI · **For:** CLAUDE CLI · **Date:** 2026-08-05
 **PO:** Samantha (owner) · **Author:** UI seat
 **Owner rulings:** *"show progress bars for items and offer an option to complete now, purchase with crystal to complete"* · *"can choose ANY item in the queue and complete now (X crystals)"* · *"if an invasion is starting they might opt to spend for it."*

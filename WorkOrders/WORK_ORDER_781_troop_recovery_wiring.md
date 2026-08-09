@@ -1,5 +1,7 @@
 # WO-781 — Wire ArmyStorage.TickRecovery (wounded troops never heal)
 
+**Status:** DONE (reconciled 2026-08-09 from the tree - commit `cd5a059c` wired TickRecovery via TroopRecoveryService, live and offline. NOT felt-verified; no `.RESULT.md`)
+
 > ⚠ Renumbered 779→781 on 2026-07-26: WO-779 was reassigned by the owner to the UI spacing/layout conformance sweep. The implementation agent may reference the old "779" label — the WORK is unchanged.
 
 **Status:** SHIPPED 2026-07-27 (cd5a059c — TroopRecoveryService wires TickRecovery live + offline).

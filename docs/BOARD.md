@@ -42,6 +42,28 @@ way the retired Notion mirror did: there is no second copy to fall behind.
 
 ## 3. Status vocabulary (keyword priority, first match wins)
 
+### 3a. Scope — which files owe a status at all (WO-937)
+
+`WorkOrders/` holds **two kinds of file**, and only one of them is in the status workflow. The
+parser decides by **filename prefix — the document's KIND, not whether it has a number:**
+
+| File | Kind | Bucket |
+|---|---|---|
+| `WORK_ORDER_*.md` — **numbered `WORK_ORDER_<n>_*.md` or legacy unnumbered `WORK_ORDER_<slug>.md`** | a work order | bucketed by the status table in §3b |
+| anything else — `README.md`, `AUDIT_*`, `BRIEF_*`, `HANDOFF_*`, `NOTES_*`, `QA_CHECKLIST_*`, `DESIGN_*`, `RESEARCH_BRIEF_*`, `REVIEW_*`, `WO541_MODEL_API.md`, … | a **companion doc** | **Doc** |
+
+**`Doc` is a NON-DEFECT bucket and `--check` ignores it entirely.** These files are references, not
+units of work — demanding a `**Status:**` line from a `README.md` or an audit brief would be absurd.
+They are still **rendered, linked, and searchable by filename**, because this board is the only index
+of `WorkOrders/` anyone actually opens; dropping them would trade a miscount for a discoverability
+hole. Filter them out with the `Doc` chip when you want a pure work view.
+
+> ⚠ **Unnumbered `WORK_ORDER_<slug>.md` files are REAL work orders and still owe a status.** They
+> render as `WO-?`. Scoping on "has a number" instead of "is a work order" would silently launder
+> their missing statuses into the non-defect bucket — do not do that.
+
+### 3b. Status buckets (work orders only)
+
 | Keyword in the `**Status:**` line | Bucket |
 |---|---|
 | `SUPERSEDED` / `CLOSED` / `CANCELLED` | **Closed** |
@@ -53,6 +75,7 @@ way the retired Notion mirror did: there is no second copy to fall behind.
 
 **`Unlabeled` is a DEFECT in the WO file, not a category.** It means the status line carries no
 canonical keyword, so the row cannot be bucketed and silently drops out of every real query.
+Since the §3a scope fix it is a *pure* defect count — a companion doc can never land there.
 
 Compound statuses are read left-to-right by that priority, which trips people up:
 
@@ -74,7 +97,10 @@ Write the truth *and* include one canonical keyword. The nuance belongs after it
 Edit **both** in the **same commit**, or the doc and the parser start disagreeing:
 
 1. `bucket_of()` in `tools/board_build.py`
-2. the table in §3 above
+2. the table in §3b above
+
+Same rule for a change of **scope** (what counts as a work order): `is_work_order()` in
+`tools/board_build.py` and the table in §3a move together.
 
 A keyword the parser knows but this doc does not is invisible to every human; a keyword this doc
 promises but the parser does not know silently produces `Unlabeled` rows.
@@ -86,6 +112,9 @@ promises but the parser does not know silently produces `Unlabeled` rows.
 `python tools/board_build.py --check` regenerates as normal, then **exits 1** if any WO is
 `Unlabeled`, printing the offending numbers and files (capped at 40, with a remainder count) so the
 output is a to-do list rather than a bare number.
+
+It fails on **genuine defects only** — real work orders with no canonical keyword. `Doc` rows (§3a)
+are out of scope and never counted, which is what makes the number honest enough to gate on.
 
 A plain run is **report-only** and always exits 0 — adding the flag to a gate is a deliberate act, and
 no one's build should start failing because a WO file is sloppy.

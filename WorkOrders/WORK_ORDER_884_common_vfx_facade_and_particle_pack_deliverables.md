@@ -4,6 +4,8 @@
 
 # WORK ORDER 884 — Common VFX facade (one low-cost class) + 5 Particle-Pack deliverables
 
+**Status:** READY TO IMPLEMENT - partial (reconciled 2026-08-09, per this file's own 08-08 banner - only the particle-pack half shipped (`a12c6d22`); four of the five sec.9 CREATE files are absent (`VfxFacade.cs`, `VfxSocket.cs`, `VfxElement.cs`, `VfxEmitter.cs`) and both `Vfx.On(` and `VfxBones` return zero hits)
+
 **Status:** PARTIAL (reconciled 2026-08-08) — particle-pack half shipped, facade half never landed
 **Silo:** Village combat / VFX (parallel-safe with the boss-breath slice — see §0.1)
 **PO:** Samantha (owner)

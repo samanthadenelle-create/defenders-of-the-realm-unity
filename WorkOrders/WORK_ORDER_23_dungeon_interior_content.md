@@ -1,5 +1,7 @@
 # WORK ORDER 23 — Dungeon interiors are placeholder primitives (content)
 
+**Status:** READY TO IMPLEMENT (reconciled 2026-08-09 from the tree - acceptance 1 is MET: `Assets/Models/KayKit/KayKit Dungeon Remastered 1.1/` is present. Acceptance 2 is UNMET: `[PLACEHOLDER]` objects still sit in `Dungeon_HealersCottage.unity` (3) and `Dungeon_FolksGranary.unity` (7))
+
 **Date:** 2026-05-24 (filed from owner playtest triage). **Authority:** #35 + WO-025.
 **Priority:** High. **Depends on:** WO-05. **Class:** CONTENT (missing gitignored art).
 

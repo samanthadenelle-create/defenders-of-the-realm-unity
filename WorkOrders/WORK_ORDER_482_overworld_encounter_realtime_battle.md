@@ -1,5 +1,7 @@
 # WORK_ORDER_482 — Overworld Encounter → Real-Time Battle Instance
 
+**Status:** DONE (reconciled 2026-08-09 - WO-483 records commit `22081724` shipping the overworld encounter into an isolated MonsterFamily BattleArena, and `fe58e4ce` proving the real path in the fleet oracle (repSpawned=True droppedToBattle=True). NOT felt-verified; no `.RESULT.md`. DUPLICATE NUMBER: two files claim 482)
+
 **Status: DESIGN SETTLED (owner 2026-06-23) — slice plan below; confirm the ONE fork in §B, then implement.**
 **Owner directive:** 2026-06-23. North star: `docs/COMBAT_PIVOT_NORTHSTAR.md`.
 **Builds on:** WO-481 (Tripo Knight + Orc family). **Separate from ATB** — ATB is its own untouched battle system.

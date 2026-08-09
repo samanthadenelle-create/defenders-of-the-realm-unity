@@ -1,5 +1,7 @@
 # WORK ORDER 139 — Pipeline "Rare Bug" Triage (3-auditor sweep)
 
+**Status:** READY TO IMPLEMENT (reconciled 2026-08-09 - no `.RESULT.md` and no commit references WO-139, so the staged fixes are not provably applied; the marked items below still need the deliberate pass this file describes. Prior line: TRIAGE - fixes staged)
+
 **Status: TRIAGE — fixes staged for deliberate application (NOT blind-patched)**
 **Created:** 2026-05-30 (owner: "clean out the town… there [are] rare bugs in pipeline")
 **Source:** three parallel read-only audits (hero/pet/combat · waves/spawn/init · HUD/camera/lifecycle).

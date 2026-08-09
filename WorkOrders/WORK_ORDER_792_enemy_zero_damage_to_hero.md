@@ -1,5 +1,7 @@
 # WORK ORDER 792 — Enemy attacks deal ZERO damage to the hero
 
+**Status:** DONE (reconciled 2026-08-09 from the tree - commit `f4f31180` landed the WO-790/791/792 wave, this WO being the enemy-to-hero damage probe. NOT felt-verified; no `.RESULT.md`)
+
 **Status:** SHIPPED 2026-07-30 (f4f31180 — enemy-to-hero damage probe).
 **Lane:** Lane 2 (Combat/AI)
 **Type:** EXISTING (combat is built; damage-to-hero is landing at 0)

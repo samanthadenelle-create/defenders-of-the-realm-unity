@@ -1,5 +1,7 @@
 # PROGRAM — WO-732 → WO-736 · Barracks Troop Roster + Tier Unlocks
 
+**Status:** DONE (reconciled 2026-08-09 from the tree - the seven-type roster is authored in `troops.json` (footman, archer, spearman, shieldguard, outrider, battlemage, catapult) and the tier gate exists as `TroopDef.UnlockBarracksTier` (`TroopDef.cs:124`), enforced by `TroopUnlock.cs` and `BarracksProgression.cs`; the Barracks itself went placeable in `c2665a9c` (WO-812). NOT felt-verified; no `.RESULT.md`)
+
 **Status:** MINTED 2026-07-16 (owner-directed: default types + upgrade unlocks)  
 **Numbering:** next free after layout WO-737 = **738** (`CLI_LANES_WO_NUMBERS.md`)  
 **Parent program:** CoC attack spine `WORK_ORDER_PROGRAM_723_731_coc_arena_barracks.md` (especially **WO-724** Barracks live)  

@@ -1,5 +1,7 @@
 # WORK ORDER 24 — Exterior world / zones beyond the village (architecture)
 
+**Status:** CLOSED - SUPERSEDED (reconciled 2026-08-09 from the tree - the connected world shipped instead as the merged hub `Main_Castle_Overworld` under WO-608 MergedWorld (`OuterWorld.unity` and `Village.unity` both deleted) plus the WO-826 Realm Map; this WO's premise, an exterior baked into `Village.unity`, no longer exists)
+
 **Date:** 2026-05-24 (filed from owner playtest triage). **Authority:** #35 + WO-025.
 **Priority:** Medium (feature scope, not breakage). **Depends on:** WO-05.
 **Class:** architecture decision + curated-scene/builder — file, do not auto-edit. (= recovery-work-orders Agent 7.)

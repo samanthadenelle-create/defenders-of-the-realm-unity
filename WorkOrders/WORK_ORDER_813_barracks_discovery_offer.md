@@ -1,5 +1,7 @@
 # WORK ORDER 813 — Barracks discovery / teach (dialogue + raid safety net)
 
+**Status:** DONE (reconciled 2026-08-09 from the tree - commit `fb2939f7` landed the barracks teach plus the raids empty-army safety net, with the Raids button in `2598f2f7`. NOT felt-verified; no `.RESULT.md`)
+
 **Status:** SHIPPED 2026-07-31 (fb2939f7 — barracks teach + raids empty-army safety net). Teach quality re-opened as WO-822 (813b).  
 **Minted:** 2026-07-30 (Claude UI seat) · **CLI guidance pass:** 2026-07-30  
 **Lane:** Onboarding / Progression (dialogue + raid entry UX)  

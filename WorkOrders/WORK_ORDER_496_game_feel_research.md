@@ -1,5 +1,7 @@
 # WORK_ORDER_496 — GAME-FEEL RESEARCH → actionable takeaways (Fallout/Clash/WC3/SC)
 
+**Status:** SPEC (reconciled 2026-08-09 - restates this file's own RESEARCH / SEQUENCED line: a source-backed research capture that sharpens WO-491/493/494, not an implementable ship; no commit references WO-496)
+
 **Status:** RESEARCH / SEQUENCED · Combat+Economy feel · research agent, 2026-06-23 (source-backed)
 **Use:** sharpens WO-491 (animation/telegraph), WO-493 (feel), WO-494 (combat design). Mobile-first, URP, Tripo.
 

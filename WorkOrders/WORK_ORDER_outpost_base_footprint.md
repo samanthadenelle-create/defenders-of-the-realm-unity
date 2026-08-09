@@ -1,5 +1,7 @@
 # WORK ORDER (number TBD per registry) — Outpost base footprint (predefined, upgradable)
 
+**Status:** SPEC (reconciled 2026-08-09 - restates this file's own DESIGN CAPTURE (owner thinking-out-loud 2026-06-07) line in the canonical vocabulary; the file carries no WO number of its own (number TBD per registry) and no commit references it)
+
 **Status: DESIGN CAPTURE (owner thinking-out-loud 2026-06-07).** **Lane:** Roaming/Outposts (relates to
 WO-143 roaming raids + ClaimableCamp). Build later — captured so it slots into the existing pipeline.
 

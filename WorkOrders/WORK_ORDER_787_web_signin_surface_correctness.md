@@ -1,5 +1,7 @@
 # WORK ORDER 787 — Web-build Sign In surface correctness
 
+**Status:** DONE (reconciled 2026-08-09 from the tree - commit `c18ff812` landed the sign-in layout unstack and the non-Pi web SKR skin, with the follow-up platform ruling in `96b454f9`. NOT felt-verified; no `.RESULT.md`)
+
 **Status:** SHIPPED 2026-07-30 (c18ff812 — sign-in layout unstack + non-Pi web forces SKR skin).
 **Lane:** Lane 4 (UI/HUD) + Platform (Pi/SKR skin)
 **Type:** EXISTING (all three surfaces were built; each is now presenting wrong on the web build)

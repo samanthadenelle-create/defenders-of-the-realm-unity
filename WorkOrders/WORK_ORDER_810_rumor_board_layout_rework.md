@@ -1,5 +1,7 @@
 # WO-810 — Brom's Rumor Board layout rework (crowded → scannable)
 
+**Status:** DONE (reconciled 2026-08-09 from the tree - commit `74612a25` landed the Rumor Board master-detail rebuild from the owner-signed wireframe (`e469b9ed`), with the 2026-08-02 conformance pass in `f0b48342`. NOT felt-verified; no `.RESULT.md`)
+
 **Status:** SHIPPED 2026-07-31 (74612a25) + **FOLLOW-UP CONFORMANCE PASS 2026-08-02** (owner F8 *"this board does not look like mock up"* — see addendum below; pending gate + owner felt-verify).  
 **Minted:** 2026-07-30  
 

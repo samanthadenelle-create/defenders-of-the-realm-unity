@@ -4,6 +4,8 @@
 
 # WORK ORDER 916 — Marketing site: ship canon tagline to production (Vercel)
 
+**Status:** READY TO IMPLEMENT - partial (reconciled 2026-08-09, per this file's own 08-08 banner - the repo is GREEN: `site/index.html:86` carries the canon tagline, landed in `f329c8d5`. Outstanding: the Vercel PROD deploy and a check of the LIVE URL - a deploy leaves no repo artifact, so this one cannot be settled from git alone)
+
 **Status: PARTIAL — tree green, Vercel prod deploy outstanding** (reconciled 2026-08-08, see banner)  
 **Minted:** 2026-08-07 (CLI / Grok — residual of audit finding #5)  
 **Silo:** Site / Ops (no Unity gameplay code)  

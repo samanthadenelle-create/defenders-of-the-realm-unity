@@ -1,5 +1,7 @@
 # WORK ORDER 790 — Outpost/garrison enemy presentation: flat green/orange + weapon not seated
 
+**Status:** BLOCKED - on the PO (reconciled 2026-08-09 - Part A, the code seam, SHIPPED in `f4f31180`, with the parking note in `a39913c2`. The remainder is not CLI-actionable: the owner has no basecolor texture source files (they auto-bind on the next run with no code change), and Part D, the weapon-pose ruling, is an open owner decision)
+
 **Status:** CODE LANDED · TEXTURES PARKED (owner 2026-07-30: "i dont have the texture for now")
 > Part A (code seam) SHIPPED — EnemyFactory albedo-restore via
 > `Resources/Enemies/OrcTex/<model>_basecolor`, texture-XOR-tint. Enemies render tinted

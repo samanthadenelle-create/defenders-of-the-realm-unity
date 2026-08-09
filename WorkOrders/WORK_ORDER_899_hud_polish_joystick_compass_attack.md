@@ -4,6 +4,8 @@
 
 # WORK ORDER 899 — HUD polish: analog joystick + wide compass + attack-button blend
 
+**Status:** READY TO IMPLEMENT - partial (reconciled 2026-08-09, per this file's own 08-08 banner - commit `a35163e1` shipped the analog stick, compass strip and attack button, but its own body excludes this WO's section 4 and records that no UI capture was taken, while this WO's acceptance requires `UI_CAPTURE_OK`)
+
 **Status:** PARTIAL (reconciled 2026-08-08) · **Silo:** HUD/UI · **For:** CLAUDE CLI · **Date:** 2026-08-07
 **PO:** Samantha (owner) · **Author:** UI seat
 **Owner asks (felt-test):** (1) replace the boxy joypad with a cleaner analog joystick; (2) make the compass wider so heading changes + enemy bearings read clearly; (3) blend the attack/sword button so it stops looking amateur.

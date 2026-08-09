@@ -1,5 +1,7 @@
 # VOID — superseded
 
+**Status:** CLOSED - SUPERSEDED (reconciled 2026-08-09 - this file's own body reads VOID - superseded; the real WO-136 is `WORK_ORDER_136_castle_structure_ramparts.md`. DUPLICATE NUMBER: three files claim 136)
+
 This draft was written before the owner clarified the goal (walls already removed manually; designer to build the full castle structure). The real WO-136 is:
 
 **`WORK_ORDER_136_castle_structure_ramparts.md`** — Complete Castle Structure: Ramparts, Walkways & Upper Level (with correct-height collision).

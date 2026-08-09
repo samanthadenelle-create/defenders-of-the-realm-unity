@@ -17,8 +17,39 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WO_DIR = os.path.join(ROOT, "WorkOrders")
 OUT = os.path.join(ROOT, "BOARD.html")
 
+# ── parser SCOPE: what in WorkOrders/ is actually a work order? (WO-937 A) ────
+# WorkOrders/ holds two kinds of file, and only one of them owes the board a status:
+#
+#   1. WORK ORDERS      WORK_ORDER_*.md          - a unit of work; MUST carry **Status:**
+#   2. COMPANION DOCS   AUDIT_/BRIEF_/HANDOFF_/NOTES_/QA_CHECKLIST_/DESIGN_/README.md/...
+#                                                - references, not work; a status line would be absurd
+#
+# Before this, EVERY .md in the folder was treated as a work order, so 18 companion docs parsed
+# with no **Status:** line and landed in "Unlabeled" - which docs/BOARD.md defines as a DEFECT.
+# That made the Unlabeled number a mix of real defects and category errors, so --check could not
+# be gated on honestly.
+#
+# We BUCKET them as "Doc" rather than EXCLUDING them. Excluding is the smaller diff and the wrong
+# call: several of these are live references people need to find (WO541_MODEL_API.md,
+# DESIGN_CONNECTOR_IS_THE_ONLY_CONTRACT.md, the raid audits, DUNGEON_WO_INDEX.md), and this board is
+# the only index of WorkOrders/ anyone actually opens. Dropping them would trade a cosmetic
+# miscount for a discoverability hole - a strictly worse bug, and a silent one.
+#
+# SCOPE IS BY DOCUMENT KIND (filename prefix), NOT BY "does it have a number". That distinction is
+# load-bearing: 18 files are named WORK_ORDER_<slug>.md with no number (WORK_ORDER_ad_generator.md,
+# WORK_ORDER_second_grom_companion.md, ...). Those ARE work orders - legacy, unnumbered, but real
+# work - so a missing status on one is a GENUINE defect and must keep counting. Scoping on the
+# number instead would have laundered 5 real defects into the non-defect bucket.
+_WO_FILENAME = re.compile(r"^WORK_ORDER_", re.IGNORECASE)
+
+def is_work_order(basename):
+    """True for a real work order (numbered or legacy-unnumbered); False for a companion doc."""
+    return bool(_WO_FILENAME.match(basename))
+
 # ── status bucketing (keyword priority order) ─────────────────────────────────
-def bucket_of(status_text, has_result):
+def bucket_of(status_text, has_result, is_wo=True):
+    # Companion docs are out of the status workflow entirely - never Unlabeled, never a defect.
+    if not is_wo: return "Doc"
     s = (status_text or "").upper()
     if "SUPERSEDED" in s or "CLOSED" in s or "CANCELLED" in s: return "Closed"
     if has_result or "DONE" in s or "IMPLEMENTED" in s or "COMPLETE" in s: return "Done"
@@ -27,9 +58,10 @@ def bucket_of(status_text, has_result):
     if "DRAFT" in s or "SPEC" in s or "NOT STARTED" in s or "PROPOSAL" in s: return "Spec"
     return "Unlabeled"
 
-BUCKET_ORDER = ["Ready", "Blocked", "Spec", "Unlabeled", "Done", "Closed"]
+BUCKET_ORDER = ["Ready", "Blocked", "Spec", "Unlabeled", "Done", "Closed", "Doc"]
 BUCKET_COLOR = {"Ready": "#e0b341", "Blocked": "#d06060", "Spec": "#7fa8d9",
-                "Unlabeled": "#999999", "Done": "#6fae6f", "Closed": "#777777"}
+                "Unlabeled": "#999999", "Done": "#6fae6f", "Closed": "#777777",
+                "Doc": "#a98fd0"}
 
 def parse_banner():
     """Next-free WO numbers from the numbering authority (the two-block table)."""
@@ -65,10 +97,11 @@ def parse_wos():
         status_m = re.search(r"^\*\*Status:?\*?\*?:?\s*(.+)$", text, re.MULTILINE)
         status = re.sub(r"[*`]", "", status_m.group(1)).strip() if status_m else ""
         has_result = base in results
+        is_wo = is_work_order(base)
         rows.append({
             "num": num, "file": base, "title": title, "status": status,
-            "bucket": bucket_of(status, has_result), "result": has_result,
-            "mtime": os.path.getmtime(path),
+            "bucket": bucket_of(status, has_result, is_wo), "result": has_result,
+            "is_wo": is_wo, "mtime": os.path.getmtime(path),
         })
     return rows
 
@@ -79,12 +112,15 @@ def build_html(rows):
     stamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
 
     def row_html(r):
-        num = f"WO-{r['num']}" if r["num"] is not None else "—"
+        num = f"WO-{r['num']}" if r["num"] is not None else ("DOC" if not r["is_wo"] else "WO-?")
         age = datetime.datetime.fromtimestamp(r["mtime"]).strftime("%Y-%m-%d")
         color = BUCKET_COLOR[r["bucket"]]
         res = ' <span class="res">RESULT</span>' if r["result"] else ""
+        # filename is in the search text so companion docs stay FINDABLE by name - that
+        # discoverability is the whole reason they are bucketed rather than dropped (WO-937 A).
+        search = " ".join((num, r["file"], r["title"], r["status"])).lower()
         return (f'<tr class="row" data-bucket="{r["bucket"]}" '
-                f'data-text="{html.escape((num + " " + r["title"] + " " + r["status"]).lower())}">'
+                f'data-text="{html.escape(search)}">'
                 f'<td class="num"><a href="WorkOrders/{html.escape(r["file"])}">{num}</a></td>'
                 f'<td class="title">{html.escape(r["title"][:110])}{res}</td>'
                 f'<td><span class="badge" style="border-color:{color};color:{color}">'
@@ -158,9 +194,12 @@ def main():
         f.write(html_text)
     from collections import Counter
     c = Counter(r["bucket"] for r in rows)
-    print(f"BOARD.html written: {len(rows)} work orders "
+    n_wo = sum(1 for r in rows if r["is_wo"])
+    print(f"BOARD.html written: {len(rows)} rows = {n_wo} work orders + {len(rows) - n_wo} docs "
           f"({', '.join(f'{b}:{c.get(b,0)}' for b in BUCKET_ORDER)})")
 
+    # Doc rows can never be Unlabeled (bucket_of short-circuits), so this is a pure defect list:
+    # real work orders whose **Status:** line carries no canonical keyword. Nothing else.
     unlabeled = [r for r in rows if r["bucket"] == "Unlabeled"]
     if unlabeled:
         # Named, not just counted — "91 Unlabeled" is unactionable; a list is a to-do.

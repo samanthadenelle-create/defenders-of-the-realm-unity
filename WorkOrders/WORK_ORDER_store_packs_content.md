@@ -1,5 +1,7 @@
 # WORK ORDER — Store Packs Content (Starter Shelf)
 
+**Status:** DONE - data only (reconciled 2026-08-09 from the tree - `Assets/Resources/Data/Canonical/packs.json` carries the eight starter bundles as packs 6-13 and names this file as their source; the remaining art assets are content the file itself flags as pending, not engineering work)
+
 **Status:** CONTENT DELIVERED (data authored) — art assets PENDING
 **Type:** Content (data only — no `.cs`)
 **Authored:** 2026-06-28

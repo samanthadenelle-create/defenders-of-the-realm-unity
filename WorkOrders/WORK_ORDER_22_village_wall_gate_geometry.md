@@ -1,5 +1,7 @@
 # WORK ORDER 22 — Village wall + gate geometry (builder)
 
+**Status:** CLOSED - SUPERSEDED (reconciled 2026-08-09 from the tree - the target scene `Village.unity` is DELETED from the tree; CLAUDE.md sec.7 canon. No commit references WO-22)
+
 **Date:** 2026-05-24 (filed from owner playtest triage). **Authority:** #35 + WO-025.
 **Priority:** High — visible structural errors. **Depends on:** WO-05.
 **Class:** curated-scene / `VillageSceneBuilder` + `WallLayout` geometry — **must re-run/patch the scene builder** (which is normally hard-ruled "do not run"); this WO is the explicit authorization to fix the wall/gate layout and re-bake the village.

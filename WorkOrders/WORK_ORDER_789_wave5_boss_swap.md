@@ -1,5 +1,7 @@
 # WORK ORDER 789 — Wave 5: swap the test apex dragon for a lower Cave Troll boss (1050 HP)
 
+**Status:** DONE (reconciled 2026-08-09 from the tree - commit `53525e8d` landed the wave-5 Cave Troll boss at 1050 HP plus spawn guards. NOT felt-verified; no `.RESULT.md`)
+
 **Status:** SHIPPED 2026-07-30 (53525e8d — wave-5 Cave Troll @1050 HP + spawn guards).
 **Lane:** Lane 2 (Combat/AI) — data-driven (waves.json), with a small optional schema/code add
 **Type:** EXISTING (a test override left in the data; the boss/wave systems are built)

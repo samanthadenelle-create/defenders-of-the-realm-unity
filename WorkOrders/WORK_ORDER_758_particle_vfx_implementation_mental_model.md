@@ -1,5 +1,7 @@
 # WORK ORDER 758 — Particle Pack VFX: mental model for Claude (how to implement them)
 
+**Status:** DONE (reconciled 2026-08-09 - the deliverable IS this primer, and it was authored and committed in `f76e6b06`; it is a read-before-WO-757 knowledge doc, not a code ship)
+
 **Status:** KNOWLEDGE + IMPLEMENTATION PRIMER — READ BEFORE WO-757.  
 **Classification:** design knowledge / VFX authoring rules (not a standalone content ship).  
 **PO:** Elden (owner learning session 2026-07-23, Flames sandbox + Particle Pack demo).  
