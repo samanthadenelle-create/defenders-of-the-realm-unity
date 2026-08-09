@@ -42,7 +42,8 @@ hard yes/no gate.
 10. **Classified the failure?** — Have I split it into *data-empty* vs *built-but-invisible* vs
     *threw-and-skipped* from the trace, before touching code?
 11. **Two strikes → escalate?** — If two fix attempts on this same issue have failed, am I STOPPING to
-    write logs to `C:\eoa\logs\debug\` for Grok review instead of solo-iterating a third time? *(memory:
+    write logs to `logs/debug/` (repo-root-relative — the repo root is machine-dependent, never hardcode
+    a drive letter) for Grok review instead of solo-iterating a third time? *(memory:
     two-failure-escalate-to-grok.)*
 
 ## GATE C — Before you say DONE / commit / hand off

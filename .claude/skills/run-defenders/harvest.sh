@@ -52,4 +52,7 @@ hits=c.most_common(15)
 print('\n'.join(f'  x{n}: {m}' for m,n in hits) if hits else '  (none — clean)')
 "
 echo "=== ranked ticket file (emitter output, written by the fleet) ==="
-ls -la /c/eoa/Builds/autopilot-tickets.md 2>/dev/null || echo "  (see <repo>/Builds/autopilot-tickets.md)"
+# Repo root is machine-dependent (C:\eoa / D:\eoa) — resolve it from this script's own
+# location: .claude/skills/run-defenders/harvest.sh -> three dirs up is the root.
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+ls -la "$REPO_ROOT/Builds/autopilot-tickets.md" 2>/dev/null || echo "  (see <repo>/Builds/autopilot-tickets.md)"

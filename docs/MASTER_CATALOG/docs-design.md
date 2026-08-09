@@ -56,7 +56,7 @@
 
 ## E. SME dossiers (`docs/SME/`) + asset-pack notes
 
-- `docs/SME/`: `BLINK_SME.md` (07-11; pack root cites `C:\eoa` — **path drifted, project is `D:\EoA`**),
+- `docs/SME/`: `BLINK_SME.md` (07-11; pack root is now cited repo-root-relative — 2026-08-09),
   `KAYKIT_SME.md`, `CHARACTER_PACKS_SME.md`, `VFX_PACKS_SME.md`, `AUDIO_SME.md`,
   `POLYPERFECT_QUATERNIUS_SME.md`, `SWORD_SHIELD_MOCAP_SME.md`, `ASSET_STORE_LEDGER_2026-07-12.md`, etc.
   — durable pack dossiers, CURRENT except path-of-record drift.
@@ -127,7 +127,8 @@
    `CLI_LANES_WO_NUMBERS.md` 2026-08-02 banner says **836**. Banner is the authority (per its own rule).
 3. **`docs/reference/REGRESSION_COVERAGE_MATRIX.md` (07-19) predates the oracle wave** — REGRESSION_OK
    is now 103 checks (loader 08-01); the "0 of 73 covered" verdict needs a Sunday refresh.
-4. **`docs/SME/BLINK_SME.md` cites pack root `C:\eoa`** — the project lives at `D:\EoA` since ~mid-June;
-   path-of-record drift in an otherwise-current dossier.
+4. ~~**`docs/SME/BLINK_SME.md` cites an absolute pack root**~~ — **RESOLVED 2026-08-09.** The repo root
+   is **machine-dependent** (`C:\eoa` on one box, `D:\eoa` on another), so *no* doc may name it; the
+   dossier now cites `Assets/Blink/` repo-root-relative. Same rule applies to every doc/script.
 5. **`docs/qa/` is the live QA ground** — the 07-26 audit trio + 08-01 UI review drove the 783→835 WO
    arc; anyone triaging must read UI_REVIEW_2026-08-01 before re-auditing UI.

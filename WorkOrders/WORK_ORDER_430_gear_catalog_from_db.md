@@ -1,5 +1,9 @@
 # WORK ORDER 430 — Weapons/Armor catalog: seed JSON → DB, pull from DB (with local fallback)
 
+> STALE: 2026-08-09 — §"The architecture reality" says the `api/*.js` backend "lives in a SEPARATE repo,
+> not in `C:\EoA`". Both halves are wrong now: `api/` is **git-tracked IN THIS repo** (see `KEY_FACTS.md`
+> "Backend / web"), and the repo root is **machine-dependent** (`C:\eoa` / `D:\eoa`) so no doc may name it.
+
 **Status: SPEC / NEEDS DECISION + BACKEND REPO.** Not safe to blind-build in the Unity repo alone.
 **Requested:** owner 2026-06-16 overnight — "load json to db for weapons and armor and have them
 pull from db."

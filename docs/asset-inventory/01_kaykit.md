@@ -1,6 +1,6 @@
 # Asset Inventory 01 - KayKit Vendor Library
 
-Read-only due-diligence survey of `C:\eoa\Assets\Models\KayKit\` (the large,
+Read-only due-diligence survey of `Assets/Models/KayKit/` (the large,
 gitignored, never-catalogued KayKit vendor library) plus the duplicate top-level
 `Assets\Models\KayKit Adventurers 2.0\`. FACTUAL MAP ONLY - no recommendations.
 

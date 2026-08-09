@@ -1,7 +1,7 @@
 # KayKit — SME Reference (Canon)
 
 **Date:** 2026-07-11 (overnight SME research)
-**Pack root:** `C:\eoa\Assets\Models\KayKit\` (21 packs + curated live-set folders) plus a duplicate `C:\eoa\Assets\Models\KayKit Adventurers 2.0\`
+**Pack root:** `Assets/Models/KayKit/` (21 packs + curated live-set folders) plus a duplicate `Assets/Models/KayKit Adventurers 2.0/` — paths are repo-root-relative; the root is machine-dependent
 **Author/brand:** Kay Lousberg — kaylousberg.com / kaylousberg.itch.io
 **License:** CC0 (all itch.io packs, including paid EXTRA/SOURCE tiers) — commercial use unrestricted, no attribution required
 **Status of this doc:** supersedes-and-extends `docs/kaykit-asset-catalog.md` (2026-05-19 creative pick-list) and `docs/KAYKIT_NOTES.md` (2026-06-05 technical notes). Those remain useful; this is the verified deep reference.

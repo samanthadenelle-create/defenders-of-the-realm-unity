@@ -204,5 +204,5 @@ commits; `NIGHT_WRAP_2026-08-02.md` §6 is the newer filed-not-fixed list).
   `resources-art.md` says the KayKit bodies have no Animator wiring (WO-833 shipped it);
   `village-npcs.md` documents the `"Forge"`→`"Blacksmith"` anchor mapping as correct (that mapping *was*
   the WO-840 bug).
-- Stale worktrees still to remove: `$env:TEMP\eoa-bake`, `D:\EoA\.claude\worktrees\agent-*`.
+- Stale worktrees still to remove: `$env:TEMP\eoa-bake`, `<repoRoot>\.claude\worktrees\agent-*`.
   `PerformanceTestRunInfo.json` — still undecided on `.gitignore`.

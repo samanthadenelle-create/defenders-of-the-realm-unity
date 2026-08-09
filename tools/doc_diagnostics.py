@@ -7,7 +7,7 @@
 # -- it never fails a build (always exits 0). Colorblind-safe: severity is TEXT
 # (STALE / WARN / OK), never color.
 #
-# HOW TO RUN (from repo root C:\EOA):
+# HOW TO RUN (from the repo root -- machine-dependent path, do not hardcode a drive):
 #     python3 tools/doc_diagnostics.py
 #     py -3 tools\doc_diagnostics.py        (Windows launcher)
 #

@@ -1,7 +1,7 @@
 # Hovl Studio VFX — Full SME Dossier
 
 **Date:** 2026-07-12 · **SME: overnight session 2026-07-12**
-**Scope:** everything under `C:\eoa\Assets\Hovl Studio\` — what we own, how the vendor intends it to be used, how our game actually consumes it, and the concrete gaps that explain the owner's felt verdict: *"we are not making them anything like how the demo shows."*
+**Scope:** everything under `Assets/Hovl Studio/` — what we own, how the vendor intends it to be used, how our game actually consumes it, and the concrete gaps that explain the owner's felt verdict: *"we are not making them anything like how the demo shows."*
 **Verified from actual files and code, not comments** (CLAUDE.md catalog rule). Companion docs: `docs/vfx/HovlStudio_Inventory.md` (WO-VFX-001 inventory), `docs/vfx/SkillTree_VFX_Mapping.md`.
 
 ---

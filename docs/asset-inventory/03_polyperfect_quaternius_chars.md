@@ -15,7 +15,7 @@ Last surveyed: 2026-06-24. Counts from disk; usage = cheap grep of
 | Lana Studio | Casual RPG VFX pack (particle FX: fire/slash/projectiles/shields) | 125M | NO (tracked) | NO | YES (VFXCatalog, VFXManager, ProjectileVFXCatalog) |
 
 > Pointer: the exhaustive polyperfect catalog already exists at
-> `C:\eoa\docs\polyperfect-asset-catalog.md` (verified 2026-06-13). This doc
+> `docs/polyperfect-asset-catalog.md` (verified 2026-06-13). This doc
 > SUMMARIZES it and adds the other four packs — do not re-derive polyperfect.
 
 ---

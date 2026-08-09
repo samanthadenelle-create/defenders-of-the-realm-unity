@@ -16,7 +16,7 @@ for shipped P1 — NOT §5.5's "prefer pack path"** (owner ruling, WO-785 surviv
 **Classification:** VFX platform / low-cost reuse (not a single-content ship).  
 **Silo:** Village combat / VFX / dungeon dress.  
 **PO:** Elden.  
-**Unity:** 6000.4.8f1 URP · project `D:\EoA`.  
+**Unity:** 6000.4.8f1 URP · project = this repo (root is machine-dependent; never hardcode a drive).  
 **Depends on:** WO-759 (Particle Pack playbook), existing `VFXManager` bus (no second stack).  
 **Supersedes for wiring style:** ad-hoc per-system VFX calls; **does not** replace `VFXManager` pooling.
 
@@ -480,7 +480,7 @@ Defaults keep shipping unblocked.
 ## 14. Copy-paste for implementing agent
 
 ```
-Implement WO-760 in D:\EoA:
+Implement WO-760 in the EoA repo (paths repo-root-relative; the root is machine-dependent):
 
 1) Add VfxBones (extract ActionBundlePlayer bone resolve; add jaw/mouth/chin/VFX_BreathSocket).
 2) Add static Vfx façade: Cast/Projectile/Impact/Loop/Stream/Key → VFXManager only;

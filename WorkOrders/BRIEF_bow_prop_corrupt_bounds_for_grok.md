@@ -10,7 +10,8 @@ not application code. No WO number minted (the `CLI_LANES_WO_NUMBERS.md` banner 
 numbering authority — take one from there if this becomes a WO).
 
 **Project:** Echoes of Elarion / Defenders of the Realm. Unity 6000.4.8f1, URP, Android/IL2CPP,
-Solana Seeker (2670x1200 landscape). Repo root `D:\EoA`.
+Solana Seeker (2670x1200 landscape). Repo root is machine-dependent (`C:\eoa` on one box, `D:\eoa`
+on another) — every path below is repo-root-relative.
 
 ---
 

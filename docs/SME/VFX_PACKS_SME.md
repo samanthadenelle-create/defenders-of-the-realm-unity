@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-11 (overnight SME research session)
 **Scope:** the four NON-Hovl VFX packs (Hovl Studio has its own dossier). Every claim below is
-verified from the working tree at `C:\eoa` (material YAML, shader source, git index, our consuming
+verified from the working tree at the repo root (material YAML, shader source, git index, our consuming
 code), plus store/publisher web research. Product identities cross-checked against
 `docs/SME/ASSET_STORE_LEDGER_2026-07-12.md`.
 **Context:** project memory records a "half-upgraded URP pack materials" problem class — legacy

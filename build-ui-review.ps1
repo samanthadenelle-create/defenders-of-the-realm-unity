@@ -36,7 +36,7 @@ $RepoRoot = (Resolve-Path $RepoRoot).Path
 
 # Normalize: if the resolved root already points AT the UI_REVIEW folder
 # (e.g. someone passed the review dir), step up so we never double-nest
-# into C:\EoA\UI_REVIEW\UI_REVIEW.
+# into <repoRoot>\UI_REVIEW\UI_REVIEW.
 if ((Split-Path $RepoRoot -Leaf) -ieq 'UI_REVIEW') {
     $RepoRoot = (Split-Path $RepoRoot -Parent)
 }

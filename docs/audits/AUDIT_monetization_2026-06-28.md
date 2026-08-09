@@ -1,5 +1,9 @@
 # Monetization / PackStore — State Audit (2026-06-28)
 
+> STALE: 2026-08-09 — the "files" appendix lists absolute `C:\eoa\...` paths. The repo root is
+> **machine-dependent** (`C:\eoa` on one box, `D:\eoa` on another); read every such entry as
+> repo-root-relative (`Assets/...`, `docs/...`). Frozen body left as-authored per CLAUDE.md §15.
+
 READ-ONLY audit. No files were edited. Scope: the store/monetization system under
 `Assets/_Modules/Wallet` + `Assets/_Modules/Cosmetics` + the canonical pack data.
 

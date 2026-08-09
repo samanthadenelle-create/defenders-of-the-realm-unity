@@ -1,7 +1,7 @@
 # BLINK SME Dossier — the Blink (RPG Art) pack family
 
 **Date:** 2026-07-11 (overnight SME research session)
-**Pack root:** `C:\eoa\Assets\Blink\` (**gitignored** — never referenced directly at runtime; see §2.1)
+**Pack root:** `Assets/Blink/` (repo-root-relative; the root is machine-dependent) (**gitignored** — never referenced directly at runtime; see §2.1)
 **Publisher:** **Blink** — Unity Asset Store publisher id **49855**
 (https://assetstore.unity.com/publishers/49855), company site blinkstudios.dev,
 docs hub https://blink.developerhub.io/ (they are the makers of **RPG Builder**).

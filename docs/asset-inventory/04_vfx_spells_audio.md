@@ -1,7 +1,7 @@
 # Asset Inventory 04 - VFX, Spells, Audio, Shaders
 
 Read-only due-diligence survey (2026-06-24). FACTUAL MAP, not a recommendation.
-Counts exclude `.meta` files. Surveyed under `C:\eoa\Assets`.
+Counts exclude `.meta` files. Surveyed under `Assets/`.
 
 ## Summary table
 

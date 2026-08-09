@@ -82,7 +82,7 @@ to scaffolding, and rewriting canon is the owner's/CLI's call.
 
 1. **Never commit it.** `.gitignore` already covers `*.keypair.json`,
    `**/*-keypair.json`, `*.keystore`, `keystore.properties` (lines 80, 229, 231,
-   309). **Store the keypair OUTSIDE `D:\eoa` anyway** — outside the repo it
+   309). **Store the keypair OUTSIDE the repo tree anyway** — outside the repo it
    cannot be caught by a stray `git add -A`.
 2. **This repo has already had one near-miss.** A live Arweave wallet private key
    (`key.json`, RSA JWK, generated at the repo root 2026-08-07) sat one
@@ -164,7 +164,7 @@ to scaffolding, and rewriting canon is the owner's/CLI's call.
       (<https://docs.solanamobile.com/dapp-store/submit-new-app>).
       ⚠ **That figure almost certainly does not cover a ~546 MiB APK** on
       permanent storage. Budget extra; the exact per-GB rate is **UNVERIFIED**.
-- [ ] **Back the keypair up offline, outside `D:\eoa`.** See the safety box above.
+- [ ] **Back the keypair up offline, outside the repo tree.** See the safety box above.
 
 ## Step 4 — 🟡 HERS 💰: publisher + app in the web portal (ONE-TIME)
 
@@ -193,10 +193,10 @@ Once the app exists in the portal:
       from stdin instead. Never paste it into a committed file.)
 - [ ] Publish the version:
       ```powershell
-      cd D:\eoa
+      cd <repoRoot>        # machine-dependent: C:\eoa on one box, D:\eoa on another
       npx @solana-mobile/dapp-store-cli `
-        --apk-file "D:\eoa\Builds\Android\DefendersOfTheRealm.apk" `
-        --keypair  "<PATH OUTSIDE D:\eoa>\publisher-keypair.json" `
+        --apk-file ".\Builds\Android\DefendersOfTheRealm.apk" `
+        --keypair  "<PATH OUTSIDE THE REPO>\publisher-keypair.json" `
         --whats-new "<the new_in_version text>" `
         --verbose
       ```
@@ -229,7 +229,7 @@ of the APK — `PublishDetails.ts:322`). **The current CLI takes no
 handy for local APK inspection:
 
 ```powershell
-& "C:\Program Files\Unity\Hub\Editor\6000.4.8f1\Editor\Data\PlaybackEngines\AndroidPlayer\SDK\build-tools\36.0.0\aapt2.exe" dump badging "D:\eoa\Builds\Android\DefendersOfTheRealm.apk"
+& "C:\Program Files\Unity\Hub\Editor\6000.4.8f1\Editor\Data\PlaybackEngines\AndroidPlayer\SDK\build-tools\36.0.0\aapt2.exe" dump badging ".\Builds\Android\DefendersOfTheRealm.apk"   # run from the repo root
 ```
 
 Useful **before** publishing, to confirm the binary you are about to mint really

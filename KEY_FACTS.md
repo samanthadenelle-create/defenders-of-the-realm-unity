@@ -464,7 +464,7 @@
 - **Echo model (WO-738, owner Path-B ruling):** 6 collectible spirits (identity in the `EchoRosterCatalog` CODE TABLE — no ScriptableObjects, WebGL-safety ruling), balance in `echoes-balance.json` (dual-copy). Each echo has element + level (max 8) + one assigned functional lane (Harvest/Crafting/Defense/Exploration). `EchoBonusCalculator` is the single math source (economy + UI + `EchoSpecializationRegression` oracle all read it). Echoes NEVER fight: Defense = passive offline city-raid bonus, Exploration = dungeons-only — both STUBBED (write to Core `EchoLaneBonuses`, hosts read when they land); **Harvest + Crafting are the felt-now lanes.** Picker reachable via roster-card tap (the wisp-injector path is dead). *(2026-07-17)*
 
 ## Backend / web
-- **`api/` lives IN THIS REPO and is git-TRACKED** (not gitignored, not a separate React repo). Deploys ride any `vercel deploy` from C:\EOA. *(2026-07-12)*
+- **`api/` lives IN THIS REPO and is git-TRACKED** (not gitignored, not a separate React repo). Deploys ride any `vercel deploy` run from the repo root. *(2026-07-12)*
 - WebTrace: `?trace=1` → `POST /api/trace` → Neon **`analytics_events`** (`event_name='web_trace'`; no separate web_traces table). **CLI read path = the `[sig]` echo in Vercel runtime logs** (`DATABASE_URL` is sensitive/unpullable). *(proven 2026-07-12)*
 - **No TTL cron exists** for trace rows (security H1 — fix pending). Open POSTs (trace/track/bug-report) have **no rate limit**. *(audit 2026-07-12)*
 - db-viewer: `tools/db-viewer/index.html` + `api/admin/db.js`, key = `ADMIN_DASH_KEY` (Vercel env, set + redeploy to activate). *(2026-07-12)*

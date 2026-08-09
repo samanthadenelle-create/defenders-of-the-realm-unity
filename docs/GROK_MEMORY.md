@@ -2,7 +2,7 @@
 
 **Purpose:** cold-start pointer so the next Grok session does not re-discover the arc.  
 **Update in place** when program state changes.  
-**Last session:** 2026-07-14 (detached worktree `~/.grok/worktrees/eoa/defenders`, same SHA as `D:\EoA` tip).
+**Last session:** 2026-07-14 (detached worktree `~/.grok/worktrees/eoa/defenders`, same SHA as the main repo tip).
 
 ---
 
@@ -10,8 +10,8 @@
 
 | Tree | Path | Notes |
 |---|---|---|
-| **Primary (prefer)** | `D:\EoA` | Branch `wip/village2-and-f8-tickets` — **Grok-03 pack copied here 2026-07-14 (uncommitted until sole committer stages)** |
-| Grok worktree | `C:\Users\Elden\.grok\worktrees\eoa\defenders` | Detached HEAD; safe to `git worktree remove` **after** verify files on `D:\EoA` |
+| **Primary (prefer)** | the main repo checkout — **root is MACHINE-DEPENDENT** (`C:\eoa` on one box, `D:\eoa` on another; never hardcode it) | Branch `wip/village2-and-f8-tickets` — **Grok-03 pack copied here 2026-07-14 (uncommitted until sole committer stages)** |
+| Grok worktree | `~/.grok/worktrees/eoa/defenders` | Detached HEAD; safe to `git worktree remove` **after** verifying the files landed in the main checkout |
 
 **Next free WO: ⛔ DO NOT COPY A NUMBER FROM THIS FILE.** Open the **`CLI_LANES_WO_NUMBERS.md` banner**
 — it is the SOLE authority and it moves several times a day. *(This line used to read "754", which by
@@ -74,7 +74,7 @@ Push HELD unless owner said otherwise
 2. **Never runtime-load `Assets/Blink/**`** — only `Resources/RpgUi`.  
 3. **No UXML** in player builds.  
 4. **Sole committer, explicit paths** — never `git add -A`.  
-5. **Detached worktree:** uncommitted Grok files die if worktree removed without copy/commit to `D:\EoA`.
+5. **Detached worktree:** uncommitted Grok files die if worktree removed without copy/commit to the main repo checkout.
 
 ---
 

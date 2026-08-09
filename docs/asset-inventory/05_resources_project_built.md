@@ -4,7 +4,7 @@ Read-only due-diligence survey of what THE PROJECT authored/wired and what
 committed runtime art actually ships. Factual map only -- not a recommendation.
 Vendor packs (polyperfect/Quaternius/Supercyan/etc) are covered by other agents.
 
-Scope: everything under `C:\eoa\Assets`. "Runtime art" = what `Resources.Load`
+Scope: everything under `Assets/`. "Runtime art" = what `Resources.Load`
 pulls at play time (the REAL shipped art).
 
 ---

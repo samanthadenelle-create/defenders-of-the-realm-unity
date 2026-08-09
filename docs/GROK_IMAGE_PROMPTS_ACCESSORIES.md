@@ -2,7 +2,7 @@
 
 WO-543 references 10 accessory icons that don't exist yet. Generate these in Grok, save each as a
 **transparent-background PNG, 512×512**, with the EXACT filename, into:
-`C:\eoa\Assets\Resources\ItemIcons\`
+`Assets/Resources/ItemIcons/`
 
 Unity import is automatic (the ItemIcons importer + `ResolveItemSprite` pick them up by `iconPath`).
 Until they land, the store shows the 💍/📿 glyph fallback — nothing is broken.

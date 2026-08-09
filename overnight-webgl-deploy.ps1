@@ -2,7 +2,9 @@
 # reaping of background batchmode Unity. Builds WebGL (ship), then deploys a Vercel
 # PREVIEW using the machine-local token. Writes progress markers the CLI polls.
 # ASCII-only.
-Set-Location 'D:\eoa'
+# Repo root is machine-dependent (C:\eoa on one box, D:\eoa on another) - resolve it from
+# this script's own location instead of hardcoding a drive letter.
+Set-Location $PSScriptRoot
 $status = 'Builds\overnight-chain-status.txt'
 New-Item -ItemType Directory -Force -Path 'Builds' | Out-Null
 "CHAIN_START $(Get-Date -Format o)" | Out-File -Encoding ascii $status
@@ -25,7 +27,7 @@ if (Test-Path 'Builds\WebGL\index.html') {
     # 2) Deploy Vercel PREVIEW (token + team scope; never --prod)
     "DEPLOY_START $(Get-Date -Format o)" | Out-File -Encoding ascii -Append $status
     try {
-        $t = (Get-Content 'D:\eoa\.vercel-token' -Raw).Trim()
+        $t = (Get-Content (Join-Path $PSScriptRoot '.vercel-token') -Raw).Trim()
         $out = & vercel deploy --yes --token $t --scope 'team_2PrmHqE5mM52aIrzPJNHmyEt' 2>&1
         ($out | ForEach-Object { $_.ToString() }) | Out-File -Encoding ascii 'Builds\vercel-deploy.txt'
         # Take the LAST bare deployment URL. Filter out api.vercel.com/... (the CLI prints

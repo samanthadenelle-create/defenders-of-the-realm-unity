@@ -5,7 +5,8 @@ Armor Image Renamer — Defenders of the Realm
 DROP all Grok armor images into:
     Assets/Resources/ItemIcons/staging/
 
-Then run this script from C:\\EoA\\ :
+Then run it (the repo root is machine-dependent, so the script resolves it from
+its own location -- you can run it from anywhere):
     python rename_armor_images.py
 
 It sorts the staged files by modification time (the order you saved them
@@ -20,10 +21,12 @@ import shutil
 import sys
 
 # ---------------------------------------------------------------------------
-# Paths (relative to repo root C:\\EoA)
+# Paths (relative to the repo root, resolved from this file's location --
+# the root is machine-dependent, never hardcode a drive letter)
 # ---------------------------------------------------------------------------
-STAGING_DIR = os.path.join("Assets", "Resources", "ItemIcons", "staging")
-DEST_DIR    = os.path.join("Assets", "Resources", "ItemIcons")
+REPO_ROOT   = os.path.dirname(os.path.abspath(__file__))
+STAGING_DIR = os.path.join(REPO_ROOT, "Assets", "Resources", "ItemIcons", "staging")
+DEST_DIR    = os.path.join(REPO_ROOT, "Assets", "Resources", "ItemIcons")
 
 # ---------------------------------------------------------------------------
 # Mapping: position (1-indexed, sorted by mtime oldest→newest) → target name

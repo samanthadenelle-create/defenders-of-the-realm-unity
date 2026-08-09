@@ -75,7 +75,7 @@ The repo root is already linked to the `defenders-of-the-realm-v2` project
 `site/.vercel` link (gitignored) and uploads only these files:
 
 ```powershell
-cd D:\EoA\site
+cd <repoRoot>\site      # repo root is machine-dependent (C:\eoa or D:\eoa) - do not hardcode
 vercel link          # first time only: create/select a NEW project, e.g. echoes-of-elarion
 vercel --prod
 ```

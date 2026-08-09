@@ -1,7 +1,7 @@
 # VFX Prefab Handbook — EoA (canonical)
 
 **Status:** CANONICAL REFERENCE for any agent or human implementing VFX.  
-**Project:** `D:\EoA` · Unity 6000.4.8f1 URP  
+**Project:** this repo (root is machine-dependent — never hardcode a drive) · Unity 6000.4.8f1 URP  
 **Date:** 2026-08-05  
 **Author:** Architecture pass (Grok) consolidating Flames sandbox measurement + WO-759/760/884 + pack inventory.  
 **UI refinement pass:** 2026-08-05 — added enum-append single-owner lock (§3.3), building-damage + telegraph-as-cast wiring (§7), registry alignment. (Grok suggests → UI refines → CLI implements.)  

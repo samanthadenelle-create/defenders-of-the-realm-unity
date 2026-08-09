@@ -4,7 +4,7 @@
 > `Assets/Resources/RpgUi/` listing, grep for runtime `Assets/Blink` references), branch
 > `wip/village2-and-f8-tickets`. The exhaustive 2026-06-27 edition (full directory census, Obsidian
 > sprite inventory, Grok reconciliation) is superseded; this file keeps only what is still load-bearing.
-> Deep dossier: `docs/SME/BLINK_SME.md` (2026-07-11 — note it cites the old `C:\eoa` path; project is `D:\EoA`).
+> Deep dossier: `docs/SME/BLINK_SME.md` (2026-07-11 — paths there are repo-root-relative; the repo root itself is machine-dependent, never hardcode a drive letter).
 
 ---
 

@@ -1,6 +1,6 @@
 # SECURITY, COMPLIANCE & HARDENING AUDIT — Consolidated
 
-**Project:** Defenders of the Realm / Echoes of Elarion (`C:\eoa`)
+**Project:** Defenders of the Realm / Echoes of Elarion (this repo)
 **Date:** 2026-06-28
 **Type:** PLANNING ONLY — no code was changed by this consolidation. Read-only audit synthesis.
 **Sources consolidated:** (1) Economy / Payment Client-Trust, (2) Code Security, (3) Monetization Compliance, (4) Privacy / Crypto / Platform-Policy, (5) Code & Build Hardening.

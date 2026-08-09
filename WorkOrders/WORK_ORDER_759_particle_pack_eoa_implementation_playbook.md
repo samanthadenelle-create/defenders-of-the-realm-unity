@@ -9,7 +9,7 @@
 **Classification:** VFX knowledge + implementation rules + first-ship checklist (Syndrath breath).  
 **Silo:** Village combat / VFX.  
 **PO:** Elden.  
-**Audience:** Any AI/implementer working in **`D:\EoA`** (Echoes of Elarion / Defenders).  
+**Audience:** Any AI/implementer working in **this repo** (Echoes of Elarion / Defenders). The repo root is machine-dependent — never hardcode a drive letter.  
 **Unity:** 6000.4.8f1 + URP.  
 
 **Related WOs (do not re-derive; this doc is the single shareable source):**
@@ -23,7 +23,7 @@
 | 66 | Boss phase VFX (`Boss_Telegraph`, phase auras) — style to mirror |
 
 **Sandbox proof (optional open):** `D:\Flames` — same pack, isolated URP project.  
-**Game project:** `D:\EoA` — **pack already imported**; do not re-download or re-import.
+**Game project:** this repo — **pack already imported**; do not re-download or re-import.
 
 ---
 
@@ -579,7 +579,8 @@ Write: `WorkOrders/WORK_ORDER_759_particle_pack_eoa_implementation_playbook.RESU
 ## 14. Copy-paste agent system block
 
 ```
-You are implementing VFX in D:\EoA (Unity 6000.4.8f1 URP).
+You are implementing VFX in the EoA repo (Unity 6000.4.8f1 URP). All paths below are
+repo-root-relative; the repo root is machine-dependent, so never hardcode a drive letter.
 
 WO-759 Particle Pack rules:
 1. Assets already at Assets/UnityTechnologies/ParticlePack — NEVER reimport or duplicate the pack.

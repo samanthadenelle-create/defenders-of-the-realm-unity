@@ -1,6 +1,8 @@
 # overnight-apk-build.ps1 - DETACHED Seeker APK build (survives harness reaping).
 # Runs the Android batchmode build, writes status markers. ASCII-only.
-Set-Location 'D:\eoa'
+# Repo root is machine-dependent (C:\eoa on one box, D:\eoa on another) - resolve it from
+# this script's own location instead of hardcoding a drive letter.
+Set-Location $PSScriptRoot
 $status = 'Builds\overnight-apk-status.txt'
 New-Item -ItemType Directory -Force -Path 'Builds' | Out-Null
 "APK_START $(Get-Date -Format o)" | Out-File -Encoding ascii $status
@@ -9,7 +11,7 @@ try {
 } catch {
     "APK_THREW $($_.Exception.Message)" | Out-File -Encoding ascii -Append $status
 }
-$apk = Get-ChildItem 'D:\eoa\Builds' -Recurse -Filter *.apk -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+$apk = Get-ChildItem (Join-Path $PSScriptRoot 'Builds') -Recurse -Filter *.apk -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1
 if ($apk) {
     "APK_OK $(Get-Date -Format o) path=$($apk.FullName) size=$([math]::Round($apk.Length/1MB,0))MB" | Out-File -Encoding ascii -Append $status
 } else {

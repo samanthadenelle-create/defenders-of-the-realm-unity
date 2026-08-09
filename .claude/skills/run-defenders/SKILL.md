@@ -10,7 +10,8 @@ you don't open a window — you build the Windows player and drive it with the *
 fleet** (`run-autopilot-fleet.ps1`), then **observe via captured JSON**, not pixels
 (the fleet runs `-nographics`). The committed driver is the trio of repo-root scripts
 (`build-windows.ps1`, `run-autopilot-fleet.ps1`, `run-unity-method.ps1`) plus the
-**harvest** helper in this skill dir. All paths below are relative to the repo root (`C:\eoa`).
+**harvest** helper in this skill dir. All paths below are relative to the repo root — **that root
+is machine-dependent** (`C:\eoa` on one box, `D:\eoa` on another), so never hardcode a drive letter.
 
 **Golden rule: the Unity editor must be CLOSED for any batchmode command** (build/gate/fleet) —
 it holds a project lock. Unity *Hub* running is fine. The fleet `.exe` needs NO Unity license.
@@ -55,7 +56,7 @@ registered, or a gate script greps a marker nobody emits.
 **3. Build the Windows player** (ALWAYS wipe `Builds/Windows` first — stale exe-stub = level3 crash):
 ```bash
 powershell -ExecutionPolicy Bypass -Command "Remove-Item -Recurse -Force 'Builds\Windows' -ErrorAction SilentlyContinue; .\build-windows.ps1"
-# -> prints  [build] SUCCESS -> C:\eoa\Builds\Windows\DefendersOfTheRealm.exe
+# -> prints  [build] SUCCESS -> <repoRoot>\Builds\Windows\DefendersOfTheRealm.exe
 ```
 
 **4. Drive it — launch the headless AutoPilot fleet** (N player instances, distinct seeds,

@@ -1,5 +1,9 @@
 # Tech-Debt Ledger — 2026-06-28
 
+> STALE: 2026-08-09 — this frozen ledger points at `C:\eoa\docs\audits\AUDIT_techdebt_2026-06-28.md`
+> (twice). The repo root is machine-dependent (`C:\eoa` / `D:\eoa`); read it as the repo-root-relative
+> `docs/audits/AUDIT_techdebt_2026-06-28.md`. Body left frozen per CLAUDE.md §15.
+
 **Status:** PLANNING ONLY — no code changed. Mini-specs for owner routing.
 **Source audit:** `C:\eoa\docs\audits\AUDIT_techdebt_2026-06-28.md`
 **Numbering:** these are ledger entries (TD-NN), not minted WOs. Promote to a real WO

@@ -22,7 +22,7 @@
 #
 # PATHS: the CLI resolves every `uri` with path.join(process.cwd(), uri)
 #        (PublishDetails.ts:81, :101, :113, :126, :142). Run from THIS folder:
-#            cd D:\eoa\publishing
+#            cd <repoRoot>/publishing     # repo root is machine-dependent - do not hardcode a drive
 #        so `media/...` and `../Builds/Android/...` resolve correctly.
 #
 # PROVENANCE of every value is noted inline. Nothing here is guessed.

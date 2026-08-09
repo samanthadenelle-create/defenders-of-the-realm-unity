@@ -88,7 +88,7 @@ land. Numbering: this consumes 684 → **next free = 685** (bumped in CLI_LANES_
 ## G. db-viewer activation (exact steps for the owner)
 1. Vercel dashboard → project `defenders-of-the-realm-v2` → Settings → Environment Variables →
    add `ADMIN_DASH_KEY` = a long random string (Production, Sensitive).
-2. Redeploy the backend (any `vercel deploy --yes` from C:\EOA ships `api/admin/db.js`; promotion
+2. Redeploy the backend (any `vercel deploy --yes` run from the repo root ships `api/admin/db.js`; promotion
    to prod is the owner's).
 3. Double-click `tools\db-viewer\index.html` → paste base URL + key → Save. Tabs: Overview
    (row counts), Players (latest saves; `player=<id>` for one full record), Metrics (7-day

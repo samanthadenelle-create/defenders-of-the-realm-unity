@@ -1,5 +1,8 @@
 # Solana dApp Store — Path A readiness audit (2026-08-06)
 
+> STALE: 2026-08-09 — §5b names the listing assets at `D:\EoA\Builds\StoreAssets\`. The repo root is
+> **machine-dependent** (`C:\eoa` / `D:\eoa`); read it as the repo-root-relative `Builds/StoreAssets/`.
+
 > Audit of the LOCKED Path A checklist in `docs/SOLANA_STORE_LISTING_PLAN_2026-07-22.md` §0.1,
 > re-run against the working tree 15 days later. **That plan stays the authority** — this is a
 > status pass over its 8 steps, not a replacement. Path A (list a clean free game first, SKR packs

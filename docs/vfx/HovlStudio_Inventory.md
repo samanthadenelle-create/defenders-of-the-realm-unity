@@ -1,7 +1,7 @@
 # Hovl Studio VFX — Inventory & Hero-Ready Shortlist (WO-VFX-001)
 
 **Status:** LIVING DOC — inventory only. No VFX code written yet. Owner reviews and gives go/no-go before WO-VFX-002+ (pooling / skill-tree / projectiles).
-**Root:** `C:\eoa\Assets\Hovl Studio`
+**Root:** `Assets/Hovl Studio` (repo-root-relative)
 **Project:** Unity 6 LTS + URP, DeNelle Studios / Defenders of the Realm.
 **Compiled:** 2026-07-10.
 

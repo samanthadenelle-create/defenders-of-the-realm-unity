@@ -1,7 +1,7 @@
 # Performance & WebGL / Pi-Browser Viability Audit
 
 **Date:** 2026-06-28
-**Scope:** `C:\eoa` (Echoes of Elarion / Defenders of the Realm)
+**Scope:** this repo (Echoes of Elarion / Defenders of the Realm)
 **Author:** CLI audit agent (read-only; no code changed)
 **Method:** static scan of `Assets/_Modules`, `ProjectSettings`, Addressables config + asset-folder weighing, cross-checked against Unity WebGL/mobile best-practice docs (URLs cited at bottom).
 

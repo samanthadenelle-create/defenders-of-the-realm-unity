@@ -756,7 +756,8 @@ SUCCESS tonight; at handoff a chain is RUNNING: 4-bot fleet (seeds 8200) + ship 
 
 **WEB DEBUG LOOP PROVEN:** WebTrace (`?trace=1`) → POST `/api/trace` → Neon `analytics_events`; CLI
 read path = the `[sig]` echo in Vercel runtime logs (`get_runtime_logs` / `vercel logs`) because
-DATABASE_URL is sensitive/unpullable. `api/` lives **IN THIS REPO**, gitignored (`C:\EOA\api\`) —
+DATABASE_URL is sensitive/unpullable. `api/` lives **IN THIS REPO**, gitignored (`api/` at the repo
+root — the root itself is machine-dependent, so never write a drive letter) —
 the older "separate React repo" canon is WRONG.
 
 **OWNER RULINGS tonight:** errors caught quietly (never a player-visible failure screen) · build-screen

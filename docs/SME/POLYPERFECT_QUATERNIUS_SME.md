@@ -2,7 +2,7 @@
 
 **Authored:** 2026-07-11 (overnight SME research session)
 **Scope:** the two gitignored world-art packs — `Assets/polyperfect/` and `Assets/Quaternius/`
-**Verified from:** on-disk trees at `C:\eoa` (branch `wip/village2-and-f8-tickets`), code greps of
+**Verified from:** on-disk trees at the repo root (branch `wip/village2-and-f8-tickets`), code greps of
 `Assets/_Modules` + `Assets/Editor` + `Assets/_Village2`, existing canon docs, the owner's Asset
 Store ledger (`docs/SME/ASSET_STORE_LEDGER_2026-07-12.md`), and vendor sites (polyperfect.com,
 quaternius.com). Every prefab-name claim below was re-verified against the actual files today.
@@ -494,7 +494,8 @@ barracks/bridge/hedge, primitive fish, no Village2 beauty pieces.
 Restore procedure:
 1. **polyperfect:** import "Low Poly Ultimate Pack" v10.0 from the owner's Asset Store
    account (or copy `Assets/polyperfect/` from an existing machine — the historical path was
-   `Documents\defenders-unity`, current home `C:\eoa`). Then **immediately run
+   `Documents\defenders-unity`, current home = this repo root, which is machine-dependent —
+   `C:\eoa` on one box, `D:\eoa` on another). Then **immediately run
    Defenders ▸ Art ▸ Fix Polyperfect URP Materials** (or batchmode
    `-executeMethod DeNelle.Editor.PolyperfectUrpFix.Fix`) — otherwise everything under the
    pack renders on the magenta/pink error shader and trees render flat white.

@@ -83,7 +83,7 @@ Pi is a **new payment rail + distribution channel** bolted onto the existing eco
 
 1. **`PiBridge.jslib` + `IPiPlatform` seam** (the only new client glue). Wraps `Pi.authenticate` / `Pi.createPayment` / `Pi.Ads.showAd`; marshals results to C# via `SendMessage`. A `WebGLPiPlatform` (real) vs `EditorPiPlatform` (stub) seam means the game runs unchanged in the Editor and on non-Pi targets — mirrors the existing `ISkrLedger` / `ISaveProvider` pattern. **No gameplay code learns about Pi.** Contract is fully specified in `PI_INTEGRATION_SPEC.md` §2.
 2. **`CurrencyKind.Pi` rail + a `pi` price field** on packs — one more rail beside `Sol`/`Usdc`/`Skr` in `WalletService.CurrencyKind` (`WORK_ORDER_economy_store_packs.md` §1; `WORK_ORDER_skr_store_design.md` §3).
-3. **The thin `/approve` + `/complete` backend** — **already built** as `pi-backend/` (Cloudflare Worker, `src/index.ts` + `wrangler.toml`), corrected against the live API (path-based `/v2/payments/{id}/approve`, `Authorization: Key`, `/complete` body `{ txid }`, idempotency KV, `/reconcile`). Grant point = the existing `PackStore.ApplyPackContents`. Deploy is owner-gated (needs Cloudflare account + Pi credentials). [[pi-backend/README.md](C:\eoa\pi-backend\README.md)]
+3. **The thin `/approve` + `/complete` backend** — **already built** as `pi-backend/` (Cloudflare Worker, `src/index.ts` + `wrangler.toml`), corrected against the live API (path-based `/v2/payments/{id}/approve`, `Authorization: Key`, `/complete` body `{ txid }`, idempotency KV, `/reconcile`). Grant point = the existing `PackStore.ApplyPackContents`. Deploy is owner-gated (needs Cloudflare account + Pi credentials). [[pi-backend/README.md](../pi-backend/README.md)]
 
 **Everything downstream of "payment completed" already exists** — the entitlement writer, `OwnedItemIds`, the economy service, the token tray.
 
@@ -126,7 +126,7 @@ Pi is **one more rail on the existing PackStore + on-ramp to SKR**, sitting clea
 
 ### Phase 0 — Mobile-webview viability gate (DO THIS FIRST; ~hours-to-days; no game logic, no bridge)
 **The cheapest decisive bit of information in the whole Pi track.** Both owner and CLI already sequenced it first.
-1. Host the current `Builds/WebGL/` on **itch.io** (purpose-built for big WebGL; handles 186 MB) **or a CDN/object store** (S3+CloudFront / Cloudflare R2 / Backblaze). **Not Vercel** — the 174 MB single `.data.br` risks free-tier rejection. [[webgl-hosting-notes](C:\eoa\docs\webgl-hosting-notes.md)]
+1. Host the current `Builds/WebGL/` on **itch.io** (purpose-built for big WebGL; handles 186 MB) **or a CDN/object store** (S3+CloudFront / Cloudflare R2 / Backblaze). **Not Vercel** — the 174 MB single `.data.br` risks free-tier rejection. [[webgl-hosting-notes](../docs/webgl-hosting-notes.md)]
 2. Open it in **Pi Browser on a real iPhone (WKWebView = worst case)** AND **a real Android (Chromium = best case)**.
 3. **Oracle:** does it (a) load, (b) hold steady FPS, (c) survive ~10 min without a `webglcontextlost` / crash-reload — on **each** device?
 - **GATE:** If iOS fails (likely at 186 MB) → the verdict is **not** "Pi is unviable" — it's "**do the Addressables-remote + texture-diet shrink (WO-545) first, re-test, then build the bridge.**" Android-Chromium will probably pass today; iOS-WKWebView is the gate the size pass exists to clear.
