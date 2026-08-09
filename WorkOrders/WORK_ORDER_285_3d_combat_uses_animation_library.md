@@ -1,6 +1,12 @@
 # WORK ORDER 285 — 3D Real-Time Fighting Uses the Animation Library (responsive event → clip)
 
-**Status:** READY TO IMPLEMENT
+**Status:** ✅ **SHIPPED (hero combat)** — committed `bac3fd9`
+(see `WORK_ORDER_285_3d_combat_uses_animation_library.RESULT.md`).
+This is the WO that already built the Knight's 3-swing escalating combo plus hit/death/block routed
+through `ActorAnimator` — i.e. combo sequencing is NOT greenfield; extend this spine.
+
+> ⚠ **§15 STALENESS FLAG (2026-08-09).** Read `READY TO IMPLEMENT` for ~2 months with a RESULT file
+> beside it.
 **Date:** 2026-06-06
 **Author:** UI (creative/architecture lane)
 **Owner approval:** Samantha — greenlit. Goal: the **3D real-time combat** actually

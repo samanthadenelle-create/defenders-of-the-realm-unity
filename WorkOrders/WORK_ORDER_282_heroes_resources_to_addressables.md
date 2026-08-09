@@ -1,6 +1,32 @@
 # WORK ORDER 282 — Hero models: Resources/Heroes → Addressables `Heroes` group
 
-**Status:** READY TO IMPLEMENT
+**Status:** ⛔ **CLOSED — SUPERSEDED BY WO-545.** Do not implement this as written.
+
+WO-545 shipped the hero-asset seam with a **different and contradictory** contract:
+`HeroAssetLoader.cs` + `HeroAddressablesGrouper.cs` use **Addressables-first with a Resources fallback
+and a synchronous `WaitForCompletion` shim** — whereas this WO's §4 explicitly requires
+"`LoadAssetAsync` + `await`, **not** `.WaitForCompletion()`". WO-545 shipped, so it wins.
+This WO's target folder `Assets/Art/Characters/Heroes/` was never created; WO-545 used
+`Assets/HeroContent/` instead.
+
+**MEASURED STATE 2026-08-09 (why this is not urgent):** Addressables is set up but effectively unused on
+the hot path — there is **no `Heroes` or `Hero_<slug>` group** (only `Default Local Group`, `Gear`, and
+three Unity Localization groups), **314 `Resources.Load` calls remain** under `Assets/_Modules/`, and
+`HeroAssetLoader` probes Addressables then always falls through, logging "no Addressables entry -
+expected in V1". `HeroAddressablesGrouper.GroupAndMigrateHeroes` has never been run.
+
+⚠ **LIVE DEBT inherited from WO-545, worth a ticket of its own:** `HeroAddressablesGrouper.cs:35-40`
+warns that **WebGL does not support `WaitForCompletion` on an undownloaded bundle.**
+
+⚠ **NUMBER COLLISION:** `WORK_ORDER_282_BuildPreviewModal_Premium_Rotation.md` also claims 282. Two
+different work orders share this number. Resolve per CLAUDE.md §2 (first-on-disk-and-referenced-wins)
+before either is actioned.
+
+See also the sibling `WORK_ORDER_282_heroes_resources_to_addressables.HOLD.md`, whose reasoning still
+stands: the async conversion touches the "does the hero appear at all" path in village/ATB/story/DTT,
+and a subtle bug there **compiles fine but yields no hero body in every scene**.
+
+> ⚠ **§15 STALENESS FLAG (2026-08-09).**
 **Date:** 2026-06-06
 **Author:** UI (creative/architecture lane)
 **Owner approval:** Samantha — greenlit; scope = "follow the plan doc"

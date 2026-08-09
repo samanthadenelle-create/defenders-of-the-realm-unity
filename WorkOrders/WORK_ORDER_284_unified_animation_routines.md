@@ -1,6 +1,19 @@
 # WORK ORDER 284 — Unified Animation Routines (event → clip, for all actors)
 
-**Status:** READY TO IMPLEMENT
+**Status:** ⚠ **PARTIAL — hero slice SHIPPED, enemy half NEVER MIGRATED** — committed `bac3fd9`
+(see `WORK_ORDER_284_unified_animation_routines.RESULT.md`, which states "partially met (heroes done)").
+`AnimParams.cs`, `ActorAnimator.cs`, `IActorAnimator.cs` are all present.
+**Still open:** Enemy / Pet / Dragon / DungeonHero were never migrated onto `ActorAnimator`.
+
+> ⚠ **THE INVARIANT THIS WO BOUGHT, AND IT IS BINDING ON NEW WORK (2026-08-09):** `ActorAnimator` is
+> "the ONLY place that calls SetTrigger/SetBool/SetFloat/SetInteger" (§3). Any future beat/strike
+> sequencer MUST drive animation THROUGH `ActorAnimator` and never touch the `Animator` directly, or it
+> breaks the single invariant this WO exists to hold. `ActionBundlePlayer.cs:122` already resolves an
+> `ActorAnimator` and warns when absent — that is the correct pattern to copy.
+
+> ⚠ **§15 STALENESS FLAG (2026-08-09).** Read `READY TO IMPLEMENT` for ~2 months with a RESULT file
+> beside it; contributed to a session re-designing shipped work. Re-open the ENEMY half as a scoped
+> follow-up — do not re-mint a new number for it.
 **Date:** 2026-06-06
 **Author:** UI (creative/architecture lane)
 **Owner approval:** Samantha — greenlit. Scope: **all actors**, **unify + standardize**.

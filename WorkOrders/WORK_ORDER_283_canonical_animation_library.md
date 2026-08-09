@@ -1,6 +1,14 @@
 # WORK ORDER 283 — Canonical Animation Library (Shared + per-type, Humanoid retarget)
 
-**Status:** READY TO IMPLEMENT
+**Status:** ✅ **SHIPPED** — committed `27e425e` (see `WORK_ORDER_283_canonical_animation_library.RESULT.md`).
+`Assets/Action/{Shared,Knight,Ranger,Enemies}/` exist; `ActionClipImporter` + the `HeroAnimatorFactory`
+Cleric spec landed. ⚠ **NOT done in that pass:** the live runtime enemies are still **Generic KayKit rigs**
+(the RESULT says so) — that remainder is the enemy half, not this WO.
+
+> ⚠ **§15 STALENESS FLAG (2026-08-09).** This line read `READY TO IMPLEMENT` for ~2 months while a
+> RESULT file sat beside it. That stale status directly caused a 2026-08-09 session to commission two
+> architects to design work this WO had already shipped. **If a RESULT file exists, the status line is
+> the thing to fix first.**
 **Date:** 2026-06-06
 **Author:** UI (creative/architecture lane)
 **Owner approval:** Samantha — greenlit. This library is THE animation method for

@@ -1,6 +1,13 @@
 # WORK ORDER 281 — BUILD BLOCKER: Addressables SBP content build fails (Windows + WebGL)
 
-**Status: READY TO IMPLEMENT — P0, blocks ALL player builds**
+**Status:** ✅ **CLOSED — the fix is in the tree.** `AddressableAssetSettings.asset:61` carries
+`m_BuildAddressablesWithPlayerBuild: 0`, which is exactly this WO's preferred fix option, and player
+builds have shipped since (Android bundle 316536, Windows exe 2026-08-08). No longer a P0, no longer a
+blocker.
+
+> ⚠ **§15 STALENESS FLAG (2026-08-09).** This read `READY TO IMPLEMENT — P0, blocks ALL player builds`
+> while builds were demonstrably shipping. A false P0 on the board is worse than no entry: it distorts
+> every priority call made around it.
 **Found:** overnight gatekeeper pipeline run. Compile + tests pass; the PLAYER BUILD fails.
 
 ## Symptom
