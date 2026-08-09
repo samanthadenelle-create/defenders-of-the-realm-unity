@@ -1,0 +1,164 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>Build UI Redesign — 3 Mockup Directions</title>
+<style>
+ body{background:#111216;color:#ddd;font:15px/1.55 'Segoe UI',sans-serif;margin:0;padding:28px;max-width:1060px}
+ h1{color:#e0b341;font-size:24px;margin:0 0 4px} h2{color:#e0b341;font-size:19px;margin:36px 0 4px}
+ .sub{color:#999;margin-bottom:8px} .note{color:#8fa8c9;font-size:13px;margin:6px 0 14px}
+ .why{background:#1a1c22;border-left:3px solid #e0b341;padding:10px 14px;margin:12px 0;border-radius:0 8px 8px 0}
+ /* phone frame */
+ .phone{position:relative;width:900px;height:430px;background:linear-gradient(180deg,#8fd07a 0%,#7cc46a 60%,#6fb85f 100%);
+        border:10px solid #26272c;border-radius:22px;overflow:hidden;margin:10px 0 4px;box-shadow:0 8px 30px #0009}
+ .phone.half{height:210px}
+ /* faux world */
+ .bldg{position:absolute;background:#b99b6f;border:2px solid #8a7350;border-radius:4px}
+ .roof{position:absolute;background:#7a5c3a;border-radius:3px 3px 0 0}
+ .wallrun{position:absolute;background:#d9c9a8;border:2px solid #b3a481}
+ .tree{position:absolute;width:26px;height:26px;background:#3f8f4f;border-radius:50%;border:2px solid #2f6f3c}
+ /* ghost */
+ .ghost{position:absolute;width:74px;height:110px;background:#7fe08acc;border:2px solid #4fae5d;border-radius:8px 8px 3px 3px}
+ .foot{position:absolute;width:110px;height:34px;background:#7fe08a44;border:2px dashed #4fae5d;border-radius:50%}
+ /* UI atoms */
+ .chip{position:absolute;width:52px;height:52px;border-radius:50%;background:#1a1b20ee;border:2px solid #555;
+       color:#eee;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700}
+ .chip.gold{border-color:#e0b341;color:#e0b341} .chip.red{border-color:#c96a5a;color:#d99}
+ .pill{position:absolute;background:#1a1b20e6;border:1px solid #3a3b42;border-radius:18px;color:#ccc;
+       padding:6px 14px;font-size:13px;white-space:nowrap}
+ .tab{position:absolute;background:#1a1b20f0;border:2px solid #e0b341;border-radius:12px 12px 0 0;color:#e0b341;
+      padding:8px 22px;font-weight:700;font-size:14px}
+ .xbtn{position:absolute;width:44px;height:44px;border-radius:50%;background:#1a1b20ee;border:2px solid #777;
+       color:#ddd;display:flex;align-items:center;justify-content:center;font-size:19px;font-weight:700}
+ .res{position:absolute;background:#15161acc;border:1px solid #33343a;border-radius:14px;color:#ddd;
+      padding:5px 12px;font-size:12.5px;letter-spacing:.4px}
+ /* carousel cards */
+ .cardrow{position:absolute;left:50%;transform:translateX(-50%);bottom:10px;display:flex;gap:12px}
+ .card{width:118px;height:150px;background:#1a1b20f2;border:2px solid #3a3b42;border-radius:12px;overflow:hidden;
+       display:flex;flex-direction:column;align-items:center}
+ .card.sel{border-color:#e0b341;box-shadow:0 0 14px #e0b34155}
+ .cardart{width:100%;height:84px;display:flex;align-items:center;justify-content:center;font-size:40px;background:#22242b}
+ .cardname{color:#eee;font-size:12.5px;font-weight:600;margin-top:5px} .cardcost{color:#b9a04f;font-size:11.5px;margin-top:2px}
+ .cat{position:absolute;display:flex;gap:8px}
+ .catb{background:#1a1b20f0;border:1px solid #3a3b42;color:#bbb;border-radius:14px;padding:5px 13px;font-size:12.5px}
+ .catb.on{border-color:#e0b341;color:#e0b341}
+ .hint{position:absolute;color:#ffffffbb;font-size:12.5px;text-shadow:0 1px 3px #000c}
+ .count{display:inline-block;background:#23252c;border:1px solid #444;border-radius:10px;color:#e0b341;
+        padding:1px 10px;font-size:13px;margin-left:8px}
+ table{border-collapse:collapse;margin:14px 0;width:100%} th,td{border:1px solid #33343a;padding:8px 12px;text-align:left;font-size:13.5px}
+ th{background:#1a1c22;color:#e0b341} td b{color:#e0b341}
+ .grid{position:absolute;inset:0;background:
+   repeating-linear-gradient(0deg,transparent 0 42px,#ffffff14 42px 43px),
+   repeating-linear-gradient(90deg,transparent 0 42px,#ffffff14 42px 43px)}
+</style></head><body>
+
+<h1>Build UI Redesign — three directions</h1>
+<div class="sub">Driven by tester feedback: "couldn't understand it... too hard... buttons everywhere." Benchmark: Clash of Clans (owner tie-breaker rule).</div>
+<div class="why"><b>Current screen carries ~10 competing elements</b> — X Done, "Placing:" hint pill, Rotate Left,
+Rotate Right, PLACE, Cancel (all full-word buttons), a 4-way D-pad, and the resource strip
+(<code>BuildHudController.cs</code>). CoC ships the same job with <b>3 contextual controls</b> that appear only when
+needed, next to the thing being placed. Every direction below follows that principle:
+<b>controls live on the object, not on the screen.</b></div>
+
+<!-- ============================ A ============================ -->
+<h2>Direction A — "CoC Classic": contextual chips only <span class="count">5 elements on screen</span></h2>
+<div class="note">No bars, no mode chrome. The ghost IS the interface: drag it with a finger; ✓ ⟳ ✗ chips float beside it.
+Green/red footprint = valid/invalid (plus the chips gray out — never color alone). Shop is a pull-up tab, closed by default.</div>
+<div class="phone">
+ <div class="grid"></div>
+ <div class="wallrun" style="right:0;top:60px;width:130px;height:300px"></div>
+ <div class="bldg" style="left:150px;top:150px;width:80px;height:60px"></div><div class="roof" style="left:144px;top:132px;width:92px;height:22px"></div>
+ <div class="tree" style="left:80px;top:300px"></div><div class="tree" style="left:320px;top:80px"></div>
+ <div class="res" style="left:14px;top:12px">🪵 250 &nbsp; ⛏ 90 &nbsp; 🌾 169 &nbsp; 💎 221</div>
+ <div class="xbtn" style="right:14px;top:12px">✕</div>
+ <div class="foot" style="left:428px;top:264px"></div>
+ <div class="ghost" style="left:446px;top:170px"></div>
+ <div class="chip gold" style="left:560px;top:180px">✓</div>
+ <div class="chip" style="left:560px;top:240px">⟳</div>
+ <div class="chip red" style="left:560px;top:300px">✕</div>
+ <div class="pill" style="left:400px;top:130px">Arcane Spire — 88🪵 88⛏ 187💎</div>
+ <div class="tab" style="left:50%;transform:translateX(-50%);bottom:0">▲ &nbsp;Build</div>
+ <div class="hint" style="left:388px;top:388px">drag anywhere to move</div>
+</div>
+<div class="note"><b>Why it works:</b> zero learning — testers already know CoC's grammar. <b>Cost:</b> biggest rewrite of
+<code>BuildHudController</code>; rotate-by-chip only (no fine nudge without adding the optional D-pad toggle).</div>
+
+<!-- ============================ B ============================ -->
+<h2>Direction B — "Carousel + minimize" (prior owner ruling, refined) <span class="count">6 elements on screen</span></h2>
+<div class="note">Large card carousel to PICK (art + cost + affordability). On select it <b>minimizes to an edge tab</b>, freeing the
+whole screen. Placement then works exactly like Direction A (chips on the ghost). Tiny D-pad <i>toggle</i> in the corner for
+pixel-nudge on small pieces — off by default.</div>
+<div class="phone half">
+ <div class="grid"></div>
+ <div class="res" style="left:14px;top:10px">🪵 250 ⛏ 90 🌾 169 💎 221</div>
+ <div class="xbtn" style="right:14px;top:10px">✕</div>
+ <div class="cat" style="left:50%;transform:translateX(-50%);top:8px"><span class="catb on">Town</span><span class="catb">Defenses</span><span class="catb">Walls</span></div>
+ <div class="cardrow">
+  <div class="card"><div class="cardart">🏠</div><div class="cardname">Cottage</div><div class="cardcost">120🪵 40🌾</div></div>
+  <div class="card sel"><div class="cardart">🗼</div><div class="cardname">Arcane Spire</div><div class="cardcost">88🪵 187💎</div></div>
+  <div class="card"><div class="cardart">🏹</div><div class="cardname">Archer Tower</div><div class="cardcost">150🪵 60⛏</div></div>
+  <div class="card"><div class="cardart">🌾</div><div class="cardname">Farm</div><div class="cardcost">80🪵</div></div>
+  <div class="card" style="opacity:.45"><div class="cardart">⚒</div><div class="cardname">Foundry</div><div class="cardcost">need 400⛏</div></div>
+ </div>
+</div>
+<div class="note" style="margin-top:2px">↑ pick phase &nbsp;·&nbsp; ↓ after selecting, the carousel folds into the corner tab — the field is clear:</div>
+<div class="phone">
+ <div class="grid"></div>
+ <div class="wallrun" style="right:0;top:60px;width:130px;height:300px"></div>
+ <div class="bldg" style="left:150px;top:150px;width:80px;height:60px"></div><div class="roof" style="left:144px;top:132px;width:92px;height:22px"></div>
+ <div class="tree" style="left:90px;top:310px"></div>
+ <div class="res" style="left:14px;top:12px">🪵 250 ⛏ 90 🌾 169 💎 221</div>
+ <div class="xbtn" style="right:14px;top:12px">✕</div>
+ <div class="foot" style="left:428px;top:264px"></div>
+ <div class="ghost" style="left:446px;top:170px"></div>
+ <div class="chip gold" style="left:560px;top:180px">✓</div>
+ <div class="chip" style="left:560px;top:240px">⟳</div>
+ <div class="chip red" style="left:560px;top:300px">✕</div>
+ <div class="pill" style="left:400px;top:130px">Arcane Spire — 88🪵 88⛏ 187💎</div>
+ <div class="tab" style="left:18px;bottom:0">▲ &nbsp;Buildings <span style="color:#999">(12)</span></div>
+ <div class="chip" style="right:16px;bottom:14px;width:44px;height:44px;font-size:16px;opacity:.55">✛</div>
+ <div class="hint" style="right:74px;bottom:26px">D-pad toggle (fine nudge, off by default)</div>
+</div>
+<div class="note"><b>Why it works:</b> best browse experience (costs & locks visible before committing) + a clear field for
+placement. Matches the earlier owner ruling (carousel, minimize-on-select, Lean Touch, corner D-pad backup). <b>Cost:</b> medium —
+carousel exists in palette form; chips replace the intent bar; <code>LeanTouchBuildDriver</code> already handles drag/pinch.</div>
+
+<!-- ============================ C ============================ -->
+<h2>Direction C — "Zen two-phase": full-screen shop → gesture-only field <span class="count">4 elements on screen</span></h2>
+<div class="note">Phase 1: a proper full-screen SHOP (grid, categories, counts — like CoC's shop). Phase 2: the field is
+completely clean; ONE bottom pill holds cancel / name+cost / rotate / confirm. Drag to move, twist two fingers to rotate.</div>
+<div class="phone">
+ <div class="grid"></div>
+ <div class="wallrun" style="right:0;top:60px;width:130px;height:300px"></div>
+ <div class="tree" style="left:110px;top:120px"></div><div class="tree" style="left:300px;top:330px"></div>
+ <div class="res" style="left:14px;top:12px">🪵 250 ⛏ 90 🌾 169 💎 221</div>
+ <div class="xbtn" style="right:14px;top:12px">✕</div>
+ <div class="foot" style="left:428px;top:264px"></div>
+ <div class="ghost" style="left:446px;top:170px"></div>
+ <div class="pill" style="left:50%;transform:translateX(-50%);bottom:14px;padding:10px 16px;font-size:14px">
+   <span style="color:#d99;font-weight:700">✕</span> &nbsp;&nbsp; Arcane Spire — 88🪵 88⛏ 187💎 &nbsp;&nbsp;
+   <span style="color:#ccc;font-weight:700">⟳</span> &nbsp;&nbsp; <span style="color:#e0b341;font-weight:700">✓ PLACE</span></div>
+ <div class="hint" style="left:50%;transform:translateX(-50%);bottom:64px">drag to move &nbsp;·&nbsp; twist to rotate &nbsp;·&nbsp; pinch to zoom</div>
+</div>
+<div class="note"><b>Why it works:</b> maximum field real estate — nothing floats near the piece, ideal for small pieces like
+wall segments. <b>Cost:</b> the two-finger twist needs the Lean Touch rotate gesture enabled + a fallback (the ⟳ in the pill);
+a first-run coach mark is required or gestures go undiscovered — the exact trap the testers just reported.</div>
+
+<!-- ============================ compare ============================ -->
+<h2>Side-by-side</h2>
+<table>
+ <tr><th></th><th>A — CoC Classic</th><th>B — Carousel + minimize</th><th>C — Zen two-phase</th></tr>
+ <tr><td>Elements during placement</td><td><b>5</b></td><td>6</td><td><b>4</b></td></tr>
+ <tr><td>Learnability (tester fix)</td><td><b>Best</b> — pure CoC grammar</td><td><b>Best</b> — CoC grammar + guided pick</td><td>Good, needs coach mark</td></tr>
+ <tr><td>Small-piece precision</td><td>Chips can crowd tiny pieces</td><td><b>Chips + optional nudge D-pad</b></td><td>Cleanest field, gesture-only</td></tr>
+ <tr><td>Browse/shop experience</td><td>Basic pull-up</td><td><b>Rich cards: art, cost, locks</b></td><td><b>Full shop screen</b></td></tr>
+ <tr><td>Refactor size</td><td>Large</td><td><b>Medium</b> (carousel + driver exist)</td><td>Medium-large</td></tr>
+ <tr><td>Matches prior owner ruling</td><td>Partly</td><td><b>Yes (verbatim)</b></td><td>Partly</td></tr>
+</table>
+
+<div class="why"><b>Recommendation: Direction B, borrowing C's shop grid later.</b> B is the CoC placement grammar
+(contextual chips on the ghost, field freed by minimize-on-select) <i>plus</i> the guided pick that new players need,
+and it matches the build-HUD ruling already on record — with the smallest refactor because
+<code>LeanTouchBuildDriver</code> (drag/pinch) and the card palette already exist. A is the fallback if the carousel
+feels heavy in playtest; C is the end-state to grow toward once gestures are proven discoverable.</div>
+
+<div class="sub">All directions keep the binding constraints: MinTouchPx 112 on every control, state carried by
+text/shape (never color alone — red/green colorblind rule), code-built uGUI (no UXML), ASCII strings in-game
+(emoji here are mockup-only stand-ins for the real resource icons).</div>
+</body></html>

@@ -1,3 +1,10 @@
+# ⚠ SUPERSEDED 2026-08-08 — Notion is RETIRED as the board (owner ruling).
+# The live board is now `BOARD.html` at repo root, GENERATED from the repo by
+# `python tools/board_build.py`. Root cause of retirement: no seat could reach the
+# Notion workspace holding the DB (CLI had no MCP auth; the UI connector was OAuth'd
+# to a different personal workspace — the data source 404'd), so the mirror silently
+# stranded and items were lost. The repo is the single source of truth. See CLAUDE.md §2.
+
 # Source of Truth → Notion (switchover note for CLI) — 2026-06-06
 
 We moved the live backlog/board off **Linear** (its free tier caps at 250 non-archived issues + 2 teams,
