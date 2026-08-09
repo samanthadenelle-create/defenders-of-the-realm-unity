@@ -778,6 +778,9 @@ namespace DeNelle.Village
                 // here would resolve on this machine and silently return null on a device.
                 { "wall_wood",  "Wooden_Wall" },
                 { "wall_stone", "Stone_Wall" },
+                { "mine_crystal",      "Crystal_Mines" },
+                { "tower_siege_tower", "Sky_Ballista" },     // id says siege, the building is the anti-air ballista
+                { "healing_caravan",   "Healing_Caravan" },  // renamed 2026-08-09 (was fountain_healing)
                 // The collector variant IS the Lumber Mill — reuse its existing portrait rather
                 // than commissioning a second image of the same building.
                 { "collector_lumbermill", "lumbermill" },

@@ -1680,7 +1680,7 @@ namespace DeNelle.Editor
                 { "collector_farm",       "Farmer_A" },
                 { "mill",                 "Farmer_B" },
                 { "collector_lumbermill", "Ranger" },
-                { "fountain_healing",     "Cleric" },
+                { "healing_caravan",     "Cleric" },
             };
             foreach (var kv in expected)
             {

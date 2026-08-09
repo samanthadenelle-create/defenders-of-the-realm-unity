@@ -94,7 +94,7 @@ namespace DeNelle.Editor
             new NpcRow { StructureId = "collector_lumbermill", Slug = "Ranger", Available = true,
                          FbxPath     = AdvDir + "/Ranger.fbx",
                          TexturePath = AdvDir + "/ranger_texture.png" },
-            new NpcRow { StructureId = "fountain_healing",     Slug = "Cleric", Available = true,
+            new NpcRow { StructureId = "healing_caravan",     Slug = "Cleric", Available = true,
                          FbxPath     = Mm6Dir + "/3 - September 2025 - Cleric/characters/Cleric.fbx",
                          TexturePath = Mm6Dir + "/3 - September 2025 - Cleric/assets/fbx/cleric_texture.png" },
         };

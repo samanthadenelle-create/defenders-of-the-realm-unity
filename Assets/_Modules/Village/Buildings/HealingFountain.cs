@@ -1,5 +1,5 @@
 // =============================================================================
-// HealingFountain — Wellspring of Elarion. A placeable SUPPORT structure that
+// HealingFountain — Healing Caravan. A placeable SUPPORT structure that
 // heals the Heart of Elarion (Tree of Life) OUT OF BATTLE ONLY.
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.Village   Namespace: DeNelle.Village
@@ -21,7 +21,7 @@
 //
 // SINGLETON: one Wellspring per village (RepoProps.singleton). Gated behind the
 // Arcane Tower research perk 'arcane-wellspring' (BuildingPerkService) — the build
-// palette filters fountain_healing out until that perk is owned.
+// palette filters healing_caravan out until that perk is owned.
 //
 // §12 INSTRUMENTATION: FlowTrace.Step when the heal gate flips (open<->closed);
 // FlowTrace.Throttle (~1/s) on the active heal so a headless run can see the drip.
@@ -370,7 +370,7 @@ namespace DeNelle.Village
             panel.style.paddingLeft = panel.style.paddingRight = 20;
             root.Add(panel);
 
-            var title = new Label("Wellspring of Elarion");
+            var title = new Label("Healing Caravan");
             title.style.fontSize = 22;
             title.style.color = new StyleColor(new Color(1.0f, 0.86f, 0.45f));
             title.style.marginBottom = 12;

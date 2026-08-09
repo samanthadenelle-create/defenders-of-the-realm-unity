@@ -226,7 +226,7 @@ namespace DeNelle.Village
                     Label = "Build Collectors",
                     LockedIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase),
                 },
-                // Support — the Wellspring of Elarion (out-of-battle Heart heal). The
+                // Support — the Healing Caravan (out-of-battle Heart heal). The
                 // fountain is unlock-gated behind the arcane-tower 'arcane-wellspring'
                 // research perk; the palette layer keeps it locked until that perk is owned.
                 [BuildType.Support] = new BuildCategory
@@ -235,7 +235,7 @@ namespace DeNelle.Village
                     Label = "Build Support",
                     LockedIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
                     {
-                        "fountain_healing",
+                        "healing_caravan",
                     },
                 },
             };

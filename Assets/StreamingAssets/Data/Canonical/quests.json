@@ -327,11 +327,11 @@
         },
         {
           "stageId": "rekindle-wards",
-          "objectiveText": "Rekindle the wards: raise the Wellspring of Elarion.",
+          "objectiveText": "Rekindle the wards: raise the Healing Caravan.",
           "reward": { "crystals": 0, "food": 0, "magic": 0, "grantItemId": "" },
           "requiresFlag": "",
           "grantsKeystone": false,
-          "completeOn": { "kind": "build", "targetId": "fountain_healing", "count": 1 }
+          "completeOn": { "kind": "build", "targetId": "healing_caravan", "count": 1 }
         },
         {
           "stageId": "awaken-spire",

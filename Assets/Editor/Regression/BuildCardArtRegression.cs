@@ -53,16 +53,16 @@ namespace DeNelle.Editor.Regression
                 //    and wall art and the aliases landed. The ratchet tightened; it must not
                 //    loosen again. Removed: lumberyard, foundry, silo, wall_wood, wall_stone,
                 //    collector_lumbermill.
-                "tower_siege_tower",   // Sky Ballista (Anti-Air) - Defenses tab, VISIBLE today
-                "gate_stone",          // Stone Gate              - Defenses tab, VISIBLE today
-                "mine_crystal",        // Crystal Mine            - Town tab,     VISIBLE today
-                "mill",                // Mill (windmill)         - Town tab,     VISIBLE today
-                "fountain_healing",    // legacy Support verb only - not player-reachable today
-                "tower_healer",        // legacy Support verb only - not player-reachable today
-                // Type 'Decoration', and NO build verb maps to Decoration - these can never be
-                // rendered as a card at all, so they need no art. Kept listed (rather than
-                // deleted) so a future verb that DOES surface Decoration fails loudly here
-                // instead of quietly shipping two letter glyphs.
+                // ⚠ NONE OF THESE IS PLAYER-VISIBLE. Every id below is filtered out of its
+                // verb's palette by BuildCategoryRegistry.LockedIds, or belongs to a
+                // CatalogType no verb maps to. Rows stay in the catalog because saves replay
+                // them (WO-707), but no card is ever drawn — so NO ART IS NEEDED for any of
+                // them. Do not commission portraits off this list; it is a debt ledger for
+                // content that is retired or gated, not a work queue.
+                "mill",                // RETIRED (WO-707): Farm is the food producer
+                "gate_stone",          // Defense LockedIds - gated
+                "tower_healer",        // legacy Support verb only - not reachable from Town/Defenses
+                // Type 'Decoration', and NO build verb maps to Decoration.
                 "deco_torch",
                 "repair_default",      // a repair-economy DATA row, not a building
             };

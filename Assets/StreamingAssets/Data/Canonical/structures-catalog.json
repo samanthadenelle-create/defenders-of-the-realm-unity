@@ -479,8 +479,8 @@
       }
     },
     {
-      "id": "fountain_healing",
-      "displayName": "Wellspring of Elarion",
+      "id": "healing_caravan",
+      "displayName": "Healing Caravan",
       "type": "Support",
       "kind": "Cell",
       "visualPrefabPath": "Structures/Well",
@@ -522,13 +522,13 @@
           0
         ],
         "scale": 1,
-        "note": "Wellspring of Elarion support heal fountain; visual reuses Structures/Well until fountain meshes exist"
+        "note": "Healing Caravan support heal fountain; visual reuses Structures/Well until fountain meshes exist"
       }
     },
     {
       "id": "tower_healer",
       "displayName": "Healer Tower",
-      "_note": "WO-891 (2026-08-05) - the FIRST instance of the general support-FIELD pattern, not a bespoke building. behaviorId 'HealerTower' attaches SupportFieldStructure, which copies range/fireRate/damage off this repo exactly the way DefenseTower does and takes its whole visual identity from an element tag set in StructureFactory's case. A second variant (slow-field, damage-aura, buffer) is a new behaviorId + case + tag and NO new VFX code. TWO PLACEHOLDERS FOR THE OWNER: the player-facing displayName is a description, not canon - rename it; and visualPrefabPath reuses the committed Tower_Castle_Round until a sanctum mesh exists, the same stand-in convention fountain_healing uses with Structures/Well.",
+      "_note": "WO-891 (2026-08-05) - the FIRST instance of the general support-FIELD pattern, not a bespoke building. behaviorId 'HealerTower' attaches SupportFieldStructure, which copies range/fireRate/damage off this repo exactly the way DefenseTower does and takes its whole visual identity from an element tag set in StructureFactory's case. A second variant (slow-field, damage-aura, buffer) is a new behaviorId + case + tag and NO new VFX code. TWO PLACEHOLDERS FOR THE OWNER: the player-facing displayName is a description, not canon - rename it; and visualPrefabPath reuses the committed Tower_Castle_Round until a sanctum mesh exists, the same stand-in convention healing_caravan uses with Structures/Well.",
       "type": "Support",
       "kind": "Cell",
       "visualPrefabPath": "Structures/Tower_Castle_Round",
