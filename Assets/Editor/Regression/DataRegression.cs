@@ -589,6 +589,13 @@ namespace DeNelle.Editor
             // It is what stopped the seven AccuRig intakes from being wired to Boss/LargeEnemy. ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "enemy-rig-coherence suite", () => { if (!DeNelle.Editor.Regression.EnemyRigControllerCoherenceRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[enemy-rig-coherence] " + r); });
 
+            // --- BUILD CARD ART (WO-1010, 2026-08-09): a catalog row whose art does not
+            // resolve renders as a bare LETTER on the card. The capture caught "Lumberyard"
+            // as an "L" among illustrated neighbours — a content gap no gate could see, on
+            // the exact screen testers called unreadable. Ratcheted: today's artless rows are
+            // recorded debt, any NEW one fails. ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "build-card-art suite", () => { if (!DeNelle.Editor.Regression.BuildCardArtRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[build-card-art] " + r); });
+
             // --- DUNGEON ENCOUNTER FAMILY (WO-1001 slice 2): EncounterSpec.kind was
             // compared ONLY to "none" by DungeonBaker, and OutpostEnemyGroupSpawner's
             // id picker was four hardcoded hollow-* literals whose hand-written stats
