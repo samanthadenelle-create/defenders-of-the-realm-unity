@@ -72,6 +72,14 @@ namespace DeNelle.Editor
                 failures.Add("DataInjector.TryInject on a bogus table returned TRUE (miss path should be false)");
 
             // ── (3) CatalogRegistry — register / get / OfType / replace semantics ────
+            // SNAPSHOT FIRST, RESTORE AFTER. CatalogRegistry is a process-wide STATIC, and this
+            // block registers a synthetic probe into it. Until 2026-08-09 the probe was never
+            // removed, so every suite that ran afterwards saw a phantom "test-<guid>" row —
+            // BuildCardArtRegression failed on exactly that, and its verdict silently depended
+            // on suite ORDER. A gate may not have that property. There is no Remove() on the
+            // registry, so the fixture is undone the way BuildEconomyRegression already does it:
+            // snapshot, then Clear + re-register the originals in the finally below.
+            var registrySnapshot = new List<CatalogEntry>(CatalogRegistry.All() ?? new List<CatalogEntry>());
             string gid = "test-" + System.Guid.NewGuid().ToString("N");
             var entry = new CatalogEntry { id = gid, displayName = "oracle probe", type = CatalogType.Decoration };
             int before = CatalogRegistry.Count;
@@ -91,6 +99,14 @@ namespace DeNelle.Editor
             CatalogRegistry.Register(new CatalogEntry { id = "", type = CatalogType.Decoration });
             if (CatalogRegistry.Count != preNull)
                 failures.Add("CatalogRegistry accepted an id-less entry (should be skipped)");
+
+            // Undo the fixture: drop the probe and put the real rows back exactly as found, so
+            // the next suite in the run sees the registry this one inherited.
+            CatalogRegistry.Clear();
+            foreach (var e in registrySnapshot) CatalogRegistry.Register(e);
+            if (CatalogRegistry.Get(gid) != null)
+                failures.Add("CatalogRegistry probe '" + gid + "' SURVIVED cleanup — the shared " +
+                             "static is still polluted and later suites will see a phantom row.");
 
             if (failures.Count == 0)
             {
