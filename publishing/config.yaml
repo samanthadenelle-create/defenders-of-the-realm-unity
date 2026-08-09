@@ -1,0 +1,254 @@
+# =============================================================================
+# Solana dApp Store — publishing config for Echoes of Elarion
+#
+# Schema: the `config.yaml` accepted by @solana-mobile/dapp-store-cli **0.15.0**
+#         (the LAST version that used config.yaml). Schema read at source from
+#         node_modules/@solana-mobile/dapp-store-cli/src/prebuild_schema/publishing_source.yaml
+#         and lib/generated/config_schema.json, plus the validation rules in
+#         src/config/PublishDetails.ts.
+#
+# ⚠ READ publishing/SUBMIT_CHECKLIST.md BEFORE USING THIS FILE. ⚠
+#   The dApp Store CLI shipped 1.0.0, which DELETED `init`, `create publisher`,
+#   `create app`, `create release`, `validate` and `publish submit`. The current
+#   CLI is portal-backed: `dapp-store --apk-file ... --whats-new ...`, and app
+#   metadata is entered in the WEB portal at https://publish.solanamobile.com.
+#   Worse: every legacy command except `init` calls checkForSelfUpdate(), which
+#   THROWS when a newer major exists on npm — so `dapp-store@0.15.0 create app`
+#   cannot run today at all. docs/PUBLISHING_STEPS.md steps 1–6 are obsolete.
+#
+#   This file is therefore kept as the SINGLE SOURCE OF TRUTH for the listing
+#   metadata, to be typed/pasted into the portal's "New dApp" form — and it stays
+#   directly usable if the config.yaml flow ever returns.
+#
+# PATHS: the CLI resolves every `uri` with path.join(process.cwd(), uri)
+#        (PublishDetails.ts:81, :101, :113, :126, :142). Run from THIS folder:
+#            cd D:\eoa\publishing
+#        so `media/...` and `../Builds/Android/...` resolve correctly.
+#
+# PROVENANCE of every value is noted inline. Nothing here is guessed.
+# =============================================================================
+
+publisher:
+  # Source: owner-supplied verified metadata.
+  name: DeNelle Studios
+  website: https://echoes-of-elarion.vercel.app/
+  email: support.EoA@icloud.com
+  support_email: support.EoA@icloud.com
+
+app:
+  # Source: owner-supplied verified metadata.
+  name: Echoes of Elarion
+
+  # Filled in BY THE CLI after the App NFT is minted. Leave empty.
+  address: ""
+
+  # Source: VERIFIED at Assets/Editor/AndroidBuild.cs:46 —
+  #   private const string PackageId = "com.denellestudios.echoesofelarion";
+  # This is also the id the live Seeker install uses, so updates land in place.
+  android_package: com.denellestudios.echoesofelarion
+
+  urls:
+    # Terms of Use. Source: owner-supplied; probed live 2026-08-08 -> HTTP 200.
+    license_url: https://echoes-of-elarion.vercel.app/terms
+
+    # TODO(OWNER) — no verified copyright URL exists.
+    #   Probed 2026-08-08: /copyright -> 404, /license -> 404. Only /privacy and
+    #   /terms return 200. The CLI template says "Don't put placeholder urls."
+    #   RECOMMENDED FILL: https://echoes-of-elarion.vercel.app/terms
+    #     — the Terms carry the IP/licence grant (section 4, "Your licence to
+    #       play", docs/TERMS_OF_USE.md:53) and the URL is live.
+    #   ALTERNATIVE: publish a /copyright page on the marketing site first.
+    #   NOT FILLED HERE because the owner must choose; a wrong URL goes on-chain.
+    copyright_url: "TODO_OWNER_SEE_COMMENT_ABOVE"
+
+    # Privacy Policy. Source: owner-supplied; probed live 2026-08-08 -> HTTP 200.
+    privacy_policy_url: https://echoes-of-elarion.vercel.app/privacy
+
+    website: https://echoes-of-elarion.vercel.app/
+
+  media:
+    # TODO(OWNER) — file does not exist yet. See publishing/media/README.md.
+    # MUST be exactly 512x512 (PublishDetails.ts:218 "Icons must be 512px by 512px.").
+    - purpose: icon
+      uri: media/icon-512.png
+
+release:
+  # Filled in BY THE CLI after the Release NFT is minted. Leave empty.
+  address: ""
+
+  media:
+    # --- TODO(OWNER): every file below must be captured/created and dropped in
+    # --- publishing/media/ before a release can be built. Exact specs, taken
+    # --- from the CLI's own validation code, are in publishing/media/README.md.
+
+    # Required. Exactly 512x512. (PublishDetails.ts:212-220)
+    - purpose: icon
+      uri: media/icon-512.png
+
+    # Required. Exactly 1200x600. (PublishDetails.ts:129 — the CLI HARD-FAILS
+    # with "Please specify banner image of size 1200x600" if this is absent.)
+    - purpose: banner
+      uri: media/banner-1200x600.png
+
+    # Optional. If present, must be exactly 1200x1200. (PublishDetails.ts:238)
+    # Commented out rather than pointed at a non-existent file — an entry whose
+    # file is missing is a hard error (PublishDetails.ts:144).
+    # - purpose: featureGraphic
+    #   uri: media/feature-graphic-1200x1200.png
+
+    # Required: at least 4 screenshots+videos COMBINED (PublishDetails.ts:179).
+    # Each screenshot must be >= 1080px in BOTH width and height
+    # (PublishDetails.ts:294) — a 1080x1920 portrait shot PASSES; a 1920x1080
+    # landscape shot PASSES; a 1080x720 shot FAILS.
+    # NOTE: this game is LANDSCAPE (see the build-HUD landscape design), so
+    # 1920x1080 landscape captures are the natural fit.
+    - purpose: screenshot
+      uri: media/screenshot-01.png
+    - purpose: screenshot
+      uri: media/screenshot-02.png
+    - purpose: screenshot
+      uri: media/screenshot-03.png
+    - purpose: screenshot
+      uri: media/screenshot-04.png
+
+    # Optional. .mp4 only, >= 720px in both dimensions (PublishDetails.ts:256, :312).
+    # - purpose: video
+    #   uri: media/trailer.mp4
+
+  files:
+    # ⚠⚠ THE APK CURRENTLY AT THIS PATH IS THE **TESTER** BUILD ⚠⚠
+    #   Builds/Android/DefendersOfTheRealm.apk — 572,202,298 bytes, mtime
+    #   2026-08-08 14:41 (checked this session).
+    #   It was built BEFORE FeatureFlags.RealmStorePurchase was gated off.
+    #   REBUILD (Defenders/Build/Android APK (Seeker)) AFTER that flag change
+    #   lands, and re-verify, BEFORE any release is created. Shipping the wrong
+    #   binary here mints an on-chain release NFT pointing at it, which is
+    #   expensive and slow to undo.
+    - purpose: install
+      uri: ../Builds/Android/DefendersOfTheRealm.apk
+
+  catalog:
+    en-US:
+      name: >-
+        Echoes of Elarion
+
+      # ⚠ LENGTH CONFLICT — OWNER MUST RULE. The verified subtitle is used
+      #   VERBATIM below, as instructed. It is 34 characters.
+      #     * releaseJsonMetadata.json allows short_description maxLength 50  -> PASSES
+      #     * BUT dapp-store-cli 0.15.0 PublishDetails.ts:278 rejects anything
+      #       over 30 chars: "Please ensure all translations of short_description
+      #       are between 0 and 30 characters"                                -> FAILS by 4
+      #   The current web portal's limit is UNVERIFIED (not published in the docs).
+      #   Do NOT silently trim this — it is the canon tagline (CLAUDE.md §7).
+      short_description: >-
+        Echoes of a Forgotten Civilization
+
+      # Source: owner-supplied verbatim text. Do not edit without owner sign-off.
+      long_description: >-
+        Elarion has fallen, and the Heart of the village still remembers everyone
+        it once sheltered. Rebuild the town stone by stone, place your walls and
+        towers where they matter, and hold the line as the waves come. Awaken the
+        Echoes - the essences of the people the Heart still guards - and take them
+        down into the dungeons beneath the realm. Play the whole game free; nothing
+        is gated behind a purchase, nothing is tradable, and there are no ads.
+
+      # TODO(OWNER) — REQUIRED field, and it is release-specific, so it cannot be
+      # written until the final submission build exists. One or two sentences on
+      # what is new/notable in THIS version. For a first release, something like
+      # "First public release." is normal — but the owner writes it.
+      new_in_version: >-
+        TODO_OWNER_WHATS_NEW_IN_THIS_VERSION
+
+      # saga_features is OPTIONAL (not in the schema's `required` list) and is
+      # deliberately OMITTED — no Saga/Seeker-exclusive feature has been verified.
+      # Adding a key here changes the per-locale key count, which the CLI checks
+      # across locales (PublishDetails.ts:267-274).
+
+  android_details:
+    # en-US only. The CLI OVERWRITES this whole block from `aapt2 dump badging`
+    # when --build-tools-path is supplied; this is the developer-declared
+    # baseline it starts from.
+    locales:
+      - en-US
+
+solana_mobile_dapp_publisher_portal:
+  # google_store_package is OPTIONAL and is deliberately OMITTED — the app is not
+  # on Google Play. docs/PUBLISHING_STEPS.md Rail 2 is still unstarted (needs a
+  # $25 console account + a 14-day / 12-tester closed test). Adding a package id
+  # here for an app that isn't on Play would be a false declaration.
+
+  # REQUIRED. Written from facts verified at source this session — see the
+  # DECLARATIONS block at the bottom of this file for the provenance of each.
+  testing_instructions: >-
+    Echoes of Elarion is a free single-player town-defence and dungeon RPG. It is
+    landscape-only and built for ARM64 (Seeker/Saga). Launch the app and play from
+    the title screen; the tutorial starts automatically on a new save.
+
+    NO ADVERTISEMENTS. The build contains no advertising SDK of any kind and
+    contacts no ad network.
+
+    NO WORKING IN-APP PURCHASE. The real-money purchase path is feature-gated OFF
+    in this build, so no purchase can be initiated or completed. Pack listings may
+    render as cosmetic previews only.
+
+    NO NFT MINTING, NO AIRDROP, NO TRADING, NO SECONDARY MARKET, NO CASH-OUT. All
+    in-game items and currency are non-transferable and stay inside the account.
+    Value flows one way only.
+
+    A Solana wallet, if connected, is used ONLY as an identity for cloud save
+    (message signing). It moves no funds and constructs no transfer transaction.
+
+    Minimum age 13, per the Terms of Use and Privacy Policy linked above.
+
+    TODO_OWNER: confirm whether a reviewer needs a login/test account, or whether
+    guest play is enough, and paste any test credentials here.
+
+  # alpha_testers is OPTIONAL and deliberately OMITTED — no Genesis-token
+  # reviewer wallet addresses have been supplied. Max 10 if ever added
+  # (PublishDetails.ts:204).
+
+# =============================================================================
+# DECLARATIONS — ads / IAP / age rating
+#
+# ⚠ THE config.yaml SCHEMA HAS NO FIELD FOR ANY OF THESE. ⚠
+#   Verified by grepping the full source of BOTH CLI generations
+#   (dapp-store-cli 0.15.0 + 1.0.0, and dapp-store-publishing-tools 1.0.0) for
+#   ads / advertis / iap / in_app_purchase / age_rating / content_rating:
+#   ZERO matches. These declarations are made in the WEB Publisher Portal form
+#   and/or in the review submission — NOT in this file. Nothing was invented to
+#   fill a field that does not exist.
+#
+#   The answers below are pre-written so the owner can paste them into the portal.
+#   They are also folded into `testing_instructions` above, which IS a real field.
+#
+# ADS -> NO. Verified three ways this session:
+#   * Packages/manifest.json contains no ad SDK (no ironsource / admob /
+#     levelplay / unity-ads / applovin entry).
+#   * NullAdService (Assets/_Modules/Core/Ads/IAdService.cs:172) is the shipping
+#     default implementation.
+#   * docs/TERMS_OF_USE.md:236 — "The Game does not currently show
+#     advertisements, and no advertising network is contacted."
+#
+# IN-APP PURCHASES -> NO (see the flag caveat below).
+#   ⚠ CAVEAT THE OWNER MUST CLEAR BEFORE SUBMITTING: as read this session,
+#     Assets/_Modules/Core/FeatureFlags.cs:594 still says
+#         public static bool RealmStorePurchase => Get("realmstorepurchase", defaultOn: true);
+#     i.e. purchases default **ON**. A separate agent is flipping this to
+#     default OFF. If that change does NOT land and the APK is not rebuilt, a
+#     "no purchases" declaration would be FALSE.
+#   Two independent hard blocks survive the flag regardless (both read at source):
+#     * SolanaWalletProvider.SendPayment hard-blocks WalletNetwork.Mainnet
+#       (FeatureFlags.cs:588) — a mainnet build cannot take money.
+#     * WalletEndpoints.SkrMintDevnet is "" (FeatureFlags.cs:590), so the default
+#       SKR currency cannot even resolve a mint.
+#
+# AGE RATING -> 13+ / "Teen".
+#   Source: docs/PRIVACY_POLICY.md:117-124 ("not directed to children under 13",
+#   COPPA threshold) and docs/TERMS_OF_USE.md:39-42 ("not directed to children
+#   under 13, and you may not use it if you are under 13"), with the higher local
+#   age (EU/UK digital-consent age, 13-16) applying where law requires.
+#   The portal's exact rating VOCABULARY is UNVERIFIED — the published docs do not
+#   list the options. Pick the lowest option that is >= 13 (typically "Teen" on an
+#   ESRB-style scale, or "12+"/"16+" on a PEGI-style scale — choose >= 13, so 16+
+#   if 12+ is the only lower neighbour and 13 must be respected).
+# =============================================================================
