@@ -1,5 +1,26 @@
 // =============================================================================
-// TowerSwapMenu — WO7: Tower Swap UI (UIElements).
+// ⛔ DEPRECATED — RETIRED WITH THE ORIGINAL TOWER-DEFENSE PILLAR (owner, 2026-08-09)
+// -----------------------------------------------------------------------------
+// THIS IS NOT A LIVE PURCHASE RAIL. It was retired when the original tower-defense
+// pillar was retired. Do not wire it, do not "re-enable" it, and do not treat it as
+// part of the monetization surface.
+//
+// WHY THIS BANNER EXISTS: the header below still reads as current WO7 spec and the
+// panel below still builds a full USDC/SCR payment UI with a confirm CTA, while
+// carrying ZERO FeatureFlags references. The 2026-08-09 audit therefore flagged it as
+// "a real-money USDC rail gated by nothing" (finding F73) — a false positive produced
+// entirely by this file describing itself as live. The only thing actually stopping it
+// is reachability: TowerSwapService needs a scene-wired _menu, and its guid appears in
+// NO scene under Assets/Scenes/. F73 is WITHDRAWN; this banner is the fix.
+//
+// If the swap idea ever returns, it comes back through the declared ladder in
+// docs/reference/MONETIZATION_ACTIVATION_LADDER.md — not by re-pointing this file.
+//
+// (Lesson, same class as SaveSchema's header claiming v36 while the const read 38:
+//  the comment is what the next reader trusts. A retired file that still describes
+//  itself as current will be re-discovered as a risk, repeatedly, forever.)
+// =============================================================================
+// TowerSwapMenu — WO7: Tower Swap UI (UIElements).   [HISTORICAL — see banner above]
 // -----------------------------------------------------------------------------
 // Driven entirely by TowerSwapService. Do not call Open() directly from game
 // code outside that service — the service owns the full lifecycle.
