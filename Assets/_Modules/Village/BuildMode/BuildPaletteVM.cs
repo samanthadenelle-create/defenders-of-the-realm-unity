@@ -289,7 +289,22 @@ namespace DeNelle.Village
                 foreach (var e in entries)
                 {
                     if (e == null) continue;
-                    if (e.id != null && _lockedIds.Contains(e.id))
+                    // WO-964 (owner ruling 2026-08-10): "dont show the spire, leave as blank till
+                    // earned, allows us to unlock new items and not reveal what they are." An
+                    // unlock-gated row is now HIDDEN rather than shown greyed — but hidden must
+                    // mean UNTIL EARNED, never forever.
+                    //
+                    // ⚠ THIS `_unlockedProvider` CHECK IS LOAD-BEARING. Before it, `_lockedIds`
+                    // was a STATIC filter and `_unlockedProvider` was consulted only on the
+                    // visible-lock axis. So moving an id into lockedIds to hide it would have
+                    // hidden it PERMANENTLY: the wave-2 Castle Defense Plans drop would flip the
+                    // persisted flag and the card would still never appear — a worse defect than
+                    // the one the ruling was about. The two axes now share ONE earn authority
+                    // (WO-964 §3.2), so "hidden until earned" and "greyed until earned" differ
+                    // only in presentation, never in WHEN.
+                    bool lockedOut = e.id != null && _lockedIds.Contains(e.id)
+                                     && !(_unlockedProvider != null && _unlockedProvider(e.id));
+                    if (lockedOut)
                     {
                         // Locked out of THIS verb's palette (build-categories lockedIds):
                         // unlock-gated rows, and ruling-gated rows like wall_stone (WO-948:

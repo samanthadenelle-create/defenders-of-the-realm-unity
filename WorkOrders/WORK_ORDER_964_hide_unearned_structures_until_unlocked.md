@@ -1,6 +1,6 @@
 # WO-964 — Unearned structures are HIDDEN, not shown-locked: the reveal is the reward
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE (implemented + gated 2026-08-10; the hidden filter is now unlock-aware, so hidden means UNTIL EARNED, never forever)
 **Date:** 2026-08-10 · **Priority:** Medium-High (it changes what a first-session player sees)
 **Block:** main line (CLI) · **Lane:** Build mode / progression data
 **Owner ruling 2026-08-10:** F8 seq 2303, verbatim — *"dont show the spire, leave as blank till earned,

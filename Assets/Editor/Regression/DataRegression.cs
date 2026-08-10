@@ -647,6 +647,7 @@ namespace DeNelle.Editor
             // committer registers it. ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "tutorial-anchor-latch suite", () => { if (!DeNelle.Editor.Regression.TutorialAnchorLatchRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[tutorial-anchor-latch] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "build-carousel-order suite", () => { if (!DeNelle.Editor.Regression.BuildCarouselTutorialOrderRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[build-carousel-order] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "founding-guide-wolf suite", () => { if (!DeNelle.Editor.Regression.FoundingGuideWolfBodyRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[founding-guide-wolf] " + r); });
 
             // --- THE ORACLE THAT GUARDS THIS FILE: distinct markers, no unregistered
             // oracle, no gate script grepping a marker nobody emits. Registered LAST so

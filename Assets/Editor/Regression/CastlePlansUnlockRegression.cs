@@ -60,17 +60,29 @@ namespace DeNelle.Editor
             if (rowCost.crystals <= 0)
                 failures.Add($"[castle-plans] '{SpireId}' cost is NOT crystals-inclusive (crystals={rowCost.crystals}) -- the WO-947 arcane basket requires crystals");
 
-            // ---- 1a: build-categories.json carries the visible-lock, reason in words ----
+            // ---- 1a: the spire is HIDDEN until earned (WO-964, owner ruling 2026-08-10) ----
+            //
+            // ⚠ THIS ASSERTION WAS INVERTED ON 2026-08-10, and the inversion is the point.
+            // WO-1013 (same day, earlier) shipped the spire as a VISIBLE-LOCKED card so the
+            // player could see what was coming and save for it. The owner then played it and
+            // ruled the opposite, verbatim (F8 seq 2303): "dont show the spire, leave as blank
+            // till earned, allows us to unlock new items and not reveal what they are." The
+            // reveal IS the reward, and hiding it is what lets new structures ship unspoiled.
+            //
+            // So the guardrail flips sides: the spire must sit in Defense lockedIds (filtered
+            // OUT of the palette entirely) and must NOT carry a visibleLockedIds row. The
+            // ProgressionUnlocks gate is unchanged -- it still decides WHEN, only the
+            // pre-unlock PRESENTATION changed. This suite stays strict in both directions:
+            // shipping it buildable from minute one still fails, and so does regressing it
+            // back to a greyed card.
             var defense = BuildCategoryRegistry.Get(BuildType.Defense);
-            string dataReason = null;
-            if (defense == null || defense.VisibleLockedReasons == null
-                || !defense.VisibleLockedReasons.TryGetValue(SpireId, out dataReason)
-                || string.IsNullOrWhiteSpace(dataReason))
-                failures.Add($"[castle-plans] Defense verb has no visibleLockedIds row for '{SpireId}' (or an empty reason) -- the card would ship buildable from minute one");
+            if (defense == null || defense.LockedIds == null || !defense.LockedIds.Contains(SpireId))
+                failures.Add($"[castle-plans] '{SpireId}' is NOT in Defense lockedIds -- WO-964 requires it HIDDEN until earned, not shown-locked and not buildable");
             else
-                log.AppendLine($"  visible-lock reason: '{dataReason}'");
-            if (defense != null && defense.LockedIds != null && defense.LockedIds.Contains(SpireId))
-                failures.Add($"[castle-plans] '{SpireId}' is ALSO in Defense lockedIds -- hidden-lock would defeat the visible-locked card");
+                log.AppendLine($"  spire hidden until earned (WO-964): in Defense lockedIds, no visible card");
+            if (defense != null && defense.VisibleLockedReasons != null
+                && defense.VisibleLockedReasons.ContainsKey(SpireId))
+                failures.Add($"[castle-plans] '{SpireId}' still carries a visibleLockedIds row -- that is the RETIRED WO-1013 presentation; WO-964 hides it instead of greying it");
 
             // ---- 1b: VM projection -- Locked with real cost until the provider flips ----
             try
@@ -83,52 +95,66 @@ namespace DeNelle.Editor
                     repo = new RepoProps { cost = rowCost, maxLevel = 3 },
                 };
                 var entries = new List<CatalogEntry> { entry };
+                // WO-964: the spire is HIDDEN by lockedIds until earned, not greyed. The category
+                // is built the way build-categories.json now authors it.
                 var category = new BuildCategory
                 {
                     Types = new[] { CatalogType.Tower },
                     Label = "Build Defenses",
-                    VisibleLockedReasons = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-                    {
-                        { SpireId, string.IsNullOrEmpty(dataReason) ? "Recover the plans" : dataReason },
-                    },
+                    LockedIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { SpireId },
                 };
                 bool unlocked = false;
                 var vm = new BuildPaletteVM(
                     null,
                     _ => category,
                     _ => entries,
-                    _ => true,              // freebie provider says YES -- a locked card must still show REAL cost
+                    // Freebie provider says NO, deliberately (changed with WO-964).
+                    // It used to say YES to prove the D20 rule "a LOCKED card must still show its
+                    // real cost, never FREE" -- but WO-964 removed the locked card entirely: before
+                    // the unlock there is no card at all. After the unlock, first-build-free is a
+                    // LEGITIMATE rule, so a YES here would assert a violation that is not one.
+                    // What this case proves now is the REVEALED card's cost display, so the freebie
+                    // axis is held out of it.
+                    _ => false,
                     () => entries.Count,
                     BuildType.Defense,
                     null,
                     id => unlocked);
 
+                // BEFORE the unlock: the card must be ABSENT entirely (WO-964 -- "leave as blank
+                // till earned ... not reveal what they are"), not greyed, not buildable.
+                if (vm.Cards.Count != 0)
+                    failures.Add($"[castle-plans] VM projected {vm.Cards.Count} card(s) while the unlock flag is DOWN -- WO-964 requires the spire to be INVISIBLE until earned (a greyed card is the retired WO-1013 presentation)");
+                else
+                    log.AppendLine("  VM projection: spire absent before the unlock (WO-964) OK");
+
+                // AFTER the unlock: it must APPEAR, buildable, at its real cost. This is the half
+                // that catches "hidden forever" -- before WO-964's unlock-aware filter, lockedIds
+                // was static and this assertion would have failed, because the plans drop could
+                // flip the flag and the card would still never come back.
+                unlocked = true;
+                vm.Refresh();
                 if (vm.Cards.Count != 1)
-                    failures.Add($"[castle-plans] VM projected {vm.Cards.Count} cards (expected 1: the spire VISIBLE while locked, never filtered)");
+                    failures.Add($"[castle-plans] after the unlock flips, VM projected {vm.Cards.Count} cards (expected 1) -- the spire is hidden FOREVER, which is worse than showing it early");
                 else
                 {
                     var card = vm.Cards[0];
-                    if (!card.Locked) failures.Add("[castle-plans] VM card not Locked while the unlock flag is down");
-                    if (string.IsNullOrWhiteSpace(card.LockReason)) failures.Add("[castle-plans] locked card has no reason WORDS (colour alone is banned)");
-                    if (card.Freebie) failures.Add("[castle-plans] locked card reports Freebie -- it must show its normal cost (D20 no-FREE)");
-                    // The card's cost seam is SoftcappedCostFor, which can only RAISE a tower
-                    // cost above the catalog row (never lower, never zero) -- so the invariant
-                    // proved here is "the REAL cost displays": non-zero and >= the row on every
-                    // component. Exact equality would flake if a scene with softcapped towers
-                    // happens to be open when the suite runs.
+                    if (card.Locked)
+                        failures.Add("[castle-plans] after the unlock flips the card is still Locked -- the lock never lifts");
+                    if (card.Freebie)
+                        failures.Add("[castle-plans] unlocked card reports Freebie -- it must show its normal cost (D20 no-FREE)");
+                    // The cost seam is SoftcappedCostFor, which can only RAISE a tower cost above
+                    // the catalog row (never lower, never zero) -- so the invariant proved here is
+                    // "the REAL cost displays": non-zero and >= the row on every component. Exact
+                    // equality would flake if a scene with softcapped towers happens to be open.
                     if (card.EffectiveCost.IsZero)
-                        failures.Add("[castle-plans] locked card cost is ZERO -- reads as FREE, the exact D20 violation");
+                        failures.Add("[castle-plans] unlocked card cost is ZERO -- reads as FREE, the exact D20 violation");
                     else if (card.EffectiveCost.crystals < rowCost.crystals || card.EffectiveCost.wood < rowCost.wood
                         || card.EffectiveCost.iron < rowCost.iron || card.EffectiveCost.food < rowCost.food)
-                        failures.Add($"[castle-plans] locked card cost {CostStr(card.EffectiveCost)} fell BELOW catalog row {CostStr(rowCost)} (normal cost must display)");
+                        failures.Add($"[castle-plans] unlocked card cost {CostStr(card.EffectiveCost)} fell BELOW catalog row {CostStr(rowCost)} (normal cost must display)");
                 }
-
-                unlocked = true;
-                vm.Refresh();
-                if (vm.Cards.Count != 1 || vm.Cards[0].Locked)
-                    failures.Add("[castle-plans] after the unlock provider flips, Refresh() still projects a Locked card -- the lock never lifts");
                 vm.Dispose();
-                log.AppendLine("  VM projection: locked-with-real-cost -> unlocked on Refresh OK");
+                log.AppendLine("  VM projection: hidden-until-earned -> appears buildable on Refresh OK");
             }
             catch (Exception ex)
             {

@@ -28,11 +28,10 @@
    "lockedIds": [
     "tower_siege_tower",
     "tower_catapult",
-    "gate_stone"
+    "gate_stone",
+    "tower_arcane_spire"
    ],
-   "visibleLockedIds": {
-    "tower_arcane_spire": "Recover the plans"
-   }
+   "visibleLockedIds": {}
   },
   {
    "buildType": "Walls",
