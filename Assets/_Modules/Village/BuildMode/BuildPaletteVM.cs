@@ -73,6 +73,13 @@ namespace DeNelle.Village
         private BuildGroup? _activeGroup;
         private CatalogType[] _types = { CatalogType.Tower, CatalogType.Gate };
         private HashSet<string> _lockedIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        // WO-1013: id -> lock-reason words (build-categories 'visibleLockedIds'). A row here
+        // RENDERS as a locked card (normal cost + the reason) until _unlockedProvider says its
+        // persisted flag flipped -- checked live at Rebuild time so every Configure/Refresh
+        // re-evaluates without a restart. A DIFFERENT axis from _lockedIds (which hides).
+        private Dictionary<string, string> _visibleLockedReasons =
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        private readonly Func<string, bool> _unlockedProvider;
         private readonly List<StructureCardVM> _cards = new List<StructureCardVM>();
 
         /// <summary>Resolves the live catalog/economy/state handles itself — the ONLY resolution
@@ -86,7 +93,8 @@ namespace DeNelle.Village
                 BuildModeController.FreeBuildAvailable,
                 () => CatalogRegistry.Count,
                 initialType,
-                onClose);
+                onClose,
+                ProgressionUnlocks.IsUnlocked);   // WO-1013 -- the persisted visible-lock gate
 
             // Subscribe the live wallet feeds (both — TrySpend fires OnChanged but not
             // GameState.ResourcesChanged for a Wood/Iron-only spend, and a crystal grant
@@ -104,7 +112,8 @@ namespace DeNelle.Village
             Func<CatalogEntry, bool> freebieProvider,
             Func<int> registryCount,
             BuildType initialType,
-            Action onClose)
+            Action onClose,
+            Func<string, bool> unlockedProvider = null)   // WO-1013 -- optional so the sec-2c tests keep compiling
         {
             _economy = economy;
             _categoryProvider = categoryProvider;
@@ -112,6 +121,9 @@ namespace DeNelle.Village
             _freebieProvider = freebieProvider ?? (_ => false);
             _registryCount = registryCount;
             _onClose = onClose;
+            // Default = the persisted flag store; a null service inside reads as locked,
+            // which is the safe default for a pure-test construction too.
+            _unlockedProvider = unlockedProvider ?? ProgressionUnlocks.IsUnlocked;
 
             _ecoHandler = _ => Raise();
             _stateHandler = Raise;
@@ -169,6 +181,8 @@ namespace DeNelle.Village
             {
                 if (cat.Types != null && cat.Types.Length > 0) _types = cat.Types;
                 _lockedIds = cat.LockedIds ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                _visibleLockedReasons = cat.VisibleLockedReasons
+                    ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             }
             // WO-1010 D21 (owner D8 resolution 2026-08-09): the Walls verb surfaces as the
             // "Castle Structures" DISPLAY category on the right-edge quick-tab stack. Named
@@ -207,6 +221,10 @@ namespace DeNelle.Village
 
             var types = new List<CatalogType>();
             var locked = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            // WO-1013: the visible-lock union mirrors the lockedIds union below -- a row
+            // visible-locked under ANY verb stays visible-locked in the merged group, so a
+            // display regrouping can never quietly promote a gated card to buildable.
+            var visibleLocked = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             foreach (BuildType verb in Enum.GetValues(typeof(BuildType)))
             {
                 var cat = _categoryProvider != null ? _categoryProvider(verb) : null;
@@ -215,6 +233,10 @@ namespace DeNelle.Village
                 if (cat.LockedIds != null)
                     foreach (var id in cat.LockedIds)
                         if (!string.IsNullOrEmpty(id)) locked.Add(id);
+
+                if (cat.VisibleLockedReasons != null)
+                    foreach (var kv in cat.VisibleLockedReasons)
+                        if (!string.IsNullOrEmpty(kv.Key)) visibleLocked[kv.Key] = kv.Value;
 
                 if (cat.Types == null) continue;
                 foreach (var t in cat.Types)
@@ -239,8 +261,10 @@ namespace DeNelle.Village
                 "keeping the previous type set so the palette does not blank.");
 
             _lockedIds = locked;
+            _visibleLockedReasons = visibleLocked;
             FlowTrace.Step("BuildPalette",
-                $"group-configure: group={group} types={string.Join(",", types)} lockedIds={locked.Count}");
+                $"group-configure: group={group} types={string.Join(",", types)} lockedIds={locked.Count} " +
+                $"visibleLocked={visibleLocked.Count}");
             Rebuild();
             Raise();
         }
@@ -252,15 +276,41 @@ namespace DeNelle.Village
         {
             _cards.Clear();
             var entries = _query != null ? _query(_types) : null;
+            List<string> excluded = null;   // WO-948 §12 — the exclusion decision is TRACED, never silent
             if (entries != null)
             {
                 foreach (var e in entries)
                 {
                     if (e == null) continue;
-                    if (e.id != null && _lockedIds.Contains(e.id)) continue;   // unlock-gated
+                    if (e.id != null && _lockedIds.Contains(e.id))
+                    {
+                        // Locked out of THIS verb's palette (build-categories lockedIds):
+                        // unlock-gated rows, and ruling-gated rows like wall_stone (WO-948:
+                        // walls build at L1 only — stone is reached by UPGRADE, never placement).
+                        (excluded ??= new List<string>()).Add(e.id);
+                        continue;
+                    }
+                    // WO-1013: a visible-locked row RENDERS (normal cost + reason words) but
+                    // can never be armed until its persisted unlock flag flips. Checked live
+                    // here so the collection's next Configure/Refresh lifts the lock with no
+                    // restart. Freebie is forced off: the locked card shows its REAL cost.
+                    if (e.id != null && _visibleLockedReasons.TryGetValue(e.id, out var lockReason)
+                        && !(_unlockedProvider != null && _unlockedProvider(e.id)))
+                    {
+                        _cards.Add(new StructureCardVM(e, _economy, false,
+                            locked: true, lockReason: lockReason));
+                        FlowTrace.Step("BuildPalette",
+                            $"palette-visible-locked: id={e.id} reason='{lockReason}' " +
+                            "(rendered, un-armable until the unlock flag flips -- WO-1013)");
+                        continue;
+                    }
                     _cards.Add(new StructureCardVM(e, _economy, _freebieProvider(e)));
                 }
             }
+            if (excluded != null)
+                FlowTrace.Step("BuildPalette",
+                    $"palette-excluded: {excluded.Count} locked id(s) filtered [{string.Join(",", excluded)}] " +
+                    "(build-categories lockedIds; catalog rows survive for save replay/sell)");
             FlowTrace.Step("BuildPalette",
                 $"catalog-count: registry={RegistryCount} cards={_cards.Count} (types={_types.Length})");
         }

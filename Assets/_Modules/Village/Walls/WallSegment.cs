@@ -144,10 +144,52 @@ namespace DeNelle.Village
         /// contact damage by a per-tier toughness factor (~x1.6 effective HP per tier), so a
         /// reinforced wall wears down far slower. The tier accent tint is owned by
         /// StructureTierVisual; this is the gameplay (durability) half of the upgrade.
+        /// WO-948: the tier also pulls its wall HEIGHT from walls.json (targetHeight for
+        /// ladder level tier-1) into the blocker collider — see ApplyTierBlockerHeight.
         /// </summary>
         public void SetTier(int tier)
         {
             _tier = Mathf.Clamp(tier, 1, 3);
+            ApplyTierBlockerHeight();
+        }
+
+        /// <summary>
+        /// WO-948 — data-driven wall height. walls.json authors a targetHeight per ladder
+        /// level (L0 wood 3.0 → L1 stone 3.8 → ...); a tier step raises the blocker collider
+        /// to match, HEIGHT ONLY: for a build-mode placed wall the collider on this root is
+        /// the footprint blocker (BaseLayoutLoader.AddFootprintBlocker), whose X/Z are
+        /// footprint-derived and must never be touched (resizing them re-opens the
+        /// "towers shoot through walls" / pathable-gap class). Ladder level = tier - 1
+        /// (matches the existing toughness semantics, where a placed row's L1 is its base
+        /// tier). No collider = traced no-op (a bare edit-mode test object), never a throw.
+        /// </summary>
+        private void ApplyTierBlockerHeight()
+        {
+            // SCOPE: player build-mode walls ONLY (PlacedStructure marker). SetTier is also
+            // called by the editor bake tools (RaidBaseGenerator :989, PerimeterWallGenerator,
+            // GridWallBuilder), whose walls author their own colliders — a data-height override
+            // there would silently re-size baked raid/perimeter scenes.
+            if (GetComponent<PlacedStructure>() == null) return;
+
+            float h = Walls.WallDefense.TargetHeight(Mathf.Clamp(_tier - 1, 0, 3));
+            if (h <= 0f || Mathf.Approximately(h, _height)) return;
+
+            var box = _blocker != null ? _blocker : GetComponent<BoxCollider>();
+            if (box == null)
+            {
+                FlowTrace.Warn(Sys,
+                    $"WallSegment '{name}' tier {_tier}: no BoxCollider to apply walls.json targetHeight {h:0.0}m to — height unchanged.");
+                return;
+            }
+            _height = h;
+            var size = box.size;
+            var center = box.center;
+            size.y = h;
+            center.y = h * 0.5f;
+            box.size = size;
+            box.center = center;
+            FlowTrace.Step(Sys,
+                $"WallSegment '{name}' tier {_tier}: blocker height -> {h:0.0}m (walls.json targetHeight, level {_tier - 1}; footprint X/Z untouched).");
         }
 
         /// <summary>

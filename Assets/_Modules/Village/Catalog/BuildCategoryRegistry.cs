@@ -43,6 +43,17 @@ namespace DeNelle.Village
         public CatalogType[] Types = Array.Empty<CatalogType>();
         public string Label = "Build";
         public HashSet<string> LockedIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// WO-1013 -- catalog ids rendered VISIBLE-BUT-LOCKED in this verb's palette
+        /// (id -> the lock reason IN WORDS, e.g. "Recover the plans"). A DIFFERENT AXIS
+        /// from <see cref="LockedIds"/>: lockedIds HIDES a row entirely; a row here is
+        /// shown with its normal cost but cannot be armed until its persisted unlock
+        /// flag flips (ProgressionUnlocks, keyed by the catalog id). The reason string
+        /// is player-facing copy -- words carry the state, never colour alone.
+        /// </summary>
+        public Dictionary<string, string> VisibleLockedReasons =
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -75,6 +86,8 @@ namespace DeNelle.Village
             [JsonProperty("label")]        public string Label;
             [JsonProperty("catalogTypes")] public List<CatalogType> CatalogTypes = new List<CatalogType>();
             [JsonProperty("lockedIds")]    public List<string> LockedIds = new List<string>();
+            /// <summary>WO-1013: id -> lock-reason words, rendered as a visible-locked card.</summary>
+            [JsonProperty("visibleLockedIds")] public Dictionary<string, string> VisibleLockedIds;
         }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
@@ -164,6 +177,9 @@ namespace DeNelle.Village
                     LockedIds = row.LockedIds != null
                         ? new HashSet<string>(row.LockedIds, StringComparer.OrdinalIgnoreCase)
                         : new HashSet<string>(StringComparer.OrdinalIgnoreCase),
+                    VisibleLockedReasons = row.VisibleLockedIds != null
+                        ? new Dictionary<string, string>(row.VisibleLockedIds, StringComparer.OrdinalIgnoreCase)
+                        : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
                 };
                 map[row.BuildType] = cat;
             }
@@ -213,6 +229,13 @@ namespace DeNelle.Village
                     {
                         "tower_siege_tower", "tower_catapult", "gate_stone",
                     },
+                    // WO-1013: the Arcane Spire is VISIBLE from minute one but locked in
+                    // words until the Castle Defense Plans are recovered (wave-2 drop).
+                    // Mirrors build-categories.json 'visibleLockedIds'; keep the two in sync.
+                    VisibleLockedReasons = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        { "tower_arcane_spire", "Recover the plans" },
+                    },
                 },
                 [BuildType.Walls] = new BuildCategory
                 {
@@ -223,7 +246,15 @@ namespace DeNelle.Village
                     // CatalogType.Wall rows are unchanged. Mirrors build-categories.json v2
                     // (both copies); keep the two in sync.
                     Label = "Castle Structures",
-                    LockedIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase),
+                    // WO-948 (owner ruling 2026-08-10): walls BUILD at level 1 ONLY — like
+                    // CoC, higher tiers exist only by UPGRADING the placed piece. wall_stone
+                    // is therefore palette-locked (its catalog row survives: existing saves
+                    // replay/sell placed stone walls via BaseLayoutLoader → CatalogRegistry,
+                    // which never consults lockedIds). Mirrors build-categories.json.
+                    LockedIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        "wall_stone",
+                    },
                 },
                 [BuildType.Collector] = new BuildCategory
                 {

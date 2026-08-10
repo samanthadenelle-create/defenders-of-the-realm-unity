@@ -124,6 +124,7 @@ namespace DeNelle.Village.Walls
             [JsonProperty("level")] public int Level;
             [JsonProperty("heartDamageMultiplier")] public float HeartDamageMultiplier = 1f;
             [JsonProperty("spikeDamagePerSecond")]  public float SpikeDamagePerSecond  = 0f;
+            [JsonProperty("targetHeight")]          public float TargetHeight          = 0f;   // WO-948
         }
 
         [System.Serializable]
@@ -137,7 +138,16 @@ namespace DeNelle.Village.Walls
         // read is divergence-free (keep these in sync with walls.json).
         private static float[] s_heartMult = { 1.0f, 0.85f, 0.70f, 0.70f };
         private static float[] s_spikeDps  = { 0f,   0f,    0f,    9f    };
+        private static float[] s_targetHeight = { 3.0f, 3.8f, 4.5f, 5.2f };   // WO-948
         private static bool s_loaded;
+
+        /// <summary>
+        /// WO-948 (owner ruling 2026-08-10): the wall ladder reachable through BUILD MODE tops
+        /// out at STONE (walls.json level 1) — walls build at L1 wood and climb ONE rung via
+        /// the upgrade verb. Steel/Spiked (levels 2..3) are WO-904's, gated behind raid-steal;
+        /// raising this constant is that WO's move, nothing else's.
+        /// </summary>
+        public const int MaxReachableWallLevel = 1;
 
         private static void EnsureLoaded()
         {
@@ -164,15 +174,18 @@ namespace DeNelle.Village.Walls
                 int count = s_heartMult.Length;      // 4 levels (0..3)
                 var hm = new float[count];
                 var sp = new float[count];
-                for (int i = 0; i < count; i++) { hm[i] = s_heartMult[i]; sp[i] = s_spikeDps[i]; } // seed w/ fallback
+                var th = new float[count];
+                for (int i = 0; i < count; i++) { hm[i] = s_heartMult[i]; sp[i] = s_spikeDps[i]; th[i] = s_targetHeight[i]; } // seed w/ fallback
                 foreach (var t in file.Tiers)
                 {
                     if (t == null || t.Level < 0 || t.Level >= count) continue;
                     if (t.HeartDamageMultiplier > 0f) hm[t.Level] = t.HeartDamageMultiplier;
                     sp[t.Level] = Mathf.Max(0f, t.SpikeDamagePerSecond);
+                    if (t.TargetHeight > 0f) th[t.Level] = t.TargetHeight;   // WO-948
                 }
                 s_heartMult = hm;
                 s_spikeDps  = sp;
+                s_targetHeight = th;
                 DeNelle.Core.Diagnostics.FlowTrace.Step("Wall",
                     $"walls.json loaded: {file.Tiers.Count} tiers; heartMult L0..L3 = " +
                     $"{s_heartMult[0]:0.00}/{s_heartMult[1]:0.00}/{s_heartMult[2]:0.00}/{s_heartMult[3]:0.00}, " +
@@ -199,11 +212,94 @@ namespace DeNelle.Village.Walls
             return s_spikeDps[Mathf.Clamp(wallLevel, 0, s_spikeDps.Length - 1)];
         }
 
-        /// <summary>The player's CURRENT wall level (GameState.WallLevel; 0 when no save is up yet).</summary>
+        /// <summary>WO-948 — the wall height (world metres) walls.json authors for a wall level (0..3).</summary>
+        public static float TargetHeight(int wallLevel)
+        {
+            EnsureLoaded();
+            return s_targetHeight[Mathf.Clamp(wallLevel, 0, s_targetHeight.Length - 1)];
+        }
+
+        // ── WO-948: the derived wall level (the heartDamageMultiplier WRITER at last) ──
+        // Before this, GameState.WallLevel had NO gameplay writer (only save-load and reset
+        // touched it), so the walls.json ladder was consumable but never climbable. The level
+        // is now DERIVED from the player's placed walls in GameState.BaseLayout — the weakest
+        // placed wall defines the perimeter (min rule, CoC "your worst wall is the breach"):
+        //   walls.json level of one placed wall = repo.wallTierBase + (placed level - 1)
+        //   (wall_wood L1 -> 0 wood · wall_wood L2 -> 1 stone · legacy wall_stone L1 -> 1)
+        // capped at MaxReachableWallLevel (WO-948; WO-904 lifts). No walls placed = level 0.
+        // Derive-at-read keeps ONE model (no second persisted copy to drift, and placement /
+        // sell / upgrade / load all self-heal); the 1s cache keeps the enemy strike path cheap.
+
+        private static int   s_derivedLevel;
+        private static float s_derivedAt = float.NegativeInfinity;
+        private static int   s_lastTraced = -1;
+
+        /// <summary>
+        /// WO-948 — PURE min-rule derive over (wallTierBase, placedLevel) pairs, exposed so
+        /// the regression can drive it without a live GameState. Empty = 0 (no walls, no
+        /// protection); otherwise min over clamped per-wall levels, capped at
+        /// <see cref="MaxReachableWallLevel"/>.
+        /// </summary>
+        public static int DeriveWallLevel(IEnumerable<(int wallTierBase, int placedLevel)> placedWalls)
+        {
+            if (placedWalls == null) return 0;
+            bool any = false;
+            int min = int.MaxValue;
+            foreach (var w in placedWalls)
+            {
+                any = true;
+                int lvl = Mathf.Clamp(w.wallTierBase + Mathf.Max(1, w.placedLevel) - 1, 0, 3);
+                if (lvl < min) min = lvl;
+            }
+            return any ? Mathf.Min(min, MaxReachableWallLevel) : 0;
+        }
+
+        /// <summary>
+        /// The player's CURRENT wall level: the WO-948 derive over the placed walls in
+        /// GameState.BaseLayout, floored by the persisted GameState.WallLevel (real saves
+        /// persist 0 — the floor exists for dev/test states that set the field directly).
+        /// 0 when no save is up yet.
+        /// </summary>
         public static int CurrentWallLevel()
         {
             var s = DeNelle.Core.State.GameStateService.Instance?.State;
-            return s != null ? Mathf.Clamp(s.WallLevel, 0, s_heartMult.Length - 1) : 0;
+            if (s == null) return 0;
+            int persisted = Mathf.Clamp(s.WallLevel, 0, s_heartMult.Length - 1);
+            return Mathf.Max(persisted, DerivedWallLevel(s));
+        }
+
+        /// <summary>The min-rule derive over the live BaseLayout, cached ~1s (strike-path cheap).</summary>
+        private static int DerivedWallLevel(DeNelle.Core.State.GameState s)
+        {
+            if (s.BaseLayout == null || s.BaseLayout.Count == 0) return 0;
+            if (Application.isPlaying && Time.unscaledTime - s_derivedAt < 1f) return s_derivedLevel;
+
+            bool any = false;
+            int min = int.MaxValue;
+            int walls = 0;
+            foreach (var p in s.BaseLayout)
+            {
+                var e = DeNelle.Core.Catalog.CatalogRegistry.Get(p.itemId);
+                if (e == null || e.type != DeNelle.Core.Catalog.CatalogType.Wall) continue;
+                any = true;
+                walls++;
+                int baseLvl = e.repo != null ? e.repo.wallTierBase : 0;
+                int lvl = Mathf.Clamp(baseLvl + Mathf.Max(1, p.level) - 1, 0, 3);
+                if (lvl < min) min = lvl;
+            }
+            int result = any ? Mathf.Min(min, MaxReachableWallLevel) : 0;
+
+            if (result != s_lastTraced)
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Wall",
+                    $"wall-level derived: {result} from {walls} placed wall(s) (min rule -- the weakest " +
+                    $"placed wall defines the perimeter; cap {MaxReachableWallLevel} per WO-948, WO-904 lifts). " +
+                    $"heartMult now {HeartDamageMultiplier(Mathf.Max(result, Mathf.Clamp(s.WallLevel, 0, 3))):0.00}.");
+                s_lastTraced = result;
+            }
+            s_derivedLevel = result;
+            s_derivedAt = Application.isPlaying ? Time.unscaledTime : float.NegativeInfinity;
+            return result;
         }
 
         /// <summary>Heart-damage multiplier for the player's current wall level (Enemy strike-path convenience).</summary>

@@ -273,6 +273,7 @@
       "id": "wall_wood",
       "displayName": "Wooden Palisade",
       "_heightNote": "2026-08-05 cadence pass: DELIBERATELY LEFT on the 1.0 base (4.0 m) even though a palisade reading at house height is the obvious next thing to lower. heightMul is a UNIFORM scale, so dropping it narrows the wall by the same factor - and every wall in an already-saved town sits on the cell pitch of its OLD claim, so a narrower segment does not re-pitch its neighbours, it opens pathable GAPS in existing runs and shrinks the NavMeshObstacle with it. That is a save-compat break, not a visual tweak. Lowering walls needs a measured StructureHeightAudit run (to state the before/after cell claim) plus a save-migration decision first. See the top-level _heightCadence.",
+      "_wo948Note": "WO-948 (owner ruling 2026-08-10): walls BUILD at L1 (wood) ONLY -- higher tiers exist only by UPGRADING the placed wall, CoC model. maxLevel capped 3->2: the ONE reachable rung is wood->stone (upgradeCost[0] is its price); the old second rung's cost row was REMOVED rather than left dormant -- steel/spiked are WO-904's behind raid-steal and must not be pre-built. upgradeVisualPath[0] swaps a L2 wall to the stone model (walls.json meshStraight paths are kaykit SOURCE paths, not runtime-loadable; the catalog row is the runtime mesh authority). wallTierBase omitted = 0 (wood is the walls.json base rung).",
       "type": "Wall",
       "kind": "Cell",
       "visualPrefabPath": "Structures/Wall_Medieval_Wood",
@@ -285,20 +286,17 @@
           "iron": 0,
           "crystals": 0
         },
-        "maxLevel": 3,
+        "maxLevel": 2,
         "upgradeCost": [
           {
             "wood": 20,
             "food": 0,
             "iron": 20,
             "crystals": 0
-          },
-          {
-            "wood": 15,
-            "food": 0,
-            "iron": 45,
-            "crystals": 0
           }
+        ],
+        "upgradeVisualPath": [
+          "Structures/Wall_Medieval_Stone"
         ],
         "navSurface": "Blocker",
         "placement": {
@@ -329,6 +327,7 @@
       "id": "wall_stone",
       "displayName": "Stone Wall",
       "_heightNote": "2026-08-05 cadence pass: LEFT on the 1.0 base for the same save-compat reason as wall_wood - see that row's _heightNote and the top-level _heightCadence.",
+      "_wo948Note": "WO-948 (owner ruling 2026-08-10): PALETTE-LOCKED (build-categories.json Walls lockedIds) -- walls build at L1 wood only; stone is reached by upgrading a placed wood wall. This ROW SURVIVES so existing saves replay/sell placed stone walls (BaseLayoutLoader resolves via CatalogRegistry, which never consults the palette). maxLevel 3->1: a legacy placed stone wall already sits AT the stone rung; deeper rungs (steel/spiked) are WO-904's behind raid-steal, so its upgradeCost table was removed. wallTierBase 1 = its walls.json ladder level (Stone) -- the WallDefense heart-mitigation derive reads it.",
       "type": "Wall",
       "kind": "Cell",
       "visualPrefabPath": "Structures/Wall_Medieval_Stone",
@@ -341,21 +340,8 @@
           "iron": 60,
           "crystals": 0
         },
-        "maxLevel": 3,
-        "upgradeCost": [
-          {
-            "wood": 30,
-            "food": 0,
-            "iron": 40,
-            "crystals": 0
-          },
-          {
-            "wood": 30,
-            "food": 0,
-            "iron": 70,
-            "crystals": 0
-          }
-        ],
+        "maxLevel": 1,
+        "wallTierBase": 1,
         "navSurface": "Blocker",
         "placement": {
           "mustSitOn": "Ground",

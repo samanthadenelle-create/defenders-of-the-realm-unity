@@ -100,6 +100,18 @@ namespace DeNelle.Core.Catalog
         /// </summary>
         public string[] upgradeTexturePath = null;
 
+        /// <summary>
+        /// WO-948 — for a <c>CatalogType.Wall</c> row: the walls.json ladder level this row's
+        /// LEVEL-1 placement corresponds to (0 = Wooden Fence, 1 = Stone, 2 = Steel, 3 = Spiked
+        /// Steel). A placed wall at upgrade level L sits at walls.json level
+        /// <c>wallTierBase + (L - 1)</c> — this is what lets the heart-mitigation derive
+        /// (Village <c>WallDefense</c>) read a legacy placed <c>wall_stone</c> (base 1) and a
+        /// wood wall upgraded to stone (base 0, L2) as the SAME ladder rung without an id list.
+        /// Default 0 (a wall row that omits it is the wood base tier); ignored by every
+        /// non-Wall row. JSON deserializes the optional "wallTierBase" straight in.
+        /// </summary>
+        public int wallTierBase = 0;
+
         /// <summary>Village resolves this string -> the actual behaviour component (Core stays pure).</summary>
         public string behaviorId = null;
 
