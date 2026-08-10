@@ -10,7 +10,7 @@ namespace DeNelle.Editor
     ///
     /// WHY THIS EXISTS: the 2026-08-09 gate-integrity bug shipped because the gate
     /// had only ever been verified in the GREEN direction. Builds/chrome-compile.log
-    /// carries COMPILE_GATE_OK (line 4803) alongside 54 "error CS" lines (3681+).
+    /// carries the OK marker (line 4803) alongside 54 "error CS" lines (3681+).
     /// A gate nobody has ever watched go red is not a gate.
     ///
     /// WHY IT REPLAYS A LOG INSTEAD OF BREAKING THE TREE (measured, not assumed -
@@ -40,7 +40,7 @@ namespace DeNelle.Editor
     /// Run it exactly like the gate:
     ///   run-unity-method.ps1 -Method DeNelle.Editor.CompileGateSelfTest.RunRedTest
     /// PASS == the log contains SELF_TEST_RED_OK (plus COMPILE_GATE_FAIL, and no
-    /// COMPILE_GATE_OK from the replay).
+    /// the OK marker from the replay).
     /// </summary>
     public static class CompileGateSelfTest
     {
@@ -83,7 +83,7 @@ namespace DeNelle.Editor
 
             if (green)
             {
-                Debug.LogError("SELF_TEST_RED_FAIL :: the gate printed COMPILE_GATE_OK for a log " +
+                Debug.LogError("SELF_TEST_RED_FAIL :: the gate printed the OK marker for a log " +
                                "carrying 54 compile errors. The 2026-08-09 bug is BACK.");
             }
             else
