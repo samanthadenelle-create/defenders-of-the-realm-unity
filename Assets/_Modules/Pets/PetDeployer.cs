@@ -616,8 +616,17 @@ namespace DeNelle.Pets
             var prefab = Resources.Load<GameObject>("Pets/" + def.Species);
             if (prefab == null)
             {
-                FlowTrace.Step("Pets",
-                    $"TryLoadPetMesh: no mesh at Resources/Pets/{def.Species} — caller uses the billboard fallback (R).");
+                // WARN, not Step (WO-961): a missing body is the exact defect that let the FTUE ship a
+                // "Follow {guide} to the gate" beat with NOTHING in the world to follow — the grant wrote
+                // a roster entry + StarterPetId and the world stayed empty, and the only trace was a Step
+                // that never reached the errors-only break-log. A species that resolves no mesh is a
+                // fail-VISIBLE condition; the billboard fallback is the recovery, not the expectation.
+                // Names the exact key so the fix is one look: EXACTLY ONE asset must answer this path
+                // (a .fbx and a same-stem .prefab in one Resources folder is ambiguous).
+                FlowTrace.Warn("Pets",
+                    $"TryLoadPetMesh: NO BODY at Resources/Pets/{def.Species} — caller falls back to the " +
+                    "billboard (R). FIX (asset): ship exactly ONE GameObject asset answering " +
+                    $"Resources.Load<GameObject>(\"Pets/{def.Species}\").");
                 return null;
             }
             return Instantiate(prefab);

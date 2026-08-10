@@ -1324,19 +1324,47 @@ namespace DeNelle.Village
         //  WO-702 — grant.starterPet (the Echo Hollow's reward: the pet emerges)
         // =====================================================================
 
-        /// <summary>Starter pet species the founding-arc Hollow placement grants --
-        /// "aether-sprite", the ETHEREAL SPIRIT (owner call 2026-07-16: the founding
-        /// Echo must read as an ethereal spirit, NOT the quadruped ice-wolf that
-        /// T-posed). Of the three starter models this is the only ethereal/spirit one
-        /// (element "aether", archetype "Heart-Ward", fairy/sprite body) and the only
-        /// HUMANOID rig (AccuRig CC_Base_* skeleton) -- so a humanoid idle controller
-        /// dropped at Resources/Pets/aether-sprite.controller (or the shared
-        /// Resources/Pets/PetIdle.controller) binds via PetDeployer.WirePetAnimator
-        /// and settles it out of the bind pose. The floating-spirit hover/drift/aura
-        /// (EchoSpiritPresentation) reads ethereal even before that idle exists.
-        /// PetSelect is bypassed under ff.bypasspetselect, so this default is what the
-        /// founding Echo becomes.</summary>
-        private const string StarterPetSpecies = "aether-sprite";
+        /// <summary>Starter pet species the founding-arc grant applies -- "ice-wolf".
+        ///
+        /// ⚠ THREE OWNER RULINGS LIVE ON THIS ONE CONSTANT. None is deleted, because each was
+        /// right when it was made and the reasons are what a future session needs:
+        ///   1. 2026-07-16 -- "aether-sprite, the ETHEREAL SPIRIT, NOT the quadruped ice-wolf
+        ///      that T-posed." The T-pose was real, and its cause is now known: the pets are
+        ///      AccuRig CC_Base HUMAN bipeds IMPORTED AS GENERIC (animationType 2, avatarSetup 0),
+        ///      so Unity built no avatar and nothing retargeted. And the "ice-wolf" asset was not
+        ///      even a wolf -- object "fox", mesh Coyote_Mesh, a coyote skinned to a human
+        ///      skeleton. Both halves of that ruling were sound.
+        ///   2. 2026-07-17 -- "Echoes are portrait-card spirits, NOT 3D models." See the birth
+        ///      site below; that ruling STILL STANDS for the roster and is deliberately NOT
+        ///      reversed here.
+        ///   3. 2026-08-10 -- "we should have Ice wolf" / "owners decision to switch", reaffirmed.
+        ///      What changed materially: a real QUADRUPED wolf rig with five baked clips
+        ///      (idle2 / running / sniffing / default / fallen) now ships in-tree, so ruling 1's
+        ///      technical objection is GONE -- there is nothing left to T-pose. The body loads
+        ///      from Resources/Pets/ice-wolf.prefab with Resources/Pets/ice-wolf.controller,
+        ///      which is PetDeployer's FIRST controller probe.
+        ///
+        /// Canon agrees: the guide's identity is "Aldwin, the Ice Echo" wearing the
+        /// Echoes/Portraits/Frosthowl portrait, and Frosthowl IS the ice wolf -- so the soul the
+        /// unlock card names and the body the player follows are finally the same animal.
+        /// (WO-961.)</summary>
+        /// <remarks>
+        /// RETIRED 2026-07-16 REASONING, kept verbatim so ruling 1 survives its own reversal:
+        /// "aether-sprite", the ETHEREAL SPIRIT (owner call 2026-07-16: the founding Echo must
+        /// read as an ethereal spirit, NOT the quadruped ice-wolf that T-posed). Of the three
+        /// starter models this is the only ethereal/spirit one (element "aether", archetype
+        /// "Heart-Ward", fairy/sprite body) and the only HUMANOID rig (AccuRig CC_Base_*
+        /// skeleton) -- so a humanoid idle controller dropped at
+        /// Resources/Pets/aether-sprite.controller (or the shared Resources/Pets/PetIdle.controller)
+        /// binds via PetDeployer.WirePetAnimator and settles it out of the bind pose. The
+        /// floating-spirit hover/drift/aura (EchoSpiritPresentation) reads ethereal even before
+        /// that idle exists. PetSelect is bypassed under ff.bypasspetselect, so this default is
+        /// what the founding Echo becomes.
+        /// CORRECTION to that text, verified at source 2026-08-10: "the ONLY humanoid rig" is
+        /// wrong on the word ONLY -- ice-wolf.fbx carried the identical CC_Base skeleton. Both
+        /// were imported Generic, which is why neither ever had an avatar.
+        /// </remarks>
+        private const string StarterPetSpecies = "ice-wolf";
 
         /// <summary>
         /// Grants the starter pet — since WO-1012 P2 (owner re-ruling 2026-08-09) on
@@ -1383,14 +1411,59 @@ namespace DeNelle.Village
                     ? def.Id : "pet-" + StarterPetSpecies;
             }
 
-            // 2) SCRAPPED (owner felt-test 2026-07-17): "Echoes are portrait-card spirits, NOT
-            // 3D models -- scrap giving them a model." The founding-echo VISIBLE BIRTH (the
-            // PetDeployer.SummonAt aether-sprite body + the EchoSpiritPresentation floating-spirit
-            // layer, PO's superseded 2026-07-16 call) is retired -- the founding Echo now awakens
-            // as a PORTRAIT CARD (EchoUnlockDialogue) and lives in the pet roster (EchoRosterView),
-            // no 3D echo body in the world. The DATA grant below (StarterPetId + roster Acquire) is
-            // UNCHANGED, and the abstract EchoService silo/workforce is untouched.
-            FlowTrace.Step("Tutorial", $"step '{step.Id}' grant.starterPet — visible echo MODEL birth SCRAPPED (echoes are portrait cards now); roster grant + StarterPetId still applied.");
+            // 2) THE GUIDE'S BODY — restored 2026-08-10 (WO-961), NARROWLY.
+            //
+            // HISTORY, both rulings intact: on 2026-07-17 the owner ruled "Echoes are portrait-card
+            // spirits, NOT 3D models -- scrap giving them a model", which retired the SummonAt body
+            // AND the EchoSpiritPresentation floating-spirit layer. THAT RULING STILL STANDS FOR THE
+            // ROSTER: echoes awaken as portrait cards (EchoUnlockDialogue) and live in EchoRosterView.
+            // Nothing here re-introduces a menagerie of 3D pets.
+            //
+            // WHY THE GUIDE IS THE EXCEPTION: WO-1012's beat 2 instructs the player, in words, to
+            // "Follow {guide} to the gate". With no body, world.guide fell down its resolution chain
+            // to the Sylas steward NPC -- the owner's F8 seq 2304, whose entire message was "npc".
+            // A step cannot tell the player to follow something that was ruled out of existence. So
+            // exactly ONE Echo -- the founding guide -- gets a world body, and only because a beat
+            // points at it.
+            //
+            // The body is the WO-961 ice wolf (Resources/Pets/ice-wolf.prefab + ice-wolf.controller,
+            // a real quadruped rig with its own idle/run clips). EchoSpiritPresentation is
+            // deliberately NOT re-enabled: it existed to MASK the sprite's missing idle, and a
+            // hovering wolf is wrong.
+            //
+            // SummonAt reuses a live summon, so this is idempotent across a re-entered beat. The
+            // DATA grant below (StarterPetId + roster Acquire) is UNCHANGED -- it was never what
+            // broke -- and the abstract EchoService silo/workforce is untouched.
+            //
+            // NOTE ON THE LOOKUP (corrected 2026-08-10 during implementation): there is NO
+            // PetDeployer.Instance -- PetDeployer is a plain MonoBehaviour with no singleton
+            // accessor (see Assets/_Modules/Pets/PetDeployer.cs:29). Resolving it that way does not
+            // compile, so this uses the SAME self-heal every other caller uses
+            // (DialogueCommandSink.EnsurePetDeployer / EchoAutoDeployTrigger.EnsurePetDeployer):
+            // find one, and build a configured one if the scene ships none. The hub CAN ship
+            // without a deployer, and a null here is exactly the silent no-body this ticket exists
+            // to kill.
+            var deployer = EnsureGuidePetDeployer();
+            if (deployer == null)
+            {
+                FlowTrace.Warn("Tutorial", $"step '{step.Id}' grant.starterPet — no PetDeployer, so the guide has NO BODY " +
+                    "and 'Follow {guide}' will fall through to the steward stand-in. Data grant still applied.");
+            }
+            else
+            {
+                Vector3 birthPos = transform != null ? transform.position : Vector3.zero;
+                if (TutorialWorldAnchors.TryResolveAnchor("guide_anchor", out Vector3 anchorPos)) birthPos = anchorPos;
+
+                var body = Guard.Try("Tutorial", "summon the founding guide's body",
+                    () => deployer.SummonAt(birthPos), null);
+
+                if (body != null)
+                    FlowTrace.Step("Tutorial", $"step '{step.Id}' grant.starterPet — guide BODY summoned ('{StarterPetSpecies}') at {birthPos} " +
+                        "(WO-961: exactly one Echo has a world body, because a beat says to follow it; the roster stays portrait cards).");
+                else
+                    FlowTrace.Warn("Tutorial", $"step '{step.Id}' grant.starterPet — guide body NOT summoned (species '{StarterPetSpecies}'); " +
+                        "'Follow {guide}' will resolve to the steward stand-in. Check Resources/Pets/ice-wolf.prefab resolves.");
+            }
 
             // 3) Roster grant (the single funnel — Acquire saves, covering StarterPetId too).
             var petSvc = DeNelle.Pets.PetAcquisitionService.Instance;
@@ -1410,9 +1483,56 @@ namespace DeNelle.Village
         // ResolveHollowPosition() REMOVED (F8 seq 632 sweep, 2026-08-02): it existed only to
         // anchor the PetDeployer.SummonAt "visible birth" of the founding Echo at the placed
         // Hollow. That birth was SCRAPPED on 2026-07-17 (echoes are portrait cards, not 3D
-        // models — see ApplyStarterPetGrant step 2), leaving this method with ZERO callers.
-        // Dead code in a flow this load-bearing reads as a live path and mis-teaches the next
-        // reader; it is gone. The Hollow BUILDING itself is untouched and still real.
+        // models), leaving this method with ZERO callers. Dead code in a flow this load-bearing
+        // reads as a live path and mis-teaches the next reader; it is gone. The Hollow BUILDING
+        // itself is untouched and still real.
+        //
+        // STILL GONE after WO-961 (2026-08-10), and deliberately: the guide's body is BACK (see
+        // ApplyStarterPetGrant step 2) but it is NOT born at the Hollow any more. WO-1012 P2 moved
+        // the grant to the ENTER of the ARRIVE beat, where the guide wakes AT THE HEART, before any
+        // Hollow has been placed. The birth position now comes from the "guide_anchor" resolver
+        // (TutorialWorldAnchors:218/243), which is the same anchor the beat's own copy points the
+        // player at -- so the body and the objective can never disagree about where the guide is.
+        // Do NOT resurrect a Hollow-relative position; it would put the body where the beat isn't.
+
+        /// <summary>
+        /// The PetDeployer that gives the founding guide its body (WO-961) -- found, or built if the
+        /// scene ships none. Mirrors <c>DialogueCommandSink.EnsurePetDeployer</c> /
+        /// <c>EchoAutoDeployTrigger.EnsurePetDeployer</c> rather than inventing a fourth spelling:
+        /// Heart-centred, project "Enemy" layer mask, bond ranks off the save.
+        /// <para/>
+        /// This exists because <c>PetDeployer</c> has NO singleton accessor. Returns null only if the
+        /// component could not be created at all; every caller must treat null as "no body" and say so.
+        /// </summary>
+        private DeNelle.Pets.PetDeployer EnsureGuidePetDeployer()
+        {
+            var deployer = FindAnyObjectByType<DeNelle.Pets.PetDeployer>();
+            if (deployer != null) return deployer;
+
+            var go = new GameObject("PetDeployer");
+            deployer = go.AddComponent<DeNelle.Pets.PetDeployer>();
+            if (deployer == null) return null;
+
+            Vector3 heartPos = Vector3.zero;
+            var heart = FindAnyObjectByType<HeartController>();
+            if (heart != null) heartPos = heart.transform.position;
+            deployer.SetHeartPosition(heartPos);
+
+            int enemyLayer = LayerMask.NameToLayer("Enemy");
+            deployer.SetEnemyMask(enemyLayer >= 0 ? (1 << enemyLayer) : ~0);
+
+            var svc = GameStateService.Instance;
+            var bonds = svc != null && svc.State != null ? svc.State.PetBonds : null;
+            if (bonds != null)
+                deployer.SetBondRanks(bonds.Count > 0 ? bonds[0] : 0,
+                                      bonds.Count > 1 ? bonds[1] : 0,
+                                      bonds.Count > 2 ? bonds[2] : 0);
+
+            FlowTrace.Step("Tutorial",
+                $"guide body: no PetDeployer in the scene - built one at heart={heartPos} " +
+                "(self-heal, same shape as DialogueCommandSink/EchoAutoDeployTrigger).");
+            return deployer;
+        }
 
         // =====================================================================
         //  WO-T4 — scripted town wave (spec step 4: horn blast, no Start-Wave press)

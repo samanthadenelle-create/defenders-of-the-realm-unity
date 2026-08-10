@@ -1,10 +1,37 @@
 # WO-961 — The founding Echo guide gets a BODY, and it is the Ice Wolf
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE (implemented + gated 2026-08-10, REGRESSION_OK 146/146; owner felt-verify owed: does the wolf walk, sit at the right scale and face the right way)
 **Date:** 2026-08-10 · **Priority:** HIGH (the FTUE's second beat tells the player to follow something that does not exist)
 **Block:** main line (CLI) · **Lane:** Tutorial / Pets / art-rig
 **Owner ruling 2026-08-10:** *"we should have Ice wolf"* + *"under pets"* +
 `D:\eoa\Assets\Resources\Pets\ice-wolf.fbx`
+
+## §0 ⚠ THERE ARE THREE RULINGS IN THIS CHAIN, NOT TWO — and two of yours contradict each other
+
+Surfaced 2026-08-10 while reading the scrapped birth site (`TutorialFlow.cs:1386-1393`). The species
+pick is the SMALLER of the two reversals this WO carries:
+
+| Date | Ruling | Where it lives |
+|---|---|---|
+| **2026-07-16** | the founding Echo must read as an ethereal spirit, **NOT the quadruped ice-wolf that T-posed** | `TutorialFlow.cs:1307-1319` |
+| **2026-07-17** | *"Echoes are portrait-card spirits, NOT 3D models — scrap giving them a model."* The visible birth (`PetDeployer.SummonAt` + the `EchoSpiritPresentation` floating-spirit layer) was **retired entirely** | `TutorialFlow.cs:1386-1393` |
+| **2026-08-10** | *"we should have Ice wolf"*, *"owners decision to switch"*, reaffirmed | this WO |
+
+**The 07-17 ruling and the WO-1012 tutorial contradict each other, and that contradiction IS the
+defect.** WO-1012's beat 2 (authored 2026-08-10) says **"Follow {guide} to the gate"** — an instruction
+that requires a body — while 07-17 had removed every Echo body from the world. So the guide falls down
+its resolution chain to the **Sylas steward NPC**, which is exactly what the owner flagged in F8 seq
+2304 with the single word **"npc"**.
+
+### The scope call (recommended, owner may override in one word)
+
+**NARROW.** Restore a world body for the **tutorial guide only**, because a beat instructs the player to
+follow it. **Echoes in the roster stay portrait cards** — the 07-17 intent (no menagerie of 3D pets)
+is preserved everywhere else. The alternative, broad reading — every Echo gets a body again — is a much
+larger change to the Echo pillar and is NOT what the F8 asked for.
+
+⚠ Do **not** re-enable `EchoSpiritPresentation`'s floating-spirit layer on the wolf: it existed to MASK
+the aether-sprite's missing idle, and a hovering wolf is wrong. The wolf's own clips replace it.
 
 ## §1 What is actually wrong (captured, not inferred)
 
@@ -63,7 +90,25 @@ The unlock card in the owner's own session reads `[Flow:Echo] unlock card: 'I ac
 id=echo-frosthowl`. **Frosthowl IS the ice wolf.** Today the soul granted (Frosthowl) and the body
 configured (aether-sprite) are different animals; this ticket makes them the same one.
 
-## §4.0 DECIDE THIS FIRST — one capture settles it, and it may cost nothing
+## §3.5 THE BODY IS SOURCED — provenance, recorded here permanently
+
+**2026-08-10, owner-supplied:** `simple_wolf.unitypackage` (3.4 MB, 15 assets), imported to
+`Assets/Animals/Low Poly Animals/`. Ships a **real quadruped rig** with five baked clips
+(`wolf_rig|default`, `idle2`, `running`, `sniffing`, `fallen`), a matching `simple_wolf.controller`,
+`Simple Wolf.mat` and three textures (color / normal / ao). This SETTLES §4.0: **Path B without the
+cost** — a genuine animal rig, already animated, so neither the biped retarget nor a commission is
+needed. The fox mesh is not used.
+
+- **Source:** https://www.cgtrader.com/items/1947050/download-page (CGTrader), owner-downloaded.
+- **Licence — OWNER RULING 2026-08-10, reaffirmed: "it is free no license." CLEARED TO SHIP.**
+  The question was raised once (the package carries no LICENSE/README file, and the CGTrader page is
+  behind a login so it could not be read from the CLI) and the owner ruled. **It is decided — do not
+  re-open it at the next audit, and do not re-raise it in a future session.** Recorded here precisely so
+  the next seat inherits the ruling instead of re-litigating it from the missing file.
+- Provenance kept above for the same reason the WO-760 dragon replacement is documented: if the asset is
+  ever swapped, the next seat knows exactly what came from where.
+
+## §4.0 SETTLED BY §3.5 — kept as the reasoning, in case the wolf is ever replaced
 
 Owner asked (2026-08-10): *"if easier i can get an animal rig but simple is better right?"* Simple is
 better — but simple means the path that ENDS UP RIGHT, not the fewest steps. There are two, and one
