@@ -41,6 +41,150 @@ using CoreWavePhase = DeNelle.Core.HudModel.WavePhase;
 
 namespace DeNelle.Village.Hud
 {
+    // ── Hero class resolution (WO-967) ────────────────────────────────────────
+
+    /// <summary>
+    /// THE one place the HUD asks "what class is the hero?" — WO-967.
+    ///
+    /// PRECEDENCE (deliberately the SAME shape GearLoadout.CurrentJob was fixed to under
+    /// F8 seq-642, GearLoadout.cs:1251-1307 — one spelling of this question in the tree,
+    /// not four):
+    ///   1. the hero's LIVE HeroAbilities class;
+    ///   2. the PERSISTED GameState.HeroClass — the SAME source HeroBodySwapper.ResolveHeroClass
+    ///      trusts to build the BODY, so the bar can never disagree with the body;
+    ///   3. a producer's own last-resolved class (presentation memory only — see below);
+    ///   4. AbilityCatalog.DefaultClass, and ONLY with a FlowTrace.Warn.
+    ///
+    /// WHY STEP 2 EXISTS (F8 seq 2312, PROVEN from source, WO-967). A composed dungeon hero
+    /// carries NO HeroAbilities: DungeonBaker.PopulateForPlay attaches only HeroLocomotion +
+    /// HeroBodySwapper (DungeonBaker.cs:1168-1187), and HeroControlEnsurer.EnsureHeroCombatComponents
+    /// provisions nine components and never that one — while HeroControlEnsurer.Ensure's IsVillageScene
+    /// gate fails every dg_* scene. So FindAnyObjectByType&lt;HeroAbilities&gt;() returned null in every
+    /// dungeon and THREE hand-written "knight" string literals in this file (the old :87, :139, :392)
+    /// asserted the Knight kit. The owner, playing a MAGE, got Sword Heroic / Shield Charge /
+    /// Warden's Grace / Radiant Strike on her bar in Dungeon_HealersCottage, verbatim:
+    /// "in dungeon i have the knights action bar loading". The body and animator were correctly Mage
+    /// in the same capture ([Flow:HeroLoco] ... avatar=MageAvatar | controller=Mage) — only the HUD
+    /// was inventing a class.
+    ///
+    /// THIS IS THE SECOND TIME THIS EXACT DEFECT SHIPPED. GearLoadout.CurrentJob had it under
+    /// F8 seq-642: it armed a KNIGHT body with a Mage staff and cloth robes AND CORRUPTED A SAVE
+    /// SLOT THE PLAYER NEVER PLAYED (every persisted equip written under the wrong "-mage" key).
+    /// It was fixed there with exactly this persisted-class step; this reader never got it.
+    ///
+    /// WHY THE CACHE IS STEP 3, NOT STEP 2 (a deliberate, documented refinement of WO-967 §4,
+    /// which listed it second): the cache is a PRESENTATION field — a producer's memory of what it
+    /// last resolved. Per the architecture law, presentation never owns game state, so the state
+    /// layer must out-rank presentation memory. In every real flow the two agree (the cache was
+    /// itself seeded from the state), so this is behaviour-identical today; it only differs when
+    /// they DISAGREE, and there the persisted state is the truth by definition (it is what the
+    /// BODY was built from). The cache remains as the last memory before the loud default.
+    ///
+    /// EVERY STEP SELF-REPORTS ITS SOURCE. Before WO-967 this whole layer was silent: a repo-wide
+    /// grep of the owner's live Player.log + break-log.jsonl for the Knight skill names, "Thrain",
+    /// "HeroAbilities" and "CombatArc" returned ZERO hits, which is why only her eyes could catch
+    /// this. Per CLAUDE.md §12 these traces are PERMANENT — flag them off when the system is proven,
+    /// never strip them.
+    ///
+    /// PUBLIC on purpose: DeNelle.Editor.Regression.HudHeroClassFallbackRegression pins the
+    /// precedence behaviourally (the producers themselves are internal).
+    /// </summary>
+    public static class HudHeroClassResolver
+    {
+        /// <summary>Provenance label: the class came off a live HeroAbilities component.</summary>
+        public const string SourceLive = "HeroAbilities(live)";
+        /// <summary>Provenance label: the class came off the persisted GameState.HeroClass.</summary>
+        public const string SourcePersisted = "GameState(persisted)";
+        /// <summary>Provenance label: the class came off the producer's own last-resolved value.</summary>
+        public const string SourceCache = "hud-cache";
+        /// <summary>Provenance label: NOTHING answered — AbilityCatalog.DefaultClass was assumed.</summary>
+        public const string SourceDefault = "catalog-default";
+
+        /// <summary>
+        /// The hero's class id for HUD display. See the type doc for the precedence and why.
+        /// Never returns null or empty; never returns a hardcoded class literal.
+        /// </summary>
+        public static string Resolve(HeroAbilities abilities, string cached = null)
+        {
+            return Resolve(abilities, cached, out _);
+        }
+
+        /// <summary>
+        /// As <see cref="Resolve(HeroAbilities,string)"/>, and reports WHICH source answered
+        /// (one of the Source* constants) so a trace can name the provenance, not just the class.
+        /// </summary>
+        public static string Resolve(HeroAbilities abilities, string cached, out string source)
+        {
+            // Unity's implicit bool covers both a plain null and a destroyed-but-non-null component.
+            string live = abilities ? abilities.HeroClass : null;
+            return ResolveFrom(live, PersistedPlayerJob(), cached, out source);
+        }
+
+        /// <summary>
+        /// The pure precedence — no Unity objects, no singletons, so the regression can prove the
+        /// ORDER headlessly (a live GameStateService cannot be stood up in a batch run without
+        /// touching the player's real save). Every runtime caller reaches this through
+        /// <see cref="Resolve(HeroAbilities,string,out string)"/>.
+        /// </summary>
+        public static string ResolveFrom(string liveClass, string persistedJob, string cached, out string source)
+        {
+            if (!string.IsNullOrEmpty(liveClass)) { source = SourceLive; return liveClass; }
+
+            if (!string.IsNullOrEmpty(persistedJob))
+            {
+                source = SourcePersisted;
+                // Not a Warn: this is the CORRECT answer for any hero built without a HeroAbilities
+                // component (every composed dungeon). Once-per-key so a run logs it exactly once
+                // instead of at the producer's 5x/sec poll rate.
+                DeNelle.Core.Diagnostics.FlowTrace.Once("HudModel", "class-from-gamestate-" + persistedJob,
+                    "HUD hero class: no live HeroAbilities (composed dungeon hero) - resolved '" + persistedJob +
+                    "' from the PERSISTED GameState.HeroClass, NOT a hardcoded class. Hero identity: '" +
+                    DeNelle.Core.State.HeroCanonNames.ForJob(persistedJob) + "' (en.json hero." + persistedJob + ".name).");
+                return persistedJob;
+            }
+
+            if (!string.IsNullOrEmpty(cached))
+            {
+                source = SourceCache;
+                DeNelle.Core.Diagnostics.FlowTrace.Once("HudModel", "class-from-hudcache-" + cached,
+                    "HUD hero class: no live HeroAbilities AND no persisted GameState.HeroClass - falling " +
+                    "back to this producer's LAST-RESOLVED class '" + cached + "'. That is presentation " +
+                    "memory, not state: it is right only while the class has not changed. Fix the SOURCE " +
+                    "(persist the hero class) rather than relying on this line.");
+                return cached;
+            }
+
+            source = SourceDefault;
+            DeNelle.Core.Diagnostics.FlowTrace.Warn("HudModel",
+                "HUD hero class: NO HeroAbilities, NO persisted GameState.HeroClass and no cached class - " +
+                "falling back to AbilityCatalog.DefaultClass ('" + AbilityCatalog.DefaultClass + "'). The " +
+                "ability bar, the nameplate AND the party card all key off that class, so if the hero is not " +
+                "a " + AbilityCatalog.DefaultClass + " every one of those surfaces is LYING to the player. " +
+                "A silent wrong-class default is exactly what put a Knight bar on a Mage (WO-967) and what " +
+                "corrupted a save slot in GearLoadout (F8 seq-642). Fix the SOURCE - do not treat this line " +
+                "as normal.");
+            return AbilityCatalog.DefaultClass;
+        }
+
+        /// <summary>
+        /// The lowercase job key for the PERSISTED player class, or null when no class has been
+        /// chosen / no save service is up. Byte-identical to GearLoadout.PersistedPlayerJob and to
+        /// HeroBodySwapper.ResolveHeroClass's source, mapped through DeNelle.Core.State.PlayableHeroes.JobKey
+        /// — the same key weapons.json `job`, the armor weight-class lookup and the per-class
+        /// PlayerPrefs slots use, so the bar, the body and the gear can never key off different strings.
+        ///
+        /// FULLY QUALIFIED ON PURPOSE (including the extension method, called statically): importing
+        /// DeNelle.Core.State here would shadow DeNelle.Village names used throughout this file.
+        /// </summary>
+        private static string PersistedPlayerJob()
+        {
+            var svc = DeNelle.Core.State.GameStateService.Instance;
+            if (svc == null || svc.State == null) return null;
+            var opt = DeNelle.Core.State.HeroClassOptExtensions.ToNullable(svc.State.HeroClass);
+            return opt.HasValue ? DeNelle.Core.State.PlayableHeroes.JobKey(opt.Value) : null;
+        }
+    }
+
     // ── HeroVitals ────────────────────────────────────────────────────────────
 
     /// <summary>
@@ -84,7 +228,9 @@ namespace DeNelle.Village.Hud
             int xp      = _prog != null ? Mathf.RoundToInt(_prog.Xp) : _xp;
             int xpToNext= _prog != null ? Mathf.RoundToInt(_prog.XpToNext) : _xpToNext;
             int level   = _prog != null ? _prog.Level : _level;
-            string cls  = _abilities != null && !string.IsNullOrEmpty(_abilities.HeroClass) ? _abilities.HeroClass : (_classId ?? "knight");
+            // WO-967: ask the state layer, never assert a class. `_classId` is this producer's
+            // sticky last-resolved value and is now the THIRD step, below the persisted state.
+            string cls  = HudHeroClassResolver.Resolve(_abilities, _classId);
             // P4: unspent Wisdom straight off the service (Village -> Village, no reflection).
             // Singleton is Bootstrap-created; keep the last value while it is not up yet.
             var wis = DeNelle.Village.Talents.WisdomCurrencyService.Instance;
@@ -136,7 +282,10 @@ namespace DeNelle.Village.Hud
                 int maxHp = _health != null ? Mathf.CeilToInt(Mathf.Max(1f, _health.MaxHp)) : 1;
                 int mana = _abilities != null ? Mathf.RoundToInt(_abilities.Mana) : 0;
                 int maxMana = _abilities != null ? Mathf.RoundToInt(_abilities.MaxMana) : 0;
-                string cls = _abilities != null && !string.IsNullOrEmpty(_abilities.HeroClass) ? _abilities.HeroClass : "knight";
+                // WO-967: was a hardcoded "knight" literal — the party card slot 0 named the wrong
+                // class (and therefore the wrong portrait/kit) for every hero without a live
+                // HeroAbilities. Same resolver as the vitals + ability producers.
+                string cls = HudHeroClassResolver.Resolve(_abilities);
                 bool alive = _health == null || _health.IsAlive;
                 members.Add(new PartyMemberRecord("Hero", cls, hp, maxHp, mana, maxMana, cls, alive, true));
             }
@@ -389,7 +538,11 @@ namespace DeNelle.Village.Hud
         {
             if (_abilities == null || !_abilities) _abilities = Object.FindAnyObjectByType<HeroAbilities>();
 
-            string cls = _abilities != null && !string.IsNullOrEmpty(_abilities.HeroClass) ? _abilities.HeroClass : "knight";
+            // WO-967 — THE REPORTED BUG lived on this line as a hardcoded "knight" literal. A
+            // composed dungeon hero carries no HeroAbilities, so `_abilities` is null in every
+            // dungeon and the bar asserted the Knight kit at a Mage. Ask the state layer instead;
+            // `source` names WHICH source answered so the capture can prove it next time.
+            string cls = HudHeroClassResolver.Resolve(_abilities, null, out string clsSource);
             var slots = new List<AbilitySlotRecord>(4);
             var sb = new System.Text.StringBuilder();
             List<string> unmapped = null;   // F8-33: equipped slots whose concept resolved NO real art
@@ -440,6 +593,16 @@ namespace DeNelle.Village.Hud
             string sig = sb.ToString();
             if (sig == _sig) return;
             _sig = sig;
+            // WO-967: the right-hand ability bar used to emit NOTHING — a repo-wide grep of the
+            // owner's live logs for the Knight skill names, "Thrain", "HeroAbilities" and
+            // "CombatArc" returned ZERO hits, so a Knight bar on a Mage was catchable only by her
+            // eyes. This fires on a loadout-signature CHANGE only (never per poll, Poll runs 5x/s)
+            // and names the class, WHERE the class came from, and the ability ids it produced —
+            // so "class='knight' source=... " on a Mage names the defect on sight next time.
+            DeNelle.Core.Diagnostics.FlowTrace.Step("HudModel",
+                "ability bar bound: class='" + cls + "' source=" + clsSource +
+                " hero='" + DeNelle.Core.State.HeroCanonNames.ForJob(cls) + "' ids=[" +
+                string.Join(",", slots.ConvertAll(s => s.Name).ToArray()) + "] sig=" + sig);
             // F8-33: name every ability that fell back to placeholder art — once per loadout
             // change, never per poll. No silent placeholder (CLAUDE.md §12 "no silent failures").
             if (unmapped != null)
