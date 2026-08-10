@@ -11,15 +11,18 @@
 // THE BODY CHAIN, in order (each step falls to the next; the chain NEVER ends
 // with nothing instantiated — Start() has already destroyed the placeholder):
 //   1. Knight only: KnightV3.fbx (ff.knightv3) -> KnightPackage.prefab (ff.heropackage)
-//   2. all other classes: the Blink LowPoly base via Addressables ("hero/base/HumanMale")
-//   3. legacy Resources/Heroes/<slug>.fbx
+//   2. any class whose Resources/Heroes/<slug> body RESOLVES: the legacy Resources path.
+//      (F8 2026-08-09: Ranger.fbx + Mage.fbx are git-TRACKED since f18b66b4, but the
+//      Blink base used to be kicked unconditionally with success terminal — Sylas/Thrain
+//      shipped as the bare Blink body while their real models sat unreachable in the tree.)
+//   3. remaining classes: the Blink LowPoly base via Addressables ("hero/base/HumanMale"),
+//      falling to the legacy Resources path on any failure
 //   4. BuildTrackedFallbackBody — the TRACKED KayKit humanoid stage (the floor)
 //
-// WHY STEP 4 EXISTS (latent P0, fixed 2026-08-05): steps 2 and 3 both depend on
-// assets that are NOT in git. Assets/Blink is gitignored, and Resources/Heroes
-// holds an FBX for Knight/KnightV3 ONLY — Ranger.fbx and Mage.fbx do not exist.
-// So on a fresh clone / CI, a Ranger or Mage fell out of step 3 with the old body
-// already destroyed: an INVISIBLE hero. A missing art pack must degrade to a
+// WHY STEP 4 EXISTS (latent P0, fixed 2026-08-05): steps 2 and 3 can both depend on
+// assets a given machine lacks (Assets/Blink is gitignored; an FBX import may not have
+// synced). On a fresh clone / CI, a Ranger or Mage once fell out of the chain with the
+// old body already destroyed: an INVISIBLE hero. A missing art pack must degrade to a
 // visible wrong-looking hero, never to nothing.
 //
 // Resources is the pickup path for the legacy + fallback bodies because it is
@@ -110,6 +113,22 @@ namespace DeNelle.Village
                     return;
                 }
                 FlowTrace.Step("HeroBody", $"class={cls} slug={slug} — ff.heropackage OFF: legacy Tripo armored body (skipping Blink base).");
+                BuildLegacyResourcesBody(cls, slug, controllerSnapshot);
+                return;
+            }
+
+            // F8 2026-08-09 ("Sylas is coming through as a blink"): probe the legacy Resources
+            // body FIRST for the non-Knight classes. Ranger.fbx + Mage.fbx landed git-TRACKED on
+            // 2026-08-06 (f18b66b4) but the Blink base load below was kicked unconditionally and
+            // its SUCCESS was terminal — so the imported bodies were dead code on any machine
+            // that has the Blink pack. The probe is synchronous and cheap (HeroAssetLoader is
+            // Addressables-first with WaitForCompletion, Resources.Load fallback, both cached)
+            // and preserves the old behaviour byte-for-byte on a machine WITHOUT the FBX: the
+            // probe misses and the Blink -> legacy -> KayKit chain below runs exactly as before.
+            if (DeNelle.Core.HeroAssetLoader.LoadHeroPrefab(slug) != null)
+            {
+                FlowTrace.Step("HeroBody",
+                    $"class={cls} slug={slug} — Resources/Heroes/{slug} RESOLVES: routing to the real class body (Blink base skipped).");
                 BuildLegacyResourcesBody(cls, slug, controllerSnapshot);
                 return;
             }
@@ -272,12 +291,12 @@ namespace DeNelle.Village
         // built from assets that are GIT-TRACKED.
         //
         // WHY THIS EXISTS. Every earlier body in the chain lives in a pack that is gitignored
-        // (Assets/Blink — .gitignore) or in an FBX that only some machines have (Resources/
-        // Heroes/Ranger.fbx and Mage.fbx do NOT exist in the tree — only their .controller and a
-        // 125-byte .tripo-extracted sentinel). On a fresh clone / CI / any machine without the
-        // Blink pack, a Ranger or Mage therefore reached BuildLegacyResourcesBody, missed, and
-        // RETURNED WITH NOTHING INSTANTIATED — while Start() had ALREADY destroyed the baked
-        // placeholder body. The player got an INVISIBLE hero, not a wrong-looking one.
+        // (Assets/Blink — .gitignore) or in an FBX a given machine may not have synced
+        // (Resources/Heroes bodies — Ranger.fbx and Mage.fbx ARE git-TRACKED since f18b66b4,
+        // 2026-08-09 correction; historically they were absent). On a fresh clone / CI / any
+        // machine without the Blink pack, a Ranger or Mage once reached BuildLegacyResourcesBody,
+        // missed, and RETURNED WITH NOTHING INSTANTIATED — while Start() had ALREADY destroyed
+        // the baked placeholder body. The player got an INVISIBLE hero, not a wrong-looking one.
         //
         // A missing art pack must degrade to a VISIBLE WRONG-LOOKING hero, never to nothing.
         // Assets/Resources/NPCs/KayKit/*.fbx is the only humanoid body set that is actually
@@ -1638,14 +1657,13 @@ namespace DeNelle.Village
         private static string SlugFor(HeroClass cls) => cls switch
         {
             HeroClass.Knight => "Knight",
-            // CANON CORRECTION 2026-08-05: the comments here used to claim Resources/Heroes/
-            // Ranger.fbx and Mage.fbx exist. They do NOT — `git ls-files` returns EMPTY for both.
-            // What IS in the tree is Ranger.controller / Mage.controller plus a 125-byte PLAIN-TEXT
-            // sentinel (`<slug>.fbx.tripo-extracted`, written by Editor/TripoAssetPostprocessor.cs)
-            // that is NOT a parked mesh and cannot be un-parked. Real Ranger/Mage bodies are
-            // content work needing art. Until then those two classes resolve through the Blink base
-            // (gitignored) and, on a machine without it, through BuildTrackedFallbackBody.
-            // The slug is still correct — it names the CONTROLLER + ability loadout, not a mesh.
+            // CANON RE-CORRECTION 2026-08-09 (F8 "Not sylas, this is a blink"): the 08-05 note
+            // here said Ranger.fbx / Mage.fbx do NOT exist. True then, FALSE now — both are
+            // git-TRACKED since f18b66b4 (2026-08-06) with Humanoid rigs, Materials/Ranger.mat and
+            // basecolor atlases. Start() now probes the legacy Resources body FIRST for non-Knight
+            // classes, so these slugs name real meshes again, not just controller + loadout.
+            // (The 125-byte `<slug>.fbx.tripo-extracted` sentinels are Editor/TripoAssetPostprocessor
+            // markers, unrelated to whether a real mesh exists.)
             HeroClass.Ranger => "Ranger",
             HeroClass.Mage   => "Mage",
             // DEF-221: the Cleric now has a DEDICATED body (Resources/Heroes/Cleric.fbx,
