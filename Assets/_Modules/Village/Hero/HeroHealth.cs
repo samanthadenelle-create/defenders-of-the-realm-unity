@@ -1116,6 +1116,32 @@ namespace DeNelle.Village
                 $"- death pose now owns the transform (agent={(agent != null ? "present" : "none")}).");
         }
 
+        /// <summary>
+        /// F8 2026-08-10 (seq 2253/2254/2255, "shakes then dies"): a SANCTIONED warp must REBASE
+        /// the death pin, never fight it. The hero died inside the arena warp-space and the pin
+        /// held the corpse there (correct); then BattleArena.ReturnHomeWithFade warped the hero
+        /// ~7km home and LateUpdate's watchdog read that legitimate move as a residual and
+        /// re-pinned the corpse back at the STALE arena spot — while VerifyReturnPose re-asserted
+        /// town. Two writers alternating = the visible death shake, and the hero could rest at
+        /// the wrong position. Called by <see cref="HeroLocomotion.WarpTo"/> (the ONE sanctioned
+        /// teleport authority — arena stage/return warps, seam crossings, gate traversals and the
+        /// hub spawn injector all route through it), so after any legitimate teleport the pin
+        /// holds the NEW pose and exactly one system decides where a dead hero rests. No-op while
+        /// no pin is armed (the common, living-hero case). The watchdog itself stays untouched:
+        /// an UNsanctioned mover writing a dead hero's transform is still fought and named.
+        /// </summary>
+        public void RebaseDeathPin(Vector3 position, Quaternion rotation, string reason)
+        {
+            if (!_deathPinActive) return;
+            Vector3 oldPos = _deathPinPos;
+            _deathPinPos          = position;
+            _deathPinRot          = rotation;
+            _deathPinResidualLogs = 0;   // fresh log budget: a rogue mover at the NEW rest pose still gets named
+            DeNelle.Core.Diagnostics.FlowTrace.Step("HeroDeath",
+                "death pin REBASED by sanctioned warp (" + reason + "): " + oldPos + " -> " + position +
+                " — the dead hero now rests at the warp target instead of fighting the mover that moved it.");
+        }
+
         // Revive counterpart to EnterDeathFreeze -- hand the transform back to the agent so
         // the revived hero walks again. Warps the agent's internal position to the (possibly
         // animation-moved) transform BEFORE re-enabling writes so there is no snap.

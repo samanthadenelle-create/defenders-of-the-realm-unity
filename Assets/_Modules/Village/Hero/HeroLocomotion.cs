@@ -396,6 +396,15 @@ namespace DeNelle.Village
 
             if (rot.HasValue) transform.rotation = rot.Value;
 
+            // F8 2026-08-10 (death shake at the arena return, seq 2253/2255): WarpTo is the ONE
+            // sanctioned teleport authority, so if the hero is mid death-freeze (died in the
+            // arena; the return warp fires while the pin holds the corpse) REBASE the pin to the
+            // landed pose here instead of letting HeroHealth.LateUpdate fight this warp back to
+            // the stale death spot. Same-GameObject, same-assembly lookup; no-op on a living hero.
+            var health = GetComponent<HeroHealth>();
+            if (health != null)
+                health.RebaseDeathPin(transform.position, transform.rotation, "HeroLocomotion.WarpTo");
+
             Velocity = Vector3.zero;   // don't carry pre-warp momentum across the seam
             OnTeleported?.Invoke();
 
