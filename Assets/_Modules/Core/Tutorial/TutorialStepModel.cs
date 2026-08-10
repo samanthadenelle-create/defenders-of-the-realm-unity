@@ -32,8 +32,10 @@ namespace DeNelle.Core.Tutorial
         [JsonProperty("scene")] public string Scene;     // for type "scene_enter"
     }
 
-    /// <summary>Dialogue ids into dialogues.json — Sylas speaks through the SAME
-    /// custom dialogue system + master-frame template as every NPC (no bubble fork).</summary>
+    /// <summary>Dialogue ids into dialogues.json — the GUIDE (the player's first
+    /// pet-Echo, WO-1012 P2; lines author the "{guide}" token resolved via
+    /// TutorialGuide) speaks through the SAME custom dialogue system +
+    /// master-frame template as every NPC (no bubble fork).</summary>
     [Serializable]
     public sealed class TutorialDialogueRef
     {
@@ -56,16 +58,18 @@ namespace DeNelle.Core.Tutorial
         [JsonProperty("count")] public int Count;
     }
 
-    /// <summary>One-time grants applied by the interpreter (prepaidTower on step ENTER —
-    /// WO-T3 funds the guided build; starterPet on step COMPLETION — WO-702: the reward
-    /// follows the placement, granting the starter pet when the Echo Hollow is placed).</summary>
+    /// <summary>One-time grants applied by the interpreter, both on step ENTER —
+    /// prepaidTower (WO-T3) funds the guided build; starterPet (WO-1012 P2) wakes the
+    /// pet-Echo GUIDE at the ARRIVE beat, before its first line plays.</summary>
     [Serializable]
     public sealed class TutorialGrant
     {
         [JsonProperty("prepaidTower")] public bool PrepaidTower;
-        /// <summary>WO-702 founding arc: on COMPLETION of this step, grant the starter pet
-        /// (PetAcquisitionService.Acquire + GameState.StarterPetId) with a visible birth at
-        /// the placed Echo Hollow. Idempotent per save (tutorial_v2_grant key + Owns check).</summary>
+        /// <summary>On ENTER of this step, grant the starter pet — the GUIDE
+        /// (PetAcquisitionService.Acquire + GameState.StarterPetId). WO-1012 P2 re-ruling
+        /// 2026-08-09: authored on the ARRIVE beat (founding_greet) so the pet-Echo exists
+        /// before it speaks; history: WO-702 granted it on founding_hollow COMPLETION.
+        /// Idempotent per save (tutorial_v2_grant key + Owns check).</summary>
         [JsonProperty("starterPet")] public bool StarterPet;
     }
 

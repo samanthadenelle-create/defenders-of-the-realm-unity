@@ -3,7 +3,7 @@
 // -----------------------------------------------------------------------------
 // HUD/panels REGISTER their affordances by id as they build ("hud.build_button",
 // "hud.wave_button"); world systems register Transforms or lazy RESOLVERS
-// ("world.sylas", "world.gate_direction"). The tutorial (UiSpotlight /
+// ("world.guide", "world.gate_direction"). The tutorial (UiSpotlight /
 // TutorialFlow) resolves ids here — replacing TutorialHudOverlay.Highlight's
 // UIDocument name-reach (spec §2.2). Reusable beyond the tutorial: any coach
 // mark / attention cue can resolve the same ids.
@@ -121,7 +121,7 @@ namespace DeNelle.Core.UI
         {
             "hud.build_button",     // VillageHudController TownActions BUILD icon
             "hud.wave_button",      // VillageHudController Start Wave CTA
-            "world.sylas",          // TutorialWorldAnchors resolver (Sylas NPC / gate fallback)
+            "world.guide",          // TutorialWorldAnchors resolver (WO-1012 P2: the pet-Echo GUIDE body / steward stand-in / Heart / town anchor)
             "world.gate_direction", // TutorialWorldAnchors resolver (nearest gate to hero)
             "build.tab_town",       // WO-702 — BuildPaletteUI Town category tab (registers when the palette builds)
             "build.tab_defenses",   // WO-702 — BuildPaletteUI Defenses category tab (founding_defense beat)
@@ -132,7 +132,8 @@ namespace DeNelle.Core.UI
             // here because DataRegression validates every authored highlight against this contract.
             "build.card.pet-house",           // founding_hollow — the Echo Hollow card among ~10 Town cards
             "build.card.collector_lumbermill",// founding_stores — the Lumbermill card (the collector that actually harvests)
-            "hud.pets",             // FTUE-04 — the persistent "Pets" pet-box button (EchoUnlockFeedback EchoPetBoxButton) the founding_echo beat spotlights; resolved lazily below
+            "hud.pets",             // FTUE-04 — the persistent "Pets" pet-box button (EchoUnlockFeedback EchoPetBoxButton); resolved lazily below
+            "hud.builders_chip",    // WO-1012 P3 — the Builders/queue status chip (HudKitController.BuildQueueStatusChip) the TIMERS beat spotlights ("Work takes time, Keeper. Watch the ledger.")
         };
 
         // FTUE-04: the founding_echo tutorial step spotlights the Pets button, but that

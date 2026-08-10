@@ -4,16 +4,18 @@
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.EditorRegression (references DeNelle.Core). Two proofs, from the
 // real catalogs the runtime reads:
-//   (1) the founding_echo step HIGHLIGHTS a real control -- its highlight list is
-//       non-empty AND every id resolves to a TutorialHighlightRegistry.KnownIds member
-//       (a highlight the HUD can actually draw), AND
+//   (1) the step that TEACHES A CONTROL BY NAME points at it: the WO-1012 P3 arc's
+//       TIMERS beat (founding_timers, "watch the ledger") must author a non-empty
+//       highlight list whose every id is a TutorialHighlightRegistry.KnownIds member
+//       (a highlight the HUD can actually draw). WO-1012 P3 re-target (2026-08-10):
+//       this check used to pin founding_echo, which the owner's 8-beat arc re-author
+//       REMOVED from the mandatory chain -- the defect class (a dialogue beat that
+//       names a control and points at nothing) is unchanged, the carrier step moved.
 //   (2) NO tut_founding_* dialogue teaches "storefront defense" -- the honest FTUE
 //       teaches stores are NOT defended and walls/towers win the defense; the word
 //       "storefront" must never appear in a founding dialogue.
 //
-// Marker: FTUE_HONESTY_OK / FTUE_HONESTY_FAIL. Expected: RED today -- founding_echo's
-// highlight is empty ([]); flips green when it highlights the pets control (a KnownIds
-// member). FAIL-BY-DESIGN.
+// Marker: FTUE_HONESTY_OK / FTUE_HONESTY_FAIL.
 //
 // Wire (DataRegression.RunAll):
 //   if (!FtueHonestyRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[ftue-honesty] " + r);
@@ -34,36 +36,38 @@ namespace DeNelle.Editor
         {
             var failures = new List<string>();
             var log = new StringBuilder();
-            log.AppendLine("--- FTUE HONESTY (founding_echo highlights a real control + no storefront-defense teaching) ---");
+            log.AppendLine("--- FTUE HONESTY (founding_timers highlights a real control + no storefront-defense teaching) ---");
 
-            // (1) founding_echo highlight is non-empty and resolves to a KnownIds member.
+            // (1) founding_timers (the WO-1012 P3 TIMERS beat) highlight is non-empty and
+            //     resolves to KnownIds members -- it names the Builders ledger, so it must
+            //     point at it (the founding_echo defect class, carried by the new arc).
             try
             {
                 DeNelle.Core.Tutorial.TutorialStepCatalog.Reload();
                 var known = new HashSet<string>(DeNelle.Core.UI.TutorialHighlightRegistry.KnownIds);
 
-                object echoStep = null;
+                object timersStep = null;
                 foreach (var s in DeNelle.Core.Tutorial.TutorialStepCatalog.All)
-                    if (s != null && s.Id == "founding_echo") { echoStep = s; break; }
+                    if (s != null && s.Id == "founding_timers") { timersStep = s; break; }
 
-                if (echoStep == null)
+                if (timersStep == null)
                 {
-                    failures.Add("[ftue-honesty] tutorial-steps.json has no 'founding_echo' step");
+                    failures.Add("[ftue-honesty] tutorial-steps.json has no 'founding_timers' step (the WO-1012 P3 arc's TIMERS beat)");
                 }
                 else
                 {
                     var highlights = new List<string>();
-                    var hlMember = echoStep.GetType().GetProperty("Highlight", BindingFlags.Public | BindingFlags.Instance);
-                    object hlVal = hlMember != null ? hlMember.GetValue(echoStep)
-                        : echoStep.GetType().GetField("Highlight", BindingFlags.Public | BindingFlags.Instance)?.GetValue(echoStep);
+                    var hlMember = timersStep.GetType().GetProperty("Highlight", BindingFlags.Public | BindingFlags.Instance);
+                    object hlVal = hlMember != null ? hlMember.GetValue(timersStep)
+                        : timersStep.GetType().GetField("Highlight", BindingFlags.Public | BindingFlags.Instance)?.GetValue(timersStep);
                     if (hlVal is IEnumerable hl) foreach (var h in hl) if (h != null) highlights.Add(h.ToString());
-                    log.AppendLine($"  founding_echo.highlight = [{string.Join(", ", highlights)}]");
+                    log.AppendLine($"  founding_timers.highlight = [{string.Join(", ", highlights)}]");
 
                     if (highlights.Count == 0)
-                        failures.Add("[ftue-honesty] founding_echo.highlight is EMPTY -- the step teaches the Echo without pointing at any control (dishonest/orphan teaching). Point it at the pets control (a KnownIds highlight).");
+                        failures.Add("[ftue-honesty] founding_timers.highlight is EMPTY -- the step says 'watch the ledger' without pointing at any control (dishonest/orphan teaching). Point it at the Builders chip (a KnownIds highlight).");
                     foreach (var h in highlights)
                         if (!known.Contains(h))
-                            failures.Add($"[ftue-honesty] founding_echo highlight '{h}' is not a TutorialHighlightRegistry.KnownIds member -- the HUD cannot draw it");
+                            failures.Add($"[ftue-honesty] founding_timers highlight '{h}' is not a TutorialHighlightRegistry.KnownIds member -- the HUD cannot draw it");
                 }
             }
             catch (Exception ex)
@@ -112,7 +116,7 @@ namespace DeNelle.Editor
             if (failures.Count == 0)
             {
                 Debug.Log(log.ToString() + "FTUE_HONESTY_OK");
-                reason = "FTUE HONESTY OK -- founding_echo highlights a real KnownIds control and no founding dialogue teaches storefront defense";
+                reason = "FTUE HONESTY OK -- founding_timers highlights a real KnownIds control and no founding dialogue teaches storefront defense";
                 return true;
             }
             reason = "ftue-honesty: " + string.Join("; ", failures);

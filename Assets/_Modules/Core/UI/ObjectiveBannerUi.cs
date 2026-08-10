@@ -1,6 +1,13 @@
 // =============================================================================
 // ObjectiveBannerUi — one-line current-objective strip (WO-T2, spec §2.2).
 // -----------------------------------------------------------------------------
+// ⚠ RETIRED FROM THE FTUE (WO-1012 P1, 2026-08-10): TutorialFlow no longer calls
+// this class — the tutorial's objective surface is ObjectiveStripUi (thin
+// bottom-center strip + progress beads; kills the top-edge F8 collision class
+// for good), and the ONE skip is TutorialSkipUi (corner control + confirm).
+// This banner currently has ZERO callers; kept compiling for any non-tutorial
+// caller a future WO may add. Do not wire new tutorial chrome through it.
+// -----------------------------------------------------------------------------
 // Top-centre, non-blocking, code-built uGUI in the kit language (obsidian glass
 // plate + gold accent rule + parchment text — UiStyle/ElarionUi tokens). Replaces
 // the UIToolkit TutorialHudOverlay banner as the tutorial's objective surface,

@@ -212,6 +212,15 @@ namespace DeNelle.Onboarding
         /// <summary>Number of beats in the tutorial sequence.</summary>
         public static int BeatCount => Beats.Length;
 
+        // WO-1012 P1 (owner 2026-08-08 "wall-of-text welcome cards"): the first three
+        // narration-only beats no longer render as modal CARDS — they play as guide
+        // ONE-LINERS through the kit's GuideLineUi (lower-left portrait + line,
+        // auto-dismissing) over the settled town view, and the card overlay only
+        // appears from the first ACTION beat. Copy is untouched (same canon keys) —
+        // presentation only. The ~4s camera moment named in the WO is NOT driven from
+        // here: DeNelle.Onboarding has no camera seam (module isolation) — P3 owns it.
+        private const int IntroOneLinerBeats = 3;
+
         // =====================================================================
         //  Lifecycle
         // =====================================================================
@@ -413,18 +422,60 @@ namespace DeNelle.Onboarding
             HasFinished = false;
             _beatIndex = 0;
 
-            SetOverlayVisible(true);
-            // UIF: announce the overlay opened so the arbiter closes any prior panel + arms the back button.
-            if (_panelHandle != null) PanelManager.NotifyOpened(_panelHandle);
-            ShowBeat(_beatIndex);
-            FadeOverlay(0f, 1f).Forget();
-
-            // V — the flow advanced to beat 1 with a bound body label. If the body is
-            // null the coach-marks are up but show no copy — surface it.
+            // V — the flow starts with a bound body label. If the body is null the
+            // card beats will show no copy — surface it.
             if (_body == null)
                 FlowTrace.Fail("Onboarding", "Run: tutorial started but body label is null — coach-marks will show no copy.");
             else
                 FlowTrace.Step("Onboarding", $"Run: tutorial started at beat 1/{Beats.Length}.");
+
+            // WO-1012 P1: beats 1-3 play as guide one-liners; the card overlay (and its
+            // arbiter registration) waits for the first action beat.
+            PlayIntroOneLiners(this.GetCancellationTokenOnDestroy()).Forget();
+        }
+
+        /// <summary>
+        /// WO-1012 P1: plays the leading narration beats as auto-dismissing guide
+        /// one-liners (GuideLineUi — portrait + ONE line, lower-left, no card, no Next),
+        /// then hands over to the modal card flow at the first gated/action beat.
+        /// Copy unchanged (same canon keys); dwell is GuideLineUi's length-scaled
+        /// reading pace. Never <c>async void</c> (port-spec Part 3).
+        /// </summary>
+        private async UniTask PlayIntroOneLiners(CancellationToken token)
+        {
+            FlowTrace.Step("Onboarding",
+                "WO-1012 P1: welcome cards 1-3 RETIRED - narration plays as guide one-liners (GuideLineUi).");
+            int i = 0;
+            try
+            {
+                for (; i < IntroOneLinerBeats && i < Beats.Length && Beats[i].Gate == TutorialGate.None; i++)
+                {
+                    if (!_running) return;   // skipped/finished mid-sequence — stop narrating
+                    _beatIndex = i;
+                    string line = CanonStrings.Locale(Beats[i].CopyKey);
+                    // WO-1012 P2: the narrator is the GUIDE — the player's first pet-Echo
+                    // (identity seam; rotation parked). Never a hard-coded hero name.
+                    float dwell = GuideLineUi.Show(DeNelle.Core.Tutorial.TutorialGuide.DisplayName, line);
+                    await UniTask.Delay(TimeSpan.FromSeconds(dwell + 0.15f),
+                        ignoreTimeScale: true, cancellationToken: token);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                return;   // destroyed mid-narration — nothing to restore
+            }
+            if (!_running) return;
+
+            // Hand over to the card flow at the first action beat.
+            _beatIndex = Mathf.Min(i, Beats.Length - 1);
+            SetOverlayVisible(true);
+            // UIF: announce the overlay opened so the arbiter closes any prior panel + arms
+            // the back button — deferred to HERE because the one-liners are non-modal.
+            if (_panelHandle != null) PanelManager.NotifyOpened(_panelHandle);
+            ShowBeat(_beatIndex);
+            FadeOverlay(0f, 1f).Forget();
+            FlowTrace.Step("Onboarding",
+                $"Run: guide one-liners done - card flow resumes at beat {_beatIndex + 1}/{Beats.Length}.");
         }
 
         /// <summary>Renders one beat into the coach-mark card.</summary>
@@ -542,6 +593,8 @@ namespace DeNelle.Onboarding
             if (!_running) { FlowTrace.Step("Onboarding", "Finish: not running — no-op."); return; }
             _running = false;
             HasFinished = true;
+            // WO-1012 P1: a guide one-liner mid-narration must not outlive the flow.
+            GuideLineUi.Hide();
             // UIF: release the arbiter slot as the coach-marks close (no-op if already swapped out).
             if (_panelHandle != null) PanelManager.NotifyClosed(_panelHandle);
 

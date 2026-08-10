@@ -841,6 +841,16 @@ namespace DeNelle.HUD
                 }
             }
             string speaker = _vm != null ? _vm.Speaker : null;
+            // WO-1012 P2: the GUIDE (tutorial lines authored with the "{guide}" token,
+            // resolved by the VM) draws its pet-Echo portrait from the identity seam —
+            // the Echoes/Portraits art ships as raw Texture2D, which the plain
+            // Resources.Load<Sprite> path above cannot resolve. A per-node `portrait`
+            // command override (the forced path) still wins above.
+            if (DeNelle.Core.Tutorial.TutorialGuide.IsGuideSpeaker(speaker))
+            {
+                var gp = DeNelle.Core.Tutorial.TutorialGuide.PortraitSprite();
+                if (gp != null) { source = "guide:" + speaker; return gp; }
+            }
             var cls = ElarionUiKit.PortraitForClass(speaker);
             if (cls != null) { source = "class:" + speaker; return cls; }
             source = "silhouette";

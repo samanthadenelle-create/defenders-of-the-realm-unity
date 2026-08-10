@@ -41,10 +41,24 @@ namespace DeNelle.Core.Tutorial
         /// gate on a SPECIFIC structure (the founding-arc guided placements).</summary>
         public const string StructurePlacedPrefix = "build.structure_placed:";   // + CatalogEntry id
         public const string WaveCleared      = "wave.cleared";
+        /// <summary>WO-1012 P3 (the arc, beat 7 ENEMIES AT THE GATE): the scripted
+        /// TutorialWaveSpawner band (3-4 enemies) was repelled. DISTINCT from
+        /// <see cref="WaveCleared"/> on purpose — the payoff beat must only ever be
+        /// completed by ITS band, never by an ambient wave-loop clear (the loop is
+        /// held closed by WaveLoopSuppressedForTutorial anyway; this makes the
+        /// contract explicit in the signal vocabulary). Raised by
+        /// TutorialFlow.TickScriptedWave when the step awaits this id.</summary>
+        public const string TutorialBandRepelled = "wave.tutorial_band_repelled";
         public const string ArenaWin         = "arena.resolved:win";
         public const string ArenaLoss        = "arena.resolved:loss";
         public const string DialogueEndedPrefix = "dialogue.ended:";   // + dialogue id
         public const string HeroReachedPrefix   = "hero.reached:";     // + anchor id
+        /// <summary>WO-1012 P3 (the arc, beat 2 WALK): follow-proximity — the hero,
+        /// led by the pet-Echo guide (PetHeroLeash lead mode), reached the gate-side
+        /// anchor ("guide_gate", resolved by Village's TutorialWorldAnchors to a spot
+        /// pulled INSIDE the walls, never the spawn ring). Rides the existing
+        /// hero.reached:* family — raised by TutorialFlow.TickProximityProbe.</summary>
+        public const string GuideGateReached    = HeroReachedPrefix + "guide_gate";
         public const string PanelOpenedPrefix   = "panel.opened:";     // + PanelId
         /// <summary>WO-854 Silo E per-species bond completion: "pet.bonded:" + the
         /// pets.json species id (e.g. "pet.bonded:ice-wolf") -- raised by

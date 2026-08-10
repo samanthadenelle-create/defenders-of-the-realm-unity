@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 3,
   "flowId": "ftue_v2",
   "steps": [
     {
@@ -9,29 +9,29 @@
       "trigger": { "type": "scene_enter", "scene": "MainCastle_Hall" },
       "pausePressure": true,
       "dialogue": { "intro": "tut_founding_greet" },
-      "highlight": ["world.sylas"],
+      "highlight": ["world.guide"],
+      "grant": { "starterPet": true },
       "completion": { "signal": "dialogue.ended:tut_founding_greet" },
       "skippable": true,
-      "objective": { "text": "Talk with Sylas beneath the tree" }
+      "objective": { "text": "Meet {guide} beneath the tree" },
+      "_note": "WO-1012 P3 beat 1/8 ARRIVE (arc re-author 2026-08-10; P2 grant position kept): the pet-Echo GUIDE wakes near the Heart - the starterPet grant applies on ENTER (before its first line plays), the cold open's payoff. {guide} is a runtime token (TutorialGuide); world.guide resolves the live pet body, else the steward stand-in, else the Heart. The 4s no-input camera moment is presentation (OnboardingFlow one-liners), not a step gate."
     },
     {
-      "id": "founding_hollow",
-      "order": 20,
+      "id": "founding_walk",
+      "order": 15,
       "scene": "MainCastle_Hall",
       "trigger": { "type": "prev_complete" },
       "pausePressure": true,
-      "dialogue": { "intro": "tut_founding_hollow", "outro": "tut_founding_hollow_done" },
-      "highlight": ["hud.build_button", "build.card.pet-house"],
-      "skipIfPrebuilt": true,
-      "grant": { "starterPet": true },
-      "completion": { "signal": "build.structure_placed:pet-house" },
+      "dialogue": { "intro": "tut_founding_walk" },
+      "highlight": ["world.guide", "world.gate_direction"],
+      "completion": { "signal": "hero.reached:guide_gate" },
       "skippable": true,
-      "objective": { "text": "Place the Echo Hollow anywhere you like", "count": 1 },
-      "_note": "F8 seq 632 root cause 3 (2026-08-02): this step used to highlight ONLY hud.build_button - the DOOR into the builder - and never the CARD, leaving the player to find the Echo Hollow among ~10 Town cards unaided while the next step highlights its card. It now teaches both, and TutorialFlow rotates the single spotlight across the whole list (Highlight[0] used to be the only one that ever rendered)."
+      "objective": { "text": "Follow {guide} to the gate" },
+      "_note": "WO-1012 P3 beat 2/8 WALK: teaches joystick/camera BY DOING - no text about controls. The guide LEADS via PetHeroLeash.SetLeadTarget (TutorialFlow.TickProximityProbe re-asserts each frame). NEW completion signal 1 of 2 (follow-proximity): 'guide_gate' resolves in TutorialWorldAnchors to the nearest wave gate pulled ~14m back toward the Heart - inside the walls, NEVER the spawn ring (owner F8 2026-07-08)."
     },
     {
       "id": "founding_stores",
-      "order": 30,
+      "order": 20,
       "scene": "MainCastle_Hall",
       "trigger": { "type": "prev_complete" },
       "pausePressure": true,
@@ -41,37 +41,24 @@
       "completion": { "signal": "build.structure_placed:collector_lumbermill" },
       "skippable": true,
       "objective": { "text": "Place your Lumbermill - it harvests timber for you", "count": 1 },
-      "_note": "F8 seq 632 root cause 2 (2026-08-02): this step awaited build.structure_placed:lumberyard while promising 'it harvests timber for you'. The catalog says otherwise - lumberyard is behaviorId GameplayBuilding with storageCapacity 500 / storageResource wood (a STOCKPILE that harvests nothing, and per WO-837 a capacity-cap progression building, never a founding freebie), while collector_lumbermill (displayName 'Lumbermill') is behaviorId ResourceCollector, the card that actually harvests. Both ship in the SAME Town palette (build-categories.json: Resource + Collector, neither in lockedIds), so a player who placed the harvester raised an id the step never awaited and stalled the full 300s. The awaited id, the copy and the highlight now all name the Lumbermill; TutorialFlow.SignalSatisfies additionally accepts the lumberyard/lumbermill equivalence on the LIVE signal path (it was previously applied only in the pre-placement auto-completer), so either placement completes the step."
+      "_note": "WO-1012 P3 beat 3/8 BUILD ONE: exactly ONE economy piece (owner: 'Don't have them build the whole village'). Prepaid via the FoundingKit free-placement exemption in BuildModeController (verified by tutorial-reach case 5) - grant.prepaidTower stays on the cannon beat only, so the arc grants 150 crystals once, unchanged. F8 seq 632 provenance kept: the awaited id, the copy and the card highlight all name the Lumbermill (collector_lumbermill); SignalSatisfies accepts the lumberyard/lumbermill equivalence."
     },
     {
-      "id": "founding_town",
-      "order": 35,
+      "id": "founding_ack",
+      "order": 25,
       "scene": "MainCastle_Hall",
       "trigger": { "type": "prev_complete" },
       "pausePressure": true,
-      "dialogue": { "intro": "tut_founding_town" },
-      "highlight": ["hud.build_button"],
-      "skipIfPrebuilt": true,
-      "completion": { "signal": "dialogue.ended:tut_founding_town" },
+      "dialogue": { "intro": "tut_founding_ack" },
+      "highlight": [],
+      "completion": { "signal": "dialogue.ended:tut_founding_ack" },
       "skippable": true,
-      "objective": { "text": "Lay out your town - the rest is yours to place" }
-    },
-    {
-      "id": "founding_echo",
-      "order": 37,
-      "scene": "MainCastle_Hall",
-      "trigger": { "type": "prev_complete" },
-      "pausePressure": true,
-      "dialogue": { "intro": "tut_founding_echo" },
-      "highlight": ["hud.pets"],
-      "completion": { "signal": "dialogue.ended:tut_founding_echo" },
-      "skippable": true,
-      "objective": { "text": "Open the Pets button and set your Echo to gather" },
-      "_note": "WO-702 owner refinement: the first Echo is already owned; this beat teaches the gather assignment only. When WO-701 (offline structure repair) lands, add the repair line to tut_founding_echo in the copy pass. The contextual ctx_echo_assign row (echo.born:2) covers the SECOND Echo and stays."
+      "objective": { "text": "{guide} approves - catch your breath" },
+      "_note": "WO-1012 P3 beat 4/8 ACK: the acknowledgment IS the pacing (owner: 'Okay. Great. Let's move on.' made structural - 2b piece 6). Carries the 2a utility line - the pet-Echo offers its work in its own words ('I can farm. I can mend.') - which doubles as the Echo-system hook and foreshadows the 2c-ter stacking teach in one clause; the REAL stacking teach stays a contextual one-shot at the moment of need."
     },
     {
       "id": "founding_defense",
-      "order": 40,
+      "order": 30,
       "scene": "MainCastle_Hall",
       "trigger": { "type": "prev_complete" },
       "pausePressure": true,
@@ -80,23 +67,77 @@
       "grant": { "prepaidTower": true },
       "completion": { "signal": "build.tower_placed" },
       "skippable": true,
-      "objective": { "text": "Raise a tower on your walls' weak side", "count": 1 },
-      "_note": "F8 seq 632 root cause 3 (2026-08-02): the Build button alone is not a teach - towers live behind the DEFENSES tab, which the Town-default palette does not show. Both are taught now that the flow walks the whole highlight list."
+      "objective": { "text": "Raise one tower to cover the gate", "count": 1 },
+      "_note": "WO-1012 P3 beat 5/8 ONE CANNON: Defense tab, ONE tower by the gate (teaches the WO-1010 lean-rail grammar). grant.prepaidTower funds it on ENTER (WO-780 rule, pinned by DataRegression). KNOWN INTERPLAY WO-945: pre-Onboarded builds get the 5s grace, so this tower finishes during the TIMERS line + the defend intro - the deliberate buffer before the scripted band."
+    },
+    {
+      "id": "founding_timers",
+      "order": 35,
+      "scene": "MainCastle_Hall",
+      "trigger": { "type": "prev_complete" },
+      "pausePressure": true,
+      "dialogue": { "intro": "tut_founding_timers" },
+      "highlight": ["hud.builders_chip"],
+      "completion": { "signal": "dialogue.ended:tut_founding_timers" },
+      "skippable": true,
+      "objective": { "text": "Work takes time - watch the Builders ledger" },
+      "_note": "WO-1012 P3 beat 6/8 TIMERS: ONE line on the queue chip (hud.builders_chip - registered by HudKitController.BuildQueueStatusChip), no lecture; the Manage deep-dive stays a later contextual. Also the WO-945 buffer: the <=5s tower build from last beat completes while this line plays."
     },
     {
       "id": "founding_defend",
+      "order": 40,
+      "scene": "MainCastle_Hall",
+      "trigger": { "type": "prev_complete" },
+      "pausePressure": true,
+      "dialogue": { "intro": "tut_town_wave" },
+      "highlight": ["world.gate_direction"],
+      "completion": { "signal": "wave.tutorial_band_repelled" },
+      "skippable": true,
+      "objective": { "text": "Enemies at the gate - drive them back" },
+      "_note": "WO-1012 P3 beat 7/8 ENEMIES AT THE GATE: the scripted 3-4 band via TutorialWaveSpawner (TutorialFlow.StartScriptedTownWave arms on this completion signal; the spawner bypasses the FTUE peace gates BY DESIGN while WaveLoopSuppressedForTutorial keeps the ambient loop closed, so ONLY the scripted band spawns). NEW completion signal 2 of 2 (scripted-band-repelled) - distinct from wave.cleared so an ambient clear can never complete the payoff beat. The intro (pausePressure) is the WO-945 buffer; hud.wave_button is deliberately NOT highlighted - no Start-Wave press in this arc, the horn blast is scripted. The wave-loop kick stays in FinishFlow - gate semantics untouched."
+    },
+    {
+      "id": "founding_win",
       "order": 45,
       "scene": "MainCastle_Hall",
       "trigger": { "type": "prev_complete" },
       "pausePressure": true,
-      "dialogue": { "intro": "tut_town_wave", "outro": "tut_town_wave_done" },
-      "highlight": ["hud.wave_button", "world.gate_direction"],
-      "completion": { "signal": "wave.cleared" },
+      "dialogue": { "intro": "tut_town_wave_done", "outro": "tut_founding_win" },
+      "highlight": [],
+      "completion": { "signal": "dialogue.ended:tut_town_wave_done" },
       "skippable": true,
-      "objective": { "text": "Defend the gate - clear the wave" },
-      "_note": "WO-702: the old town_wave row's mechanics live on here verbatim - the wave.cleared completion keys TutorialFlow.StartScriptedTownWave (the TutorialWaveSpawner teaching wave, which bypasses the FTUE peace gates by design)."
+      "objective": { "text": "The gate held - Elarion is yours" },
+      "_note": "WO-1012 P3 beat 8/8 WIN + HANDOFF: quiet celebration (tut_town_wave_done keeps its grant_resources_for_towers command and the Settings/Game Guide pointer); completing this final step runs FinishFlow -> FinishOnboarding + BeginLoop (Onboarded gate semantics untouched). The OUTRO (tut_founding_win, 'The rest is yours, Keeper.') plays over the handoff and its dialogue.ended raise - deliberately consumed by NO mandatory step - triggers the 2c-bis nudge chain, so the tutorial never ends in silence (owner directive 2026-08-10)."
     },
 
+    {
+      "id": "ctx_build_weapons",
+      "order": 1050,
+      "flowId": "contextual",
+      "trigger": { "type": "signal", "signal": "dialogue.ended:tut_founding_win" },
+      "pausePressure": false,
+      "dialogue": { "intro": "tut_ctx_build_weapons" },
+      "highlight": ["hud.build_button"],
+      "completion": { "signal": "dialogue.ended:tut_ctx_build_weapons" },
+      "skippable": true,
+      "oneShot": true,
+      "objective": { "text": "When you wish: raise a roof for proper weapons" },
+      "_note": "WO-1012 2c-bis nudge 1/2 (owner directive 2026-08-10, the post-handoff 'now what?' gap): suggest the WEAPONS building first - catalog id 'workshop' (QR-5.7 pins display 'Forge'; the live structures-catalog still says 'Weaponsmith' - flagged to the owner, copy names both). Fires off the WIN outro's dialogue.ended. Dismissible, never blocking - contextual one-shots never gate or pause pressure by construction. Closes the [Flow:Vendor] blank-town gap: no weapons vendor exists until the player builds one."
+    },
+    {
+      "id": "ctx_build_armor",
+      "order": 1060,
+      "flowId": "contextual",
+      "trigger": { "type": "signal", "signal": "build.structure_placed:workshop" },
+      "pausePressure": false,
+      "dialogue": { "intro": "tut_ctx_build_armor" },
+      "highlight": ["hud.build_button"],
+      "completion": { "signal": "dialogue.ended:tut_ctx_build_armor" },
+      "skippable": true,
+      "oneShot": true,
+      "objective": { "text": "Next along the road: an Armorer" },
+      "_note": "WO-1012 2c-bis nudge 2/2: once the weapons roof stands (trigger = its placement signal), suggest ARMOR - catalog id 'forge', display 'Armorer'. Dismissible, never blocking. THE CHAIN'S ORDER PAST THESE TWO BEATS IS AN OWNER CREATIVE PIN - propose the full sequence to the owner before authoring more (WO-1012 2c-bis, verbatim: 'not completely locked down that path... a gentle nudge')."
+    },
     {
       "id": "ctx_echo_assign",
       "order": 1010,

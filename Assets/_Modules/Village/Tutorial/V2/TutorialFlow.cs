@@ -3,8 +3,12 @@
 // -----------------------------------------------------------------------------
 // Walks the tutorial-steps.json registry (TutorialStepCatalog): for each
 // mandatory step — wait trigger → track tutorial_step_enter → apply
-// pausePressure/grant → play the intro dialogue (Sylas through the SAME custom
-// dialogue system as every NPC) → arm spotlight + objective banner → await the
+// pausePressure/grant → play the intro dialogue (the GUIDE — the player's first
+// pet-Echo, WO-1012 P2; speaker = the "{guide}" token resolved via
+// TutorialGuide — through the SAME custom
+// dialogue system as every NPC) → arm the WO-1012 presentation kit (FocusMask +
+// GuidePointer chevron + ObjectiveStrip; the ONE corner skip lives for the whole
+// flow) → await the
 // ONE completion signal (TutorialSignals) with a generous STEP-STUCK watchdog →
 // play outro → track complete → persist SeenTutorials → next. On the last step
 // it is the ONLY V2-path caller of GameStateService.FinishOnboarding() and it
@@ -405,7 +409,7 @@ namespace DeNelle.Village
             // which meant every wave/build/arena signal existed only while the FTUE was armed, and
             // story-quest stages that complete off those signals silently inherited the flag.
             // Adding the component here again would stand up a SECOND emitter host on a latching bus.
-            go.AddComponent<TutorialWorldAnchors>();     // world.sylas / world.gate_direction resolvers
+            go.AddComponent<TutorialWorldAnchors>();     // world.guide / world.gate_direction resolvers
             FlowTrace.Step("Tutorial", $"Bootstrap({reason}): TutorialFlow armed in hub '{scene}'.");
         }
 
@@ -439,6 +443,11 @@ namespace DeNelle.Village
                 FlowTrace.Step("Tutorial", $"flow '{TutorialStepCatalog.FlowId}' started ({_steps.Count} steps).");
                 _phase = Phase.Settling;
                 _stepEnteredAt = Time.unscaledTime;
+                // WO-1012 §2b piece 5 — THE ONE SKIP: a single corner control for the whole
+                // flow (one confirm sheet inside TutorialSkipUi -> SkipAll). Shown once here,
+                // hidden in FinishFlow. The banner's inline "Skip >" and the big Skip
+                // Tutorial button are both retired.
+                TutorialSkipUi.Show(SkipAll);
             }
             else
             {
@@ -451,6 +460,17 @@ namespace DeNelle.Village
             if (s_instance == this) s_instance = null;
             TutorialSignals.Raised -= OnSignal;
             PressureHeld = false;
+            // WO-1012: a mid-run teardown (scene unload) must not strand the kit chrome —
+            // the pieces are DontDestroyOnLoad singletons and would otherwise outlive the flow.
+            if (_phase != Phase.Idle && _phase != Phase.Finished)
+            {
+                UiSpotlight.Hide();
+                GuidePointer.Hide();
+                GuideLineUi.Hide();
+                ObjectiveStripUi.Hide();
+                TutorialSkipUi.Hide();
+                DeNelle.Pets.PetHeroLeash.ClearLeadTarget();   // WO-1012 P2: no stranded lead
+            }
         }
 
         // =====================================================================
@@ -509,14 +529,22 @@ namespace DeNelle.Village
                 if (state != null && state.SeenTutorials != null &&
                     state.SeenTutorials.TryGetValue(SeenPrefix + _step.Id, out bool seen) && seen)
                 {
+                    // WO-1012 P2: reconcile essential GRANTS on the resume-skip too — a save
+                    // that marked the step seen before its grant persisted (or a save from
+                    // before the starter-pet grant MOVED steps, founding_hollow → the ARRIVE
+                    // beat) must never resume half-granted. Both applies are idempotent per
+                    // save (the tutorial_v2_grant key persists first), so this is a no-op on
+                    // any healthy save.
+                    if (_step.Grant != null && _step.Grant.PrepaidTower) ApplyPrepaidTowerGrant(_step);
+                    if (_step.Grant != null && _step.Grant.StarterPet) ApplyStarterPetGrant(_step);
                     FlowTrace.Step("Tutorial", $"step '{_step.Id}' already seen — resuming past it.");
                     continue;
                 }
 
                 // Prebuilt / Default-Town skip (owner ruling 2026-07-24): a build-teaching step marked
                 // skipIfPrebuilt is SKIPPED when the town is already laid out (BaseLayout carries the
-                // Default-Town seed signature). CRITICAL: apply its GRANTS first (founding_hollow grants
-                // the starterPet — a Default-Town player must NOT be left pet-less), reusing the exact
+                // Default-Town seed signature). CRITICAL: apply its GRANTS first (a skipped step's
+                // essential grant must still land — no player is ever left half-granted), reusing the exact
                 // idempotent grant path SkipAll uses (ApplyPrepaidTowerGrant / ApplyStarterPetGrant),
                 // then mark it seen so a resume never replays it — but do NOT play its intro dialogue.
                 // A Build-Your-Own (blank template) town has no such signature (IsTownPrebuilt false),
@@ -564,6 +592,17 @@ namespace DeNelle.Village
             if (step.Grant != null && step.Grant.PrepaidTower)
                 ApplyPrepaidTowerGrant(step);
 
+            // Grant (WO-1012 P2, owner re-ruling 2026-08-09): the starter-pet grant is
+            // ENTER-side now — the guide IS the pet-Echo, so it must exist (roster +
+            // deployed body via PetAcquisitionService → PetDeployer.SyncDeployedToSlots)
+            // BEFORE the beat's dialogue plays in its voice. Moved here from
+            // CompleteCurrentStep (the WO-702 reward-follows-placement rule) in the same
+            // change that moved the grant from founding_hollow to the ARRIVE beat
+            // (founding_greet — tutorial-steps.json v2): the pet wakes near the Heart as
+            // the cold open's payoff, then speaks. Idempotent per save.
+            if (step.Grant != null && step.Grant.StarterPet)
+                ApplyStarterPetGrant(step);
+
             // PART 2 (guided-build tolerance): a build step whose demanded structure is
             // ALREADY placed (free-carousel player, or a tower dropped before the step
             // armed) must not burn the 120s watchdog. If BaseLayout already satisfies the
@@ -583,9 +622,15 @@ namespace DeNelle.Village
             //  * wave.cleared      -> spawn the scripted teaching wave (spec step 4:
             //    "HORN BLAST" — the step must complete WITHOUT the player pressing
             //    Start Wave; the loop is held closed by the !Onboarded gate anyway).
+            //  * wave.tutorial_band_repelled -> the SAME scripted band (WO-1012 P3,
+            //    beat 7 ENEMIES AT THE GATE): the arc's payoff beat completes on the
+            //    band-scoped signal so an ambient clear can never satisfy it. The
+            //    peace window (WaveLoopSuppressedForTutorial) holds the loop closed,
+            //    so ONLY this band spawns during the arc.
             //  * arena.resolved:win -> stage ONE guaranteed rep once the hero crosses
             //    into OuterWorld (spec step 5 — no hunting for a random encounter).
-            if (string.Equals(_awaitSignal, TutorialSignals.WaveCleared, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(_awaitSignal, TutorialSignals.WaveCleared, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(_awaitSignal, TutorialSignals.TutorialBandRepelled, StringComparison.OrdinalIgnoreCase))
                 StartScriptedTownWave(step);
             if (string.Equals(_awaitSignal, TutorialSignals.ArenaWin, StringComparison.OrdinalIgnoreCase))
             {
@@ -596,10 +641,17 @@ namespace DeNelle.Village
             }
 
             // Presentation (Core kit affordances — read the step model only).
+            // WO-1012 §2b piece 3: the thin bottom-center ObjectiveStrip replaces the fat
+            // top banner. ONE sentence + whole-chain progress beads (done = steps behind
+            // us in the chain, resume-skips included) — the per-step "(0/1)" counter and
+            // the banner's skip affordances are retired (Objective.Count is now unread;
+            // the ONE skip is the TutorialSkipUi corner control armed at flow start).
+            // WO-1012 P2: objective texts may name the guide via the "{guide}" data
+            // token — resolved through the identity seam at render time, never stored.
             if (step.Objective != null && !string.IsNullOrEmpty(step.Objective.Text))
-                ObjectiveBannerUi.Show(step.Objective.Text, step.Objective.Count,
-                    step.Skippable ? (Action)SkipCurrentStep : null,
-                    (Action)SkipAll);   // persistent whole-FTUE skip (confirmed in the banner)
+                ObjectiveStripUi.Show(TutorialGuide.ResolveToken(step.Objective.Text), done: _index, total: _steps.Count);
+            else
+                ObjectiveStripUi.Hide();
             ArmHighlights(step);
 
             // Intro dialogue — the standard NPC template; its end raises
@@ -821,11 +873,16 @@ namespace DeNelle.Village
             if (_highlightIds.Count == 0)
             {
                 UiSpotlight.Hide();
+                GuidePointer.Hide();
                 return;
             }
 
             _nextHighlightAt = Time.unscaledTime + HighlightCycleSeconds;
-            UiSpotlight.Show(_highlightIds[0]);
+            // WO-1012 §2b: FocusMask style follows the beat kind (tap = Focus dim+block,
+            // gesture/movement = lighter Gesture, combat = Glow), and the ONE gold chevron
+            // (GuidePointer) rides the same highlight id.
+            UiSpotlight.Show(_highlightIds[0], MaskStyleForCurrentStep());
+            GuidePointer.Show(_highlightIds[0]);
             if (_highlightIds.Count > 1)
                 FlowTrace.Step("Tutorial", $"step '{step.Id}' authors {_highlightIds.Count} highlights " +
                     $"[{string.Join(", ", _highlightIds)}] - the ONE spotlight rotates across all of them every " +
@@ -840,7 +897,45 @@ namespace DeNelle.Village
             if (Time.unscaledTime < _nextHighlightAt) return;
             _nextHighlightAt = Time.unscaledTime + HighlightCycleSeconds;
             _highlightIndex = (_highlightIndex + 1) % _highlightIds.Count;
-            UiSpotlight.Show(_highlightIds[_highlightIndex]);
+            UiSpotlight.Show(_highlightIds[_highlightIndex], MaskStyleForCurrentStep());
+            GuidePointer.Show(_highlightIds[_highlightIndex]);
+        }
+
+        /// <summary>WO-1012 §2b: the FocusMask style for the LIVE step, keyed on its
+        /// completion signal (data-driven — no step-id branching):
+        ///   * placement/movement beats -> Gesture (~35% dim, never blocks — the drag /
+        ///     the walk must land anywhere, and the world stays readable);
+        ///   * combat beats -> Glow (no dim: the player is fighting);
+        ///   * everything else (tap-the-button / open-the-panel / read-the-line) ->
+        ///     Focus (~65% dim, raycast-block outside the cutout — and UiSpotlight
+        ///     itself only ever blocks on a resolved UI-rect target, so a world-anchored
+        ///     Focus cutout still passes all input).</summary>
+        private UiSpotlight.MaskStyle MaskStyleForCurrentStep()
+        {
+            string s = _awaitSignal;
+            if (string.IsNullOrEmpty(s)) return UiSpotlight.MaskStyle.Glow;
+            if (s.StartsWith(TutorialSignals.StructurePlacedPrefix, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(s, TutorialSignals.TowerPlaced, StringComparison.OrdinalIgnoreCase) ||
+                s.StartsWith(TutorialSignals.HeroReachedPrefix, StringComparison.OrdinalIgnoreCase))
+                return UiSpotlight.MaskStyle.Gesture;
+            if (string.Equals(s, TutorialSignals.WaveCleared, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(s, TutorialSignals.TutorialBandRepelled, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(s, TutorialSignals.ArenaWin, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(s, TutorialSignals.ArenaLoss, StringComparison.OrdinalIgnoreCase))
+                return UiSpotlight.MaskStyle.Glow;
+            return UiSpotlight.MaskStyle.Focus;
+        }
+
+        /// <summary>The palette-card highlight id for the live placement step
+        /// ("build.card.&lt;wanted structure id&gt;" — BuildPaletteUI registers one per
+        /// rendered card), or null for any non-specific-placement step.</summary>
+        private string PlacementCardHighlightId()
+        {
+            if (string.IsNullOrEmpty(_awaitSignal) ||
+                !_awaitSignal.StartsWith(TutorialSignals.StructurePlacedPrefix, StringComparison.OrdinalIgnoreCase))
+                return null;
+            string wantId = _awaitSignal.Substring(TutorialSignals.StructurePlacedPrefix.Length);
+            return string.IsNullOrEmpty(wantId) ? null : "build.card." + wantId;
         }
 
         // =====================================================================
@@ -868,6 +963,13 @@ namespace DeNelle.Village
                     _builderOpenedThisStep = true;
                     FlowTrace.Step("Tutorial", $"coach :: step '{_step.Id}' - builder opened; " +
                         "the escalating nudge stands down (the player has found the door).");
+                    // WO-1012 §2b piece 2: a PLACEMENT step is a gesture beat — once the
+                    // builder is open, the ghost finger replays the card->field drag arc
+                    // on a 2s loop until the first real placement (NotifyGestureSuccess in
+                    // CompleteCurrentStep fades it permanently).
+                    string card = PlacementCardHighlightId();
+                    if (card != null)
+                        GuidePointer.ShowDrag(card, new Vector2(0.5f, 0.45f));
                 }
                 return;
             }
@@ -879,7 +981,7 @@ namespace DeNelle.Village
             _nextCoachAt = Time.unscaledTime + CoachNudgeSeconds;
 
             string objective = _step.Objective != null && !string.IsNullOrEmpty(_step.Objective.Text)
-                ? _step.Objective.Text : null;
+                ? TutorialGuide.ResolveToken(_step.Objective.Text) : null;   // WO-1012 P2 guide token
             string msg;
             if (IsPlacementStep())
                 msg = _coachBeats <= 1 && objective != null
@@ -910,7 +1012,8 @@ namespace DeNelle.Village
             {
                 _highlightIndex = 0;
                 _nextHighlightAt = Time.unscaledTime + HighlightCycleSeconds;
-                UiSpotlight.Show(_highlightIds[0]);
+                UiSpotlight.Show(_highlightIds[0], MaskStyleForCurrentStep());
+                GuidePointer.Show(_highlightIds[0]);
             }
         }
 
@@ -976,8 +1079,11 @@ namespace DeNelle.Village
             TryTriggerContextual(id);
         }
 
-        /// <summary>Skip affordance intent (banner Skip / dialogue footer). Only
-        /// honours steps authored skippable (spec: steps 3–5 are not).</summary>
+        /// <summary>Per-step skip intent. WO-1012 §2b piece 5: NO UI raises this any
+        /// more — the banner's inline "Skip &gt;" is retired with the banner, and the
+        /// ONE player-facing skip (TutorialSkipUi corner control) routes to
+        /// <see cref="SkipAll"/> through its confirm sheet. Kept public for probes /
+        /// dev tooling; still honours the authored skippable flag.</summary>
         public void SkipCurrentStep()
         {
             if (_phase != Phase.AwaitCompletion || _step == null || !_step.Skippable) return;
@@ -1034,7 +1140,7 @@ namespace DeNelle.Village
                     if (step == null || string.IsNullOrEmpty(step.Id)) continue;
                     if (step.Grant != null && step.Grant.PrepaidTower)
                         ApplyPrepaidTowerGrant(step);   // idempotent: no-op if already granted this save
-                    // WO-702: the founding_hollow starter-pet grant is essential too — a
+                    // WO-1012 P2: the ARRIVE-beat starter-pet grant is essential too — a
                     // skipper ends with the pet like a completer. Same idempotent key.
                     if (step.Grant != null && step.Grant.StarterPet)
                         ApplyStarterPetGrant(step);
@@ -1047,7 +1153,7 @@ namespace DeNelle.Village
             // Owner 2026-07-10 felt-bug ("cancelled tutorial but it restarts on the Build button"):
             // an explicit Skip must ALSO silence the CONTEXTUAL one-shot hints. ctx_first_spend fires
             // on economy.can_afford_upgrade — which THIS skip's own crystal grant guarantees — and
-            // spotlights hud.build_button, so opening Build after a cancel resurfaced a Sylas hint that
+            // spotlights hud.build_button, so opening Build after a cancel resurfaced a guide hint that
             // reads as "the tutorial restarted". Mark every one-shot ctx seen (same persistence CtxSeen
             // checks) so a skipper gets NO further tutorial content; completers still receive the hints.
             if (_contextual != null)
@@ -1079,6 +1185,15 @@ namespace DeNelle.Village
             _stagedRepPending = false;
             var step = _step;
 
+            // WO-1012 §2b: a genuinely-completed gesture beat fades its ghost-finger
+            // replay PERMANENTLY (the player has proven the drag). Computed here while
+            // _awaitSignal still belongs to the completing step.
+            if (!skipped)
+            {
+                string gestureCard = PlacementCardHighlightId();
+                if (gestureCard != null) GuidePointer.NotifyGestureSuccess(gestureCard);
+            }
+
             if (!skipped)
             {
                 FlowTrace.Step("Tutorial", $"STEP-COMPLETE :: {step.Id} " +
@@ -1093,22 +1208,28 @@ namespace DeNelle.Village
 
             GameStateService.Instance?.MarkTutorialSeen(SeenPrefix + step.Id);
 
-            // WO-702: COMPLETION-side grant — the starter pet FOLLOWS the Hollow placement
-            // (reward-after-action; ENTER-side grants like prepaidTower stay in EnterStep).
-            // Applied on skip too: a skipped step still credits its essential grant.
-            if (step.Grant != null && step.Grant.StarterPet)
-                ApplyStarterPetGrant(step);
+            // The old WO-702 COMPLETION-side starter-pet grant is GONE from here:
+            // WO-1012 P2 moved it ENTER-side (EnterStep) — the guide IS the pet-Echo
+            // and must exist before the beat speaks. Skip/rescue paths still end fully
+            // granted: EnterStep ran before any completion, and SkipAll/skipIfPrebuilt/
+            // resume all reconcile grants idempotently.
+
+            // WO-1012 P2: end the guide-lead the moment the beat completes — the leash
+            // resumes natural exploration (safe no-op when no lead was active).
+            DeNelle.Pets.PetHeroLeash.ClearLeadTarget();
 
             _highlightIds.Clear();   // ROOT CAUSE 3: never rotate a dead step's walk
             _highlightIndex = 0;
             UiSpotlight.Hide();
-            ObjectiveBannerUi.Hide();
+            GuidePointer.Hide();
+            GuideLineUi.Hide();      // WO-1012: a guide one-liner never outlives its beat
+            ObjectiveStripUi.Hide();
             PressureHeld = false;
 
-            // Outro (Sylas reacts) — plays over the transition; never gates the chain.
+            // Outro (the guide reacts) — plays over the transition; never gates the chain.
             // A SKIPPED step (player skip OR a watchdog rescue) never plays one: the outro
-            // is Sylas reacting to a thing the player did, so playing it for a step that did
-            // not happen narrates a fiction (F8 seq 632 root cause 4).
+            // is the guide reacting to a thing the player did, so playing it for a step that
+            // did not happen narrates a fiction (F8 seq 632 root cause 4).
             if (!skipped && step.Dialogue != null && !string.IsNullOrEmpty(step.Dialogue.Outro))
             {
                 if (!CoreDialogue.DialogueService.Play(step.Dialogue.Outro))
@@ -1123,7 +1244,11 @@ namespace DeNelle.Village
             _phase = Phase.Finished;
             _step = null;
             UiSpotlight.Hide();
-            ObjectiveBannerUi.Hide();
+            GuidePointer.Hide();
+            GuideLineUi.Hide();
+            ObjectiveStripUi.Hide();
+            TutorialSkipUi.Hide();   // the ONE skip leaves with the flow
+            DeNelle.Pets.PetHeroLeash.ClearLeadTarget();   // WO-1012 P2: no lead outlives the flow
             PressureHeld = false;
 
             DeNelle.Core.Analytics.EventTracker.Track("tutorial_completed", new
@@ -1194,8 +1319,11 @@ namespace DeNelle.Village
         private const string StarterPetSpecies = "aether-sprite";
 
         /// <summary>
-        /// WO-702: grants the starter pet on COMPLETION of the founding_hollow step —
-        /// the reward follows the placement. Three moves, each self-reporting:
+        /// Grants the starter pet — since WO-1012 P2 (owner re-ruling 2026-08-09) on
+        /// ENTER of the ARRIVE beat (founding_greet): the pet-Echo IS the guide and
+        /// wakes near the Heart before it speaks. (History: WO-702 granted it on
+        /// COMPLETION of founding_hollow — reward-follows-placement — until the
+        /// guide re-ruling moved it.) Three moves, each self-reporting:
         ///   1. record <c>GameState.StarterPetId</c> (the SAME field the old PetSelect
         ///      confirm wrote — SyncSlotsFromState restores slot 0 from it on reload),
         ///   2. VISIBLE BIRTH (owner refinement 2026-07-13): the pet's body emerges AT
@@ -1312,8 +1440,13 @@ namespace DeNelle.Village
             if (!_townWaveArmed || !_townWaveSpawnSettled) return;
             if (_tutorialWave == null || !_tutorialWave.IsCleared) return;
             _townWaveArmed = false;
-            FlowTrace.Step("Tutorial", "scripted town wave CLEARED (all tutorial enemies dead) — raising 'wave.cleared'.");
-            TutorialSignals.Raise(TutorialSignals.WaveCleared);
+            // WO-1012 P3: raise the id the LIVE step awaits — the arc's ENEMIES beat
+            // completes on the band-scoped 'wave.tutorial_band_repelled' (so an ambient
+            // clear can never satisfy it); a legacy wave.cleared step still gets its id.
+            bool bandBeat = string.Equals(_awaitSignal, TutorialSignals.TutorialBandRepelled, StringComparison.OrdinalIgnoreCase);
+            FlowTrace.Step("Tutorial", "scripted town wave CLEARED (all tutorial enemies dead) — raising '" +
+                (bandBeat ? TutorialSignals.TutorialBandRepelled : TutorialSignals.WaveCleared) + "'.");
+            TutorialSignals.Raise(bandBeat ? TutorialSignals.TutorialBandRepelled : TutorialSignals.WaveCleared);
         }
 
         /// <summary>Nearest wave gate to the hero — the same nearest-gate rule the legacy
@@ -1443,6 +1576,13 @@ namespace DeNelle.Village
             string anchorId = _awaitSignal.Substring(TutorialSignals.HeroReachedPrefix.Length);
             if (!TutorialWorldAnchors.TryResolveAnchor(anchorId, out Vector3 pos)) return;
 
+            // WO-1012 P2: the GUIDE (pet-Echo) LEADS every movement beat — re-asserted
+            // each frame (the anchor can resolve late or move; the leash seam dedupes
+            // its own tracing). Cleared on beat completion / flow teardown. Verified at
+            // source: Pet.cs steers to SetHomePost; PetHeroLeash.SetLeadTarget is the
+            // narrowest carrot-override seam (no new movement system).
+            DeNelle.Pets.PetHeroLeash.SetLeadTarget(pos);
+
             Vector3 d = _hero.transform.position - pos;
             d.y = 0f;
             if (d.sqrMagnitude <= ReachedRadius * ReachedRadius)
@@ -1561,8 +1701,13 @@ namespace DeNelle.Village
                 });
 
                 // Never pausePressure, never gate — a short line + a spotlight only.
+                // WO-1012: contextual hints keep the GLOW language (no dim, never blocks)
+                // and ride the same chevron cue as the mandatory chain.
                 if (ctx.Highlight != null && ctx.Highlight.Count > 0)
-                    UiSpotlight.Show(ctx.Highlight[0]);
+                {
+                    UiSpotlight.Show(ctx.Highlight[0], UiSpotlight.MaskStyle.Glow);
+                    GuidePointer.Show(ctx.Highlight[0]);
+                }
                 if (ctx.Dialogue != null && !string.IsNullOrEmpty(ctx.Dialogue.Intro))
                 {
                     if (!CoreDialogue.DialogueService.Play(ctx.Dialogue.Intro))
@@ -1597,8 +1742,19 @@ namespace DeNelle.Village
             if (ctx.OneShot)
                 GameStateService.Instance?.MarkTutorialSeen(CtxSeenPrefix + ctx.Id);
 
-            // Only clear the spotlight if the mandatory chain isn't using it.
-            if (_phase != Phase.AwaitCompletion) UiSpotlight.Hide();
+            // Only clear the spotlight/pointer if the mandatory chain isn't using them;
+            // when it IS, re-assert the live step's own highlight (the ctx hint borrowed
+            // the singletons — hand them back, don't leave the ctx target lit).
+            if (_phase != Phase.AwaitCompletion)
+            {
+                UiSpotlight.Hide();
+                GuidePointer.Hide();
+            }
+            else if (_highlightIds.Count > 0)
+            {
+                UiSpotlight.Show(_highlightIds[_highlightIndex % _highlightIds.Count], MaskStyleForCurrentStep());
+                GuidePointer.Show(_highlightIds[_highlightIndex % _highlightIds.Count]);
+            }
         }
 
         private static bool CtxSeen(TutorialStepDef ctx)

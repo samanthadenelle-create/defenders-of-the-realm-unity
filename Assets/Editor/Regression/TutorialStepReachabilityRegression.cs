@@ -51,6 +51,20 @@
 //                          hub really exists (the gate is load-bearing, not
 //                          decorative) and (b) TutorialFlow.TryArm checks it.
 //
+//   Case 6 [arc-shape]     WO-1012 P3 (2026-08-10): the owner's 8-beat founding arc
+//                          holds its shape — the mandatory chain is EXACTLY
+//                          greet/walk/stores/ack/defense/timers/defend/win in order;
+//                          ARRIVE carries the starterPet grant (the guide must exist
+//                          before it speaks); WALK completes on the follow-proximity
+//                          signal (hero.reached:guide_gate) and TutorialWorldAnchors
+//                          actually resolves that anchor; ENEMIES AT THE GATE
+//                          completes on the band-scoped wave.tutorial_band_repelled
+//                          and TutorialFlow arms the scripted spawner on it; and the
+//                          WIN beat's OUTRO feeds the 2c-bis nudge chain — its
+//                          dialogue.ended id IS ctx_build_weapons' trigger, so the
+//                          tutorial can never again end in silence (the owner's
+//                          "now what?" gap). Both nudges stay oneShot + non-blocking.
+//
 //   Case 5 [refusal-loud]  BuildModeController's enemy-owned refusal is AUDIBLE:
 //                          a player-facing toast + a FlowTrace line, not the bare
 //                          Debug.Log it used to be. CLAUDE.md sec.12: a refusal the
@@ -120,6 +134,7 @@ namespace DeNelle.Editor.Regression
                     Case(failures, "palette-reach", () => Case2_PaletteReach(steps, failures, notes));
                     Case(failures, "teach-present", () => Case3_TeachPresent(steps, failures, notes));
                     Case(failures, "refusal-loud", () => Case5_RefusalLoud(steps, failures, notes));
+                    Case(failures, "arc-shape", () => Case6_ArcShape(steps, failures, notes));
                 }
                 Case(failures, "arm-safety", () => Case4_ArmSafety(failures, notes));
             }
@@ -135,7 +150,8 @@ namespace DeNelle.Editor.Regression
                          "emitter in Assets/_Modules, every awaited placement id resolves in the catalog and " +
                          "sits in a palette the player can open (and is free-placement exempt), every " +
                          "player-action step points at a real registered highlight, TutorialFlow refuses to " +
-                         "arm in an enemy-owned hub, and the build refusal is player-audible" + noteStr;
+                         "arm in an enemy-owned hub, the build refusal is player-audible, and the WO-1012 " +
+                         "8-beat arc + 2c-bis nudge chain hold their shape" + noteStr;
                 return true;
             }
             reason = "tutorial-reach FAIL x" + failures.Count + ": " + string.Join(" | ", failures) + noteStr;
@@ -162,6 +178,14 @@ namespace DeNelle.Editor.Regression
             public string Signal;
             public List<string> Highlight = new List<string>();
             public string ObjectiveText;
+            // WO-1012 P3 (arc-shape): the extra ends of the step contract Case 6 pins.
+            public string TriggerSignal;
+            public string IntroDialogue;
+            public string OutroDialogue;
+            public bool GrantStarterPet;
+            public bool GrantPrepaidTower;
+            public bool OneShot;
+            public bool PausePressure;
         }
 
         private static List<Step> LoadSteps(List<string> failures)
@@ -202,6 +226,13 @@ namespace DeNelle.Editor.Regression
                     Contextual = string.Equals((string)o["flowId"], "contextual", StringComparison.OrdinalIgnoreCase),
                     Signal = o["completion"] != null ? (string)o["completion"]["signal"] : null,
                     ObjectiveText = o["objective"] != null ? (string)o["objective"]["text"] : null,
+                    TriggerSignal = o["trigger"] != null ? (string)o["trigger"]["signal"] : null,
+                    IntroDialogue = o["dialogue"] != null ? (string)o["dialogue"]["intro"] : null,
+                    OutroDialogue = o["dialogue"] != null ? (string)o["dialogue"]["outro"] : null,
+                    GrantStarterPet = o["grant"] != null && o["grant"]["starterPet"] != null && (bool)o["grant"]["starterPet"],
+                    GrantPrepaidTower = o["grant"] != null && o["grant"]["prepaidTower"] != null && (bool)o["grant"]["prepaidTower"],
+                    OneShot = o["oneShot"] != null && (bool)o["oneShot"],
+                    PausePressure = o["pausePressure"] != null && (bool)o["pausePressure"],
                 };
                 var hl = o["highlight"] as JArray;
                 if (hl != null)
@@ -512,6 +543,9 @@ namespace DeNelle.Editor.Regression
                 || signal.StartsWith(DeNelle.Core.Tutorial.TutorialSignals.PanelOpenedPrefix, StringComparison.OrdinalIgnoreCase)
                 || string.Equals(signal, DeNelle.Core.Tutorial.TutorialSignals.TowerPlaced, StringComparison.OrdinalIgnoreCase)
                 || string.Equals(signal, DeNelle.Core.Tutorial.TutorialSignals.WaveCleared, StringComparison.OrdinalIgnoreCase)
+                // WO-1012 P3: the arc's ENEMIES beat is a combat action — it must point
+                // somewhere (world.gate_direction), same rule as wave.cleared.
+                || string.Equals(signal, DeNelle.Core.Tutorial.TutorialSignals.TutorialBandRepelled, StringComparison.OrdinalIgnoreCase)
                 || string.Equals(signal, DeNelle.Core.Tutorial.TutorialSignals.BuildModeEntered, StringComparison.OrdinalIgnoreCase);
         }
 
@@ -651,6 +685,129 @@ namespace DeNelle.Editor.Regression
                                  "in BuildModeController.FoundingKit - with the v32 zeroed starting budget the player " +
                                  "cannot afford the thing the FTUE forces them to place (soft-lock)");
             }
+        }
+
+        // =====================================================================
+        //  CASE 6 - the WO-1012 P3 8-beat arc holds its shape (2026-08-10)
+        // =====================================================================
+
+        /// <summary>The owner's dynamic arc (WO-1012 §2c): ARRIVE, WALK, BUILD ONE, ACK,
+        /// ONE CANNON, TIMERS, ENEMIES AT THE GATE, WIN + HANDOFF — by step id, in order.</summary>
+        private static readonly string[] ArcIds =
+        {
+            "founding_greet", "founding_walk", "founding_stores", "founding_ack",
+            "founding_defense", "founding_timers", "founding_defend", "founding_win",
+        };
+
+        private static void Case6_ArcShape(List<Step> steps, List<string> failures, List<string> notes)
+        {
+            // (a) The mandatory chain is EXACTLY the 8 arc beats, in order.
+            var mandatory = new List<Step>();
+            foreach (var s in steps) if (!s.Contextual) mandatory.Add(s);
+            mandatory.Sort((x, y) => x.Order.CompareTo(y.Order));
+
+            if (mandatory.Count != ArcIds.Length)
+                failures.Add("[arc-shape] mandatory chain has " + mandatory.Count + " steps - the WO-1012 P3 arc is " +
+                             "exactly " + ArcIds.Length + " beats (owner 2026-08-09/10; supersedes the 7-step 2026-07-24 chain)");
+            int n = Math.Min(mandatory.Count, ArcIds.Length);
+            for (int i = 0; i < n; i++)
+                if (!string.Equals(mandatory[i].Id, ArcIds[i], StringComparison.OrdinalIgnoreCase))
+                    failures.Add("[arc-shape] beat " + (i + 1) + " is '" + mandatory[i].Id + "' - the arc authors '" +
+                                 ArcIds[i] + "' there (ARRIVE/WALK/BUILD ONE/ACK/ONE CANNON/TIMERS/ENEMIES/WIN)");
+
+            var byId = new Dictionary<string, Step>(StringComparer.OrdinalIgnoreCase);
+            foreach (var s in steps) if (!string.IsNullOrEmpty(s.Id) && !byId.ContainsKey(s.Id)) byId[s.Id] = s;
+
+            // (b) ARRIVE wakes the guide: the starterPet grant rides founding_greet (the
+            //     pet-Echo must exist before it speaks - WO-1012 P2 enter-side rule).
+            if (byId.TryGetValue("founding_greet", out var greet) && !greet.GrantStarterPet)
+                failures.Add("[arc-shape] founding_greet no longer carries grant.starterPet - the guide IS the pet-Echo " +
+                             "and must be granted on the ARRIVE beat, before its first line plays");
+
+            // (c) WALK completes on the follow-proximity signal, and the anchor resolves:
+            //     TutorialWorldAnchors must actually implement the 'guide_gate' case.
+            if (byId.TryGetValue("founding_walk", out var walk))
+            {
+                if (!string.Equals(walk.Signal, DeNelle.Core.Tutorial.TutorialSignals.GuideGateReached, StringComparison.OrdinalIgnoreCase))
+                    failures.Add("[arc-shape] founding_walk completes on '" + (walk.Signal ?? "<null>") + "' - the WALK beat's " +
+                                 "contract is '" + DeNelle.Core.Tutorial.TutorialSignals.GuideGateReached + "' (follow-proximity, " +
+                                 "the guide leads via PetHeroLeash)");
+                string anchorsSrc = ReadText("Assets/_Modules/Village/Tutorial/V2/TutorialWorldAnchors.cs", failures);
+                if (anchorsSrc != null && !StripComments(anchorsSrc).Contains("\"guide_gate\""))
+                    failures.Add("[arc-shape] TutorialWorldAnchors no longer resolves the 'guide_gate' anchor - the WALK " +
+                                 "beat's hero.reached:guide_gate can never be raised (TryResolveAnchor returns false forever)");
+            }
+
+            // (d) ENEMIES AT THE GATE completes on the band-scoped signal, and TutorialFlow
+            //     arms the scripted spawner on it (not only on legacy wave.cleared).
+            if (byId.TryGetValue("founding_defend", out var defend))
+            {
+                if (!string.Equals(defend.Signal, DeNelle.Core.Tutorial.TutorialSignals.TutorialBandRepelled, StringComparison.OrdinalIgnoreCase))
+                    failures.Add("[arc-shape] founding_defend completes on '" + (defend.Signal ?? "<null>") + "' - the payoff " +
+                                 "beat's contract is '" + DeNelle.Core.Tutorial.TutorialSignals.TutorialBandRepelled + "' so an " +
+                                 "ambient wave clear can never complete it");
+                string flowSrc = ReadText(TutorialFlowSrc, failures);
+                if (flowSrc != null)
+                {
+                    string code = StripComments(flowSrc);
+                    int arm = code.IndexOf("StartScriptedTownWave", StringComparison.Ordinal);
+                    if (arm < 0 || code.IndexOf("TutorialBandRepelled", StringComparison.Ordinal) < 0)
+                        failures.Add("[arc-shape] TutorialFlow does not key StartScriptedTownWave/TickScriptedWave on " +
+                                     "TutorialSignals.TutorialBandRepelled - the ENEMIES beat's band never spawns or never completes");
+                }
+            }
+
+            // (e) WIN + HANDOFF never ends in silence: its OUTRO's dialogue.ended id is the
+            //     first nudge's trigger (owner directive 2026-08-10, the "now what?" gap).
+            byId.TryGetValue("founding_win", out var win);
+            byId.TryGetValue("ctx_build_weapons", out var nudge1);
+            byId.TryGetValue("ctx_build_armor", out var nudge2);
+            if (win == null || string.IsNullOrEmpty(win.OutroDialogue))
+                failures.Add("[arc-shape] founding_win has no OUTRO dialogue - the handoff ends in silence and the 2c-bis " +
+                             "nudge chain has no trigger (owner 2026-08-10: 'okay. Now what?')");
+            if (nudge1 == null)
+                failures.Add("[arc-shape] ctx_build_weapons (2c-bis nudge 1, the weapons building) is missing");
+            if (nudge2 == null)
+                failures.Add("[arc-shape] ctx_build_armor (2c-bis nudge 2, the armor building) is missing");
+            if (win != null && !string.IsNullOrEmpty(win.OutroDialogue) && nudge1 != null)
+            {
+                string expected = DeNelle.Core.Tutorial.TutorialSignals.DialogueEndedPrefix + win.OutroDialogue;
+                if (!string.Equals(nudge1.TriggerSignal, expected, StringComparison.OrdinalIgnoreCase))
+                    failures.Add("[arc-shape] ctx_build_weapons triggers on '" + (nudge1.TriggerSignal ?? "<null>") + "' but the " +
+                                 "WIN outro raises '" + expected + "' - the nudge chain is disconnected from the handoff");
+            }
+            if (nudge2 != null &&
+                !string.Equals(nudge2.TriggerSignal,
+                    DeNelle.Core.Tutorial.TutorialSignals.StructurePlacedPrefix + "workshop", StringComparison.OrdinalIgnoreCase))
+                failures.Add("[arc-shape] ctx_build_armor triggers on '" + (nudge2.TriggerSignal ?? "<null>") + "' - the chain " +
+                             "contract is build.structure_placed:workshop (armor follows the weapons roof)");
+
+            // (f) Nudges are nudges: oneShot, never pausePressure (never blocking).
+            foreach (var nudge in new[] { nudge1, nudge2 })
+            {
+                if (nudge == null) continue;
+                if (!nudge.OneShot)
+                    failures.Add("[arc-shape] '" + nudge.Id + "' is not oneShot:true - a nudge that repeats is nagging, not guidance");
+                if (nudge.PausePressure)
+                    failures.Add("[arc-shape] '" + nudge.Id + "' sets pausePressure - a post-handoff nudge must never gate free play");
+            }
+
+            // (g) The nudged buildings exist in the catalog (id workshop = weapons, id forge
+            //     = armor - QR-5.7). A nudge toward a card that cannot render is the seq 632
+            //     defect wearing a new hat.
+            string catRaw = ReadText(StructuresRes, failures);
+            if (catRaw != null)
+            {
+                var entries = JObject.Parse(catRaw)["entries"] as JArray;
+                var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                if (entries != null) foreach (var e in entries) { string id = (string)e["id"]; if (!string.IsNullOrEmpty(id)) ids.Add(id); }
+                foreach (var want in new[] { "workshop", "forge" })
+                    if (!ids.Contains(want))
+                        failures.Add("[arc-shape] nudge-chain building id '" + want + "' does not resolve in structures-catalog.json");
+            }
+
+            notes.Add("arc-shape: " + n + "/" + ArcIds.Length + " beats verified in order; nudge chain past " +
+                      "weapons->armor is an OWNER CREATIVE PIN (WO-1012 2c-bis) - do not author more without her sequence");
         }
 
         // =====================================================================

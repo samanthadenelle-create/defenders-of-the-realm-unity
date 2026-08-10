@@ -1,17 +1,27 @@
 // =============================================================================
-// UiSpotlight — reusable dim-screen + circular-cutout attention affordance (WO-T2).
+// UiSpotlight — the tutorial FOCUS MASK (WO-T2, upgraded WO-1012 §2b piece 1).
 // -----------------------------------------------------------------------------
-// Dims the whole screen EXCEPT a circular cutout over a registered UI target or
-// a world position, with a gold pulse ring on the rim. Code-built uGUI on its
-// own overlay canvas (kit canon — no UIToolkit), UNSCALED time, eased in/out
-// ~200ms. It GUIDES, it never gates: every graphic is raycastTarget=false so
-// input passes straight through (spec §2.2 "closable/ignorable — the completion
-// signal advances, not the spotlight").
+// Dims the whole screen EXCEPT one soft-edged circular cutout over a registered
+// UI target or a world position, with a gold glow on the rim. Code-built uGUI on
+// its own overlay canvas (kit canon — no UIToolkit), UNSCALED time, eased in/out
+// ~200ms.
+//
+// WO-1012 §2b (owner 2026-08-09, supersedes the 2026-07-16 "glow not circle"
+// ruling FOR FOCUS BEATS): the mask carries THREE styles —
+//   * Focus   — ~65% dim, ONE soft-edged cutout, raycast-BLOCK outside the
+//               cutout (tap beats: the cutout is the only actionable thing).
+//               Blocking applies ONLY when the resolved target is a UI rect —
+//               a world-anchored cutout never blocks (the player must still
+//               move/fight; blocking movement on a world beat is the wedge).
+//   * Gesture — ~35% dim, same cutout, NEVER blocks (drag/movement beats: the
+//               world stays readable and the gesture must land anywhere).
+//   * Glow    — the 2026-07-16 glow-only presentation, no dim, never blocks
+//               (contextual hints + combat beats keep the old language).
 //
 // Cutout construction (pure uGUI, no shader): four dim rects around a square
 // hole + a generated "circle-hole" sprite filling the square whose alpha is the
 // dim color outside a feathered circle and 0 inside — together the screen is
-// dimmed everywhere except an exact circular window.
+// dimmed everywhere except a soft-edged circular window.
 //
 // Targets resolve through TutorialHighlightRegistry every frame (follows moving
 // targets, survives late registration). Presentation-only: no service calls, no
@@ -27,19 +37,31 @@ using UnityEngine.UI;
 namespace DeNelle.Core.UI
 {
     /// <summary>
-    /// Full-screen dim with a circular cutout + gold pulse ring over a highlight
-    /// target. <see cref="Show(string)"/> follows a registry id;
-    /// <see cref="ShowWorld(Transform)"/> follows a world anchor. <see cref="Hide"/>
-    /// eases out. Never blocks input.
+    /// Full-screen dim with a soft-edged circular cutout + gold glow over a
+    /// highlight target. <see cref="Show(string, MaskStyle)"/> follows a registry
+    /// id; <see cref="ShowWorld(Transform, MaskStyle)"/> follows a world anchor.
+    /// <see cref="Hide"/> eases out. Blocks input outside the cutout ONLY in
+    /// <see cref="MaskStyle.Focus"/> on a resolved UI-rect target.
     /// </summary>
     public sealed class UiSpotlight : MonoBehaviour
     {
+        /// <summary>WO-1012 §2b presentation styles — see the file header.</summary>
+        public enum MaskStyle
+        {
+            /// <summary>~65% dim, raycast-block outside the cutout (tap beats).</summary>
+            Focus,
+            /// <summary>~35% dim, never blocks (gesture/movement beats — world stays readable).</summary>
+            Gesture,
+            /// <summary>No dim, glow halo only, never blocks (contextual hints, combat beats).</summary>
+            Glow,
+        }
+
         private const float FadeSeconds = 0.2f;          // eased in/out ~200ms (unscaled)
-        // Owner 2026-07-16 "instead of the circle have a GLOW to the button": the affordance was a
-        // full-screen DIM with a hard circular ring cutout (read as "a circle around the button").
-        // Now it is a soft GLOW halo ON the target, no screen dim. DimAlpha=0 removes the scrim; the
-        // ring sprite is a wide feathered glow (see RingSprite). Nothing else dims the screen.
-        private const float DimAlpha = 0f;               // was 0.62 — no screen dim; glow-on-target only
+        // WO-1012 §2b dim levels. History: DimAlpha was 0.62 at birth, then 0 (owner 2026-07-16
+        // "glow to the button, not a circle"); WO-1012 re-rules FOCUS beats back to a dimmed
+        // cutout while the glow-only look survives as MaskStyle.Glow.
+        private const float FocusDimAlpha = 0.65f;       // Focus: the screen dims, the cutout teaches
+        private const float GestureDimAlpha = 0.35f;     // Gesture: lighter — the world stays readable
         private const float HolePadding = 46f;           // px beyond the target rect (glow reach)
         private const float MinHoleDiameter = 120f;      // px — never a pin-prick
         private const float RingPulsePeriod = 1.4f;      // gold rim breathing (s)
@@ -60,6 +82,7 @@ namespace DeNelle.Core.UI
         private Transform _worldAnchor;    // world mode
         private bool _visible;
         private float _fadeT;              // 0 hidden .. 1 shown
+        private MaskStyle _style = MaskStyle.Focus;   // WO-1012: dim level + blocking per style
 
         private static Sprite _holeSprite;   // generated once, cached for the process
         private static Sprite _ringSprite;
@@ -68,34 +91,60 @@ namespace DeNelle.Core.UI
 
         /// <summary>Spotlight the target registered under <paramref name="highlightId"/>
         /// (TutorialHighlightRegistry). Re-resolves every frame, so late registration
-        /// and moving targets both work; while unresolved the overlay stays hidden.</summary>
-        public static void Show(string highlightId)
+        /// and moving targets both work; while unresolved the overlay stays hidden.
+        /// <paramref name="style"/> picks the WO-1012 presentation (dim + blocking).</summary>
+        public static void Show(string highlightId, MaskStyle style = MaskStyle.Focus)
         {
             var s = Ensure();
             s._targetId = highlightId;
             s._worldAnchor = null;
             s._visible = true;
+            s.ApplyStyle(style);
             s._tracedTarget = null;   // BM-3: re-log the resolved target/rect for the new id
-            Diagnostics.FlowTrace.Step("Spotlight", $"show highlightId={highlightId}");
+            Diagnostics.FlowTrace.Step("Tutorial", $"FocusMask SHOW highlightId={highlightId} style={style}");
         }
 
         /// <summary>Spotlight a world-space anchor (projected via the main camera).</summary>
-        public static void ShowWorld(Transform anchor)
+        public static void ShowWorld(Transform anchor, MaskStyle style = MaskStyle.Gesture)
         {
             var s = Ensure();
             s._targetId = null;
             s._worldAnchor = anchor;
             s._visible = anchor != null;
+            s.ApplyStyle(style);
         }
 
         /// <summary>Ease the spotlight out. Safe when not shown.</summary>
         public static void Hide()
         {
             if (_instance == null) return;
+            if (_instance._visible)
+                Diagnostics.FlowTrace.Step("Tutorial", "FocusMask HIDE");
             _instance._visible = false;
             _instance._targetId = null;
             _instance._worldAnchor = null;
             _instance._tracedTarget = null;   // BM-3: forget the last resolved target
+            if (_instance._group != null)
+            {
+                _instance._group.blocksRaycasts = false;   // never leave a dead mask eating taps
+                _instance._group.interactable = false;
+            }
+        }
+
+        /// <summary>Recolour the dim layers for <paramref name="style"/>. The four dim
+        /// rects + the cutout-corner fill share one obsidian hue at the style's alpha;
+        /// blocking is applied per-frame in Update (needs the resolved-target kind).</summary>
+        private void ApplyStyle(MaskStyle style)
+        {
+            _style = style;
+            float a = style == MaskStyle.Focus ? FocusDimAlpha
+                    : style == MaskStyle.Gesture ? GestureDimAlpha
+                    : 0f;
+            Color dim = new Color(ElarionUiKit.ObsidianFill.r, ElarionUiKit.ObsidianFill.g,
+                                  ElarionUiKit.ObsidianFill.b, a);
+            for (int i = 0; i < 4; i++)
+                if (_dimRects[i] != null) _dimRects[i].color = dim;
+            if (_holeCorners != null) _holeCorners.color = dim;
         }
 
         // ── Lifecycle ─────────────────────────────────────────────────────────
@@ -116,7 +165,11 @@ namespace DeNelle.Core.UI
             _canvas.renderMode = RenderMode.ScreenSpaceOverlay;
             _canvas.sortingOrder = CanvasSortOrder;
             gameObject.AddComponent<CanvasScaler>().uiScaleMode = CanvasScaler.ScaleMode.ConstantPixelSize;
-            // Deliberately NO GraphicRaycaster — the overlay can never eat a tap.
+            // WO-1012 §2b: Focus beats raycast-BLOCK outside the cutout, so the canvas now
+            // carries a raycaster. Blocking is gated per-frame via the CanvasGroup (only a
+            // shown Focus mask on a UI-rect target ever blocks — Gesture/Glow never do, and
+            // dialogue/modals sort far above 4200 so they are never occluded).
+            gameObject.AddComponent<GraphicRaycaster>();
             _group = gameObject.AddComponent<CanvasGroup>();
             _group.alpha = 0f;
             _group.blocksRaycasts = false;
@@ -124,16 +177,19 @@ namespace DeNelle.Core.UI
             _rootRect = (RectTransform)transform;
 
             // Obsidian-tinted dim (not pure black) so the scrim reads as the kit's
-            // warm-obsidian language; the gold pulse ring completes the black+gold pairing.
+            // warm-obsidian language; the gold glow completes the black+gold pairing.
+            // Alpha is set per style in ApplyStyle; built at the Focus default.
             Color dim = new Color(ElarionUiKit.ObsidianFill.r, ElarionUiKit.ObsidianFill.g,
-                                  ElarionUiKit.ObsidianFill.b, DimAlpha);
+                                  ElarionUiKit.ObsidianFill.b, FocusDimAlpha);
             for (int i = 0; i < 4; i++)
             {
                 var r = new GameObject("Dim" + i, typeof(RectTransform), typeof(Image));
                 r.transform.SetParent(transform, false);
                 var img = r.GetComponent<Image>();
                 img.color = dim;
-                img.raycastTarget = false;
+                // The dim rects ARE the raycast blocker (outside the cutout). Whether they
+                // actually block is the CanvasGroup's per-frame call in Update.
+                img.raycastTarget = true;
                 _dimRects[i] = img;
             }
 
@@ -146,6 +202,9 @@ namespace DeNelle.Core.UI
             _holeCorners = corners.GetComponent<Image>();
             _holeCorners.sprite = HoleSprite();
             _holeCorners.color = dim;
+            // NEVER a raycast target: this image spans the whole cutout cell (its alpha is
+            // 0 inside the circle) — blocking here would kill the very tap the cutout
+            // invites. The cell's soft corners therefore pass taps too; deliberate leak.
             _holeCorners.raycastTarget = false;
             Fill((RectTransform)corners.transform);
 
@@ -172,15 +231,22 @@ namespace DeNelle.Core.UI
             float dir = _visible ? 1f : -1f;
             _fadeT = Mathf.Clamp01(_fadeT + dir * (Time.unscaledDeltaTime / FadeSeconds));
             _group.alpha = _fadeT * _fadeT * (3f - 2f * _fadeT);   // smoothstep ease
-            if (_fadeT <= 0f) return;
+            if (_fadeT <= 0f) { _group.blocksRaycasts = false; return; }
 
-            if (!TryTargetScreenRect(out Rect target))
+            if (!TryTargetScreenRect(out Rect target, out bool isUiRect))
             {
                 // Unresolved target — keep the overlay invisible rather than dimming
-                // the whole screen with no window (degrade gracefully, never wedge).
+                // the whole screen with no window (degrade gracefully, never wedge),
+                // and NEVER block on an invisible mask.
                 _group.alpha = 0f;
+                _group.blocksRaycasts = false;
                 return;
             }
+
+            // WO-1012 §2b: raycast-block outside the cutout — Focus style ONLY, and only
+            // when the resolved target is a UI rect (a world-anchored cutout never blocks:
+            // the player must still be able to move/fight through the HUD).
+            _group.blocksRaycasts = _visible && _style == MaskStyle.Focus && isUiRect;
 
             LayoutHole(target);
 
@@ -193,9 +259,10 @@ namespace DeNelle.Core.UI
 
         // ── Target resolution ─────────────────────────────────────────────────
 
-        private bool TryTargetScreenRect(out Rect rect)
+        private bool TryTargetScreenRect(out Rect rect, out bool isUiRect)
         {
             rect = default;
+            isUiRect = false;
 
             if (!string.IsNullOrEmpty(_targetId))
             {
@@ -211,6 +278,7 @@ namespace DeNelle.Core.UI
                     // the card re-registers active.
                     if (!t.Rect.gameObject.activeInHierarchy) return false;
                     rect = ScreenRectOf(t.Rect);
+                    isUiRect = true;
                     TraceResolved(t.Rect.name, rect);
                     return true;
                 }
@@ -235,12 +303,14 @@ namespace DeNelle.Core.UI
             string key = (_targetId ?? "") + "|" + (targetName ?? "");
             if (_tracedTarget == key) return;
             _tracedTarget = key;
-            Diagnostics.FlowTrace.Step("Spotlight",
-                $"show highlightId={_targetId} target={targetName} " +
+            Diagnostics.FlowTrace.Step("Tutorial",
+                $"FocusMask resolved highlightId={_targetId} target={targetName} style={_style} " +
                 $"rect=({rect.x:F0},{rect.y:F0},{rect.width:F0},{rect.height:F0})");
         }
 
-        private static Rect ScreenRectOf(RectTransform rt)
+        /// <summary>Screen-space pixel rect of a uGUI RectTransform. Internal so the
+        /// sibling kit piece GuidePointer (WO-1012 §2b) shares ONE projection rule.</summary>
+        internal static Rect ScreenRectOf(RectTransform rt)
         {
             var corners = new Vector3[4];
             rt.GetWorldCorners(corners);
@@ -260,7 +330,9 @@ namespace DeNelle.Core.UI
             return new Rect(min, max - min);
         }
 
-        private static bool TryWorldToScreen(Vector3 world, out Rect rect)
+        /// <summary>Project a world position to a nominal screen rect (chest-high aim).
+        /// Internal so GuidePointer shares the same projection (WO-1012 §2b).</summary>
+        internal static bool TryWorldToScreen(Vector3 world, out Rect rect)
         {
             rect = default;
             var cam = Camera.main;
@@ -308,8 +380,10 @@ namespace DeNelle.Core.UI
         private static Sprite HoleSprite()
         {
             if (_holeSprite != null) return _holeSprite;
+            // WO-1012 §2b: SOFT-edged cutout — the dim eases in across the outer ~22% of
+            // the window instead of the old near-hard 0.92→0.99 rim.
             _holeSprite = MakeRadialSprite((dist01) =>
-                Mathf.Clamp01(Mathf.InverseLerp(0.92f, 0.99f, dist01)));   // 0 inside → 1 at rim
+                Mathf.Clamp01(Mathf.InverseLerp(0.78f, 1.0f, dist01)));   // 0 inside → 1 at rim, feathered
             return _holeSprite;
         }
 

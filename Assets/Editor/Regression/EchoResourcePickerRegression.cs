@@ -89,6 +89,15 @@ namespace DeNelle.Editor
                         state.EchoCount = 6;
                         EchoBalanceCatalog.Reload();
 
+                        // WO-953: OPEN all three existence gates for the legacy groups —
+                        // their label/state assertions predate the faucet-honesty cue and
+                        // describe an all-faucets-open town. The collector catalog ids are
+                        // both the real catalog rows AND CatalogIdsForBuilding's cold-
+                        // catalog naming fallback, so this opens the gate either way.
+                        state.MarkEverBuilt("collector_farm");
+                        state.MarkEverBuilt("collector_lumbermill");
+                        state.MarkEverBuilt("collector_forge");
+
                         // Bind the VM to Elowen (index 1, affinity Wood) assigned to IRON —
                         // a deliberate NON-match so both flag states are exercised.
                         state.EchoLanes = "food:1,iron:2,gold:1,crystals:1,iron:1,crystals:1";
@@ -99,6 +108,7 @@ namespace DeNelle.Editor
                         CheckCardStrings(vm, state, Fail);
                         CheckRepairTask(vm, state, Fail);   // WO-811: the repair chip + verb + honest status
                         CheckSynergyLine(state, Fail);
+                        CheckFaucetHonesty(state, Fail);    // WO-953: the NEEDS cue + waiting status
                     }
                 }
             }
@@ -336,6 +346,119 @@ namespace DeNelle.Editor
 
             // Restore the harvest pick so any later group starts from the WO-830 baseline.
             vm.AssignResource(EchoAssignments.ResIron);
+        }
+
+        // =====================================================================
+        //  Group 7 — WO-953: faucet honesty (the NEEDS cue + waiting status)
+        // ---------------------------------------------------------------------
+        //  Pins: (a) the token→building map; (b) the QR-5.7 name inversion guard —
+        //  iron's needed building must NEVER resolve to "Armorer" (canon-strings
+        //  'forge' names the armor storefront; the collector's card says "Forge");
+        //  (c) closed gate → "NEEDS: <name>" IN the chip label with " (now)" still
+        //  LAST (WO-883 order law) and the chip still tappable-shaped (cue, never a
+        //  lock — the projection itself proves no disabled state exists); (d) the
+        //  StateText mirror "waiting on a <name>"; (e) gold/crystals NEVER cued;
+        //  (f) reopening the gate clears the cue.
+        // =====================================================================
+        private static void CheckFaucetHonesty(GameState state, Action<string> Fail)
+        {
+            // (a) token → building map is the gate's own vocabulary.
+            if (EchoCardVM.FaucetBuildingIdFor("iron") != "forge"
+                || EchoCardVM.FaucetBuildingIdFor("wood") != "lumbermill"
+                || EchoCardVM.FaucetBuildingIdFor("food") != "farm")
+                Fail("FaucetBuildingIdFor map broken (expected iron->forge, wood->lumbermill, food->farm)");
+            if (EchoCardVM.FaucetBuildingIdFor("gold") != null || EchoCardVM.FaucetBuildingIdFor("crystals") != null)
+                Fail("gold/crystals must have NO faucet building (no collector exists for them)");
+
+            // (b) the QR-5.7 inversion guard. Whatever source resolves (catalog or the
+            // progression fallback), iron's building must read "Forge" — never the
+            // canon-strings 'forge' value "Armorer" (the armor storefront).
+            string ironName = EchoCardVM.NeededBuildingDisplayName("forge");
+            if (string.IsNullOrEmpty(ironName) || ironName.IndexOf("Armorer", StringComparison.OrdinalIgnoreCase) >= 0)
+                Fail($"iron's needed building resolved to '{ironName}' — the QR-5.7 inversion (canon 'forge'=Armorer) leaked");
+            if (!ironName.Contains("Forge"))
+                Fail($"iron's needed building resolved to '{ironName}' (expected the collector card word 'Forge')");
+            string foodName = EchoCardVM.NeededBuildingDisplayName("farm");
+            if (foodName != "Farm")
+                Fail($"food's needed building resolved to '{foodName}' (expected canon 'Farm')");
+            string woodName = EchoCardVM.NeededBuildingDisplayName("lumbermill");
+            if (string.IsNullOrEmpty(woodName) || !woodName.StartsWith("Lumber", StringComparison.Ordinal))
+                Fail($"wood's needed building resolved to '{woodName}' (expected the canon 'Lumber Mill' family)");
+
+            // Close ALL gates: empty the ever-built ledger (the WO-834 input). A live
+            // registered collector would keep a gate open — headless there are none,
+            // but assert against the primitive rather than assume.
+            var savedLedger = new List<string>(state.EverBuiltStructureIds);
+            state.EverBuiltStructureIds.Clear();
+            try
+            {
+                bool ironGateClosed = !DeNelle.Village.Buildings.Progression.ResourceBuildingHarvester.MayHarvest(
+                    DeNelle.Village.Buildings.Progression.ResourceBuildingHarvester.CatalogIdsForBuilding("forge"),
+                    state.EverBuiltStructureIds,
+                    DeNelle.Village.Buildings.Progression.ResourceCollectorRegistry.Get("forge") != null);
+                if (!ironGateClosed)
+                {
+                    // A live scene collector is registered (editor left a scene open) —
+                    // the closed-state assertions below would be vacuous; consistency
+                    // between the cue and the gate is still pinned.
+                    if (EchoCardVM.TryGetFaucetNeed("iron", out _))
+                        Fail("TryGetFaucetNeed shows a NEEDS cue while the gate primitive reads OPEN (cue must mirror the gate exactly)");
+                    return;
+                }
+
+                if (!EchoCardVM.TryGetFaucetNeed("iron", out string needs) || string.IsNullOrEmpty(needs))
+                    Fail("closed iron gate raised no NEEDS cue (TryGetFaucetNeed false/empty)");
+                if (EchoCardVM.TryGetFaucetNeed("gold", out _) || EchoCardVM.TryGetFaucetNeed("crystals", out _))
+                    Fail("gold/crystals carry a NEEDS cue (they have no faucet building — never cue them)");
+
+                // (c) the cue lands IN the chip label; " (now)" stays LAST (WO-883).
+                state.EchoLanes = "food:1,iron:2,gold:1,crystals:1,iron:1,crystals:1";
+                using (var scope = new VmScope(1))
+                {
+                    var chips = scope.Vm.ResourceChips();
+                    foreach (var c in chips)
+                    {
+                        bool expectCue = c.Id == "iron" || c.Id == "wood" || c.Id == "food";
+                        bool hasCue = c.Label.Contains("NEEDS:");
+                        if (expectCue && !hasCue)
+                            Fail($"gated chip '{c.Id}' label '{c.Label}' carries no NEEDS cue");
+                        if (!expectCue && hasCue)
+                            Fail($"ungated chip '{c.Id}' label '{c.Label}' claims a NEEDS cue");
+                        if (!IsAscii(c.Label))
+                            Fail($"cue label '{c.Label}' contains non-ASCII characters");
+                        if (c.Id == "iron")
+                        {
+                            if (c.Label.IndexOf("Armorer", StringComparison.OrdinalIgnoreCase) >= 0)
+                                Fail($"iron chip label '{c.Label}' names the Armorer (QR-5.7 inversion leaked into the UI)");
+                            int iNow = c.Label.IndexOf("(now)", StringComparison.Ordinal);
+                            int iNeeds = c.Label.IndexOf("NEEDS:", StringComparison.Ordinal);
+                            if (iNow >= 0 && iNeeds >= 0 && iNow < iNeeds)
+                                Fail($"iron chip label '{c.Label}' — ' (now)' must stay the LAST token (WO-883 order law)");
+                            if (!c.Selected)
+                                Fail("iron chip lost Selected under a closed gate — the cue must never unassign/lock the pick");
+                        }
+                    }
+
+                    // (d) the status mirror: assigned-iron StateText says it is waiting.
+                    string st = scope.Vm.StateText;
+                    if (!st.Contains("Iron") || !st.Contains("waiting on a"))
+                        Fail($"gated StateText '{st}' does not read 'Gathering Iron ... waiting on a <building>'");
+                    if (st.IndexOf("Armorer", StringComparison.OrdinalIgnoreCase) >= 0)
+                        Fail($"gated StateText '{st}' names the Armorer (QR-5.7 inversion)");
+                    if (!IsAscii(st))
+                        Fail($"gated StateText '{st}' contains non-ASCII characters");
+                }
+
+                // (f) reopen → the cue clears.
+                state.MarkEverBuilt("collector_forge");
+                if (EchoCardVM.TryGetFaucetNeed("iron", out string stale))
+                    Fail($"iron still cues 'NEEDS: {stale}' after collector_forge entered the ever-built ledger (gate reopened)");
+            }
+            finally
+            {
+                state.EverBuiltStructureIds.Clear();
+                state.EverBuiltStructureIds.AddRange(savedLedger);
+            }
         }
 
         /// <summary>Tiny disposable wrapper so each temporary VM always unsubscribes.</summary>

@@ -26,7 +26,11 @@
 //                     The developer's own PlayerPrefs are snapshotted and restored.
 //   4 [shelf-cap]     The thinned shelf: for the Forge + Armorer, at every authored
 //                     level, Resolve returns <= perLevelCap rows PER REQUIRED LEVEL,
-//                     ZERO ineligible (locked) rows, and ZERO excluded-prefix rows.
+//                     ZERO excluded-prefix rows, and ZERO locked rows EXCEPT the
+//                     WO-960 preview window: a vendor with lockedPreviewLevels > 0
+//                     (armorer=5) may ship level-locked rows whose req sits in
+//                     (level, level+window] - those are the owner-ruled greyed
+//                     ladder, not a WO-860 regression. Class locks stay forbidden.
 //   5 [shelf-oracle]  The surviving rows match an INDEPENDENT re-implementation of
 //                     the documented sort written here from the JSON (bucket by
 //                     req.level, power DESC, id ORDINAL ASC), and two consecutive
@@ -341,9 +345,22 @@ namespace DeNelle.Editor.Regression
                     foreach (var ware in wares)
                     {
                         if (vendor.OnlyEquippable && !ware.Eligible)
-                            failures.Add($"[shelf-cap] '{vendorId}' Lv{level} still returns LOCKED row '{ware.Id}' " +
-                                         $"(reason '{ware.LockReason}') despite onlyEquippable - the owner asked to " +
-                                         "'only show ones they can equip'");
+                        {
+                            // WO-960: the locked PREVIEW window re-admits class-appropriate rows
+                            // locked ONLY by level, within (level, level + lockedPreviewLevels].
+                            // Anything else locked is still the WO-860 violation.
+                            int lockedReq = ReqLevelOf(ware);
+                            bool previewOk = vendor.LockedPreviewLevels > 0 &&
+                                             ware.LockReason != null &&
+                                             ware.LockReason.StartsWith("Requires Lv ", StringComparison.Ordinal) &&
+                                             lockedReq > level &&
+                                             lockedReq <= level + vendor.LockedPreviewLevels;
+                            if (!previewOk)
+                                failures.Add($"[shelf-cap] '{vendorId}' Lv{level} returns LOCKED row '{ware.Id}' " +
+                                             $"(reason '{ware.LockReason}') outside the WO-960 preview window - " +
+                                             "onlyEquippable admits only class-ok level locks within " +
+                                             $"lockedPreviewLevels ({vendor.LockedPreviewLevels})");
+                        }
 
                         if (vendor.ExcludeIdPrefixes != null)
                             foreach (var p in vendor.ExcludeIdPrefixes)

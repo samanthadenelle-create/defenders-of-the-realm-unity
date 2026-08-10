@@ -2,18 +2,25 @@
 // SylasStewardInjector — WO-702 "The Founding of Elarion": Sylas's BODY for the
 // founding beats (owner ruling 2026-07-13: "use the model for him, then unload it").
 // -----------------------------------------------------------------------------
-// The Tutorial V2 founding arc speaks through Sylas (tutorial-steps.json rows →
-// TutorialFlow → DialogueService), but under ff.singlehero the walk-up companion
-// introducer no-ops, so NO Sylas body exists — TutorialWorldAnchors.ResolveSylas
-// falls to a synthetic courtyard anchor and "world.sylas" spotlights empty air.
+// ⚠ WO-1012 P2 (owner re-ruling 2026-08-09): the tutorial GUIDE is now the
+// player's first PET-ECHO — tutorial dialogue attributes to the "{guide}" token
+// (TutorialGuide seam), NOT to Sylas, and TutorialWorldAnchors.ResolveGuide
+// prefers the live pet body. This steward body remains as the PARKED-ROTATION
+// STAND-IN / physical fallback the guide anchor resolves to before the pet
+// deploys (and Sylas stays a canon village NPC in his own right).
+//
+// Original rationale (WO-702): under ff.singlehero the walk-up companion
+// introducer no-ops, so NO steward body exists — the guide anchor would fall to
+// a synthetic courtyard anchor and "world.guide" would spotlight empty air.
 //
 // This injector mirrors CastleCompanionIntroducerInjector's proven shape
 // (RuntimeInitializeOnLoadMethod bootstrap → HubScenes.IsHub gate → runtime
 // holder → Resources body + height-normalize + NpcGroundSeat) and spawns the
 // Ranger-Scout body NEAR THE HEART, named "Sylas", so:
-//   * TutorialWorldAnchors.ResolveSylas finds it by name (GameObject.Find("Sylas"))
-//     and the "world.sylas" highlight + "sylas_anchor" proximity resolve to a REAL
-//     character standing at the tree — the fresh-spawn vista (tree + well + Sylas).
+//   * TutorialWorldAnchors.ResolveGuide finds it by name (GameObject.Find("Sylas"))
+//     as its stand-in fallback and the "world.guide" highlight + "guide_anchor"
+//     proximity resolve to a REAL character standing at the tree when no pet
+//     body is deployed — the fresh-spawn vista (tree + well + steward).
 //   * A manual Talk (TalkPromptRegistry proximity prompt) REPLAYS the current
 //     founding step's intro line (TutorialFlow.CurrentIntroDialogueId) — the flow
 //     itself auto-plays each beat, so Talk is a courtesy replay, never a gate.
@@ -180,12 +187,13 @@ namespace DeNelle.Village
             Guard.Try("SylasSteward", "spawn steward body", () => body = SpawnBody(basePos, rot, holder.transform));
             if (body == null)
             {
-                FlowTrace.Fail("SylasSteward", "Inject: body spawn failed entirely — 'world.sylas' falls back to the synthetic town anchor (flow degrades, never blocks).");
+                FlowTrace.Fail("SylasSteward", "Inject: body spawn failed entirely — 'world.guide' falls back to the Heart / synthetic town anchor (flow degrades, never blocks).");
                 return;
             }
 
-            // THE LOAD-BEARING NAME: TutorialWorldAnchors.ResolveSylas finds Sylas by
-            // GameObject.Find("Sylas") — this is what points the spotlight at him.
+            // THE LOAD-BEARING NAME: TutorialWorldAnchors.ResolveGuide finds this
+            // stand-in by GameObject.Find("Sylas") when no pet-Echo body is deployed
+            // (WO-1012 P2) — this is what points the spotlight at him.
             body.name = "Sylas";
 
             Guard.Try("SylasSteward", "attach steward Talk", () => AttachInteraction(body));

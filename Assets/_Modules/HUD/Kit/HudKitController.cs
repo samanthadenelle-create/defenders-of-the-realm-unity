@@ -805,6 +805,10 @@ namespace DeNelle.HUD.Kit
             // reports the SAME string it always did (FormatQueueChip), it just no longer has to
             // ellipsize the Train count off the end of a narrower face.
             _queueChipLabel = chip != null ? chip.GetComponentInChildren<TMP_Text>(true) : null;
+            // WO-1012 P3 (TIMERS beat): the FTUE spotlights this chip for its one line on
+            // build timers — same registry contract as hud.build_button (line ~490 above).
+            if (chip != null)
+                TutorialHighlightRegistry.Register("hud.builders_chip", (RectTransform)chip.transform);
 
             // The Builder card rail. The SHARED component (DeNelle.Core.UI.QueueRailView) —
             // the Work Queue modal hosts the very same one, so the two surfaces can never

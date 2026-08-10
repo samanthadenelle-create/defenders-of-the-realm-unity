@@ -41,7 +41,9 @@ namespace DeNelle.Village
 
         private static readonly Color GruntTint  = new Color(0.58f, 0.58f, 0.64f); // grey
         private static readonly Color TankTint   = new Color(0.72f, 0.20f, 0.16f); // red
-        private static readonly Color HealerTint = new Color(0.22f, 0.72f, 0.34f); // green
+        // WO-956: was green (0.22, 0.72, 0.34) - even a dev-hotkey ENEMY never wears the
+        // safe hue (owner is red/green colourblind). Sickly violet via the hostile palette.
+        private static readonly Color HealerTint = HostilePalette.PlaceholderEffectTint;
 
         private Transform _root;
         private int _counter;

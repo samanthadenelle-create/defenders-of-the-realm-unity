@@ -1,5 +1,5 @@
 {
- "version": 5,
+ "version": 7,
  "speakers": [
   {
    "name": "Mother Wren",
@@ -35,6 +35,12 @@
    "name": "Sylas",
    "affiliation": "Ranger Companion",
    "portrait": "Portraits/Sylas"
+  },
+  {
+   "name": "{guide}",
+   "affiliation": "Echo of Elarion",
+   "portrait": "Portraits/pet-house",
+   "_note": "WO-1012 P2: the tutorial GUIDE speaker token - resolved at runtime by the TutorialGuide identity seam (the pet-Echo; rotation parked). This record exists for the card/regression contract; the live name/affiliation/portrait come from the seam."
   },
   {
    "name": "Coppin",
@@ -1002,11 +1008,11 @@
      "id": "start",
      "lines": [
       {
-       "speaker": "Sylas",
+       "speaker": "{guide}",
        "text": "In town they come in WAVES, at the gates. Your towers hold the line - and you fight beside them."
       },
       {
-       "speaker": "Sylas",
+       "speaker": "{guide}",
        "text": "Horns! Here they come - to the gate, Keeper!"
       }
      ],
@@ -1029,15 +1035,15 @@
      "id": "start",
      "lines": [
       {
-       "speaker": "Sylas",
+       "speaker": "{guide}",
        "text": "The line held - you and that tower of yours, together. That is how home is kept."
       },
       {
-       "speaker": "Sylas",
+       "speaker": "{guide}",
        "text": "Take your due - a defender earns their keep."
       },
       {
-       "speaker": "Sylas",
+       "speaker": "{guide}",
        "text": "You are ready to defend Elarion. When you wish to venture beyond the walls, the road is yours to take. You can revisit this guide anytime under Settings, Game Guide."
       }
      ],
@@ -1151,11 +1157,11 @@
      "id": "start",
      "lines": [
       {
-       "speaker": "Sylas",
+       "speaker": "{guide}",
        "text": "This is your castle - and this tree is what we defend. Everything else is yours to build."
       },
       {
-       "speaker": "Sylas",
+       "speaker": "{guide}",
        "text": "The old town is gone, Keeper. What stands next on this ground is your call, stone by stone."
       }
      ]
@@ -1170,11 +1176,11 @@
      "id": "start",
      "lines": [
       {
-       "speaker": "Sylas",
+       "speaker": "{guide}",
        "text": "Start small. Tap BUILD and set down an Echo Hollow - anywhere you like. There is no wrong ground for it."
       },
       {
-       "speaker": "Sylas",
+       "speaker": "{guide}",
        "text": "Build a thing, and the thing gives back. You'll see."
       }
      ]
@@ -1189,12 +1195,16 @@
      "id": "start",
      "lines": [
       {
-       "speaker": "Sylas",
+       "speaker": "{guide}",
        "text": "There - your Hollow stands, and your first Echo has answered. That spirit is yours now, Keeper."
       },
       {
-       "speaker": "Sylas",
+       "speaker": "{guide}",
        "text": "You'll find it under the Echoes button by the tree - it works for you now."
+      },
+      {
+       "speaker": "{guide}",
+       "text": "I can farm. I can mend. Put me to work, Keeper."
       }
      ]
     }
@@ -1208,15 +1218,15 @@
      "id": "start",
      "lines": [
       {
-       "speaker": "Sylas",
+       "speaker": "{guide}",
        "text": "This one earns its keep. Some roofs work your land - grain, timber, coin - and a lumber yard turns the woods into planks."
       },
       {
-       "speaker": "Sylas",
+       "speaker": "{guide}",
        "text": "Set your stores wherever the ground suits you. The raiders march on the Heart of Elarion - they pay your storehouses no mind."
       },
       {
-       "speaker": "Sylas",
+       "speaker": "{guide}",
        "text": "Walls and towers are what hold a horde back. We'll raise those next - that is where your defense is won."
       }
      ]
@@ -1231,11 +1241,11 @@
      "id": "start",
      "lines": [
       {
-       "speaker": "Sylas",
+       "speaker": "{guide}",
        "text": "Now the rest - the forge, the farm, the market. Lay them out; this town is yours."
       },
       {
-       "speaker": "Sylas",
+       "speaker": "{guide}",
        "text": "Take your time. A town is a plan you walk through every day."
       }
      ]
@@ -1250,11 +1260,11 @@
      "id": "start",
      "lines": [
       {
-       "speaker": "Sylas",
+       "speaker": "{guide}",
        "text": "Your first Echo has woken - a spirit of the tree, and it came with your Hollow."
       },
       {
-       "speaker": "Sylas",
+       "speaker": "{guide}",
        "text": "Open the Echoes button by the tree to meet it, and choose what it gathers - wood, iron or grain. While you rest, it works."
       }
      ],
@@ -1270,11 +1280,11 @@
      "id": "start",
      "lines": [
       {
-       "speaker": "Sylas",
+       "speaker": "{guide}",
        "text": "Roofs raised - now teeth. Open BUILD and look to the Defenses tab."
       },
       {
-       "speaker": "Sylas",
+       "speaker": "{guide}",
        "text": "Raise a tower where your walls are weakest. When the horde comes, you'll be glad of every arrow."
       }
      ]
@@ -1289,7 +1299,7 @@
      "id": "start",
      "lines": [
       {
-       "speaker": "Sylas",
+       "speaker": "{guide}",
        "text": "A new Echo has answered! Set it to a harvest - wood, iron or grain - and it will tend the work on its own."
       }
      ]
@@ -1304,7 +1314,7 @@
      "id": "start",
      "lines": [
       {
-       "speaker": "Sylas",
+       "speaker": "{guide}",
        "text": "Coin enough to build, Keeper. Walls don't raise themselves - put it to work."
       }
      ]
@@ -1319,7 +1329,7 @@
      "id": "start",
      "lines": [
       {
-       "speaker": "Sylas",
+       "speaker": "{guide}",
        "text": "New steel in your pack? Iron serves no one in a chest - equip it."
       }
      ]
@@ -1334,8 +1344,108 @@
      "id": "start",
      "lines": [
       {
-       "speaker": "Sylas",
+       "speaker": "{guide}",
        "text": "A talent earned! Open your talents and shape how you fight, Keeper."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "tut_founding_walk",
+   "_note": "WO-1012 P3 beat 2/8 WALK ('Come with me.' - the WO's authored copy). No control text: the walk itself teaches joystick/camera (progressive disclosure law).",
+   "startNode": "start",
+   "nodes": [
+    {
+     "id": "start",
+     "lines": [
+      {
+       "speaker": "{guide}",
+       "text": "Come with me, Keeper - the gate first. Stay close; I will show you the way."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "tut_founding_ack",
+   "_note": "WO-1012 P3 beat 4/8 ACK: the acknowledgment beat (2b piece 6) + the 2a utility line VERBATIM - the pet-Echo offers its work (the Echo-system hook; foreshadows the 2c-ter stacking teach). Supersedes tut_founding_hollow_done as the chain's first acknowledgment (that record is now unreferenced by the mandatory chain).",
+   "startNode": "start",
+   "nodes": [
+    {
+     "id": "start",
+     "lines": [
+      {
+       "speaker": "{guide}",
+       "text": "Good. You got it. Build a thing, and the thing gives back."
+      },
+      {
+       "speaker": "{guide}",
+       "text": "I can farm. I can mend. Put me to work, Keeper."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "tut_founding_timers",
+   "_note": "WO-1012 P3 beat 6/8 TIMERS: ONE line on the queue chip, no lecture (the Manage deep-dive stays contextual).",
+   "startNode": "start",
+   "nodes": [
+    {
+     "id": "start",
+     "lines": [
+      {
+       "speaker": "{guide}",
+       "text": "Work takes time, Keeper. Watch the ledger - the Builders tally tells you what is still rising."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "tut_founding_win",
+   "_note": "WO-1012 P3 beat 8/8 WIN + HANDOFF outro (the WO's authored line). Its dialogue.ended raise is the 2c-bis nudge chain's trigger - consumed by no mandatory step, so it reaches the contextual watchers.",
+   "startNode": "start",
+   "nodes": [
+    {
+     "id": "start",
+     "lines": [
+      {
+       "speaker": "{guide}",
+       "text": "The rest is yours, Keeper."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "tut_ctx_build_weapons",
+   "_note": "WO-1012 2c-bis nudge 1/2 (owner 2026-08-10): the weapons building - catalog id 'workshop'. QR-5.7 pins display 'Forge'; the live catalog says 'Weaponsmith', so the copy names both until the owner rules the rename. Dismissible, never blocking.",
+   "startNode": "start",
+   "nodes": [
+    {
+     "id": "start",
+     "lines": [
+      {
+       "speaker": "{guide}",
+       "text": "A thought, Keeper: a town needs proper steel. Set up a spot to buy weapons - raise the Forge, the weaponsmith's roof, when you are ready."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "tut_ctx_build_armor",
+   "_note": "WO-1012 2c-bis nudge 2/2: armor - catalog id 'forge', display 'Armorer'. The chain's order past these two beats is an owner creative pin - do not author more without her sequence.",
+   "startNode": "start",
+   "nodes": [
+    {
+     "id": "start",
+     "lines": [
+      {
+       "speaker": "{guide}",
+       "text": "Good steel wants good armor. An Armorer next, perhaps - in your own time, Keeper."
       }
      ]
     }

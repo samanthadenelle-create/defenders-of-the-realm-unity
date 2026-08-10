@@ -30,11 +30,15 @@ namespace DeNelle.Core.Dialogue
         // Those catalog/state reads now live HERE as read-only projections; the View binds the
         // strings and resolves sprites (a presentation concern) from them.
 
-        /// <summary>The current speaker's guild/shop affiliation sub-line (card standard), or null.</summary>
+        /// <summary>The current speaker's guild/shop affiliation sub-line (card standard), or null.
+        /// The GUIDE (WO-1012 P2 — lines authored with the "{guide}" token, resolved in OnLine)
+        /// carries its identity-seam affiliation; everyone else resolves via the speakers block.</summary>
         public string Affiliation
         {
             get
             {
+                if (Tutorial.TutorialGuide.IsGuideSpeaker(Speaker))
+                    return Tutorial.TutorialGuide.Affiliation;
                 var rec = DialogueCatalog.FindSpeaker(Speaker);
                 return rec != null ? rec.Affiliation : null;
             }
@@ -129,7 +133,10 @@ namespace DeNelle.Core.Dialogue
         private void OnLine(DialogueLine l)
         {
             ShowingOptions = false;
-            Speaker = l != null ? (l.Speaker ?? "") : "";
+            // WO-1012 P2: tutorial lines author the "{guide}" speaker token — resolve it
+            // to the live guide identity (the pet-Echo) at surface time. Copy unchanged;
+            // non-token speakers pass through untouched.
+            Speaker = l != null ? Tutorial.TutorialGuide.ResolveToken(l.Speaker ?? "") : "";
             Text = l != null ? (l.Text ?? "") : "";
             _optionLabels.Clear();
             Changed?.Invoke();

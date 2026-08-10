@@ -1,7 +1,27 @@
 # WORK ORDER 1012 — Tutorial/FTUE redesign: premium presentation, guide-hero rotation, the dynamic arc
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE (P1+P2+P3) — implemented 2026-08-10 by the sequential pipeline (kit → pet-guide →
+8-beat arc), conformance review CONFORMS TRUE; P4 (captures vs wireframes + tester re-test) and the
+owner felt-pass remain. See §7 below for the review's open findings.
 **Minted:** 2026-08-09 (UI seat) — provenance stack bumped 1012 → 1013 in the same edit (header-is-sole-source rule, 08-09 restructure)
+
+## §7 REVIEW FINDINGS (2026-08-10 pipeline review — open items, none blocking the lane commit)
+
+- **IMPORTANT — the ARRIVE 4s no-input camera moment is implemented NOWHERE** (circular deferral:
+  the step json delegates to OnboardingFlow presentation; OnboardingFlow's comment delegates to P3).
+  P4 scope.
+- **IMPORTANT — headless verification gap:** `AutoPilotDriver.AssertFoundingArc` (:2502-2530) still
+  drives the RETIRED chain (places pet-house, checks `founding_hollow`); no driver exercises
+  WALK / band-DEFEND / WIN, so the arc's `[Flow:Tutorial]` funnel is unproven headlessly. Update the
+  driver in the next AutoPilot pass.
+- Minors: 16 dead legacy `"speaker": "Sylas"` records (unreferenced, json-only) · the 2a utility
+  line duplicated into an unreferenced record · stale TutorialFlow comments (defend order/final) ·
+  the `{guide}` fallback portrait path is `Portraits/pet-house` (a building) · 12 pre-existing
+  em-dash bytes in ctx objectives · `GuideLineUi` is a new presenter where §2b said "existing
+  dialogue kit" (deviation documented in-file; mandatory beats still ride DialogueService).
+- **NOT in this lane (deferred integrations):** §2c-ter (the Echo stacking teach — needs the WO-953
+  gated-assignment seam to exist first) · WO-1013's `ctx_plans_recovered` step + `plans_collected`
+  signal wiring (proposed JSON in the WO-1013 RESULT) — both ride the next tutorial-data touch.
 **Lane:** Tutorial/Onboarding presentation + pacing. **The V2 bones STAY** — this is a skin + flow pass.
 **Provenance:** owner directive 2026-08-08/09 (verbatim fragments): the tutorial *"feels very amateurish...
 the verbiage is fine... it's the way the flow goes... the childish buttons they're using to highlight what

@@ -290,8 +290,9 @@ namespace DeNelle.DevTools
                 // gate is stuck, this FAILS and the throttled '[Flow:Build] PlaceLoop BLOCKED at
                 // <gate>' lines name the culprit — that is its purpose.
                 yield return RunPhase("AssertTutorialFirstTower", AssertTutorialFirstTower());
-                // WO-702 founding-arc probe: on a FRESH save, assert Sylas's steward body
-                // stands near the Heart (+ 'world.sylas' resolves to it), drive the live
+                // WO-702 founding-arc probe (guide identity per WO-1012 P2): on a FRESH
+                // save, assert a GUIDE body (the pet-Echo, else the steward stand-in)
+                // stands near the Heart (+ 'world.guide' resolves to it), drive the live
                 // founding_greet dialogue to its end through the REAL Advance path, place
                 // the Echo Hollow through the REAL build gate (ArmById('pet-house') +
                 // injected click — the 2990aaf6 lesson, no logic bypass), then assert the
@@ -2207,7 +2208,10 @@ namespace DeNelle.DevTools
         // ---------------------------------------------------------------------
         // Fresh-save founding arc, link by link (each failure NAMES the dead link):
         //   link 0  context gates (ff.tutorialv2 / hub / fresh save) — N/A otherwise
-        //   link 1  Sylas body present near the Heart AND 'world.sylas' resolves TO IT
+        //   link 1  a GUIDE BODY present near the Heart AND 'world.guide' resolving to
+        //           it (WO-1012 P2: the guide IS the pet-Echo body "Pet_<species>",
+        //           deployed by the ARRIVE-beat starter grant; the steward stand-in
+        //           is the parked-rotation fallback body)
         //   link 2  founding_greet driven to its end via the REAL dialogue Advance
         //   link 3  Echo Hollow through the REAL build gate: Enter → ArmById('pet-house')
         //           → injected click (IBuildInput seam) → placement commits →
@@ -2261,43 +2265,50 @@ namespace DeNelle.DevTools
             }
             FlowTrace.Step(Tag, "AssertFoundingArc: link 5 (entry) PASS — peace window held (HostilesSuppressedForTutorial=true).");
 
-            // ── link 1: Sylas body near the Heart + 'world.sylas' resolves to it ──
-            GameObject sylas = null;
+            // ── link 1: 'world.guide' resolves to a live GUIDE BODY near the Heart ──
+            // WO-1012 P2: the guide IS the player's first pet-Echo (root "Pet_<species>",
+            // deployed once the ARRIVE-beat starter grant lands); the steward stand-in
+            // ("CompanionIntroducer" / "Sylas") is the parked-rotation fallback body.
+            // Resolving only to the Heart/town-anchor fallbacks = NO body ever spawned
+            // = the beat has no physical guide — FAIL. (DevTools cannot reference
+            // DeNelle.Pets, so the pet body is classified by its PetDeployer name.)
+            Transform guideT = null;
+            bool guideIsBody = false;
             float t0 = Time.realtimeSinceStartup;
             while (Time.realtimeSinceStartup - t0 < 5f)
             {
-                sylas = GameObject.Find("Sylas");
-                if (sylas != null) break;
+                var a = DeNelle.Core.UI.TutorialHighlightRegistry.Resolve("world.guide");
+                guideT = a.IsValid ? a.World : null;
+                if (guideT != null)
+                {
+                    string n = guideT.name ?? "";
+                    guideIsBody = n.StartsWith("Pet_", StringComparison.OrdinalIgnoreCase) ||
+                                  string.Equals(n, "Sylas", StringComparison.Ordinal) ||
+                                  string.Equals(n, "CompanionIntroducer", StringComparison.Ordinal);
+                    if (guideIsBody) break;
+                }
                 yield return null;
             }
-            if (sylas == null)
+            if (!guideIsBody)
             {
-                _lastDetail = "FAIL link 1 — no 'Sylas' body (SylasStewardInjector never spawned it)";
-                FlowTrace.Fail(Tag, "AssertFoundingArc: FAIL at link 1 — no GameObject named 'Sylas' within 5s on a fresh save; SylasStewardInjector did not spawn the steward body (read its [Flow:SylasSteward] lines in this run).");
+                _lastDetail = $"FAIL link 1 — 'world.guide' never resolved to a guide body (got '{(guideT != null ? guideT.name : "<invalid>")}')";
+                FlowTrace.Fail(Tag, $"AssertFoundingArc: FAIL at link 1 — 'world.guide' resolved to '{(guideT != null ? guideT.name : "<invalid>")}' for 5s on a fresh save; neither a deployed pet-Echo body (ARRIVE-beat grant -> PetDeployer 'Pet_<species>') nor the steward stand-in spawned (read [Flow:PetAcquire] / [Flow:SylasSteward] lines in this run).");
                 yield break;
             }
             var heart = FindAnyObjectByType<HeartController>();
             if (heart != null)
             {
-                float d = Vector3.Distance(sylas.transform.position, heart.transform.position);
+                float d = Vector3.Distance(guideT.position, heart.transform.position);
                 if (d > 20f)
-                    FlowTrace.Warn(Tag, $"AssertFoundingArc: link 1 SOFT — Sylas is {d:0.0}m from the Heart (expected a courtyard-adjacent spawn <= 20m).");
+                    FlowTrace.Warn(Tag, $"AssertFoundingArc: link 1 SOFT — guide body '{guideT.name}' is {d:0.0}m from the Heart (expected a courtyard-adjacent spawn <= 20m).");
                 else
-                    FlowTrace.Step(Tag, $"AssertFoundingArc: link 1a PASS — Sylas body {d:0.0}m from the Heart.");
+                    FlowTrace.Step(Tag, $"AssertFoundingArc: link 1a PASS — guide body '{guideT.name}' {d:0.0}m from the Heart.");
             }
-            var anchor = DeNelle.Core.UI.TutorialHighlightRegistry.Resolve("world.sylas");
-            bool anchorIsSylas = anchor.IsValid && anchor.World != null &&
-                (anchor.World == sylas.transform || anchor.World.IsChildOf(sylas.transform) || sylas.transform.IsChildOf(anchor.World));
-            if (!anchorIsSylas)
-            {
-                _lastDetail = "FAIL link 1 — 'world.sylas' does not resolve to the spawned body";
-                FlowTrace.Fail(Tag, $"AssertFoundingArc: FAIL at link 1 — 'world.sylas' resolved to '{(anchor.World != null ? anchor.World.name : "<invalid>")}' instead of the spawned Sylas body; TutorialWorldAnchors.ResolveSylas is not finding it by name.");
-                yield break;
-            }
-            FlowTrace.Step(Tag, "AssertFoundingArc: link 1 PASS — Sylas body present and 'world.sylas' resolves to it.");
+            FlowTrace.Step(Tag, $"AssertFoundingArc: link 1 PASS — 'world.guide' resolves to the live guide body '{guideT.name}'.");
 
             // ── link 2: drive founding_greet's dialogue to its end (real Advance) ──
             var flow = FindAnyObjectByType<TutorialFlow>();
+            bool greetCompleted = false;   // WO-1012 P2: greet ENTER fires the starter-pet grant — link 4 keys off this
             if (flow != null && string.Equals(flow.CurrentStepId, "founding_greet", StringComparison.OrdinalIgnoreCase))
             {
                 // Wait for the beat's intro dialogue to open, then Advance through it —
@@ -2326,6 +2337,7 @@ namespace DeNelle.DevTools
                     FlowTrace.Fail(Tag, $"AssertFoundingArc: FAIL at link 2 — drove the greet dialogue with {taps} real Advance taps but the flow never left founding_greet (dialogue.ended:tut_founding_greet not consumed).");
                     yield break;
                 }
+                greetCompleted = true;
                 FlowTrace.Step(Tag, $"AssertFoundingArc: link 2 PASS — founding_greet completed via real dialogue Advance ({taps} taps); flow now on '{flow.CurrentStepId}'.");
             }
             else
@@ -2490,10 +2502,13 @@ namespace DeNelle.DevTools
                 }
             }
 
-            // ── link 4: the completion-side starter-pet grant ────────────────────
-            // (only asserted hard when the flow was live on founding_hollow OR the
-            //  grant already persisted; a mid-run probe placement without the flow on
-            //  that step does not trigger the grant — that's interpreter-correct.)
+            // ── link 4: the ARRIVE-beat (enter-side) starter-pet grant ───────────
+            // WO-1012 P2: the grant moved from founding_hollow COMPLETION to
+            // founding_greet ENTER — the guide IS the pet-Echo and must exist before
+            // it speaks. Asserted hard whenever the flow demonstrably passed the
+            // ARRIVE beat this run (greet completed above) or the arc already
+            // progressed on this save (flow past greet / Hollow standing); a probe run
+            // where the flow never entered the chain leaves the grant correctly untriggered.
             float gw = 0f;
             bool granted = false;
             while (gw < 6f)
@@ -2506,14 +2521,14 @@ namespace DeNelle.DevTools
             bool flowWasOnHollow = flow != null && string.Equals(flow.CurrentStepId, "founding_hollow", StringComparison.OrdinalIgnoreCase);
             if (granted)
                 FlowTrace.Step(Tag, $"AssertFoundingArc: link 4 PASS — starter pet granted (Pets={(st.Pets != null ? st.Pets.Count : 0)}, StarterPetId='{st.StarterPetId}').");
-            else if (flowWasOnHollow || hollowAlreadyPlaced)
+            else if (greetCompleted || flowWasOnHollow || hollowAlreadyPlaced)
             {
-                _lastDetail = "FAIL link 4 — Hollow placed but no pet grant (Pets/StarterPetId unchanged)";
-                FlowTrace.Fail(Tag, $"AssertFoundingArc: FAIL at link 4 — the Hollow stands but GameState.Pets ({petsBefore}→{(st.Pets != null ? st.Pets.Count : 0)}) / StarterPetId ('{st.StarterPetId}') show NO grant within 6s; ApplyStarterPetGrant never fired on step completion.");
+                _lastDetail = "FAIL link 4 — ARRIVE beat passed but no pet grant (Pets/StarterPetId unchanged)";
+                FlowTrace.Fail(Tag, $"AssertFoundingArc: FAIL at link 4 — the ARRIVE beat is behind us (greetCompleted={greetCompleted}, onHollow={flowWasOnHollow}, hollowPlaced={hollowAlreadyPlaced}) but GameState.Pets ({petsBefore}→{(st.Pets != null ? st.Pets.Count : 0)}) / StarterPetId ('{st.StarterPetId}') show NO grant within 6s; ApplyStarterPetGrant never fired on founding_greet ENTER (WO-1012 P2 enter-side rule).");
                 yield break;
             }
             else
-                FlowTrace.Step(Tag, "AssertFoundingArc: link 4 skipped — flow was not awaiting founding_hollow this run, so the completion-side grant is correctly untriggered.");
+                FlowTrace.Step(Tag, "AssertFoundingArc: link 4 skipped — the flow never entered the ARRIVE beat this run, so the enter-side grant is correctly untriggered.");
 
             // ── link 6: DEFEND must refuse while the arc is incomplete ───────────
             if (!st.Onboarded)
@@ -2545,7 +2560,7 @@ namespace DeNelle.DevTools
                 FlowTrace.Step(Tag, "AssertFoundingArc: link 5 (exit) PASS — peace window still held.");
             }
 
-            _lastDetail = "PASS — founding-arc chain intact (Sylas, greet, Hollow, grant, peace, DEFEND-refusal)";
+            _lastDetail = "PASS — founding-arc chain intact (guide body, greet, Hollow, grant, peace, DEFEND-refusal)";
             FlowTrace.Step(Tag, "AssertFoundingArc: PASS — the WO-702 founding-arc chain is intact end-to-end.");
         }
 

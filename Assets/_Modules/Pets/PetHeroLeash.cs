@@ -87,6 +87,42 @@ namespace DeNelle.Pets
 
         private static Type s_heroType;
 
+        // ── WO-1012 P2: the GUIDE-LEAD seam ──────────────────────────────────
+        // The tutorial's pet-Echo GUIDE leads movement beats ("Come with me."):
+        // while a lead target is set, every leashed pet suspends its wander/orbit
+        // FSM and paces AHEAD of the hero toward the target — the carrot projects
+        // toward the anchor but stays hard-clamped inside the hero leash, so the
+        // guide WAITS for a lagging hero instead of deserting it. At the anchor it
+        // holds and looks around. STATIC by design: the narrowest data/config seam
+        // (TutorialFlow hands over ONE world position; no pet-instance plumbing,
+        // no cross-module object handoff), and during the FTUE exactly ONE pet
+        // exists (the starter Echo) so "all leashed pets" == the guide. Cleared by
+        // the flow on beat completion / teardown; verified at source that Pet.cs
+        // steers to SetHomePost, so no new movement code beyond this carrot mode.
+        private static bool s_leadActive;
+        private static Vector3 s_leadTarget;
+        private const float LeadArriveRadius = 2.2f;   // hold distance at the anchor
+        private int _leadBehaviorSent = -1;            // dedupe SetBehavior calls in lead mode
+
+        /// <summary>Point every leashed pet (the FTUE guide) at a world-space lead
+        /// anchor. Idempotent — safe to re-assert every frame; traces on change only.</summary>
+        public static void SetLeadTarget(Vector3 worldPos)
+        {
+            if (!s_leadActive || (worldPos - s_leadTarget).sqrMagnitude > 1f)
+                FlowTrace.Step("Pets", $"guide-lead SET -> {worldPos} (WO-1012 P2: the pet-Echo paces ahead of the hero toward the anchor).");
+            s_leadActive = true;
+            s_leadTarget = worldPos;
+        }
+
+        /// <summary>End the lead (beat complete / flow teardown) — the leash resumes
+        /// natural exploration. Safe when no lead is active.</summary>
+        public static void ClearLeadTarget()
+        {
+            if (!s_leadActive) return;
+            s_leadActive = false;
+            FlowTrace.Step("Pets", "guide-lead CLEARED — leash resumes natural exploration.");
+        }
+
         private void Awake()
         {
             _pet = GetComponent<Pet>();
@@ -130,6 +166,40 @@ namespace DeNelle.Pets
             Vector3 petPos = transform.position;
             Vector3 toHero = _heroT.position - petPos; toHero.y = 0f;
             float distHero = toHero.magnitude;
+
+            // ── WO-1012 P2 guide-lead: an active lead target overrides the wander
+            //    FSM entirely — the pet paces ahead of the hero toward the anchor. ──
+            if (s_leadActive)
+            {
+                Vector3 toAnchor = s_leadTarget - petPos; toAnchor.y = 0f;
+                Vector3 leadCarrot;
+                int wantBehavior;
+                if (toAnchor.magnitude <= LeadArriveRadius)
+                {
+                    leadCarrot = s_leadTarget;   // arrived — hold at the anchor
+                    wantBehavior = 3;            // "look around" idle while waiting
+                }
+                else
+                {
+                    leadCarrot = petPos + toAnchor.normalized * LeadDistance;
+                    wantBehavior = 0;            // travel gait
+                }
+                if (wantBehavior != _leadBehaviorSent)
+                {
+                    _leadBehaviorSent = wantBehavior;
+                    _pet.SetBehavior(wantBehavior);
+                }
+                // Same hard clamp as the wander path: the carrot never leaves the
+                // hero's ReturnRadius — the guide LEADS, it never deserts.
+                Vector3 fh = leadCarrot - _heroT.position; fh.y = 0f;
+                if (fh.magnitude > ReturnRadius)
+                    leadCarrot = _heroT.position + fh.normalized * ReturnRadius;
+                leadCarrot.y = Mathf.Max(0f, leadCarrot.y);
+                _pet.SetHomePost(leadCarrot);
+                _lastHeroPos = _heroT.position;   // keep the moving-context sample warm
+                return;
+            }
+            _leadBehaviorSent = -1;   // out of lead mode — the FSM owns behavior again
 
             // ── heading drift: a CONTINUOUS Perlin-noise turn intent (coherent noise →
             //    smooth, animal-like curving), signed so there's no directional bias. ──
