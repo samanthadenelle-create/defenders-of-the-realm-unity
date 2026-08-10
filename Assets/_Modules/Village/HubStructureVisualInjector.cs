@@ -596,7 +596,8 @@ namespace DeNelle.Village
             // landmark shows the flat blue electro rune-circle ground loop ("Cathedral_Aura" ->
             // Magic circle electro loop) — NOT a shield dome; the prior "Aegis_Shield" holy dome was
             // the felt-test reject. Distinct from the combat Arcane Spire (Aura_HeartPulse) +
-            // harvest nodes (TreeofLifeAura_Aura). Must match StructureFactory (diff gate).
+            // harvest nodes ("Poi_NodeAura" -- retagged 2026-08-06; this line used to name
+            // "TreeofLifeAura_Aura" and was stale). Must match StructureFactory (diff gate).
             if (s.bakedName == "ArcaneTower_MagicUpgrades")
                 ArcaneAura.Ensure(target.gameObject, "Cathedral_Aura");
 

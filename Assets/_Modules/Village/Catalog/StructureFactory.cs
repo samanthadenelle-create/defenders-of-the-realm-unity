@@ -921,7 +921,8 @@ namespace DeNelle.Village
                     // "arcane-tower") shows the flat blue electro rune-circle ground loop
                     // ("Cathedral_Aura" -> Magic circle electro loop) — NOT a shield dome; the prior
                     // "Aegis_Shield" holy dome was the felt-test reject. Distinct from the combat
-                    // Arcane Spire's "Aura_HeartPulse" + nodes' "TreeofLifeAura_Aura".
+                    // Arcane Spire's "Aura_HeartPulse" + nodes' "Poi_NodeAura" (retagged
+                    // 2026-08-06; this line used to name "TreeofLifeAura_Aura" and was stale).
                     if (string.Equals(entry.id, "arcane-tower", System.StringComparison.OrdinalIgnoreCase))
                         ArcaneAura.Ensure(root, "Cathedral_Aura");
                     break;

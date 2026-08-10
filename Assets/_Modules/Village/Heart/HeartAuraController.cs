@@ -91,7 +91,10 @@ namespace DeNelle.Village
         // Stop()'d on destroy. It is ADDITIVE to the Aura_HeartPulse health-tell nucleus and is
         // parented to the Heart ROOT (not the health-size pivot) so the ambient glow reads
         // constant, unaffected by the color-free size pulse above.
-        private const string TreeAuraKey = "TreeofLifeAura_Aura";
+        // WO-1002 / owner F8 seq 2306: the key itself is UNCHANGED (owner owns the tag) -- it now
+        // comes from AmbientAuraPolicy so the hub tree and the harvest nodes read ONE definition of
+        // "the rejected yellow loop", and a retag can never re-ship it past only one of the gates.
+        private const string TreeAuraKey = AmbientAuraPolicy.WithheldAmbientAuraKey;
 
         // HP tier cut points for the Step-traced readout (mirrors HeartwoodAmbient tiers).
         private const float HealthyMin  = 75f;
@@ -124,6 +127,7 @@ namespace DeNelle.Village
         private const float CrownTrackInterval = 0.5f;   // throttle for the live-crown re-seat
         private bool  _hasTreeBody;                       // a visible non-particle tree renderer exists (hub centerpiece)
         private bool  _suppressWhiteSwirl;                // hub static-town Heart: white Aura_HeartPulse withheld
+        private bool  _suppressTreeAura;                  // hub static-town Heart: TreeofLifeAura_Aura withheld (WO-1002)
         private float _crownTrackTimer;
         private bool  _crownReported;                     // §12 Once-trace guard
 
@@ -185,6 +189,14 @@ namespace DeNelle.Village
             _hasTreeBody = TryComputeCrown(out Vector3 crown, out Vector3 canopy);
             _suppressWhiteSwirl = _hasTreeBody;
 
+            // WO-1002 + owner F8 seq 2306 ("i do not want that vfx used at all"): the GREEN/gold
+            // TreeofLifeAura_Aura FireFlies loop is the yellow plume at the hub world tree's base.
+            // It rides the SAME hub-detection gate as the white swirl above -- _hasTreeBody, the one
+            // predicate that means "this Heart is the static-town centerpiece with a visible tree".
+            // NO second detection is invented: a bare combat/raid Heart has no tree body, so it keeps
+            // its aura exactly as before (the withhold is HUB-ONLY, per WO-1002 section 1).
+            _suppressTreeAura = ShouldWithholdTreeAura(_hasTreeBody);
+
             // A pivot child hosts the glow + owns the size pulse, so scaling the aura never pollutes
             // the pooled VFX GameObject's own localScale. Parent to the ANCHOR (scale 1, unrotated)
             // so the pulse/glow math is clean; when a tree exists the pivot sits on the canopy (world)
@@ -216,7 +228,17 @@ namespace DeNelle.Village
             // (B) GREEN Tree-of-Life ambient loop (TreeofLifeAura_Aura -- OWNER-TAGGED FireFlies; key
             // verbatim, NEVER swapped). Seated tightly on the tree CROWN (live renderer bounds) when a
             // tree exists, else the legacy anchor+offset. Crown-tracked each tick in Update.
-            StartGreenTreeAura(_hasTreeBody ? crown : transform.position + _auraOffset);
+            //
+            // WO-1002 / F8 2306: on the HUB centerpiece it is now WITHHELD -- and the withhold is
+            // TRACED, never a silent early-return, because "nobody noticed for three days" is exactly
+            // what a silent withhold buys. Combat/raid Hearts fall through and still start it.
+            if (_suppressTreeAura)
+                FlowTrace.Step("Heart",
+                    $"HeartAura '{name}': hub centerpiece Heart -> " +
+                    AmbientAuraPolicy.WithholdReason("tree-base ambient loop") +
+                    $" (treeBody={_hasTreeBody}, anchorPos={transform.position:F2}) -- combat/raid Hearts unaffected.");
+            else
+                StartGreenTreeAura(_hasTreeBody ? crown : transform.position + _auraOffset);
 
             // (C) WO-891 (adjacent, reported): THE HEART DID NOT FLINCH WHEN STRUCK.
             //
@@ -294,6 +316,18 @@ namespace DeNelle.Village
             }
         }
 
+        /// <summary>
+        /// THE WO-1002 DECISION, as a pure predicate so it is testable headlessly (a live BuildAura
+        /// needs a VFXManager + a play session, which would green-tick over a null).
+        /// TRUE only when this Heart is the HUB centerpiece (<paramref name="hasTreeBody"/> -- the
+        /// same single hub-detection the white swirl uses) AND the policy says the rejected ambient
+        /// loop is withheld. A combat/raid Heart has no visible tree body, so it is always FALSE and
+        /// keeps its aura. Flipping <see cref="AmbientAuraPolicy.ShrinkInsteadOfWithhold"/> also makes
+        /// it FALSE -- the hub then plays the loop small (0.2) instead of not at all.
+        /// </summary>
+        public static bool ShouldWithholdTreeAura(bool hasTreeBody)
+            => hasTreeBody && AmbientAuraPolicy.ShouldWithhold(TreeAuraKey);
+
         /// <summary>Spawn the OWNER-TAGGED GREEN Tree-of-Life ambient loop (<see cref="TreeAuraKey"/>
         /// FireFlies) at <paramref name="worldSeat"/> (the tree crown when a centerpiece exists).
         /// Parented to the scale-1 ANCHOR -- NOT the scale-7 tree, which would inflate the pooled
@@ -306,17 +340,23 @@ namespace DeNelle.Village
                     $"HeartAura '{name}': VFXManager.Instance is null -- the pooled {TreeAuraKey} loop will not appear.");
                 return;
             }
+            // WO-1002 fallback path: normally 1. If the owner flips
+            // AmbientAuraPolicy.ShrinkInsteadOfWithhold to TRUE ("or set height to .2 so its small"),
+            // the HUB tree plays the loop at 0.2 instead of not at all. A bare combat/raid Heart
+            // (no tree body) is never resized -- the alternative is hub-scoped like the withhold.
+            float scaleMul = _hasTreeBody ? AmbientAuraPolicy.ScaleFor(TreeAuraKey) : 1f;
             _treeHandle = VFXManager.PlayKey(
                 TreeAuraKey,
                 worldSeat,
                 Quaternion.identity,
                 transform,          // anchor (scale 1) -- clean world scale; crown-tracked via SetPosition
                 null,               // keep the authored aura color (no tint)
-                1f);
+                scaleMul);
             if (_treeHandle != null)
                 FlowTrace.Step("Heart",
                     $"HeartAura '{name}': {TreeAuraKey} FireFlies ambient started at crown {worldSeat:F2} " +
-                    $"(treeBody={_hasTreeBody}, anchorPos={transform.position:F2}) -- parented to anchor, crown-tracked.");
+                    $"(treeBody={_hasTreeBody}, anchorPos={transform.position:F2}, scaleMul={scaleMul:F2}) -- " +
+                    "parented to anchor, crown-tracked.");
             else
                 FlowTrace.Warn("Heart",
                     $"HeartAura '{name}': PlayKey('{TreeAuraKey}') returned a NULL handle -- ambient tree loop " +
@@ -378,8 +418,10 @@ namespace DeNelle.Village
                 _crownReported = true;
                 FlowTrace.Once("Heart", $"aura-crown:{name}",
                     $"HeartAura '{name}': crown-tether LIVE -> anchorPos={transform.position:F2}, crown={crown:F2}, " +
-                    $"canopy={canopy:F2}, whiteSwirlSuppressed={_suppressWhiteSwirl}. Auras now seated on the tree " +
-                    "renderer bounds (the offset from the anchor is the RCA and is now corrected).");
+                    $"canopy={canopy:F2}, whiteSwirlSuppressed={_suppressWhiteSwirl}, " +
+                    $"treeAuraSuppressed={_suppressTreeAura}, treeHandle={(_treeHandle != null ? "live" : "none")}. " +
+                    "Auras now seated on the tree renderer bounds (the offset from the anchor is the RCA " +
+                    "and is now corrected).");
             }
         }
 

@@ -57,7 +57,10 @@ namespace DeNelle.Village
         // FireFlies stays on the Heart's tree crown (HeartAuraController.TreeAuraKey), where the
         // owner confirmed it reads well: "the fireflies are great at the tree".
         // Still a SWAPPABLE default — the owner may retag in the VFX Caster.
-        private const string NodeAuraKey = "Poi_NodeAura";
+        // PUBLIC (WO-1002 oracle): the harvest-node aura key is the thing the owner ruling is about,
+        // so the regression asserts on the REAL constant rather than re-typing the string. Read-only
+        // const -- exposing it changes no behaviour and gives the suite a live value to test.
+        public const string NodeAuraKey = "Poi_NodeAura";
         private const string LandmarkKey = "Poi_Landmark";
 
         // ── Live callout handles (one per beacon currently showing) ──────────
@@ -215,8 +218,27 @@ namespace DeNelle.Village
             if (b == null) return;
             if (_live.TryGetValue(b, out var h) && h != null && h.IsAlive) return;
 
+            // WO-890 / WO-1002 / owner F8 seq 2306 ("i do not want that vfx used at all"): harvest
+            // nodes must NEVER start the rejected ambient loop. Today NodeAuraKey is "Poi_NodeAura"
+            // (retagged 2026-08-06), so this gate is dormant BY VALUE -- it exists so that a future
+            // retag back to the rejected key is refused HERE, loudly, instead of silently re-shipping
+            // the plume the owner has now asked to remove three times. Traced, never a silent return.
+            if (AmbientAuraPolicy.ShouldWithhold(NodeAuraKey))
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Once("Poi", "node-aura-withheld",
+                    AmbientAuraPolicy.WithholdReason("harvest-node callout aura") +
+                    " NodeAuraKey is currently pointed at the rejected loop -- retag it in the VFX " +
+                    "Caster to restore node auras.");
+                return;
+            }
+
+            // scale 0 = "use the catalog DefaultScale" (VFXManager.PlayKeyInternal). The policy only
+            // ever returns a non-1 value under the shrink flip on the rejected key, so a normal node
+            // aura keeps its authored size exactly as before.
+            float policyScale = AmbientAuraPolicy.ScaleFor(NodeAuraKey);
             var handle = VFXManager.PlayKey(NodeAuraKey, b.transform.position,
-                Quaternion.identity, parent: null, color: b.Tint, scale: 0f, lifetime: 0f,
+                Quaternion.identity, parent: null, color: b.Tint,
+                scale: policyScale == 1f ? 0f : policyScale, lifetime: 0f,
                 follow: b.transform);
             if (handle != null) _live[b] = handle;   // null == key not authored yet / budget hit
         }

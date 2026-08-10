@@ -6,7 +6,7 @@
 
 # WORK ORDER 1002 — Remove the yellow aura at the hub Heart of Elarion tree
 
-**Status:** READY TO IMPLEMENT - NOT STARTED (verified accurate 2026-08-08) · **Silo:** Hub/VFX · **For:** CLAUDE CLI · **Date:** 2026-08-07
+**Status:** DONE (implemented + gated 2026-08-10, REGRESSION_OK 147/147) - three days after it was raised, and only because the owner asked a THIRD time. Owner felt-verify owed: open the hub and confirm the tree base is clean.
 **PO:** Samantha (owner) · **Author:** UI seat · **UI-seat block:** 1000–1099
 **Owner (felt-test 2026-08-07):** *"remove the yellow."* A big yellow glowing plume engulfs the base/roots of the Heart of Elarion tree in the hub. It's the same over-hot yellow class as the harvest-node plume (WO-890 subtlety ruling).
 
