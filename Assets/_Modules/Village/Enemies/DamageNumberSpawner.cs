@@ -156,6 +156,83 @@ namespace DeNelle.Village
             return n;
         }
 
+        // =====================================================================
+        //  WO-953 — "+N <resource>" income pops THROUGH THE SAME POOL.
+        //  Owner ruling (verbatim): "we can use the same item that spawns the
+        //  damage points." ONE pool, one owner — ResourceGainPopup (the old
+        //  separate TMP stack) now forwards here; never build a second stack.
+        //  Combat behavior above is untouched: this is an additive entry point.
+        // =====================================================================
+
+        /// <summary>Seconds within which repeat gains of the SAME resource MERGE into the
+        /// live label instead of spawning another (burst throttle — a silo dump or a fast
+        /// tick loop can never wallpaper the screen with popups).</summary>
+        public const float GainMergeWindowSeconds = 0.6f;
+
+        /// <summary>Per-resource running merge state (label + accumulated amount).</summary>
+        private struct GainStream
+        {
+            public DamageNumberSpawner Label;
+            public int Amount;
+            public float LastTime;
+        }
+        private static readonly Dictionary<string, GainStream> s_gainStreams =
+            new Dictionary<string, GainStream>(8);
+
+        // The resource this pooled body is currently showing a gain label for, or null
+        // when it is a damage number / plain label. Guards the merge path against a
+        // recycled body that the pool has since re-leased to combat.
+        private string _gainKey;
+
+        /// <summary>
+        /// Spawns (or MERGES into a live) floating "+N &lt;resource&gt;" income pop at
+        /// <paramref name="worldPos"/> — the WO-953 felt moment for every delivery that
+        /// lands in the wallet. Word+shape: the resource NAME rides in the text (the
+        /// tint is a redundant channel only — colorblind law). Pooled + burst-merged:
+        /// a repeat gain of the same resource within <see cref="GainMergeWindowSeconds"/>
+        /// updates the live label's total instead of stacking a new popup.
+        /// No-op (null) for non-positive amounts, empty labels, or no camera.
+        /// </summary>
+        public static DamageNumberSpawner SpawnResourceGain(int amount, string resourceLabel, Vector3 worldPos, Color tint)
+        {
+            if (amount <= 0 || string.IsNullOrEmpty(resourceLabel)) return null;
+
+            float now = Time.unscaledTime;
+            if (s_gainStreams.TryGetValue(resourceLabel, out var st)
+                && st.Label != null
+                && st.Label._gainKey == resourceLabel
+                && st.Label.gameObject.activeSelf
+                && now - st.LastTime < GainMergeWindowSeconds)
+            {
+                st.Amount += amount;
+                st.LastTime = now;
+                st.Label.RearmGainLabel("+" + st.Amount + " " + resourceLabel);
+                s_gainStreams[resourceLabel] = st;
+                // §12: the merge is a deliberate drop of a visual, not a lost grant —
+                // trace it so a capture can tell "merged" from "never popped".
+                FlowTrace.Throttle("Feedback", "gain-merge-" + resourceLabel, 1f,
+                    $"resource pop merged +{amount} into running +{st.Amount} {resourceLabel} (burst throttle)");
+                return st.Label;
+            }
+
+            var n = SpawnLabel("+" + amount + " " + resourceLabel, worldPos, tint, scale: 1.05f);
+            if (n == null) return null;   // no camera — SpawnLabel already Once-traced
+            n._gainKey = resourceLabel;
+            s_gainStreams[resourceLabel] = new GainStream { Label = n, Amount = amount, LastTime = now };
+            FlowTrace.Throttle("Feedback", "gain-pop", 1f,
+                $"resource pop spawned +{amount} {resourceLabel} (damage-number pool, WO-953)");
+            return n;
+        }
+
+        /// <summary>Updates a live gain label's text with the merged running total and
+        /// restarts its rise/fade so the new number is readable from the start.</summary>
+        private void RearmGainLabel(string text)
+        {
+            if (_text != null) _text.text = text;
+            _age = 0f;   // LateUpdate re-derives position from _startPos — the label
+                         // re-pops from its origin, reading as a refreshed counter.
+        }
+
         // ── Pool (SetActive cycle under a DontDestroyOnLoad root) ─────────────
         // Mirrors VfxPool: a dormant number is just disabled + re-homed, then
         // re-armed by Build/BuildLabel on the next Spawn. Self-installs lazily.
@@ -203,6 +280,7 @@ namespace DeNelle.Village
             // Clear the visible glyph so a dormant number can't flash stale text for a
             // frame before its next Build re-arms it.
             if (_text != null) _text.text = string.Empty;
+            _gainKey = null;   // WO-953: a pooled body carries no gain identity while dormant
             transform.SetParent(Root(), false);
             gameObject.SetActive(false);
             if (!s_pool.Contains(this)) s_pool.Enqueue(this);
@@ -218,6 +296,7 @@ namespace DeNelle.Village
             _faceCamera = cam;
             _startPos = _tf.position;
             _age = 0f;
+            _gainKey = null;   // WO-953: a recycled gain label re-leased to combat must never merge
             _lifetime = Lifetime;   // reset (a reused body may have been a longer label)
             _rise = RiseDistance;
 
@@ -262,6 +341,7 @@ namespace DeNelle.Village
             _faceCamera = cam;
             _startPos = _tf.position;
             _age = 0f;
+            _gainKey = null;   // WO-953: SpawnResourceGain re-stamps this after the build
             _lifetime = 1.6f;   // linger ~2x a damage number so the player reads it
             _rise = 1.6f;
 

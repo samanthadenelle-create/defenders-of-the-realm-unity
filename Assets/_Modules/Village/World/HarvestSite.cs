@@ -145,7 +145,8 @@ namespace DeNelle.Village.World
                     : transform.position + Vector3.up * 2.2f;
 
                 Color tint = GetResourceColor();
-                ResourceGainPopup.Spawn(popupPos, $"+{amount} {ResourceType}", tint);
+                // WO-953: player word, never the enum ("Crystals", not "AetherCrystal").
+                ResourceGainPopup.Spawn(popupPos, $"+{amount} {MineNode.ResourceDisplayLabel(ResourceType)}", tint);
 
                 TryAttractRaid();
             }

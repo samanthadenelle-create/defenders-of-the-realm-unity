@@ -626,7 +626,23 @@ namespace DeNelle.Village
         {
             if (amount <= 0) return;
             Vector3 pos = transform.position + Vector3.up * 1.6f;
-            ResourceGainPopup.Spawn(pos, $"+{amount} {Resource}", ResourceTint(Resource));
+            // WO-953: the popup names the PLAYER word ("Crystals"), never the enum
+            // ("AetherCrystal") — the word is the meaning channel (colorblind law).
+            ResourceGainPopup.Spawn(pos, $"+{amount} {ResourceDisplayLabel(Resource)}", ResourceTint(Resource));
+        }
+
+        /// <summary>Player-facing popup word per resource (WO-953 — matches the collector's
+        /// "Crystals" label so wood/iron/food/crystals read identically across every income path).</summary>
+        internal static string ResourceDisplayLabel(MineResource res)
+        {
+            return res switch
+            {
+                MineResource.Wood          => "Wood",
+                MineResource.Iron          => "Iron",
+                MineResource.Food          => "Food",
+                MineResource.AetherCrystal => "Crystals",
+                _                          => res.ToString()
+            };
         }
 
         /// <summary>Resource-themed popup tint (matches HarvestSite's palette so Wood/

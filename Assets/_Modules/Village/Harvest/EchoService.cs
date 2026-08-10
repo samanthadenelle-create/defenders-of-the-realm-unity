@@ -425,8 +425,54 @@ namespace DeNelle.Village
             if (gs != null) gs.Save();
 
             FlowTrace.Step("Echo", $"DumpSilos: banked +{wood} wood, +{iron} iron, +{food} food, +{gold} gold, +{crystals} crystals (pool {pool}); silo reset, clock advanced.");
+
+            // WO-953: the felt moment — "+N <resource>" pops for every banked share,
+            // through the ONE pooled damage-number spawner (owner ruling: "we can use
+            // the same item that spawns the damage points"). Word carries the meaning;
+            // the tint is the shared income palette (redundant channel, colorblind law).
+            SpawnDumpPops(wood, iron, food, gold, crystals);
+
             Changed?.Invoke();
             return pool;
+        }
+
+        /// <summary>
+        /// WO-953 pop hook for the silo dump: one "+N &lt;resource&gt;" pooled pop per
+        /// nonzero banked share, stacked above the hero (the tap that banked them).
+        /// Purely presentational — banking already happened and is FlowTrace'd above;
+        /// a missing hero/camera skips the visual, never the grant.
+        /// </summary>
+        private static void SpawnDumpPops(int wood, int iron, int food, int gold, int crystals)
+        {
+            var hero = GameObject.FindWithTag("Player");   // canon hero tag (WO-450)
+            if (hero == null)
+            {
+                FlowTrace.Once("Echo", "dump-pop-nohero",
+                    "DumpSilos: no 'Player'-tagged hero in scene -- +N pops skipped (the grant itself is logged above).");
+                return;
+            }
+
+            Vector3 basePos = hero.transform.position + Vector3.up * 2.0f;
+            int slot = 0;
+            void Pop(int amount, string label, Color tint)
+            {
+                if (amount <= 0) return;
+                // Stack each resource's pop a step higher so a 5-way dump reads as a
+                // column, not an overdraw pile (per-resource labels never merge with
+                // each other -- the merge in the pool is per-resource by design).
+                DamageNumberSpawner.SpawnResourceGain(amount, label,
+                    basePos + Vector3.up * (0.55f * slot), tint);
+                slot++;
+            }
+
+            // The shared income palette (MineNode.ResourceTint / ResourceCollector.PopupTint
+            // values) so wood reads as wood whichever faucet paid it. Gold has no prior
+            // world-pop precedent; warm coin gold, named in TEXT like every other.
+            Pop(wood,     "Wood",     new Color(0.55f, 0.38f, 0.22f));
+            Pop(iron,     "Iron",     new Color(0.62f, 0.64f, 0.70f));
+            Pop(food,     "Food",     new Color(0.72f, 0.62f, 0.28f));
+            Pop(gold,     "Gold",     new Color(1.00f, 0.85f, 0.35f));
+            Pop(crystals, "Crystals", new Color(0.35f, 0.72f, 0.95f));
         }
 
         // =====================================================================

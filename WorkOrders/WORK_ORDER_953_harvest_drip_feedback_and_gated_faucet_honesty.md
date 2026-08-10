@@ -1,6 +1,6 @@
 # WORK ORDER 953 — Harvest drip feedback (+N pops via the damage-number spawner) + gated-faucet honesty
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE (implemented + gated 2026-08-10; RESULT filed; the §3 instrumented-run citation is still owed before any rate is retuned)
 **Minted:** 2026-08-10 (CLI seat, main line — banner bumped 953 → 954 in the same edit)
 **Silo:** Village/Harvest feedback + picker honesty — coordinate with the landed WO-811 lane (uncommitted)
 **Origin:** owner 2026-08-10, verbatim: *"Should be some simple + value that pops everytime they bring

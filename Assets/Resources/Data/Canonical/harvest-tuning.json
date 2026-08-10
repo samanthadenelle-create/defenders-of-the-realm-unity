@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "_authoringNotes": "WO-953 (owner 2026-08-10) -- the pet-node DEMO rates promoted out of PetHarvestBootstrap.cs hardcodes (were YieldPerExtract=5 at :172, site.BaseYield=5 at :189, ExtractCooldown=6s at :173) into owner-tunable data. VALUES UNCHANGED by default -- the tuning itself is the owner's pass, not the WO's. Loaded by DeNelle.Village.HarvestTuning via CanonicalJson (Resources copy wins, StreamingAssets is the desktop source); DUAL-COPY LAW: keep the two files byte-identical and bump version on any edit. These numbers feed ONLY the runtime placeholder starter nodes PetHarvestBootstrap drops (DEF-258: spawn is OFF by default; -spawnPlaceholderMineNodes re-enables) -- the hand-placed overworld MineNodes keep their own per-node values.",
+  "petNode": {
+    "yieldPerExtract": 5,
+    "extractCooldownSeconds": 6.0,
+    "siteBaseYield": 5
+  }
+}

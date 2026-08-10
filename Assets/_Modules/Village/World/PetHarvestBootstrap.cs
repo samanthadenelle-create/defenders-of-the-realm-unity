@@ -169,8 +169,11 @@ namespace DeNelle.Village
 
             var node = go.AddComponent<MineNode>();
             node.Resource         = res;
-            node.YieldPerExtract  = 5;
-            node.ExtractCooldown  = 6f;
+            // WO-953: demo rates promoted to owner-tunable canonical data
+            // (Data/Canonical/harvest-tuning.json via HarvestTuning; defaults are the
+            // old hardcodes 5 / 6s, values unchanged). The tuning pass itself is hers.
+            node.YieldPerExtract  = HarvestTuning.PetNodeYieldPerExtract;
+            node.ExtractCooldown  = HarvestTuning.PetNodeExtractCooldownSeconds;
             node.TotalExtracts    = 0;     // infinite — a steady starter economy that never depletes
             node.RespawnSeconds   = 0f;
             node.UseFiniteReserve = false;
@@ -186,7 +189,8 @@ namespace DeNelle.Village
             {
                 site.name = $"HarvestSite-{label}";
                 // Slightly richer base for the demo (pets make it better).
-                site.BaseYield = 5;
+                // WO-953: promoted to harvest-tuning.json (default 5, value unchanged).
+                site.BaseYield = HarvestTuning.PetNodeSiteBaseYield;
             }
         }
 

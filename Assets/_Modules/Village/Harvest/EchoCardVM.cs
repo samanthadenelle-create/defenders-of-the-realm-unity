@@ -37,9 +37,11 @@
 // as TEXT, never by color alone (colorblind owner).
 // =============================================================================
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 using DeNelle.Core.Diagnostics;
 using DeNelle.Core.State;
+using DeNelle.Village.Buildings.Progression;
 
 namespace DeNelle.Village
 {
@@ -155,8 +157,18 @@ namespace DeNelle.Village
                 string what;
                 if (ro.Lane == LaneType.Harvest)
                 {
-                    string res = EchoAssignments.ResourceLabelFor(EchoAssignments.ResourceTokenOf(EchoIndex));
+                    string token = EchoAssignments.ResourceTokenOf(EchoIndex);
+                    string res = EchoAssignments.ResourceLabelFor(token);
                     what = string.IsNullOrEmpty(res) ? "Gathering" : "Gathering " + res;
+
+                    // WO-953 faucet honesty: when the assigned resource's existence gate
+                    // is CLOSED (its collector building was never built -- the WO-834
+                    // phantom-income gate, surfaced READ-ONLY here), the status says so
+                    // in WORDS instead of implying income that is not arriving. The
+                    // assignment itself stays valid and starts paying when the building
+                    // lands -- exactly the WO-811 honest-status pattern.
+                    if (TryGetFaucetNeed(token, out string needsBuilding))
+                        return $"{what} - Lv {ro.Level} - waiting on a {needsBuilding}";
                 }
                 else
                 {
@@ -241,8 +253,16 @@ namespace DeNelle.Village
                 // me" rather than as broken text. Order matters: " (now)" stays the LAST token
                 // so the selected cue is never split by the affinity cue. Both are TEXT, never
                 // hue (colorblind owner), and both are ASCII.
+                // WO-953 faucet honesty: a resource whose existence gate is CLOSED carries
+                // a WORDS cue naming the building that opens it ("NEEDS: Forge"). The chip
+                // stays fully tappable -- affinity is a bonus and the gate is a cue, never
+                // a lock (owner ruling: "assignment stays allowed"). Order per WO-883:
+                // " (now)" stays the LAST token so the selected cue is never split.
+                string needsCue = TryGetFaucetNeed(res, out string needsName)
+                    ? " - NEEDS: " + needsName : "";
                 string label = EchoAssignments.ResourceLabelFor(res)
                              + (preferred ? " - best" : "")
+                             + needsCue
                              + (sel ? " (now)" : "");
                 string note = "";
                 chips[i] = new ResourceChip(res, label, note, sel, preferred);
@@ -289,6 +309,116 @@ namespace DeNelle.Village
         {
             FlowTrace.Step("Echo", $"Card: repair task requested echo={EchoIndex}.");
             EchoAssignments.AssignRepair(EchoIndex);
+        }
+
+        // =====================================================================
+        //  WO-953 — faucet honesty (the existence gate surfaced in WORDS)
+        // ---------------------------------------------------------------------
+        //  Her live defect: echo 1 assigned to iron (Player.log "AssignLane: echo 1
+        //  'idle' -> 'iron:1'") while "[Flow:Harvest] existence gate CLOSED for
+        //  'forge' ... NEVER BUILT" -- three silent screens between her and the
+        //  cause. These helpers SURFACE ResourceBuildingHarvester's gate verdict
+        //  (READ-ONLY -- the phantom-income gate itself is correct by design and
+        //  untouched) so the picker + status can say "NEEDS: Forge" in words.
+        //  All static + data-decidable, so the headless oracle can pin them.
+        // =====================================================================
+
+        // Edge-log memory so the cue traces on FLIP only (the harvester's _lastGate
+        // pattern) -- ResourceChips() runs per frame while the silo fills.
+        private static readonly Dictionary<string, bool> s_lastCueShown =
+            new Dictionary<string, bool>(4);
+
+        /// <summary>
+        /// The resource-building progression id whose WO-834 existence gate covers a
+        /// picker resource token — food→farm, wood→lumbermill, iron→forge. Null for
+        /// gold/crystals (no collector building exists for them, so no gate to surface).
+        /// </summary>
+        public static string FaucetBuildingIdFor(string resourceToken)
+        {
+            switch (resourceToken)
+            {
+                case EchoAssignments.ResFood: return ResourceBuildingProgression.FarmId;
+                case EchoAssignments.ResWood: return ResourceBuildingProgression.LumbermillId;
+                case EchoAssignments.ResIron: return ResourceBuildingProgression.ForgeId;
+                default:                      return null;
+            }
+        }
+
+        /// <summary>
+        /// True when <paramref name="resourceToken"/>'s existence gate is CLOSED, with
+        /// <paramref name="buildingDisplayName"/> naming the building that opens it
+        /// (resolved via <see cref="NeededBuildingDisplayName"/> — QR-5.7 safe).
+        /// Reads the same inputs the gate itself reads (live collector registry +
+        /// the persisted ever-built ledger) through the PURE
+        /// <see cref="ResourceBuildingHarvester.MayHarvest"/> rule — surfacing only,
+        /// never deciding. False (no cue) for ungated resources or on any read failure
+        /// (Guard'd — a broken read must never slap a false NEEDS on a paying chip).
+        /// </summary>
+        public static bool TryGetFaucetNeed(string resourceToken, out string buildingDisplayName)
+        {
+            buildingDisplayName = null;
+            string bid = FaucetBuildingIdFor(resourceToken);
+            if (string.IsNullOrEmpty(bid)) return false;
+
+            bool closed = Guard.Try("Echo", "read harvest existence gate", () =>
+            {
+                var s = GameStateService.Instance != null ? GameStateService.Instance.State : null;
+                IReadOnlyList<string> ever = s != null && s.EverBuiltStructureIds != null
+                    ? (IReadOnlyList<string>)s.EverBuiltStructureIds
+                    : Array.Empty<string>();
+                bool live = ResourceCollectorRegistry.Get(bid) != null;
+                return !ResourceBuildingHarvester.MayHarvest(
+                    ResourceBuildingHarvester.CatalogIdsForBuilding(bid), ever, live);
+            }, fallback: false);
+
+            if (closed) buildingDisplayName = NeededBuildingDisplayName(bid);
+
+            // Trace on flip only (never per-frame): the cue appearing/clearing is the
+            // player-felt state change a capture needs to show.
+            if (!s_lastCueShown.TryGetValue(resourceToken, out bool was) || was != closed)
+            {
+                s_lastCueShown[resourceToken] = closed;
+                FlowTrace.Step("Echo",
+                    closed
+                        ? $"faucet cue SHOWN for '{resourceToken}': existence gate CLOSED -> 'NEEDS: {buildingDisplayName}' (assignment stays allowed; pays when the building lands)"
+                        : $"faucet cue CLEARED for '{resourceToken}': existence gate OPEN.");
+            }
+            return closed;
+        }
+
+        /// <summary>
+        /// The PLAYER-FACING name of the building that opens <paramref name="buildingId"/>'s
+        /// gate. WARNING - QR-5.7 NAME INVERSION: in canon-strings.json the key 'forge' names the
+        /// ARMORER storefront and 'workshop' names "Forge" (the weapons building) — so the
+        /// bare 'forge' progression id must NEVER be fed to canon-strings (it would tell
+        /// the player to build an armor shop for iron). For iron we resolve the COLLECTOR
+        /// card's own catalog displayName ("Forge" on collector_forge — the exact word on
+        /// the build-palette card the player must find), falling back to the progression
+        /// def. farm/lumbermill resolve via canon-strings (their keys are not inverted),
+        /// then the same fallbacks.
+        /// </summary>
+        public static string NeededBuildingDisplayName(string buildingId)
+        {
+            // 1. canon-strings — SKIPPED for 'forge' (the QR-5.7 inversion trap).
+            if (buildingId != ResourceBuildingProgression.ForgeId)
+            {
+                string canon = VillageStrings.Canon(buildingId);
+                if (!string.IsNullOrEmpty(canon) && !canon.StartsWith("[[missing", StringComparison.Ordinal))
+                    return canon;
+            }
+
+            // 2. The collector card's live catalog displayName (what the build palette
+            //    shows — the word the player can actually go find).
+            foreach (var cid in ResourceBuildingHarvester.CatalogIdsForBuilding(buildingId))
+            {
+                var e = DeNelle.Core.Catalog.CatalogRegistry.Get(cid);
+                if (e != null && !string.IsNullOrEmpty(e.displayName)) return e.displayName;
+            }
+
+            // 3. The progression def's own display name (catalog cold — headless/boot).
+            var def = ResourceBuildingProgression.Find(buildingId);
+            if (def != null && !string.IsNullOrEmpty(def.DisplayName)) return def.DisplayName;
+            return buildingId;
         }
 
         // ── First-meeting one-shot (WO-681 spec 3) ──────────────────────────────
