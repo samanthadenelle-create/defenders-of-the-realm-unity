@@ -283,6 +283,18 @@ ONE owner amendment on top:
   skip affordance). A tutorial pointing at controls that no longer exist is a worse tester experience
   than the clutter this WO removes — the pass is not done until the tutorial walks the NEW screen.
 
+- **D21 (owner review of the post-fix build, 2026-08-09: "the screen should match the mock up with the
+  bar on the right side"):** the PICK phase still anchors the CATEGORY TABS inside the bottom panel
+  (two oversized Town/Defenses word-buttons + a large dead-space band right of the cards). Per the
+  wireframe benchmark (`UI_REVIEW/build_ui_target_wireframe.html`) and D15: **the category tabs move to
+  the LEAN RIGHT SECTION** (vertical quick-tab stack), and the bottom panel slims to the card row +
+  crystals readout only — centered, no dead band, resting on the D19 resource frame. The selected
+  quick-tab drives which cards the row shows; picking a card minimizes as today.
+  **D8 + the D15 mapping are hereby RESOLVED by this re-affirmation:** three categories on the right
+  bar — `Town`, `Defense`, `Castle Structures` — where **Castle Structures = the renamed Walls category
+  (walls + gates, + verticality pieces when they ship)**. Rename at the DISPLAY level (`build-categories
+  .json` display strings); keep the underlying category keys stable so nothing else re-maps.
+
 Concretely, the delivered screen passes when: the right edge holds the lean rail (OK/Rot/X), the close
 control is a SMALL ROUND corner button (D10), ONE minimized tab sits at the bottom, ONE thin hint line,
 and NOTHING else floats on the field — no D-pad (until summoned, D12 virtual stick), no Flag (D11), no
