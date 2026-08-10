@@ -52,6 +52,24 @@ using Ledger = DeNelle.Village.Buildings.Progression;
 namespace DeNelle.Village
 {
     /// <summary>
+    /// WHY a Builder job qualifies for the <see cref="BuildTimerConfig.firstBuildSeconds"/>
+    /// grace (WO-945). The CALLER decides the reason (it owns the catalog id, the ever-built
+    /// ledger and the pallets carve-out); the service applies the SAME shortening for either
+    /// reason but traces them DISTINCTLY, so a capture can tell tutorial-time grace from
+    /// first-build grace. <see cref="None"/> = pay the real tier curve.
+    /// </summary>
+    public enum BuildGraceReason
+    {
+        /// <summary>No grace — the tier curve applies unchanged.</summary>
+        None = 0,
+        /// <summary>First-ever build of this structure id (owner ruling 2026-08-06).</summary>
+        FirstBuild = 1,
+        /// <summary>Player not yet Onboarded — EVERY qualifying build is snappy so the
+        /// tutorial never stalls on a timer (WO-945, the ruling's intent made literal).</summary>
+        Onboarding = 2,
+    }
+
+    /// <summary>
     /// The common Obsidian work queue (WO-773): N concurrent active slots + a FIFO
     /// pending queue PER CHANNEL (Builder/Train/Research), offline-fair via TimeSource,
     /// with rewarded-ad / premium speedups on the Builder channel. Persisted in
@@ -347,7 +365,7 @@ namespace DeNelle.Village
         /// </summary>
         public BuildJobData? StartBuild(string structureId, int tier = 0, bool firstEverBuild = false)
             => StartBuilderJob(structureId, BuildJobType.Build, JobKind.Build, tier,
-                               firstEverBuild: firstEverBuild);
+                               grace: firstEverBuild ? BuildGraceReason.FirstBuild : BuildGraceReason.None);
 
         /// <summary>
         /// WO-911 (M2) — <see cref="StartBuild(string,int,bool)"/> that RECORDS what the caller
@@ -358,7 +376,18 @@ namespace DeNelle.Village
         /// </summary>
         public BuildJobData? StartBuild(string structureId, int tier, bool firstEverBuild, JobCost paid)
             => StartBuilderJob(structureId, BuildJobType.Build, JobKind.Build, tier,
-                               firstEverBuild: firstEverBuild, paid: paid);
+                               grace: firstEverBuild ? BuildGraceReason.FirstBuild : BuildGraceReason.None,
+                               paid: paid);
+
+        /// <summary>
+        /// WO-945 — <see cref="StartBuild(string,int,bool,JobCost)"/> that carries WHY the grace
+        /// applies (<see cref="BuildGraceReason"/>), so onboarding-time grace and first-build grace
+        /// trace distinctly. Prefer this at the placement site; the bool overloads above stay for
+        /// back-compat (and are oracle-pinned by ObsidianQueueRegression).
+        /// </summary>
+        public BuildJobData? StartBuild(string structureId, int tier, BuildGraceReason grace, JobCost paid)
+            => StartBuilderJob(structureId, BuildJobType.Build, JobKind.Build, tier,
+                               grace: grace, paid: paid);
 
         /// <summary>
         /// Start (or QUEUE) an UPGRADE job for <paramref name="structureId"/> to
@@ -392,8 +421,26 @@ namespace DeNelle.Village
             }
         }
 
+        /// <summary>
+        /// WO-945 — the PURE grace math (headlessly testable, mirrors ObsidianQueueEngine's
+        /// pure-core pattern): returns the duration a Builder job actually runs after the
+        /// <paramref name="grace"/> rule. Applies only to builds (never upgrades), only when a
+        /// reason is present and <paramref name="firstBuildSeconds"/> is enabled (&gt; 0), and
+        /// ONLY EVER SHORTENS — a tier curve already under the grace is returned unchanged.
+        /// FirstBuild and Onboarding shorten identically; they differ only in the trace the
+        /// caller (StartBuilderJob) emits.
+        /// </summary>
+        public static double GraceAdjustedDurationMs(double durationMs, BuildGraceReason grace,
+                                                     bool isUpgrade, float firstBuildSeconds)
+        {
+            if (grace == BuildGraceReason.None || isUpgrade || firstBuildSeconds <= 0f)
+                return durationMs;
+            double graceMs = firstBuildSeconds * 1000.0;
+            return graceMs < durationMs ? graceMs : durationMs;
+        }
+
         private BuildJobData? StartBuilderJob(string structureId, BuildJobType type, JobKind kind, int tier,
-                                              int targetLevel = 0, bool firstEverBuild = false,
+                                              int targetLevel = 0, BuildGraceReason grace = BuildGraceReason.None,
                                               JobCost paid = default)
         {
             if (string.IsNullOrEmpty(structureId)) return null;
@@ -413,19 +460,33 @@ namespace DeNelle.Village
             // because only it knows the catalog id (structureId here is the JOB key, which for a
             // placement is UnderConstructionVisual.KeyFor(data), NOT the catalog id).
             //
+            // WO-945 -- the ruling's intent made literal: while the player is NOT Onboarded,
+            // EVERY qualifying build gets the grace, not just the first-per-id (the tutorial asks
+            // for two towers of the SAME id; tower #2 ran the full 90s curve and the scripted
+            // teaching wave nearly destroyed it mid-construction). The caller passes the REASON
+            // (BuildGraceReason) so the two rules trace distinctly in a capture; the shortening
+            // itself is the pure GraceAdjustedDurationMs seam below, which the regression drives
+            // headlessly.
+            //
             // Upgrades never qualify: "first build" means the first BUILD. An upgrade of a
             // structure you have never owned is not reachable anyway.
-            if (firstEverBuild && type != BuildJobType.Upgrade && Config.firstBuildSeconds > 0f)
             {
-                double graceMs = Config.firstBuildSeconds * 1000.0;
+                double graced = GraceAdjustedDurationMs(durationMs, grace,
+                    type == BuildJobType.Upgrade, Config.firstBuildSeconds);
                 // Only ever SHORTEN. A tier-0 curve already under the grace (or a retuned config)
-                // must not be made slower by this rule.
-                if (graceMs < durationMs)
+                // must not be made slower by this rule (GraceAdjustedDurationMs guarantees it;
+                // the < test here just keeps the trace to genuine shortenings).
+                if (graced < durationMs)
                 {
-                    DeNelle.Core.Diagnostics.FlowTrace.Step("BuildTimer",
-                        $"FIRST-BUILD grace on '{structureId}': {durationMs / 1000.0:0.#}s -> " +
-                        $"{Config.firstBuildSeconds:0.#}s (tier {tier} curve bypassed).");
-                    durationMs = graceMs;
+                    if (grace == BuildGraceReason.Onboarding)
+                        DeNelle.Core.Diagnostics.FlowTrace.Step("BuildTimer",
+                            $"ONBOARDING grace on '{structureId}': {durationMs / 1000.0:0.#}s -> " +
+                            $"{Config.firstBuildSeconds:0.#}s (not-yet-onboarded rule, WO-945).");
+                    else
+                        DeNelle.Core.Diagnostics.FlowTrace.Step("BuildTimer",
+                            $"FIRST-BUILD grace on '{structureId}': {durationMs / 1000.0:0.#}s -> " +
+                            $"{Config.firstBuildSeconds:0.#}s (tier {tier} curve bypassed).");
+                    durationMs = graced;
                 }
             }
 

@@ -117,6 +117,9 @@ namespace DeNelle.Editor
                 // ── 9. BUILD-TIMER CONFIG (WO-172 / WO-612 rewarded-ad path) ─────────────
                 CheckBuildTimerConfig(failures, log);
 
+                // ── 9b. WO-945 — first-build + onboarding grace (decision + duration) ────
+                CheckBuildGrace(failures, log);
+
                 // ── 10. DAMAGE STATES (WO-672 D) — real DamageStatesCatalog loader ───────
                 CheckDamageStates(failures, log);
 
@@ -534,7 +537,7 @@ namespace DeNelle.Editor
             var layout = new List<PlacedStructureData>
             {
                 new PlacedStructureData("tower_ground_archer", 3, 5, 2, 1),
-                new PlacedStructureData("wall_wood", 10, 10, 0, 3),
+                new PlacedStructureData("wall_wood", 10, 10, 0, 2), // WO-948: wall_wood maxLevel is now 2 (wood->stone rung only)
                 new PlacedStructureData("gate_stone", 20, 8, 1, 1, yawOffset: 45f),
             };
 
@@ -653,6 +656,101 @@ namespace DeNelle.Editor
             {
                 failures.Add("instant-finish disabled (perMinute 0) but InstantFinishPrice(1h) != 0");
             }
+        }
+
+        // =====================================================================
+        //  9b. WO-945 — FIRST-BUILD + ONBOARDING GRACE.
+        //  ---------------------------------------------------------------------
+        //  The owner ruling 2026-08-06 ("onboarding never stalls on a timer") was
+        //  scoped per-structure-id, so the tutorial's SECOND tower of the same id
+        //  ran the real ~90s curve straight into the scripted teaching wave
+        //  (owner felt-report 2026-08-10). WO-945 makes the intent literal: while
+        //  NOT Onboarded, every qualifying build gets firstBuildSeconds. Driven
+        //  through the two REAL pure seams the placement path composes —
+        //  BuildModeController.GraceReasonFor (the caller decision, which owns
+        //  the pallets carve-out) and BuildTimerService.GraceAdjustedDurationMs
+        //  (the duration math StartBuilderJob applies). The live Onboarded flag
+        //  itself is a GameState read; driving the full MonoBehaviour Place()
+        //  path needs play mode, so the decision seam takes the flag as input —
+        //  the same data+logic-only contract as the rest of this oracle.
+        // =====================================================================
+        private static void CheckBuildGrace(List<string> failures, StringBuilder log)
+        {
+            int before = failures.Count;
+
+            var cfg = Resources.Load<BuildTimerConfig>(BuildTimerConfig.ResourcesPath);
+            if (cfg == null) cfg = BuildTimerConfig.CreateDefault();
+
+            // -- A. THE DECISION (the real caller seam, pallets carve-out included) ----
+            // (i) WO-945 headline: SECOND build of an already-built id (firstEverBuild
+            //     false) while NOT Onboarded -> Onboarding grace.
+            if (BuildModeController.GraceReasonFor(false, true, false) != BuildGraceReason.Onboarding)
+                failures.Add("[grace] second build while NOT Onboarded got no Onboarding grace — WO-945 regressed " +
+                             "(tutorial tower #2 runs the full curve into the teaching wave)");
+            // (ii) Onboarded veteran, second build -> NO grace (the tier curve IS the economy).
+            if (BuildModeController.GraceReasonFor(false, false, false) != BuildGraceReason.None)
+                failures.Add("[grace] an ONBOARDED second build received a grace — the tier-curve economy is bypassed for veterans");
+            // First-ever builds keep the FirstBuild reason in BOTH states (trace-baseline stability).
+            if (BuildModeController.GraceReasonFor(true, false, false) != BuildGraceReason.FirstBuild)
+                failures.Add("[grace] first-ever build (onboarded) lost its FirstBuild grace (owner ruling 2026-08-06)");
+            if (BuildModeController.GraceReasonFor(true, true, false) != BuildGraceReason.FirstBuild)
+                failures.Add("[grace] first-ever build during onboarding must keep the FirstBuild reason (trace precedence, WO-945)");
+            // (iii) The pallets carve-out beats BOTH rules, in BOTH states.
+            if (BuildModeController.GraceReasonFor(true,  true,  true) != BuildGraceReason.None ||
+                BuildModeController.GraceReasonFor(false, true,  true) != BuildGraceReason.None ||
+                BuildModeController.GraceReasonFor(true,  false, true) != BuildGraceReason.None)
+                failures.Add("[grace] a pallet (storage container) received a build grace — the owner carve-out (2026-08-06) is broken");
+
+            // -- B. THE DURATION (the pure math StartBuilderJob applies at job start) --
+            double tier1Ms = cfg.DurationSecondsForTier(1, BuildJobKind.Build) * 1000.0;
+            double graceMs = cfg.firstBuildSeconds * 1000.0;
+            if (cfg.firstBuildSeconds > 0f && tier1Ms > graceMs)
+            {
+                double dOnboard = BuildTimerService.GraceAdjustedDurationMs(tier1Ms, BuildGraceReason.Onboarding, false, cfg.firstBuildSeconds);
+                if (System.Math.Abs(dOnboard - graceMs) > 0.5)
+                    failures.Add($"[grace] Onboarding grace produced {dOnboard}ms, expected firstBuildSeconds = {graceMs}ms");
+                double dFirst = BuildTimerService.GraceAdjustedDurationMs(tier1Ms, BuildGraceReason.FirstBuild, false, cfg.firstBuildSeconds);
+                if (System.Math.Abs(dFirst - graceMs) > 0.5)
+                    failures.Add($"[grace] FirstBuild grace produced {dFirst}ms, expected firstBuildSeconds = {graceMs}ms");
+            }
+            else
+            {
+                log.AppendLine($"  [grace] curve/config leaves no shortening headroom (tier1 {tier1Ms}ms, grace {graceMs}ms) — shorten cases N/A");
+            }
+            double dNone = BuildTimerService.GraceAdjustedDurationMs(tier1Ms, BuildGraceReason.None, false, cfg.firstBuildSeconds);
+            if (System.Math.Abs(dNone - tier1Ms) > 0.5)
+                failures.Add($"[grace] reason None changed the duration ({tier1Ms}ms -> {dNone}ms) — the tier curve must be untouched without a grace");
+            double dUp = BuildTimerService.GraceAdjustedDurationMs(tier1Ms, BuildGraceReason.Onboarding, true, cfg.firstBuildSeconds);
+            if (System.Math.Abs(dUp - tier1Ms) > 0.5)
+                failures.Add("[grace] an UPGRADE received the build grace — 'first build' means the first BUILD");
+            // The only-ever-SHORTENS invariant: a 2s curve with a 5s grace stays 2s.
+            double dShort = BuildTimerService.GraceAdjustedDurationMs(2000.0, BuildGraceReason.Onboarding, false, 5f);
+            if (dShort != 2000.0)
+                failures.Add($"[grace] grace LENGTHENED a 2s curve to {dShort}ms — the only-ever-shorten invariant is broken");
+            // firstBuildSeconds = 0 disables the rule entirely (the config's stated contract).
+            if (BuildTimerService.GraceAdjustedDurationMs(tier1Ms, BuildGraceReason.Onboarding, false, 0f) != tier1Ms)
+                failures.Add("[grace] firstBuildSeconds=0 did not disable the grace");
+
+            // -- C. COMPOSED (WO-945 acceptance 1) — both real seams end-to-end --------
+            if (cfg.firstBuildSeconds > 0f && tier1Ms > graceMs)
+            {
+                double dTut = BuildTimerService.GraceAdjustedDurationMs(tier1Ms,
+                    BuildModeController.GraceReasonFor(false, true, false), false, cfg.firstBuildSeconds);
+                if (System.Math.Abs(dTut - graceMs) > 0.5)
+                    failures.Add($"[grace] COMPOSED WO-945 case: not-yet-onboarded second build ran {dTut}ms, expected {graceMs}ms");
+                double dVet = BuildTimerService.GraceAdjustedDurationMs(tier1Ms,
+                    BuildModeController.GraceReasonFor(false, false, false), false, cfg.firstBuildSeconds);
+                if (System.Math.Abs(dVet - tier1Ms) > 0.5)
+                    failures.Add($"[grace] COMPOSED veteran case: onboarded second build ran {dVet}ms, expected the tier curve {tier1Ms}ms");
+                double dPal = BuildTimerService.GraceAdjustedDurationMs(tier1Ms,
+                    BuildModeController.GraceReasonFor(false, true, true), false, cfg.firstBuildSeconds);
+                if (System.Math.Abs(dPal - tier1Ms) > 0.5)
+                    failures.Add($"[grace] COMPOSED pallet case: a pallet during onboarding ran {dPal}ms, expected its real timer {tier1Ms}ms");
+            }
+
+            if (failures.Count == before)
+                log.AppendLine($"  [grace] WO-945 first-build + onboarding grace OK (decision + duration + carve-out + " +
+                               $"only-shortens; grace {cfg.firstBuildSeconds}s vs tier1 {tier1Ms / 1000.0}s)");
         }
 
         // =====================================================================

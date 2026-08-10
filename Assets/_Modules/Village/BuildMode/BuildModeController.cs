@@ -2008,13 +2008,21 @@ namespace DeNelle.Village
                 // list, so a container added later is excluded automatically. They are deliberate
                 // capacity-progression buildings (WO-837) and must pay their real timer.
                 bool isPallet = _armed != null && DeNelle.Core.Economy.TownBankCapacity.IsStorageContainer(_armed.repo);
-                bool graceApplies = firstEverBuild && !isPallet;
+                // WO-945: while the player is NOT Onboarded, EVERY qualifying build gets the
+                // grace, not just the first-per-id — the tutorial asks for TWO towers of the
+                // SAME id, and tower #2 ran the real 90s curve into the scripted teaching wave.
+                // Same Onboarded read the tutorial/steward code uses (state != null &&
+                // !state.Onboarded — SylasStewardInjector.FoundingArcIncomplete's shape); a null
+                // state grants NO onboarding grace, matching firstEverBuild's own null-state
+                // default above. The pallets carve-out survives for BOTH reasons (GraceReasonFor).
+                bool notYetOnboarded = state != null && !state.Onboarded;
+                var graceReason = GraceReasonFor(firstEverBuild, notYetOnboarded, isPallet);
                 // WO-911 (M2): record what was ACTUALLY charged (line 1772 — default for a
                 // freebie, else SoftcappedCostFor at the tower count that applied at charge time)
                 // so a cancel refunds 100% of it (ruling Q1) instead of re-deriving a number the
                 // player never paid. `cost` is the same value ChargeLedger debited above.
                 var job = svc != null
-                    ? svc.StartBuild(jobKey, tier, graceApplies, BuildTimerService.ToJobCost(cost))
+                    ? svc.StartBuild(jobKey, tier, graceReason, BuildTimerService.ToJobCost(cost))
                     : null;
                 // Sec.12 proving line: a capture must show the RESOLVED tier + duration, so
                 // "every building takes 15s" can never silently come back.
@@ -2042,6 +2050,22 @@ namespace DeNelle.Village
             CancelArmed(afterPlacement: true);
             _hud?.SetState(BuildHudState.Browse);
             FlowTrace.Step("BuildHud", "state -> Browse (placement committed; intent bar hidden, carousel restored)");
+        }
+
+        /// <summary>
+        /// WO-945 — the PURE build-grace decision (headlessly testable; BuildEconomyRegression
+        /// drives it). The pallets carve-out (owner ruling 2026-08-06: storage containers pay
+        /// their real timer) beats BOTH grace rules; first-build precedence over onboarding keeps
+        /// the existing FIRST-BUILD trace line on genuine first builds, so captured baselines
+        /// stay comparable. <paramref name="notYetOnboarded"/> must already encode the null-state
+        /// default (state != null &amp;&amp; !state.Onboarded — no grace when state is unknowable).
+        /// </summary>
+        public static BuildGraceReason GraceReasonFor(bool firstEverBuild, bool notYetOnboarded, bool isPallet)
+        {
+            if (isPallet) return BuildGraceReason.None;              // carve-out wins in every state
+            if (firstEverBuild) return BuildGraceReason.FirstBuild;  // owner ruling 2026-08-06
+            if (notYetOnboarded) return BuildGraceReason.Onboarding; // WO-945: tutorial never stalls
+            return BuildGraceReason.None;
         }
 
         // =====================================================================
