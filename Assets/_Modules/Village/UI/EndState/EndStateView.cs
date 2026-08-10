@@ -113,13 +113,14 @@ namespace DeNelle.Village.UI
                 canvas = ElarionUiKit.BuildModalCanvas("EndState", 31000);
                 var c = canvas.GetComponent<Canvas>();
                 if (c != null) c.overrideSorting = true;
-                // Grown DOWN (top edge held at 0.86) to 0.30 of screen height: this is the
-                // row-less SPLASH size (F8-45: a spoils damage report further extends the
-                // banner downward in Bind), so it must carry enough height for the header band
-                // (Bind) plus the emblem+subtitle below it — otherwise the tall title band
-                // would crush them. (Was 0.64–0.86 = 0.22h, too short to seat the headline.)
+                // Grown DOWN (top edge held at CompactTopY) to 0.30 of screen height: this is
+                // the row-less SPLASH size (F8-45/WO-952: Bind's owned compact solve grows the
+                // banner downward to its FINAL content-fitted height), so it must carry enough
+                // height for the header band (Bind) plus the emblem+subtitle below it —
+                // otherwise the tall title band would crush them. (Was 0.64–0.86 = 0.22h, too
+                // short to seat the headline.)
                 chrome = ElarionUiKit.BuildObsidianPanel(canvas.transform, vm.Title,
-                    new Vector2(0.15f, 0.56f), new Vector2(0.85f, 0.86f),
+                    new Vector2(CompactX0, CompactSplashBottomY), new Vector2(CompactX1, CompactTopY),
                     onClose: null, withBackdrop: false, frameName: RpgUiCatalog.FrameCore,
                     medallionIcon: "crest");   // explicit: the socket seats the crest family, never blank
             }
@@ -214,9 +215,35 @@ namespace DeNelle.Village.UI
         private const float CompactBodyTopY = 0.745f;
         /// <summary>Compact body-well FLOOR. This is FrameCore's OWN art-measured well floor
         /// (ElarionUiKit ZonesFor, case FrameCore: z.body = (0.055, 0.075, 0.945, 0.835)) — it
-        /// clears the frame's ornate bottom border. Used only when the banner shows no CTA at
-        /// all, to reclaim the close band the kit reserves for a Close this template hides.</summary>
+        /// clears the frame's ornate bottom border. WO-952: the owned compact solve reclaims
+        /// down to this floor on EVERY compact banner — a CTA-carrying banner seats the CTA in
+        /// its own band ON this floor instead of keeping the kit's dead close-band reservation
+        /// (which is what left a 249px well for 276px of rows, the captured defect).</summary>
         private const float CompactBodyFloorY = 0.075f;
+
+        // ── WO-952 COMPACT FRAME CONSTANTS — single source for Show AND the owned solve
+        //    (the capture proved these numbers were living in two places: Show's literal
+        //    anchors and the growth block's literal 0.08 clamp; a solve that must invert
+        //    the layout law needs them named once). ──────────────────────────────────────
+        /// <summary>Banner left/right edges on the canvas (Show's build anchors).</summary>
+        private const float CompactX0 = 0.15f;
+        private const float CompactX1 = 0.85f;
+        /// <summary>Banner panel width as a canvas fraction — the compact analogue of
+        /// <see cref="PanelWidthFrac"/>. WO-952: the subtitle/spoils width chain used the
+        /// full modal's 0.56 for the banner too, under-measuring the banner's real 0.70
+        /// column by 20% and over-counting wrapped lines (need inflated for nothing).</summary>
+        private const float CompactPanelWidthFrac = CompactX1 - CompactX0;   // 0.700
+        /// <summary>Banner TOP edge (screen fraction) — held while the banner grows down.</summary>
+        private const float CompactTopY = 0.86f;
+        /// <summary>Row-less SPLASH bottom edge: the 0.30h build-time banner (Show).</summary>
+        private const float CompactSplashBottomY = 0.56f;
+        /// <summary>The grown banner's bottom-edge floor (the pre-existing growth clamp:
+        /// the world stays visible below the banner, so it may span at most
+        /// <see cref="CompactTopY"/> minus this of the screen = 0.78h).</summary>
+        private const float CompactGrowthFloorY = 0.08f;
+        /// <summary>Gap between the body well's floor and the seated banner CTA, ref px
+        /// (matches the +12 the legacy footer-grow compensation used).</summary>
+        private const float CompactCtaGapPx = 12f;
 
         /// <summary>Deterministic body-well height in reference px for the OWNED geometry path
         /// (0 = not owned; BuildBody then measures). Set by the geometry pass in Bind.</summary>
@@ -226,6 +253,14 @@ namespace DeNelle.Village.UI
         /// captured once so the downward-growth block can re-solve <see cref="_wellPx"/>
         /// against the grown panel instead of re-measuring a live rect.</summary>
         private float _compactBodyFrac;
+
+        /// <summary>WO-952: the compact banner's OWNED CTA band — canonical CTA height,
+        /// seated on the frame art's measured well floor, sized against the banner's FINAL
+        /// solved height. Non-null only when the owned compact solve ran for a banner that
+        /// carries a CTA; the CTA build then seats the button here instead of carving a
+        /// footer out of the body well (the carve is what the stale close-band reservation
+        /// used to collide with).</summary>
+        private RectTransform _compactCtaBand;
 
         /// <summary>Content-sized panel HALF-height (fraction of screen), solved in REAL PIXELS.
         /// The old body of this method summed fictional "units" (2.4 for an emblem, 1.1 per
@@ -273,20 +308,31 @@ namespace DeNelle.Village.UI
         private const float BodyZoneWidthFrac = 0.945f - 0.055f;   // 0.890 (FrameCore)
         private const float SubtitleInsetFrac = 0.96f - 0.04f;     // 0.920
 
-        /// <summary>Reference px of text column the subtitle actually gets.</summary>
-        private static float SubtitleWidthPx(float canvasH)
+        /// <summary>The panel-width fraction the width chain must use for THIS screen.
+        /// WO-952: the banner spans 0.70 of the canvas (Show: 0.15..0.85) but the chain
+        /// always used the full modal's 0.56 — under-measuring the compact subtitle column
+        /// by 20%, over-counting wrapped lines and inflating the banner's need.</summary>
+        private static float PanelWidthFracFor(EndStateVM vm)
         {
-            return PostScaleCanvasWidth(canvasH) * PanelWidthFrac * BodyZoneWidthFrac * SubtitleInsetFrac;
+            return vm != null && vm.Compact ? CompactPanelWidthFrac : PanelWidthFrac;
+        }
+
+        /// <summary>Reference px of text column the subtitle actually gets.
+        /// <paramref name="panelWidthFrac"/> = this screen's canvas-width fraction
+        /// (<see cref="PanelWidthFracFor"/>) — WO-952: never assume the modal's.</summary>
+        private static float SubtitleWidthPx(float canvasH, float panelWidthFrac)
+        {
+            return PostScaleCanvasWidth(canvasH) * panelWidthFrac * BodyZoneWidthFrac * SubtitleInsetFrac;
         }
 
         /// <summary>WRAPPED line count for the subtitle at FontBody inside the REAL body-well
         /// width. Explicit '\n' segments each wrap independently. Drives the band height so a
         /// multi-line death message gets a band tall enough to hold it (F8 flag_04: a one-line
         /// band let the text spill over the emblem above and the CTA below). Clamped 1..4.</summary>
-        private static int SubtitleLines(string subtitle, float canvasH)
+        private static int SubtitleLines(string subtitle, float canvasH, float panelWidthFrac)
         {
             if (string.IsNullOrEmpty(subtitle)) return 0;
-            float columnPx = Mathf.Max(1f, SubtitleWidthPx(canvasH));
+            float columnPx = Mathf.Max(1f, SubtitleWidthPx(canvasH, panelWidthFrac));
             int lines = 0;
             foreach (var seg in subtitle.Split('\n'))
                 lines += Mathf.Max(1, Mathf.CeilToInt(MeasureTextPx(seg, ElarionUi.FontBody) / columnPx));
@@ -446,7 +492,7 @@ namespace DeNelle.Village.UI
                     $"geometry: panel={panelPx:0}px (frac {panelFracH:0.###}) header {HeaderY0:0.###}-{HeaderY1:0.###} " +
                     $"body {bodyFloor:0.###}-{BodyTopY:0.###} = {_wellPx:0}px cta band {CtaBandY0:0.###}-{CtaBandY0 + ctaBandH:0.###} " +
                     $"need={RequiredBodyPx(vm, _canvasH):0}px " +
-                    $"(subtitle column {SubtitleWidthPx(_canvasH):0}px -> {SubtitleLines(vm.Subtitle, _canvasH)} line(s))");
+                    $"(subtitle column {SubtitleWidthPx(_canvasH, PanelWidthFracFor(vm)):0}px -> {SubtitleLines(vm.Subtitle, _canvasH, PanelWidthFracFor(vm))} line(s))");
             }
             else if (chrome.layout != null && chrome.layout.header != null)
             {
@@ -458,59 +504,81 @@ namespace DeNelle.Village.UI
                     chrome.layout.body.anchorMax =                       // body top clears the band
                         new Vector2(chrome.layout.body.anchorMax.x, CompactBodyTopY);
 
-                // ── COMPACT: RECLAIM THE DEAD CLOSE BAND ─────────────────────────────
-                // The SAME reclaim the full modal's owned-geometry pass performs above, valid
-                // for the SAME reason: Show() hides this template's shared Close (owner button
-                // law), so every pixel the kit reserved for it is dead space.
+                // ── WO-952 OWNED COMPACT GEOMETRY (F8 capture 2026-08-10, twice: "need=276px
+                //    well=249px scale=0.9") — the full modal's 2026-08-05 lesson applied to
+                //    the banner ─────────────────────────────────────────────────────────────
+                // WHAT WENT WRONG: the old pass reclaimed the kit's dead close-band reservation
+                // ONLY when the banner carried no CTA at all. A WO-672 Repair-All banner kept
+                // the reservation's 0.45 body floor — computed against the 0.30h SPLASH panel —
+                // and the later downward growth scaled that stale fraction up with the panel:
+                // at the growth clamp on a 16:9 desktop (1080 ref-px canvas, 842px panel),
+                // 0.45 x 842 = 379px sat below the body well for a 132px button, leaving a
+                // 0.295 x 842 = 249px well for 276px of rows -> uniform 0.9 compression, every
+                // band below its own content size. Exactly the captured numbers.
                 //
-                // HOW MUCH: BuildObsidianPanel's close-band reservation runs against the
-                // banner's BUILD-TIME height (0.30 of screen). On a 965 ref-px landscape canvas
-                // that is a 290px panel, so the fixed 132px Close box measures 0.456 of it, the
-                // footer band relocates to 0.40-0.53 and the body floor lands on the
-                // reservation's own 0.45 sanity clamp. The banner therefore handed its content
-                // 0.45..0.745 = 0.295 of the panel — 55% of a wave-clear banner reserved for a
-                // button that is switched off. At the growth clamp that is a 222px well, which
-                // seats exactly ONE spoils row; the F8-45 damage report has been rendering up
-                // to EIGHT into it (canon issue #28, the "body rows COMPRESSED" line).
+                // THE FIX IS REFLOW, NOT SHRINK: solve the banner's FINAL height up front from
+                // the content it must seat (need + the canonical CTA band when one is carried),
+                // stamp every band against that ONE height, and seat the CTA in its OWN bottom
+                // band on the frame art's measured well floor (ZonesFor FrameCore z.body.y =
+                // 0.075). The close-band reclaim therefore now runs on EVERY compact banner —
+                // CTA-shaped instead of gated off — and nothing is stamped before the height it
+                // is a fraction of is known, so nothing can desynchronise (the exact recipe
+                // that fixed the full modal's compaction on 2026-08-05).
                 //
-                // Reclaimed: the body floor drops to the frame art's OWN measured well floor
-                // (ZonesFor FrameCore z.body.y = 0.075 — not an invented number), giving
-                // 0.075..0.745 = 0.670 of the panel and a ~504px well at the clamp. That is the
-                // budget EndStateVM.CompactMaxSpoilRows is derived against.
-                //
-                // GATED ON "NO CTA AT ALL": when the banner carries the WO-672 Repair-All CTA
-                // that CTA is seated in chrome.layout.footer, which the reservation relocated
-                // into this same region — dropping the floor under it would put rows behind the
-                // button. That path keeps today's geometry, unchanged. THE FULL MODAL IS NOT
-                // TOUCHED: this whole branch is the `else` of `ownGeometry`.
-                bool compactNoCta = vm.Compact
-                                    && string.IsNullOrEmpty(vm.PrimaryLabel)
-                                    && string.IsNullOrEmpty(vm.CtaLabel);
+                // Clamps: never below the 0.30h splash (a row-less banner is unchanged), never
+                // past the growth floor (the world below stays visible). The growth floor is
+                // the ONE remaining compression source; BuildBody's Fail net still names it
+                // when it bites — the net stays, it caught this.
+                bool compactAnyCta = vm.Compact
+                                     && (!string.IsNullOrEmpty(vm.PrimaryLabel)
+                                         || !string.IsNullOrEmpty(vm.CtaLabel));
                 if (vm.Compact && chrome.layout.body != null && chrome.root != null)
                 {
                     var bdy = chrome.layout.body;
-                    if (compactNoCta)
+                    var rootRt0 = (RectTransform)chrome.root.transform;
+                    float topY = rootRt0.anchorMax.y;                            // splash top, held
+                    float hNow = Mathf.Max(0.05f, topY - rootRt0.anchorMin.y);   // the 0.30h splash
+                    float needPx = RequiredBodyPx(vm, _canvasH);
+                    float ctaPx = compactAnyCta
+                        ? ElarionUiKit.CanonCtaHeight + CompactCtaGapPx : 0f;
+                    // Invert the layout law (the PanelHalfHeight recipe): the body well is
+                    // (CompactBodyTopY - CompactBodyFloorY) of the panel minus the CTA band's
+                    // pixels, so panelPx = (need + ctaBand) / that fraction.
+                    float solvedPx = (needPx + ctaPx) / (CompactBodyTopY - CompactBodyFloorY);
+                    float panelFrac = Mathf.Clamp(solvedPx / Mathf.Max(1f, _canvasH),
+                                                  hNow, topY - CompactGrowthFloorY);
+                    rootRt0.anchorMin = new Vector2(rootRt0.anchorMin.x, topY - panelFrac);
+                    float panelPx = panelFrac * _canvasH;
+
+                    float bodyFloor = CompactBodyFloorY + ctaPx / Mathf.Max(1f, panelPx);
+                    bdy.anchorMin = new Vector2(bdy.anchorMin.x, bodyFloor);
+                    bdy.anchorMax = new Vector2(bdy.anchorMax.x, CompactBodyTopY);
+                    bdy.offsetMin = new Vector2(bdy.offsetMin.x, 0f);
+                    bdy.offsetMax = new Vector2(bdy.offsetMax.x, 0f);
+
+                    if (compactAnyCta)
                     {
-                        bdy.anchorMin = new Vector2(bdy.anchorMin.x, CompactBodyFloorY);
-                        bdy.offsetMin = new Vector2(bdy.offsetMin.x, 0f);
-                        bdy.offsetMax = new Vector2(bdy.offsetMax.x, 0f);
+                        // The CTA's OWN band: canonical height, seated on the art floor, its
+                        // fraction computed from the FINAL panel px so PinCanonicalCtaSize's
+                        // fixed 132px box fills it exactly. Parented beside the body zone so
+                        // both resolve in the same (panel-fraction) space. The CTA build below
+                        // seats the button here instead of carving the body well.
+                        _compactCtaBand = MakeZone(bdy.parent, "Zone_CompactCta",
+                            0.10f, CompactBodyFloorY,
+                            0.90f, CompactBodyFloorY
+                                   + ElarionUiKit.CanonCtaHeight / Mathf.Max(1f, panelPx));
                     }
 
-                    // DETERMINISTIC well height, in the SAME reference-px space as the band
-                    // constants — the full modal's lesson (ElarionUiKit.cs:1014-1018): reading
-                    // rect.height on the creation frame can return RAW SCREEN pixels, which
-                    // BuildBody would then compare against reference-px band totals. Measured
-                    // off the body's OWN anchors, so it is correct on BOTH compact paths
-                    // (reclaimed floor, or the untouched CTA geometry).
-                    var rootRt0 = (RectTransform)chrome.root.transform;
-                    float panelFrac0 = Mathf.Max(0.05f, rootRt0.anchorMax.y - rootRt0.anchorMin.y);
-                    _compactBodyFrac = Mathf.Max(0.01f, bdy.anchorMax.y - bdy.anchorMin.y);
-                    _wellPx = _compactBodyFrac * _canvasH * panelFrac0;
+                    _compactBodyFrac = Mathf.Max(0.01f, CompactBodyTopY - bodyFloor);
+                    _wellPx = _compactBodyFrac * panelPx;
                     Canvas.ForceUpdateCanvases();
                     FlowTrace.Step("EndState",
-                        $"compact banner geometry: body {bdy.anchorMin.y:0.###}-{bdy.anchorMax.y:0.###} " +
-                        $"({_compactBodyFrac:0.###} of a {(_canvasH * panelFrac0):0}px panel) = {_wellPx:0}px well, " +
-                        $"need={RequiredBodyPx(vm, _canvasH):0}px, closeBandReclaimed={compactNoCta}");
+                        $"compact banner geometry (WO-952 owned solve): panel={panelPx:0}px " +
+                        $"(frac {panelFrac:0.###}, splash was {hNow:0.###}) body {bodyFloor:0.###}-" +
+                        $"{CompactBodyTopY:0.###} = {_wellPx:0}px well, need={needPx:0}px, " +
+                        $"ctaBand={(compactAnyCta ? ElarionUiKit.CanonCtaHeight : 0f):0}px" +
+                        (panelFrac >= topY - CompactGrowthFloorY - 0.0005f
+                            ? " (AT THE GROWTH CLAMP)" : string.Empty));
                 }
             }
 
@@ -539,7 +607,11 @@ namespace DeNelle.Village.UI
             // neither can ever silently fire the crystal spend.
             bool hasBannerCta = !hasCta && vm.Compact && !string.IsNullOrEmpty(vm.CtaLabel);
             bool anyCta = hasCta || hasBannerCta;
+            // WO-952: the owned compact solve minted a dedicated CTA band below the body
+            // well — use it. FrameCore has no footer zone, so the legacy carve stole 16% of
+            // the body well the solve had just sized to EXACTLY the content's need.
             RectTransform footer     = !anyCta ? null
+                                     : _compactCtaBand != null ? _compactCtaBand
                                      : hasFooterZone ? chrome.layout.footer
                                      : MakeZone(well, "Zone_Footer",     0.10f, 0f,    0.90f, 0.16f);
             // VICTORY SWEEP (fresh 1280x720 capture, 2026-07-06: "Wood +15" / "Iron +8" ran
@@ -551,7 +623,7 @@ namespace DeNelle.Village.UI
             // own zone, and on the real-footer path its floor is raised above the pinned
             // CTA's measured top edge so rewards and Continue can never share pixels.
             RectTransform rewardWell = MakeZone(well, "Zone_RewardWell",
-                0f, (hasFooterZone || !anyCta) ? 0f : 0.22f, 1f, 1f);
+                0f, (hasFooterZone || !anyCta || _compactCtaBand != null) ? 0f : 0.22f, 1f, 1f);
 
             // ONE primary action (Continue / Rise again / ...) — built FIRST so the reward
             // well can be sized around the law-pinned CTA; it still lands LAST in the reveal.
@@ -590,10 +662,15 @@ namespace DeNelle.Village.UI
                 // body floor already sits CtaGapY above its top, so neither compensation can have
                 // anything to do — and both of them re-derive fractions from creation-frame rects,
                 // which is what made the reservations drift apart in the first place. Skip them.
-                if (ownGeometry)
+                if (ownGeometry || _compactCtaBand != null)
                 {
+                    // WO-952: the compact owned band is sized to EXACTLY CanonCtaHeight against
+                    // the final panel, same as the full modal's reclaimed close band — both
+                    // compensations below re-derive fractions from creation-frame rects, which
+                    // is the desync class this pass exists to end. Skip them.
                     FlowTrace.Step("EndState",
-                        $"CTA seated in the reclaimed close band (need={need:0}px, band=={ElarionUiKit.CanonCtaHeight:0}px) - no floor-raise required");
+                        $"CTA seated in the {(ownGeometry ? "reclaimed close band" : "owned compact CTA band (WO-952)")} " +
+                        $"(need={need:0}px, band=={ElarionUiKit.CanonCtaHeight:0}px) - no floor-raise required");
                 }
                 else if (!hasFooterZone)
                 {
@@ -663,10 +740,14 @@ namespace DeNelle.Village.UI
             // to its final size in Show (PanelHalfHeight) and stamped once by the owned geometry
             // pass above — there is nothing left to extend.
             //
-            // The COMPACT banner keeps its downward growth: it is a different screen (the F8-45
-            // wave damage report) whose frame is deliberately pinned by its TOP edge, and it does
-            // not run the owned geometry pass.
-            if (vm.Compact && chrome.root != null)
+            // The COMPACT banner's downward growth — WO-952: SUPERSEDED by the owned compact
+            // solve whenever the frame zones exist (_wellPx > 1): the banner is now BUILT at
+            // its final solved height, so there is nothing left to grow — and growing here
+            // against fractions stamped for a different height is the exact desync the
+            // 2026-08-10 capture measured (the stale 0.45 reservation scaled up with the
+            // panel). This block remains ONLY for the art-less procedural fallback panel
+            // (chrome.layout == null), where no solve ran and the live rect is all there is.
+            if (vm.Compact && chrome.root != null && _wellPx <= 1f)
             {
                 Canvas.ForceUpdateCanvases();
                 // Prefer the well the reclaim pass SOLVED (reference px). Falls back to the
@@ -753,7 +834,7 @@ namespace DeNelle.Village.UI
         {
             float px = 0f; int n = 0;
             if (vm.Emblem != null) { px += EmblemPx; n++; }
-            if (!string.IsNullOrEmpty(vm.Subtitle)) { px += SubLinePx * SubtitleLines(vm.Subtitle, canvasH); n++; }
+            if (!string.IsNullOrEmpty(vm.Subtitle)) { px += SubLinePx * SubtitleLines(vm.Subtitle, canvasH, PanelWidthFracFor(vm)); n++; }
             if (vm.Stars >= 0) { px += StarsPx; n++; }
             if (vm.TimeSeconds >= 0f) { px += TimePx; n++; }
             int spoilBands = SpoilBandCount(vm, canvasH);
@@ -786,10 +867,12 @@ namespace DeNelle.Village.UI
         /// in portrait it is 269px, so portrait stays SINGLE-COLUMN as ruled.</summary>
         private const float MinSpoilColumnPx = 420f;
 
-        /// <summary>Body-well width in reference px (the full width a spoils band spans).</summary>
-        private static float SpoilsBodyWidthPx(float canvasH)
+        /// <summary>Body-well width in reference px (the full width a spoils band spans).
+        /// <paramref name="panelWidthFrac"/> = this screen's canvas-width fraction
+        /// (<see cref="PanelWidthFracFor"/> — WO-952: the banner is 0.70, the modal 0.56).</summary>
+        private static float SpoilsBodyWidthPx(float canvasH, float panelWidthFrac)
         {
-            return PostScaleCanvasWidth(canvasH) * PanelWidthFrac * BodyZoneWidthFrac;
+            return PostScaleCanvasWidth(canvasH) * panelWidthFrac * BodyZoneWidthFrac;
         }
 
         /// <summary>Spoils columns for this screen: 2 only when a column clears
@@ -800,7 +883,7 @@ namespace DeNelle.Village.UI
         private static int SpoilColumns(EndStateVM vm, float canvasH)
         {
             if (vm == null || vm.Compact || vm.Spoils.Count < 2) return 1;
-            return SpoilsBodyWidthPx(canvasH) * 0.5f >= MinSpoilColumnPx ? 2 : 1;
+            return SpoilsBodyWidthPx(canvasH, PanelWidthFracFor(vm)) * 0.5f >= MinSpoilColumnPx ? 2 : 1;
         }
 
         /// <summary>How many BANDS the spoils occupy — the number the panel solve must budget.</summary>
@@ -845,7 +928,7 @@ namespace DeNelle.Village.UI
             // guard so the copy can NEVER escape its rect (§1.14: text never overlaps
             // siblings) if the estimate is ever short.
             if (!string.IsNullOrEmpty(vm.Subtitle))
-                bands.Add((SubLinePx * SubtitleLines(vm.Subtitle, _canvasH), host =>
+                bands.Add((SubLinePx * SubtitleLines(vm.Subtitle, _canvasH, PanelWidthFracFor(vm)), host =>
                 {
                     var l = ElarionUiKit.Label(host, vm.Subtitle, 0f, 1f, ElarionUi.Parchment,
                         ElarionUi.FontBody, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f);
@@ -879,7 +962,7 @@ namespace DeNelle.Village.UI
             // SpoilBandCount is the same function RequiredBodyPx budgeted with, so the panel
             // solve and the layout can never disagree about how many bands there are.
             int spoilCols = SpoilColumns(vm, _canvasH);
-            float spoilBodyPx = SpoilsBodyWidthPx(_canvasH);
+            float spoilBodyPx = SpoilsBodyWidthPx(_canvasH, PanelWidthFracFor(vm));
             int spoilBands = SpoilBandCount(vm, _canvasH);
             for (int b = 0; b < spoilBands; b++)
             {
