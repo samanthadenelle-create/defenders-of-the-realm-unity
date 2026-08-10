@@ -39,6 +39,19 @@
   a captured line; every system self-reports; the fleet + web bots verify before she ever has to.
 
 ## Latest (2026-08-09) — the 08-08 ship day: machine unblocked, stairs SOLVED, store re-gated
+- **⚡ EVENING-2 WAVE (2026-08-09 ~21:00-23:00, this seat) — the WO-1010 defect-pass close + the Sylas fix.**
+  Owner F8s (new product folder `LocalLow\DeNelle\Echoes of Elarion` — **the F8 daemon was watching the
+  OLD folder; restarted on the corrected script**, her flags now ping again): (1) *"Sylas is coming
+  through as a blink"* — **FIXED**: `HeroBodySwapper.Start()` now probes `Resources/Heroes/<slug>` FIRST
+  for non-Knight classes (Ranger.fbx/Mage.fbx were git-TRACKED since `f18b66b4` but unreachable — the
+  Blink base load was terminal-on-success); (2) *"This screen is not correct"* — the WO-1010 §7 pass
+  closed: D17 sprites live (element/check+rotate authored), D19 seating consumed, always-on touch D-pad
+  retired (its reflection seam deleted), ONE skip, P3 hint line, PICK dock 540→410 band-tightening.
+  Gates `COMPILE_GATE_OK` + `REGRESSION_OK 133/133` + `UI_CAPTURE_OK 62`/`FIDELITY_OK 44`, PNGs opened
+  vs `UI_REVIEW/build_ui_target_wireframe.html` (owner re-pinned it tonight). New WOs off the banner:
+  **941** (pre-existing RumorBoard/RealmMap `UI_GEOMETRY_FAIL x16`), **942** (capture-case gaps);
+  UI seat minted **WO-1012 tutorial/FTUE redesign** (+ wireframes) — D16's full rework lives there.
+  Open: **D8 Walls-tab owner ruling** (conflicts with the 07-13 ruling), tester re-test, felt-verify.
 - **Anchor = `CANON_GROUND_TRUTH_2026-08-09.md`** (supersedes 08-08, bannered). Branch
   `wip/village2-and-f8-tickets`, **HEAD `c8320434`, PUSHED — local == origin, 0/0** (push landed 2026-08-08
   19:52:45). **30 commits landed on 2026-08-08** (counted from `git log`, by both author and committer

@@ -33,6 +33,19 @@ every other doc loses to it on conflict. Written after the 2026-08-08 day-long s
 > (`git log` by both author and committer date), leaving it **exactly 21 commits** and ~11.5 hours behind
 > HEAD. Do not act on it.
 
+> ### ⚡ EVENING-2 DELTA (2026-08-09 ~23:00, appended in the same breath as the work — §15)
+> **The WO-1010 build-screen defect pass is closed to capture-proof** (D17 sprites live, D19 seating,
+> touch D-pad retired, ONE skip, P3 hint, PICK band-tightening; gates `COMPILE_GATE_OK` +
+> `REGRESSION_OK 133/133` + `UI_CAPTURE_OK 62`, PNGs opened vs the owner-re-pinned
+> `UI_REVIEW/build_ui_target_wireframe.html`). **The Sylas F8 is fixed at the root**:
+> `HeroBodySwapper.Start()` probes `Resources/Heroes/<slug>` first — the tracked Ranger/Mage bodies
+> were dead code behind a terminal-on-success Blink load. **The F8 daemon was blind to the renamed
+> product folder** (`Echoes of Elarion`) — restarted on the corrected script. Minted: **WO-941**
+> (pre-existing RumorBoard/RealmMap geometry overlaps, 16 assertions) · **WO-942** (capture-case
+> gaps). UI seat shipped **WO-1012** (tutorial/FTUE redesign + wireframes; owner-amended §2a:
+> "person A never guides person A"). **Open for the owner:** D8 Walls-tab ruling · tester re-test ·
+> felt-verify of tonight's screen · WO-931/910/939/940 unchanged. EditMode XML remains stale (08-04).
+
 ---
 
 ## 0. ✅ THE MACHINE IS NO LONGER BLOCKED — the 08-08 §0 is RESOLVED
