@@ -22,7 +22,12 @@
 //   3. Token grammar      — AssignHarvest+SetLevel produce a "resource:level" token that
 //      round-trips; legacy "wood,iron,food,idle" reads Harvest with the RESOURCE
 //      preserved at L1; a v33 generic "harvest:N" defaults to the AFFINITY resource;
-//      a stored non-pickable "crafting:1" still reads back (read-compat).
+//      a stored non-pickable "crafting:1" still reads back (read-compat); WO-811 (f):
+//      "repair:N" round-trips (level preserved, no harvest resource) and the
+//      unknown-token->Idle default is unchanged (the older-build view of the token).
+//   4b. WO-811 repair rate — RepairFractionsPerSecond = the shared-contribution formula
+//      over repair-assigned echoes ONLY (no affinity term — Repairs was removed as an
+//      affinity); repair echoes never leak into the harvest aggregate; zero echoes = 0.
 //   4. Bonus math         — all-matched assignment: AggregateHarvestMultiplier equals the
 //      hand-computed formula INCLUDING pair bonuses + six-set + the HIDDEN tri term;
 //      the tri term is APPLIED but NOT in any ReadoutFor().BonusPct (applied ≠ displayed);
@@ -115,6 +120,7 @@ namespace DeNelle.Editor
                         EchoBalanceCatalog.Reload();       // ensure the tunables are loaded fresh
                         CheckTokenGrammar(state, Fail);
                         CheckBonusMath(state, Fail);
+                        CheckRepairMath(state, Fail);      // WO-811: repair token rate math (single source)
                         CheckLaneBonusesPopulation(state, Fail);
                         svcGo = CheckDumpCredit(state, Fail, notes);
                     }
@@ -152,6 +158,7 @@ namespace DeNelle.Editor
             if (failures.Count == 0)
             {
                 reason = "ECHO SPEC OK — WO-830 affinity table + balance dual-copy + resource-token grammar + "
+                         + "WO-811 repair token/rate (no affinity, honest zero) + "
                          + "pair/tri math (tri applied-not-displayed) + save round-trip + EchoLaneBonuses + dump credit all hold"
                          + (notes.Count > 0 ? " [" + string.Join("; ", notes) + "]" : "");
                 return true;
@@ -372,9 +379,86 @@ namespace DeNelle.Editor
             if (EchoAssignments.LaneOf(1) != EchoAssignments.LaneCrafting || EchoAssignments.LevelOf(1) != 1)
                 Fail($"stored crafting token reads lane='{EchoAssignments.LaneOf(1)}' level={EchoAssignments.LevelOf(1)} (expected crafting/1 read-compat)");
             if (EchoAssignments.PickableLanes.Length != 1 || EchoAssignments.PickableLanes[0] != EchoAssignments.LaneHarvest)
-                Fail("PickableLanes must be Harvest-only (WO-830 Sec.3e — the dead Crafting chip is removed)");
+                Fail("PickableLanes must be Harvest-only (WO-830 Sec.3e — the dead Crafting chip is removed; the WO-811 repair chip rides the card, not this list)");
             if (EchoAssignments.PickableResources.Length != 5)
                 Fail($"PickableResources length {EchoAssignments.PickableResources.Length} (expected the 5 harvest resources)");
+
+            // (f) WO-811: the REPAIR task token. AssignRepair writes "repair:<level>"
+            //     preserving the level; it round-trips through the read API (Repair lane,
+            //     NO harvest resource); a stored "repair:N" CSV reads straight back; and
+            //     the unknown-token default is UNCHANGED — the exact path an OLDER build
+            //     walks when it meets "repair:N" (additive back-compat, no schema bump).
+            state.EchoLanes = "food:1,iron:2";
+            if (!EchoAssignments.AssignRepair(1))
+                Fail("AssignRepair(1) returned false (headless state installed — must succeed)");
+            if (EchoAssignments.LaneOf(1) != EchoAssignments.LaneRepair)
+                Fail($"repair token: LaneOf(1)='{EchoAssignments.LaneOf(1)}' (expected 'repair')");
+            if (EchoAssignments.LevelOf(1) != 2)
+                Fail($"repair token: LevelOf(1)={EchoAssignments.LevelOf(1)} (expected 2 — level preserved across the task change)");
+            if (EchoAssignments.ResourceTokenOf(1) != "")
+                Fail($"repair token: ResourceTokenOf(1)='{EchoAssignments.ResourceTokenOf(1)}' (expected '' — repair carries no harvest resource)");
+            parts = (state.EchoLanes ?? "").Split(',');
+            if (parts.Length <= 1 || parts[1] != "repair:2")
+                Fail($"repair token: persisted CSV token[1]='{(parts.Length > 1 ? parts[1] : "<none>")}' (expected 'repair:2'); full='{state.EchoLanes}'");
+            if (EchoAssignments.LabelFor(EchoAssignments.LaneRepair) != "Repair")
+                Fail($"LabelFor('repair')='{EchoAssignments.LabelFor(EchoAssignments.LaneRepair)}' (expected 'Repair')");
+
+            // Reload read path: a stored repair CSV reads straight back at its level.
+            state.EchoLanes = "repair:3,idle";
+            if (EchoAssignments.LaneOf(0) != EchoAssignments.LaneRepair || EchoAssignments.LevelOf(0) != 3)
+                Fail($"stored repair token reads lane='{EchoAssignments.LaneOf(0)}' level={EchoAssignments.LevelOf(0)} (expected repair/3)");
+
+            // Unknown tokens still read Idle — the same defensive default an older build
+            // applies to the (to it, unknown) repair token. Never a throw, never corruption.
+            state.EchoLanes = "mystery:9,repair:1";
+            if (EchoAssignments.LaneOf(0) != EchoAssignments.LaneIdle)
+                Fail($"unknown token 'mystery:9' reads '{EchoAssignments.LaneOf(0)}' (expected 'idle' — the unknown-token default must be unchanged)");
+            if (EchoAssignments.LaneOf(1) != EchoAssignments.LaneRepair)
+                Fail($"repair token after an unknown neighbour reads '{EchoAssignments.LaneOf(1)}' (expected 'repair' — per-token isolation)");
+        }
+
+        // =====================================================================
+        //  Group 4b — WO-811 repair rate math (single source; no affinity term)
+        // =====================================================================
+        private static void CheckRepairMath(GameState state, Action<string> Fail)
+        {
+            float b = EchoBalanceCatalog.BaseContributionPerEcho;
+            float per = EchoBalanceCatalog.PerLevelBonus;
+            float baseRate = EchoBalanceCatalog.RepairFractionPerHour;
+            if (baseRate <= 0f)
+                Fail($"RepairFractionPerHour={baseRate:0.###} (expected > 0 — the WO-811 knob or its built-in default)");
+
+            // Two repair echoes (Lv1 + Lv4) plus a harvester: the rate sums ONLY the
+            // repair-assigned echoes, level-scaled by the SHARED contribution terms, with
+            // NO match term anywhere (no roster entry prefers Repair — WO-830 removed it).
+            state.EchoLanes = "repair:1,repair:4,wood:1,idle,idle,idle";
+            float expected = (baseRate * (1f + b) + baseRate * (1f + b + per * 3f)) / 3600f;
+            float actual = EchoBonusCalculator.RepairFractionsPerSecond();
+            if (Mathf.Abs(actual - expected) > Eps)
+                Fail($"RepairFractionsPerSecond={actual:0.#####} (expected {expected:0.#####} — base x (1 + shared terms), no affinity)");
+
+            // A repair-assigned echo contributes NOTHING to the harvest aggregate beyond
+            // the assignment-independent six-set term (count 6, all owned, no harvest echo).
+            state.EchoLanes = "repair:1,idle,idle,idle,idle,idle";
+            float expectedAgg = 6f * (1f + EchoBalanceCatalog.SixSetBonusGlobalHarvest);
+            float actualAgg = EchoBonusCalculator.AggregateHarvestMultiplier();
+            if (Mathf.Abs(actualAgg - expectedAgg) > Eps)
+                Fail($"repair echo leaked into the harvest aggregate: {actualAgg:0.####} (expected {expectedAgg:0.####})");
+
+            // ReadoutFor a repair echo: Repair lane, NO PreferredMatch (Repairs is not an
+            // affinity), BonusPct = the base term only at Lv1 (the honest displayed number).
+            var ro = EchoBonusCalculator.ReadoutFor(0);
+            if (ro.Lane != LaneType.Repair)
+                Fail($"ReadoutFor(repair).Lane={ro.Lane} (expected Repair)");
+            if (ro.PreferredMatch)
+                Fail("ReadoutFor(repair).PreferredMatch=true (Repairs was REMOVED as an affinity — no match bonus may fire)");
+            if (Mathf.Abs(ro.BonusPct - b * 100f) > Eps * 100f)
+                Fail($"ReadoutFor(repair).BonusPct={ro.BonusPct:0.##} (expected {b * 100f:0.##} — base term only, no match)");
+
+            // No repair echo -> the rate is exactly 0 (zero echoes = zero fake work).
+            state.EchoLanes = AllMatchedL1;
+            if (EchoBonusCalculator.RepairFractionsPerSecond() > 0f)
+                Fail("RepairFractionsPerSecond > 0 with no repair-assigned echo (must be exactly 0)");
         }
 
         // =====================================================================

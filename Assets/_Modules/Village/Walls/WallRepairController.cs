@@ -828,6 +828,87 @@ namespace DeNelle.Village
             return sb.ToString();
         }
 
+        // =====================================================================
+        //  WO-811 — single-worst-target seams (the Echo repair task's backend)
+        // =====================================================================
+
+        /// <summary>
+        /// WO-811: peeks the single MOST-DAMAGED repairable structure (highest damage
+        /// fraction in the same <see cref="CollectRepairAllSet"/> sweep Repair-All uses,
+        /// so destroyed structures are already excluded — the WO-753 skip is inherited,
+        /// never re-implemented). Read-only: no spend, no fix, no selection/prompt.
+        /// Returns false with zeroed outs when nothing is repairable.
+        /// The Echo repair consumer (EchoRepairService) reads this to pace its work
+        /// budget against the worst target BEFORE committing a spend.
+        /// </summary>
+        public bool TryPeekWorstDamaged(out string name, out float damageFraction, out CoreCost cost)
+        {
+            var items = CollectRepairAllSet();
+            if (items.Count == 0)
+            {
+                name = ""; damageFraction = 0f; cost = default;
+                return false;
+            }
+            int best = 0;
+            for (int i = 1; i < items.Count; i++)
+                if (items[i].DamageFraction > items[best].DamageFraction) best = i;
+            name = items[best].Name;
+            damageFraction = items[best].DamageFraction;
+            cost = items[best].Cost;
+            return true;
+        }
+
+        /// <summary>
+        /// WO-811: repairs ONLY the single most-damaged structure — the Echo repair
+        /// task's completion primitive (MOST-DAMAGED-FIRST is the documented priority
+        /// choice; it matches the RepairAll worst-first sort and WO-701's triage
+        /// instinct). Prices from the item's own catalog row (the same
+        /// <see cref="CollectRepairAllSet"/> costing every hand-repair path uses,
+        /// talent discount included) and spends through the SAME construction-economy
+        /// path (<see cref="SpendMaterials"/> → EconomyService.TrySpend) — never a
+        /// second wallet, never free hitpoints. Returns false (logged, never silent)
+        /// when nothing is damaged or the wallet cannot cover the cost.
+        /// </summary>
+        public bool TryRepairWorst(string reason, out string repairedName, out float repairedFraction, out CoreCost spent)
+        {
+            repairedName = ""; repairedFraction = 0f; spent = default;
+
+            var items = CollectRepairAllSet();
+            if (items.Count == 0)
+            {
+                FlowTrace.Step("Repair", $"TryRepairWorst({reason}): nothing damaged — no-op.");
+                return false;
+            }
+            int best = 0;
+            for (int i = 1; i < items.Count; i++)
+                if (items[i].DamageFraction > items[best].DamageFraction) best = i;
+            var item = items[best];
+
+            if (!MaterialsZero(item.Cost) && !SpendMaterials(item.Cost, reason + " '" + item.Name + "'"))
+            {
+                // SpendMaterials already traced the refusal (cost > wallet) — add the caller context.
+                FlowTrace.Step("Repair",
+                    $"TryRepairWorst({reason}): SKIPPED '{item.Name}' (dmg {item.DamageFraction:0.00}) — " +
+                    $"cost {DescribeMaterials(item.Cost)} unaffordable, wallet={WalletLine()}");
+                return false;
+            }
+
+            var fix = item.Fix;
+            Guard.Try("Repair", $"TryRepairWorst fix '{item.Name}'", () => fix?.Invoke());
+            repairedName = item.Name;
+            repairedFraction = item.DamageFraction;
+            spent = item.Cost;
+
+            // REP-1 post-fix proof line: re-read the live fraction AFTER the fix ran.
+            float postFrac = item.FractionNow != null ? item.FractionNow() : -1f;
+            FlowTrace.Step("Repair",
+                $"TryRepairWorst({reason}): repaired '{item.Name}' " +
+                $"(dmg {item.DamageFraction:0.00} -> post-fix {postFrac:0.00}) " +
+                $"for {DescribeMaterials(item.Cost)}; wallet={WalletLine()}");
+            Rescan();
+            return true;
+        }
+
         /// <summary>Compact wallet line for FlowTrace (in-session EconomyService pools).</summary>
         private static string WalletLine()
         {

@@ -279,6 +279,43 @@ namespace DeNelle.Village
         }
 
         // =====================================================================
+        //  WO-811 REPAIR -- the rate the repair consumer reads (single math source).
+        // =====================================================================
+
+        /// <summary>
+        /// WO-811: structure-FRACTIONS of repair work per second across every Echo assigned
+        /// to the REPAIR task (the value EchoRepairService accrues its work budget at --
+        /// this method is the ONE home of the repair rate math, per the single-math-source
+        /// law this file exists for).
+        ///
+        /// Per repair-assigned echo:
+        ///   EchoBalanceCatalog.RepairFractionPerHour x (1 + LaneContribution)
+        /// where LaneContribution is the SAME shared term every lane uses --
+        /// BaseContributionPerEcho + PerLevelBonus x (level - 1). Level scaling therefore
+        /// rides the one owner-tuned curve, and there is deliberately NO affinity match
+        /// term: "Repairs" was REMOVED as an affinity (WO-830 owner ruling 2026-08-02 --
+        /// Maren harvests Crystals), no roster entry prefers the Repair lane, so
+        /// PreferredMatches can never fire here and no match bonus is reintroduced.
+        ///
+        /// 0 when no echo is on the job / no GameState (=> the consumer accrues nothing --
+        /// the honest zero, never fake work).
+        /// </summary>
+        public static float RepairFractionsPerSecond()
+        {
+            int count = OwnedCount();
+            if (count <= 0) return 0f;
+
+            float perHour = 0f;
+            for (int i = 0; i < count; i++)
+            {
+                if (LaneTypeOf(EchoAssignments.LaneOf(i)) != LaneType.Repair) continue;
+                perHour += Mathf.Max(0f, EchoBalanceCatalog.RepairFractionPerHour)
+                         * (1f + LaneContribution(i, LaneType.Repair));
+            }
+            return perHour / 3600f;
+        }
+
+        // =====================================================================
         //  NON-HARVEST lanes -- passive multipliers stored on EchoLaneBonuses.
         // =====================================================================
 
@@ -431,6 +468,7 @@ namespace DeNelle.Village
                 case EchoAssignments.LaneCrafting:    return LaneType.Crafting;
                 case EchoAssignments.LaneDefense:     return LaneType.Defense;
                 case EchoAssignments.LaneExploration: return LaneType.Exploration;
+                case EchoAssignments.LaneRepair:      return LaneType.Repair;   // WO-811
                 default:                              return LaneType.Idle;
             }
         }

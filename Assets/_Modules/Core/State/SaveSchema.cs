@@ -500,12 +500,15 @@ namespace DeNelle.Core.State
             /// </summary>
             [JsonProperty("strategicPlacementMigrated")] public bool? StrategicPlacementMigrated;
 
-            // ── WO-681/658 — Echo assignments (WO-738 lane:level, WO-830 resource) ─
+            // ── WO-681/658 — Echo assignments (WO-738 lane:level, WO-830 resource,
+            //    WO-811 repair task) ─
             /// <summary>
             /// Per-Echo assignment CSV by echo index. TOKEN GRAMMAR (v33 base, extended
-            /// additively by WO-830 — SAME wire shape, NO schema bump, NO migrator):
+            /// additively by WO-830 and WO-811 — SAME wire shape, NO schema bump, NO migrator):
             /// <c>idle</c> (no level, no resource); <c>&lt;lane&gt;:&lt;level&gt;</c> with lane in
-            /// harvest/crafting/defense/exploration; or the WO-830 PRIMARY form
+            /// harvest/crafting/defense/exploration/repair (repair = the WO-811 structure-repair
+            /// task; an OLDER build reads the then-unknown token as Idle — the standing
+            /// unknown-token default, no crash/corruption); or the WO-830 PRIMARY form
             /// <c>&lt;resource&gt;:&lt;level&gt;</c> with resource in wood/iron/food/gold/crystals —
             /// a HARVEST assignment carrying the player-picked resource (e.g.
             /// <c>"wood:3,idle,crystals:1"</c>). Written by the Echo resource picker + level

@@ -35,6 +35,7 @@ namespace DeNelle.Village
                 go.AddComponent<EchoWaveUnlockBridge>();       // routes WaveManager.OnWaveCleared -> Echo unlocks
                 go.AddComponent<EchoWorkforceHud>();          // WO-555: hidden Echo panel, opened by the HUD harvest button (next to Settings) via HarvestPanelGate
                 go.AddComponent<EchoUnlockFeedback>();        // F8 2026-07-15: unmissable in-view unlock feedback (persistent pip + center banner + reward SFX), independent of the hidden panel
+                go.AddComponent<EchoRepairService>();         // WO-811: the REPAIR task consumer (real repair via WallRepairController; offline-fair on the shared clock)
             }
 
             // Reconcile WorkerManager: retire its competing harvest role for V1 so it

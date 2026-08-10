@@ -68,6 +68,14 @@ namespace DeNelle.Village
         Crafting,
         Defense,
         Exploration,
+        /// <summary>WO-811: the REPAIR task -- the Echo advances real repair on damaged
+        /// structures (EchoRepairService through the WallRepairController backend).
+        /// Appended LAST so no existing member's ordinal moves (the persisted grammar is
+        /// string tokens, but ordinal stability costs nothing and prevents surprises).
+        /// Deliberately NO affinity maps here: "Repairs" was REMOVED as an affinity
+        /// (WO-830 owner ruling 2026-08-02 -- Maren harvests Crystals), so repair never
+        /// earns a match bonus.</summary>
+        Repair,
     }
 
     /// <summary>The five harvestable targets an Echo can be assigned to (WO-830). This is the

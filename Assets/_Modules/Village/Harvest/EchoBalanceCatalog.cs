@@ -64,6 +64,14 @@ namespace DeNelle.Village
         /// <summary>WO-830 Sec.3d: the HIDDEN tri-synergy bonus (additive fraction) applied when
         /// ALL pair-synergies run at once. NEVER disclosed player-facing -- applied path only.</summary>
         [JsonProperty("hiddenTriSynergyBonus")] public float HiddenTriSynergyBonus = 0.25f;
+
+        /// <summary>WO-811: structure-FRACTIONS of repair work ONE repair-assigned Echo advances
+        /// per hour at level 1, BEFORE the shared contribution terms (EchoBonusCalculator.
+        /// RepairFractionsPerSecond folds BaseContributionPerEcho + PerLevelBonus on top).
+        /// 2.0 = a fresh Echo fully mends one half-damaged structure in ~15 min. ADDITIVE
+        /// knob: absent in an older echoes-balance.json, Newtonsoft leaves this default --
+        /// no version bump, same additive law as every field here.</summary>
+        [JsonProperty("repairFractionPerHour")] public float RepairFractionPerHour = 2f;
     }
 
     /// <summary>Static surface over echoes-balance.json -- load + cache + typed getters (WO-738).</summary>
@@ -99,6 +107,10 @@ namespace DeNelle.Village
 
         /// <summary>WO-830 Sec.3d: the hidden tri-synergy bonus (applied-only, never disclosed).</summary>
         public static float HiddenTriSynergyBonus { get { EnsureLoaded(); return Mathf.Max(0f, _data.HiddenTriSynergyBonus); } }
+
+        /// <summary>WO-811: base repair work (structure fractions/hour) per repair-assigned Echo
+        /// at level 1 (EchoBonusCalculator.RepairFractionsPerSecond is the ONE consumer).</summary>
+        public static float RepairFractionPerHour { get { EnsureLoaded(); return Mathf.Max(0f, _data.RepairFractionPerHour); } }
 
         /// <summary>The per-echo base contribution rate for an echo id (1.0 fallback when absent).</summary>
         public static float BaseRateFor(string echoId)

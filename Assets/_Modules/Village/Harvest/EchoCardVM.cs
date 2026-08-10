@@ -21,8 +21,15 @@
 // The dead Crafting chip is REMOVED (Sec.3e default); Defense/Exploration stay
 // hidden (owner ruling 2026-07-24).
 //
+// WO-811 (2026-08-10): the picker gains a SIXTH row -- the "Repair structures" TASK
+// chip (RepairTaskChip / TaskChips; AssignRepair verb -> the "repair:<level>" token).
+// Repair has NO affinity cue ("Repairs" was removed as an affinity, WO-830) and its
+// status line is HONEST: "nothing to repair" when the town is pristine, "waiting for
+// materials" when the wallet can't cover the spend (EchoRepairService.Status).
+//
 // STATE line semantics: live from the shared EchoBonusCalculator --
 //   harvesting  -> "Gathering Wood - Lv 3 - +65% (best -- this Echo's calling)"
+//   repairing   -> "Repairing structures - Lv 2" (or the honest empty/broke tail)
 //   idle        -> "Idle - waiting for your word."
 // Identity (name / element / flavor / portrait) is read from EchoRosterCatalog.ByIndex
 // (the six named spirits), NOT hardcoded. ASCII-only separators ('-' not the
@@ -69,12 +76,14 @@ namespace DeNelle.Village
         {
             EchoIndex = Math.Max(0, echoIndex);
             if (EchoService.Instance != null) EchoService.Instance.Changed += OnServiceChanged;
+            if (EchoRepairService.Instance != null) EchoRepairService.Instance.Changed += OnServiceChanged;   // WO-811: honest repair tail re-binds
             EchoAssignments.Changed += OnServiceChanged;
         }
 
         public void Dispose()
         {
             if (EchoService.Instance != null) EchoService.Instance.Changed -= OnServiceChanged;
+            if (EchoRepairService.Instance != null) EchoRepairService.Instance.Changed -= OnServiceChanged;
             EchoAssignments.Changed -= OnServiceChanged;
         }
 
@@ -129,6 +138,20 @@ namespace DeNelle.Village
                 var ro = EchoBonusCalculator.ReadoutFor(EchoIndex);
                 if (ro.Lane == LaneType.Idle)
                     return "Idle - waiting for your word.";
+                if (ro.Lane == LaneType.Repair)
+                {
+                    // WO-811: HONEST repair status. The tail states are read from the live
+                    // consumer (EchoRepairService); with no service (headless/editmode) the
+                    // plain assigned line is still true. TEXT only, ASCII only.
+                    var rs = EchoRepairService.Instance;
+                    string baseLine = $"Repairing structures - Lv {ro.Level}";
+                    if (rs == null) return baseLine;
+                    if (rs.Status == EchoRepairStatus.NothingToRepair || !rs.HasRepairTargets)
+                        return $"Repair - Lv {ro.Level} - nothing to repair right now";
+                    if (rs.Status == EchoRepairStatus.WaitingMaterials)
+                        return $"Repair - Lv {ro.Level} - waiting for materials";
+                    return baseLine;
+                }
                 string what;
                 if (ro.Lane == LaneType.Harvest)
                 {
@@ -165,8 +188,9 @@ namespace DeNelle.Village
             }
         }
 
-        /// <summary>The action-row prompt (one ask, one row) -- the WO-830 resource-picker ask,
-        /// naming the Echo's short name (the part before the comma) from the roster catalog.</summary>
+        /// <summary>The action-row prompt (one ask, one row) -- names the Echo's short name
+        /// (the part before the comma) from the roster catalog. WO-811: reworded from the
+        /// WO-830 "gather?" ask because the picker now offers gather AND repair.</summary>
         public string AskText
         {
             get
@@ -175,7 +199,7 @@ namespace DeNelle.Village
                 string name = entry != null ? entry.DisplayName : "this Echo";
                 int comma = name.IndexOf(',');
                 if (comma > 0) name = name.Substring(0, comma);
-                return "What should " + name + " gather?";
+                return "What should " + name + " tend to?";
             }
         }
 
@@ -226,6 +250,29 @@ namespace DeNelle.Village
             return chips;
         }
 
+        /// <summary>WO-811: the "Repair structures" TASK chip -- the sixth picker row beside
+        /// the five WO-830 resource chips. Selected state carried in TEXT (" (now)") like every
+        /// other chip; NEVER Preferred / never a "best" cue (Repairs was removed as an affinity,
+        /// WO-830 ruling 2026-08-02 -- repair earns no match bonus and must not claim one).</summary>
+        public ResourceChip RepairTaskChip()
+        {
+            bool sel = EchoAssignments.LaneOf(EchoIndex) == EchoAssignments.LaneRepair;
+            string label = "Repair structures" + (sel ? " (now)" : "");
+            return new ResourceChip(EchoAssignments.LaneRepair, label, "", sel, preferred: false);
+        }
+
+        /// <summary>WO-811: the full task-picker row set the View renders -- the five WO-830
+        /// resource chips (unchanged order) plus the repair task chip LAST. ResourceChips()
+        /// keeps its 5-length WO-830 contract for existing consumers/oracles.</summary>
+        public ResourceChip[] TaskChips()
+        {
+            var res = ResourceChips();
+            var all = new ResourceChip[res.Length + 1];
+            Array.Copy(res, all, res.Length);
+            all[res.Length] = RepairTaskChip();
+            return all;
+        }
+
         // ── The assign verb (the ONLY mutation this card performs) ─────────────
 
         /// <summary>Assign this Echo to harvest <paramref name="resourceToken"/> via the
@@ -234,6 +281,14 @@ namespace DeNelle.Village
         {
             FlowTrace.Step("Echo", $"Card: harvest-resource requested echo={EchoIndex} resource='{resourceToken}'.");
             EchoAssignments.AssignHarvest(EchoIndex, resourceToken);
+        }
+
+        /// <summary>WO-811: assign this Echo to the REPAIR task (the "Repair structures" chip's
+        /// verb). EchoAssignments traces + persists ("repair:&lt;level&gt;") + raises Changed.</summary>
+        public void AssignRepair()
+        {
+            FlowTrace.Step("Echo", $"Card: repair task requested echo={EchoIndex}.");
+            EchoAssignments.AssignRepair(EchoIndex);
         }
 
         // ── First-meeting one-shot (WO-681 spec 3) ──────────────────────────────

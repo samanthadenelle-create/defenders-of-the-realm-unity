@@ -1,6 +1,7 @@
 # WO-811 — Echo tasks: gather a resource node **or** repair structures
 
-**Status:** READY TO IMPLEMENT  
+**Status:** DONE — the repair half implemented 2026-08-10 (the gather half was already WO-830's);
+regressions green, RESULT filed; owner felt-verify pending. See the RESULT file.
 **Minted:** 2026-07-30  
 **Lane:** Village/Harvest + structure repair consumer (single lane for Echo assignment product)  
 **Origin:** owner Echo card screenshot 2026-07-30 20:49 — *Echoes need to either gather a node (wood/iron/or whatever resource) or repair structures*  

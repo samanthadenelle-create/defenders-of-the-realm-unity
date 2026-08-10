@@ -22,6 +22,10 @@
 //      hidden-tri vocabulary (the secret stays secret at the string layer too).
 //   4. Synergy line       — SynergyText ACTIVE when the pair runs, recipe text when
 //      not; names the partner; never mentions "hidden"/"tri"/"secret".
+//   6. WO-811 repair task — TaskChips = 5 resources + the "Repair structures" chip
+//      LAST; the repair chip never carries an affinity cue; AssignRepair persists
+//      "repair:<level>" (level preserved) with the "(now)" TEXT cue on re-read; the
+//      repair StateText is honest (never a Gathering claim).
 //   5. WO-831 emergence   — every roster entry has a non-empty ASCII EmergeLine;
 //      EchoUnlockDialogue.EmergeLineFor falls back to the shared default on a null
 //      entry; EchoRosterCatalog.LoadEmergence returns null GRACEFULLY (no throw)
@@ -93,6 +97,7 @@ namespace DeNelle.Editor
                         CheckChipProjection(vm, Fail);
                         CheckPickerVerb(vm, state, Fail);
                         CheckCardStrings(vm, state, Fail);
+                        CheckRepairTask(vm, state, Fail);   // WO-811: the repair chip + verb + honest status
                         CheckSynergyLine(state, Fail);
                     }
                 }
@@ -116,7 +121,8 @@ namespace DeNelle.Editor
             if (failures.Count == 0)
             {
                 reason = "ECHO PICKER OK — 5-chip projection + picker verb + card strings (affinity disclosed, "
-                         + "tri never) + synergy line + WO-831 emergence data/fallback all hold"
+                         + "tri never) + WO-811 repair chip/verb/status (text-cued, no affinity cue) "
+                         + "+ synergy line + WO-831 emergence data/fallback all hold"
                          + (notes.Count > 0 ? " [" + string.Join("; ", notes) + "]" : "");
                 return true;
             }
@@ -219,8 +225,10 @@ namespace DeNelle.Editor
                 Fail($"WhatText '{whatText}' does not disclose the affinity ('Favors: Wood')");
 
             string askText = vm.AskText;
-            if (!askText.Contains("gather"))
-                Fail($"AskText '{askText}' is not the gather ask");
+            // WO-811: the ask was reworded from "gather?" to "tend to?" because the picker
+            // now offers gather AND repair — the old word claimed only half the choices.
+            if (!askText.Contains("tend"))
+                Fail($"AskText '{askText}' is not the tend-to ask (WO-811 reword — the picker offers gather AND repair)");
             if (askText.Contains(","))
                 Fail($"AskText '{askText}' carries the full comma name (expected the short name)");
 
@@ -267,6 +275,67 @@ namespace DeNelle.Editor
                 if (!sy.Contains("Aldwin") || !sy.Contains("Food"))
                     Fail($"broken-pair SynergyText '{sy}' must hint the partner and its resource (Aldwin / Food)");
             }
+        }
+
+        // =====================================================================
+        //  Group 6 — WO-811: the repair task chip + verb + honest status strings
+        // =====================================================================
+        private static void CheckRepairTask(EchoCardVM vm, GameState state, Action<string> Fail)
+        {
+            // Chip projection: exactly ONE extra TASK row, appended LAST, resource order
+            // ahead of it unchanged (the WO-830 contract is untouched).
+            var all = vm.TaskChips();
+            if (all == null || all.Length != 6)
+            {
+                Fail($"TaskChips length {(all == null ? 0 : all.Length)} (expected 6 — five resources + repair)");
+                return;
+            }
+            var expectedOrder = EchoAssignments.PickableResources;
+            for (int i = 0; i < 5; i++)
+                if (all[i].Id != expectedOrder[i])
+                    Fail($"TaskChips[{i}].Id='{all[i].Id}' (expected '{expectedOrder[i]}' — resource rows unchanged ahead of repair)");
+
+            var chip = vm.RepairTaskChip();
+            if (chip.Id != EchoAssignments.LaneRepair)
+                Fail($"RepairTaskChip.Id='{chip.Id}' (expected 'repair')");
+            if (!chip.Label.Contains("Repair structures"))
+                Fail($"RepairTaskChip label '{chip.Label}' must carry the full 'Repair structures' text (no clip, no icon-only)");
+            if (!IsAscii(chip.Label))
+                Fail($"RepairTaskChip label '{chip.Label}' contains non-ASCII characters");
+            if (chip.Selected)
+                Fail("RepairTaskChip.Selected=true while the echo is harvest-assigned");
+            if (chip.Preferred || chip.Label.IndexOf("best", StringComparison.OrdinalIgnoreCase) >= 0)
+                Fail($"RepairTaskChip claims an affinity cue ('{chip.Label}') — Repairs was REMOVED as an affinity (WO-830 2026-08-02); repair never carries 'best'");
+
+            // The verb: assign repair -> "repair:<level>" persisted with the level preserved
+            // (the card-strings group left echo 1 on wood at level 2).
+            vm.AssignRepair();
+            if (EchoAssignments.LaneOf(1) != EchoAssignments.LaneRepair)
+                Fail($"after AssignRepair: LaneOf(1)='{EchoAssignments.LaneOf(1)}' (expected 'repair')");
+            var parts = (state.EchoLanes ?? "").Split(',');
+            if (parts.Length <= 1 || parts[1] != "repair:2")
+                Fail($"after AssignRepair: persisted token[1]='{(parts.Length > 1 ? parts[1] : "<none>")}' (expected 'repair:2' — level preserved); full='{state.EchoLanes}'");
+
+            chip = vm.RepairTaskChip();
+            if (!chip.Selected || !chip.Label.Contains("(now)"))
+                Fail($"selected RepairTaskChip label '{chip.Label}' lacks the '(now)' TEXT cue (colorblind law)");
+
+            // Status string: an honest repair line — TEXT, never a gather claim. In this
+            // headless oracle EchoRepairService.Instance is null, so the plain assigned
+            // line is the truthful render (the nothing-to-repair / waiting-for-materials
+            // tails are the live service's to add and are asserted by its own traces).
+            string stateText = vm.StateText;
+            if (!stateText.Contains("Repair"))
+                Fail($"repair StateText '{stateText}' does not read as a repair status");
+            if (stateText.Contains("Gathering"))
+                Fail($"repair StateText '{stateText}' still claims Gathering");
+            if (!stateText.Contains("Lv 2"))
+                Fail($"repair StateText '{stateText}' lost the level (expected 'Lv 2')");
+            if (!IsAscii(stateText))
+                Fail($"repair StateText '{stateText}' contains non-ASCII characters");
+
+            // Restore the harvest pick so any later group starts from the WO-830 baseline.
+            vm.AssignResource(EchoAssignments.ResIron);
         }
 
         /// <summary>Tiny disposable wrapper so each temporary VM always unsubscribes.</summary>
