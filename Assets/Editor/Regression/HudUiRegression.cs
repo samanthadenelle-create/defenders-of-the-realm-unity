@@ -129,6 +129,13 @@ namespace DeNelle.Editor
         private static readonly HashSet<string> MissingResourceBaseline = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             "Arena/Backdrops/outerworld_backdrop",
+            // WO-957/1007: the exit arch's KayKit look. The kit lives under the GITIGNORED
+            // Assets/Models/KayKit/ (big-art-out-of-git policy), so the editor branch resolves
+            // the real .mat by AssetDatabase and this Resources path is the PLAYER-build mirror
+            // that has deliberately not been staged yet. DungeonExitInteractable.ResolveKayKitMaterial
+            // already degrades loudly and visibly on a miss ("exit arch renders plain-lit (still
+            // visible)"), which is why this is debt and not a defect - the arch never blanks.
+            "Dungeon/Exit/dungeon_texture",
             "Audio/Ambient/Heartwood_Critical",
             "Audio/Ambient/Heartwood_Healthy",
             "Audio/Ambient/Heartwood_Strained",

@@ -26,7 +26,9 @@ using System;
 using Cysharp.Threading.Tasks;
 using DeNelle.Core;
 using DeNelle.Core.Diagnostics;
+using DeNelle.Dungeons.RoomForge;
 using DeNelle.Village;
+using Newtonsoft.Json;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -109,24 +111,30 @@ namespace DeNelle.Dungeons
                 $"(routes -> SceneRouter.Castle, hero={(taggedHero != null ? "tagged" : "unresolved")})");
         }
 
-        // The exit seats at the ENTRY room (where the hero spawns) so the player leaves
-        // from where they came, nudged a few metres off the exact hero seat so the
-        // walk-in trigger does not fire on the spawn frame.
+        // WO-957: the exit seats at the layout's DESIGNATED true-exit room (exitRoomId,
+        // schema v2) - the ONE place that wears the full arch + beacon. An unauthored /
+        // unresolvable designation falls back to the ENTRY room (where the hero spawns),
+        // the pre-multi-floor behavior, nudged a few metres off the exact hero seat so
+        // the walk-in trigger does not fire on the spawn frame.
         private static Vector3 ResolveExitPosition(Transform composeRoot)
         {
             Vector3 basePos;
-            Transform entry = null;
-            foreach (Transform child in composeRoot)
+            string exitRoomId = LoadExitRoomId(composeRoot.name);
+            Transform seat = FindRoomChild(composeRoot, exitRoomId);
+            if (seat != null)
             {
-                if (child != null && string.Equals(child.name, "entry", StringComparison.OrdinalIgnoreCase))
-                {
-                    entry = child;
-                    break;
-                }
+                FlowTrace.Step(Sys, $"true exit seats at designated room '{exitRoomId}' (layout exitRoomId)");
             }
-            if (entry != null)
+            else
             {
-                basePos = entry.position;
+                if (!string.IsNullOrEmpty(exitRoomId))
+                    FlowTrace.Warn(Sys, $"designated exit room '{exitRoomId}' not found under " +
+                        $"'{composeRoot.name}' - falling back to the entry room");
+                seat = FindRoomChild(composeRoot, "entry");
+            }
+            if (seat != null)
+            {
+                basePos = seat.position;
             }
             else
             {
@@ -137,6 +145,35 @@ namespace DeNelle.Dungeons
             }
             // Nudge off the hero seat (entry node sits at origin; hero is seated on it).
             return basePos + new Vector3(0f, 0f, -2.6f);
+        }
+
+        private static Transform FindRoomChild(Transform composeRoot, string roomId)
+        {
+            if (string.IsNullOrEmpty(roomId)) return null;
+            foreach (Transform child in composeRoot)
+            {
+                if (child != null && string.Equals(child.name, roomId, StringComparison.OrdinalIgnoreCase))
+                    return child;
+            }
+            return null;
+        }
+
+        // Layout JSON (Resources dual-copy, same load path as DungeonRoomBinder) ->
+        // exitRoomId. Null-safe: a missing/unparseable/pre-v2 layout just means the
+        // entry-room default (never blanks the exit).
+        private static string LoadExitRoomId(string composeRootName)
+        {
+            string dungeonId = composeRootName.Substring("DungeonCompose_".Length);
+            var text = Guard.Try(Sys, $"load layout '{dungeonId}' for exitRoomId",
+                () => Resources.Load<TextAsset>("Data/Canonical/dungeon-layouts/" + dungeonId), null);
+            if (text == null)
+            {
+                FlowTrace.Step(Sys, $"layout '{dungeonId}' not in Resources - true exit uses the entry-room default");
+                return null;
+            }
+            var layout = Guard.Try(Sys, $"parse layout '{dungeonId}' for exitRoomId",
+                () => JsonConvert.DeserializeObject<DungeonComposeLayout>(text.text), null);
+            return layout != null ? layout.exitRoomId : null;
         }
     }
 
@@ -173,17 +210,28 @@ namespace DeNelle.Dungeons
         // label to "Leave Dungeon" - dg_descent_probe authors "Extract (deep)" and the string is
         // absent from the baked scene entirely.
         [SerializeField] private string _label = "Leave Dungeon";
+        // WO-957: which presentation this exit wears. TRUE = the layout's ONE true exit
+        // (full arch + light beacon + "EXIT"); FALSE = a per-floor leave pad (quiet flat
+        // pad + small "Leave" label - word+shape carry the distinction, never hue: the
+        // owner is red/green colourblind). [SerializeField] for the same bake-then-save
+        // reason as _label above.
+        [SerializeField] private bool _isTrueExit = true;
 
         /// <summary>Create the exit at <paramref name="position"/> and build its visual.</summary>
         /// <param name="onLeave">Optional rich-scene leave action (ExitToVillage). Null => Castle route.</param>
         /// <param name="label">Interact-button prompt text.</param>
-        public static DungeonExitInteractable Spawn(Vector3 position, System.Action onLeave = null, string label = "Leave Dungeon")
+        /// <param name="trueExit">WO-957: TRUE = the full arch+beacon true-exit presentation;
+        /// FALSE = the quiet per-floor leave-pad presentation. The baker passes FALSE for
+        /// every extract pad (reflection Invoke passes all four args - defaults do not apply).</param>
+        public static DungeonExitInteractable Spawn(Vector3 position, System.Action onLeave = null,
+                                                   string label = "Leave Dungeon", bool trueExit = true)
         {
             var go = new GameObject("DungeonExit (Return)");
             go.transform.position = position;
             var exit = go.AddComponent<DungeonExitInteractable>();
             exit._onLeave = onLeave;
             exit._label = string.IsNullOrEmpty(label) ? "Leave Dungeon" : label;
+            exit._isTrueExit = trueExit;
             exit.BuildVisual();
             return exit;
         }
@@ -195,16 +243,34 @@ namespace DeNelle.Dungeons
             trigger.isTrigger = true;
             trigger.radius = TriggerRadius;
 
-            // A simple emerald-gold home-arch (distinct from the purple entry portal),
-            // built from decorative primitives with their colliders stripped so nothing
-            // physically traps the hero. URP/Unlit is pinned into every build by the
-            // MAT-02 build preprocessor, so these never render magenta.
             var frame = new Color(0.20f, 0.55f, 0.30f, 1f);   // emerald stone
             var glow = new Color(0.55f, 0.95f, 0.55f, 0.72f); // green-gold sheet
 
-            AddDecor("Pillar_L", new Vector3(-1.1f, 1.3f, 0f), new Vector3(0.35f, 2.6f, 0.35f), frame, false);
-            AddDecor("Pillar_R", new Vector3(1.1f, 1.3f, 0f), new Vector3(0.35f, 2.6f, 0.35f), frame, false);
-            AddDecor("Lintel", new Vector3(0f, 2.75f, 0f), new Vector3(2.7f, 0.35f, 0.35f), frame, false);
+            // WO-957: TWO presentations, distinguished by SHAPE and WORD, never hue
+            // (colourblind law) - the full arch/beacon marks ONLY the layout's true exit;
+            // per-floor extract pads get the quiet flat-pad affordance below.
+            if (!_isTrueExit)
+            {
+                BuildLeavePad(glow);
+                return;
+            }
+
+            // WO-1007 (owner pick: Option C, freestanding decorated arch): the exit is a
+            // real KayKit monument arch, not primitive emerald cubes. Missing-asset safety:
+            // fall back to the old primitive arch with a Warn - a lost exit is a softlock.
+            bool kaykitBuilt = Guard.Try(Sys, "build KayKit exit arch", () => TryBuildKayKitArch(), false);
+            if (!kaykitBuilt)
+            {
+                FlowTrace.Warn(Sys, "KayKit exit arch unresolved - falling back to the primitive arch " +
+                    "(never an invisible exit)");
+                AddDecor("Pillar_L", new Vector3(-1.1f, 1.3f, 0f), new Vector3(0.35f, 2.6f, 0.35f), frame, false);
+                AddDecor("Pillar_R", new Vector3(1.1f, 1.3f, 0f), new Vector3(0.35f, 2.6f, 0.35f), frame, false);
+                AddDecor("Lintel", new Vector3(0f, 2.75f, 0f), new Vector3(2.7f, 0.35f, 0.35f), frame, false);
+            }
+            FlowTrace.Step(Sys, $"exit arch variant built: {(kaykitBuilt ? "kaykit-optionC" : "primitive-fallback")}");
+
+            // Green-gold glow plane filling the opening ("you may pass home") - kept in
+            // BOTH variants, and kept DISTINCT from the purple entry portal (WO-869).
             AddDecor("Sheet", new Vector3(0f, 1.3f, 0f), new Vector3(1.9f, 2.5f, 1f), glow, true);
 
             // WO-797 / F8 seq 622 exit discoverability: the arch alone read as "no way to
@@ -214,6 +280,119 @@ namespace DeNelle.Dungeons
             // glow beam that reads over enemy heads and from the corridor mouth, and a
             // billboarded ASCII "EXIT" label. All decorative (no colliders).
             BuildBeacon(glow);
+        }
+
+        // ── WO-1007: the KayKit Option C monument arch ────────────────────────────
+        // wall_arched + two pillar_decorated, freestanding, sharing the kit texture so
+        // it themes with the dungeon. Resolution order:
+        //   1. Resources copies (Assets/Resources/Dungeon/Exit/ - tracked, so the
+        //      runtime-INJECTED return exit resolves in a player build),
+        //   2. editor-only AssetDatabase from the gitignored kit (bake/editor coverage),
+        //   3. caller falls back to the primitive arch (Warn, never invisible).
+        private bool TryBuildKayKitArch()
+        {
+            GameObject archModel = ResolveExitProp("wall_arched");
+            GameObject pillarModel = ResolveExitProp("pillar_decorated");
+            if (archModel == null || pillarModel == null) return false;
+
+            Material mat = ResolveKayKitMaterial();
+            // The arch piece is authored on the kit grid (~4m wall). Base sits on the
+            // floor at the trigger's seat; pillars flank just outside the wall edges.
+            AddProp("Arch_KayKit", archModel, Vector3.zero, 0f, mat);
+            AddProp("Pillar_L", pillarModel, new Vector3(-2.3f, 0f, 0f), 0f, mat);
+            AddProp("Pillar_R", pillarModel, new Vector3(2.3f, 0f, 0f), 0f, mat);
+            return true;
+        }
+
+        private static GameObject ResolveExitProp(string stem)
+        {
+            var fromResources = Guard.Try(Sys, $"resolve exit prop '{stem}' (Resources)",
+                () => Resources.Load<GameObject>("Dungeon/Exit/" + stem), null);
+            if (fromResources != null) return fromResources;
+#if UNITY_EDITOR
+            var fromKit = Guard.Try(Sys, $"resolve exit prop '{stem}' (editor kit)",
+                () => UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(
+                    "Assets/Models/KayKit/dungeon/" + stem + ".fbx"), null);
+            if (fromKit != null) return fromKit;
+#endif
+            FlowTrace.Warn(Sys, $"exit prop '{stem}' unresolved (no Resources copy" +
+#if UNITY_EDITOR
+                ", no kit asset" +
+#endif
+                ")");
+            return null;
+        }
+
+        // The kit's shared URP material look. In a player build the .mat asset is not
+        // addressable, so build a URP/Lit (MAT-02-pinned) material from the tracked
+        // texture copy; in the editor prefer the kit's own dungeon_texture_URP.mat.
+        private static Material ResolveKayKitMaterial()
+        {
+#if UNITY_EDITOR
+            var kitMat = Guard.Try(Sys, "resolve kit material (editor)",
+                () => UnityEditor.AssetDatabase.LoadAssetAtPath<Material>(
+                    "Assets/Models/KayKit/dungeon/dungeon_texture_URP.mat"), null);
+            if (kitMat != null) return kitMat;
+#endif
+            Shader lit = Shader.Find("Universal Render Pipeline/Lit");
+            if (lit == null)
+            {
+                FlowTrace.Warn(Sys, "URP/Lit shader unresolved - exit arch keeps its imported materials");
+                return null;
+            }
+            var mat = new Material(lit);
+            var tex = Guard.Try(Sys, "resolve kit texture (Resources)",
+                () => Resources.Load<Texture2D>("Dungeon/Exit/dungeon_texture"), null);
+            if (tex != null && mat.HasProperty("_BaseMap")) mat.SetTexture("_BaseMap", tex);
+            else FlowTrace.Warn(Sys, "kit texture unresolved - exit arch renders plain-lit (still visible)");
+            return mat;
+        }
+
+        // Instantiate a decorative prop child: colliders stripped (never trap the hero),
+        // every renderer on the shared kit material so the piece themes with the room.
+        private void AddProp(string childName, GameObject model, Vector3 localPos, float yawDeg, Material mat)
+        {
+            var prop = Instantiate(model);
+            prop.name = childName;
+            prop.transform.SetParent(transform, false);
+            prop.transform.localPosition = localPos;
+            prop.transform.localRotation = Quaternion.Euler(0f, yawDeg, 0f);
+            foreach (var col in prop.GetComponentsInChildren<Collider>(true))
+                if (col != null) UnityEngine.Object.Destroy(col);
+            if (mat != null)
+                foreach (var rend in prop.GetComponentsInChildren<Renderer>(true))
+                    if (rend != null) rend.sharedMaterial = mat;
+        }
+
+        // ── WO-957: the QUIET per-floor leave pad ─────────────────────────────────
+        // A flat translucent floor disc + a small billboarded label carrying the word
+        // ("Leave"). Deliberately subordinate to the true exit: no arch, no tall beam,
+        // no "EXIT" text, and NO real Light (the stairwell candles already spend 3 of
+        // the URP 4-per-object realtime light budget - a light per pad would evict the
+        // ones that matter). Shape (flat disc vs tall arch/shaft) + word ("Leave" vs
+        // "EXIT") carry the distinction without hue (colourblind law).
+        private void BuildLeavePad(Color glow)
+        {
+            var disc = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            disc.name = "Pad_Marker";
+            var discCol = disc.GetComponent<Collider>();
+            if (discCol != null) UnityEngine.Object.Destroy(discCol); // decorative - never trap
+            disc.transform.SetParent(transform, false);
+            disc.transform.localPosition = new Vector3(0f, 0.03f, 0f);
+            disc.transform.localScale = new Vector3(1.8f, 0.02f, 1.8f);
+            var discRend = disc.GetComponent<Renderer>();
+            if (discRend != null) ApplyDecorMaterial(discRend, glow, translucent: true);
+
+            Transform label = BuildWorldLabel("Pad_Label", _label,
+                new Vector3(0f, 1.2f, 0f), fontSize: 40, characterSize: 0.09f);
+            if (label != null)
+            {
+                // Reuse the beacon component for billboarding only - null light, no pulse.
+                var beacon = gameObject.AddComponent<DungeonExitBeacon>();
+                beacon.Bind(null, label);
+            }
+            FlowTrace.Step(Sys, $"leave pad built at {transform.position} " +
+                $"(quiet affordance, label='{_label}', no light/beam)");
         }
 
         // Builds the DungeonExitBeacon child: light + vertical beam + "EXIT" label.
@@ -263,33 +442,11 @@ namespace DeNelle.Dungeons
 
             // ASCII label. Legacy TextMesh (code-built UI law - no UXML); billboarded by
             // the beacon component. Skipped with a Warn if no built-in font resolves.
-            Transform label = null;
-            var font = Guard.Try(Sys, "resolve builtin font",
-                () => Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf"), null);
-            if (font == null)
-                font = Guard.Try(Sys, "resolve builtin font (Arial fallback)",
-                    () => Resources.GetBuiltinResource<Font>("Arial.ttf"), null);
-            if (font != null)
-            {
-                var labelGo = new GameObject("Beacon_Label");
-                labelGo.transform.SetParent(transform, false);
-                labelGo.transform.localPosition = new Vector3(0f, 3.6f, 0f);
-                var tm = labelGo.AddComponent<TextMesh>();
-                tm.text = "EXIT";
-                tm.font = font;
-                tm.fontSize = 48;
-                tm.characterSize = 0.14f;
-                tm.anchor = TextAnchor.MiddleCenter;
-                tm.alignment = TextAlignment.Center;
-                tm.color = new Color(0.75f, 1f, 0.75f, 1f);
-                var tr = labelGo.GetComponent<MeshRenderer>();
-                if (tr != null && font.material != null) tr.sharedMaterial = font.material;
-                label = labelGo.transform;
-            }
-            else
-            {
-                FlowTrace.Warn(Sys, "no builtin font resolved - exit beacon ships without the EXIT label");
-            }
+            // ⚠ THE NAME IS PINNED the same way Beacon_Beam is - the ownership regression
+            // finds this child by name. Build it through the shared BuildWorldLabel so the
+            // true exit and the WO-957 leave pad can never drift apart.
+            Transform label = BuildWorldLabel("Beacon_Label", "EXIT",
+                new Vector3(0f, 3.6f, 0f), fontSize: 48, characterSize: 0.14f);
 
             var beacon = beaconGo.AddComponent<DungeonExitBeacon>();
             beacon.Bind(light, label);
@@ -312,33 +469,81 @@ namespace DeNelle.Dungeons
             prim.transform.localScale = localScale;
 
             var rend = prim.GetComponent<Renderer>();
-            if (rend != null)
+            if (rend != null) ApplyDecorMaterial(rend, color, asQuad || translucent);
+        }
+
+        /// <summary>
+        /// The ONE material path for every code-built decor surface here (beam, sheet, leave pad).
+        /// Extracted from <see cref="AddDecor"/> so the WO-957 pad cannot drift from the WO-1008
+        /// beam: a second copy of this block is how one of them ends up opaque again.
+        /// <paramref name="translucent"/> forces the transparent surface — URP keeps a material in
+        /// the OPAQUE queue unless the render state matches, so setting only the alpha does nothing.
+        /// </summary>
+        private void ApplyDecorMaterial(Renderer rend, Color color, bool translucent)
+        {
+            if (rend == null) return;
+            Shader sh = Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Unlit/Color");
+            if (sh == null)
             {
-                Shader sh = Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Unlit/Color");
-                if (sh != null)
-                {
-                    var mat = new Material(sh);
-                    if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", color);
-                    if (mat.HasProperty("_Color")) mat.SetColor("_Color", color);
-                    // Translucent glow (Surface=1 -> transparent on URP/Unlit). The sheet has always
-                    // been translucent; WO-1008 lets a beam opt in too, so it reads as a shaft of
-                    // light instead of a painted box. Transparent needs the render state to match,
-                    // or URP keeps it in the opaque queue and the alpha does nothing.
-                    if ((asQuad || translucent) && mat.HasProperty("_Surface"))
-                    {
-                        mat.SetFloat("_Surface", 1f);
-                        mat.SetOverrideTag("RenderType", "Transparent");
-                        mat.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
-                        if (mat.HasProperty("_SrcBlend"))
-                            mat.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
-                        if (mat.HasProperty("_DstBlend"))
-                            mat.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
-                        if (mat.HasProperty("_ZWrite")) mat.SetFloat("_ZWrite", 0f);
-                        mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
-                    }
-                    rend.sharedMaterial = mat;
-                }
+                FlowTrace.Warn(Sys, "no URP/Unlit shader resolved - decor surface keeps its primitive " +
+                                    "material (magenta risk in a stripped player build)");
+                return;
             }
+
+            var mat = new Material(sh);
+            if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", color);
+            if (mat.HasProperty("_Color")) mat.SetColor("_Color", color);
+            if (translucent && mat.HasProperty("_Surface"))
+            {
+                mat.SetFloat("_Surface", 1f);
+                mat.SetOverrideTag("RenderType", "Transparent");
+                mat.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+                if (mat.HasProperty("_SrcBlend"))
+                    mat.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
+                if (mat.HasProperty("_DstBlend"))
+                    mat.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+                if (mat.HasProperty("_ZWrite")) mat.SetFloat("_ZWrite", 0f);
+                mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            }
+            rend.sharedMaterial = mat;
+        }
+
+        /// <summary>
+        /// The ONE world-label path (legacy <see cref="TextMesh"/> — code-built UI law, no UXML).
+        /// Extracted from <see cref="BuildBeacon"/> so the WO-957 leave pad and the true exit's
+        /// "EXIT" build the same way. Returns null (with a Warn, never silently) when no built-in
+        /// font resolves — the caller then ships without a label rather than throwing.
+        /// Parented to the exit root, not to the beacon, because the beacon component billboards
+        /// the label transform it is handed.
+        /// </summary>
+        private Transform BuildWorldLabel(string name, string text, Vector3 localPos,
+                                          int fontSize, float characterSize, Color? color = null)
+        {
+            var font = Guard.Try(Sys, "resolve builtin font",
+                () => Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf"), null);
+            if (font == null)
+                font = Guard.Try(Sys, "resolve builtin font (Arial fallback)",
+                    () => Resources.GetBuiltinResource<Font>("Arial.ttf"), null);
+            if (font == null)
+            {
+                FlowTrace.Warn(Sys, $"no builtin font resolved - '{name}' ships without its world label");
+                return null;
+            }
+
+            var labelGo = new GameObject(name);
+            labelGo.transform.SetParent(transform, false);
+            labelGo.transform.localPosition = localPos;
+            var tm = labelGo.AddComponent<TextMesh>();
+            tm.text = text;                       // ASCII only - a non-ASCII glyph renders as tofu
+            tm.font = font;
+            tm.fontSize = fontSize;
+            tm.characterSize = characterSize;
+            tm.anchor = TextAnchor.MiddleCenter;
+            tm.alignment = TextAlignment.Center;
+            tm.color = color ?? new Color(0.75f, 1f, 0.75f, 1f);
+            var tr = labelGo.GetComponent<MeshRenderer>();
+            if (tr != null && font.material != null) tr.sharedMaterial = font.material;
+            return labelGo.transform;
         }
 
         /// <summary>

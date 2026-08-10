@@ -48,6 +48,12 @@ namespace DeNelle.Editor.RoomForge
         [JsonProperty("graphId")] public string graphId = "untitled_graph";
         /// <summary>Node id placed at world origin/identity. Empty => first node in the list.</summary>
         [JsonProperty("entry")] public string entry = "";
+        /// <summary>
+        /// WO-957: the node that carries the layout's ONE true exit (full arch + beacon).
+        /// Empty => the entry node (pre-multi-floor behavior). Carried into
+        /// <see cref="DungeonComposeLayout.exitRoomId"/> at compose.
+        /// </summary>
+        [JsonProperty("exitRoomId")] public string exitRoomId = "";
         [JsonProperty("nodes")] public List<GraphNode> nodes = new List<GraphNode>();
         [JsonProperty("edges")] public List<GraphEdge> edges = new List<GraphEdge>();
         /// <summary>Optional bake/lint rules passed straight through to the compose layout.</summary>
@@ -491,6 +497,10 @@ namespace DeNelle.Editor.RoomForge
                 var layout = new DungeonComposeLayout
                 {
                     dungeonId = graph.graphId,
+                    // WO-957: the ONE true exit. An unauthored exitRoomId falls back to the
+                    // entry node - the pre-multi-floor behavior the runtime spawner defaults
+                    // to anyway, so the data and the fallback agree on the same room.
+                    exitRoomId = string.IsNullOrEmpty(graph.exitRoomId) ? graph.entry : graph.exitRoomId,
                     cellSize = EmitCellSize,
                     rooms = new List<ComposeRoomPlacement>(),
                     connections = keptConnections,

@@ -557,7 +557,7 @@
         0.0,
         0.0
       ],
-      "label": "Extract"
+      "label": "Leave"
     },
     {
       "id": "ed-extract-l2",
@@ -567,7 +567,7 @@
         0.0,
         0.0
       ],
-      "label": "Extract"
+      "label": "Leave"
     },
     {
       "id": "ed-extract-l3",
@@ -577,7 +577,7 @@
         0.0,
         0.0
       ],
-      "label": "Extract"
+      "label": "Leave"
     },
     {
       "id": "ed-extract-l4",
@@ -587,7 +587,7 @@
         0.0,
         0.0
       ],
-      "label": "Extract"
+      "label": "Leave"
     },
     {
       "id": "ed-extract-l5",
@@ -597,7 +597,7 @@
         0.0,
         0.0
       ],
-      "label": "Extract"
+      "label": "Leave"
     }
   ]
 }

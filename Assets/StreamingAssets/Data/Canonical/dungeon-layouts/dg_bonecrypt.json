@@ -538,7 +538,7 @@
         0.0,
         0.0
       ],
-      "label": "Extract"
+      "label": "Leave"
     },
     {
       "id": "bc-extract-l2",
@@ -548,7 +548,7 @@
         0.0,
         0.0
       ],
-      "label": "Extract"
+      "label": "Leave"
     },
     {
       "id": "bc-extract-l3",
@@ -558,7 +558,7 @@
         0.0,
         0.0
       ],
-      "label": "Extract"
+      "label": "Leave"
     },
     {
       "id": "bc-extract-l4",
@@ -568,7 +568,7 @@
         0.0,
         0.0
       ],
-      "label": "Extract"
+      "label": "Leave"
     }
   ]
 }

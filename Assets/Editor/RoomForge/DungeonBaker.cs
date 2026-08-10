@@ -1699,9 +1699,14 @@ namespace DeNelle.Editor.RoomForge
             {
                 if (e == null) continue;
                 Vector3 pos = RoomSeat(instances, e.roomId, e.offset);
-                string label = string.IsNullOrEmpty(e.label) ? "Extract" : e.label;
-                // Spawn(position, onLeave, label)
-                var exit = spawn.Invoke(null, new object[] { pos, null, label }) as Component;
+                // WO-957 owner pin: the word is "Leave" ("Extract" was shooter jargon).
+                string label = string.IsNullOrEmpty(e.label) ? "Leave" : e.label;
+                // Spawn(position, onLeave, label, trueExit). trueExit:FALSE - per-floor pads
+                // wear the QUIET affordance (flat pad + "Leave"); the full arch/beacon marks
+                // ONLY the layout's one true exit (WO-957: every stairwell wore the full
+                // EXIT beacon and mid-dungeon floors read as "the way out").
+                // Reflection.Invoke does NOT apply C# default args - pass all four.
+                var exit = spawn.Invoke(null, new object[] { pos, null, label, false }) as Component;
                 if (exit != null)
                 {
                     exit.gameObject.name = string.IsNullOrEmpty(e.id) ? "Extract" : $"Extract_{e.id}";

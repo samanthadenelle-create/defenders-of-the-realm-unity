@@ -20,8 +20,17 @@ namespace DeNelle.Dungeons.RoomForge
         // it fails the gate. The composer never emitted one, so each composed layout had to have
         // it hand-added afterwards - which is silent until someone composes a NEW dungeon and the
         // oracle catches it. Emitting it here fixes that for every future compose.
-        [JsonProperty("version")] public int version = 1;
+        // v2 (WO-957): + exitRoomId (the ONE true exit designation) and extract labels relabel
+        // "Extract" -> "Leave" (owner pin 2026-08-10). Additive - a v1 layout still parses.
+        [JsonProperty("version")] public int version = 2;
         [JsonProperty("dungeonId")] public string dungeonId = "untitled";
+        /// <summary>
+        /// WO-957: the room instance that carries the layout's ONE true exit (the full
+        /// arch + beacon presentation). Null/empty = the entry room, which matches the
+        /// pre-multi-floor behavior (DungeonExitSpawner has always seated the return
+        /// exit at the entry). Per-floor extracts are quiet "Leave" pads, never this.
+        /// </summary>
+        [JsonProperty("exitRoomId")] public string exitRoomId;
         /// <summary>Metres per grid cell for the authored <c>cell</c> coords. Defaults to the kit
         /// canon (WO-922: 10, was 6); GraphDungeonComposer emits 1 and puts solved world ints in
         /// <c>cell</c>, so this only bites hand-authored layouts that omit the field.</summary>
@@ -158,7 +167,9 @@ namespace DeNelle.Dungeons.RoomForge
         [JsonProperty("id")] public string id;
         [JsonProperty("roomId")] public string roomId;
         [JsonProperty("offset")] public float[] offset;
-        [JsonProperty("label")] public string label = "Extract";
+        /// <summary>WO-957 owner pin (2026-08-10, verbatim "use Leave for the word"):
+        /// "Extract" was shooter jargon, tonally wrong for Echoes of Elarion.</summary>
+        [JsonProperty("label")] public string label = "Leave";
     }
 
     /// <summary>WO-797 confinement rules: pin the room's mobs to the room footprint.</summary>
