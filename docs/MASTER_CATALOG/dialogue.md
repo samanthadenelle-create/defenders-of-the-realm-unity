@@ -320,13 +320,23 @@ byte-identical** (DialogueRegression check 2). **version 2 · 14 speakers · 38 
 - **Story/FTUE**: `SylasFirstMeeting` (8 nodes), `CompanionMeeting` (2), `brom_intro` (3),
   `echo_first_meeting` (1), `pet-house` (9 — the Echo Hollow attunement flow; the ONE
   conversational structure).
-- **Tutorial V2 beats** (single-node, played by TutorialFlow): `tut_move_to_sylas`,
-  `tut_meet_sylas`, `tut_first_tower`, `tut_first_tower_done`, `tut_town_wave`,
-  `tut_town_wave_done`, `tut_world_encounter`, `tut_world_encounter_win`,
-  `tut_world_encounter_retry`, `tut_return_home`, `tut_freedom`, `tut_founding_greet`,
-  `tut_founding_hollow`, `tut_founding_hollow_done`, `tut_founding_stores`,
-  `tut_founding_town`, `tut_founding_echo`, `tut_founding_defense`; contextuals
-  `tut_ctx_echo_assign`, `tut_ctx_first_spend`, `tut_ctx_gear_equip`, `tut_ctx_talents`.
+- **Tutorial V2 beats** (single-node, played by TutorialFlow) — **ONE arc, ONE speaker: every
+  `tut_*` record speaks as the `{guide}` token and nothing else** (WO-1014, dialogues.json v8,
+  pinned by `TutorialGuideIdentityRegression` `[tutorial-guide-identity]`).
+  Mandatory chain: `tut_founding_greet`, `tut_founding_walk`, `tut_founding_stores`,
+  `tut_founding_ack`, `tut_founding_defense`, `tut_founding_timers`, `tut_town_wave`,
+  `tut_town_wave_done`, `tut_founding_win`. Unreferenced but kept:
+  `tut_founding_hollow`, `tut_founding_hollow_done`, `tut_founding_town`, `tut_founding_echo`.
+  Contextuals: `tut_ctx_build_weapons`, `tut_ctx_build_armor`, `tut_ctx_echo_assign`,
+  `tut_ctx_first_spend`, `tut_ctx_gear_equip`, `tut_ctx_talents`, and `tut_ctx_two_fights`
+  (WO-1014 salvage — authored, NOT yet wired; its trigger is an owner creative pin).
+  **RETIRED 2026-08-10 (WO-1014) — deleted, and a re-add now FAILS the regression:**
+  `tut_move_to_sylas`, `tut_meet_sylas`, `tut_first_tower`, `tut_first_tower_done`,
+  `tut_world_encounter`, `tut_world_encounter_win`, `tut_world_encounter_retry`,
+  `tut_return_home`, `tut_freedom`. That legacy arc was spoken by a hard-coded human
+  ("Sylas, Scout of the Reach") and ran CONCURRENTLY with the `{guide}` founding arc —
+  two narrators, no identity (owner felt-test 2026-08-10). Sylas remains a hero name and
+  keeps the separate non-tutorial `SylasFirstMeeting` beat.
 - **Dungeon**: `dun_torch_warden` (1).
 
 ---

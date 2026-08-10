@@ -1,5 +1,6 @@
 {
-  "version": 3,
+  "version": 4,
+  "_note": "v4 (WO-1014, 2026-08-10): (a) the founding_ack note now records that the guide's UTILITY line moved to beat 1/8 - see the dialogues.json v8 note; (b) four EM DASHES (U+2014) were replaced with ASCII hyphens in the ctx_* objective texts. Those four were PLAYER-VISIBLE strings and every non-ASCII glyph renders as TOFU on device (binding project rule) - they predate this WO and were caught while editing this file.",
   "flowId": "ftue_v2",
   "steps": [
     {
@@ -54,7 +55,7 @@
       "completion": { "signal": "dialogue.ended:tut_founding_ack" },
       "skippable": true,
       "objective": { "text": "{guide} approves - catch your breath" },
-      "_note": "WO-1012 P3 beat 4/8 ACK: the acknowledgment IS the pacing (owner: 'Okay. Great. Let's move on.' made structural - 2b piece 6). Carries the 2a utility line - the pet-Echo offers its work in its own words ('I can farm. I can mend.') - which doubles as the Echo-system hook and foreshadows the 2c-ter stacking teach in one clause; the REAL stacking teach stays a contextual one-shot at the moment of need."
+      "_note": "WO-1012 P3 beat 4/8 ACK: the acknowledgment IS the pacing (owner: 'Okay. Great. Let's move on.' made structural - 2b piece 6). WO-1014 2c MOVED the utility line ('I can farm. I can mend.') OUT of this beat and into beat 1/8 (tut_founding_greet): an ACK by definition plays AFTER the player has built, so the guide's utility was still being explained after the ask - owner 2026-08-10, 'the wolf asks what to do, but never explained that's what it does'. The Echo-system hook now opens the arc; the REAL stacking teach stays a contextual one-shot at the moment of need."
     },
     {
       "id": "founding_defense",
@@ -149,7 +150,7 @@
       "completion": { "signal": "dialogue.ended:tut_ctx_echo_assign" },
       "skippable": true,
       "oneShot": true,
-      "objective": { "text": "A new Echo has joined — assign it to a harvest" }
+      "objective": { "text": "A new Echo has joined - assign it to a harvest" }
     },
     {
       "id": "ctx_first_spend",
@@ -162,7 +163,7 @@
       "completion": { "signal": "dialogue.ended:tut_ctx_first_spend" },
       "skippable": true,
       "oneShot": true,
-      "objective": { "text": "You can afford to fortify — put that coin to work" }
+      "objective": { "text": "You can afford to fortify - put that coin to work" }
     },
     {
       "id": "ctx_gear_equip",
@@ -175,7 +176,7 @@
       "completion": { "signal": "dialogue.ended:tut_ctx_gear_equip" },
       "skippable": true,
       "oneShot": true,
-      "objective": { "text": "New gear in your pack — equip it" }
+      "objective": { "text": "New gear in your pack - equip it" }
     },
     {
       "id": "ctx_talents",
@@ -188,7 +189,7 @@
       "completion": { "signal": "dialogue.ended:tut_ctx_talents" },
       "skippable": true,
       "oneShot": true,
-      "objective": { "text": "A talent point earned — shape how you fight" }
+      "objective": { "text": "A talent point earned - shape how you fight" }
     }
   ]
 }

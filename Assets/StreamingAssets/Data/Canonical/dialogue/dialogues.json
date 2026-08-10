@@ -1,5 +1,6 @@
 {
- "version": 7,
+ "version": 8,
+ "_note": "v8 (WO-1014, 2026-08-10): the LEGACY 'Sylas' TUTORIAL ARC IS RETIRED - tut_move_to_sylas, tut_meet_sylas, tut_first_tower, tut_first_tower_done, tut_world_encounter, tut_world_encounter_win, tut_world_encounter_retry, tut_return_home and tut_freedom are DELETED. Two complete, contradictory tutorial scripts were live at once (a human 'Sylas, Scout of the Reach' vs the founding arc's {guide} pet-Echo), which is the root of the owner's 2026-08-10 report ('a NPC and wolf both spawn together... no knowledge of who this wolf is... the intro is badly composed'). INVARIANT, regression-pinned by TutorialGuideIdentityRegression [tutorial-guide-identity]: EVERY dialogue whose id starts with 'tut_' speaks as the '{guide}' token and NOTHING else, and none of the retired ids may return. Sylas remains a real HERO name (HeroCanonNames) and keeps his non-tutorial 'SylasFirstMeeting' companion dialogue, which is a separate beat already stood down under ff.singlehero - only the tutorial ARC retires.",
  "speakers": [
   {
    "name": "Mother Wren",
@@ -929,78 +930,6 @@
    ]
   },
   {
-   "id": "tut_move_to_sylas",
-   "startNode": "start",
-   "nodes": [
-    {
-     "id": "start",
-     "lines": [
-      {
-       "speaker": "Sylas",
-       "text": "Ho, Keeper! Over here - by the gate. Quickly now, before the light thins."
-      }
-     ]
-    }
-   ]
-  },
-  {
-   "id": "tut_meet_sylas",
-   "startNode": "start",
-   "nodes": [
-    {
-     "id": "start",
-     "lines": [
-      {
-       "speaker": "Sylas",
-       "text": "Sylas, Scout of the Reach. I know your name, Keeper - the whole town does."
-      },
-      {
-       "speaker": "Sylas",
-       "text": "Hear me: when the horns sound, they come for the gates. And they WILL sound."
-      },
-      {
-       "speaker": "Sylas",
-       "text": "So we make ready first. Walk with me."
-      }
-     ]
-    }
-   ]
-  },
-  {
-   "id": "tut_first_tower",
-   "startNode": "start",
-   "nodes": [
-    {
-     "id": "start",
-     "lines": [
-      {
-       "speaker": "Sylas",
-       "text": "Before the horns sound, we build. See that gate? The last attack came through there."
-      },
-      {
-       "speaker": "Sylas",
-       "text": "Tap BUILD and raise a watchtower - this first one is on me."
-      }
-     ]
-    }
-   ]
-  },
-  {
-   "id": "tut_first_tower_done",
-   "startNode": "start",
-   "nodes": [
-    {
-     "id": "start",
-     "lines": [
-      {
-       "speaker": "Sylas",
-       "text": "Look at it stand! That's YOURS, Keeper - and it holds this gate with you."
-      }
-     ]
-    }
-   ]
-  },
-  {
    "id": "tut_town_wave",
    "startNode": "start",
    "nodes": [
@@ -1059,91 +988,20 @@
    ]
   },
   {
-   "id": "tut_world_encounter",
+   "id": "tut_ctx_two_fights",
+   "_note": "WO-1014 2a SALVAGE. The retired legacy arc's one genuinely useful teach - the town-vs-open-world distinction, formerly tut_return_home ('Two fights, Keeper') - re-voiced as the {guide} pet-Echo so the WISDOM survives the SPEAKER's retirement. NOT WIRED YET: no step in tutorial-steps.json triggers it, because the trigger signal (first time the player leaves the walls / first open-world encounter) is an OWNER CREATIVE PIN - WO-1014 section 5 lists it. Wire it to a contextual one-shot the moment she rules the trigger; do not invent one.",
    "startNode": "start",
    "nodes": [
     {
      "id": "start",
      "lines": [
       {
-       "speaker": "Sylas",
-       "text": "Out there is DIFFERENT. No walls. No towers."
+       "speaker": "{guide}",
+       "text": "Mark this, Keeper. In town they come in waves, at your gates, and your towers stand with you."
       },
       {
-       "speaker": "Sylas",
-       "text": "When something finds you in the open, it's you alone in the fight - start to finish. Go and learn it."
-      }
-     ]
-    }
-   ]
-  },
-  {
-   "id": "tut_world_encounter_win",
-   "startNode": "start",
-   "nodes": [
-    {
-     "id": "start",
-     "lines": [
-      {
-       "speaker": "Sylas",
-       "text": "Alone - and enough. Remember the feel of that, Keeper."
-      }
-     ]
-    }
-   ]
-  },
-  {
-   "id": "tut_world_encounter_retry",
-   "startNode": "start",
-   "nodes": [
-    {
-     "id": "start",
-     "lines": [
-      {
-       "speaker": "Sylas",
-       "text": "Up, Keeper! The field forgives nothing - but it teaches fast. Again."
-      }
-     ]
-    }
-   ]
-  },
-  {
-   "id": "tut_return_home",
-   "startNode": "start",
-   "nodes": [
-    {
-     "id": "start",
-     "lines": [
-      {
-       "speaker": "Sylas",
-       "text": "Home now. In town: waves at the gates, your towers beside you. Out there: just you."
-      },
-      {
-       "speaker": "Sylas",
-       "text": "Two fights, Keeper. Always know which one you're in."
-      }
-     ]
-    }
-   ]
-  },
-  {
-   "id": "tut_freedom",
-   "startNode": "start",
-   "nodes": [
-    {
-     "id": "start",
-     "lines": [
-      {
-       "speaker": "Sylas",
-       "text": "And look - the Tree stirs. You drove the dark back, and Elarion ANSWERED."
-      },
-      {
-       "speaker": "Sylas",
-       "text": "When the horn calls DEFEND, fortify every gate. Venture out. Grow stronger. Defend better."
-      },
-      {
-       "speaker": "Sylas",
-       "text": "It's all yours now, Keeper. I'll be by the gate."
+       "speaker": "{guide}",
+       "text": "Beyond the walls there are no towers - only you and me. Two fights. Always know which one you are in."
       }
      ]
     }
@@ -1151,6 +1009,7 @@
   },
   {
    "id": "tut_founding_greet",
+   "_note": "WO-1014 2c ORDERING FIX: the guide's UTILITY line ('I can farm. I can mend.') now lands HERE, in beat 1/8, BEFORE any ask - it used to be buried as the third line of tut_founding_hollow_done and (after WO-1012's re-author) sat in tut_founding_ack, both of which play AFTER the player has already been told to build. Owner report 2026-08-10, verbatim: 'the wolf asks what to do, but never explained that's what it does'. || OWNER CREATIVE PIN (WO-1014 2b / section 5, NOT authored by CLI): the guide's SELF-INTRODUCTION beat - the name it gives and whether it introduces itself BEFORE or AFTER the tree line - is the owner's call. When she rules, the name itself is NOT authored into this copy: it stays the runtime {guide} token and drops into the ONE seam, TutorialGuideIdentityInstaller.GuideCanonNameOverride. Only the intro SENTENCE is added here, in the slot she picks.",
    "startNode": "start",
    "nodes": [
     {
@@ -1163,6 +1022,10 @@
       {
        "speaker": "{guide}",
        "text": "The old town is gone, Keeper. What stands next on this ground is your call, stone by stone."
+      },
+      {
+       "speaker": "{guide}",
+       "text": "I can farm. I can mend. Put me to work, Keeper."
       }
      ]
     }
@@ -1189,6 +1052,7 @@
   },
   {
    "id": "tut_founding_hollow_done",
+   "_note": "SUPERSEDED + UNREFERENCED: no step in tutorial-steps.json names tut_founding_hollow / _done / tut_founding_town / tut_founding_echo since WO-1012's P3 arc re-author (verified 2026-08-10 - the mandatory chain is greet -> walk -> stores -> ack -> defense -> timers -> defend -> win). WO-1014 2c stripped the buried UTILITY line that used to sit here as line 3 (after the ask) - it now opens the arc in tut_founding_greet. Kept, not deleted: still valid copy if the Hollow beat is ever re-armed, and it must NOT re-acquire the utility line.",
    "startNode": "start",
    "nodes": [
     {
@@ -1201,10 +1065,6 @@
       {
        "speaker": "{guide}",
        "text": "You'll find it under the Echoes button by the tree - it works for you now."
-      },
-      {
-       "speaker": "{guide}",
-       "text": "I can farm. I can mend. Put me to work, Keeper."
       }
      ]
     }
@@ -1369,7 +1229,7 @@
   },
   {
    "id": "tut_founding_ack",
-   "_note": "WO-1012 P3 beat 4/8 ACK: the acknowledgment beat (2b piece 6) + the 2a utility line VERBATIM - the pet-Echo offers its work (the Echo-system hook; foreshadows the 2c-ter stacking teach). Supersedes tut_founding_hollow_done as the chain's first acknowledgment (that record is now unreferenced by the mandatory chain).",
+   "_note": "WO-1012 P3 beat 4/8 ACK: the acknowledgment beat (2b piece 6). Supersedes tut_founding_hollow_done as the chain's first acknowledgment (that record is now unreferenced by the mandatory chain). WO-1014 2c MOVED the utility line ('I can farm. I can mend.') OUT of this beat and into tut_founding_greet: an ACK plays AFTER the player has already built, so stating the guide's utility here still landed after the ask - the exact defect the owner reported on 2026-08-10. The Echo-system hook now opens the arc instead.",
    "startNode": "start",
    "nodes": [
     {
@@ -1378,10 +1238,6 @@
       {
        "speaker": "{guide}",
        "text": "Good. You got it. Build a thing, and the thing gives back."
-      },
-      {
-       "speaker": "{guide}",
-       "text": "I can farm. I can mend. Put me to work, Keeper."
       }
      ]
     }
@@ -1476,7 +1332,7 @@
   },
   {
    "id": "village_elder",
-   "_note": "Quest cast (2026-08-03). Copy INSTALLED 2026-08-04 on the owner ruling 'dialogue approved'; source = docs/narrative/QUEST_CAST_VOICES_2026-08-03.md. Seated at the Heart by QuestCastNpcInjector. Addressed by quests.json elarion.welcome / stage meet-elder. Lines below are that doc's greeting + quest-give, which is exactly its own meet-elder mapping. NOT installed (no slot - this dialogue has one ungated node, so a state-specific line would play at the wrong time): the in-progress nudge, the turn-in and the idle-repeat. Owner Question 3 (is the Elder also Warden Alric / does he get a proper name; and Sylas already covers this same welcome beat via tut_meet_sylas) stays OPEN - neither line below names him or contradicts Sylas, so neither depends on the answer.",
+   "_note": "Quest cast (2026-08-03). Copy INSTALLED 2026-08-04 on the owner ruling 'dialogue approved'; source = docs/narrative/QUEST_CAST_VOICES_2026-08-03.md. Seated at the Heart by QuestCastNpcInjector. Addressed by quests.json elarion.welcome / stage meet-elder. Lines below are that doc's greeting + quest-give, which is exactly its own meet-elder mapping. NOT installed (no slot - this dialogue has one ungated node, so a state-specific line would play at the wrong time): the in-progress nudge, the turn-in and the idle-repeat. Owner Question 3 (is the Elder also Warden Alric / does he get a proper name) stays OPEN - neither line below names him, so neither depends on the answer. NOTE (WO-1014, 2026-08-10): the second half of that question - 'Sylas already covers this same welcome beat via tut_meet_sylas' - is now MOOT; tut_meet_sylas and the whole legacy Sylas tutorial arc were RETIRED, so there is no longer a second mouth on this beat.",
    "startNode": "talk",
    "nodes": [
     {

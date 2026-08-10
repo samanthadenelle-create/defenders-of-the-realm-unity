@@ -26,6 +26,35 @@ namespace DeNelle.Village
     /// <see cref="TutorialGuide"/>. No scene objects, no per-frame work.</summary>
     public static class TutorialGuideIdentityInstaller
     {
+        // =====================================================================
+        //  WO-1014 2b - THE OWNER'S NAME SEAM. ONE PLACE. NOT AUTHORED BY CLI.
+        // ---------------------------------------------------------------------
+        //  The owner heard the guide called "Storm" during her 2026-08-10 felt
+        //  test. That name is NOT authored anywhere for the guide: today the
+        //  guide's identity is DERIVED from EchoRosterCatalog.ByCount(1) below
+        //  ("Aldwin, the Ice Echo"), while the roster ALSO carries a Storm
+        //  affinity and "Bran, the Storm Echo" (echo-stormcoil-serpent,
+        //  EchoRosterCatalog.cs:186-194). So the wolf is wearing a roster row,
+        //  not a chosen name - which is exactly why it reads as "no knowledge of
+        //  who this wolf is".
+        //
+        //  NAMING THE GUIDE IS AN OWNER CREATIVE DECISION (CLAUDE.md section 2;
+        //  the same "she picks, we wire" pattern as the VFX owner-tag rule).
+        //  When she rules, drop the name HERE and nowhere else - dialogue copy
+        //  keeps authoring the "{guide}" token, so nothing else in the game
+        //  changes. Leave EMPTY to keep deriving from the founding roster row.
+        //
+        //    ""            -> derive from EchoRosterCatalog.ByCount(1) (today)
+        //    "Storm"       -> if she adopts Storm as canon (reserve it in the
+        //                     roster too, so nothing else can claim it)
+        //    "<her name>"  -> any authored canon name
+        //  Set GuideCanonTitle/Affiliation only if she wants the CARD sub-lines
+        //  to change with it; empty keeps the roster's.
+        // =====================================================================
+        private const string GuideCanonNameOverride  = "";
+        private const string GuideCanonTitleOverride = "";
+        private const string GuideCanonAffiliationOverride = "";
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         private static void Install()
         {
@@ -44,10 +73,26 @@ namespace DeNelle.Village
             int comma = full.IndexOf(',');
             string shortName = comma > 0 ? full.Substring(0, comma).Trim() : full;
 
+            // WO-1014 2b: the owner's name seam wins over the derived roster row.
+            // Empty (today) = derive, exactly as before - a no-op until she rules.
+            bool owned = !string.IsNullOrEmpty(GuideCanonNameOverride);
+            string name = owned ? GuideCanonNameOverride : shortName;
+            string title = !string.IsNullOrEmpty(GuideCanonTitleOverride) ? GuideCanonTitleOverride
+                         : owned ? GuideCanonNameOverride : full;
+            string affil = !string.IsNullOrEmpty(GuideCanonAffiliationOverride)
+                         ? GuideCanonAffiliationOverride : first.Element;
+
+            FlowTrace.Step("Tutorial",
+                "guide-identity source = " + (owned
+                    ? "OWNER OVERRIDE (WO-1014 2b seam) -> '" + name + "'"
+                    : "DERIVED from EchoRosterCatalog.ByCount(1) '" + full + "' - the guide has NO authored " +
+                      "name yet (owner creative pin, WO-1014 2b). Any 'Storm' the player hears is the roster's " +
+                      "Storm affinity / 'Bran, the Storm Echo', never this guide."));
+
             TutorialGuide.Configure(
-                displayName: shortName,
-                fullTitle: full,
-                affiliation: first.Element,   // e.g. "Essence of a fallen keeper" — the card sub-line
+                displayName: name,
+                fullTitle: title,
+                affiliation: affil,           // e.g. "Essence of a fallen keeper" — the card sub-line
                 portraitTexturePath: "Echoes/Portraits/" + first.PortraitName);
         }
     }

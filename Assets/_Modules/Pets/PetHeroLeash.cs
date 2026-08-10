@@ -27,6 +27,7 @@
 using System;
 using System.Reflection;
 using UnityEngine;
+using UnityEngine.AI;
 using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Pets
@@ -104,12 +105,59 @@ namespace DeNelle.Pets
         private const float LeadArriveRadius = 2.2f;   // hold distance at the anchor
         private int _leadBehaviorSent = -1;            // dedupe SetBehavior calls in lead mode
 
+        // ── WO-1014 HALF B: the guide-lead FORENSICS (instrumentation ONLY) ───
+        // Owner 2026-08-10: "wolf is supposed to lead, but doesn't move". F8 seq
+        // 2307's harvest contains NO [Flow:Pets] lead lines at all, so the seam is
+        // currently UNOBSERVABLE — that is the blocker, not a known defect. These
+        // fields exist purely so ONE capture can separate the four ways this beat
+        // can silently do nothing:
+        //   (A) TutorialFlow never called SetLeadTarget       -> no "guide-lead SET" line
+        //   (B) it called, but NO enabled leash exists to hear -> SET line says leashes=0
+        //       (PetHarvester.SuspendLeash disables this component while it harvests)
+        //   (C) a leash heard it and wrote the carrot, but the BODY never moved
+        //       -> "guide-lead TICK" says carrot written, moved=0.00 m/s
+        //   (D) the body moved and simply never reached the anchor -> moved>0, dist flat
+        // NOTHING here changes movement. Per CLAUDE.md section 12 the fix waits on
+        // the capture. (See also the two Pet.Update early-return traces, which are
+        // what turn case (C) from a mystery into a named gate.)
+        private static int s_enabledLeashes;            // live count of ENABLED PetHeroLeash
+        private Vector3 _leadLastPos;                   // body position at the last forensic sample
+        private float   _leadLastSampleTime;            // Time.time of that sample
+        private bool    _leadEngagedTraced;             // one "ENGAGED" line per lead episode
+        private bool    _leadArrivedTraced;             // one "ARRIVED" line per lead episode
+        private NavMeshAgent _agent;                    // cached mover handle (diagnostics only)
+        private bool    _agentResolved;                 // so a genuinely absent agent is not re-probed
+
+        /// <summary>True while a guide lead is in force. Read by <see cref="Pet"/> so its
+        /// early-return gates can say, once, that the lead is landing on a deaf pet.</summary>
+        public static bool IsLeading => s_leadActive;
+
+        /// <summary>The active lead anchor (meaningless unless <see cref="IsLeading"/>).</summary>
+        public static Vector3 LeadTarget => s_leadTarget;
+
+        /// <summary>How many PetHeroLeash components are currently ENABLED — i.e. how many
+        /// listeners a <see cref="SetLeadTarget"/> call can possibly reach. Zero is the
+        /// silent-no-op case (B) above.</summary>
+        public static int EnabledLeashCount => s_enabledLeashes;
+
         /// <summary>Point every leashed pet (the FTUE guide) at a world-space lead
         /// anchor. Idempotent — safe to re-assert every frame; traces on change only.</summary>
         public static void SetLeadTarget(Vector3 worldPos)
         {
             if (!s_leadActive || (worldPos - s_leadTarget).sqrMagnitude > 1f)
-                FlowTrace.Step("Pets", $"guide-lead SET -> {worldPos} (WO-1012 P2: the pet-Echo paces ahead of the hero toward the anchor).");
+            {
+                FlowTrace.Step("Pets",
+                    $"guide-lead SET -> {worldPos} (WO-1012 P2: the pet-Echo paces ahead of the hero toward " +
+                    $"the anchor). listeners: {s_enabledLeashes} enabled PetHeroLeash.");
+                // WO-1014 case (B): a lead nobody can hear. This used to be perfectly
+                // silent — the static took the value and no Update ever consumed it.
+                if (s_enabledLeashes == 0)
+                    FlowTrace.Warn("Pets",
+                        "guide-lead SET but ZERO enabled PetHeroLeash exists — NOTHING will consume this " +
+                        "anchor, so the guide cannot move no matter what the tutorial asks. Either no pet " +
+                        "body was spawned, or the component is disabled (PetHarvester.SuspendLeash turns it " +
+                        "off while the pet harvests and only RestoreLeash turns it back on).");
+            }
             s_leadActive = true;
             s_leadTarget = worldPos;
         }
@@ -122,6 +170,29 @@ namespace DeNelle.Pets
             s_leadActive = false;
             FlowTrace.Step("Pets", "guide-lead CLEARED — leash resumes natural exploration.");
         }
+
+        // WO-1014 Half B: the enabled-listener census. OnEnable/OnDisable are the only
+        // honest place to count — PetHarvester flips `enabled` directly.
+        private void OnEnable()
+        {
+            s_enabledLeashes++;
+            if (s_leadActive)
+                FlowTrace.Step("Pets", $"leash ENABLED on '{PetIdSafe()}' while a guide lead is active " +
+                                       $"(listeners now {s_enabledLeashes}).");
+        }
+
+        private void OnDisable()
+        {
+            s_enabledLeashes = Mathf.Max(0, s_enabledLeashes - 1);
+            _leadEngagedTraced = false;
+            _leadArrivedTraced = false;
+            if (s_leadActive)
+                FlowTrace.Warn("Pets", $"leash DISABLED on '{PetIdSafe()}' WHILE A GUIDE LEAD IS ACTIVE — this " +
+                                       $"pet stops consuming the lead anchor from now on (listeners now " +
+                                       $"{s_enabledLeashes}). PetHarvester.SuspendLeash is the known caller.");
+        }
+
+        private string PetIdSafe() => _pet != null ? _pet.PetId : gameObject.name;
 
         private void Awake()
         {
@@ -196,9 +267,11 @@ namespace DeNelle.Pets
                     leadCarrot = _heroT.position + fh.normalized * ReturnRadius;
                 leadCarrot.y = Mathf.Max(0f, leadCarrot.y);
                 _pet.SetHomePost(leadCarrot);
+                TraceLeadForensics(petPos, leadCarrot, toAnchor.magnitude, distHero);
                 _lastHeroPos = _heroT.position;   // keep the moving-context sample warm
                 return;
             }
+            if (_leadEngagedTraced) { _leadEngagedTraced = false; _leadArrivedTraced = false; }
             _leadBehaviorSent = -1;   // out of lead mode — the FSM owns behavior again
 
             // ── heading drift: a CONTINUOUS Perlin-noise turn intent (coherent noise →
@@ -265,6 +338,69 @@ namespace DeNelle.Pets
             carrot.y = Mathf.Max(0f, carrot.y);
 
             _pet.SetHomePost(carrot);
+        }
+
+        // =====================================================================
+        //  WO-1014 Half B — guide-lead forensics. READ-ONLY: it inspects and
+        //  reports, it never steers. One ENGAGED line per episode (the full
+        //  census), a 1 Hz TICK line (did the BODY actually move?), one ARRIVED.
+        //  Between them, one capture answers "the wolf doesn't move" without a
+        //  single guess: whether a mover exists, whether it is on the navmesh,
+        //  what mode the pet is in, what carrot was written, and the measured
+        //  per-second displacement of the body that was supposed to walk.
+        // =====================================================================
+        private void TraceLeadForensics(Vector3 petPos, Vector3 carrot, float distToAnchor, float distHero)
+        {
+            if (!_agentResolved) { _agentResolved = true; _agent = GetComponent<NavMeshAgent>(); }
+            // isStopped may only be read on an agent that is enabled AND on the mesh -
+            // reading it otherwise logs a Unity error, which would make the diagnostic
+            // itself the noise. Report the two cheap facts and only then the third.
+            string mover;
+            if (_agent == null)
+                mover = "NO NavMeshAgent component (Pet falls back to a raw transform move)";
+            else if (!_agent.enabled || !_agent.isOnNavMesh)
+                mover = $"agent(enabled={_agent.enabled}, onNavMesh={_agent.isOnNavMesh}) - OFF THE NAVMESH, " +
+                        "so Pet.MoveToward takes its raw-transform fallback branch";
+            else
+                mover = $"agent(enabled=True, onNavMesh=True, isStopped={_agent.isStopped}, " +
+                        $"velocity={_agent.velocity.magnitude:0.00})";
+            string mode = _pet != null ? _pet.Mode.ToString() : "<no Pet>";
+            string alive = _pet != null ? _pet.IsAlive.ToString() : "?";
+
+            if (!_leadEngagedTraced)
+            {
+                _leadEngagedTraced = true;
+                _leadLastPos = petPos;
+                _leadLastSampleTime = Time.time;
+                FlowTrace.Step("Pets",
+                    $"guide-lead ENGAGED on '{PetIdSafe()}': anchor={s_leadTarget} dist={distToAnchor:0.00}m " +
+                    $"heroDist={distHero:0.00}m mode={mode} alive={alive} {mover} bodyPos={petPos} " +
+                    $"carrot={carrot} listeners={s_enabledLeashes}. NOTE: writing the carrot is SetHomePost " +
+                    $"only — Pet.Update decides whether it is ever integrated (see its early-return traces).");
+            }
+
+            float dt = Time.time - _leadLastSampleTime;
+            if (dt >= 1f)
+            {
+                float moved = (petPos - _leadLastPos).magnitude;
+                _leadLastPos = petPos;
+                _leadLastSampleTime = Time.time;
+                string verdict = moved < 0.05f
+                    ? "BODY DID NOT MOVE (carrot written, zero displacement — the write is being ignored downstream)"
+                    : "body moving";
+                FlowTrace.Throttle("Pets", "guide-lead-tick-" + PetIdSafe(), 1f,
+                    $"guide-lead TICK '{PetIdSafe()}': moved={moved / Mathf.Max(0.0001f, dt):0.00} m/s over " +
+                    $"{dt:0.00}s -> {verdict}. dist={distToAnchor:0.00}m heroDist={distHero:0.00}m mode={mode} " +
+                    $"{mover} carrot={carrot} homePost={(_pet != null ? _pet.HomePost.ToString() : "?")}.");
+            }
+
+            if (!_leadArrivedTraced && distToAnchor <= LeadArriveRadius)
+            {
+                _leadArrivedTraced = true;
+                FlowTrace.Step("Pets",
+                    $"guide-lead ARRIVED: '{PetIdSafe()}' is within {LeadArriveRadius:0.0}m of {s_leadTarget} " +
+                    $"(dist={distToAnchor:0.00}m) and holds. The LEAD half of the walk beat completed.");
+            }
         }
 
         // Weighted-random idle behavior (0 wander,1 sniff,2 sit,3 look,4 circle,5 dash).

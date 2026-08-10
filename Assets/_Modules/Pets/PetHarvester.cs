@@ -254,6 +254,14 @@ namespace DeNelle.Pets
             if (_leash == null) _leash = GetComponent<PetHeroLeash>();
             if (_leash != null && _leash.enabled)
             {
+                // WO-1014 Half B (instrumentation only): disabling the leash is one of the
+                // four ways the FTUE guide-lead can silently do nothing — the anchor is set
+                // but this pet no longer consumes it. Named at the moment it happens.
+                if (PetHeroLeash.IsLeading)
+                    FlowTrace.Warn("Pets",
+                        $"PetHarvester SUSPENDING the leash on '{(_pet != null ? _pet.PetId : "<null>")}' WHILE " +
+                        $"A GUIDE LEAD IS ACTIVE (anchor {PetHeroLeash.LeadTarget}) — harvesting takes over " +
+                        "HomePost, so the tutorial's lead anchor stops reaching this pet until RestoreLeash.");
                 _leashWasEnabled = true;
                 _leash.enabled = false;
             }

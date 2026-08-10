@@ -373,7 +373,25 @@ namespace DeNelle.Pets
             if (!IsAlive) return;
             // Idle / Fortify pets do not hunt — Idle trails the hero (the
             // integrator drives that), Fortify holds its wall span.
-            if (_mode != PetMode.Defend) return;
+            if (_mode != PetMode.Defend)
+            {
+                // ── WO-1014 Half B (INSTRUMENTATION ONLY — no behaviour change) ──
+                // The FTUE guide is asked to LEAD via PetHeroLeash.SetLeadTarget, which
+                // writes HomePost. HomePost is only ever integrated by MoveToward(_homePost)
+                // FURTHER DOWN this method — past this return. So while a lead is active and
+                // the pet is not in Defend mode, the carrot is written every frame and never
+                // read: a perfectly silent no-op, which is why F8 seq 2307 carried no lead
+                // evidence at all. Say it ONCE, with the mode named, so one capture settles
+                // whether THIS is the reason the wolf stands still. DO NOT "fix" by changing
+                // the gate — the owner's ruling on how a guide-mode pet should move comes first.
+                if (DeNelle.Pets.PetHeroLeash.IsLeading)
+                    DeNelle.Core.Diagnostics.FlowTrace.Once("Pets", "lead-inert-mode-" + _petId,
+                        $"guide lead ACTIVE (anchor {DeNelle.Pets.PetHeroLeash.LeadTarget}) but Pet.Update on " +
+                        $"'{_petId}' RETURNS AT THE MODE GATE (mode={_mode}, only Defend continues) BEFORE " +
+                        $"MoveToward(_homePost) — the leash's SetHomePost write is INERT for this pet and " +
+                        $"nothing else moves an {_mode} pet (PetIdleRoutines only reads position for anims).");
+                return;
+            }
 
             // PET COMBAT GATE (owner 2026-07-08, ff.petcombat default OFF): pets are HARVEST /
             // COMPANION only per docs/COMBAT_PIVOT_NORTHSTAR.md ("no pets in battle"). A Defend pet
@@ -383,6 +401,17 @@ namespace DeNelle.Pets
             {
                 DeNelle.Core.Diagnostics.FlowTrace.Once("PetCombat", "gated-" + _petId,
                     $"pet combat gated OFF (ff.petcombat) — pet '{_petId}' will not hunt/attack (harvest/companion only)");
+                // ── WO-1014 Half B (INSTRUMENTATION ONLY — no behaviour change) ──
+                // Second silent no-op on the same seam: this return is ALSO above
+                // MoveToward(_homePost), so even a DEFEND-mode guide stops consuming the
+                // leash carrot whenever ff.petcombat is off (its default). Named here so a
+                // capture distinguishes "wrong mode" from "combat gate" without guessing.
+                if (DeNelle.Pets.PetHeroLeash.IsLeading)
+                    DeNelle.Core.Diagnostics.FlowTrace.Once("Pets", "lead-inert-combatgate-" + _petId,
+                        $"guide lead ACTIVE (anchor {DeNelle.Pets.PetHeroLeash.LeadTarget}) but Pet.Update on " +
+                        $"'{_petId}' RETURNS AT THE ff.petcombat GATE (mode={_mode}) BEFORE " +
+                        $"MoveToward(_homePost) — the leash's SetHomePost write is INERT for this pet while " +
+                        $"pet combat is off (default OFF).");
                 return;
             }
 
