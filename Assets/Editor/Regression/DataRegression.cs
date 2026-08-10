@@ -486,6 +486,9 @@ namespace DeNelle.Editor
             // than shipping the three classes the spec named - registered as it actually landed.
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "armed-hero suite", () => { if (!DeNelle.Editor.Regression.ArmedHeroInvariantRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[armed-hero] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "buildmenu-economy suite", () => { if (!DeNelle.Editor.Regression.BuildMenuRealEconomyRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[buildmenu-economy] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "hero-death-pin suite", () => { if (!DeNelle.Editor.Regression.HeroDeathPinRebaseRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[hero-death-pin] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "wall-build-l1 suite", () => { if (!DeNelle.Editor.Regression.WallBuildL1Regression.Run(out var r)) failures.Add(r); else log.AppendLine("[wall-build-l1] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "castle-plans suite", () => { if (!DeNelle.Editor.CastlePlansUnlockRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[castle-plans] " + r); });
 
             // --- WO-853 structures are targetable: Faction derived (never serialized) on every
             // IDamageable, walls stay on layer Structure (towers must not shoot through them),
