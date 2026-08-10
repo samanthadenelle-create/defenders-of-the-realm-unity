@@ -38,6 +38,50 @@
 - **The operating dream:** the owner plays and rules; agents build in parallel lanes; every bug is
   a captured line; every system self-reports; the fleet + web bots verify before she ever has to.
 
+## Latest (2026-08-10) — the wave-3 settle: 12 lane commits, 143/143 suites, five honest partials
+- **Anchor still `CANON_GROUND_TRUTH_2026-08-09.md`** — ⚠ its header is now WRONG on three facts
+  (it claims HEAD `19a50616`, "NOT PUSHED", "63 commits ahead"). Read the tree, not that header.
+  Branch `wip/village2-and-f8-tickets`. **Save schema v38** (`SaveSchema.cs:41`).
+- **The 2026-08-10 morning wave's in-flight lanes are CLOSED OUT.** Three lanes had died mid-write when
+  the session expired and the tree did NOT compile: `GearAura.cs` (WO-959, helpers present, call sites
+  fine), `EndStateView.cs` (WO-952, four call sites left on the old arity — `error CS7036`), and
+  `DungeonExitInteractable.cs` (WO-957/1007/1008, two helper methods referenced but never written —
+  `error CS0103`). All three completed by the committer, then gated as one tree.
+- **Gates over the settled tree, read off the markers:** `Builds/gate-settle4.log` → `COMPILE_GATE_OK`
+  (zero `error CS`) · `Builds/regression-settle3.log` → **`REGRESSION_OK 143/143 suites`** ·
+  `Builds/ui-capture-settle.log` → `UI_CAPTURE_OK 62` + `UI_CAPTURE_FIDELITY_OK 44`. ⚠ The
+  `UI_GEOMETRY_FAIL x16` in that capture is **WO-941's pre-existing RumorBoard/RealmMap baseline**, not
+  new — and **no EndState case is in the capture set**, which is exactly WO-952's missing deliverable.
+- **The suite count moved 136 → 143** because seven wave-3 oracles were finally REGISTERED:
+  `[barracks-blanktown]` `[echo-hollow-route]` `[harvest-drip]` `[hostile-green]` `[dungeon-cam-958]`
+  `[gear-aura-carry]` `[armor-store-window]`. Each lane authored its oracle and left registration to
+  the committer on purpose — `DataRegression.cs` is lane-fenced. **Never restate the count; read the marker.**
+- **Two reds were found and fixed on the way, both real:** `GuidePointer.cs` (WO-1012) hand-rolled two
+  `Image` widgets and tripped the `[ui-obsidian]` HardFailOnNew ratchet — now built through
+  `ElarionUiKit.AddImage(rounded:false)`; and `Dungeon/Exit/dungeon_texture` is a `Resources.Load`
+  literal with no asset (the KayKit kit is gitignored) — registered as tracked debt in
+  `HudUiRegression.MissingResourceBaseline`, since the runtime path already degrades loudly and visibly.
+- **SHIPPED + RESULT-filed (7):** WO-950 blank-town drillmaster/teach/phantom-footprint · WO-951 Echo
+  Hollow opens the roster · WO-953 harvest "+N" pops through the damage-number pool + gated-faucet
+  honesty · WO-956 hostility off the red/green axis · WO-958 dungeon camera in tight rooms · WO-959
+  weapon auras only while DRAWN · WO-960 armor-store locked-preview ladder · plus **WO-1012** tutorial/
+  FTUE redesign (RESULT filed).
+- **⚠ FIVE HONEST PARTIALS — still READY, remaining scope written into each WO body** (a `.RESULT.md`
+  forces the board's Done bucket, so none was filed): **WO-952** the geometry fix landed but its capture
+  case + `COMPRESSED`-absence oracle do NOT exist · **WO-957/1007/1008** the code landed and the owner's
+  "Leave" relabel is now in the data (13 labels, 3 content layouts, both copies byte-identical), **but
+  the dungeons have NOT been re-baked** — `_isTrueExit` is a `SerializeField` on BAKED objects, so
+  nothing is on screen until a re-bake **in an isolated worktree** · **WO-949** respawn-in-town and the
+  3 founding potions landed, the "teach the cost of dying" deliverable did not.
+- **WO-85 NEVER STARTED** and now says so: grass + roads already shipped at `cc24da5a`/`bfacf0b3` and
+  nothing has touched them since, so the lane is *"why does the shipped terrain not read"*, not "add
+  grass" — and **value contrast must carry it** (hue alone is invisible to the owner).
+- **Owner directive added to CLAUDE.md §11:** *the pipeline never idles* — the agent pool tops up on
+  every lane completion; pin-blocked tickets park with their pins surfaced; one gate, one committer.
+- **Owner pins still open:** WO-954 hollow models · WO-947 four cost-basket calls · WO-917 dodge glyph ·
+  WO-1013 Arcane Tower/Spire naming · D8 Walls tab · WO-956's deuteranopia risk on the new body tint ·
+  WO-960 shelf depth · WO-959's drawn/sheathed mapping.
+
 ## Latest (2026-08-09) — the 08-08 ship day: machine unblocked, stairs SOLVED, store re-gated
 - **⚡ EVENING-2 WAVE (2026-08-09 ~21:00-23:00, this seat) — the WO-1010 defect-pass close + the Sylas fix.**
   Owner F8s (new product folder `LocalLow\DeNelle\Echoes of Elarion` — **the F8 daemon was watching the

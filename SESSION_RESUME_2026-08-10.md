@@ -1,46 +1,66 @@
-# SESSION RESUME — 2026-08-10 (write-down at ~95% context, before compaction)
+# SESSION RESUME — 2026-08-10 (updated after the wave-3 SETTLE; the earlier card is superseded)
 
-**Purpose:** the live in-flight state of this session, so any seat (post-compaction or fresh) resumes
-without re-deriving. Delete when the wave is closed.
+**Purpose:** the live in-flight state, so any seat resumes without re-deriving. Delete when the
+remaining partials are closed.
 
 ## Git state
-- Branch `wip/village2-and-f8-tickets`, **HEAD `322c88bc`, PUSHED, local == origin.**
-- Morning wave = 11 lane commits (wallet WO-931 · death-pin · battle-music · WO-945 grace · WO-811
-  Echo repair · WO-948 walls · WO-1013 plans · WO-929+955 VFX · suite registrations · F8 listener
-  hooks incl. the .gitignore un-ignore · docs/board/canon).
-- Gates that produced it: `COMPILE_GATE_OK` (Builds/compile-gate-morning-wave2.log, 0 error CS) +
-  `REGRESSION_FAIL 135/136` where the single red was the then-in-flight WO-1012 ui-obsidian ratchet.
 
-## IN FLIGHT (uncommitted in the shared tree — DO NOT `git add -A`)
-1. **WO-1012 tutorial pipeline — COMPLETE, review CONFORMS TRUE, uncommitted.** Its two blocker
-   edits are APPLIED by the orchestrator in `DataRegression.cs` (mandatory pin 7→8; `TutorialBandRepelled`
-   added to `KnownSignal`). Open findings recorded in the WO's new §7.
-2. **Wave-3 fan-out (workflow, 9 lanes):** WO-950 · 951 · 952 · 953 · 956 · 958 · 959 · 960 · 949.
-3. **Exit-affordance lane:** WO-957 + 1007 + 1008 combined (owner pins IN: keep the pads, the word
-   is **"Leave"**).
-4. **World atmosphere lane:** WO-85 modernization (grass/paths). ⚠ Mid-task correction sent: grass +
-   roads ALREADY SHIPPED at `cc24da5a` / `bfacf0b3` (2026-08-07, ExteriorTerrainBuilder + committed
-   terrain data + merged scene; nothing touched them since) yet the owner has never seen it — the
-   agent is investigating why it does not read (runtime override? too subtle, esp. red/green
-   colourblind — VALUE contrast must carry), and must ENHANCE that builder, not paint beside it.
+- Branch `wip/village2-and-f8-tickets`. The 2026-08-10 morning wave (11 commits) plus the **wave-3
+  settle (12 commits)** are in. Working tree CLEAN at the time of writing.
+- Settle commits, in order: WO-950 · WO-951 · WO-953 · WO-956 · WO-958 · WO-959 · WO-960 · WO-952
+  (partial) · WO-957/1007/1008 (partial) · WO-949 (partial) · the wave-3 oracle registrations ·
+  docs/board/canon.
 
-## THE NEXT MECHANICAL STEP (owner-authorized, blocked only on lanes settling)
-The last compile gate (`Builds/compile-gate-1012.log`) was RED with **15 errors, all in
-`GearAura.cs`** = the WO-959 lane mid-write. Attribution rule: no other lane drew a diagnostic.
-**Plan:** when the fan-out + exit lanes report, run ONE compile gate over the settled tree →
-`DataRegression.RunAll` → RESULT files + status flips → lane commits by explicit path → push →
-**wipe + rebuild the Windows exe** (owner is waiting on it; she stopped playtesting for it).
+## Gates over the settled tree (read off the markers, never off this card)
+
+- `Builds/gate-settle4.log` → `COMPILE_GATE_OK`, zero `error CS`
+- `Builds/regression-settle3.log` → **`REGRESSION_OK 143/143 suites`** (136 → 143: seven wave-3
+  oracles registered)
+- `Builds/ui-capture-settle.log` → `UI_CAPTURE_OK 62` + `UI_CAPTURE_FIDELITY_OK 44`; the
+  `UI_GEOMETRY_FAIL x16` is WO-941's pre-existing RumorBoard/RealmMap baseline
+
+## What the settle actually had to fix (three lanes died mid-write)
+
+The expiring session left the tree **non-compiling** in three places, each completed by the committer:
+
+1. `EndStateView.cs` — three helpers re-signed to take `panelWidthFrac`, four call sites left on the
+   old arity (`error CS7036`).
+2. `DungeonExitInteractable.cs` — `BuildLeavePad` written against `ApplyDecorMaterial` and
+   `BuildWorldLabel`, neither of which existed (`error CS0103`). Both extracted from the existing
+   inline blocks so the pad and the true exit share ONE material path and ONE label path.
+3. Then two real regression reds: the `[ui-obsidian]` ratchet on `GuidePointer.cs`, and a
+   `Resources.Load` literal with no asset (`Dungeon/Exit/dungeon_texture`).
+
+## STILL OPEN — the five partials (all still READY, scope in the WO body)
+
+1. **WO-952** — geometry landed; the capture case + `COMPRESSED`-absence oracle do NOT exist. That is
+   the whole remaining scope.
+2. **WO-957 / 1007 / 1008** — code landed, the owner's **"Leave"** relabel is in the data (13 labels,
+   both copies byte-identical). **NOT re-baked**, so none of it is on screen yet; `_isTrueExit` is a
+   `SerializeField` on BAKED objects. The re-bake belongs in an **isolated worktree** (memory
+   `dungeon-scene-shared-tree-corruption`), not the shared tree. No layout authors `exitRoomId` yet;
+   the per-layout one-beacon regression was not written.
+3. **WO-949** — respawn-in-town + 3 founding potions landed; "teach the cost of dying" did not, and the
+   discovery it required (what dying actually costs today) was never run. Likely a DESIGN GAP pin.
+4. **WO-85** — never started. The real question is *why the already-shipped grass/roads do not read*;
+   value contrast must carry it.
 
 ## OWNER PINS OPEN (one word each unblocks)
-- **WO-954** — which models the hollow family wears (they are still KayKit `Skeleton_*`).
-- **WO-947** — 4 cost-basket calls (arcane pair = crystals+iron?; healer/caravan magical?; jeweler
-  regular?; arcane-tower shop crystal-based?).
-- **WO-917** — dodge glyph art pick (surface candidates rather than waiting).
-- **WO-1013** — "Arcane Tower" (art sheet) vs "Arcane Spire" (buildable) vs `arcane-tower` (existing
-  building id) naming.
+
+- **WO-954** which models the hollow family wears · **WO-947** the four cost-basket calls · **WO-917**
+  dodge glyph art · **WO-1013** Arcane Tower vs Spire naming · **D8** Walls-tab ruling.
+- New from this settle: **WO-956** — does the grunt BODY read different to you? (the new umber and the
+  old orc green may collapse to the same olive under deuteranopia; the fix would be luminance, not
+  another hue) · **WO-960** shelf depth (5 levels × 2 rows?) · **WO-959** confirm "unsheathed" means the
+  combat carry state (sword on the back in town = no flames).
+- **WO-85** — in a fresh player build, is the ground visibly grass-and-roads at all, or
+  visible-but-too-subtle? That word decides which fix it becomes.
 
 ## STANDING RULES SET TODAY (also in CLAUDE.md + memory)
+
 - The F8 listener is hook-enforced for every seat (`.claude/settings.json` + `.claude/hooks/`).
-- **The pipeline never idles** — refill agent lanes on every completion.
-- Recommended-option autonomy: act on my recommendation, she overrides after.
+- **The pipeline never idles** — refill agent lanes on every completion (CLAUDE.md §11).
+- Recommended-option autonomy: act on the recommendation, she overrides after.
 - Cost baskets: regular = wood+iron; magical = crystal-based; never all three.
+- **A `.RESULT.md` forces the board's Done bucket** — so a partial lane gets its outcome written into
+  the WO body instead, and the status line keeps a canonical keyword plus the remaining scope.
