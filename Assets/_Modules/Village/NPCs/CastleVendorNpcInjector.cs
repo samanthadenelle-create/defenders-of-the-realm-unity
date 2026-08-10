@@ -1168,6 +1168,16 @@ namespace DeNelle.Village
             LastInteractId = _structureId;
             LastInteractRoute = ResolveRoute(_structureId);
             FlowTrace.Step("Village", $"CastleNpc.Interact '{_label}' id='{_structureId}' -> route={LastInteractRoute}");
+            // WO-951 (owner 2026-08-10): the Echo Hollow keeper's Talk opens the EXISTING Echo
+            // roster popup — NOT the legacy Yarn grant menu. EchoRoster.Open self-traces
+            // ([Flow:Echo] RosterOpen) and registers with PanelManager (single-modal discipline),
+            // so a rejected/failed open is already a logged line, never a silent no-op.
+            if (LastInteractRoute == EchoRosterRoute)
+            {
+                FlowTrace.Step("Village", $"CastleNpc '{_label}' -> Echo roster (WO-951 Hollow repurpose).");
+                EchoRoster.Open();
+                return;
+            }
             // §12 / WO-413: the castle vendor NPCs are the primary live interaction surface (the
             // home hub is MainCastle_Hall). They open the SAME parameterized StructureMenu, so the
             // shop-vs-upgrade split is decided data-driven by that node's gates (seeded from
@@ -1246,15 +1256,33 @@ namespace DeNelle.Village
         private static bool HasConversation(string id) =>
             DeNelle.Core.Dialogue.DialogueCatalog.Find(id) != null;
 
+        // ── WO-951 (owner ruling 2026-08-10): the Echo Hollow is repurposed ──────────
+        // Interacting with the Hollow — building tap (BuildingInteractable) OR keeper Talk
+        // (this class) — opens the EXISTING Echo roster popup (EchoRoster.Open), verbatim:
+        // "so then when they go to the store they open the echos pop up on right? Simple
+        // and easy." One verb, no new UI. The old Yarn grant menu (Echo Warden choose-a-
+        // pet) is superseded as the interact surface: Echoes unlock by level now
+        // (EchoService), and the starter grant rides the founding-arc ARRIVE beat, not
+        // this menu. These constants + the predicate are the single chokepoint both
+        // interact surfaces AND the regression suite key on.
+        public const string EchoHollowId = "pet-house";
+        public const string EchoRosterRoute = "echo-roster";
+        public static bool IsEchoHollowId(string id) =>
+            !string.IsNullOrEmpty(id) &&
+            string.Equals(id, EchoHollowId, System.StringComparison.OrdinalIgnoreCase);
+
         // SHARED routing decision — the SINGLE source of truth for Interact()'s branch AND the headless
         // oracle (AssertVendorTalkRoute), so the test can never drift from the real route. PURE, no side
-        // effects: a structure with an authored CONVERSATION, a SHOPPABLE vendor, or a TALK-FUNCTION
-        // building opens the Talk dialogue (its primary function); the upgrade panel is reached ONLY when
-        // upgrade is the building's ONLY function (upgradable, NOT shoppable, no conversation, no talk
-        // function). Upgrade for the talk-first ones is the HUD context button (owner 2026-06-21).
+        // effects: the Echo Hollow opens the Echo roster popup (WO-951 — checked FIRST so neither the
+        // upgrade short-circuit nor the Yarn menu can steal it); a structure with an authored
+        // CONVERSATION, a SHOPPABLE vendor, or a TALK-FUNCTION building opens the Talk dialogue (its
+        // primary function); the upgrade panel is reached ONLY when upgrade is the building's ONLY
+        // function (upgradable, NOT shoppable, no conversation, no talk function). Upgrade for the
+        // talk-first ones is the HUD context button (owner 2026-06-21).
         // Verifiable headless WITHOUT rendering.
         public static string ResolveRoute(string structureId) =>
-            (IsUpgradableId(structureId) && !IsShoppableId(structureId)
+            IsEchoHollowId(structureId) ? EchoRosterRoute
+            : (IsUpgradableId(structureId) && !IsShoppableId(structureId)
                 && !HasTalkFunctionId(structureId) && !HasConversation(structureId))
                 ? "upgrade-panel" : "talk-dialogue";
 

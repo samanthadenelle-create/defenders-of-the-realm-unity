@@ -269,6 +269,20 @@ namespace DeNelle.Village
             FlowTrace.Step("Village", $"Interact {_building.Type} (id='{_building.BuildingId}') -> " +
                 (hookId != null ? $"structure hook '{hookId}' (StructureMenu gates shop/upgrade)"
                                 : "legacy panel route"));
+            // WO-951 (owner ruling 2026-08-10): the Echo Hollow is the Echoes' building — tapping
+            // it opens the EXISTING Echo roster popup ("they open the echos pop up on right?
+            // Simple and easy."). Routed BEFORE the upgrade/Yarn branches so neither steals the
+            // tap; the old Yarn grant menu (Echo Warden choose-a-pet) is superseded as the tap
+            // surface — Echoes unlock by level now (EchoService) and the starter grant rides the
+            // founding-arc ARRIVE beat. ONE chokepoint with the keeper NPC: the same
+            // CastleNpcInteractable route decision (ResolveRoute -> "echo-roster") governs both.
+            // EchoRoster.Open self-traces ([Flow:Echo] RosterOpen) + registers with PanelManager.
+            if (CastleNpcInteractable.IsEchoHollowId(hookId))
+            {
+                FlowTrace.Step("Village", $"Interact {_building.Type} -> Echo roster (WO-951 Hollow repurpose).");
+                EchoRoster.Open();
+                return;
+            }
             // UPGRADE IS DIRECT, NEVER YARN (owner 2026-06-20, severe): an upgradable building
             // ALWAYS opens the code-built Building Upgrade panel — it must NEVER fall through to the
             // Yarn StructureMenu. The Yarn upgrade path ran a DIFFERENT backend (ResourceBuildingState

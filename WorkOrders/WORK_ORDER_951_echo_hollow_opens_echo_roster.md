@@ -1,6 +1,6 @@
 # WORK ORDER 951 — Echo Hollow repurposed: tap it → the Echoes popup opens. Simple and easy.
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE (implemented + gated 2026-08-10; RESULT filed; owner felt-verify owed)
 **Minted:** 2026-08-10 (CLI seat, main line — banner bumped 951 → 952 in the same edit)
 **Silo:** Village (Hollow interactable routing) + HUD panel routing — small, one-verb change
 **Origin:** owner F8 seq 2266 (*"Given how we do the Echos on levels does this still fit? If it
