@@ -62,9 +62,19 @@ namespace DeNelle.Village
         public event Action OnRestoreRequested;
 
         /// <summary>
-        /// Raised when the "Orient" button is tapped (only shown while an entry is armed).
-        /// The controller opens the 3-axis orient editor ON THE ARMED ENTRY — no typing an
-        /// id. Arg is the armed entry id.
+        /// Raised to open the 3-axis orient editor ON THE ARMED ENTRY (no typing an id).
+        /// Arg is the armed entry id.
+        ///
+        /// WO-1010 D1 (owner screenshot review 2026-08-08): the palette's on-screen "Orient"
+        /// WORD-BUTTON is GONE. It was never in this WO's spec (§2 retires rotation word-buttons
+        /// — the ghost/rail rotate control is the ONE rotate affordance), and pinned top-right of
+        /// the dock it half-covered the Echoes chip so the HUD read "hoes 1/6". The EVENT stays
+        /// because BuildModeController.cs:3747 still subscribes it (OpenOrientEditorForArmed);
+        /// removing the event would be a silent behaviour deletion in a file this agent does not
+        /// own. No palette chrome raises it today — a dev seat drives the orient editor through
+        /// the controller. Nothing player-facing regressed: the button was dev-gated anyway
+        /// (DevHotkeys || isDebugBuild), which is exactly why it only ever appeared in the
+        /// owner's felt-test builds and never in ship.
         /// </summary>
         public event Action<string> OnOrientRequested;
 
@@ -98,7 +108,6 @@ namespace DeNelle.Village
         private GameObject _canvas;           // own overlay canvas (kit BuildModalCanvas)
         private Transform _stripContent;      // horizontal-layout card host inside the scroll
         private TextMeshProUGUI _balanceLabel;
-        private Button _orientBtn;            // shown only while an entry is armed
         private string _armedId;
 
         // Collapse-on-place (owner "minimize on select" + 2026-07-16 redesign): while an
@@ -109,14 +118,24 @@ namespace DeNelle.Village
         private GameObject _topBarGo;         // the dock header band (hidden while collapsed)
         private GameObject _trayGo;           // the scroll well (hidden while collapsed)
         private GameObject _tabRowGo;         // the category tab band (hidden while collapsed)
-        // WO-1010 P2: the "^ Buildings (n)" edge tab — the ONLY chrome Collapse leaves up,
-        // and the way back to the carousel without cancelling out of build intent entirely.
-        private GameObject _restoreTabGo;
-        private TextMeshProUGUI _restoreTabLabel;
+        // WO-1010 P2 + D15: the right-edge category quick-tabs — the ONLY chrome Collapse
+        // leaves up, and the way back to the carousel (PRE-FILTERED) without cancelling out of
+        // build intent entirely. Replaces the single "^ Buildings (n)" tab.
+        private struct QuickTab
+        {
+            public GameObject Go;
+            public TextMeshProUGUI Label;
+            public BuildGroup Group;
+            public string Caption;
+        }
+        private readonly List<QuickTab> _quickTabs = new List<QuickTab>(2);
         private const float RestoreTabW = 260f;
         /// <summary>Bottom breathing room under the card tray so a device safe-area inset
         /// (gesture bar / rounded corner) cannot clip the cost line off the cards.</summary>
         private const float TrayBottomInsetPx = 28f;
+        /// <summary>Fixed pixel width of one card (never a fraction of the band — UI_PLAYBOOK §3).
+        /// Named because the D13 band-coverage trace has to reason about it.</summary>
+        private const float CardWidthPx = 260f;
 
         // WO-673 category switcher (always on — WO-682): the owner-ruled three build
         // categories — Town / Defenses / Walls — as a tab row between the header and
@@ -179,7 +198,6 @@ namespace DeNelle.Village
         {
             if (_canvas != null) _canvas.SetActive(false);
             _armedId = null;
-            UpdateOrientButton();
         }
 
         /// <summary>
@@ -192,7 +210,6 @@ namespace DeNelle.Village
         {
             _armedId = id;
             if (_canvas != null && _canvas.activeSelf) Render();
-            else UpdateOrientButton();
         }
 
         private void EnsureBuilt()
@@ -254,18 +271,13 @@ namespace DeNelle.Village
                 FontStyles.Bold, TextAlignmentOptions.Left,
                 new Vector2(0.04f, 0.10f), new Vector2(0.36f, 0.90f));
 
-            // Orient — opens the 3-axis orient editor on the ARMED entry (no id typing).
-            // DEV-ONLY (UpdateOrientButton gate). Parented to the DOCK (not the header band)
-            // and pinned TOP-RIGHT of the dock so it SURVIVES Collapse: it is only ever
-            // meaningful while an entry is armed (= placing = header hidden), so it must not
-            // vanish with the header. Small box, no wall; sits clear of the centred bottom
-            // intent cluster. Top-right slot is free now that the duplicate "Done" is gone.
-            _orientBtn = ElarionUiKit.BuildObsidianButton(dock.transform, "Orient",
-                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                new Vector2(0.78f, 0.80f), new Vector2(0.98f, 0.98f),
-                () => { if (!string.IsNullOrEmpty(_armedId)) OnOrientRequested?.Invoke(_armedId); });
-            PinSize(_orientBtn, 300f, ElarionUiKit.CanonCtaHeight);
-            _orientBtn.gameObject.SetActive(false);   // shown only while armed (+ dev)
+            // WO-1010 D1 (owner screenshot review 2026-08-08): the "Orient" WORD-BUTTON that
+            // used to be pinned here (dock top-right, 300x132, dev-gated) is REMOVED. It was
+            // not in this WO's spec — §2 retires the rotation word-buttons in favour of the ONE
+            // rotate control on the ghost/rail — and because it survived Collapse it sat over
+            // the HUD's Echoes chip during placement, clipping it to "hoes 1/6". The
+            // OnOrientRequested EVENT is kept (BuildModeController still subscribes it); only
+            // the on-screen chrome is gone.
 
             // NOTE (2026-07-16 redesign): the palette's own "Done" exit was REMOVED to end
             // the duplicate-exit problem — the ONE exit is BuildHudController's top-band
@@ -285,9 +297,37 @@ namespace DeNelle.Village
 
             // Bottom: horizontal-scrolling slot-plate card tray in a recessed dark well
             // (content-width now, so it reads as a dock — not a screen-wide wall).
+            // WO-1010 D13 — THE TRAY IS OPAQUE. It used to be Color(0,0,0,0.55): a 1560px-wide,
+            // 45%-SEE-THROUGH sheet laid straight over the live 3D town. That is a direct
+            // violation of UI_PLAYBOOK §6 ("anything over the 3D field must carry its OWN edge —
+            // it may not borrow contrast from the world"), and it is the mechanism behind D13's
+            // "raw 3D models spilled over the world ... over the field AND PANEL (no obsidian
+            // card frames)" plus "stray prop models scatter across the bottom band": the shop
+            // band was a WINDOW, and what showed through it was the town's real buildings at
+            // world scale, wearing no card frame because they were never cards.
+            //
+            // WHY THE OWNER ONLY SAW IT ON THE DEFENSES TAB — the tab-specificity is the proof.
+            // Town lists SIX rows (Resource + Collector) and its cards fill the tray edge to
+            // edge, so almost no glass is left uncovered. Defenses lists only THREE unlocked
+            // rows — Archer Tower, Ballista, Arcane Spire; tower_siege_tower / tower_catapult /
+            // gate_stone are lockedIds in build-categories.json — so ~3x260px of a ~1560px band
+            // is card and the remaining ~45% is bare glass onto the field. Nothing about the
+            // card CODE differs between the tabs (verified: one BuildCard path, and all three
+            // Defenses portraits share byte-identical import settings); the only variable is how
+            // much of the band the cards happen to cover.
+            //
+            // Obsidian fill + a gold top rule (the kit panel language, WO-562) so the band reads
+            // as a dock in front of the world instead of a tinted pane of it.
             var tray = ElarionUiKit.AddImage(dock.transform, "CardTray",
                 new Vector2(0f, 0f), new Vector2(1f, trayTop),
-                new Color(0f, 0f, 0f, 0.55f), rounded: false);
+                ElarionUiKit.ObsidianFill, rounded: false);
+            var trayRule = ElarionUiKit.AddImage(tray.transform, "TrayTopRule",
+                new Vector2(0f, 1f), new Vector2(1f, 1f), ElarionUiKit.ObsidianTrim, rounded: false);
+            var trayRuleRt = trayRule.GetComponent<RectTransform>();
+            trayRuleRt.sizeDelta = new Vector2(0f, 2f);
+            trayRuleRt.pivot = new Vector2(0.5f, 1f);
+            var trayRuleImg = trayRule.GetComponent<Image>();
+            if (trayRuleImg != null) trayRuleImg.raycastTarget = false;
             // SAFE-AREA INSET AT THE BOTTOM. The tray anchored flush to 0, so the card plates
             // ran to the very edge of the canvas with the COST LINE sitting on it — the first
             // card capture shows it. On any device with a gesture bar or a rounded corner, the
@@ -346,13 +386,14 @@ namespace DeNelle.Village
         /// dock background — the header band, the tab row, AND the card tray — so NO black
         /// wall covers the map/ghost. The "Placing: &lt;name&gt;" label is folded into the
         /// HUD intent cluster (BuildHudController.SetPlacingLabel), so the dock shows no
-        /// summary panel of its own. The dev-only Orient button (a DOCK child, not a header
-        /// child) stays reachable — UpdateOrientButton keeps its armed+dev gate. Called from
+        /// summary panel of its own. What Collapse LEAVES up is the right-edge category
+        /// quick-tabs (D15) — the way back into a pre-filtered carousel. (The dev-only Orient
+        /// button that used to survive Collapse here is GONE, WO-1010 D1.) Called from
         /// BuildModeController.Arm. <paramref name="armedDisplayName"/> is retained for API
         /// compat (the label is now owned by the HUD). Safe before build (no-op).
         /// </summary>
         /// <summary>
-        /// True while the shop is minimized to the `^ Buildings` tab. WO-1010 D12: the build nudge
+        /// True while the shop is minimized to the quick-tabs. WO-1010 D12: the build nudge
         /// stick is gated on item-selected AND carousel-minimized (owner 2026-08-09), so the HUD
         /// needs the second condition and the brain reads it from here rather than inferring it.
         /// </summary>
@@ -366,62 +407,138 @@ namespace DeNelle.Village
             if (_trayGo != null) _trayGo.SetActive(false);
             if (_tabRowGo != null) _tabRowGo.SetActive(false);
             IsCollapsed = true;
-            ShowRestoreTab(true);   // WO-1010 P2: the way BACK to the carousel
-            UpdateOrientButton();   // keep the dev Orient button correct while armed
+            ShowQuickTabs(true);    // WO-1010 P2/D15: the way BACK to the carousel
             FlowTrace.Step("BuildHud",
                 "palette collapsed: all dock chrome hidden (no black wall) — Placing label folded into intent bar");
         }
 
-        // ── WO-1010 P2: the minimized edge tab ─────────────────────────────────
+        // ── WO-1010 P2 + D15: the minimized component's category quick-tabs ─────
         /// <summary>
-        /// Show or hide the "^ Buildings (n)" edge tab that Collapse leaves behind.
+        /// Show or hide the quick-tabs the minimized shop leaves behind.
         ///
-        /// WHY THIS EXISTS. Collapse hides EVERY piece of dock chrome, which is what clears
+        /// WHY THIS EXISTS (P2). Collapse hides EVERY piece of dock chrome, which is what clears
         /// the field — but it also left the player with NO WAY BACK to the carousel except
         /// cancelling the placement, so picking the wrong card was a dead end you had to back
         /// out of. That is a real part of what the external testers hit as "too hard to use".
-        /// The tab is the one affordance that makes minimize-on-select reversible.
+        /// These tabs are the affordance that makes minimize-on-select reversible.
         ///
-        /// It carries the COUNT so the collapsed state still says what is behind it — a bare
-        /// chevron would read as decoration rather than a door.
+        /// WHY THERE ARE TWO (D15, owner 2026-08-09, verbatim "we should see two tabs for the
+        /// slider vertical scroll, one for Structures/Defenses" + "everything is either a
+        /// structure (building) or a Defense (tower)"): a single generic door made the player
+        /// reopen the shop and THEN find the category. Two named doors reopen it already
+        /// filtered. Two entries cover the whole catalog with no leftovers, which is the test
+        /// that the binary split is the right one.
+        ///
+        /// Each carries its group's COUNT so the minimized state still says what is behind it —
+        /// a bare word would read as decoration rather than a door.
         /// </summary>
-        private void ShowRestoreTab(bool show)
+        private void ShowQuickTabs(bool show)
         {
-            if (show && _restoreTabGo == null) BuildRestoreTab();
-            if (_restoreTabGo == null) return;
-            if (_restoreTabGo.activeSelf != show) _restoreTabGo.SetActive(show);
-            if (show && _restoreTabLabel != null)
+            // Rebuild if the list is empty OR its entries were destroyed with a previous canvas
+            // (Unity fake-null): a stale list would silently leave the minimized shop with no
+            // door at all, which is the exact dead end P2 exists to prevent.
+            if (show && (_quickTabs.Count == 0 || _quickTabs[0].Go == null))
             {
-                int n = _vm != null && _vm.Cards != null ? _vm.Cards.Count : 0;
-                _restoreTabLabel.text = n > 0 ? "^ Buildings (" + n + ")" : "^ Buildings";
+                _quickTabs.Clear();
+                BuildQuickTabs();
+            }
+            for (int i = 0; i < _quickTabs.Count; i++)
+            {
+                var t = _quickTabs[i];
+                if (t.Go == null) continue;
+                if (t.Go.activeSelf != show) t.Go.SetActive(show);
+                if (show && t.Label != null)
+                {
+                    int n = CountForGroup(t.Group);
+                    t.Label.text = t.Caption + " (" + n + ")";
+                }
             }
         }
 
-        private void BuildRestoreTab()
+        /// <summary>
+        /// How many cards a D15 group WOULD show, without disturbing the live projection.
+        ///
+        /// The counts are computed on a THROWAWAY VM over the same providers, never by
+        /// re-Configuring the live one: the live VM is what the carousel is currently rendering
+        /// (and, while minimized, what the player is placing from), so counting by mutating it
+        /// would re-render the shop underneath an in-flight placement. A count is a question,
+        /// not a state change.
+        /// </summary>
+        private static int CountForGroup(BuildGroup group)
+        {
+            int n = 0;
+            Guard.Try("BuildPalette", "count group " + group, () =>
+            {
+                BuildPaletteVM probe = null;
+                try
+                {
+                    probe = BuildPaletteVM.CreateDefault(BuildType.Town, null);
+                    probe.ConfigureGroup(group);
+                    n = probe.Cards != null ? probe.Cards.Count : 0;
+                }
+                finally
+                {
+                    // CreateDefault subscribes the live wallet feeds. A throw between here and
+                    // Dispose would leak that subscription onto a VM nothing renders, so the
+                    // teardown is in a finally, not on the happy path.
+                    probe?.Dispose();
+                }
+            });
+            return n;
+        }
+
+        private void BuildQuickTabs()
         {
             if (_canvas == null) return;
-            var btn = ElarionUiKit.BuildObsidianButton(_canvas.transform, "^ Buildings",
+
+            // RIGHT EDGE, stacked VERTICALLY (D15: "in the minimized component on right").
+            // Upper-right band only: the lean placement rail (D14 — OK / rotate / X) owns the
+            // right edge lower down, and the compact corner Done (D10) owns the true top-right,
+            // so these two sit between them rather than competing with either. Fixed-pixel boxes
+            // (PinSize) so a wide landscape canvas cannot stretch them into thin bars, and the
+            // 132px CTA height clears MinTouchPx without an extra pad.
+            AddQuickTab("Structures", BuildGroup.Structures, 0.78f, "BuildPaletteRestoreTab");
+            AddQuickTab("Defenses", BuildGroup.Defenses, 0.60f, "BuildPaletteQuickTab_Defenses");
+        }
+
+        /// <summary>
+        /// One right-edge quick-tab. <paramref name="objectName"/> is explicit because
+        /// UICaptureLaunch asserts the collapsed palette still has an active
+        /// "BuildPaletteRestoreTab" — the first tab keeps that name so the capture contract
+        /// survives the P2 -> D15 change without editing the capture harness.
+        /// </summary>
+        private void AddQuickTab(string caption, BuildGroup group, float yCentre, string objectName)
+        {
+            var btn = ElarionUiKit.BuildObsidianButton(_canvas.transform, caption,
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
-                // BOTTOM-CENTRE, not a top corner. The first capture put it at top-left, which
-                // lands squarely on the HUD's wallet chips — the HUD top band is y 0.90-1.0
-                // with the resource readout on its left, and this canvas sorts BELOW the HUD,
-                // so the tab would have been half-hidden behind the numbers it was competing
-                // with. Bottom-centre is where the retired intent bar freed space, it is clear
-                // of the nudge-pad toggle in the bottom-left corner, and it is the one place
-                // where an up-chevron reads literally: the shop lives down here, tap to raise it.
-                new Vector2(0.40f, 0.015f), new Vector2(0.60f, 0.135f),
+                new Vector2(0.80f, yCentre), new Vector2(0.99f, yCentre),
                 () =>
                 {
                     FlowTrace.Step("BuildPalette",
-                        "restore tab tapped -> returning to the carousel (standard no-charge cancel)");
+                        $"quick-tab tapped group={group} -> reopening the carousel PRE-FILTERED " +
+                        "(standard no-charge cancel of any un-placed ghost)");
+                    // Filter FIRST, then ask the brain to restore: OnRestoreRequested routes
+                    // through CancelArmed -> Expand -> Render, so the group must already be set
+                    // or the carousel would come back on the previous category and only switch
+                    // on the next re-render.
+                    EnsureVm();
+                    _vm.ConfigureGroup(group);
+                    _activeType = _vm.ActiveType;
+                    UpdateTabHighlight();
                     OnRestoreRequested?.Invoke();
                 });
             if (btn == null) return;
-            btn.gameObject.name = "BuildPaletteRestoreTab";
+            btn.gameObject.name = objectName;
             PinSize(btn, RestoreTabW, ElarionUiKit.CanonCtaHeight);
-            _restoreTabGo = btn.gameObject;
-            _restoreTabLabel = btn.GetComponentInChildren<TMP_Text>(true) as TextMeshProUGUI;
-            _restoreTabGo.SetActive(false);
+            var go = btn.gameObject;
+            go.SetActive(false);
+            _quickTabs.Add(new QuickTab
+            {
+                Go = go,
+                Label = btn.GetComponentInChildren<TMP_Text>(true) as TextMeshProUGUI,
+                Group = group,
+                Caption = caption
+            });
         }
 
         /// <summary>
@@ -443,10 +560,9 @@ namespace DeNelle.Village
             if (_tabRowGo != null) _tabRowGo.SetActive(true);
             if (_trayGo != null) _trayGo.SetActive(true);
             IsCollapsed = false;
-            ShowRestoreTab(false);  // WO-1010 P2: the carousel IS back; the door closes with it
+            ShowQuickTabs(false);   // WO-1010 P2/D15: the carousel IS back; the door closes with it
             _armedId = null;
             if (_canvas.activeSelf) Render();
-            else UpdateOrientButton();
             FlowTrace.Step("BuildPalette",
                 "expand: armed cleared + cards re-rendered (live cost + single-card glow refresh)");
         }
@@ -473,7 +589,6 @@ namespace DeNelle.Village
             for (int i = _stripContent.childCount - 1; i >= 0; i--)
                 Destroy(_stripContent.GetChild(i).gameObject);
             UpdateBalance();
-            UpdateOrientButton();
 
             // MVVM Silo C: the candidate gather + unlock filter + affordability projection
             // now live in the VM. The View renders _vm.Cards (each a StructureCardVM). The
@@ -486,6 +601,20 @@ namespace DeNelle.Village
             var built = Guard.TryEach("BuildPalette", "build card", cards,
                 c => BuildCard(c));
             FlowTrace.Step("BuildPalette", $"rows-added: built={built.built} failed={built.failed}");
+
+            // WO-1010 D13 — BAND COVERAGE. The defect was tab-specific (Defenses, not Town) and
+            // nothing in the card code is tab-specific, so the variable is how much of the tray
+            // band the cards actually cover. This line states it in numbers: card width x count
+            // + layout spacing/padding against the tray's own resolved width. Anything well under
+            // 1.0 is bare tray band, which is the surface that used to be see-through onto the
+            // 3D town. Keep it: it is the one number that distinguishes "the shop is drawn wrong"
+            // from "the shop is drawn right and there is simply not much in this category".
+            var trayRt2 = _trayGo != null ? _trayGo.transform as RectTransform : null;
+            float trayW = trayRt2 != null ? trayRt2.rect.width : 0f;
+            float contentW = built.built * CardWidthPx + Mathf.Max(0, built.built - 1) * 10f + 24f;
+            FlowTrace.Step("BuildPalette",
+                $"band-coverage: cards={built.built} contentPx={contentW:F0} trayPx={trayW:F0} " +
+                $"cover={(trayW > 0f ? contentW / trayW : 0f):F2} (tray fill is OPAQUE -- D13)");
 
             if (built.built == 0)
             {
@@ -524,8 +653,8 @@ namespace DeNelle.Village
             var cardGo = new GameObject("Card_" + e.id, typeof(RectTransform), typeof(Image), typeof(Button), typeof(LayoutElement));
             cardGo.transform.SetParent(_stripContent, false);
             var rt = cardGo.GetComponent<RectTransform>();
-            rt.sizeDelta = new Vector2(260f, 0f);
-            cardGo.GetComponent<LayoutElement>().preferredWidth = 260f;
+            rt.sizeDelta = new Vector2(CardWidthPx, 0f);
+            cardGo.GetComponent<LayoutElement>().preferredWidth = CardWidthPx;
 
             // BM-3 (WO-746): register this card under a STABLE tutorial-spotlight id
             // ("build.card.<entryId>") every Render(), so a step can anchor its glow to the
@@ -656,7 +785,20 @@ namespace DeNelle.Village
                 glowGo.AddComponent<IconGlowPulse>();
             }
 
-            var art = ResolveEntryArt(e);
+            // WO-1010 D13 §12 INSTRUMENTATION — resolve the art through the TRACED resolver so
+            // every card states, per render, WHICH branch produced its picture. "The card looks
+            // wrong" is otherwise unsplittable into art-missing vs art-wrong-shape vs
+            // card-never-built; this line makes the next device run answer it in one read
+            // instead of another theory. Never strip these (owner ruling).
+            var art = ResolveEntryArtTraced(e, out string artBranch);
+
+            // The art band ALWAYS carries its own dark plate, in BOTH branches. Every Defenses
+            // portrait in the tree (archer-tower / ballista / arcane-spire) is a
+            // TRANSPARENT-BACKGROUND sticker PNG, so with no plate of its own the picture draws
+            // straight onto whatever happens to be behind the card — which on any surface where
+            // the card plate is absent is the 3D field itself (UI_PLAYBOOK §6). The art Image is
+            // now a CHILD of that plate rather than being the plate, so the frame cannot go
+            // missing with the sprite.
             var bandGo = new GameObject("Art", typeof(RectTransform), typeof(Image));
             bandGo.transform.SetParent(cardGo.transform, false);
             var brt = (RectTransform)bandGo.transform;
@@ -665,25 +807,50 @@ namespace DeNelle.Village
             brt.offsetMin = Vector2.zero; brt.offsetMax = Vector2.zero;
             var bandImg = bandGo.GetComponent<Image>();
             bandImg.raycastTarget = false;
+            bandImg.color = new Color(0f, 0f, 0f, 0.45f);   // recessed dark well, always
             if (art != null)
             {
-                bandImg.sprite = art;
-                bandImg.preserveAspect = true;
+                var artGo = new GameObject("ArtImage", typeof(RectTransform), typeof(Image));
+                artGo.transform.SetParent(bandGo.transform, false);
+                var art_rt = (RectTransform)artGo.transform;
+                art_rt.anchorMin = Vector2.zero; art_rt.anchorMax = Vector2.one;
+                art_rt.offsetMin = Vector2.zero; art_rt.offsetMax = Vector2.zero;
+                var artImg = artGo.GetComponent<Image>();
+                artImg.raycastTarget = false;
+                artImg.sprite = art;
+                // preserveAspect keeps the picture INSIDE the band. It is what stops a tall
+                // sticker PNG from being stretched, and it is why a card preview can never draw
+                // outside its own 208x86 reference band no matter what the source image is.
+                artImg.preserveAspect = true;
                 // Armed = the icon reads warm/lit (over its glow halo); a BUILT singleton reads
                 // desaturated ("already placed"); rest = plain white.
-                bandImg.color = built ? new Color(0.62f, 0.62f, 0.62f, 1f)
+                artImg.color = built ? new Color(0.62f, 0.62f, 0.62f, 1f)
                     : (armed ? new Color(1f, 0.965f, 0.82f, 1f) : Color.white);
             }
             else
             {
-                // (c) fallback plate: recessed dark well + the entry's gilt initial.
-                bandImg.color = new Color(0f, 0f, 0f, 0.45f);
+                // (c) fallback: the dark well already painted above + the entry's gilt initial.
                 string glyphSource = card.DisplayName;
                 string glyph = string.IsNullOrEmpty(glyphSource)
                     ? "?" : glyphSource.Substring(0, 1).ToUpperInvariant();
                 MakeText(bandGo.transform, glyph, 30, ElarionUi.Gilt, FontStyles.Bold,
                     TextAlignmentOptions.Center, Vector2.zero, Vector2.one);
             }
+
+            // The per-card D13 line: id, the art branch, the sprite's real pixel shape, and
+            // whether the obsidian plate resolved. If a future capture ever shows a frameless
+            // card again, "plate=False" or "art=GLYPH" names the cause without a second run.
+            var artRect = art != null ? art.rect : new Rect();
+            FlowTrace.Step("BuildPaletteArt",
+                $"card id={e.id} type={e.type} art={artBranch} " +
+                $"sprite={(art != null ? art.name : "<none>")} " +
+                $"px={(int)artRect.width}x{(int)artRect.height} " +
+                $"plate={(plate != null)} built={built} armed={armed} " +
+                $"freebie={freebie} affordable={affordable}");
+            if (art == null)
+                FlowTrace.Warn("BuildPaletteArt",
+                    $"card id={e.id} resolved NO art on any branch (portrait id/slug/alias, concept-icons) " +
+                    "-- rendering the gilt-initial plate. A card reading as a bare letter is THIS line.");
 
             if (built)
             {
@@ -701,24 +868,32 @@ namespace DeNelle.Village
             }
             else
             {
-                // A live freebie says "FREE" in so many words — the WORD carries the meaning
-                // (owner is red/green colorblind; never color-alone). After the one-shot flag
-                // is consumed the label reverts to the normal per-resource cost. ASCII only.
-                // WO-1010: UNAFFORDABLE SAYS SO IN A WORD. The freebie case above already
-                // honoured "never color-alone" — but the unaffordable case did NOT: the string
-                // was byte-identical whether you could afford it or not, and the ONLY difference
-                // was ElarionUi.Danger vs ElarionUi.Affordable. Red-vs-green is precisely the
-                // discrimination this project cannot rely on (the owner is red/green
-                // colorblind), so an unaffordable card was indistinguishable from an affordable
-                // one for the person it matters most to. Found by looking at the capture, not
-                // by any gate. "NEED" leads so the state is read before the numbers; the colour
-                // stays as a redundant second cue, never the only one.
-                string costText = freebie ? "FREE"
+                // WO-1010 D20 (owner ruling 2026-08-08, verbatim: "dont show anything on first
+                // build just nothing, only afterwards" + "they dont need to know first is free"
+                // + "they will see it didnt cost them to place"): while the first-build-free rule
+                // applies to a card its price slot shows NOTHING. No "FREE", no "First build
+                // FREE" — the player learns the first one is free by not being charged. This
+                // supersedes D9's labelling clause; the label used to read "FREE".
+                //
+                // WO-1010 D9 verification half, WHICH STAYS: UNAFFORDABLE SAYS SO IN A WORD.
+                // The unaffordable case once differed from the affordable one ONLY by
+                // ElarionUi.Danger vs ElarionUi.Affordable — the cost string was byte-identical.
+                // Red-vs-green is precisely the discrimination this project cannot rely on (the
+                // owner is red/green colorblind), so an unaffordable card was indistinguishable
+                // from an affordable one for the person it matters most to. "NEED" leads so the
+                // state is read before the numbers; colour stays a redundant second cue. ASCII only.
+                string costText = freebie ? string.Empty
                     : (affordable ? CostLabel(cost) : "NEED " + CostLabel(cost));
-                var costLabel = MakeText(cardGo.transform, costText, 13,
-                    affordable ? ElarionUi.Affordable : ElarionUi.Danger, FontStyles.Bold,
-                    TextAlignmentOptions.Center, new Vector2(0.06f, 0.03f), new Vector2(0.94f, 0.24f));
-                costLabel.raycastTarget = false;
+                // An EMPTY price slot is built as nothing at all, not as an empty label — a
+                // zero-width TMP object in the band is invisible but still a layout participant,
+                // and "shows nothing" should mean nothing is there.
+                if (!string.IsNullOrEmpty(costText))
+                {
+                    var costLabel = MakeText(cardGo.transform, costText, 13,
+                        affordable ? ElarionUi.Affordable : ElarionUi.Danger, FontStyles.Bold,
+                        TextAlignmentOptions.Center, new Vector2(0.06f, 0.03f), new Vector2(0.94f, 0.24f));
+                    costLabel.raycastTarget = false;
+                }
             }
 
             // ── Targeting tag (towers only) — at-a-glance anti-air read ─────────
@@ -802,16 +977,41 @@ namespace DeNelle.Village
             };
 
         private static Sprite ResolveEntryArt(CatalogEntry e)
+            => ResolveEntryArtTraced(e, out _);
+
+        /// <summary>
+        /// <see cref="ResolveEntryArt"/> with the WINNING BRANCH reported out (WO-1010 D13,
+        /// CLAUDE.md §12). The resolver has four ordered candidates and they fail differently:
+        /// a portrait found by id is authored art, a portrait found by DISPLAY-NAME SLUG is art
+        /// hanging off a label creative can rename (UI_PLAYBOOK §14 — the exact trap that nearly
+        /// deleted the Weaponsmith card), an alias hit is art whose filename disagrees with its
+        /// catalog id, a concept-icon is a generic gap-filler, and null is a letter glyph.
+        /// A caller that only sees "a Sprite or not" cannot tell those apart in a capture, which
+        /// is how "the card looks wrong" stayed a theory. Pure read-out; resolution order and
+        /// results are UNCHANGED.
+        /// </summary>
+        private static Sprite ResolveEntryArtTraced(CatalogEntry e, out string branch)
         {
+            branch = "null-entry";
             if (e == null) return null;
+
             string slug = SlugOf(e.displayName);
+
             var s = LoadPortrait(e.id);
-            if (s == null) s = LoadPortrait(slug);
-            if (s == null && !string.IsNullOrEmpty(e.id) &&
-                PortraitAliases.TryGetValue(e.id, out var aliased))
+            if (s != null) { branch = "portrait-id"; return s; }
+
+            s = LoadPortrait(slug);
+            if (s != null) { branch = "portrait-slug:" + slug; return s; }
+
+            if (!string.IsNullOrEmpty(e.id) && PortraitAliases.TryGetValue(e.id, out var aliased))
+            {
                 s = LoadPortrait(aliased);
-            if (s != null) return s;
-            return ConceptIconResolver.ResolveAny(e.id, slug, e.type.ToString());
+                if (s != null) { branch = "portrait-alias:" + aliased; return s; }
+            }
+
+            s = ConceptIconResolver.ResolveAny(e.id, slug, e.type.ToString());
+            branch = s != null ? "concept-icon" : "GLYPH";
+            return s;
         }
 
         /// <summary>"Archer Tower" -> "archer-tower" (the Portraits/ file convention).</summary>
@@ -844,7 +1044,11 @@ namespace DeNelle.Village
         /// <summary>Compact per-resource cost string for the card (skips zero slots; ASCII only).</summary>
         private static string CostLabel(DeNelle.Core.Catalog.ResourceCost c)
         {
-            if (c.IsZero) return "Free";
+            // WO-1010 D20: a zero cost prints NOTHING, not "Free". The freebie branch in
+            // BuildCard already short-circuits, but a genuinely zero-priced catalog row would
+            // otherwise sneak the retired word back onto a card through this formatter — which
+            // is exactly how a removed label comes back six months later.
+            if (c.IsZero) return string.Empty;
             // WO-697: cost numbers through the ONE kit formatter (compact >= 10k).
             var parts = new List<string>(4);
             if (c.wood     > 0) parts.Add(ElarionUi.CompactNumber(c.wood)     + "W");
@@ -871,22 +1075,12 @@ namespace DeNelle.Village
             _tabRow?.SetActive(_activeType);
         }
 
-        /// <summary>Show the Orient button only while an entry is armed.</summary>
-        private void UpdateOrientButton()
-        {
-            // F8-30 — Orient is a DEV offset-authoring tool, not player UI: during the
-            // tutorial the owner tapped it next to Done and the orient modal click-locked
-            // the screen. Gate it behind the global DevHotkeys kill-switch (default OFF —
-            // same gate as AdminOverlay/DebugCanvas), so players/tutorial never see it.
-            // WO-707 (owner 2026-07-13 "we need the orient tool at least in dev build —
-            // these are sitting wrong"): ALSO visible in Development builds (her felt-test
-            // exes), without opening the whole DevHotkeys surface. Ship builds
-            // (BuildOptions.None — the WebGL previews/prod) never show it.
-            if (_orientBtn != null)
-                _orientBtn.gameObject.SetActive(
-                    (DeNelle.Core.FeatureFlags.DevHotkeys || Debug.isDebugBuild)
-                    && !string.IsNullOrEmpty(_armedId));
-        }
+        // WO-1010 D1: UpdateOrientButton() is GONE with the button it gated. Its whole job was
+        // the dev visibility rule (DevHotkeys || isDebugBuild) AND the armed check for a control
+        // that no longer exists; keeping a method that toggles nothing would be dead code that
+        // reads as a live rule. History, so nobody re-adds it by accident: F8-30 dev-gated the
+        // button after the owner tapped it mid-tutorial and the orient modal click-locked the
+        // screen; WO-707 then re-admitted it to Development builds. D1 retires it outright.
 
         // ── Consistent-size pin (mirrors ElarionUiKit.PinCanonicalCtaSize) ──────
         /// <summary>
