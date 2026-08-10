@@ -642,6 +642,12 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "gear-aura-carry suite", () => { if (!DeNelle.Editor.Regression.GearAuraCarryGateRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[gear-aura-carry] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "armor-store-window suite", () => { if (!DeNelle.Editor.Regression.ArmorStoreLockedWindowRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[armor-store-window] " + r); });
 
+            // --- 2026-08-10 evening, minted from two live F8 captures while the owner played.
+            // Same fencing reason as the block above: each lane authored its oracle, the
+            // committer registers it. ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "tutorial-anchor-latch suite", () => { if (!DeNelle.Editor.Regression.TutorialAnchorLatchRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[tutorial-anchor-latch] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "build-carousel-order suite", () => { if (!DeNelle.Editor.Regression.BuildCarouselTutorialOrderRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[build-carousel-order] " + r); });
+
             // --- THE ORACLE THAT GUARDS THIS FILE: distinct markers, no unregistered
             // oracle, no gate script grepping a marker nobody emits. Registered LAST so
             // it sees the fully-built registry above it (it reads SOURCE, not runtime

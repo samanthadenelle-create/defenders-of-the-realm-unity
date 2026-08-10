@@ -31,24 +31,58 @@ the creative half. **The technical half is still true, and it is not specific to
 |---|---|
 | `ice-wolf.fbx` exists and is git-TRACKED | `Assets/Resources/Pets/ice-wolf.fbx` |
 | The load path already works | `PetDeployer.cs:616` `Resources.Load<GameObject>("Pets/" + def.Species)`; `pets.json` has `pet-ice-wolf` / species `ice-wolf` |
-| The wolf has **no avatar and no clips** | `ice-wolf.fbx.meta`: `animationType: 2` (Generic), `avatarSetup: 0`, `clipAnimations: []` |
-| **So does the sprite** | `aether-sprite.fbx.meta`: `animationType: 2`, `avatarSetup: 0` |
+| The wolf DOES carry a full humanoid skeleton | the FBX contains the complete **AccuRig `CC_Base_` biped**: Hip/Pelvis/Waist/Spine01-02, Clavicle, Upperarm, Forearm, Hand + Index/Mid/Pinky/Thumb 1-3, Thigh/Calf/Foot/ToeBase + 5 toes, NeckTwist, Head, JawRoot, Tongue01-03, Teeth, Eyes, Breast — plus a ~95-entry facial expression set (`ice-wolf.json`, `"Generation": "AccuRig"`) |
+| **So does the sprite** | `aether-sprite.fbx` carries **141** `CC_Base_*` bones — same family |
+| But BOTH are IMPORTED AS GENERIC | `ice-wolf.fbx.meta` / `aether-sprite.fbx.meta`: `animationType: 2` (Generic), `avatarSetup: 0`, `skeleton: []`, `clipAnimations: []` — so Unity builds **no avatar** and nothing can retarget |
 | There is no controller and no clip anywhere for pets | zero `.controller`, zero `.anim` under `Assets/Resources/Pets`; `Pets/Pet` and `Pets/PetIdle` are both entries in `HudUiRegression.MissingResourceBaseline` |
 
-> ⚠ **A comment lies here (CLAUDE.md mandatory-first-step).** `TutorialFlow.cs:1310-1312` claims
-> aether-sprite is *"the only HUMANOID rig (AccuRig CC_Base_*)"*. Its meta says **Generic, no avatar**.
-> The sprite only reads acceptable because `EchoSpiritPresentation` hovers and drifts it, which MASKS the
-> missing idle. A quadruped has no such mask — which is exactly why the wolf read as broken in July and
-> the sprite did not. Fix the comment in the same commit.
+> ### ⚠ CORRECTION 2026-08-10 (this WO said the opposite for a few minutes — owner caught it)
+> An earlier revision of this ticket called `TutorialFlow.cs:1310-1312`'s *"the only HUMANOID rig
+> (AccuRig CC_Base_*)"* **false at source**. That was wrong, and it was wrong in the way §12 warns about:
+> it read the **import setting** and called it the **skeleton**. The comment is RIGHT that the rig is an
+> AccuRig CC_Base humanoid; its only error is the word **"only"** — the wolf has the identical skeleton.
+> What is true is that both are imported **Generic**, so the humanoid rig is present and ignored. **That
+> is the whole T-pose story: the rig was always there, Unity was told not to build an avatar from it.**
+> Correct the "only" in the code comment; do not delete the humanoid claim.
 
-**Consequence: dropping the wolf in as-is ships a sliding bind-pose statue (QR-5.3).** The mesh is the
-part we already have; the rig, the clips and the controller are the work.
+> ### ⚠ THE REAL RISK, and it is not the import flag
+> The object in `ice-wolf.json` is named **`"fox"`**, the mesh is **`Coyote_Mesh`**, and the textures are
+> `Coyote_Mesh_Bake_Pbr_Diffuse/Normal.png`. **`ice-wolf.fbx` is a fox/coyote body auto-rigged onto a
+> HUMAN biped skeleton** — fore-legs mapped as arms (with fingers and thumbs), hind-legs as legs.
+> Flipping the import to Humanoid WILL build an avatar and WILL retarget the project's existing clips —
+> onto a quadruped built like a person. That, not the missing controller, is the likely reason it read
+> broken in July. A rig setting does not fix a skeleton/mesh mismatch.
+
+**Consequence: dropping the wolf in as-is ships a sliding bind-pose statue (QR-5.3); flipping it to
+Humanoid may instead ship an upright fox.** The mesh is the part we already have; the question is which
+of the two paths in §4.0 the body actually needs.
 
 ## §3 Canon supports the ruling
 
 The unlock card in the owner's own session reads `[Flow:Echo] unlock card: 'I accept your power'
 id=echo-frosthowl`. **Frosthowl IS the ice wolf.** Today the soul granted (Frosthowl) and the body
 configured (aether-sprite) are different animals; this ticket makes them the same one.
+
+## §4.0 DECIDE THIS FIRST — one capture settles it, and it may cost nothing
+
+Owner asked (2026-08-10): *"if easier i can get an animal rig but simple is better right?"* Simple is
+better — but simple means the path that ENDS UP RIGHT, not the fewest steps. There are two, and one
+screenshot tells us which:
+
+- **Path A — free (5 minutes, zero new assets).** Flip `ice-wolf.fbx` to `animationType: 3` (Humanoid),
+  let Unity build the avatar off the CC_Base skeleton that is already there, retarget ONE existing
+  humanoid idle. If a fox on biped animation reads acceptably at pet scale, we are done.
+- **Path B — an animal rig.** A real quadruped skeleton + an idle and a walk. Costs money/time, and is
+  the only honest answer if Path A reads as a person-shaped fox.
+
+**Do not buy anything until Path A has been captured.** The test is: flip the import, drop one idle,
+run `UICaptureLaunch` / a device screencap, and LOOK. Headless markers cannot see a T-pose or an upright
+fox (the 08-09 lesson: *"headless gates cannot see orientation"*), so this decision is made on pixels.
+Record the screenshot in this WO either way — a proven "Path A is ugly" is what justifies the spend.
+
+⚠ Whichever path wins, the **fox-vs-wolf** question is the owner's and is separate: the shipped body is
+a fox/coyote named `ice-wolf`, representing the Echo **Frosthowl**. That may read perfectly well as a
+small canine companion, or it may be the reason to commission a wolf.
 
 ## §4 Scope
 
