@@ -223,8 +223,11 @@ namespace DeNelle.Village
                     if (warbandFixer != null)
                     {
                         // WO-790: ALBEDO-RESTORE SEAM. The Warband/Troll family's authored Tripo
-                        // basecolors never travelled from the old C:\EoA export (Orc_Berserker.json
-                        // records that export dir; the .fbx.meta texture remaps dangle to guids that
+                        // basecolors never travelled from the authoring machine's export tree
+                        // (Orc_Berserker.json records a MACHINE-LOCAL export dir -- "C:/EoA/Assets/
+                        // Resources/Enemies" -- that no longer resolves anywhere; the repo root is
+                        // machine-dependent, so treat that string as provenance, never as a path to
+                        // read; the .fbx.meta texture remaps dangle to guids that
                         // exist nowhere; a binary scan of the FBXs finds zero embedded images). So
                         // the tint below is what the owner saw as "flat green/orange enemies".
                         // When the owner stages the restored art as Enemies/OrcTex/<model>_basecolor

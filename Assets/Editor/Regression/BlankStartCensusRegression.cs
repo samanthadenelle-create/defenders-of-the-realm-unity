@@ -3,7 +3,7 @@
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.EditorRegression. STANDALONE (NOT wired into DataRegression
 // .RunAll — invoke via:
-//   Unity.exe -batchmode -quit -projectPath C:\EOA
+//   Unity.exe -batchmode -quit -projectPath <repoRoot>   (root is MACHINE-DEPENDENT)
 //     -executeMethod DeNelle.Editor.BlankStartCensusRegression.Run
 // or the "Defenders > Regression > Blank Start Census (WO-703)" menu item).
 //

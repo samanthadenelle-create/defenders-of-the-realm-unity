@@ -12,7 +12,8 @@
 // key component's on-screen rect and writes tight crops so each piece can be
 // viewed close-up.
 //
-// Outputs -> C:/EoA/UI_REVIEW/OBSIDIAN_DEMO/
+// Outputs -> <repoRoot>/UI_REVIEW/OBSIDIAN_DEMO/   (repo root resolved at runtime from
+// Application.dataPath — the root is MACHINE-DEPENDENT, never hardcode C:\EoA / D:\eoa)
 //   obsidian_demo_FULL.png         — the whole assembled HUD
 //   obsidian_demo_TargetNameplate.png
 //   obsidian_demo_PlayerStatBars.png
@@ -22,7 +23,7 @@
 //
 // MUST BE RUN IN A GRAPHICS UNITY SESSION (windowed, NOT -nographics) — UI needs
 // a real graphics device to render. Run:
-//   "<Unity>\Unity.exe" -projectPath C:\EoA -batchmode -quit ^
+//   "<Unity>\Unity.exe" -projectPath <repoRoot> -batchmode -quit ^
 //     -executeMethod DeNelle.Editor.ObsidianDemoCapture.Capture -logFile -
 //   (omit -nographics; keep the editor CLOSED so the project isn't locked)
 // Or in-editor via the menu: Defenders/UI/Capture Obsidian Demo
@@ -43,7 +44,13 @@ namespace DeNelle.Editor
     {
         private const string ScenePath =
             "Assets/Blink/Art/UI/_DEMO_UIPacks/OBSIDIAN_DEMO.unity";
-        private const string OutDir = "C:/EoA/UI_REVIEW/OBSIDIAN_DEMO/";
+        // Repo root is MACHINE-DEPENDENT (C:\EoA on one box, D:\eoa on another — owner ruling
+        // 2026-08-09, CLAUDE.md §0), so it is resolved at runtime from Unity's own anchor:
+        // Application.dataPath == "<repoRoot>/Assets". The relative destination
+        // (<repoRoot>/UI_REVIEW/OBSIDIAN_DEMO/) is unchanged, so existing tooling still finds it.
+        private static string RepoRoot =>
+            Directory.GetParent(Application.dataPath).FullName.Replace('\\', '/');
+        private static string OutDir => RepoRoot + "/UI_REVIEW/OBSIDIAN_DEMO/";
 
         // Supersample factor over the canvas's native reference resolution, for
         // crisper full + crop images.

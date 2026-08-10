@@ -27,11 +27,13 @@
 //   * STRETCH root (fills its parent screen — HUDCore / MerchantPanel / GameMenu /
 //     LoadingScreen / LoginScreen): no intrinsic size, so render full-screen 1920x1080.
 //
-// Outputs -> C:/EoA/UI_REVIEW/OBSIDIAN_PREFABS/<PrefabName>.png  (+ _INDEX.txt)
+// Outputs -> <repoRoot>/UI_REVIEW/OBSIDIAN_PREFABS/<PrefabName>.png  (+ _INDEX.txt)
+// (repo root resolved at runtime from Application.dataPath — it is MACHINE-DEPENDENT,
+//  never hardcode C:\EoA / D:\eoa)
 //
 // MUST RUN IN A GRAPHICS UNITY SESSION (windowed, NOT -nographics) — UI needs a
 // real graphics device. Run (editor CLOSED so the project isn't locked):
-//   "<Unity>\Unity.exe" -projectPath C:\EoA -batchmode -quit ^
+//   "<Unity>\Unity.exe" -projectPath <repoRoot> -batchmode -quit ^
 //     -executeMethod DeNelle.Editor.ObsidianComponentGalleryBuilder.Build -logFile -
 // Or in-editor: menu  Defenders/UI/Build Obsidian Component Gallery
 // =============================================================================
@@ -51,7 +53,12 @@ namespace DeNelle.Editor
     public static class ObsidianComponentGalleryBuilder
     {
         private const string PrefabDir = "Assets/Blink/Art/UI/Obsidian_UI/Prefabs_Obsidian";
-        private const string OutDir    = "C:/EoA/UI_REVIEW/OBSIDIAN_PREFABS/";
+        // Repo root is MACHINE-DEPENDENT (C:\EoA on one box, D:\eoa on another — owner ruling
+        // 2026-08-09, CLAUDE.md §0), so it is resolved at runtime from Unity's own anchor:
+        // Application.dataPath == "<repoRoot>/Assets". Relative destination unchanged.
+        private static string RepoRoot =>
+            Directory.GetParent(Application.dataPath).FullName.Replace('\\', '/');
+        private static string OutDir => RepoRoot + "/UI_REVIEW/OBSIDIAN_PREFABS/";
 
         // Supersample over the prefab's native pixels (dropped to 1 for very large prefabs
         // so the RenderTexture never gets absurd).

@@ -543,11 +543,34 @@ namespace DeNelle.Core.Diagnostics
                         if (e.keyCode == KeyCode.Return || e.keyCode == KeyCode.KeypadEnter) { CommitFlag(); return; }
                         if (e.keyCode == KeyCode.Escape) { CommitFlag(); return; }
                     }
-                    float w = 580f, x = (Screen.width - w) * 0.5f, y = Screen.height * 0.18f;
-                    GUI.color = new Color(0f, 0f, 0f, 0.85f);
-                    GUI.Box(new Rect(x - 12, y - 12, w + 24, 96), GUIContent.none);
+                    // ---- WO-1010 D2: the note box moves OUT of the tutorial banner's band ----
+                    // The box used to seat at Screen.height * 0.18f. That is exactly where
+                    // ObjectiveBannerUi parks the tutorial objective strip (anchor y 0.845,
+                    // pivot top, 46 px tall on a ConstantPixelSize canvas => roughly 173..219 px
+                    // from the top of a 1080-tall screen, while this box spanned 182..278). The
+                    // two texts overprinted into garbled double-text at top-centre in every FTUE
+                    // capture (owner screenshot 2026-08-08, "Place the Echo Hollow anywhere you
+                    // like (0/1)" on top of "What looks wrong?").
+                    //
+                    // The banner OWNS the top band by design (it is anchored under the HUD compass
+                    // crown, owner 2026-07-16), so the dev box yields. It now seats in a FIXED-PIXEL
+                    // band measured up from the BOTTOM edge -- fixed px, never a fraction of screen,
+                    // so the two bands cannot re-collide at any resolution or aspect. Both surfaces
+                    // measure in device pixels here (IMGUI, and the banner's ConstantPixelSize
+                    // canvas), so the separation is literal, not approximate.
+                    const float NoteW = 580f;          // box content width
+                    const float NoteBoxH = 96f;        // plate height (unchanged)
+                    const float NoteBottomInsetPx = 168f;  // fixed px from the bottom screen edge
+                    float w = NoteW, x = (Screen.width - w) * 0.5f;
+                    // Mathf.Max keeps the plate on-screen on a very short window (editor game view).
+                    float boxTop = Mathf.Max(12f, Screen.height - NoteBottomInsetPx - NoteBoxH);
+                    float y = boxTop + 12f;            // content inset inside the plate
+                    // Near-opaque plate: at 0.85 the frozen frame bled through the note text.
+                    GUI.color = new Color(0f, 0f, 0f, 0.98f);
+                    GUI.Box(new Rect(x - 12, boxTop, w + 24, NoteBoxH), GUIContent.none);
                     GUI.color = Color.white;
-                    GUI.Label(new Rect(x, y, w, 24), "⚑ What looks wrong?  (Enter = save · Esc = save blank)");
+                    // ASCII only -- the flag glyph and the middle dot rendered as tofu boxes.
+                    GUI.Label(new Rect(x, y, w, 24), "What looks wrong?  (Enter = save, Esc = save blank)");
                     GUI.SetNextControlName("flagNote");
                     _noteBuffer = GUI.TextField(new Rect(x, y + 28, w, 30), _noteBuffer, 240);
                     GUI.FocusControl("flagNote");
@@ -555,20 +578,25 @@ namespace DeNelle.Core.Diagnostics
                 catch { CommitFlag(); }
                 return;
             }
-            // (the dev guard opened at the top of OnGUI continues — note box + Flag button
-            // are one dev-only region; the confirmation toast below stays in all builds)
-            // RELIABLE capture trigger (owner: "no F8"). F8 is unreliable in the editor (Game-view
-            // focus / function-key interception) and ABSENT on mobile — and this game is mobile-first.
-            // A small always-visible IMGUI button flags a bug with ZERO input-system / focus dependency
-            // (tap on mobile, click in the editor). F8 stays as the desktop shortcut. Dev/editor builds
-            // only — never shown to players (BreakCaptureHarness itself ships, the button does not).
-            if (!_noteMode)
-            {
-                var prevFlag = GUI.color;
-                GUI.color = new Color(1f, 0.85f, 0.2f, 0.92f);
-                if (GUI.Button(new Rect(8f, Screen.height * 0.5f - 18f, 96f, 36f), "⚑ Flag")) FlagHere();
-                GUI.color = prevFlag;
-            }
+            // (the dev guard opened at the top of OnGUI is now the note box ALONE; the
+            // confirmation toast below stays in all builds)
+            //
+            // ---- WO-1010 D11 (owner ruling 2026-08-08, verbatim "Remove Fully") ----
+            // The always-on IMGUI "Flag" button that used to draw here (left edge, vertical
+            // centre) is DELETED. It was UI chrome, not instrumentation: it photobombed the
+            // build-mode screen (and every marketing/review capture) exactly the way the uGUI
+            // FLAG chip did before the 2026-08-07 ruling gated that one OFF by default. This
+            // was the survivor of that pass.
+            //
+            // NOTHING about capture changes. The F8 KEY above (Update -> FlagHere), the whole
+            // BreakCaptureHarness, break-log.jsonl, the screenshots and the [Flow:*] tail are
+            // untouched -- CLAUDE.md 12/14 make the instrumentation permanent.
+            //
+            // If you need an ON-SCREEN tap-to-flag affordance again (a touch device with no
+            // keyboard, or an editor session where the Game view swallows F8), turn on the
+            // sanctioned one instead of re-adding this: PlayerPrefs "ff.flagbutton" = 1 spawns
+            // DeNelle.Core.Dev.FlagCaptureButton, which fires the IDENTICAL FlagFromButton
+            // capture. One on-screen flag affordance, one gate -- do not grow a second.
 #endif
 
             // brief "flagged" confirmation toast
@@ -577,7 +605,8 @@ namespace DeNelle.Core.Diagnostics
             {
                 var prev = GUI.color;
                 GUI.color = new Color(1f, 0.85f, 0.2f, 0.95f);
-                GUI.Label(new Rect(18, 16, 260, 34), "  ⚑ flagged", new GUIStyle(GUI.skin.box) { fontSize = 20, fontStyle = FontStyle.Bold });
+                // ASCII only -- the leading flag glyph rendered as a tofu box.
+                GUI.Label(new Rect(18, 16, 260, 34), "  FLAGGED", new GUIStyle(GUI.skin.box) { fontSize = 20, fontStyle = FontStyle.Bold });
                 GUI.color = prev;
             }
             catch { }

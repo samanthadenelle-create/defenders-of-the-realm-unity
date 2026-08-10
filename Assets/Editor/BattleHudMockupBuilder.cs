@@ -39,7 +39,9 @@
 // so one missing asset never blanks the whole mockup (no-silent-failure rule).
 //
 // Output scene -> Assets/Scenes/BattleHUD_Mockup.unity
-// Output PNG   -> C:/EoA/UI_REVIEW/BATTLE_HUD_MOCKUP/battle_hud_diablo_orbs.png
+// Output PNG   -> <repoRoot>/UI_REVIEW/BATTLE_HUD_MOCKUP/battle_hud_diablo_orbs.png
+//                 (repo root resolved at runtime from Application.dataPath — it is
+//                  MACHINE-DEPENDENT, never hardcode C:\EoA / D:\eoa)
 //
 // MUST RUN IN A GRAPHICS UNITY SESSION (windowed / in-editor, NOT -nographics).
 // In-editor:  menu  Defenders/UI/Build Battle HUD Mockup
@@ -71,8 +73,13 @@ namespace DeNelle.Editor
         private const string KnightIcons = "Assets/Resources/Talents/knight";
 
         private const string ScenePath = "Assets/Scenes/BattleHUD_Mockup.unity";
-        private const string OutDir     = "C:/EoA/UI_REVIEW/BATTLE_HUD_MOCKUP/";
-        private const string OutPng     = OutDir + "battle_hud_diablo_orbs.png";
+        // Repo root is MACHINE-DEPENDENT (C:\EoA on one box, D:\eoa on another — owner ruling
+        // 2026-08-09, CLAUDE.md §0), so it is resolved at runtime from Unity's own anchor:
+        // Application.dataPath == "<repoRoot>/Assets". Relative destination unchanged.
+        private static string RepoRoot =>
+            Directory.GetParent(Application.dataPath).FullName.Replace('\\', '/');
+        private static string OutDir => RepoRoot + "/UI_REVIEW/BATTLE_HUD_MOCKUP/";
+        private static string OutPng => OutDir + "battle_hud_diablo_orbs.png";
 
         private const int DesignW = 1920;
         private const int DesignH = 1080;

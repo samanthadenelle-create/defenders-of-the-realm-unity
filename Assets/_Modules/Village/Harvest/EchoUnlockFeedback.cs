@@ -120,6 +120,11 @@ namespace DeNelle.Village
             if (_foundingPending && _buildWasActive && !buildActive) EvaluateFoundingTeach();
             _buildWasActive = buildActive;
 
+            // WO-1010 D18: the Echoes chip hides while the builder owns the screen. Driven
+            // from the SAME per-frame BuildModeState read above rather than a paired
+            // hide/restore call, deliberately -- see ApplyChipVisibility for why.
+            ApplyChipVisibility();
+
             // OWNER RCA 2026-08-01: the new holds (Onboarded / no-other-modal) have no edge
             // event to ride, so while the teach is pending re-evaluate at 1 Hz — the card
             // fires on the first quiet second after the tutorial closes.
@@ -228,14 +233,55 @@ namespace DeNelle.Village
             return s != null && s.SeenTutorials.TryGetValue(EchoService.FoundingTaughtKey, out bool seen) && seen;
         }
 
+        /// <summary>TRUE while the active scene is a gameplay scene (the scene half of the
+        /// chip's visibility rule). Cached so the per-frame build-mode half does not have to
+        /// re-read the scene name every frame.</summary>
+        private bool _sceneAllowsChip;
+
         /// <summary>Show the pip + Pets button only in gameplay scenes; hide them on the
         /// menu / front-door scenes so gameplay HUD chrome never leaks onto the title.</summary>
         private void ApplySceneVisibility(string sceneName)
         {
-            bool show = IsGameplayScene(sceneName);
-            if (_pipCanvas != null && _pipCanvas.activeSelf != show)
-                _pipCanvas.SetActive(show);
-            FlowTrace.Step("Echo", $"EchoUnlockFeedback pip/Pets visibility={(show ? "SHOWN" : "hidden")} for scene '{sceneName ?? "<null>"}'");
+            _sceneAllowsChip = IsGameplayScene(sceneName);
+            FlowTrace.Step("Echo", $"EchoUnlockFeedback scene gate={(_sceneAllowsChip ? "allows" : "blocks")} chip for scene '{sceneName ?? "<null>"}'");
+            ApplyChipVisibility();
+        }
+
+        // =====================================================================
+        // WO-1010 D18 (owner 2026-08-08, prompted "where is the value of adding echos on
+        // this screen" -- answer: there is none): the Echoes chip is town-HUD carryover and
+        // is HIDDEN for the whole of build mode. Nothing in the builder acts on the Echo
+        // count (Echo awakening is not reachable there, and the Echo-gated extra build slot
+        // explains itself on the Manage screen), while the chip's right-edge band is exactly
+        // where the lean placement rail now lives. This also dissolves D7 -- with the chip
+        // gone there is no reserved zone to negotiate; the right edge belongs to the rail.
+        //
+        // MECHANISM -- reused, not invented. This is the same shape the rest of the HUD uses
+        // to yield to the builder: POLL the Core seam DeNelle.Core.BuildModeState.IsActive
+        // (Village writes it in BuildModeController.Enter/Exit/OnDestroy; HUD + Village read
+        // it) and drive the surface from that, exactly as DeNelle.HUD.DialogueView does each
+        // frame for the dialogue plate. This file ALREADY polled that seam in Update for the
+        // founding-teach hold, so the read is free.
+        //
+        // WHY POLLED AND NOT A PAIRED HIDE/RESTORE CALL: a restore that has to be *called* is
+        // the part that breaks silently -- one exit route that forgets it leaves the chip gone
+        // FOREVER, which is worse than the chip being in the wrong place. Deriving visibility
+        // from the live flag every frame means EVERY exit route restores it by construction:
+        // the compact Done button and any other Exit() path (BuildModeController.cs:567), a
+        // controller torn down by a scene swap (:412, which clears the flag precisely so it
+        // cannot stick), and a domain-reload-free Play session (BuildModeState.ResetStatics).
+        // There is no code path that can hide this chip without also being the code path that
+        // shows it again.
+        // =====================================================================
+        /// <summary>Apply the chip's full visibility rule: a gameplay scene AND the builder
+        /// closed. Idempotent and cheap -- SetActive only fires on a real edge.</summary>
+        private void ApplyChipVisibility()
+        {
+            if (_pipCanvas == null) return;
+            bool show = _sceneAllowsChip && !DeNelle.Core.BuildModeState.IsActive;
+            if (_pipCanvas.activeSelf == show) return;      // no edge -> no work, no log spam
+            _pipCanvas.SetActive(show);
+            FlowTrace.Step("Echo", $"EchoUnlockFeedback pip/Pets visibility={(show ? "SHOWN" : "hidden")} (gameplayScene={_sceneAllowsChip}, buildMode={DeNelle.Core.BuildModeState.IsActive})");
         }
 
         /// <summary>FALSE for the menu / non-HUD scenes (Title, HeroSelect, PetSelect,
