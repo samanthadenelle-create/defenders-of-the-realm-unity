@@ -1,6 +1,50 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ RECONCILED 2026-08-10 (CLI): main line next free = **967**. **782–859 + 900–966 CONSUMED.**
+> ## ⚠ RECONCILED 2026-08-10 (CLI): main line next free = **969**. **782–859 + 900–968 CONSUMED.**
+> - **968** = **HIGHEST — Dungeon locomotion: mover ownership, dead camera basis, frozen camera** —
+>   owner F8 **2312** verbatim: *"This problem  gets marked as Highest on the board. Everything is wrong
+>   check locomotion"*, and F8 **2313** 22 s later, same scene: *"No camera movement"*. Both in
+>   `Dungeon_HealersCottage`. PROVEN FROM THE CAPTURE, not theorised — three seams, one shape:
+>   **(1)** the hero's mover FLIPS mid-session and nothing logs which is live — `[Flow:HeroLoco] vel=0.00`
+>   while the root moved (neutralize ON, `DungeonHero` moving; `dYaw=12.0` at 60 fps is exactly its
+>   720 deg/s cap) versus `[Flow:HeroDrift] vel=(0.000,5.000)` with live input, which is only reachable
+>   when the neutralize is OFF (`SetScriptedMove(zero)` -> `ReadMoveInput` at `HeroLocomotion.cs:1517`
+>   would make the `input.y > 0.5` gate impossible). **(2)** the animator is fed a COMPONENT, not the
+>   world — `ActorAnimator` is the sole `Speed` writer and takes `HeroLocomotion.Velocity` (`:1107`),
+>   dead by design in a dungeon, while `DungeonHero`'s competing write can be a permanent no-op because
+>   `_animator` is resolved ONCE in `Awake` (`DungeonHero.cs:138-149`), before the async body swap.
+>   **(3)** the movement basis is IDENTITY — `[Flow:HeroDrift] camYaw=0.0` on every line because that
+>   field is `SmartMobileCamera.CameraYaw` and **no `SmartMobileCamera` exists in the scene** (script
+>   GUID count 0), so the stick is world-absolute; `DungeonHero` meanwhile uses `Camera.main`. The
+>   camera itself is parked at `yaw=180` = `spawn.facingY 90` + `_headingYawOffset 90`, i.e. its
+>   Bind-time seat (authored yaw is 0, so it did move once and then stopped).
+>   ⚠ Carries a **MASKING WARNING**: fixing the basis alone while the camera is frozen inverts the
+>   stick 180 deg and reads as a NEW bug — camera + basis must ship together.
+>   ⚠ **INDEPENDENT of WO-966** (that is the constant 94.5 deg Mage MESH yaw, every scene); this is
+>   dungeon-only mover/basis ownership. They STACK — do not tune one against the other. The `dYaw`
+>   swings are `DeltaAngle(0, rootYaw)` and are a SYMPTOM of the dead basis, not a third facing defect.
+>   Instrumentation (3 permanent heartbeats: `[Flow:HeroOwner]`, `[Flow:DungeonMover]`,
+>   `[Flow:DungeonCam]`) is ALREADY LANDED — every remaining unknown is now one capture away.
+>   File `WORK_ORDER_968_dungeon_locomotion_ownership_and_camera_seam.md`. **READY TO IMPLEMENT.**
+>
+> *(banner bumped 968 → 969 in the SAME edit as the mint.)*
+> - **967** = **The dungeon action bar defaults to the KNIGHT kit (hardcoded literal)** — owner F8 2312,
+>   verbatim: *"in dungeon i have the knights action bar loading"* + *"as Thrain"*, playing a MAGE.
+>   SETTLED FROM SOURCE, no further capture needed: three hand-written `"knight"` string literals in
+>   `HudModelProducers.cs` (**:392** the reported bug, **:87** + **:139** latent). NOT an enum-zero
+>   default — `HeroClass`'s zero is Mage (`Enums.cs:49`) and `AbilityCatalog.DefaultClass` is `"mage"`.
+>   Dungeon-only because the composed hero is baked with HeroLocomotion + HeroBodySwapper only
+>   (`DungeonBaker.cs:1168-1187`) and `EnsureHeroCombatComponents` provisions nine components but never
+>   `HeroAbilities` — so `FindAnyObjectByType<HeroAbilities>()` is null and `:392` asserts Knight. The
+>   NAME stayed right (Thrain IS the Mage name, `en.json:145`) because `HeroVitalsProducer` has a sticky
+>   `_classId` cached from town across the `DontDestroyOnLoad` host and the ability producer has none.
+>   ⚠ This is a REPEAT of the F8 seq-642 defect already fixed in `GearLoadout.CurrentJob` — same
+>   persisted-state fallback, never applied to the second reader. ⚠ The seam is INSTRUMENTATION-SILENT
+>   (zero hits across Player.log + break-log for every ability/identity tag), which is half of why it
+>   cost a session; the WO ships the traces regardless of the fix.
+>   File `WORK_ORDER_967_dungeon_action_bar_defaults_to_knight.md`. **READY TO IMPLEMENT.**
+>
+> *(banner bumped 967 → 968 in the SAME edit as the mint.)*
 > - **966** = **Hero body faces the wrong way while running (Mage NW when running N)** — owner F8 2309.
 >   MEASURED, not guessed: `HeroFacingAudit.MeasureAll` reports Mage needs **4.5 deg** and Ranger **3.7 deg**
 >   to face +Z, while `HeroBodySwapper.cs:263` applies **-90** to every non-Knight body — a **94.5 deg**
@@ -572,6 +616,18 @@
 > That is the exact failure this file's own rule warns about — *"never a number copied into any other
 > doc"* — and the copy was **inside the numbering authority itself**. A duplicate cannot be kept honest
 > by discipline; it can only be removed. **The header is the sole source. Do not restore numbers here.**
+>
+> *(UI-seat bumped 1017 -> 1018 in the SAME edit as the WO-1017 mint — F8 seq=2314 ERROR: TOWN SYSTEMS
+> RUN INSIDE DUNGEONS. `TownActivityProbe.Poll` (`TownActivityProbe.cs:147`) FAILs with
+> `suspended=False policy=SuspendAndResume reason='none'` in `Dungeon_HealersCottage` — the scene-driven
+> suspension gate never fires for dungeon scenes, so town systems (incl. an Enemy in the active scene)
+> stay alive off-hub.)*
+>
+> *(UI-seat bumped 1016 -> 1017 in the SAME edit as the WO-1016 mint — **HIGHEST (owner F8 seq=2312)**:
+> hero locomotion is DEAD in dungeons. Captured proof: world position advances (Zone x=-28.0,z=-1.8 ->
+> x=-26.9,z=-4.7) while `[Flow:HeroLoco] vel=0.00 m/s` EVERY frame and the animator holds ONE clip
+> `mixamo.com(w=1.00)` with `[Flow:GaitF] speedP=0.00` — the hero SLIDES through the dungeon in idle.
+> Velocity source is not fed by whatever moves the hero in this scene.)*
 >
 > *(UI-seat bumped 1015 -> 1016 in the SAME edit as the WO-1015 mint — EQUIPMENT/paperdoll screen is
 > broken: ~40% dead space above the content, the hero PREVIEW BOX RENDERS EMPTY, every slot's label +

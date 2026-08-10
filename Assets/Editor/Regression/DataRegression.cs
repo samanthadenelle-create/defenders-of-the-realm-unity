@@ -649,6 +649,8 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "build-carousel-order suite", () => { if (!DeNelle.Editor.Regression.BuildCarouselTutorialOrderRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[build-carousel-order] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "founding-guide-wolf suite", () => { if (!DeNelle.Editor.Regression.FoundingGuideWolfBodyRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[founding-guide-wolf] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "hub-tree-aura suite", () => { if (!DeNelle.Editor.Regression.HubTreeAuraWithholdRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[hub-tree-aura] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "hud-class-fallback suite", () => { if (!DeNelle.Editor.Regression.HudHeroClassFallbackRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[hud-class-fallback] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "tutorial-guide-identity suite", () => { if (!DeNelle.Editor.Regression.TutorialGuideIdentityRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[tutorial-guide-identity] " + r); });
 
             // --- THE ORACLE THAT GUARDS THIS FILE: distinct markers, no unregistered
             // oracle, no gate script grepping a marker nobody emits. Registered LAST so
