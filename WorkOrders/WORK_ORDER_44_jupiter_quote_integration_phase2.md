@@ -1,6 +1,6 @@
 # WORK ORDER 44 — Jupiter Quote Integration (Phase 2)
 
-**Status:** READY TO IMPLEMENT
+**Status:** BLOCKED — PAUSED (owner ruling 2026-08-09: waiting on publish approval, then revisit)
 **Date:** 2026-05-26
 **Priority:** Medium
 **Scope:** Medium / Network dependency

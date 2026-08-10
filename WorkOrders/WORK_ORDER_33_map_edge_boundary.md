@@ -1,6 +1,6 @@
 # WORK ORDER 33 — Map Edge Boundary (Invisible Walls + Visual Barrier)
 
-**Status:** READY TO IMPLEMENT
+**Status:** CLOSED — STALE (owner ruling 2026-08-09: aged out in the due-diligence sweep; spec targets the pre-merged 300x300 exterior terrain, world since replaced by Main_Castle_Overworld merged world)
 **Date:** 2026-05-26
 **Author:** Bug triage — playtest screenshot
 **Priority:** High — hero can walk off the terrain edge into the black void; enemies
