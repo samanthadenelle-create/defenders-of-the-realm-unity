@@ -1,6 +1,6 @@
 # WORK ORDER 959 — Weapon flame aura shows ONLY while the sword is unsheathed
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE (implemented + gated 2026-08-10; RESULT filed; confirm the drawn/sheathed mapping named in the RESULT)
 **Minted:** 2026-08-10 (CLI seat, main line — banner bumped 959 → 960 in the same edit)
 **Silo:** Village/Hero gear aura — small gating change
 **Origin:** owner RULING, F8 seq 2297, 2026-08-10 11:28, verbatim: *"can we agree to only show the

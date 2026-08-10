@@ -1730,6 +1730,27 @@ namespace DeNelle.Village
         /// <summary>Current hold state (false = idle/lowered, true = combat/ready).</summary>
         public bool CombatActive => _combatActive;
 
+        /// <summary>
+        /// True while the weapon prop is DRAWN to the hand - the SAME predicate ApplyHoldPose
+        /// seats the props by (a live SHEATHED Seating-Editor edit pins the props to the back,
+        /// so it reads as not-drawn even mid-combat). WO-959 (owner ruling 2026-08-10): element
+        /// weapon auras (GearAura) render ONLY while this is true.
+        /// </summary>
+        public bool IsWeaponDrawn => _combatActive && !(_seatingEditActive && _seatEditSheathed);
+
+        /// <summary>
+        /// Raised ONCE per carry-state FLIP (true = drawn to the hand, false = sheathed on the
+        /// back socket), AFTER ApplyHoldPose has re-seated the props - so a subscriber that
+        /// measures the weapon prop (GearAura's blade solve, WO-959) sees it already parented at
+        /// its new seat. Never raised on the per-frame no-change re-assert (HeroLocomotion calls
+        /// SetCombatActive every frame; see CompensateParentScale's throttle note).
+        /// </summary>
+        public event System.Action<bool> OnCarryStateChanged;
+
+        // Last drawn value notified. Default false matches _combatActive's default - a fresh
+        // hero is sheathed, so the first ApplyHoldPose notifies only if it actually draws.
+        private bool _lastNotifiedDrawn;
+
         // Auto-mirror fallback: if no caller drives SetCombatActive, derive the combat
         // hold the same way HeroLocomotion does — the blade rides ready ONLY while a wave is
         // genuinely live (Countdown/Active), not merely because a WaveManager exists in the
@@ -1840,6 +1861,22 @@ namespace DeNelle.Village
                     offT.localPosition = _offHandDrawnLocalPos;
                     offT.localRotation = _offHandDrawnLocalRot;
                 }
+            }
+
+            // ── WO-959: notify carry-state subscribers the state FLIPPED (change-only - this
+            // method re-runs every frame via SetCombatActive's no-change path, so an unguarded
+            // invoke here would fire at frame rate). Raised AFTER the re-seat above so a
+            // subscriber measuring the prop (GearAura) sees it at its new parent. Guarded: a
+            // throwing subscriber must never break the equip/pose path it piggybacks on.
+            if (drawn != _lastNotifiedDrawn)
+            {
+                _lastNotifiedDrawn = drawn;
+                FlowTrace.Step("Equip", "carry state -> " + (drawn ? "DRAWN (hand)" : "SHEATHED (back)") +
+                    " on '" + name + "' - notifying carry-state subscribers (WO-959).");
+                var handler = OnCarryStateChanged;
+                if (handler != null)
+                    Guard.Try("Equip", "OnCarryStateChanged(" + (drawn ? "drawn" : "sheathed") + ")",
+                        () => handler(drawn));
             }
         }
 

@@ -57,6 +57,20 @@
 //    a red smoke." Both are properties of WHERE and HOW the recipe was seated, measured at source
 //    - see the constants block. The seat is now the measured BLADE, above the grip, emitting along
 //    its length, with the recipe's smoke / ground-shell layers muted while it is worn.
+//
+// ## WO-959 (owner ruling 2026-08-10, F8 seq 2297) - DRAWN-ONLY WEAPON AURAS
+//
+// "can we agree to only show the flames on the sword when unsheathed?" - an element weapon aura
+// renders ONLY while the weapon is DRAWN. "Unsheathed" maps to the REAL carry state at HEAD:
+// EquipmentController.IsWeaponDrawn (its _combatActive, the flag ApplyHoldPose physically seats
+// the prop by - hand when drawn, back socket when sheathed - driven per-frame by HeroLocomotion's
+// engagement signal / the BattleLock+wave auto-mirror). The gate is ONE clause in Refresh: the
+// weapon-seat WANT resolves to None while not drawn, so acquire-on-draw and release-on-sheathe
+// both ride the existing verified StartWeapon/StopWeapon paths and cover ALL element auras, not
+// just flame. The edge that triggers the re-resolve is EquipmentController.OnCarryStateChanged,
+// raised AFTER ApplyHoldPose re-seats the prop (so the blade measure sees it at its new parent);
+// the throttled Update reseat check is the belt-and-braces release if that event was missed.
+// The BODY seat (heal relics) is NOT gated - the ruling is about weapons.
 // =============================================================================
 
 using UnityEngine;
@@ -105,9 +119,10 @@ namespace DeNelle.Village
 
         // -- Blade seating (WO-930). The weapon prop EquipmentController builds under the hand is
         // named "EquipmentProp_Weapon" (EquipmentController.cs:69 `PropName`, used for BOTH the grip
-        // root and the mesh child). Found under the hand first; if the weapon has been re-seated
-        // elsewhere on the rig (sheathed to SheatheSocket_Back) the whole hero is searched, so a
-        // sheathed flame blade still smoulders on the player's back instead of on an empty hand.
+        // root and the mesh child). Found under the hand first, then anywhere on the rig (a prop
+        // caught mid-reparent by the carry-state re-seat). NOTE (WO-959): a SHEATHED weapon no
+        // longer carries its aura at all - the drawn-only gate in Refresh releases it - so the
+        // rig-wide search is measurement robustness, not a sheathed-smoulder feature any more.
         private const string WeaponPropName = "EquipmentProp_Weapon";
 
         // Fraction of the measured grip->tip span kept CLEAR of flame at the grip end. The owner's
@@ -195,6 +210,14 @@ namespace DeNelle.Village
         private GearLoadout _loadout;
         private float _nextReseatCheck;
 
+        // WO-959: the carry-state authority. EquipmentController owns drawn/sheathed (it is the
+        // component that physically seats the prop hand vs back socket), so its IsWeaponDrawn is
+        // the state and its OnCarryStateChanged is the edge that acquires/releases the weapon
+        // seat. Lazily bound: on the companion build path the controller can be added AFTER this
+        // component, so every drawn-state read retries the bind (see BindCarryState).
+        private EquipmentController _equipment;
+        private bool _carrySubscribed;
+
         /// <summary>True when the loadout WANTS a weapon aura that is not currently held (blade not
         /// attached yet, loop cap hit, socket missing) - the flag that keeps Update retrying.</summary>
         private bool _weaponPending;
@@ -215,6 +238,7 @@ namespace DeNelle.Village
         {
             _loadout = GetComponent<GearLoadout>();
             if (_loadout != null) _loadout.OnGearChanged += Refresh;
+            BindCarryState();
             SceneManager.sceneUnloaded += OnSceneUnloaded;
             Refresh();
         }
@@ -222,6 +246,8 @@ namespace DeNelle.Village
         private void OnDisable()
         {
             if (_loadout != null) _loadout.OnGearChanged -= Refresh;
+            if (_equipment != null && _carrySubscribed) _equipment.OnCarryStateChanged -= HandleCarryStateChanged;
+            _carrySubscribed = false;
             SceneManager.sceneUnloaded -= OnSceneUnloaded;
             StopAll("OnDisable");
         }
@@ -261,6 +287,16 @@ namespace DeNelle.Village
                     "pooled instance died - a loop parented to a destroyed transform plays forever at the " +
                     "world origin and burns a loop slot. Re-resolving on the next equip change.");
                 StopWeapon("socket lost");
+                return;
+            }
+
+            // WO-959 belt-and-braces: OnCarryStateChanged is the primary release edge, but if it
+            // was missed (the bind raced the first draw, or a body swap re-created the
+            // EquipmentController under a live subscription) this throttled check still puts a
+            // sheathed weapon's flame out within ReseatCheckSeconds. Same verified StopWeapon.
+            if (!IsWeaponDrawn())
+            {
+                StopWeapon("weapon sheathed (WO-959 reseat check)");
                 return;
             }
 
@@ -309,17 +345,33 @@ namespace DeNelle.Village
             string  weaponWhy;
             var weapon = _loadout.EquippedWeapon;
             if (GearAuraMap.TryWeaponAura(weapon, out VFXType wType, out weaponWhy)) wantWeapon = wType;
+            bool loadoutWantsWeapon = wantWeapon != VFXType.None;
+
+            // WO-959 (owner ruling, F8 seq 2297): an element aura renders ONLY while the weapon is
+            // DRAWN. Sheathed on the back = no flames, whatever the loadout grants. ONE gate here
+            // covers ALL element auras, because every weapon-seat aura resolves through this want -
+            // and the sheathed release below is the same verified StopWeapon an unequip uses.
+            if (wantWeapon != VFXType.None && !IsWeaponDrawn())
+            {
+                wantWeapon = VFXType.None;
+                weaponWhy  = "weapon sheathed - element auras render only while drawn (WO-959)";
+            }
 
             if (wantWeapon != _weaponType || (_weaponHandle == null) != (wantWeapon == VFXType.None))
             {
-                StopWeapon("equip change");
+                // The why doubles as the release reason when the resolve came up empty, so the
+                // trace names the real cause (sheathed / no brand) instead of a generic label.
+                StopWeapon(wantWeapon == VFXType.None ? weaponWhy : "equip change");
                 if (wantWeapon != VFXType.None) StartWeapon(wantWeapon, weapon, weaponWhy);
                 else FlowTrace.Step("GearAura", "weapon aura: none (" + weaponWhy + ")");
             }
 
             // Computed OUTSIDE the change guard, so a seat that is wanted-and-still-empty stays
-            // pending even on a Refresh that changed nothing.
-            _weaponPending = wantWeapon != VFXType.None && _weaponHandle == null;
+            // pending even on a Refresh that changed nothing. Deliberately the PRE-GATE want
+            // (WO-959): while the loadout grants an aura that is withheld - blade not attached
+            // yet, loop cap, or SHEATHED - the Update retry keeps ticking, so the flame appears
+            // within PendingRetrySeconds of a draw even if the carry-state event was missed.
+            _weaponPending = loadoutWantsWeapon && _weaponHandle == null;
 
             // -- Seat 2: body ---------------------------------------------------------
             VFXType wantBody = VFXType.None;
@@ -333,6 +385,67 @@ namespace DeNelle.Village
                 if (wantBody != VFXType.None) StartBody(wantBody, bodyWhy);
                 else FlowTrace.Step("GearAura", "body aura: none (" + bodyWhy + ")");
             }
+        }
+
+        // =====================================================================
+        //  WO-959 - the drawn/sheathed gate
+        // =====================================================================
+
+        /// <summary>
+        /// Resolve + subscribe the carry-state authority (idempotent). Separate from the
+        /// GearLoadout subscription because EquipmentController can be added to the hero AFTER
+        /// this component (companion build order adds the controller first, the hero swapper
+        /// last) - so every drawn-state read retries the bind rather than assuming OnEnable won.
+        /// </summary>
+        private void BindCarryState()
+        {
+            if (_equipment == null)
+            {
+                _equipment = GetComponent<EquipmentController>();
+                _carrySubscribed = false;   // a destroyed controller took the old subscription with it
+            }
+            if (_equipment != null && !_carrySubscribed)
+            {
+                _equipment.OnCarryStateChanged += HandleCarryStateChanged;
+                _carrySubscribed = true;
+                FlowTrace.Step("GearAura",
+                    "bound to EquipmentController.OnCarryStateChanged (WO-959: weapon auras follow drawn/sheathed).");
+            }
+        }
+
+        /// <summary>
+        /// Carry-state edge (WO-959): acquire the weapon-seat aura on draw, release it on
+        /// sheathe - both through the ONE Refresh resolution path, so the release is the same
+        /// verified StopWeapon every other exit uses. Raised by EquipmentController.ApplyHoldPose
+        /// AFTER the prop is re-seated, so the blade measure on acquire sees the prop in hand.
+        /// </summary>
+        private void HandleCarryStateChanged(bool drawn)
+        {
+            FlowTrace.Step("GearAura", "carry state -> " + (drawn ? "DRAWN" : "SHEATHED") +
+                " - re-resolving the weapon seat (WO-959: element auras render only on a drawn weapon).");
+            Refresh();
+        }
+
+        /// <summary>
+        /// The drawn/sheathed truth (WO-959). EquipmentController.IsWeaponDrawn is the SAME
+        /// predicate ApplyHoldPose physically seats the prop by (hand when drawn, back socket
+        /// when sheathed; its state follows BattleLock / live-wave engagement via HeroLocomotion's
+        /// per-frame SetCombatActive, or the auto-mirror when nothing drives it). With no
+        /// EquipmentController on this rig there IS no sheathe - the prop never leaves the hand -
+        /// so the honest answer is drawn: fail-VISIBLE (the pre-WO-959 always-on behaviour),
+        /// never a silently withheld aura.
+        /// </summary>
+        private bool IsWeaponDrawn()
+        {
+            BindCarryState();
+            if (_equipment == null)
+            {
+                FlowTrace.Throttle("GearAura", "no-equip-carry", 30f,
+                    "no EquipmentController on this hero - no sheathe state exists, so the weapon " +
+                    "aura is treated as DRAWN (fail-visible; the WO-959 gate is inert on this rig).");
+                return true;
+            }
+            return _equipment.IsWeaponDrawn;
         }
 
         // =====================================================================
