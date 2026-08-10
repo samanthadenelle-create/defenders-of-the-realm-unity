@@ -1,0 +1,138 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>Tutorial Flow Redesign — 2026 FTUE Wireframes</title>
+<style>
+ body{background:#101115;color:#ccc;font:15px/1.55 'Segoe UI',sans-serif;margin:0;padding:26px;max-width:1060px}
+ h1{color:#e0b341;font-size:23px;margin:0 0 4px} h2{color:#e0b341;font-size:18px;margin:34px 0 6px}
+ .sub{color:#999;margin-bottom:10px;font-size:13.5px}
+ .why{background:#1a1c22;border-left:3px solid #e0b341;padding:10px 14px;margin:12px 0;border-radius:0 8px 8px 0;font-size:14px}
+ .frame{position:relative;width:940px;height:420px;background:#3a4438;border:8px solid #23242a;border-radius:18px;overflow:hidden;margin:8px 0 4px}
+ .dim{position:absolute;inset:0;background:#000000a8}
+ .hole{position:absolute;border-radius:14px;box-shadow:0 0 0 2000px #000000a8;background:transparent;border:2px solid #e0b34188}
+ .holeglow{position:absolute;border-radius:14px;border:2px solid #e0b341;filter:blur(3px);opacity:.7}
+ .wire{position:absolute;background:#22242b;border:1.5px solid #6a6d78;border-radius:8px;color:#cfd2da;
+       display:flex;align-items:center;justify-content:center;font-size:12.5px}
+ .wire.gold{border-color:#e0b341;color:#e0b341}
+ .lab{position:absolute;color:#e0b341;font-size:11.5px;white-space:nowrap} .lab:before{content:"— "}
+ .labL:after{content:" —"} .labL:before{content:""} .labL{text-align:right}
+ .chev{position:absolute;color:#e0b341;font-size:26px;text-shadow:0 0 12px #e0b341aa;animation:none}
+ .beads{letter-spacing:4px;color:#e0b341;font-size:13px}
+ .portrait{position:absolute;width:64px;height:64px;border-radius:50%;background:#2a2c33;border:2px solid #e0b341;
+           display:flex;align-items:center;justify-content:center;font-size:28px}
+ .speech{position:absolute;background:#15161acc;border:1px solid #3a3b42;border-radius:12px;color:#ddd;padding:8px 14px;font-size:13px;max-width:420px}
+ .ghostw{position:absolute;width:64px;height:92px;background:#7fe08a33;border:2px solid #7fe08a;border-radius:8px}
+ .finger{position:absolute;font-size:30px;filter:drop-shadow(0 2px 6px #000c)}
+ .arc{position:absolute;border:2px dashed #ffffff88;border-radius:50%;border-bottom:none;border-left:none;transform:rotate(20deg)}
+ table{border-collapse:collapse;margin:12px 0;width:100%} th,td{border:1px solid #33343a;padding:7px 11px;text-align:left;font-size:13.5px}
+ th{background:#1a1c22;color:#e0b341}
+ .flow{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+ .beat{background:#1a1c22;border:1px solid #3a3b42;border-radius:10px;padding:8px 12px;font-size:12.5px;color:#ccc}
+ .beat b{color:#e0b341} .beat.ctx{border-style:dashed;color:#8fa8c9}
+ .arrow{color:#666;align-self:center}
+</style></head><body>
+
+<h1>Tutorial Flow Redesign — premium FTUE, wireframes + flow</h1>
+<div class="sub">Owner brief: flow feels amateurish; "childish buttons" highlighting the next action; verbiage is fine.
+Benchmark: 2026 FTUE practice (Supercell-class). The DATA-DRIVEN BONES STAY — tutorial-steps.json, TutorialFlow,
+TutorialSignals, the Onboarded gate — this redesigns the PRESENTATION + PACING layer only.</div>
+
+<div class="why"><b>The four principles</b> (from the research, each fixing a named complaint):
+<b>1. One focus</b> — a dim mask with ONE lit cutout; the rest of the screen is dark and input-blocked (kills "what do I tap?").
+<b>2. One elegant cue</b> — a slim gold chevron that settles on the target, or a ghost-finger for gestures (replaces the childish boxed markers).
+<b>3. One line of story</b> — the Echo speaks one line per beat via the EXISTING dialogue portrait (teaching stays diegetic; no Next/Next cards).
+<b>4. One objective</b> — a thin bottom strip with progress beads (replaces the fat top banner + its F8 collision, D2).</div>
+
+<div class="why"><b>The GUIDE is a rotating HERO, never a placeholder and never yourself</b> (owner ruling
+2026-08-08): the KayKit stand-in scripted as "Sylas" is retired. The guide = the NEXT hero in the roster:
+<code>guideClass = (playerHeroClass + 1) % 4</code> over the existing <code>HeroClass</code> enum
+(Mage/Knight/Ranger/Cleric -> canon names Grom/Sylas/Thrain/Elara from en.json). Pick Grom and Sylas guides
+you; pick Elara and it wraps to the first. The guide's real rig walks INTO frame and stays a physical
+presence through the flow — every line is spoken by them, portrait + name from the existing dialogue kit.</div>
+
+<h2>Frame 1 — "TAP" beat: spotlight + chevron + one line</h2>
+<div class="frame">
+ <div class="dim"></div>
+ <div class="hole" style="right:16px;top:120px;width:128px;height:110px"></div>
+ <div class="wire gold" style="right:28px;top:152px;width:96px;height:32px;z-index:2">Defense</div>
+ <div class="wire" style="right:28px;top:190px;width:96px;height:32px;z-index:2;opacity:.75">Castle Structs</div>
+ <div class="chev" style="right:154px;top:150px">&#10095;</div>
+ <div class="lab labL" style="right:190px;top:158px">slim chevron settles on target — no boxes, no bounce-spam</div>
+ <div class="portrait" style="left:16px;bottom:52px">&#128100;</div>
+ <div class="speech" style="left:92px;bottom:60px">"The walls will not hold themselves, Keeper. Raise a tower." — <i>guide hero (rotation rule)</i></div>
+ <div class="lab" style="left:96px;bottom:36px">the GUIDE HERO speaks — same dialogue portrait kit as every NPC; ONE line, no card, no Next</div>
+ <div class="wire" style="left:50%;transform:translateX(-50%);bottom:6px;width:420px;height:26px;font-size:12px">
+   Raise an Archer Tower &nbsp;&nbsp;<span class="beads">&#9679;&#9679;&#9675;&#9675;&#9675;</span></div>
+ <div class="lab labL" style="right:20px;bottom:12px">Skip — one small corner control, confirm once</div>
+ <div class="wire" style="right:16px;bottom:40px;width:64px;height:26px;font-size:11px;opacity:.7">Skip</div>
+</div>
+<div class="sub">Everything outside the cutout is dimmed AND raycast-blocked; the cutout is the only живое spot.
+The chevron is ONE sprite with a slow 6px settle animation — premium games move ONE thing, slowly, not five things fast.</div>
+
+<h2>Frame 2 — "GESTURE" beat: ghost finger shows the drag, nothing is said</h2>
+<div class="frame">
+ <div class="dim" style="background:#00000055"></div>
+ <div class="ghostw" style="left:420px;top:170px"></div>
+ <div class="arc" style="left:330px;top:210px;width:200px;height:120px"></div>
+ <div class="finger" style="left:310px;top:290px">&#9757;</div>
+ <div class="lab" style="left:350px;top:330px">ghost finger replays the drag arc (2s loop, fades after first successful drag)</div>
+ <div class="wire" style="left:50%;transform:translateX(-50%);bottom:6px;width:420px;height:26px;font-size:12px">
+   Drag the tower to a spot you like &nbsp;&nbsp;<span class="beads">&#9679;&#9679;&#9679;&#9675;&#9675;</span></div>
+ <div class="lab" style="left:640px;top:180px">field stays 55% lit — gestures need the world visible</div>
+</div>
+
+<h2>Frame 3 — completion beat: quiet celebration, next objective arms</h2>
+<div class="frame">
+ <div class="wire" style="left:420px;top:160px;width:70px;height:100px;border-color:#7fe08a;color:#7fe08a">Tower&#10003;</div>
+ <div class="lab" style="left:500px;top:180px">small VFX pulse + SFX (existing facade) — 0.8s, no modal, no confetti wall</div>
+ <div class="wire" style="left:50%;transform:translateX(-50%);bottom:6px;width:420px;height:26px;font-size:12px">
+   Station your Warden &nbsp;&nbsp;<span class="beads">&#9679;&#9679;&#9679;&#9679;&#9675;</span></div>
+ <div class="lab" style="left:66%;bottom:36px">beads tick forward — the strip IS the progress UI</div>
+</div>
+
+<h2>Frame 4 — contextual one-shot (weeks later): same language, just-in-time</h2>
+<div class="frame">
+ <div class="dim" style="background:#00000070"></div>
+ <div class="hole" style="left:380px;top:120px;width:200px;height:150px"></div>
+ <div class="wire" style="left:410px;top:150px;width:140px;height:90px;z-index:2">Manage screen<br>(first open)</div>
+ <div class="portrait" style="left:16px;bottom:52px">&#128100;</div>
+ <div class="speech" style="left:92px;bottom:60px">"Three lines of work, one ledger. Watch the queues, Keeper." — <i>guide hero</i></div>
+ <div class="lab" style="left:96px;bottom:36px">contextual steps (oneShot:true) reuse the SAME kit — one visual language forever</div>
+</div>
+
+<h2>The flow — the owner's dynamic arc ("walk over here... grab this, move it... okay, great — let's move on")</h2>
+<div class="flow">
+ <span class="beat"><b>0</b> Cold open cinematic (exists)</span><span class="arrow">&#8594;</span>
+ <span class="beat"><b>1</b> ARRIVE — the guide hero WALKS INTO frame by the Heart; one line of welcome</span><span class="arrow">&#8594;</span>
+ <span class="beat"><b>2</b> WALK — "come with me" — follow the guide to the gate (teaches joystick/camera by DOING, no text about controls)</span><span class="arrow">&#8594;</span>
+ <span class="beat"><b>3</b> BUILD ONE — one economy piece (spotlight Build, ghost-finger the drag) — "grab this... move it over here"</span><span class="arrow">&#8594;</span>
+ <span class="beat"><b>4</b> ACK — guide: "Good. You got it." (0.8s beat — the acknowledgment IS the pacing)</span><span class="arrow">&#8594;</span>
+ <span class="beat"><b>5</b> ONE CANNON — Defense tab, place ONE tower near the gate</span><span class="arrow">&#8594;</span>
+ <span class="beat"><b>6</b> TIMERS — spotlight the build timer: "work takes time — watch the ledger" (one line, no lecture)</span><span class="arrow">&#8594;</span>
+ <span class="beat"><b>7</b> ENEMIES AT THE GATE — a small scripted band hits the gate; player + tower repel it (the payoff)</span><span class="arrow">&#8594;</span>
+ <span class="beat"><b>8</b> WIN — quiet celebration; guide hands off: "The rest is yours, Keeper." Onboarded=true; HUD fades in</span>
+</div>
+<div class="sub">NOT build-the-whole-village. One piece, one cannon, one idea about time, one fight. Each action beat ends
+with a guide acknowledgment before the next arms — conversational cadence, never click-click-click-done.</div>
+<div class="flow">
+ <span class="beat ctx">contextual, later: first Manage open</span>
+ <span class="beat ctx">first raid</span>
+ <span class="beat ctx">first Echo awakening (teaching conversation — canon)</span>
+ <span class="beat ctx">first dungeon</span>
+</div>
+
+<h2>Retire vs keep</h2>
+<table>
+ <tr><th>Today</th><th>Fate</th></tr>
+ <tr><td>Fat top objective banner + "(0/1)" counter + inline "Skip &gt;"</td><td><b>RETIRE</b> → thin bottom objective strip + beads; counter gone (beads carry it)</td></tr>
+ <tr><td>Yellow boxed icon markers over targets ("childish buttons")</td><td><b>RETIRE</b> → dim mask + cutout + ONE chevron / ghost finger</td></tr>
+ <tr><td>Big "Skip Tutorial" button + second skip</td><td><b>RETIRE</b> → one small corner Skip, confirm-once, checkpoints resume</td></tr>
+ <tr><td>OnboardingFlow coach-mark CARDS (Welcome/Heart/Field beats, Next-Next)</td><td><b>CONVERT</b> → Echo one-liners over a 4s camera moment (no cards, no Next)</td></tr>
+ <tr><td>tutorial-steps.json + TutorialFlow + TutorialSignals + Onboarded gate + grants</td><td><b>KEEP</b> — the bones are right; only the skin changes</td></tr>
+ <tr><td>UiSpotlight</td><td><b>UPGRADE</b> → soft-edged cutout + input mask (raycast-block outside)</td></tr>
+ <tr><td>Dialogue system + portraits</td><td><b>REUSE</b> — the Echo is the one teaching voice (canon)</td></tr>
+</table>
+
+<div class="why"><b>Why this reads premium:</b> one moving element at a time, slow easing, dark-glass restraint
+(the obsidian kit already has the palette), the story character does the talking, and the player is DOING
+something every beat — the four things the research keeps finding in top-grossing FTUEs. Nothing here is a
+new system: it is a skin + pacing pass over the V2 tutorial's existing data and signals.</div>
+
+</body></html>
