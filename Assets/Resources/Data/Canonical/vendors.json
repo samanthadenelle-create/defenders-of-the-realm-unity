@@ -10,9 +10,10 @@
     "onlyEquippable": "WO-860. true = HIDE rows the shopper cannot equip right now (wrong class / under-level) instead of listing them LOCKED. false/absent = the pre-860 aspiration shelf. Reuses the EXISTING equip gate (WeaponFitsClass / ArmorFitsClass / req.level) as the show-filter - the gate is correct, only its consequence changes.",
     "perLevelCap": "WO-860. Max weapon/armor rows stocked PER REQUIRED LEVEL (owner: 'only 2 options on each new level'). 0/absent = uncapped. WHICH rows survive is a documented deterministic sort in VendorStockResolver.EmitCapped: bucket by req.level, then power DESCENDING (damageMult for weapons, defense for armor), tie-broken by id ORDINAL ASCENDING so the pick never depends on catalog row order, locale or device.",
     "excludeIdPrefixes": "WO-860. Item-id prefixes this vendor never stocks (case-insensitive). 'blink_' keeps the ~65 art-pack placeholder rows off the player-facing shelf WITHOUT editing the catalogs (they stay ownable/equippable). Empty/absent = stock everything.",
-    "footerLine": "WO-860. The 'come back after leveling for new stock' line rendered UNDER a NON-EMPTY capped list - the case a player hits most once perLevelCap is on (they have wares; better ones unlock later). Distinct from emptyLine, which covers 0 results. Absent = render no footer."
+    "footerLine": "WO-860. The 'come back after leveling for new stock' line rendered UNDER a NON-EMPTY capped list - the case a player hits most once perLevelCap is on (they have wares; better ones unlock later). Distinct from emptyLine, which covers 0 results. Absent = render no footer.",
+    "lockedPreviewLevels": "WO-960 (owner: 'display as greyed out with lvl and only show ones in the next 5 levels'). N > 0 = a class-appropriate row locked ONLY by level still SHOWS, greyed + non-purchasable with its 'Lv N' requirement, when req.level is within the shopper's next N levels (req in (level, level+N]); deeper future rows stay hidden. Under onlyEquippable this RE-ADMITS the near-future ladder slice; on the aspiration shelf it CLAMPS level-locked rows to the same window. 0/absent = pre-960 behaviour exactly."
   },
-  "version": 1,
+  "version": 2,
   "vendors": [
     {
       "id": "market",
@@ -54,6 +55,7 @@
       "maxReqLevel": 0,
       "onlyEquippable": true,
       "perLevelCap": 2,
+      "lockedPreviewLevels": 5,
       "excludeIdPrefixes": [
         "blink_"
       ],

@@ -1,6 +1,6 @@
 # WORK ORDER 960 — Armor store: show the ladder — locked items greyed with their level, next-5-levels window
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE (implemented + gated 2026-08-10; RESULT filed; shelf-depth pin open)
 **Minted:** 2026-08-10 (CLI seat, main line — banner bumped 960 → 961 in the same edit)
 **Silo:** Village shop/gear UI + gear unlock derivation
 **Origin:** owner RULING 2026-08-10, verbatim: *"we need more armor, only 3 options in store, if the

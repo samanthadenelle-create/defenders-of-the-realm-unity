@@ -27,6 +27,13 @@
 //   perLevelCap       — at most N rows per REQUIRED LEVEL (see EmitCapped's sort).
 //   excludeIdPrefixes — drop placeholder bands ("blink_") without touching catalogs.
 //   footerLine        — the "come back after you level" cue under a capped list.
+//
+// WO-960 — THE LOCKED PREVIEW WINDOW (owner 2026-08-10: "display as greyed out with
+// lvl and only show ones in the next 5 levels"). A fifth DATA knob, lockedPreviewLevels
+// (armorer=5): a class-appropriate row locked ONLY by level ships LOCKED ("Requires
+// Lv N") when req.level is in (shopperLevel, shopperLevel+N] — under onlyEquippable
+// this re-admits the near-future ladder slice; beyond the window the row hides on
+// every shelf mode. 0/absent = pre-960 exactly.
 //   • consumables    — ConsumableCatalog (Market's potions/food/tents).
 //   • materials/gems — MaterialCatalog (gems = the crystal band, Jeweler stock).
 //   • rings/amulets  — GearCatalog.Accessories by slot (the v26 equip slots).
@@ -255,6 +262,9 @@ namespace DeNelle.Village.Hero
             bool onlyEquippable = vendor != null && vendor.OnlyEquippable;
             int perLevelCap = vendor != null ? vendor.PerLevelCap : 0;                 // 0 = uncapped
             var excludePrefixes = vendor != null ? vendor.ExcludeIdPrefixes : null;    // e.g. ["blink_"]
+            // WO-960: the locked PREVIEW window ("greyed out with lvl, only the next 5 levels").
+            // 0 = pre-960 behaviour on every shelf mode.
+            int lockedPreviewLevels = vendor != null ? vendor.LockedPreviewLevels : 0;
 
             foreach (var rawCat in categories)
             {
@@ -278,10 +288,18 @@ namespace DeNelle.Village.Hero
                             if (IsExcludedId(w.id, excludePrefixes)) return;
                             bool classOk = string.IsNullOrEmpty(job) || GearCatalog.WeaponFitsClass(w, job);
                             bool levelOk = MeetsLevel(w.req, level);
+                            // WO-960: a class-appropriate row locked ONLY by level is previewable
+                            // (LOCKED, not hidden) when req sits within (level, level+window].
+                            bool previewLocked = classOk && !levelOk &&
+                                InPreviewWindow(w.req, level, lockedPreviewLevels);
+                            // Beyond the window the row hides on EVERY shelf mode (ladder without
+                            // a wall of lockeds). window==0 = pre-960: this branch never fires.
+                            if (lockedPreviewLevels > 0 && classOk && !levelOk && !previewLocked) return;
                             // WO-860 B1: HIDE what the shopper cannot equip, instead of a locked row.
                             // Reuses the EXISTING equip gate (WeaponFitsClass/MeetsLevel) as the
                             // show-filter — the gate is correct; only its consequence changes.
-                            if (onlyEquippable && !(classOk && levelOk)) return;
+                            // WO-960 carves out the preview window: those rows come back LOCKED.
+                            if (onlyEquippable && !(classOk && levelOk) && !previewLocked) return;
                             picked.Add(new ShelfPick(w.id, ReqLevel(w.req), w.damageMult,
                                 classOk && levelOk, LockReason(classOk, levelOk, Cap(w.job), w.req)));
                         });
@@ -301,7 +319,13 @@ namespace DeNelle.Village.Hero
                             if (IsExcludedId(a.id, excludePrefixes)) return;
                             bool classOk = GearCatalog.ArmorFitsClass(a, job);
                             bool levelOk = MeetsLevel(a.req, level);
-                            if (onlyEquippable && !(classOk && levelOk)) return;
+                            // WO-960 (see the weapon band): the locked preview window re-admits
+                            // class-appropriate level-locked rows within (level, level+window],
+                            // and hides level-locked rows beyond it on every shelf mode.
+                            bool previewLocked = classOk && !levelOk &&
+                                InPreviewWindow(a.req, level, lockedPreviewLevels);
+                            if (lockedPreviewLevels > 0 && classOk && !levelOk && !previewLocked) return;
+                            if (onlyEquippable && !(classOk && levelOk) && !previewLocked) return;
                             string wt = (a.weight ?? string.Empty).Trim();
                             picked.Add(new ShelfPick(a.id, ReqLevel(a.req), a.defense,
                                 classOk && levelOk,
@@ -373,13 +397,20 @@ namespace DeNelle.Village.Hero
             }
 
             // ── §12: trace every resolve; never a silent blank ──────────────────
+            // WO-960: count the LOCKED rows that actually shipped (post-cap) so the trace
+            // proves the preview window's output, not its candidates.
+            int lockedShipped = 0;
+            foreach (var ware in result)
+                if (!ware.Eligible) lockedShipped++;
             string vendorId = vendor != null ? vendor.Id : (vendorContext ?? "<none>");
             string queryStr = $"cats=[{string.Join(",", categories)}] roster=[{string.Join(",", roster)}]" +
                               $" classFilter={(rosterFilter ? "roster" : "none")} maxReqLevel={levelCap}" +
                               $" onlyEquippable={onlyEquippable} perLevelCap={perLevelCap}" +
+                              $" lockedPreviewLevels={lockedPreviewLevels}" +
                               $" exclude=[{(excludePrefixes != null ? string.Join(",", excludePrefixes) : string.Empty)}]" +
                               $" job='{job}' lvl={level} layout={LayoutFor(vendorContext)}";
-            FlowTrace.Step("Vendor", $"{vendorId} resolved {result.Count} items (query: {queryStr})");
+            FlowTrace.Step("Vendor",
+                $"{vendorId} resolved {result.Count} items ({lockedShipped} locked) (query: {queryStr})");
             if (result.Count == 0)
                 FlowTrace.Warn("Vendor",
                     $"{vendorId} resolved EMPTY - authored emptyLine shown: \"{EmptyLineFor(vendorContext)}\"");
@@ -534,6 +565,12 @@ namespace DeNelle.Village.Hero
             if ((kinds & GearKind.Craftable) != 0) cats.Add("craftable");
             return cats;
         }
+
+        /// <summary>WO-960: true when a level-locked row sits inside the vendor's locked
+        /// PREVIEW window — req.level in (level, level+previewLevels]. False when the
+        /// window is off (0) so the caller's pre-960 paths are untouched.</summary>
+        private static bool InPreviewWindow(GearReq req, int level, int previewLevels) =>
+            previewLevels > 0 && ReqLevel(req) > level && ReqLevel(req) <= level + previewLevels;
 
         private static bool MeetsLevel(GearReq req, int level) => req == null || level >= req.level;
         private static int ReqLevel(GearReq req) => req != null ? req.level : 1;

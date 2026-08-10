@@ -879,7 +879,7 @@ namespace DeNelle.Village.Hero
             if (!eligible)
             {
                 string reason = string.IsNullOrEmpty(lockReason) ? "Locked" : lockReason;
-                _rowActions[id] = () => { Status = name + " - " + reason + "."; };
+                _rowActions[id] = () => { Status = LockedTapLine(name, reason); };
                 _items.Add(new ItemVM(id, name, IconRoleWeapon, id, cost.Coins, "gold",
                     affordable: false, w.rarity, equipped: false, locked: true, lockReason: reason));
                 return;
@@ -910,7 +910,7 @@ namespace DeNelle.Village.Hero
             if (!eligible)
             {
                 string reason = string.IsNullOrEmpty(lockReason) ? "Locked" : lockReason;
-                _rowActions[id] = () => { Status = name + " - " + reason + "."; };
+                _rowActions[id] = () => { Status = LockedTapLine(name, reason); };
                 _items.Add(new ItemVM(id, name, IconRoleArmor, id, cost.Coins, "gold",
                     affordable: false, a.rarity, equipped: false, locked: true, lockReason: reason));
                 return;
@@ -922,6 +922,21 @@ namespace DeNelle.Village.Hero
             _items.Add(new ItemVM(id, name, IconRoleArmor, id, owned ? 0 : cost.Coins, "gold",
                 affordable, a.rarity, equipped: equipped, locked: false,
                 level: owned ? GearLevel(id) : 1));
+        }
+
+        /// <summary>
+        /// WO-960 ruling 4: a tap on a LOCKED card explains the unlock in plain words.
+        /// Level locks read "unlocks at Lv N" (owner-verbatim phrasing); any other lock
+        /// (e.g. "Class: Ranger" — a hard never, not a later) keeps the reason as-is.
+        /// The LockReason string itself stays "Requires Lv N" because the View's card
+        /// hint shortener and the disabled buy-button label both key on that prefix.
+        /// </summary>
+        private static string LockedTapLine(string name, string reason)
+        {
+            const string prefix = "Requires Lv ";
+            return reason != null && reason.StartsWith(prefix, StringComparison.Ordinal)
+                ? name + " unlocks at Lv " + reason.Substring(prefix.Length) + "."
+                : name + " - " + reason + ".";
         }
 
         // -- BUY - a CRAFTABLE recipe row (crafting-as-shoppable). Surfaced when the vendor's

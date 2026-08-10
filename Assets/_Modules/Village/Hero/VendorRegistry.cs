@@ -66,6 +66,16 @@ namespace DeNelle.Village
         [JsonProperty("perLevelCap")] public int PerLevelCap;
 
         /// <summary>
+        /// WO-960 locked PREVIEW window (owner: "display as greyed out with lvl and only show
+        /// ones in the next 5 levels"). N &gt; 0 = a class-appropriate row locked ONLY by level
+        /// still shows LOCKED when its req.level is within the shopper's next N levels
+        /// (req in (level, level+N]); deeper future rows stay hidden. Under onlyEquippable this
+        /// RE-ADMITS the near-future slice of the ladder; on the aspiration shelf it CLAMPS the
+        /// level-locked rows to the same window. 0/absent = pre-960 behaviour exactly.
+        /// </summary>
+        [JsonProperty("lockedPreviewLevels")] public int LockedPreviewLevels;
+
+        /// <summary>
         /// Item-id prefixes this vendor never stocks (case-insensitive). Used to keep the
         /// ~65 "blink_*" placeholder rows — art-pack filler that is real in the catalog but
         /// not authored content — off the player-facing shelf without editing the catalogs
