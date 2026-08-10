@@ -4,6 +4,13 @@
 
 # WORK ORDER 917 — HUD residual (WO-899 §4): dodge icon + empty skill-slot placeholder
 
+> **⚠ OWNER FELT-EVIDENCE 2026-08-10 (F8 seq 2286, dg_ember_deep, screenshot
+> `flag_20260810-150215_11.png`):** *"the square box has a circle over it with a . (looks like target
+> lock but no idea what the game is expecting."* The unlabeled circle/swirl control beside the Bag
+> button reads as a TARGET-LOCK RETICLE to the player — the affordance is not merely unpolished, it
+> actively miscommunicates. Raises this from residual-polish to a readability defect. The blocking
+> owner art pick (dodge glyph) still stands — surface icon-key candidates to her rather than waiting.
+
 **Status: NOT STARTED** (reconciled 2026-08-08, see banner) — blocked only on owner art pick for dodge glyph if no existing icon key fits  
 **Minted:** 2026-08-07 (CLI / Grok — residual of WO-899; explicitly **not** done in `a35163e1`)  
 **Silo:** HUD / UI  

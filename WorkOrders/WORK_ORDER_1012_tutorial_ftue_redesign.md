@@ -45,16 +45,27 @@ tutorial rewrite HERE).
 > person A."* Whatever character guides the tutorial, it must NEVER be the hero the player selected.
 > The rotation formula below is ONE sanctioned mechanism that satisfies it ("I don't really care what
 > method you use"); any mechanism that satisfies the invariant is acceptable.
-> **RULED (owner, 2026-08-09, same session): ROTATION.** *"Let's just stick with rotation. If we
-> choose to change it another point, that's fine... for right now, let's leave it as rotation."*
-> The hero-rotation formula below is the implementation — UNBLOCKED, no creative dependency.
-> **Parked creative alternative (logged for a possible later pivot, NOT in scope):** the guide as
-> the player's FIRST PET/ECHO — *"you meet your first pet and your pet's the one that introduces you
-> and teaches you these things, since they're the Echo, in essence, of this village."* Fits canon
-> (an Echo is the awakened essence of one of the people the Heart of Elarion guards) and
-> `founding_hollow` already grants the starter pet. If ever chosen it needs a dialogue
-> re-attribution pass (speaker = the Echo, copy unchanged). Implement rotation behind a seam that
-> keeps the guide IDENTITY a data/config swap, so that pivot stays cheap.
+> **⚠ RE-RULED (owner, 2026-08-09, later the same day — via the pivot seam, exactly as designed):
+> THE GUIDE IS THE PLAYER'S FIRST PET — AN ECHO OF ELARION.** Owner, verbatim: *"maybe even better
+> to start with our pet. And our pet, which is an echo of Elarion, is the one that is our guide. By
+> doing that, it introduces the pet first, allows us to always have an answer for who's gonna be the
+> guide, and they can explain, hey, listen, I'll go farm for you, or I can repair your towers."*
+> Confirmed over the alternatives (keep-rotation / hybrid) on the explicit pick list.
+> **Why it wins:** canon-perfect (an Echo is the awakened essence of one of the people the Heart
+> guarded — THIS WAS THEIR VILLAGE; the story does the teaching); the game's namesake system appears
+> in minute one; the guide teaches its own utility (the canon claim-loop onboarding + the
+> teaching-conversation-per-Echo ruling); the guide-identity problem dissolves permanently (a pet is
+> never the player's hero — the "never yourself" invariant holds by construction); companion
+> attachment from minute one. The starter-pet grant already exists in the step schema
+> (`founding_hollow`) — it MOVES to the ARRIVE beat.
+> **ROTATION is now the parked alternative** (formula preserved below for history/pivot). The seam
+> stands: guide identity remains a data/config swap.
+> **Flow deltas from the pet-guide:** ARRIVE grants + introduces the pet-Echo (it wakes near the
+> Heart — its essence returning is the cold open's payoff); the pet leads the WALK beat (pets already
+> follow/path — CLI verifies the rig can lead + emote); all GuideLine speech re-attributes to the
+> pet-Echo (copy unchanged); ONE added utility line at the ACK beat — the pet offers its work in its
+> own words ("I can farm. I can mend. Put me to work, Keeper.") — which doubles as the Echo-system
+> hook. The rotation-hero cameo is NOT in scope (rejected hybrid).
 
 - `guideClass = (HeroClass)(((int)playerHeroClass + 1) % 4)` — the owner's formula over the EXISTING
   `HeroClass` enum (Mage/Knight/Ranger/Cleric). Names resolve via `HeroCanonNames` (Grom/Sylas/Thrain/
@@ -106,6 +117,46 @@ tutorial rewrite HERE).
 - **NOT in the flow:** building the whole village, multi-structure quotas, any second fight, any screen
   tour. Contextual one-shots (first Manage open, first raid, first Echo awakening — the canon teaching
   conversation, first dungeon) ride the SAME kit via the existing `contextual`/`oneShot` schema.
+
+### 2c-bis. ⚠ OWNER DIRECTIVE 2026-08-10 — the post-handoff "now what?" gap (ADDED to scope)
+
+> Verbatim intent (owner, felt-test 2026-08-10): after placing the two towers and repelling the wave,
+> *"it doesn't give you any more guidance... The bottom line was after I placed the two towers, I was
+> like, okay. Now what?"* She wants the tutorial to hand off into a **gentle progression chain**:
+> *"hey, we should set up a spot to buy some proper weapons... then after that, maybe let's get armor...
+> it should follow the natural progression, not completely locked down that path... a gentle nudge or
+> something... just some guidance on how to start."*
+
+- The WIN + HANDOFF beat (8) must not end in silence. After `FinishOnboarding()`, a **nudge chain** of
+  contextual one-shots continues the thread: suggest the weapons building first (canon ids per QR-5.7:
+  the WEAPONS shop is id `workshop`, display "Forge"), then armor (id `forge`, display "Armorer"), then
+  onward through the natural progression — each a GuideLine one-liner + optional FocusMask on the Build
+  entry, **dismissible and never blocking** (nudges, not locks; free play stays free).
+- Corroborating capture (F8 harvest 2026-08-10): `[Flow:Vendor] Forge: Lever-1 baked/station fallback
+  withheld for 'collector_forge' — never player-built on this save (blank-town gate, WO-834)` — on a
+  blank-town founding there IS no weapons vendor until the player builds one, and nothing tells them.
+  The nudge chain is what closes that loop.
+- Implementation shape: same `contextual`/`oneShot` schema + the §2b kit — this is P3/P4 data authoring,
+  not new systems. The chain's ORDER (weapons → armor → what next) is a creative call: propose the full
+  sequence to the owner before authoring past the first two beats she named.
+
+### 2c-ter. ⚠ OWNER RULING 2026-08-10 — the Echo teaches the STACKING dependency (ADDED to scope)
+
+> Verbatim: *"we should add to the tutorial, from the echo that it lets you know it cant do anything
+> if it cant stack it somewhere."*
+
+- The pet-Echo guide, in ITS OWN VOICE, teaches that its gathering is useless without somewhere to
+  stack the goods — the works/storehouse dependency (the phantom-income existence gate,
+  `ResourceBuildingHarvester.cs:129-143`, + the WO-837 storehouse capacity model). Example shape
+  (copy = owner voice pass): "I can gather all day, Keeper — but I need somewhere to stack it. Raise
+  the works and I will fill them."
+- Delivery: a contextual one-shot on the FIRST gathering assignment whose resource's existence gate
+  is CLOSED (the exact moment the owner herself hit on 2026-08-10 — assigned iron, no iron works,
+  silent zero). Same kit, one line, dismissible. Pairs with WO-953's picker `NEEDS: <building>` cue —
+  the Echo line is the teach, the picker cue is the persistent honest state.
+- Also echoes into the utility line at ACK ("I can farm. I can mend.") — the guide may foreshadow it
+  there in one clause, but the real teach fires contextually at the moment of need (progressive
+  disclosure law).
 
 ## 3. Constraints (binding)
 

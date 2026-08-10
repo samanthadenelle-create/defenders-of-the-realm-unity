@@ -1,6 +1,114 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ RECONCILED 2026-08-09 (CLI / THE RULES): main line next free = **945**. **782–859 + 900–944 CONSUMED.**
+> ## ⚠ RECONCILED 2026-08-10 (CLI): main line next free = **961**. **782–859 + 900–960 CONSUMED.**
+> - **960** = **Armor store: locked-preview ladder (greyed + Lv N, next-5-levels window)** — owner
+>   ruling 2026-08-10. RCA'd start: armor.json has 24 rows (per-class rarity ladders), store shows 3 —
+>   a visibility/filter defect, not missing content; level-gate derivation to be found/proposed as
+>   data. File `WORK_ORDER_960_armor_store_locked_preview_window.md`. **READY TO IMPLEMENT.**
+>
+> *(banner bumped 960 → 961 in the SAME edit as the 960 mint.)*
+> - **959** = **Weapon flame aura only while unsheathed** — owner ruling F8 2297 ("only show the
+>   flames on the sword when unsheathed"). One gate at the GearAura seam, all element auras; the
+>   "unsheathed" state mapping named in the RESULT for her felt-confirm.
+>   File `WORK_ORDER_959_weapon_flame_aura_only_unsheathed.md`. **READY TO IMPLEMENT.**
+>
+> *(banner bumped 959 → 960 in the SAME edit as the 959 mint.)*
+> - **958** = **Dungeon camera stops fighting the player in small rooms** — owner F8 2289 (auto-rotate
+>   + tight-space framing in dg_ember_deep). Capture-first tuning, all values in DungeonCameraProfile
+>   (the one authority), owner felt-pass closes. File `WORK_ORDER_958_dungeon_camera_tight_rooms_stability.md`.
+>   **READY TO IMPLEMENT.**
+>
+> *(banner bumped 958 → 959 in the SAME edit as the 958 mint.)*
+> - **957** = **EXIT beacon on EVERY stairwell in multi-floor dungeons** — owner F8 2287 + screenshot
+>   (EXIT arrow on a mid-dungeon descent). Hypothesis: beacon placement predates WO-930 multi-floor
+>   (stairs used to BE the exit); fix = one designated exit per layout + per-layout regression.
+>   Companions WO-1007/1008 own presentation. File `WORK_ORDER_957_exit_beacon_on_every_stairwell.md`.
+>   **READY TO IMPLEMENT.**
+>
+> *(banner bumped 957 → 958 in the SAME edit as the 957 mint.)*
+> - **956** = **An enemy reads GREEN — hostility never sits on the red/green axis** — owner F8 2269 +
+>   clarification (enemy showing green; owner red/green colourblind). RCA-first (heal-cast glow on the
+>   hollow-acolyte healer is the lead candidate — the never-ticketed 08-06 "Cast_Heal green glow"
+>   item); fix = faction-driven effect presentation, hostile palette/shape.
+>   File `WORK_ORDER_956_enemy_reads_green_hostility_cue.md`. **READY TO IMPLEMENT.**
+>
+> *(banner bumped 956 → 957 in the SAME edit as the 956 mint.)*
+> - **955** = **VFXManager.Acquire NRE — pool free list hands back a destroyed host** — captured
+>   exception (owner session 2026-08-10, arena-death churn via HeroHpStateAura): Acquire:876 threw on
+>   a destroyed pooled host's transform. Fix = dead-slot evict+rebuild with a Warn, find the teardown
+>   destroyer; ONESHOT saturation stays separate. File `WORK_ORDER_955_vfx_pool_destroyed_host_nre.md`.
+>   **READY TO IMPLEMENT.**
+>
+> *(banner bumped 955 → 956 in the SAME edit as the 955 mint.)*
+> - **954** = **Hollow family still wears KayKit skeletons + enemy id→model mapping goes data-driven** —
+>   owner report 2026-08-10, RCA'd live: authored (no fallback), the whole hollow town-wave family maps
+>   to plain KayKit `Skeleton_*` across FOUR divergent code tables; enemies.json has no model column.
+>   Mechanics READY (data column + one resolver, behavior-preserving seed); the hollow re-skin model
+>   pick = owner creative pin. File `WORK_ORDER_954_hollow_family_models_data_driven.md`.
+>
+> *(banner bumped 954 → 955 in the SAME edit as the 954 mint.)*
+> - **953** = **Harvest "+N" pops via the damage-number spawner + gated-faucet honesty** — owner
+>   rulings 2026-08-10 (reuse the damage-points spawner; her zero-iron RCA'd live to the
+>   phantom-income gate: 'forge' never built on her blank save, correct-but-silent). Picker shows a
+>   NEEDS cue; pet-node demo rates (5/5) promoted to owner-tunable data, values unchanged.
+>   File `WORK_ORDER_953_harvest_drip_feedback_and_gated_faucet_honesty.md`. **READY TO IMPLEMENT.**
+>
+> *(banner bumped 953 → 954 in the SAME edit as the 953 mint.)*
+> - **952** = **EndState wave-clear panel compresses body below content size** — the panel's own
+>   FlowTrace net fired twice in one session (need=276px well=249px scale=0.9, screen-height clamp);
+>   fix = reflow-not-shrink + a capture case at the failing resolution asserting the Fail line's
+>   ABSENCE. File `WORK_ORDER_952_endstate_panel_body_compression.md`. **READY TO IMPLEMENT.**
+>
+> *(banner bumped 952 → 953 in the SAME edit as the 952 mint.)*
+> - **951** = **Echo Hollow repurposed: tap it → the Echoes popup opens** — owner ruling 2026-08-10
+>   (F8 2266 + confirmation "Simple and easy"). Not removed, not a skins store; keeper Talk routes to
+>   the existing roster panel. Capacity/awakening-stage/skins-counter recorded as UNPINNED extensions.
+>   File `WORK_ORDER_951_echo_hollow_opens_echo_roster.md`. **READY TO IMPLEMENT.**
+>
+> *(banner bumped 951 → 952 in the SAME edit as the 951 mint.)*
+> - **950** = **Drillmaster + teach toast appear on a blank-town save with NO barracks** — owner
+>   felt-report 2026-08-10, RCA'd live: the injector's OnSceneLoaded path checks unlock but never
+>   `MayBakedTwinSurface`, while the sweep shows surfaced=0/everBuilt empty on the same save. Fix at
+>   the Inject seam + ownership reconcile + once-teach burn guard.
+>   File `WORK_ORDER_950_drillmaster_without_barracks_blank_town.md`. **READY TO IMPLEMENT.**
+>
+> *(banner bumped 950 → 951 in the SAME edit as the 950 mint.)*
+> - **949** = **Death UX: respawn IN TOWN + starter potions + teach the cost of dying** — owner F8s
+>   2026-08-10 10:20/10:22 verbatim ("On Death I should respawn in town not where I died", "start the
+>   user with some potions, and explain to them consequences of dying with resources"). Discovery-first
+>   on what death costs today; potion-button-at-zero + no-apothecary caveats carried in the WO.
+>   File `WORK_ORDER_949_death_ux_respawn_town_potions_teaching.md`. **READY TO IMPLEMENT.**
+>
+> *(banner bumped 949 → 950 in the SAME edit as the 949 mint.)*
+> - **948** = **Walls: build at L1 only, upgrade to climb (CoC model)** — owner ruling 2026-08-10 on
+>   first seeing Castle Structures ("enforce them to start with a level one wall... like CoC does
+>   it"). Verified: `BuildPaletteUI.cs:1105-1106` offers wall_wood AND wall_stone as placeables; the
+>   walls.json ladder already exists and heart-mitigation already pays. Scope = palette enforcement +
+>   the wood→stone rung only; deeper tiers/gates stay in WO-904 behind raid-steal.
+>   File `WORK_ORDER_948_walls_build_l1_only_upgrade_to_climb.md`. **READY TO IMPLEMENT.**
+>
+> *(banner bumped 948 → 949 in the SAME edit as the 948 mint.)*
+> - **947** = **Cost-basket separation: regular = wood+iron, magical/ethereal = crystal-based, never
+>   all three** — owner economy ruling 2026-08-10 (verbatim in the WO). Audit found 6 of 29 entries
+>   violating; SPEC pending 4 owner classification pins (healer/caravan/jeweler/arcane-tower + the
+>   crystals-pair-with-iron-or-wood call), then mechanical data edit + invariant regression.
+>   File `WORK_ORDER_947_cost_basket_separation_regular_vs_arcane.md`. **SPEC.**
+>
+> *(banner bumped 947 → 948 in the SAME edit as the 947 mint.)*
+> - **946** = **POI node auras + Tree of Life: retire the strong yellow, go subtle** — owner F8 seq 2252
+>   verbatim look ruling (*"remove the yelllow from the nodes and the tree of Life (its a vfx) but we
+>   want something subtle, not so strong"*). Needs EYES to verify (screencap loop), owner felt-close.
+>   File `WORK_ORDER_946_poi_tree_aura_yellow_subtle.md`. **READY TO IMPLEMENT.**
+> - **945** = **Tutorial: the SECOND tower runs the full 90s curve while the teaching wave lands** —
+>   owner felt-report (Seeker + exe, multiple repros), RCA data-proven same morning: the 5s first-build
+>   grace is per-structure-id, the tutorial asks for two towers of the SAME id, tower #2 ran 90s
+>   (proving lines Player.log 51090 grace on #1 / 55450 no grace on #2 / 55676 cost-freebie DID fire).
+>   Fix = while !Onboarded every build gets the grace (the 08-06 ruling's own stated intent), pallets
+>   carve-out intact. File `WORK_ORDER_945_tutorial_second_tower_timer_grace.md`. **READY TO IMPLEMENT.**
+>
+> *(banner bumped 945 → 947 in the SAME edit as the 945+946 mints — the rule that broke five times on 08-02.)*
+
+> ## (superseded header) RECONCILED 2026-08-09 (CLI / THE RULES): main line next free = ~~945~~ — see the 2026-08-10 header above. **782–859 + 900–944 CONSUMED.**
 > - **944** = **Placing: the item's title pins STATIC at the top of the screen** — owner F8 seq 2250
 >   flagged live in the fresh 22:11 build (*"can we make the title of the item pin staticl maybe at the
 >   top of the screen"*); retires the last follow behaviour (the pill), UI_PLAYBOOK §8's own preferred
@@ -396,6 +504,12 @@
 > That is the exact failure this file's own rule warns about — *"never a number copied into any other
 > doc"* — and the copy was **inside the numbering authority itself**. A duplicate cannot be kept honest
 > by discipline; it can only be removed. **The header is the sole source. Do not restore numbers here.**
+>
+> *(UI-seat bumped 1013 -> 1014 in the SAME edit as the WO-1013 mint — "Castle Defense Plans": survive
+> wave 2 -> a physical drop at the gate unlocks the Arcane Spire card (starts VISIBLE but LOCKED,
+> "Recover the plans") + funds the first build; the player still builds it themselves (reinforces the
+> WO-1010 loop); delivered through the WO-1012 contextual one-shot kit; canon: recovered knowledge of
+> the fallen civilization.)*
 >
 > *(UI-seat bumped 1012 -> 1013 in the SAME edit as the WO-1012 mint — tutorial/FTUE presentation + pacing
 > redesign: retire the boxed markers / fat top banner / Next-Next coach cards for a spotlight mask + ONE

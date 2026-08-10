@@ -7,13 +7,14 @@
 > Per CLAUDE.md §15 the newest `CANON_GROUND_TRUTH_<date>.md` wins on any conflict with this file.
 # DeNelle Studios — Project Canon Loader
 
-> ## ▶ LIVE THREAD (2026-08-09) — READ BEFORE WORKING
+> ## ▶ LIVE THREAD (2026-08-09) — READ BEFORE WORKING *(header re-anchored 2026-08-10 morning)*
 > **Reality anchor = `CANON_GROUND_TRUTH_2026-08-09.md`** (supersedes 08-08, bannered). Branch
-> `wip/village2-and-f8-tickets`, **HEAD `c8320434`, PUSHED — local == origin, 0/0** (push landed 08-08
-> 19:52:45). **30 commits landed 2026-08-08.** ⚠ Working tree NOT clean, and it is a SHARED tree
-> (CLAUDE.md §11): `ProjectSettings.asset` (exactly two auto-stamped keys — an Android build ran AFTER
-> HEAD, not a hand edit) plus **4 DELETED files under `tools/webbot/`**. One committer, staged by
-> explicit path, never `git add -A`.
+> `wip/village2-and-f8-tickets`, **HEAD `07b756b6` (2026-08-09 23:00), PUSHED 2026-08-10 ~10:12 —
+> local == origin** (the 68-commit 08-09 wave). ⚠ The tree carries the 2026-08-10 morning fix wave
+> UNCOMMITTED while it gates: WO-931 wallet refusal · hero death-pin rebase · battle-music countdown
+> gate · WO-945 onboarding build grace (+ agent lanes in flight). Save schema **v38**
+> (`SaveSchema.cs:41`, WO-934). **WO-931 is IMPLEMENTED (option b)** — its "READY TO IMPLEMENT"
+> lines below are history. One committer, staged by explicit path, never `git add -A`.
 > Gates last emitted, **read off the marker files**: `Builds/gate-ship3.log` → `COMPILE_GATE_OK` ·
 > `Builds/regression-ship3.log` → `REGRESSION_OK 130/130 suites` · `Builds/ui-capture-ship.log` →
 > `UI_CAPTURE_OK 44`. ⚠ `Builds/test-results-EditMode.xml` is 930/930 green but **stamped 2026-08-04 —

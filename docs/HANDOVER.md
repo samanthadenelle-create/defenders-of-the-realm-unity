@@ -256,10 +256,15 @@ renumbered** (the face arrays are indexed by ordinal).
 **Open, needing the owner:** **WO-774.0's posture ruling, newly un-parked** (the seam that made it
 deferrable is closed) · **the three dead difficulty levers** (wire them or delete them) · **the three gate
 holes** (Resources-only files unchecked, no change-bumps-version rule, RoomForge's hardcoded list) ·
-the WebGL / web-deploy step (never ran) · `tools/webbot/` (restore or not) ·
+the WebGL / web-deploy step (never ran; owner 2026-08-10: deferred to end of the morning session) ·
+`tools/webbot/` (restore or not) ·
 the false `PRIVACY_POLICY.md` sentence on a live page · the Terms' missing arbitration/waiver clauses ·
-**WO-931** (architecture call: build-guard / runtime refusal at the `WalletService` seam / both — left
-UNPICKED) · **WO-910** · promoting `api/` to prod · widening **WO-929** to the building path · the RESULT
+~~**WO-931** (architecture call — left UNPICKED)~~ **RESOLVED 2026-08-10: owner picked (b) runtime
+refusal; IMPLEMENTED at the `WalletService.Pay`/`PayFlat` seams (uncommitted pending the batch gate);
+preconditions 1+2 on the flag still open** ·
+**WO-910** · promoting `api/` to prod · ~~widening **WO-929** to the building path~~ **DONE 2026-08-10:
+WO-929 §2b now pins FOUR proven host classes (building/hero-aura/enemy-caster/pooled enemy) — fix at the
+shared attach seam** · the RESULT
 debt · the ambiguous `Resources/Structures` `.fbx`-vs-`.prefab` pair.
 
 **The 08-06 block below is SUPERSEDED — kept as history, not guidance.**

@@ -53,11 +53,11 @@
   UI seat minted **WO-1012 tutorial/FTUE redesign** (+ wireframes) — D16's full rework lives there.
   Open: **D8 Walls-tab owner ruling** (conflicts with the 07-13 ruling), tester re-test, felt-verify.
 - **Anchor = `CANON_GROUND_TRUTH_2026-08-09.md`** (supersedes 08-08, bannered). Branch
-  `wip/village2-and-f8-tickets`, **HEAD `c8320434`, PUSHED — local == origin, 0/0** (push landed 2026-08-08
-  19:52:45). **30 commits landed on 2026-08-08** (counted from `git log`, by both author and committer
-  date). ⚠ Working tree NOT clean: `ProjectSettings.asset`
-  (exactly two auto-stamped keys, `bundleVersion`/`AndroidBundleVersionCode` 316839 → 316856 — an Android
-  build ran AFTER HEAD, not a hand edit) and **4 DELETED files under `tools/webbot/`**.
+  `wip/village2-and-f8-tickets`, **HEAD `07b756b6` (2026-08-09 23:00), PUSHED 2026-08-10 ~10:12 —
+  local == origin** (the 68-commit 08-09 wave; the earlier "HEAD c8320434 / 30 commits" reading was the
+  08-08 point-in-time state). ⚠ 2026-08-10: the 5.1 GB stale Grok worktrees under `~\.grok\worktrees`
+  were deleted (verified no unique work); the tree carries the 08-10 morning fix wave uncommitted while
+  it gates (WO-931 · death-pin rebase · battle-music gate · WO-945).
 - **Gates last emitted** (read off the marker files, never off this line): `Builds/gate-ship3.log` 19:36 →
   `COMPILE_GATE_OK` · `Builds/regression-ship3.log` 19:38 → `REGRESSION_OK 130/130 suites` ·
   `Builds/ui-capture-ship.log` 14:30 → `UI_CAPTURE_OK 44`. ⚠ **`Builds/test-results-EditMode.xml` is
@@ -89,8 +89,11 @@
   (`576601e3`). `StubWalletProvider` has **NO `#if UNITY_EDITOR`/`DEVELOPMENT_BUILD` guard**, ships in every
   player, fabricates a wallet + a **2000 SKR mock balance** + a base58 signature, and `ApplyPackContents`
   then **grants the pack for ZERO payment** while firing `purchase_completed` with the fake txSig.
-  **The submitted store build had a tappable Buy button.** = **WO-931, READY TO IMPLEMENT**, precondition
-  **3 of 3** in that flag's DO-NOT-TURN-ON block.
+  **The submitted store build had a tappable Buy button.** = **WO-931 — IMPLEMENTED 2026-08-10 (option b,
+  owner-picked): runtime refusal at BOTH `WalletService.Pay` and `PayFlat` seams** (stub short-circuit +
+  `IsRealSigningWallet` belt; loud `FlowTrace.Fail` refusals; regression cases in
+  `WalletProviderSelectionRegression` §8; precondition 3 of 3 recorded SATISFIED in the flag's
+  DO-NOT-TURN-ON block — **preconditions 1 and 2 remain OPEN, the flag default did NOT move**).
 - **Legal + publishing:** `640bfc1c` sets `productName` → **"Echoes of Elarion"** (installs under the store
   listing name). `c8320434` authored `docs/TERMS_OF_USE.md` and hosts it verbatim at `site/terms.html`, live
   at `https://echoes-of-elarion.vercel.app/terms` (verified 200), linked from landing nav + footer;
@@ -465,7 +468,7 @@
 - **Builds:** Seeker APK -> Windows -> WebGL launched detached ~06:28; WebGL DEPLOY pending owner `vercel` CLI.
 
 ## Persistence / save
-- Save schema **v37** — `SaveSchema.cs:36` → `public const int CurrentVersion = 37;` *(re-verified at source 2026-08-09)*. History: v29 heroLevel/heroXp/heroLifetimeXp; v30 strategicPlacementMigrated WO-673; v31 echoLanes; v32 freeBuildsUsed; v33 echoLanes `lane:level` token WO-738 — deliberate pass-through; v34 persists Tribes/Wards/Arena + pet active-slot; **v35** `obsidianQueue` — WO-773 multi-channel Builder/Train/Research queue, `MigrateToV35` folds legacy buildJobs/pendingBuilds/buildingCooldowns into the Builder channel, idempotent; **v36** WO-834 `everBuiltStructureIds` (the blank-town baked standdown); **v37** WO-911 M2 **the per-job PAID BASKET** — `paidWood/paidFood/paidIron/paidCrystals/paidMagic` on `BuildJobData`, the precondition for the owner's Q1 ruling that **cancel refunds 100% of what was paid, flat**; ⚠ **a pre-v37 job refunds ZERO and says so.** Every bump carries a `SaveMigrator` step so the CORE_SAVE version-triple oracle stays green.
+- Save schema **v38** — `SaveSchema.cs:41` → `public const int CurrentVersion = 38;` *(re-verified at source 2026-08-10; the const moved lines, read it off the file)*. **v38 = WO-934 army loadout bank** — `ArmyStorage.loadouts` (3 named composition presets) + `activeLoadout` index; additive on nested Army JSON, `MigrateToV38` EnsureLoadouts for empty slots. History: v29 heroLevel/heroXp/heroLifetimeXp; v30 strategicPlacementMigrated WO-673; v31 echoLanes; v32 freeBuildsUsed; v33 echoLanes `lane:level` token WO-738 — deliberate pass-through; v34 persists Tribes/Wards/Arena + pet active-slot; **v35** `obsidianQueue` — WO-773 multi-channel Builder/Train/Research queue, `MigrateToV35` folds legacy buildJobs/pendingBuilds/buildingCooldowns into the Builder channel, idempotent; **v36** WO-834 `everBuiltStructureIds` (the blank-town baked standdown); **v37** WO-911 M2 **the per-job PAID BASKET** — `paidWood/paidFood/paidIron/paidCrystals/paidMagic` on `BuildJobData`, the precondition for the owner's Q1 ruling that **cancel refunds 100% of what was paid, flat**; ⚠ **a pre-v37 job refunds ZERO and says so.** Every bump carries a `SaveMigrator` step so the CORE_SAVE version-triple oracle stays green.
 - **Persisted:** BaseLayout, Zones, PartyMemberIds, ArenaDefense, PetName, Settlements. **NOT persisted (truthful red oracles):** Tribes, Wards, Arena W-L record, pet active-slot map, broken-tower state. *(2026-07-12)*
 - Local save = PlayerPrefs `dotr-save`, signed (LB-3 HMAC, tamper-rejected); server save/load nonce-auth is built but `BackendAuthConfig.Enforced` = **OFF**. *(2026-07-12)*
 
