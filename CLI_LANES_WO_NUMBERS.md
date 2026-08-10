@@ -1,6 +1,29 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ RECONCILED 2026-08-10 (CLI): main line next free = **965**. **782–859 + 900–964 CONSUMED.**
+> ## ⚠ RECONCILED 2026-08-10 (CLI): main line next free = **967**. **782–859 + 900–966 CONSUMED.**
+> - **966** = **Hero body faces the wrong way while running (Mage NW when running N)** — owner F8 2309.
+>   MEASURED, not guessed: `HeroFacingAudit.MeasureAll` reports Mage needs **4.5 deg** and Ranger **3.7 deg**
+>   to face +Z, while `HeroBodySwapper.cs:263` applies **-90** to every non-Knight body — a **94.5 deg**
+>   error on the mesh. KnightV3 measures 0 and agrees, which is why only the new classes show it. The -90
+>   is the Tripo-era convention applied to CC/AccuRIG models that arrived 2026-08-06. Fix is a one-line
+>   owner choice (derive vs constant) recorded in the WO. **⚠ RENUMBERED from 965** — the CLI seat wrote
+>   the file without bumping this banner (the 08-02 collision failure, repeated); the F8-queue lane minted
+>   965 correctly and is cited in `CLAUDE.md:431`, so it keeps the number.
+>   File `WORK_ORDER_966_hero_facing_offset_when_running.md`. **READY TO IMPLEMENT.**
+>
+> *(banner bumped 966 → 967 in the SAME edit as the mint.)*
+> - **965** = **F8 inbox is a QUEUE — no owner capture is ever dropped again** — a real harness defect,
+>   proven on disk today: the seat acked seq **2306**, the next ping it ever saw was **2309**, and seq
+>   **2307** (*"both NPC and echo but no movement"*) + **2308** (`[Flow:Tutorial] STEP-STUCK ::
+>   founding_walk`) reached NO seat. Cause: `LATEST_CAPTURE.md` + `PING.json` were single slots (a burst
+>   overwrote itself), `f8-ack.ps1` acked PING's **newest** seq (burying everything below it), and the
+>   per-seq file name `capture-<HHmmss>.md` collided inside one second. Fix = append-only
+>   `logs/f8-inbox/QUEUE.jsonl` + per-seq capture files + oldest-first `f8-check-inbox.ps1` +
+>   one-at-a-time `f8-ack.ps1`, with supersede/unqueued/lost all LOUD in `queue-events.log`. Exit codes,
+>   PING seq and ACK watermark contracts preserved; the owner changes nothing.
+>   File `WORK_ORDER_965_f8_inbox_capture_queue_no_drops.md`. **DONE — awaiting batch-gate + commit.**
+>
+> *(banner bumped 965 → 966 in the SAME edit as the mint.)*
 > - **964** = **Unearned structures are HIDDEN, not shown-locked** — owner F8 2303, verbatim: *"dont show
 >   the spire, leave as blank till earned, allows us to unlock new items and not reveal what they are"*.
 >   ⚠ REVERSES WO-1013's visible-locked Spire card, which shipped the SAME DAY (`bd9d54d9`); both rulings
@@ -549,6 +572,18 @@
 > That is the exact failure this file's own rule warns about — *"never a number copied into any other
 > doc"* — and the copy was **inside the numbering authority itself**. A duplicate cannot be kept honest
 > by discipline; it can only be removed. **The header is the sole source. Do not restore numbers here.**
+>
+> *(UI-seat bumped 1015 -> 1016 in the SAME edit as the WO-1015 mint — EQUIPMENT/paperdoll screen is
+> broken: ~40% dead space above the content, the hero PREVIEW BOX RENDERS EMPTY, every slot's label +
+> value + hint OVERPRINT each other, and the rogue "Orient" button appears HERE TOO — proving WO-1010 D1
+> is a GLOBAL stray control, not a build-mode one. Also the Echoes chip bleeds through the modal.)*
+>
+> *(UI-seat bumped 1014 -> 1015 in the SAME edit as the WO-1014 mint — TUTORIAL NARRATIVE COHERENCE: TWO
+> guide arcs are live at once (the legacy hard-coded "Sylas" human-scout script AND the new {guide}
+> pet-Echo founding arc), so two guides spawn, the wolf never introduces itself, the name drifts
+> ("Storm"), the wolf does not LEAD the walk, a second wolf is introduced at the entrance, and the pet
+> asks for orders before its utility was ever explained. Retire the legacy arc, author the wolf's
+> identity, fix the lead + the ask-order ordering.)*
 >
 > *(UI-seat bumped 1013 -> 1014 in the SAME edit as the WO-1013 mint — "Castle Defense Plans": survive
 > wave 2 -> a physical drop at the gate unlocks the Arcane Spire card (starts VISIBLE but LOCKED,

@@ -1061,8 +1061,45 @@ namespace DeNelle.Editor
         /// </summary>
         private static void ReportFacing(GameObject probe, Bounds bounds, StringBuilder report)
         {
-            Vector3 forward = Vector3.zero;
-            string source = "none";
+            float yawNeeded = MeasureForwardYawNeeded(probe, bounds, out Vector3 forward, out string source);
+            float delta     = Mathf.Abs(Mathf.DeltaAngle(yawNeeded, HeroForwardYaw));
+
+            report.Append("FACING measured ").Append(Fmt(forward)).Append(" via ").Append(source)
+                  .Append(": yaw needed to face +Z = ").Append(Num(yawNeeded))
+                  .Append(" deg, HeroBodySwapper applies ").Append(Num(HeroForwardYaw))
+                  .Append(" deg (delta ").Append(Num(delta)).Append(" deg) - ")
+                  .Append(delta <= FacingWarnDegrees ? "AGREES, no change needed" : "DISAGREES, owner call")
+                  .Append(" (reported only, nothing rotated); ");
+
+            if (delta > FacingWarnDegrees)
+                Debug.LogWarning(Tag + "the measured model forward is " + Fmt(forward) + " (" + source +
+                                 "), which wants a yaw of " + Num(yawNeeded) + " deg to face world +Z, but " +
+                                 "HeroBodySwapper.BuildLegacyResourcesBody applies " + Num(HeroForwardYaw) +
+                                 " deg to every non-Knight hero (the WO-174 +X -> +Z correction) - a delta of " +
+                                 Num(delta) + " deg. If the hero reads as walking one way and facing another, " +
+                                 "THAT is the number to change, in the swapper (the Knight already carries its " +
+                                 "own Offset-Forge-locked +15). NOTHING was rotated here: baking a correction " +
+                                 "into the asset would compose with the swapper's yaw and double-rotate it.");
+            else
+                Debug.Log(Tag + "measured forward " + Fmt(forward) + " (" + source + ") wants yaw " +
+                          Num(yawNeeded) + " deg; the swapper applies " + Num(HeroForwardYaw) +
+                          " deg - they agree within " + Num(FacingWarnDegrees) + " deg.");
+        }
+
+        /// <summary>
+        /// THE facing measurement, extracted from <see cref="ReportFacing"/> (WO-965) so a
+        /// multi-hero audit can run the IDENTICAL maths over other FBXs instead of cloning it -
+        /// two copies of this would drift and the audit would then measure a different thing
+        /// than the builder reports. Behaviour is unchanged; only the reporting moved out.
+        /// <para/>
+        /// Returns the yaw (deg) that would put the measured model forward on world +Z.
+        /// Reports only - nothing is rotated here, ever.
+        /// </summary>
+        internal static float MeasureForwardYawNeeded(GameObject probe, Bounds bounds,
+                                                      out Vector3 forward, out string source)
+        {
+            forward = Vector3.zero;
+            source = "none";
 
             // Guarded: an Animator that has not been initialised in edit mode can refuse
             // GetBoneTransform. A throw here must NOT lose the whole measurement pass -
@@ -1106,29 +1143,8 @@ namespace DeNelle.Editor
                           (facesX ? "on Z -> faces +/-X" : "on X -> faces +/-Z") + ", SIGN UNKNOWN)";
             }
 
-            float yawNeeded = Vector3.SignedAngle(forward, Vector3.forward, Vector3.up);
-            float delta     = Mathf.Abs(Mathf.DeltaAngle(yawNeeded, HeroForwardYaw));
-
-            report.Append("FACING measured ").Append(Fmt(forward)).Append(" via ").Append(source)
-                  .Append(": yaw needed to face +Z = ").Append(Num(yawNeeded))
-                  .Append(" deg, HeroBodySwapper applies ").Append(Num(HeroForwardYaw))
-                  .Append(" deg (delta ").Append(Num(delta)).Append(" deg) - ")
-                  .Append(delta <= FacingWarnDegrees ? "AGREES, no change needed" : "DISAGREES, owner call")
-                  .Append(" (reported only, nothing rotated); ");
-
-            if (delta > FacingWarnDegrees)
-                Debug.LogWarning(Tag + "the measured model forward is " + Fmt(forward) + " (" + source +
-                                 "), which wants a yaw of " + Num(yawNeeded) + " deg to face world +Z, but " +
-                                 "HeroBodySwapper.BuildLegacyResourcesBody applies " + Num(HeroForwardYaw) +
-                                 " deg to every non-Knight hero (the WO-174 +X -> +Z correction) - a delta of " +
-                                 Num(delta) + " deg. If the hero reads as walking one way and facing another, " +
-                                 "THAT is the number to change, in the swapper (the Knight already carries its " +
-                                 "own Offset-Forge-locked +15). NOTHING was rotated here: baking a correction " +
-                                 "into the asset would compose with the swapper's yaw and double-rotate it.");
-            else
-                Debug.Log(Tag + "measured forward " + Fmt(forward) + " (" + source + ") wants yaw " +
-                          Num(yawNeeded) + " deg; the swapper applies " + Num(HeroForwardYaw) +
-                          " deg - they agree within " + Num(FacingWarnDegrees) + " deg.");
+            // The yaw that would put the measured forward on world +Z.
+            return Vector3.SignedAngle(forward, Vector3.forward, Vector3.up);
         }
 
         /// <summary>
