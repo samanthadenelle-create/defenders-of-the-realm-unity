@@ -114,5 +114,97 @@ namespace DeNelle.Core.World
         /// must still clear <see cref="CeilingHeightRef"/> (1.9 + 0.35 = 2.25, well under 4).
         /// </summary>
         public const float VerticalArmLength = 0.35f;
+
+        // ═════════════════════════════════════════════════════════════════════
+        //  WO-958 — tight-room stability (owner F8 seq 2289: "the camera is
+        //  fighting me hard in here ... its auto rotating and it needs to keep
+        //  more focus to the room as well as my direction").
+        //  Every knob below is dungeon-context ONLY (SmartMobileCamera reads them
+        //  solely while its WO-920 dungeon profile is active); town camera never
+        //  sees them. Tune HERE — never at the call site.
+        // ═════════════════════════════════════════════════════════════════════
+
+        // ── (1) Input owns yaw: the damped facing-recenter ───────────────────
+        // The "auto rotating" she felt is SmartMobileCamera's facing-recenter: it
+        // is suspended while steering, so every PAUSE in a small room swung the
+        // seat behind her facing 0.4 s later at up to 220 deg/s (village tuning).
+        // In a dungeon her input owns yaw; the recenter survives only as a slow
+        // idle drift (turning it fully off world-locks the seat behind corridor
+        // walls — the exact WO-385 failure the recenter exists to prevent).
+
+        /// <summary>
+        /// Master switch for the idle facing-recenter in dungeons. TRUE = the damped
+        /// drift below; set FALSE to hand yaw to input alone (accepting the WO-385
+        /// world-locked-seat trade on corridor turns). Owner-tunable.
+        /// </summary>
+        public const bool FacingRecenterEnabled = true;
+
+        /// <summary>Seconds of no camera-drag AND no steering before the recenter may drift
+        /// (village 0.4 — the pause-then-swing she reported). Long = her input owns yaw.</summary>
+        public const float FacingRecenterDelay = 1.25f;
+
+        /// <summary>Hard cap (deg/s) on the recenter swing (village 220 — the whip).</summary>
+        public const float FacingRecenterMaxSpeed = 70f;
+
+        /// <summary>Recenter stiffness, 1/sec (village 4). Step = angleError * this, capped
+        /// above; ~1.4 reads as a lazy drift that never fights a deliberate look.</summary>
+        public const float FacingRecenterStiffness = 1.4f;
+
+        // ── (2) Room-aware framing: the small-room seat ──────────────────────
+
+        /// <summary>
+        /// A room whose NARROW footprint extent (min of world X/Z size) is at or under
+        /// this is SMALL and gets the tighter seat below. One RoomForge cell is
+        /// <see cref="CellSizeRef"/> = 10 m, so 12 catches every 1-cell-wide room and
+        /// corridor while a 2x2 (20 m) hall keeps the standard seat.
+        /// </summary>
+        public const float SmallRoomMaxExtent = 12f;
+
+        /// <summary>Boom length in a SMALL room (standard <see cref="CameraDistance"/> 3.2).
+        /// 2.4 keeps the seat off the wall behind the hero in a 10 m room.</summary>
+        public const float SmallRoomCameraDistance = 2.4f;
+
+        /// <summary>Seat height in a SMALL room (standard <see cref="CameraHeight"/> 1.9).
+        /// Slightly higher over the SAME <see cref="LookAtHeight"/> = the raised pitch the
+        /// WO asks for — the floor of the room fills the frame instead of the far wall.
+        /// 2.15 + the 20 deg pitch cap still clears the 4 m ceiling (max ~2.9 m).</summary>
+        public const float SmallRoomCameraHeight = 2.15f;
+
+        /// <summary>SmoothDamp time (s) easing the seat between the standard and small-room
+        /// framing on a room change. Transition, never a snap.</summary>
+        public const float RoomSeatSmoothTime = 0.55f;
+
+        /// <summary>Slack (m) the CURRENT room keeps in its containment test so skirting a
+        /// doorway edge doesn't flap the room id (and the seat target) every frame.</summary>
+        public const float RoomStickySlack = 0.35f;
+
+        // ── (3) Facing focus + ceiling/pitch safety ──────────────────────────
+
+        /// <summary>
+        /// Metres the look-at point biases toward the hero's FACING (never velocity) in a
+        /// dungeon, so the frame leads where she is pointed. Routed through the existing
+        /// lead-point SmoothDamp, so a quick spin moves the aim under a metre, eased —
+        /// facing focus without whipping. 0 disables.
+        /// </summary>
+        public const float FacingLookAhead = 0.8f;
+
+        /// <summary>Dungeon pitch band floor (deg; negative = look up). Village floor is -10;
+        /// under a 4 m lid there is no sky worth tilting up for.</summary>
+        public const float PanPitchMin = -5f;
+
+        /// <summary>Dungeon pitch band ceiling (deg). Village cap is 35, which rotates the
+        /// standard seat to ~3.4 m — a bed-in against the WO-919 ceiling slab. 20 keeps the
+        /// rotated seat at ~2.9 m worst case, clear of the 4 m lid.</summary>
+        public const float PanPitchMax = 20f;
+
+        /// <summary>Hard backstop: the camera never rises above heroFeetY +
+        /// (<see cref="CeilingHeightRef"/> - this), so the lens stays under the ceiling slab
+        /// even mid-transition or on geometry the pitch clamp cannot know about. The clamp is
+        /// continuous (a min), so engaging it eases — never a pop.</summary>
+        public const float CeilingClearance = 0.5f;
+
+        /// <summary>Interval (s) of the [Flow:Camera] dungeon heartbeat Throttle line
+        /// (boom / yaw source / room id+size / ceiling clamps) — WO-958's evidence feed.</summary>
+        public const float TraceEverySeconds = 2f;
     }
 }

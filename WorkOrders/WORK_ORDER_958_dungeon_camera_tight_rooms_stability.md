@@ -1,6 +1,6 @@
 # WORK ORDER 958 — Dungeon camera: stop fighting the player in small rooms
 
-**Status:** READY TO IMPLEMENT (tuning lane; owner felt-verify closes)
+**Status:** DONE (implemented + gated 2026-08-10; RESULT filed; owner felt-pass closes it - every value is data in DungeonCameraProfile)
 **Minted:** 2026-08-10 (CLI seat, main line — banner bumped 958 → 959 in the same edit)
 **Silo:** Camera (SmartMobileCamera dungeon profile) — no overlap with live lanes
 **Origin:** owner F8 seq 2289, 2026-08-10 11:23, dg_ember_deep, verbatim: *"the camera is fighting me

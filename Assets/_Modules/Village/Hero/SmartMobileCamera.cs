@@ -42,6 +42,10 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using System.Collections.Generic;
+// WO-958: the dungeon camera's tuning authority + the room-bounds blackboard the
+// Dungeons-side publisher fills (Village cannot reference DeNelle.Dungeons directly).
+using DungeonCam = DeNelle.Core.World.DungeonCameraProfile;
+using DungeonRoomSense = DeNelle.Core.World.DungeonRoomSense;
 
 namespace DeNelle.Village
 {
@@ -414,6 +418,33 @@ namespace DeNelle.Village
         private float   _villageCombatFovBoost;
         private bool    _villageFramingEnabled;
         private bool    _villageCollisionEnabled;
+        // WO-958: yaw/pitch tuning snapshots — the dungeon profile overrides the
+        // facing-recenter + pitch band, so the town restore must be exact, not re-typed.
+        private bool    _villageFacingRecenterEnabled;
+        private float   _villageFacingRecenterDelay;
+        private float   _villageFacingRecenterSpeed;
+        private float   _villageFacingRecenterStiffness;
+        private float   _villagePanPitchMin;
+        private float   _villagePanPitchMax;
+
+        // ── WO-958: room-aware dungeon framing state (dungeon profile ONLY) ────
+        // Current room the hero occupies, resolved from the DungeonRoomSense
+        // blackboard with a sticky containment cache (doorway edges don't flap it).
+        private DungeonRoomSense.Room _dgRoom;
+        private bool    _dgRoomValid;
+        private string  _dgRoomId;
+        private Vector3 _dgRoomSize;
+        private bool    _dgRoomSmall;
+        // The smoothed live seat (height / boom) — SmoothDamped between the standard
+        // and small-room profile seats so a room change is a transition, never a snap.
+        private float   _dgSeatHeight;
+        private float   _dgSeatDist;
+        private float   _dgSeatHeightVel;
+        private float   _dgSeatDistVel;
+        // Evidence counters/state for the [Flow:Camera] heartbeat (WO-958 sec.3).
+        private int     _dgCeilingClamps;
+        private string  _dgYawSource = "hold";
+        private float   _dgTraceTimer;
 
         /// <summary>
         /// WO-920 — applies (or lifts) the LOCKED DUNGEON CAMERA profile based on the active scene.
@@ -482,6 +513,12 @@ namespace DeNelle.Village
                 _villageCombatFovBoost   = _combatFovBoost;
                 _villageFramingEnabled   = _framingEnabled;
                 _villageCollisionEnabled = _collisionEnabled;
+                _villageFacingRecenterEnabled   = _facingRecenterEnabled;
+                _villageFacingRecenterDelay     = _facingRecenterDelay;
+                _villageFacingRecenterSpeed     = _facingRecenterSpeed;
+                _villageFacingRecenterStiffness = _facingRecenterStiffness;
+                _villagePanPitchMin             = _panPitchMin;
+                _villagePanPitchMax             = _panPitchMax;
 
                 _followOffset = new Vector3(
                     0f,
@@ -493,6 +530,33 @@ namespace DeNelle.Village
                 _combatFovBoost   = 0f;      // (2) no FOV pump
                 _framingEnabled   = false;   // (3) no look-at yank toward mobs
                 _collisionEnabled = false;   // (1) no wall pull-in AND no ceiling/wall fade
+
+                // WO-958 (owner F8 seq 2289, "its auto rotating"): her input owns yaw in a
+                // dungeon. The yaw MODEL stays (player pan + damped facing-recenter — see the
+                // WO-920 note above), but the recenter is re-tuned from the village whip
+                // (0.4 s / 220 deg/s / stiffness 4 — a swing at every pause in a small room)
+                // to a lazy idle drift, and the pitch band is narrowed so the rotated seat
+                // can never bed into the WO-919 ceiling slab. All numbers from the one
+                // profile authority; village values restored exactly on exit.
+                _facingRecenterEnabled   = DungeonCam.FacingRecenterEnabled;
+                _facingRecenterDelay     = DungeonCam.FacingRecenterDelay;
+                _facingRecenterSpeed     = DungeonCam.FacingRecenterMaxSpeed;
+                _facingRecenterStiffness = DungeonCam.FacingRecenterStiffness;
+                _panPitchMin = DungeonCam.PanPitchMin;
+                _panPitchMax = DungeonCam.PanPitchMax;
+                _panPitch    = Mathf.Clamp(_panPitch, _panPitchMin, _panPitchMax);
+
+                // WO-958: seed the room-aware seat at the standard dungeon framing; the
+                // per-frame damp in DungeonRoomSeat walks it tighter when the room is small.
+                _dgSeatHeight    = DungeonCam.CameraHeight;
+                _dgSeatDist      = DungeonCam.CameraDistance;
+                _dgSeatHeightVel = 0f;
+                _dgSeatDistVel   = 0f;
+                _dgRoomValid     = false;
+                _dgRoomId        = null;
+                _dgRoomSmall     = false;
+                _dgCeilingClamps = 0;
+                _dgTraceTimer    = 0f;
 
                 _dungeonProfileActive = true;
                 RestoreAllFaded();   // drop anything the village profile had left hidden
@@ -506,6 +570,16 @@ namespace DeNelle.Village
                 _combatFovBoost   = _villageCombatFovBoost;
                 _framingEnabled   = _villageFramingEnabled;
                 _collisionEnabled = _villageCollisionEnabled;
+                // WO-958: exact-restore the yaw/pitch tuning the dungeon overrode.
+                _facingRecenterEnabled   = _villageFacingRecenterEnabled;
+                _facingRecenterDelay     = _villageFacingRecenterDelay;
+                _facingRecenterSpeed     = _villageFacingRecenterSpeed;
+                _facingRecenterStiffness = _villageFacingRecenterStiffness;
+                _panPitchMin = _villagePanPitchMin;
+                _panPitchMax = _villagePanPitchMax;
+                _dgRoomValid = false;
+                _dgRoomId    = null;
+                _dgRoomSmall = false;
 
                 _dungeonProfileActive = false;
             }
@@ -523,7 +597,88 @@ namespace DeNelle.Village
                 $"headroom={DeNelle.Core.World.DungeonCameraProfile.CeilingHeightRef - _followOffset.y:F2} " +
                 $"lead={_leadDistance:F2} zoomOut={_combatZoomOut:F2} fovBoost={_combatFovBoost:F1} " +
                 $"framing={_framingEnabled} collision={_collisionEnabled} " +
-                $"orbitBehind={_orbitBehind} facingRecenter={_facingRecenterEnabled} (yaw model unchanged)");
+                $"orbitBehind={_orbitBehind} facingRecenter={_facingRecenterEnabled} " +
+                // WO-958: the yaw MODEL is unchanged, its TUNING is context-owned now —
+                // print the live numbers + room data so a capture names them.
+                $"recenter=(delay {_facingRecenterDelay:F2}s, max {_facingRecenterSpeed:F0}deg/s, " +
+                $"stiff {_facingRecenterStiffness:F1}) pitchBand=[{_panPitchMin:F0},{_panPitchMax:F0}] " +
+                $"roomsPublished={DungeonRoomSense.RoomCount}");
+        }
+
+        // ── WO-958: room-aware dungeon framing ────────────────────────────────
+
+        /// <summary>
+        /// The live dungeon seat offset (0, height, -boom): resolves the room the hero
+        /// occupies from the DungeonRoomSense blackboard, picks the standard or the
+        /// small-room profile seat, and SmoothDamps the live values toward it — a room
+        /// change is a transition (DungeonCam.RoomSeatSmoothTime), never a snap.
+        /// No room data (rooms unpublished / between rooms / hand-built dungeon)
+        /// simply means the standard WO-920 seat. Dungeon profile paths only.
+        /// </summary>
+        private Vector3 DungeonRoomSeat(float dt)
+        {
+            UpdateDungeonRoom();
+
+            float targetH = _dgRoomSmall ? DungeonCam.SmallRoomCameraHeight : DungeonCam.CameraHeight;
+            float targetD = _dgRoomSmall ? DungeonCam.SmallRoomCameraDistance : DungeonCam.CameraDistance;
+            _dgSeatHeight = Mathf.SmoothDamp(_dgSeatHeight, targetH, ref _dgSeatHeightVel,
+                DungeonCam.RoomSeatSmoothTime, float.MaxValue, dt);
+            _dgSeatDist   = Mathf.SmoothDamp(_dgSeatDist, targetD, ref _dgSeatDistVel,
+                DungeonCam.RoomSeatSmoothTime, float.MaxValue, dt);
+            return new Vector3(0f, _dgSeatHeight, -_dgSeatDist);
+        }
+
+        // Resolve which published room contains the hero. Sticky: the CURRENT room keeps
+        // slack in its containment test so skirting a doorway edge doesn't flap the room
+        // id (and with it the seat target) every frame. Emits one [Flow:Camera] Step per
+        // room CHANGE — the heartbeat carries the steady-state.
+        private void UpdateDungeonRoom()
+        {
+            Vector3 heroPos = _target.position;
+
+            if (_dgRoomValid && DungeonRoomSense.ContainsXZ(in _dgRoom, heroPos, DungeonCam.RoomStickySlack))
+                return;   // still in the cached room
+
+            bool found = DungeonRoomSense.TryGetRoomAt(heroPos, out var room);
+            string newId = found ? room.Id : null;
+            if (found == _dgRoomValid && string.Equals(newId, _dgRoomId, System.StringComparison.Ordinal))
+                return;   // no change (including the steady "between rooms" state)
+
+            _dgRoomValid = found;
+            _dgRoom      = room;
+            _dgRoomId    = newId;
+            _dgRoomSize  = found ? room.Bounds.size : Vector3.zero;
+            _dgRoomSmall = found &&
+                Mathf.Min(_dgRoomSize.x, _dgRoomSize.z) <= DungeonCam.SmallRoomMaxExtent;
+
+            DeNelle.Core.Diagnostics.FlowTrace.Step("Camera", _dgRoomValid
+                ? $"room -> '{_dgRoomId}' size=({_dgRoomSize.x:F0}x{_dgRoomSize.z:F0}) small={_dgRoomSmall} " +
+                  $"seatTarget=(h {(_dgRoomSmall ? DungeonCam.SmallRoomCameraHeight : DungeonCam.CameraHeight):F2}, " +
+                  $"d {(_dgRoomSmall ? DungeonCam.SmallRoomCameraDistance : DungeonCam.CameraDistance):F2})"
+                : "room -> none (between rooms / no room data) - standard dungeon seat");
+        }
+
+        // WO-958 sec.3 evidence heartbeat: boom, seat, yaw source, room id/size, ceiling
+        // clamps — the capture that turns "the camera is fighting me" into named numbers.
+        // Own timer gates the STRING BUILD (interpolating every frame just to have
+        // FlowTrace.Throttle drop it would allocate per frame); the Throttle wrapper's
+        // shorter window then never suppresses a line the timer let through.
+        private void EmitDungeonHeartbeat(float dt)
+        {
+            _dgTraceTimer -= dt;
+            if (_dgTraceTimer > 0f) return;
+            _dgTraceTimer = DungeonCam.TraceEverySeconds;
+
+            float boom = Vector3.Distance(transform.position,
+                _target.position + Vector3.up * _lookAtHeight);
+            DeNelle.Core.Diagnostics.FlowTrace.Throttle("Camera", "wo958-heartbeat",
+                DungeonCam.TraceEverySeconds * 0.5f,
+                $"boom={boom:F2} seat=(h {_dgSeatHeight:F2}, d {_dgSeatDist:F2}) " +
+                $"yawSrc={_dgYawSource} panYaw={_panYaw:F0} pitch={_panPitch:F1} " +
+                $"room={(_dgRoomValid ? "'" + _dgRoomId + "'" : "none")} " +
+                $"size=({_dgRoomSize.x:F0}x{_dgRoomSize.z:F0}) small={_dgRoomSmall} " +
+                $"ceilClampsTotal={_dgCeilingClamps} " +
+                $"avoidance={(_collisionEnabled ? "collision-on" : "collision-off (WO-920: no wall hits by design)")}");
         }
 
         // DEF-151: build the camera-occlusion mask from the project's NAMED layers so it
@@ -746,6 +901,13 @@ namespace DeNelle.Village
             // ── 3. Follow offset with combat zoom (+ orbit-behind) ────────────
             Vector3 zoomOffset = _followOffset + new Vector3(0f, 0f, -_combatZoomOut * _combatBlend);
 
+            // WO-958 (2): room-aware dungeon seat — shorter boom / raised pitch when the
+            // hero's current room is small, eased between seats. Replaces (rather than
+            // stacks on) the offset above: the dungeon profile already zeroes combat zoom,
+            // so this is the whole dungeon seat. Town path untouched.
+            if (_dungeonProfileActive)
+                zoomOffset = DungeonRoomSeat(dt);
+
             // Orbit-behind (DEF-202/204, CAMERA_INPUT_OVERHAUL.md §2): rotate the offset by
             // the PLAYER-authoritative _panYaw (set via AddYaw from pan input) — NOT the hero's
             // velocity. The old velocity-chasing yaw fed back into camera-relative movement and
@@ -768,6 +930,7 @@ namespace DeNelle.Village
                 // has speed. Recenter pulls _panYaw toward hero FACING; HeroLocomotion reads
                 // CameraYaw into its move basis — pivoting the seat mid-press retargets `move` and
                 // reopens the wiggle. Reframe only when stick-up AND ~stopped (ShouldSuspend…).
+                bool recenterStepped = false;   // WO-958: yaw-source evidence (inert for town)
                 if (_facingRecenterEnabled && _timeSinceLastDrag > _facingRecenterDelay
                     && !ShouldSuspendFacingRecenter())
                 {
@@ -778,7 +941,15 @@ namespace DeNelle.Village
                     // Never step past the target (kills any chance of overshoot/oscillation).
                     if (Mathf.Abs(step) > Mathf.Abs(angleErr)) step = angleErr;
                     _panYaw += step;
+                    recenterStepped = Mathf.Abs(step) > 0.001f;
                 }
+
+                // WO-958 trace: name this frame's yaw authority for the dungeon heartbeat —
+                // "input" (her drag is recent), "recenter" (the idle drift moved the seat),
+                // or "hold" (nothing rotated). Dungeon-gated; town behavior unchanged.
+                if (_dungeonProfileActive)
+                    _dgYawSource = _timeSinceLastDrag <= _facingRecenterDelay ? "input"
+                                 : recenterStepped ? "recenter" : "hold";
 
                 zoomOffset = Quaternion.Euler(_panPitch, _panYaw, 0f) * zoomOffset;
             }
@@ -794,6 +965,22 @@ namespace DeNelle.Village
             // the desired position; if it hits world geometry, pull the seat IN to just
             // in front of the hit so the camera body (+ near clip) never enters the wall.
             desired = ApplyCollision(desired, dt);
+
+            // WO-958 (3): ceiling backstop — with dungeon collision OFF (WO-920 ruling)
+            // nothing else stops a pitched-up seat from rising into the WO-919 ceiling
+            // slab. Clamp the seat below heroFeetY + (CeilingHeightRef - clearance),
+            // hero-relative so multi-level floors stay correct. A min() is continuous,
+            // so engaging it eases — never a pop. Counted for the heartbeat.
+            if (_dungeonProfileActive)
+            {
+                float maxY = _target.position.y
+                    + DungeonCam.CeilingHeightRef - DungeonCam.CeilingClearance;
+                if (desired.y > maxY)
+                {
+                    desired.y = maxY;
+                    _dgCeilingClamps++;
+                }
+            }
 
             transform.position = Vector3.SmoothDamp(transform.position, desired, ref _posVelocity, _smoothTime, float.MaxValue, dt);
             // DEF-67: apply shake offset on top of the smoothed position.
@@ -813,6 +1000,19 @@ namespace DeNelle.Village
             Vector3 leadTarget = heroBase;
             if (heroVelFlat.sqrMagnitude > 0.01f)
                 leadTarget += heroVelFlat.normalized * _leadDistance;
+
+            // WO-958 (3): dungeon facing focus — bias the look-at toward the hero's FACING
+            // (never velocity — that edge stays structurally absent) so the frame leads
+            // where she is pointed. Routed through the _leadPoint SmoothDamp below, so a
+            // quick spin moves the aim under a metre, eased: focus without whipping.
+            // (_leadDistance is 0 in the dungeon profile, so this is the only lead.)
+            if (_dungeonProfileActive && DungeonCam.FacingLookAhead > 0f)
+            {
+                Vector3 face = _target.forward;
+                face.y = 0f;
+                if (face.sqrMagnitude > 0.01f)
+                    leadTarget += face.normalized * DungeonCam.FacingLookAhead;
+            }
 
             // ── 6. Auto-framing ───────────────────────────────────────────────
             // WO-512 slice 2: LOCK-ON framing override. When a lock target is bound AND the flag is
@@ -841,6 +1041,10 @@ namespace DeNelle.Village
                 _leadSmoothTime, float.MaxValue, dt);
 
             AimAt(_leadPoint);
+
+            // WO-958 sec.3: the throttled [Flow:Camera] evidence heartbeat (dungeon only).
+            if (_dungeonProfileActive)
+                EmitDungeonHeartbeat(dt);
 
             // ── Sole-camera check ─────────────────────────────────────────────
             _soleCheckTimer -= dt;
