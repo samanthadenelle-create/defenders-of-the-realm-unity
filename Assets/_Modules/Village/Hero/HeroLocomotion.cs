@@ -123,6 +123,18 @@ namespace DeNelle.Village
         /// <summary>TEST SEAM: stop the scripted-move override; input reverts to real devices.</summary>
         public static void ClearScriptedMove() { _scriptedMoveActive = false; _scriptedMove = Vector2.zero; }
 
+        /// <summary>
+        /// WO-968 (§12) — is the scripted-move override live RIGHT NOW? Read-only.
+        /// <para>This is not a test detail: <see cref="DungeonController"/>'s
+        /// <c>EnsureSingleDungeonMover</c> neutralizes this component in a dungeon by calling
+        /// <see cref="SetScriptedMove"/>(zero), so this flag IS "the dungeon currently owns the
+        /// hero". Until now nothing could observe it, so a capture could not distinguish
+        /// "neutralized, DungeonHero is moving" from "NOT neutralized, two movers are fighting" —
+        /// the exact ambiguity that cost the 2026-08-10 dungeon session. The
+        /// <c>[Flow:HeroOwner]</c> heartbeat below prints it every second.</para>
+        /// </summary>
+        public static bool ScriptedMoveActive => _scriptedMoveActive;
+
         // WO-512 slice 3: lock-face / strafe. While a soft lock-on is engaged (driven by
         // HeroTargetIndicator), the hero continuously slews its root yaw toward the LOCKED
         // enemy INSTEAD of the move-direction LookRotation(Velocity) writer — even while
@@ -1317,6 +1329,84 @@ namespace DeNelle.Village
                     $"nt={st.normalizedTime % 1f:F2} | avatar={(av != null ? av.name : "<none>")} | " +
                     $"controller={(_animator.runtimeAnimatorController != null ? _animator.runtimeAnimatorController.name : "<null>")}");
             }
+        }
+
+        // ── [Flow:HeroOwner] WHO OWNS THE HERO — 1 Hz heartbeat (WO-968, §12) ────────
+        // Forged by the 2026-08-10 dungeon session (owner F8 2312 "Everything is wrong check
+        // locomotion" + 2313 "No camera movement"). The captures contained BOTH of these, minutes
+        // apart, in the SAME scene:
+        //   • [Flow:HeroLoco] vel=0.00 while the hero's world position changed  (this component
+        //     neutralized; DungeonHero's CharacterController was the mover), and
+        //   • [Flow:HeroDrift] vel=(0.000,5.000) with live input                 (this component
+        //     NOT neutralized and translating the root itself).
+        // Nothing in the log could tell those two states apart, because the neutralize
+        // (DungeonController.EnsureSingleDungeonMover -> SetScriptedMove(zero)) logs ONCE on apply
+        // and never again, and the restore logs once on teardown. So a reader could not answer the
+        // first question that matters — WHO MOVED THE HERO THIS FRAME — and every downstream
+        // reading (animator Speed, gait forensics, camera basis) was un-attributable.
+        //
+        // This heartbeat answers it from data, every second, in every scene:
+        //   ownerCC/ownerAgent  - which mover is live on this rig (the capability check
+        //                         ForeignMoverOwnsTransform already uses, printed).
+        //   scriptedMove        - the dungeon neutralize gate (see ScriptedMoveActive).
+        //   velSelf             - THIS component's Velocity (what feeds ActorAnimator -> Speed).
+        //   velRoot             - the MEASURED root speed (delta position / dt) — what actually
+        //                         happened in the world, regardless of who wrote it.
+        //   animSpeed           - the value the Animator is actually holding.
+        // velRoot >> velSelf with animSpeed ~0 is the "moving but playing idle" defect, stated as
+        // one line instead of inferred from three separate traces.
+        //   basis               - the camera-relative movement basis + WHERE it came from. In a
+        //                         dungeon there is no SmartMobileCamera, so CameraYaw is absent and
+        //                         the basis silently degrades to world-absolute (proven: every
+        //                         [Flow:HeroDrift] line in the dungeon capture reads camYaw=0.0).
+        // LateUpdate (not Update) deliberately: Update has several early-returns (dialogue
+        // suppression, auto-walk, the ground-snap `return`), and the frames that take them are
+        // exactly the frames worth reporting. Whole body gated on FlowTrace.Enabled -> zero cost off.
+        private Vector3 _ownerTraceLastPos;
+        private bool    _ownerTraceHasLastPos;
+        private float   _ownerTraceLastAt;
+
+        private void LateUpdate()
+        {
+            if (!DeNelle.Core.Diagnostics.FlowTrace.Enabled) return;
+
+            Vector3 pos = transform.position;
+            float now = Time.time;
+            float velRoot = 0f;
+            if (_ownerTraceHasLastPos)
+            {
+                float dt = Mathf.Max(1e-4f, now - _ownerTraceLastAt);
+                Vector3 d = pos - _ownerTraceLastPos; d.y = 0f;
+                velRoot = d.magnitude / dt;
+            }
+            _ownerTraceLastPos = pos;
+            _ownerTraceLastAt = now;
+            _ownerTraceHasLastPos = true;
+
+            float animSpeed = (_animator != null && _hasSpeedParam) ? _animator.GetFloat(AnimSpeed) : float.NaN;
+            bool ccLive = ForeignMoverOwnsTransform();
+            string agentState = _agent == null ? "<none>"
+                : (_agent.enabled ? (_agent.isOnNavMesh ? "on-mesh" : "off-mesh") : "disabled");
+            string basisSrc = _smartCamera != null ? "SmartMobileCamera.CameraYaw" : "NONE(world-absolute)";
+            float basisYaw = _smartCamera != null ? _smartCamera.CameraYaw : 0f;
+            var mainCam = Camera.main;
+
+            DeNelle.Core.Diagnostics.FlowTrace.Throttle("HeroOwner", "owner", 1f,
+                $"scene='{gameObject.scene.name}' ownerCC={(ccLive ? "LIVE(foreign mover owns transform)" : "none")} " +
+                $"ownerAgent={agentState} scriptedMove={(ScriptedMoveActive ? "ZEROED(dungeon neutralize ON)" : "off")} " +
+                $"velSelf={Velocity.magnitude:F2} velRoot={velRoot:F2} animSpeed={animSpeed:F2} " +
+                $"rootYaw={transform.eulerAngles.y:F1} " +
+                $"basis={basisSrc} basisYaw={basisYaw:F1} " +
+                $"mainCamYaw={(mainCam != null ? mainCam.transform.eulerAngles.y : -1f):F1} pos={pos:F2}");
+
+            // The named defect, called out as a FAILURE the moment it is true rather than left for a
+            // reader to spot: the world moved the hero but the animator is holding ~idle. Throttled
+            // so a sustained stall reports once a second, not every frame.
+            if (velRoot > 0.5f && !float.IsNaN(animSpeed) && animSpeed < 0.1f)
+                DeNelle.Core.Diagnostics.FlowTrace.Throttle("HeroOwner", "anim-stall", 1f,
+                    $"ANIMATION-VELOCITY STALL: root travelled {velRoot:F2} m/s but Animator Speed={animSpeed:F2} " +
+                    $"(velSelf={Velocity.magnitude:F2}). The animator is being fed a DEAD value — a mover other " +
+                    "than this component wrote the transform and nothing re-published its speed.");
         }
 
         // ── Manual NavMeshLink traversal (WO-468) ────────────────────────────────────

@@ -238,6 +238,44 @@ namespace DeNelle.Dungeons
             // Keeper rig blends idle <-> walk. Null-guarded — no-op without a rig.
             if (_animator != null && _hasSpeedParam)
                 _animator.SetFloat(AnimSpeed, _planarVelocity.magnitude);
+
+            TraceMoverHeartbeat();
+        }
+
+        // ── [Flow:DungeonMover] 1 Hz heartbeat (WO-968, §12) ─────────────────────────
+        // Owner F8 2312, verbatim: "Everything is wrong check locomotion". The capture proved the
+        // hero's world position changed while [Flow:HeroLoco] reported vel=0.00 and the animator
+        // held a single idle clip — but nothing in the log could say whether THIS component was the
+        // one moving it, nor whether its Animator write was landing anywhere.
+        //
+        // The specific hazard this line makes visible: `_animator` and `_hasSpeedParam` are resolved
+        // EXACTLY ONCE, in Awake (:143-148), and Awake runs BEFORE the async HeroBodySwapper builds
+        // the real rig (DungeonController:753 — the swap lands at the END, ~160 ms later). So on a
+        // body-swapped Keeper this component can be holding a destroyed/placeholder Animator, or
+        // none, for the entire run — and the guarded SetFloat above then silently writes NOTHING,
+        // forever, with no error. That is invisible in every existing trace; it is one field here.
+        // Pair it with [Flow:HeroOwner] on the same rig to attribute the move in one read.
+        private void TraceMoverHeartbeat()
+        {
+            if (!FlowTrace.Enabled) return;
+
+            FlowTrace.Throttle("DungeonMover", "mover", 1f,
+                $"planarVel={_planarVelocity.magnitude:F2} inputEnabled={_inputEnabled} " +
+                $"cc={(_controller != null && _controller.enabled ? "LIVE" : "disabled/none")} " +
+                $"tapTarget={_hasMoveTarget} yaw={transform.eulerAngles.y:F1} pos={transform.position:F2} " +
+                $"animator={(_animator != null ? _animator.name : "<null/destroyed>")} " +
+                $"hasSpeedParam={_hasSpeedParam} " +
+                $"animSpeed={(_animator != null && _hasSpeedParam ? _animator.GetFloat(AnimSpeed) : float.NaN):F2} " +
+                $"moveCam={(_moveCamera != null ? _moveCamera.name : "<null>")} " +
+                $"camYaw={(_moveCamera != null ? _moveCamera.transform.eulerAngles.y : -1f):F1}");
+
+            // Called out as a failure the moment it is true: this component is translating the root
+            // but its Animator handle is dead, so the walk cycle can never play from here.
+            if (_planarVelocity.magnitude > 0.5f && (_animator == null || !_hasSpeedParam))
+                FlowTrace.Throttle("DungeonMover", "dead-anim", 1f,
+                    $"DungeonHero is MOVING at {_planarVelocity.magnitude:F2} m/s but its Animator handle is " +
+                    $"{(_animator == null ? "NULL/DESTROYED" : "missing the Speed parameter")} — the Speed write " +
+                    "above is a no-op. Resolved once in Awake, which runs BEFORE the async body swap.");
         }
 
         // ── Input resolution ─────────────────────────────────────────────────

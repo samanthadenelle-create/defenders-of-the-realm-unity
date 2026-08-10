@@ -484,6 +484,8 @@ namespace DeNelle.Dungeons
         /// </summary>
         private void LateUpdate()
         {
+            TraceRigHeartbeat();
+
             if (!_fpvActive || _combatFramingActive || _pivot == null) return;
 
             Vector2 look = SampleLookDelta();
@@ -492,6 +494,50 @@ namespace DeNelle.Dungeons
             _lookPitch = Mathf.Clamp(_lookPitch, -_fpvPitchClamp, _fpvPitchClamp);
 
             DriveFpvPivot();
+        }
+
+        // ── [Flow:DungeonCam] 1 Hz LIVE heartbeat (WO-968, §12) ──────────────────────
+        // Owner F8 2313, verbatim: "No camera movement" (Dungeon_HealersCottage, 22 s after the
+        // locomotion flag). The capture could not answer it: this rig logs ONLY at Bind time
+        // (mode=, ApplyThirdPerson:), i.e. at t~0, and the harvested window was t~1698 s. So the
+        // ONLY camera evidence in the whole capture was HeroGaitForensics' camYaw — which read a
+        // CONSTANT 180.0 with dCam=0.0 across a window in which the hero both translated and turned.
+        //
+        // 180 is not an arbitrary number: the layout spawns the Keeper at facingY=90
+        // (healers-cottage.json spawn) and EnsurePivot stamps _headingYawOffset (+90) on the pivot,
+        // so 90 + 90 = 180 is EXACTLY the pose SeatThirdPersonImmediate seats on Bind. The camera
+        // therefore appears PARKED AT ITS BIND SEAT — it was framed once and never followed again.
+        // What that capture CANNOT say is why, and there are several live candidates that a single
+        // read of this line separates:
+        //   • Follow==null      - the vcam has no target (Bind never ran, or the target went away).
+        //   • pivot destroyed   - EnsurePivot parents "DungeonOTSPivot" UNDER the hero, and the
+        //                         async HeroBodySwapper rebuilds the hero's children AFTER the
+        //                         dungeon binds. A destroyed pivot leaves Follow dangling and the
+        //                         body stage no-ops -> frozen at the last pose. (Same failure shape
+        //                         as DungeonHero caching its Animator in Awake, pre-swap.)
+        //   • brain absent      - nothing copies this rig's pose onto the rendering Camera.
+        //   • rig moves, cam does not - the vcam is solving but is not the brain's live camera.
+        // Printing hero pose next to camera pose also makes "the camera is following, the HERO is
+        // stuck" refutable in the same line. Gated on FlowTrace.Enabled -> zero cost when off.
+        private void TraceRigHeartbeat()
+        {
+            if (!FlowTrace.Enabled) return;
+
+            var mainCam = UnityEngine.Camera.main;
+            string followName = (_camera != null && _camera.Follow != null) ? _camera.Follow.name : "<null>";
+            string pivotState = _pivot == null ? "<destroyed/none>" : $"alive yaw={_pivot.eulerAngles.y:F1}";
+            string heroState = _boundHero == null
+                ? "<unbound>"
+                : $"pos={_boundHero.position:F2} yaw={_boundHero.eulerAngles.y:F1}";
+            bool brain = mainCam != null && mainCam.GetComponent<CinemachineBrain>() != null;
+
+            FlowTrace.Throttle("DungeonCam", "rig-heartbeat", 1f,
+                $"mode={_mode} fpv={_fpvActive} combatFraming={_combatFramingActive} " +
+                $"vcam={(_camera != null ? (_camera.isActiveAndEnabled ? "enabled" : "DISABLED") : "<null>")} " +
+                $"Follow='{followName}' pivot={pivotState} hero={heroState} " +
+                $"rig=pos={transform.position:F2} yaw={transform.eulerAngles.y:F1} " +
+                $"mainCam={(mainCam != null ? $"'{mainCam.name}' pos={mainCam.transform.position:F2} yaw={mainCam.transform.eulerAngles.y:F1}" : "<none>")} " +
+                $"brain={(brain ? "present" : "ABSENT")} headingYawOffset={_headingYawOffset:F1}");
         }
 
         /// <summary>Writes the accumulated look onto the pivot's world rotation (FPV).</summary>

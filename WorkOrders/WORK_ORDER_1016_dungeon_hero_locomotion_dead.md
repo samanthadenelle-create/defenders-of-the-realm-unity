@@ -1,0 +1,113 @@
+# WORK ORDER 1016 — HIGHEST: hero locomotion is dead in dungeons (slides in idle; vel always 0.00)
+
+**Status:** READY TO IMPLEMENT — **PRIORITY: HIGHEST (owner ruling, F8 seq=2312)**
+**Minted:** 2026-08-10 (UI seat) — provenance stack bumped 1016 → 1017 in the same edit
+**Lane:** Hero locomotion / animation. Gameplay-felt P0.
+**Provenance:** owner F8 capture **seq=2312**, 2026-08-10 18:33, scene `Dungeon_HealersCottage`,
+verbatim: *"This problem gets marked as Highest on the board. Everything is wrong check locomotion."*
+Capture file: `logs/f8-inbox/capture-20260810-183326.md`.
+
+---
+
+## 1. RCA — from the CAPTURED DATA (§12; no code-read theory required to locate this)
+
+The auto-harvested trace proves the defect in two lines that disagree with each other:
+
+**A. The hero IS moving through the world.** `[Flow:Zone]` reports the hero's position advancing across
+the capture window:
+```
+[Flow:Zone] GetZone(x=-28.0,z=-1.8).      <- early, repeated
+[Flow:Zone] GetZone(x=-26.9,z=-4.7).      <- later (last line of the capture)
+```
+…and `[Flow:GaitF]` shows the body rotating: `yaw=270 dYaw=0.0` → `yaw=42 dYaw=12.0`.
+
+**B. Locomotion believes it is standing perfectly still — every single frame.**
+```
+[Flow:HeroLoco] vel=0.00 m/s | clips=[mixamo.com(w=1.00,len=3.63s)] | baseState hash=-2089788878
+                | avatar=MageAvatar | controller=Mage
+[Flow:GaitF]    vel=0.00@0deg ... clip=mixamo.com(1.00) speedP=0.00 skate=0.00
+```
+`vel=0.00` appears on EVERY `HeroLoco` line in the capture. `speedP=0.00` means the animator's speed
+parameter is never driven, so the state machine never leaves its base state — and the clip list only
+ever contains **ONE clip at weight 1.00**, `mixamo.com` (len 3.63s), for the whole capture.
+
+**⇒ The hero translates through the dungeon while the animator plays a single idle clip: a slide/skate.**
+That is the owner's "everything is wrong."
+
+**The defect is the VELOCITY SOURCE, not the animator.** Whatever moves the hero in the dungeon scene is
+not the thing `HeroLocomotion` reads velocity from. ⚠ **Do not trust the class header** — canon warns
+that `HeroLocomotion`'s "pure transform" comment hides that it is a `NavMeshAgent` (CLAUDE.md mandatory
+read). The prime hypothesis to TEST FIRST: in dungeons the hero is driven by direct transform movement
+(or a different controller/rig path) while velocity is still read from the NavMeshAgent, which reports
+0 because the agent is not the mover here. **Confirm with a capture before editing** (§12).
+
+**Secondary finding (do not conflate):** `clips=[mixamo.com(...)]` — the base clip carries the raw
+Mixamo export name. Whether the Mage controller in this scene even HAS a locomotion blend tree needs
+verifying: if the controller only holds one state, no velocity fix alone will animate a walk. Check both.
+
+**Out of scope / noise:** the Editor.log `NullReferenceException` during "exit code reload scopes
+(post serialization)" is an editor domain-reload/shutdown error, not this defect. Note it, do not chase
+it here.
+
+## 1b. COMPANION DEFECT — the dungeon CAMERA is frozen too (F8 seq=2313, same session)
+
+Owner flagged **seq=2313** 22 seconds later, same scene: *"No camera movement."* The captured proof is
+already in BOTH captures' `[Flow:GaitF]` lines — the camera yaw never changes, on any line, in either
+capture:
+```
+[Flow:GaitF] ... yaw=270 dYaw=0.0  camYaw=180 dCam=0.0     <- seq 2312
+[Flow:GaitF] ... yaw=79  dYaw=0.0  camYaw=180 dCam=0.0     <- seq 2313
+[Flow:GaitF] ... yaw=72  dYaw=0.0  camYaw=180 dCam=0.0     <- seq 2313, hero has moved AND turned
+```
+`camYaw` is pinned at **180** with `dCam=0.0` throughout, while hero yaw swings (270 → 79 → 72 → 42) and
+hero position advances. **The camera rig is not following or rotating in dungeons.**
+
+Filed HERE, not separately, because it is the same scene, same session, and almost certainly the same
+root class as §1 — *the dungeon's rig wiring does not drive the things it drives elsewhere.* Fix them in
+one pass, but **prove them independently** (a camera that follows is not proof that locomotion animates,
+and vice versa). Anchor: `DungeonCameraRig`. Same §12 rule — instrument the rig's follow/look path, read
+which input is dead, THEN fix.
+
+**Acceptance (camera):** in a dungeon, moving the hero changes `camYaw`/`dCam` in the trace and the view
+follows; verified in the same capture as the locomotion proof; swept across the other scenes.
+
+## 2. What to do
+
+1. **Instrument the velocity path FIRST** (§12 — the hard gate). Add/extend `[Flow:HeroLoco]` to print,
+   per frame: the mover in use (agent vs transform vs controller), `agent.enabled`, `agent.isOnNavMesh`,
+   `agent.velocity`, the frame delta-position derived velocity, and which one feeds the animator's speed
+   parameter. Run the dungeon headless and READ IT. The line that shows a non-zero delta-position beside
+   a zero fed-velocity is the fix site.
+2. **Fix at that site.** Whatever actually moves the hero in dungeons must be the velocity source that
+   drives `speedP`. Prefer feeding the animator from a **measured world delta-position / deltaTime**
+   (mover-agnostic) rather than binding to one mover — the same code then works in village AND dungeon,
+   which is the whole class of bug here.
+3. **Verify the controller has a locomotion blend tree** for the Mage rig in this scene; if the dungeon
+   loads a reduced/other controller, that is a second fix.
+4. **Sweep the other scenes** — village, overworld, Village2, raids. A mover/velocity mismatch is
+   scene-shaped; prove locomotion animates in EVERY scene, not just the one that was flagged.
+
+## 3. Acceptance criteria
+
+- [ ] In `Dungeon_HealersCottage`, walking produces `[Flow:HeroLoco] vel > 0` and `[Flow:GaitF] speedP > 0`
+      with a walk/run clip weighted in — captured, not eyeballed.
+- [ ] No slide: the hero's animation matches its world movement (`skate` stays near 0 while moving).
+- [ ] Idle → walk → run → idle transitions play in dungeons.
+- [ ] The same capture proof for village + overworld + one raid scene (no regression, no other scene
+      silently on the broken path).
+- [ ] The velocity feed is mover-agnostic (documented in the file header — and the misleading
+      "pure transform" header on `HeroLocomotion` is CORRECTED in the same commit, canon §15).
+- [ ] `[Flow:HeroLoco]` retains the new diagnostic fields (§12: instrumentation is PERMANENT, never
+      stripped).
+- [ ] `COMPILE_GATE_OK` + `REGRESSION_OK <n>/<n> suites`; add a regression that fails if fed-velocity is
+      0 while delta-position is non-zero for N consecutive frames — this bug can never return silently.
+- [ ] Owner felt-test in the dungeon: target verdict "it walks."
+
+## 4. What NOT to touch
+
+- The gait-forensics harness itself (`HeroGaitForensics` is the instrument that caught this — extend,
+  never remove).
+- Combat/BattleLock (the capture's "MELEE swing SUPPRESSED — no active battle" line is expected
+  behaviour in an unstaged dungeon room, not a defect).
+- Dungeon composition/scene bake, equipment socket scaling (`[Flow:Equip]` parent-scale lines are a
+  separate concern).
