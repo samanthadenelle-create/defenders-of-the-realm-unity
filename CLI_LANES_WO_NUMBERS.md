@@ -334,8 +334,18 @@
 > ## ⚠ TWO-BLOCK ALLOCATION IN USE (2026-08-02 evening) — the collision fix, in practice
 > | Block | Owner | Next free |
 > |---|---|---|
-> | **main line** | CLI | **932** (782–859 + 900–**931** consumed; 860–899 was the UI seat's old block) — *(table row corrected 2026-08-09: it still read 931/930 and contradicted the reconciled-2026-08-08 HEADER above, which is the authority. The header already recorded the 931 → 932 bump made in the same edit as the 931 mint.)* |
-> | **1000–1099 reserved** | UI seat | **1012** (1000–1011 consumed) |
+> | **main line** | CLI | **→ READ THE HEADER AT THE TOP OF THIS FILE. THIS ROW NO LONGER CARRIES A NUMBER.** |
+> | **1000–1099 reserved** | UI seat | **→ READ THE HEADER. THIS ROW NO LONGER CARRIES A NUMBER.** |
+>
+> ### ⚠ WHY THESE CELLS ARE EMPTY (2026-08-09 — a live re-mint hazard, not tidying)
+> This table used to restate the next-free numbers. It read **932** for the main line while the header
+> above said **939** — a seven-number gap, and **932–938 all exist on disk**. A seat trusting the table
+> would have re-minted over SEVEN live work orders. The row even carried a note saying it had been
+> "corrected 2026-08-09"; it went stale the SAME DAY, because 933–938 were minted after the correction.
+>
+> That is the exact failure this file's own rule warns about — *"never a number copied into any other
+> doc"* — and the copy was **inside the numbering authority itself**. A duplicate cannot be kept honest
+> by discipline; it can only be removed. **The header is the sole source. Do not restore numbers here.**
 >
 > *(UI-seat bumped 1011 -> 1012 in the SAME edit as the WO-1011 mint — BOARD workflow acclimation for the
 > CLI: adopt BOARD.html/board_build.py as the live board (Notion retired 2026-08-08), wire regeneration
