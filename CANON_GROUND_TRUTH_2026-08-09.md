@@ -3,9 +3,28 @@
 **Supersedes `CANON_GROUND_TRUTH_2026-08-08.md`.** Per CLAUDE.md §15 this is the single live anchor:
 every other doc loses to it on conflict. Written after the 2026-08-08 day-long ship wave.
 
-**Branch:** `wip/village2-and-f8-tickets` · **HEAD `c8320434`** ("docs(legal+publishing): host a Terms of
-Use, and scaffold the dApp Store submission", 2026-08-08 19:48:44 -0500) · **PUSHED — `origin/wip/...`
-and HEAD are level, 0 ahead / 0 behind** (push landed 2026-08-08 19:52:45). master is stale.
+**Branch:** `wip/village2-and-f8-tickets` · **HEAD `19a50616`** (re-anchored 2026-08-09 evening) ·
+**NOT PUSHED — 63 commits ahead of `origin/wip/...`.** master is stale.
+
+> ### ⚠ THIS HEADER WAS 57 COMMITS STALE AND THE WHOLE DAY WAS MISSING FROM CANON
+> It read `HEAD c8320434` / "PUSHED, 0 ahead" while 63 commits sat unpushed. Grepping this file,
+> `SESSION_CANON_LOADER.md` and `docs/HANDOVER.md` for `WO-1010` / `D14` / `D19` returned **zero hits** —
+> a twenty-item build-screen redesign, seven ruled canon conflicts, four false-green gate classes and
+> two new generated reference maps, none of it recorded. The CLI seat enforced §15 on every other doc
+> that day and skipped its own anchor. **A session booting from this file would have started blind.**
+>
+> **LANDED 2026-08-09 (read the git log from `c8320434` for detail):** WO-1010 P1+P2 + §7 D1–D20 (build
+> screen rebuilt around the ghost: lean right-edge rail, compact corner Done, thin bottom resource strip,
+> auto-showing analog nudge stick, `^ Buildings` restore tab with Structures/Defenses quick-tabs);
+> seven AccuRig enemies imported Humanoid + wired + the troll family; `RULES.md`, `docs/BOARD.md`,
+> `docs/UI_PLAYBOOK.md`, `docs/TICKET_LIFECYCLE.md`, `docs/reference/DATA_CLASS_MAP.md`,
+> `docs/reference/VFX_AUDIO_WIRING_MAP.md` + `tools/vfx_audio_map.py`; board Unlabeled 91 → 0;
+> `COMPILE_GATE_OK` made provable; Linear/Notion/Task-list retired; repo root ruled machine-dependent;
+> FlowTrace never-stripped and ON in every build.
+>
+> **⚠ RECENCY DOES NOT CERTIFY A DOC.** This file was committed 2026-08-09 06:29 and was ALREADY FALSE
+> when written (see the webbot correction below, broken by its own commit). Treat "newest wins" as a
+> tiebreaker between sources, never as evidence that any one of them is right.
 
 > ⚠ **The 08-08 anchor is not merely stale — it is INVERTED on BOTH of its headline sections.** Its §0
 > ("the machine is blocked, reboot is the fix") is RESOLVED, and its §2 ("the dungeon stairs — where the
@@ -227,9 +246,15 @@ DO-NOT-TURN-ON block. The flag does not move until 931 lands.
 
 ### `tools/webbot/` was DELETED OUTSIDE GIT
 
-All four files (`canvas-probe.js`, `introtest.js`, `package.json`, `webbot.js`) are **present at HEAD**,
-**no commit has ever deleted them** (`git log --diff-filter=D` over that path is empty), they are **not
-gitignored**, and **the directory does not exist on disk.** This is the **Playwright web-build self-test
+> **⚠ CORRECTED 2026-08-09: THE PARAGRAPH BELOW WAS FALSE THE MOMENT IT WAS WRITTEN.** Commit
+> `e1380870` — **the same commit that added this file** — `git rm`'d all four, on a confirmed owner
+> decision. They are **NOT present at HEAD**, and recovery is `git checkout c8320434 -- tools/webbot/`,
+> **not** `git checkout -- tools/webbot/` (which restores nothing). The same inversion is repeated in
+> `SESSION_CANON_LOADER.md` and `KEY_FACTS.md`.
+
+All four files (`canvas-probe.js`, `introtest.js`, `package.json`, `webbot.js`) were **present at
+`c8320434`**, were **deleted in `e1380870`**, are **not gitignored**, and **the directory does not
+exist on disk.** This is the **Playwright web-build self-test
 rig** — the eyes on the deployed web build (memory `owner-office-autonomy-web-loop`).
 
 Restorable with `git checkout -- tools/webbot/`. **That has NOT been run.** It is an **open decision for
