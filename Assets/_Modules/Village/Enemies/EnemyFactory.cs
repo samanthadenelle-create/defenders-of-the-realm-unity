@@ -260,15 +260,24 @@ namespace DeNelle.Village
                         // defect on the prominent boss. Give it a dark, desaturated undead slate so it reads as
                         // an elite necromancer, not flat-green error — by LUMINANCE (dark), colorblind-safe.
                         bool isWarlord = model == "Orc_Necromancer" || tId == "orc-warlord" || tId == "orc-necromancer";
+                        // WO-956 (owner F8 seq 2269, 2026-08-10 "the one is green"): the old grunt
+                        // arm was the saturated G-dominant orc green (0.30, 0.42, 0.22) — a whole
+                        // ENEMY BODY painted the SAFE hue (owner is red/green colourblind; the 07-10
+                        // "enemy green needs fixed" ruling had spared the grunts as "intended", and
+                        // this F8 re-flags exactly that). Hostile never wears green: the grunt arm
+                        // now reads HostilePalette.PlaceholderBodyTint (umber PLACEHOLDER — final
+                        // hue = owner look pass). Troll/ogre/warlord stay: all three are desaturated
+                        // near-neutrals that fail the green-dominance margin (they read grey/slate).
                         Color fallbackTint =
-                            isTroll   ? new Color(0.38f, 0.40f, 0.34f) :   // grey-green troll hide
+                            isTroll   ? new Color(0.38f, 0.40f, 0.34f) :   // grey-green troll hide (near-neutral, reads grey)
                             isOgre    ? new Color(0.48f, 0.47f, 0.52f) :   // cold ogre grey
                             isWarlord ? new Color(0.22f, 0.20f, 0.26f) :   // Warlord/Necromancer boss — dark undead slate
-                                        new Color(0.30f, 0.42f, 0.22f);     // real Warband orcs — orc green/brown (grunts, intended)
+                                        HostilePalette.PlaceholderBodyTint; // Warband grunts — WO-956 umber placeholder (was orc green)
                         warbandFixer.SetFallbackTint(fallbackTint);
                         FlowTrace.Step("Enemy",
                             $"garrison fallback TINT {fallbackTint} bound to '{model}' (id '{tId}', rig {rigForModel}) — " +
-                            "no OrcTex basecolor for Warband/Troll family, paints solid colour not white");
+                            "no OrcTex basecolor for Warband/Troll family, paints solid colour not white " +
+                            "(grunt arm = WO-956 hostile-palette placeholder, never the green axis)");
                         }
                     }
                 }

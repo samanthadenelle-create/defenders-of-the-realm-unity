@@ -233,6 +233,24 @@ namespace DeNelle.Village
 
             FlowTrace.Throttle("EnemyAura", "started", 2f,
                 $"'{name}': holding '{_type}' (one slot per enemy, mutually exclusive by construction).");
+
+            // WO-956: FACTION DRIVES PRESENTATION - an ENEMY aura must never present on
+            // the green axis (owner is red/green colourblind; green is the SAFE hue - a
+            // green-wrapped hostile reads as friendly). The known offender is
+            // Aura_Necromancer (Lana Fog_poison, authored saturated green), but the check
+            // reads the INSTANCE's authored colours rather than naming types, so any
+            // future green re-pick self-detects. The override rides VfxLoopModulator, so
+            // Restore() (both pool-return ends) hands the authored art back untouched.
+            // Motion/shape stays authored - that is the greyscale acceptance channel.
+            var mod = _handle.Modulator;
+            if (mod != null && mod.BaselineReadsGreen())
+            {
+                mod.SetTintOverride(HostilePalette.PlaceholderEffectTint);
+                FlowTrace.Step("EnemyAura",
+                    $"'{name}': '{_type}' authored art is GREEN-dominant on an ENEMY - applied the " +
+                    "WO-956 hostile-palette PLACEHOLDER tint (sickly violet; final hue = owner look " +
+                    "pass). Shape/motion read unchanged; authored colours restore on pool return.");
+            }
         }
 
         /// <summary>Stop and release THE held loop. Idempotent; safe with nothing held.</summary>

@@ -1864,6 +1864,10 @@ namespace DeNelle.Village
                 string projKey    = (_typeVfxSet != null && !string.IsNullOrEmpty(_typeVfxSet.ProjectileVfxKey)) ? _typeVfxSet.ProjectileVfxKey : DefaultProjectileVfxKey;
                 string impactKey  = (_typeVfxSet != null && !string.IsNullOrEmpty(_typeVfxSet.ImpactVfxKey))     ? _typeVfxSet.ImpactVfxKey     : DefaultImpactVfxKey;
                 Color  castTint   = _typeVfxSet != null ? _typeVfxSet.RangedVfxTint : DefaultRangedVfxTint;
+                // WO-956 faction gate: an ENEMY cast never flies the safe green hue (owner is
+                // red/green colourblind). A data-authored green EnemyTypeVfxSet tint is
+                // substituted with the hostile-palette placeholder + a FlowTrace warn inside.
+                castTint = HostilePalette.EnforceOnTint(castTint, $"{_enemyId} ranged-cast tint");
 
                 // Muzzle flash at the caster's hands (chest height, slightly ahead) as the orb releases.
                 VFXManager.PlayKey(castKey,

@@ -1,6 +1,6 @@
 # WORK ORDER 956 — An enemy reads GREEN: hostility must never sit on the red/green axis
 
-**Status:** READY TO IMPLEMENT (RCA-first: pin WHICH green source, then fix at that seam)
+**Status:** DONE (implemented + gated 2026-08-10; RESULT filed; owner look-pass owed - see the named deuteranopia risk on the BODY tint)
 **Minted:** 2026-08-10 (CLI seat, main line — banner bumped 956 → 957 in the same edit)
 **Silo:** Village/Enemies visuals + VFX tinting — coordinate with WO-954 (models) and WO-955 (pool)
 **Origin:** owner F8 seq 2269 2026-08-10 (*"see here and the one is green"*), clarified same session:

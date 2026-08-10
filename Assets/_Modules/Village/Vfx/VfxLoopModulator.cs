@@ -55,6 +55,10 @@ namespace DeNelle.Village
             public ParticleSystem Ps;
             public ParticleSystem.MinMaxCurve Rate;
             public float SimSpeed;
+            // WO-956: the authored start colour, captured so a faction tint override
+            // (hostile-palette re-tint of a green enemy aura) restores like every
+            // other modulation - the pool can never be handed a re-tinted instance.
+            public ParticleSystem.MinMaxGradient StartColor;
         }
 
         private Layer[] _layers;
@@ -67,6 +71,9 @@ namespace DeNelle.Village
         private float _emissionMul = 1f;
         private float _speedMul    = 1f;
         private float _scaleMul    = 1f;
+        // WO-956: true while a faction tint override has replaced the authored start
+        // colours; Restore() puts the authored gradients back and clears it.
+        private bool  _tintOverridden;
 
         /// <summary>True once the pristine baseline has been recorded.</summary>
         public bool HasBaseline => _captured;
@@ -89,9 +96,10 @@ namespace DeNelle.Village
                 var ps = systems[i];
                 _layers[i] = new Layer
                 {
-                    Ps       = ps,
-                    Rate     = ps.emission.rateOverTime,
-                    SimSpeed = ps.main.simulationSpeed,
+                    Ps         = ps,
+                    Rate       = ps.emission.rateOverTime,
+                    SimSpeed   = ps.main.simulationSpeed,
+                    StartColor = ps.main.startColor,   // WO-956: authored colour baseline
                 };
             }
 
@@ -162,7 +170,158 @@ namespace DeNelle.Village
             ApplyEmission();
             ApplySpeed();
             transform.localScale = _baseLocalScale;
+
+            // WO-956: hand back the authored start colours if a faction tint override
+            // ran - same contract as emission/speed/scale, called from both exits, so
+            // a re-tinted enemy aura can never contaminate the next pool user (who may
+            // be player-side and OWED the authored green).
+            if (_tintOverridden)
+            {
+                _tintOverridden = false;
+                for (int i = 0; i < _layers.Length; i++)
+                {
+                    var ps = _layers[i].Ps;
+                    if (ps == null) continue;
+                    var main = ps.main;
+                    main.startColor = _layers[i].StartColor;
+                }
+            }
         }
+
+        // =====================================================================
+        //  WO-956 - faction tint override (enemy-side effects never green)
+        // =====================================================================
+
+        /// <summary>
+        /// WO-956: true when any captured layer's AUTHORED start colour presents on
+        /// the green axis (<see cref="HostilePalette.IsGreenDominant"/>). Baseline
+        /// only - an applied override does not change the answer, so a holder can
+        /// re-ask idempotently.
+        /// </summary>
+        public bool BaselineReadsGreen()
+        {
+            if (!_captured) Capture();
+            if (_layers == null) return false;
+            for (int i = 0; i < _layers.Length; i++)
+            {
+                if (_layers[i].Ps == null) continue;
+                if (GradientReadsGreen(_layers[i].StartColor)) return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// WO-956: true when any layer's LIVE start colour presents on the green
+        /// axis - the post-override verification read (regression + headless use).
+        /// </summary>
+        public bool CurrentReadsGreen()
+        {
+            var systems = GetComponentsInChildren<ParticleSystem>(true);
+            for (int i = 0; i < systems.Length; i++)
+            {
+                if (systems[i] == null) continue;
+                if (GradientReadsGreen(systems[i].main.startColor)) return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// WO-956: replace every layer's start-colour RGB with <paramref name="tint"/>
+        /// while PRESERVING the authored alpha structure (gradient alpha keys, per-key
+        /// times, two-colour ranges) - the fade envelope is part of the recipe's shape
+        /// read and must survive a faction re-tint. Restored by <see cref="Restore"/>
+        /// from both pool-return ends, so the override can never leak to the next user
+        /// of the pool slot.
+        /// </summary>
+        public void SetTintOverride(Color tint)
+        {
+            if (!_captured) Capture();
+            if (_layers == null) return;
+            for (int i = 0; i < _layers.Length; i++)
+            {
+                var ps = _layers[i].Ps;
+                if (ps == null) continue;   // a layer was destroyed - skip, never throw
+                var main = ps.main;
+                main.startColor = Retinted(_layers[i].StartColor, tint);
+            }
+            _tintOverridden = true;
+        }
+
+        /// <summary>Green test across every representation a MinMaxGradient can hold.</summary>
+        private static bool GradientReadsGreen(ParticleSystem.MinMaxGradient g)
+        {
+            switch (g.mode)
+            {
+                case ParticleSystemGradientMode.Color:
+                    return HostilePalette.IsGreenDominant(g.color);
+                case ParticleSystemGradientMode.TwoColors:
+                    return HostilePalette.IsGreenDominant(g.colorMin)
+                        || HostilePalette.IsGreenDominant(g.colorMax);
+                case ParticleSystemGradientMode.Gradient:
+                case ParticleSystemGradientMode.RandomColor:
+                    return GradientKeysReadGreen(g.gradient);
+                case ParticleSystemGradientMode.TwoGradients:
+                    return GradientKeysReadGreen(g.gradientMin)
+                        || GradientKeysReadGreen(g.gradientMax);
+                default:
+                    return false;
+            }
+        }
+
+        private static bool GradientKeysReadGreen(Gradient grad)
+        {
+            if (grad == null) return false;
+            var keys = grad.colorKeys;
+            for (int i = 0; i < keys.Length; i++)
+                if (HostilePalette.IsGreenDominant(keys[i].color)) return true;
+            return false;
+        }
+
+        /// <summary>
+        /// Rebuild <paramref name="baseline"/> in its AUTHORED representation with every
+        /// colour key's RGB replaced by <paramref name="tint"/> - alphas, key times and
+        /// the min/max structure survive, mirroring ScaledCurve's "never collapse the
+        /// authored shape" rule for the colour channel.
+        /// </summary>
+        private static ParticleSystem.MinMaxGradient Retinted(ParticleSystem.MinMaxGradient baseline, Color tint)
+        {
+            switch (baseline.mode)
+            {
+                case ParticleSystemGradientMode.Color:
+                    return new ParticleSystem.MinMaxGradient(WithAlpha(tint, baseline.color.a));
+                case ParticleSystemGradientMode.TwoColors:
+                    return new ParticleSystem.MinMaxGradient(
+                        WithAlpha(tint, baseline.colorMin.a),
+                        WithAlpha(tint, baseline.colorMax.a));
+                case ParticleSystemGradientMode.Gradient:
+                case ParticleSystemGradientMode.RandomColor:
+                {
+                    var g = new ParticleSystem.MinMaxGradient(RetintedGradient(baseline.gradient, tint));
+                    g.mode = baseline.mode;   // keep RandomColor as RandomColor
+                    return g;
+                }
+                case ParticleSystemGradientMode.TwoGradients:
+                    return new ParticleSystem.MinMaxGradient(
+                        RetintedGradient(baseline.gradientMin, tint),
+                        RetintedGradient(baseline.gradientMax, tint));
+                default:
+                    return baseline;
+            }
+        }
+
+        private static Gradient RetintedGradient(Gradient src, Color tint)
+        {
+            if (src == null) return null;
+            var srcKeys = src.colorKeys;
+            var outKeys = new GradientColorKey[srcKeys.Length];
+            for (int i = 0; i < srcKeys.Length; i++)
+                outKeys[i] = new GradientColorKey(new Color(tint.r, tint.g, tint.b), srcKeys[i].time);
+            var g = new Gradient { mode = src.mode };
+            g.SetKeys(outKeys, src.alphaKeys);
+            return g;
+        }
+
+        private static Color WithAlpha(Color c, float a) => new Color(c.r, c.g, c.b, a);
 
         private void ApplyEmission()
         {
