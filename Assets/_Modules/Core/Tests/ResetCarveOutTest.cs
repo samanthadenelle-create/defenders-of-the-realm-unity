@@ -160,6 +160,15 @@ namespace DeNelle.Core.Tests
             // budget (StartingBudget constants), not the legacy 5 iron / 15 wood.
             Assert.That(_state.Iron, Is.EqualTo(StartingBudget.StrategicIron), "iron -> core-kit seed");
             Assert.That(_state.Wood, Is.EqualTo(StartingBudget.StrategicWood), "wood -> core-kit seed");
+            // WO-949: the founding kit grants starter healing potions in the persisted larder
+            // (GearInventory IS VillageInventory's backing dict), keyed by the canonical belt
+            // potion id — so a fresh hero can heal from turn one.
+            Assert.That(_state.GearInventory, Is.Not.Null, "gearInventory seeded (WO-949)");
+            Assert.That(_state.GearInventory.ContainsKey(DeNelle.Core.HUD.HudCommands.HpPotionId),
+                Is.True, "founding potions present under the canonical belt id (WO-949)");
+            Assert.That(_state.GearInventory[DeNelle.Core.HUD.HudCommands.HpPotionId],
+                Is.EqualTo(StartingBudget.FoundingHealPotions),
+                "founding potion count -> StartingBudget.FoundingHealPotions (WO-949)");
             Assert.That(_state.BuildingCooldowns, Is.Empty, "buildingCooldowns wiped");
             Assert.That(_state.PendingBuilds, Is.Empty, "pendingBuilds wiped");
             Assert.That(_state.TutorialStep, Is.EqualTo(TutorialStep.Step1), "tutorialStep -> Step1");

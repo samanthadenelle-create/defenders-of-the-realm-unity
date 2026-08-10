@@ -960,8 +960,11 @@ namespace DeNelle.Village
         /// is kept -- CastleSpawnMarkerHider) if present, else the castle courtyard centre
         /// (0, castle.liftY, 0) -- the same navmesh-proven point HomeReturnPortalInjector warps
         /// home to. <see cref="Respawn"/>'s agent.Warp re-samples this onto the courtyard navmesh.
+        /// PUBLIC since WO-949 (owner F8 2026-08-10 "On Death I should respawn in town not where
+        /// I died"): BattleArena's death-loss return targets THIS same resolver, so every death
+        /// context lands on the ONE town anchor rather than a second drifting copy of it.
         /// </summary>
-        private static Vector3 ResolveTownSpawn()
+        public static Vector3 ResolveTownSpawn()
         {
             var marker = GameObject.Find("HeroStartPoint_PlayerSpawn");
             if (marker == null) marker = GameObject.Find("HeroStartPoint_InsidePersonalQuarters");

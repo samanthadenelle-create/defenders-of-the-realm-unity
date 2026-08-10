@@ -957,7 +957,21 @@ namespace DeNelle.Core.State
             // Wipe the hero so onboarding re-prompts. Do NOT unbind the wallet.
             s.HeroClass = HeroClassOpt.None;
             s.Inventory = AtbInventory.Empty;
-            s.GearInventory = new System.Collections.Generic.Dictionary<string, int>();
+            // WO-949 (owner F8 2026-08-10 "Can we start the user with some potions"): the founding
+            // kit now includes StartingBudget.FoundingHealPotions Minor Healing Draughts. This dict
+            // IS the persisted VillageInventory larder (VillageInventory.EnsureLoaded pulls it), and
+            // the key is the canonical belt-potion id (HudCommands.HpPotionId = "minor-heal-potion")
+            // the HUD potion slot + ConsumableUseService.TryUse consume — so the granted stack shows
+            // on the belt badge from turn one. Every New Game routes through here
+            // (TitleController:359), which is the ONE founding grant seam; existing saves are
+            // untouched (no read-migration grant). No schema bump: the dict shape is unchanged.
+            s.GearInventory = new System.Collections.Generic.Dictionary<string, int>
+            {
+                { DeNelle.Core.HUD.HudCommands.HpPotionId, StartingBudget.FoundingHealPotions },
+            };
+            FlowTrace.Step("Founding",
+                "founding grant: " + StartingBudget.FoundingHealPotions + "x '" +
+                DeNelle.Core.HUD.HudCommands.HpPotionId + "' seeded into the larder (WO-949).");
             s.AtbLossStreak = 0;
             s.BuildingDamage = new SerializableDict<string, double>();
             s.Dungeons = DungeonProgress.Empty();

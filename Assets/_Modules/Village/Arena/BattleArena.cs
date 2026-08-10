@@ -2297,7 +2297,37 @@ namespace DeNelle.Village.Arena
             Vector3 returnPos = _current != null ? _current.ReturnPosition : Vector3.zero;
             float   returnYaw = _current != null ? _current.ReturnYaw : 0f;
             if (!won && _current != null)
+            {
                 returnPos = SafeLossReturnPosition(_current.ReturnPosition, _current.ReturnYaw);
+
+                // WO-949 (owner F8 2026-08-10 10:20 "On Death I should respawn in town not where I
+                // died", ruling: respawn location = TOWN, every death context). PROVEN at HEAD from
+                // the same session's break-log: the loss return WANTED (-53.29,0.08,5.28) then
+                // (-71.13,0.08,34.72) - both SafeLossReturnPosition anchors metres from the engage
+                // spot out in the field - and ReturnHomeWithFade then revived the hero IN PLACE
+                // there, which is the felt "here is where I respawn". A LOSS where the hero DIED now
+                // returns to the canonical TOWN anchor (HeroHealth.ResolveTownSpawn - the same
+                // marker/injector point HandleDeath's hub branch uses), so the single return warp +
+                // VerifyReturnPose + the in-place revive all land at town. A loss with the hero
+                // still ALIVE (flee/regroup) keeps the safe pull-back - retreating is not dying.
+                // Hub-gated: dungeon defeats cancel this warp anyway (CancelPendingReturnWarp) and
+                // their scene exit owns the hero; a non-hub scene has no town anchor to resolve.
+                var hhDead = HeroHealth.Instance;
+                string lossScene = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name;
+                if (hhDead != null && !hhDead.IsAlive && DeNelle.Core.HubScenes.IsHub(lossScene))
+                {
+                    Vector3 lossAnchor = returnPos;
+                    Guard.Try("BattleArena", "resolve TOWN respawn for death loss", () =>
+                    {
+                        returnPos = HeroHealth.ResolveTownSpawn();
+                        return true;
+                    }, false);
+                    FlowTrace.Step("Respawn",
+                        "death loss -> TOWN return (WO-949): loss anchor " + lossAnchor +
+                        " overridden to town " + returnPos + " (scene='" + lossScene +
+                        "') - the hero wakes at the town anchor, never on the corpse.");
+                }
+            }
 
             // MASKED RETURN (encounter feedback): hand the stage teardown + the ~7km home warp +
             // the camera re-lock to a short coroutine that brackets them in a black fade (mirrors the
@@ -2587,8 +2617,12 @@ namespace DeNelle.Village.Arena
                 {
                     Guard.Try("BattleArena", "revive hero on loss return", () =>
                         hhLoss.Respawn(hhLoss.transform.position));
+                    // WO-949: a DEATH loss was warped to the TOWN anchor above (Resolve override),
+                    // so "in place" here is town; a cancelled warp (dungeon settle) revives where
+                    // the scene exit owns. Name the actual anchor so the capture proves which.
                     FlowTrace.Step("BattleArena",
-                        "loss return: hero revived IN PLACE at the loss anchor — arena owns the death cycle.");
+                        "loss return: hero revived IN PLACE at " + hhLoss.transform.position +
+                        " (death loss = the TOWN anchor since WO-949) — arena owns the death cycle.");
                 }
             }
 

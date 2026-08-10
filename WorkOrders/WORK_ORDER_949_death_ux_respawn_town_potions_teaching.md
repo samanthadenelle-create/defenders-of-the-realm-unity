@@ -1,6 +1,6 @@
 # WORK ORDER 949 — Death UX: respawn IN TOWN, starter potions, and teach the cost of dying
 
-**Status:** READY TO IMPLEMENT
+**Status:** READY TO IMPLEMENT (PARTIAL - deliverables 1 and 2 LANDED + gated 2026-08-10; deliverable 3 (teach the cost of dying) is NOT built, see the 2026-08-10 note at the bottom)
 **Minted:** 2026-08-10 (CLI seat, main line — banner bumped 949 → 950 in the same edit)
 **Silo:** Village/Hero (respawn flow) + founding kit data + one FTUE one-shot (composes with WO-1012)
 **Origin:** owner F8s 2026-08-10, verbatim:
@@ -37,3 +37,39 @@ death is the death-pin fight (fix landed, unbuilt at capture time); "here is whe
 
 The death-pin rebase fix (in tree, uncommitted — Hero lane); the arena's return-pose nets; the
 Onboarded gate; potion crafting/apothecary scope (parked); no UXML.
+
+---
+
+## 2026-08-10 - PARTIAL LANDING (CLI seat, gated)
+
+**2 of 3 deliverables landed and are gate-green.**
+
+**1. Respawn location = TOWN - LANDED.** The gap was the ARENA loss path, not `HeroHealth`:
+`HandleDeath`'s hub branch already resolved the town anchor (`HeroHealth.cs:878`), but BattleArena's
+defeat return warped to `SafeLossReturnPosition` - a pull-back anchor out in the field - and revived
+the hero in place there. `ResolveTownSpawn()` is now public (`HeroHealth.cs:967`) and BattleArena
+overrides the loss anchor with it when the hero actually DIED in a hub scene
+(`BattleArena.cs:2313-2327`). Deliberately narrow: a loss with the hero ALIVE (flee/regroup) keeps the
+safe pull-back, and dungeon defeats are excluded. The revive trace now names the anchor it landed on
+(`:2620`), so a capture proves which branch ran.
+
+**2. Starter potions - LANDED.** `StartingBudget.FoundingHealPotions = 3` (`NestedTypes.cs:90`),
+seeded into the persisted larder by `ResetToNewGame` - the ONE founding-grant seam
+(`GameStateService.cs:968-971`). Existing saves untouched, no schema bump. **An adjacent defect was
+found and fixed in the same seam:** `VillageInventory`'s `_loaded` latch pulled `GearInventory`
+exactly once per app run, so a New Game left the DDOL singleton holding the PREVIOUS session's counts and
+its next `SyncToState` would have clobbered the fresh grant; it now re-pulls on `StateReplaced` and
+releases the subscription in `OnDestroy` (`VillageInventory.cs:53-77`). Covered by
+`CoreSaveRegression.cs:656-663` and `ResetCarveOutTest.cs:163-171`.
+
+**3. Teach the cost of dying - NOT DONE, and this is why the WO stays READY.** No FTUE one-shot was
+written, and the DISCOVERY this WO required first - what dying actually costs today - was never run or
+recorded. If death has no resource consequence, that is a DESIGN GAP needing the owner's pin, not an
+invention. Also untouched: this WO's own flagged risk that the potion button self-disables at zero (with
+a grant in place it should live, but nothing verifies it).
+
+**Gate:** `Builds/gate-settle4.log` -> `COMPILE_GATE_OK` · `Builds/regression-settle3.log` ->
+`REGRESSION_OK 143/143 suites`.
+
+**Owner felt-verify:** New Game -> 3 potions on the belt, button live. Die in a town wave AND lose an
+arena fight -> both wake at the town anchor, never on the corpse.

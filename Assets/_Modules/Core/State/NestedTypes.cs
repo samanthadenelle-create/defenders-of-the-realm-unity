@@ -78,6 +78,16 @@ namespace DeNelle.Core.State
         public const int StrategicWood = 0;
         /// <summary>New-game Iron seed — 0; the free-first-build flags replace it (see class remarks).</summary>
         public const int StrategicIron = 0;
+
+        /// <summary>
+        /// WO-949 (owner F8 2026-08-10 "Can we start the user with some potions"): the founding
+        /// grant of Minor Healing Draughts, seeded into <c>GameState.GearInventory</c> (the
+        /// persisted VillageInventory larder) by <c>GameStateService.ResetToNewGame</c> under the
+        /// canonical <c>HudCommands.HpPotionId</c> key. OWNER-TUNABLE here, the same one-constant
+        /// pattern as the wood/iron pair above (the founding kit is code-constant, not data-driven).
+        /// Founding-only: existing saves gain nothing (no read-migration grant).
+        /// </summary>
+        public const int FoundingHealPotions = 3;
     }
 
     /// <summary>An in-flight pet-assisted tower build (villageSlice PendingTowerBuild).</summary>

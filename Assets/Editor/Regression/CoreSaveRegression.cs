@@ -653,7 +653,14 @@ namespace DeNelle.Editor
                 // EVERY first-build freebie (fresh empty list, owner ruling 2026-07-13 evening).
                 if (st.FreeBuildsUsed == null || st.FreeBuildsUsed.Count != 0)
                     failures.Add($"ResetToNewGame FreeBuildsUsed != EMPTY (got {(st.FreeBuildsUsed == null ? "null" : "[" + string.Join(",", st.FreeBuildsUsed) + "]")}) — a fresh save must have ALL first-build freebies live");
-                log.AppendLine("  ResetToNewGame carve-out holds (wallet/breachStyle kept; progression + pets wiped)");
+                // WO-949 — the founding kit grants starter healing potions in the persisted larder
+                // (GearInventory backs VillageInventory), under the canonical belt id, so a fresh
+                // hero can heal from turn one. Count is the one owner-tunable constant.
+                if (st.GearInventory == null
+                    || !st.GearInventory.TryGetValue(DeNelle.Core.HUD.HudCommands.HpPotionId, out var foundingPotions)
+                    || foundingPotions != StartingBudget.FoundingHealPotions)
+                    failures.Add($"ResetToNewGame founding potion grant missing/wrong (want {StartingBudget.FoundingHealPotions}x '{DeNelle.Core.HUD.HudCommands.HpPotionId}' in GearInventory, got {(st.GearInventory == null ? "null dict" : st.GearInventory.TryGetValue(DeNelle.Core.HUD.HudCommands.HpPotionId, out var fp2) ? fp2.ToString() : "no key")}) — WO-949");
+                log.AppendLine("  ResetToNewGame carve-out holds (wallet/breachStyle kept; progression + pets wiped; founding potions granted, WO-949)");
 
                 // ── Tamper gate through the REAL Load: mutate, save, corrupt, reload. ──
                 svc2.AddCrystals(50);   // 250 -> 300, saved — distinguishes a real load from fresh defaults
