@@ -870,15 +870,36 @@ namespace DeNelle.Village
         /// <summary>Get a dormant instance from the pool or create a new one.</summary>
         private GameObject Acquire(VFXType type, in VFXCatalog.Entry entry)
         {
-            if (_pools.TryGetValue(type, out var q) && q.Count > 0)
+            if (_pools.TryGetValue(type, out var q))
             {
-                var reused = q.Dequeue();
-                reused.transform.SetParent(null, false);   // un-parent from pool root
-                return reused;
+                while (q.Count > 0)
+                {
+                    var reused = q.Dequeue();
+                    // WO-955: a scene/arena teardown can destroy a pooled host while it still
+                    // sits in this free list, and the poisoned list PERSISTS across scene loads
+                    // (two captured NREs, 2026-08-10: HeroHpStateAura in town after arena
+                    // deaths, then EnemyAuraVFX in dg_ember_deep). A destroyed host is a dead
+                    // slot: evict it loudly and keep draining — never dereference a corpse,
+                    // never throw out of a Play call. Capacity self-heals via the fresh
+                    // instantiate below.
+                    if (reused == null)
+                    {
+                        FlowTrace.Warn("VFXManager",
+                            $"Acquire({type}): pooled host was DESTROYED while in the free list — dead slot evicted, rebuilding on demand (WO-955; find the teardown that destroys pooled hosts).");
+                        continue;
+                    }
+                    reused.transform.SetParent(null, false);   // un-parent from pool root
+                    return reused;
+                }
             }
             // Pool empty — instantiate a fresh one (will be pooled after use).
             return CreatePooledInstance(entry.Prefab, type);
         }
+
+        // WO-929: returns whose reparent must wait out a host (de)activation window.
+        // Swept (and cleared) at the top of the next Update, where the cascade is over.
+        private readonly List<(GameObject go, VFXType type)> _pendingReturns =
+            new List<(GameObject, VFXType)>();
 
         /// <summary>
         /// Return a GameObject to its type pool (called internally after lifetime ends or
@@ -888,12 +909,47 @@ namespace DeNelle.Village
         {
             if (go == null) return;
 
+            // WO-929 (the seam, cited by F8 seq 2291): this method is reached from component
+            // OnDisable while a POOLED HOST deactivates (EnemyAuraVFX.OnDisable -> VFXHandle.Stop
+            // -> here), and SetParent is ILLEGAL inside that window — Unity refuses it, the aura
+            // never reaches the pool, and the error fires on every pooled despawn that carries an
+            // aura (proven across four host classes: pooled enemies, a building, the hero
+            // near-death aura, enemy casters). While the object still hangs under an inactive
+            // parent hierarchy we are (or may be) inside that window: silence the particles NOW,
+            // DEFER the reparent + enqueue to the next Update sweep. One frame late into the pool
+            // is invisible; the thrown reparent was not.
+            if (go.transform.parent != null && !go.transform.parent.gameObject.activeInHierarchy)
+            {
+                go.GetComponent<VfxLoopModulator>()?.Restore();
+                StopAllParticles(go);
+                bool alreadyPending = false;
+                for (int i = 0; i < _pendingReturns.Count; i++)
+                    if (_pendingReturns[i].go == go) { alreadyPending = true; break; }
+                if (!alreadyPending)
+                {
+                    _pendingReturns.Add((go, type));
+                    FlowTrace.Throttle("VFXManager", "deferred-return", 5f,
+                        $"ReturnToPool({type}): host is mid-(de)activation — reparent deferred one frame (WO-929).");
+                }
+                return;
+            }
+
+            CompleteReturn(go, type);
+        }
+
+        // The reparent + enqueue + counter tail of a pool return. Runs only OUTSIDE a host
+        // (de)activation window (directly, or from the deferred sweep one frame later).
+        private void CompleteReturn(GameObject go, VFXType type)
+        {
+            if (go == null) return;
+
             // WO-888: a HELD loop may have been modulated while it played (emission density,
             // simulation speed, body scale — the colourblind low-HP pulse read). Nothing else
             // in this method resets instance state, so without this the NEXT user of this pool
             // slot would silently inherit the last owner's modulation, with no error anywhere.
             // Doing it HERE covers every return path — VFXHandle.Stop, the timed return, and
-            // the destroyed-host sweep reclaim — not just the ones a handle owns. Idempotent.
+            // the destroyed-host sweep reclaim — not just the ones a handle owns. Idempotent
+            // (a deferred return already ran it once in the guard above — harmless twice).
             go.GetComponent<VfxLoopModulator>()?.Restore();
 
             StopAllParticles(go);
@@ -934,6 +990,21 @@ namespace DeNelle.Village
         private void Update()
         {
             SweepOneshots();
+
+            // WO-929: complete any returns deferred out of a host (de)activation window — the
+            // cascade that made SetParent illegal is over by the next frame. A host destroyed
+            // mid-defer takes its aura child with it: the null entry is dropped here and the
+            // prune paths (dead-oneshot sweep / loop-set removal on destroy) own its counters.
+            if (_pendingReturns.Count > 0)
+            {
+                for (int i = 0; i < _pendingReturns.Count; i++)
+                {
+                    var (go, type) = _pendingReturns[i];
+                    if (go == null) continue;
+                    CompleteReturn(go, type);
+                }
+                _pendingReturns.Clear();
+            }
         }
 
         /// <summary>Live oneshot count, DERIVED from the tracked slot set after pruning any whose
