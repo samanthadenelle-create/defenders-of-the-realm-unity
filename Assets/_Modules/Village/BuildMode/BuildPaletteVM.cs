@@ -36,6 +36,12 @@ namespace DeNelle.Village
     /// catalog type the verb table declares (Resource / Collector / Support / Wall / Gate).
     /// Derived from catalog TYPE, never from an id list — an id list would rot the first time
     /// a catalog row is added, a type rule will not.
+    ///
+    /// ⚠ SUPERSEDED AS THE QUICK-TAB SOURCE by WO-1010 D21 (owner, late 2026-08-09): the
+    /// right-edge stack now carries THREE raw verbs (Town / Defense / Castle Structures =
+    /// the renamed Walls) via <see cref="BuildPaletteVM.Configure"/>. The binary grouping and
+    /// <see cref="BuildPaletteVM.ConfigureGroup"/> remain on the API (pure, tested seam) but
+    /// the shipped UI no longer calls them.
     /// </summary>
     public enum BuildGroup
     {
@@ -164,6 +170,15 @@ namespace DeNelle.Village
                 if (cat.Types != null && cat.Types.Length > 0) _types = cat.Types;
                 _lockedIds = cat.LockedIds ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             }
+            // WO-1010 D21 (owner D8 resolution 2026-08-09): the Walls verb surfaces as the
+            // "Castle Structures" DISPLAY category on the right-edge quick-tab stack. Named
+            // trace so a capture can split "tab absent" (flag) from "tab present, rows empty"
+            // (catalog) in one read — §12.
+            if (type == BuildType.Walls)
+                FlowTrace.Step("BuildPalette",
+                    "walls-category surfacing: Configure(Walls) serving the 'Castle Structures' display " +
+                    "category (FeatureFlags.WallsTab=" + DeNelle.Core.FeatureFlags.WallsTab +
+                    " -- display rename only, BuildType.Walls key + catalog rows unchanged)");
             Rebuild();
             Raise();
         }
@@ -206,11 +221,11 @@ namespace DeNelle.Village
                 {
                     bool isDefense = t == CatalogType.Tower;
                     if (isDefense != (group == BuildGroup.Defenses)) continue;
-                    // Walls stay behind their existing feature flag. The owner's binary ruling
-                    // puts the castle fabric in Structures, but ff.wallstab is OFF today and
-                    // merging two tabs into one grouping must never be the thing that ships a
-                    // gated surface: a display regrouping does not get to un-gate content. Flip
-                    // the flag and the wall rows appear here with no further code change.
+                    // Walls stay behind their existing feature flag: merging two tabs into one
+                    // grouping must never be the thing that ships a gated surface — a display
+                    // regrouping does not get to un-gate content. (WO-1010 D21, 2026-08-09:
+                    // FeatureFlags.WallsTab defaultOn flipped TRUE by the owner's D8 resolution,
+                    // so wall rows now flow here by default; the guard remains the flag's.)
                     if (t == CatalogType.Wall && !DeNelle.Core.FeatureFlags.WallsTab) continue;
                     if (!types.Contains(t)) types.Add(t);
                 }

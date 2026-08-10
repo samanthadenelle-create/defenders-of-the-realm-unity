@@ -217,7 +217,12 @@ namespace DeNelle.Village
                 [BuildType.Walls] = new BuildCategory
                 {
                     Types = new[] { CatalogType.Wall },
-                    Label = "Build Walls",
+                    // WO-1010 D21 / owner D8 resolution 2026-08-09: the Walls category
+                    // DISPLAYS as "Castle Structures" (walls + gates-to-come, verticality
+                    // later). DISPLAY STRING ONLY — the BuildType.Walls key and the
+                    // CatalogType.Wall rows are unchanged. Mirrors build-categories.json v2
+                    // (both copies); keep the two in sync.
+                    Label = "Castle Structures",
                     LockedIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase),
                 },
                 [BuildType.Collector] = new BuildCategory

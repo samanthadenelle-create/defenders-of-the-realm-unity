@@ -725,12 +725,21 @@ namespace DeNelle.Core
         /// interaction path (ArenaHeraldSpawner) stays independently gated by "ff.arena".</summary>
         public static bool Colosseum => Get("colosseum", defaultOn: false);
 
-        /// <summary>Owner ruling 2026-07-13: the build palette's WALLS tab is OFF for now —
-        /// player wall-building ships with SETTLEMENT BUILDING (the WO-708 wall-builder
-        /// drag-lines tool, parked post-V1). When OFF, <see cref="DeNelle.Village.BuildPaletteUI"/>
-        /// renders only Town / Defenses (tabs re-span the row). Wall catalog rows stay loadable
-        /// (saves/replay untouched). Flip ON via PlayerPrefs "ff.wallstab" = 1.</summary>
-        public static bool WallsTab => Get("wallstab", defaultOn: false);
+        /// <summary>The build palette's walls category tab. When OFF,
+        /// <see cref="DeNelle.Village.BuildPaletteUI"/> renders only the Town / Defense
+        /// quick-tabs and <c>BuildPaletteVM.ConfigureGroup</c> filters Wall rows out of the
+        /// Structures grouping. Wall catalog rows stay loadable either way (saves/replay
+        /// untouched). PlayerPrefs "ff.wallstab" = 0/1 overrides.</summary>
+        // Owner D8 resolution 2026-08-09 (WO-1010 §7 D21 addendum) — defaultOn flipped
+        // false -> true: Walls RETURNS as the "Castle Structures" display category on the
+        // build screen's right-edge quick-tab stack (display rename only; the BuildType.Walls
+        // key and build-categories.json keys are unchanged). This SUPERSEDES the 2026-07-13
+        // ruling that parked the tab behind settlement building.
+        // WARNING — PlayerPrefs-first trap: Get() reads the persisted "ff.wallstab" BEFORE
+        // this default, so a machine where ff.wallstab=0 was ever written will NOT see this
+        // flip until the pref is cleared or set to 1. A felt-test seat that still shows two
+        // tabs is that machine, not a regression of this line.
+        public static bool WallsTab => Get("wallstab", defaultOn: true);
 
         /// <summary>WO-VFX-POI (owner is red/green colorblind — callouts read by MOTION / SHAPE /
         /// LUMINANCE / VERTICALITY, never hue): when ON, <see cref="DeNelle.Village.PoiCalloutSystem"/>

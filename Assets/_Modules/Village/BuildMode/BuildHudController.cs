@@ -430,8 +430,9 @@ namespace DeNelle.Village
             // comparing their rects, which is why this is written down here.
             //
             // The right edge is now split by ownership, matching the target wireframe:
-            //   TOP-right    -> the corner Done (D10) and the palette's quick-tabs (D15)
-            //   BOTTOM-right -> this rail, seated just above the D19 strip
+            //   TOP-right    -> the corner Done (D10)
+            //   MIDDLE-right -> the palette's permanent quick-tab stack (D15/D21, y 507..935)
+            //   BOTTOM-right -> this rail, seated just above the D19 strip (y 114..498)
             // That also puts the verbs in genuine right-thumb reach in landscape, which is what
             // D14 asked for in the first place.
             var railEdge = ElarionUiKit.AddImage(_intentBar.transform, "GhostVerbRail",

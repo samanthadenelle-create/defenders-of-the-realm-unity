@@ -1,6 +1,16 @@
 // =============================================================================
 // BuildTabRow — the code-built Build HUD category tab row (Grok slice 3).
 // -----------------------------------------------------------------------------
+// ⚠ RETIRED FROM THE DOCK — WO-1010 D21 (owner ruling late 2026-08-09). The PICK
+// phase's category tabs left the bottom panel: the RIGHT-EDGE quick-tab stack in
+// BuildPaletteUI (BuildQuickTabs/AddQuickTab) is now the ONE permanent category
+// selector (Town / Defense / Castle Structures), and it took over this file's
+// tutorial spotlight registrations ("build.tab_town"/"build.tab_defenses") and
+// the gilt-underline active tell. NOTHING constructs this component any more
+// (BuildPaletteUI was the sole caller — verified 2026-08-09). Kept on disk
+// because an edit-only lane cannot delete files + .meta pairs; the committing
+// seat may delete both in one commit if it wants the dead code gone.
+// -----------------------------------------------------------------------------
 // Assembly: DeNelle.Village   Namespace: DeNelle.Village
 //
 // The owner-ruled build categories — Town / Defenses / Walls (Walls gated by

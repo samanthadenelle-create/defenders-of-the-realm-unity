@@ -113,23 +113,47 @@ namespace DeNelle.Village
         // Collapse-on-place (owner "minimize on select" + 2026-07-16 redesign): while an
         // entry is armed the shop FULLY minimizes — EVERY dock background is hidden so no
         // black wall covers the map. These refs let Collapse()/Expand() toggle the header
-        // band, the tab row, and the card tray. The "Placing: <name>" label is folded into
-        // the HUD intent bar (BuildHudController.SetPlacingLabel) — no summary panel here.
+        // band, the crystals line, and the card tray. The "Placing: <name>" label is folded
+        // into the HUD intent bar (BuildHudController.SetPlacingLabel) — no summary panel here.
         private GameObject _topBarGo;         // the dock header band (hidden while collapsed)
         private GameObject _trayGo;           // the scroll well (hidden while collapsed)
-        private GameObject _tabRowGo;         // the category tab band (hidden while collapsed)
-        // WO-1010 P2 + D15: the right-edge category quick-tabs — the ONLY chrome Collapse
-        // leaves up, and the way back to the carousel (PRE-FILTERED) without cancelling out of
-        // build intent entirely. Replaces the single "^ Buildings (n)" tab.
+        private GameObject _crystalsRowGo;    // the slim crystals line above the tray (hidden while collapsed)
+        // WO-1010 D21 (owner ruling late 2026-08-09, WO §7): the category tabs LEFT the bottom
+        // panel — the right-edge quick-tab stack is now the PERMANENT category selector, visible
+        // in BOTH the PICK phase and the collapsed/placing state. In PICK a tap re-points the
+        // card row (Configure); while collapsed a tap reopens the carousel PRE-FILTERED (the
+        // standard no-charge cancel). Three entries — Town / Defense / Castle Structures — where
+        // Castle Structures is the RENAMED Walls display category (keys stay stable).
         private struct QuickTab
         {
             public GameObject Go;
             public TextMeshProUGUI Label;
-            public BuildGroup Group;
+            public BuildType Type;
             public string Caption;
+            public GameObject Underline;   // gilt active tell — position/shape, never colour alone
         }
-        private readonly List<QuickTab> _quickTabs = new List<QuickTab>(2);
+        private readonly List<QuickTab> _quickTabs = new List<QuickTab>(3);
         private const float RestoreTabW = 260f;
+
+        // ── WO-1010 D21: the quick-tab stack's FIXED-PIXEL band math (1920x1080 reference) ──
+        // The right edge is split by ownership (the D7/D8-class lesson — two surfaces must
+        // never draw in one band). Reading the neighbours' published/authored numbers:
+        //   BOTTOM-right — the D14 verb rail: seated ResourceStripReservedPx(98) +
+        //     RailBottomGapPx(16) = 114px up, RailBandH = 384px tall -> the rail owns
+        //     y 114..498 from the bottom.
+        //   TOP-right — the D10 corner Done: a 112px MinTouch hit pad inset 24px from the
+        //     corner -> Done owns the top 136px, i.e. y 944..1080 from the bottom.
+        //   MIDDLE band -> THIS stack: 944 - 498 = 446px free. Three 132px tabs
+        //     (CanonCtaHeight, >= MinTouchPx 112) + two 16px gutters = 428px, centred in the
+        //     band: stack bottom 507 (9px clear of the rail's 498), top 935 (9px clear of
+        //     Done's 944). Tab centres bottom-up: 573 / 721 / 869.
+        // X: box right edge 72px in from the screen edge -> x 1588..1848 at 1920 wide (the
+        // capture-documented D15 column). Both canvases resolve 1:1 at 1920x1080 in landscape
+        // (this modal canvas is 1080x1920 ref, match 0.5 -> scale 1), so these px are directly
+        // comparable with BuildHudController's.
+        private const float QuickTabGutterPx     = 16f;
+        private const float QuickTabStackBottomPx = 507f;
+        private const float QuickTabEdgeInsetPx  = 72f;
         /// <summary>Bottom breathing room under the card tray so a device safe-area inset
         /// (gesture bar / rounded corner) cannot clip the cost line off the cards.</summary>
         private const float TrayBottomInsetPx = 28f;
@@ -137,17 +161,15 @@ namespace DeNelle.Village
         /// Named because the D13 band-coverage trace has to reason about it.</summary>
         private const float CardWidthPx = 260f;
 
-        // WO-673 category switcher (always on — WO-682): the owner-ruled three build
-        // categories — Town / Defenses / Walls — as a tab row between the header and
-        // the card tray. Tapping a tab Configure()s this palette for that verb (placement
-        // stays generic; BuildModeController's _activeBuildType is only ever used to
-        // Configure this palette, verified BuildModeController.cs:256). The active tab
-        // carries a gold UNDERLINE — position/shape tell, never color alone (owner is
-        // red/green colorblind).
+        // WO-673 category switcher (always on — WO-682), RE-HOMED by WO-1010 D21: the
+        // owner-ruled three build categories — Town / Defense / Castle Structures (the
+        // renamed Walls) — now live in the right-edge quick-tab stack, NOT a bottom tab
+        // row. Tapping a tab Configure()s this palette for that verb (placement stays
+        // generic; BuildModeController's _activeBuildType is only ever used to Configure
+        // this palette). The active tab carries a gold UNDERLINE — position/shape tell,
+        // never color alone (owner is red/green colorblind). The BuildTabRow component is
+        // RETIRED from the dock (no callers remain — see its header note).
         private BuildType _activeType = BuildType.Defense;
-        // WO — the kit tab component (BuildTabRow) that renders Town/Defenses/Walls and
-        // owns the active-underline + tutorial spotlight registration (was an inline loop).
-        private BuildTabRow _tabRow;
 
         private void OnEnable()
         {
@@ -235,10 +257,15 @@ namespace DeNelle.Village
             // be clean"): the 540px dock carried a ~140px HEADER band whose only tenant was
             // the 16px Crystals line — a third of the panel read as empty black (the owner's
             // "This screen is not correct" PICK capture). The header band is COLLAPSED to
-            // zero (kept as a GO for the Collapse() seam) and the balance line now sits
-            // beside the tabs, so the dock is tabs + tray and nothing else.
-            // tray 0-0.632 (~259px), tabs 0.632-1.0 (~151px), header zero.
-            const float trayTop = 0.632f;
+            // zero (kept as a GO for the Collapse() seam).
+            // WO-1010 D21 (owner, late 2026-08-09): the CATEGORY TAB BAND DISSOLVES from the
+            // dock entirely — the tabs move to the right-edge quick-tab stack. The dock slims
+            // to the CARD ROW + one slim crystals line: tray 259px + crystals 44px = 303px,
+            // fixed pixels, centred, resting on the D19 resource frame. No dead band.
+            const float TrayHeightPx    = 259f;
+            const float CrystalsBandPx  = 44f;
+            const float DockHeightPx    = TrayHeightPx + CrystalsBandPx;   // 303
+            const float trayTop = TrayHeightPx / DockHeightPx;             // ~0.855 of 303px
             const float headerBottom = 1.0f;
 
             // Grok slice 4 (landscape density): the shop is now a LARGE landscape
@@ -266,9 +293,10 @@ namespace DeNelle.Village
             // selection on a phone"): wide dock so the shop tiles read big and
             // thumb-reachable on a small landscape phone screen (CoC shop bar).
             // Height history: 440 -> 540 (2026-07-15, band rebalance) -> 410 (2026-08-09
-            // WO-1010 band-tightening: the header band collapsed, so the dock is exactly
-            // the 132px tab row + pads and the ~259px card tray — the mockup's half-tray).
-            drt.sizeDelta = new Vector2(1560f, 410f);
+            // band-tightening) -> 303 (2026-08-09 D21: the tab band dissolved to the
+            // right-edge stack, so the dock is exactly the ~259px card tray + a 44px
+            // crystals line — the mockup's slim bottom panel).
+            drt.sizeDelta = new Vector2(1560f, DockHeightPx);
 
             // Slim header row: obsidian fill + gold under-rule (the kit panel language).
             // Held as _topBarGo so Collapse() can hide the whole header band (it was the
@@ -301,22 +329,18 @@ namespace DeNelle.Village
             // "X Done" (always visible while Build Mode is open). OnExitRequested stays on
             // the API for back-compat but is no longer raised from this strip.
 
-            // WO — category tab row via the reusable kit component (BuildTabRow):
-            // Town / Defenses / Walls (Walls gated by FeatureFlags.WallsTab). Each tab
-            // Configure()s this palette for that verb; the active tab carries a gilt
-            // underline (position/shape tell, not colour alone). Owns tutorial spotlights.
-            var tabRow = ElarionUiKit.AddImage(dock.transform, "CategoryTabs",
+            // WO-1010 D21: the bottom CategoryTabs band + BuildTabRow are GONE — the
+            // category selector is the right-edge quick-tab stack (built below, canvas
+            // level, so it survives Collapse). What remains here is the ONE slim crystals
+            // line the ruling keeps in the bottom panel, centred so the slimmed dock reads
+            // as card row + readout and nothing else.
+            var crystalsRow = ElarionUiKit.AddImage(dock.transform, "CrystalsRow",
                 new Vector2(0f, trayTop), new Vector2(1f, headerBottom),
                 ElarionUiKit.ObsidianFill, rounded: false);
-            _tabRowGo = tabRow;
-            _tabRow = tabRow.AddComponent<BuildTabRow>();
-            _tabRow.Build(tabRow.transform, Configure, _activeType);
-
-            // Balance sits IN the tab band, left of the (now adjacent, centred) tabs —
-            // never alone on an empty band (owner F8 2026-07-06; WO-1010 band-tightening).
-            _balanceLabel = MakeText(tabRow.transform, "Crystals: 0", 16, ElarionUi.Gilt,
-                FontStyles.Bold, TextAlignmentOptions.Left,
-                new Vector2(0.02f, 0.10f), new Vector2(0.20f, 0.90f));
+            _crystalsRowGo = crystalsRow;
+            _balanceLabel = MakeText(crystalsRow.transform, "Crystals: 0", 16, ElarionUi.Gilt,
+                FontStyles.Bold, TextAlignmentOptions.Center,
+                new Vector2(0.30f, 0.05f), new Vector2(0.70f, 0.95f));
 
             // Bottom: horizontal-scrolling slot-plate card tray in a recessed dark well
             // (content-width now, so it reads as a dock — not a screen-wide wall).
@@ -399,6 +423,10 @@ namespace DeNelle.Village
             // slim pill in the HUD intent cluster (BuildHudController.SetPlacingLabel), so
             // Collapse just hides every dock background and leaves the map fully visible.
 
+            // WO-1010 D21: the PERMANENT right-edge quick-tab stack — canvas-level (not a
+            // dock child) so it stands in BOTH the PICK phase and the collapsed state.
+            EnsureQuickTabs();
+
             _canvas.SetActive(false);   // built hidden; Show shows it
         }
 
@@ -406,14 +434,15 @@ namespace DeNelle.Village
 
         /// <summary>
         /// FULLY minimize the shop while placing (owner redesign 2026-07-16): hide EVERY
-        /// dock background — the header band, the tab row, AND the card tray — so NO black
-        /// wall covers the map/ghost. The "Placing: &lt;name&gt;" label is folded into the
-        /// HUD intent cluster (BuildHudController.SetPlacingLabel), so the dock shows no
-        /// summary panel of its own. What Collapse LEAVES up is the right-edge category
-        /// quick-tabs (D15) — the way back into a pre-filtered carousel. (The dev-only Orient
-        /// button that used to survive Collapse here is GONE, WO-1010 D1.) Called from
-        /// BuildModeController.Arm. <paramref name="armedDisplayName"/> is retained for API
-        /// compat (the label is now owned by the HUD). Safe before build (no-op).
+        /// dock background — the header band, the crystals line, AND the card tray — so NO
+        /// black wall covers the map/ghost. The "Placing: &lt;name&gt;" label is folded into
+        /// the HUD intent cluster (BuildHudController.SetPlacingLabel), so the dock shows no
+        /// summary panel of its own. What stands is the PERMANENT right-edge quick-tab stack
+        /// (D21) — in this state it is the way back into a pre-filtered carousel. (The
+        /// dev-only Orient button that used to survive Collapse here is GONE, WO-1010 D1.)
+        /// Called from BuildModeController.Arm. <paramref name="armedDisplayName"/> is
+        /// retained for API compat (the label is now owned by the HUD). Safe before build
+        /// (no-op).
         /// </summary>
         /// <summary>
         /// True while the shop is minimized to the quick-tabs. WO-1010 D12: the build nudge
@@ -425,42 +454,34 @@ namespace DeNelle.Village
         public void Collapse(string armedDisplayName)
         {
             if (_canvas == null) return;
-            FlowTrace.Step("BuildHud", $"Collapse refs: topBar={_topBarGo!=null} tray={_trayGo!=null} tabRow={_tabRowGo!=null}");
+            FlowTrace.Step("BuildHud", $"Collapse refs: topBar={_topBarGo!=null} tray={_trayGo!=null} crystals={_crystalsRowGo!=null}");
             if (_topBarGo != null) _topBarGo.SetActive(false);
             if (_trayGo != null) _trayGo.SetActive(false);
-            if (_tabRowGo != null) _tabRowGo.SetActive(false);
+            if (_crystalsRowGo != null) _crystalsRowGo.SetActive(false);
             IsCollapsed = true;
-            ShowQuickTabs(true);    // WO-1010 P2/D15: the way BACK to the carousel
+            // WO-1010 D21: the quick-tab stack is PERMANENT (visible in PICK too) — Collapse
+            // only guarantees it exists and its counts are fresh; nothing toggles here.
+            EnsureQuickTabs();
+            RefreshQuickTabCounts();
             FlowTrace.Step("BuildHud",
-                "palette collapsed: all dock chrome hidden (no black wall) — Placing label folded into intent bar");
+                "palette collapsed: all dock chrome hidden (no black wall) — Placing label folded into intent bar; right-edge quick-tabs stand");
         }
 
-        // ── WO-1010 P2 + D15: the minimized component's category quick-tabs ─────
+        // ── WO-1010 D21: the PERMANENT right-edge category quick-tab stack ─────
         /// <summary>
-        /// Show or hide the quick-tabs the minimized shop leaves behind.
+        /// Ensure the quick-tab stack exists and is up. WO-1010 D21 (owner ruling late
+        /// 2026-08-09): the stack is the ONE category selector, visible in BOTH the PICK
+        /// phase and the collapsed/placing state — the bottom tab band is gone, so hiding
+        /// this would leave the shop with no category affordance at all.
         ///
-        /// WHY THIS EXISTS (P2). Collapse hides EVERY piece of dock chrome, which is what clears
-        /// the field — but it also left the player with NO WAY BACK to the carousel except
-        /// cancelling the placement, so picking the wrong card was a dead end you had to back
-        /// out of. That is a real part of what the external testers hit as "too hard to use".
-        /// These tabs are the affordance that makes minimize-on-select reversible.
-        ///
-        /// WHY THERE ARE TWO (D15, owner 2026-08-09, verbatim "we should see two tabs for the
-        /// slider vertical scroll, one for Structures/Defenses" + "everything is either a
-        /// structure (building) or a Defense (tower)"): a single generic door made the player
-        /// reopen the shop and THEN find the category. Two named doors reopen it already
-        /// filtered. Two entries cover the whole catalog with no leftovers, which is the test
-        /// that the binary split is the right one.
-        ///
-        /// Each carries its group's COUNT so the minimized state still says what is behind it —
-        /// a bare word would read as decoration rather than a door.
+        /// Rebuilds if the list is empty OR its entries were destroyed with a previous
+        /// canvas (Unity fake-null): a stale list would silently leave the shop with no
+        /// selector, the exact dead end P2 existed to prevent.
         /// </summary>
-        private void ShowQuickTabs(bool show)
+        private void EnsureQuickTabs()
         {
-            // Rebuild if the list is empty OR its entries were destroyed with a previous canvas
-            // (Unity fake-null): a stale list would silently leave the minimized shop with no
-            // door at all, which is the exact dead end P2 exists to prevent.
-            if (show && (_quickTabs.Count == 0 || _quickTabs[0].Go == null))
+            if (_canvas == null) return;
+            if (_quickTabs.Count == 0 || _quickTabs[0].Go == null)
             {
                 _quickTabs.Clear();
                 BuildQuickTabs();
@@ -468,18 +489,23 @@ namespace DeNelle.Village
             for (int i = 0; i < _quickTabs.Count; i++)
             {
                 var t = _quickTabs[i];
-                if (t.Go == null) continue;
-                if (t.Go.activeSelf != show) t.Go.SetActive(show);
-                if (show && t.Label != null)
-                {
-                    int n = CountForGroup(t.Group);
-                    t.Label.text = t.Caption + " (" + n + ")";
-                }
+                if (t.Go != null && !t.Go.activeSelf) t.Go.SetActive(true);
+            }
+        }
+
+        /// <summary>Refresh each tab's live count caption ("Town (6)").</summary>
+        private void RefreshQuickTabCounts()
+        {
+            for (int i = 0; i < _quickTabs.Count; i++)
+            {
+                var t = _quickTabs[i];
+                if (t.Go == null || t.Label == null) continue;
+                t.Label.text = t.Caption + " (" + CountForType(t.Type) + ")";
             }
         }
 
         /// <summary>
-        /// How many cards a D15 group WOULD show, without disturbing the live projection.
+        /// How many cards a category verb WOULD show, without disturbing the live projection.
         ///
         /// The counts are computed on a THROWAWAY VM over the same providers, never by
         /// re-Configuring the live one: the live VM is what the carousel is currently rendering
@@ -487,16 +513,15 @@ namespace DeNelle.Village
         /// would re-render the shop underneath an in-flight placement. A count is a question,
         /// not a state change.
         /// </summary>
-        private static int CountForGroup(BuildGroup group)
+        private static int CountForType(BuildType type)
         {
             int n = 0;
-            Guard.Try("BuildPalette", "count group " + group, () =>
+            Guard.Try("BuildPalette", "count type " + type, () =>
             {
                 BuildPaletteVM probe = null;
                 try
                 {
-                    probe = BuildPaletteVM.CreateDefault(BuildType.Town, null);
-                    probe.ConfigureGroup(group);
+                    probe = BuildPaletteVM.CreateDefault(type, null);
                     n = probe.Cards != null ? probe.Cards.Count : 0;
                 }
                 finally
@@ -514,54 +539,142 @@ namespace DeNelle.Village
         {
             if (_canvas == null) return;
 
-            // RIGHT EDGE, stacked VERTICALLY (D15: "in the minimized component on right").
-            // Upper-right band only: the lean placement rail (D14 — OK / rotate / X) owns the
-            // right edge lower down, and the compact corner Done (D10) owns the true top-right,
-            // so these two sit between them rather than competing with either. Fixed-pixel boxes
-            // (PinSize) so a wide landscape canvas cannot stretch them into thin bars, and the
-            // 132px CTA height clears MinTouchPx without an extra pad.
-            AddQuickTab("Structures", BuildGroup.Structures, 0.78f, "BuildPaletteRestoreTab");
-            AddQuickTab("Defenses", BuildGroup.Defenses, 0.60f, "BuildPaletteQuickTab_Defenses");
+            // RIGHT EDGE, stacked VERTICALLY in the MIDDLE band (D21 — band math at the
+            // QuickTab* consts above: the D14 rail owns y 114..498 from the bottom, the D10
+            // corner Done owns the top 136px; this stack owns 507..935 between them).
+            // Fixed-pixel 260x132 boxes (CanonCtaHeight >= MinTouchPx 112) so a wide
+            // landscape canvas cannot stretch them into thin bars.
+            //
+            // THREE categories (owner D8 resolution via D21, 2026-08-09): Town / Defense /
+            // Castle Structures — where Castle Structures is the RENAMED Walls display
+            // category (walls + gates-to-come, verticality later). Display rename only: the
+            // underlying BuildType.Walls key and build-categories.json keys are untouched.
+            // The Walls verb stays behind FeatureFlags.WallsTab (defaultOn flipped TRUE by
+            // the same ruling) — flag off = two tabs, exactly as the old bottom row did.
+            bool wallsOn = DeNelle.Core.FeatureFlags.WallsTab;
+            float step = ElarionUiKit.CanonCtaHeight + QuickTabGutterPx;                // 148
+            float bottomCentre = QuickTabStackBottomPx + ElarionUiKit.CanonCtaHeight * 0.5f; // 573
+            // Top -> bottom reads Town / Defense / Castle Structures (the ruling's order).
+            AddQuickTab("Town", BuildType.Town, bottomCentre + 2f * step, "BuildPaletteRestoreTab");
+            AddQuickTab("Defense", BuildType.Defense, bottomCentre + step, "BuildPaletteQuickTab_Defense");
+            if (wallsOn)
+            {
+                // Caption resolves through the DATA display seam (build-categories.json
+                // 'label' via BuildCategoryRegistry) so the rename lives in one place; the
+                // registry's hardcoded fallback mirrors it.
+                string castleCaption = BuildCategoryRegistry.Get(BuildType.Walls).Label;
+                if (string.IsNullOrEmpty(castleCaption) || castleCaption == "Build") castleCaption = "Castle Structures";
+                AddQuickTab(castleCaption, BuildType.Walls, bottomCentre, "BuildPaletteQuickTab_CastleStructures");
+            }
+            FlowTrace.Step("BuildPalette",
+                "D21 quick-tab stack built: " + _quickTabs.Count + " tabs at x 1588..1848, y band 507..935 " +
+                "(3x132px + 2x16px gutters = 428px centred between the D14 rail top 498 and the corner " +
+                "Done pad bottom 944; 9px clearance each side, 1920x1080 ref); walls/'Castle Structures' " +
+                "tab " + (wallsOn ? "PRESENT" : "ABSENT") + " (FeatureFlags.WallsTab=" + wallsOn + ")");
         }
 
         /// <summary>
         /// One right-edge quick-tab. <paramref name="objectName"/> is explicit because
         /// UICaptureLaunch asserts the collapsed palette still has an active
         /// "BuildPaletteRestoreTab" — the first tab keeps that name so the capture contract
-        /// survives the P2 -> D15 change without editing the capture harness.
+        /// survives the P2 -> D15 -> D21 changes without editing the capture harness.
+        /// <paramref name="yCentrePx"/> is FIXED reference px from the canvas BOTTOM (the
+        /// same coordinate system the D14 rail seats in), never a fraction of height — a
+        /// fraction would drift the stack into the rail's band on a short canvas.
         /// </summary>
-        private void AddQuickTab(string caption, BuildGroup group, float yCentre, string objectName)
+        private void AddQuickTab(string caption, BuildType type, float yCentrePx, string objectName)
         {
             var btn = ElarionUiKit.BuildObsidianButton(_canvas.transform, caption,
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
-                new Vector2(0.80f, yCentre), new Vector2(0.99f, yCentre),
+                new Vector2(0.90f, 0.5f), new Vector2(0.90f, 0.5f),
                 () =>
                 {
+                    bool collapsed = IsCollapsed;
                     FlowTrace.Step("BuildPalette",
-                        $"quick-tab tapped group={group} -> reopening the carousel PRE-FILTERED " +
-                        "(standard no-charge cancel of any un-placed ghost)");
-                    // Filter FIRST, then ask the brain to restore: OnRestoreRequested routes
-                    // through CancelArmed -> Expand -> Render, so the group must already be set
-                    // or the carousel would come back on the previous category and only switch
-                    // on the next re-render.
+                        "quick-tab tapped type=" + type + " collapsed=" + collapsed +
+                        (type == BuildType.Walls
+                            ? " (walls surfacing as 'Castle Structures', FeatureFlags.WallsTab=" +
+                              DeNelle.Core.FeatureFlags.WallsTab + ")"
+                            : string.Empty) +
+                        (collapsed
+                            ? " -> reopening the carousel PRE-FILTERED (standard no-charge cancel of any un-placed ghost)"
+                            : " -> re-pointing the card row (PICK phase category switch)"));
                     EnsureVm();
-                    _vm.ConfigureGroup(group);
-                    _activeType = _vm.ActiveType;
-                    UpdateTabHighlight();
-                    OnRestoreRequested?.Invoke();
+                    if (collapsed)
+                    {
+                        // Filter FIRST, then ask the brain to restore: OnRestoreRequested routes
+                        // through CancelArmed -> Expand -> Render, so the verb must already be
+                        // set or the carousel would come back on the previous category and only
+                        // switch on the next re-render.
+                        _vm.Configure(type);
+                        _activeType = type;
+                        UpdateTabHighlight();
+                        OnRestoreRequested?.Invoke();
+                    }
+                    else
+                    {
+                        // PICK phase: the tap IS the category switch (the old bottom-tab path).
+                        Configure(type);
+                    }
                 });
             if (btn == null) return;
             btn.gameObject.name = objectName;
-            PinSize(btn, RestoreTabW, ElarionUiKit.CanonCtaHeight);
-            var go = btn.gameObject;
-            go.SetActive(false);
+            // FIXED-PIXEL seat: anchor to the canvas' bottom-right corner and stamp the box.
+            // (PinSize would centre on the fraction anchor rect, i.e. a HEIGHT fraction —
+            // exactly the drift the band math forbids.)
+            var rt = btn.transform as RectTransform;
+            if (rt != null)
+            {
+                rt.anchorMin = rt.anchorMax = new Vector2(1f, 0f);
+                rt.pivot = new Vector2(0.5f, 0.5f);
+                rt.sizeDelta = new Vector2(RestoreTabW, ElarionUiKit.CanonCtaHeight);
+                rt.anchoredPosition = new Vector2(-(QuickTabEdgeInsetPx + RestoreTabW * 0.5f), yCentrePx);
+            }
+
+            // Active-category tell: a gilt underline pinned to the tab's bottom edge —
+            // POSITION + SHAPE carry the meaning, never colour alone (owner is red/green
+            // colourblind). Same grammar the retired BuildTabRow used.
+            var underline = new GameObject("ActiveUnderline", typeof(RectTransform), typeof(Image));
+            underline.transform.SetParent(btn.transform, false);
+            var urt = (RectTransform)underline.transform;
+            urt.anchorMin = new Vector2(0.08f, 0f);
+            urt.anchorMax = new Vector2(0.92f, 0f);
+            urt.pivot = new Vector2(0.5f, 0f);
+            urt.sizeDelta = new Vector2(0f, 3f);
+            var uimg = underline.GetComponent<Image>();
+            uimg.color = ElarionUi.Gilt;
+            uimg.raycastTarget = false;
+            underline.SetActive(type == _activeType);
+
+            // Tutorial spotlight re-registration (WO-1010 D21): the bottom tab row that
+            // owned "build.tab_town"/"build.tab_defenses" is gone — the highlights re-home
+            // here so the founding tutorial beats never dangle. Registry re-register is
+            // idempotent (last write wins; fake-null guard drops destroyed rects).
+            if (type == BuildType.Town && rt != null)
+                TutorialHighlightRegistry.Register("build.tab_town", rt);
+            else if (type == BuildType.Defense && rt != null)
+                TutorialHighlightRegistry.Register("build.tab_defenses", rt);
+
             _quickTabs.Add(new QuickTab
             {
-                Go = go,
+                Go = btn.gameObject,
                 Label = btn.GetComponentInChildren<TMP_Text>(true) as TextMeshProUGUI,
-                Group = group,
-                Caption = caption
+                Type = type,
+                Caption = caption,
+                Underline = underline
             });
+
+            // Capture-caught (wave-4 PICK PNG): "Castle Structures (N)" ELLIPSIZED inside the
+            // 260px box — the kit button's fixed font size cannot know this stack carries the
+            // one long caption. Autosize down instead of truncating: a shrunk word is
+            // readable, "Castle Struct..." is not (and the ellipsis ate the live count).
+            var qtLabel = _quickTabs[_quickTabs.Count - 1].Label;
+            if (qtLabel != null)
+            {
+                qtLabel.textWrappingMode = TextWrappingModes.NoWrap;
+                qtLabel.enableAutoSizing = true;
+                qtLabel.fontSizeMin = 13f;
+            }
         }
 
         /// <summary>
@@ -580,14 +693,15 @@ namespace DeNelle.Village
         {
             if (_canvas == null) return;
             if (_topBarGo != null) _topBarGo.SetActive(true);
-            if (_tabRowGo != null) _tabRowGo.SetActive(true);
+            if (_crystalsRowGo != null) _crystalsRowGo.SetActive(true);
             if (_trayGo != null) _trayGo.SetActive(true);
             IsCollapsed = false;
-            ShowQuickTabs(false);   // WO-1010 P2/D15: the carousel IS back; the door closes with it
+            // WO-1010 D21: the quick-tab stack STAYS UP — it is the permanent category
+            // selector in the PICK phase too (the bottom tab band is gone).
             _armedId = null;
             if (_canvas.activeSelf) Render();
             FlowTrace.Step("BuildPalette",
-                "expand: armed cleared + cards re-rendered (live cost + single-card glow refresh)");
+                "expand: armed cleared + cards re-rendered (live cost + single-card glow refresh); quick-tabs stand");
         }
 
         /// <summary>
@@ -603,6 +717,11 @@ namespace DeNelle.Village
             FlowTrace.Step("BuildPalette", "palette-build-start");
             EnsureBuilt();
             EnsureVm();
+            // WO-1010 D21: the permanent right-edge selector rides every render — counts
+            // stay live (a placement/spend can change what a category would list).
+            EnsureQuickTabs();
+            RefreshQuickTabCounts();
+            UpdateTabHighlight();
             if (_stripContent == null)
             {
                 FlowTrace.Warn("BuildPalette", "Render aborted: strip content is null (palette never built)");
@@ -1089,13 +1208,18 @@ namespace DeNelle.Village
                 _balanceLabel.text = "Crystals: " + ElarionUi.CompactNumber(_vm != null ? _vm.Crystals : 0);
         }
 
-        // ── Category tabs (now the reusable BuildTabRow kit component) ─────────
+        // ── Category tabs (WO-1010 D21: the right-edge quick-tab stack) ────────
 
-        /// <summary>Move the gilt underline to the tab matching <see cref="_activeType"/>.
-        /// No-op when the tab row was never built (palette not built yet).</summary>
+        /// <summary>Move the gilt underline to the quick-tab matching <see cref="_activeType"/>.
+        /// A legacy verb with no tab (Collector/Support) simply lights nothing — never a
+        /// throw, never a wrong underline. No-op when the stack was never built.</summary>
         private void UpdateTabHighlight()
         {
-            _tabRow?.SetActive(_activeType);
+            for (int i = 0; i < _quickTabs.Count; i++)
+            {
+                var t = _quickTabs[i];
+                if (t.Underline != null) t.Underline.SetActive(t.Type == _activeType);
+            }
         }
 
         // WO-1010 D1: UpdateOrientButton() is GONE with the button it gated. Its whole job was
