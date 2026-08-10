@@ -11,17 +11,39 @@
 // into the controller for the place intents (rotate/place/cancel/exit).
 //
 // THREE STATES (Grok, CoC mental model):
-//   Browse   — shop open; NO intent bar; tap a placed building to select it.
-//   Placing  — the single PLACE intent bar (Rotate L/R . PLACE . Cancel); the shop
+//   Browse   — shop open; NO verb rail; tap a placed building to select it.
+//   Placing  — the LEAN RIGHT-EDGE RAIL (confirm / rotate / cancel); the shop
 //              collapses to the armed-card summary (BuildPaletteUI.Collapse).
 //   Selected — the selection verbs (Move/Upgrade/Sell/Cancel) render on the SAME
 //              bar family, owned by BuildSelectionUI (kept — the fleet's
 //              AssertBuildMoveChain SELECT link asserts that panel renders).
 //
-// This canvas hosts the wallet row (BuildWalletRow, all pools), the "BUILD MODE"
-// label, and the "Done" exit (>=132px). The category tabs + the icon-first card
-// carousel stay in BuildPaletteUI's own canvas (its card/art/cost/economy/arm
-// logic is reused verbatim, not rebuilt); this controller sequences them by state.
+// WO-1010 §7 OWNER RULINGS D14 / D10 / D17 / D19 (2026-08-08) — THE RIGHT EDGE AND
+// THE BOTTOM BAND ARE THE ONLY CHROME:
+//   D14 — the three placement verbs live in a LEAN, FIXED right-edge rail (right-thumb
+//         territory in landscape). The old "cluster flanks the ghost and flips sides
+//         near an edge" follow logic is DELETED: no chrome sits on or beside the piece
+//         any more, so the rail needs no per-frame layout at all. The ghost keeps ONLY
+//         its name+cost pill, which still follows and still clamps.
+//   D10 — the exit is a COMPACT CORNER control labelled "Done" (the "X" glyph is
+//         dropped). Small visual, full MinTouch invisible hit pad. It caps the rail's
+//         column from the true top-right corner.
+//   D17 — the rail speaks ICON language where real SPRITE art exists. Cancel renders
+//         RpgUiCatalog element/cross. Confirm and rotate have NO check-mark / circular-
+//         arrow sprite anywhere in the pack, so they KEEP their ASCII words: a typed
+//         "⟳" would render as tofu on the shipped TMP atlas (the ASCII rule), and this
+//         lane does not invent art. The moment those two sprites land, pass them to
+//         MakeVerb and the words drop out with no other change.
+//   D19 — the resource strip moved OFF the top: it is now ONE THIN bottom-centre
+//         obsidian band (fixed pixel height), display-only, seated so the carousel and
+//         the placement hint own the band above it. With the strip gone the old
+//         full-width top bar had no tenant left and was deleted outright — it was 10%
+//         of the field in raycast-blocking chrome for a decorative label.
+//
+// The category tabs + the icon-first card carousel stay in BuildPaletteUI's own canvas
+// (its card/art/cost/economy/arm logic is reused verbatim, not rebuilt); this
+// controller sequences them by state. RailReservedWidthPx / ResourceStripReservedPx are
+// PUBLIC so the carousel lane can seat clear of this lane's bands without a cross-edit.
 //
 // LANDSCAPE only; panels near-black (WO-562 — do NOT lighten); ASCII-only TMP;
 // meaning never by colour alone; code-built uGUI on the kit; ZERO UXML. Control
@@ -53,35 +75,68 @@ namespace DeNelle.Village
         // every other control >= 112px shortest side (owner touch-target ruling).
         private const int SortingOrder = 906;   // above palette dock (900), below selection (910)
 
-        // ── CONSISTENT button rectangle (owner felt-test 2026-07-15: "long thin
-        //    rectangles in horizontal mode") ─────────────────────────────────────
-        // A wide landscape canvas stretches fraction-of-WIDTH anchors into thin bars
-        // (very wide, short). The fix: every HUD button gets a CONSISTENT fixed size
-        // via PinSize — height = the kit CTA height (ElarionUiKit.CanonCtaHeight, >=
-        // MinTouchPx floor) and a CAPPED width, so it stays a proper tappable box
-        // instead of a full-band bar. Standard verb 190w, primary PLACE 240w, the
-        // top-right Done 200w. Height sourced from the kit (no new magic floor).
-        private const float IntentBtnW = 190f;
-        private const float PlaceBtnW  = 240f;
-        private const float ExitBtnW   = 200f;
-
-        // ── WO-1010 P1: CHIPS ON THE GHOST (CoC grammar) ───────────────────────
+        // ── WO-1010 P1: SMALL VISUAL INSIDE A MINTOUCH HIT PAD ─────────────────
         // External testers (2026-08-08) could not read the build screen: "buttons
-        // everywhere". The four word-buttons sat at the bottom edge while the thing they
-        // acted on was under the player's finger in the middle of the field, so the
-        // controls and their subject were never in the same place. The chips move TO the
-        // ghost. Visual circle is small; the HIT AREA is a full MinTouch box around it —
-        // invisible padding, NOT visual growth (the chip must not become a slab).
+        // everywhere". Every verb here therefore keeps a SMALL visible plate inside an
+        // INVISIBLE MinTouch hit box — padding, never visual growth. Growing the visual
+        // to 112 would put opaque slabs down the right edge and undo the redesign.
         private const float ChipVisualPx = 52f;
         private const float ChipHitPx    = ElarionUiKit.MinTouchPx;   // 112
-        private const float ChipGapPx    = 12f;
-        private const float ChipEdgePx   = 3f;    // accent border thickness on each chip
+        private const float ChipEdgePx   = 3f;    // accent border thickness on each plate
+        private const float ChipIconPx   = 30f;   // sprite glyph inside the 52px plate
         private const float GhostPillW   = 620f;  // widened: the first capture wrapped the
         private const float GhostPillH   = 56f;   // name+cost onto 2 lines and overflowed
         private const float GhostPillLiftPx = 96f;   // pill floats ABOVE the ghost anchor
-        private const float ChipDropPx      = 24f;   // slight drop so the cluster reads as attached
-        private const float ChipFlankPx     = 56f;   // clearance from the ghost's edge (D3: flank, never overlap)
-        private const float SafePadPx       = 24f;   // never let a chip touch the screen edge
+        private const float SafePadPx       = 24f;   // never let the pill touch the screen edge
+
+        // ── D14: THE LEAN RIGHT-EDGE RAIL (fixed — no per-frame layout) ────────
+        // Every dimension is FIXED PIXELS at the 1920x1080 reference (never a fraction
+        // of screen — a wide canvas stretches fraction anchors into thin bars). Band
+        // width = one MinTouch hit column plus a pad each side, so the three 112px hit
+        // boxes sit inside the band instead of straddling its trim.
+        private const float RailPadPx       = 10f;
+        private const float RailGutterPx    = 14f;   // gutter between stacked verbs
+        private const float RailEdgeInsetPx = 24f;   // band's own inset from the screen edge
+        private const float RailBandW       = ChipHitPx + RailPadPx * 2f;                    // 132
+        private const float RailBandH       = ChipHitPx * 3f + RailGutterPx * 2f + RailPadPx * 2f; // 384
+
+        /// <summary>
+        /// Horizontal band (from the RIGHT screen edge, in 1920x1080 reference px) that the
+        /// D14 rail owns. PUBLIC so the carousel / quick-tab lane can seat clear of it
+        /// without reaching into this file — the D7 lesson was that two surfaces drawing in
+        /// one band is the defect, not either surface on its own.
+        /// </summary>
+        public const float RailReservedWidthPx = RailEdgeInsetPx + RailBandW;
+
+        // ── D10: the compact corner Done ───────────────────────────────────────
+        // Visual shrinks; the hit area does not. The hit pad is a full MinTouch box in the
+        // true top-right corner and the visible plate is centred inside it, so the art sits
+        // ~80 reference px in from both edges — well clear of a rounded corner or cutout
+        // WITHOUT a live-Screen safe-area read (which would make the headless capture
+        // non-deterministic; fixed reference px is the house rule anyway).
+        private const float CornerInsetPx  = 24f;
+        private const float DoneVisualPx   = 76f;
+
+        // ── D19: the thin bottom-centre resource strip ─────────────────────────
+        // BuildWalletRow authors 150x64 chips at 10px spacing and seats its row 24px in
+        // from its parent's left edge; the band is sized to that content so the row reads
+        // as ONE slim frame rather than a panel with a row parked in it. Display-only, so
+        // MinTouch does not apply (WO-1010 D19 states this explicitly).
+        private const float StripChipW    = 150f;
+        private const float StripChipH    = 64f;
+        private const float StripChipGap  = 10f;
+        private const float StripSideInset = 24f;   // BuildWalletRow's own left offset
+        private const float StripPadPx     = 8f;
+        private const float StripBandH     = StripChipH + StripPadPx * 2f;   // 80
+        private const float StripBottomPx  = 18f;
+
+        /// <summary>
+        /// Vertical band (from the BOTTOM screen edge, in 1920x1080 reference px) that the
+        /// D19 resource strip owns. PUBLIC for the same reason as
+        /// <see cref="RailReservedWidthPx"/>: the carousel must rest ABOVE this, and in
+        /// PLACE the single hint line sits above the strip, never on it.
+        /// </summary>
+        public const float ResourceStripReservedPx = StripBottomPx + StripBandH;
 
         // Callbacks into the BRAIN (BuildModeController wires these).
         private Action _onRotateLeft;
@@ -91,15 +146,15 @@ namespace DeNelle.Village
         private Action _onExit;
 
         private GameObject _canvas;
-        private GameObject _intentBar;       // shown only in Placing (WO-1010: now the CHIP cluster)
+        private GameObject _intentBar;       // shown only in Placing (WO-1010 D14: pill + rail)
         private BuildWalletRow _wallet;
         private BuildHudState _state = BuildHudState.Browse;
         private TextMeshProUGUI _placeName;  // name + cost, floated above the ghost
 
         // ── WO-1010 P1 state ───────────────────────────────────────────────────
         private RectTransform _canvasRect;
-        private RectTransform _ghostPill;    // name + cost, above the ghost
-        private RectTransform _chipCluster;  // OK / Rot / X, beside the ghost
+        private RectTransform _ghostPill;    // name + cost, above the ghost (the ONE thing that follows)
+        private RectTransform _verbRail;     // D14: confirm / rotate / cancel, FIXED at the right edge
         private Button _okChip;
         private TextMeshProUGUI _okChipLabel;
         private Image _okChipRing;
@@ -158,64 +213,126 @@ namespace DeNelle.Village
             _canvas.AddComponent<GraphicRaycaster>();
             _canvasRect = _canvas.transform as RectTransform;
 
-            BuildTopBar();
-            BuildIntentBar();
+            BuildResourceStrip();   // D19 — thin bottom-centre band
+            BuildCornerDone();      // D10 — compact corner exit, caps the rail column
+            BuildIntentBar();       // D14 — ghost pill + the fixed right-edge verb rail
             BuildDpadToggle();
             FlowTrace.Step("BuildHud",
-                "chrome-built: consistent button sizes enforced (h=" +
-                ElarionUiKit.CanonCtaHeight + ", capped widths — no thin bars)");
+                "chrome-built (WO-1010 D10/D14/D19): compact corner Done + fixed right rail (" +
+                RailReservedWidthPx + "px reserved) + thin bottom strip (" +
+                ResourceStripReservedPx + "px reserved); the old full-width top bar is GONE");
 
             _canvas.SetActive(false);   // built hidden; Show shows it
         }
 
-        private void BuildTopBar()
+        /// <summary>
+        /// D19 — the resource strip as ONE THIN bottom-centre band, not a top panel.
+        /// The band is sized to BuildWalletRow's actual chip content so it hugs the numbers
+        /// instead of being a slab with a row parked in it, and it carries its OWN gold edge:
+        /// ObsidianFill is (0.02,0.02,0.025) — effectively black — so a band floating over
+        /// live terrain cannot borrow contrast from whatever happens to be behind it.
+        /// Display-only (no MinTouch floor), but it DOES eat taps so a mis-aimed read of the
+        /// wallet never falls through and drags the ghost.
+        /// </summary>
+        private void BuildResourceStrip()
         {
-            // Near-black top band (WO-562) spanning the top of the landscape canvas.
-            var band = ElarionUiKit.AddImage(_canvas.transform, "TopBar",
-                new Vector2(0f, 0.90f), new Vector2(1f, 1f), ElarionUiKit.ObsidianFill, rounded: false);
-            var bandImg = band.GetComponent<Image>();
-            if (bandImg != null) bandImg.raycastTarget = true;   // eat taps on the chrome band
+            var edge = ElarionUiKit.AddImage(_canvas.transform, "BuildResourceStrip",
+                new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), ElarionUi.Gilt, rounded: true);
+            var edgeRt = edge.transform as RectTransform;
+            if (edgeRt != null)
+            {
+                edgeRt.anchorMin = edgeRt.anchorMax = new Vector2(0.5f, 0f);
+                edgeRt.pivot = new Vector2(0.5f, 0f);
+                edgeRt.anchoredPosition = new Vector2(0f, StripBottomPx);
+                edgeRt.sizeDelta = new Vector2(StripSideInset * 2f + StripChipW, StripBandH);
+            }
+            var edgeImg = edge.GetComponent<Image>();
+            if (edgeImg != null) edgeImg.raycastTarget = true;
 
-            // Wallet chips (all pools) — left.
+            var fill = ElarionUiKit.AddImage(edge.transform, "StripFill",
+                new Vector2(0f, 0f), new Vector2(1f, 1f), ElarionUiKit.ObsidianFill, rounded: true);
+            var fillRt = fill.transform as RectTransform;
+            if (fillRt != null)
+            {
+                fillRt.offsetMin = new Vector2(ChipEdgePx, ChipEdgePx);
+                fillRt.offsetMax = new Vector2(-ChipEdgePx, -ChipEdgePx);
+            }
+            var fillImg = fill.GetComponent<Image>();
+            if (fillImg != null) fillImg.raycastTarget = false;
+
             var walletGo = new GameObject("BuildWalletRow");
-            walletGo.transform.SetParent(band.transform, false);
+            walletGo.transform.SetParent(fill.transform, false);
             _wallet = walletGo.AddComponent<BuildWalletRow>();
-            _wallet.Build(band.transform);
+            _wallet.Build(fill.transform);
 
-            // "BUILD MODE" label — centre.
-            var title = MakeText(band.transform, "BUILD MODE", 26, ElarionUi.Gilt,
-                FontStyles.Bold, TextAlignmentOptions.Center,
-                new Vector2(0.35f, 0.1f), new Vector2(0.65f, 0.9f));
-            title.raycastTarget = false;
-
-            // "X Done" exit — the ONE exit affordance (the palette's duplicate "Done" is
-            // removed). Seated in the top band RIGHT-OF-CENTRE, NOT the screen corner:
-            // the FTUE Skip Tutorial + HUD Menu/gear both hug the top-right SCREEN corner
-            // (ObjectiveBannerUi anchors Skip Tutorial to (1,1) at y -92), so a corner Done
-            // collided with them. Centre ~0.735 keeps Done inside the HUD's own dark band,
-            // large + tappable, and clear of that right-edge column on every screen ratio.
-            // Pinned to the consistent HUD box (ExitBtnW x CanonCtaHeight) so a wide canvas
-            // can never stretch it into a thin bar.
-            var exit = ElarionUiKit.BuildObsidianButton(_canvas.transform, "X Done",
-                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
-                new Vector2(0.685f, 0.86f), new Vector2(0.785f, 0.99f),
-                () => _onExit?.Invoke());
-            PinSize(exit, ExitBtnW, ElarionUiKit.CanonCtaHeight);
+            // Size the band to the row it actually built. The pool list is DATA (the wallet
+            // DTO), so counting the chips beats hard-coding "five" — a sixth pool would
+            // otherwise silently overflow the frame it is supposed to sit inside.
+            int chips = 0;
+            var row = fill.transform.Find("WalletChips");
+            if (row != null)
+            {
+                for (int i = 0; i < row.childCount; i++)
+                    if (row.GetChild(i).name.StartsWith("Chip_", StringComparison.Ordinal)) chips++;
+            }
+            if (chips > 0 && edgeRt != null)
+            {
+                float content = chips * StripChipW + (chips - 1) * StripChipGap;
+                edgeRt.sizeDelta = new Vector2(StripSideInset * 2f + content, StripBandH);
+            }
             FlowTrace.Step("BuildHud",
-                "single exit 'X Done' seated right-of-centre in the top band (clear of the " +
-                "right-edge Skip Tutorial / Menu column)");
-            // Canonical close name (probe/close convention; label stays "X Done").
-            exit.gameObject.name = "CloseButton";
+                "D19 resource strip: thin bottom-centre band, " + chips + " pool(s), h=" +
+                StripBandH + "px fixed -- reserves " + ResourceStripReservedPx +
+                "px of the bottom band (carousel + hint seat ABOVE it)");
+        }
+
+        /// <summary>
+        /// D10 — the exit as a COMPACT CORNER control. The owner's markup was verbatim
+        /// "Move to Corner Remove the X, Size smaller and more minized": the label loses the
+        /// "X" glyph and reads just "Done", the visible plate shrinks to <see cref="DoneVisualPx"/>,
+        /// and the 112px MinTouch floor is carried by the SAME invisible hit pad the rail verbs
+        /// use — the visual never grows into a slab. Seated in the true top-right corner on the
+        /// rail's own column so the right edge reads as ONE stack: Done, then the three verbs.
+        ///
+        /// KNOWN NEIGHBOUR: ObjectiveBannerUi anchors "Skip Tutorial" to (1,1) at y -92, which
+        /// is this corner. The owner ruled the corner anyway and WO-1010 D16 re-targets the
+        /// tutorial chrome (and resolves the two-skip nit) in the same pass — flagged, not
+        /// silently worked around by parking Done somewhere it was not ruled to be.
+        /// </summary>
+        private void BuildCornerDone()
+        {
+            var host = new GameObject("BuildDoneCorner", typeof(RectTransform));
+            host.transform.SetParent(_canvas.transform, false);
+            var hrt = (RectTransform)host.transform;
+            hrt.anchorMin = hrt.anchorMax = new Vector2(1f, 1f);
+            hrt.pivot = new Vector2(1f, 1f);
+            hrt.sizeDelta = new Vector2(ChipHitPx, ChipHitPx);
+            // x inset lines the hit box's centre up with the rail band's centre, so the corner
+            // control and the rail read as one right-edge column instead of two loose things.
+            hrt.anchoredPosition = new Vector2(-(RailEdgeInsetPx + (RailBandW - ChipHitPx) * 0.5f),
+                                               -CornerInsetPx);
+
+            var done = MakeVerb(hrt, "DoneCorner", "Done", null, ElarionUi.Gilt,
+                Vector2.zero, DoneVisualPx, 18f, () => _onExit?.Invoke(), out _, out _);
+            // Canonical close name (probe/close convention; the label is now just "Done").
+            done.gameObject.name = "CloseButton";
+            FlowTrace.Step("BuildHud",
+                "D10 exit: compact corner 'Done' (visual " + DoneVisualPx + "px inside a " +
+                ChipHitPx + "px hit pad) -- caps the right-edge rail column");
         }
 
         // =====================================================================
         //  WO-1010 P1 — the ghost carries its own controls
         // =====================================================================
         /// <summary>
-        /// Builds the name+cost pill and the OK / Rot / X chip cluster. Both are SCREEN-SPACE
-        /// UI that follows the ghost's projected point (pushed by the brain via TrackGhost) —
-        /// deliberately NOT world-space billboards, which shrink with zoom and would fall
-        /// under the MinTouch floor exactly when the player is placing a small wall piece.
+        /// Builds the ghost's name+cost pill and the D14 right-edge verb rail.
+        ///
+        /// THE SPLIT IS THE RULING: the PILL follows the ghost's projected screen point
+        /// (pushed by the brain via TrackGhost) — screen-space, never a world-space billboard,
+        /// which would shrink with zoom and fall under the MinTouch floor exactly when the
+        /// player is placing a small wall piece. The RAIL does not follow anything. It is a
+        /// slim FIXED column hugging the right edge, so the piece being placed is never
+        /// covered by its own controls and there is no per-frame layout to get wrong.
         /// </summary>
         private void BuildIntentBar()
         {
@@ -266,42 +383,93 @@ namespace DeNelle.Village
             _placeName.fontSizeMin = 14f;
             _placeName.fontSizeMax = 22f;
 
-            // ── The chip cluster. Three round chips in a row, pivoted CENTRE so the
-            //    clamp math below can keep the whole cluster on-screen as one unit.
-            var cluster = new GameObject("GhostChips", typeof(RectTransform));
-            cluster.transform.SetParent(_intentBar.transform, false);
-            _chipCluster = (RectTransform)cluster.transform;
-            _chipCluster.anchorMin = _chipCluster.anchorMax = new Vector2(0.5f, 0.5f);
-            _chipCluster.pivot = new Vector2(0.5f, 0.5f);
-            _chipCluster.sizeDelta = new Vector2(ChipHitPx * 3f + ChipGapPx * 2f, ChipHitPx);
+            // ── D14: THE LEAN RIGHT-EDGE RAIL ─────────────────────────────────────
+            // A slim obsidian band with its own gold trim, hugging the right edge and
+            // vertically centred — right-thumb territory in landscape, and the same column
+            // the compact corner Done sits at the top of. The band is a raycast target so a
+            // tap that lands in a gutter is eaten by the chrome instead of falling through
+            // and dragging the ghost out from under the player's other hand.
+            var railEdge = ElarionUiKit.AddImage(_intentBar.transform, "GhostVerbRail",
+                new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), ElarionUi.Gilt, rounded: true);
+            _verbRail = railEdge.transform as RectTransform;
+            if (_verbRail != null)
+            {
+                _verbRail.anchorMin = _verbRail.anchorMax = new Vector2(1f, 0.5f);
+                _verbRail.pivot = new Vector2(1f, 0.5f);
+                _verbRail.anchoredPosition = new Vector2(-RailEdgeInsetPx, 0f);
+                _verbRail.sizeDelta = new Vector2(RailBandW, RailBandH);
+            }
+            var railEdgeImg = railEdge.GetComponent<Image>();
+            if (railEdgeImg != null) railEdgeImg.raycastTarget = true;
 
-            float step = ChipHitPx + ChipGapPx;
-            _okChip = MakeChip(_chipCluster, "OkChip", "OK", ElarionUi.Gilt, -step,
+            var railFill = ElarionUiKit.AddImage(railEdge.transform, "RailFill",
+                new Vector2(0f, 0f), new Vector2(1f, 1f), ElarionUiKit.ObsidianFill, rounded: true);
+            var railFillRt = railFill.transform as RectTransform;
+            if (railFillRt != null)
+            {
+                railFillRt.offsetMin = new Vector2(ChipEdgePx, ChipEdgePx);
+                railFillRt.offsetMax = new Vector2(-ChipEdgePx, -ChipEdgePx);
+            }
+            var railFillImg = railFill.GetComponent<Image>();
+            if (railFillImg != null) railFillImg.raycastTarget = false;
+
+            // ── D17: icon language WHERE REAL SPRITE ART EXISTS, words where it does not.
+            // Only the cancel glyph is in the pack (element/cross). There is no check-mark
+            // and no circular-arrow sprite anywhere under Resources/RpgUi, and a "⟳" typed
+            // into TMP renders as a TOFU BOX on the shipped atlas — so confirm and rotate
+            // keep ASCII words rather than shipping a square. RpgUiCatalog's contract is
+            // sprite-or-null and every caller keeps its glyph fallback; MakeVerb honours it,
+            // so dropping the two missing sprites into the pack is the ONLY change needed
+            // to finish D17.
+            Sprite cancelIcon = RpgUiCatalog.Get(RpgUiCatalog.RoleElement, RpgUiCatalog.ElementCross);
+            if (cancelIcon == null)
+                FlowTrace.Warn("BuildHud",
+                    "D17: element/cross sprite absent -- cancel verb falls back to the ASCII 'X'.");
+            FlowTrace.Step("BuildHud",
+                "D17 rail icons: confirm=ASCII 'OK' (no check-mark sprite in pack), " +
+                "rotate=ASCII 'Rot' (no circular-arrow sprite in pack), cancel=" +
+                (cancelIcon != null ? "SPRITE element/cross" : "ASCII 'X'"));
+
+            // Stacked top -> bottom: confirm, rotate, cancel. Cancel sits FURTHEST from
+            // confirm so the destructive verb is not the one a slipped thumb finds.
+            float step = ChipHitPx + RailGutterPx;
+            var railRt = railFill.transform as RectTransform;
+            _okChip = MakeVerb(railRt, "OkChip", "OK", null, ElarionUi.Gilt,
+                new Vector2(0f, step), ChipVisualPx, 20f,
                 () => _onPlace?.Invoke(), out _okChipLabel, out _okChipRing);
-            MakeChip(_chipCluster, "RotChip", "Rot", ElarionUi.Parchment, 0f,
+            MakeVerb(railRt, "RotChip", "Rot", null, ElarionUi.Parchment,
+                Vector2.zero, ChipVisualPx, 20f,
                 () => _onRotateRight?.Invoke(), out _, out _);
-            MakeChip(_chipCluster, "CancelChip", "X", new Color(0.86f, 0.32f, 0.30f), step,
+            MakeVerb(railRt, "CancelChip", "X", cancelIcon, new Color(0.86f, 0.32f, 0.30f),
+                new Vector2(0f, -step), ChipVisualPx, 20f,
                 () => _onCancel?.Invoke(), out _, out _);
 
             // Kept as the canonical cancel name so any probe/close convention still resolves
             // it after the word-button retirement.
-            var cancelChip = _chipCluster.Find("CancelChip");
+            var cancelChip = railRt != null ? railRt.Find("CancelChip") : null;
             if (cancelChip != null) cancelChip.gameObject.name = "BuildHudPlaceCancel";
 
             _intentBar.SetActive(false);   // Placing state shows it
             FlowTrace.Step("BuildHud",
-                "WO-1010 P1: intent bar RETIRED -> chips on the ghost [OK][Rot][X] + name/cost pill; " +
-                "controls now sit where the player is looking, not at the bottom edge");
+                "WO-1010 D14: the ghost-following chip cluster is RETIRED -> a FIXED lean right-edge " +
+                "rail [OK][Rot][X] (" + RailBandW + "x" + RailBandH + "px, " + RailEdgeInsetPx +
+                "px inset); the ghost now carries ONLY its name/cost pill, so no chrome sits on the piece");
         }
 
         /// <summary>
-        /// One chip: a MinTouch-sized INVISIBLE hit box with a small visible circle inside it.
-        /// The transparent parent Image is the raycast target, so the tappable area is ~112px
-        /// while the art stays ~52px — the WO's invisible-padding rule. Growing the visual
-        /// instead would put three slabs over the field and undo the point of the redesign.
+        /// One rail verb (or the corner Done): a MinTouch-sized INVISIBLE hit box with a small
+        /// visible plate inside it. The transparent parent Image is the raycast target, so the
+        /// tappable area is 112px while the art stays ~52px — the WO's invisible-padding rule.
+        /// Growing the visual instead would put slabs down the right edge and undo the point of
+        /// the redesign.
+        ///
+        /// D17: pass a SPRITE in <paramref name="icon"/> and the plate renders the glyph art;
+        /// pass null and it renders <paramref name="label"/> as ASCII text. That null path is
+        /// not a stub — it is RpgUiCatalog's sprite-or-null contract, and it is what keeps a
+        /// missing pack from turning a verb into a tofu box.
         /// </summary>
-        private static Button MakeChip(RectTransform parent, string name, string label,
-            Color accent, float xOffset, Action onClick,
+        private static Button MakeVerb(RectTransform parent, string name, string label,
+            Sprite icon, Color accent, Vector2 offset, float visualPx, float fontPx, Action onClick,
             out TextMeshProUGUI labelOut, out Image ringOut)
         {
             var go = new GameObject(name, typeof(RectTransform));
@@ -310,7 +478,7 @@ namespace DeNelle.Village
             rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
             rt.pivot = new Vector2(0.5f, 0.5f);
             rt.sizeDelta = new Vector2(ChipHitPx, ChipHitPx);
-            rt.anchoredPosition = new Vector2(xOffset, 0f);
+            rt.anchoredPosition = offset;
 
             var hit = go.AddComponent<Image>();
             hit.color = new Color(0f, 0f, 0f, 0f);   // invisible padding, still raycastable
@@ -319,15 +487,15 @@ namespace DeNelle.Village
             btn.targetGraphic = hit;
             if (onClick != null) btn.onClick.AddListener(() => onClick());
 
-            // ── The visible chip: an ACCENT-COLOURED EDGE around a near-black fill. ──
+            // ── The visible plate: an ACCENT-COLOURED EDGE around a near-black fill. ──
             // The first build used a plain ObsidianFill circle, and the capture showed why
             // that fails: ObsidianFill is (0.02,0.02,0.025) — effectively black — so the chip
-            // was black-on-black and only the bare label floated over the field. A chip that
-            // follows the ghost sits over ARBITRARY terrain (pale sand, dark water, grass), so
-            // it cannot borrow contrast from whatever happens to be behind it; it has to carry
-            // its own edge. The edge also gives each chip a second, non-textual identity
-            // (gold confirm / grey rotate / red cancel) WITHOUT meaning ever resting on colour
-            // alone, because the label already says which is which.
+            // was black-on-black and only the bare label floated over the field. Even inside
+            // the rail band the plate keeps its edge: the band itself is the same near-black,
+            // so without it the verbs would be black-on-black again. The edge also gives each
+            // verb a second, non-textual identity (gold confirm / parchment rotate / red
+            // cancel) WITHOUT meaning ever resting on colour alone, because each verb also
+            // carries a distinct WORD or a distinct SHAPE.
             var edge = ElarionUiKit.AddImage(go.transform, "ChipEdge",
                 new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), accent, rounded: true);
             var edgeRt = edge.transform as RectTransform;
@@ -335,7 +503,7 @@ namespace DeNelle.Village
             {
                 edgeRt.anchorMin = edgeRt.anchorMax = new Vector2(0.5f, 0.5f);
                 edgeRt.pivot = new Vector2(0.5f, 0.5f);
-                edgeRt.sizeDelta = new Vector2(ChipVisualPx, ChipVisualPx);
+                edgeRt.sizeDelta = new Vector2(visualPx, visualPx);
             }
             var edgeImg = edge.GetComponent<Image>();
             if (edgeImg != null) edgeImg.raycastTarget = false;
@@ -347,14 +515,38 @@ namespace DeNelle.Village
             {
                 fillRt.anchorMin = fillRt.anchorMax = new Vector2(0.5f, 0.5f);
                 fillRt.pivot = new Vector2(0.5f, 0.5f);
-                fillRt.sizeDelta = new Vector2(ChipVisualPx - ChipEdgePx * 2f, ChipVisualPx - ChipEdgePx * 2f);
+                fillRt.sizeDelta = new Vector2(visualPx - ChipEdgePx * 2f, visualPx - ChipEdgePx * 2f);
             }
             ringOut = fill.GetComponent<Image>();
             if (ringOut != null) ringOut.raycastTarget = false;
 
-            labelOut = MakeText(fill.transform, label, 20, accent, FontStyles.Bold,
+            if (icon != null)
+            {
+                // SPRITE glyph (D17). preserveAspect so a non-square source is never squashed;
+                // untinted so the pack art reads as authored — the accent EDGE carries the
+                // redundant colour cue and the SHAPE carries the meaning.
+                var iconGo = new GameObject("ChipIcon", typeof(RectTransform), typeof(Image));
+                iconGo.transform.SetParent(fill.transform, false);
+                var irt = (RectTransform)iconGo.transform;
+                irt.anchorMin = irt.anchorMax = new Vector2(0.5f, 0.5f);
+                irt.pivot = new Vector2(0.5f, 0.5f);
+                irt.sizeDelta = new Vector2(ChipIconPx, ChipIconPx);
+                var iconImg = iconGo.GetComponent<Image>();
+                iconImg.sprite = icon;
+                iconImg.preserveAspect = true;
+                iconImg.raycastTarget = false;
+                labelOut = null;
+                return btn;
+            }
+
+            labelOut = MakeText(fill.transform, label, fontPx, accent, FontStyles.Bold,
                 TextAlignmentOptions.Center, Vector2.zero, Vector2.one);
             labelOut.raycastTarget = false;
+            // A short verb must never ellipsis-cull inside its own plate.
+            labelOut.textWrappingMode = TextWrappingModes.NoWrap;
+            labelOut.enableAutoSizing = true;
+            labelOut.fontSizeMin = fontPx * 0.6f;
+            labelOut.fontSizeMax = fontPx;
             return btn;
         }
 
@@ -425,27 +617,10 @@ namespace DeNelle.Village
                 " — follows state, no player action");
         }
 
-        // ── Rotate labels never truncate (owner felt-test 2026-07-16) ───────────
-        /// <summary>
-        /// Opt a kit button's TMP label OUT of the kit's single-line ellipsis fit
-        /// (ElarionUiKit.FitSingleLine leaves it NoWrap + Ellipsis, which clips
-        /// "Rotate Right" to "Rotate Ri..."). We flip it to normal WRAP + Overflow so it
-        /// wraps to two lines and NEVER culls a glyph — the button is pinned tall
-        /// (CanonCtaHeight = 132) so two lines seat comfortably. Autosizing off keeps the
-        /// size deterministic (no shrink-to-nothing). Presentation-only.
-        /// </summary>
-        private static void AllowTwoLineLabel(Button button)
-        {
-            if (button == null) return;
-            var label = button.GetComponentInChildren<TMP_Text>(true);
-            if (label == null) return;
-            label.enableAutoSizing = false;
-            label.textWrappingMode = TextWrappingModes.Normal;   // wrap, do not clip
-            label.overflowMode = TextOverflowModes.Overflow;     // never ellipsis-cull a line
-            label.alignment = TextAlignmentOptions.Center;
-            FlowTrace.Step("BuildHud",
-                "rotate label '" + (label.text ?? "") + "' set to wrap (2-line, no truncate)");
-        }
+        // NOTE: AllowTwoLineLabel (the "Rotate Right" -> "Rotate Ri..." ellipsis fix) was
+        // deleted with WO-1010 D14/D10 — every kit word-button it served is gone. The rail
+        // verbs and the corner Done are hand-built plates whose short ASCII labels autosize
+        // inside their own plate, so there is no kit FitSingleLine pass left to opt out of.
 
         // ── Public API the BRAIN drives ────────────────────────────────────────
 
@@ -535,8 +710,9 @@ namespace DeNelle.Village
         }
 
         /// <summary>
-        /// Follow the ghost. LateUpdate so the anchor pushed this frame is already current.
-        /// Runs only while Placing, so Browse costs nothing.
+        /// Follow the ghost with the PILL (the rail is fixed and needs no pass). LateUpdate so
+        /// the anchor pushed this frame is already current. Runs only while Placing, so Browse
+        /// costs nothing.
         /// </summary>
         private void LateUpdate()
         {
@@ -546,78 +722,59 @@ namespace DeNelle.Village
         /// <summary>
         /// The follow/clamp pass, callable directly. LateUpdate drives it at runtime; the
         /// headless UI capture calls it explicitly because MonoBehaviour ticks do NOT run in
-        /// edit mode — without this the capture would photograph the chips parked at the
-        /// canvas centre and the screenshot would prove nothing about the edge-clamp rule it
-        /// is meant to verify.
+        /// edit mode — without this the capture would photograph the pill parked at the canvas
+        /// centre and the screenshot would prove nothing about the clamp rule it is meant to
+        /// verify. STILL DIRECTLY CALLABLE by contract, even though D14 shrank the work to the
+        /// pill alone: the OK/No verdict below is state, not layout, and the capture needs it.
         /// </summary>
         public void LayoutGhostControlsNow()
         {
-            if (_state != BuildHudState.Placing || !_hasGhostAnchor) return;
-            if (_canvasRect == null || _chipCluster == null) return;
+            if (_state != BuildHudState.Placing) return;
 
-            // Screen -> canvas-local. Overlay canvases take a NULL camera here; passing one
-            // silently offsets everything.
-            Vector2 local;
-            if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(
-                    _canvasRect, _ghostScreenPoint, null, out local))
-                return;
-
-            Vector2 half = _canvasRect.rect.size * 0.5f;
-
-            // CLAMP AS A UNIT. A chip that walks off-screen when the ghost nears an edge is
-            // an unplaceable building — the acceptance criteria call this out because it is
-            // the failure the old bottom-edge bar could not have.
-            // ── FLANK THE GHOST, DO NOT SIT ON IT (WO-1010 §7 D3). ────────────────
-            // The first build dropped the cluster straight BELOW the anchor, which put the
-            // chips on top of the green ghost art — the owner's screenshot caught it. That
-            // defeats the entire redesign: the controls moved to the ghost so the player can
-            // SEE the piece being placed, and covering it with its own buttons is worse than
-            // the bottom bar it replaced. The cluster now sits to one SIDE, and flips to the
-            // other side when the preferred flank would run off-screen, so it clears the piece
-            // at every screen position instead of only in the middle.
-            Vector2 chipHalf = _chipCluster.sizeDelta * 0.5f;
-            float leftLimit  = -half.x + chipHalf.x + SafePadPx;
-            float rightLimit =  half.x - chipHalf.x - SafePadPx;
-
-            float flankX = local.x + ChipFlankPx + chipHalf.x;      // prefer the ghost's right
-            if (flankX > rightLimit)
+            // ── D14: THE RAIL IS NOT LAID OUT HERE, AND THAT IS THE POINT. ────────
+            // The retired code flanked the ghost with the chip cluster and flipped it to the
+            // other side near a screen edge. The owner's ruling ("i want a lean section on
+            // right") removes the entire class of problem: fixed chrome cannot land on the
+            // piece, cannot walk off-screen, and cannot need a clamp. Only the PILL follows.
+            if (_canvasRect != null && _ghostPill != null && _hasGhostAnchor)
             {
-                float mirrored = local.x - ChipFlankPx - chipHalf.x; // no room -> flip left
-                flankX = mirrored >= leftLimit ? mirrored : Mathf.Clamp(flankX, leftLimit, rightLimit);
-            }
-
-            Vector2 chipPos = new Vector2(flankX, local.y - ChipDropPx);
-            chipPos.x = Mathf.Clamp(chipPos.x, leftLimit, rightLimit);
-            chipPos.y = Mathf.Clamp(chipPos.y, -half.y + chipHalf.y + SafePadPx, half.y - chipHalf.y - SafePadPx);
-            _chipCluster.anchoredPosition = chipPos;
-
-            if (_ghostPill != null)
-            {
-                // ── THE PILL IS PLACED RELATIVE TO THE *CLAMPED* CHIPS, NOT THE GHOST. ──
-                // Clamping the two independently is what the first edge capture caught: in a
-                // corner they each satisfied "fully on-screen" and then landed ON TOP OF EACH
-                // OTHER, with the chips covering the cost text. Two separately-correct clamps
-                // can still produce one unreadable result, so the pair is positioned as a unit.
-                Vector2 pillHalf = _ghostPill.sizeDelta * 0.5f;
-                float gap = 14f;
-                float topLimit    = half.y - pillHalf.y - SafePadPx;
-                float bottomLimit = -half.y + pillHalf.y + SafePadPx;
-
-                // Prefer above the chips; if there is no room up there, sit below them.
-                float pillY = chipPos.y + chipHalf.y + pillHalf.y + gap;
-                if (pillY > topLimit)
+                // Screen -> canvas-local. Overlay canvases take a NULL camera here; passing one
+                // silently offsets everything.
+                Vector2 local;
+                if (RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                        _canvasRect, _ghostScreenPoint, null, out local))
                 {
-                    float below = chipPos.y - chipHalf.y - pillHalf.y - gap;
-                    if (below >= bottomLimit) pillY = below;
-                    else pillY = Mathf.Clamp(pillY, bottomLimit, topLimit);
-                }
+                    Vector2 half = _canvasRect.rect.size * 0.5f;
+                    Vector2 pillHalf = _ghostPill.sizeDelta * 0.5f;
 
-                Vector2 pillPos = new Vector2(local.x, pillY);
-                pillPos.x = Mathf.Clamp(pillPos.x, -half.x + pillHalf.x + SafePadPx, half.x - pillHalf.x - SafePadPx);
-                _ghostPill.anchoredPosition = pillPos;
+                    // CLAMP AGAINST THE RESERVED BANDS, NOT JUST THE SCREEN. "Fully on-screen"
+                    // was never the real requirement — the first edge capture showed two
+                    // separately-correct clamps producing one unreadable result. The pill's
+                    // limits therefore subtract the rail's column on the right and the resource
+                    // strip's band at the bottom, so it can never slide UNDER either of them.
+                    float leftLimit   = -half.x + pillHalf.x + SafePadPx;
+                    float rightLimit  =  half.x - pillHalf.x - SafePadPx - RailReservedWidthPx;
+                    float topLimit    =  half.y - pillHalf.y - SafePadPx;
+                    float bottomLimit = -half.y + pillHalf.y + SafePadPx + ResourceStripReservedPx;
+                    if (rightLimit < leftLimit) rightLimit = leftLimit;      // absurdly narrow canvas
+                    if (topLimit < bottomLimit) topLimit = bottomLimit;
+
+                    // Float ABOVE the ghost; drop below only when there is no room up there,
+                    // so the pill labels the piece without covering it.
+                    float pillY = local.y + GhostPillLiftPx;
+                    if (pillY > topLimit)
+                    {
+                        float below = local.y - GhostPillLiftPx;
+                        pillY = below >= bottomLimit ? below : Mathf.Clamp(pillY, bottomLimit, topLimit);
+                    }
+
+                    _ghostPill.anchoredPosition = new Vector2(
+                        Mathf.Clamp(local.x, leftLimit, rightLimit),
+                        Mathf.Clamp(pillY, bottomLimit, topLimit));
+                }
             }
 
-            // ── THE VERDICT: short word on the chip, full reason on the PILL. ──────
+            // ── THE VERDICT: short word on the verb, full reason on the PILL. ─────
             // The first capture put the whole reason ON the chip and "Not enough Wood" wrapped
             // to four lines and spilled outside a 52px circle — unreadable, and it covered the
             // other chips. A sentence needs the WIDE surface; the chip only ever has room for
@@ -649,26 +806,12 @@ namespace DeNelle.Village
             _wallet?.Refresh();
         }
 
-        // ── Consistent-size pin (mirrors ElarionUiKit.PinCanonicalCtaSize) ──────
-        /// <summary>
-        /// Collapse a kit button's fraction-of-parent anchors to a POINT at the anchor
-        /// rect's centre and stamp a fixed <paramref name="w"/> x <paramref name="h"/>
-        /// pixel box, so a wide landscape canvas can never stretch it into a thin bar.
-        /// Height must be >= ElarionUiKit.MinTouchPx so the kit touch-floor guard no-ops.
-        /// Presentation-only: does not restyle or re-wire the button.
-        /// </summary>
-        private static void PinSize(Button button, float w, float h)
-        {
-            if (button == null) return;
-            var rt = button.transform as RectTransform;
-            if (rt == null) return;
-            Vector2 centre = (rt.anchorMin + rt.anchorMax) * 0.5f;
-            rt.anchorMin = centre;
-            rt.anchorMax = centre;
-            rt.pivot = new Vector2(0.5f, 0.5f);
-            rt.anchoredPosition = Vector2.zero;
-            rt.sizeDelta = new Vector2(w, h);
-        }
+        // NOTE: the local PinSize helper (the "long thin rectangles in horizontal mode" fix
+        // that collapsed a kit button's fraction anchors onto a fixed pixel box) went with the
+        // last kit button in this file — WO-1010 D10 replaced the pinned 200x132 "X Done" with
+        // the hand-built corner plate above. The pattern itself is unchanged canon and still
+        // lives at BuildPaletteUI.PinSize / BuildTabRow; every rect in this file is now
+        // authored at fixed pixels directly, which is the same rule one step earlier.
 
         // ── uGUI helper (BuildPaletteUI/BuildSelectionUI shape) ────────────────
         private static TextMeshProUGUI MakeText(Transform parent, string text, float size,
