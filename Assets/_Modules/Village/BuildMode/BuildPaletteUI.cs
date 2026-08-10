@@ -788,7 +788,11 @@ namespace DeNelle.Village
             // quiet twin of the WO-707 arm/commit gate (BuildModeController.IsSingletonBuilt);
             // enforcement semantics are unchanged. Non-singleton rows always compute false.
             bool built = BuildModeController.IsSingletonBuilt(e);
-            bool armed = !built && card.Id == _armedId;
+            // WO-1013: a visible-locked card (build-categories 'visibleLockedIds', unlock flag
+            // still down) renders with its NORMAL cost + the lock reason IN WORDS, and can
+            // never arm. Words + dimmed shape carry the state, never colour alone.
+            bool locked = card.Locked;
+            bool armed = !built && !locked && card.Id == _armedId;
 
             // Slot-plate card: the Blink "slot_action" plate as the face (Obsidian fill
             // fallback when the mirrored art is absent), a Button over the whole plate.
@@ -834,7 +838,7 @@ namespace DeNelle.Village
             // The Button is kept for its disabled-tint + press-transition visuals ONLY — the
             // actual tap is delivered by CardTapGuard below (see WO note), so no onClick
             // listener is attached (that avoids any desktop double-fire with the guard).
-            btn.interactable = built || affordable;
+            btn.interactable = !locked && (built || affordable);
 
             // ── Touch-web tap-vs-scroll guard (WO: build carousel tap dead on mobile) ──
             // The card Button is a grandchild of the horizontal ScrollRect (Scroll ->
@@ -853,9 +857,19 @@ namespace DeNelle.Village
             var tapEntry = e;
             bool tapBuilt = built;
             bool tapAffordable = affordable;
+            bool tapLocked = locked;
             cardGo.AddComponent<CardTapGuard>().Init(() =>
             {
                 FlowTrace.Step("BuildPalette", $"card onClick FIRED id={tapEntry.id}");
+                // WO-1013: a visible-locked card never arms and never opens the preview --
+                // the tap is inert; the reason words on the card explain the state (no toast,
+                // no announcement chrome per WO-1013 sec 3).
+                if (tapLocked)
+                {
+                    FlowTrace.Step("BuildPalette",
+                        $"palette: tapped LOCKED card '{tapId}' -- arm refused (visible-lock, WO-1013)");
+                    return;
+                }
                 // BM-2 (WO-746): the singleton's one copy is already placed — arming is
                 // refused; the tap surfaces the SAME "Already built - your town has one" toast
                 // the WO-707 arm/commit gate uses, so the card stays discoverable but reads as
@@ -887,6 +901,7 @@ namespace DeNelle.Village
             // "already placed" is unmistakable); meaning is also carried by the Built chip / the
             // cost word, never colour alone (owner is red/green colourblind).
             if (built) cardGo.AddComponent<CanvasGroup>().alpha = 0.5f;
+            else if (locked) cardGo.AddComponent<CanvasGroup>().alpha = 0.55f;   // WO-1013 -- dimmed, reason words carry the meaning
             else if (!affordable) cardGo.AddComponent<CanvasGroup>().alpha = 0.45f;
 
             // Armed = bright gilt name (the icon glows below; the label now sits on the
@@ -1024,7 +1039,13 @@ namespace DeNelle.Village
                 // owner is red/green colorblind), so an unaffordable card was indistinguishable
                 // from an affordable one for the person it matters most to. "NEED" leads so the
                 // state is read before the numbers; colour stays a redundant second cue. ASCII only.
-                string costText = freebie ? string.Empty
+                // WO-1013: a visible-locked card shows its NORMAL cost, plainly -- no NEED
+                // prefix and no affordable/danger colouring, because affordability is not the
+                // state that matters while locked; the lock reason chip (below) carries the
+                // state in words. Never "FREE" (D20 holds here too -- freebie is forced off
+                // for locked cards at the VM).
+                string costText = locked ? CostLabel(cost)
+                    : freebie ? string.Empty
                     : (affordable ? CostLabel(cost) : "NEED " + CostLabel(cost));
                 // An EMPTY price slot is built as nothing at all, not as an empty label — a
                 // zero-width TMP object in the band is invisible but still a layout participant,
@@ -1032,7 +1053,8 @@ namespace DeNelle.Village
                 if (!string.IsNullOrEmpty(costText))
                 {
                     var costLabel = MakeText(cardGo.transform, costText, 13,
-                        affordable ? ElarionUi.Affordable : ElarionUi.Danger, FontStyles.Bold,
+                        locked ? ElarionUi.Parchment
+                               : (affordable ? ElarionUi.Affordable : ElarionUi.Danger), FontStyles.Bold,
                         TextAlignmentOptions.Center, new Vector2(0.06f, 0.03f), new Vector2(0.94f, 0.24f));
                     costLabel.raycastTarget = false;
                 }
@@ -1045,7 +1067,33 @@ namespace DeNelle.Village
             // Arcane = Land + Air). Colorblind-safe: meaning is the TEXT, never color
             // alone (owner is red/green colorblind). ASCII-only — WO-683: the old
             // leading shape glyphs rendered as tofu boxes on the shipped TMP font.
-            string targetTag = card.TargetingTag;
+            // WO-1013: while locked, the reason chip takes the tag band -- one message at a
+            // time, and "Recover the plans" outranks "Land + Air" until the card is live.
+            string targetTag = locked ? null : card.TargetingTag;
+            if (locked)
+            {
+                var lockBackGo = new GameObject("LockReason", typeof(RectTransform), typeof(Image));
+                lockBackGo.transform.SetParent(bandGo.transform, false);
+                var lrt = (RectTransform)lockBackGo.transform;
+                lrt.anchorMin = new Vector2(0f, 0f);
+                lrt.anchorMax = new Vector2(1f, 0.34f);
+                lrt.offsetMin = Vector2.zero; lrt.offsetMax = Vector2.zero;
+                var lockImg = lockBackGo.GetComponent<Image>();
+                lockImg.color = new Color(0f, 0f, 0f, 0.72f);   // dark backing for legibility over art
+                lockImg.raycastTarget = false;
+                string reasonWords = string.IsNullOrEmpty(card.LockReason) ? "Locked" : card.LockReason;
+                var lockLabel = MakeText(lockBackGo.transform, reasonWords, 12,
+                    ElarionUi.Parchment, FontStyles.Bold, TextAlignmentOptions.Center,
+                    Vector2.zero, Vector2.one);
+                lockLabel.raycastTarget = false;
+                // The one long phrase must never ellipsize inside the 208px band -- shrink,
+                // don't truncate (the quick-tab caption lesson).
+                lockLabel.textWrappingMode = TextWrappingModes.NoWrap;
+                lockLabel.enableAutoSizing = true;
+                lockLabel.fontSizeMin = 9f;
+                FlowTrace.Step("BuildPalette",
+                    $"card-locked id={e.id} reason='{reasonWords}' costShown='{CostLabel(cost)}' (WO-1013)");
+            }
             if (!string.IsNullOrEmpty(targetTag))
             {
                 var tagBackGo = new GameObject("TargetTag", typeof(RectTransform), typeof(Image));

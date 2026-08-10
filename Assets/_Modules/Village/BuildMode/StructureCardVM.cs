@@ -55,6 +55,17 @@ namespace DeNelle.Village
         public string DisplayName { get; }
 
         // ── Shared (palette card + info panel) ───────────────────────────────
+        /// <summary>
+        /// WO-1013 -- true when this card is VISIBLE-BUT-LOCKED (build-categories
+        /// 'visibleLockedIds' with its persisted unlock flag still down). The card renders
+        /// with its NORMAL cost plus <see cref="LockReason"/> in words, and can never be
+        /// armed/placed while locked. A different axis from the hidden lockedIds filter.
+        /// </summary>
+        public bool Locked { get; }
+        /// <summary>The lock reason IN WORDS (e.g. "Recover the plans"); null when not locked.
+        /// Words carry the state -- never colour alone (colorblind law).</summary>
+        public string LockReason { get; }
+
         /// <summary>True while the entry's first-build freebie is live (card/info shows "FREE").</summary>
         public bool Freebie { get; }
         /// <summary>The cost the player actually pays — freebie-aware (default/zero when free). The
@@ -102,8 +113,17 @@ namespace DeNelle.Village
         public static StructureCardVM CreateForEntry(CatalogEntry entry)
             => new StructureCardVM(entry, EconomyService.Instance, BuildModeController.FreeBuildAvailable(entry));
 
-        public StructureCardVM(CatalogEntry entry, IEconomy economy, bool freebie)
+        public StructureCardVM(CatalogEntry entry, IEconomy economy, bool freebie,
+            bool locked = false, string lockReason = null)
         {
+            // WO-1013: a locked card always shows its REAL cost (the aspiration is the
+            // point), so the caller passes freebie=false for locked rows -- belt-and-braces
+            // here too, because a zero "FREE" cost on a locked card would contradict both
+            // the D20 no-FREE rule and the "normal cost displayed" acceptance line.
+            if (locked) freebie = false;
+            Locked = locked;
+            LockReason = locked ? lockReason : null;
+
             Entry = entry;
             Id = entry != null ? entry.id : null;
             DisplayName = entry != null && !string.IsNullOrEmpty(entry.displayName) ? entry.displayName
