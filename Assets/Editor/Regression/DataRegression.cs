@@ -629,6 +629,19 @@ namespace DeNelle.Editor
             // silently draws a DIFFERENT ladder, with no log line and no symptom. ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "collector-ladder suite", () => { if (!DeNelle.Editor.Regression.CollectorLadderRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[collector-ladder] " + r); });
 
+            // --- 2026-08-10 wave-3 lanes. Each lane authored its oracle but left the
+            // registration to the committer on purpose (this file is lane-fenced, so
+            // nine agents editing it in parallel would collide). Registered here in the
+            // same commit as the lane work, which is also what keeps [regression-marker]
+            // green - an oracle written and never registered is a FAIL by design. ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "barracks-blanktown suite", () => { if (!DeNelle.Editor.BarracksBlankTownRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[barracks-blanktown] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "echo-hollow-route suite", () => { if (!DeNelle.Editor.EchoHollowRouteRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[echo-hollow-route] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "harvest-drip suite", () => { if (!DeNelle.Editor.HarvestDripRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[harvest-drip] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "hostile-green suite", () => { if (!DeNelle.Editor.HostileGreenCueRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[hostile-green] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "dungeon-cam-958 suite", () => { if (!DeNelle.Editor.DungeonCameraTightRoomRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[dungeon-cam-958] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "gear-aura-carry suite", () => { if (!DeNelle.Editor.Regression.GearAuraCarryGateRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[gear-aura-carry] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "armor-store-window suite", () => { if (!DeNelle.Editor.Regression.ArmorStoreLockedWindowRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[armor-store-window] " + r); });
+
             // --- THE ORACLE THAT GUARDS THIS FILE: distinct markers, no unregistered
             // oracle, no gate script grepping a marker nobody emits. Registered LAST so
             // it sees the fully-built registry above it (it reads SOURCE, not runtime
@@ -742,13 +755,14 @@ namespace DeNelle.Editor
 
             if (mandatory.Count == 0)
             { failures.Add("tutorial-steps.json deserialized to 0 mandatory steps (mapping break or empty)"); return; }
-            // Owner ruling 2026-07-24 (end-after-defend): the founding arc ENDS at the
-            // defend/survive beat = exactly 7 mandatory steps (greet, hollow, stores, town,
-            // echo, defense, defend). The venture-out back half (world_encounter, return_home,
-            // freedom) was SCRAPPED — players learn to venture out automatically, and the guide
-            // lives under Settings -> Game Guide. Supersedes the WO-702 (2026-07-13) 10-step chain.
-            if (mandatory.Count != 7)
-                failures.Add($"tutorial mandatory chain has {mandatory.Count} steps — the owner-decided founding flow ends after defend at exactly 7 (2026-07-24)");
+            // WO-1012 (owner-ruled arc, 2026-08-09/10): the founding flow is the 8-beat
+            // pet-Echo-guided arc — ARRIVE, WALK, BUILD ONE, ACK, ONE CANNON, TIMERS,
+            // ENEMIES AT THE GATE, WIN+HANDOFF. Supersedes the 2026-07-24 end-after-defend
+            // 7-step pin (that ruling's substance — no venture-out back half, no whole-village
+            // build — survives inside the 8 beats; the count moved because ACK/WIN became
+            // structural beats, not because scope grew).
+            if (mandatory.Count != 8)
+                failures.Add($"tutorial mandatory chain has {mandatory.Count} steps — the WO-1012 owner-ruled arc is exactly 8 beats (2026-08-10)");
 
             // Known highlight-registry ids + completion-signal vocabulary.
             var knownHighlights = new HashSet<string>(DeNelle.Core.UI.TutorialHighlightRegistry.KnownIds);
@@ -763,6 +777,8 @@ namespace DeNelle.Editor
                     s == DeNelle.Core.Tutorial.TutorialSignals.EchoBornSecond ||
                     s == DeNelle.Core.Tutorial.TutorialSignals.FirstGearAdded ||
                     s == DeNelle.Core.Tutorial.TutorialSignals.FirstSkillPoint ||
+                    // WO-1012 P3: the scripted teaching band's repelled signal (ENEMIES beat).
+                    s == DeNelle.Core.Tutorial.TutorialSignals.TutorialBandRepelled ||
                     s.StartsWith(DeNelle.Core.Tutorial.TutorialSignals.DialogueEndedPrefix) ||
                     s.StartsWith(DeNelle.Core.Tutorial.TutorialSignals.HeroReachedPrefix) ||
                     s.StartsWith(DeNelle.Core.Tutorial.TutorialSignals.PanelOpenedPrefix) ||
