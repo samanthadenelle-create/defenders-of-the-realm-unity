@@ -1,6 +1,16 @@
 # Dedicated Build HUD — Reconciled Implementation Spec (2026-07-14)
 
-**Status:** READY TO IMPLEMENT. Merges Grok's build-screen guidance + the internal SME code-map + owner rulings (2026-07-14). Mint/confirm a WO number from `CLI_LANES_WO_NUMBERS.md` before commit. Branch `wip/village2-and-f8-tickets`. Build mode IS the Pi "Seekerthon" demo.
+> ⚠ **SUPERSEDED 2026-08-09.** This spec was implemented, then its chrome layout was overruled by
+> WO-1010 §7 owner rulings D10 / D14 / D17 / D19. Frozen as history — do not build from the layout
+> section. What is now WRONG here: the **"Top bar"** line (the full-width top bar, the centred
+> **"BUILD MODE"** label and the **Exit "X Done" top-right** are all DELETED — the exit is a compact
+> corner control reading just `Done`, and the wallet is a thin bottom-centre strip); the
+> **centre-bottom intent bar** (the three placement verbs are a fixed lean right-edge rail, anchored
+> bottom-right); and the ghost-following chip cluster that a later pass added on top of this spec
+> (retired — only the ghost's name+cost pill follows). Current truth: `BuildHudController.cs` header
+> comment + `docs/MASTER_CATALOG/village-systems.md` (BuildHudController row) + `docs/UI_PLAYBOOK.md`.
+
+**Status:** SUPERSEDED (was: READY TO IMPLEMENT). Merges Grok's build-screen guidance + the internal SME code-map + owner rulings (2026-07-14). Mint/confirm a WO number from `CLI_LANES_WO_NUMBERS.md` before commit. Branch `wip/village2-and-f8-tickets`. Build mode IS the Pi "Seekerthon" demo.
 
 ## North star (Grok + owner)
 A **dedicated Build HUD presentation layer that owns edit-mode chrome end-to-end**, styled like **Clash of Clans**, in **LANDSCAPE**. Keep `BuildModeController` as the BRAIN (enter/exit, arm, place, move, sell, upgrade, ghost, grid, economy, save) — the new HUD owns only layout/states/chrome. Do NOT rebuild placement, grid, BaseLayout, factory, or category JSON. Re-skin + unify chrome ownership.

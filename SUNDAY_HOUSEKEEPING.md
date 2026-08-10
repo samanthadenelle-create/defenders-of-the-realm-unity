@@ -70,5 +70,49 @@ other lane mid-edit — so the week's green is a real green and not one lane's e
 
 ---
 
+## 4. THE ONE-WEEK VALIDITY THRESHOLD (owner, 2026-08-09, BINDING)
+
+**Verbatim:** *"Anytime we are considering validity of ticket, please use time frame as more of the
+reason to validate if its true"* + *"anything more than a week out i would verify before taking at
+face value."*
+
+**The weekly cadence in §1 is what makes this threshold meaningful.** Docs are brought up to date every
+Sunday, so anything dated more than a week back predates the last refresh — it was written against a
+tree that has since been swept.
+
+| Age of the artifact | How to treat it |
+|---|---|
+| **Within 7 days** | May be taken at face value. |
+| **Older than 7 days** | **VERIFY AT SOURCE** before relying on, quoting, or acting on it. |
+
+Rules of application:
+
+- **Older than a week means UNPROVEN, not wrong.** The threshold is a tripwire for a re-read.
+  **Nothing is ever closed on age alone.**
+- **The date beats the `Status:` line.** A `Status: READY TO IMPLEMENT` written weeks ago is the
+  weakest signal in the file — it is written once and almost never updated.
+- **Always state the age.** Cite dated artifacts as "*`<path>`, dated `<date>` — N days old*", so the
+  reader can apply the threshold themselves. Give BOTH the doc's own dated header and its last
+  git-commit date (`git log -1 --format=%ad -- <path>`) when they disagree.
+- **When two docs conflict, the NEWER wins by default.** Banner the older; do not re-litigate contents.
+- **Verified means opened.** Mark every aged claim explicitly `VERIFIED` (naming the file:line checked)
+  or `NOT VERIFIED`. Never launder an unverified aged claim as fact.
+- **Caveat that costs us if forgotten:** a ticket can be old because it was DEPRIORITISED, not because
+  it was overtaken. Age is strong evidence about *state* ("this is how the system works") and weak
+  evidence about an *unfixed defect* — defects do not expire, they wait. Verify, do not discard.
+
+**This is also step 1 of the sweep:** anything in the §1 load-bearing set that is more than 7 days old
+is, by definition, due for verification this week — that list IS the week's refresh queue, oldest
+first, whether or not a specific contradiction has been spotted in it yet. Refresh **the most important
+flow** alongside it, so the docs describing how the game is actually played never fall behind the code.
+
+*Proof this was needed (2026-08-09): 14 `CANON_GROUND_TRUTH_<date>.md` sat at repo root against a
+"keep exactly ONE" rule (`RULES.md:564`) — one of them documented as actively INVERTED
+(`SESSION_CANON_LOADER.md:396`) yet sitting beside the live anchor; and
+`docs/BUILD_HUD_RECONCILED_SPEC_2026-07-14.md` still read `Status: READY TO IMPLEMENT` while
+specifying a build screen deleted that same day. Date alone resolves every one of them.*
+
+---
+
 *Maintained by the CLI/orchestrator. The Sunday sweep is the guarantee that "what is done" is always
 answerable from stored, known state — never reconstructed from memory.*

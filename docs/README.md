@@ -41,6 +41,7 @@ indexed separately in `../PROJECT_INDEX.md`.
 - `WARDROBE_ARCHITECTURE.md` — **Dressable capability at the rig level** (BlinkWardrobe + VisualFactory.Skin): characters start clothed not in underwear; data-driven per-character wardrobe collection that feeds the cosmetic store (foundation shipped, data layer = WO-456). Read before touching clothing/cosmetics/store.
 - `unity-decisions.md`, `UNITY_BEST_PRACTICES_AUDIT.md`
 - `INSTRUMENTATION_STANDARD.md` — how new code is written observable-first (FlowTrace/Guard/regression authoring standard; the *method* that operationalizes `CLAUDE.md §12`)
+- `UI_PLAYBOOK.md` — **read before adding or changing any screen, panel, HUD element or overlay** (2026-08-09). 15 practices, each stating the defect it prevents and citing the code that demonstrates it: zero UXML, kit builders, fixed-pixel bands, the 112 px touch floor via invisible hit pads, never-colour-alone, own-your-edge, screen-space not billboards, clamp against reserved bands, ASCII-only TMP, near-black panels, safe area, layout callable outside `Update`, verify-by-capture (and how a capture lies), never hang art off a display name, instrument the surface. Ends in a done-checklist.
 - `DEBUGGER_TOOLKIT_DESIGN.md` — the debugger/diagnostics toolkit as it ACTUALLY exists (FlowTrace/Guard/BreakCaptureHarness + the AutoPilotProbes fleet oracles + TGVRU); reconciled 2026-06-19, supersedes the old DebugProbe/hotkey design
 
 ## Game design specs

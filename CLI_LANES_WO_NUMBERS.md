@@ -1,6 +1,40 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ RECONCILED 2026-08-09 (CLI / THE RULES): main line next free = **939**. **782–859 + 900–938 CONSUMED.**
+> ## ⚠ RECONCILED 2026-08-09 (CLI / THE RULES): main line next free = **943**. **782–859 + 900–942 CONSUMED.**
+> - **942** = **UI capture harness: two capture-case gaps left by the WO-1010 pass** — the
+>   `padon` case is byte-identical to `edgeclamp` (the identical-file-size tell) because the D12
+>   no-toggle ruling dissolved what it photographed, and the D17 sprite-path dim-on-invalid has no
+>   assertion. File `WORK_ORDER_942_ui_capture_case_gaps_wo1010.md`. **READY TO IMPLEMENT.**
+>
+> *(banner bumped 942 → 943 in the SAME edit as the 942 mint — the rule that broke five times on 08-02.)*
+> - **941** = **RumorBoard + RealmMap: controls overlap text (16 UI_GEOMETRY assertions)** — the
+>   geometry oracle pins CloseButton/CTA/reward-label overlaps at both portrait sizes on RumorBoard and
+>   a map-node disc over text on RealmMap at both landscape sizes; PRE-EXISTING (identical in the 20:41
+>   and 22:04 runs, attributed before ticketing). File
+>   `WORK_ORDER_941_rumorboard_realmmap_geometry_overlaps.md`. **READY TO IMPLEMENT.**
+>
+> *(banner bumped 941 → 942 in the SAME edit as the 941 mint.)*
+> - **940** = **Board: DATE-tag every ticket + "opened within" filter (age is DERIVED, never typed)**
+>   — owner ruling 2026-08-09: *"i want aged tagged to every ticket"*, *"date tagged"*, *"so we can
+>   filter opened within and see"*. Backs the one-week validity threshold (`SUNDAY_HOUSEKEEPING.md` §4):
+>   you cannot apply "older than a week -> verify" if the board does not show age. **Carries a real
+>   defect:** `tools/board_build.py:116` labels its Age column from `os.path.getmtime` — that is LAST
+>   MODIFIED, not OPENED, so any edit resets a ticket's apparent age and "opened within" is unanswerable
+>   today. File `WORK_ORDER_940_board_date_tagging_and_opened_within_filter.md`.
+>   **READY TO IMPLEMENT.**
+>
+> *(banner bumped 940 → 941 in the SAME edit as the 940 mint — the rule that broke five times on 08-02.)*
+> - **939** = **Backend auth rail is compiled OFF in every shipped build (+ guest-id salt in the binary)**
+>   — `BACKEND_AUTH_ENFORCED` is defined on NO platform row in `ProjectSettings.asset`, so
+>   `BackendAuthConfig.cs:58`'s enforced branch is compiled out and `GameStateService` sends no auth
+>   headers; real cloud saves therefore ride the GUEST rail, whose id is
+>   `Sha256(deviceId + GuestIdSalt)` with the salt literal at `GameStateService.cs:1572`. Anyone who
+>   derives that id can read AND overwrite that player's save. Server side is sound — the client just
+>   never uses it. **Owner ruling 2026-08-09: OVERNIGHT, not a hotfix — no live player base, so
+>   exposure is theoretical.** File `WORK_ORDER_939_backend_auth_rail_unreachable.md`.
+>   **READY TO IMPLEMENT.**
+>
+> *(banner bumped 939 → 940 in the SAME edit as the 939 mint — the rule that broke five times on 08-02.)*
 > - **938** = **`RULES.md` — the one page the owner can point at** — the binding rules are currently
 >   spread across CLAUDE.md, PREFLIGHT_GATE.md, SESSION_CANON_LOADER.md, docs/HANDOVER.md,
 >   docs/TICKET_PIPELINE.md, docs/ARCHITECTURE_PRINCIPLES.md, docs/INSTRUMENTATION_STANDARD.md and
@@ -346,6 +380,14 @@
 > That is the exact failure this file's own rule warns about — *"never a number copied into any other
 > doc"* — and the copy was **inside the numbering authority itself**. A duplicate cannot be kept honest
 > by discipline; it can only be removed. **The header is the sole source. Do not restore numbers here.**
+>
+> *(UI-seat bumped 1012 -> 1013 in the SAME edit as the WO-1012 mint — tutorial/FTUE presentation + pacing
+> redesign: retire the boxed markers / fat top banner / Next-Next coach cards for a spotlight mask + ONE
+> chevron / ghost-finger + thin bottom objective strip with beads; the GUIDE is a rotating HERO —
+> guide=(playerHeroClass+1)%4 over the HeroClass enum, never yourself, retiring the KayKit "Sylas"
+> stand-in; pacing = the owner's dynamic arc (walk with the guide -> build ONE piece -> ONE cannon ->
+> the timers, one line -> enemies at the gate -> win + handoff). Bones stay: tutorial-steps.json,
+> TutorialFlow, TutorialSignals, Onboarded gate, grants.)*
 >
 > *(UI-seat bumped 1011 -> 1012 in the SAME edit as the WO-1011 mint — BOARD workflow acclimation for the
 > CLI: adopt BOARD.html/board_build.py as the live board (Notion retired 2026-08-08), wire regeneration
