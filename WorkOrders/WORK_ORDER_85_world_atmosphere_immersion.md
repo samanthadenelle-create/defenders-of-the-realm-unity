@@ -249,3 +249,26 @@ Culling mode:    Automatic (Pause and Catch-up)
 - [ ] AnimatorCullingAuditor reports 0 missing controllers
 - [ ] Hero cannot walk past boundary walls
 - [ ] 60 FPS on mid-range mobile during a 10-enemy wave with full VFX + weather
+
+---
+
+## 2026-08-10 - NOT STARTED (recorded so the next seat does not re-derive it)
+
+The 2026-08-10 wave assigned this lane and its session expired mid-investigation. **Nothing was written:
+there is no code change in the tree for it and this file was never appended to.** Recording the standing
+correction so the next agent starts from the real question:
+
+- **Grass and roads ALREADY SHIPPED** at `cc24da5a` / `bfacf0b3` (2026-08-07): `ExteriorTerrainBuilder`
+  plus committed terrain data plus the merged scene. Nothing has touched them since - `cc24da5a` is
+  still the last commit against that builder.
+- **Yet the owner has never seen the effect.** So the lane is NOT "add grass" - it is *"why does the
+  shipped terrain not read?"*, and the answer decides everything: a runtime override / scene problem
+  (visible-not-at-all) is a different fix from a contrast problem (visible-but-unreadable). The owner is
+  red/green colourblind, so **VALUE contrast must carry** - a hue-only difference between grass and path
+  is invisible to her by construction.
+- **The lane must ENHANCE `ExteriorTerrainBuilder`, not paint beside it** (one owner per concern).
+- First move per §12: a captured line, not a theory - a device/player screencap of the hub plus the
+  terrain builder's own trace, before any edit.
+
+**Owner pin that unblocks it:** in a fresh player build, is the ground visibly grass-and-roads at all, or
+visible-but-too-subtle? One word decides which of the two fixes this becomes.

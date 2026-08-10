@@ -312,6 +312,12 @@ The lead session is the **ORCHESTRATOR**, not a solo worker. Division of labor:
 owner retests/confirms** (felt/gameplay) or a regression passes (data/logic) — "push the ones that
 passed." Ambiguous tickets (no repro / screen / stack) **bounce back for detail** — never work blind.
 
+**THE PIPELINE NEVER IDLES (owner directive 2026-08-10):** *"we should always have a agent assigned
+and queued... so the dev work continues."* While READY tickets exist, the agent pool stays loaded —
+on any lane/workflow completion, the orchestrator immediately tops up with the next disjoint-lane
+READY ticket(s). Pin-blocked tickets park with their pins surfaced so unblocking is one owner word.
+Gate + commit cadence stays singular (one gate, one committer) — the parallelism lives in the lanes.
+
 **Multi-session reconciliation (FIRM RULE — always followed):** multiple sessions/agents edit the
 SAME working tree. There is exactly **ONE committer** (the lead/CLI). When another session or an agent
 worktree leaves changes in the tree, the committer **SAVES their work and merges only the diffs into
