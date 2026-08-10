@@ -1,6 +1,6 @@
 # WORK_ORDER_107 — Major Village Castle Overhaul: Dream Defensible Medieval Castle Town (Elarion)
 
-**Status: READY TO IMPLEMENT**
+**Status:** CLOSED — SUPERSEDED (owner-approved sweep 2026-08-09: dream fixed-layout castle vs player-built town)
 
 **Owner:** (this session)  
 **Related:** Previous BuildMode work (BuildPreviewModal, yawOffset, Ghost), EconomyService (for upgrades), VillageSceneBuilder (serialization bottleneck — touch carefully), DESIGN-DECISIONS (no Keep, Elarion Tree of Life center, canon naming).

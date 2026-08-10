@@ -1,6 +1,6 @@
 # WORK ORDER 70 — Final Combat System (HeroHealth + EnemyHealth + Full Wiring)
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE (reconciled 2026-08-09 from the tree, NOT felt-verified — HeroHealth.cs in tree, wave loop WIRED per canon §8; caveat: 'EnemyHealth' as named absent, enemy health integrated elsewhere)
 **Date:** 2026-05-28
 **Priority:** Critical
 **Scope:** Medium — three scripts + prefab wiring guide

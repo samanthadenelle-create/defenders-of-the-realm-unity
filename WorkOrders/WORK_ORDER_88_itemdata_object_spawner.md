@@ -1,6 +1,6 @@
 # WORK ORDER 88 — ItemData ScriptableObject + ObjectSpawner (Unified Pool Factory)
 
-**Status:** READY TO IMPLEMENT
+**Status:** CLOSED — SUPERSEDED by WO-86 (owner-approved sweep 2026-08-09: SO data-architecture RESULT exists; pooling residue unverified)
 **Date:** 2026-05-28
 **Priority:** Critical
 **Scope:** Medium — two new scripts + targeted edits to existing Data SOs + all spawn callsites

@@ -1,6 +1,6 @@
 # WORK ORDER 101 — Village Rebuild: Polyperfect Low-Poly Asset Swap
 
-**Status:** READY TO IMPLEMENT
+**Status:** CLOSED — SUPERSEDED (owner-approved sweep 2026-08-09: Village.unity deleted; merged world + player-built town)
 **Date:** 2026-05-29
 **Priority:** High — file size blocker for Seeker APK + visual polish
 **Scope:** Medium — mesh-only swap in `VillageSceneBuilder.cs`. No gameplay code changes.

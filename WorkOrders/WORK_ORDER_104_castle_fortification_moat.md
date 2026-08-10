@@ -1,6 +1,6 @@
 # WORK ORDER 104 — Castle Fortification Rebuild: Curtain Walls, Round Towers, Moat + 4 Drawbridges
 
-**Status:** READY TO IMPLEMENT
+**Status:** CLOSED — SUPERSEDED by WO-904 (owner-approved sweep 2026-08-09: fixed-layout castle vs player-built town; WO-904 owns fortifications)
 **Date:** 2026-05-29
 **Priority:** High — world quality, architect lane (fully independent of gameplay code)
 **Scope:** Large — `VillageSceneBuilder.cs` environment changes only. No gameplay code.

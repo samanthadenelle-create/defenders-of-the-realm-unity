@@ -1,6 +1,6 @@
 # WORK ORDER 90 — Fix Heart/Tree Taking 0 Damage from Enemies
 
-**Status:** BUG FIX — READY TO IMPLEMENT
+**Status:** CLOSED — SUPERSEDED by WO-125 (owner-approved sweep 2026-08-09: heart damage path live per canon §6; newer WO-125 owns heartfall bugs)
 **Date:** 2026-05-28
 **Priority:** Critical
 **Scope:** Small — create HeartHealth.cs + targeted edit to EnemyBrain

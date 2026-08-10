@@ -1,6 +1,6 @@
 # WORK ORDER 68 — Fix ATB System + Enemy Engagement in Dungeon Combat
 
-**Status:** READY TO IMPLEMENT
+**Status:** CLOSED — SUPERSEDED by WO-130 (owner-approved sweep 2026-08-09: newer WO-130 owns the ATB-broken surface)
 **Date:** 2026-05-28
 **Priority:** Critical
 **Scope:** Medium — ATBCombatManager overhaul + EnemyBrain engagement fix

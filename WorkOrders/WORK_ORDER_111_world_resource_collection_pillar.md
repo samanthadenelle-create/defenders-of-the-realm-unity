@@ -1,6 +1,6 @@
 # WORK ORDER 111 — World Resource Collection Pillar (collection points → build mines → auto-harvest)
 
-**Status:** DESIGN — owner vision captured 2026-05-29, ready to phase
+**Status:** CLOSED — SUPERSEDED (owner-approved sweep 2026-08-09: pillar implemented as Echo harvest + nodes + stockpiles, canon §7/§8)
 **Priority:** Pillar (big) — the idle/economy backbone. Build incrementally; WO-110 is Phase 1.
 **Lanes:** design (owner + UI) · gameplay code (CLI) · world placement (`VillageSceneBuilder` / world scenes)
 **Roadmap:** the build-out of [[resource-idle-economy-roadmap]] (resource gathering + pet auto-harvest + offline → upgrades).

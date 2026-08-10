@@ -1,6 +1,6 @@
 # WORK ORDER 61 — Ground Decals, Hit Reactions & Final Polish
 
-**Status:** READY TO IMPLEMENT
+**Status:** CLOSED — SUPERSEDED by WO-84 (owner-approved sweep 2026-08-09: WO-84 hit-reactions RESULT exists; decals residue unverified)
 **Date:** 2026-05-28
 **Priority:** High
 **Scope:** Medium — CameraShakeManager + HitStop + DecalSpawner + footstep dust

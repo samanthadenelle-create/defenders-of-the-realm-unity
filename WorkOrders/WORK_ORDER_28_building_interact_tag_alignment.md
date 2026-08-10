@@ -1,6 +1,6 @@
 # WORK ORDER 28 — Building Interact Tag Alignment (Pet House / Farm / Arcane Tower)
 
-**Status:** READY TO IMPLEMENT
+**Status:** CLOSED — SUPERSEDED (owner-approved sweep 2026-08-09: old-village building tags; Village.unity deleted, buildings re-owned by the player-built town model)
 **Date:** 2026-05-26
 **Author:** Bug triage — playtest screenshots
 **Priority:** High — three core gameplay buildings are non-interactable / invisible

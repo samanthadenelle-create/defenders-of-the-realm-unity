@@ -1,6 +1,6 @@
 # WORK ORDER 40 — Wave Imminent: Screen Flash + Haptic Vibration
 
-**Status:** READY TO IMPLEMENT
+**Status:** CLOSED (owner ruling 2026-08-09, felt-notated: flash partially present in-game — low-health flashing observed live; haptics never felt; remainder judged a bell-and-whistle not worth the performance weight on lower/mid-tier devices like Seeker)
 **Date:** 2026-05-26
 **Author:** Owner design spec — playtest feedback
 **Priority:** High — no warning before enemies pour through the gate;

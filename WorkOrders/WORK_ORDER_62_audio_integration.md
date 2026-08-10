@@ -1,6 +1,6 @@
 # WORK ORDER 62 — Audio Integration (AbilityAudioBridge + VFX Sync)
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE (reconciled 2026-08-09 from the tree, NOT felt-verified — Assets/_Modules/Village/Hero/AbilityAudioBridge.cs in tree)
 **Date:** 2026-05-28
 **Priority:** High
 **Scope:** Medium — AudioService extension + VFXManager sound flag + mobile rules

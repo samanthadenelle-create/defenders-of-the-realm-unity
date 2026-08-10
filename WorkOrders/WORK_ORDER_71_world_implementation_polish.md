@@ -1,6 +1,6 @@
 # WORK ORDER 71 — Complete World Implementation & Polish Pass
 
-**Status:** READY TO IMPLEMENT
+**Status:** CLOSED — SUPERSEDED (owner-approved sweep 2026-08-09: old world replaced by the merged Main_Castle_Overworld)
 **Date:** 2026-05-28
 **Priority:** High
 **Scope:** Large — terrain, foliage, lighting, occlusion, NavMesh, boundaries

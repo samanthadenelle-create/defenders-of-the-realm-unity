@@ -1,6 +1,6 @@
 # WORK ORDER 37 — Hero Attack VFX + Sound Overhaul (Creative Pass)
 
-**Status:** READY TO IMPLEMENT — Creative spec + code targets
+**Status:** CLOSED — SUPERSEDED (owner-approved sweep 2026-08-09: VFX flow is now the owner-tag pipeline + WO-195 spell VFX factory)
 **Date:** 2026-05-26
 **Author:** Creative pass — owner playtest feedback
 **Priority:** High — current attack feedback is unconvincing; owner wants

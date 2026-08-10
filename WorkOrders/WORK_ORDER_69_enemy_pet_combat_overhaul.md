@@ -1,6 +1,6 @@
 # WORK ORDER 69 — Complete Enemy + Pet Combat Overhaul
 
-**Status:** READY TO IMPLEMENT
+**Status:** CLOSED — SUPERSEDED (owner-approved sweep 2026-08-09: combat pivot + smart-composition rebuild + pets-to-Echoes reframe)
 **Date:** 2026-05-28
 **Priority:** Critical
 **Scope:** Large — replaces/supersedes EnemyBrain (WO-49/53), adds PetCombatController

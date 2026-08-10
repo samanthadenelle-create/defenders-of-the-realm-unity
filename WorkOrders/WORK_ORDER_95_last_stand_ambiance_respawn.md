@@ -1,6 +1,6 @@
 # WORK ORDER 95 — Last Stand Scene: Ambiance, Blaise Idle Pose, Enemy Respawn Loop
 
-**Status:** BUG FIX — READY TO IMPLEMENT
+**Status:** CLOSED — SUPERSEDED (owner-approved sweep 2026-08-09: Last Stand scene absent from Assets/Scenes)
 **Date:** 2026-05-28
 **Priority:** High
 **Scope:** Small–Medium — scene lighting, animator fix, respawn guard

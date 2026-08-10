@@ -1,6 +1,6 @@
 # WORK ORDER 103 — Village Scene Rebake
 
-**Status:** READY TO IMPLEMENT
+**Status:** CLOSED — SUPERSEDED (owner-approved sweep 2026-08-09: rebake of a deleted scene)
 **Date:** 2026-05-29
 **Priority:** Urgent — scene is stale; all recent fixes are code-only and will not appear until the builder reruns
 **Scope:** Small — single batchmode command, no code changes

@@ -1,6 +1,6 @@
 # WORK ORDER 80 — Vercel + Neon Backend (War Room, TX Verification, Management)
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE (reconciled 2026-08-09 from the tree, NOT felt-verified — api/ lives in this repo with schema.sql, DB_SETUP.md, admin/, game/; Neon save path live)
 **Date:** 2026-05-28
 **Priority:** Critical
 **Scope:** Large — database schema + serverless API routes + Unity helper

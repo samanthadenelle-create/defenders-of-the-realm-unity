@@ -1,6 +1,6 @@
 # WORK ORDER 107 — Climate Regions & Terrain Shifts: The World Beyond Elarion
 
-**Status:** READY TO IMPLEMENT
+**Status:** CLOSED — SUPERSEDED by WO-826 (owner-approved sweep 2026-08-09: outer-world regions re-owned by merged world + shipped Realm Map)
 **Date:** 2026-05-29
 **Priority:** High — world feel, player exploration, ties to WO-111 resource nodes
 **Scope:** Large — VillageSceneBuilder exterior + new ZoneManager system

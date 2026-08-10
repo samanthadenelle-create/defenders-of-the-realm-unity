@@ -1,6 +1,6 @@
 # WORK ORDER 43 — In-App SKR Swap (Jupiter Aggregator)
 
-**Status:** READY TO IMPLEMENT
+**Status:** CLOSED — SUPERSEDED by WO-210 (owner-approved sweep 2026-08-09: filename already marked it; content re-minted as WO-210)
 **Date:** 2026-05-26
 **Author:** Owner direction — UX + revenue feature
 **Priority:** Medium — monetisation / onboarding friction reduction

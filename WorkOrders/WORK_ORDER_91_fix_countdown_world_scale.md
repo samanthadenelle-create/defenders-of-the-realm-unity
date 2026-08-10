@@ -1,6 +1,6 @@
 # WORK ORDER 91 — Fix Wave Countdown "9" Rendering at World Scale
 
-**Status:** BUG FIX — READY TO IMPLEMENT
+**Status:** CLOSED — SUPERSEDED by WO-186 (owner-approved sweep 2026-08-09: WO-186 owns the wave-countdown surface)
 **Date:** 2026-05-28
 **Priority:** High
 **Scope:** Small — replace world-space TextMesh with screen-space Canvas overlay

@@ -1,6 +1,6 @@
 # WORK ORDER 42 — Hero Select Screen: Two-Panel Redesign (rev 2)
 
-**Status:** READY TO IMPLEMENT
+**Status:** CLOSED — SUPERSEDED (owner-approved sweep 2026-08-09: two-panel multi-hero select vs the single-hero pivot, COMBAT_PIVOT_NORTHSTAR)
 **Date:** 2026-05-26
 **Author:** Owner creative direction — playtest feedback + reference screenshot
 **Priority:** High — current layout lacks visual hierarchy; dragon not prominent;

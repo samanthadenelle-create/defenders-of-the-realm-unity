@@ -1,6 +1,6 @@
 # WORK ORDER 113 — Arcane Tower as a Buildable Tower Type
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE (reconciled 2026-08-09 from the tree, NOT felt-verified — ArcaneTower.cs in Village/Buildings + build card 'arcane-tower' registered live in the 2026-08-09 F8 runtime trace)
 **Date:** 2026-05-29
 **Priority:** High — completes the buildable tower roster; unlocks the §9 support-aura imbuements
 **Scope:** Medium — one new TowerData asset + build-palette/roster entry + prefab wiring + imbue authoring. **Additive only.**

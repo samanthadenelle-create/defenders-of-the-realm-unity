@@ -1,6 +1,6 @@
 # WORK ORDER 124 — Resource HUD: Show the Four Harvest Resources Tick Up
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE (reconciled 2026-08-09 from the tree, NOT felt-verified — [Flow:HUD] resource line live in the 2026-08-09 F8 runtime trace)
 **Date:** 2026-05-30 (Fri)
 **Priority:** High — the WO-117 worker auto-collect demo needs the player to **SEE** Wood / Food / Crystal / Ore bank in real time. Today only crystals render; the other three harvest payouts are invisible.
 **Scope:** Small + self-contained. Additive interface method on Core + one code-built panel on the existing `VillageHudController`. No new assembly, no scene file, no UXML.

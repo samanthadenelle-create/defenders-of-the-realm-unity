@@ -1,6 +1,6 @@
 # WORK ORDER 123 — WebGL Build + Tester Hosting
 
-**Status:** READY — overnight CLI (build) + script-relay (hosting)
+**Status:** DONE (reconciled 2026-08-09 from the tree, NOT felt-verified — web build deployed and owner-playtested via the web-trace triage pipeline; hosting details not re-verified)
 **Priority:** High — **unblocks testers** (the build-distribution bottleneck "all along"). Sequenced by
 owner *after* zones + WO-104 castle for the *polished* host, but a **first testable build can come sooner**.
 **Lanes:** WebGL build = CLI (here). Hosting/deploy = script-relay (owner runs in Vercel/itch, relays output).

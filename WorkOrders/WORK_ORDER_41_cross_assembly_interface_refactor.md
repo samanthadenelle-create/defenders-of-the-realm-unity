@@ -1,6 +1,6 @@
 # WORK ORDER 41 — Cross-Assembly Interface Refactor: IVillageHud + IAudioService
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE (reconciled 2026-08-09 from the tree, NOT felt-verified — IVillageHud.cs + IAudioService.cs exist at the spec'd Core paths, CoreServices-resolved; CLAUDE.md §6)
 **Date:** 2026-05-26
 **Author:** Architecture pass — owner preference for correct methods over reflection shortcuts
 **Priority:** High — prerequisite for WO-38/39/40 implementation; also cleans up

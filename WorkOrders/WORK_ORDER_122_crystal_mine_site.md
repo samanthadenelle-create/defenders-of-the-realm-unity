@@ -1,6 +1,6 @@
 # WORK ORDER 122 — Crystal Mine Site (wire the on-map crystal as the mine)
 
-**Status:** READY TO IMPLEMENT — CLI lane (held until green tree)
+**Status:** CLOSED — SUPERSEDED (owner-approved sweep 2026-08-09: on-map crystal of a deleted scene; crystal economy now Echo-harvest/stockpiles)
 **Date:** 2026-05-29
 **Priority:** Medium — world polish + first node of the resource-gathering pillar
 **Scope:** Small (Phase 1 wire-up) — `VillageSceneBuilder` wiring + a small `CrystalMine` flag

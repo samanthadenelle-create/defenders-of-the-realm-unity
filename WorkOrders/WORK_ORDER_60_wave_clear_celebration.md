@@ -1,6 +1,6 @@
 # WORK ORDER 60 — Wave Clear Celebration + Kill Combo System
 
-**Status:** READY TO IMPLEMENT
+**Status:** CLOSED — SUPERSEDED by WO-83 (owner-approved sweep 2026-08-09: identical scope, WO-83 RESULT exists)
 **Date:** 2026-05-28
 **Priority:** High
 **Scope:** Medium — WaveManager hook + new KillComboTracker component

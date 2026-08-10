@@ -1,6 +1,6 @@
 # WORK ORDER 72 — Best Non-P2W Monetization (Warcraft / Starcraft Style)
 
-**Status:** READY TO IMPLEMENT
+**Status:** CLOSED — SUPERSEDED (owner-approved sweep 2026-08-09: live model = player-built town + PackStore, canon §8)
 **Date:** 2026-05-28
 **Priority:** High
 **Scope:** Large — MonetizationManager, CosmeticData, Shop UI, Battle Pass, Building Prestige

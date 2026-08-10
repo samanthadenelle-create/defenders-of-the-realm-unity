@@ -1,6 +1,6 @@
 # WORK ORDER 117 — Worker Dispatch & Auto-Collect: Send Them Out, Keep Them Safe
 
-**Status:** READY TO IMPLEMENT — **Phase 1 is the immediate CLI target (SUNDAY deadline)**
+**Status:** CLOSED — SUPERSEDED (owner-approved sweep 2026-08-09: worker dispatch re-owned by the Obsidian multi-channel queue + Builders chip, canon §8 / WO-773)
 **Date:** 2026-05-29 (Fri) — owner's **#1 priority**, minimal slice demoable by **Sunday**
 **Priority:** Top — the concrete worker layer of the HARVEST pillar; the Warcraft harvest verb made playable
 **Scope:** Large (phased). Phase 1 small + self-contained; Phases 2–3 build on it.

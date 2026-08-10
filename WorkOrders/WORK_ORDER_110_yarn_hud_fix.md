@@ -1,6 +1,6 @@
 # WORK_ORDER_110 — Fix Yarn Spinner Blue Button + Mobile-First HUD Redesign (Chunk 9)
 
-**Status: READY TO IMPLEMENT**
+**Status:** CLOSED — DUPLICATE (owner-approved sweep 2026-08-09: revision copy of WORK_ORDER_110_yarn_blue_button_mobile_hud.md, itself closed)
 
 **Context:** Builds on previous chunks (WO-108 castle, WO-109 NPC Yarn dialogue + equip/craft, builder wiring for NPCs with DialogueRunner + NPCCommandBridge, code-built UIs, Economy as resource source). Yarn is active for stationed NPCs. HUD is in DeNelle.HUD (passive, some UIDocument + code panels). UXML has known build issues; prefer code-built Canvases for mobile/reliability.
 

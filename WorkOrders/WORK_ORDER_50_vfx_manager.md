@@ -1,6 +1,6 @@
 # WORK ORDER 50 — VFXManager + Modern VFX Integration
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE (reconciled 2026-08-09 from the tree, NOT felt-verified — Assets/_Modules/Village/Vfx/VFXManager.cs in tree; live VFX pools in the 2026-08-09 F8 runtime trace)
 **Date:** 2026-05-28
 **Priority:** High
 **Scope:** Medium — new manager + catalog ScriptableObject + AbilityVfxKit migration

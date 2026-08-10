@@ -1,6 +1,6 @@
 # WORK ORDER 49 — Enemy AI Fix (Immediate Blocker)
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE (reconciled 2026-08-09 from the tree, NOT felt-verified — EnemyBrain.cs rebuilt in Village/Enemies with target eval; canon §7 component targeting; wave loop WIRED per canon §8)
 **Date:** 2026-05-28
 **Priority:** Critical
 **Scope:** Small — single script, prefab wiring

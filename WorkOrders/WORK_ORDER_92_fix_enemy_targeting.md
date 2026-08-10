@@ -1,6 +1,6 @@
 # WORK ORDER 92 — Fix EnemyBrain Targeting: Enemies Ignore Hero and Towers
 
-**Status:** BUG FIX — READY TO IMPLEMENT
+**Status:** DONE (reconciled 2026-08-09 from the tree, NOT felt-verified — same evidence as WO-49: EnemyBrain rebuilt, canon §7 component targeting)
 **Date:** 2026-05-28
 **Priority:** Critical — game-breaking blocker
 **Scope:** Medium — targeted edit to EnemyBrain + new EnemyTarget tag system

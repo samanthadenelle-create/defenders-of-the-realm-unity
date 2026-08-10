@@ -1,6 +1,6 @@
 # WORK ORDER 102 — Village Bug Cluster: Dragon Airborne / Enemy Aggro / Stacked Bars
 
-**Status:** READY TO IMPLEMENT
+**Status:** CLOSED — SUPERSEDED by WO-125 (owner-approved sweep 2026-08-09: old-scene bug cluster; scene deleted, survivors re-ticketed)
 **Date:** 2026-05-29
 **Priority:** High — all three are visible in every playtest session
 **Scope:** Small — targeted fixes, no system rewrites

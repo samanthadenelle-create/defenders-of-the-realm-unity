@@ -1,6 +1,6 @@
 # WORK ORDER 109 — Rampart Level: Walkable Wall Tops + Wall-Top Tower Spec
 
-**Status:** READY TO IMPLEMENT
+**Status:** CLOSED — SUPERSEDED by WO-904 (owner-approved sweep 2026-08-09: old-castle walkable walls; WO-904 owns fortifications)
 **Date:** 2026-05-30
 **Priority:** High — core defensive depth, feeds player build mode (WO-108)
 **Scope:** Medium — wall collider pass + NavMesh upper layer + tower prefab swap

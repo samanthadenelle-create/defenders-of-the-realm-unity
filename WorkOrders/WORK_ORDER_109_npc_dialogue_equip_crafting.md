@@ -1,6 +1,6 @@
 # WORK_ORDER_109 — NPC Dialogue (Yarn Spinner) + Basic Equipment & Crafting Foundation
 
-**Status: READY TO IMPLEMENT**
+**Status:** CLOSED — SUPERSEDED (owner-approved sweep 2026-08-09: Yarn Spinner absent from tree; in-house Core/Dialogue/DialogueModel.cs; crafting owned by the WO-293 line)
 
 **Context:** Builds on WO-108 (Castle Last Bastion with stationed NPCs via NPCUpgradeStation and districts), WO-106 (Economy as source of truth), previous builder wiring, HeroBodySwapper/VisualFactory for visuals, existing Crafting/VillageInventory/Item foundation, Dialogue/ .yarn setup and DialogueUI command bridges.
 

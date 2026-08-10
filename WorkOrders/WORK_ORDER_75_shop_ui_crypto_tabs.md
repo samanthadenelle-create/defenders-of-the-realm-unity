@@ -1,6 +1,6 @@
 # WORK ORDER 75 — Full Shop UI with SOL / SKR / USDC Tabs + SKR Bonus Highlight
 
-**Status:** READY TO IMPLEMENT
+**Status:** CLOSED — SUPERSEDED (owner-approved sweep 2026-08-09: WO-73 shop RESULT exists + storefront model replaced the tabbed shop)
 **Date:** 2026-05-28
 **Priority:** High
 **Scope:** Medium — full ShopUI.cs replacement + prefab guide

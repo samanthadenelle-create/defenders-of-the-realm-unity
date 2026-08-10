@@ -1,6 +1,6 @@
 # WORK ORDER 31 — Build Menu: Tower Build/Upgrade Dialog
 
-**Status:** READY TO IMPLEMENT
+**Status:** CLOSED — SUPERSEDED (owner-approved sweep 2026-08-09: build/upgrade dialogs owned by the Build HUD line — BuildHudController + BUILD_HUD_RECONCILED_SPEC / WO-1010/1012)
 **Date:** 2026-05-26
 **Author:** Owner design spec — playtest screenshot + description
 **Priority:** High — Build button currently shows a bare card with no element choice,

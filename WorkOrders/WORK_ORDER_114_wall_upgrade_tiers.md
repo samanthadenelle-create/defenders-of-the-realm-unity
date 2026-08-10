@@ -1,6 +1,6 @@
 # WORK ORDER 114 — Wall Upgrade Tiers: Wood → Stone → Reinforced (the CoC Sink)
 
-**Status:** READY TO IMPLEMENT
+**Status:** CLOSED — SUPERSEDED by WO-904 (owner-approved sweep 2026-08-09: WO-904 explicitly cites this WO and owns walls/gates)
 **Date:** 2026-05-29
 **Priority:** High — closes the named North-Star gap (the upgrade sink paid from harvest)
 **Scope:** Medium — WallSegment tier data + visual swap + upgrade interaction; rides the architect rebake

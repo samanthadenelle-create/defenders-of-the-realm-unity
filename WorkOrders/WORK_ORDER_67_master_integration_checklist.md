@@ -1,6 +1,6 @@
 # WORK ORDER 67 — Master Integration Checklist + Final Code Cleanup
 
-**Status:** READY TO IMPLEMENT
+**Status:** CLOSED — SUPERSEDED (owner-approved sweep 2026-08-09: May-era checklist superseded by the gate/regression pipeline, canon §8)
 **Date:** 2026-05-28
 **Priority:** Critical (final step before playtesting)
 **Scope:** Large — documentation, code cleanup, debug menu, mobile test plan

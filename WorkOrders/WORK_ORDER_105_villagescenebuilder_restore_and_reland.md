@@ -1,6 +1,6 @@
 # WORK ORDER 105 — VillageSceneBuilder Restore + Clean Re-land of DEF-101
 
-**Status:** READY TO IMPLEMENT — CLI priority
+**Status:** CLOSED — SUPERSEDED (owner-approved sweep 2026-08-09: re-land of a reverted commit in a history re-cloned 2026-07-13 — unexecutable; scene deleted)
 **Date:** 2026-05-29
 **Priority:** URGENT — file is non-compiling, blocks all village rebuilds
 **Scope:** Small — git restore + targeted re-apply of 3 confirmed-good changes

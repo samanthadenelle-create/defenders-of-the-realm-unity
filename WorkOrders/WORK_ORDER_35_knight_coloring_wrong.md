@@ -1,6 +1,6 @@
 # WORK ORDER 35 — Knight Hero Coloring Wrong
 
-**Status:** READY TO IMPLEMENT
+**Status:** CLOSED — SUPERSEDED (owner-approved sweep 2026-08-09: hero rig/art re-owned by the 2026-06-22 combat/hero pivot, COMBAT_PIVOT_NORTHSTAR)
 **Date:** 2026-05-26
 **Author:** Bug triage — playtest screenshot
 **Priority:** High — Knight renders dark/grungy with red splatters; reads as a

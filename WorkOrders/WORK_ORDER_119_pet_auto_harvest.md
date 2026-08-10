@@ -1,6 +1,6 @@
 # WORK ORDER 119 — Pet Auto-Harvest: A Spirit at a Building Tends
 
-**Status:** READY TO IMPLEMENT
+**Status:** CLOSED — SUPERSEDED (owner-approved sweep 2026-08-09: evolved into the Echo harvest system, canon §7 / WO-830 ruling)
 **Date:** 2026-05-30
 **Priority:** High — the pet half of the HARVEST pillar; completes WO-117's `SetBoost` seam and unblocks WO-115's pet-accrual no-op
 **Scope:** Medium — one additive enum value + one new behaviour component in `DeNelle.Village`; an optional additive field on `PetData`. NO changes to combat AI.

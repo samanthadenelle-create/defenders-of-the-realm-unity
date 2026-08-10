@@ -1,6 +1,6 @@
 # WORK ORDER 74 — Solana Crypto Payments (SOL + SKR + USDC)
 
-**Status:** READY TO IMPLEMENT
+**Status:** CLOSED — SUPERSEDED by WO-766 + the pack-store line (owner-approved sweep 2026-08-09: wallet strategy re-owned)
 **Date:** 2026-05-28
 **Priority:** Critical
 **Scope:** Medium — one new script + SDK install + ShopUI hooks

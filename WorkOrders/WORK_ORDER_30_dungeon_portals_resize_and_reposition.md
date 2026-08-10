@@ -1,6 +1,6 @@
 # WORK ORDER 30 — Dungeon Portals: Move Inside Walls + Reduce Size 20%
 
-**Status:** READY TO IMPLEMENT
+**Status:** CLOSED (owner ruling 2026-08-09: portals now behind the coming-soon gate)
 **Date:** 2026-05-26
 **Author:** Bug triage — playtest screenshots (both portals)
 **Priority:** High — portals are at the wall perimeter and visually dominate / block the view

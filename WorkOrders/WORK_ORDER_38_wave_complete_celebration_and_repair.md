@@ -1,6 +1,6 @@
 # WORK ORDER 38 — Wave Complete: Victory Audio, Celebration Banner, Auto-Repair
 
-**Status:** READY TO IMPLEMENT
+**Status:** CLOSED — SUPERSEDED by WO-83 (owner-approved sweep 2026-08-09: WO-83 RESULT covers celebration + combo; auto-repair residue unverified)
 **Date:** 2026-05-26
 **Author:** Owner design spec — playtest feedback
 **Priority:** High — wave clear currently has zero feedback; the player has no

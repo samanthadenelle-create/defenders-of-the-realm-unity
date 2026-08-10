@@ -1,6 +1,6 @@
 # WORK_ORDER_108 — Major Village Castle Town (Last Bastion) + World/Region Extension Overhaul
 
-**Status: READY TO IMPLEMENT**
+**Status:** CLOSED — SUPERSEDED (owner-approved sweep 2026-08-09: fixed-layout overhaul vs player-built town; sibling WO-108 player_build_mode has a RESULT)
 
 **Branch context:** feat/tower-core-loop (carry forward from prior pet/outpost/economy and build modal work).
 

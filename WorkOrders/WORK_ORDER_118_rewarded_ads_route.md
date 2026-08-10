@@ -1,6 +1,6 @@
 # WORK ORDER 118 — Rewarded-Ad Monetization Route (the population engine)
 
-**Status:** READY TO IMPLEMENT
+**Status:** CLOSED — SUPERSEDED by WO-912 (owner-approved sweep 2026-08-09: WO-912 ad_revenue_free_path owns rewarded ads)
 **Date:** 2026-05-29
 **Priority:** High — this is the **store-build F2P revenue layer** + retention engine for the 95% who never pay
 **Lanes:** Monetization/Backend (isolated) · code-only · no scene files · UI code-built

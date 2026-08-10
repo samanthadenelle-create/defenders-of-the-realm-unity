@@ -1,6 +1,6 @@
 # WORK ORDER 39 — Compass: Enemy Attack Direction Indicator
 
-**Status:** READY TO IMPLEMENT
+**Status:** CLOSED — SUPERSEDED by WO-322 (owner-approved sweep 2026-08-09: newer compass ticket owns the surface)
 **Date:** 2026-05-26
 **Author:** Owner design spec — playtest feedback
 **Priority:** High — player has no spatial awareness of which gate is under attack;

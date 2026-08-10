@@ -1,6 +1,6 @@
 # WORK ORDER 81 — Hero Combat Feel Overhaul (Phase 1 — Priority #1)
 
-**Status:** READY TO IMPLEMENT
+**Status:** CLOSED — SUPERSEDED (owner-approved sweep 2026-08-09: COMBAT_PIVOT_NORTHSTAR 2026-06-22 explicitly re-owns hero combat feel)
 **Date:** 2026-05-28
 **Priority:** Critical
 **Scope:** Large — four scripts + HeroHealth edit + prefab wiring

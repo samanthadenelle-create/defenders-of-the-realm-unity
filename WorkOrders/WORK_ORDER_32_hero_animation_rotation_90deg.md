@@ -1,6 +1,6 @@
 # WORK ORDER 32 — Hero Animation Facing 90° Off
 
-**Status:** READY TO IMPLEMENT — single-line fix
+**Status:** CLOSED — SUPERSEDED by WO-326 (owner-approved sweep 2026-08-09: WO-326 names itself the recurrence of this ticket)
 **Date:** 2026-05-26
 **Author:** Bug triage — playtest report
 **Priority:** High — hero visually faces the wrong direction when moving

@@ -1,6 +1,6 @@
 # WORK ORDER 46 — Tower Combat (towers actually target, fire, and kill)
 
-**Status:** READY TO IMPLEMENT
+**Status:** CLOSED — DUPLICATE of WO-209 (owner-approved sweep 2026-08-09: file 209 is the re-mint of this WO, identical header; the question stays open under WO-209)
 **Date:** 2026-05-26
 **Author:** Owner playtest ("never seen defend-the-tower work") + code audit
 **Priority:** CRITICAL — towers are the **PRIMARY method of defending**, not a
