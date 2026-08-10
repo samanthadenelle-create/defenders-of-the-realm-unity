@@ -33,6 +33,22 @@ namespace DeNelle.Core.Catalog
         public CatalogType type;
         public EntryKind   kind = EntryKind.Cell;
 
+        /// <summary>
+        /// PRESENTATION ONLY (WO-963) — the build palette carousel's authored display order.
+        /// LOWER SORTS FIRST; 0 (the default, i.e. the JSON key absent) means UNAUTHORED and
+        /// sorts AFTER every authored row, keeping its current relative position — the sort is
+        /// STABLE on catalog row order, so an unauthored row can never jump.
+        ///
+        /// Seeded to the TUTORIAL'S TEACHING ORDER so the shelf and the script agree. The
+        /// palette NEVER reads tutorial-steps.json at runtime (ARCHITECTURE_PRINCIPLES §1/§2 —
+        /// presentation must not take a teaching script as an input); the catalog carries the
+        /// order and BuildCarouselTutorialOrderRegression is what keeps the two agreeing.
+        ///
+        /// Consumed by <c>BuildPaletteVM.SortForDisplay</c> and nothing else: it gates nothing,
+        /// prices nothing and changes no group split.
+        /// </summary>
+        public int         displayOrder;
+
         /// <summary>LOOK — Resources/polyperfect-style prefab path. Resolved to a model at build time.</summary>
         public string      visualPrefabPath;
 

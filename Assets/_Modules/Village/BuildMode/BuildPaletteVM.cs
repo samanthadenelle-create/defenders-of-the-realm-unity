@@ -275,7 +275,14 @@ namespace DeNelle.Village
         private void Rebuild()
         {
             _cards.Clear();
-            var entries = _query != null ? _query(_types) : null;
+            // WO-963 — ONE order, always: the carousel follows the catalog's authored
+            // displayOrder (seeded to the tutorial's teaching order), stable-tiebroken on the
+            // query's own row order. Applied HERE, before the filter loop, so the sort is a pure
+            // re-ordering of the SAME rows: nothing is added, nothing is dropped, and the
+            // locked-id UNION / visible-lock passes below run over exactly what they ran over
+            // before. There is no FTUE-only variant — a shelf that re-sorts itself under the
+            // player is worse than an arbitrary one.
+            var entries = SortForDisplay(_query != null ? _query(_types) : null);
             List<string> excluded = null;   // WO-948 §12 — the exclusion decision is TRACED, never silent
             if (entries != null)
             {
@@ -313,6 +320,71 @@ namespace DeNelle.Village
                     "(build-categories lockedIds; catalog rows survive for save replay/sell)");
             FlowTrace.Step("BuildPalette",
                 $"catalog-count: registry={RegistryCount} cards={_cards.Count} (types={_types.Length})");
+            // WO-963 §12 — name the ORDER that shipped, so a "the carousel is in the wrong order"
+            // report is one read: card-order tells authored-first from catalog-order at a glance.
+            FlowTrace.Step("BuildPalette",
+                "card-order: " + DescribeOrder(_cards) + " (WO-963 displayOrder asc, 0/absent last, " +
+                "stable on catalog row order)");
+        }
+
+        private static string DescribeOrder(List<StructureCardVM> cards)
+        {
+            if (cards == null || cards.Count == 0) return "<none>";
+            var sb = new System.Text.StringBuilder();
+            int n = cards.Count < 6 ? cards.Count : 6;
+            for (int i = 0; i < n; i++)
+            {
+                if (i > 0) sb.Append(',');
+                sb.Append(cards[i] != null ? cards[i].Id : "<null>");
+            }
+            if (cards.Count > n) sb.Append(",+").Append(cards.Count - n).Append(" more");
+            return sb.ToString();
+        }
+
+        // ── WO-963: the ONE display order ─────────────────────────────────────
+
+        /// <summary>
+        /// WO-963 — order the palette rows by their catalog-authored
+        /// <see cref="CatalogEntry.displayOrder"/> (LOWER FIRST), with a STABLE tiebreak on the
+        /// incoming row order.
+        ///
+        /// A row with NO authored order (0 or negative — i.e. the JSON key absent) sorts AFTER
+        /// every authored row and keeps its current relative position, so seeding four rows can
+        /// never reshuffle the other twenty-five. The stability is explicit (the incoming index is
+        /// the tiebreak key) rather than assumed: <c>List.Sort</c> is an UNSTABLE introsort and
+        /// would quietly permute equal-key rows differently on different row counts.
+        ///
+        /// PURE + presentation-only: returns a NEW list, never mutates the registry's, adds and
+        /// drops nothing, and reads no tutorial data. Null in, null out (the caller's null-guard
+        /// is preserved). Public + static so the regression can drive the real shipped sort.
+        /// </summary>
+        public static IReadOnlyList<CatalogEntry> SortForDisplay(IReadOnlyList<CatalogEntry> entries)
+        {
+            if (entries == null) return null;
+            int n = entries.Count;
+            if (n < 2) return entries;
+
+            var idx = new int[n];
+            for (int i = 0; i < n; i++) idx[i] = i;
+
+            Array.Sort(idx, (a, b) =>
+            {
+                int ka = OrderKey(entries[a]);
+                int kb = OrderKey(entries[b]);
+                if (ka != kb) return ka < kb ? -1 : 1;
+                return a.CompareTo(b);   // STABLE: original position breaks every tie
+            });
+
+            var result = new List<CatalogEntry>(n);
+            for (int i = 0; i < n; i++) result.Add(entries[idx[i]]);
+            return result;
+        }
+
+        /// <summary>Authored order, with unauthored (null row / 0 / negative) pushed to the end.</summary>
+        private static int OrderKey(CatalogEntry e)
+        {
+            if (e == null) return int.MaxValue;
+            return e.displayOrder > 0 ? e.displayOrder : int.MaxValue;
         }
 
         private void Raise() { if (!_disposed) Changed?.Invoke(); }
