@@ -1,9 +1,10 @@
 # WORK ORDER 955 — VFXManager.Acquire NRE: the pool's free list hands back a DESTROYED host
 
-**Status:** IN PROGRESS — the Acquire guard LANDED 2026-08-10 (same wave, CLI direct): dead slots are
-evicted with a `FlowTrace.Warn` naming WO-955 and Acquire self-heals via fresh instantiate; the NRE
-class is closed. REMAINING: (a) the teardown-destroyer hunt — the new Warn IS the instrument, the
-next capture that fires it names the poisoning window; (b) the pool-shape regression case.
+**Status:** READY TO IMPLEMENT — remaining scope only. The Acquire guard LANDED 2026-08-10 (same
+wave, CLI direct, committed): dead slots are evicted with a `FlowTrace.Warn` naming WO-955 and
+Acquire self-heals via fresh instantiate; the NRE class is closed. REMAINING (this ticket's live
+scope): (a) the teardown-destroyer hunt — the new Warn IS the instrument, the next capture that
+fires it names the poisoning window; (b) the pool-shape regression case.
 **Minted:** 2026-08-10 (CLI seat, main line — banner bumped 955 → 956 in the same edit)
 **Silo:** Village/Vfx (VFXManager pool) — no overlap with live lanes
 **Origin:** captured exception, owner session 2026-08-10 16:12:25 UTC (break_12_exception), during
