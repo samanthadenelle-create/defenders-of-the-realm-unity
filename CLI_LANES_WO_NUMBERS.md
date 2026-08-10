@@ -1,6 +1,40 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ RECONCILED 2026-08-10 (CLI): main line next free = **961**. **782–859 + 900–960 CONSUMED.**
+> ## ⚠ RECONCILED 2026-08-10 (CLI): main line next free = **964**. **782–859 + 900–963 CONSUMED.**
+> - **963** = **Build carousel follows the tutorial's teaching order** — owner F8 2302, verbatim: *"Can
+>   we order the carousel in order of how the tutorial presents them?"* RCA'd live: there is NO sort —
+>   `BuildPaletteVM.Rebuild` foreaches the registry query, so the order IS the row order in
+>   `structures-catalog.json`. Fix = an owner-tunable display order in the catalog (data, not code),
+>   seeded Lumbermill → Tower → Workshop → Armorer per `tutorial-steps.json` orders 20/30/1050/1060,
+>   with current catalog order as the stable tiebreak. The palette must NOT read the tutorial script at
+>   runtime — presentation never depends on a teaching flow.
+>   File `WORK_ORDER_963_build_carousel_tutorial_order.md`. **READY TO IMPLEMENT.**
+>
+> *(banner bumped 963 → 964 in the SAME edit as the mint.)*
+> - **962** = **`guide_gate` must LATCH, not re-resolve — the WALK beat chases a moving gate** — owner
+>   F8 2301, proven in her Player.log: the anchor resolved to `WaveSpawnPoint-S` (-3.43,0.08,-38.63),
+>   then `guide-lead SET` fired again at (37.29,0.08,-0.21) [east] and (3.07,0.08,38.68) [north] as she
+>   walked, so `hero.reached:guide_gate` was never reachable and the step STEP-STUCK at 123s and was
+>   watchdog-SKIPPED. Fix = resolve the gate ONCE on step ENTER and latch it for the step's life.
+>   Pure logic, no art. File `WORK_ORDER_962_guide_gate_anchor_latch.md`. **READY TO IMPLEMENT.**
+>
+> *(banner bumped 962 → 963 in the SAME edit as the mint.)*
+> - **961** = **The founding Echo guide gets a BODY, and it is the Ice Wolf** — owner ruling 2026-08-10
+>   ("we should have Ice wolf", pointing at `Assets/Resources/Pets/ice-wolf.fbx`). REVERSES the
+>   2026-07-16 call recorded at `TutorialFlow.cs:1307-1319` (aether-sprite "ethereal spirit, NOT the
+>   quadruped ice-wolf that T-posed"). Proven at source: the body is not spawned AT ALL today —
+>   `[Flow:Tutorial] grant.starterPet — visible echo MODEL birth SCRAPPED (echoes are portrait cards
+>   now)` — while the WALK objective still says "Follow {guide} to the gate". Real cost is NOT the mesh
+>   (tracked, and `PetDeployer` already loads `Pets/<species>`): `ice-wolf.fbx.meta` is
+>   `animationType: 2` / `avatarSetup: 0` / `clipAnimations: []`, there are ZERO `.controller` and ZERO
+>   `.anim` under `Resources/Pets`, and `Pets/Pet` + `Pets/PetIdle` are in the known-missing baseline —
+>   so it needs a rig + idle + walk + controller or it ships as a sliding bind-pose statue (QR-5.3).
+>   ⚠ The comment claiming aether-sprite is "the only HUMANOID rig" is FALSE at source — its meta is
+>   Generic with no avatar too; it only reads ethereal because `EchoSpiritPresentation` hovers it.
+>   Canon is on the ruling's side: the unlock card in her session reads `id=echo-frosthowl`, and
+>   Frosthowl IS the ice wolf. File `WORK_ORDER_961_founding_guide_body_ice_wolf.md`. **READY TO IMPLEMENT.**
+>
+> *(banner bumped 961 → 962 in the SAME edit as the mint.)*
 > - **960** = **Armor store: locked-preview ladder (greyed + Lv N, next-5-levels window)** — owner
 >   ruling 2026-08-10. RCA'd start: armor.json has 24 rows (per-class rarity ladders), store shows 3 —
 >   a visibility/filter defect, not missing content; level-gate derivation to be found/proposed as
