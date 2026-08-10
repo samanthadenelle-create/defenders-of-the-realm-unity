@@ -35,6 +35,11 @@
 //      no wallet apps on API 30+).
 //   6. Identity chain: WalletSkinBootstrap still routes a real connect into
 //      GameStateService.BindWallet (the address becomes the cloud-save key).
+//   8. WO-931 (2026-08-10): the PAYMENT seam refuses the stub. RUNTIME cases
+//      drive the real WalletService (Create(useStub: true)) through Pay and
+//      PayFlat and assert PaymentResult.Ok == false with the exact refusal
+//      reason — the free-grant hole case 4b's failure message narrates is
+//      closed at WalletService.Pay/PayFlat, before _provider.SendPayment.
 // Wire into DataRegression.RunAll as [wallet-provider].
 // =============================================================================
 
@@ -42,6 +47,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text.RegularExpressions;
 using UnityEngine;
+using DeNelle.Wallet;
 
 namespace DeNelle.Editor
 {
@@ -264,6 +270,91 @@ namespace DeNelle.Editor
                                  "ERROR_AUTHORIZATION_FAILED on every connect)");
             }
 
+            // -- 8. WO-931: the payment seam REFUSES the stub (runtime + pin) --
+            //
+            // Closes the free-grant hole that case 4b's failure message narrates:
+            // StubWalletProvider fake-succeeds SendPayment (mock balance seeded at
+            // 2000 SKR, fabricated base58 signature), so with RealmStorePurchase
+            // forced ON a release desktop/WebGL build granted packs for ZERO
+            // payment. Option (b) landed 2026-08-10: WalletService.Pay AND PayFlat
+            // refuse BEFORE _provider.SendPayment when the resolved provider is the
+            // stub (and, once connected, whenever IsRealSigningWallet is false).
+            // With Pay forced to Ok == false, PackStore.Purchase's Ok-gated branch
+            // (ApplyPackContents + the purchase_completed EventTracker.Track) is
+            // unreachable from a stub payment in ANY build configuration.
+            //
+            // These are RUNTIME cases over the real WalletService, not a lint. The
+            // stub refusal sits before the first await in Pay/PayFlat, so a
+            // stub-pinned call completes SYNCHRONOUSLY — if IsCompleted ever reads
+            // false here, the refusal has moved below an await (or behind a
+            // connect) and is no longer the seam. NOTE: each refused call logs ONE
+            // LogError line (FlowTrace.Fail — the WO-931 "loud refusal" §12
+            // requirement); that is the refusal proving itself, not a suite error.
+            {
+                var stubService = WalletService.Create(useStub: true);
+                var probePack = new PackDef
+                {
+                    Sku = "wo931-probe",
+                    Name = "WO-931 Probe",
+                    Pricing = new PackPricing { Usd = 1d, Sol = 0.01d, Usdc = 1d, Skr = 1d },
+                    Contents = new PackContents(),
+                };
+
+                var payAwaiter = stubService.Pay(probePack, CurrencyKind.Skr).GetAwaiter();
+                if (!payAwaiter.IsCompleted)
+                    failures.Add("WO-931: stub-pinned Pay did not complete synchronously - the stub refusal is " +
+                                 "no longer before the first await in WalletService.Pay; the seam has moved");
+                else
+                {
+                    var pay = payAwaiter.GetResult();
+                    if (pay.Ok)
+                        failures.Add("WO-931 FREE-GRANT HOLE REOPENED: WalletService.Pay returned Ok over the " +
+                                     "devnet stub - PackStore would grant the pack IN FULL for zero payment and " +
+                                     "fire a purchase_completed event carrying a fabricated txSig");
+                    else if (pay.Error != WalletService.StubPaymentRefusalReason)
+                        failures.Add("WO-931: stub Pay refused, but the reason drifted from " +
+                                     "WalletService.StubPaymentRefusalReason (got: '" + pay.Error + "')");
+                    if (!string.IsNullOrEmpty(pay.TxSignature))
+                        failures.Add("WO-931: a refused stub Pay still carried a tx signature ('" +
+                                     pay.TxSignature + "') - no fabricated signature may leave the seam");
+                }
+
+                var flatAwaiter = stubService.PayFlat("wo931-flat-probe", CurrencyKind.Sol, 0.01d).GetAwaiter();
+                if (!flatAwaiter.IsCompleted)
+                    failures.Add("WO-931: stub-pinned PayFlat did not complete synchronously - the stub refusal " +
+                                 "is no longer before the first await in WalletService.PayFlat; the seam has moved");
+                else
+                {
+                    var flat = flatAwaiter.GetResult();
+                    if (flat.Ok)
+                        failures.Add("WO-931: WalletService.PayFlat returned Ok over the devnet stub - the " +
+                                     "ungated flat-fee path (dead callers today) would settle fabricated payments " +
+                                     "the day anyone revives it");
+                    else if (flat.Error != WalletService.StubPaymentRefusalReason)
+                        failures.Add("WO-931: stub PayFlat refused, but the reason drifted from " +
+                                     "WalletService.StubPaymentRefusalReason (got: '" + flat.Error + "')");
+                }
+            }
+
+            // Source pin on the seam itself, so a refactor cannot quietly route a
+            // payment path around the runtime cases above: the shared refusal const
+            // must be USED in both entry points (declaration + Pay + PayFlat = 3),
+            // and the belt must keep REUSING IsRealSigningWallet (declaration +
+            // both entry points >= 3) rather than a rewritten local predicate.
+            if (File.Exists(servicePath))
+            {
+                string svc931 = File.ReadAllText(servicePath);
+                if (Regex.Matches(svc931, "StubPaymentRefusalReason").Count < 3)
+                    failures.Add("WO-931: WalletService.StubPaymentRefusalReason is no longer used by BOTH Pay " +
+                                 "and PayFlat (expected declaration + 2 uses) - one payment entry point has " +
+                                 "lost its stub refusal");
+                if (Regex.Matches(svc931, "IsRealSigningWallet").Count < 3)
+                    failures.Add("WO-931: WalletService lost the IsRealSigningWallet belt at the payment seam " +
+                                 "(expected the declaration plus a check in each of Pay and PayFlat) - a " +
+                                 "connected non-signing provider (e.g. the dev-only DevWalletProbe, which " +
+                                 "delegates SendPayment to an inner stub) could fabricate a settled payment");
+            }
+
             if (failures.Count > 0)
             {
                 reason = "WALLET PROVIDER FAIL - " + string.Join("; ", failures);
@@ -276,7 +367,9 @@ namespace DeNelle.Editor
                      "defaultOn: false, so fresh installs ship no stub-backed Buy button), " +
                      "MWA queries manifest present, " +
                      "dapp identity named + icon relative and served (api/icon.js + rewrite), " +
-                     "BindWallet identity chain wired";
+                     "BindWallet identity chain wired, " +
+                     "WO-931 payment seam refuses the stub (Pay + PayFlat runtime-verified, " +
+                     "IsRealSigningWallet belt pinned)";
             return true;
         }
 

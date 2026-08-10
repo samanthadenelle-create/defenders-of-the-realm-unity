@@ -274,7 +274,9 @@ namespace DeNelle.Wallet.Tests
         [Test]
         public void a_funded_pay_succeeds_and_echoes_the_pack_and_rail()
         {
-            var service = new WalletService(new FakeWalletProvider());
+            // WO-931: the payment seam now requires a real signing provider
+            // (IsRealSigningWallet) — a paying fake must attest CanSign.
+            var service = new WalletService(new FakeWalletProvider { CanSign = true });
             service.Connect().GetAwaiter().GetResult();
 
             var result = service.Pay(MakePack(), CurrencyKind.Usdc).GetAwaiter().GetResult();
@@ -289,7 +291,9 @@ namespace DeNelle.Wallet.Tests
         [Test]
         public void a_provider_payment_failure_surfaces_through_pay()
         {
-            var service = new WalletService(new FakeWalletProvider { PaymentFails = true });
+            // WO-931: CanSign = true so the failure comes from the PROVIDER,
+            // not from the new signing-attestation refusal at the seam.
+            var service = new WalletService(new FakeWalletProvider { PaymentFails = true, CanSign = true });
             service.Connect().GetAwaiter().GetResult();
             // The provider-failure guard logs its proof via FlowTrace.Fail (Debug.LogError).
             LogAssert.Expect(UnityEngine.LogType.Error,
@@ -299,16 +303,58 @@ namespace DeNelle.Wallet.Tests
                 "a provider-level payment failure must bubble up as a failed PaymentResult.");
         }
 
+        [Test]
+        public void pay_refuses_a_connected_provider_that_cannot_sign()
+        {
+            // WO-931 belt check: a CONNECTED provider that holds no signing key
+            // (CanSignMessages false — e.g. the dev-only DevWalletProbe, which
+            // delegates SendPayment to an inner stub) must be refused at the
+            // seam, loudly, before the provider is ever asked to "pay".
+            var service = new WalletService(new FakeWalletProvider()); // CanSign defaults false
+            service.Connect().GetAwaiter().GetResult();
+            LogAssert.Expect(UnityEngine.LogType.Error,
+                new System.Text.RegularExpressions.Regex("REFUSED"));
+            var result = service.Pay(MakePack(), CurrencyKind.Sol).GetAwaiter().GetResult();
+            Assert.That(result.Ok, Is.False,
+                "a non-signing provider must never settle a payment (WO-931).");
+            Assert.That(result.Error, Is.EqualTo(WalletService.NonSigningPaymentRefusalReason));
+            Assert.That(result.TxSignature, Is.Null.Or.Empty,
+                "a refused payment must carry no transaction signature.");
+        }
+
+        [Test]
+        public void payflat_refuses_a_connected_provider_that_cannot_sign()
+        {
+            // WO-931: PayFlat shares the same seam — it reaches the same
+            // provider SendPayment and was previously gated by nothing at all.
+            var service = new WalletService(new FakeWalletProvider()); // CanSign defaults false
+            service.Connect().GetAwaiter().GetResult();
+            LogAssert.Expect(UnityEngine.LogType.Error,
+                new System.Text.RegularExpressions.Regex("REFUSED"));
+            var result = service.PayFlat("test-flat-tx", CurrencyKind.Sol, 0.01).GetAwaiter().GetResult();
+            Assert.That(result.Ok, Is.False);
+            Assert.That(result.Error, Is.EqualTo(WalletService.NonSigningPaymentRefusalReason));
+        }
+
         // =====================================================================
         //  End-to-end over the SHIPPED StubWalletProvider  (TC-WAL-06)
         // =====================================================================
 
         [UnityTest]
-        public IEnumerator full_connect_balance_pay_flow_over_the_real_stub() => UniTask.ToCoroutine(
+        public IEnumerator full_connect_balance_flow_over_the_real_stub_and_pay_refuses() => UniTask.ToCoroutine(
             async () =>
             {
                 // Create(useStub:true) forces the devnet stub even if the SDK
                 // were present — the canonical offline / EditMode path.
+                //
+                // WO-931 CONTRACT CHANGE (2026-08-10): connect / balance /
+                // identity plumbing still run end-to-end over the stub, but a
+                // stub PAYMENT now REFUSES at the WalletService.Pay seam. This
+                // test used to assert the stub purchase CONFIRMED — that was the
+                // free-grant hole itself (fabricated signature → PackStore grant
+                // → fake purchase_completed analytics), so it now asserts the
+                // refusal. A re-appearing green "stub purchase confirms" is a
+                // regression, not a feature.
                 var service = WalletService.Create(useStub: true);
 
                 var account = await service.Connect();
@@ -318,9 +364,22 @@ namespace DeNelle.Wallet.Tests
                 var balance = await service.GetBalance();
                 Assert.That(balance.Sol, Is.GreaterThan(0d));
 
+                // The refusal is LOUD (FlowTrace.Fail → Debug.LogError), §12.
+                LogAssert.Expect(UnityEngine.LogType.Error,
+                    new System.Text.RegularExpressions.Regex("REFUSED: stub provider cannot sign"));
                 var result = await service.Pay(MakePack(), CurrencyKind.Sol);
-                Assert.That(result.Ok, Is.True, "a funded devnet-stub purchase must confirm.");
-                Assert.That(result.TxSignature, Is.Not.Null.And.Not.Empty);
+                Assert.That(result.Ok, Is.False,
+                    "WO-931: a stub-backed payment must REFUSE — a confirming stub purchase is the free-grant hole.");
+                Assert.That(result.Error, Is.EqualTo(WalletService.StubPaymentRefusalReason));
+                Assert.That(result.TxSignature, Is.Null.Or.Empty,
+                    "no fabricated signature may leave the seam.");
+
+                // PayFlat shares the seam (it was gated by nothing before WO-931).
+                LogAssert.Expect(UnityEngine.LogType.Error,
+                    new System.Text.RegularExpressions.Regex("REFUSED: stub provider cannot sign"));
+                var flat = await service.PayFlat("wo931-flat", CurrencyKind.Sol, 0.01);
+                Assert.That(flat.Ok, Is.False);
+                Assert.That(flat.Error, Is.EqualTo(WalletService.StubPaymentRefusalReason));
 
                 await service.Disconnect();
                 Assert.That(service.IsConnected, Is.False);

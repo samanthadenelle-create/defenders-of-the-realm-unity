@@ -7,6 +7,8 @@
         "DeNelle.Data",
         "DeNelle.BattleATB",
         "DeNelle.Dungeons",
+        "DeNelle.Wallet",
+        "UniTask",
         "Unity.AI.Navigation",
         "Unity.Addressables",
         "Unity.ResourceManager"

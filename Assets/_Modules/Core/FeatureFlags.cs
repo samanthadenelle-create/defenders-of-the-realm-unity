@@ -606,6 +606,16 @@ namespace DeNelle.Core
         //      Either build-guard that file out of release players, OR make the payment path REFUSE when
         //      the resolved provider is the stub. This is the one that costs money, not just a dead
         //      button: turning the flag on before it is closed ships FREE PACKS. See WO-931.
+        //      >>> SATISFIED 2026-08-10 (WO-931, option b - runtime refusal at the payment seam).
+        //      WalletService.Pay AND WalletService.PayFlat now refuse BEFORE _provider.SendPayment:
+        //      a stub-typed provider is refused outright (before any connection-state check), and a
+        //      connected provider failing IsRealSigningWallet (e.g. the dev-only DevWalletProbe, which
+        //      delegates SendPayment to an inner stub) is refused too. The refusal is unconditional -
+        //      NOT #if-guarded - so it holds in Editor, development and release alike; it is loud
+        //      (FlowTrace.Fail) and returns PaymentResult.Failure, so PackStore's Ok-gated grant +
+        //      purchase_completed event can never fire from a stub "payment". Locked in by the
+        //      [wallet-provider] regression, section 8 (runtime Pay/PayFlat cases + source pin).
+        //      Preconditions 1 and 2 above remain OPEN - this note does NOT license flipping the flag.
         // NOTE FOR WHOEVER FLIPS IT: Get() reads PlayerPrefs FIRST, so a STORED value BEATS this
         // default. A device that ever set "ff.realmstorepurchase" = 1 keeps the Buy rail until that key
         // is cleared/zeroed. Changing this default protects FRESH INSTALLS (every store reviewer and

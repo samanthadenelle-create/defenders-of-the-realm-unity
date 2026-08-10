@@ -1,6 +1,7 @@
 # WORK ORDER 931 — Close the StubWalletProvider free-grant hole
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — implemented 2026-08-10 (option b, owner-picked), gates green, RESULT filed;
+felt/owner close per pipeline. See `WORK_ORDER_931_stub_wallet_free_grant_hole.RESULT.md`.
 **Minted:** 2026-08-08 (CLI seat, main line — banner bumped 931 → 932 in the same edit)
 **Silo:** Wallet / Monetization (`Assets/_Modules/Wallet/*`) — file-disjoint from gameplay lanes
 **Type:** EXISTING (built, latent) — security / entitlement integrity, NOT a new feature
