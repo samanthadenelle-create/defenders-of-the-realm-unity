@@ -411,6 +411,13 @@ Owner directive (2026-06-23): **the owner is NEVER the bug detector** (memory
 every F8 flag / error / softlock the harness records must surface on the CLI **without the owner
 saying "rearm" or "watch"** — the CLI **triages it LIVE** (RCA from the captured line + screenshot).
 
+**Claude Code seats: the listener is HOOK-ENFORCED (owner directive 2026-08-10).** `.claude/settings.json`
+(committed, all seats) arms three hooks: SessionStart auto-starts the daemon; UserPromptSubmit injects any
+un-acked capture at turn start; a Stop-hook background poller (`.claude/hooks/f8-poll-rewake.ps1`, 10 s
+cadence, single-instance across seats via a repo lock) REWAKES the idle seat the moment a capture lands.
+The old per-turn-poll discipline (`.cursor/rules/f8-auto-triage.mdc`) stopped being followed within a
+month — the harness now executes it instead of trusting the seat to.
+
 **Persistent daemon (primary — no manual re-arm):**
 - **Start once:** `powershell -File .claude\skills\run-defenders\f8-watch-start.ps1` (idempotent).
   Runs `f8-watch-daemon.ps1` hidden; watches `break-log.jsonl` + Editor/Player logs forever.
