@@ -1,6 +1,6 @@
 # WORK ORDER 950 — Drillmaster (+ teach toast) appears on a blank-town save with NO barracks
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE (implemented + gated 2026-08-10; RESULT filed; owner felt-verify owed)
 **Minted:** 2026-08-10 (CLI seat, main line — banner bumped 950 → 951 in the same edit)
 **Silo:** Village/NPCs (BarracksNpcInjector) + the singleton/blank-town gate seam
 **Origin:** owner felt-report 2026-08-10 (*"i have a drillmaster but have not placed the barracks yet.

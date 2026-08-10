@@ -30,6 +30,7 @@
 using System.Collections.Generic;
 using DeNelle.Core;
 using UnityEngine;
+using UnityEngine.AI;
 using UnityEngine.SceneManagement;
 
 namespace DeNelle.Village
@@ -214,7 +215,13 @@ namespace DeNelle.Village
             // Report the OBSERVED end state, not the intent: TrySwap runs its own gates and
             // the WO-673 migration standdown branch can deactivate the object again. Reading
             // activeSelf back is the only answer that cannot overclaim.
-            return barracks.gameObject.activeSelf;
+            bool stands = barracks.gameObject.activeSelf;
+            // WO-950: a twin that legitimately STANDS gets its physics back (a prior
+            // gate-suppression stripped colliders + nav obstacles). Restore re-asserts
+            // the Ticket #10 setLocalPos rule, so the baked body collider stays down
+            // while the visible skin + its fitted StructureCollider stand elsewhere.
+            if (stands) RestoreBakedTwinPhysics(barracks.gameObject, "CastleBarracks");
+            return stands;
         }
 
         private static void ApplyAll()
@@ -307,6 +314,8 @@ namespace DeNelle.Village
             if (StrategicPlacementMigration.StanddownActiveForBaked(s.bakedName, out string migratedId))
             {
                 target.gameObject.SetActive(false);
+                SuppressBakedTwinPhysics(target.gameObject,
+                    $"standdown, migrated -> BaseLayout '{migratedId}'");
                 DeNelle.Core.Diagnostics.FlowTrace.Step("Placement",
                     $"standdown {s.bakedName} (migrated -> BaseLayout '{migratedId}').");
                 return;
@@ -341,6 +350,8 @@ namespace DeNelle.Village
                 (!BarracksUnlock.IsUnlocked || StructureSingleton.IsPlayerBuilt("barracks")))
             {
                 target.gameObject.SetActive(false);
+                SuppressBakedTwinPhysics(target.gameObject,
+                    "baked CastleBarracks stands down at scene load (locked / placed wins)");
                 DeNelle.Core.Diagnostics.FlowTrace.Step("Barracks",
                     "TrySwap: baked 'CastleBarracks' stands DOWN at scene load - " +
                     (BarracksUnlock.IsUnlocked
@@ -367,6 +378,11 @@ namespace DeNelle.Village
                 if (t != null && t.name == bakedName) { target = t; break; }
             if (target == null) return;   // not in this scene bake
             if (!target.gameObject.activeSelf) target.gameObject.SetActive(true);
+            // WO-950: a prior gate-suppression stripped this twin's colliders + nav
+            // obstacles (phantom-footprint discipline); a resurfaced store must be SOLID
+            // again. Restore re-asserts the Ticket #10 setLocalPos rule internally, so a
+            // repositioned-visual row keeps its baked body colliders down.
+            RestoreBakedTwinPhysics(target.gameObject, bakedName);
 
             // LightSkin_ marker present => SkinStorefront already ran (it early-returns on the
             // marker). Do NOT let that early-return leave the store hidden under a seated vendor:
@@ -389,6 +405,106 @@ namespace DeNelle.Village
             // baked renderers disabled by a stale skin attempt; re-enable them to be safe.
             foreach (var r in target.GetComponentsInChildren<Renderer>(true))
                 if (r != null) r.enabled = true;
+        }
+
+        // =====================================================================
+        //  WO-950 — the PHANTOM-FOOTPRINT discipline (owner F8 seq 2267, 2026-08-10:
+        //  "feels like a building is here" at the suppressed baked barracks, ~(16,0,-4)).
+        //  A suppressed baked twin must carry ZERO enabled non-trigger colliders and no
+        //  live nav obstacle: SetActive(false) alone leaves every collider's enabled-FLAG
+        //  true, so any later reactivation (or a path that hides renderers without
+        //  deactivating, the :402 skin hide) stands an invisible wall the player walks
+        //  into. This generalizes the Ticket #10 discipline SkinStorefront already
+        //  applies on its setLocalPos path to EVERY suppression path — trigger colliders
+        //  go down too, because on a suppressed twin the NPC interact point is NOT
+        //  legitimately live (WO-950 item 4). Restore mirrors it on surfacing.
+        // =====================================================================
+
+        /// <summary>Disables every enabled collider (solid AND trigger — a suppressed
+        /// twin's NPC point is not legitimately live) + every NavMeshObstacle under the
+        /// twin. Idempotent and silent when nothing was enabled; logs one traced line
+        /// (with a navmesh probe that splits collider-block from baked-navmesh-hole)
+        /// when it actually disabled something.</summary>
+        public static void SuppressBakedTwinPhysics(GameObject twin, string reason)
+        {
+            if (twin == null) return;
+            int solid = 0, trig = 0, navs = 0;
+            foreach (var c in twin.GetComponentsInChildren<Collider>(true))
+            {
+                if (c == null || !c.enabled) continue;
+                if (c.isTrigger) trig++; else solid++;
+                c.enabled = false;
+            }
+            foreach (var o in twin.GetComponentsInChildren<NavMeshObstacle>(true))
+                if (o != null && o.enabled) { o.enabled = false; navs++; }
+            if (solid + trig + navs == 0) return;   // idempotent re-sweep - nothing to do, nothing to log
+
+            // WO-950 2b mechanism split, one captured line: with zero enabled colliders,
+            // any movement STILL blocking at this footprint is the BAKED NAVMESH (the
+            // merged-world bake ran with the twin standing, so its hole persists at
+            // runtime regardless of colliders) - a rebake concern, not a collider one.
+            Vector3 pos = twin.transform.position;
+            bool walkable = NavMesh.SamplePosition(pos, out _, 1.5f, NavMesh.AllAreas);
+            DeNelle.Core.Diagnostics.FlowTrace.Step("Hub",
+                $"suppressed physics on baked twin '{twin.name}' at ({pos.x:0.0},{pos.y:0.0},{pos.z:0.0}) - " +
+                $"disabled {solid} solid + {trig} trigger collider(s), {navs} nav obstacle(s) ({reason}); " +
+                $"navmesh-walkable-within-1.5m={walkable} (false + still-blocked-here = baked navmesh hole, WO-950).");
+        }
+
+        /// <summary>Re-enables the colliders + nav obstacles a suppression stripped, then
+        /// RE-ASSERTS the Ticket #10 rule: on a setLocalPos skin row whose LightSkin marker
+        /// stands, the baked NON-TRIGGER colliders stay disabled (the visible building and
+        /// its fitted StructureCollider live elsewhere — re-enabling the baked body collider
+        /// would resurrect the exact phantom wall the discipline removed).</summary>
+        public static void RestoreBakedTwinPhysics(GameObject twin, string bakedName)
+        {
+            if (twin == null) return;
+            int cols = 0, navs = 0;
+            foreach (var c in twin.GetComponentsInChildren<Collider>(true))
+                if (c != null && !c.enabled) { c.enabled = true; cols++; }
+            foreach (var o in twin.GetComponentsInChildren<NavMeshObstacle>(true))
+                if (o != null && !o.enabled) { o.enabled = true; navs++; }
+
+            bool reassertedSkinRule = false;
+            Transform marker = twin.transform.Find(MarkerPrefix + bakedName);
+            if (marker != null && RowKeepsBakedCollidersDown(bakedName))
+            {
+                reassertedSkinRule = true;
+                foreach (var c in twin.GetComponentsInChildren<Collider>(true))
+                {
+                    if (c == null || c.isTrigger) continue;                    // NPC points stay live
+                    if (IsUnderTransform(c.transform, marker)) continue;       // the skinned visual's own colliders
+                    if (IsUnderNamed(c.transform, "StructureCollider")) continue;   // the Ticket #10 fitted box
+                    c.enabled = false;
+                }
+            }
+            if (cols > 0 || navs > 0)
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Hub",
+                    $"restored physics on baked twin '{twin.name}' - re-enabled {cols} collider(s), {navs} nav " +
+                    $"obstacle(s){(reassertedSkinRule ? "; setLocalPos skin present - baked solid colliders re-disabled per Ticket #10" : "")} (WO-950).");
+        }
+
+        /// <summary>True when the swap row for <paramref name="bakedName"/> repositions its
+        /// visual (setLocalPos) — the rows whose baked body colliders must stay down.</summary>
+        private static bool RowKeepsBakedCollidersDown(string bakedName)
+        {
+            for (int i = 0; i < Swaps.Length; i++)
+                if (Swaps[i].bakedName == bakedName) return Swaps[i].setLocalPos;
+            return false;
+        }
+
+        private static bool IsUnderTransform(Transform t, Transform root)
+        {
+            for (var cur = t; cur != null; cur = cur.parent)
+                if (cur == root) return true;
+            return false;
+        }
+
+        private static bool IsUnderNamed(Transform t, string name)
+        {
+            for (var cur = t; cur != null; cur = cur.parent)
+                if (cur.name == name) return true;
+            return false;
         }
 
         // The lightweight-skin body of a swap (extracted from TrySwap so ResurfaceStorefront

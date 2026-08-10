@@ -391,10 +391,28 @@ namespace DeNelle.Village
                     // Plain Find is blind to inactive objects, so a null here is BOTH
                     // "already stood down" and "not in this scene bake". Split them with
                     // the incl-inactive scan so the EnforceAll tally cannot overclaim.
-                    if (FindByNameInclInactive(bakedName) != null) alreadyDown++;
+                    var down = FindByNameInclInactive(bakedName);
+                    if (down != null)
+                    {
+                        alreadyDown++;
+                        // WO-950 phantom-footprint discipline: SetActive(false) leaves every
+                        // collider's enabled-FLAG true, so a twin some earlier path stood down
+                        // can still resurrect an invisible wall on any reactivation. Enforce
+                        // the zero-enabled-solid-collider invariant on every sweep (idempotent,
+                        // silent when already stripped).
+                        var downGo = down.gameObject;
+                        Guard.Try("Singleton", $"suppress physics on '{bakedName}'",
+                            () => HubStructureVisualInjector.SuppressBakedTwinPhysics(downGo, reason));
+                    }
                     continue;
                 }
                 baked.SetActive(false);
+                // WO-950: a suppressed twin is not just invisible — it is also NOT SOLID
+                // (colliders + nav obstacles stripped; restored on surfacing by
+                // HubStructureVisualInjector.RestoreBakedTwinPhysics). The owner's F8 seq
+                // 2267: an invisible baked barracks body-blocking the hero at ~(16,0,-4).
+                Guard.Try("Singleton", $"suppress physics on '{bakedName}'",
+                    () => HubStructureVisualInjector.SuppressBakedTwinPhysics(baked, reason));
                 stood++;
                 FlowTrace.Step("Singleton",
                     $"baked twin '{bakedName}' stood down - {reason}.");

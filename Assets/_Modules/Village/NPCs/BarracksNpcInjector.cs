@@ -116,12 +116,29 @@ namespace DeNelle.Village
 
             if (!IsCastleHubScene(SceneManager.GetActiveScene().name)) return;
             if (!DeNelle.Village.BarracksUnlock.IsUnlocked) return;
-            if (GameObject.Find(HolderName) != null) return;   // already surfaced this scene
             // WO-834 blank-town gate: on a Build-Your-Own (migrated, never-built) save the
             // baked barracks stays down at unlock — the drillmaster arrives when the player
             // PLACES a barracks (SingletonResolved reseat below). Without this early-return
             // the poll would re-surface the bake + log every second on a blank town.
-            if (!StructureSingleton.MayBakedTwinSurface(StructureId)) return;
+            // WO-950: the gate now runs BEFORE the holder check so the poll can also REAP an
+            // orphan — a drillmaster the sceneLoaded ordering seated against the bake before
+            // the deferred EnforceAll sweep stood that bake down (WO-950 mechanism b). Gate
+            // closed + nothing placed means any standing holder is an NPC at an invisible
+            // building; reap it and re-arm the mis-burned once-teach.
+            if (!StructureSingleton.MayBakedTwinSurface(StructureId))
+            {
+                var orphan = GameObject.Find(HolderName);
+                if (orphan != null && !StructureSingleton.IsPlayerBuilt(StructureId))
+                {
+                    FlowTrace.Warn("Barracks",
+                        "WO-950 poll: reaped an ORPHANED drillmaster - the blank-town gate is closed and " +
+                        "nothing is placed, so it was seated against the suppressed bake (sceneLoaded race).");
+                    Destroy(orphan);
+                    ResetMisburnedOnceTeach();
+                }
+                return;
+            }
+            if (GameObject.Find(HolderName) != null) return;   // already surfaced this scene
 
             FlowTrace.Step("Barracks",
                 "unlock flipped true in-hub (ff.barracks + founding-complete) - surfacing the Barracks live (1 Hz poll).");
@@ -184,7 +201,29 @@ namespace DeNelle.Village
                     break;
                 }
 
-            if (barracks == null) barracks = GameObject.Find(BarracksRootName);
+            if (barracks == null)
+            {
+                // WO-950 item 1: the BAKED fallback carries the SAME blank-town gate the 1 Hz
+                // poll already carries (WO-834, StructureSingleton.MayBakedTwinSurface). This
+                // path runs on sceneLoaded — BEFORE the deferred StructureSingleton.EnforceAll
+                // sweep — so without the gate it could find the still-active bake, seat the
+                // drillmaster, and burn the once-teach on a save where the barracks was never
+                // built (owner felt-report 2026-08-10). A PLACED barracks is exempt by
+                // construction: the placed-scan above already claimed it and never reaches
+                // here. ONE owner per concern: the rule itself lives in StructureSingleton
+                // (the swept 'barracks' catalog row authors bakedTwins 'CastleBarracks');
+                // this seam only QUERIES the authority earlier than its deferred sweep runs.
+                if (!StructureSingleton.MayBakedTwinSurface(StructureId))
+                {
+                    FlowTrace.Step("Barracks",
+                        "Inject refused the BAKED CastleBarracks - blank-town gate closed (WO-834 via WO-950): " +
+                        "'barracks' was never built on this save. The drillmaster seats only at a PLACED " +
+                        "barracks; the once-teach stays unburned.");
+                    ResetMisburnedOnceTeach();
+                    return;
+                }
+                barracks = GameObject.Find(BarracksRootName);
+            }
 
             if (barracks == null)
             {
@@ -227,6 +266,47 @@ namespace DeNelle.Village
                 FlowTrace.Fail("Village", "BarracksNpcInjector: failed to place the drillmaster NPC.");
                 Debug.LogWarning("[BarracksNpcInjector] failed to place the drillmaster NPC.");
             }
+        }
+
+        // =====================================================================
+        // WO-950 item 3 — the smallest honest reset of a MIS-BURNED once-teach.
+        // The owner's 2026-08-10 save burned 'barracks_intro' via the ungated
+        // sceneLoaded Inject (toast pointed at a building she never built). Rather
+        // than a dev-only flag flip, the GATE-REFUSAL path clears the seen flag
+        // itself: the gate being closed (migrated save, 'barracks' not in the
+        // monotonic EverBuiltStructureIds) PROVES the drillmaster never
+        // legitimately seated on this save — a placement would have opened the
+        // gate forever via MarkEverBuilt at the commit seam. So the clear can
+        // never touch a legitimate burn (Default-Town/legacy saves have the
+        // template grant; a placed barracks keeps the gate open), and the
+        // owner's already-burned save self-heals on its next hub load: the teach
+        // re-arms and fires once, honestly, at her first real barracks.
+        // Self-guarding + public so the regression suite can pin both directions.
+        // =====================================================================
+        /// <summary>Clears a 'barracks_intro' once-teach that was burned while the
+        /// blank-town gate was closed (an illegitimate burn). Refuses when the gate
+        /// is open or a placed barracks exists. Returns true when it cleared.</summary>
+        public static bool ResetMisburnedOnceTeach()
+        {
+            // A legit burn is untouchable: gate open, or a player-owned barracks standing.
+            if (StructureSingleton.MayBakedTwinSurface(StructureId)) return false;
+            if (StructureSingleton.IsPlayerBuilt(StructureId)) return false;
+
+            var svc = DeNelle.Core.State.GameStateService.Instance;
+            var st = svc != null ? svc.State : null;
+            if (st == null || st.SeenTutorials == null) return false;
+            if (!(st.SeenTutorials.TryGetValue("barracks_intro", out bool seen) && seen)) return false;
+
+            st.SeenTutorials.Remove("barracks_intro");
+            // Persist only in play mode: the headless regression seats a THROWAWAY
+            // GameStateService, and Save() writes the real save file — a suite run
+            // must never clobber a genuine save with fixture state.
+            if (Application.isPlaying) svc.Save();
+            FlowTrace.Step("Barracks",
+                "WO-950: cleared a MIS-BURNED 'barracks_intro' once-teach - the blank-town gate is closed " +
+                "and nothing is placed, so the drillmaster never legitimately seated on this save; the " +
+                "teach re-arms for the first real barracks.");
+            return true;
         }
 
         private bool SpawnDrillmaster(Transform barracks, Transform hero, Transform parent)
