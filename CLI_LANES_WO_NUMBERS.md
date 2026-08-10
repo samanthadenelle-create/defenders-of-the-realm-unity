@@ -1,6 +1,17 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ RECONCILED 2026-08-10 (CLI): main line next free = **964**. **782–859 + 900–963 CONSUMED.**
+> ## ⚠ RECONCILED 2026-08-10 (CLI): main line next free = **965**. **782–859 + 900–964 CONSUMED.**
+> - **964** = **Unearned structures are HIDDEN, not shown-locked** — owner F8 2303, verbatim: *"dont show
+>   the spire, leave as blank till earned, allows us to unlock new items and not reveal what they are"*.
+>   ⚠ REVERSES WO-1013's visible-locked Spire card, which shipped the SAME DAY (`bd9d54d9`); both rulings
+>   are recorded in the WO. Good news: it is a DATA move — `build-categories` already has both buckets
+>   (`lockedIds` filters the row OUT, `visibleLockedIds` renders it greyed), so the Spire moves buckets
+>   and `ProgressionUnlocks.IsUnlocked` is already the earn gate. ⚠ Carries an OWNER QUESTION: this is the
+>   opposite policy to WO-960's armor-store greyed ladder, which also shipped today — both can be right
+>   (shop = aspiration, new structure = surprise) but only one can be the house rule.
+>   File `WORK_ORDER_964_hide_unearned_structures_until_unlocked.md`. **READY TO IMPLEMENT.**
+>
+> *(banner bumped 964 → 965 in the SAME edit as the mint.)*
 > - **963** = **Build carousel follows the tutorial's teaching order** — owner F8 2302, verbatim: *"Can
 >   we order the carousel in order of how the tutorial presents them?"* RCA'd live: there is NO sort —
 >   `BuildPaletteVM.Rebuild` foreaches the registry query, so the order IS the row order in
