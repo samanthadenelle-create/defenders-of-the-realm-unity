@@ -1,6 +1,16 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ RECONCILED 2026-08-09 (CLI / THE RULES): main line next free = **943**. **782–859 + 900–942 CONSUMED.**
+> ## ⚠ RECONCILED 2026-08-09 (CLI / THE RULES): main line next free = **944**. **782–859 + 900–943 CONSUMED.**
+> - **943** = **The docs get a HOME: wiki-style linked navigation over the doc lake** — owner
+>   directive 2026-08-09 (*"almost like a Wiki... start at from home... the next CLI seat doesn't
+>   have to dig"*): ONE GENERATED static home page (HOME.html or a BOARD nav rail, built beside
+>   `board_build.py`) linking rules / architecture hub / north star + newest ground truth / board /
+>   master catalog / VFX + sounds organization views. LINK never duplicate; generator fails on dead
+>   links; newest-by-date resolution; composes with WO-937/938/940/1011. Overnight lane, carries the
+>   aged-vs-new due-diligence rider. File `WORK_ORDER_943_docs_wiki_home_linked_canon.md`.
+>   **READY TO IMPLEMENT.**
+>
+> *(banner bumped 943 → 944 in the SAME edit as the 943 mint — the rule that broke five times on 08-02.)*
 > - **942** = **UI capture harness: two capture-case gaps left by the WO-1010 pass** — the
 >   `padon` case is byte-identical to `edgeclamp` (the identical-file-size tell) because the D12
 >   no-toggle ruling dissolved what it photographed, and the D17 sprite-path dim-on-invalid has no
