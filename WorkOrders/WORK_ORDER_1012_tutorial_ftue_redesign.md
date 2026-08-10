@@ -45,14 +45,16 @@ tutorial rewrite HERE).
 > person A."* Whatever character guides the tutorial, it must NEVER be the hero the player selected.
 > The rotation formula below is ONE sanctioned mechanism that satisfies it ("I don't really care what
 > method you use"); any mechanism that satisfies the invariant is acceptable.
-> **CREATIVE OPTION ON THE TABLE (owner, same ruling):** the guide could instead be the player's
-> FIRST PET/ECHO — *"you meet your first pet and your pet's the one that introduces you and teaches
-> you these things, since they're the Echo, in essence, of this village."* This fits existing canon
-> (an Echo is the awakened essence of one of the people the Heart of Elarion guards) and the
-> `founding_hollow` step already grants the starter pet. Choosing it needs the owner's final creative
-> call + a dialogue re-attribution pass (speaker = the Echo, copy unchanged). Until she rules, the
-> hero-rotation default below stands — but implement it behind a seam that makes swapping the guide
-> IDENTITY (hero vs Echo) a data/config change, not a rewrite.
+> **RULED (owner, 2026-08-09, same session): ROTATION.** *"Let's just stick with rotation. If we
+> choose to change it another point, that's fine... for right now, let's leave it as rotation."*
+> The hero-rotation formula below is the implementation — UNBLOCKED, no creative dependency.
+> **Parked creative alternative (logged for a possible later pivot, NOT in scope):** the guide as
+> the player's FIRST PET/ECHO — *"you meet your first pet and your pet's the one that introduces you
+> and teaches you these things, since they're the Echo, in essence, of this village."* Fits canon
+> (an Echo is the awakened essence of one of the people the Heart of Elarion guards) and
+> `founding_hollow` already grants the starter pet. If ever chosen it needs a dialogue
+> re-attribution pass (speaker = the Echo, copy unchanged). Implement rotation behind a seam that
+> keeps the guide IDENTITY a data/config swap, so that pivot stays cheap.
 
 - `guideClass = (HeroClass)(((int)playerHeroClass + 1) % 4)` — the owner's formula over the EXISTING
   `HeroClass` enum (Mage/Knight/Ranger/Cleric). Names resolve via `HeroCanonNames` (Grom/Sylas/Thrain/
