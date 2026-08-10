@@ -1,0 +1,66 @@
+<!DOCTYPE html><html><head><meta charset="utf-8">
+<title>EoA Home - 2026-08-09 22:29</title>
+<style>
+ body{background:#14151a;color:#ddd;font:14px/1.5 'Segoe UI',sans-serif;margin:0;padding:24px}
+ h1{color:#e0b341;font-size:24px;margin:0 0 4px}
+ h2{color:#e0b341;font-size:16px;margin:0 0 6px;border-bottom:1px solid #2a2c36;padding-bottom:6px}
+ .sub{color:#888;margin-bottom:14px} .sub b{color:#bbb}
+ .nav{margin-bottom:18px} .nav a{color:#7fa8d9;margin-right:14px;text-decoration:none}
+ .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(430px,1fr));gap:16px}
+ .card{background:#1e2027;border:1px solid #2c2e38;border-radius:10px;padding:16px 18px}
+ .blurb{color:#888;font-size:12px;margin:0 0 10px}
+ .entry{padding:5px 0;border-bottom:1px solid #24262e}
+ .entry:last-child{border-bottom:0}
+ .entry a{color:#e0b341;text-decoration:none;font-weight:600;white-space:nowrap}
+ .entry a:hover{text-decoration:underline}
+ .desc{color:#999;font-size:12px;display:block}
+</style></head><body>
+<h1>Echoes of Elarion — Home</h1>
+<div class="sub">Generated <b>2026-08-09 22:29</b> from the repo — the repo is the source of truth, this page
+ is a derived view (WO-943). Regenerate: <b>python tools/home_build.py</b>. Dead links FAIL the
+ generator, so every link below was live at generation time.</div>
+<div class="nav"><a href="#rules">The rules</a> <a href="#canon">Architectural canon</a> <a href="#northstar">North star</a> <a href="#board">The board</a> <a href="#catalogs">Component catalogs</a> <a href="#assets">Asset organization</a> <a href="#operator">Operator docs</a></div>
+<div class="grid">
+<div class="card" id="rules"><h2>The rules</h2><p class="blurb">Binding on every seat, every session. RULES.md (WO-938) is the index; the pointed-at docs are the authority.</p><div class="entry"><a href="RULES.md">RULES.md</a><span class="desc">The one page - every binding rule as one checkable line + a pointer to the doc that owns it.</span></div>
+<div class="entry"><a href="CLAUDE.md">CLAUDE.md</a><span class="desc">Agent rules &amp; project memory - read by every agent before work; §15 = canon maintenance.</span></div>
+<div class="entry"><a href="PREFLIGHT_GATE.md">Preflight gate</a><span class="desc">The YES-plus-proof checklist answered before touching any code or debugging.</span></div>
+<div class="entry"><a href="SESSION_CANON_LOADER.md">Session canon loader</a><span class="desc">The at-a-glance SME primer that boots a session (core rules + current state + key files).</span></div></div>
+<div class="card" id="canon"><h2>Architectural canon</h2><p class="blurb">The ruled architecture set. Per-area *_ARCHITECTURE.md deep-dives are reached THROUGH the hub, not listed flat.</p><div class="entry"><a href="docs/ARCHITECTURE.md">Architecture hub</a><span class="desc">THE single authoritative hub (HP B2B lens, assembly map, world/scene, data, save, build mode) - indexes every deep-dive.</span></div>
+<div class="entry"><a href="docs/ARCHITECTURE_PRINCIPLES.md">Architecture principles</a><span class="desc">The owner&#x27;s HP B2B law - bounded contexts, presentation never touches the objects, right-not-easy.</span></div></div>
+<div class="card" id="northstar"><h2>North star</h2><p class="blurb">Where we are going, and what is CURRENTLY true. The ground-truth anchor below is resolved newest-by-date at generation time.</p><div class="entry"><a href="docs/COMBAT_PIVOT_NORTHSTAR.md">Combat pivot north star</a><span class="desc">The Single-Knight pivot - supersedes the Blink/party-of-4 canon.</span></div>
+<div class="entry"><a href="CANON_GROUND_TRUTH_2026-08-09.md">Canon ground truth (2026-08-09)</a><span class="desc">The single live anchor of current reality - newest dated anchor wins; all earlier ones are frozen.</span></div>
+<div class="entry"><a href="KEY_FACTS.md">Key facts</a><span class="desc">The living fact sheet + north-star state, updated in place.</span></div></div>
+<div class="card" id="board"><h2>The board</h2><p class="blurb">The live work-order board - GENERATED from WorkOrders/*.md (python tools/board_build.py). The repo is the data; the board is a view.</p><div class="entry"><a href="BOARD.html">BOARD.html</a><span class="desc">Every work order bucketed Ready/Blocked/Spec/Done/Closed with search + filters. Regenerate before any read.</span></div></div>
+<div class="card" id="catalogs"><h2>Component catalogs</h2><p class="blurb">docs/MASTER_CATALOG.md + its per-area pages - verified from the actual code, not comments.</p><div class="entry"><a href="docs/MASTER_CATALOG.md">Master Catalog (hub)</a><span class="desc">The exhaustive file-by-file SME catalog - architecture map + stale/risk ledger. Mandatory first read before touching any area.</span></div>
+<div class="entry"><a href="docs/MASTER_CATALOG/BLINK.md">BLINK</a><span class="desc">MASTER CATALOG — Blink (what remains true, 2026-08-02)</span></div>
+<div class="entry"><a href="docs/MASTER_CATALOG/audio.md">audio</a><span class="desc">MASTER CATALOG — Audio (DeNelle.Audio + the Village audio players + assets)</span></div>
+<div class="entry"><a href="docs/MASTER_CATALOG/battle-atb.md">battle-atb</a><span class="desc">MASTER CATALOG — battle-atb (COMBAT: live BattleArena real-time + dormant ATB)</span></div>
+<div class="entry"><a href="docs/MASTER_CATALOG/core.md">core</a><span class="desc">MASTER CATALOG — Core (Assets/_Modules/Core)</span></div>
+<div class="entry"><a href="docs/MASTER_CATALOG/data-catalogs.md">data-catalogs</a><span class="desc">MASTER CATALOG — data-catalogs</span></div>
+<div class="entry"><a href="docs/MASTER_CATALOG/devtools-settings-onboarding.md">devtools-settings-onboarding</a><span class="desc">Master Catalog — DevTools / Settings / Onboarding</span></div>
+<div class="entry"><a href="docs/MASTER_CATALOG/dialogue.md">dialogue</a><span class="desc">MASTER CATALOG — Dialogue</span></div>
+<div class="entry"><a href="docs/MASTER_CATALOG/docs-design.md">docs-design</a><span class="desc">MASTER CATALOG — docs-design (the load-bearing design/canon doc set)</span></div>
+<div class="entry"><a href="docs/MASTER_CATALOG/docs-wo-state.md">docs-wo-state</a><span class="desc">MASTER CATALOG — docs-wo-state (WO numbering + live WO map)</span></div>
+<div class="entry"><a href="docs/MASTER_CATALOG/economy-meta.md">economy-meta</a><span class="desc">MASTER CATALOG — Area: economy-meta (currencies, monetization, meta-economy)</span></div>
+<div class="entry"><a href="docs/MASTER_CATALOG/editor-tools.md">editor-tools</a><span class="desc">Master Catalog — Editor Tools &amp; Gates (Assets/Editor) — 2026-08-02</span></div>
+<div class="entry"><a href="docs/MASTER_CATALOG/hud.md">hud</a><span class="desc">MASTER CATALOG — Area: HUD (DeNelle.HUD)</span></div>
+<div class="entry"><a href="docs/MASTER_CATALOG/misc-modules.md">misc-modules</a><span class="desc">Master Catalog — Misc Modules (Dungeons foremost)</span></div>
+<div class="entry"><a href="docs/MASTER_CATALOG/resources-art.md">resources-art</a><span class="desc">Master Catalog — resources-art</span></div>
+<div class="entry"><a href="docs/MASTER_CATALOG/scenes.md">scenes</a><span class="desc">MASTER CATALOG — Scenes</span></div>
+<div class="entry"><a href="docs/MASTER_CATALOG/village-enemies-world.md">village-enemies-world</a><span class="desc">Master Catalog — village-enemies-world</span></div>
+<div class="entry"><a href="docs/MASTER_CATALOG/village-hero.md">village-hero</a><span class="desc">MASTER CATALOG — village-hero (rewritten 2026-08-02)</span></div>
+<div class="entry"><a href="docs/MASTER_CATALOG/village-npcs.md">village-npcs</a><span class="desc">Master Catalog — village-npcs</span></div>
+<div class="entry"><a href="docs/MASTER_CATALOG/village-systems.md">village-systems</a><span class="desc">Master Catalog — Village Systems</span></div></div>
+<div class="card" id="assets"><h2>Asset organization</h2><p class="blurb">How the VFX and sounds are organized - generated registries, source-cited from the actual tree on every run (WO-943 §2.6).</p><div class="entry"><a href="docs/reference/VFX_ORGANIZATION.md">VFX organization</a><span class="desc">Generated registry: the Resources/VFX folder taxonomy, counts by type, catalog assets, the _Shared breakdown.</span></div>
+<div class="entry"><a href="docs/reference/SOUND_ORGANIZATION.md">Sound organization</a><span class="desc">Generated registry: SfxId + MusicTrack enum values read from source, SfxClipLibrary, where clips live on disk.</span></div>
+<div class="entry"><a href="docs/reference/VFX_AUDIO_WIRING_MAP.md">VFX/audio wiring map</a><span class="desc">The key-to-hook wiring map for VFX and audio events.</span></div></div>
+<div class="card" id="operator"><h2>Operator docs</h2><p class="blurb">How this project is actually run, day to day.</p><div class="entry"><a href="docs/HANDOVER.md">Handover</a><span class="desc">The single operator&#x27;s manual a new session reads first - how we work + the build/gate/bake cycle + resume points.</span></div>
+<div class="entry"><a href="docs/TICKET_PIPELINE.md">Ticket pipeline</a><span class="desc">The role-separated QA -&gt; CLI -&gt; PO bug pipeline (binding).</span></div>
+<div class="entry"><a href="docs/BOARD.md">Board protocol</a><span class="desc">How the derived board works - status vocabulary, scope, the --check gate.</span></div>
+<div class="entry"><a href="docs/UI_PLAYBOOK.md">UI playbook</a><span class="desc">Read before adding or changing any screen, panel, HUD element or overlay - 15 practices, each citing the defect it prevents.</span></div>
+<div class="entry"><a href="docs/INSTRUMENTATION_STANDARD.md">Instrumentation standard</a><span class="desc">How code is written observable-first - FlowTrace/Guard/regression authoring (the method behind CLAUDE.md §12).</span></div>
+<div class="entry"><a href="docs/README.md">Docs index</a><span class="desc">The category index of docs/ - find your category, don&#x27;t grep blind.</span></div>
+<div class="entry"><a href="PROJECT_INDEX.md">Project index</a><span class="desc">The root-file map - living docs vs frozen dated ledgers.</span></div>
+<div class="entry"><a href="START_HERE.md">Start here</a><span class="desc">The boot sequence a fresh CLI session follows.</span></div></div>
+</div>
+</body></html>

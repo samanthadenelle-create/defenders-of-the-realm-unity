@@ -1,6 +1,7 @@
 # WORK ORDER 943 — The docs get a HOME: wiki-style linked navigation over the doc lake
 
-**Status:** READY TO IMPLEMENT (overnight lane, owner-directed 2026-08-09)
+**Status:** DONE (delivered + lead-verified 2026-08-09 same night — see the RESULT; owner click-through pending)
+*(Prior: READY TO IMPLEMENT — overnight lane, owner-directed 2026-08-09)*
 **Minted:** 2026-08-09 (CLI session, WO-1010 pass) — number from the `CLI_LANES_WO_NUMBERS.md` header, bumped 943 -> 944 in the SAME edit.
 **Lane:** Docs/tooling. No gameplay code. Pairs with the overnight aged-vs-new due-diligence sweep.
 **Provenance (owner, verbatim fragments, 2026-08-09 late session):** *"almost like a Wiki where there's a link that we start at from home, whether it's board or whatever we call it... it can point to these are the rules. These are the architectural canons. This is a north star... the different components that are actually part of it."* — *"I'd like to be able to look through the catalog of VFX and see how they're organized... I'd like to see how the sounds are organized."* — *"I know it's supposed to be just a doc, but it's become more of a lake over the months... that's the technical debt that builds up."* — *"the next CLI seat doesn't have to dig. They're able to reference... a static content page and... click a link and take it to that piece."*

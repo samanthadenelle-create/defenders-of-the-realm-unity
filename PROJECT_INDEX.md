@@ -25,6 +25,7 @@ Docs index: `docs/README.md`.
 
 | File | Purpose |
 |---|---|
+| `HOME.html` | **Generated wiki-style home page over the doc lake** (`python tools/home_build.py`) — one click to rules / architecture / north star / board / catalogs / the VFX+sound organization registries; derived view, never hand-edit, dead links fail the generator (WO-943) |
 | `CANON_GROUND_TRUTH_2026-08-06.md` | **The single live anchor of current reality — read FIRST** (delta over 08-05 → 08-03 → 08-02 → 08-01 → 07-26 → the deep `CANON_GROUND_TRUTH_2026-07-22.md` module anchor; all earlier anchors frozen/bannered) |
 | `docs/reference/SESSION_INDEX_2026-08-06.md` | The 2026-08-05/06 session as a **known dictionary** — every defect with its proving line, every **REFUTED** belief with the evidence that killed it, the owner rulings, the open items |
 | `docs/reference/DEFECT_INDEX_2026-08-05.md` | Same, for the earlier half of 2026-08-05 (dungeon P0, wallet, catalog fallback drift). **Frozen ledger** |

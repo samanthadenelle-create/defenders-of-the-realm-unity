@@ -1,7 +1,9 @@
-> **Live reality anchor = `../CANON_GROUND_TRUTH_2026-08-02.md`** (a delta over 08-01 → 07-26 → the deep
-> `../CANON_GROUND_TRUTH_2026-07-22.md` module anchor). Branch = `wip/village2-and-f8-tickets`;
-> board = Notion. If any doc below reads as pre-pivot (branch `feat/tower-core-loop`, Linear board,
-> or a tower-defense + Solana framing), the anchor wins.
+> **STALE banner corrected 2026-08-09:** the live anchor is the NEWEST `../CANON_GROUND_TRUTH_<date>.md`
+> **sorted by date** (never a name copied here — this line previously hardcoded 08-02 and went stale);
+> **the board is `../BOARD.html`, derived from `WorkOrders/*.md`** (`python tools/board_build.py`) —
+> **Notion is RETIRED (owner ruling 2026-08-08)**, as are Linear and the task list. Branch =
+> `wip/village2-and-f8-tickets`. Start at **`../HOME.html`** (`python tools/home_build.py`) for
+> one-click navigation. If any doc below reads as pre-pivot, the newest anchor wins.
 
 # docs/ — Index
 
@@ -11,6 +13,7 @@ indexed separately in `../PROJECT_INDEX.md`.
 
 ## Start here / canon
 
+- `../HOME.html` — **the generated wiki-style home page over the doc lake** (rules / architecture / north star / board / catalogs / VFX+sound organization registries) — regenerate `python tools/home_build.py`, never hand-edit; dead links fail the build (WO-943)
 - `HANDOVER.md` — **the single operator's manual a new session reads first** (how we work, the binding rules, this-session's new canon, the build/gate/bake cycle, resume points)
 - `NORTH_STAR.md`, `NORTH_STAR_PROGRESS.md` — vision + progress against it
 - `DESIGN-DECISIONS.md` — **binding creative decisions** (Elarion naming, no Keep, etc.)
