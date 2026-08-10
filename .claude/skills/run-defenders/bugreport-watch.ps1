@@ -116,23 +116,9 @@ function Invoke-Admin([string]$query) {
     }
 }
 
-function Read-PingSeq {
-    try {
-        if (-not (Test-Path $PingFile)) { return 0 }
-        return [int]((Get-Content $PingFile -Raw | ConvertFrom-Json).seq)
-    } catch { return 0 }
-}
-
-function Write-Ping([int]$seq, [string]$kind, [string]$capturePath, [string]$summary) {
-    @{
-        seq         = $seq
-        firedAtUtc  = (Get-Date).ToUniversalTime().ToString('o')
-        kind        = $kind
-        capturePath = $capturePath
-        summary     = $summary
-        message     = 'NEW BUG REPORT - review now (read LATEST_CAPTURE.md or run f8-check-inbox.ps1)'
-    } | ConvertTo-Json -Depth 4 | Set-Content -Path $PingFile -Encoding UTF8
-}
+# WO-965: publishing goes through the shared inbox lib so bug reports land in QUEUE.jsonl too
+# (this daemon shares PING.json/LATEST_CAPTURE.md with the F8 daemon, so it shared the drop bug).
+. (Join-Path $PSScriptRoot 'f8-inbox-lib.ps1')
 
 function Read-State {
     try {
@@ -153,9 +139,6 @@ function Write-State([long]$lastReportId, [long]$lastCount, [string]$lastLatest)
 # One md per NEW report - the report's identity + description + context tail, in
 # the LATEST_CAPTURE house shape the f8/websig daemons write.
 function Emit-ReportCapture($row) {
-    $seq = (Read-PingSeq) + 1
-    $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
-    $capPath = Join-Path $Inbox ('capture-bugreport-{0}-id{1}.md' -f $stamp, $row.report_id)
     $nl = [Environment]::NewLine
 
     $tail = @()
@@ -169,7 +152,7 @@ function Emit-ReportCapture($row) {
     $shot = if ($row.has_screenshot) { 'yes (fetch via db-viewer / view=bugreports single row)' } else { 'no' }
 
     $md = @(
-        ('# NEW BUG REPORT (auto-inbox seq={0}, bug_reports id={1})' -f $seq, $row.report_id)
+        ('# NEW BUG REPORT (auto-inbox seq=__F8SEQ__, bug_reports id={0})' -f $row.report_id)
         ''
         ('**Time (local):** {0}' -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'))
         ('**Submitted (db):** {0}' -f $row.created_at)
@@ -199,11 +182,11 @@ function Emit-ReportCapture($row) {
         ''
     ) -join $nl
 
-    Set-Content -Path $capPath -Value $md -Encoding UTF8
-    Set-Content -Path $Latest -Value $md -Encoding UTF8
-
     $summary = ('bug_reports id={0} player={1} scene={2}: {3}' -f $row.report_id, $player, $row.route, $desc)
-    Write-Ping -seq $seq -kind 'bug-report' -capturePath $capPath -summary $summary.Substring(0, [Math]::Min(160, $summary.Length))
+    $seq = Publish-F8Capture -Inbox $Inbox -Kind 'bug-report' -Md $md -Source 'bugreport' `
+        -BaseName ('capture-bugreport-id{0}' -f $row.report_id) `
+        -Summary $summary.Substring(0, [Math]::Min(160, $summary.Length)) `
+        -PingMessage 'NEW BUG REPORT - review now (read LATEST_CAPTURE.md or run f8-check-inbox.ps1)'
     try { [System.Media.SystemSounds]::Exclamation.Play() } catch { }
     Write-Host ''
     Write-Host '============================================================'
@@ -217,12 +200,9 @@ function Emit-ReportCapture($row) {
 # rows landed but their content is unreachable from here. Still notify - the
 # notify contract must hold from day one; the TODO names the one-view fix.
 function Emit-DegradedCapture([long]$newCount, [long]$oldCount, [string]$latest) {
-    $seq = (Read-PingSeq) + 1
-    $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
-    $capPath = Join-Path $Inbox ('capture-bugreport-{0}-degraded.md' -f $stamp)
     $nl = [Environment]::NewLine
     $md = @(
-        ('# NEW BUG REPORT(S) - content pending admin view (auto-inbox seq={0})' -f $seq)
+        '# NEW BUG REPORT(S) - content pending admin view (auto-inbox seq=__F8SEQ__)'
         ''
         ('**Time (local):** {0}' -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'))
         ('**New rows:** {0} (bug_reports count {1} -> {2})' -f ($newCount - $oldCount), $oldCount, $newCount)
@@ -239,10 +219,10 @@ function Emit-DegradedCapture([long]$newCount, [long]$oldCount, [string]$latest)
         '- Ack when triaged: f8-ack.ps1'
         ''
     ) -join $nl
-    Set-Content -Path $capPath -Value $md -Encoding UTF8
-    Set-Content -Path $Latest -Value $md -Encoding UTF8
-    Write-Ping -seq $seq -kind 'bug-report' -capturePath $capPath `
-        -summary ('{0} new bug report(s) - view=bugreports missing, content pending' -f ($newCount - $oldCount))
+    $seq = Publish-F8Capture -Inbox $Inbox -Kind 'bug-report' -Md $md -Source 'bugreport' `
+        -BaseName 'capture-bugreport-degraded' `
+        -Summary ('{0} new bug report(s) - view=bugreports missing, content pending' -f ($newCount - $oldCount)) `
+        -PingMessage 'NEW BUG REPORT - review now (read LATEST_CAPTURE.md or run f8-check-inbox.ps1)'
     try { [System.Media.SystemSounds]::Exclamation.Play() } catch { }
     Write-Host ('[bugreport] DEGRADED PING seq={0}: {1} new report(s), content unreadable until view=bugreports exists.' -f $seq, ($newCount - $oldCount))
 }

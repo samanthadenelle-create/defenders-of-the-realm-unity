@@ -428,6 +428,14 @@ month — the harness now executes it instead of trusting the seat to.
 - **Start once:** `powershell -File .claude\skills\run-defenders\f8-watch-start.ps1` (idempotent).
   Runs `f8-watch-daemon.ps1` hidden; watches `break-log.jsonl` + Editor/Player logs forever.
 - **Inbox:** `logs/f8-inbox/` — daemon writes `LATEST_CAPTURE.md` + bumps `PING.json` on each capture.
+- **⚠ THE INBOX IS A QUEUE, NOT A SLOT (WO-965, 2026-08-10).** `LATEST_CAPTURE.md` + `PING.json` hold
+  only the **NEWEST** capture; the record is the append-only **`logs/f8-inbox/QUEUE.jsonl`** plus one
+  `capture-*-seq<N>.md` per capture. `f8-check-inbox.ps1` surfaces the **OLDEST un-acked** capture and
+  a `pending=N` count; **`f8-ack.ps1` acks exactly ONE** — keep triaging until it reports `NO_CAPTURE`.
+  *Why it is written this hard:* the two files used to be single slots, so a burst overwrote itself and
+  an ack of the newest seq silently closed everything below it — on 2026-08-10 the seat acked seq 2306,
+  next saw 2309, and the owner's **2307 + 2308 never reached any seat**. Never ack "the latest"; never
+  assume the newest capture is the only one.
 - **Agent poll:** `.cursor/rules/f8-auto-triage.mdc` (alwaysApply) — every turn run `f8-check-inbox.ps1`
   FIRST; session start also launches background `f8-watch-poll.ps1` (notify on `F8 INBOX PING`).
 - **After triage:** `f8-ack.ps1`, then re-launch `f8-watch-poll.ps1`.

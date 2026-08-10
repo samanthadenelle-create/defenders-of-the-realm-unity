@@ -24,6 +24,7 @@ $PingFile = Join-Path $Inbox 'PING.json'
 $AckFile  = Join-Path $Inbox 'ACK.json'
 $Latest   = Join-Path $Inbox 'LATEST_CAPTURE.md'
 $LockFile = Join-Path $Inbox 'poll-rewake.lock'
+$Lib      = Join-Path $RepoRoot '.claude\skills\run-defenders\f8-inbox-lib.ps1'
 
 # -- single instance: first live poller wins the triage-owner seat ------------
 if (Test-Path $LockFile) {
@@ -47,11 +48,32 @@ try {
                     try { $lastAck = [int]((Get-Content $AckFile -Raw | ConvertFrom-Json).lastAckSeq) } catch { }
                 }
                 if ([int]$ping.seq -gt $lastAck) {
-                    Write-Output "NEW F8 CAPTURE (passive listener) seq=$($ping.seq) kind=$($ping.kind) firedAt=$($ping.firedAtUtc)"
-                    Write-Output "Read $Latest FIRST (CLAUDE.md section 14: harvest before theory), triage from the captured lines, then run f8-ack.ps1."
-                    if (Test-Path $Latest) {
-                        Write-Output '--- LATEST_CAPTURE.md (head) ---'
-                        Get-Content $Latest -TotalCount 20 | ForEach-Object { Write-Output $_ }
+                    # WO-965: wake with the FULL backlog, oldest first. LATEST_CAPTURE.md holds only
+                    # the newest capture, so waking on it alone is how seq 2307/2308 were lost.
+                    $pending = @()
+                    if (Test-Path $Lib) { . $Lib ; $pending = @(Get-F8Pending $Inbox) }
+
+                    if ($pending.Count -gt 0) {
+                        $first = $pending[0]
+                        Write-Output "NEW F8 CAPTURE(S) (passive listener): $($pending.Count) un-acked, oldest first."
+                        foreach ($e in $pending) {
+                            Write-Output ("  seq={0} kind={1} file={2}" -f $e.seq, $e.kind, $e.capturePath)
+                            Write-Output ("      {0}" -f $e.summary)
+                        }
+                        Write-Output "Triage seq=$($first.seq) FIRST (CLAUDE.md section 14: harvest before theory) from $($first.capturePath), then f8-ack.ps1 (acks ONE), and repeat until f8-check-inbox.ps1 says NO_CAPTURE."
+                        $head = $first.capturePath
+                        if ([string]::IsNullOrWhiteSpace($head) -or -not (Test-Path $head)) { $head = $Latest }
+                        if (Test-Path $head) {
+                            Write-Output ('--- {0} (head) ---' -f (Split-Path $head -Leaf))
+                            Get-Content $head -TotalCount 20 | ForEach-Object { Write-Output $_ }
+                        }
+                    } else {
+                        Write-Output "NEW F8 CAPTURE (passive listener) seq=$($ping.seq) kind=$($ping.kind) firedAt=$($ping.firedAtUtc)"
+                        Write-Output "Read $Latest FIRST (CLAUDE.md section 14: harvest before theory), triage from the captured lines, then run f8-ack.ps1."
+                        if (Test-Path $Latest) {
+                            Write-Output '--- LATEST_CAPTURE.md (head) ---'
+                            Get-Content $Latest -TotalCount 20 | ForEach-Object { Write-Output $_ }
+                        }
                     }
                     exit 2   # asyncRewake: exit 2 wakes the model with the lines above
                 }

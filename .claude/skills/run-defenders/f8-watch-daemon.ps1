@@ -1,5 +1,9 @@
 # f8-watch-daemon.ps1 - Persistent F8 / break-log watcher (auto-rearm forever).
 # Start: f8-watch-start.ps1 | Poll: f8-check-inbox.ps1 | Stop: f8-watch-stop.ps1
+#
+# WO-965: every capture is now APPENDED to logs/f8-inbox/QUEUE.jsonl via f8-inbox-lib.ps1.
+# LATEST_CAPTURE.md + PING.json still hold the newest capture (unchanged contract) but they are
+# a VIEW; the queue is the record, so a burst can no longer collapse to its newest member.
 
 param(
     [int]$PollSeconds = 5
@@ -7,11 +11,14 @@ param(
 
 $ErrorActionPreference = 'SilentlyContinue'
 
+. (Join-Path $PSScriptRoot 'f8-inbox-lib.ps1')
+
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
 $Inbox    = Join-Path $RepoRoot 'logs\f8-inbox'
 $PidFile  = Join-Path $Inbox 'daemon.pid'
 $PingFile = Join-Path $Inbox 'PING.json'
 $Latest   = Join-Path $Inbox 'LATEST_CAPTURE.md'
+$StateFile = Join-Path $Inbox 'daemon-state.json'
 
 # Desktop persistentDataPath = LocalLow\<companyName>\<productName>. productName became
 # "Echoes of Elarion" on 2026-08-08 (store-listing match), which MOVES this folder. Prefer the
@@ -36,27 +43,7 @@ if (Test-Path $PidFile) {
         }
     }
 }
-Set-Content -Path $PidFile -Value "$myPid" -Encoding UTF8
-
-function Read-PingSeq {
-    if (-not (Test-Path $PingFile)) { return 0 }
-    try {
-        $j = Get-Content $PingFile -Raw | ConvertFrom-Json
-        return [int]$j.seq
-    } catch { return 0 }
-}
-
-function Write-Ping([int]$seq, [string]$kind, [string]$capturePath, [string]$summary) {
-    $obj = @{
-        seq         = $seq
-        firedAtUtc  = (Get-Date).ToUniversalTime().ToString('o')
-        kind        = $kind
-        capturePath = $capturePath
-        summary     = $summary
-        message     = 'F8 capture - triage now (read LATEST_CAPTURE.md or run f8-check-inbox.ps1)'
-    }
-    $obj | ConvertTo-Json -Depth 4 | Set-Content -Path $PingFile -Encoding UTF8
-}
+Write-F8Text $PidFile "$myPid"
 
 function Harvest-Context {
     $blocks = @()
@@ -78,14 +65,13 @@ function Alert-Owner([string]$Title, [string]$Body) {
 }
 
 function Emit-Capture([string]$kind, [string]$body, [string]$triggerLine) {
-    $seq = (Read-PingSeq) + 1
-    $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
-    $capPath = Join-Path $Inbox ('capture-{0}.md' -f $stamp)
+    # The seq is allocated INSIDE Publish-F8Capture (under the inbox lock) - __F8SEQ__ is the
+    # placeholder it substitutes, so the header can be built before the number exists.
     $harvest = Harvest-Context
     $nl = [Environment]::NewLine
 
     $md = @(
-        ('# F8 Capture (auto-inbox seq={0})' -f $seq)
+        '# F8 Capture (auto-inbox seq=__F8SEQ__)'
         ''
         ('**Time (local):** {0}' -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'))
         ('**Kind:** {0}' -f $kind)
@@ -106,15 +92,13 @@ function Emit-Capture([string]$kind, [string]$body, [string]$triggerLine) {
         '## Triage'
         '- Read this file before code-read or theory.'
         '- Route per docs/TICKET_PIPELINE.md.'
-        '- Ack when done: f8-ack.ps1'
+        '- Ack when done: f8-ack.ps1  (acks THIS capture only; a queued backlog stays pending)'
         ''
     ) -join $nl
 
-    Set-Content -Path $capPath -Value $md -Encoding UTF8
-    Set-Content -Path $Latest -Value $md -Encoding UTF8
-
     $sumLen = [Math]::Min(120, $triggerLine.Length)
-    Write-Ping -seq $seq -kind $kind -capturePath $capPath -summary $triggerLine.Substring(0, $sumLen)
+    $seq = Publish-F8Capture -Inbox $Inbox -Kind $kind -Md $md -Source 'f8' -BaseName 'capture' `
+        -Summary $triggerLine.Substring(0, $sumLen)
 
     Write-Host ''
     Write-Host '============================================================'
@@ -126,10 +110,35 @@ function Emit-Capture([string]$kind, [string]$body, [string]$triggerLine) {
     Alert-Owner -Title 'Defenders F8 Capture' -Body ('seq={0} {1}{2}{3}' -f $seq, $kind, $nl, $triggerLine)
 }
 
+# WO-965 second drop path: the daemon used to baseline $breakBase to the CURRENT line count on
+# every start, so any capture the owner made while the daemon was down (machine reboot, seat
+# restart, a crash) was skipped forever and silently. The break-log offset is now PERSISTED, so a
+# restart resumes where it left off and the backlog is replayed - loudly.
 $breakBase = 0
-if (Test-Path $BreakLog) {
-    $breakBase = @(Get-Content $BreakLog -ErrorAction SilentlyContinue).Count
+$curBreakLines = 0
+if (Test-Path $BreakLog) { $curBreakLines = @(Get-Content $BreakLog -ErrorAction SilentlyContinue).Count }
+
+$persisted = $null
+if (Test-Path $StateFile) { try { $persisted = Get-Content $StateFile -Raw | ConvertFrom-Json } catch { } }
+if ($persisted -and $persisted.breakLog -eq $BreakLog) {
+    $breakBase = [int]$persisted.breakOffset
+    if ($breakBase -gt $curBreakLines) {
+        Write-F8Event $Inbox 'warn' ("break-log shrank ({0} -> {1} lines): rotated/cleared, replaying from 0" -f $breakBase, $curBreakLines)
+        $breakBase = 0
+    } elseif ($breakBase -lt $curBreakLines) {
+        Write-F8Event $Inbox 'warn' ("daemon was DOWN for {0} break-log line(s) (offset {1} of {2}) - replaying them now, none dropped" -f ($curBreakLines - $breakBase), $breakBase, $curBreakLines)
+    }
+} else {
+    # first ever run against this break-log: baseline to now (do not replay months of history)
+    $breakBase = $curBreakLines
+    Write-F8Event $Inbox 'info' ("first run for $BreakLog - baselined at $breakBase line(s)")
 }
+
+function Save-BreakOffset([int]$offset) {
+    $obj = @{ breakLog = $BreakLog; breakOffset = $offset; updatedUtc = (Get-Date).ToUniversalTime().ToString('o') }
+    try { Write-F8Text $StateFile ($obj | ConvertTo-Json -Depth 3) } catch { }
+}
+Save-BreakOffset $breakBase
 
 $logPositions = @{}
 foreach ($p in @($EditorLog, $PlayerLog)) {
@@ -155,17 +164,21 @@ while ($true) {
         if ($cur -gt $breakBase) {
             $newLines = $lines[$breakBase..($cur - 1)]
             foreach ($line in $newLines) {
-                if ($line -match ('kind.*:\s*"({0})"' -f $kindSkip)) { continue }
+                if ($line -match ('"kind"\s*:\s*"({0})"' -f $kindSkip)) { continue }
                 if ([string]::IsNullOrWhiteSpace($line)) { continue }
                 $key = 'bl:' + $line.GetHashCode()
                 if ($seenKeys.ContainsKey($key)) { continue }
                 $seenKeys[$key] = $true
 
+                # anchored on the "kind" FIELD: the old greedy 'kind.*:\s*"(\w+)"' walked past it and
+                # captured the LAST quoted word on the line - which is why PING.json kind read
+                # "Main_Castle_Overworld" (the scene) instead of "flagged" / "error".
                 $capKind = 'break-log'
-                if ($line -match 'kind.*:\s*"(\w+)"') { $capKind = $Matches[1] }
+                if ($line -match '"kind"\s*:\s*"([^"]+)"') { $capKind = $Matches[1] }
                 Emit-Capture -kind $capKind -body $line -triggerLine $line
             }
             $breakBase = $cur
+            Save-BreakOffset $breakBase
         }
     }
 

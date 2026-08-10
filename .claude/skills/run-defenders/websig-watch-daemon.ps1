@@ -82,32 +82,15 @@ function Invoke-Admin([string]$query) {
     }
 }
 
-function Read-PingSeq {
-    try {
-        if (-not (Test-Path $PingFile)) { return 0 }
-        return [int]((Get-Content $PingFile -Raw | ConvertFrom-Json).seq)
-    } catch { return 0 }
-}
-
-function Write-Ping([int]$seq, [string]$kind, [string]$capturePath, [string]$summary) {
-    @{
-        seq         = $seq
-        firedAtUtc  = (Get-Date).ToUniversalTime().ToString('o')
-        kind        = $kind
-        capturePath = $capturePath
-        summary     = $summary
-        message     = 'WEB trace capture - triage now (read LATEST_CAPTURE.md or run f8-check-inbox.ps1)'
-    } | ConvertTo-Json -Depth 4 | Set-Content -Path $PingFile -Encoding UTF8
-}
+# WO-965: publishing goes through the shared inbox lib so web captures land in QUEUE.jsonl too
+# (this daemon shares PING.json/LATEST_CAPTURE.md with the F8 daemon, so it shared the drop bug).
+. (Join-Path $PSScriptRoot 'f8-inbox-lib.ps1')
 
 function Emit-WebCapture([string]$kind, [string]$session, [string]$build, [string]$trigger, [string[]]$context) {
-    $seq = (Read-PingSeq) + 1
-    $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
-    $capPath = Join-Path $Inbox ('capture-web-{0}.md' -f $stamp)
     $nl = [Environment]::NewLine
 
     $md = @(
-        ('# WEB Trace Capture (auto-inbox seq={0})' -f $seq)
+        '# WEB Trace Capture (auto-inbox seq=__F8SEQ__)'
         ''
         ('**Time (local):** {0}' -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'))
         ('**Kind:** {0}' -f $kind)
@@ -135,10 +118,9 @@ function Emit-WebCapture([string]$kind, [string]$session, [string]$build, [strin
         ''
     ) -join $nl
 
-    Set-Content -Path $capPath -Value $md -Encoding UTF8
-    Set-Content -Path $Latest -Value $md -Encoding UTF8
-
-    Write-Ping -seq $seq -kind $kind -capturePath $capPath -summary $trigger.Substring(0, [Math]::Min(120, $trigger.Length))
+    $seq = Publish-F8Capture -Inbox $Inbox -Kind $kind -Md $md -Source 'websig' -BaseName 'capture-web' `
+        -Summary $trigger.Substring(0, [Math]::Min(120, $trigger.Length)) `
+        -PingMessage 'WEB trace capture - triage now (read LATEST_CAPTURE.md or run f8-check-inbox.ps1)'
     try { [System.Media.SystemSounds]::Exclamation.Play() } catch { }
     Write-Host ''
     Write-Host '============================================================'

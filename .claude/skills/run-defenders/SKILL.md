@@ -131,17 +131,22 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .claude\skills\run-defenders
 
 **2. Agent session** — `.cursor/rules/f8-auto-triage.mdc` (alwaysApply) requires:
 - Background `f8-watch-poll.ps1` with notify on `F8 INBOX PING` (mid-session wake)
-- Every turn: `f8-check-inbox.ps1` first; if `NEW_CAPTURE`, read `logs/f8-inbox/LATEST_CAPTURE.md` before any code-read
-- After triage: `f8-ack.ps1` + re-launch poll
+- Every turn: `f8-check-inbox.ps1` first; if `NEW_CAPTURE`, read the file on the `capture=` line (the OLDEST pending capture) before any code-read
+- After triage: `f8-ack.ps1` (acks ONE) — repeat until `NO_CAPTURE`, then re-launch poll
 
 **3. Stop daemon** (end of day): `f8-watch-stop.ps1`
 
 | Script | Role |
 |--------|------|
-| `f8-watch-daemon.ps1` | Persistent watcher → inbox + `PING.json` |
+| `f8-inbox-lib.ps1` | Shared queue lib (WO-965): `Publish-F8Capture` / `Get-F8Pending` / ack state |
+| `f8-watch-daemon.ps1` | Persistent watcher → `QUEUE.jsonl` + `PING.json` + per-seq capture files |
 | `f8-watch-poll.ps1` | Agent background poller; exits on un-acked capture |
-| `f8-check-inbox.ps1` | Sync poll (`NEW_CAPTURE` / exit 1) |
-| `f8-ack.ps1` | Ack after triage |
+| `f8-check-inbox.ps1` | Sync poll (`NEW_CAPTURE` + `pending=N`, oldest first / exit 1) |
+| `f8-ack.ps1` | Ack ONE capture after triage (`-Seq n`, `-All`) |
+
+**WO-965:** captures are an append-only queue (`logs/f8-inbox/QUEUE.jsonl`). `LATEST_CAPTURE.md` and
+`PING.json` show only the NEWEST — before the queue existed, a burst collapsed into them and one ack
+buried the rest (2026-08-10: the owner's seq 2307 + 2308 never reached a seat). Drain `pending=` to 0.
 
 Legacy: `f8-watch.sh` (bash, exits on first fire, needs manual re-arm).
 

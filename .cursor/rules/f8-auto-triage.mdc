@@ -29,15 +29,22 @@ Stop only when done for the day: `f8-watch-stop.ps1`.
    ```powershell
    powershell -NoProfile -ExecutionPolicy Bypass -File .claude\skills\run-defenders\f8-check-inbox.ps1
    ```
-4. **If exit code 0 (`NEW_CAPTURE`):** STOP planned work. Read `logs/f8-inbox/LATEST_CAPTURE.md` (auto-harvested `[Flow:*]` context is inside). Triage from that data FIRST — no code-read, no theory (§12). Route per `docs/TICKET_PIPELINE.md`.
-5. **After triage:** `f8-ack.ps1`, then **re-launch** background `f8-watch-poll.ps1` (step 2).
+4. **If exit code 0 (`NEW_CAPTURE`):** STOP planned work. Read the file named on the `capture=` line — that is the **OLDEST un-acked** capture (auto-harvested `[Flow:*]` context is inside). `pending=N` tells you how many are queued; `LATEST_CAPTURE.md` only ever holds the NEWEST one. Triage from that data FIRST — no code-read, no theory (§12). Route per `docs/TICKET_PIPELINE.md`.
+5. **After triage:** `f8-ack.ps1` — it acks **ONE** capture (the oldest). **Loop back to step 3 until `NO_CAPTURE`**, then **re-launch** background `f8-watch-poll.ps1` (step 2).
 
 ## Inbox files
 
 | File | Role |
 |------|------|
-| `logs/f8-inbox/PING.json` | Monotonic seq; daemon bumps on each capture |
-| `logs/f8-inbox/LATEST_CAPTURE.md` | Full harvest + trigger (read this) |
-| `logs/f8-inbox/ACK.json` | Last acked seq (`f8-ack.ps1`) |
+| `logs/f8-inbox/QUEUE.jsonl` | **The record** — append-only, one line per capture (WO-965). Nothing is ever overwritten here |
+| `logs/f8-inbox/PING.json` | Monotonic seq; producers bump on each capture (a VIEW of the newest) |
+| `logs/f8-inbox/LATEST_CAPTURE.md` | Newest capture's harvest + trigger (a VIEW — with a backlog banner when others are queued) |
+| `logs/f8-inbox/capture-*-seq<N>.md` | Per-capture harvest, one file per seq — what you actually triage |
+| `logs/f8-inbox/ACK.json` | `lastAckSeq` = contiguous watermark + `acked` = out-of-order acks (`f8-ack.ps1`) |
+| `logs/f8-inbox/queue-events.log` | Loud ledger: supersede / unqueued / lost / ack events |
+
+**Never assume the newest capture is the only one.** Before WO-965 a burst collapsed into
+`LATEST_CAPTURE.md` and a single ack buried the rest — on 2026-08-10 the owner's seq 2307 and 2308
+were never surfaced to any seat. Walk `pending=` to zero, every time.
 
 Legacy one-shot watcher `f8-watch.sh` is superseded by daemon + inbox poll unless bash-only environment.
