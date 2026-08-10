@@ -25,6 +25,25 @@
 // (the same nearest-gate rule the legacy director used).
 // Results are cached with a short TTL — resolvers run per-frame under the
 // spotlight, but a scene scan should not.
+//
+// WO-962 — THE STEP-ENTER LATCH (owner F8 seq 2301, 2026-08-10).
+// "Nearest" is measured FROM THE HERO, so a live per-frame resolve made the
+// walk-to target MOVE as the player obeyed it. The captured proving lines from
+// ONE founding_walk step:
+//     guide-lead SET -> (-3.43, 0.08, -38.63)   (south gate)
+//     guide-lead SET -> (37.29, 0.08, -0.21)    (east gate)
+//     guide-lead SET -> ( 3.07, 0.08,  38.68)   (north gate)
+//     STEP-STUCK :: founding_walk - no 'hero.reached:guide_gate' after 123s
+// The anchor is therefore RESOLVED ONCE on step ENTER and LATCHED for the life
+// of the step (LatchAnchor / ClearLatch, driven by TutorialFlow.EnterStep /
+// CompleteCurrentStep / FinishFlow). TryResolveAnchor reads the latch, so the
+// proximity probe, the guide lead (PetHeroLeash.SetLeadTarget) and the
+// "world.gate_direction" highlight all agree on ONE target. The resolver stays
+// LIVE for everything else. If the live resolver would now answer differently
+// we FlowTrace.Step that divergence ONCE and DO NOT act on it — that line is
+// the regression's evidence, not a fallback.
+// NOT the fix (explicitly forbidden by WO-962 §3): widening ReachedRadius or
+// lengthening the watchdog. Both hide the defect.
 // =============================================================================
 
 using DeNelle.Core.UI;
@@ -57,26 +76,167 @@ namespace DeNelle.Village
         // Runtime holder for the SAFE TOWN guide anchor (see ResolveTownAnchor).
         private const string TownAnchorName = "GuideTownAnchor (runtime)";
 
+        // ── WO-962: the step-ENTER latch (one target per step) ────────────────
+        private static string _latchAnchorId;
+        private static Vector3 _latchPos;
+        private static Transform _latchSource;      // the transform the latch resolved THROUGH (gate)
+        private static string _latchSourceName;
+        private static bool _latchActive;
+        private static bool _latchDivergenceTraced;
+        private static float _nextDivergenceCheckAt;
+
+        /// <summary>The transform the LAST live resolve went through (set by TryResolveLive).
+        /// Captured by LatchAnchor so the gate HIGHLIGHT points at the same gate the latch
+        /// took its position from - resolving it a second time could pick a different one.</summary>
+        private static Transform _lastLiveSource;
+
+        /// <summary>How often the latch may ask the LIVE resolver whether it would now
+        /// answer differently. Diagnostic only - the answer is never acted on.</summary>
+        private const float DivergenceCheckSeconds = 1f;
+
+        /// <summary>Planar distance at which a live re-resolve counts as a MOVED goalpost
+        /// (the F8 seq 2301 gates were tens of metres apart; 1.5m ignores navmesh jitter).</summary>
+        private const float DivergenceMeters = 1.5f;
+
+        /// <summary>Live-resolve signature. Exposed so the WO-962 regression can drive a
+        /// MOVING resolver (the F8 seq 2301 south -> east -> north walk) without a baked
+        /// scene, hero rig or navmesh. Runtime NEVER sets this.</summary>
+        public delegate bool AnchorLiveResolver(string anchorId, out Vector3 pos, out string sourceName);
+
+        /// <summary>Regression-only seam (see <see cref="AnchorLiveResolver"/>). Null in play.</summary>
+        public static AnchorLiveResolver LiveResolverOverride;
+
         private void OnEnable()
         {
             // Registration points (WO-T2 world targets, guide-identity per WO-1012 P2):
             TutorialHighlightRegistry.RegisterResolver("world.guide",
                 () => new HighlightTarget(ResolveGuide()));
+            // WO-962: while a step's anchor is LATCHED the highlight points at the LATCHED
+            // gate, not at whatever gate is nearest this frame - the arrow and the guide-lead
+            // must never disagree (that disagreement IS the bug).
             TutorialHighlightRegistry.RegisterResolver("world.gate_direction",
-                () => new HighlightTarget(ResolveNearestGate()));
+                () => new HighlightTarget(_latchActive && _latchSource != null ? _latchSource : ResolveNearestGate()));
         }
 
         private void OnDisable()
         {
             TutorialHighlightRegistry.Unregister("world.guide");
             TutorialHighlightRegistry.Unregister("world.gate_direction");
+            ClearLatch("anchors component disabled (scene teardown)");
         }
 
-        /// <summary>Position of a named step anchor. False when unresolvable this frame.</summary>
+        // =====================================================================
+        //  WO-962 — the LATCH
+        // =====================================================================
+
+        /// <summary>True when <paramref name="anchorId"/> is the currently latched anchor.</summary>
+        public static bool IsLatched(string anchorId) =>
+            _latchActive && string.Equals(_latchAnchorId, anchorId, System.StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// Resolve <paramref name="anchorId"/> ONCE and hold that world position for the life
+        /// of the step (WO-962). Idempotent: a second call for the SAME anchor is a no-op and
+        /// returns true, so TutorialFlow may re-call it every frame to cover an anchor that is
+        /// not resolvable yet at STEP-ENTER (late-spawning gates) WITHOUT ever re-targeting a
+        /// latch that already took. Latching a DIFFERENT anchor replaces the latch.
+        /// Returns false when nothing resolved - the caller simply has no anchor this frame
+        /// (no silent fallback, no substitute target).
+        /// </summary>
+        public static bool LatchAnchor(string anchorId)
+        {
+            if (string.IsNullOrEmpty(anchorId)) return false;
+            if (IsLatched(anchorId)) return true;
+
+            _lastLiveSource = null;
+            if (!TryResolveLive(anchorId, out Vector3 pos, out string sourceName))
+                return false;
+
+            _latchAnchorId = anchorId;
+            _latchPos = pos;
+            _latchSourceName = sourceName;
+            _latchSource = _lastLiveSource;   // the exact gate this position came from
+            _latchActive = true;
+            _latchDivergenceTraced = false;
+            _nextDivergenceCheckAt = Time.unscaledTime + DivergenceCheckSeconds;
+
+            FlowTrace.Step("Tutorial",
+                $"anchor '{anchorId}' LATCHED at {pos} (gate '{sourceName}') - WO-962: resolved ONCE on step " +
+                "enter and held for the life of the step; the probe, the guide lead and the gate highlight " +
+                "all read THIS position. A live re-resolve is diagnostic only.");
+            return true;
+        }
+
+        /// <summary>Drop the latch (step exit / completion / flow reset), so a re-entered step
+        /// resolves once again. Safe to call when nothing is latched.</summary>
+        public static void ClearLatch(string reason = null)
+        {
+            if (!_latchActive)
+            {
+                _latchAnchorId = null; _latchSource = null; _latchSourceName = null;
+                return;
+            }
+            string was = _latchAnchorId;
+            Vector3 wasPos = _latchPos;
+            _latchActive = false;
+            _latchAnchorId = null;
+            _latchSource = null;
+            _latchSourceName = null;
+            _latchDivergenceTraced = false;
+            FlowTrace.Step("Tutorial",
+                $"anchor '{was}' latch CLEARED (was {wasPos})" +
+                (string.IsNullOrEmpty(reason) ? "." : $" - {reason}.") +
+                " A re-entered step re-resolves once (WO-962).");
+        }
+
+        /// <summary>
+        /// Diagnostic ONLY (WO-962 §3): ask the live resolver what it would answer now and,
+        /// the FIRST time it disagrees with the latch, record that divergence. The latch is
+        /// NOT updated - this line is the evidence that the goalpost would have moved.
+        /// </summary>
+        private static void TraceDivergenceOnce(string anchorId)
+        {
+            if (_latchDivergenceTraced) return;
+            if (Time.unscaledTime < _nextDivergenceCheckAt) return;
+            _nextDivergenceCheckAt = Time.unscaledTime + DivergenceCheckSeconds;
+
+            if (!TryResolveLive(anchorId, out Vector3 livePos, out string liveName)) return;
+
+            Vector3 d = livePos - _latchPos;
+            d.y = 0f;
+            if (d.sqrMagnitude < DivergenceMeters * DivergenceMeters) return;
+
+            _latchDivergenceTraced = true;
+            FlowTrace.Step("Tutorial",
+                $"anchor '{anchorId}' LATCH DIVERGENCE: the live resolver would now answer {livePos} " +
+                $"(gate '{liveName}'), {d.magnitude:0.0}m from the LATCHED {_latchPos} (gate " +
+                $"'{_latchSourceName}'). The latch HOLDS - WO-962: following the live answer is the " +
+                "moving-goalpost defect (F8 seq 2301). Diagnostic line, no action taken.");
+        }
+
+        /// <summary>Position of a named step anchor. False when unresolvable this frame.
+        /// WO-962: a LATCHED anchor answers with the latched position, never a re-resolve.</summary>
         public static bool TryResolveAnchor(string anchorId, out Vector3 pos)
         {
+            if (!string.IsNullOrEmpty(anchorId) && IsLatched(anchorId))
+            {
+                pos = _latchPos;
+                TraceDivergenceOnce(anchorId);
+                return true;
+            }
+            return TryResolveLive(anchorId, out pos, out _);
+        }
+
+        /// <summary>The LIVE (unlatched) resolve. Every anchor still resolves live for
+        /// anything that is not an active latched step.</summary>
+        private static bool TryResolveLive(string anchorId, out Vector3 pos, out string sourceName)
+        {
             pos = default;
+            sourceName = null;
             if (string.IsNullOrEmpty(anchorId)) return false;
+
+            // Regression seam (WO-962): a scripted moving resolver stands in for the scene.
+            var over = LiveResolverOverride;
+            if (over != null) return over(anchorId, out pos, out sourceName);
 
             switch (anchorId.ToLowerInvariant())
             {
@@ -85,6 +245,8 @@ namespace DeNelle.Village
                     var t = ResolveGuide();
                     if (t == null) return false;
                     pos = t.position;
+                    sourceName = t.name;
+                    _lastLiveSource = t;
                     return true;
                 }
                 case "guide_gate":
@@ -108,6 +270,8 @@ namespace DeNelle.Village
                     }
                     if (NavMesh.SamplePosition(pos, out var gateHit, 10f, NavMesh.AllAreas))
                         pos = gateHit.position;
+                    sourceName = gate.name;
+                    _lastLiveSource = gate;
                     FlowTrace.Once("Tutorial", "guide-gate-anchor",
                         $"WALK anchor 'guide_gate' resolved at {pos} — nearest gate '{gate.name}' pulled " +
                         $"{GateAnchorPullbackMeters:0}m toward the Heart (inside the walls, never the spawn ring).");
@@ -127,6 +291,8 @@ namespace DeNelle.Village
                     var heart = FindAnyObjectByType<HeartController>();
                     if (heart == null) return false;
                     pos = heart.transform.position;
+                    sourceName = heart.name;
+                    _lastLiveSource = heart.transform;
                     return true;
                 }
                 default:

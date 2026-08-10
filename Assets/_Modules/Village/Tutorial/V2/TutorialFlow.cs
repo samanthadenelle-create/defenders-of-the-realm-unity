@@ -470,6 +470,7 @@ namespace DeNelle.Village
                 ObjectiveStripUi.Hide();
                 TutorialSkipUi.Hide();
                 DeNelle.Pets.PetHeroLeash.ClearLeadTarget();   // WO-1012 P2: no stranded lead
+                TutorialWorldAnchors.ClearLatch("flow torn down mid-run");   // WO-962
             }
         }
 
@@ -575,6 +576,20 @@ namespace DeNelle.Village
             _builderOpenedThisStep = false;
 
             FlowTrace.Step("Tutorial", $"STEP-ENTER :: {step.Id} (order={step.Order}, completes on '{_awaitSignal}').");
+
+            // WO-962 (owner F8 seq 2301): a hero.reached:<anchor> step LATCHES its anchor on
+            // ENTER. "Nearest gate" is measured from the HERO, so a live per-frame resolve
+            // moved the target to a different side of town every time the player obeyed it
+            // (south -> east -> north in one founding_walk) and the beat could not be walked
+            // to. Resolve ONCE here; TickProximityProbe re-calls LatchAnchor only to cover an
+            // anchor that is not resolvable YET (it is a no-op once latched). The latch is
+            // dropped in CompleteCurrentStep / FinishFlow / teardown, so a re-entered step
+            // resolves once again. NOT fixed by widening ReachedRadius or the watchdog.
+            if (!string.IsNullOrEmpty(_awaitSignal) &&
+                _awaitSignal.StartsWith(TutorialSignals.HeroReachedPrefix, StringComparison.OrdinalIgnoreCase))
+                TutorialWorldAnchors.LatchAnchor(_awaitSignal.Substring(TutorialSignals.HeroReachedPrefix.Length));
+            else
+                TutorialWorldAnchors.ClearLatch($"step '{step.Id}' does not complete on hero.reached");
             DeNelle.Core.Analytics.EventTracker.Track("tutorial_step_enter", new
             {
                 stepId = step.Id,
@@ -1218,6 +1233,10 @@ namespace DeNelle.Village
             // resumes natural exploration (safe no-op when no lead was active).
             DeNelle.Pets.PetHeroLeash.ClearLeadTarget();
 
+            // WO-962: the anchor latch dies WITH the step (completed OR watchdog-skipped),
+            // so a re-entered step resolves once again instead of inheriting a stale target.
+            TutorialWorldAnchors.ClearLatch($"step '{step.Id}' {(skipped ? "skipped" : "complete")}");
+
             _highlightIds.Clear();   // ROOT CAUSE 3: never rotate a dead step's walk
             _highlightIndex = 0;
             UiSpotlight.Hide();
@@ -1249,6 +1268,7 @@ namespace DeNelle.Village
             ObjectiveStripUi.Hide();
             TutorialSkipUi.Hide();   // the ONE skip leaves with the flow
             DeNelle.Pets.PetHeroLeash.ClearLeadTarget();   // WO-1012 P2: no lead outlives the flow
+            TutorialWorldAnchors.ClearLatch("flow finished");   // WO-962: no latch outlives the flow
             PressureHeld = false;
 
             DeNelle.Core.Analytics.EventTracker.Track("tutorial_completed", new
@@ -1574,6 +1594,13 @@ namespace DeNelle.Village
             if (_hero == null) { _hero = FindAnyObjectByType<HeroLocomotion>(); if (_hero == null) return; }
 
             string anchorId = _awaitSignal.Substring(TutorialSignals.HeroReachedPrefix.Length);
+
+            // WO-962: idempotent re-latch. EnterStep already latched this anchor; this call
+            // returns immediately when it did, and only takes effect when the anchor was NOT
+            // resolvable at ENTER (a late-spawning gate / a hero that had not landed yet) -
+            // in which case the FIRST frame it resolves becomes the latch for the whole step.
+            // It can never RE-target a latch that already took, which is the defect.
+            TutorialWorldAnchors.LatchAnchor(anchorId);
             if (!TutorialWorldAnchors.TryResolveAnchor(anchorId, out Vector3 pos)) return;
 
             // WO-1012 P2: the GUIDE (pet-Echo) LEADS every movement beat — re-asserted
