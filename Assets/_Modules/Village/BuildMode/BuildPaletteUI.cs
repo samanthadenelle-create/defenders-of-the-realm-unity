@@ -231,8 +231,15 @@ namespace DeNelle.Village
             // seat a CanonCtaHeight (132px) button WITHOUT overflowing into the tray, so
             // the tabs + Orient/Done render as proper boxes, not full-band thin bars.
             // header 0.74–1.0 (~140px), tabs 0.48–0.74 (~140px), tray 0–0.48 (~259px).
-            const float trayTop = 0.48f;
-            const float headerBottom = 0.74f;
+            // WO-1010 cosmetic band-tightening (2026-08-09, owner mockup bar "this needs to
+            // be clean"): the 540px dock carried a ~140px HEADER band whose only tenant was
+            // the 16px Crystals line — a third of the panel read as empty black (the owner's
+            // "This screen is not correct" PICK capture). The header band is COLLAPSED to
+            // zero (kept as a GO for the Collapse() seam) and the balance line now sits
+            // beside the tabs, so the dock is tabs + tray and nothing else.
+            // tray 0-0.632 (~259px), tabs 0.632-1.0 (~151px), header zero.
+            const float trayTop = 0.632f;
+            const float headerBottom = 1.0f;
 
             // Grok slice 4 (landscape density): the shop is now a LARGE landscape
             // bottom carousel, not the old 540px portrait dock — wider so more
@@ -243,13 +250,25 @@ namespace DeNelle.Village
             drt.anchorMin = new Vector2(0.5f, 0f);
             drt.anchorMax = new Vector2(0.5f, 0f);
             drt.pivot = new Vector2(0.5f, 0f);
-            drt.anchoredPosition = Vector2.zero;
+            // WO-1010 D19 SEATING: the dock's bottom clears the resource strip's PUBLISHED
+            // reserved band (BuildHudController.ResourceStripReservedPx — same assembly, the
+            // const exists precisely so this lane can seat clear without a cross-edit). The
+            // strip is a bottom-centre band on a HIGHER sorting order (906 vs this canvas's
+            // 900); anchored flush to 0 the dock's card tray drew UNDER it and the strip
+            // overprinted the cards' cost line. Fixed pixels, not a fraction, per the
+            // fixed-pixel-band rule — in PICK the carousel now rests ON the strip, never
+            // overlapping the cards (D19: "the carousel rests on it").
+            drt.anchoredPosition = new Vector2(0f, BuildHudController.ResourceStripReservedPx);
+            FlowTrace.Step("BuildPalette",
+                "D19 seating: dock bottom lifted to " + BuildHudController.ResourceStripReservedPx +
+                "px (the strip's published reserved band) -- carousel rests ON the strip, cards clear of it");
             // Phone enlargement (owner felt-test 2026-07-14 "make it larger for
-            // selection on a phone"): taller + wider dock so the shop tiles read big
-            // and thumb-reachable on a small landscape phone screen (CoC shop bar).
-            // Raised 440->540 (2026-07-15) so the rebalanced header/tab bands each hold
-            // a full 132px button without overflow, while the card tray stays ~259px.
-            drt.sizeDelta = new Vector2(1560f, 540f);
+            // selection on a phone"): wide dock so the shop tiles read big and
+            // thumb-reachable on a small landscape phone screen (CoC shop bar).
+            // Height history: 440 -> 540 (2026-07-15, band rebalance) -> 410 (2026-08-09
+            // WO-1010 band-tightening: the header band collapsed, so the dock is exactly
+            // the 132px tab row + pads and the ~259px card tray — the mockup's half-tray).
+            drt.sizeDelta = new Vector2(1560f, 410f);
 
             // Slim header row: obsidian fill + gold under-rule (the kit panel language).
             // Held as _topBarGo so Collapse() can hide the whole header band (it was the
@@ -265,11 +284,9 @@ namespace DeNelle.Village
             var ruleImg = rule.GetComponent<Image>();
             if (ruleImg != null) ruleImg.raycastTarget = false;
 
-            // Balance sits IN the dock header, left-aligned beside the buttons —
-            // no more floating alone on an empty band (owner F8 2026-07-06).
-            _balanceLabel = MakeText(topBar.transform, "Crystals: 0", 16, ElarionUi.Gilt,
-                FontStyles.Bold, TextAlignmentOptions.Left,
-                new Vector2(0.04f, 0.10f), new Vector2(0.36f, 0.90f));
+            // (WO-1010 band-tightening: the balance label used to live here in the header
+            // band; it now seats beside the tabs — see below, after the tab row builds —
+            // so the header band could collapse to zero and stop reading as empty black.)
 
             // WO-1010 D1 (owner screenshot review 2026-08-08): the "Orient" WORD-BUTTON that
             // used to be pinned here (dock top-right, 300x132, dev-gated) is REMOVED. It was
@@ -294,6 +311,12 @@ namespace DeNelle.Village
             _tabRowGo = tabRow;
             _tabRow = tabRow.AddComponent<BuildTabRow>();
             _tabRow.Build(tabRow.transform, Configure, _activeType);
+
+            // Balance sits IN the tab band, left of the (now adjacent, centred) tabs —
+            // never alone on an empty band (owner F8 2026-07-06; WO-1010 band-tightening).
+            _balanceLabel = MakeText(tabRow.transform, "Crystals: 0", 16, ElarionUi.Gilt,
+                FontStyles.Bold, TextAlignmentOptions.Left,
+                new Vector2(0.02f, 0.10f), new Vector2(0.20f, 0.90f));
 
             // Bottom: horizontal-scrolling slot-plate card tray in a recessed dark well
             // (content-width now, so it reads as a dock — not a screen-wide wall).

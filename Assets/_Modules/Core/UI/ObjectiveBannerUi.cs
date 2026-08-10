@@ -11,6 +11,13 @@
 // means). Unscaled-time fade; never blocks gameplay input outside its own small
 // Skip button.
 //
+// WO-1010 D16 (owner ruling 2026-08-08): ONE skip affordance, banner-integrated.
+// The old floating corner "Skip Tutorial" button (anchored (1,1), y -92) is GONE —
+// it collided with the build HUD's compact corner Done (D10) and doubled the skip.
+// The banner's single control raises the per-step skip when the step supplies one
+// ("Skip >"); when only the whole-FTUE skip is supplied it reads "Skip Tutorial"
+// and routes through the kit confirm so it never fires on an accidental tap.
+//
 // SEPARATE from ElarionUiKit by design (do-not-touch this slice); kit-promotion
 // candidate: ElarionUiKit.ObjectiveStrip(...) in WO-T5.
 // =============================================================================
@@ -37,14 +44,16 @@ namespace DeNelle.Core.UI
 
         private CanvasGroup _group;
         private TextMeshProUGUI _label;
+        // WO-1010 D16: THE ONE SKIP. A single banner-integrated control; its label and
+        // action follow what the caller supplied — per-step skip ("Skip >") wins when
+        // present, else the whole-FTUE skip ("Skip Tutorial", kit-confirmed). Since every
+        // FTUE step today is per-step skippable, skip-all remains reachable by simply
+        // walking the steps; the control degrades to the confirmed skip-all the moment a
+        // non-skippable step ships. No second control exists anywhere on screen.
         private Button _skipBtn;
         private GameObject _skipHost;
+        private TextMeshProUGUI _skipLabel;
         private Action _onSkip;
-        // Persistent "Skip Tutorial" affordance — completes the WHOLE FTUE (distinct
-        // from the per-step _skipHost Skip>). Shown whenever a caller supplies onSkipAll
-        // and confirmed through a lightweight kit confirm before firing (never on accident).
-        private Button _skipAllBtn;
-        private GameObject _skipAllHost;
         private Action _onSkipAll;
         private bool _visible;
         private float _fadeT;
@@ -64,8 +73,9 @@ namespace DeNelle.Core.UI
             b._count = Mathf.Max(0, count);
             b._done = 0;
             b.RefreshLabel();
-            if (b._skipHost != null) b._skipHost.SetActive(onSkip != null);
-            if (b._skipAllHost != null) b._skipAllHost.SetActive(onSkipAll != null);
+            // D16: one control — per-step skip when the step supplies it, else skip-all.
+            if (b._skipHost != null) b._skipHost.SetActive(onSkip != null || onSkipAll != null);
+            if (b._skipLabel != null) b._skipLabel.text = onSkip != null ? "Skip >" : "Skip Tutorial";
         }
 
         /// <summary>Update progress on a counted objective (e.g. 1 of 1 towers).</summary>
@@ -156,7 +166,9 @@ namespace DeNelle.Core.UI
             textGo.transform.SetParent(prt, false);
             var trt = (RectTransform)textGo.transform;
             trt.anchorMin = new Vector2(0.02f, 0f);
-            trt.anchorMax = new Vector2(0.86f, 1f);
+            // 0.80, not the old 0.86: the D16 skip control's visible face now reaches
+            // ~0.83 of the plate, and an ellipsized objective must not run under it.
+            trt.anchorMax = new Vector2(0.80f, 1f);
             trt.offsetMin = Vector2.zero;
             trt.offsetMax = Vector2.zero;
             _label = textGo.AddComponent<TextMeshProUGUI>();
@@ -168,72 +180,84 @@ namespace DeNelle.Core.UI
             _label.overflowMode = TextOverflowModes.Ellipsis;
             _label.raycastTarget = false;
 
-            // Skip affordance (small, right edge) — shown only when the caller
-            // supplied an onSkip intent (skippable steps).
+            // ── THE ONE SKIP (WO-1010 D16) — banner-integrated, right edge. ──────
+            // The old floating corner "Skip Tutorial" that used to be built here is GONE:
+            // it doubled the skip affordance and its (1,1)/-92 box collided with the build
+            // HUD's compact corner Done (D10). This single control carries BOTH intents
+            // (per-step when supplied, else the confirmed skip-all — see HandleSkipTap).
+            //
+            // MinTouch via an INVISIBLE HIT PAD (the playbook's padding-never-growth rule):
+            // the banner strip is only 46px tall, so the visible face stays small and the
+            // transparent parent Image carries the full touch floor. The pad overhangs the
+            // strip vertically; it is invisible, and it raycasts only while a skip intent
+            // is live (the CanvasGroup drops raycasts otherwise), so the overhang can never
+            // eat a tap when no skip is on offer.
             _skipHost = new GameObject("Skip", typeof(RectTransform), typeof(Image), typeof(Button));
             _skipHost.transform.SetParent(prt, false);
             var srt = (RectTransform)_skipHost.transform;
-            srt.anchorMin = new Vector2(0.87f, 0.16f);
-            srt.anchorMax = new Vector2(0.99f, 0.84f);
-            srt.offsetMin = Vector2.zero;
-            srt.offsetMax = Vector2.zero;
+            srt.anchorMin = srt.anchorMax = new Vector2(1f, 0.5f);
+            srt.pivot = new Vector2(1f, 0.5f);
+            srt.anchoredPosition = Vector2.zero;
+            srt.sizeDelta = new Vector2(ElarionUiKit.MinTouchPx, ElarionUiKit.MinTouchPx);
             var simg = _skipHost.GetComponent<Image>();
-            simg.color = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.16f);
+            simg.color = new Color(0f, 0f, 0f, 0f);   // invisible padding, still raycastable
             _skipBtn = _skipHost.GetComponent<Button>();
             _skipBtn.targetGraphic = simg;
-            _skipBtn.onClick.AddListener(() => _onSkip?.Invoke());
+            _skipBtn.onClick.AddListener(HandleSkipTap);
+
+            // The small visible face, centred inside the pad (quiet gold wash, kit hue).
+            var face = new GameObject("Face", typeof(RectTransform), typeof(Image));
+            face.transform.SetParent(srt, false);
+            var facert = (RectTransform)face.transform;
+            facert.anchorMin = facert.anchorMax = new Vector2(0.5f, 0.5f);
+            facert.pivot = new Vector2(0.5f, 0.5f);
+            facert.sizeDelta = new Vector2(104f, 32f);
+            var faceImg = face.GetComponent<Image>();
+            faceImg.color = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.16f);
+            faceImg.raycastTarget = false;
 
             var skipTextGo = new GameObject("Label", typeof(RectTransform));
-            skipTextGo.transform.SetParent(srt, false);
+            skipTextGo.transform.SetParent(facert, false);
             var strt = (RectTransform)skipTextGo.transform;
             strt.anchorMin = Vector2.zero;
             strt.anchorMax = Vector2.one;
             strt.offsetMin = Vector2.zero;
             strt.offsetMax = Vector2.zero;
-            var st = skipTextGo.AddComponent<TextMeshProUGUI>();
-            ElarionUiKit.EnsureFont(st);
-            st.fontSize = 15f;
-            st.color = ElarionUi.ParchmentDim;
-            st.alignment = TextAlignmentOptions.Center;
-            st.text = "Skip >";   // ASCII only (no glyphs in TMP)
-            st.raycastTarget = false;
+            _skipLabel = skipTextGo.AddComponent<TextMeshProUGUI>();
+            ElarionUiKit.EnsureFont(_skipLabel);
+            _skipLabel.fontSize = 15f;
+            _skipLabel.color = ElarionUi.ParchmentDim;
+            _skipLabel.alignment = TextAlignmentOptions.Center;
+            _skipLabel.text = "Skip >";   // ASCII only (no glyphs in TMP); Show() retitles per intent
+            _skipLabel.raycastTarget = false;
+            // "Skip Tutorial" must fit the same small face without escaping it.
+            _skipLabel.textWrappingMode = TextWrappingModes.NoWrap;
+            _skipLabel.enableAutoSizing = true;
+            _skipLabel.fontSizeMin = 11f;
+            _skipLabel.fontSizeMax = 15f;
 
             _skipHost.SetActive(false);
 
-            // Persistent "Skip Tutorial" affordance — top-right SCREEN corner (child of the
-            // canvas root, not the strip), so it stays put while the tutorial runs.
-            // Presentation-separation law (MVVM): a DUMB, kit-styled view from the Obsidian
-            // button factory — frame/face/label ink/font/hover feedback all live in the kit —
-            // whose ONLY injected dependency is the onClick Action. That Action stays
-            // RequestSkipAll: presentation raises the kit confirm and only then invokes the
-            // caller's _onSkipAll (→ TutorialFlow.SkipAll). No hand-rolled Image/Button/trim/
-            // label assembly. Style1/Gray = the standardized quiet obsidian HUD face.
-            _skipAllBtn = ElarionUiKit.BuildObsidianButton(
-                transform, "Skip Tutorial",                    // ASCII only (no glyphs in TMP)
-                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                new Vector2(1f, 1f), new Vector2(1f, 1f),
-                onClick: RequestSkipAll);
-            _skipAllHost = _skipAllBtn != null ? _skipAllBtn.gameObject : null;
-            if (_skipAllHost != null)
-            {
-                var sart = (RectTransform)_skipAllHost.transform;
-                // Owner 2026-07-16: "Skip Tutorial should not be over top the Menu button." The HUD
-                // Menu/gear lives in the top-right corner; drop Skip Tutorial DOWN the right edge below
-                // it (clear of Menu above and the ability rail lower) so the two never overlap. The kit
-                // anchored at (1,1) with zero offsets; collapse that to the HUD-consistent fixed box.
-                sart.pivot = new Vector2(1f, 1f);
-                sart.anchoredPosition = new Vector2(-14f, -116f);   // clear the taller box under Menu
-                sart.sizeDelta = new Vector2(248f, 72f);            // HUD-consistent (owner 2026-07-16)
-                ElarionUiKit.ClampMinTouch(_skipAllBtn);            // kit touch floor guard (never shrinks)
-
-                _skipAllHost.SetActive(false);
-            }
+            DeNelle.Core.Diagnostics.FlowTrace.Step("UI",
+                "D16: ONE skip affordance built into the banner ('Skip >' per-step / " +
+                "'Skip Tutorial' confirmed skip-all fallback); the floating corner Skip Tutorial is retired");
         }
 
-        /// <summary>The persistent Skip-Tutorial tap: presentation raises a lightweight
-        /// confirm (kit ConfirmModal) and only invokes the caller's onSkipAll intent on
-        /// confirm — MVVM: the banner owns the confirm chrome, the caller owns what skip
-        /// means (TutorialFlow.SkipAll). Never fires on an accidental single tap.</summary>
+        /// <summary>The one skip control's tap (D16): the per-step skip wins when the step
+        /// supplied one (instant, as before); otherwise the whole-FTUE skip runs through
+        /// the kit confirm. Exactly one of the two ever backs the visible control, and the
+        /// label (set in <see cref="Show"/>) always names which.</summary>
+        private void HandleSkipTap()
+        {
+            if (_onSkip != null) { _onSkip.Invoke(); return; }
+            RequestSkipAll();
+        }
+
+        /// <summary>The whole-FTUE skip (reached through the ONE banner control, D16):
+        /// presentation raises a lightweight confirm (kit ConfirmModal) and only invokes
+        /// the caller's onSkipAll intent on confirm — MVVM: the banner owns the confirm
+        /// chrome, the caller owns what skip means (TutorialFlow.SkipAll). Never fires on
+        /// an accidental single tap.</summary>
         private void RequestSkipAll()
         {
             var skip = _onSkipAll;
@@ -275,7 +299,7 @@ namespace DeNelle.Core.UI
             _fadeT = Mathf.Clamp01(_fadeT + dir * (Time.unscaledDeltaTime / FadeSeconds));
             float eased = _fadeT * _fadeT * (3f - 2f * _fadeT);
             _group.alpha = eased;
-            // Raycast only for a live tap target: the per-step Skip> or the persistent Skip Tutorial.
+            // Raycast only while the ONE skip control (D16) has a live intent behind it.
             _group.blocksRaycasts = shown && (_onSkip != null || _onSkipAll != null);
             _group.interactable = _group.blocksRaycasts;
         }

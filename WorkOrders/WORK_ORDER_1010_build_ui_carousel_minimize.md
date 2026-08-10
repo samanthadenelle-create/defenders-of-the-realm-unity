@@ -1,7 +1,10 @@
 # WORK ORDER 1010 — Build-mode UI redesign: "Carousel + minimize" (CoC grammar, chips on the ghost)
 
-**Status:** READY TO IMPLEMENT — **§7 defect pass** (P1/P2 core DELIVERED; owner screenshot review
-2026-08-08 logged D1–D9, D1 first)
+**Status:** READY TO IMPLEMENT — **§7 defect pass NEARLY CLOSED 2026-08-09 evening** (see the
+RESULT §7 addendum: D17/D19/D5/D6/D12 closed capture-proven, D16 stopgap + P3 hint + PICK
+band-tightening shipped; remaining = D8 owner ruling, tester re-test, felt-verify; tutorial
+redesign split to WO-1012)
+*(Prior: P1/P2 core DELIVERED; owner screenshot review 2026-08-08 logged D1–D9, D1 first)*
 *(Prior: READY TO IMPLEMENT — owner ruling 2026-08-08: Direction B; first pick was C, reversed to B on
 re-read: "in reading B is cleaner easier". B is final.)*
 **Minted:** 2026-08-08 (UI seat) — number from `CLI_LANES_WO_NUMBERS.md` banner (bumped 1010 → 1011 in the same edit)

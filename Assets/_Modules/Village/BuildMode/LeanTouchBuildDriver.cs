@@ -18,10 +18,12 @@
 //   two-finger PINCH → raises / lowers the overview camera (zoom).
 //   [Rotate Left/Right] → RotateCcw / RotateCw (±45° yaw, WO-673 L5) — mirrors Q/E.
 //   [Cancel] button  → Cancel (back out arm/move) — replaces right-click / Escape.
-//   [D-pad cross]    → the SAME kit d-pad the combat/town HUD hosts (WO-683):
-//                      publishes HudMoveInput.Move (loose reflection), which the
-//                      controller merges into the arrow-key move vector so the
-//                      armed ghost / in-progress move nudges exactly like keys.
+//   (WO-1010 D5/D6/D12, 2026-08-09: the WO-683 always-on 4-zone d-pad this bar used
+//    to build is RETIRED — it rode Install and so sat on screen through BOTH phases,
+//    including PICK where there is nothing to nudge. The nudge control is now the
+//    Build HUD's OWN state-gated analog stick — BuildHudController.BuildNudgePad,
+//    shown only while a piece is being positioned — so this driver keeps ONLY the
+//    gesture handling plus the hidden probe anchor below.)
 //
 // WO-677 (MOB-1, 2026-07-12): the verb bar is CODE-BUILT uGUI on its own
 // Screen-Space-Overlay canvas via ElarionUiKit — the SAME pattern as
@@ -40,7 +42,6 @@
 // =============================================================================
 
 using System.Collections.Generic;
-using System.Reflection;          // WO-683: loose-reflection publish into HudMoveInput.Set (no Village->HUD edge)
 using UnityEngine;
 using UnityEngine.UI;
 using Lean.Touch;
@@ -100,10 +101,12 @@ namespace DeNelle.Village
 
             EnsureBuilt();
             if (_barRoot != null) _barRoot.SetActive(true);
-            // WO-683 §12 — the d-pad-SHOWN decision, named: the pad rides the touch
-            // bar, so it shows exactly when the touch driver installs (never desktop).
-            FlowTrace.Step("Build", "TouchBar SHOWN — verb bar + kit d-pad visible for this build session " +
-                "(WO-683 d-pad-shown decision: touch driver installed).");
+            // WO-1010 D5/D6/D12 — nothing VISIBLE rides this bar any more: the always-on
+            // d-pad is retired (the nudge stick is BuildHudController's, state-gated) and
+            // Cancel is built-but-hidden as the probe anchor. The activation is kept so the
+            // canvas exists exactly when the touch driver is live (probe/contract parity).
+            FlowTrace.Step("Build", "TouchBar active for this build session -- gesture handling only; " +
+                "no visible chrome (WO-1010: always-on d-pad retired, nudge stick is the HUD's, state-gated).");
             enabled = true;
         }
 
@@ -111,10 +114,9 @@ namespace DeNelle.Village
         public void Uninstall()
         {
             if (_barRoot != null) _barRoot.SetActive(false);
-            // WO-683 — zero the published move so a chevron still held at Exit can't
-            // keep feeding HeroLocomotion (the same HudMoveInput static) after the
-            // pad is hidden (its onUp never fires once the GO deactivates).
-            PublishDpadMove(Vector2.zero);
+            // (WO-1010: the WO-683 "zero the published HudMoveInput" step went with the
+            // d-pad — this driver no longer publishes any move vector, so there is nothing
+            // held that could keep steering after Exit.)
             _overviewCamera = null;
             enabled = false;
         }
@@ -240,13 +242,12 @@ namespace DeNelle.Village
         // =====================================================================
 
         /// <summary>
-        /// Build the right-edge vertical verb stack once: the Rotate Left / Rotate Right
-        /// pair (45° steps, WO-673 L5; ASCII text labels, WO-683) over Cancel, plus the
-        /// WO-683 kit d-pad on the left. Own overlay canvas + GraphicRaycaster so the bar
-        /// renders with NO external dependency and its taps register as GUI. Done/Exit
-        /// stays on the palette's top bar; these are the in-placement verbs the
-        /// keyboard owned. Seated x 0.845-0.985 / y 0.16-0.435 — clear of the centred
-        /// 540px palette dock and of the PLACE button at x 0.66-0.80 (WO-677 Lane C).
+        /// Build the touch-bar canvas once. After the WO-1010 retirements it carries NO
+        /// visible chrome: the rotate pair went to the HUD rail (Grok slice 2), Cancel is
+        /// built-but-hidden as the fleet's probe anchor, and the WO-683 always-on d-pad is
+        /// gone (D5/D6/D12 — the nudge control is BuildHudController's state-gated stick).
+        /// Own overlay canvas + GraphicRaycaster kept so the hidden anchor proves the bar
+        /// is code-built uGUI with no PanelSettings dependency (AssertTouchVerbBarRenderable).
         /// </summary>
         private void EnsureBuilt()
         {
@@ -294,78 +295,27 @@ namespace DeNelle.Village
                 "cancel is the HUD intent bar's (BuildHudController.RequestUiCancel); this GO " +
                 "kept inactive only for the AssertTouchVerbBarRenderable probe.");
 
-            // ── WO-683: THE kit d-pad on the build screen ─────────────────────
-            // Owner ruling 2026-07-12: the d-pad from the combat/friendly HUD must
-            // show in build mode and move the asset. BuildModeHudBridge hides the
-            // WHOLE HUD kit while building (root CanvasGroup fade), so exempting one
-            // widget from that fade would mean HUD-side surgery; instead the build
-            // overlay hosts its OWN instance of the SAME kit builder the HUD uses
-            // (same component, same chrome — mirrors HudKitController's moveCluster
-            // branch, incl. the CombatHud611 cross-vs-cluster flag). It publishes
-            // into DeNelle.HUD.Kit.HudMoveInput.Set by loose reflection (no
-            // Village->HUD asmdef edge, §5 — the HeroLocomotion pattern's write
-            // side); BuildModeController merges HudMoveInput.Move into the SAME
-            // move vector as the arrow keys. Seated left side, ABOVE the hero
-            // stick's bottom-left engage zone (VirtualJoystick.IsInZone) and clear
-            // of the centred palette dock. Its chevron zones are uGUI buttons on
-            // this canvas, so presses register as GUI (finger.IsOverGui) and can
-            // never fall through as world taps. Direction is carried by the
-            // chevron SHAPES + position, never color alone (owner colorblind).
-            // Grok slice / D-pad lane: seated BOTTOM-LEFT (owner "backup virtual D-pad
-            // bottom-left"), above the hero stick's engage zone and clear of the centred
-            // shop carousel. Keep the GO name "BuildDPad" for probe stability (WO-683).
-            var dpad = DeNelle.Core.FeatureFlags.CombatHud611
-                ? DeNelle.Core.UI.ElarionUiKit.BuildVirtualDPad(
-                    _barRoot.transform, new Vector2(0.12f, 0.24f), PublishDpadMove)
-                : DeNelle.Core.UI.ElarionUiKit.BuildControllerCluster(
-                    _barRoot.transform, new Vector2(0.12f, 0.24f), PublishDpadMove);
-            dpad.root.name = "BuildDPad";   // stable probe/debug name (BuildTouchCancel precedent)
-            FlowTrace.Step("Build", "TouchBar: kit d-pad BUILT on the build overlay (WO-683) — " +
-                (DeNelle.Core.FeatureFlags.CombatHud611 ? "VirtualDPad cross" : "controller cluster") +
-                ", same builder as the combat/town HUD moveCluster.");
+            // ── WO-1010 D5/D6/D12: the WO-683 always-on 4-zone d-pad is GONE. ──
+            // It was built here unconditionally and shown on Install, so every touch
+            // session carried an arrow pad through BOTH phases — including PICK, where
+            // there is no ghost to nudge (the owner's D6 capture shows it overprinting
+            // the open carousel and the first card). The nudge control is now OWNED by
+            // BuildHudController: its analog stick (BuildNudgePad) is state-gated to
+            // Placing + carousel-minimized, so nothing here should ever draw a second
+            // move control. The HudMoveInput reflection publish seam went with it —
+            // the HUD stick feeds the brain through BuildHudController.NudgeVector.
+            FlowTrace.Step("Build", "TouchBar: WO-683 always-on d-pad RETIRED (WO-1010 D5/D6/D12) -- " +
+                "the one nudge control is the Build HUD's state-gated stick; this bar keeps " +
+                "gesture handling + the hidden Cancel probe anchor only.");
 
             _barRoot.SetActive(false);   // shown by Install, hidden by Uninstall
         }
 
-        // ── WO-683: HudMoveInput publish seam (loose reflection, cached once) ──
-        private static MethodInfo s_hudMoveSet;
-        private static bool s_hudMoveSetResolved;
-
-        /// <summary>
-        /// Publish the build d-pad's held direction into DeNelle.HUD.Kit.HudMoveInput.Set —
-        /// the SAME static the combat/town HUD d-pad writes and that BuildModeController /
-        /// HeroLocomotion read by name (no Village->HUD asmdef edge, §5). Resolution is
-        /// cached once; a miss or a throw WARNS (§12 — never a silent catch) and the pad
-        /// goes inert rather than blanking the bar.
-        /// </summary>
-        private static void PublishDpadMove(Vector2 v)
-        {
-            if (!s_hudMoveSetResolved)
-            {
-                s_hudMoveSetResolved = true;
-                try
-                {
-                    var t = System.Type.GetType("DeNelle.HUD.Kit.HudMoveInput, DeNelle.HUD");
-                    s_hudMoveSet = t != null
-                        ? t.GetMethod("Set", BindingFlags.Public | BindingFlags.Static,
-                            null, new[] { typeof(Vector2) }, null)
-                        : null;
-                }
-                catch (System.Exception ex)
-                {
-                    s_hudMoveSet = null;
-                    FlowTrace.Warn("Build", "HudMoveInput.Set reflection resolve threw: " + ex.Message);
-                }
-                if (s_hudMoveSet == null)
-                    FlowTrace.Warn("Build", "HudMoveInput.Set reflection MISS " +
-                        "('DeNelle.HUD.Kit.HudMoveInput, DeNelle.HUD') — build d-pad presses publish nowhere (WO-683).");
-            }
-            if (s_hudMoveSet == null) return;
-            try { s_hudMoveSet.Invoke(null, new object[] { v }); }
-            catch (System.Exception ex)
-            {
-                FlowTrace.Warn("Build", "HudMoveInput.Set invoke threw: " + ex.Message);
-            }
-        }
+        // NOTE (WO-1010, 2026-08-09): the WO-683 PublishDpadMove reflection seam
+        // (DeNelle.HUD.Kit.HudMoveInput.Set by loose reflection) was DELETED with the
+        // always-on d-pad — this file publishes no move vector any more. The build nudge
+        // now flows BuildHudController.BuildNudgePad -> NudgeVector -> the brain's poll,
+        // with no reflection bridge at all (§10: no new System.Reflection in bridges —
+        // this pass removed the last one this file carried).
     }
 }

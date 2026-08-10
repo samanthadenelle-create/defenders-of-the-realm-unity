@@ -28,12 +28,12 @@
 //   D10 — the exit is a COMPACT CORNER control labelled "Done" (the "X" glyph is
 //         dropped). Small visual, full MinTouch invisible hit pad. It caps the rail's
 //         column from the true top-right corner.
-//   D17 — the rail speaks ICON language where real SPRITE art exists. Cancel renders
-//         RpgUiCatalog element/cross. Confirm and rotate have NO check-mark / circular-
-//         arrow sprite anywhere in the pack, so they KEEP their ASCII words: a typed
-//         "⟳" would render as tofu on the shipped TMP atlas (the ASCII rule), and this
-//         lane does not invent art. The moment those two sprites land, pass them to
-//         MakeVerb and the words drop out with no other change.
+//   D17 — the rail speaks ICON language: confirm renders RpgUiCatalog element/check,
+//         rotate element/rotate, cancel element/cross (the check + rotate sprites
+//         landed 2026-08-09, closing the gap this note used to record). MakeVerb is
+//         sprite-or-null, so the ASCII words ("OK" / "Rot" / "X") remain the fallback
+//         whenever a sprite fails to load — a missing pack degrades to words, never
+//         to a typed glyph that would render as tofu on the shipped TMP atlas.
 //   D19 — the resource strip moved OFF the top: it is now ONE THIN bottom-centre
 //         obsidian band (fixed pixel height), display-only, seated so the carousel and
 //         the placement hint own the band above it. With the strip gone the old
@@ -97,6 +97,12 @@ namespace DeNelle.Village
         private const float RailPadPx       = 10f;
         private const float RailGutterPx    = 14f;   // gutter between stacked verbs
         private const float RailEdgeInsetPx = 24f;   // band's own inset from the screen edge
+        /// <summary>
+        /// Clearance between the rail's bottom and the top of the D19 resource strip. The rail
+        /// is anchored to the BOTTOM-right and grows UPWARD, which is what keeps it out of the
+        /// palette lane's D15 quick-tabs — those own the TOP-right. See BuildIntentBar.
+        /// </summary>
+        private const float RailBottomGapPx = 16f;
         private const float RailBandW       = ChipHitPx + RailPadPx * 2f;                    // 132
         private const float RailBandH       = ChipHitPx * 3f + RailGutterPx * 2f + RailPadPx * 2f; // 384
 
@@ -138,6 +144,22 @@ namespace DeNelle.Village
         /// </summary>
         public const float ResourceStripReservedPx = StripBottomPx + StripBandH;
 
+        // ── WO-1010 P3: the ONE thin first-run hint line (WO §1 "First-run hint") ──
+        // PLACE phase only, seated ABOVE the D19 strip's reserved band. Display-only
+        // (non-raycast — a hint must never eat a world tap), fixed pixels, own dark
+        // backing per the playbook (it floats over live terrain and cannot borrow
+        // contrast from the world). Gated: shows during a player's first 2 build
+        // sessions and dismisses forever after 3 successful placements.
+        private const float HintLineW = 860f;
+        private const float HintLineH = 40f;
+        private const float HintGapPx = 8f;     // breathing room above the strip band
+        private const string HintText =
+            "tap a card, then drag the ghost - chips confirm / rotate / cancel";
+        private const string HintSessionsKey   = "build.hint.sessions";
+        private const string HintPlacementsKey = "build.hint.placements";
+        private const int HintSessionLimit   = 2;
+        private const int HintPlacementLimit = 3;
+
         // Callbacks into the BRAIN (BuildModeController wires these).
         private Action _onRotateLeft;
         private Action _onRotateRight;
@@ -156,9 +178,11 @@ namespace DeNelle.Village
         private RectTransform _ghostPill;    // name + cost, above the ghost (the ONE thing that follows)
         private RectTransform _verbRail;     // D14: confirm / rotate / cancel, FIXED at the right edge
         private Button _okChip;
-        private TextMeshProUGUI _okChipLabel;
+        private TextMeshProUGUI _okChipLabel;   // ASCII fallback path (null when the D17 sprite loaded)
         private Image _okChipRing;
-        private GameObject _dpadHost;        // the nudge pad — OFF unless toggled
+        private Image _okChipIcon;           // D17 sprite path (null when the ASCII fallback is live)
+        private GameObject _dpadHost;        // the nudge stick — shown by STATE while Placing (D12), never a toggle
+        private GameObject _hintLine;        // WO-1010 P3: the one first-run hint line (PLACE phase, gated)
 
         private bool _hasGhostAnchor;
         private Vector2 _ghostScreenPoint;
@@ -216,7 +240,7 @@ namespace DeNelle.Village
             BuildResourceStrip();   // D19 — thin bottom-centre band
             BuildCornerDone();      // D10 — compact corner exit, caps the rail column
             BuildIntentBar();       // D14 — ghost pill + the fixed right-edge verb rail
-            BuildDpadToggle();
+            BuildNudgePad();        // D12 — state-driven nudge stick (no toggle)
             FlowTrace.Step("BuildHud",
                 "chrome-built (WO-1010 D10/D14/D19): compact corner Done + fixed right rail (" +
                 RailReservedWidthPx + "px reserved) + thin bottom strip (" +
@@ -294,10 +318,10 @@ namespace DeNelle.Village
         /// use — the visual never grows into a slab. Seated in the true top-right corner on the
         /// rail's own column so the right edge reads as ONE stack: Done, then the three verbs.
         ///
-        /// KNOWN NEIGHBOUR: ObjectiveBannerUi anchors "Skip Tutorial" to (1,1) at y -92, which
-        /// is this corner. The owner ruled the corner anyway and WO-1010 D16 re-targets the
-        /// tutorial chrome (and resolves the two-skip nit) in the same pass — flagged, not
-        /// silently worked around by parking Done somewhere it was not ruled to be.
+        /// NEIGHBOUR RESOLVED (WO-1010 D16, 2026-08-09): ObjectiveBannerUi's floating
+        /// "Skip Tutorial" — which used to anchor (1,1) at y -92, i.e. this exact corner —
+        /// is REMOVED; the banner-integrated control is the one skip. This corner now
+        /// belongs to Done alone.
         /// </summary>
         private void BuildCornerDone()
         {
@@ -313,7 +337,7 @@ namespace DeNelle.Village
                                                -CornerInsetPx);
 
             var done = MakeVerb(hrt, "DoneCorner", "Done", null, ElarionUi.Gilt,
-                Vector2.zero, DoneVisualPx, 18f, () => _onExit?.Invoke(), out _, out _);
+                Vector2.zero, DoneVisualPx, 18f, () => _onExit?.Invoke(), out _, out _, out _);
             // Canonical close name (probe/close convention; the label is now just "Done").
             done.gameObject.name = "CloseButton";
             FlowTrace.Step("BuildHud",
@@ -384,19 +408,34 @@ namespace DeNelle.Village
             _placeName.fontSizeMax = 22f;
 
             // ── D14: THE LEAN RIGHT-EDGE RAIL ─────────────────────────────────────
-            // A slim obsidian band with its own gold trim, hugging the right edge and
-            // vertically centred — right-thumb territory in landscape, and the same column
-            // the compact corner Done sits at the top of. The band is a raycast target so a
-            // tap that lands in a gutter is eaten by the chrome instead of falling through
-            // and dragging the ghost out from under the player's other hand.
+            // A slim obsidian band with its own gold trim, hugging the right edge. The band is
+            // a raycast target so a tap that lands in a gutter is eaten by the chrome instead
+            // of falling through and dragging the ghost out from under the player's other hand.
+            //
+            // ANCHORED BOTTOM-RIGHT, GROWING UPWARD — and that is a CAPTURE-PROVEN fix, not a
+            // preference. The first build centred this band vertically (spanning y 348..732 from
+            // the top at the 1080 reference). The 2026-08-09 capture pair showed the palette
+            // lane's D15 quick-tabs occupying the TOP-right of the very same column
+            // (x 1590..1845, y 170..490) — so "Defenses (3)" landed directly on top of the OK
+            // confirm verb. Two surfaces drawing in one band is the D7 defect class, and the
+            // most important control on the screen was the one underneath it. The two canvases
+            // are captured separately, so no single PNG shows the overlap; it only falls out of
+            // comparing their rects, which is why this is written down here.
+            //
+            // The right edge is now split by ownership, matching the target wireframe:
+            //   TOP-right    -> the corner Done (D10) and the palette's quick-tabs (D15)
+            //   BOTTOM-right -> this rail, seated just above the D19 strip
+            // That also puts the verbs in genuine right-thumb reach in landscape, which is what
+            // D14 asked for in the first place.
             var railEdge = ElarionUiKit.AddImage(_intentBar.transform, "GhostVerbRail",
-                new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), ElarionUi.Gilt, rounded: true);
+                new Vector2(1f, 0f), new Vector2(1f, 0f), ElarionUi.Gilt, rounded: true);
             _verbRail = railEdge.transform as RectTransform;
             if (_verbRail != null)
             {
-                _verbRail.anchorMin = _verbRail.anchorMax = new Vector2(1f, 0.5f);
-                _verbRail.pivot = new Vector2(1f, 0.5f);
-                _verbRail.anchoredPosition = new Vector2(-RailEdgeInsetPx, 0f);
+                _verbRail.anchorMin = _verbRail.anchorMax = new Vector2(1f, 0f);
+                _verbRail.pivot = new Vector2(1f, 0f);
+                _verbRail.anchoredPosition = new Vector2(-RailEdgeInsetPx,
+                                                         ResourceStripReservedPx + RailBottomGapPx);
                 _verbRail.sizeDelta = new Vector2(RailBandW, RailBandH);
             }
             var railEdgeImg = railEdge.GetComponent<Image>();
@@ -413,47 +452,129 @@ namespace DeNelle.Village
             var railFillImg = railFill.GetComponent<Image>();
             if (railFillImg != null) railFillImg.raycastTarget = false;
 
-            // ── D17: icon language WHERE REAL SPRITE ART EXISTS, words where it does not.
-            // Only the cancel glyph is in the pack (element/cross). There is no check-mark
-            // and no circular-arrow sprite anywhere under Resources/RpgUi, and a "⟳" typed
-            // into TMP renders as a TOFU BOX on the shipped atlas — so confirm and rotate
-            // keep ASCII words rather than shipping a square. RpgUiCatalog's contract is
-            // sprite-or-null and every caller keeps its glyph fallback; MakeVerb honours it,
-            // so dropping the two missing sprites into the pack is the ONLY change needed
-            // to finish D17.
-            Sprite cancelIcon = RpgUiCatalog.Get(RpgUiCatalog.RoleElement, RpgUiCatalog.ElementCross);
+            // ── D17: the rail's icon language — check / rotate-arrow / cross sprites.
+            // All three glyphs now ship in the pack (element/check + element/rotate landed
+            // 2026-08-09 beside the existing element/cross). RpgUiCatalog's contract is
+            // sprite-or-null and MakeVerb honours it: any sprite that fails to load falls
+            // back to the ASCII word ("OK" / "Rot" / "X") — words degrade gracefully, a
+            // typed glyph would render as a tofu box on the shipped TMP atlas.
+            Sprite confirmIcon = RpgUiCatalog.Get(RpgUiCatalog.RoleElement, RpgUiCatalog.ElementCheck);
+            Sprite rotateIcon  = RpgUiCatalog.Get(RpgUiCatalog.RoleElement, RpgUiCatalog.ElementRotate);
+            Sprite cancelIcon  = RpgUiCatalog.Get(RpgUiCatalog.RoleElement, RpgUiCatalog.ElementCross);
+            if (confirmIcon == null)
+                FlowTrace.Warn("BuildHud",
+                    "D17: element/check sprite absent -- confirm verb falls back to the ASCII 'OK'.");
+            if (rotateIcon == null)
+                FlowTrace.Warn("BuildHud",
+                    "D17: element/rotate sprite absent -- rotate verb falls back to the ASCII 'Rot'.");
             if (cancelIcon == null)
                 FlowTrace.Warn("BuildHud",
                     "D17: element/cross sprite absent -- cancel verb falls back to the ASCII 'X'.");
             FlowTrace.Step("BuildHud",
-                "D17 rail icons: confirm=ASCII 'OK' (no check-mark sprite in pack), " +
-                "rotate=ASCII 'Rot' (no circular-arrow sprite in pack), cancel=" +
-                (cancelIcon != null ? "SPRITE element/cross" : "ASCII 'X'"));
+                "D17 rail icons: confirm=" + (confirmIcon != null ? "SPRITE element/check" : "ASCII 'OK'") +
+                ", rotate=" + (rotateIcon != null ? "SPRITE element/rotate" : "ASCII 'Rot'") +
+                ", cancel=" + (cancelIcon != null ? "SPRITE element/cross" : "ASCII 'X'"));
 
             // Stacked top -> bottom: confirm, rotate, cancel. Cancel sits FURTHEST from
             // confirm so the destructive verb is not the one a slipped thumb finds.
             float step = ChipHitPx + RailGutterPx;
             var railRt = railFill.transform as RectTransform;
-            _okChip = MakeVerb(railRt, "OkChip", "OK", null, ElarionUi.Gilt,
+            _okChip = MakeVerb(railRt, "OkChip", "OK", confirmIcon, ElarionUi.Gilt,
                 new Vector2(0f, step), ChipVisualPx, 20f,
-                () => _onPlace?.Invoke(), out _okChipLabel, out _okChipRing);
-            MakeVerb(railRt, "RotChip", "Rot", null, ElarionUi.Parchment,
+                () => _onPlace?.Invoke(), out _okChipLabel, out _okChipRing, out _okChipIcon);
+            MakeVerb(railRt, "RotChip", "Rot", rotateIcon, ElarionUi.Parchment,
                 Vector2.zero, ChipVisualPx, 20f,
-                () => _onRotateRight?.Invoke(), out _, out _);
+                () => _onRotateRight?.Invoke(), out _, out _, out _);
             MakeVerb(railRt, "CancelChip", "X", cancelIcon, new Color(0.86f, 0.32f, 0.30f),
                 new Vector2(0f, -step), ChipVisualPx, 20f,
-                () => _onCancel?.Invoke(), out _, out _);
+                () => _onCancel?.Invoke(), out _, out _, out _);
 
             // Kept as the canonical cancel name so any probe/close convention still resolves
             // it after the word-button retirement.
             var cancelChip = railRt != null ? railRt.Find("CancelChip") : null;
             if (cancelChip != null) cancelChip.gameObject.name = "BuildHudPlaceCancel";
 
+            BuildFirstRunHint(_intentBar.transform);   // WO-1010 P3 — rides the Placing state
+
             _intentBar.SetActive(false);   // Placing state shows it
             FlowTrace.Step("BuildHud",
                 "WO-1010 D14: the ghost-following chip cluster is RETIRED -> a FIXED lean right-edge " +
                 "rail [OK][Rot][X] (" + RailBandW + "x" + RailBandH + "px, " + RailEdgeInsetPx +
                 "px inset); the ghost now carries ONLY its name/cost pill, so no chrome sits on the piece");
+        }
+
+        /// <summary>
+        /// WO-1010 P3 — the ONE thin first-run hint line (WO §1). Parented under the
+        /// intent bar so it exists only in the PLACE phase, seated at fixed pixels ABOVE
+        /// the D19 strip's reserved band (never on it — the reserved-band rule), with its
+        /// own gold edge around a near-black backing because it floats over live terrain.
+        /// Entirely non-raycast: a hint that eats a world tap would drag the ghost.
+        /// Built hidden; <see cref="SetState"/> shows it while the first-run gate holds
+        /// (first <see cref="HintSessionLimit"/> sessions, dismissed forever after
+        /// <see cref="HintPlacementLimit"/> successful placements).
+        /// </summary>
+        private void BuildFirstRunHint(Transform parent)
+        {
+            var edge = ElarionUiKit.AddImage(parent, "BuildFirstRunHint",
+                new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), ElarionUi.Gilt, rounded: true);
+            _hintLine = edge;
+            var ert = edge.transform as RectTransform;
+            if (ert != null)
+            {
+                ert.anchorMin = ert.anchorMax = new Vector2(0.5f, 0f);
+                ert.pivot = new Vector2(0.5f, 0f);
+                ert.anchoredPosition = new Vector2(0f, ResourceStripReservedPx + HintGapPx);
+                ert.sizeDelta = new Vector2(HintLineW, HintLineH);
+            }
+            var edgeImg = edge.GetComponent<Image>();
+            if (edgeImg != null) edgeImg.raycastTarget = false;
+
+            var fill = ElarionUiKit.AddImage(edge.transform, "HintFill",
+                new Vector2(0f, 0f), new Vector2(1f, 1f), ElarionUiKit.ObsidianFill, rounded: true);
+            var frt = fill.transform as RectTransform;
+            if (frt != null)
+            {
+                frt.offsetMin = new Vector2(ChipEdgePx, ChipEdgePx);
+                frt.offsetMax = new Vector2(-ChipEdgePx, -ChipEdgePx);
+            }
+            var fillImg = fill.GetComponent<Image>();
+            if (fillImg != null) fillImg.raycastTarget = false;
+
+            var t = MakeText(fill.transform, HintText, 18, ElarionUi.Parchment,
+                FontStyles.Normal, TextAlignmentOptions.Center,
+                new Vector2(0.02f, 0f), new Vector2(0.98f, 1f));
+            t.raycastTarget = false;
+            // One line, always: the hint shrinks to fit rather than escaping its backing.
+            t.textWrappingMode = TextWrappingModes.NoWrap;
+            t.enableAutoSizing = true;
+            t.fontSizeMin = 12f;
+            t.fontSizeMax = 18f;
+
+            _hintLine.SetActive(false);
+            FlowTrace.Step("BuildHud",
+                "P3 first-run hint built: seated " + (ResourceStripReservedPx + HintGapPx) +
+                "px up (clears the D19 reserved " + ResourceStripReservedPx + "px band), " +
+                HintLineW + "x" + HintLineH + "px fixed, non-raycast; gate = first " +
+                HintSessionLimit + " sessions / dismiss after " + HintPlacementLimit + " placements");
+        }
+
+        /// <summary>
+        /// Swap a plate from the kit's 9-sliced rounded RECTANGLE to a true DISC. The target
+        /// wireframe styles every rail verb and the corner Done `border-radius:50%`, and the
+        /// first capture came back with rounded squares — close enough to pass a marker, not
+        /// close enough to pass the owner's side-by-side ("does not match" was the last verdict).
+        /// The circle sprite is procedural and may be null under WebGL, in which case the plate
+        /// keeps its rounded-rect look rather than losing its background entirely. Image.type
+        /// must go back to Simple: the disc carries no 9-slice borders, and leaving it Sliced
+        /// renders it as a smeared quad.
+        /// </summary>
+        private static void MakeDisc(Image img)
+        {
+            if (img == null) return;
+            var disc = ElarionUiKit.CircleSprite;
+            if (disc == null) return;               // keep the rounded rect; never blank the plate
+            img.sprite = disc;
+            img.type = Image.Type.Simple;
         }
 
         /// <summary>
@@ -470,8 +591,9 @@ namespace DeNelle.Village
         /// </summary>
         private static Button MakeVerb(RectTransform parent, string name, string label,
             Sprite icon, Color accent, Vector2 offset, float visualPx, float fontPx, Action onClick,
-            out TextMeshProUGUI labelOut, out Image ringOut)
+            out TextMeshProUGUI labelOut, out Image ringOut, out Image iconOut)
         {
+            iconOut = null;
             var go = new GameObject(name, typeof(RectTransform));
             go.transform.SetParent(parent, false);
             var rt = (RectTransform)go.transform;
@@ -506,7 +628,7 @@ namespace DeNelle.Village
                 edgeRt.sizeDelta = new Vector2(visualPx, visualPx);
             }
             var edgeImg = edge.GetComponent<Image>();
-            if (edgeImg != null) edgeImg.raycastTarget = false;
+            if (edgeImg != null) { edgeImg.raycastTarget = false; MakeDisc(edgeImg); }
 
             var fill = ElarionUiKit.AddImage(edge.transform, "ChipFill",
                 new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), ElarionUiKit.ObsidianFill, rounded: true);
@@ -518,7 +640,7 @@ namespace DeNelle.Village
                 fillRt.sizeDelta = new Vector2(visualPx - ChipEdgePx * 2f, visualPx - ChipEdgePx * 2f);
             }
             ringOut = fill.GetComponent<Image>();
-            if (ringOut != null) ringOut.raycastTarget = false;
+            if (ringOut != null) { ringOut.raycastTarget = false; MakeDisc(ringOut); }
 
             if (icon != null)
             {
@@ -535,6 +657,7 @@ namespace DeNelle.Village
                 iconImg.sprite = icon;
                 iconImg.preserveAspect = true;
                 iconImg.raycastTarget = false;
+                iconOut = iconImg;   // callers that state-drive the glyph (OK verdict) hold this
                 labelOut = null;
                 return btn;
             }
@@ -551,13 +674,13 @@ namespace DeNelle.Village
         }
 
         /// <summary>
-        /// The nudge pad's corner toggle. The pad is OFF by default (it was permanently
-        /// on-screen before, and testers counted it among the "buttons everywhere"), but it
-        /// stays reachable because pixel-precise nudging is what makes a long wall run
-        /// placeable at all. Built on the Core kit's own d-pad seam, so no new reflection
-        /// bridge into the HUD assembly is introduced.
+        /// The build-owned nudge stick (D12). No toggle: the stick is state-driven —
+        /// <see cref="SetState"/> / <see cref="SetNudgePadAllowed"/> show it exactly while
+        /// a piece is being positioned. It stays in the HUD because pixel-precise nudging
+        /// is what makes a long wall run placeable at all. Built on the Core kit's own
+        /// widget seam, so no new reflection bridge into the HUD assembly is introduced.
         /// </summary>
-        private void BuildDpadToggle()
+        private void BuildNudgePad()
         {
             // ── NO TOGGLE. The pad follows the STATE. (owner ruling 2026-08-09) ────
             // The first pass gave the nudge pad a corner "+" button. That was the wrong trade:
@@ -594,10 +717,6 @@ namespace DeNelle.Village
         }
 
         /// <summary>
-        /// Show the virtual d-pad exactly while a piece is being positioned. Driven by
-        /// <see cref="SetState"/>, never by the player.
-        /// </summary>
-        /// <summary>
         /// WO-1010 D12 — the BRAIN's per-frame verdict on whether the nudge stick may show:
         /// an item is selected AND the carousel is minimized. Both conditions are automatic;
         /// there is no toggle and the player does nothing. Placement ending (placed OR cancelled)
@@ -622,12 +741,52 @@ namespace DeNelle.Village
         // verbs and the corner Done are hand-built plates whose short ASCII labels autosize
         // inside their own plate, so there is no kit FitSingleLine pass left to opt out of.
 
+        // ── WO-1010 P3: the first-run hint's counters ──────────────────────────
+
+        /// <summary>Eligible while BOTH gates hold: within the first
+        /// <see cref="HintSessionLimit"/> build sessions AND under
+        /// <see cref="HintPlacementLimit"/> successful placements.</summary>
+        private static bool HintEligible()
+        {
+            return PlayerPrefs.GetInt(HintSessionsKey, 0) <= HintSessionLimit
+                && PlayerPrefs.GetInt(HintPlacementsKey, 0) < HintPlacementLimit;
+        }
+
+        private void OnEnable()
+        {
+            // The BRAIN pushes every successful commit through its StructurePlaced event
+            // (raised only AFTER the charge + BaseLayout append); the HUD merely counts them
+            // for the hint gate — presentation-owned counters, no new brain seam.
+            BuildModeController.StructurePlaced += OnStructurePlacedCountHint;
+        }
+
+        private void OnDisable()
+        {
+            BuildModeController.StructurePlaced -= OnStructurePlacedCountHint;
+        }
+
+        private void OnStructurePlacedCountHint(string id)
+        {
+            int n = PlayerPrefs.GetInt(HintPlacementsKey, 0) + 1;
+            PlayerPrefs.SetInt(HintPlacementsKey, n);
+            if (n >= HintPlacementLimit && _hintLine != null && _hintLine.activeSelf)
+            {
+                _hintLine.SetActive(false);
+                FlowTrace.Step("BuildHud",
+                    "first-run hint DISMISSED FOREVER: " + n + " successful placements");
+            }
+        }
+
         // ── Public API the BRAIN drives ────────────────────────────────────────
 
         public void Show()
         {
             if (_canvas == null) Build();
             if (_canvas != null) _canvas.SetActive(true);
+            // WO-1010 P3: one build session = one Show (the brain calls it exactly once per
+            // Enter, BuildModeController.cs:543). Counting here keeps the counter in the
+            // presentation layer with no new brain seam.
+            PlayerPrefs.SetInt(HintSessionsKey, PlayerPrefs.GetInt(HintSessionsKey, 0) + 1);
             RefreshResources();
             SetState(_state);
         }
@@ -646,6 +805,23 @@ namespace DeNelle.Village
             bool placing = state == BuildHudState.Placing;
             if (_intentBar != null && _intentBar.activeSelf != placing)
                 _intentBar.SetActive(placing);
+
+            // WO-1010 P3: the one hint line rides the PLACE phase, behind the first-run gate.
+            // Parented under the intent bar, so hiding the bar hides it too; this only decides
+            // whether an ELIGIBLE player sees it when placement starts.
+            if (_hintLine != null)
+            {
+                bool showHint = placing && HintEligible();
+                if (_hintLine.activeSelf != showHint)
+                {
+                    _hintLine.SetActive(showHint);
+                    if (showHint)
+                        FlowTrace.Step("BuildHud", "first-run hint SHOWN (session " +
+                            PlayerPrefs.GetInt(HintSessionsKey, 0) + "/" + HintSessionLimit +
+                            ", placements " + PlayerPrefs.GetInt(HintPlacementsKey, 0) + "/" +
+                            HintPlacementLimit + ")");
+                }
+            }
 
             // The nudge pad only makes sense while something is being positioned, and that is
             // a state the HUD already knows — so it comes and goes on its own. No toggle, no
@@ -774,18 +950,29 @@ namespace DeNelle.Village
                 }
             }
 
-            // ── THE VERDICT: short word on the verb, full reason on the PILL. ─────
+            // ── THE VERDICT: state on the chip, full reason IN WORDS on the PILL. ─
             // The first capture put the whole reason ON the chip and "Not enough Wood" wrapped
             // to four lines and spilled outside a 52px circle — unreadable, and it covered the
             // other chips. A sentence needs the WIDE surface; the chip only ever has room for
-            // a verb. So the chip says OK / No, and the pill — which is already 620px and
-            // right above the ghost — carries the why. Both are words, so the refusal is still
-            // never communicated by colour alone.
+            // a verb or a glyph. The pill — already 620px and right above the ghost — carries
+            // the why as TEXT (appended below), so the refusal is never colour-alone whichever
+            // chip path is live:
+            //  - ASCII fallback (_okChipLabel): the chip itself flips OK <-> No (word + colour).
+            //  - D17 sprite (_okChipIcon): a check-mark has no word to flip, so the invalid
+            //    state reads as DIM + DISABLED (an alpha/brightness change, not a hue the
+            //    owner's red/green blindness can lose) — the WORDED verdict stays on the pill.
+            //    Chosen over swapping in the cross sprite, which would put two X glyphs on one
+            //    rail and make confirm-invalid look like a second cancel.
             if (_okChipLabel != null)
             {
                 string want = _ghostValid ? "OK" : "No";
                 if (_okChipLabel.text != want) _okChipLabel.text = want;
                 _okChipLabel.color = _ghostValid ? ElarionUi.Gilt : new Color(0.86f, 0.32f, 0.30f);
+            }
+            else if (_okChipIcon != null)
+            {
+                Color want = _ghostValid ? Color.white : new Color(1f, 1f, 1f, 0.35f);
+                if (_okChipIcon.color != want) _okChipIcon.color = want;
             }
             if (_okChipRing != null) { /* fill stays obsidian; the EDGE carries chip identity */ }
             if (_okChip != null) _okChip.interactable = _ghostValid;

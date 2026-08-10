@@ -46,16 +46,23 @@ namespace DeNelle.Village
             _underlines.Clear();
             _active = active;
 
+            // WO-1010 band-tightening (2026-08-09): the slot fractions only carry each
+            // tab's CENTRE (PinSize collapses to a fixed 360x132 box), and the old slots
+            // spread the centres across the full 1560px band — two tabs sat ~575px apart
+            // with a dead centred gap the owner's mockup does not have. Centres now pack
+            // the pinned boxes ADJACENT (24px gaps) about the band's middle:
+            // two tabs -> 744px cluster (centres 0.377/0.623); three -> 1128px
+            // (centres 0.254/0.500/0.746).
             if (DeNelle.Core.FeatureFlags.WallsTab)
             {
-                Tab(parent, "Town",     BuildType.Town,    0.02f, 0.33f, onSelect);
-                Tab(parent, "Defenses", BuildType.Defense, 0.35f, 0.66f, onSelect);
-                Tab(parent, "Walls",    BuildType.Walls,   0.68f, 0.99f, onSelect);
+                Tab(parent, "Town",     BuildType.Town,    0.199f, 0.309f, onSelect);
+                Tab(parent, "Defenses", BuildType.Defense, 0.445f, 0.555f, onSelect);
+                Tab(parent, "Walls",    BuildType.Walls,   0.691f, 0.801f, onSelect);
             }
             else
             {
-                Tab(parent, "Town",     BuildType.Town,    0.02f, 0.49f, onSelect);
-                Tab(parent, "Defenses", BuildType.Defense, 0.51f, 0.98f, onSelect);
+                Tab(parent, "Town",     BuildType.Town,    0.322f, 0.432f, onSelect);
+                Tab(parent, "Defenses", BuildType.Defense, 0.568f, 0.678f, onSelect);
             }
         }
 

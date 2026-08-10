@@ -165,6 +165,11 @@ namespace DeNelle.Core.UI
         public const string ElementToggleBoxOff = "togglebox_off";
         public const string ElementHandle  = "handle";
         public const string ElementCross   = "cross";
+        // WO-1010 D17 (2026-08-09): the two rail-verb glyphs that were missing from the pack —
+        // check-mark (confirm) + circular-arrow (rotate), authored in the element/cross style.
+        // Same sprite-or-null contract as every other name: callers keep their ASCII fallback.
+        public const string ElementCheck   = "check";
+        public const string ElementRotate  = "rotate";
         public const string ElementArrowBox   = "arrow_box";
         public const string ElementArrowBoxOn = "arrow_box_on";
         public const string ElementMenuBtn1 = "menu_btn_1";

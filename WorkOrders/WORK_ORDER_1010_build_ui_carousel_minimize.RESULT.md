@@ -117,3 +117,34 @@ any of these; every one is only wrong once drawn.
   and/or `FeatureFlags.WallsTab` — UNSPECIFIED, awaiting the owner. Reversing WO-707 more broadly is
   a design decision, not a CLI call.
 - **The external-tester re-test.** Nothing in this file substitutes for it.
+
+---
+
+## 7. ADDENDUM — 2026-08-09 evening defect-pass wave (CLI; every claim capture- or source-verified)
+
+Gates on the combined tree: `COMPILE_GATE_OK` (zero `error CS`) + `REGRESSION_OK 133/133 suites` +
+`UI_CAPTURE_OK 62` / `UI_CAPTURE_FIDELITY_OK 44` — and the PNGs were OPENED and judged side-by-side
+against `UI_REVIEW/build_ui_target_wireframe.html` (the owner re-pinned it as the expectation tonight).
+
+- **D17 CLOSED.** `element/check` + `element/rotate` sprites authored in the pack's own style
+  (gold 232,158,0, cross-matched stroke) beside `element/cross`; `RpgUiCatalog.ElementCheck/Rotate`
+  constants added; the rail now renders check / rotate-arrow / cross SPRITES in discs (capture-proven).
+  Sprite-path invalid state = dim (alpha 0.35) + disabled, worded reason stays on the pill.
+- **D19 seating CLOSED.** The palette dock consumes `BuildHudController.ResourceStripReservedPx`;
+  the strip no longer overprints the card costs (capture-proven).
+- **D5/D6/D12 residual CLOSED.** The WO-683 always-on touch D-pad is retired from
+  `LeanTouchBuildDriver` (its `HudMoveInput` reflection seam deleted with it — a §10-positive);
+  the ONE nudge control is the HUD's auto-showing analog stick, state-gated.
+- **D16 stopgap SHIPPED.** ONE banner-integrated skip (per-step wins; skip-all behind the kit
+  confirm); the floating corner "Skip Tutorial" is gone, clearing the D10 corner. The full tutorial
+  redesign is **WO-1012** (UI seat, minted tonight) — deliberately not started in this pass.
+- **P3 hint line SHIPPED** with the spec's first-run gate (2 sessions / 3 placements, PlayerPrefs).
+- **PICK band-tightening SHIPPED** (the owner's "This screen is not correct" F8): header band
+  collapsed, dock 540 -> 410, tabs packed adjacent, balance beside the tabs (capture-proven).
+- Follow-on tickets minted: **WO-941** (pre-existing RumorBoard/RealmMap `UI_GEOMETRY_FAIL x16` —
+  attributed to runs BEFORE this wave) and **WO-942** (capture-case gaps: `padon` byte-identical
+  to `edgeclamp`; no assertion on the sprite-path dim state).
+
+**Still open on this WO:** D8 (owner ruling — Walls tab vs the 07-13 walls-ship-with-settlement
+ruling), the external-tester re-test (the thing that closes it), owner felt-verify of tonight's
+screen, and WO-942's runtime check of the dim state.

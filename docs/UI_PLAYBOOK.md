@@ -83,11 +83,20 @@ overlaps its neighbour — a two-defect chain from one fraction.
 - `ElarionUiKit.PinCanonicalCtaSize(Button)` (`:900-911`) — collapses stretch anchors to the anchor
   rect's centre and stamps the canonical box. `SeatSharedCloseInside` (`:925-936`) does the same but
   grows **upward** from the band's lower edge so a fixed box never sinks through an ornate border.
-- The local variant: a private `PinSize(button, w, h)` that stamps a **capped width** with
-  `ElarionUiKit.CanonCtaHeight` — `Assets/_Modules/Village/BuildMode/BuildHudController.cs:647-658`,
-  with the named widths at `:56-66`. Mirrored in `BuildPaletteUI.cs:889` and `BuildTabRow.cs:115`.
+- The local variant: a private `PinSize(button, w, h)` that collapses a kit button's
+  fraction-of-parent anchors to a POINT at the anchor rect's centre and stamps a fixed pixel box —
+  `Assets/_Modules/Village/BuildMode/BuildPaletteUI.cs:1103-1115` and
+  `Assets/_Modules/Village/BuildMode/BuildTabRow.cs:115-127` (called at `BuildTabRow.cs:84`).
+- ⚠ **`PinSize` no longer exists in `BuildHudController.cs`** (WO-1010 D10/D14, 2026-08-09). It went
+  with the last kit word-button in that file — the pinned 200x132 `X Done` — which D10 replaced with a
+  hand-built corner plate. The `IntentBtnW` / `PlaceBtnW` / `ExitBtnW` named widths were deleted in the
+  same pass. That file now authors **every** rect at fixed reference px directly, which is this rule one
+  step earlier: the named sizes are `BuildHudController.cs:73-162` (chip/pill, rail band, corner Done,
+  strip, first-run hint), and the note recording the deletion is at `:996-1001`.
 - Fixed pixel inset, not a fraction, so it cannot scale away on a short canvas:
-  `BuildPaletteUI.cs:291-299` (`TrayBottomInsetPx = 28f`).
+  `BuildPaletteUI.cs:135` (`TrayBottomInsetPx = 28f`), applied at `:350` — and the dock itself now
+  seats at `BuildHudController.ResourceStripReservedPx` (WO-1010 D19, `BuildPaletteUI.cs` dock
+  build), consuming the published reserved band instead of anchoring flush to 0.
 - The gates: `Assets/Editor/Regression/SkillsPanelLayoutRegression.cs:508-528` and
   `EchoCardLayoutRegression.cs:193-196` fail the re-introduction of a `1/n` fraction slice.
 
@@ -113,10 +122,13 @@ Three ways to satisfy it, in order of preference:
 rectangles all over the play field and destroys the thing you were trying to build.
 
 **Pointers**
-- The pattern, stated: `BuildHudController.cs:297-320` — `ChipVisualPx = 52f`,
-  `ChipHitPx = ElarionUiKit.MinTouchPx` (`:75-76`). Transparent parent `Image` is the raycast target;
-  the visible circle is a child. The doc comment names the failure: *"Growing the visual instead
-  would put three slabs over the field and undo the point of the redesign."*
+- The pattern, stated: `BuildHudController.cs:78-84` — `ChipVisualPx = 52f`,
+  `ChipHitPx = ElarionUiKit.MinTouchPx`. The implementation is `MakeVerb` at `:592-674`: the
+  transparent parent `Image` is the raycast target at `ChipHitPx` (`:605-610`) and the visible disc is
+  a child at `visualPx` (`:621-643`). Its doc comment names the failure: *"Growing the visual instead
+  would put slabs down the right edge and undo the point of the redesign."*
+- Same helper, same pad, smaller art: the D10 corner **Done** is a 76 px visual inside the full 112 px
+  hit box — `BuildHudController.cs:313-346` (`DoneVisualPx = 76f` at `:124`).
 - The kit version: `ElarionUiKit.EnsureTouchFloorArea(slot)` (`:3397-3429`) — a `TouchFloor` child
   at fixed `MinTouchPx`, `SetAsFirstSibling` so it never draws over the icon. Its comment carries the
   measurement (arc medallions resolve to **93.7 px**, 18.3 under floor) *and* the reason the rect
@@ -140,16 +152,16 @@ The owner could not tell them apart. The file's own comment two lines above alre
 for the freebie case; the unaffordable branch just never got it.
 
 **Pointers**
-- `Assets/_Modules/Village/BuildMode/BuildPaletteUI.cs:698-711` — now reads `NEED 80W 30I`.
-  *"'NEED' leads so the state is read before the numbers; the colour stays as a redundant second cue,
-  never the only one."*
-- `BuildPaletteUI.cs:679-692` — a placed singleton shows a **`Built` chip**: word plus a rounded
+- `Assets/_Modules/Village/BuildMode/BuildPaletteUI.cs:889-897` — now reads `NEED 80W 30I`.
+  *"'NEED' leads so the state is read before the numbers; colour stays a redundant second cue."*
+- `BuildPaletteUI.cs:866-879` — a placed singleton shows a **`Built` chip**: word plus a rounded
   shape plate, not a grey-out.
-- `BuildPaletteUI.cs:715-738` — tower targeting reads `Land` / `Air` / `Land+Air` as text.
-- `BuildPaletteUI.cs:121-128` — the active category tab carries a **gold underline**: position and
-  shape, never colour alone.
-- A blocked placement **says why in words**: `BuildHudController.cs:607-630`. Note the split — the
-  chip has room for a verb (`OK` / `No`), the 620 px pill carries the sentence
+- `BuildPaletteUI.cs:909-931` — tower targeting reads `Land` / `Air` / `Land+Air` as text.
+- `BuildTabRow.cs:86-99` — the active category tab carries a **gilt underline**: position and
+  shape, never colour alone (the palette just routes state to it, `BuildPaletteUI.cs:1082-1087`).
+- A blocked placement **says why in words**: `BuildHudController.cs:953-987`. Note the split — the
+  chip carries only the compact state (the ASCII fallback flips `OK`/`No`; the D17 check-mark sprite
+  dims + disables, a brightness change, not a hue), while the 620 px pill carries the sentence
   (`Arcane Spire - Not enough Wood`). Putting the sentence on the chip wrapped it to four lines and
   covered its neighbours.
 - Other live examples: `ArenaPanel.cs:309` (`NEED MORE SKR`), `HubRepairAffordance.cs:247`.
@@ -173,12 +185,15 @@ black-on-black with only bare labels floating over the field — *worse than the
 replaced*.
 
 **Pointers**
-- `BuildHudController.cs:322-341` — the accent-edge-around-near-black-fill recipe, with the RCA in
-  the comment. Note the bonus: the edge gives each chip a second non-textual identity
+- `BuildHudController.cs:612-643` — the accent-edge-around-near-black-fill recipe, with the RCA in
+  the comment. Note the bonus: the edge gives each verb a second non-textual identity
   (gold confirm / parchment rotate / red cancel) *without* meaning ever resting on colour, because
-  the label already says which is which.
-- `BuildHudController.cs:232-253` — same treatment on the name/cost pill.
-- Text over art gets its own dark backing: `BuildPaletteUI.cs:731-733` (`alpha 0.62` plate under the
+  the label already says which is which. It still applies **inside** the D14 rail: the band is the
+  same near-black, so a plate without its edge would be black-on-black again.
+- `BuildHudController.cs:373-396` — same treatment on the name/cost pill, and `:261-285` on the D19
+  bottom resource strip (gold `Gilt` edge, `ObsidianFill` inset by `ChipEdgePx`); the WO-1010 P3
+  first-run hint line reuses the same recipe.
+- Text over art gets its own dark backing: `BuildPaletteUI.cs:925-928` (`alpha 0.62` plate under the
   targeting caption).
 - World-space readouts do it too: `GhostPreview.cs:326-330` — *"Dark pill so the text reads over any
   terrain colour."*
@@ -197,10 +212,11 @@ floor exactly when the player needs it — placing a small wall piece while zoom
 - The ruling: `WorkOrders/WORK_ORDER_1010_build_ui_carousel_minimize.md:95-96` — *"screen-space UI
   anchored to the ghost's projected position, clamped to the safe area — never world-space billboards
   that can shrink with zoom."*
-- The implementation: `BuildHudController.cs:214-219` (the doc comment restates the rule),
-  `:148-159` (screen-space overlay, 1920×1080 landscape reference, match 0.5),
-  `:547-550` (the projection — and note the trap: **overlay canvases take a NULL camera** in
-  `ScreenPointToLocalPointInRectangle`; passing one silently offsets everything).
+- The implementation: `BuildHudController.cs:351-360` (the doc comment restates the rule, and now
+  states the split — after WO-1010 D14 the **pill is the only thing that follows**; the verb rail is
+  fixed at the right edge and follows nothing), `:225-238` (screen-space overlay, 1920×1080 landscape
+  reference, match 0.5), `:917-921` (the projection — and note the trap: **overlay canvases take a
+  NULL camera** in `ScreenPointToLocalPointInRectangle`; passing one silently offsets everything).
 - Historical precedent: `Assets/_Modules/Village/Waves/WaveCountdownUI.cs:1-8` replaced a
   world-space gate number with a screen-space singleton.
 - World-space canvases remain correct for **non-interactive readouts** attached to a specific object
@@ -210,25 +226,37 @@ floor exactly when the player needs it — placing a small wall piece while zoom
 
 ---
 
-## 8. Clamp related elements AS A UNIT.
+## 8. Clamp against the RESERVED BANDS, not just the screen.
 
-If two elements must be read together, clamp the **cluster**, then position the second relative to
-the **already-clamped** first. Never clamp them independently.
+"Fully on-screen" was never the real requirement. A floating element must also stay clear of every
+**fixed band another surface owns** — otherwise two separately-correct clamps produce one unreadable
+result: at a screen corner the ghost pill and the verb chips each satisfied "fully on-screen" and
+landed **on top of each other**, with the chips covering the cost text.
 
-**Why:** two separately-correct clamps produce one unreadable result. At a screen corner the pill and
-the chips each satisfied "fully on-screen" — and landed **on top of each other**, with the chips
-covering the cost text.
+Two ways to satisfy it, and the cheaper one is now the house answer:
+
+1. **Take the follow away.** WO-1010 D14 (2026-08-09) retired the cluster that followed the ghost and
+   flipped sides near an edge. Fixed chrome cannot land on the piece, cannot walk off-screen, and
+   cannot need a clamp. If a control does not have to follow, do not make it follow.
+2. **For whatever genuinely must follow, publish the bands and subtract them.** Reserved widths are
+   `public const` so a neighbouring lane seats clear of them without reaching into your file.
 
 **Pointers**
-- `BuildHudController.cs:540-605` (`LayoutGhostControlsNow`). Read the whole method; it is the worked
-  example. Three separate rules in one pass:
-  - `:557-579` — **flank, never overlap.** The cluster sits to one *side* of the ghost and flips to
-    the other side when the preferred flank would run off-screen. The first build dropped it straight
-    below the anchor, covering the green ghost art with its own buttons.
-  - `:583-604` — the pill is placed relative to the **clamped chip position**, preferring above,
-    falling below when there is no room up there.
-  - `:565-567` — clamp limits are computed from the cluster's own half-size plus `SafePadPx = 24f`,
-    so no member can touch the screen edge.
+- `BuildHudController.cs:906-988` (`LayoutGhostControlsNow`) — the worked example, now down to the
+  **pill alone**:
+  - `:926-936` — the clamp limits subtract `RailReservedWidthPx` on the right and
+    `ResourceStripReservedPx` at the bottom on top of the pill's own half-size and `SafePadPx = 24f`
+    (`:90`), so the pill can never slide *under* the rail or the strip. The two degenerate guards
+    below them collapse the range instead of inverting it on an absurdly narrow canvas.
+  - `:938-945` — prefers **above** the ghost anchor, drops **below** only when there is no room up
+    there, so the pill labels the piece without covering it.
+  - `:910-914` — the comment stating that the rail is deliberately **not** laid out here.
+- The published seams: `BuildHudController.RailReservedWidthPx` (`:109-115`) and
+  `BuildHudController.ResourceStripReservedPx` (`:139-145`).
+- The defect this class produces when the bands are *not* published: `BuildHudController.cs:414-430`.
+  The rail's first build centred vertically and the palette lane's D15 quick-tabs occupied the top of
+  the same column, so "Defenses (3)" drew directly on the OK confirm verb. **The two canvases are
+  captured separately, so no single PNG showed it** — it only fell out of comparing their rects.
 
 ---
 
@@ -245,9 +273,19 @@ screenshot on 2026-07-12 and cost a whole audit lane.
   source under `Assets/_Modules/**`.
 - Per-panel enforcement: `GlossaryRegression.cs:280-298`, `EchoCardLayoutRegression.cs:215-223`,
   `BuildMenuLayoutRegression.cs:432`, `DailyQuestEmptyStateRegression.cs:399-407`.
-- The real cost: `BuildPaletteUI.cs:720-721` — *"WO-683: the old leading shape glyphs rendered as
+- The real cost: `BuildPaletteUI.cs:915-916` — *"WO-683: the old leading shape glyphs rendered as
   tofu boxes on the shipped TMP font."*
 - Same scan class also rejects NUL bytes (`CLAUDE.md` §1, WO-434).
+- **The rule beats the icon pass, and the gap gets reported rather than papered over.** WO-1010 D17
+  (2026-08-09) moved the build rail to sprite icons *where real sprite art exists* — and later the
+  same day the two missing sprites (`element`/`check`, `element`/`rotate`) landed beside
+  `element`/`cross`, closing the gap this bullet used to record. The DISCIPLINE is unchanged and is
+  the point: while the art was absent, confirm and rotate shipped their ASCII words (`OK` / `Rot`)
+  rather than a typed `⟳` that would render as tofu, and the absence was a logged `FlowTrace.Warn`,
+  not a silent square. `BuildHudController.cs:455-476` resolves all three and logs which resolved as
+  sprites; `MakeVerb` (`:592`) is sprite-or-null, so the ASCII words remain the live fallback if a
+  sprite ever fails to load (`RpgUiCatalog.cs:171-172` holds the names). Do not invent art, and do
+  not type the glyph.
 
 ---
 
@@ -263,8 +301,9 @@ every surface reads as one designed game. "It looks a bit dark on my monitor" is
   (`PanelStone`, `PanelStoneDark`, `Scrim`, `Gold`, `Gilt`).
 - `ElarionUiKit.cs:174-191` — one chrome, one trim colour (`ObsidianTrim`), `ObsidianTrimPx = 3f`,
   and **no per-panel `X` button** — one consistent Close.
-- Restated at every call site that touches a band: `BuildHudController.cs:26` (*"panels near-black
-  (WO-562 — do NOT lighten)"*), `:172`.
+- Restated at every call site that touches a band: `BuildHudController.cs:48` (*"panels near-black
+  (WO-562 — do NOT lighten)"*), and at the two bands it builds — `:236-241` (the D19 strip) and
+  `:530-537` (each rail verb's plate).
 - Tune the language in ONE place: the tokens route through `UiStyle.Theme`
   (`ElarionUiKit.cs:60-76`), so swapping the active `UiTheme` reskins every kit screen at once. If
   you feel the urge to hand-pick a colour on your panel, that urge belongs in the theme.
@@ -280,7 +319,7 @@ whatever you anchored flush to `0` or `1`.
 - `Assets/_Modules/Core/UI/SafeAreaInset.cs` — `EdgeMarginPx = 44f`, `Left/Right/Top/BottomInset`,
   `ApplyTopRight`, `TopRightAnchoredPosition`.
 - The cheap version when you only need breathing room: a fixed pixel inset —
-  `BuildPaletteUI.cs:291-299`. The card tray ran flush to the canvas bottom with the **cost line**
+  `BuildPaletteUI.cs:342-350`. The card tray ran flush to the canvas bottom with the **cost line**
   sitting on the edge; on any device with a gesture bar the price is the first thing clipped.
 - ⚠ `docs/reference/AUDIT_2026-08-09.md` F74: **all nine HUD zones ignore the safe area** —
   `SafeAreaInset` has exactly one caller in the entire codebase. Do not assume the HUD you are
@@ -297,8 +336,10 @@ capture photographs your elements parked wherever they were constructed — and 
 screenshot of an unlaid-out screen proves nothing about the layout rule it exists to verify.
 
 **Pointers**
-- `BuildHudController.cs:528-540` — `LateUpdate()` is a one-line delegate to the public
-  `LayoutGhostControlsNow()`. The doc comment states exactly why.
+- `BuildHudController.cs:888-905` — `LateUpdate()` is a one-line delegate to the public
+  `LayoutGhostControlsNow()`. The doc comment states exactly why, and adds the corollary: the method
+  stays **directly callable by contract** even after D14 shrank its work to the pill alone, because
+  the `OK`/`No` verdict it also computes is state the capture needs.
 - `Assets/Editor/UICaptureLaunch.cs:2277-2281` and `:2314-2328` — the capture calls
   `TrackGhost(...)` then `LayoutGhostControlsNow()` for each of four states. *"without that call this
   would photograph the chips parked at the canvas centre in all four shots and prove nothing at all."*
@@ -405,8 +446,10 @@ bad row logs and is skipped rather than blanking the screen.
 **threw-and-skipped** *before* you touch code. A `catch` that swallows without logging is forbidden.
 
 **Pointers**
-- `BuildHudController.cs:292-294`, `:519`, `:237-241` — one `[Flow:BuildHud]` line per real state
-  transition, each stating the design intent, not just the event.
+- `BuildHudController.cs:244-247`, `:307-310`, `:500-503`, `:883` — one `[Flow:BuildHud]` line per
+  real state transition, each stating the design intent, not just the event. `:464-472` is the
+  pattern for a *missing asset*: `FlowTrace.Warn` naming the fallback that was taken, so an absent
+  sprite is a reported gap rather than a silent square.
 - `GhostPreview.cs:300-305` — `FlowTrace.Warn` + hide, never a silent dead label.
 - Helpers: `Assets/_Modules/Core/Diagnostics/` (`FlowTrace.cs`, `Guard.cs`).
   Method doc: `docs/INSTRUMENTATION_STANDARD.md`.
@@ -429,7 +472,10 @@ Work top to bottom. Every line is answerable YES or NO — "probably" is NO.
       authored at the floor, or given an invisible hit pad. No visual was grown into a slab.
 - [ ] If an external layout pass owns my rect, I used a hit pad (it would wipe `ClampMinTouch`).
 - [ ] Anything anchored to a world object is **screen-space**, not a world-space billboard.
-- [ ] Elements that must be read together clamp **as a unit**, and I checked a screen **corner**.
+- [ ] Anything that follows a moving anchor clamps against the **reserved bands** of the fixed chrome
+      (not just "on-screen"), and I checked a screen **corner**. Better: it does not follow at all.
+- [ ] Any band my surface owns is published as a `public const` reserved size for the neighbouring
+      lane, and I checked my rects against the *other* canvases — no single PNG shows an overlap.
 - [ ] Nothing is flush to a screen edge that a gesture bar or notch would eat.
 
 **Legibility**
