@@ -372,13 +372,20 @@ namespace DeNelle.Village
             //    never eat a world tap meant for the ground.
             // Gold edge around a near-black fill, for the same reason as the chips: the pill
             // floats over live terrain and cannot rely on the ground behind it for contrast.
+            // WO-944 (owner F8 seq 2250, flagged live in the 22:11 build, verbatim: "can we make
+            // the title of the item pin staticl maybe at the top of the screen"): the pill no
+            // longer follows the ghost. It PINS top-centre, fixed pixels — the LAST follower on
+            // this screen retires, which is UI_PLAYBOOK §8's own preferred answer ("if a control
+            // does not have to follow, do not make it follow"). Clear of the corner Done's hit
+            // pad by construction (620px centred vs the 112px pad in the far corner).
             var pillEdge = ElarionUiKit.AddImage(_intentBar.transform, "GhostPill",
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), ElarionUi.Gilt, rounded: true);
+                new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), ElarionUi.Gilt, rounded: true);
             _ghostPill = pillEdge.transform as RectTransform;
             if (_ghostPill != null)
             {
-                _ghostPill.anchorMin = _ghostPill.anchorMax = new Vector2(0.5f, 0.5f);
-                _ghostPill.pivot = new Vector2(0.5f, 0.5f);
+                _ghostPill.anchorMin = _ghostPill.anchorMax = new Vector2(0.5f, 1f);
+                _ghostPill.pivot = new Vector2(0.5f, 1f);
+                _ghostPill.anchoredPosition = new Vector2(0f, -CornerInsetPx);
                 _ghostPill.sizeDelta = new Vector2(GhostPillW, GhostPillH);
             }
             var pillEdgeImg = pillEdge.GetComponent<Image>();
@@ -907,48 +914,13 @@ namespace DeNelle.Village
         {
             if (_state != BuildHudState.Placing) return;
 
-            // ── D14: THE RAIL IS NOT LAID OUT HERE, AND THAT IS THE POINT. ────────
-            // The retired code flanked the ghost with the chip cluster and flipped it to the
-            // other side near a screen edge. The owner's ruling ("i want a lean section on
-            // right") removes the entire class of problem: fixed chrome cannot land on the
-            // piece, cannot walk off-screen, and cannot need a clamp. Only the PILL follows.
-            if (_canvasRect != null && _ghostPill != null && _hasGhostAnchor)
-            {
-                // Screen -> canvas-local. Overlay canvases take a NULL camera here; passing one
-                // silently offsets everything.
-                Vector2 local;
-                if (RectTransformUtility.ScreenPointToLocalPointInRectangle(
-                        _canvasRect, _ghostScreenPoint, null, out local))
-                {
-                    Vector2 half = _canvasRect.rect.size * 0.5f;
-                    Vector2 pillHalf = _ghostPill.sizeDelta * 0.5f;
-
-                    // CLAMP AGAINST THE RESERVED BANDS, NOT JUST THE SCREEN. "Fully on-screen"
-                    // was never the real requirement — the first edge capture showed two
-                    // separately-correct clamps producing one unreadable result. The pill's
-                    // limits therefore subtract the rail's column on the right and the resource
-                    // strip's band at the bottom, so it can never slide UNDER either of them.
-                    float leftLimit   = -half.x + pillHalf.x + SafePadPx;
-                    float rightLimit  =  half.x - pillHalf.x - SafePadPx - RailReservedWidthPx;
-                    float topLimit    =  half.y - pillHalf.y - SafePadPx;
-                    float bottomLimit = -half.y + pillHalf.y + SafePadPx + ResourceStripReservedPx;
-                    if (rightLimit < leftLimit) rightLimit = leftLimit;      // absurdly narrow canvas
-                    if (topLimit < bottomLimit) topLimit = bottomLimit;
-
-                    // Float ABOVE the ghost; drop below only when there is no room up there,
-                    // so the pill labels the piece without covering it.
-                    float pillY = local.y + GhostPillLiftPx;
-                    if (pillY > topLimit)
-                    {
-                        float below = local.y - GhostPillLiftPx;
-                        pillY = below >= bottomLimit ? below : Mathf.Clamp(pillY, bottomLimit, topLimit);
-                    }
-
-                    _ghostPill.anchoredPosition = new Vector2(
-                        Mathf.Clamp(local.x, leftLimit, rightLimit),
-                        Mathf.Clamp(pillY, bottomLimit, topLimit));
-                }
-            }
+            // ── NOTHING IS LAID OUT HERE ANY MORE, AND THAT IS THE POINT. ─────────
+            // D14 fixed the rail; WO-944 (owner F8 seq 2250, flagged live in the 22:11 build:
+            // "can we make the title of the item pin staticl maybe at the top of the screen")
+            // pinned the pill top-centre — the last follower is gone, so the whole
+            // follow/clamp pass retired with it (UI_PLAYBOOK §8: "if a control does not have
+            // to follow, do not make it follow"). TrackGhost still feeds validity + reason;
+            // only the VERDICT below remains, which is state, not layout.
 
             // ── THE VERDICT: state on the chip, full reason IN WORDS on the PILL. ─
             // The first capture put the whole reason ON the chip and "Not enough Wood" wrapped

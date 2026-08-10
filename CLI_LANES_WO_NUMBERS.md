@@ -1,6 +1,12 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ RECONCILED 2026-08-09 (CLI / THE RULES): main line next free = **944**. **782–859 + 900–943 CONSUMED.**
+> ## ⚠ RECONCILED 2026-08-09 (CLI / THE RULES): main line next free = **945**. **782–859 + 900–944 CONSUMED.**
+> - **944** = **Placing: the item's title pins STATIC at the top of the screen** — owner F8 seq 2250
+>   flagged live in the fresh 22:11 build (*"can we make the title of the item pin staticl maybe at the
+>   top of the screen"*); retires the last follow behaviour (the pill), UI_PLAYBOOK §8's own preferred
+>   answer. File `WORK_ORDER_944_placing_title_pinned_static_top.md`. **READY TO IMPLEMENT.**
+>
+> *(banner bumped 944 → 945 in the SAME edit as the 944 mint.)*
 > - **943** = **The docs get a HOME: wiki-style linked navigation over the doc lake** — owner
 >   directive 2026-08-09 (*"almost like a Wiki... start at from home... the next CLI seat doesn't
 >   have to dig"*): ONE GENERATED static home page (HOME.html or a BOARD nav rail, built beside
