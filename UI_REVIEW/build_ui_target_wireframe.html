@@ -1,0 +1,101 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>WO-1010 Target Wireframe — post D1-D17</title>
+<style>
+ body{background:#101115;color:#ccc;font:15px/1.5 'Segoe UI',sans-serif;margin:0;padding:26px;max-width:1040px}
+ h1{color:#e0b341;font-size:22px;margin:0 0 2px} h2{color:#e0b341;font-size:17px;margin:30px 0 6px}
+ .sub{color:#888;margin-bottom:14px;font-size:13.5px}
+ .frame{position:relative;width:940px;height:440px;background:#3a4438;border:8px solid #23242a;
+        border-radius:18px;overflow:hidden;margin:8px 0 6px}
+ .grid{position:absolute;inset:0;background:
+   repeating-linear-gradient(0deg,transparent 0 44px,#ffffff0d 44px 45px),
+   repeating-linear-gradient(90deg,transparent 0 44px,#ffffff0d 44px 45px)}
+ .wire{position:absolute;background:#22242b;border:1.5px solid #6a6d78;border-radius:8px;
+       color:#cfd2da;display:flex;align-items:center;justify-content:center;font-size:12.5px}
+ .wire.gold{border-color:#e0b341;color:#e0b341}
+ .wire.dashed{border-style:dashed;background:#22242b66;color:#8a8d98}
+ .round{border-radius:50%!important;font-size:17px;font-weight:700}
+ .ghostw{position:absolute;width:70px;height:100px;background:#7fe08a33;border:2px solid #7fe08a;
+         border-radius:8px}
+ .footw{position:absolute;width:104px;height:30px;border:2px dashed #7fe08a;border-radius:50%;background:#7fe08a1a}
+ .lab{position:absolute;color:#e0b341;font-size:11.5px;letter-spacing:.3px;white-space:nowrap}
+ .lab:before{content:"— "}
+ .labL:after{content:" —"} .labL:before{content:""}
+ .labL{text-align:right}
+ .keyrow{display:flex;gap:26px;flex-wrap:wrap;color:#999;font-size:13px;margin:6px 0 0}
+ .keyrow b{color:#ccc}
+ .icon{font-family:'Segoe UI Symbol',sans-serif}
+</style></head><body>
+
+<h1>WO-1010 — target wireframe (all rulings D1–D17 applied)</h1>
+<div class="sub">Landscape phone. Gray boxes = obsidian-kit controls; green = the ghost; gold = interactive
+labels. Symbols on the rail are SPRITE icons in-game (ASCII/tofu rule — never TMP glyphs).</div>
+
+<h2>PLACE phase — the clean field + the lean right section</h2>
+<div class="frame">
+ <div class="grid"></div>
+
+ <!-- top chrome -->
+ <div class="wire gold round" style="right:12px;top:10px;width:52px;height:52px;font-size:12px">Done</div>
+ <div class="lab labL" style="right:74px;top:26px">D10: compact corner, no "X"</div>
+
+ <div class="lab labL" style="right:74px;top:86px">D18: Echoes chip HIDDEN in build mode (town-HUD only)</div>
+
+ <!-- LEAN RIGHT SECTION -->
+ <div class="wire dashed" style="right:8px;top:112px;width:120px;height:300px;flex-direction:column;justify-content:flex-start;padding-top:6px">
+   <span style="color:#8a8d98;font-size:10.5px;margin-bottom:4px">LEAN RIGHT SECTION</span>
+ </div>
+ <div class="wire gold" style="right:20px;top:152px;width:96px;height:32px">Defense</div>
+ <div class="wire" style="right:20px;top:190px;width:96px;height:32px">Castle Structs</div>
+ <div class="wire" style="right:20px;top:228px;width:96px;height:32px">Town</div>
+ <div class="lab labL" style="right:146px;top:190px">D15: quick-tabs — reopen carousel pre-filtered</div>
+
+ <div class="wire gold round icon" style="right:44px;top:276px;width:48px;height:48px">&#10003;</div>
+ <div class="wire round icon" style="right:44px;top:330px;width:48px;height:48px">&#8635;</div>
+ <div class="wire round icon" style="right:44px;top:384px;width:48px;height:48px;border-color:#c96a5a;color:#d99">&#10005;</div>
+ <div class="lab labL" style="right:104px;top:290px">D14: rail — confirm</div>
+ <div class="lab labL" style="right:104px;top:344px">D17: SYMBOL sprite, not "Rot"</div>
+ <div class="lab labL" style="right:104px;top:398px">cancel</div>
+
+ <!-- ghost -->
+ <div class="footw" style="left:400px;top:250px"></div>
+ <div class="ghostw" style="left:417px;top:162px"></div>
+ <div class="wire" style="left:330px;top:126px;width:250px;height:30px">Arcane Spire — 88 W, 88 I, 187 C</div>
+ <div class="lab" style="left:590px;top:134px">only chrome on the piece: its pill</div>
+
+ <!-- bottom -->
+ <div class="lab" style="left:352px;bottom:64px;color:#8a8d98">drag anywhere to move &nbsp;(one thin hint line)</div>
+ <div class="wire" style="left:50%;transform:translateX(-50%);bottom:8px;width:340px;height:26px;font-size:11.5px">W 250 &nbsp;&nbsp; I 90 &nbsp;&nbsp; F 169 &nbsp;&nbsp; C 221 &nbsp;&nbsp; G 15</div>
+ <div class="lab" style="left:76%;bottom:14px">D19: thin bottom-center resource frame</div>
+ <div class="wire dashed round" style="left:14px;bottom:12px;width:46px;height:46px">&#9737;</div>
+ <div class="lab" style="left:70px;bottom:24px">D12: v-D-pad toggle — exists ONLY while placing (after select); stick only after tap; GONE on place/cancel</div>
+</div>
+<div class="keyrow"><b>Gone from this screen:</b> Orient (D1) · Flag button (D11) · arrow D-pad (D12) ·
+Rotate L/R + PLACE + Cancel word-buttons · "Placing:" pill · second skip. <b>Field carries:</b> ghost + pill, nothing else.</div>
+
+<h2>PICK phase — carousel open, right section idle</h2>
+<div class="frame" style="height:340px">
+ <div class="grid"></div>
+ <div class="wire gold round" style="right:12px;top:10px;width:52px;height:52px;font-size:12px">Done</div>
+
+ <!-- carousel -->
+ <div class="wire" style="left:110px;bottom:10px;width:700px;height:186px;flex-direction:column;justify-content:flex-start">
+   <div style="display:flex;gap:10px;margin-top:8px">
+     <span class="wire gold" style="position:static;width:110px;height:28px">Town</span>
+     <span class="wire" style="position:static;width:110px;height:28px">Defense</span>
+     <span class="wire" style="position:static;width:130px;height:28px">Castle Structs</span>
+   </div>
+   <div style="display:flex;gap:12px;margin-top:10px">
+     <span class="wire" style="position:static;width:104px;height:120px">card: art<br>name<br>cost</span>
+     <span class="wire gold" style="position:static;width:104px;height:120px">selected</span>
+     <span class="wire" style="position:static;width:104px;height:120px">card</span>
+     <span class="wire" style="position:static;width:104px;height:120px">card</span>
+     <span class="wire dashed" style="position:static;width:104px;height:120px">locked:<br>"need 400 iron"</span>
+   </div>
+ </div>
+ <div class="lab" style="left:112px;bottom:232px">D13: every card FRAMED — previews clipped inside, never spilled 3D</div>
+ <div class="lab labL" style="right:20px;bottom:120px">no D-pad, no rail<br>(nothing to place yet)</div>
+</div>
+<div class="keyrow"><b>D8:</b> three category tabs (naming per D15 confirm). <b>D9/D20:</b> price slot shows
+NOTHING while the first-build-free rule applies (D20: never say FREE — the player sees they were not charged); real costs show once they apply.
+<b>D16:</b> tutorial banner points at THESE homes, and never overlaps the F8 box (D2).</div>
+
+</body></html>

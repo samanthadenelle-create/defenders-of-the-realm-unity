@@ -616,6 +616,16 @@ namespace DeNelle.Editor
             // 2026-08-05), because a shader-only check passes an untextured URP mesh ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "townsfolk-bodies suite", () => { if (!DeNelle.Editor.Regression.TownsfolkBodyPoolRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[townsfolk-bodies] " + r); });
 
+            // --- COLLECTOR UPGRADE LADDER (WO-936 Finding C, 2026-08-09): a placed
+            // collector's tier tree is authored on the row its repo.collectorBuildingId
+            // points at, not on itself — the live Lumber Mill upgrades through
+            // 'lumbermill', which build-categories lockedIds RETIRES from the palette.
+            // It therefore reads as dead content while being the sole home of a live
+            // building's progression. Deleting it would not crash: BuildingUpgradeVM
+            // falls through to ResourceBuildingProgression's legacy level curve and
+            // silently draws a DIFFERENT ladder, with no log line and no symptom. ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "collector-ladder suite", () => { if (!DeNelle.Editor.Regression.CollectorLadderRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[collector-ladder] " + r); });
+
             // --- THE ORACLE THAT GUARDS THIS FILE: distinct markers, no unregistered
             // oracle, no gate script grepping a marker nobody emits. Registered LAST so
             // it sees the fully-built registry above it (it reads SOURCE, not runtime
