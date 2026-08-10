@@ -62,6 +62,7 @@ using System.Collections.Generic;
 using DeNelle.Audio;            // MusicDirector (Village references DeNelle.Audio)
 using DeNelle.Core.Audio;       // MusicLayer (Core contract)
 using DeNelle.Core.Diagnostics; // FlowTrace (Village references DeNelle.Core)
+using DeNelle.Village.Hud;      // HudContextEvaluator.ImminentThreshold (same asmdef; the one Village-side imminent rule)
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -367,9 +368,20 @@ namespace DeNelle.Village
             // Victory is a one-shot that returns to ambient on its own coroutine.
             if (_state == BattleMusicState.Victory) return;
 
-            // Safety net: if a wave is actually live (Active/Countdown) but we somehow
-            // never entered a combat state, enter Combat.
-            bool waveLive = _wave.Phase == WavePhase.Active || _wave.Phase == WavePhase.Countdown;
+            // Safety net: if a wave is actually live but we somehow never entered a
+            // combat state, enter Combat. A COUNTDOWN counts as live ONLY when the wave
+            // is IMMINENT (owner ruling 2026-07-08, same rule the HUD posture obeys via
+            // HudContextEvaluator.ImminentThreshold) — a long between-waves gap must NOT
+            // hold battle music over a peaceful town. Proven by F8 seq 2251 (2026-08-10):
+            // Victory wound down to None mid-countdown (live 0/0, cd~287s) and this net
+            // re-pushed Battle:Combat for the whole ~290s gap while the HUD, on the same
+            // second, logged "countdown long-gap -> gated OUT of Battle".
+            bool imminent = _wave.Phase == WavePhase.Countdown
+                && _wave.CountdownRemaining <= HudContextEvaluator.ImminentThreshold;
+            bool waveLive = _wave.Phase == WavePhase.Active || imminent;
+            if (_wave.Phase == WavePhase.Countdown && !imminent && _state == BattleMusicState.None)
+                FlowTrace.Throttle("BattleMusic", "countdown-longgap", 5f,
+                    $"countdown long-gap ({_wave.CountdownRemaining:0.0}s > {HudContextEvaluator.ImminentThreshold}s) -> staying ambient (no Combat push)");
             if (waveLive && _state == BattleMusicState.None)
             {
                 TransitionTo(IsBossWaveLive() ? BattleMusicState.Boss : BattleMusicState.Combat);

@@ -119,8 +119,11 @@ namespace DeNelle.Village.Hud
         // single-sourced WaveProducer.ImminentThreshold (HudModelProducers.cs) — that const is
         // `private` inside WaveProducer so it can't be referenced here without touching that file;
         // this evaluator is edit-scoped to itself, so the value is duplicated with THIS pointer.
-        // Keep the two in lockstep; promote to a shared const if they ever diverge.
-        private const float ImminentThreshold = 5f;
+        // Keep the two in lockstep. `internal` (not private) since 2026-08-10: BattleMusicManager
+        // reads the SAME threshold so battle MUSIC obeys the same owner ruling as the HUD posture
+        // (F8 seq 2251 — battle music through a whole 290s town countdown). Village-side authority
+        // is THIS const; the Core-side WaveProducer copy stays private across the asmdef edge.
+        internal const float ImminentThreshold = 5f;
 
         /// <summary>Owner ruling 2026-07-08 (refines the 2026-07-06 "countdown counts as battle"): a
         /// wave COUNTDOWN reads as Battle ONLY when the wave is IMMINENT (final ~<see cref="ImminentThreshold"/>s),
