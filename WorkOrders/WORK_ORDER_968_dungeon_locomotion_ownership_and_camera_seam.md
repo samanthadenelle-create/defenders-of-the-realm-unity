@@ -211,6 +211,30 @@ Third assert: **basis is real** — fail if `HeroLocomotion` is the live mover i
 
 ---
 
+## 11b. ⚠ FALSE-GREEN WARNING — `[Flow:GaitF] bodyErr` IS VACUOUS IN A DUNGEON (headed run, 2026-08-10)
+
+**Do not read `bodyErr=0.0` in a dungeon capture as "the body is aligned." It measures nothing there.**
+
+`HeroGaitForensics` derives `bodyErr` from `HeroLocomotion.Velocity` — and under a foreign
+`CharacterController` owner that value is **0.00 by design** (that is the whole point of F1: the
+animator is fed the MEASURED root speed instead). With a zero travel vector there is no heading to
+compare the body against, so the error term collapses to `0.0` and *prints as a pass*.
+
+Proven in the 2026-08-10 headed proof run of `Dungeon_HealersCottage`: every `[Flow:GaitF]` line reads
+`vel=0.00@0deg ... bodyErr=0.0` while `[Flow:HeroOwner]` on the same frames reads
+`velRoot=4.20 animSpeed=4.20` and the hero visibly crosses 15 m of floor. The two instruments are not
+in conflict — GaitF is honestly reporting a quantity that is undefined in this ownership mode.
+
+**Consequence if ignored:** a future session reads `bodyErr=0.0`, marks the facing seams green, and
+burns a whole cycle before discovering it never had a measurement. (Note this is the same instrument
+that WO-1016 §1d already caught disagreeing with `HeroLoco` — same root, one velocity source.)
+
+**Fix direction (NOT taken here — it is F1's shape, not a readout patch):** point `bodyErr`'s heading
+at the same mover-agnostic measured root velocity the animator now uses, so the forensic is defined in
+every ownership mode. ⚠ §7 F1 explicitly FORBIDS changing a trace's velocity source to make a number
+look right — this is the opposite case (the readout is undefined, not inconvenient), so it needs its
+own ticket and its own proof, not a quiet edit.
+
 ## 12. Open owner pins
 
 - **P1:** With the basis fixed, should the dungeon stick be relative to the **camera** (F3) or to the **Keeper's own facing**? The two dungeon movers currently disagree with each other; only the owner picks the feel.

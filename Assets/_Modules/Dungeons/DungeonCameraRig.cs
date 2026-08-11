@@ -494,6 +494,7 @@ namespace DeNelle.Dungeons
         private void LateUpdate()
         {
             HealFollowTarget();
+            HealBodyStage();
             TraceRigHeartbeat();
 
             if (!_fpvActive || _combatFramingActive || _pivot == null) return;
@@ -610,6 +611,106 @@ namespace DeNelle.Dungeons
             }
         }
 
+        // ── BODY-STAGE SELF-HEAL (WO-968 E26 candidate 5 / proven by the 2026-08-10 HEADED run) ──
+        // THE frozen-dungeon-camera root cause, and it is NOT the pivot. The headed proof run
+        // (Dungeon_HealersCottage, 43 consecutive [Flow:DungeonCam] heartbeats, real rendering)
+        // captured this:
+        //     Follow='DungeonOTSPivot' pivot=alive vcam=enabled brain=present
+        //     hero=pos=(-28.00, 0.08, 0.00) -> (-22.51, 0.08, -7.14)
+        //     rig=pos=(-28.50, 2.25, 3.20)  mainCam pos=(-28.50, 2.25, 3.20)   <- ONE distinct pose
+        // The hero traversed >15 m; the rig and the rendering camera never moved a millimetre, and
+        // exactly ONE pose appears across the whole run: the pose SeatThirdPersonImmediate wrote on
+        // Bind. The matching screenshots show the hero walking clean out of frame while the view
+        // stares at the wall he left. Every candidate ranked in WO-968 E26 is REFUTED by that same
+        // line (Follow bound, pivot alive, vcam enabled, brain present, HealFollowTarget never
+        // fired). What is left is the vcam's BODY STAGE, and the mechanism is deterministic in
+        // Cinemachine 3.1.6 -- read at source in Library/PackageCache, not inferred:
+        //
+        //   ApplyThirdPerson does  _follow.enabled = false;  Destroy(_follow);  AddComponent<TPF>().
+        //   - `enabled = false` fires OnDisable -> CinemachineComponentBase invalidates the vcam's
+        //     pipeline cache (CinemachineComponentBase.cs:50).
+        //   - Destroy() is DEFERRED to end of frame, so the disabled CinemachineFollow is STILL a
+        //     live component when the brain rebuilds the cache later in the SAME frame.
+        //   - UpdatePipelineCache takes the FIRST component per stage (CinemachineCamera.cs:288-303).
+        //     CinemachineFollow is scene-authored, the ThirdPersonFollow is AddComponent'd at
+        //     runtime and therefore LAST, so the doomed iso body wins the Body slot.
+        //   - End of frame the iso body is destroyed. Unity does NOT call OnDisable on an ALREADY
+        //     disabled component as it dies, so nothing ever invalidates the cache again.
+        //   => m_Pipeline[Body] holds a destroyed object forever. InvokeComponentPipeline's
+        //      `c != null` is false, the Body stage is SKIPPED, and InternalUpdateCameraState
+        //      pulls the state FROM the transform and pushes it BACK to the transform
+        //      (CinemachineCamera.cs:208-233) -- a perfect fixed point. The camera is frozen for
+        //      the life of the scene.
+        //
+        // It is a RACE, which is why the bug reads as intermittent and why WO-1016 section 1d saw a
+        // capture with camYaw genuinely CHANGING (308->307->306) while the owner still reported "no
+        // camera": if Bind lands AFTER the brain's update for that frame, the destroy has completed
+        // by the time the cache is rebuilt and the camera works fine that session. Do not "fix" the
+        // intermittency by reordering Bind -- that only re-rolls the dice.
+        //
+        // The heal cannot call InvalidatePipelineCache (internal to Cinemachine), so it uses the
+        // sanctioned side effect: toggling our own body component's `enabled` fires OnDisable +
+        // OnEnable, each of which invalidates the cache. One toggle, next read rebuilds clean.
+        // Throttled, because during the single overlap frame the stale body is still alive and the
+        // rebuild legitimately picks it again - that is expected and self-resolves next frame.
+        private bool _loggedBodyHealOnce;
+        private float _nextBodyHealAt;
+
+        private void HealBodyStage()
+        {
+            if (_camera == null || _tpf == null || _mode == CamMode.Iso) return;
+
+            // ⛔ ReferenceEquals, NEVER ==. DO NOT "simplify" this to a null check.
+            // A DESTROYED UnityEngine.Object compares EQUAL to null under the overloaded ==
+            // operator, and a destroyed CinemachineFollow squatting in m_Pipeline[Body] is EXACTLY
+            // the state this method exists to catch. Written with ==, the squatter reads as "no
+            // body configured", the guard below returns early, the heal never runs, and the dungeon
+            // camera silently freezes again for the whole scene -- the precise bug the owner spent
+            // two F8 captures and a headed proof run to pin down. ReferenceEquals bypasses the
+            // overload and asks the only question that matters: is this the SAME OBJECT as our TPF?
+            var body = _camera.GetCinemachineComponent(CinemachineCore.Stage.Body);
+            if (ReferenceEquals(body, _tpf)) return;   // healthy: our body owns the stage
+
+            if (Time.time < _nextBodyHealAt) return;
+            _nextBodyHealAt = Time.time + 0.5f;
+
+            // Same trap, stated as data: `body == null` true + ReferenceEquals(body, null) false
+            // IS the destroyed squatter, and it must print as DESTROYED, not as <empty>.
+            string was = body == null
+                ? (ReferenceEquals(body, null) ? "<empty>" : $"DESTROYED {body.GetType().Name}")
+                : $"{body.GetType().Name}(enabled={body.enabled})";
+
+            // Force the pipeline cache to rebuild (OnDisable + OnEnable both invalidate it).
+            _tpf.enabled = false;
+            _tpf.enabled = true;
+            var now = _camera.GetCinemachineComponent(CinemachineCore.Stage.Body);
+            bool healed = ReferenceEquals(now, _tpf);
+
+            if (!_loggedBodyHealOnce)
+            {
+                _loggedBodyHealOnce = true;
+                FlowTrace.Warn("DungeonCam",
+                    "HealBodyStage: the vcam's BODY stage did not hold this rig's " +
+                    $"CinemachineThirdPersonFollow (it held {was}), so the body stage was skipped and " +
+                    "the camera sat frozen at the pose SeatThirdPersonImmediate wrote on Bind. Forced a " +
+                    "pipeline re-cache -> body is now " +
+                    $"{(healed ? "CinemachineThirdPersonFollow (FOLLOWING)" : "STILL WRONG")}.");
+            }
+            else
+            {
+                FlowTrace.Throttle("DungeonCam", "body-heal-repeat", 1f,
+                    $"HealBodyStage: re-cached the Body stage again (held {was}). One repeat on the " +
+                    "frame after Bind is expected (the iso body dies at end of frame); a CONTINUOUS " +
+                    "repeat means something keeps adding a second Body component - that is a new defect.");
+            }
+
+            if (!healed)
+                FlowTrace.Fail("DungeonCam",
+                    "HealBodyStage: forced a pipeline re-cache and the Body stage STILL is not this " +
+                    "rig's CinemachineThirdPersonFollow. The dungeon camera cannot follow. Check for a " +
+                    "second CinemachineComponentBase at Stage.Body on this GameObject.");
+        }
+
         // ── [Flow:DungeonCam] 1 Hz LIVE heartbeat (WO-968, §12) ──────────────────────
         // Owner F8 2313, verbatim: "No camera movement" (Dungeon_HealersCottage, 22 s after the
         // locomotion flag). The capture could not answer it: this rig logs ONLY at Bind time
@@ -639,17 +740,42 @@ namespace DeNelle.Dungeons
 
             var mainCam = UnityEngine.Camera.main;
             string followName = (_camera != null && _camera.Follow != null) ? _camera.Follow.name : "<null>";
-            string pivotState = _pivot == null ? "<destroyed/none>" : $"alive yaw={_pivot.eulerAngles.y:F1}";
+            // pivotPos (not just yaw): the 2026-08-10 headed run could not tell "the follow target
+            // is standing still" from "the body stage is not solving", because this line printed the
+            // pivot's YAW only. The pivot's WORLD POSITION separates them in one read.
+            string pivotState = _pivot == null
+                ? "<destroyed/none>"
+                : $"alive yaw={_pivot.eulerAngles.y:F1} pivotPos={_pivot.position:F2}";
             string heroState = _boundHero == null
                 ? "<unbound>"
                 : $"pos={_boundHero.position:F2} yaw={_boundHero.eulerAngles.y:F1}";
             bool brain = mainCam != null && mainCam.GetComponent<CinemachineBrain>() != null;
 
+            // body= : WHAT actually occupies the vcam's Body stage. This is the field that would
+            // have named the frozen-camera root cause in ONE read instead of a dig through the
+            // Cinemachine package source (see HealBodyStage above). ReferenceEquals for the same
+            // reason it is used there: a DESTROYED component compares equal to null, and printing
+            // that squatter as "<empty>" is what hid the defect in the first place.
+            var bodyStage = _camera != null
+                ? _camera.GetCinemachineComponent(CinemachineCore.Stage.Body)
+                : null;
+            string bodyState = ReferenceEquals(bodyStage, null)
+                ? "<empty>"
+                : (bodyStage == null
+                    ? $"DESTROYED {bodyStage.GetType().Name} (body stage SKIPPED - camera cannot follow)"
+                    : $"{bodyStage.GetType().Name}(enabled={bodyStage.enabled})");
+
+            // camState= : the vcam's SOLVED state position. If camState tracks the hero while
+            // rig=pos does not, the body stage is solving and something downstream is stale; if
+            // camState is pinned to rig=pos, the body stage is not solving at all.
+            string camState = _camera != null ? $"{_camera.State.RawPosition:F2}" : "<null>";
+
             FlowTrace.Throttle("DungeonCam", "rig-heartbeat", 1f,
                 $"mode={_mode} fpv={_fpvActive} combatFraming={_combatFramingActive} " +
                 $"vcam={(_camera != null ? (_camera.isActiveAndEnabled ? "enabled" : "DISABLED") : "<null>")} " +
+                $"body={bodyState} " +
                 $"Follow='{followName}' pivot={pivotState} hero={heroState} " +
-                $"rig=pos={transform.position:F2} yaw={transform.eulerAngles.y:F1} " +
+                $"rig=pos={transform.position:F2} yaw={transform.eulerAngles.y:F1} camState={camState} " +
                 $"mainCam={(mainCam != null ? $"'{mainCam.name}' pos={mainCam.transform.position:F2} yaw={mainCam.transform.eulerAngles.y:F1}" : "<none>")} " +
                 $"brain={(brain ? "present" : "ABSENT")} headingYawOffset={_headingYawOffset:F1}");
         }
