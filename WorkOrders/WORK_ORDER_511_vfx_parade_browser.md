@@ -47,3 +47,44 @@ procedural on a clean clone. Acceptable per the local-art policy; flag in the wi
 Reference Mirza Beig in any WIRING that ships (gitignored, breaks clone) — the parade may PREVIEW any local
 folder, but only wire what the owner picks + accept the local-reference caveat. No runtime changes (editor
 tool only). Don't auto-wire from the picks file — the AI reviews + wires deliberately.
+
+---
+
+## 6. EXTENSION 2026-08-10 (owner directive) — RUN-ALL + CATALOGUE
+
+Owner, verbatim: *"can you run the vfx caster to see them"* · *"and have a tool to run and read all"* ·
+*"then catalogue"*. Context: choosing VFX for the WO-1019 mage kit (poison/drain/thunder + the
+`Casting_Fire_3` wind-up) is currently blind — **the UI seat cannot judge motion from a still, and cannot
+run batchmode (§2: CLI owns batchmode; the owner playtests)**. The parade must therefore leave behind a
+DURABLE, READABLE ARTEFACT, not just an on-screen show.
+
+**6a. RUN-ALL.** A one-command mode that walks **every** prefab under the configured roots (the Spells
+Pack alone is **465** prefabs under `Particles/Prefabs/{Auras,Buffs,Projectiles,Shields,Spells,Tomes,
+Variations}`) — not just one folder. Resumable, skips broken prefabs with an ASCII warning, and reports a
+count at the end so a silent partial run is impossible.
+
+**6b. CATALOGUE (the new deliverable).** The run WRITES a durable registry —
+`docs/VFX_CATALOG.md` + `Assets/VfxParade/vfx-catalog.json` — one row per prefab, machine-read from the
+asset (never hand-typed, never guessed):
+`path · name · family (Casting/Projectile/Explosion/Aura/Buff/Shield/Spell/Variation) · element
+(Arcane|Dark|Fire|Ice|Light|Nature|Storm) · variant suffix · particle-system count · duration/lifetime ·
+looping? · dominant start-colour (hex) · has-trail · has-light · approx max particles`.
+Rationale — memory `audit-outputs-as-known-dictionaries`: an audit output becomes a **canonical registry**
+the whole team reads, not a one-off report. With colour + duration + family in a table, the UI seat can
+shortlist candidates and reason about timing WITHOUT seeing motion; the owner's eyes are then spent only
+on the final feel call.
+
+**6c. STILLS + (if cheap) CLIPS.** Alongside the catalogue, write a thumbnail PNG per prefab to
+`Assets/VfxParade/thumbs/<name>.png`. ⚠ The owner has stated the limit plainly — *"the best ones you
+cannot see from a screenshot"* — so a still is a SHORTLISTING aid, never the decision. If a short
+image-sequence/GIF per prefab is cheap in the same pass, emit it; that is the only artefact that lets a
+non-playing seat judge wind-up and dissipation.
+
+**6d. Feed the timing contract.** The catalogue's duration column exists to serve WO-1019's rule that
+`Casting_*` is WIND-UP driven by an ability's authored `castSeconds` — a wind-up whose clip is longer
+than the cast will truncate. Flag any Casting_ prefab whose duration exceeds ~0.6s so short-cast spells
+do not get one by accident (this is exactly the `Casting_Fire_3`-on-Fireball tension logged in WO-1019).
+
+**Acceptance (extension):** one command catalogues all 465 without hand-editing; `docs/VFX_CATALOG.md`
+regenerates deterministically and is committed; every field is read from the asset; thumbnails land;
+WO-1019's outstanding picks (drain/thunder elements) can be shortlisted FROM the catalogue.

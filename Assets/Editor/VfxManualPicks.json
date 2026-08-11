@@ -708,6 +708,13 @@
             "manual": true
         },
         {
+            "key": "Posion_Cast",
+            "prefabPath": "Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Nature/Spell_Nature_2_Green Variant.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
             "key": "RangedAttack-DaggerThrow_Projectile",
             "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectiles 2D/2D Projectile 8 dagger.prefab",
             "isLoop": false,
