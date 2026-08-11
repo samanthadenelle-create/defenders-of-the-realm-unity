@@ -1,6 +1,48 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ RECONCILED 2026-08-10 (CLI): main line next free = **974**. **782–859 + 900–973 CONSUMED.**
+> ## ⚠ RECONCILED 2026-08-10 (CLI): main line next free = **977**. **782–859 + 900–976 CONSUMED.**
+> - **976** = **`hasSurface` is a false green — `panelSettings=ok canvas=ok` proves nothing** —
+>   `Assets/_Modules/Core/UI/AddressableUIManager.cs:234` emits
+>   `panelSettings=ok canvas=ok => hasSurface=`, but both halves are **non-null checks**. A panel with
+>   both references present can still be **zero-sized, offscreen, behind another sort order, or fully
+>   transparent** — and the line prints `ok` through every one of those. Same disease as WO-973's
+>   `bubble=ok`, on a **far more trafficked path**: this is the shared UI surface resolver, not one
+>   NPC's speech bubble. Found by sweep during the WO-973 read-only prep, 2026-08-10.
+>   Weaker siblings, same shape, listed so the sweep isn't repeated: `CompanionGearSetup.cs:208`
+>   (`result=ok` after an `AddComponent` that essentially cannot return null) and
+>   `HudCompassWidget.cs:529` (`hero=ok`, a non-null check). `TowerLoopDevHarness.cs:171` is a dev
+>   harness — ignore.
+>   ⚠ **The fix is NOT to delete these lines** (§12 — instrumentation is never stripped). It is to
+>   make them assert something that can FAIL: resolved rect size, visibility, sort order. A trace
+>   that cannot fail is worse than no trace, because it actively steers the next reader away from the
+>   broken thing — which is precisely what cost this project a pixel-discovery on WO-973. **READY.**
+> - **975** = **The `Gear` Addressables group points at a GITIGNORED art pack** — architect verified
+>   2026-08-10. `AddressableAssetsData/AssetGroups/Gear.asset` is **git-TRACKED** and holds **426
+>   entries**; resolved GUIDs land in `Assets/Blink/Art/...`, and `git check-ignore -v` returns
+>   `.gitignore:350:/Assets/Blink/`. **A tracked group asset ASSERTS content that a fresh clone does
+>   not have** — worse than the `polyperfect`/`KayKit` case, because the assertion looks authoritative.
+>   Consequence on a clone/CI: 426 dangling entries → a degenerate `gear_assets_all_*.bundle` →
+>   `EquipmentController.cs:744`, `HeroArmorVisual.cs:199` and `HeroBodySwapper.cs:148` all fail their
+>   `LoadAssetAsync` = **no weapons, no armour, no hero body**. Existing partial net
+>   `DataRegression.cs:2642` (`AddressableKeyExists`) returns `false` on throw with only a
+>   `LogWarning`, so it is a soft signal, NOT a fence. Fix = promote the referenced prefabs into a
+>   tracked location (precedent: the `Resources/Structures` negation at `.gitignore:150-176`) and/or a
+>   regression that HARD-fails when entry count ≠ resolvable-GUID count. **READY.**
+> - **974** = **The Addressables content build has NO SEAM — it rides a machine-local Editor
+>   Preference** — architect verified 2026-08-10. `AddressableAssetSettings.asset:61` →
+>   `m_BuildAddressablesWithPlayerBuild: 0`, and the enum at package source
+>   (`AddressableAssetSettings.cs:210-215`) reads `PlayerBuildOption.PreferencesValue = 0` — *"use the
+>   global settings stored in preferences."* There is **ZERO** explicit content build in the tree:
+>   `WebGLBuild.cs:127`, `DesktopBuild.cs:241` and `AndroidBuild.cs:105` each call
+>   `BuildPipeline.BuildPlayer` and nothing else; no `BuildPlayerContent` call exists anywhere under
+>   `Assets/`. **Whether bundles are rebuilt is decided by an uncommitted per-machine preference.** It
+>   is evidently ON on this box (tonight's build emitted fresh bundles), which is exactly what makes it
+>   dangerous — it works here by luck, and a fresh clone / CI runner / a seat that ever toggled it ships
+>   **stale or absent** `StreamingAssets/aa` with **NO loud failure**; Addressables simply cannot
+>   resolve `gear/*` at runtime. Fix = either `m_BuildAddressablesWithPlayerBuild: 1` or an explicit
+>   `AddressableAssetSettings.BuildPlayerContent()` at the head of each build entry point, logging its
+>   result. **Deliberately NOT landed in the 2026-08-10 release window — it is a build-path change.**
+>   **READY.**
 > - **973** = **Bryn's speech bubble is a giant skewed world-space card** — found in the PIXELS during the
 >   WO-968 headed dungeon proof (`Dungeon_HealersCottage`, 2026-08-11), not by the owner. Screenshots
 >   `01_idle`–`05_right` are ~60 % covered by a trapezoid card reading *"Bryn the Wa… / The path opens

@@ -608,9 +608,22 @@
   dependency block between `// Android Resolver Dependencies Start/End` is EDM4U-generated and
   overwritten on every resolve. Installed SDK = **13.14.0** (`firebase-app-unity`/`firebase-auth-unity`);
   any added Firebase package MUST match that version.
-- **PROD (current) = the 07-16 six-fix build** — `q2v5vj86g`, promoted 2026-07-16, public, on
-  `defenders-of-the-realm-v2.vercel.app`. Rollback target recorded in `Builds/PROD_ROLLBACK.txt`
-  (prior prod `44dellx2j`). Commit `77e927be` (pushed to origin). *(2026-07-16)*
+- **PROD (current) = the 2026-08-05 build** — deployment `dpl_9vGadbKyPrQ55HR3PaUT53i9CNUh`,
+  `https://defenders-of-the-realm-v2-ly1ih48m3.vercel.app`, `target: production`, deployed
+  **2026-08-05T23:37Z**, commit `8fdb29a5`, serving `defenders-of-the-realm-v2.vercel.app`.
+  *(verified 2026-08-10 against the LIVE Vercel deployment record, not against a doc)*
+  - ⚠ **This line used to read *"PROD (current) = the 07-16 six-fix build `q2v5vj86g`, promoted
+    2026-07-16"* — STALE BY THREE PRODUCTION DEPLOYMENTS.** The record shows `target: production`
+    deploys on **2026-08-03T22:50Z**, **2026-08-04T19:33Z** and **2026-08-05T23:37Z**. A seat trusting
+    the old line would have believed prod was three weeks of code behind where it actually is — which
+    is exactly the error that kept the "prod runs OLD `api/`" claim alive below (see `docs/HANDOVER.md`
+    and the 08-09 anchor's correction notes). **Read the deployment record, never this line, when the
+    answer has to be current.**
+  - **Rollback target = `Builds/PROD_ROLLBACK.txt`** — ⚠ this doc referenced that file **for weeks
+    while it did not exist on disk**; it was finally written 2026-08-10. A referenced rollback target
+    that was never written is the same as having no way back, and nothing in the pipeline was checking.
+    **STANDING RULE: overwrite `Builds/PROD_ROLLBACK.txt` with the OUTGOING prod deployment id BEFORE
+    every promotion.** Recorded after the fact, it points at the thing you are trying to escape.
 - **2026-08-01 release train:** fresh desktop exe · Seeker APK v-wave installed on-device + Firebase App
   Distribution (testers) · WebGL→Vercel preview refreshed. Screenshot archive
   `Builds\ui-capture-archive\2026-08-01\`.
@@ -629,7 +642,22 @@
     **absent** (206 DLLs, was 207). ⚠ Paired trap from the same commit: `ff.devresourcetool`'s default
     flip to OFF **changes nothing on a machine that already has `ff.devresourcetool=1` in PlayerPrefs** —
     `FeatureFlags.Get` reads PlayerPrefs FIRST. *(2026-08-08)*
-- Deploy chain: `webgl-vercel-overnight.ps1` detached; markers + `DEPLOY_URL` in `Builds/webgl-chain-status.txt`. Preview only; promotion + push are the owner's.
+- Deploy chain: **prefer `overnight-webgl-deploy.ps1`.** Promotion + push stay the owner's call.
+  *(corrected 2026-08-10 — this line used to read "`webgl-vercel-overnight.ps1` detached; markers +
+  `DEPLOY_URL` in `Builds/webgl-chain-status.txt`. Preview only", which mixed two scripts into one
+  procedure that no single script implements.)*
+  - **The two scripts disagree and the markers belong to the OLDER one.** `overnight-webgl-deploy.ps1`
+    writes **`Builds\overnight-chain-status.txt`**; the markers canon quotes (`CHAIN_START`,
+    `WEBGL_BUILD_OK`, `DEPLOY_URL`, `CHAIN_DONE`) are `webgl-vercel-overnight.ps1`'s. Grepping for a
+    marker in the file the other script writes finds nothing and reads as "the chain never ran".
+  - `webgl-vercel-overnight.ps1` calls bare **`vercel deploy --yes` with NO token and NO scope**, so it
+    fails unless the CLI is already interactively authed — which a detached/overnight run is not.
+  - ⚠ **TRAP — never `cd Builds\WebGL` and deploy from there.** That folder carries its own
+    `.vercel/project.json` pointing at a **DIFFERENT Vercel project** (`defenders-webgl`,
+    `prj_ox8fqdHbD7lkrKEyxy0dtQAjphGc`) than the repo root
+    (`defenders-of-the-realm-v2`, `prj_qUmuwr8BN492oZH8yRuvPZMN3e0J`). Deploy from the **repo root** so
+    the link resolves to the real project. *(The stray file only exists when `Builds/WebGL/` has been
+    built + linked; `Builds/WebGL/` is absent from disk right now, so the trap is dormant, not gone.)*
 - Fleet baseline: DataRegression = **REGRESSION_OK, 0 reds** — all 5 long-standing reds fixed 2026-07-19 (R1 arena ground texture, R2 dual-wallet Grant->GameState, R3 pet active-slot persist, R4 core-save Tribes/Wards/Arena persist, R5 orc-raider SSOT enemies.json Hp 130). *(2026-07-19)*; re-certified 2026-08-01 with UI_CAPTURE_OK 23 (103 checks).
 
 ## UI / MVVM (WO-744 — DONE 2026-07-18)

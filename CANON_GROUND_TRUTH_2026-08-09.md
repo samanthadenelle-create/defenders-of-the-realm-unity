@@ -342,6 +342,25 @@ session that reads only the newest anchor loses it otherwise.
   game hardcodes the prod domain, and **prod's nonce endpoint has no CORS** — so a browser blocks the
   WebGL wallet rail regardless of the client.
 
+  > **⚠ CORRECTION 2026-08-10 — the bullet directly above is REFUTED. (Dated anchor: body left as
+  > written per CLAUDE.md §15; this note is the correction.)** Verified against the LIVE Vercel
+  > deployment record + live HTTP, not against another doc:
+  > - **`api/` is NOT preview-only — it has been in PRODUCTION since 2026-08-03.** `target: production`
+  >   deploys landed 2026-08-03T22:50Z, 2026-08-04T19:33Z and **2026-08-05T23:37Z**
+  >   (`dpl_9vGadbKyPrQ55HR3PaUT53i9CNUh`, commit `8fdb29a5`).
+  > - **Prod's nonce endpoint DOES have CORS.** A live
+  >   `GET https://defenders-of-the-realm-v2.vercel.app/api/auth/nonce?wallet=...` returns the NEW
+  >   structured shape `{"ok":false,"code":"AUTH_WALLET_MALFORMED","ref":"..."}` **with**
+  >   `access-control-allow-origin: *` and `access-control-allow-headers` including
+  >   `X-Wallet, X-Nonce, X-Signature`. Nothing about the WebGL wallet rail is CORS-blocked in prod.
+  > - **Mechanism, and it is a standing property:** `.vercelignore:17` (`!/api`) allowlists `/api`, so **every
+  >   `--prod` deploy from the repo root re-ships `api/` to production.** There is no way to promote the
+  >   WebGL payload alone from this repo — which is why "promote `api/`" quietly happened three times
+  >   while every doc still listed it as a pending owner call.
+  > - Consequence: **"promote `api/`" is not an open decision.** Anything downstream that assumed prod
+  >   was still running old `api/` code — including the "do not promote" argument in
+  >   `docs/reference/AUDIT_2026-08-09.md` §5 — rests on a false premise. See that file's §5 note.
+
 ### Traps that bite testing
 - **Hero select SELF-SKIPS when the save already records a class.** Testing a class change needs **New
   Game / Play Intro** — **never Continue.**

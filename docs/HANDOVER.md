@@ -245,13 +245,35 @@ design call, not an implementation ticket) · **hero select SELF-SKIPS** when th
 class, so testing a class change needs **New Game / Play Intro**, never Continue · height cadence **1.25**
 landmark / **1.2** towers / **1.0** building base / **0.75** siege / **0.35** decoration with **WALLS
 DELIBERATELY EXCLUDED** (a uniform fit narrows a wall, which **opens PATHABLE GAPS in saved wall runs**;
-**`collector_farm` at 1.4 is a COMPENSATION, not an outlier — do not "fix" it**) · **`api/` is deployed to
-PREVIEW only** while the game hardcodes the prod domain, and prod's nonce endpoint has **no CORS** —
-promoting it is the owner's call · still **colour-only and OPEN** (owner is red/green colourblind): **the
+**`collector_farm` at 1.4 is a COMPENSATION, not an outlier — do not "fix" it**) · ~~**`api/` is deployed
+to PREVIEW only** while the game hardcodes the prod domain, and prod's nonce endpoint has **no CORS** —
+promoting it is the owner's call~~ **REFUTED 2026-08-10 against LIVE HTTP — see the correction note
+immediately below** · still **colour-only and OPEN** (owner is red/green colourblind): **the
 build placement ghost** and **the hero health bar** · the bottom action bar is **6 visible faces** with
 `Upgrade` re-pointed to Manage/Queues — `HudActionBarModel.ButtonCount` stays **7** (enum identity),
 `MaxVisibleFaces` is the number that went 7 → 6, and **`Map` stays dormant at ordinal 4 and must never be
 renumbered** (the face arrays are indexed by ordinal).
+
+> ### ⚠ CORRECTION 2026-08-10 — `api/` IS IN PRODUCTION, and has been since 2026-08-03
+> Verified against the **LIVE Vercel deployment record + live HTTP responses**, not against another doc.
+> Three separate claims that this handover carried forward (here, and in the 08-03 block further down)
+> are **REFUTED**:
+> 1. *"`api/` is deployed to PREVIEW only"* — **false.** `target: production` deploys landed
+>    **2026-08-03T22:50Z**, **2026-08-04T19:33Z** and **2026-08-05T23:37Z**
+>    (`dpl_9vGadbKyPrQ55HR3PaUT53i9CNUh`, commit `8fdb29a5`).
+> 2. *"prod runs OLD code (prose error shape)"* — **false.** A live
+>    `GET https://defenders-of-the-realm-v2.vercel.app/api/auth/nonce?wallet=...` returns the **NEW
+>    structured shape** `{"ok":false,"code":"AUTH_WALLET_MALFORMED","ref":"..."}`.
+> 3. *"prod's nonce endpoint has NO CORS"* — **false.** That same response carries
+>    `access-control-allow-origin: *` and an `access-control-allow-headers` list including
+>    **`X-Wallet, X-Nonce, X-Signature`**. The WebGL wallet rail is **not** blocked by CORS in prod.
+>
+> **Why it stayed wrong, and the mechanism to remember:** `.vercelignore:17` (`!/api`) allowlists `/api`, so
+> **every `--prod` deploy from the repo root re-ships `api/` to production.** That is a **standing
+> property of the deploy layout**, not a one-night event — there is no such thing as promoting only the
+> WebGL payload from this repo. A seat reading the un-struck lines above would have (a) planned a
+> "promote `api/`" action that had already happened three times, and (b) treated the prod `api/`
+> surface as un-exposed when it is fully live. **"Promoting `api/` to prod" is NOT an open action item.**
 
 **Open, needing the owner:** **WO-774.0's posture ruling, newly un-parked** (the seam that made it
 deferrable is closed) · **the three dead difficulty levers** (wire them or delete them) · **the three gate
@@ -262,7 +284,8 @@ the false `PRIVACY_POLICY.md` sentence on a live page · the Terms' missing arbi
 ~~**WO-931** (architecture call — left UNPICKED)~~ **RESOLVED 2026-08-10: owner picked (b) runtime
 refusal; IMPLEMENTED at the `WalletService.Pay`/`PayFlat` seams (uncommitted pending the batch gate);
 preconditions 1+2 on the flag still open** ·
-**WO-910** · promoting `api/` to prod · ~~widening **WO-929** to the building path~~ **DONE 2026-08-10:
+**WO-910** · ~~promoting `api/` to prod~~ **NOT AN OPEN ACTION — `api/` has been in production since
+2026-08-03; see the correction note above** · ~~widening **WO-929** to the building path~~ **DONE 2026-08-10:
 WO-929 §2b now pins FOUR proven host classes (building/hero-aura/enemy-caster/pooled enemy) — fix at the
 shared attach seam** · the RESULT
 debt · the ambiguous `Resources/Structures` `.fbx`-vs-`.prefab` pair.
@@ -424,6 +447,17 @@ current for less than a day.
   blocks the WebGL wallet rail no matter what the client does.
 - `player_data` = **2 test rows, newest 2026-05-31**. `bug_reports` = **0**. `analytics_events` = 80,749.
 - **`vercel deploy --prod` is the single highest-value action on the board. Owner's call.**
+
+> **⚠ CORRECTION BANNER 2026-08-10 (this 08-03 ledger is FROZEN — body left as written, per CLAUDE.md
+> §15).** The three server bullets above (`api/` PREVIEW-only · prod runs OLD code / prose error shape ·
+> prod's nonce endpoint has NO CORS) were **true when written on 08-03 and are REFUTED as of today.**
+> Live HTTP to `https://defenders-of-the-realm-v2.vercel.app/api/auth/nonce?wallet=...` returns the NEW
+> structured shape `{"ok":false,"code":"AUTH_WALLET_MALFORMED","ref":"..."}` **with**
+> `access-control-allow-origin: *` and `access-control-allow-headers` including
+> `X-Wallet, X-Nonce, X-Signature`. Production deploys landed 2026-08-03T22:50Z, 2026-08-04T19:33Z and
+> 2026-08-05T23:37Z. The `vercel deploy --prod` bullet **was actioned** — mechanism: `.vercelignore:17` (`!/api`)
+> allowlists `/api`, so **every `--prod` from the repo root re-ships `api/`.** See the correction note in
+> the current 08-09 handover block above.
 
 **⚠ THE SEAM worth ranking first if one architectural thing gets built:** nothing in the game can damage a
 wall, gate, or enemy tower. `WallSegment.cs:28` + `Gate.cs:45` implement `IDamageableStructure`;

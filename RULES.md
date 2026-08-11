@@ -221,6 +221,30 @@ Resolved from the tree on 2026-08-09, not from assumption. Where the tree could 
   `git.deploymentEnabled: false` (CLI-only). Deploy scripts `overnight-webgl-deploy.ps1` /
   `webgl-vercel-overnight.ps1` are **PREVIEW-ONLY by design — never `--prod`.** A second, separate Vercel
   project holds the marketing/legal one-pager: `site/` (`site/.vercel/project.json` → `echoes-of-elarion`).
+  - ⚠ **READ THE SCOPE OF THAT RULE (correction 2026-08-10, verified against the live Vercel deployment
+    record).** "PREVIEW-ONLY, never `--prod`" is **still true and still correct — it is a statement about
+    the SCRIPTS, not about the state of production.** Production has been promoted **by hand**, repeatedly:
+    `vercel deploy --prod` on **2026-08-03T22:50Z**, **2026-08-04T19:33Z** and **2026-08-05T23:37Z**
+    (`dpl_9vGadbKyPrQ55HR3PaUT53i9CNUh`, commit `8fdb29a5`), and the 2026-07-16 build went live by
+    `vercel promote`. **The scripts never touched prod; a human did.**
+  - **This distinction IS the bug it caused.** Multiple docs read this tooling guarantee as a guarantee
+    about state and concluded *"`api/` cannot have reached production"* — which is how
+    `docs/HANDOVER.md`, `CANON_GROUND_TRUTH_2026-08-09.md` and `docs/reference/AUDIT_2026-08-09.md` §5 all
+    carried "prod runs OLD `api/` code" for a week after it stopped being true (the AUDIT built a
+    **security** argument on it: *"prod running old code is what's protecting you"* — the mitigation never
+    existed). **A rule about what a script does can never be evidence about what production is running.
+    Check the deployment record.**
+  - **There is no WebGL-only promotion from this repo.** `.vercelignore:17` (`!/api`) re-includes `/api`,
+    so **every `--prod` from the repo root re-ships the serverless backend to production alongside the
+    static payload.** Any plan of the form "ship the game build but hold `api/` back" is unimplementable
+    as the tree stands.
+  - **PROMOTION TECHNIQUE (owner-ruled 2026-08-10, and the one to reach for at 2am):** build →
+    **deploy to PREVIEW** → **verify the preview URL actually serves the new build** →
+    **`vercel promote <that exact preview url>`**. Deliberately **NOT `--prod`**: promoting a verified
+    preview ships **the artifact you inspected**, whereas `--prod` re-uploads a fresh, uninspected one.
+    Run it from the **repo root** (see the `Builds/WebGL` stray-project trap in
+    `docs/webgl-hosting-notes.md`), and **overwrite `Builds/PROD_ROLLBACK.txt` with the OUTGOING prod
+    deployment id BEFORE promoting** — recorded afterwards it points at the thing you are escaping.
 - **QR-4.3** **Neon Postgres — ONE database. There is NO prod/dev split.** The only env var is
   **`DATABASE_URL`** (22 call sites in `api/`; no `POSTGRES_URL`, no `NEON_*`, no Neon branch anywhere in
   the tree). Preview and production therefore read and write the SAME database. Schema: `api/schema.sql`
