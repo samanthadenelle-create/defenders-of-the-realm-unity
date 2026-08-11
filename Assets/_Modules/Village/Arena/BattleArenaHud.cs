@@ -78,12 +78,17 @@ namespace DeNelle.Village.Arena
         /// </summary>
         public void ShowResult(bool won, int stars, float durationSeconds,
                                BattleRewardSummary rewards, Action onContinue, float autoTimeoutSeconds = 20f,
-                               bool perfect = false)
+                               bool perfect = false,
+                               // WO-969: the arena's HAND-BACK. onContinue is the player's CHOICE;
+                               // onAbandon is the same transition re-claimed by the arena the instant
+                               // this screen is destroyed without that choice being made. Passing both
+                               // is what stops a Pause (or any modal) from eating the route home.
+                               Action onAbandon = null)
         {
             var vm = won
                 ? EndStateVM.FromBattleVictory(stars, durationSeconds,
                       rewards.Xp, rewards.Wisdom, rewards.Wood, rewards.Iron, rewards.GearName,
-                      onContinue, autoTimeoutSeconds, perfect)
+                      onContinue, autoTimeoutSeconds, perfect, primaryRoute: null, onAbandon: onAbandon)
                 : EndStateVM.FromBattleDefeat();
             EndStateView.Show(vm);
 

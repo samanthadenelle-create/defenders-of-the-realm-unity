@@ -1632,6 +1632,33 @@ namespace DeNelle.Village.UI
             else
                 FlowTrace.Step("EndState",
                     $"'{title}' torn down ({reason}) - no primary action pending, nothing abandoned.");
+
+            // WO-969: warning about the abandonment was never enough - HAND THE TRANSITION BACK.
+            SignalAbandon(reason);
+        }
+
+        /// <summary>
+        /// WO-969 (owner F8 seq 2315) - THE PENDING-TRANSITION HAND-BACK.
+        ///
+        /// PROVEN BY CAPTURE: opening Pause over the arena victory summary runs
+        /// PanelManager.NotifyOpened -> previous.Close() -> <see cref="CloseFromArbiter"/> ->
+        /// Destroy, and the deferred home return that lived ONLY in <c>_vm.Primary</c> died with
+        /// the GameObject. The 45s stranding watchdog then had to walk the player home.
+        ///
+        /// The screen keeps its correct behaviour (a displaced end-state NEVER silently fires the
+        /// player's CHOICE), and gains the missing half: it TELLS the owner of the transition that
+        /// the screen is gone. Fired at most once, and only while Primary never ran - so a normal
+        /// Continue (which nulls Primary in <see cref="FirePrimary"/>) can never double-fire it.
+        /// Called from every abandon path (<see cref="AbandonedPrimaryWarn"/>) AND from
+        /// <see cref="OnDestroy"/>, which is the catch-all for any destroy path not yet written.
+        /// </summary>
+        private void SignalAbandon(string reason)
+        {
+            // The latch + the trace + the Guard all live on the VM (EndStateVM.HandBackPendingTransition)
+            // ON PURPOSE: the whole point is that the transition survives THIS object, so its
+            // exactly-once state must not be a field of the thing being destroyed. It also makes the
+            // contract provable headlessly with no canvas and no edit-mode Destroy.
+            _vm?.HandBackPendingTransition(reason);
         }
 
         /// <summary>HUD-2: the single-modal arbiter swapped us out (another modal opened over the
@@ -1649,6 +1676,13 @@ namespace DeNelle.Village.UI
 
         private void OnDestroy()
         {
+            // WO-969 CATCH-ALL: the three KNOWN abandon paths route through AbandonedPrimaryWarn,
+            // but OnDestroy catches every path that exists and every path nobody has written yet
+            // (a parent canvas torn down, an additive scene unload, a future modal). Latched, so
+            // when the known path already handed back this is a no-op. This is what makes the fix
+            // hold against the NEXT modal instead of only against Pause.
+            SignalAbandon("OnDestroy (GameObject destroyed with a transition still pending)");
+
             SceneManager.sceneLoaded -= OnSceneLoaded;
             // HUD-2: release the arbiter slot (no-op for compact banners - handle is null - and a
             // no-op if we were already swapped out).

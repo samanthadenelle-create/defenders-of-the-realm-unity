@@ -74,6 +74,65 @@ namespace DeNelle.Village.UI
         /// <summary>&gt; 0 = fire Primary automatically after this many real seconds (softlock guard).</summary>
         public float AutoDismissSeconds;
 
+        // ── WO-969: the PENDING-TRANSITION HAND-BACK (owner F8 seq 2315) ──────────
+        // A screen is presentation. A PENDING STATE TRANSITION (the arena's masked home
+        // return, a respawn) is NOT — and until now it was owned by <see cref="Primary"/>,
+        // i.e. by a GameObject that PanelManager, a replacing Show() or a scene load may
+        // destroy at any moment. When that happened the transition was simply dropped and
+        // the player was stranded until BattleArena's 45s watchdog rescued her (PROVEN BY
+        // CAPTURE: opening Pause over the victory summary -> PanelManager.NotifyOpened ->
+        // EndStateView.CloseFromArbiter -> Destroy -> STRANDING WATCHDOG FIRED).
+        //
+        // Abandoned is the hand-back: the view REPORTS its own destruction to whoever
+        // owns the transition, instead of taking it to the grave. It is NOT "Continue" —
+        // a displaced end-state still must never silently fire the player's CHOICE. It is
+        // the owner being told "your screen is gone; the transition is yours again."
+        // Fired exactly once, and only while <see cref="Primary"/> never ran.
+
+        /// <summary>Invoked exactly once if this end-state is destroyed WITHOUT its
+        /// <see cref="Primary"/> ever running (arbiter swap-out, replacing Show, scene load,
+        /// or any other destroy). Hands a pending state transition back to its real owner.
+        /// Null = nothing load-bearing was delegated to this screen.</summary>
+        public Action Abandoned;
+
+        private bool _handedBack;
+
+        /// <summary>
+        /// WO-969 - run the hand-back exactly once. Lives on the MODEL, not the view, for two
+        /// reasons: (1) a pending state transition outliving the screen is precisely the point, so
+        /// its latch must not live in the thing being destroyed; (2) it makes the contract provable
+        /// HEADLESSLY (EndStateTransitionHandoffRegression) with no canvas, no coroutines and no
+        /// edit-mode Destroy.
+        ///
+        /// Contract, and every clause of it is load-bearing:
+        ///   * Runs only while <see cref="Primary"/> NEVER ran - <see cref="Primary"/> is nulled by
+        ///     the view the instant it fires, so a normal Continue makes this a permanent no-op.
+        ///   * NEVER invokes <see cref="Primary"/>. A displaced end-state must not silently make the
+        ///     player's CHOICE; it only tells the transition's owner that the screen is gone.
+        ///   * Fires at most once no matter how many destroy paths call it.
+        /// </summary>
+        /// <returns>True if a hand-back actually ran on this call.</returns>
+        public bool HandBackPendingTransition(string reason)
+        {
+            if (_handedBack) return false;
+            if (Primary == null) return false;        // the transition already ran (or none was pending)
+            var handBack = Abandoned;
+            Abandoned = null;
+            _handedBack = true;
+            if (handBack == null) return false;       // nothing load-bearing was delegated
+
+            FlowTrace.Warn("EndState",
+                "'" + Title + "' - HANDING THE PENDING TRANSITION BACK to its owner (" + reason + "). " +
+                "It is completing NOW, independently of the screen's lifetime: a state change was " +
+                "never a view's to lose. (WO-969; BattleArena's stranding watchdog stays armed as the " +
+                "last-resort net and should now never fire.)");
+            Guard.Try("EndState", "abandoned-transition hand-back", () => handBack.Invoke());
+            return true;
+        }
+
+        /// <summary>True once <see cref="HandBackPendingTransition"/> has latched (test/diagnostic).</summary>
+        public bool HandedBack => _handedBack;
+
         /// <summary>Compact banner mode (wave-clear): small top panel, no scrim/backdrop, non-blocking.</summary>
         public bool Compact;
 
@@ -103,7 +162,11 @@ namespace DeNelle.Village.UI
         public static EndStateVM FromBattleVictory(int stars, float durationSeconds,
             int xp, int wisdom, int wood, int iron, string gearName,
             Action onContinue, float autoTimeoutSeconds = 20f, bool perfect = false,
-            string primaryRoute = null)
+            string primaryRoute = null,
+            // WO-969: the SAME return, wired as the hand-back. The arena's masked home return is
+            // the only route out of a won arena, so it must survive this screen being destroyed.
+            // Callers that pass nothing keep the old (view-owned) behaviour.
+            Action onAbandon = null)
         {
             var vm = new EndStateVM
             {
@@ -118,6 +181,7 @@ namespace DeNelle.Village.UI
                 PrimaryLabel = "Continue",
                 PrimaryRoute = primaryRoute ?? DefaultVictoryRoute(),
                 Primary = onContinue,
+                Abandoned = onAbandon,
                 AutoDismissSeconds = Mathf.Max(1f, autoTimeoutSeconds),
             };
 

@@ -2368,8 +2368,17 @@ namespace DeNelle.Village.Arena
             _hud = null;
             if (won && hud != null)
             {
+                // WO-969 (owner F8 seq 2315): doMaskedReturn is passed TWICE, and the second one is
+                // the fix. As onContinue it is the player's CHOICE (tap Continue -> go home). As
+                // onAbandon it is the arena RE-CLAIMING the transition the moment the screen is
+                // destroyed without that choice - which is exactly what opening Pause over the
+                // victory summary does (PROVEN BY CAPTURE: PanelManager.NotifyOpened 'Pause' ->
+                // EndStateView.CloseFromArbiter -> Destroy -> the 45s watchdog had to rescue her).
+                // The transition is now independent of the panel's lifetime; latched by
+                // returnStarted, so exactly one of the two ever does anything.
                 Guard.Try("BattleArena", "battle victory summary",
-                    () => hud.ShowResult(true, stars, durationSeconds, totals, doMaskedReturn));
+                    () => hud.ShowResult(true, stars, durationSeconds, totals, doMaskedReturn,
+                                         onAbandon: doMaskedReturn));
 
                 // =============================================================
                 // STRANDING WATCHDOG (owner-reported twice: Seeker 313763 and desktop
@@ -2474,6 +2483,15 @@ namespace DeNelle.Village.Arena
         private const float StrandWatchdogSeconds = 45f;
 
         /// <summary>
+        /// WO-969: hard cap (unscaled seconds) on how long the masked home return will wait out a
+        /// PAUSED game before proceeding anyway. Generous - a player may sit in the pause menu - but
+        /// finite: a timeScale left at 0 by any other system must never become a new way to strand
+        /// the hero. This is a COURTESY gate on presentation order, NOT a softlock net; the return
+        /// itself is already owned by the arena the moment the screen hands it back.
+        /// </summary>
+        private const float PausedReturnHoldCapSeconds = 300f;
+
+        /// <summary>
         /// Guarantees the masked home return happens even if the victory panel that owned it is
         /// destroyed without firing (see the call site for the three paths that do that).
         /// No-op when the player taps Continue normally -- <paramref name="alreadyReturned"/> latches.
@@ -2565,6 +2583,33 @@ namespace DeNelle.Village.Arena
         private System.Collections.IEnumerator ReturnHomeWithFade(
             Vector3 returnPos, float returnYaw, bool won, GameObject stage, List<Enemy> survivors)
         {
+            // WO-969: HOLD WHILE THE GAME IS PAUSED. The hand-back re-claims the return the instant
+            // the victory screen dies, and the commonest killer is the player opening PAUSE over it
+            // (owner F8 seq 2315). Pause zeroes Time.timeScale (PauseController.Pause), while every
+            // fade here is UNSCALED - so without this gate the black fade + the 7km warp would play
+            // out underneath the pause menu and she would un-pause already home, mid-fade. Gate on
+            // timeScale (not on PauseController: DeNelle.Village must not reference DeNelle.Settings),
+            // unscaled and hard-capped so a stuck timeScale can never wedge the route home.
+            {
+                float held = 0f;
+                bool announced = false;
+                while (Time.timeScale <= 0.0001f && held < PausedReturnHoldCapSeconds)
+                {
+                    if (!announced)
+                    {
+                        announced = true;
+                        FlowTrace.Step("BattleArena",
+                            "masked return re-claimed while the game is PAUSED - holding the fade until " +
+                            "the player resumes (cap " + PausedReturnHoldCapSeconds.ToString("0") + "s).");
+                    }
+                    held += Time.unscaledDeltaTime;
+                    yield return null;
+                }
+                if (announced)
+                    FlowTrace.Step("BattleArena",
+                        "resumed after " + held.ToString("0.0") + "s paused - masked home return proceeding.");
+            }
+
             var fader = ScreenFader.EnsureInstalled();
             FlowTrace.Step("BattleArena", "FADE OUT before home warp (mask the 7km return).");
             if (fader != null) yield return StartCoroutine(fader.FadeOutCo(HomeFadeOutSeconds));
