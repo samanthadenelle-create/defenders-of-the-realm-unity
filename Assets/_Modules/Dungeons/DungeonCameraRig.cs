@@ -81,6 +81,13 @@
 // DungeonController owns scene orchestration and calls Bind() once the hero is
 // placed; this component owns ONLY the camera maths so the rig can be tuned and
 // unit-reasoned in isolation.
+//
+// -- Bind is NOT a one-shot any more (WO-968 F5, 2026-08-10) --
+// Owner F8 seq 2313 "No camera movement": the rig was framed once on Bind and never
+// tracked again, because the async HeroBodySwapper rebuilds the hero's children AFTER
+// the dungeon binds and the follow PIVOT lives under the hero. HealFollowTarget (polled
+// from LateUpdate) re-creates/re-parents the pivot and re-points Follow whenever they go
+// dead, and late-binds a hero that did not exist at Start. It is LOUD when it fires.
 // =============================================================================
 
 using System.Collections.Generic;
@@ -261,6 +268,8 @@ namespace DeNelle.Dungeons
         // Bind() explicitly (e.g. Folk's Granary). One Start() lookup is cheap.
         private void Start()
         {
+            // Arm the LateUpdate late-bind retry window relative to this rig's own start.
+            _bindRetryUntil = Time.time + BindRetryWindowSeconds;
             if (_camera != null && _camera.Follow != null && _boundHero != null) return;
             var hero = FindAnyObjectByType<DungeonHero>();
             if (hero != null) Bind(hero.transform);
@@ -484,6 +493,7 @@ namespace DeNelle.Dungeons
         /// </summary>
         private void LateUpdate()
         {
+            HealFollowTarget();
             TraceRigHeartbeat();
 
             if (!_fpvActive || _combatFramingActive || _pivot == null) return;
@@ -494,6 +504,110 @@ namespace DeNelle.Dungeons
             _lookPitch = Mathf.Clamp(_lookPitch, -_fpvPitchClamp, _fpvPitchClamp);
 
             DriveFpvPivot();
+        }
+
+        // ── FOLLOW-TARGET SELF-HEAL (WO-968 F5) — the frozen dungeon camera ─────────────────
+        // Owner F8 seq 2313, verbatim: "No camera movement". What the capture PROVES:
+        //   * Camera.main's yaw was a CONSTANT 180.0, dCam=0.0, across a window in which the hero
+        //     both translated (-28.0,-1.8 -> -26.9,-4.7) and turned (yaw 270 -> 42).
+        //   * 180 is EXACTLY the bind-time seat: the layout spawns the Keeper at facingY=90 and
+        //     EnsurePivot stamps _headingYawOffset (+90) as the pivot's local yaw. 90 + 90 = 180.
+        //   * It is NOT the authored scene pose either — the baked Main Camera yaw is 0.
+        // So the camera was framed ONCE by SeatThirdPersonImmediate on Bind and never tracked
+        // again. That refutes two of the four candidates outright: Bind DID run (the camera left
+        // its authored pose) and the CinemachineBrain IS copying the rig (Main Camera holds the
+        // rig's seat pose). What is left is the ThirdPersonFollow BODY STAGE not solving, i.e.:
+        //   (1) the Follow target went away  — EnsurePivot parents "DungeonOTSPivot" UNDER the
+        //       hero, and the async HeroBodySwapper rebuilds the hero's children AFTER the dungeon
+        //       binds, so the pivot can be destroyed or re-parented out from under us. This is the
+        //       SAME failure shape as DungeonHero caching its Animator in Awake (WO-968 E13);
+        //   (2) the vcam is not live (disabled).
+        // Both are healed here by a cheap per-frame null-poll — the same self-heal idiom as
+        // HeroLocomotion.ResolveAnimator — instead of assuming a one-shot Bind holds for the run.
+        // The heal is LOUD: if it ever fires, the next capture names the cause instead of leaving
+        // it as candidate (1) vs (2).
+        //
+        // ⚠ SHIP-TOGETHER NOTE (WO-968 §8): this must land in the SAME build as the movement-basis
+        // fix. A camera frozen at 180 with a camera-relative stick is a constant 180-degree
+        // INVERTED stick — "forward walks backward" — which reads as a brand-new bug.
+        private bool _loggedHealOnce;
+        private float _nextBindRetryAt;
+        // Window measured from THIS rig's Start, never from Time.time's absolute origin — a dungeon
+        // entered 28 minutes into a session (the owner's capture was at t~1698 s) must still retry.
+        private float _bindRetryUntil = float.NegativeInfinity;
+        private const float BindRetryIntervalSeconds = 0.5f;
+        private const float BindRetryWindowSeconds = 30f;
+
+        private void HealFollowTarget()
+        {
+            // The legacy iso A/B follows the HERO directly (no pivot), so the pivot/Follow identity
+            // checks below do not apply to it — and the hero root cannot be destroyed by a body
+            // swap the way a child pivot can. Skip it rather than "heal" it into the OTS wiring.
+            if (_mode == CamMode.Iso && !_combatFramingActive) return;
+
+            if (_boundHero == null)
+            {
+                // Start()'s fallback bind is a ONE-SHOT lookup; in a scene whose Keeper is spawned
+                // or body-swapped after Start it finds nothing and the rig never binds at all.
+                // Retry on a slow poll (the lookup is not free) for a bounded window, then stop.
+                if (Time.time > _bindRetryUntil || Time.time < _nextBindRetryAt) return;
+                _nextBindRetryAt = Time.time + BindRetryIntervalSeconds;
+                var late = FindAnyObjectByType<DungeonHero>();
+                if (late == null) return;
+                FlowTrace.Warn("DungeonCam",
+                    $"late bind: no hero was bound at Start, found '{late.name}' at t={Time.time:F1}s — " +
+                    "binding now. (A rig that never binds shows the authored scene pose and never follows.)");
+                Bind(late.transform);
+                return;
+            }
+
+            // A destroyed Unity object compares == null, so this catches the destroyed pivot; the
+            // parent check catches the alive-but-detached case (re-parented by a rig rebuild).
+            bool pivotDead = _pivot == null || _pivot.parent != _boundHero;
+            bool followDead = _camera == null || _camera.Follow == null
+                              || (_pivot != null && _camera.Follow != _pivot);
+
+            if (!pivotDead && !followDead)
+            {
+                // Candidate (2): the rig is wired but the vcam is switched off, so nothing solves.
+                if (_camera != null && !_camera.enabled)
+                {
+                    _camera.enabled = true;
+                    FlowTrace.Warn("DungeonCam",
+                        "HealFollowTarget: the CinemachineCamera was DISABLED while bound — the body " +
+                        "stage could not solve, so the view sat at its last seat. Re-enabled.");
+                }
+                return;
+            }
+
+            string why = pivotDead
+                ? (_pivot == null ? "the follow PIVOT was destroyed" : "the follow PIVOT was re-parented off the hero")
+                : "the vcam's Follow target was null/stale";
+
+            EnsurePivot(_boundHero);
+            if (_camera != null)
+            {
+                _camera.Follow = _pivot;
+                _camera.LookAt = null;
+                if (!_camera.enabled) _camera.enabled = true;
+            }
+            if (_fpvActive) DriveFpvPivot();
+
+            // Named the first time (the root cause), throttled after (recurrence is its own signal).
+            if (!_loggedHealOnce)
+            {
+                _loggedHealOnce = true;
+                FlowTrace.Warn("DungeonCam",
+                    $"HealFollowTarget: RE-BOUND the dungeon camera because {why} — this is WO-968's " +
+                    "frozen-camera root (the async HeroBodySwapper rebuilds the hero's children AFTER " +
+                    $"Bind). hero='{_boundHero.name}' Follow='{(_camera != null && _camera.Follow != null ? _camera.Follow.name : "<null>")}'.");
+            }
+            else
+            {
+                FlowTrace.Throttle("DungeonCam", "heal-repeat", 1f,
+                    $"HealFollowTarget: re-bound again ({why}) — a REPEATING heal means something is " +
+                    "destroying the pivot every frame; that is a second defect, not this one.");
+            }
         }
 
         // ── [Flow:DungeonCam] 1 Hz LIVE heartbeat (WO-968, §12) ──────────────────────

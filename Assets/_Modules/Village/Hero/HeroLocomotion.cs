@@ -13,6 +13,27 @@
 // (WASD / arrows) or Gamepad.current via the new Input System (activeInputHandler
 // "Both"). WarpTo disables -> warps -> re-enables the agent for scene-seam crossings.
 // Movement is in the XZ plane; the agent keeps the hero grounded.
+//
+// TRANSFORM OWNERSHIP (WO-968 / WO-1016, 2026-08-10) — READ BEFORE TOUCHING MOVEMENT.
+// This component is NOT always the mover. In a dungeon the Keeper carries a
+// CharacterController (DeNelle.Dungeons.DungeonHero) and THAT is the integrator. The rule
+// is a per-frame CAPABILITY check, ForeignMoverOwnsTransform() — a live CharacterController
+// on this rig means this component writes NOTHING (no position, no rotation, no auto-walk,
+// no lock-face) that frame. It is the exact inverse of DungeonHero's own "my CC is disabled,
+// the arena owns the hero" guard, so exactly ONE of the two writes the transform, ever.
+// Ownership is SELF-REPORTING: every flip emits [Flow:HeroOwner] TRANSFORM OWNER -> ... and
+// the 1 Hz heartbeat prints owner=/animFeed=.
+//
+// THE ANIMATOR FEED IS MOVER-AGNOSTIC. Speed is published from the MEASURED root speed
+// (delta position / dt, sampled in LateUpdate after every mover has run) whenever a foreign
+// mover owns the rig, and from this component's Velocity otherwise. Feeding a dead Velocity
+// while another component moved the root is what made the Keeper slide through a dungeon in
+// a single idle clip (owner F8 seq 2312).
+//
+// THE MOVEMENT BASIS comes from ResolveMovementBasisYaw: SmartMobileCamera when the component
+// is PRESENT (never keyed on its VALUE — CameraYaw legitimately returns 0 in top-down), else
+// the flattened yaw of Camera.main (dungeons have no SmartMobileCamera), else a LOUD
+// [Flow:HeroLoco] Fail — a missing basis is never a silent identity.
 // =============================================================================
 
 using System.Collections.Generic;
@@ -334,6 +355,84 @@ namespace DeNelle.Village
         {
             if (_ccProbe == null) _ccProbe = GetComponent<CharacterController>();
             return _ccProbe != null && _ccProbe.enabled;
+        }
+
+        // ── ONE OWNER OF THE HERO TRANSFORM — the decision seam (WO-968 S1 / WO-1016) ─────────
+        // These three statics are PURE so the rule itself can be regression-tested with no scene,
+        // no play session and no Unity object (see DungeonMoverOwnershipRegression). The live code
+        // below CALLS them — the test therefore covers the shipped decision, not a copy of it.
+        //
+        // THE RULE, stated once: exactly ONE component may integrate this transform on a frame, and
+        // whichever one does is the one the animator is fed from. Ownership is decided by CAPABILITY
+        // (a live CharacterController on the same rig), never by scene name and never by a static
+        // side-channel — the side-channel (DungeonController's SetScriptedMove(zero) stomp) is what
+        // silently lapsed in the owner's 2026-08-10 capture: [Flow:HeroLoco] vel=0.00 while the root
+        // moved on some frames, and [Flow:HeroDrift] vel=(0,5) with live input on others, in the SAME
+        // session, with nothing in the log naming which was live.
+
+        /// <summary>
+        /// May THIS component write the hero transform this frame? False whenever a foreign mover
+        /// (a live CharacterController — the dungeon Keeper's <c>DungeonHero</c>) owns it. Exact
+        /// inverse of DungeonHero.Update's own "my CC is disabled, the arena owns the hero" guard,
+        /// so the two are mutually exclusive by construction.
+        /// </summary>
+        public static bool SelfMayWriteTransform(bool foreignOwnsTransform) => !foreignOwnsTransform;
+
+        /// <summary>
+        /// The value the animator's Speed is fed. WO-968 F1: when a foreign mover owns the
+        /// transform, publish the MEASURED root speed (delta position / dt) — what actually
+        /// happened in the world — instead of this component's own <see cref="Velocity"/>, which is
+        /// dead by design while it is not the mover. Mover-agnostic: no scene check, so the same
+        /// code is correct in town, overworld, raid and dungeon.
+        /// </summary>
+        public static float ResolveAnimatorFeed(bool crossingSeam, float seamSpeed,
+                                                bool foreignOwnsTransform, float selfSpeed,
+                                                float measuredRootSpeed)
+        {
+            if (crossingSeam) return seamSpeed;
+            return foreignOwnsTransform ? measuredRootSpeed : selfSpeed;
+        }
+
+        /// <summary>
+        /// The named defect of WO-1016, as a predicate: the root travelled but the animator is
+        /// holding ~idle (the hero slides through the dungeon playing a single idle clip). NaN
+        /// animSpeed = "no Speed parameter on this controller", which is a different fault and is
+        /// deliberately NOT a stall.
+        /// </summary>
+        public static bool IsAnimationStalled(float rootSpeed, float animSpeed)
+        {
+            return rootSpeed > AnimStallRootSpeed
+                   && !float.IsNaN(animSpeed)
+                   && animSpeed < AnimStallAnimSpeed;
+        }
+
+        /// <summary>Root speed (m/s) above which a walk cycle MUST be playing.</summary>
+        public const float AnimStallRootSpeed = 0.5f;
+        /// <summary>Animator Speed below which the rig reads as standing still.</summary>
+        public const float AnimStallAnimSpeed = 0.1f;
+
+        // ── MOVEMENT BASIS — where "forward" comes from (WO-968 S3) ──────────────────────────
+        /// <summary>Which source supplies the camera-relative movement basis this frame.</summary>
+        public enum MovementBasis
+        {
+            /// <summary>Town / overworld: SmartMobileCamera.CameraYaw (the player-pan yaw).</summary>
+            SmartMobileCamera,
+            /// <summary>Dungeon: the flattened yaw of the camera that ACTUALLY exists in the scene.</summary>
+            MainCamera,
+            /// <summary>No basis at all — the stick is world-absolute. Always reported as a failure.</summary>
+            None
+        }
+
+        /// <summary>
+        /// Pure basis selection. NOTE THE TRAP this encodes: the fallback keys on the
+        /// SmartMobileCamera COMPONENT BEING ABSENT, never on its VALUE being zero — in town
+        /// top-down framing <c>CameraYaw</c> legitimately returns 0, and treating that as "no basis"
+        /// would silently re-base the town stick.
+        /// </summary>
+        public static MovementBasis ResolveBasisKind(bool hasSmartCamera, bool hasUsableMainCamera)
+        {
+            if (hasSmartCamera) return MovementBasis.SmartMobileCamera;
+            return hasUsableMainCamera ? MovementBasis.MainCamera : MovementBasis.None;
         }
 
         /// <summary>
@@ -840,7 +939,20 @@ namespace DeNelle.Village
             // is reported via AutoWalkArrived; the tutorial clears the target to hand
             // control back. Returns through the SAME NavMesh Move() path as manual
             // walking so stairs/ramparts/walls behave identically.
-            if (_autoWalkTarget != null && !probeDriving)
+            // ── ONE OWNER OF THIS TRANSFORM (WO-968 S1 / WO-1016) ────────────────────────────
+            // Resolved BEFORE any writer below (auto-walk included) because every one of them
+            // writes transform.position or transform.rotation. When a live CharacterController
+            // sits on this rig, THAT component is the integrator this frame and this one must
+            // write nothing at all — see SelfMayWriteTransform for the full rationale.
+            //
+            // Why this is not redundant with the dungeon's existing neutralize: the neutralize is
+            // three SHARED STATICS (scripted-move zero + GroundSnapEnabled) that any other system
+            // can clear, and the owner's capture proves it was OFF for part of the session
+            // ([Flow:HeroDrift] input=(0.00,1.00) vel=(0.000,5.000) inside the dungeon). This gate
+            // is a per-frame CAPABILITY check on this rig, so it cannot lapse.
+            bool foreignOwnsTransform = ForeignMoverOwnsTransform();
+
+            if (_autoWalkTarget != null && !probeDriving && !foreignOwnsTransform)
             {
                 // Crossings must fire during auto-walk too (bot tests + scripted cutscene walks), not just
                 // player input — otherwise the hero auto-walks INTO a HeroLinkCrossing and never warps.
@@ -850,6 +962,19 @@ namespace DeNelle.Village
             }
 
             Vector2 input = ReadMoveInput();
+
+            // The foreign mover owns the transform: stand down COMPLETELY. Zeroing the input +
+            // velocity here is enough to disarm every writer below (the translate/face block, the
+            // town move-start slew and the lock-face slew are all gated on input or Velocity), and
+            // the face-hold request is dropped so it cannot slew the root either. The animator is
+            // still driven — from the MEASURED root speed — further down, which is the half of this
+            // that fixes WO-1016's "slides in idle".
+            if (foreignOwnsTransform)
+            {
+                input = Vector2.zero;
+                Velocity = Vector3.zero;
+                _facingActive = false;
+            }
 
             // DEF-70 fix: the victory pose briefly suppresses movement after a wave
             // clear — but it must NEVER lock the hero. It ends the instant the player
@@ -870,8 +995,7 @@ namespace DeNelle.Village
             // camera-mode change can't break input (WO-368/363 intent preserved). Curl-safe: CameraYaw is
             // pan-driven, never velocity-driven. (Lazy re-fetch so the fix engages if the camera wired
             // up after the hero — otherwise it would silently no-op.)
-            if (_smartCamera == null) _smartCamera = Object.FindObjectOfType<SmartMobileCamera>();
-            float yaw = _smartCamera != null ? _smartCamera.CameraYaw : 0f;
+            float yaw = ResolveMovementBasisYaw(out MovementBasis basisKind);
             Quaternion cameraRotation = Quaternion.Euler(0f, yaw, 0f);
             Vector3 move = cameraRotation * new Vector3(input.x, 0f, input.y);
             if (move.sqrMagnitude > 1f) move.Normalize();
@@ -952,8 +1076,10 @@ namespace DeNelle.Village
             // engaged with a live target AND the flag is on. (InputSuppressed/auto-walk already
             // early-returned above, so dialogue/cutscene facing is never fought.) When false, the
             // EXISTING LookRotation(Velocity) writer below runs byte-identical — zero regression.
+            // (WO-968 S1) ...and never while a foreign mover owns the transform — ApplyLockFaceYaw
+            // writes transform.rotation, which would make a second rotation writer on the rig.
             bool lockFacing = _lockFaceActive && _lockFaceTarget != null &&
-                              DeNelle.Core.FeatureFlags.LockOn;
+                              DeNelle.Core.FeatureFlags.LockOn && !foreignOwnsTransform;
 
             // [Flow:HeroTurn] step-in: capture the PRE-rotation state so the trace below can report
             // the exact yaw applied this frame vs the target. moveHeading = Atan2 of the (camera-
@@ -1102,7 +1228,13 @@ namespace DeNelle.Village
                     // #1 control side:
                     $"input=({input.x:F2},{input.y:F2}) move=({move.x:F3},{move.z:F3}) " +
                     $"vel=({Velocity.x:F3},{Velocity.z:F3}) |velX|={Mathf.Abs(Velocity.x):F3} " +
-                    $"camYaw={yaw:F1} heroYaw={transform.eulerAngles.y:F1} " +
+                    // WO-968 F4: this field was named `camYaw`, which COLLIDED with
+                    // [Flow:GaitF]'s camYaw (Camera.main.eulerAngles.y). Two different
+                    // quantities under one name mis-led the 2026-08-10 investigation: GaitF
+                    // read 180 and HeroDrift read 0, and both were correct readings of
+                    // different things. This one is the movement BASIS, so it says so, and
+                    // names its source.
+                    $"basisYaw={yaw:F1} basis={basisKind} heroYaw={transform.eulerAngles.y:F1} " +
                     $"dYaw={Mathf.DeltaAngle(yaw, transform.eulerAngles.y):F1} " +
                     // #2 anim side:
                     $"| baseNt={baseNt:F2} hipsLocalX={hipsLocalX:F3} clips=[{animSb}]");
@@ -1116,7 +1248,15 @@ namespace DeNelle.Village
             // During a manual seam slide we drive transform.position directly (the agent is released),
             // so Velocity may be ~0 even though the hero is moving — feed the animator a WALK speed so
             // the locomotion cycle plays through the crossing instead of freezing.
-            _actor?.SetLocomotion(_crossingSeam ? _moveSpeed : Velocity.magnitude);
+            // WO-968 F1 / WO-1016: the feed is MOVER-AGNOSTIC. When a foreign mover owns the
+            // transform, Velocity is dead BY DESIGN (this component is standing down, see the
+            // ownership gate above), so feeding it is what made the Keeper slide through the
+            // dungeon in a single idle clip. Publish the MEASURED root speed instead — what the
+            // root ACTUALLY did, regardless of which component wrote it. In town nothing has a
+            // CharacterController, so foreignOwnsTransform is false and this is byte-identical to
+            // the old line.
+            _actor?.SetLocomotion(ResolveAnimatorFeed(
+                _crossingSeam, _moveSpeed, foreignOwnsTransform, Velocity.magnitude, _measuredRootSpeed));
 
             // Turn-in-place / directional-turn feed (owner 2026-07-04, KnightMocap full-turning). Combat
             // only — town uses input-facing slew above (no turnleft180 low-pivot clips). Skipped during
@@ -1176,7 +1316,9 @@ namespace DeNelle.Village
             //                     them yields exactly (50,0,50).
             // On the overworld both are false, so the condition below reduces to the original
             // `(_agent == null || !_agent.isOnNavMesh) && !_isTeleporting` — unchanged.
-            bool foreignMover  = ForeignMoverOwnsTransform();
+            // (WO-968) resolved ONCE at the top of Update now — the clamp and the movement writers
+            // must never disagree about who owns the transform on a given frame.
+            bool foreignMover  = foreignOwnsTransform;
             bool inStagedArena = DeNelle.Village.Arena.BattleArena.IsArenaPosition(transform.position);
             if ((_agent == null || !_agent.isOnNavMesh) && !_isTeleporting && !foreignMover && !inStagedArena)
             {
@@ -1331,6 +1473,96 @@ namespace DeNelle.Village
             }
         }
 
+        // ── MOVEMENT BASIS resolution (WO-968 F3) ────────────────────────────────────
+        // WHAT WAS BROKEN, proven at source: this used to read
+        //     float yaw = _smartCamera != null ? _smartCamera.CameraYaw : 0f;
+        // and there is NO SmartMobileCamera in Dungeon_HealersCottage (zero references to its
+        // script GUID in the scene, and nothing runtime-adds one). So in a dungeon the whole
+        // camera-relative conversion below silently collapsed to the identity rotation and the
+        // player's stick meant WORLD +Z regardless of where the camera pointed — while the OTHER
+        // dungeon mover (DungeonHero) projected Camera.main for the SAME stick. Two movers, two
+        // frames of reference, one stick. Every [Flow:HeroDrift] line in the owner's dungeon
+        // capture reads camYaw=0.0, which is that identity, printed.
+        //
+        // The fix takes the basis from the camera that ACTUALLY EXISTS in the scene, and a missing
+        // basis is a LOUD failure rather than a silent identity.
+        private float _nextBasisFailAt;
+
+        private float ResolveMovementBasisYaw(out MovementBasis kind)
+        {
+            // Lazy re-fetch so the basis engages if the camera wired up after the hero.
+            if (_smartCamera == null) _smartCamera = Object.FindObjectOfType<SmartMobileCamera>();
+
+            var cam = Camera.main;
+            Vector3 camFwd = Vector3.zero;
+            bool usableMainCam = false;
+            if (cam != null)
+            {
+                camFwd = Vector3.ProjectOnPlane(cam.transform.forward, Vector3.up);
+                // A camera looking straight DOWN has no usable planar forward — that is a
+                // degenerate basis, not a basis. Treated as absent (and reported).
+                usableMainCam = camFwd.sqrMagnitude > 1e-6f;
+            }
+
+            kind = ResolveBasisKind(_smartCamera != null, usableMainCam);
+            switch (kind)
+            {
+                case MovementBasis.SmartMobileCamera:
+                    // PRESENCE, not value: CameraYaw legitimately RETURNS 0 in top-down/legacy
+                    // framing (WO-387). Falling back on a zero VALUE would re-base the town stick.
+                    return _smartCamera.CameraYaw;
+
+                case MovementBasis.MainCamera:
+                    return Mathf.Atan2(camFwd.x, camFwd.z) * Mathf.Rad2Deg;
+
+                default:
+                    // NEVER a silent identity (§12: no silent failures). With no basis source the
+                    // stick is world-absolute — "forward" walks world +Z no matter where the player
+                    // is looking — and that must be readable in one line of the capture instead of
+                    // inferred from a printed 0.0. Self-throttled: FlowTrace.Fail has no throttle
+                    // overload and this would otherwise fire every frame.
+                    if (Time.realtimeSinceStartup >= _nextBasisFailAt)
+                    {
+                        _nextBasisFailAt = Time.realtimeSinceStartup + 5f;
+                        DeNelle.Core.Diagnostics.FlowTrace.Fail("HeroLoco",
+                            $"NO MOVEMENT BASIS in scene '{gameObject.scene.name}': there is no " +
+                            "SmartMobileCamera and no Camera.main with a usable planar forward, so the " +
+                            "camera-relative conversion degrades to WORLD-ABSOLUTE — the stick's " +
+                            "'forward' is world +Z regardless of the view. Give the scene a camera (or a " +
+                            "SmartMobileCamera) rather than letting the basis resolve to identity.");
+                    }
+                    return 0f;
+            }
+        }
+
+        // ── OWNERSHIP SELF-REPORT (WO-968 S1 / WO-1016) ──────────────────────────────
+        // The neutralize that decides ownership (DungeonController.EnsureSingleDungeonMover) logs
+        // ONCE on apply and once on restore, so for the whole run in between "which mover is live"
+        // was unobservable — and the owner's capture proves it CHANGED mid-session. Every FLIP now
+        // names itself, so the question is answerable from the log alone, forever.
+        private bool _lastOwnerForeign;
+        private bool _hasLastOwner;
+
+        private void ReportOwnershipFlip(bool foreignOwns)
+        {
+            if (_hasLastOwner && _lastOwnerForeign == foreignOwns) return;
+            bool first = !_hasLastOwner;
+            _hasLastOwner = true;
+            _lastOwnerForeign = foreignOwns;
+            string ownerWord = foreignOwns
+                ? "FOREIGN CharacterController (this component writes NOTHING and publishes the MEASURED root speed to the animator)"
+                : "HeroLocomotion (sole integrator; animator fed from Velocity)";
+            DeNelle.Core.Diagnostics.FlowTrace.Step("HeroOwner",
+                $"TRANSFORM OWNER {(first ? "=" : "->")} " +
+                // NOTE: the ternary's branches are pre-built above the interpolation on purpose --
+                // a multi-line concatenation INSIDE a non-verbatim $"..." hole is CS8967 under this
+                // project's C# 9 language version (it compiles in a scratch pad on newer versions,
+                // which is exactly how it reached the gate).
+                $"{ownerWord} " +
+                $"[scene='{gameObject.scene.name}' scriptedMove={(ScriptedMoveActive ? "ZEROED" : "off")} " +
+                $"agent={(_agent == null ? "<none>" : (_agent.enabled ? "enabled" : "disabled"))}]");
+        }
+
         // ── [Flow:HeroOwner] WHO OWNS THE HERO — 1 Hz heartbeat (WO-968, §12) ────────
         // Forged by the 2026-08-10 dungeon session (owner F8 2312 "Everything is wrong check
         // locomotion" + 2313 "No camera movement"). The captures contained BOTH of these, minutes
@@ -1366,35 +1598,63 @@ namespace DeNelle.Village
         private bool    _ownerTraceHasLastPos;
         private float   _ownerTraceLastAt;
 
+        // ── MEASURED ROOT SPEED — the mover-agnostic truth (WO-968 F1) ───────────────
+        // Delta position / dt, sampled in LateUpdate so it is taken AFTER every Update-order mover
+        // has written the transform (DungeonHero's CharacterController.Move included). That sample
+        // point is what makes it mover-agnostic BY CONSTRUCTION rather than by a scene check.
+        // ⚠ It is computed OUTSIDE the FlowTrace gate on purpose: the animator feed consumes it, and
+        // a trace-gated measurement would collapse the feed to zero in a normal (untraced) build —
+        // i.e. it would reproduce the very defect this fixes, invisibly, everywhere but a capture.
+        private float _measuredRootSpeed;
+
+        /// <summary>
+        /// The hero root's measured planar speed (m/s) last frame, regardless of which component
+        /// wrote the transform. This — not <see cref="Velocity"/> — is what the animator is fed
+        /// whenever a foreign mover owns the rig.
+        /// </summary>
+        public float MeasuredRootSpeed => _measuredRootSpeed;
+
         private void LateUpdate()
         {
-            if (!DeNelle.Core.Diagnostics.FlowTrace.Enabled) return;
-
             Vector3 pos = transform.position;
             float now = Time.time;
-            float velRoot = 0f;
             if (_ownerTraceHasLastPos)
             {
                 float dt = Mathf.Max(1e-4f, now - _ownerTraceLastAt);
                 Vector3 d = pos - _ownerTraceLastPos; d.y = 0f;
-                velRoot = d.magnitude / dt;
+                _measuredRootSpeed = d.magnitude / dt;
             }
             _ownerTraceLastPos = pos;
             _ownerTraceLastAt = now;
             _ownerTraceHasLastPos = true;
 
-            float animSpeed = (_animator != null && _hasSpeedParam) ? _animator.GetFloat(AnimSpeed) : float.NaN;
             bool ccLive = ForeignMoverOwnsTransform();
+
+            // Self-report: every ownership FLIP names itself, so "which mover is live" can never
+            // again be unobservable for a whole run. Cheap — flips happen on dungeon enter/exit.
+            ReportOwnershipFlip(ccLive);
+
+            if (!DeNelle.Core.Diagnostics.FlowTrace.Enabled) return;
+
+            float velRoot = _measuredRootSpeed;
+            float animSpeed = (_animator != null && _hasSpeedParam) ? _animator.GetFloat(AnimSpeed) : float.NaN;
             string agentState = _agent == null ? "<none>"
                 : (_agent.enabled ? (_agent.isOnNavMesh ? "on-mesh" : "off-mesh") : "disabled");
-            string basisSrc = _smartCamera != null ? "SmartMobileCamera.CameraYaw" : "NONE(world-absolute)";
-            float basisYaw = _smartCamera != null ? _smartCamera.CameraYaw : 0f;
+            float basisYaw = ResolveMovementBasisYaw(out MovementBasis basisKind);
+            string basisSrc = basisKind == MovementBasis.SmartMobileCamera ? "SmartMobileCamera.CameraYaw"
+                            : basisKind == MovementBasis.MainCamera ? "Camera.main(flattened)"
+                            : "NONE(world-absolute)";
             var mainCam = Camera.main;
 
             DeNelle.Core.Diagnostics.FlowTrace.Throttle("HeroOwner", "owner", 1f,
-                $"scene='{gameObject.scene.name}' ownerCC={(ccLive ? "LIVE(foreign mover owns transform)" : "none")} " +
+                $"scene='{gameObject.scene.name}' " +
+                // WO-968 S1: the ONE field that answers "who moved the hero this frame".
+                $"owner={(ccLive ? "FOREIGN-CC" : "HeroLocomotion")} " +
+                $"ownerCC={(ccLive ? "LIVE(foreign mover owns transform)" : "none")} " +
                 $"ownerAgent={agentState} scriptedMove={(ScriptedMoveActive ? "ZEROED(dungeon neutralize ON)" : "off")} " +
-                $"velSelf={Velocity.magnitude:F2} velRoot={velRoot:F2} animSpeed={animSpeed:F2} " +
+                $"velSelf={Velocity.magnitude:F2} velRoot={velRoot:F2} " +
+                // WO-968 F1: which of the two the animator is actually being fed.
+                $"animFeed={(ccLive ? "velRoot(measured)" : "velSelf")} animSpeed={animSpeed:F2} " +
                 $"rootYaw={transform.eulerAngles.y:F1} " +
                 $"basis={basisSrc} basisYaw={basisYaw:F1} " +
                 $"mainCamYaw={(mainCam != null ? mainCam.transform.eulerAngles.y : -1f):F1} pos={pos:F2}");
@@ -1402,7 +1662,7 @@ namespace DeNelle.Village
             // The named defect, called out as a FAILURE the moment it is true rather than left for a
             // reader to spot: the world moved the hero but the animator is holding ~idle. Throttled
             // so a sustained stall reports once a second, not every frame.
-            if (velRoot > 0.5f && !float.IsNaN(animSpeed) && animSpeed < 0.1f)
+            if (IsAnimationStalled(velRoot, animSpeed))
                 DeNelle.Core.Diagnostics.FlowTrace.Throttle("HeroOwner", "anim-stall", 1f,
                     $"ANIMATION-VELOCITY STALL: root travelled {velRoot:F2} m/s but Animator Speed={animSpeed:F2} " +
                     $"(velSelf={Velocity.magnitude:F2}). The animator is being fed a DEAD value — a mover other " +

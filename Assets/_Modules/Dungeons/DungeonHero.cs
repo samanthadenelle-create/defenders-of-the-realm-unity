@@ -34,6 +34,23 @@
 //
 // All public surface is plain MonoBehaviour — no UniTask flows here (movement is
 // per-frame, not async).
+//
+// ── OWNERSHIP + FEED + BASIS (WO-968 / WO-1016, 2026-08-10) — READ THIS FIRST ──
+// * TRANSFORM: this component is the SOLE integrator while its CharacterController is
+//   ENABLED. The injected village HeroLocomotion now stands down on exactly that
+//   condition (HeroLocomotion.ForeignMoverOwnsTransform / SelfMayWriteTransform), which
+//   is the mirror of the "CC disabled -> the arena owns the hero" guard in Update below.
+//   Exactly one of the two writes this transform on any frame, decided by capability —
+//   NOT by the old static side-channel, which the owner's capture proved can lapse.
+// * ANIMATOR: Speed has ONE writer. When an ActorAnimator is on this rig (HeroLocomotion
+//   adds it), IT owns Speed and is fed the MEASURED root speed — i.e. whatever this
+//   component's CharacterController.Move actually did. We write Speed only when no
+//   ActorAnimator is present. The Animator handle is re-resolved every frame while dead;
+//   caching it once in Awake (before the async body swap) made the write a permanent
+//   silent no-op, which is half of "the hero slides in an idle clip".
+// * BASIS: every stick sampler goes through CameraRelative(), which re-resolves the
+//   camera and FAILS LOUDLY when there is none. See the P1 owner pin on DungeonStickBasis
+//   — camera-relative vs Keeper-relative is one value away.
 // =============================================================================
 
 using UnityEngine;
@@ -103,9 +120,17 @@ namespace DeNelle.Dungeons
 
         /// <summary>Animator <c>Speed</c> float hash — matches AnimatorSetup.cs.</summary>
         private static readonly int AnimSpeed = Animator.StringToHash("Speed");
-        // WO-163: cached once — whether the controller declares "Speed". The
-        // per-frame SetFloat below logs an error every frame if it doesn't.
+        // WO-163: whether the live controller declares "Speed". The per-frame SetFloat below
+        // logs an error every frame if it doesn't.
+        // WO-968 E13 — THIS USED TO BE RESOLVED EXACTLY ONCE, IN Awake, AND THAT IS A DEFECT.
+        // Awake runs BEFORE the async HeroBodySwapper rebuilds the Keeper's rig (the swap lands
+        // at the END of DungeonController's ready sequence, ~160 ms later), so on a body-swapped
+        // Keeper this component could hold a DESTROYED / placeholder Animator for the entire run
+        // — and the guarded SetFloat below then wrote NOTHING, forever, with no error. The rig is
+        // now re-resolved through ResolveAnimator(), the same self-heal idiom HeroLocomotion has
+        // had since DEF-70/WO-174 (this component simply never got it).
         private bool _hasSpeedParam;
+        private Animator _paramCheckedAnimator;
 
         /// <summary>The current horizontal velocity (XZ), eased toward the input.</summary>
         private Vector3 _planarVelocity;
@@ -138,14 +163,87 @@ namespace DeNelle.Dungeons
         private void Awake()
         {
             _controller = GetComponent<CharacterController>();
-            if (_moveCamera == null) _moveCamera = Camera.main;
-            // The Animator sits on the KayKit Keeper mesh child of the hero rig.
-            _animator = GetComponentInChildren<Animator>();
-            if (_animator != null && _animator.runtimeAnimatorController != null)
+            ResolveMoveCamera();
+            // The Animator sits on the KayKit Keeper mesh child of the hero rig. This is only a
+            // FIRST attempt — the real rig may not exist yet (async body swap). ResolveAnimator
+            // re-runs every frame while the handle is dead, so a late swap is picked up.
+            ResolveAnimator();
+        }
+
+        // ── Animator self-heal (WO-968 E13/E15) ──────────────────────────────────────
+        // Mirrors HeroLocomotion.ResolveAnimator + RefreshParamCache deliberately, rather than
+        // inventing a second mechanism: re-resolve while the handle is null (a DESTROYED Unity
+        // object compares == null, so a body swap heals itself), drop a handle that is no longer
+        // part of this rig, and re-scan the declared parameters whenever the Animator INSTANCE
+        // changes (a swap rebinds the runtimeAnimatorController too). Cheap on the steady state:
+        // one reference compare once the rig is wired.
+        private void ResolveAnimator()
+        {
+            // A stale-but-alive handle: the swapper can leave the old body alive-but-detached.
+            if (_animator != null && !_animator.transform.IsChildOf(transform))
+                _animator = null;
+
+            if (_animator == null)
             {
-                foreach (var p in _animator.parameters)
-                    if (p.nameHash == AnimSpeed) { _hasSpeedParam = true; break; }
+                var bodyT = transform.Find("HeroBody");
+                if (bodyT != null) _animator = bodyT.GetComponentInChildren<Animator>();
+                if (_animator == null) _animator = GetComponentInChildren<Animator>();
             }
+
+            if (_animator != null && _animator != _paramCheckedAnimator)
+                RefreshParamCache();
+        }
+
+        private void RefreshParamCache()
+        {
+            _paramCheckedAnimator = _animator;
+            _hasSpeedParam = false;
+            if (_animator == null || _animator.runtimeAnimatorController == null) return;
+            foreach (var p in _animator.parameters)
+                if (p.nameHash == AnimSpeed) { _hasSpeedParam = true; break; }
+
+            FlowTrace.Step("DungeonMover",
+                $"animator RE-RESOLVED on '{name}': animator='{_animator.name}' " +
+                $"controller='{(_animator.runtimeAnimatorController != null ? _animator.runtimeAnimatorController.name : "<null>")}' " +
+                $"hasSpeedParam={_hasSpeedParam}. (Awake-only caching was WO-968 E13 — a handle " +
+                "resolved before the async body swap made every Speed write a silent no-op.)");
+        }
+
+        // ── ONE SPEED OWNER (WO-968 F2) ──────────────────────────────────────────────
+        // Two components were writing the SAME Animator "Speed" parameter on the dungeon Keeper:
+        // this one (directly) and DeNelle.Core.Combat.ActorAnimator (driven by HeroLocomotion,
+        // which HeroBodySwapper injects onto the same rig). ActorAnimator is the canonical writer
+        // — it re-resolves the Animator AND its controller across body swaps, guards missing
+        // params, and damps the feed — and it is now fed the MEASURED root speed, so it publishes
+        // whatever ACTUALLY moved the hero, including this component's CharacterController.Move.
+        // So when it is present on this rig we YIELD rather than fight it; when it is absent
+        // (a dungeon Keeper with no village rig injected) we remain the writer, which is why the
+        // resolve above still has to be correct.
+        private DeNelle.Core.Combat.ActorAnimator _actorProbe;
+
+        private bool ActorAnimatorOwnsSpeed()
+        {
+            // Re-probe while null so it self-heals in BOTH directions (injected late by the body
+            // swap; destroyed on teardown — a destroyed Unity object compares == null).
+            if (_actorProbe == null) _actorProbe = GetComponent<DeNelle.Core.Combat.ActorAnimator>();
+            return _actorProbe != null && _actorProbe.isActiveAndEnabled;
+        }
+
+        /// <summary>
+        /// Pure ownership rule for the Animator Speed parameter — regression-testable with no
+        /// scene. This component writes Speed only when no ActorAnimator owns it AND it has a
+        /// live handle with the parameter declared.
+        /// </summary>
+        public static bool ShouldWriteSpeed(bool actorAnimatorPresent, bool animatorResolved, bool hasSpeedParam)
+        {
+            return !actorAnimatorPresent && animatorResolved && hasSpeedParam;
+        }
+
+        /// <summary>Guarded Speed write that honours <see cref="ShouldWriteSpeed"/>.</summary>
+        private void DriveSpeed(float speed)
+        {
+            if (!ShouldWriteSpeed(ActorAnimatorOwnsSpeed(), _animator != null, _hasSpeedParam)) return;
+            _animator.SetFloat(AnimSpeed, speed);
         }
 
         /// <summary>
@@ -199,6 +297,10 @@ namespace DeNelle.Dungeons
 
         private void Update()
         {
+            // Self-heal the Animator handle FIRST, every frame, before anything reads it — the
+            // async body swap lands mid-run and Awake's resolve is stale from that moment on.
+            ResolveAnimator();
+
             // Audit R-A1 (2026-08-01): while DungeonController disables this
             // CharacterController for a real-time arena fight (the arena's
             // HeroLocomotion is then the SOLE mover on this transform), skip the
@@ -213,8 +315,7 @@ namespace DeNelle.Dungeons
                 _planarVelocity = Vector3.zero;
                 _verticalVelocity = 0f;
                 _hasMoveTarget = false;
-                if (_animator != null && _hasSpeedParam)
-                    _animator.SetFloat(AnimSpeed, 0f);
+                DriveSpeed(0f);
                 return;
             }
 
@@ -234,10 +335,9 @@ namespace DeNelle.Dungeons
                              * Time.deltaTime;
             _controller.Move(motion);
 
-            // Feed the Animator's Speed float from the planar move speed so the
-            // Keeper rig blends idle <-> walk. Null-guarded — no-op without a rig.
-            if (_animator != null && _hasSpeedParam)
-                _animator.SetFloat(AnimSpeed, _planarVelocity.magnitude);
+            // Feed the Animator's Speed float from the planar move speed so the Keeper rig blends
+            // idle <-> walk — but ONLY while no ActorAnimator owns the parameter (WO-968 F2).
+            DriveSpeed(_planarVelocity.magnitude);
 
             TraceMoverHeartbeat();
         }
@@ -265,17 +365,23 @@ namespace DeNelle.Dungeons
                 $"tapTarget={_hasMoveTarget} yaw={transform.eulerAngles.y:F1} pos={transform.position:F2} " +
                 $"animator={(_animator != null ? _animator.name : "<null/destroyed>")} " +
                 $"hasSpeedParam={_hasSpeedParam} " +
+                // WO-968 F2: which component owns the Speed parameter on this rig.
+                $"speedOwner={(ActorAnimatorOwnsSpeed() ? "ActorAnimator(fed measured root speed)" : "DungeonHero")} " +
                 $"animSpeed={(_animator != null && _hasSpeedParam ? _animator.GetFloat(AnimSpeed) : float.NaN):F2} " +
+                $"basis={DungeonStickBasis} " +
                 $"moveCam={(_moveCamera != null ? _moveCamera.name : "<null>")} " +
                 $"camYaw={(_moveCamera != null ? _moveCamera.transform.eulerAngles.y : -1f):F1}");
 
             // Called out as a failure the moment it is true: this component is translating the root
-            // but its Animator handle is dead, so the walk cycle can never play from here.
-            if (_planarVelocity.magnitude > 0.5f && (_animator == null || !_hasSpeedParam))
+            // and NOBODY can publish that to the animator — its own handle is dead AND no
+            // ActorAnimator owns the parameter — so the walk cycle can never play. (When
+            // ActorAnimator DOES own it, a null handle here is expected, not a defect.)
+            if (_planarVelocity.magnitude > 0.5f && !ActorAnimatorOwnsSpeed()
+                && (_animator == null || !_hasSpeedParam))
                 FlowTrace.Throttle("DungeonMover", "dead-anim", 1f,
                     $"DungeonHero is MOVING at {_planarVelocity.magnitude:F2} m/s but its Animator handle is " +
-                    $"{(_animator == null ? "NULL/DESTROYED" : "missing the Speed parameter")} — the Speed write " +
-                    "above is a no-op. Resolved once in Awake, which runs BEFORE the async body swap.");
+                    $"{(_animator == null ? "NULL/DESTROYED" : "missing the Speed parameter")} and no " +
+                    "ActorAnimator owns Speed — nothing can drive the walk cycle on this rig.");
         }
 
         // ── Input resolution ─────────────────────────────────────────────────
@@ -327,6 +433,97 @@ namespace DeNelle.Dungeons
             return ResolveTapDirection();
         }
 
+        // ── THE MOVEMENT BASIS — one site, never a silent identity (WO-968 S3) ───────────────
+        // Three samplers (WASD, joystick, kit D-pad) each carried their OWN copy of the
+        // camera-projection block, and every copy degraded to `Vector3.forward / Vector3.right`
+        // when _moveCamera was null — a SILENT world-absolute basis, indistinguishable in the log
+        // from a working camera-relative one. _moveCamera was also resolved once in Awake, so a
+        // camera created after this component (the dungeon rig is bound later by DungeonController)
+        // left it null for the whole run. One resolver, one projection, one loud failure.
+        //
+        // ⚠ OPEN OWNER PIN P1 (WO-968 §12) — THE FEEL CALL IS NOT OURS.
+        // Camera-relative is shipped because it matches town and is what players expect. The
+        // alternative — Keeper-relative, where the stick is read against the hero's own visual
+        // facing — is ONE VALUE away: change DungeonStickBasis to StickBasis.KeeperRelative.
+        // Nothing else needs to change; both bases resolve through CameraRelative() below.
+        private enum StickBasis
+        {
+            /// <summary>Stick is read against the view (town parity). SHIPPED.</summary>
+            CameraRelative,
+            /// <summary>Stick is read against the Keeper's own visual forward.</summary>
+            KeeperRelative
+        }
+
+        private const StickBasis DungeonStickBasis = StickBasis.CameraRelative;
+
+        /// <summary>Degrees the Tripo FBX visual forward leads the root transform (DEF-7).</summary>
+        private const float ModelYawOffset = 90f;
+
+        private float _nextBasisFailAt;
+
+        /// <summary>
+        /// Re-resolves the camera the stick is read against while it is null. A destroyed camera
+        /// compares == null, so this self-heals in both directions (same idiom as ResolveAnimator).
+        /// </summary>
+        private void ResolveMoveCamera()
+        {
+            if (_moveCamera == null) _moveCamera = Camera.main;
+        }
+
+        /// <summary>
+        /// Converts a raw stick/keys vector into a world-space XZ direction using the ACTIVE basis.
+        /// Magnitude is preserved (analog speed) and clamped to 1. A missing basis is REPORTED,
+        /// never silently resolved to identity.
+        /// </summary>
+        private Vector3 CameraRelative(Vector2 raw)
+        {
+            Vector3 fwd, right;
+
+            if (DungeonStickBasis == StickBasis.KeeperRelative)
+            {
+                // The root carries FaceHeading's -90 model offset, so the VISUAL forward is the
+                // root forward rotated back by +90.
+                Quaternion visual = transform.rotation * Quaternion.Euler(0f, ModelYawOffset, 0f);
+                fwd = Vector3.ProjectOnPlane(visual * Vector3.forward, Vector3.up);
+                right = Vector3.ProjectOnPlane(visual * Vector3.right, Vector3.up);
+            }
+            else
+            {
+                ResolveMoveCamera();
+                if (_moveCamera == null)
+                {
+                    // §12: no silent failures. With no camera the stick is world-absolute — say so.
+                    if (Time.realtimeSinceStartup >= _nextBasisFailAt)
+                    {
+                        _nextBasisFailAt = Time.realtimeSinceStartup + 5f;
+                        FlowTrace.Fail("DungeonMover",
+                            "NO MOVEMENT BASIS: DungeonHero has no camera to read the stick against " +
+                            "(_moveCamera null and Camera.main absent), so 'forward' means world +Z " +
+                            "regardless of the view. The dungeon rig binds the camera via " +
+                            "DungeonController/SetCamera — if this fires, that bind never happened.");
+                    }
+                    fwd = Vector3.forward;
+                    right = Vector3.right;
+                }
+                else
+                {
+                    fwd = Vector3.ProjectOnPlane(_moveCamera.transform.forward, Vector3.up);
+                    right = Vector3.ProjectOnPlane(_moveCamera.transform.right, Vector3.up);
+                }
+            }
+
+            // Degenerate basis (camera looking straight down): keep the world axes rather than
+            // normalising a zero vector into a NaN heading.
+            if (fwd.sqrMagnitude < 0.0001f) fwd = Vector3.forward;
+            if (right.sqrMagnitude < 0.0001f) right = Vector3.right;
+            fwd.Normalize();
+            right.Normalize();
+
+            Vector3 dir = right * raw.x + fwd * raw.y;
+            if (dir.sqrMagnitude > 1f) dir.Normalize();
+            return dir;
+        }
+
         // ── Kit D-pad seam (loose reflection; cached) — F8 2026-07-30 ─────────
         private static System.Reflection.PropertyInfo s_hudMoveProp;
         private static bool s_hudMoveResolved;
@@ -351,20 +548,7 @@ namespace DeNelle.Dungeons
             Vector2 raw = default;
             try { raw = (Vector2)s_hudMoveProp.GetValue(null); } catch { return Vector3.zero; }
             if (raw.sqrMagnitude < 0.02f * 0.02f) return Vector3.zero;
-
-            // Same camera-relative projection as SampleJoystickMove.
-            Vector3 fwd = Vector3.forward, right = Vector3.right;
-            if (_moveCamera != null)
-            {
-                fwd = Vector3.ProjectOnPlane(_moveCamera.transform.forward, Vector3.up);
-                right = Vector3.ProjectOnPlane(_moveCamera.transform.right, Vector3.up);
-                if (fwd.sqrMagnitude < 0.0001f) fwd = Vector3.forward;
-                if (right.sqrMagnitude < 0.0001f) right = Vector3.right;
-                fwd.Normalize(); right.Normalize();
-            }
-            Vector3 dir = right * raw.x + fwd * raw.y;
-            if (dir.sqrMagnitude > 1f) dir.Normalize();
-            return dir;
+            return CameraRelative(raw);
         }
 
         /// <summary>
@@ -377,21 +561,7 @@ namespace DeNelle.Dungeons
         {
             Vector2 stick = DeNelle.Village.VirtualJoystick.Move;
             if (stick.sqrMagnitude < 0.02f * 0.02f) return Vector3.zero;   // deadzone
-
-            Vector3 fwd = Vector3.forward, right = Vector3.right;
-            if (_moveCamera != null)
-            {
-                fwd = Vector3.ProjectOnPlane(_moveCamera.transform.forward, Vector3.up);
-                right = Vector3.ProjectOnPlane(_moveCamera.transform.right, Vector3.up);
-                if (fwd.sqrMagnitude < 0.0001f) fwd = Vector3.forward;
-                if (right.sqrMagnitude < 0.0001f) right = Vector3.right;
-                fwd.Normalize();
-                right.Normalize();
-            }
-
-            Vector3 dir = right * stick.x + fwd * stick.y;
-            if (dir.sqrMagnitude > 1f) dir.Normalize();   // clamp; keep analog magnitude below 1
-            return dir;
+            return CameraRelative(stick);
         }
 
         /// <summary>
@@ -411,21 +581,9 @@ namespace DeNelle.Dungeons
 
             if (x == 0f && z == 0f) return Vector3.zero;
 
-            // Make the raw input camera-relative so "up" is screen-up under the
-            // isometric tilt — project the camera basis onto the floor plane.
-            Vector3 fwd = Vector3.forward, right = Vector3.right;
-            if (_moveCamera != null)
-            {
-                fwd = Vector3.ProjectOnPlane(_moveCamera.transform.forward, Vector3.up);
-                right = Vector3.ProjectOnPlane(_moveCamera.transform.right, Vector3.up);
-                // Degenerate basis (camera looking straight down) — fall back.
-                if (fwd.sqrMagnitude < 0.0001f) fwd = Vector3.forward;
-                if (right.sqrMagnitude < 0.0001f) right = Vector3.right;
-                fwd.Normalize();
-                right.Normalize();
-            }
-
-            return (right * x + fwd * z).normalized;
+            // Make the raw input camera-relative so "up" is screen-up under the tilt.
+            Vector3 dir = CameraRelative(new Vector2(x, z));
+            return dir.sqrMagnitude > 0.0001f ? dir.normalized : Vector3.zero;
         }
 
         /// <summary>
@@ -435,6 +593,7 @@ namespace DeNelle.Dungeons
         private void TrySampleTap()
         {
             if (!TryGetTapScreenPosition(out Vector2 screenPos)) return;
+            ResolveMoveCamera();   // WO-968: the Awake-time cache can be null for the whole run
             if (_moveCamera == null) return;
 
             Ray ray = _moveCamera.ScreenPointToRay(screenPos);
