@@ -19,8 +19,15 @@ says so in those words.
 | `DeNelle.Editor.DataRegression.RunAll` | **`REGRESSION_OK 159/159 suites`** (was 158 — `[wall-adjacency]` added) |
 | Android | **`[AndroidBuild] SUCCEEDED`** — 616,746,278 bytes, 21:33 |
 | Firebase App Distribution | release **`2026.08.11.319827`**, distributed to `testers` |
+| WebGL | **`[WebGLBuild] SUCCEEDED`** — `buildOptions = None`, 258 MB in 25 min |
+| **Production web** | live and verified — see §4 |
 
-Commits: `b6645acb` (pushed) — WO-972 walls, WO-968 camera, WO-973 mint + board regen.
+Commits (all pushed): `b6645acb` walls + camera, `cb07f538` canon corrections + Addressables WOs +
+proof images, `21e16d29` hollow-assertion registry + three functional bugs.
+
+**Six work orders minted tonight — every one of them from evidence, none from a hunch:**
+WO-973 (Bryn's bubble, found in the pixels), WO-974 + WO-975 (Addressables audit),
+WO-976 + WO-977 + WO-978 + WO-979 (the hollow-assertion sweep).
 
 ---
 
@@ -189,8 +196,43 @@ responses. Four load-bearing canon claims were refuted:
 **Method used, chosen from the record rather than convenience:** build → deploy preview → verify the
 preview actually serves the new build → `vercel promote <that exact url>`. Promoting a verified
 preview ships the artifact that was inspected; `--prod` re-uploads one that wasn't. No repo script
-supports promotion, so that step stays a deliberate manual command — no `--prod` was added to any
+supports promotion, so that step stayed a deliberate manual command — no `--prod` was added to any
 script in a release window.
+
+### Result — **shipped to production**
+
+| Step | Evidence |
+|---|---|
+| WebGL build | **`[WebGLBuild] SUCCEEDED - 258 MB in 00:25:03`** |
+| Ship build, not dev | **`[WebGLBuild] buildOptions = None (compressed ship build)`**, Brotli + `decompressionFallback`, **no `*symbols*` artifact** in `Builds/WebGL/Build/` |
+| Addressables content built | all of `Builds/WebGL/StreamingAssets/aa/` regenerated at **21:44**, incl. `gear_assets_all_*.bundle` (15,056,364 B) |
+| Preview | `defenders-of-the-realm-v2-1oe31jt4m.vercel.app` — verified serving `fe676addc91c105f18dd720db220a024` |
+| **Production** | `https://defenders-of-the-realm-v2.vercel.app` → **200**, title *Echoes of Elarion*, serving **`fe676addc91c105f18dd720db220a024`** — the same hash. Confirmed by polling until it flipped, not assumed from the promote command's output. |
+| Rollback | `Builds/PROD_ROLLBACK.txt` → `dpl_9vGadbKyPrQ55HR3PaUT53i9CNUh` (the Aug-5 build) |
+
+Two things worth knowing about the mechanics, since both contradicted expectations:
+
+- **The preview is behind Vercel deployment protection** — an anonymous fetch returns a Vercel
+  *login page*, not the game. The first verification attempt read that login HTML and correctly
+  reported **MATCH=NO**. It was verified through the share-token URL instead. Had the check been
+  "did the deploy command succeed", this would have looked fine either way.
+- **`vercel promote` on this project rebuilds** rather than re-aliasing the existing artifact — the
+  promote produced a *new* production deployment in `Building` state. So production did not flip
+  immediately, and a check run right after the command would have reported the **old** hash and read
+  as a failed promotion.
+
+### ⚠ One regression to flag: the payload grew 42%
+
+| | bytes |
+|---|---|
+| Previous production `.data` | 165,005,813 |
+| **Tonight's** `.data` | **234,411,182** |
+
+That is **+69 MB (+42%)** on the file every web player downloads before the game starts. It is not a
+blocker — production serves it — but it is a real load-time cost, and it makes **WO-545 / WO-282**
+(moving heroes out of `Resources/` into Addressables, never landed) materially more valuable than
+they were this morning. Nothing tonight was aimed at payload size; this is reported because it is a
+number that moved, not because it was measured on purpose.
 
 ---
 
@@ -214,6 +256,43 @@ Correct and worth keeping: nothing remote (`Remote.LoadPath` is `<undefined>`, `
 `File.ReadAllText`-throws-in-WebGL trap, and Addressables/`Resources/` are cleanly disjoint.
 
 ---
+
+## 5b. The hollow-assertion sweep — and three real bugs it uncovered
+
+Three unrelated traces reported success on broken things in a single night (`bubble=ok`,
+`hasSurface=ok`, `bodyErr=0.0`). That is a pattern, not a coincidence, so the codebase was swept for
+**every trace assertion that cannot fail**: `docs/reference/HOLLOW_ASSERTIONS_REGISTRY.md` — 44 rows,
+each opened at source, ranked by traffic × consequence.
+
+**The sweep found three genuine functional bugs. The hollow traces are what hid them:**
+
+- **WO-977 — starter skill points can be silently never granted.** The once-only latch flips
+  **before** two grants that, unlike the identical call twelve lines above, are not wrapped in the
+  `try`/`catch` that would fail loudly. A null `SkillSystem` ⇒ **zero points, latched forever**, log
+  says *"granted 2 starter skill points"*. **Fires for every player exactly once** — the worst
+  possible cadence, because replaying the save cannot reproduce it.
+- **WO-978 — four economy callers log what was *requested*, not what was *credited*.** `Grant` routes
+  to the clampable `EarnedIncome` kind, so **a capped bank pays 0 while the log reads `+500
+  crystals`.** This is precisely the shape of *"I did the raid and got nothing"* being unfalsifiable
+  from the logs. `EconomyService` itself is honest — the fix is caller-side only, and the ticket says
+  so loudly so nobody edits the one component that got it right.
+- **WO-979 — `WaveFeedbackDirector` reports a bind that can never succeed.** It prints
+  `hudBound={CoreServices.Hud != null}` while `FindHud()` is a stub whose whole body is
+  `return null;`. It doesn't just fail to prove the thing — it **names one variable and reports
+  another**, supplying evidence for the opposite conclusion.
+
+**Structural finding:** four separate traces all read the same `PanelManager.AnyOpen` bookkeeping
+flag — including a method literally named `VerifyOpenedVisible` whose entire predicate is that flag.
+So an invisible panel produces not one unverified claim but **four apparently independent
+confirmations**. That is how a blank screen survives a capture review.
+
+**Canon conflict closed:** `docs/INSTRUMENTATION_STANDARD.md` §1.4 was still titled *"The strip path
+(clean it up later)"* and instructed the reader to strip `Step` breadcrumbs and offered a "one-folder
+delete" of the diagnostics layer. That contradicted the binding §12 ruling (**never strip
+FlowTrace**) — and it was the *older* text, so a seat following the method doc would have deleted the
+net the rule exists to build. Now the **mute** path, plus a new §1.4b carrying the rule this night
+earned: **a trace field that cannot report failure is a bug, not a nicety**, and the fix is never
+deletion.
 
 ## 6. Open pins — need the owner, not more investigation
 
