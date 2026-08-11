@@ -77,6 +77,32 @@ namespace DeNelle.Core.State
         /// <summary>Suffix half of <see cref="LoadoutPrefix"/> (the schema version tag).</summary>
         public const string LoadoutSuffix = "-v1";
 
+        /// <summary>
+        /// WO-1019 Part A - the per-class HOT-SWAP (assignable extras) bar key.
+        /// Shape: "dotr-skillbar-&lt;class&gt;-extra-v1".
+        ///
+        /// THE DEFECT THIS RETIRES (owner felt-test 2026-08-10, verbatim: "he inherits the
+        /// hotswap from previous character"): AssignableSkillBar persisted under ONE GLOBAL
+        /// key, <see cref="SkillBarLegacyGlobalKey"/>. WO-861 Phase 0 made the W/E/R rail
+        /// (<see cref="LoadoutPrefix"/>) per-class for exactly this reason and the hot-swap
+        /// rail was never given the same treatment, so switching Grom -> Thrain re-rendered
+        /// the KNIGHT's assigned skills on the Mage's bar - and the first assign saved them
+        /// back over the shared key. Same defect shape as F8 seq-642 (GearLoadout) and
+        /// WO-967 (the HUD class literal): one store, many heroes.
+        ///
+        /// Unlike <see cref="LoadoutKeyFor"/> this key is NOT byte-identical to the legacy
+        /// one for any class, so AssignableSkillBar performs a FILTERED one-shot read of the
+        /// legacy value: each class inherits only the entries it actually owns
+        /// (AbilityCatalog.IsUsableByClass). The contaminating ids are dropped by
+        /// construction rather than by a migration step that could get it wrong.
+        /// </summary>
+        public const string SkillBarPrefix = "dotr-skillbar-";
+        /// <summary>Suffix half of <see cref="SkillBarPrefix"/> (bar name + schema version tag).</summary>
+        public const string SkillBarSuffix = "-extra-v1";
+        /// <summary>The pre-WO-1019 GLOBAL hot-swap bar key, kept ONLY so the filtered
+        /// migration read and the New-Game reset can both name the same literal.</summary>
+        public const string SkillBarLegacyGlobalKey = "dotr-skillbar-extra-v1";
+
         /// <summary>Every equip-slot prefix, so a reset can loop instead of listing them.</summary>
         public static readonly string[] AllSlotPrefixes = { Weapon, Armor, OffHand, Ring, Amulet };
 
@@ -84,6 +110,11 @@ namespace DeNelle.Core.State
         public static string LoadoutKeyFor(string classKey) =>
             LoadoutPrefix + (string.IsNullOrEmpty(classKey) ? "knight" : classKey.Trim().ToLowerInvariant()) +
             LoadoutSuffix;
+
+        /// <summary>The HOT-SWAP (assignable extras) bar key for a lowercase class key.</summary>
+        public static string SkillBarKeyFor(string classKey) =>
+            SkillBarPrefix + (string.IsNullOrEmpty(classKey) ? "knight" : classKey.Trim().ToLowerInvariant()) +
+            SkillBarSuffix;
     }
 
     /// <summary>
@@ -1073,11 +1104,24 @@ namespace DeNelle.Core.State
                 }
                 string loadoutKey = EquipPrefKeys.LoadoutKeyFor(classKey);
                 if (PlayerPrefs.HasKey(loadoutKey)) { PlayerPrefs.DeleteKey(loadoutKey); deleted++; }
+                // WO-1019: the HOT-SWAP bar is the THIRD store with this exact shape and was the
+                // only one this reset never touched, so a New Game inherited the old hero's
+                // assigned extras verbatim. Clear it with the rest.
+                string skillBarKey = EquipPrefKeys.SkillBarKeyFor(classKey);
+                if (PlayerPrefs.HasKey(skillBarKey)) { PlayerPrefs.DeleteKey(skillBarKey); deleted++; }
+            }
+            // WO-1019: and the pre-per-class GLOBAL hot-swap key, or a New Game would re-migrate
+            // the old shared bar back in on first read.
+            if (PlayerPrefs.HasKey(EquipPrefKeys.SkillBarLegacyGlobalKey))
+            {
+                PlayerPrefs.DeleteKey(EquipPrefKeys.SkillBarLegacyGlobalKey);
+                deleted++;
             }
             PlayerPrefs.Save();
             FlowTrace.Step("Save",
                 $"ResetToNewGame: cleared {deleted} stale equip/loadout PlayerPrefs key(s) " +
-                "(dotr-equip-* + dotr-loadout-*) - a new game starts on the class STARTER loadout, never an old equip.");
+                "(dotr-equip-* + dotr-loadout-* + dotr-skillbar-*) - a new game starts on the class " +
+                "STARTER loadout, never an old equip and never another hero's hot-swap bar.");
         }
 
         // =====================================================================

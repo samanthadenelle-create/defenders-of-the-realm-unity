@@ -531,6 +531,10 @@ namespace DeNelle.Village.Hud
     {
         private HeroAbilities _abilities;
         private string _sig;
+        // WO-1019: the class this producer last BOUND the bar to, so the trace can name the
+        // TRANSITION (knight -> mage) and not just the destination. A hero switch that failed to
+        // rebind is only visible as an old->new class with UNCHANGED ids.
+        private string _boundClass;
 
         public AbilityLoadoutProducer(IHudModel m) : base(m, 0.20f) { }
 
@@ -599,8 +603,18 @@ namespace DeNelle.Village.Hud
             // eyes. This fires on a loadout-signature CHANGE only (never per poll, Poll runs 5x/s)
             // and names the class, WHERE the class came from, and the ability ids it produced —
             // so "class='knight' source=... " on a Mage names the defect on sight next time.
+            //
+            // WO-1019 EXTENDS THAT SAME LINE (one trace vocabulary, not a competing second one):
+            // it now names the BAR (qwer vs hotswap) and the class TRANSITION. The owner's
+            // "he inherits the hotswap from previous character" was a bar that did not REBIND on a
+            // hero switch, and a destination-only line cannot show that — "class='mage' (was
+            // 'knight') ids=[Sword Heroic,...]" names the defect on sight, where "class='mage'
+            // ids=[...]" alone does not.
+            string wasClause = (!string.IsNullOrEmpty(_boundClass) && _boundClass != cls)
+                ? " (was '" + _boundClass + "')" : "";
+            _boundClass = cls;
             DeNelle.Core.Diagnostics.FlowTrace.Step("HudModel",
-                "ability bar bound: class='" + cls + "' source=" + clsSource +
+                "ability bar bound: bar=qwer class='" + cls + "'" + wasClause + " source=" + clsSource +
                 " hero='" + DeNelle.Core.State.HeroCanonNames.ForJob(cls) + "' ids=[" +
                 string.Join(",", slots.ConvertAll(s => s.Name).ToArray()) + "] sig=" + sig);
             // F8-33: name every ability that fell back to placeholder art — once per loadout
@@ -867,6 +881,8 @@ namespace DeNelle.Village.Hud
     {
         private HeroAbilities _abilities;
         private string _sig;
+        // WO-1019: same pair of fields as AbilityLoadoutProducer, for the same reason.
+        private string _boundClass;
 
         public AssignableLoadoutProducer(IHudModel m) : base(m, 0.20f) { }
 
@@ -874,6 +890,11 @@ namespace DeNelle.Village.Hud
         {
             if (_abilities == null || !_abilities) _abilities = Object.FindAnyObjectByType<HeroAbilities>();
             var bar = AssignableSkillBarAccess.Current;
+            // WO-1019: THE bar the owner reported ("he inherits the hotswap from previous
+            // character") and it was emitting NOTHING — WO-967 instrumented only the Q/W/E/R rail,
+            // so the hot-swap rail's contents were invisible in every capture and the defect was
+            // catchable only by her eyes. Same resolver, same trace vocabulary as that rail.
+            string cls = HudHeroClassResolver.Resolve(_abilities, _boundClass, out string clsSource);
 
             var slots = new List<AbilitySlotRecord>(AssignableSkillBar.SlotCount);
             var sb = new System.Text.StringBuilder();
@@ -900,8 +921,16 @@ namespace DeNelle.Village.Hud
             }
 
             string sig = sb.ToString();
-            if (sig == _sig) return;
+            if (sig == _sig && string.Equals(_boundClass, cls, System.StringComparison.Ordinal)) return;
             _sig = sig;
+            string wasClause = (!string.IsNullOrEmpty(_boundClass) && _boundClass != cls)
+                ? " (was '" + _boundClass + "')" : "";
+            _boundClass = cls;
+            // Change-gated (Poll runs 5x/s), never per poll — identical cadence to the qwer rail.
+            DeNelle.Core.Diagnostics.FlowTrace.Step("HudModel",
+                "ability bar bound: bar=hotswap class='" + cls + "'" + wasClause + " source=" + clsSource +
+                " hero='" + DeNelle.Core.State.HeroCanonNames.ForJob(cls) + "' ids=[" +
+                string.Join(",", slots.ConvertAll(s => s.Name).ToArray()) + "] sig=" + sig);
             Model.Assignable.SetSlots(slots);
         }
     }

@@ -192,6 +192,19 @@ namespace DeNelle.Village
                 return false;
             }
 
+            // WO-1019: a hero may only bind an ability its OWN class (or the universal pool)
+            // authors — the same invariant Load enforces on restore, applied at the write side so
+            // a cross-class equip path can never re-contaminate the bar.
+            string wearerClass = ResolveClass();
+            if (!AbilityCatalog.IsUsableByClass(abilityId, wearerClass))
+            {
+                FlowTrace.Warn("Loadout", "Equip REJECTED — '" + abilityId + "' is not authored for class '" +
+                                          wearerClass + "' (owner='" +
+                                          (AbilityCatalog.OwningClassOf(abilityId) ?? "<unknown>") +
+                                          "'). A hero must never present another class's kit.");
+                return false;
+            }
+
             // Reject a duplicate equip — the same ability can't sit in two slots.
             foreach (var kvp in _slots)
             {
@@ -297,9 +310,12 @@ namespace DeNelle.Village
         private void Load()
         {
             _slots.Clear();
-            string key = PrefsKey;
+            string cls = ResolveClass();
+            string key = PrefsKeyFor(cls);
             _loadedKey = key;
             string raw = PlayerPrefs.GetString(key, string.Empty);
+            int dropped = 0;
+            string droppedNames = null;
             if (!string.IsNullOrEmpty(raw))
             {
                 foreach (var pair in raw.Split(';'))
@@ -309,9 +325,35 @@ namespace DeNelle.Village
                     if (eq <= 0 || eq >= pair.Length - 1) continue;
                     var slot = ParseSlot(pair.Substring(0, eq));
                     if (!slot.HasValue || slot.Value == AbilitySlot.Q) continue;
-                    _slots[slot.Value] = pair.Substring(eq + 1);
+                    string id = pair.Substring(eq + 1);
+
+                    // WO-1019 THE RULE: a bound ability that is not valid for the active hero's
+                    // class is DROPPED and the slot falls back to that class's stock def (see
+                    // HeroAbilities.Resolve — an empty slot IS the class default). A hero must
+                    // never present another class's kit.
+                    //
+                    // The per-class KEY (WO-861 Phase 0, above) already keeps the classes apart in
+                    // the normal flow, so this is the belt-and-braces half: it also covers a key
+                    // written before that split, a pool entry that later moved class, and any
+                    // future writer that forgets the rule. Never a silent drop (CLAUDE.md §12).
+                    if (!AbilityCatalog.IsUsableByClass(id, cls))
+                    {
+                        dropped++;
+                        droppedNames = droppedNames == null
+                            ? id + "(owner=" + (AbilityCatalog.OwningClassOf(id) ?? "<unknown>") + ")"
+                            : droppedNames + "," + id + "(owner=" + (AbilityCatalog.OwningClassOf(id) ?? "<unknown>") + ")";
+                        continue;
+                    }
+                    _slots[slot.Value] = id;
                 }
             }
+
+            if (dropped > 0)
+                FlowTrace.Warn("Loadout",
+                    "W/E/R bar: DROPPED " + dropped + " id(s) not authored for class '" + cls + "' [" +
+                    droppedNames + "] while loading '" + key + "' - those slots fall back to the class " +
+                    "stock def. WO-1019.");
+
             Changed?.Invoke();
         }
 

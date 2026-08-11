@@ -466,6 +466,16 @@ namespace DeNelle.Village
             var heroLoadout = hero.GetComponent<HeroLoadout>();
             heroLoadout?.ReloadFromPrefs();
 
+            // HOT-SWAP BAR (AssignableSkillBar, WO-1019): the same guarantee for the OTHER
+            // persisted ability rail. It used to be reached only lazily via
+            // AssignableSkillBarAccess (which auto-adds it), so a hero that PERSISTS across a
+            // scene load never re-ran its Awake->Load and kept whatever the previous hero left in
+            // memory - the owner's "he inherits the hotswap from previous character". Its key is
+            // now per-class, so this reload lands on THIS hero's bar.
+            // DisallowMultipleComponent makes the add a no-op when present.
+            if (hero.GetComponent<AssignableSkillBar>() == null) hero.AddComponent<AssignableSkillBar>();
+            hero.GetComponent<AssignableSkillBar>()?.ReloadFromPrefs();
+
             // DAMAGE SINK (F8 2026-08-05): HeroHealth is the ONLY way anything hurts the hero —
             // EnemyBrain/Enemy resolve the player as IDamageableStructure through this component.
             // Until now it was attached exclusively by HeroHealthBootstrap, which keys off a

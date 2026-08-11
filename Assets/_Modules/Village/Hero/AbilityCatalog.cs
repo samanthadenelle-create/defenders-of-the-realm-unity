@@ -284,6 +284,78 @@ namespace DeNelle.Village
                 : heroClass.Trim().ToLowerInvariant();
         }
 
+        // =====================================================================
+        //  WO-1019 Part A — CLASS OWNERSHIP of an ability id
+        // -----------------------------------------------------------------------------
+        //  Both persisted ability bars (HeroLoadout = the W/E/R rail, AssignableSkillBar
+        //  = the hot-swap rail) store ability IDS and restore them on load. Neither could
+        //  ask the question "does this id even belong to the hero wearing it?", so a bar
+        //  restored from another hero's session rendered that hero's kit — the owner's
+        //  "he inherits the hotswap from previous character" on Thrain.
+        //
+        //  The answer is DATA, not a string convention: an ability's owning class is the
+        //  abilities.json CLASS KEY it is authored under, with the "-skills" pool suffix
+        //  stripped ("mage-skills" -> "mage"). The id PREFIX agrees today (mage.fireball)
+        //  but it is decoration — a renamed id must not silently change who may equip it.
+        //
+        //  "universal-skills" -> "universal", usable by EVERY class (that is what the pool
+        //  is FOR: universal.arcane-bolt / universal.mend / universal.dash).
+        // =====================================================================
+
+        /// <summary>The pool class key whose abilities every hero may equip.</summary>
+        public const string UniversalPoolClass = "universal";
+
+        private const string SkillsPoolSuffix = "-skills";
+
+        /// <summary>
+        /// The class that OWNS <paramref name="abilityId"/> — the abilities.json class key it is
+        /// authored under, with the "-skills" pool suffix stripped ("mage-skills" -> "mage").
+        /// Returns <see cref="UniversalPoolClass"/> for the shared pool and null for a
+        /// null/empty/unknown id (an id no longer in the catalog belongs to nobody).
+        /// </summary>
+        public static string OwningClassOf(string abilityId)
+        {
+            if (string.IsNullOrEmpty(abilityId)) return null;
+            EnsureLoaded();
+            if (_data.Classes == null) return null;
+            string want = abilityId.Trim().ToLowerInvariant();
+            foreach (var kvp in _data.Classes)
+            {
+                var cls = kvp.Value;
+                if (cls?.Abilities == null) continue;
+                foreach (var def in cls.Abilities.Values)
+                {
+                    if (def == null || string.IsNullOrEmpty(def.Id)) continue;
+                    if (def.Id.Trim().ToLowerInvariant() != want) continue;
+                    string key = (kvp.Key ?? string.Empty).Trim().ToLowerInvariant();
+                    return key.EndsWith(SkillsPoolSuffix, StringComparison.Ordinal)
+                        ? key.Substring(0, key.Length - SkillsPoolSuffix.Length)
+                        : key;
+                }
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// True when a hero of <paramref name="heroClass"/> may have <paramref name="abilityId"/>
+        /// bound to a bar slot: the id is authored under that class (kit or "-skills" pool) or
+        /// under the universal pool. An UNKNOWN id returns false — it cannot render or cast, so
+        /// keeping it bound only preserves a lie on the bar.
+        ///
+        /// CLERIC ALIAS: HeroAbilities.Awake and HeroLoadout.ResolveClass both map Cleric onto the
+        /// "mage" loadout (WO-226) and there is no "cleric" block in abilities.json, so the same
+        /// alias is applied here — otherwise this predicate would drop a Cleric's ENTIRE bar.
+        /// </summary>
+        public static bool IsUsableByClass(string abilityId, string heroClass)
+        {
+            string owner = OwningClassOf(abilityId);
+            if (string.IsNullOrEmpty(owner)) return false;
+            if (owner == UniversalPoolClass) return true;
+            string cls = NormalizeClass(heroClass);
+            if (cls == "cleric") cls = "mage";
+            return owner == cls;
+        }
+
         private static string SlotKey(AbilitySlot slot)
         {
             switch (slot)
