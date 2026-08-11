@@ -37,6 +37,13 @@
 // ever touching the dungeon - it is not possible to freeze the room the player is
 // in through this API.
 //
+// THE SCENE IS A FLOOR, NOT A PEER FLAG (WO-1017, proven by F8 seq 2314): while the
+// active scene is off-hub it holds the town down, and an ad-hoc hold layered on top
+// (a BattleArena encounter staged INSIDE a dungeon) can only ever ADD. Its Resume
+// falls back TO the floor, never through it. Before this, the arena's paired Resume
+// released the dungeon's own baseline and the town ran on with the player still
+// standing in the dungeon. See Resume + ApplySceneBaseline.
+//
 // HARVESTING IS NOT REPRESENTED HERE AT ALL. There is deliberately no
 // HarvestSuspended flag: a flag that exists is a flag someone eventually reads,
 // and the ruling is that harvesting never stops. Its absence is the enforcement.
@@ -106,6 +113,15 @@ namespace DeNelle.Core
         private static string _reason = "none";
         private static float _graceUntil = -1f;
         private static string _lastActiveScene;
+
+        // ── The scene FLOOR (WO-1017) ───────────────────────────────────────────
+        // Non-null while the ACTIVE scene itself demands the town stand still (the
+        // player is active somewhere that is not a hub and not the front-end). This is
+        // the baseline every ad-hoc hold sits ON TOP OF; see Resume for why it exists.
+        // Written ONLY by ApplySceneBaseline, so there is exactly one writer and the
+        // floor can never drift from the scene the player is standing in.
+        private static string _floorReason;
+        private static string _floorScene;
 
         /// <summary>True while the town is held still because the player is elsewhere.</summary>
         public static bool IsSuspended => _suspended;
@@ -208,11 +224,44 @@ namespace DeNelle.Core
                 // Not an error. Teardown paths call this unconditionally on purpose.
                 return;
             }
+
+            string prior = _reason;
+            string why = string.IsNullOrEmpty(reason) ? "unspecified" : reason;
+
+            // ── THE SCENE FLOOR (WO-1017) ───────────────────────────────────────
+            // PROVEN BY CAPTURE (F8 seq 2314, Player.log L195137/L213948/L224706): the
+            // scene gate DID fire on entering 'Dungeon_HealersCottage' and suspended the
+            // town. A real-time BattleArena encounter then staged INSIDE that dungeon and
+            // called Suspend() again - which, being idempotent and FLAT, only rewrote the
+            // reason. When the fight resolved, BattleArena's paired Resume() released the
+            // whole suspension, DUNGEON BASELINE INCLUDED, and started a return grace for a
+            // return that had not happened. 2.7 s later TownActivityProbe caught the town
+            // running with the player still standing in the dungeon.
+            //
+            // The defect is NOT a missed classification - it is that a NESTED hold could
+            // lift the town on its way out. So the scene baseline is a FLOOR, not another
+            // peer flag: an ad-hoc hold may only ever ADD to it, and releasing that hold
+            // can only fall BACK to the floor, never through it. Expressed here rather
+            // than by counting Suspends because the two Resume call sites pass a
+            // resume-REASON, not the key they took - they cannot be matched to their own
+            // Suspend without changing their call signatures.
+            if (_floorReason != null)
+            {
+                _graceUntil = -1f;   // the player never came back; a return grace would be a lie
+                _reason = _floorReason;
+                FlowTrace.Warn("TownSuspend",
+                    $"Resume ({why}) released the nested hold '{prior}' but the player is STILL off-hub " +
+                    $"in '{_floorScene}' - the SCENE FLOOR re-asserts the suspension immediately and NO " +
+                    "return grace is started. A nested hold (arena battle, cutscene) must never lift the " +
+                    "town on its way out. Reason restored to the floor.");
+                return;
+            }
+
             _suspended = false;
             float g = Mathf.Max(0f, graceSeconds);
             _graceUntil = Time.time + g;
             FlowTrace.Step("TownSuspend",
-                $"town RESUMED ({(string.IsNullOrEmpty(reason) ? "unspecified" : reason)}) after '{_reason}' - " +
+                $"town RESUMED ({why}) after '{prior}' - " +
                 $"holding {g:0.0}s return grace so no held wave lands the instant the player is back.");
             _reason = "none";
         }
@@ -231,6 +280,8 @@ namespace DeNelle.Core
             _reason = "none";
             _graceUntil = -1f;
             _lastActiveScene = null;
+            _floorReason = null;
+            _floorScene = null;
             WavePolicy = InProgressWavePolicy.SuspendAndResume;
         }
 
@@ -262,25 +313,94 @@ namespace DeNelle.Core
 
         private static void EvaluateActiveScene(string trigger)
         {
-            var active = SceneManager.GetActiveScene();
-            string name = active.name;
+            string name = SceneManager.GetActiveScene().name;
             if (string.IsNullOrEmpty(name)) return;
-            if (name == _lastActiveScene) return;
-            _lastActiveScene = name;
+            ApplySceneBaseline(name, trigger);
+        }
+
+        /// <summary>
+        /// Does the scene named <paramref name="sceneName"/> ITSELF demand that the town
+        /// stand still? Derived from scene KIND, never from a dungeon whitelist: the test
+        /// is "not a hub and not the front-end", so a dungeon baked tomorrow - a composed
+        /// <c>dg_*</c>, a hand-built <c>Dungeon_*</c>, a <c>RaidBase_*</c>, an ATB battle -
+        /// is classified correctly on the day it exists with no list to edit. That is the
+        /// whole reason the rule is phrased negatively; see InstallSceneHook.
+        ///
+        /// Public because it is the ONE predicate the regression can pin per scene kind
+        /// without loading a scene.
+        /// </summary>
+        public static bool SceneDemandsSuspension(string sceneName, out string reason)
+        {
+            reason = null;
+            if (string.IsNullOrEmpty(sceneName)) return false;
 
             // Menus / front-end are not "the player is off adventuring" - there is no town
-            // loaded to protect and suspending there would only muddy the trace. Only a
-            // real gameplay scene that is not a hub counts as being elsewhere.
-            bool isHub = HubScenes.IsHub(name);
-            bool isFrontEnd = name == SceneRouter.Title || name.StartsWith("HeroSelect", System.StringComparison.OrdinalIgnoreCase);
+            // loaded to protect and suspending there would only muddy the trace.
+            bool isHub = HubScenes.IsHub(sceneName);
+            bool isFrontEnd = sceneName == SceneRouter.Title
+                              || sceneName.StartsWith("HeroSelect", System.StringComparison.OrdinalIgnoreCase);
+            if (isHub || isFrontEnd) return false;
 
-            if (isHub || isFrontEnd)
+            reason = "player active in '" + sceneName + "'";
+            return true;
+        }
+
+        /// <summary>
+        /// Set the scene FLOOR from <paramref name="sceneName"/> and move the suspension to
+        /// match it. The single writer of the floor.
+        ///
+        /// THE DEDUP IS DELIBERATELY ONE-DIRECTIONAL (WO-1017). When the active scene has
+        /// not changed we may still RE-ASSERT a lost floor, but we must NEVER auto-resume:
+        /// a legitimate ad-hoc hold sits above the floor (the arena stages 7 km away in the
+        /// SAME hub scene, so its suspension is floorless by design), and an unsolicited
+        /// resume on some unrelated additive sceneLoaded would cancel that fight's pause
+        /// mid-swing. Upward only.
+        ///
+        /// Public so the regression can drive the exact transition a scene load drives,
+        /// instead of green-ticking over a scene it cannot load headlessly.
+        /// </summary>
+        public static void ApplySceneBaseline(string sceneName, string trigger)
+        {
+            if (string.IsNullOrEmpty(sceneName)) return;
+            string t = string.IsNullOrEmpty(trigger) ? "unspecified" : trigger;
+
+            bool demands = SceneDemandsSuspension(sceneName, out string floor);
+            // Store the reason EXACTLY as it is applied to Suspend below, trigger and all.
+            // Storing the bare `floor` here made the fallback restore a DIFFERENT string than
+            // the one the floor was raised with, so after a nested Resume the town reported a
+            // reason that no longer said how it got there - caught by [town-suspend-floor]
+            // case [nested-hold]. The floor's reason is the thing that explains the real state,
+            // so it must survive a clobber verbatim.
+            string floorReason = demands ? floor + " (" + t + ")" : null;
+            _floorReason = floorReason;
+            _floorScene = demands ? sceneName : null;
+
+            if (sceneName == _lastActiveScene)
             {
-                Resume("active scene '" + name + "' is " + (isHub ? "a hub" : "front-end") + " (" + trigger + ")");
+                // Same scene. Upward-only: restore a floor that something released out
+                // from under us, and say so loudly - a silent re-assert would hide the
+                // very clobber this ticket exists to stop.
+                if (demands && !_suspended)
+                {
+                    FlowTrace.Warn("TownSuspend",
+                        $"scene FLOOR was lost while still in '{sceneName}' - re-asserting ({t}). " +
+                        "Something released the town without the player leaving.");
+                    Suspend(floorReason);
+                }
                 return;
             }
 
-            Suspend("player active in '" + name + "' (" + trigger + ")");
+            _lastActiveScene = sceneName;
+
+            if (!demands)
+            {
+                _floorReason = null;
+                _floorScene = null;
+                Resume("active scene '" + sceneName + "' is a hub / front-end (" + t + ")");
+                return;
+            }
+
+            Suspend(floorReason);
         }
     }
 }
