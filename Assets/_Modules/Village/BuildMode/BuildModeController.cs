@@ -1131,9 +1131,32 @@ namespace DeNelle.Village
         /// (owner 2026-07-24 "tell me why it's red") so both read identically.
         /// </summary>
         private string ReasonLabelText(BuildRejectReason reason)
-            => reason == BuildRejectReason.CannotAfford
-                ? ShortfallMessage(EffectiveCostFor(_armed))
-                : BuildFeedbackToast.MessageFor(reason);
+        {
+            if (reason == BuildRejectReason.CannotAfford) return ShortfallMessage(EffectiveCostFor(_armed));
+
+            string text = BuildFeedbackToast.MessageFor(reason);
+            // WO-972 — WORDS, NEVER COLOUR ALONE. The owner is red/green colourblind, so the
+            // red ghost tint conveys nothing; "Too close to another building" alone did not
+            // say WHAT was in the way. The Occupied gates capture the occupant id, so say it.
+            if (reason == BuildRejectReason.Occupied && !string.IsNullOrEmpty(_lastRejectDetail))
+                text += " - " + _lastRejectDetail + " is already on that square";
+            return text;
+        }
+
+        /// <summary>
+        /// WO-972 — the last Occupied gate's occupant, in player words. Set by the CellGrid /
+        /// WorldOverlap rejects in IsValidPlacement and cleared at the top of every evaluation,
+        /// so it can never carry a stale name onto a later reject. ASCII only (player-visible).
+        /// </summary>
+        private string _lastRejectDetail;
+
+        /// <summary>The occupant's catalog display name, falling back to its id, then plain words.</summary>
+        private static string OccupantLabel(string itemId)
+        {
+            if (string.IsNullOrEmpty(itemId)) return "Something";
+            var e = CatalogRegistry.Get(itemId);
+            return e != null && !string.IsNullOrEmpty(e.displayName) ? e.displayName : itemId;
+        }
 
         /// <summary>
         /// TWO-STEP dropped state (owner ruling 2026-07-13): the pending ghost sits frozen
@@ -1514,7 +1537,12 @@ namespace DeNelle.Village
             // cover it (PlacementGrid.FootprintCells yaw overload; ×1 at cardinals —
             // byte-identical to the legacy claim). Under-claiming at 45° was the
             // placement-lies bug the architecture review vetoed (G-F).
-            footprint = _grid.FootprintCells(StructureFactory.MeasureUprightFootprintMetres(entry), ArmedYawDegrees);
+            // WO-972 — the claim metric, not the raw mesh measure. Identical for every row
+            // EXCEPT a Wall, whose claim comes off the authored placement.footprint so a
+            // 3.03 m palisade on a 3.00 m cell stays a ONE-CELL tile instead of squaring up
+            // into the 2x2 block that rejected the neighbouring cell (F8 seq 2327).
+            footprint = _grid.FootprintCells(StructureFactory.MeasureClaimFootprintMetres(entry), ArmedYawDegrees);
+            _lastRejectDetail = null;   // per-evaluation; only an Occupied gate below sets it
 
             // SURFACE ROLE (data-driven, PlacementRules.mustSitOn) — a WallWalk defense MUST seat
             // on a wall TOP (defensive posture); everything else is a flat-ground placement. The
@@ -1593,6 +1621,10 @@ namespace DeNelle.Village
                 FlowTrace.Warn("Build",
                     $"REJECT Occupied cell=({cell.x},{cell.y}) fp=({footprint.x}x{footprint.y}) gate=CellGrid " +
                     $"occupantCell=({occupantCell.x},{occupantCell.y}) occupant='{occupant ?? "<none>"}'.");
+                // WORDS, never colour alone (the owner is red/green colourblind, so a red
+                // ghost tint carries NO information for her): name the thing that owns the
+                // square. The trace already knew; the player was told nothing but a hue.
+                _lastRejectDetail = OccupantLabel(occupant);
                 reason = BuildRejectReason.Occupied; return false;
             }
 
@@ -1609,7 +1641,16 @@ namespace DeNelle.Village
             //    any OTHER overlapping structure still rejects.
             GameObject ignore = supportingWall != null
                 ? supportingWall.GetComponentInParent<PlacedStructure>()?.gameObject : null;
-            if (OverlapsExistingStructure(footprintAabb, ignore, out var blocker, out var blockerBounds))
+            // WO-972 — a WALL may ABUT a wall. Wall bodies are authored slightly wider than
+            // their cell (wall_wood's collider dumped 3.03 m across a 3.00 m cell), so with the
+            // one-cell claim above two neighbouring segments overlap by centimetres BY DESIGN —
+            // that is what makes a run continuous rather than a dashed line of 3 m holes. The
+            // strict AABB test would read those centimetres as "occupied" and simply move the
+            // reject from gate=CellGrid to gate=WorldOverlap, so wall-on-wall is excluded here.
+            // NOT a hole in the rule: the CELL GRID above still refuses two walls on the SAME
+            // square, and gates keep their own spawn-to-Heart lane test (step 4, untouched).
+            bool armedIsWall = entry != null && entry.type == CatalogType.Wall;
+            if (OverlapsExistingStructure(footprintAabb, ignore, armedIsWall, out var blocker, out var blockerBounds))
             {
                 // The proving line (F8 2026-07-30): separates the three Occupied gates and
                 // names the occupant + its bounds — an inflated renderer-bounds blocker
@@ -1620,6 +1661,7 @@ namespace DeNelle.Village
                     $"aabb c={footprintAabb.center} s={footprintAabb.size} gate=WorldOverlap " +
                     $"blocker='{blocker.name}' id='{blocker.itemId}' bounds c={blockerBounds.center} s={blockerBounds.size} " +
                     $"| gridOccupant='{_grid.OccupantAt(cell) ?? "<none>"}'.");
+                _lastRejectDetail = OccupantLabel(blocker.itemId);   // words, never colour alone
                 reason = BuildRejectReason.Occupied; return false;
             }
 
@@ -1680,13 +1722,18 @@ namespace DeNelle.Village
         /// selected structure is excluded so it never blocks its own re-placement.
         /// </summary>
         private bool OverlapsExistingStructure(Bounds footprintAabb, GameObject ignore = null)
-            => OverlapsExistingStructure(footprintAabb, ignore, out _, out _);
+            => OverlapsExistingStructure(footprintAabb, ignore, false, out _, out _);
+
+        /// <summary>Back-compat overload (no wall-abut allowance) for the reason-aware callers.</summary>
+        private bool OverlapsExistingStructure(Bounds footprintAabb, GameObject ignore,
+            out PlacedStructure blocker, out Bounds blockerBounds)
+            => OverlapsExistingStructure(footprintAabb, ignore, false, out blocker, out blockerBounds);
 
         // F8 2026-07-30 (anonymous Occupied storm): out-param variant NAMES the blocker +
         // its bounds so the reject trace/toast can say WHAT occupies the spot — the owner
         // hit reject=Occupied on cell after cell with nothing in the log naming the cause.
         private bool OverlapsExistingStructure(Bounds footprintAabb, GameObject ignore,
-            out PlacedStructure blocker, out Bounds blockerBounds)
+            bool armedIsWall, out PlacedStructure blocker, out Bounds blockerBounds)
         {
             blocker = null;
             blockerBounds = default;
@@ -1696,6 +1743,10 @@ namespace DeNelle.Village
                 if (ps == null) continue;
                 if (_movingSelected && ps == _selected) continue;   // don't self-block a move
                 if (ignore != null && ps.gameObject == ignore) continue;   // wall-walk: tower sits ON the supporting wall
+                // WO-972 — wall abuts wall by design (see the call site). The WallSegment probe
+                // is the same component BaseLayoutLoader uses to identify a placed wall, so a
+                // replayed wall and a freshly placed one are treated identically.
+                if (armedIsWall && ps.GetComponentInChildren<WallSegment>(true) != null) continue;
 
                 Bounds wb;
                 if (!TryWorldBounds(ps.gameObject, out wb)) continue;

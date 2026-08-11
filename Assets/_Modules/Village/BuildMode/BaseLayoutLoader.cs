@@ -308,7 +308,13 @@ namespace DeNelle.Village
             //     mesh's world AABB (×√2 at diagonal yaws) — must match what IsValidPlacement
             //     claimed at place time, or a reload would Occupy fewer cells than validity
             //     promised and a later placement could overlap the diagonal.
-            float footprintMetres = StructureFactory.MeasureUprightFootprintMetres(entry);
+            // WO-972 — the CLAIM metric (identical to the measured mesh for every row except a
+            // Wall, which claims off its authored placement.footprint). This MUST be the same
+            // call BuildModeController.IsValidPlacement claims with, or a reload would Occupy a
+            // different cell set than placement promised and the run would re-break on load.
+            // The BLOCKER is unaffected in practice: AddFootprintBlocker sizes the box as
+            // Clamp(rendered * 0.85, cellSize, claim), which is 3x3 m for a wall at either claim.
+            float footprintMetres = StructureFactory.MeasureClaimFootprintMetres(entry);
             Vector2Int blockerFootprint = grid.FootprintCells(footprintMetres);
             Vector2Int footprint = grid.FootprintCells(footprintMetres, yawDeg);
 

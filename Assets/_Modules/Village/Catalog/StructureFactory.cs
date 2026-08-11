@@ -705,6 +705,60 @@ namespace DeNelle.Village
             return result;
         }
 
+        /// <summary>
+        /// WO-972 (owner F8 seq 2327, verbatim: "cannot build walls beside each other").
+        /// The metric the GRID CLAIM is computed from — which is NOT always the measured
+        /// mesh. For a <see cref="CatalogType.Wall"/> row the claim comes from the AUTHORED
+        /// repo.placement.footprint; every other row keeps the measured upright mesh
+        /// (<see cref="MeasureUprightFootprintMetres"/>), byte-identical to before.
+        ///
+        /// WHY WALLS ARE DECOUPLED — proven by the seq-2327 capture, not inferred:
+        ///   wall_wood's fitted body measures just over the 3.00 m cell across (its
+        ///   MeshCollider dumped size=(3.03, 3.73, 1.42)), so Ceil(m / cellSize) claimed
+        ///   TWO cells — and PlacementGrid.FootprintCells SQUARES that claim, so a 1.42 m
+        ///   THIN palisade claimed a 2x2 block. The captured reject:
+        ///     [Flow:Build] REJECT Occupied cell=(17,16) fp=(2x2) gate=CellGrid
+        ///                  occupantCell=(17,17) occupant='wall_wood'
+        ///   — she was starting a corner one row over and the neighbour's phantom cells
+        ///   owned it. The run she DID land sat on a SIX-metre pitch (Occupy 12_17 /
+        ///   14_17 / 16_17; collider centres x = -7.50 / -1.50 / 4.50), i.e. a ~3 m hole
+        ///   between every 3.03 m segment. A wall is a ONE-CELL tile (CoC model); its body
+        ///   may overhang its cell slightly, and that overhang is exactly what makes a run
+        ///   read as continuous instead of a dashed line.
+        ///
+        /// THE FIX IS CLAIM-SIDE ONLY — THE MESH IS NOT RESIZED. The height-cadence
+        /// carve-out for walls (structures-catalog.json `_heightCadence` and the per-row
+        /// `_heightNote`: narrowing a wall opens PATHABLE GAPS in already-saved runs and
+        /// shrinks its NavMeshObstacle with it) is untouched. So is the obstacle itself:
+        /// BaseLayoutLoader.AddFootprintBlocker sizes the box as
+        /// Clamp(rendered * 0.85, cellSize, claim), which resolves to 3x3 m at BOTH the old
+        /// 2x2 claim and the new 1x1 (captured: "kept root footprint box 3x3m (h=4)") — the
+        /// carve is byte-identical. And nothing MOVES: PlacementGrid.CellToWorld seats a
+        /// structure on its ORIGIN CELL centre, independent of footprint, so every
+        /// already-saved wall replays at the exact same world position and merely claims
+        /// fewer (never more) cells — a shrinking claim can never invalidate a saved layout.
+        /// </summary>
+        public static float MeasureClaimFootprintMetres(CatalogEntry entry)
+        {
+            float measured = MeasureUprightFootprintMetres(entry);
+            if (entry == null || entry.type != CatalogType.Wall) return measured;
+
+            float authored = entry.repo != null && entry.repo.placement != null
+                ? Mathf.Max(0.01f, entry.repo.placement.footprint)
+                : measured;
+
+            // PERMANENT PROVING LINE (§12). The measured metres are the number that turned a
+            // one-cell palisade into a 2x2 claim, and they were logged NOWHERE — the RCA had
+            // to bound them from a MeshCollider dump plus the blocker clamp. Never again:
+            // this states both numbers, once per entry id, so the next capture answers it.
+            FlowTrace.Once("Build", "wall-claim-" + entry.id,
+                $"WALL CLAIM '{entry.id}': the grid claim is driven by the AUTHORED " +
+                $"placement.footprint={authored:0.###}m, while the fitted MESH measures " +
+                $"{measured:0.###}m across. The mesh is NOT resized — only the cell claim is " +
+                $"decoupled, so a wall is a one-cell tile and a run of them has no holes.");
+            return authored;
+        }
+
         /// <summary>World-space renderer bounds of <paramref name="go"/> (renderer-first, collider fallback).</summary>
         private static bool TryWorldBounds(GameObject go, out Bounds bounds)
         {
