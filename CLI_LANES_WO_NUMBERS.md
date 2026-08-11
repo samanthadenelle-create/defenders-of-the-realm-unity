@@ -1,6 +1,49 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ RECONCILED 2026-08-10 (CLI): main line next free = **972**. **782–859 + 900–971 CONSUMED.**
+> ## ⚠ RECONCILED 2026-08-10 (CLI): main line next free = **974**. **782–859 + 900–973 CONSUMED.**
+> - **973** = **Bryn's speech bubble is a giant skewed world-space card** — found in the PIXELS during the
+>   WO-968 headed dungeon proof (`Dungeon_HealersCottage`, 2026-08-11), not by the owner. Screenshots
+>   `01_idle`–`05_right` are ~60 % covered by a trapezoid card reading *"Bryn the Wa… / The path opens
+>   easy… / mind the rocks — th… / cottage keeps her sh…"*, clipped off the right edge. **The trapezoid
+>   IS the diagnosis:** a screen-space canvas cannot skew, so this is a **world-space** canvas seen in
+>   perspective at wildly wrong scale. Paired data from the same run:
+>   `[Flow:Dungeon] Bryn.Configure 'bryn-the-wanderer' at (-31.00, 0.00, -2.00) (speakRadius=6, bubble=ok)`
+>   — i.e. `bubble=ok` reports success while the thing is unreadable, so the trace is asserting
+>   construction and NOT legibility. It clears when the hero leaves the 6 m speak radius, which is what
+>   proves it is the speak bubble and not a HUD panel.
+>   Dialogue lane. Text is CLIPPED, so this is a readability defect, not cosmetic.
+>   ⚠ Do NOT "fix" it by moving the camera — the parked WO-968 camera was frozen at the bind seat for
+>   this entire run, so the card's apparent size is measured against a stationary camera 5 m away.
+>   Re-measure AFTER the camera fix lands before choosing a scale, or you will tune against a bug.
+>   **READY (needs a headed re-shot post-camera-fix as its first step).**
+> - **972** = **Walls cannot be built beside each other** — owner F8 **seq 2327**, verbatim:
+>   *"cannot build walls beside each other"* (`Main_Castle_Overworld`, 2026-08-11 02:05 UTC).
+>   PROVEN BY CAPTURE, her Player.log:
+>   `[Flow:Build] REJECT Occupied cell=(17,16) fp=(2x2) gate=CellGrid occupantCell=(17,17) occupant='wall_wood'`
+>   — **a wall claims a 2x2 block**, while `[Flow:Structure] 'wall_wood' carries Collider 'MeshCollider'
+>   bounds size=(3.03, 3.73, 1.42)` proves the palisade is a **one-cell tile** (3.03 m across, 1.42 m
+>   thick) on a 3.00 m cell. TWO COLLAPSES STACK: `MeasureUprightFootprintMetres` reduces the mesh to
+>   `Max(size.x, size.z)` (the 1.42 m depth is discarded), then `FootprintCells` ceils **and squares** it
+>   — so a **1 % overshoot** (3.03 on 3.00) doubles the claim and re-applies that doubling to the thin
+>   axis that was never over a cell. Second symptom, same root: her landed run sits on a **6 m pitch**
+>   (`Occupy 12_17 / 14_17 / 16_17`, centres x=-7.50/-1.50/+4.50) — every wall run has a ~3 m hole
+>   between segments.
+>   ⚠ NOT intentional pathing protection — the gate-clearance rule reports `BlocksGate` and never fired;
+>   the reject is `gate=CellGrid`. Scaffold / singleton / render-elsewhere all eliminated from the trace.
+>   FIX IS CLAIM-SIDE ONLY, **the mesh is never touched** — so the walls-excluded-from-height-cadence
+>   carve-out holds, and the **NavMeshObstacle is byte-identical** (`Clamp(rendered*0.85, cellSize, claim)`
+>   resolves to the captured 3x3 m box at BOTH the old 2x2 and the new 1x1 claim). **No save migration:**
+>   `CellToWorld` seats on the ORIGIN CELL centre independent of footprint, so every saved wall replays
+>   in place and merely claims fewer cells.
+>   ALSO SHIPPED: **words, never colour alone** (owner is red/green colourblind) — the refusal now names
+>   the occupant, and a permanent `FlowTrace.Once` states authored-vs-measured metres, the datum that was
+>   logged NOWHERE and had to be bounded from a collider dump during RCA.
+>   Regression `WallAdjacencyRegression [wall-adjacency]` written; registration handed to the committer
+>   (`DataRegression.cs` is lane-fenced).
+>   File `WorkOrders/WORK_ORDER_972_walls_cannot_be_built_beside_each_other.md`.
+>   **Code in tree, brace/NUL clean — awaiting batch-gate + commit; PO felt-verifies + closes.**
+>
+> *(banner bumped 972 → 973 in the SAME edit as the mint.)*
 > - **971** = **Remove the original tutorial — ONE tutorial, ONE guide** — owner ruling 2026-08-10,
 >   verbatim: *"why are two tutorials active?"* / *"remove the original"* / *"only the new wolf one
 >   stays"* / *"from data"*. PROVEN BY CAPTURE, her Player.log on the 20:42 build:
