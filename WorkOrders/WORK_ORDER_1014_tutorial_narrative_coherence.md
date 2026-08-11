@@ -44,6 +44,85 @@ Every reported symptom falls out of this one fact:
 - **"Introduces player to another wolf"** → a SECOND wolf at the entrance: either the legacy arc's NPC
   slot now dressed as a wolf, or a duplicate pet spawn. Must resolve to ONE wolf, ever.
 
+## 1c. ✅ CONFIRMED IN-GAME + OWNER RULING — F8 seq=2316 (2026-08-10 20:30, `Main_Castle_Overworld`)
+
+Owner flag, verbatim: **"PET and NPC. Remove NPC"**. This is §1's two-live-arcs defect reproduced in the
+HUB scene, with the fix ruled.
+
+**Harvested trace — the guide side is CORRECT:**
+```
+[Flow:Tutorial] FocusMask SHOW highlightId=world.guide style=Gesture
+[Flow:Tutorial] FocusMask resolved highlightId=world.guide target=Pet_ice-wolf style=Gesture rect=(851,246,120,120)
+[Flow:Tutorial] GuidePointer SHOW chevron highlightId=world.guide
+[Flow:Tutorial] GuidePointer SHOW chevron highlightId=world.gate_direction
+```
+`world.guide` resolves to **`Pet_ice-wolf`** — exactly the WO-1012 pet-Echo ruling, working. **The pet is
+right; the problem is the NPC standing next to it.** So this is not a resolution bug — a SECOND body is
+being spawned by the legacy path.
+
+**OWNER RULING: remove the NPC. The pet-Echo is the sole guide.** No dialogue re-point, no "hide it for
+now" — the legacy guide NPC does not spawn in the tutorial at all. This makes §2a (retire the legacy
+Sylas arc) the P0 slice of this WO, and it satisfies §2e (one guide body, ever) at the same time.
+CLI: find what spawns the NPC in `Main_Castle_Overworld` (scene-baked object vs the legacy arc's spawner)
+and remove that path — then the "exactly one guide body" regression proves it stays gone.
+
+**Owner screenshot, same session — the pet dialogue is up and shows THREE more items:**
+- **The wolf is now named "Frost" — ⚠ SAME NAME-LEAK CLASS AS "Storm" (§1).** `Frost` is an **Echo
+  AFFINITY** in `EchoRosterCatalog` (Aldwin/Frost), not an authored guide name. The guide is still
+  drawing identity from the affinity roster. **§5's open question is NOT resolved by this** — CLI must
+  confirm whether "Frost" is authored-on-purpose or leaked; if leaked, the fix is the same as Storm.
+- **The portrait is a generic placeholder silhouette, not a wolf** — the guide has no portrait art bound.
+  A guide with a stranger's silhouette undercuts the whole "who is this wolf" fix. Bind the pet's real
+  portrait (or its Echo card art).
+- **`Echoes 1/6` chip overlaps the `Skip` button** at right — the same HUD-chip-over-chrome class as
+  WO-1010 D7/D18. Chips need suppressing (or z-ordering under) while tutorial chrome/dialogue is up.
+
+**⚠⚠ SECOND SCREENSHOT — THE DEFECT IS VISIBLE, AND THE NAME IS INCONSISTENT ON ONE SCREEN:**
+- **Both bodies are in frame, sharing one highlight:** a **human NPC** (bearded villager in vest + hat)
+  standing AT the Heart with the **white wolf pet** beside him, both inside the same gold guide glow.
+  That is the owner's "PET and NPC" exactly. **Remove the human.**
+- **THE GUIDE HAS TWO DIFFERENT NAMES ON SCREEN IN THE SAME SESSION:** the dialogue speaker read
+  **"Frost"**, the objective strip reads **"Follow Aldwin to the gate"**. Per `EchoRosterCatalog` those
+  are the SAME roster row — **`Aldwin` is the Echo's NAME and `Frost` is its AFFINITY** (Aldwin/Frost ->
+  Food). So one surface prints the name and another prints the affinity. **This is the root of the
+  "Storm"/"Frost" confusion in §1 — not a random leak, but two surfaces reading different FIELDS of the
+  same row.** Fix: ONE resolver for the guide's display name (`{guide}` token) that always returns the
+  NAME field; never the affinity. Add a regression asserting dialogue-speaker == objective-name.
+- ⇒ **§5's open question is now sharper, and cheaper:** the wolf may already HAVE a canon name —
+  **Aldwin** — inherited from the starter Echo. Owner: adopt `Aldwin` as the guide's name (and never
+  show `Frost` as a name), or author a distinct one? Either way the affinity must stop appearing as a
+  name.
+
+**Also shipped and working (visible in this shot):** WO-1012's **thin bottom objective strip with
+progress beads** (`Follow Aldwin to the gate` + 8 beads, first filled) is live and looks right — the fat
+top banner is gone. That is the redesign landing.
+
+**Credit where due — §2c is partly fixed:** the line *"Keeper, I'm at your side. What should I tend to?"*
+now presents **`Gather resources` / `Repair structures`** as explicit choices, so the ask carries its own
+explanation. That satisfies the spirit of §2c at the point of the ask; the remaining §2c work is the
+IDENTITY beat coming BEFORE it (who the wolf is, stated once, first).
+
+**Side note, good news:** the trace shows WO-1012's presentation kit is LIVE and instrumented
+(`FocusMask`, `GuidePointer`, `style=Gesture`, resolved rects). The P1 skin shipped.
+
+## 1d. §2d PROVEN BY DATA — the walk beat times out because the guide never leads (F8 seq=2318)
+
+Harness ERROR, same session:
+```
+[Flow:Tutorial] STEP-STUCK :: founding_walk — no 'hero.reached:guide_gate' after 120s in-step
+  (bound 120s, builder time excluded; ff.tutorialv2 on; builderOpenedThisStep=False, coachBeats=2);
+  RESCUED via watchdog and recorded as SKIPPED - the step was NOT completed
+```
+**This is the owner's *"wolf is supposed to lead, but doesn't move"* (§1), now with a hard proof line.**
+The player never reaches `guide_gate`, the step hangs the full 120s, and the watchdog SKIPS it — so a
+first-time player silently loses the walk beat entirely. §2d moves from "verify" to **CONFIRMED DEFECT,
+fix required**. Note `builderOpenedThisStep=False` rules out the build-menu detour as the cause.
+⚠ The watchdog rescue is doing its job, but a **skipped** beat is not a passed one — do not let the
+rescue mask this in future runs; the acceptance criterion is the signal firing, not the watchdog saving.
+
+**F8 seq=2317** (*"Now says frost"*) is the same naming defect as §1c — the objective strip changed from
+`Aldwin` to `Frost` mid-session, which is exactly the two-surfaces-two-fields bug. Covered above.
+
 ## 2. What to do
 
 ### 2a. RETIRE the legacy Sylas arc (the single highest-value fix)

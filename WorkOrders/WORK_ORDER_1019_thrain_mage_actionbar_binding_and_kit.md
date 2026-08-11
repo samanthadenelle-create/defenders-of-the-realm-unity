@@ -229,6 +229,182 @@ before moving.
 **Resulting default bar:** Q Fireball · W Arcane Shell · E Drain · R Poison — all magic, single-target
 first, sustain from fighting, an ultimate that finishes over time.
 
+## PART B — RESULT (CLI, 2026-08-10). Data authored; **every number below is `<<DRAFT — owner tuning pass>>`** and needs her sign-off before this is called done.
+
+### B0. No new gameplay code was needed — verified at source, not assumed
+
+| Spell | `effect` | Shipped resolver | Line | Precedent already in the game |
+|---|---|---|---|---|
+| `mage.poison` | `dot` | `HeroAbilities.ResolveDot` | `HeroAbilities.cs:859` → `:1580` | `knight.emberbrand-throw` |
+| `mage.drain` | `drainshot` | `HeroAbilities.ResolveDrainshot` | `HeroAbilities.cs:870` → `:1305` | `ranger.healing-shot` |
+| `mage.thunder` | `strike` | the core Strike branch (enum default) | `HeroAbilities.cs:853-871` falls through | `knight.thunderbolt` |
+
+`ResolveDrainshot` reads, verbatim: *runs the EXISTING Strike resolution and heals the caster for the
+damage that shot actually landed* — **"steal health" is real today**, no code written. Every field used
+(`dotDamage`, `dotSeconds`, `damage`, `range`, `cooldown`, `manaCost`, `castSeconds`) already exists on
+`AbilityCatalog.AbilityDef`. **No field was invented. Zero `.cs` gameplay files touched.**
+
+⚠ **One honest mechanical caveat, flagged not fixed:** `ResolveDot` applies `DamageElement.Flame` +
+`StatusEffect.Burn` (it was authored for a burning brand). A poison-flavoured DoT therefore ticks as
+*burn* under the hood. It works and it is the sanctioned reuse; if the owner wants poison to read as its
+own element/status that is a **separate ticket**, not a silent widening of this one.
+
+### B1. The three authored entries — DRAFT numbers for sign-off
+
+**`mage.poison`** — R ultimate, in `classes.mage` slot `r`:
+| field | value | why |
+|---|---|---|
+| name | **"Poison Cloud"** `<<DRAFT>>` | she said "poison"; matches her `PoisonCloudcast` key |
+| damage (initial) | **40** `<<DRAFT>>` | |
+| dotDamage | **24** `<<DRAFT>>` | |
+| dotSeconds | **10** `<<DRAFT>>` | 40 + 24x10 = **280 total**, ranged against Meteor's 260 burst |
+| cooldown | **42** `<<DRAFT>>` | Meteor's cd, kept |
+| manaCost | **6** `<<DRAFT>>` | Meteor's, kept |
+| range | **14** `<<DRAFT>>` | Fireball's reach |
+| castSeconds | **0.5** `<<DRAFT>>` | Meteor's wind-up, kept |
+
+**`mage.drain`** — E default, in `classes.mage` slot `e`:
+| field | value | why |
+|---|---|---|
+| name | **"Drain"** `<<DRAFT>>` | her word, unembellished |
+| damage | **28** `<<DRAFT>>` | heals the same, via damage dealt |
+| cooldown | **9** `<<DRAFT>>` | shorter than Healing Shot's 12 — it is a **starter**, the trade must be repeatable |
+| manaCost | **3** `<<DRAFT>>` | Mend's cost, kept |
+| range | **13** `<<DRAFT>>` | just inside Fireball's 14, so you pull then close one step |
+| castSeconds | **0.35** `<<DRAFT>>` | |
+
+**`mage.thunder`** — learnable, in `classes.mage-skills`:
+| field | value | why |
+|---|---|---|
+| name | **"Thunder"** `<<DRAFT>>` | her word |
+| damage | **65** `<<DRAFT>>` | a finisher, ~2x Fireball |
+| cooldown | **6** `<<DRAFT>>` | Thunderbolt's 3s doubled — burst, not poke |
+| manaCost | **3** `<<DRAFT>>` · range **15** `<<DRAFT>>` · castSeconds **0.4** `<<DRAFT>>` | |
+
+### B2. Where each one LIVES, and the one structural fact that forced it
+
+**`AbilityCatalog.Find(class, slot)` reads `classes.<class>.abilities[slot]` DIRECTLY — there is no id
+indirection** (`AbilityCatalog.cs:242`). A default slot must therefore hold a FULL def. Since the
+acceptance criteria forbid duplicate ids (and `FindById` returns the FIRST match, so a duplicate makes
+the live def depend on file order and lets two rows drift), each id is authored EXACTLY once:
+
+- `classes.mage`: `q` fireball · `w` shell · **`e` mage.drain** · **`r` mage.poison**
+- `classes.mage-skills` (+3 rows, appended): **`mage.thunder`** (new, learnable) · **`mage.heal`** and
+  **`mage.meteor`**, MOVED verbatim from the defaults, definitions intact — neither deleted.
+
+⚠ **A tension for the owner to settle, surfaced not resolved.** Her later note — *"they unlock in the
+skill tree and hot swap bar"* — reads as the pool being the primary home for these spells, while her
+earlier ruling put **drain on E and poison on R as defaults**. Both are honoured as literally as the
+schema allows: drain/poison are the ruled defaults, thunder is pool-only. If she meant all three to be
+*earned* rather than given, the edit is to restore `mage.heal`/`mage.meteor` to `e`/`r` and move
+drain/poison into the pool — a data move, no code. **Not done on a paraphrase of an explicit ruling.**
+
+### B3. Unlock reachability — what a tree node costs, and why none was authored
+
+A pool spell reaches the hot-swap rail ONLY through a `kind: "skill"` node (`HeroLoadoutVM`: unlocked
+Skill-kind nodes → `AbilityCatalog.FindById` → the assignable choices). The node shape, copied from
+`knight.t1n2`:
+
+```json
+{ "id": "mage.tXnY", "name": "Thunder", "tier": "tierN", "slot": S, "cost": C, "kind": "skill",
+  "iconPath": "Talents/wizard/wizard_NN", "abilityId": "mage.thunder",
+  "description": "Unlocks Thunder - 65 dmg at 15m (6s cd).",
+  "effect": { "type": "unlockAbility", "ability": "mage.thunder" }, "prerequisites": ["mage.t..."] }
+```
+
+**The mage tree is a FULL 5-slot x 4-tier grid — 20 nodes, every cell occupied.** Adding three skill
+nodes means a **tier 5** or re-purposing existing nodes (`mage.t3n4` "Runic Overload" / `mage.t4n4`
+"Reality Rift" are `kind:"active"` stubs with no `abilityId` — the obvious re-purpose candidates).
+Placement, tier and cost are **her design**, so nothing was authored — and the WO's own *What NOT to
+touch* already scopes unlock-hooking as a follow-up. Two mage pool spells (**`mage.frost-nova`,
+`mage.arcane-bolt`**) were ALREADY unreachable before this WO; the regression now pins that ledger so it
+cannot grow silently.
+
+**Class-filter check (the way this ships broken):** `OwningClassOf` answers from the abilities.json class
+key, so all three resolve to `mage` → `IsUsableByClass(id,"mage")` **true**, and false for knight/ranger.
+Part A's rail filter will **keep** them. Regression case 3 pins it.
+
+### B4. VFX — what her one tag covers, and what is left wired to nothing
+
+**Her tag, mapped verbatim:** `mage.poison.vfxCast = "Posion_Cast"` — **her spelling, transposed, kept
+exactly** (`Assets/Editor/VfxManualPicks.json`, `manual:true` → `Assets/Spells Pack/Particles/Prefabs/
+Variations/Spells/Nature/Spell_Nature_2_Green Variant.prefab`).
+⚠ **Spelling-mismatch risk, flagged for the orchestrator, deliberately NOT resolved:** the key reads
+`Posion_Cast`, not `Poison_Cast`, and the earlier WO text names a third string (`PoisonCloudcast`). Three
+spellings, one effect. The mapping is only correct while the *authored key* and the *tagged key* stay
+character-identical; "correcting" either one breaks the lookup silently. **Owner's call which spelling is
+canon.**
+
+**Is the sequence in the PREFAB or in the code? — ANSWERED AT SOURCE: the prefab.** Her tagged prefab
+resolves (through a variant chain) to `Spell_Nature_2`, which contains **6 child particle systems —
+Trail, Distortion, Spell_Nature_2, Dust, Rocks(Explosion), Decal — with staggered `startDelay` (0 and
+1.7s)**. It **self-sequences**: one `VFXManager.PlayKey` plays the whole 4-5 part show. So for the beat
+she tagged, **one key IS the whole effect and nothing is missing.**
+As for `cataclysm` specifically: **there is no cataclysm VFX in this repo at all** — `mage.cataclysm` has
+zero vfx keys authored, no prefab named cataclysm exists, and **no `.cs` references cataclysm** outside
+regression comments. So there is no third pattern and no cataclysm-only code path; the "4 or 5 parts in
+order" she remembers is **(a) prefab authoring**, which is exactly the sanctioned special case — a
+differently-authored ASSET, never a second spawner/pool. Nothing here goes near the two-stack scar.
+
+**Untagged stages stay wired to NOTHING** (`vfx-map-owner-tags-no-creative-pick`), enforced by the
+regression:
+| Spell | tagged | HELD EMPTY, awaiting her tag |
+|---|---|---|
+| `mage.poison` | `vfxCast` = `Posion_Cast` | `vfxProjectile`, `vfxImpact`, `vfxResidual` (the lingering cloud) |
+| `mage.drain` | **none** | all four — incl. the ruled **reversed target→caster beam** |
+| `mage.thunder` | **none** | all four (knight's `Thunderbolt_*` keys deliberately NOT reused — a look-alike is still a creative pick) |
+
+**One Unity-side step remains for the committer:** `Posion_Cast` is in `VfxManualPicks.json` but **not yet
+in `Assets/Resources/VFX/HovlVfxCatalog.asset`** — run `Defenders/VFX/Generate Hovl VFX Catalog` (the
+manual overlay merges last and wins on collision). Until then the key **no-ops harmlessly** (throttled
+log), it does not throw. **No VFX rows were added by this lane**, so neither the `VFXType` ordinal trap
+nor the `Build()` `arraySize` row-drop trap is engaged.
+
+### B5. Two consequences — RECORDED, not resolved
+
+1. **`hero-talents.json` `mage.t3n1` "Cataclysm Prep" (+60% Meteor radius) now buffs a POOL spell.**
+   ⚠ *Re-examined rather than carried forward:* under her *"they unlock in the skill tree and hot swap
+   bar"* design this is **arguably INTENDED, not a defect** — buffing a spell you then unlock and slot is
+   the loop working. The data supports that reading: the tree ALREADY contains `mage.t4n1` unlocking
+   `mage.cataclysm` (a pool spell) gated behind `mage.t3n1`, i.e. **"prep the meteor, then earn the
+   bigger one"** reads as a designed line, not an accident. **But** Meteor is no longer a *default*, so a
+   player can now buy Cataclysm Prep while owning nothing it affects. **Owner's call**; the id was NOT
+   deleted, so the talent still resolves either way.
+2. **E is now an OFFENSIVE cast.** `HeroAbilities.cs:702` lists the self-cast/heal effects excluded from
+   the melee attack trigger, and `drainshot` is deliberately **not** among them — so E now **yaws the
+   hero at the target and plays the attack trigger**, where Mend was a static self-cast. That is correct
+   for a beam and it is a real change in feel. Sustain now comes from *winning the trade*, not from
+   pausing to heal.
+
+### B6. Files touched + regression
+
+- `Assets/StreamingAssets/Data/Canonical/abilities.json` and `Assets/Resources/Data/Canonical/abilities.json`
+  — **byte-identical**, SHA256 `837762614FEFFCD16AE1B46862DE3145FE44B49DB6DC100554F76F4A2AC2C6F8`;
+  `version` bumped **2 → 3**; no BOM, CRLF preserved, no NUL bytes.
+- `Assets/Editor/Regression/HeroBarClassRebindRegression.cs` — Case 1's expected table updated to
+  E `mage.drain` / R `mage.poison`, **exactly as the note that file carried required**, in the same
+  change as the data edit.
+- `Assets/Editor/Regression/MageSpellKitAuthoringRegression.cs` — **NEW**, `[mage-spell-kit]`, markers
+  `MAGE_SPELL_KIT_OK` / `MAGE_SPELL_KIT_FAIL`. Seven cases: the ruled default bar (ids + effects +
+  all-magic + Q-has-DPS + E-is-offensive); the three new spells' field shape **plus a source lint that
+  the `dot` / `drainshot` handlers still exist**; class ownership (mage + cleric alias yes, knight +
+  ranger no) so Part A's filter cannot drop them; the displaced ids survive and `mage.t3n1`'s target
+  still resolves; no duplicate ids; the dual-copy byte compare + NUL guard; and the unlock-reachability
+  ledger.
+
+**Registration line for `DataRegression.cs`** (lane-fenced, left to the committer):
+
+```csharp
+DeNelle.Core.Diagnostics.Guard.Try("Regression", "mage-spell-kit suite", () => { if (!DeNelle.Editor.Regression.MageSpellKitAuthoringRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[mage-spell-kit] " + r); });
+```
+
+Tag: `[mage-spell-kit]`.
+
+**Not done here (deliberate):** no talent nodes authored (her design); no VFX substitutions; no Unity
+run, no gate, no commit.
+
+---
+
 ## PART C — TALENTS (owner ruling 2026-08-10)
 
 ### C1. Mage: a talent that gives Fireball SPLASH damage

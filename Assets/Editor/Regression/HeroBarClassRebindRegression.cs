@@ -127,12 +127,14 @@ namespace DeNelle.Editor.Regression
         //  Case 1 - the MAGE KIT is already all-magic and already has the DPS
         // =====================================================================
 
-        // ⚠ PART B WILL CHANGE THE EXPECTED IDS BELOW, BY DESIGN. The owner's ruling
-        // (WO-1019 Part B) moves E: mage.heal -> mage.drain and R: mage.meteor -> mage.poison.
-        // That is a DATA edit awaiting her tuning pass; when it lands, update this table in the
-        // same commit. The two invariants around it - "every default is authored under the mage
-        // class" and "Q is an explicit damage ability at range" - hold either way and are the
-        // part that must never be edited to make a failure go away.
+        // ✔ PART B HAS LANDED (WO-1019, owner rulings 2026-08-10 "change mend to drain" +
+        // "make meteor strike into poison"), so this table now reads E: mage.drain and
+        // R: mage.poison. It was updated in the same commit as the abilities.json edit, exactly
+        // as the note that used to sit here required. The two invariants around it - "every
+        // default is authored under the mage class" and "Q is an explicit damage ability at
+        // range" - held across the change and are the part that must never be edited to make a
+        // failure go away. The displaced mage.heal / mage.meteor did NOT disappear: they moved,
+        // definition intact, into the classes.mage-skills learnable pool.
         private static void Case1_MageKitIsAllMagicWithDps(List<string> failures)
         {
             AbilityCatalog.Reload();
@@ -141,8 +143,8 @@ namespace DeNelle.Editor.Regression
             {
                 new { Slot = AbilitySlot.Q, Id = "mage.fireball" },
                 new { Slot = AbilitySlot.W, Id = "mage.shell"    },
-                new { Slot = AbilitySlot.E, Id = "mage.heal"     },
-                new { Slot = AbilitySlot.R, Id = "mage.meteor"   },
+                new { Slot = AbilitySlot.E, Id = "mage.drain"    },
+                new { Slot = AbilitySlot.R, Id = "mage.poison"   },
             };
 
             for (int i = 0; i < expected.Length; i++)

@@ -1,6 +1,6 @@
 # WORK ORDER 1016 — HIGHEST: hero locomotion is dead in dungeons (slides in idle; vel always 0.00)
 
-**Status:** READY TO IMPLEMENT — **PRIORITY: HIGHEST (owner ruling, F8 seq=2312)**
+**Status:** READY TO IMPLEMENT — **P0 BLOCKER (escalated 2026-08-10: hero cannot move AT ALL, hub + dungeon; blocks WO-1014 walk beat). Was HIGHEST per owner ruling F8 seq=2312.**
 **Minted:** 2026-08-10 (UI seat) — provenance stack bumped 1016 → 1017 in the same edit
 **Lane:** Hero locomotion / animation. Gameplay-felt P0.
 **Provenance:** owner F8 capture **seq=2312**, 2026-08-10 18:33, scene `Dungeon_HealersCottage`,
@@ -70,6 +70,45 @@ which input is dead, THEN fix.
 
 **Acceptance (camera):** in a dungeon, moving the hero changes `camYaw`/`dCam` in the trace and the view
 follows; verified in the same capture as the locomotion proof; swept across the other scenes.
+
+## 1c. ⛔ ESCALATION 2026-08-10 — NOBODY MOVES, INCLUDING THE HERO. THIS IS A P0 BLOCKER.
+
+Owner, verbatim (hub scene `Main_Castle_Overworld`, same session as F8 2316–2318):
+**"NPC and Pet Neither move, even hero cannot move"**
+
+This is **larger than the dungeon animation defect this WO was opened for**:
+- Not just the dungeon — **the HUB scene too**.
+- Not just the animator — **the hero does not TRANSLATE AT ALL**. §1's original finding was "position
+  advances while `vel=0.00`" (a *feed* bug). This is worse: **no movement happens.**
+- The guide and the NPC are frozen as well, so it is **not hero-specific** — it is whatever drives
+  agent/character movement in that scene, for every actor.
+
+**⇒ This is the root cause of the tutorial STEP-STUCK** logged in WO-1014 §1d: `founding_walk` waits
+120s for `hero.reached:guide_gate` and times out **because nothing in the scene can walk**. Fixing the
+walk beat is pointless until this is fixed. **WO-1014 §2d is BLOCKED ON THIS WO.**
+
+**Priority: HIGHEST/P0 — a game where the hero cannot move is unplayable.** This outranks every other
+open item in the current queue (WO-1010/1012/1014/1015/1019 all assume a movable hero).
+
+**Diagnosis order (§12 — instrument, do not guess):**
+1. Capture the hub scene and read whether input reaches the mover at all: input → locomotion → agent.
+   Log `agent.enabled`, `agent.isOnNavMesh`, `agent.isStopped`, `Time.timeScale`, and the input vector.
+2. **Prime suspects to TEST, cheapest first:**
+   - **`Time.timeScale == 0`** — a modal/tutorial pause left set (the tutorial's `pausePressure`,
+     a panel, or the coach beat). This would freeze hero AND pet AND NPC simultaneously — exactly the
+     reported symptom, and the single most likely cause of "nothing at all moves".
+   - **Input suppressed by tutorial chrome** — `FocusMask` raycast-blocking (WO-1012 spec'd
+     input-blocking outside the cutout!) swallowing joystick input. ⚠ HIGH suspicion: the mask shipped
+     this session, and `style=Gesture` was active in the seq-2316 trace.
+   - **NavMesh missing/unbaked** in the hub → every agent immobile.
+   - `agent.isStopped` left true by a tutorial/leash step.
+3. The tutorial FocusMask suspicion is testable in seconds: does movement work with
+   `ff.tutorialv2` off / after the tutorial completes? If yes, the mask/input-gate is the culprit and
+   the fix belongs to the WO-1012 kit, not the locomotion layer.
+
+**Acceptance (this escalation):** hero moves in the hub with the tutorial ACTIVE and inactive; pet and
+NPC path normally; `Time.timeScale == 1` during coach beats; a capture proves input → velocity → motion.
+Add a regression that fails if input is non-zero while position is unchanged for N frames.
 
 ## 2. What to do
 
