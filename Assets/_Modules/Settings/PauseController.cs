@@ -115,7 +115,7 @@ namespace DeNelle.Settings
         {
             // Safety net: never leave the engine frozen if this object dies
             // (scene unload, domain reload) while paused.
-            if (_paused) Time.timeScale = _timeScaleBeforePause;
+            if (_paused) Time.timeScale = _timeScaleBeforePause > 0f ? _timeScaleBeforePause : 1f;
             // Don't leak the arbiter slot if destroyed while paused (scene unload).
             if (_panelHandle != null) PanelManager.NotifyClosed(_panelHandle);
             if (_modal != null && _modal.canvas != null) Destroy(_modal.canvas);
@@ -202,9 +202,24 @@ namespace DeNelle.Settings
             if (_paused) return;
             EnsureBuilt();
 
-            _timeScaleBeforePause = Time.timeScale;
+            // WO-1016/P0 (owner F8 seq 2319, 2026-08-10 — "No locomotioonj in town"): capture the
+            // pre-pause scale, but NEVER capture a FROZEN one. Two independent systems freeze the
+            // world (this controller, and BreakCaptureHarness.FlagHere's F8 note freeze at
+            // BreakCaptureHarness.cs:474). If the OS backgrounds the app while the F8 note box is up,
+            // Time.timeScale is ALREADY 0 here, so the old line captured 0 and Resume() below restored
+            // 0 — a PERMANENT, INVISIBLE freeze: the pause modal closes, input is still read, the
+            // camera still orbits (unscaled), build mode still works (its own input path), and the
+            // hero cannot move because Time.deltaTime is 0. That is exactly the captured signature
+            // (live input in [Flow:HeroDrift] with vel=(0.000,0.000) and a frozen animator baseNt).
+            // A capture of <=0 is never meaningful to restore, so it degrades to 1.
+            float observed = Time.timeScale;
+            _timeScaleBeforePause = observed > 0f ? observed : 1f;
             Time.timeScale = 0f;
             _paused = true;
+            DeNelle.Core.Diagnostics.FlowTrace.Step("Pause",
+                $"PAUSE -> timeScale 0 (captured {observed:F2}" +
+                (observed > 0f ? "" : " <= 0, ALREADY FROZEN by another owner — restoring to 1 instead") +
+                $"). Resume will restore {_timeScaleBeforePause:F2}.");
 
             if (_modal != null && _modal.canvas != null) _modal.canvas.SetActive(true);
             // Announce the pause modal opened so the arbiter arms the back button + closes any prior panel.
@@ -218,8 +233,13 @@ namespace DeNelle.Settings
         {
             if (!_paused) return;
 
-            Time.timeScale = _timeScaleBeforePause;
+            // Belt-and-braces with the capture guard above: a restore is the LAST place a frozen
+            // world may be re-armed, so it can never write a non-positive scale (the same guard
+            // OnQuitClicked has always had — it was simply missing on the path players use).
+            Time.timeScale = _timeScaleBeforePause > 0f ? _timeScaleBeforePause : 1f;
             _paused = false;
+            DeNelle.Core.Diagnostics.FlowTrace.Step("Pause",
+                $"RESUME -> timeScale {Time.timeScale:F2} (captured {_timeScaleBeforePause:F2}).");
 
             if (_settings != null && _settings.IsOpen)
                 _settings.Close();

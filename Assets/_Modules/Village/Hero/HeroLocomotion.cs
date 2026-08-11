@@ -1657,7 +1657,28 @@ namespace DeNelle.Village
                 $"animFeed={(ccLive ? "velRoot(measured)" : "velSelf")} animSpeed={animSpeed:F2} " +
                 $"rootYaw={transform.eulerAngles.y:F1} " +
                 $"basis={basisSrc} basisYaw={basisYaw:F1} " +
+                // P0 2026-08-10 (owner F8 seq 2319, "No locomotioonj in town? Works in builder mode
+                // not in here"): the WORLD CLOCK + the two input gates. Their absence is why a
+                // three-hour capture could not be read. Every writer below Velocity scales by
+                // Time.deltaTime, so at timeScale 0 the hero cannot move, cannot turn and cannot
+                // animate WHILE INPUT IS STILL BEING READ — indistinguishable, in the old trace,
+                // from a broken locomotion path. Camera orbit and build mode survive because both
+                // run on the unscaled clock / their own input path, which is exactly the owner's
+                // "works in builder mode" discriminator. Print it, always.
+                $"timeScale={Time.timeScale:F2} dt={Time.deltaTime:F4} " +
+                $"inputSuppressed={InputSuppressed} autoWalk={IsAutoWalking} " +
                 $"mainCamYaw={(mainCam != null ? mainCam.transform.eulerAngles.y : -1f):F1} pos={pos:F2}");
+
+            // The frozen world, called out as a FAILURE rather than left as a field to notice. This
+            // is the SOFTLOCK shape: nothing is wrong with locomotion, the clock simply stopped and
+            // no owner restarted it. Throttled to once a second while it persists.
+            if (Time.timeScale <= 0f)
+                DeNelle.Core.Diagnostics.FlowTrace.Throttle("HeroOwner", "frozen-clock", 1f,
+                    $"WORLD CLOCK FROZEN: Time.timeScale={Time.timeScale:F2} in scene " +
+                    $"'{gameObject.scene.name}'. The hero CANNOT move, turn or animate while this " +
+                    "holds, however healthy the locomotion path is — every writer scales by " +
+                    "Time.deltaTime. If no pause menu is on screen, a freeze owner (PauseController " +
+                    "background auto-pause / BreakCaptureHarness F8 note) failed to restore it.");
 
             // The named defect, called out as a FAILURE the moment it is true rather than left for a
             // reader to spot: the world moved the hero but the animator is holding ~idle. Throttled

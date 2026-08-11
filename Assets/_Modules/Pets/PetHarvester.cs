@@ -107,6 +107,28 @@ namespace DeNelle.Pets
         {
             if (_pet == null || !_pet.IsAlive) { StopHarvesting(true); return; }
 
+            // ── WO-1014 Half C: THE GUIDE LEAD OUTRANKS HARVESTING ───────────────
+            // The THIRD suppressor of the FTUE guide (the first two were Pet.Update's
+            // mode + ff.petcombat early returns, fixed in Pet.cs). Harvesting owns
+            // HomePost and DISABLES PetHeroLeash (SuspendLeash), so a pet that wandered
+            // onto a node mid-tutorial would stop consuming the lead anchor and walk to
+            // the node instead — re-breaking "the wolf doesn't lead" during the founding
+            // arc, with the fix above still perfectly correct. While a lead is in force
+            // we hand the pet back (restoreLeash: true re-enables the listener) and never
+            // start a new gather. The lead is short-lived; nodes are not going anywhere.
+            if (PetHeroLeash.IsLeading)
+            {
+                if (_state != HarvestState.Idle || _leashWasEnabled)
+                {
+                    FlowTrace.Step("Pets",
+                        $"PetHarvester on '{_pet.PetId}' RELEASING harvest to the active guide lead " +
+                        $"(anchor {PetHeroLeash.LeadTarget}) - leash restored so the lead anchor reaches " +
+                        "this pet again (WO-1014 Half C).");
+                    StopHarvesting(restoreLeash: true);
+                }
+                return;
+            }
+
             // Combat ALWAYS wins. A Defend pet with a hostile nearby is handed back
             // to Pet.cs's own hunt/attack loop — never starve defending to gather.
             if (ShouldYieldToCombat())

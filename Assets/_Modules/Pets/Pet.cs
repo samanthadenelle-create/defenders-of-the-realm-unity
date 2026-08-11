@@ -354,6 +354,22 @@ namespace DeNelle.Pets
             if (_animator != null && _hasBehavior) _animator.SetInteger(AnimBehavior, behavior);
         }
 
+        /// <summary>
+        /// WO-1014 Half C — the guide-lead movement rule, as a PURE predicate so it can be
+        /// proven headlessly without a live pet body (see GuideLeadMovementRegression).
+        /// True when an active FTUE guide lead owns this pet's movement, i.e. the lead
+        /// carrot in HomePost must be integrated by MoveToward.
+        /// <para>Walking as the guide is NOT combat: the lane is TRUE with
+        /// <c>ff.petcombat</c> OFF (its shipped default) in every mode. It yields ONLY when
+        /// pet combat is explicitly enabled AND the pet is a Defend pet — the one case where
+        /// the pre-existing hunt/attack priority still applies, preserved verbatim.</para>
+        /// </summary>
+        public static bool GuideLeadOwnsMovement(bool leadActive, bool petCombatEnabled, PetMode mode)
+        {
+            if (!leadActive) return false;
+            return !(petCombatEnabled && mode == PetMode.Defend);
+        }
+
         private void Update()
         {
             float dt = Time.deltaTime;
@@ -371,6 +387,32 @@ namespace DeNelle.Pets
             _lastPosition = transform.position;
 
             if (!IsAlive) return;
+
+            // ── WO-1014 Half C: the GUIDE-LEAD MOVEMENT LANE (the fix) ───────────
+            // PROVEN CAUSE (F8 seq 2320, Main_Castle_Overworld, build 20:42): the leash
+            // wrote the lead carrot every frame and the body never moved -
+            //   "guide-lead TICK 'pet-ice-wolf': moved=0.00 m/s over 1.00s -> BODY DID NOT MOVE"
+            // because BOTH early returns below (the mode gate and the ff.petcombat gate)
+            // sit ABOVE MoveToward(_homePost). WALKING AS THE FTUE GUIDE IS NOT COMBAT, so
+            // it must not be conditional on a COMBAT feature flag: ff.petcombat stays OFF by
+            // default and every combat behaviour (hunt scan / anti-ranged / Attack) stays
+            // exactly where it was, behind that flag, further down this method.
+            // The lane deliberately yields when combat is ENABLED and the pet is a Defend
+            // pet: in that (non-default) configuration the old priority is preserved verbatim.
+            if (GuideLeadOwnsMovement(DeNelle.Pets.PetHeroLeash.IsLeading,
+                                      DeNelle.Core.FeatureFlags.PetCombat, _mode))
+            {
+                // Paired with PetHeroLeash's 1 Hz "guide-lead TICK" line so ONE capture shows
+                // the fix working instead of requiring inference: this says the lead REACHED
+                // the mover, the TICK says the body then moved.
+                DeNelle.Core.Diagnostics.FlowTrace.Throttle("Pets", "lead-lane-" + _petId, 1f,
+                    $"guide-lead LANE ACTIVE on '{_petId}': lead PASSES the mode gate (mode={_mode}) and the " +
+                    $"ff.petcombat gate (PetCombat={DeNelle.Core.FeatureFlags.PetCombat}) -> MoveToward(_homePost=" +
+                    $"{_homePost}) IS being integrated this frame (WO-1014 Half C). Combat stays gated.");
+                MoveToward(_homePost, dt);
+                return;
+            }
+
             // Idle / Fortify pets do not hunt — Idle trails the hero (the
             // integrator drives that), Fortify holds its wall span.
             if (_mode != PetMode.Defend)

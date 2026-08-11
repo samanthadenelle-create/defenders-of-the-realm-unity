@@ -657,6 +657,9 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "dungeon-mover-ownership suite", () => { if (!DeNelle.Editor.Regression.DungeonMoverOwnershipRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[dungeon-mover-ownership] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "hero-bar-rebind suite", () => { if (!DeNelle.Editor.Regression.HeroBarClassRebindRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[hero-bar-rebind] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "mage-spell-kit suite", () => { if (!DeNelle.Editor.Regression.MageSpellKitAuthoringRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[mage-spell-kit] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "guide-lead-move suite", () => { if (!DeNelle.Editor.Regression.GuideLeadMovementRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[guide-lead-move] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "town-movement-floor suite", () => { if (!DeNelle.Editor.Regression.TownMovementFloorRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[town-movement-floor] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "one-guide-body suite", () => { if (!DeNelle.Editor.Regression.OneGuideBodyRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[one-guide-body] " + r); });
 
             // --- THE ORACLE THAT GUARDS THIS FILE: distinct markers, no unregistered
             // oracle, no gate script grepping a marker nobody emits. Registered LAST so

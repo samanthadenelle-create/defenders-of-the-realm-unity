@@ -470,8 +470,19 @@ namespace DeNelle.Core.Diagnostics
             catch { }
             _noteBuffer = "";
             _noteShowFrame = Time.frameCount + 1;
-            _prevTimeScale = Time.timeScale;
+            // P0 2026-08-10 (owner F8 seq 2319): the SECOND world-freezer is PauseController
+            // (auto-pause on OS background). If the app is already paused when F8 lands, the old
+            // line captured 0 and CommitFlag restored 0 — the world never restarts, and the only
+            // visible symptom is "the hero will not move" with the camera and build mode still fine.
+            // A captured freeze is never worth restoring, so it degrades to 1.
+            float observedScale = Time.timeScale;
+            _prevTimeScale = observedScale > 0f ? observedScale : 1f;
             Time.timeScale = 0f;                                   // freeze so typing can't drive the hero
+            if (observedScale <= 0f)
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("BreakCapture",
+                    "F8 pressed while the world was ALREADY frozen (timeScale 0 — another owner, " +
+                    "e.g. PauseController's background auto-pause). Restoring to 1 on commit instead " +
+                    "of re-arming the freeze.");
             _noteMode = true;
 #else
             // WO-839 §3 release-safety: the typed-note flow (freeze + IMGUI text field) is
@@ -487,7 +498,7 @@ namespace DeNelle.Core.Diagnostics
         void CommitFlag()
         {
             _noteMode = false;
-            try { Time.timeScale = _prevTimeScale; } catch { Time.timeScale = 1f; }
+            try { Time.timeScale = _prevTimeScale > 0f ? _prevTimeScale : 1f; } catch { Time.timeScale = 1f; }
             string note = string.IsNullOrWhiteSpace(_noteBuffer) ? "(no note)" : _noteBuffer.Trim();
             Record("flagged", $"[{SafeScene()}] {note}", null, screenshot: false);  // shot already taken
             _flagCount++;

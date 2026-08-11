@@ -75,6 +75,16 @@ namespace DeNelle.Village
         private const float DespawnPollInterval = 1f;
         private float _nextPollAt;
 
+        // WO-1014 (owner felt-test 2026-08-10, verbatim: "but still wolf and npc"): the
+        // guide-body watch runs FASTER than the Onboarded watch. WO-961 gives the guide a
+        // real wolf body a beat or two after the hub loads — i.e. AFTER this stand-in has
+        // legitimately seated — so the window where both exist is measured from the summon,
+        // not from scene load. A 1 Hz check would leave the pair visible for up to a second
+        // at the exact moment the player is looking at the tree.
+        private const float GuideBodyPollInterval = 0.25f;
+        private float _nextGuideCheckAt;
+        private bool _standDownTraced;
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
         {
@@ -128,6 +138,34 @@ namespace DeNelle.Village
         // gets its fresh spawn via OnSceneLoaded -> Inject.
         private void Update()
         {
+            // ── WO-1014: ONE GUIDE, EVER ────────────────────────────────────────
+            // The stand-in exists ONLY to give the guide a physical presence while the
+            // guide has no body of its own. WO-961 shipped that body, so from the moment
+            // it summons this steward is a SECOND figure standing where the guide is —
+            // exactly what the owner saw ("but still wolf and npc"). It is retired here
+            // rather than deleted outright because it is still the honest degradation
+            // path: TutorialFlow's own summon-failure branch says so in as many words
+            // ("'Follow {guide}' will resolve to the steward stand-in"). Body-less guide
+            // -> stand-in seats. Guide with a body -> stand-in stands down. A chain.
+            if (Time.unscaledTime >= _nextGuideCheckAt)
+            {
+                _nextGuideCheckAt = Time.unscaledTime + GuideBodyPollInterval;
+                var holderNow = GameObject.Find(HolderName);
+                if (holderNow != null && TutorialWorldAnchors.HasLiveGuideBody)
+                {
+                    if (!_standDownTraced)
+                    {
+                        _standDownTraced = true;
+                        FlowTrace.Step("SylasSteward",
+                            "the founding guide now HAS a world body (WO-961) - standing the steward " +
+                            "stand-in DOWN so exactly one guide figure is ever present. The stand-in is " +
+                            "the body-less fallback only; it is not deleted, so a failed guide summon " +
+                            "still degrades to a real character instead of empty air.");
+                    }
+                    Destroy(holderNow);
+                }
+            }
+
             if (Time.unscaledTime < _nextPollAt) return;
             _nextPollAt = Time.unscaledTime + DespawnPollInterval;
             if (!ArcIncomplete())
@@ -158,6 +196,18 @@ namespace DeNelle.Village
             if (!ArcIncomplete())
             {
                 FlowTrace.Step("SylasSteward", "arc already complete (Onboarded) or state unavailable — no steward spawned.");
+                return;
+            }
+
+            // WO-1014: never seat a stand-in for a guide that already has a body. This is
+            // the RELOAD / re-enter case (a save resumed mid-arc, a hub re-load after the
+            // summon); the first-run case — hub loads, steward seats, wolf summons a beat
+            // later — is caught by the guide-body watch in Update. Same single authority.
+            if (TutorialWorldAnchors.HasLiveGuideBody)
+            {
+                FlowTrace.Step("SylasSteward",
+                    "the founding guide ALREADY has a world body - stand-in NOT seated (WO-1014: one " +
+                    "guide figure, ever; 'world.guide' resolves to the live body at the head of the chain).");
                 return;
             }
 

@@ -302,6 +302,28 @@ namespace DeNelle.Village
 
         // ── The GUIDE (the pet-Echo; steward body = the parked-rotation fallback) ──
 
+        /// <summary>
+        /// THE SINGLE AUTHORITY ON "DOES THE GUIDE HAVE A BODY" (WO-1014, owner felt-test
+        /// 2026-08-10: "but still wolf and npc"). Returns the live pet-Echo body, or null.
+        /// <para>
+        /// WHY THIS IS PUBLIC AND WHY NOTHING MAY RE-IMPLEMENT IT: the guide's identity
+        /// resolves down a CHAIN — pet body, then the steward stand-in, then the Heart —
+        /// and a chain only works if exactly one place decides which link answers. Before
+        /// this existed, <see cref="ResolveGuide"/> knew the pet won while
+        /// SylasStewardInjector had no idea a pet existed at all, so once WO-961 gave the
+        /// guide a real body BOTH stood in the courtyard: the spotlight pointed at the wolf
+        /// and the stand-in it was supposed to REPLACE was still there. That is not a chain,
+        /// it is two things side by side. Every consumer asks HERE.
+        /// </para>
+        /// Deliberately uncached: callers gate their own polling, and a stale "no body yet"
+        /// is precisely the answer that leaves a second body standing.
+        /// </summary>
+        public static Transform LiveGuideBody() => FindAnyObjectByType<DeNelle.Pets.Pet>()?.transform;
+
+        /// <summary>True when the founding guide has a real world body (see
+        /// <see cref="LiveGuideBody"/>) — i.e. when the stand-in must NOT be seated.</summary>
+        public static bool HasLiveGuideBody => LiveGuideBody() != null;
+
         private static Transform ResolveGuide()
         {
             if (Time.unscaledTime - _guideCachedAt < CacheSeconds && _guideCache != null)
@@ -310,10 +332,12 @@ namespace DeNelle.Village
 
             // 1. The live pet-Echo body — THE guide (WO-1012 P2). PetDeployer names the
             //    root "Pet_<species>" and deploys it once the ARRIVE-beat grant lands.
-            var pet = FindAnyObjectByType<DeNelle.Pets.Pet>();
-            if (pet != null)
+            //    Asked through the shared authority so the stand-in's spawn gate and this
+            //    chain can never disagree about who the guide is (WO-1014).
+            var petT = LiveGuideBody();
+            if (petT != null)
             {
-                _guideCache = pet.transform;
+                _guideCache = petT;
                 return _guideCache;
             }
 
