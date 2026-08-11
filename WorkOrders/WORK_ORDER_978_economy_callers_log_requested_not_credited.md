@@ -1,0 +1,71 @@
+# WORK ORDER 978 — Economy callers log the amount REQUESTED, not the amount CREDITED
+
+**Status:** READY TO IMPLEMENT
+**Lane:** Economy / instrumentation
+**Severity:** player-facing, and **invisible in every capture** — which is what makes it expensive
+**Minted:** 2026-08-10 (CLI), from the hollow-assertion audit (`docs/reference/HOLLOW_ASSERTIONS_REGISTRY.md`)
+
+---
+
+## 1. The defect
+
+Four callers log the value they *passed in* as though it landed:
+
+- `Assets/_Modules/Village/Raids/RaidVictoryController.cs:277`
+- `Assets/_Modules/Village/Quests/DailyQuestRewardBridge.cs:126`
+- `Assets/_Modules/Village/Outposts/ChallengeOutpostVictoryController.cs:147`
+- `Assets/_Modules/Village/Population/PopulationService.cs:211`
+
+`EconomyService.Grant` routes to the **clampable `EarnedIncome`** kind. So when the town bank is at
+cap, **the player is credited 0 while the log reads `+500 crystals`.**
+
+## 2. ⚠ The authority is HONEST — do not "fix" `EconomyService`
+
+`Assets/_Modules/Village/Economy/EconomyService.cs:416` already prints the **post-clamp amount** *and*
+the **resulting total**. It is doing exactly the right thing.
+
+**The bug is entirely caller-side.** Anyone who reads this ticket and starts editing `EconomyService`
+is fixing the one component that got it right. Say it out loud in the fix commit.
+
+## 3. Why this one matters more than it looks
+
+This is the exact shape of *"I did the raid and got nothing"* — a complaint that is **unfalsifiable
+from the logs**, because every log line agrees the reward was paid. It converts a real economy bug
+into an argument about whether the player misremembered.
+
+It also silently hides a design question: at cap, is paying 0 correct? Overflow, partial credit, and
+a refusal message are all defensible; **silently paying nothing while announcing payment is not.**
+Surface the clamp so that question can be asked.
+
+## 4. Fix
+
+1. Every caller logs the **returned credited amount**, never the argument.
+2. When `credited < requested`, that is not a routine line — emit a `FlowTrace.Warn` naming both
+   numbers and the reason (at cap), so a capture shows the shortfall instead of hiding it.
+3. **Words, never colour alone** (owner is red/green colourblind): if any of these paths drive a
+   player-facing reward popup, the popup must state the actual amount, and state plainly when a
+   reward was capped. A number that silently differs from the announced one is worse than a refusal.
+
+## 5. Acceptance criteria
+
+- [ ] With the bank at cap, all four paths log `credited=0` (or the partial amount) and `Warn`, and
+      **no** line claims the full amount.
+- [ ] With headroom, behaviour and logs are unchanged.
+- [ ] `EconomyService.cs` is **not** modified (it is already correct) — or, if it is, the WO explains
+      why in writing.
+- [ ] Player-facing reward text reflects the credited amount.
+- [ ] Regression covering the at-cap and headroom cases, registered in `DataRegression.cs` (committer
+      adds the registration — that file is lane-fenced).
+- [ ] Brace balance + 0 NUL bytes (§1, §0).
+
+## 6. Open question for the owner (do not decide this in code)
+
+**At cap, what should happen?** Pay 0, pay partial, refuse with a message, or overflow into something
+else? The current behaviour (pay 0, announce full) is certainly wrong, but the replacement is a design
+call, not an engineering one. Ship the honest logging first — it is correct under every possible
+ruling — and park the behaviour change on her answer.
+
+## 7. Related
+
+WO-976, WO-977, WO-973 — same failure class (asserting intent rather than outcome). Registry:
+`docs/reference/HOLLOW_ASSERTIONS_REGISTRY.md`.

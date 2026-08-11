@@ -1,6 +1,29 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ RECONCILED 2026-08-10 (CLI): main line next free = **977**. **782–859 + 900–976 CONSUMED.**
+> ## ⚠ RECONCILED 2026-08-10 (CLI): main line next free = **980**. **782–859 + 900–979 CONSUMED.**
+> - **979** = **`WaveFeedbackDirector` reports a HUD bind that can never succeed** —
+>   `Assets/_Modules/Village/Waves/WaveFeedbackDirector.cs:321` prints
+>   `hudBound={CoreServices.Hud != null}` while `FindHud()` at `:325` is a **stub whose entire body is
+>   `return null;`**. The bind is ALWAYS null. This is not merely an unfalsifiable trace — **it reports
+>   a DIFFERENT VARIABLE than the one it names**, so a reader checking "did the wave HUD bind?" gets an
+>   answer about `CoreServices.Hud` instead. Either finish `FindHud` or delete the seam and say so;
+>   what must not stand is a stub with a trace that implies it works. **READY.**
+> - **978** = **Economy callers echo the amount REQUESTED, not the amount CREDITED** — an entire class,
+>   found in the 2026-08-10 hollow-assertion audit: `RaidVictoryController.cs:277`,
+>   `DailyQuestRewardBridge.cs:126`, `ChallengeOutpostVictoryController.cs:147`,
+>   `PopulationService.cs:211` all log the value they passed in as though it landed.
+>   `EconomyService.Grant` routes to the **clampable `EarnedIncome`** kind, so **a capped town bank pays
+>   0 while the log reads `+500 crystals`.** ⚠ The authority itself is HONEST — `EconomyService.cs:416`
+>   prints the post-clamp amount AND the resulting total — so the fix is caller-side: log the returned
+>   credited amount, never the argument. Player-facing: this is the shape of "I did the raid and got
+>   nothing" being invisible in every capture. **READY.**
+> - **977** = **Starter skill points can be silently never granted, and the latch says otherwise** —
+>   `Assets/_Modules/Village/Hero/HeroProgression.cs:269` logs *"granted 2 starter skill points"*, but
+>   the latch flips at **`:266`, BEFORE** two null-conditional grants which — unlike the identical call
+>   twelve lines above — are **NOT** wrapped in the try/catch that would `Fail`. A null `SkillSystem`
+>   yields **zero points, latched forever**, with the log reading granted. **Fires for every player
+>   exactly once**, which is the worst possible cadence: unreproducible on a second run of the same
+>   save. Fix = grant first, latch only on confirmed success, and wrap it like its neighbour. **READY.**
 > - **976** = **`hasSurface` is a false green — `panelSettings=ok canvas=ok` proves nothing** —
 >   `Assets/_Modules/Core/UI/AddressableUIManager.cs:234` emits
 >   `panelSettings=ok canvas=ok => hasSurface=`, but both halves are **non-null checks**. A panel with

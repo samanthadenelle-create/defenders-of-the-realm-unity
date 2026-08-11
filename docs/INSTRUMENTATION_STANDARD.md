@@ -68,16 +68,50 @@ Two mechanisms at different stages:
   always runs. Only the pure-logging `FlowTrace` entry points are strippable. `Measure`
   returns a `Scope` (non-void), so it can't be `[Conditional]`; it stays on the runtime guard.
 
-### 1.4 The strip path (clean it up later)
-- Every line is `[Flow:<system>]`. To audit/strip a stabilised system:
-  `Grep "FlowTrace\.\w+\(\"Store\""` → every Store trace in one query.
-- **One-folder delete:** the whole diagnostic layer is `Assets/_Modules/Core/Diagnostics/`.
-  Static, `DeNelle.Core`-local, no cross-module coupling to unwind.
+### 1.4 The MUTE path (⚠ corrected 2026-08-10 — it is NOT a strip path)
+
+> ## ⛔ THIS SECTION USED TO SAY "STRIP". THAT IS RETIRED AND WAS NEVER SAFE.
+> It was titled *"The strip path (clean it up later)"* and instructed the reader to
+> **"mute/strip the `Step` breadcrumbs"** on graduation, and it advertised a **"one-folder
+> delete"** of `Assets/_Modules/Core/Diagnostics/`. It now directly contradicts the binding
+> **CLAUDE.md §12 ruling (2026-08-09): NEVER STRIP FLOWTRACE.** Instrumentation is PERMANENT.
+> You may eventually FLAG IT OFF (`FlowTrace.Enabled = false`); **the calls STAY IN THE CODE.**
+>
+> **Why the old wording was actively harmful, not merely outdated:** a stripped `Step` turns a
+> logged flow back into a silent one, so the NEXT regression in that system starts from **zero
+> evidence** instead of a trace. Removing instrumentation is never "cleanup" — it discards the
+> only asset that makes the next bug cheap. Every hour this project has spent on guess-and-ship
+> was paid for by evidence that did not exist at the moment it was needed.
+
+- Every line is `[Flow:<system>]`. To audit a stabilised system:
+  `Grep "FlowTrace\.\w+\(\"Store\""` → every Store trace in one query. **Audit, not strip.**
 - **Promotion rule — "proven stable":** a system graduates when (a) its headless
   `DataRegression` check is green, and (b) it survives owner F8 playtests with no new
-  `[BREAK]` / `[Flow:*] *FAILED` lines for that system. On graduation: **mute/strip the
-  `Step` breadcrumbs**, but **keep every `Warn`/`Fail` and every `Guard`** — those are the
-  permanent no-silent-failure net, not scaffolding.
+  `[BREAK]` / `[Flow:*] *FAILED` lines for that system. On graduation you may **mute** the
+  `Step` breadcrumbs behind the runtime flag — **the calls remain**. `Warn`, `Fail` and every
+  `Guard` stay live regardless: they are the permanent no-silent-failure net, not scaffolding.
+
+### 1.4b A trace field that cannot report failure is a BUG, not a nicety
+
+Added 2026-08-10 after **three** instances surfaced in a single night, each independently:
+
+- `bubble=ok` on a speech bubble that covered 60% of the screen with its text clipped mid-word
+  (WO-973) — it survived until a human looked at a **screenshot**.
+- `panelSettings=ok canvas=ok => hasSurface=` (WO-976) — both halves are non-null checks, so it
+  prints `ok` for a panel that is zero-sized, offscreen, occluded or fully transparent.
+- `[Flow:GaitF] bodyErr=0.0` reading as a pass in dungeons while measuring **nothing** — it
+  derives from a velocity that is 0 **by design** under foreign ownership (WO-968 §11b).
+
+**The rule:** before you write an assertion, ask *"what broken state would make this line print
+something different?"* If the answer is "none", you have written decoration.
+
+**Assert outcomes, not intent:** resolved sizes rather than authored ones; post-settle values
+rather than pre-settle; **measured** rather than derived quantities; the amount **credited**
+rather than the amount requested. Prefer a line that can embarrass you.
+
+**And the fix is never deletion** (see the ⛔ above). Make the line falsifiable.
+
+Full ranked inventory: **`docs/reference/HOLLOW_ASSERTIONS_REGISTRY.md`**.
 
 ### 1.5 Mobile / WebGL / perf
 Mirror `BreakCaptureHarness`'s own rule (it disables itself on WebGL):
