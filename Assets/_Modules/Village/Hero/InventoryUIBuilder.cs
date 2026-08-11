@@ -152,12 +152,9 @@ namespace DeNelle.Village
                                 new Vector2(0.30f, 0.165f), new Vector2(0.93f, 0.235f), new Color(0f, 0f, 0f, 0f));
             NoRaycast(tray);
 
-#if DEVELOPMENT_BUILD || UNITY_EDITOR
-            // Dev-only: seat hand-grips on the equipped weapon while looking at the LEFT 3D hero
-            // preview (parity with the Gear/EquipmentPanel screen). Hidden in shipping players.
-            // Drops into the freed left of the footer tray; the wallet wells stay right-aligned (x≥0.47).
-            BuildOrientButton(tray.transform);
-#endif
+            // WO-1015 E1: the dev-gated "Orient" button that used to seat here is REMOVED (see the
+            // note at BuildGenericWalletChip's sibling comment below). The freed left of the footer
+            // tray simply stays clear; the wallet wells keep their right-aligned positions.
 
             // WO-565: the Sort + Filter buttons were wired to EMPTY lambdas — visible controls
             // that silently did nothing. HIDDEN rather than ship a half-feature: category Filter
@@ -239,33 +236,13 @@ namespace DeNelle.Village
             chip.SetAmount(0, animate: false);
         }
 
-#if DEVELOPMENT_BUILD || UNITY_EDITOR
-        // Dev-only "Orient" button — opens the in-game Seating Editor (WO-577) on the inventory
-        // PREVIEW's own EquipmentController (HeroPreviewViewer.Equip), so the owner dials the
-        // hand-grip offset on the weapon she is looking at in the left 3D preview. The offset saves
-        // per weapon id to AttachmentOffsetRegistry, which the equip/attach path already reads → the
-        // grip is then correct everywhere. Reuse, no new tool: the SAME overlay the Gear screen, the
-        // build-menu Orient, and AdminOverlay launch. Falls back to the world hero when no preview.
-        private void BuildOrientButton(Transform parent)
-        {
-            // WO-713: the U+2692 hammer glyph tofu'd in the build TMP font (known HUDUI red)
-            // — plain ASCII label per the ASCII-only law.
-            var btn = ElarionUiKit.ButtonPack(parent, "Orient", ElarionUiKit.ButtonKind.Quiet,
-                new Vector2(0.02f, 0.10f), new Vector2(0.20f, 0.90f),
-                () =>
-                {
-                    // Z-ORDER FIX v2 (owner F8 "tool closes the window"): the seating editor is a UI-Toolkit
-                    // overlay; the inventory is a uGUI canvas at sortingOrder 31000. The overlay now adopts
-                    // sortingOrder >= 32100 (SeatingEditorOverlay.AdoptPanelSettings) so it renders ON TOP of
-                    // the inventory — no need to Close() it. Drive the PREVIEW's own weapon (the 3D model the
-                    // owner is looking at); null-safe LaunchFor falls back to the world hero. The offset saves
-                    // per weapon-id to AttachmentOffsetRegistry → the grip is corrected everywhere.
-                    DeNelle.Village.UI.SeatingEditorOverlay.LaunchFor(_heroPreview?.Equip);
-                },
-                RpgUiCatalog.ButtonFrame);
-            if (btn != null) btn.name = "OrientDev";
-        }
-#endif
+        // ── WO-1015 E1: the in-panel "Orient" word-button is GONE from this screen ──────────
+        // Same strand removed from EquipmentPanel and (by WO-1010 D1) from BuildPaletteUI. It was
+        // dev-gated, which is NOT the same as invisible — the owner's felt-test builds are
+        // development builds, so it rendered on every screen she looked at and overlapped the
+        // content it was pinned beside. The seating editor keeps its ONE sanctioned entry point,
+        // AdminOverlay (Assets/_Modules/HUD/AdminOverlay.cs:361 "Orient Asset" / :608 "Seating
+        // Editor") — a dev screen, not a gameplay screen. Do not re-add a per-screen launcher.
 
         // ── TABS ---
         // WO-713 A.2 — the ONE uniform kit tab row (WO-714 P1 BuildTabRow): element_tab

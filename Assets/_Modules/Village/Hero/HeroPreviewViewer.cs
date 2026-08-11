@@ -106,6 +106,13 @@ namespace DeNelle.Village.Hero
             {
                 // RT allocation failed (rare — out of VRAM / unsupported format). Bail
                 // gracefully: free the half-made RT and report failure so the panel skips.
+                // WO-1015 E2 CANDIDATE C: this used to fail SILENTLY (bare `return false`), which
+                // reached the panel as an indistinguishable "no preview" and is one live path to
+                // the owner's blank navy box. It is now a Fail line naming the size and format.
+                FlowTrace.Fail("Preview", string.Format(
+                    "rt.Create() FAILED for {0}x{1} ARGB32 (depth 16, AA 2) - no render texture " +
+                    "exists, so the preview CANNOT draw. This is a device/format capability " +
+                    "failure, not a layout or culling problem.", textureSize, textureSize));
                 Object.Destroy(_rt);
                 _rt = null;
                 return false;
@@ -219,6 +226,22 @@ namespace DeNelle.Village.Hero
             _cam.allowMSAA       = false;
             _cam.enabled         = false;          // CRITICAL — manual Render() only
 
+            // WO-1015 E2 CANDIDATES D + E. The camera's cullingMask is `1 << _previewLayer` and the
+            // clone's layers are set by SetLayerRecursive — if those two ever disagree the camera
+            // renders an EMPTY frustum and the RawImage shows the clear colour, which is the exact
+            // navy the owner photographed. Likewise a degenerate bounds (all renderers disabled or
+            // zero-size) frames the camera on nothing. Both are stated as numbers, not assumed.
+            FlowTrace.Step("Preview", string.Format(
+                "camera rig: previewLayer={0} (named '{1}' resolved={2}) cullingMask=0x{3:X8} " +
+                "modelLayer={4} layersAgree={5} | bounds center=({6:F2},{7:F2},{8:F2}) " +
+                "size=({9:F2},{10:F2},{11:F2}) degenerate={12}",
+                _previewLayer, PreviewLayerName, LayerMask.NameToLayer(PreviewLayerName) >= 0,
+                1 << _previewLayer, _model != null ? _model.layer : -1,
+                _model != null && _model.layer == _previewLayer,
+                bounds.center.x, bounds.center.y, bounds.center.z,
+                bounds.size.x, bounds.size.y, bounds.size.z,
+                bounds.size.sqrMagnitude < 0.0001f));
+
             FrameCamera(bounds);
 
             // --- key light -------------------------------------------------------
@@ -306,6 +329,103 @@ namespace DeNelle.Village.Hero
             if (!IsValid) return;
             _model.transform.localRotation = Quaternion.Euler(0f, yawDegrees, 0f);
             _cam.Render();
+        }
+
+        /// <summary>
+        /// WO-1015 E2 — THE DECISIVE INSTRUMENT. Everything else in this class proves the rig was
+        /// CONSTRUCTED; this proves whether anything was DRAWN.
+        ///
+        /// WHY IT IS NEEDED AND WHY NOTHING ELSE SUBSTITUTES: the camera clears to
+        /// Color(0.02, 0.047, 0.094) — byte-identical to the equipment panel's own preview plate
+        /// fill. So "the camera rendered an empty frustum" and "the RawImage was never enabled"
+        /// and "the panel never built a rig" are the SAME PIXELS on screen. A screenshot cannot
+        /// separate them and neither can reading the source. This does: it blits the render
+        /// texture down to 16x16, reads it back, and reports how many pixels differ from the clear
+        /// colour plus the min/max luminance actually present.
+        ///
+        ///   diff == 0     -> the camera ran and drew NOTHING. The rig is fine; the MODEL is the
+        ///                    dead step (culling mask vs. layer, all renderers disabled, the clone
+        ///                    outside the frustum, or a null-material model). Look at the
+        ///                    "camera rig:" line and the per-renderer enumeration above it.
+        ///   diff &gt; 0     -> the hero IS in the texture. If the owner still sees navy, the dead
+        ///                    step is downstream in the PANEL (RawImage disabled, zero-size rect,
+        ///                    covered by a sibling, alpha 0) — not in this rig at all.
+        ///
+        /// One 16x16 readback per Begin/Retarget. Never throws; a failure to probe is itself
+        /// reported rather than swallowed.
+        /// </summary>
+        public void ProbeRenderedContent(string system = "Preview")
+        {
+            if (!IsValid)
+            {
+                FlowTrace.Warn(system, "RT PROBE skipped - the rig is not valid (no texture to read).");
+                return;
+            }
+
+            RenderTexture small = null;
+            Texture2D readback = null;
+            var prevActive = RenderTexture.active;
+            try
+            {
+                _cam.Render();   // make sure the texture reflects the current state before reading
+
+                const int N = 16;
+                small = RenderTexture.GetTemporary(N, N, 0, RenderTextureFormat.ARGB32);
+                Graphics.Blit(_rt, small);
+                RenderTexture.active = small;
+                readback = new Texture2D(N, N, TextureFormat.RGBA32, false);
+                readback.ReadPixels(new Rect(0, 0, N, N), 0, 0, false);
+                readback.Apply(false, false);
+
+                Color clear = _cam.backgroundColor;
+                var px = readback.GetPixels();
+                int diff = 0;
+                float minLum = 1f, maxLum = 0f;
+                for (int i = 0; i < px.Length; i++)
+                {
+                    var c = px[i];
+                    float lum = 0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b;
+                    if (lum < minLum) minLum = lum;
+                    if (lum > maxLum) maxLum = lum;
+                    if (Mathf.Abs(c.r - clear.r) > 0.02f ||
+                        Mathf.Abs(c.g - clear.g) > 0.02f ||
+                        Mathf.Abs(c.b - clear.b) > 0.02f) diff++;
+                }
+
+                string verdict = diff == 0
+                    ? "NOTHING WAS DRAWN - every sampled pixel is the camera clear colour. The rig " +
+                      "built fine, so the dead step is the MODEL (layer vs. cullingMask, all " +
+                      "renderers disabled, clone outside the frustum, or null materials) - read the " +
+                      "'camera rig:' line and the per-renderer enumeration above."
+                    : "CONTENT PRESENT - the hero is in the render texture. If the screen still " +
+                      "shows a flat plate, the dead step is DOWNSTREAM in the panel (RawImage " +
+                      "disabled / zero rect / covered / alpha 0), not in this rig.";
+
+                FlowTrace.Step(system, string.Format(
+                    "RT PROBE {0}x{1}->16x16: {2}/{3} px differ from clear ({4:F3},{5:F3},{6:F3}); " +
+                    "lum min={7:F3} max={8:F3}. {9}",
+                    _rt.width, _rt.height, diff, px.Length,
+                    clear.r, clear.g, clear.b, minLum, maxLum, verdict));
+
+                if (diff == 0)
+                    FlowTrace.Fail(system, "RT PROBE: the preview render texture is a UNIFORM clear " +
+                                           "colour - the preview box is blank at the SOURCE, not at " +
+                                           "the panel. Fix the model/culling, not the RawImage.");
+            }
+            catch (System.Exception ex)
+            {
+                // Never swallow: a probe that cannot run must say so, or the next reader assumes
+                // the absence of a probe line means the probe passed.
+                FlowTrace.Warn(system, "RT PROBE threw (" + ex.GetType().Name + ": " + ex.Message +
+                                       ") - the readback is unavailable on this platform/pipeline; " +
+                                       "the blank-vs-drawn question stays open.");
+            }
+            finally
+            {
+                RenderTexture.active = prevActive;
+                if (readback != null) Object.Destroy(readback);
+                if (small != null) RenderTexture.ReleaseTemporary(small);
+            }
         }
 
         /// <summary>Repaint the RenderTexture once (manual render). Safe no-op when invalid.</summary>

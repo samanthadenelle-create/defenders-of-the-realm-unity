@@ -43,6 +43,11 @@ namespace DeNelle.Village.Hero
         private HeroPreviewViewer _preview;
         private RawImage _previewImage;
         private Image _previewSilhouette;   // sil_male fallback behind the render (WO-713 §D)
+        // WO-1015 E2 — the STRUCTURAL fallback. These two labels are fixed-pixel bands built
+        // unconditionally, so the preview box carries the hero's identity in WORDS even when no
+        // silhouette art resolves and no render texture exists. A blank box is not reachable.
+        private TMPro.TextMeshProUGUI _previewNameLabel;
+        private TMPro.TextMeshProUGUI _previewStateLabel;
         private readonly List<GameObject> _targetBodies = new List<GameObject>();
         private int _previewTargetIndex = -1;
 
@@ -51,7 +56,8 @@ namespace DeNelle.Village.Hero
 
         // Live regions.
         private Transform _panelTransform;
-        private GameObject _slotsHost;          // holds the 5 labeled slot plates (rebuilt per render)
+        private RectTransform _slotListContent; // the scroll column the 5 slot ROWS are parented to
+        private bool _slotListScrolls;          // budget outcome — traced, never guessed
         private GameObject _targetBar;
 
         // Change-drawer (tap a slot → browse compatible items for it).
@@ -65,6 +71,71 @@ namespace DeNelle.Village.Hero
 
         private const float RowHeightPx = 64f;
         private const float RowGapPx    = 4f;
+
+        // =====================================================================
+        //  WO-1015 — THE FIXED-PIXEL BAND BUDGET (E3/E4/E5/E7)
+        // ---------------------------------------------------------------------
+        //  Every one of these is REFERENCE PIXELS, never a fraction of a parent. They are PUBLIC
+        //  so EquipmentScreenLayoutRegression [equipment-screen-layout] can replay this arithmetic
+        //  without a play session: the oracle reads them by reflection and fails the build if any
+        //  band drops under its own floor (the kit touch floor for a tappable band, one whole TMP
+        //  line box for a text band) or if the three slot text bands stop summing inside the row.
+        //
+        //  THE SLOT ROW, banded (E4 — label / value / hint, three bands that cannot share pixels):
+        //      pad 8 + label 44 + gap 6 + value 48 + gap 6 + hint 44 + pad 8 = 164 px
+        //  164 >= MinTouchPx(112), and each text band >= FontFloor(30) * 1.25 line box (37.5 px).
+        // =====================================================================
+
+        /// <summary>Guaranteed gutter between any two bands — no two bands ever touch.</summary>
+        public const float BandGapPx = 12f;
+
+        /// <summary>One whole slot row. == SlotRowPadPx*2 + the three text bands + their two gaps.</summary>
+        public const float SlotRowPx = 164f;
+        /// <summary>Top/bottom padding inside a slot row.</summary>
+        public const float SlotRowPadPx = 8f;
+        /// <summary>Band 1 of a slot row: the slot NAME ("Weapon (Main Hand)").</summary>
+        public const float SlotLabelBandPx = 44f;
+        /// <summary>Band 2 of a slot row: the equipped item name, or the WORD "Empty"
+        /// (colourblind law — an empty slot says so in words, never by colour).</summary>
+        public const float SlotValueBandPx = 48f;
+        /// <summary>Band 3 of a slot row: the grant line, or the pointer at the system that fills it.</summary>
+        public const float SlotHintBandPx = 44f;
+        /// <summary>Gutter between the three text bands inside a slot row.</summary>
+        public const float SlotRowBandGapPx = 6f;
+        /// <summary>E5 — the slot's ART band. A real FIXED-pixel square, not a fraction: the icons
+        /// were "a few dark pixels" because they were 0.36 x 0.40 of a ~64 px plate (~25x23 px).</summary>
+        public const float SlotIconPx = 112f;
+        /// <summary>Slots on this doll: chest / off-hand / main-hand / amulet / ring.</summary>
+        public const int SlotCount = 5;
+
+        /// <summary>Floor under which the preview art band is squeezed rather than seated.</summary>
+        public const float PreviewMinPx = 320f;
+        /// <summary>E2 fallback band: the hero's NAME, always rendered, fixed px.</summary>
+        public const float PreviewNameBandPx = 56f;
+        /// <summary>E2 fallback band: the live/portrait STATE word, always rendered, fixed px.</summary>
+        public const float PreviewStateBandPx = 44f;
+        /// <summary>Inner padding around the preview's art region.</summary>
+        public const float PreviewPadPx = 8f;
+
+        /// <summary>The target picker band (hero + companions). >= MinTouchPx.</summary>
+        public const float TargetBarPx = 120f;
+
+        /// <summary>Measured well WIDTH at or above which the doll lays out as two columns
+        /// (slots | preview). Below it the preview is a top band and the slots scroll under it.</summary>
+        public const float TwoColumnMinWidthPx = 900f;
+        /// <summary>Left (slot) column width as a fraction of the content row, two-column mode.</summary>
+        public const float SlotColumnFrac = 0.52f;
+        /// <summary>Horizontal gutter between the two columns.</summary>
+        public const float ColumnGapFrac = 0.02f;
+
+        /// <summary>Reclaimed body TOP. FrameCharacter's authored body zone caps at 0.605 (the baked
+        /// portrait arch); its header band starts at 0.905 and its medallion at 0.900, so 0.875
+        /// clears both ornaments while reclaiming the dead strip between (E3).</summary>
+        public const float BodyTopFrac = 0.875f;
+        /// <summary>ElarionUiKit's DefaultCloseZone.y — the bottom band the shared Close reserves.</summary>
+        public const float CloseBandY0 = 0.050f;
+        /// <summary>The well floor clears the Close box by this much.</summary>
+        public const float CloseGapY = 0.020f;
 
         // Modal-arbiter handle (one panel at a time) + PanelRouter registration.
         private PanelHandle _panelHandle;
@@ -101,42 +172,163 @@ namespace DeNelle.Village.Hero
             // "upgrade from Character in the ragdoll to characters name"). Resolved from the active
             // hero's class -> canon full name (Grom Ironhand, etc.), matching the inventory card.
             string headerName = HeroFullName(ResolveActiveHeroJob());
+            // WO-1015 E3/E7: the panel was 0.12..0.88 x 0.06..0.95 — a narrow column inside which the
+            // kit's FIXED-PIXEL canonical Close (360x132) looked enormous relative to the content it
+            // closes. Widened to 0.06..0.94 x 0.05..0.96: the Close keeps its canonical size (never
+            // resized here — E7 is a PROPORTION defect, and the fix is to give the content the space,
+            // not to shrink the one shared CTA).
             var chrome = ElarionUiKit.BuildObsidianPanel(_ui.transform, headerName,
-                new Vector2(0.12f, 0.06f), new Vector2(0.88f, 0.95f),
+                new Vector2(0.06f, 0.05f), new Vector2(0.94f, 0.96f),
                 () => _vm?.Close(), headerX0: 0.10f, headerX1: 0.90f,
                 frameName: RpgUiCatalog.FrameCharacter, medallionIcon: "armor");
             var panel = chrome.content;
 
-            // UI_BLINK_TEMPLATE_CANON §3/§4: drop content into the frame's BODY drop-zone
-            // (the templated, pre-positioned area inside the ornate border) instead of floating
-            // over the whole panel rect at 0..1 — that overlapped FrameCharacter's border.
-            // FrameCharacter exposes only a body zone (no medallion/footer); the central 3D hero
-            // preview stays the medallion-equivalent in the body. Falls back to the panel rect
-            // when no frame art is present (WebGL-safe). All fraction layouts below are now
-            // relative to this body zone.
-            var bodyHost = (chrome.layout != null && chrome.layout.body != null)
-                ? chrome.layout.body : (RectTransform)panel.transform;
-            _panelTransform = bodyHost;
+            // =================================================================
+            //  WO-1015 E3 — ONE OWNED GEOMETRY PASS (the ManageScreenPanel.BuildChrome law):
+            //  measure the well, sum the fixed bands, hand the remainder to content.
+            // -----------------------------------------------------------------
+            //  E3's ROOT CAUSE, proven at source, not eyeballed: this screen dropped its content
+            //  into chrome.layout.body, and ElarionUiKit.ZonesFor(FrameCharacter) authors that zone
+            //  as (0.060, 0.110, 0.940, 0.605) — its top is 0.605 because Stats_Panel bakes a
+            //  PORTRAIT ARCH above it. This screen never used the arch, so the whole 0.605..0.905
+            //  strip (30% of the panel, ~40% of what the player reads as the frame body) rendered
+            //  as empty black and every piece of content was crammed into the bottom half. That is
+            //  the defect verbatim.
+            //
+            //  It also caused E4. Every slot band was a FRACTION of a fraction: at the owner's
+            //  2340x1080 device the post-scale canvas is ~978px, the panel ~890px, the body zone
+            //  0.495 of that = ~440px, and the Amulet plate 0.145 of THAT = ~64px. Its interior
+            //  caption / name / grant bands were 0.17 / 0.17 / 0.18 of 64px = ~11px each — against
+            //  a FontFloor(30) line box of ~37px. TMP renders OUTSIDE its rect by default, so three
+            //  ~11px bands each painted a ~37px line box and the three overprinted one another.
+            //  Fixed pixels, summed against a measured well, make that arithmetically impossible.
+            // =================================================================
+            float canvasH = ElarionUiKit.PostScaleCanvasHeight(
+                chrome.root != null ? chrome.root.transform : _ui.transform);
+            float panelFracH = 0.91f, panelFracW = 0.88f;
+            if (chrome.root != null)
+            {
+                var rootRt = (RectTransform)chrome.root.transform;
+                panelFracH = Mathf.Max(0.05f, rootRt.anchorMax.y - rootRt.anchorMin.y);
+                panelFracW = Mathf.Max(0.05f, rootRt.anchorMax.x - rootRt.anchorMin.x);
+            }
+            float panelPx  = Mathf.Max(1f, canvasH * panelFracH);
+            float panelWpx = Mathf.Max(1f, CanvasWidthPx(canvasH) * panelFracW);
 
-            // Central 3D hero preview (the showcase centerpiece).
-            BuildPreviewWidget(bodyHost);
+            // The kit reserves the bottom of every framed panel for the ONE shared Close (a fixed
+            // CanonCtaHeight box growing up from CloseBandY0). The well floor drops straight onto
+            // that band plus a gap — exactly ManageScreenPanel's band-5 arithmetic.
+            float closeBandTop = CloseBandY0 + ElarionUiKit.CanonCtaHeight / panelPx;
+            float bodyFloor    = closeBandTop + CloseGapY;
 
-            // The five labeled slot plates around the hero (rebuilt per render).
-            _slotsHost = new GameObject("Slots", typeof(RectTransform));
-            _slotsHost.transform.SetParent(bodyHost, false);
-            var sh = _slotsHost.GetComponent<RectTransform>();
-            sh.anchorMin = Vector2.zero; sh.anchorMax = Vector2.one;
-            sh.offsetMin = Vector2.zero; sh.offsetMax = Vector2.zero;
+            RectTransform bodyRt = chrome.layout != null ? chrome.layout.body : null;
+            RectTransform well;
+            if (bodyRt != null)
+            {
+                // RECLAIM the arch strip. BodyTopFrac(0.875) clears FrameCharacter's header band
+                // (y0 = 0.905) and its medallion socket (y0 = 0.900), so nothing is painted over the
+                // frame's ornament — only over the unused baked arch, which the body zone's own
+                // ZoneBacking plate (a stretched child, so it grows with this resize) covers.
+                bodyRt.anchorMin = new Vector2(bodyRt.anchorMin.x, bodyFloor);
+                bodyRt.anchorMax = new Vector2(bodyRt.anchorMax.x, BodyTopFrac);
+                bodyRt.offsetMin = new Vector2(bodyRt.offsetMin.x, 0f);
+                bodyRt.offsetMax = new Vector2(bodyRt.offsetMax.x, 0f);
+                well = bodyRt;
+            }
+            else
+            {
+                // Procedural fallback frame (no frame art — WebGL-safe): mint the same well by hand
+                // so the band cursor below still measures from a real body top.
+                well = MakeZone(panel != null ? panel.transform : _ui.transform, "Zone_Body_Equip",
+                                new Vector2(0.055f, bodyFloor), new Vector2(0.945f, BodyTopFrac));
+            }
+            _panelTransform = well;
 
-            // Slim target picker (only when there is more than one assignable member).
-            if (_vm != null && _vm.TargetNames.Count > 1)
-                BuildTargetBar(bodyHost, new Vector2(0.30f, 0.875f), new Vector2(0.70f, 0.91f));
+            float wellPx = Mathf.Max(0f, (BodyTopFrac - bodyFloor) * panelPx);
+            float wellWpx = Mathf.Max(1f, panelWpx * Mathf.Max(0.05f, well.anchorMax.x - well.anchorMin.x));
 
-#if DEVELOPMENT_BUILD || UNITY_EDITOR
-            // Dev-only: orient the SHOWN weapon live (parity with the build-menu model-select
-            // Orient) so the owner resolves hand grips from the Gear screen. Hidden in players.
-            BuildOrientButton(bodyHost);
-#endif
+            // ── THE SUM. Only ONE band is fixed at the top level: the target picker, and only when
+            //    there is more than one assignable member. Everything else is the slot list (which
+            //    SCROLLS at fixed row pitch — it can never compress a row) and the preview (which
+            //    absorbs the remainder, with a floor below which it is stacked rather than squeezed).
+            bool multiTarget = _vm != null && _vm.TargetNames.Count > 1;
+            float targetCost = multiTarget ? TargetBarPx + BandGapPx : 0f;
+            float contentPx  = wellPx - targetCost;
+
+            // The slot list at its natural (unscrolled) height: five rows and four gutters.
+            float slotsNaturalPx = SlotCount * SlotRowPx + (SlotCount - 1) * BandGapPx;
+
+            // TWO-COLUMN when the well is wide enough to seat a readable slot column beside the
+            // preview; otherwise the preview takes a fixed TOP band and the slots scroll beneath it.
+            // Chosen on MEASURED WIDTH, never on a guessed aspect ratio.
+            bool twoColumn = wellWpx >= TwoColumnMinWidthPx;
+            float previewBandPx, slotsBandPx;
+            if (twoColumn)
+            {
+                previewBandPx = contentPx;      // full-height right column
+                slotsBandPx   = contentPx;      // full-height left column
+            }
+            else
+            {
+                // Stacked: the preview keeps its floor, the slot list takes the remainder, and the
+                // remainder is never allowed below one whole row + its gutter (it scrolls instead).
+                previewBandPx = Mathf.Max(PreviewMinPx, contentPx - slotsNaturalPx - BandGapPx);
+                slotsBandPx   = contentPx - previewBandPx - BandGapPx;
+                if (slotsBandPx < SlotRowPx)
+                {
+                    previewBandPx = Mathf.Max(0f, contentPx - SlotRowPx - BandGapPx);
+                    slotsBandPx   = contentPx - previewBandPx - BandGapPx;
+                }
+            }
+            _slotListScrolls = slotsBandPx < slotsNaturalPx;
+
+            // §12: the geometry is PROVEN by a capture, not by an eyeball. One line, every band.
+            FlowTrace.Step("Equip", string.Format(
+                "bands(px): canvas={0:0} panel={1:0}x{2:0} well={3:0}x{4:0} (bodyFloor={5:F3} top={6:F3}, " +
+                "reclaimed from the FrameCharacter 0.605 arch cap) || layout={7} target={8:0} " +
+                "preview={9:0}[floor {10:0}] slots={11:0}[natural {12:0} = {13}x{14:0}row + {15}x{16:0}gap, " +
+                "{17}] gaps={18:0} => content={19:0}",
+                canvasH, panelPx, panelWpx, wellPx, wellWpx, bodyFloor, BodyTopFrac,
+                twoColumn ? "two-column" : "stacked", multiTarget ? TargetBarPx : 0f,
+                previewBandPx, PreviewMinPx, slotsBandPx, slotsNaturalPx,
+                SlotCount, SlotRowPx, SlotCount - 1, BandGapPx,
+                _slotListScrolls ? "SCROLLS" : "fits",
+                targetCost + (twoColumn ? 0f : BandGapPx), contentPx));
+
+            if (previewBandPx < PreviewMinPx)
+                FlowTrace.Warn("Equip", string.Format(
+                    "preview band is {0:0}px, under the {1:0}px floor - the paperdoll art is squeezed. " +
+                    "The name + state fallback bands still render (they are fixed px), so the box " +
+                    "cannot go blank; only the portrait art loses room.", previewBandPx, PreviewMinPx));
+
+            // ── LAY THE BANDS. One cursor, top-down, gutter after every band; or two columns.
+            float cursor = 0f;
+            if (multiTarget)
+                BuildTargetBar(Band(well, "Band_TargetBar", ref cursor, TargetBarPx));
+
+            RectTransform previewBand, slotsBand;
+            if (twoColumn)
+            {
+                var row = Band(well, "Band_Content", ref cursor, contentPx);
+                slotsBand   = Column(row, "Col_Slots",   0f, SlotColumnFrac - ColumnGapFrac * 0.5f);
+                previewBand = Column(row, "Col_Preview", SlotColumnFrac + ColumnGapFrac * 0.5f, 1f);
+            }
+            else
+            {
+                previewBand = Band(well, "Band_Preview", ref cursor, previewBandPx);
+                slotsBand   = Band(well, "Band_Slots",   ref cursor, slotsBandPx);
+            }
+
+            // Hero preview (the showcase centerpiece) — with its structural fallback (E2).
+            BuildPreviewWidget(previewBand);
+
+            // The five slot ROWS. A scroll zone at FIXED row pitch: a row can never be compressed
+            // to fit, so the three text bands inside it can never be forced to overprint (E4).
+            var slotScroll = ElarionUiKit.MakeScrollZone(slotsBand, spacing: BandGapPx, padding: 4);
+            _slotListContent = slotScroll != null ? slotScroll.content : null;
+            if (_slotListContent == null)
+                FlowTrace.Fail("Equip", "MakeScrollZone returned no content - the slot list has no host; " +
+                                        "no slot row can be built and the screen would read as gear-less.");
 
             Bind(_vm);
 
@@ -150,7 +342,87 @@ namespace DeNelle.Village.Hero
             if (!PanelManager.NotifyOpened(_panelHandle))
                 return;
 
-            Debug.Log("[EquipmentPanel] Opened — Gear Preview showcase bound to EquipVM (MVVM).");
+            Debug.Log("[EquipmentPanel] Opened - Gear Preview showcase bound to EquipVM (MVVM).");
+        }
+
+        // =====================================================================
+        //  WO-1015 — geometry primitives (the ManageScreenPanel.Band law, verbatim)
+        // =====================================================================
+
+        /// <summary>
+        /// Seat the next band under the previous one and advance the cursor by its height PLUS the
+        /// guaranteed gutter. Top-anchored, top pivot, explicit <c>sizeDelta.y</c> — the height is
+        /// REFERENCE PIXELS, never a fraction of the parent. Fraction bands are the whole of E3/E4:
+        /// a 37px TMP line box inside an 11px fraction band paints straight over its neighbours.
+        /// </summary>
+        private static RectTransform Band(RectTransform parent, string name, ref float cursorPx,
+                                          float heightPx, float x0 = 0.01f, float x1 = 0.99f,
+                                          float gapPx = -1f)
+        {
+            if (gapPx < 0f) gapPx = BandGapPx;
+            float h = Mathf.Max(0f, heightPx);
+            var go = new GameObject(name, typeof(RectTransform));
+            var rt = (RectTransform)go.transform;
+            rt.SetParent(parent, false);
+            rt.anchorMin = new Vector2(x0, 1f);
+            rt.anchorMax = new Vector2(x1, 1f);
+            rt.pivot = new Vector2(0.5f, 1f);
+            rt.sizeDelta = new Vector2(0f, h);
+            rt.anchoredPosition = new Vector2(0f, -cursorPx);
+            cursorPx += h + gapPx;
+            return rt;
+        }
+
+        /// <summary>A full-height COLUMN of a band. Horizontal fractions are legitimate here: the
+        /// column's WIDTH is not what any text band is measured against — every text band inside it
+        /// is pinned in fixed pixels off the row's own top edge.</summary>
+        private static RectTransform Column(RectTransform parent, string name, float x0, float x1)
+        {
+            var go = new GameObject(name, typeof(RectTransform));
+            var rt = (RectTransform)go.transform;
+            rt.SetParent(parent, false);
+            rt.anchorMin = new Vector2(x0, 0f);
+            rt.anchorMax = new Vector2(x1, 1f);
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+            return rt;
+        }
+
+        /// <summary>A fixed-pixel band pinned to the BOTTOM of its host, cursor running upward.
+        /// Used inside the preview so the name/state fallback bands can never be squeezed out.</summary>
+        private static RectTransform BandFromBottom(RectTransform parent, string name, ref float cursorPx,
+                                                    float heightPx, float x0 = 0.02f, float x1 = 0.98f)
+        {
+            float h = Mathf.Max(0f, heightPx);
+            var go = new GameObject(name, typeof(RectTransform));
+            var rt = (RectTransform)go.transform;
+            rt.SetParent(parent, false);
+            rt.anchorMin = new Vector2(x0, 0f);
+            rt.anchorMax = new Vector2(x1, 0f);
+            rt.pivot = new Vector2(0.5f, 0f);
+            rt.sizeDelta = new Vector2(0f, h);
+            rt.anchoredPosition = new Vector2(0f, cursorPx);
+            cursorPx += h + SlotRowBandGapPx;
+            return rt;
+        }
+
+        private static RectTransform MakeZone(Transform parent, string name, Vector2 aMin, Vector2 aMax)
+        {
+            var go = new GameObject(name, typeof(RectTransform));
+            var rt = (RectTransform)go.transform;
+            rt.SetParent(parent, false);
+            rt.anchorMin = aMin; rt.anchorMax = aMax;
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+            return rt;
+        }
+
+        /// <summary>Post-scale canvas WIDTH in the same reference-px space as
+        /// <see cref="ElarionUiKit.PostScaleCanvasHeight"/> — one scaleFactor drives both axes.
+        /// DERIVED, never read off a live rect on the creation frame (that returns raw screen px).</summary>
+        private static float CanvasWidthPx(float canvasH)
+        {
+            float sw = ElarionUiKit.SurfaceWidth, sh = ElarionUiKit.SurfaceHeight;
+            if (sw < 1f || sh < 1f) return canvasH * (1080f / 1920f);   // headless: kit portrait reference
+            return canvasH * (sw / sh);
         }
 
         // ── Construct the model seams + the pure ViewModel at the open-site ──────────
@@ -289,48 +561,70 @@ namespace DeNelle.Village.Hero
             }
         }
 
-        // ── The five labeled slot plates around the hero ─────────────────────────────
+        // ── The five slot ROWS (WO-1015 E4/E5) ───────────────────────────────────────
+        // Was: five plates hand-anchored at body FRACTIONS, each slicing its own interior into
+        // four more fractions. On the owner's device the short Amulet/Ring plates resolved to
+        // ~64 px and their interior bands to ~11 px each — under a third of one FontFloor line
+        // box — so caption, name and grant all painted the same pixels. That is E4 verbatim.
+        //
+        // Now: one fixed-pitch scroll column of SlotRowPx rows. The row height is pixels the row
+        // OWNS; the three text bands are pinned in fixed pixels off the row's top edge and sum to
+        // exactly the row height. Overlap is not expressible in this geometry.
         private void RebuildSlots()
         {
-            if (_slotsHost == null) return;
-            for (int i = _slotsHost.transform.childCount - 1; i >= 0; i--)
+            if (_slotListContent == null) return;
+            for (int i = _slotListContent.childCount - 1; i >= 0; i--)
             {
-                var c = _slotsHost.transform.GetChild(i);
+                var c = _slotListContent.GetChild(i);
                 if (c != null) Destroy(c.gameObject);
             }
 
-            // Eyes-sweep 2026-07-06 + guard sweep 9413: each caption band (drawn ABOVE its plate)
-            // is a FIXED 0.055 body-fraction tall (see CapH in BuildGearSlot — the old 16%-of-plate
-            // rule gave the short Amulet/Ring plates 9–12px caption bands; TextFitGuard proved they
-            // rendered 0 glyphs: "rect 265x9/265x12 ... STILL renders 0 visible glyphs"). Plate rects
-            // re-tuned so every caption+plate stack stays DISJOINT with the full-height caption.
-            // LEFT column: Full Armor Set (large) + Shield (Off Hand).
-            BuildGearSlot(EquipVM.SlotChest,   new Vector2(0.035f, 0.455f), new Vector2(0.235f, 0.80f));
-            BuildGearSlot(EquipVM.SlotOffHand, new Vector2(0.035f, 0.115f), new Vector2(0.235f, 0.40f));
+            int built = 0;
+            // Reading order top-down: what you wear, then what you hold, then trinkets.
+            built += BuildGearSlotRow(EquipVM.SlotChest)    ? 1 : 0;
+            built += BuildGearSlotRow(EquipVM.SlotMainhand) ? 1 : 0;
+            built += BuildGearSlotRow(EquipVM.SlotOffHand)  ? 1 : 0;
+            built += BuildGearSlotRow(EquipVM.SlotAmulet)   ? 1 : 0;
+            built += BuildGearSlotRow(EquipVM.SlotRing)     ? 1 : 0;
 
-            // RIGHT column: Weapon (Main Hand) (large) + Amulet + Ring.
-            BuildGearSlot(EquipVM.SlotMainhand, new Vector2(0.765f, 0.525f), new Vector2(0.965f, 0.80f));
-            BuildGearSlot(EquipVM.SlotAmulet,   new Vector2(0.765f, 0.325f), new Vector2(0.965f, 0.47f));
-            BuildGearSlot(EquipVM.SlotRing,     new Vector2(0.765f, 0.115f), new Vector2(0.965f, 0.27f));
+            if (built != SlotCount)
+                FlowTrace.Fail("Equip", string.Format(
+                    "slot rows built {0}, expected {1} - a slot is MISSING from the doll, not merely " +
+                    "mis-drawn. SlotCount and the band budget disagree with what the VM exposes.",
+                    built, SlotCount));
+            else
+                FlowTrace.Step("Equip", string.Format(
+                    "slot rows: {0} x {1:0}px (bands {2:0}/{3:0}/{4:0} + pads {5:0} + gaps {6:0} = {7:0}), " +
+                    "icon art band {8:0}px, list {9}.",
+                    built, SlotRowPx, SlotLabelBandPx, SlotValueBandPx, SlotHintBandPx,
+                    SlotRowPadPx * 2f, SlotRowBandGapPx * 2f,
+                    SlotRowPadPx * 2f + SlotLabelBandPx + SlotValueBandPx + SlotHintBandPx + SlotRowBandGapPx * 2f,
+                    SlotIconPx, _slotListScrolls ? "SCROLLS" : "fits"));
         }
 
-        // One labeled slot CARD (WO-713 §D): the label lives INSIDE the card — the old floating
-        // captions collided with neighbouring plates ("Shield (Off Hand)" over "Ironward Plate",
-        // the §1.14 fit-never-spill class). A filled card shows icon + name + its one-line grant
-        // (the WO-683 BESTOWS read — gear states why it matters); an EMPTY card shows a pointer
-        // to the system that fills it, not a bare "Empty". Tapping opens the change-drawer.
-        private void BuildGearSlot(string slotKey, Vector2 anchorMin, Vector2 anchorMax)
+        /// <summary>
+        /// One slot ROW: a fixed-height tappable plate carrying an ART band and THREE stacked,
+        /// non-overlapping text bands — label / value / hint (the WO-911 queue-row banding).
+        /// FILLED shows the item name + its one-line grant (WO-683 BESTOWS read). EMPTY says the
+        /// WORD "Empty" and points at the system that fills the slot — never a colour-only state.
+        /// </summary>
+        private bool BuildGearSlotRow(string slotKey)
         {
+            if (_slotListContent == null) return false;
             var slot = FindSlot(slotKey);
 
-            // Framed plate (button).
-            var go = new GameObject("Slot_" + slotKey, typeof(Image), typeof(Button));
-            go.transform.SetParent(_slotsHost.transform, false);
-            var rt = go.GetComponent<RectTransform>();
-            rt.anchorMin = anchorMin; rt.anchorMax = anchorMax;
-            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
-            var img = go.GetComponent<Image>();
+            // ── The row host: BOTH the LayoutElement AND sizeDelta. The scroll column has
+            //    childControlHeight off, so a row that sets only one of them collapses to zero.
+            var go = new GameObject("Slot_" + slotKey, typeof(Image), typeof(Button), typeof(LayoutElement));
+            go.transform.SetParent(_slotListContent, false);
+            var rt = (RectTransform)go.transform;
+            var le = go.GetComponent<LayoutElement>();
+            le.preferredHeight = SlotRowPx;
+            le.minHeight = SlotRowPx;          // >= MinTouchPx(112) — the whole row is the tap target
+            le.flexibleWidth = 1f;
+            rt.sizeDelta = new Vector2(rt.sizeDelta.x, SlotRowPx);
 
+            var img = go.GetComponent<Image>();
             bool selected = slotKey == _drawerSlotKey;
             // Real Obsidian equipment-slot plate (UI_BLINK_TEMPLATE_CANON §4) — sprite-FIRST,
             // sliced, white; the procedural Cell tint is the WebGL-safe null fallback.
@@ -355,58 +649,86 @@ namespace DeNelle.Village.Hero
             bool filled = slot.HasValue && slot.Value.Content.HasValue;
             var item = filled ? slot.Value.Content.Value : default;
 
-            // ── Card interior — FOUR disjoint bands, all INSIDE the plate (fit-never-spill):
-            //    caption (top) / icon / name / grant-or-pointer (bottom). Every label is
-            //    FitSingleLine-protected, so the short Amulet/Ring plates stay legible
-            //    (the guard-9413 zero-glyph class cannot recur — no band is outside the card).
-            var capLbl = ElarionUiKit.Label(go.transform, SlotCaption(slotKey), 0.80f, 0.97f,
-                ElarionUi.Gilt, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f, bold: true);
-            capLbl.raycastTarget = false;
-            ElarionUiKit.FitSingleLine(capLbl, 0f, ElarionUi.FontMicro);
+            // ── E5: the ART BAND. A FIXED SlotIconPx square pinned to the row's left edge, vertically
+            //    centred. Fixed px is the whole fix — the old icon was 0.36 x 0.36 of a plate that had
+            //    itself collapsed, which is why it read as "a few dark pixels".
+            var iconGo = new GameObject("IconBand", typeof(Image));
+            iconGo.transform.SetParent(go.transform, false);
+            var irt = (RectTransform)iconGo.transform;
+            irt.anchorMin = new Vector2(0f, 0.5f);
+            irt.anchorMax = new Vector2(0f, 0.5f);
+            irt.pivot = new Vector2(0f, 0.5f);
+            irt.sizeDelta = new Vector2(SlotIconPx, SlotIconPx);
+            irt.anchoredPosition = new Vector2(SlotRowPadPx + 6f, 0f);
+            var iconImg = iconGo.GetComponent<Image>();
+            iconImg.raycastTarget = false;
 
-            // Real item art for FILLED slots (mirrors InventoryGrid.ResolveItemIcon): the slot's
-            // ItemVM already carries the correct IconRole + item id. Empty slots keep the ghost
-            // glyph at low alpha.
+            // THE SHARED resolver — GearIconCatalog, the same path the queue/cards and InventoryGrid
+            // use. No second resolver is introduced here, so an item cannot look like one thing on
+            // the doll and another in the grid.
             var iconSprite = filled ? ResolveSlotItemArt(slotKey, item) : null;
             if (iconSprite == null)
                 iconSprite = RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, SlotIconName(slotKey));
-            var iconGo = ElarionUiKit.AddImage(go.transform, "Icon",
-                new Vector2(0.30f, 0.42f), new Vector2(0.70f, 0.78f),
-                Color.white, rounded: false);
-            var iconImg = iconGo.GetComponent<Image>();
-            iconImg.raycastTarget = false;
             if (iconSprite != null)
             {
-                iconImg.sprite = iconSprite; iconImg.preserveAspect = true;
-                iconImg.color = filled ? RarityTint(item.Rarity) : new Color(1f, 1f, 1f, 0.30f);
+                iconImg.sprite = iconSprite;
+                iconImg.preserveAspect = true;
+                iconImg.color = filled ? RarityTint(item.Rarity) : new Color(1f, 1f, 1f, 0.35f);
             }
             else
             {
+                // No art at all: the band still carries a legible glyph rather than a dark square.
                 iconImg.color = new Color(0f, 0f, 0f, 0f);
-                ElarionUiKit.Label(iconGo.transform, "?", 0f, 1f,
+                var q = ElarionUiKit.Label(iconGo.transform, "?", 0f, 1f,
                     filled ? ElarionUi.Parchment : ElarionUi.ParchmentDim,
                     ElarionUi.FontTitle, TMPro.TextAlignmentOptions.Center, 0f, 1f, bold: true);
+                q.raycastTarget = false;
+                ElarionUiKit.FitSingleLine(q, 0f, ElarionUi.FontTitle);
             }
 
-            // Item name (or "Empty") — single line, fitted, never wraps onto neighbours.
-            string nameText = filled ? ElarionUiKit.SpacedDisplayName(item.Name) : "Empty";
-            var slotName = ElarionUiKit.Label(go.transform, nameText, 0.24f, 0.41f,
+            // ── The TEXT COLUMN: everything right of the art band. It never shares pixels with the
+            //    icon (fixed left inset), and its three bands never share pixels with each other.
+            var text = new GameObject("TextColumn", typeof(RectTransform));
+            text.transform.SetParent(go.transform, false);
+            var trt = (RectTransform)text.transform;
+            trt.anchorMin = Vector2.zero; trt.anchorMax = Vector2.one;
+            trt.offsetMin = new Vector2(SlotRowPadPx + 6f + SlotIconPx + 14f, SlotRowPadPx);
+            trt.offsetMax = new Vector2(-(SlotRowPadPx + 6f), -SlotRowPadPx);
+
+            // BAND 1 — the slot's own name. Always present, so the row is identifiable even empty.
+            float cursor = 0f;
+            var labelBand = Band(trt, "Band_Label", ref cursor, SlotLabelBandPx, 0f, 1f, SlotRowBandGapPx);
+            var lbl = ElarionUiKit.Label(labelBand, SlotCaption(slotKey), 0f, 1f,
+                ElarionUi.Gilt, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Left, 0f, 1f, bold: true);
+            lbl.raycastTarget = false;
+            ElarionUiKit.FitSingleLine(lbl, 0f, ElarionUi.FontLabel);
+
+            // BAND 2 — the equipped item, or the WORD "Empty". Colourblind law: the state is said,
+            // never merely tinted (the dim colour is decoration on top of the word, not the signal).
+            var valueBand = Band(trt, "Band_Value", ref cursor, SlotValueBandPx, 0f, 1f, SlotRowBandGapPx);
+            string valueText = filled ? ElarionUiKit.SpacedDisplayName(item.Name) : "Empty";
+            var val = ElarionUiKit.Label(valueBand, valueText, 0f, 1f,
                 filled ? ElarionUi.Parchment : ElarionUi.ParchmentDim,
-                ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, bold: filled);
-            slotName.raycastTarget = false;
-            ElarionUiKit.FitSingleLine(slotName, 0f, ElarionUi.FontMicro);
+                ElarionUi.FontBody, TMPro.TextAlignmentOptions.Left, 0f, 1f, bold: filled);
+            val.raycastTarget = false;
+            ElarionUiKit.FitSingleLine(val, 0f, ElarionUi.FontBody);
 
-            // Bottom band: FILLED = the item's one-line grant (why it matters, WO-683 BESTOWS
-            // read from the catalog defs); EMPTY = a pointer to the system that fills the slot.
-            string valueText = filled ? (_vm != null ? _vm.GrantLineFor(slotKey) : "") : EmptySlotPointer(slotKey);
-            if (!string.IsNullOrEmpty(valueText))
-            {
-                var grantLbl = ElarionUiKit.Label(go.transform, valueText, 0.05f, 0.23f,
-                    filled ? ElarionUi.Gilt : ElarionUi.ParchmentDim,
-                    ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f);
-                grantLbl.raycastTarget = false;
-                ElarionUiKit.FitSingleLine(grantLbl, 0f, ElarionUi.FontMicro);
-            }
+            // BAND 3 — why it matters (filled), or where to get one (empty). Never blank: an empty
+            // band that renders nothing is indistinguishable from a band that failed to render.
+            var hintBand = Band(trt, "Band_Hint", ref cursor, SlotHintBandPx, 0f, 1f, SlotRowBandGapPx);
+            string hintText = filled ? (_vm != null ? _vm.GrantLineFor(slotKey) : "") : EmptySlotPointer(slotKey);
+            if (string.IsNullOrEmpty(hintText))
+                hintText = filled ? "No stat bonus" : "Nothing equipped";
+            var hint = ElarionUiKit.Label(hintBand, hintText, 0f, 1f,
+                filled ? ElarionUi.Gilt : ElarionUi.ParchmentDim,
+                ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Left, 0f, 1f);
+            hint.raycastTarget = false;
+            ElarionUiKit.FitSingleLine(hint, 0f, ElarionUi.FontLabel);
+
+            FlowTrace.Step("Equip", string.Format(
+                "slot '{0}' bound: filled={1} item='{2}' iconResolved={3} value='{4}' hint='{5}'",
+                slotKey, filled, filled ? item.Id : "-", iconSprite != null, valueText, hintText));
+            return true;
         }
 
         // GrantLine MOVED to EquipVM.GrantLineFor (strict-MVVM: it read GearCatalog in the View).
@@ -449,10 +771,12 @@ namespace DeNelle.Village.Hero
             CloseDrawer();
             _drawerSlotKey = slotKey;
 
-            // Bottom raised 0.02 -> 0.17 (eyes-sweep rule 2): the drawer ends ABOVE the shared
-            // bottom-centre Close band instead of extending underneath it; same drawer height.
+            // WO-1015: the drawer is a fraction of the WELL, and the well now ends above the shared
+            // bottom-centre Close band by construction (see the band budget in Open) — so the old
+            // hand-tuned 0.17 floor, which was compensating for a well that ran under the Close, is
+            // no longer needed and was simply wasting the drawer's own height.
             _drawerHost = ElarionUiKit.PanelFramed(_panelTransform,
-                new Vector2(0.06f, 0.17f), new Vector2(0.94f, 0.55f),
+                new Vector2(0.03f, 0.03f), new Vector2(0.97f, 0.94f),
                 deep: true, packSpriteName: RpgUiCatalog.PanelWindowDark);
             var fill = ElarionUiKit.AddImage(_drawerHost.transform, "DrawerFill",
                 new Vector2(0.02f, 0.03f), new Vector2(0.98f, 0.97f),
@@ -494,12 +818,16 @@ namespace DeNelle.Village.Hero
         }
 
         // ── Target picker (hero + companions) ────────────────────────────────────────
-        private void BuildTargetBar(Transform parent, Vector2 anchorMin, Vector2 anchorMax)
+        // WO-1015: takes its own FIXED-PIXEL band (TargetBarPx >= MinTouchPx) instead of the old
+        // (0.30,0.875)-(0.70,0.91) body fraction — 3.5% of a ~440px body was a 15px tall row of
+        // touch targets, which ClampMinTouch then grew straight over the slots underneath.
+        private void BuildTargetBar(RectTransform band)
         {
+            if (band == null) return;
             var bar = new GameObject("TargetBar", typeof(RectTransform));
-            bar.transform.SetParent(parent, false);
+            bar.transform.SetParent(band, false);
             var br = bar.GetComponent<RectTransform>();
-            br.anchorMin = anchorMin; br.anchorMax = anchorMax;
+            br.anchorMin = Vector2.zero; br.anchorMax = Vector2.one;
             br.offsetMin = Vector2.zero; br.offsetMax = Vector2.zero;
             _targetBar = bar;
 
@@ -511,37 +839,31 @@ namespace DeNelle.Village.Hero
             {
                 int idx = i;
                 float x0 = gap + i * (w + gap);
+                // 0.96 * TargetBarPx(120) = 115px >= MinTouchPx(112), so ClampMinTouch never GROWS
+                // a picker button out of its own band onto the content below it.
                 var btn = ElarionUiKit.ButtonPack(bar.transform, names[i], ElarionUiKit.ButtonKind.Gold,
-                    new Vector2(x0, 0.06f), new Vector2(x0 + w, 0.94f),
+                    new Vector2(x0, 0.02f), new Vector2(x0 + w, 0.98f),
                     () => _vm?.SelectTarget(idx), RpgUiCatalog.ButtonFrame);
                 CreamTab(btn);
+                ElarionUiKit.ClampMinTouch(btn);
                 if (btn != null) btn.name = "Tgt_" + idx;
             }
             HighlightTargets();
         }
 
-#if DEVELOPMENT_BUILD || UNITY_EDITOR
-        // Dev-only "Orient" button — opens the in-game Seating Editor (WO-577) on the PREVIEW's
-        // own EquipmentController, so the owner dials the hand-grip offset on the weapon she is
-        // looking at in the 3D showcase. The offset saves per weapon id to AttachmentOffsetRegistry,
-        // which the equip/attach path already reads → the grip is then correct everywhere. Reuse,
-        // no new tool: same overlay the build-menu Orient and AdminOverlay launch.
-        private void BuildOrientButton(Transform parent)
-        {
-            // WO-713: the U+2692 hammer glyph tofu'd in the build TMP font (known HUDUI red)
-            // — plain ASCII label per the ASCII-only law.
-            var btn = ElarionUiKit.ButtonPack(parent, "Orient", ElarionUiKit.ButtonKind.Quiet,
-                new Vector2(0.02f, 0.02f), new Vector2(0.20f, 0.07f),
-                () =>
-                {
-                    var eq = _preview != null ? _preview.Equip : null;
-                    if (eq != null) DeNelle.Village.UI.SeatingEditorOverlay.LaunchFor(eq);
-                    else            DeNelle.Village.UI.SeatingEditorOverlay.Launch();   // fall back to world hero
-                },
-                RpgUiCatalog.ButtonFrame);
-            if (btn != null) btn.name = "OrientDev";
-        }
-#endif
+        // ── WO-1015 E1: the in-panel "Orient" word-button is GONE from this screen ──────────
+        // It was a DEV-GATED strand (#if DEVELOPMENT_BUILD || UNITY_EDITOR) copy-pasted into three
+        // player-facing screens — the build palette (removed by WO-1010 D1), the inventory footer
+        // (InventoryUIBuilder, removed by this WO) and here. Dev-gated is not the same as invisible:
+        // the owner's felt-test builds ARE development builds, so it rendered on her screen every
+        // time, and here it sat at body-fraction (0.02,0.02)-(0.20,0.07) which lands straight over
+        // the Shield (Off Hand) plate and clipped its text.
+        //
+        // The tool itself is NOT removed and NOT reimplemented: SeatingEditorOverlay keeps its ONE
+        // sanctioned entry point, AdminOverlay ("Orient Asset" / "Seating Editor",
+        // Assets/_Modules/HUD/AdminOverlay.cs:361 + :608) — a dev screen, not a gameplay screen.
+        // Do not re-add a per-screen launcher: EquipmentScreenLayoutRegression [equipment-screen-layout]
+        // fails the build if the word "Orient" reappears as a control in this file.
 
         private void HighlightTargets()
         {
@@ -582,10 +904,10 @@ namespace DeNelle.Village.Hero
             {
                 if (wantCount == 0)
                     FlowTrace.Warn("Equip",
-                        $"EquipmentPanel has NO compatible items for slot {_vm?.SelectedSlotKey} — empty-state row (data-empty).");
+                        $"EquipmentPanel has NO compatible items for slot {_vm?.SelectedSlotKey} - empty-state row (data-empty).");
                 else
                     FlowTrace.Fail("Equip",
-                        $"EquipmentPanel had {wantCount} item(s) but built 0 rows ({failed} failed) — empty-state row (built-but-broken).");
+                        $"EquipmentPanel had {wantCount} item(s) but built 0 rows ({failed} failed) - empty-state row (built-but-broken).");
                 CreateEmptyStateRow(listRoot, "No gear available for this slot.");
             }
 
@@ -730,15 +1052,46 @@ namespace DeNelle.Village.Hero
             // the id is spaced so a raw itemId never reaches the player (P10).
             ElarionUiKit.ShowToast("Equipped " + ElarionUiKit.SpacedDisplayName(id) + ".",
                 ElarionUiKit.ToastTone.Confirm);
-            Debug.Log($"[EquipmentPanel] Equipped {id} via EquipVM — hero visual/stat updated.");
+            Debug.Log($"[EquipmentPanel] Equipped {id} via EquipVM - hero visual/stat updated.");
         }
 
-        // ── Live hero preview widget (centerpiece) + viewer lifecycle ────────────────
+        // =====================================================================
+        //  WO-1015 E2 — the hero preview: STRUCTURAL fallback + §12 instrumentation
+        // ---------------------------------------------------------------------
+        //  The owner's capture shows a flat dark-navy rectangle. That colour is AMBIGUOUS by
+        //  construction and this is why it must be instrumented rather than guessed at: it is
+        //  simultaneously (a) this host's own fill Color(0.02, 0.047, 0.094), (b) the preview
+        //  camera's clearFlags SolidColor backgroundColor — the SAME rgb, HeroPreviewViewer.cs's
+        //  "#050c18 viewport bg". So a live render of an EMPTY frustum, a render that never ran,
+        //  and a RawImage that was never enabled all look IDENTICAL on screen. No screenshot can
+        //  separate them; only a trace can.
+        //
+        //  The candidates the instrumentation separates, and the line that settles each:
+        //    A  no source body        -> "preview: body=NULL"            (EquipmentPanel, below)
+        //    B  rig/RT never built    -> "Begin returned ok=False"       (EquipmentPanel, below)
+        //    C  RT alloc failed       -> "rt.Create() FAILED"            (HeroPreviewViewer.Begin)
+        //    D  camera sees nothing   -> "cullingMask layer=<n> named=<bool>" + the renderer
+        //                                enumeration already in Begin (renderer count / layer)
+        //    E  model degenerate      -> "bounds=<size> dist=<f>"        (HeroPreviewViewer.Begin)
+        //    F  drew nothing at all   -> "RT PROBE: uniform clear colour" (the decisive line —
+        //                                a readback that reports whether ANY pixel differs from
+        //                                the camera's clear colour; that is the ONLY signal that
+        //                                distinguishes "rendered an empty scene" from "rendered
+        //                                the hero", and it cannot be inferred from source)
+        //    G  built but not shown   -> "outcome=fallback reason=..."   (EquipmentPanel, below)
+        //
+        //  AND, regardless of which one it turns out to be, the box is no longer allowed to be
+        //  blank: the NAME band and the STATE band below are built unconditionally in fixed
+        //  pixels, before any of the render machinery is touched. Even with zero art and zero
+        //  render texture the player reads "Thrain the Wise / Portrait view - live model
+        //  unavailable". A paperdoll screen showing NOTHING is now unreachable.
+        // =====================================================================
         private void BuildPreviewWidget(Transform parent)
         {
             var host = ElarionUiKit.AddImage(parent, "HeroPreview",
-                new Vector2(0.32f, 0.10f), new Vector2(0.68f, 0.88f),
+                new Vector2(0f, 0f), new Vector2(1f, 1f),
                 new Color(0.02f, 0.047f, 0.094f, 1f), rounded: false);
+            var hostRt = (RectTransform)host.transform;
             var hostImg = host.GetComponent<Image>();
             if (hostImg != null)
             {
@@ -754,16 +1107,43 @@ namespace DeNelle.Village.Hero
                 }
             }
 
-            // WO-713 §D null-safe-by-construction: the mirrored Obsidian sil_male silhouette
-            // sits BEHIND the live render — if the RT rig ever fails, the paperdoll well still
-            // reads as a hero silhouette, never a blank black box. Toggled with the preview.
-            var silGo = ElarionUiKit.AddImage(host.transform, "Silhouette",
-                new Vector2(0.14f, 0.06f), new Vector2(0.86f, 0.92f),
+            // ── THE FALLBACK BANDS FIRST. Fixed pixels, pinned to the bottom, built before the
+            //    render rig is even considered — so no failure downstream can prevent them.
+            float up = PreviewPadPx;
+            var stateBand = BandFromBottom(hostRt, "Band_PreviewState", ref up, PreviewStateBandPx);
+            var nameBand  = BandFromBottom(hostRt, "Band_PreviewName",  ref up, PreviewNameBandPx);
+
+            _previewNameLabel = ElarionUiKit.Label(nameBand, HeroFullName(ResolveActiveHeroJob()), 0f, 1f,
+                ElarionUi.Gilt, ElarionUi.FontBody, TMPro.TextAlignmentOptions.Center, 0f, 1f, bold: true);
+            _previewNameLabel.raycastTarget = false;
+            ElarionUiKit.FitSingleLine(_previewNameLabel, 0f, ElarionUi.FontBody);
+
+            // Colourblind law: the live/fallback distinction is a WORD, never a tint.
+            _previewStateLabel = ElarionUiKit.Label(stateBand, "Loading view...", 0f, 1f,
+                ElarionUi.ParchmentDim, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0f, 1f);
+            _previewStateLabel.raycastTarget = false;
+            ElarionUiKit.FitSingleLine(_previewStateLabel, 0f, ElarionUi.FontLabel);
+
+            // ── The ART REGION: everything above the two fallback bands.
+            float artFloorPx = PreviewPadPx + PreviewStateBandPx + SlotRowBandGapPx
+                             + PreviewNameBandPx + SlotRowBandGapPx;
+            var art = new GameObject("PreviewArt", typeof(RectTransform));
+            art.transform.SetParent(hostRt, false);
+            var artRt = (RectTransform)art.transform;
+            artRt.anchorMin = Vector2.zero; artRt.anchorMax = Vector2.one;
+            artRt.offsetMin = new Vector2(PreviewPadPx, artFloorPx);
+            artRt.offsetMax = new Vector2(-PreviewPadPx, -PreviewPadPx);
+
+            // WO-713 §D: the Obsidian sil_male silhouette sits BEHIND the live render — when the
+            // RT rig is unavailable the well still reads as a hero, not a black box.
+            var silGo = ElarionUiKit.AddImage(artRt, "Silhouette",
+                new Vector2(0.10f, 0.02f), new Vector2(0.90f, 0.98f),
                 new Color(0f, 0f, 0f, 0f), rounded: false);
             _previewSilhouette = silGo.GetComponent<Image>();
             _previewSilhouette.raycastTarget = false;
             var silSp = RpgUiCatalog.Get(RpgUiCatalog.RoleSilhouette, RpgUiCatalog.SilMale);
-            if (silSp != null)
+            bool silResolved = silSp != null;
+            if (silResolved)
             {
                 _previewSilhouette.sprite = silSp;
                 _previewSilhouette.preserveAspect = true;
@@ -771,20 +1151,33 @@ namespace DeNelle.Village.Hero
             }
             else
             {
-                _previewSilhouette.enabled = false;   // no art — the dark plate stays the fallback
+                // NO ART. The old code set _previewSilhouette = null here, and HidePreview then had
+                // literally nothing to show — that is one live path to the owner's blank box, and it
+                // fails SILENTLY. It is now said out loud, and the name/state bands carry the box.
+                _previewSilhouette.enabled = false;
                 _previewSilhouette = null;
+                FlowTrace.Warn("Equip",
+                    "preview: silhouette art '" + RpgUiCatalog.SilMale + "' did NOT resolve from role '" +
+                    RpgUiCatalog.RoleSilhouette + "' - the art fallback is unavailable on this build. " +
+                    "The name + state WORD bands are the fallback instead (they always render).");
             }
 
             var imgGo = new GameObject("PreviewRawImage", typeof(RectTransform), typeof(RawImage));
-            imgGo.transform.SetParent(host.transform, false);
+            imgGo.transform.SetParent(artRt, false);
             var rt = imgGo.GetComponent<RectTransform>();
-            rt.anchorMin = new Vector2(0.04f, 0.04f);
-            rt.anchorMax = new Vector2(0.96f, 0.96f);
+            rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one;
             rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
             _previewImage = imgGo.GetComponent<RawImage>();
             _previewImage.raycastTarget = false;
             _previewImage.color = Color.white;
             _previewImage.enabled = false;
+
+            FlowTrace.Step("Equip", string.Format(
+                "preview widget built: art floor={0:0}px above the fixed name({1:0})+state({2:0}) bands, " +
+                "silhouetteArt={3}, charPlate={4}. Fallback bands are unconditional - a blank preview " +
+                "box is not reachable from here.",
+                artFloorPx, PreviewNameBandPx, PreviewStateBandPx, silResolved,
+                RpgUiCatalog.Get(RpgUiCatalog.RoleSlot, RpgUiCatalog.SlotCharacter) != null));
         }
 
         private void BeginOrRetargetPreview()
@@ -795,10 +1188,26 @@ namespace DeNelle.Village.Hero
             string weaponId = ActiveWeaponId();
             string offHandId = ActiveOffHandId();
             int armorTier = ActiveArmorTier();
-            if (body == null) { HidePreview(); return; }
+
+            // CANDIDATE A. Proves whether the panel ever HAD a body to preview. If this line says
+            // NULL, nothing about render textures, layers or materials is relevant — ResolveBody /
+            // the target list is the dead step and no preview code should be touched.
+            FlowTrace.Step("Equip", string.Format(
+                "preview: targetIndex={0} body={1} bodies={2} weapon='{3}' offHand='{4}' armorTier={5}",
+                _vm != null ? _vm.ActiveTargetIndex : -1,
+                body != null ? body.name : "NULL", _targetBodies.Count,
+                weaponId ?? "-", offHandId ?? "-", armorTier));
+
+            if (body == null)
+            {
+                ShowPreviewFallback("no hero body resolved for the active target (ResolveBody found " +
+                                    "neither a 'HeroBody' child nor a tagged Player root)");
+                return;
+            }
 
             bool ok;
-            if (_preview == null)
+            bool fresh = _preview == null;
+            if (fresh)
             {
                 _preview = new HeroPreviewViewer();
                 ok = _preview.Begin(body, textureSize: 512, weaponId: weaponId,
@@ -810,16 +1219,36 @@ namespace DeNelle.Village.Hero
                 if (!ok) ok = _preview.IsValid;
             }
 
-            if (ok && _preview.IsValid && _preview.Texture != null)
+            // CANDIDATES B/C/G. Each field is reported separately rather than as one boolean, so the
+            // trace names WHICH link failed instead of only that the chain did.
+            var tex = _preview != null ? _preview.Texture : null;
+            FlowTrace.Step("Equip", string.Format(
+                "preview: {0} returned ok={1} IsValid={2} texture={3} ({4}x{5}, created={6})",
+                fresh ? "Begin" : "Retarget", ok, _preview != null && _preview.IsValid,
+                tex != null ? "present" : "NULL",
+                tex != null ? tex.width : 0, tex != null ? tex.height : 0,
+                tex != null && tex.IsCreated()));
+
+            if (ok && _preview.IsValid && tex != null)
             {
-                _previewImage.texture = _preview.Texture;
+                _previewImage.texture = tex;
                 _previewImage.enabled = true;
                 _preview.SetRotation(18f);
                 if (_previewSilhouette != null) _previewSilhouette.enabled = false;
+                if (_previewStateLabel != null) _previewStateLabel.text = "Live view";
+
+                // CANDIDATE F — THE DECISIVE LINE. Everything above proves the rig was CONSTRUCTED;
+                // only this proves anything was DRAWN. Without it a rig that renders an empty
+                // frustum reports a perfect green chain and still shows the owner a flat navy box.
+                _preview.ProbeRenderedContent("Equip");
+                FlowTrace.Step("Equip", "preview: outcome=LIVE (render texture bound and shown).");
             }
             else
             {
-                HidePreview();
+                ShowPreviewFallback(string.Format(
+                    "{0} ok={1}, IsValid={2}, texture={3}",
+                    fresh ? "Begin" : "Retarget", ok,
+                    _preview != null && _preview.IsValid, tex != null ? "present" : "NULL"));
             }
         }
 
@@ -828,6 +1257,23 @@ namespace DeNelle.Village.Hero
             if (_preview == null || !_preview.IsValid) return;
             // WO-567: mirror the full equipped look (weapon + shield + armor tint), not just weapon.
             _preview.RefreshGear(ActiveWeaponId(), ActiveOffHandId(), ActiveArmorTier());
+        }
+
+        /// <summary>
+        /// The ONE fallback path. Hides the dead render, brings the silhouette back if there is
+        /// art, and — always — puts the reason in the trace and a WORD on the screen. There is no
+        /// code path from here to an empty box: the name and state bands are already built.
+        /// </summary>
+        private void ShowPreviewFallback(string reason)
+        {
+            HidePreview();
+            if (_previewStateLabel != null)
+                _previewStateLabel.text = _previewSilhouette != null
+                    ? "Portrait view - live model unavailable"
+                    : "Live model unavailable";
+            FlowTrace.Warn("Equip", "preview: outcome=FALLBACK reason=" + reason +
+                                    " (silhouette=" + (_previewSilhouette != null) +
+                                    "; the name + state bands carry the box either way).");
         }
 
         private void HidePreview()
@@ -977,7 +1423,10 @@ namespace DeNelle.Village.Hero
             DisposePreview();
             if (_ui != null) Destroy(_ui);
             _ui = null;
-            _slotsHost = null;
+            _slotListContent = null;
+            _slotListScrolls = false;
+            _previewNameLabel = null;
+            _previewStateLabel = null;
             _targetBar = null;
             _drawerHost = null;
             _drawerSlotKey = null;
