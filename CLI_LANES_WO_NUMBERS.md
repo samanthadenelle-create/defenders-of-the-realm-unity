@@ -1,6 +1,19 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ RECONCILED 2026-08-10 (CLI): main line next free = **980**. **782–859 + 900–979 CONSUMED.**
+> ## ⚠ RECONCILED 2026-08-10 (CLI): main line next free = **981**. **782–859 + 900–980 CONSUMED.**
+> - **980** = **Dungeon camera FRAMING after the WO-968 fix — blown-out wall, hero as silhouette.**
+>   The camera fix itself is PROVEN (43 heartbeats, 15 distinct rig poses, heal line fired once naming
+>   the DESTROYED CinemachineFollow verbatim). This is about what the now-working camera SHOWS:
+>   `03_walk_end.png` / `08_final.png` are dominated by a near-white wall with the hero a black
+>   silhouette against a torch. **Kept separate from WO-968 deliberately** — *"the camera follows"* and
+>   *"the player can see where they are going"* are two claims and only the first is proven; folding
+>   them would let a proven fix carry an unproven one. **May well be WORKING AS INTENDED**: the old
+>   camera was parked across the room, so this is the first time anyone has seen the intended
+>   over-the-shoulder framing. ⛔ **OWNER RULING FIRST, asked as behaviour not colour** (she is
+>   red/green colourblind): *can you tell where you are going, or does it read as a bright blur?*
+>   Candidate fixes if a defect — torch intensity, bloom/post-exposure, rig distance/height, hero
+>   rim-light. ⚠ **Do NOT touch the follow logic or `HealBodyStage`.** Before/after proof pairs in
+>   `docs/proof/2026-08-10-dungeon-headed{,-AFTER-camera-fix}/`. **READY (blocked on her ruling).**
 > - **979** = **`WaveFeedbackDirector` reports a HUD bind that can never succeed** —
 >   `Assets/_Modules/Village/Waves/WaveFeedbackDirector.cs:321` prints
 >   `hudBound={CoreServices.Hud != null}` while `FindHud()` at `:325` is a **stub whose entire body is

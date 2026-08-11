@@ -119,9 +119,53 @@ forces a re-cache. Detection uses `ReferenceEquals`, never `==`, because a destr
 compares equal to null — a "simplifying" edit would make the squatter read as *"no body configured"*
 and silently re-freeze the camera. The comment says exactly that, naming the consequence.
 
-> ⚠ **This fix has NOT executed yet.** The diagnosis is source-derived and the evidence is airtight,
-> but no build containing `HealBodyStage` has run. The proof line to look for on the next headed run:
-> `body=CinemachineThirdPersonFollow(enabled=True)` with `rig=pos` finally tracking `pivotPos`.
+### ✅ PROVEN — the camera fix was re-run and it works
+
+*(This section originally read "this fix has NOT executed yet." A fresh Windows player was built at
+22:3x and the headed run was repeated. Proof images:
+`docs/proof/2026-08-10-dungeon-headed-AFTER-camera-fix/`.)*
+
+**The rig moves. 43 heartbeats produced 15 distinct poses** — run1 produced **one**.
+
+```
+FIRST: rig=pos=(-28.50, 2.25,  3.20) yaw=180.0
+LAST : rig=pos=(-32.02, 2.33, -4.14) yaw=203.1
+```
+
+It tracks the hero in **both** position and rotation — rig yaw follows hero yaw at the
+`headingYawOffset` +90 throughout (hero 90→180, 294→12, 334→76, 113→203), and `camState` equals
+`rig=pos` on every sample, i.e. the body stage solves *and* the transform receives it.
+`body=CinemachineThirdPersonFollow(enabled=True)` on **all 43** heartbeats.
+
+**And the race genuinely hit this run**, which is what makes this a proof rather than a lucky pass:
+
+```
+[Flow:DungeonCam] HealBodyStage: the vcam's BODY stage did not hold this rig's
+CinemachineThirdPersonFollow (it held DESTROYED CinemachineFollow), so the body stage was
+skipped and the camera sat frozen at the pose SeatThirdPersonImmediate wrote on Bind.
+Forced a pipeline re-cache -> body is now CinemachineThirdPersonFollow (FOLLOWING).
+```
+
+*"it held DESTROYED CinemachineFollow"* — the source-derived prediction, confirmed by runtime data,
+word for word. Fired **once**, **zero** repeats, **zero** "re-cache did not take" failures.
+
+The distinction that matters: a *lucky* run shows **no heal line and a moving camera**; a *broken*
+run shows **the heal line and a frozen camera**. This run shows **the heal line AND a moving
+camera** — the one combination that proves the mechanism and the fix together.
+
+**Pixels agree.** In the before-shot the hero was gone from frame; in the after-shot he is
+**centre-frame, over-the-shoulder**, and the compass moved (**S → SW**) where before it read S in all
+eight shots.
+
+**All four WO-968 seams now pass. `Dungeon_HealersCottage` is playable.**
+
+> ### ⚠ But look at the after-shots before you call this finished — WO-980
+> The camera follows correctly, and the *framing* is a separate question I am not qualified to
+> settle. In `03_walk_end.png` and `08_final.png` the frame is dominated by a **blown-out wall**, and
+> the hero renders as a **black silhouette** against a torch. Whether that is atmospheric or
+> unplayable is a feel call, and it is yours. Ticketed as **WO-980** with the screenshots attached.
+> Flagged rather than quietly fixed, because "the camera works" and "you can see where you are
+> going" are two different claims and only the first is proven.
 
 ### Also captured
 
