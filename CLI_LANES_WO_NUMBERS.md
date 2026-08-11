@@ -1,6 +1,43 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ RECONCILED 2026-08-10 (CLI): main line next free = **971**. **782–859 + 900–970 CONSUMED.**
+> ## ⚠ RECONCILED 2026-08-10 (CLI): main line next free = **972**. **782–859 + 900–971 CONSUMED.**
+> - **971** = **Remove the original tutorial — ONE tutorial, ONE guide** — owner ruling 2026-08-10,
+>   verbatim: *"why are two tutorials active?"* / *"remove the original"* / *"only the new wolf one
+>   stays"* / *"from data"*. PROVEN BY CAPTURE, her Player.log on the 20:42 build:
+>   `[Flow:SylasSteward] Sylas steward spawned at (2.00, 0.08, 3.00)` and
+>   `[Flow:Tutorial] guide BODY summoned ('ice-wolf') at (2.00, 0.06, 3.00)` — **two guide bodies two
+>   centimetres apart** — with the ONE spotlight alternating, `FocusMask resolved highlightId=world.guide
+>   target=Sylas` then `target=Pet_ice-wolf`, while the strip read "Follow Aldwin to the gate". Her
+>   screenshot shows the gold ring on a peasant NPC with the wolf inside the same ring.
+>   ⚠ TWO HALVES, ARMED BY DIFFERENT ROUTES — this is why it had to come from data: `TutorialDirector`
+>   (the legacy FTUE flow) was **dormant-but-present** (self-destructs at `Title`, plus an ff.tutorialv2
+>   stand-down) — exactly the state the ruling forbids; `SylasStewardInjector` **armed every hub load**
+>   and is the half she actually saw. WO-1014 retired the nine legacy `tut_*` DIALOGUE ids correctly, but
+>   the injector spawns independently of any dialogue.
+>   ⚠ WO-1014's "gate the stand-in" fix was committed and in her build and **never executed** — its own
+>   stand-down trace occurs **ZERO** times in her log while the steward is still on screen at t=127s. The
+>   owner overruled the approach regardless: a fallback that can share the screen with the real guide is
+>   a second guide. REMOVED, not gated.
+>   REMOVED: `SylasStewardInjector.cs`, `TutorialDirector.cs`, `PetIntroduction.cs`,
+>   `TutorialDirectorHubGateTest.cs`, and `ResolveGuide`'s stand-in link (chain is now pet body → Heart).
+>   `AssertStewardSurvivesNewGame` **reversed** into `AssertExactlyOneGuideBody` — it asserted the
+>   opposite of the ruling and would have gone GREEN on the build she rejected.
+>   ✔ CARVE-OUTS VERIFIED, NOT ASSUMED: **Sylas the CHARACTER stays** (`HeroCanonNames.cs`,
+>   `hero.ranger` in en.json, his abilities.json kit, `SylasFirstMeeting`) — only his guide-BODY role
+>   went. And the "legacy" tutorial folder is NOT wholly legacy: `TutorialFlow` adds `TutorialWaveSpawner`,
+>   `DialogueCommandSink` adds `TutorialAutoWalk`+`TutorialHudOverlay`, `ElaraWaveThreeJoin`/
+>   `StoryCompanionInjector` call `CompanionSpawner` — deleting the folder would have been an
+>   orphaned-reference outage that compiles and blanks. Both carve-outs are now regression-pinned.
+>   Regression `OneGuideBodyRegression [one-guide-body]` rewritten (6 cases, dry-run green on the real
+>   tree) + the runtime `AssertExactlyOneGuideBody` 8s watch window.
+>   ALSO IDENTIFIED, ticket separately: her *"vfx yes thing on the tree"* is **`Poi_NodeAura` →
+>   `Magic circle sun loop`**, the POI callout for the invisible DDOL `Collector_lumbermill` stranded at
+>   world (0,0,0) — 12 m in front of the Heart anchor, so it reads as a plume at the roots.
+>   `AmbientAuraPolicy` misses it because it gates by KEY string, not prefab.
+>   File `WorkOrders/WORK_ORDER_971_remove_the_original_tutorial_one_guide_only.md`.
+>   **DONE — awaiting batch-gate + commit; PO felt-verifies + closes.**
+>
+> *(banner bumped 971 → 972 in the SAME edit as the mint.)*
 > - **970** = **The bounds align can only YAW — a weapon whose mesh is not authored Y-long never stands
 >   up** — owner felt-report, playing the Mage: the Emberglass Staff (`tripo_staff_a`) *"is not being held
 >   correctly."* PROVEN BY CAPTURE, her Player.log, then settled at source.
@@ -667,6 +704,12 @@
 > That is the exact failure this file's own rule warns about — *"never a number copied into any other
 > doc"* — and the copy was **inside the numbering authority itself**. A duplicate cannot be kept honest
 > by discipline; it can only be removed. **The header is the sole source. Do not restore numbers here.**
+>
+> *(UI-seat bumped 1020 -> 1021 in the SAME edit as the WO-1020 mint — WALLS CANNOT BE PLACED
+> ADJACENT to each other (owner F8 seq=2327). Trace shows ghostValid=True while a neighbouring
+> 'wall_wood@16_17' is still BUILDING (remaining=8s) — suspect the in-progress build job's cell
+> reservation blocks the adjacent cell, or a rotated footprint over-claims. Walls are useless if
+> they cannot form a RUN.)*
 >
 > *(UI-seat bumped 1019 -> 1020 in the SAME edit as the WO-1019 mint — Thrain/MAGE action bar: the
 > authored defaults in abilities.json are CORRECT and all-magic (Q Fireball / W Arcane Shell / E Mend /

@@ -119,7 +119,10 @@ namespace DeNelle.Editor
             "Assets/_Modules/Village/UI/SeatingEditorOverlay.cs",
             "Assets/_Modules/Village/UI/TowerPlacementRotateMenu.cs",
             "Assets/_Modules/Village/Tutorial/TutorialHudOverlay.cs",
-            "Assets/_Modules/Village/Tutorial/PetIntroduction.cs",
+            // WO-971 (2026-08-10): PetIntroduction.cs removed from this list because the
+            // file is DELETED. It was a legacy-FTUE-only screen whose sole consumer was
+            // TutorialDirector, and the owner ruled the original tutorial out entirely
+            // ("remove the original", "only the new wolf one stays").
         };
 
         // --- Check 4: referenced-but-missing Resources paths grandfathered as

@@ -209,3 +209,90 @@ No second NPC. No second wolf. No name drift.
 - The hero roster / `HeroCanonNames` (Sylas stays a hero — only the tutorial ARC retires).
 - WO-1012's presentation kit + pacing, WO-1013's plans beat, WO-1010's build UI.
 - Wave balance, the Onboarded gate, the peace window.
+
+---
+
+## 1e. ⭐ §2d ROOT CAUSE FOUND IN THE DATA — F8 seq=2320 (2026-08-10 20:45, hub)
+
+Owner: *"so many things wrong here the vfx yes thing on the tree the wolf doesnt move and the npc"*.
+The wolf STILL does not lead **after** CLI's hero-movement fix — so this is a SEPARATE defect from
+WO-1016, and the harvested line diagnoses it outright:
+
+```
+[Flow:Pets] guide-lead TICK 'pet-ice-wolf': moved=0.00 m/s over 1.00s -> BODY DID NOT MOVE
+  (carrot written, zero displacement — the write is being ignored downstream).
+  dist=41.98m heroDist=6.73m mode=Defend
+  agent(enabled=True, onNavMesh=True, isStopped=False, velocity=0.00)
+  carrot=(1.55, 0.08, -0.47) homePost=(1.55, 0.08, -0.47)
+```
+
+**Read it precisely — four facts, one conclusion:**
+1. **The agent is HEALTHY** — `enabled=True, onNavMesh=True, isStopped=False`. So it is NOT a navmesh
+   bake, not a disabled agent, not a stop flag. Rule those out; do not go looking there.
+2. **`carrot == homePost` EXACTLY** `(1.55, 0.08, -0.47)`. The lead destination is being set to the
+   pet's OWN HOME POST — it is being told to walk to where it already stands. Zero displacement is the
+   correct response to that instruction.
+3. **`mode=Defend`.** The pet is in DEFEND mode, whose whole job is to HOLD the home post.
+4. `dist=41.98m` — the real gate target is 42m away and never becomes the carrot.
+
+**⇒ ROOT CAUSE: the guide-lead carrot is overwritten by Defend-mode's home-post re-assert.**
+`PetHeroLeash.SetLeadTarget` writes the gate, then the pet's Defend behaviour stomps it back to
+`homePost` on the same tick — exactly what the trace means by *"the write is being ignored downstream."*
+
+**THE FIX (§2d, now specific):** the tutorial walk beat must put the pet into a **LEAD/FOLLOW mode that
+outranks Defend** for the duration of the beat (and restore the prior mode after), OR Defend must yield
+while a lead target is set. Do NOT "write the carrot harder" — the write already lands; it is the mode
+arbitration that is wrong. Add a regression asserting `carrot != homePost` while a lead target is active.
+
+**Credit:** this line is a model of §12 instrumentation — it reports the symptom, the ruled-out causes,
+AND the smoking gun (`carrot == homePost`) in one string. Whoever wrote it saved a debugging session.
+Keep it.
+
+**Also in this capture — a VFX to check (separate concern, likely its own ticket):**
+`[Flow:VFXManager] PlayKey('Poi_NodeAura') -> prefab 'Magic circle sun loop'` repeats continuously at
+the Heart. The owner's *"the vfx ye[llow] thing on the tree"* most likely refers to this sun-loop aura.
+⚠ **WO-1002 already removed a yellow plume from the hub Heart tree — the owner noted it was "asked three
+times."** This is a DIFFERENT key (`Poi_NodeAura`), so it is either a second offender or the same visual
+returning by another route. **Owner: confirm this is the thing you mean before anyone deletes it** — and
+if so it needs its own WO, not a silent removal inside this one.
+
+---
+
+## 1f. ✅ WOLF NOW MOVES + 🐛 NEW: the pet dialogue re-pops on proximity (F8 seq=2322, 21:00)
+
+Owner: *"Better the animal moves, rotation seems off but thats small. this screen pops everytime i am
+near. Should only pop after tutorial is over."*
+
+**✅ §2d / §1e RESOLVED — the guide leads.** The `BODY DID NOT MOVE` / `carrot == homePost` condition is
+gone; the wolf walks. The mode-arbitration fix landed. (Verify the `founding_walk` step now COMPLETES
+rather than watchdog-SKIPPING — seq 2318/2321 were both STEP-STUCK; a passing capture is the proof.)
+
+**Minor, logged not chased:** *"rotation seems off but thats small"* — the wolf's facing while leading.
+Low priority; fold into the lead-mode polish, do not open a ticket.
+
+**🐛 NEW DEFECT — the pet's dialogue fires on PROXIMITY during the tutorial.** Harvested:
+```
+[Flow:Dialogue] resize contentH=54 (text=34 well=54 opts=0) -> panelH=214 band=24 (min 214/max 529)
+```
+The dialogue panel is being built repeatedly — this is the pet's *"Keeper, I'm at your side. What should
+I tend to?"* (Gather resources / Repair structures) screen from the earlier screenshot, re-triggering
+**every time the hero walks near the wolf**. During the tutorial the player is REQUIRED to walk beside
+the guide, so it fires constantly and interrupts the beat it is standing in.
+
+**OWNER RULING: the pet's task dialogue must not open until the tutorial is OVER.** Gate the proximity
+trigger on tutorial completion (`Onboarded` / flow Finished), the same gate the rest of the tutorial
+already respects. During the tutorial the wolf speaks ONLY through authored beats; afterwards, proximity
+opens its task menu normally.
+⚠ Watch the interaction with §2c: the identity + utility lines must still land during the tutorial as
+authored dialogue — gating the PROXIMITY trigger must not silence the guide's scripted beats.
+**Acceptance:** walking beside the guide during the tutorial opens nothing; after completion, proximity
+opens the task menu once.
+
+## 1g. Skip button placement (F8 seq=2324) — owner ruling
+
+Owner: *"Skip button needs to move to off canvas where the rotate x and close buttons go"*.
+The tutorial **Skip** control moves OUT of the play area and into the standard off-canvas chrome band —
+the same edge zone that hosts the rotate / X / close controls (the WO-1010 lean right section + compact
+corner `Done`). It must NOT float over the field or collide with the `Echoes` chip (§1c) or the objective
+strip. One Skip only (§2b's "one small corner control" stands — this rules WHERE).
+*(seq=2323 was a no-note flag; nothing actionable, acked.)*

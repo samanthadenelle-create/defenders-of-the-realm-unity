@@ -43,7 +43,7 @@
 //   6. [legacy]      NPC_Peasant_Mevina / NPC_Peasant_Tob must STILL resolve. They
 //                    left THIS pool but seven other call sites still load them
 //                    (CastleVendorNpcInjector, CastleCompanionIntroducerInjector,
-//                    SylasStewardInjector, QuestCastNpcInjector, VillageNpcInjector,
+//                    QuestCastNpcInjector,VillageNpcInjector,
 //                    TorchWardenDress). Deleting them while "replacing the villager
 //                    bodies" would blank the vendors and the quest cast.
 //
@@ -342,7 +342,7 @@ namespace DeNelle.Editor.Regression
                 if (Resources.Load<GameObject>(legacy) != null) continue;
                 failures.Add($"[legacy] '{legacy}' no longer resolves. It left CastleTownsfolkInjector's pool but " +
                              "seven other call sites still load it (CastleVendorNpcInjector, " +
-                             "CastleCompanionIntroducerInjector, SylasStewardInjector, QuestCastNpcInjector, " +
+                             "CastleCompanionIntroducerInjector, QuestCastNpcInjector," +
                              "VillageNpcInjector, TorchWardenDress) - deleting it blanks the vendors and the " +
                              "quest cast into capsule placeholders.");
             }

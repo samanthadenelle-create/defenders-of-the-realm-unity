@@ -1,6 +1,6 @@
 # WORK ORDER 1016 — HIGHEST: hero locomotion is dead in dungeons (slides in idle; vel always 0.00)
 
-**Status:** READY TO IMPLEMENT — **P0 BLOCKER (escalated 2026-08-10: hero cannot move AT ALL, hub + dungeon; blocks WO-1014 walk beat). Was HIGHEST per owner ruling F8 seq=2312.**
+**Status:** READY TO IMPLEMENT — **P0 movement blocker REPORTED FIXED by CLI in a new build (owner, 2026-08-10); WO-1014's walk beat is UNBLOCKED.** ⚠ Scope check before closing: this WO holds THREE defects — §1c total-immobility (the reported fix), §1 dungeon slide-in-idle (`vel=0.00` while position advances), §1b frozen dungeon camera (`camYaw` pinned, `dCam=0.0`). Confirm §1 and §1b with a fresh dungeon capture before marking DONE; do not let the movement fix close the animation + camera halves. Was HIGHEST per owner ruling F8 seq=2312.**
 **Minted:** 2026-08-10 (UI seat) — provenance stack bumped 1016 → 1017 in the same edit
 **Lane:** Hero locomotion / animation. Gameplay-felt P0.
 **Provenance:** owner F8 capture **seq=2312**, 2026-08-10 18:33, scene `Dungeon_HealersCottage`,
@@ -150,3 +150,54 @@ Add a regression that fails if input is non-zero while position is unchanged for
   behaviour in an unstaged dungeon room, not a defect).
 - Dungeon composition/scene bake, equipment socket scaling (`[Flow:Equip]` parent-scale lines are a
   separate concern).
+
+---
+
+## 1d. F8 seq=2325 (21:03, dungeon) — §1 FIXED, but TWO INSTRUMENTS NOW DISAGREE
+
+Owner: *"still no camera in dungeon and the shield is now mid body"*. Harvested:
+```
+[Flow:GaitF]    vel=6.00@-57deg ... camYaw=306 dCam=-0.6 CAM-MOVED-WHILE-MOVING
+                clip=move_run_m(0.65) speedP=4.60 skate=0.77 bodyErr=18.1
+[Flow:HeroLoco] vel=0.00 m/s | clips=[walk_normal_f(w=0.89,len=3.79s), move_run_m(w=0.11,len=1.25s)]
+                | avatar=KnightV3Avatar | controller=KnightMocap
+[Flow:Offset]   sheathed offset 'shield_A@sheathed' applied: pos=(-0.12,0.03,0.02) rot=(2,180,-78) full=False
+```
+
+**✅ §1 (slide-in-idle) IS FIXED.** The animator now holds a real BLEND — `walk_normal_f(0.89)` +
+`move_run_m(0.11)` — with `speedP=4.60` driving it. The old "ONE clip at weight 1.00, speedP=0.00"
+condition is gone. Locomotion animates.
+
+**✅ §1b (frozen camera) CONTRADICTS THE REPORT — do not close either way without disambiguating.**
+The trace says `camYaw` is CHANGING (308→307→306), `dCam=-0.6`, and the harness prints its own verdict:
+**`CAM-MOVED-WHILE-MOVING`**. The old `camYaw=180 dCam=0.0` pin is gone. So the camera YAW is alive,
+yet the owner reports *"still no camera."* ⚠ **The report and the data disagree, which means we are
+measuring the wrong thing.** Likely the complaint is NOT yaw but one of: the camera does not FOLLOW in
+position (stays put while the hero runs off), no player CONTROL over it (cannot look around), wrong
+distance/pitch, or it is clipped inside geometry. **Instrument camera POSITION + follow-distance +
+player look-input**, not just yaw, then re-ask. Do not mark §1b done on the strength of `dCam` alone.
+
+**🐛 NEW — the two velocity instruments disagree in the SAME frame:** `GaitF vel=6.00` vs
+`HeroLoco vel=0.00`. GaitF sees the hero moving at 6 m/s; HeroLoco still reports zero. **§1's original
+velocity-FEED defect is therefore only half fixed** — whatever now drives the animator (speedP) is not
+what `HeroLoco` reads. Unify them on one measured source (the §2 "mover-agnostic delta-position" rule)
+so two traces can never tell two stories again.
+
+**🐛 NEW — foot skate is high:** `skate=0.65 → 0.77` and `bodyErr=18-21deg` while running. The mocap
+clip and the actual travel speed disagree, so the feet slide. Tune the blend's speed scaling (or the
+agent speed) against the clip's authored stride. This is exactly what `HeroGaitForensics` exists to
+catch — it is reporting honestly; act on it.
+
+**🐛 NEW — shield sits MID-BODY (owner).** `sheathed offset 'shield_A@sheathed' applied: pos=(-0.12,
+0.03, 0.02) rot=(2,180,-78) **full=False**`. The offset IS being applied, so this is a WRONG offset (or
+wrong socket), not a missing one. ⚠ **`full=False` is the lead** — find what the full-vs-partial flag
+gates; a partial application may be skipping the socket/parent step that puts it on the back. Note the
+rig here is `KnightV3Avatar` — verify the offset table has an entry for THIS rig, not just the base one.
+Related surface: WO-1015 (equipment screen) — but this is world-socket placement, fix it here.
+
+**F8 seq=2326 — the shield defect FOLLOWS THE HERO ACROSS SCENES.** Owner: *"broken shield carried back
+on exit"* (flagged in `Main_Castle_Overworld` right after leaving the dungeon). So the mid-body shield is
+**not** a dungeon-scene problem — the bad offset persists through the scene transition back to the hub.
+That rules out dungeon-specific rig/scene wiring and points at the equip/offset STATE carried on the
+hero (or applied once and never re-evaluated on scene load). Fix once, verify in BOTH scenes and across
+the transition.

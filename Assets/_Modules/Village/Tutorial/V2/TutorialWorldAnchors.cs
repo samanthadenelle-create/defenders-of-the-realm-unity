@@ -13,10 +13,10 @@
 // an Echo of Elarion. Resolution order for the guide anchor:
 //   1. the live pet-Echo BODY (DeNelle.Pets.Pet — deployed by PetDeployer once
 //      the ARRIVE-beat starter grant lands; the guide itself),
-//   2. the steward stand-in body ("CompanionIntroducer" / a GameObject named
-//      after the steward NPC — the PARKED hero-rotation path's walk-up body,
-//      kept as the fallback so the beat still has a physical presence when no
-//      pet body is deployed, e.g. before the grant applies),
+//   2. ⛔ REMOVED (WO-971) — there used to be a steward stand-in BODY link here
+//      ("CompanionIntroducer" / "Sylas"). It is gone: exactly ONE guide figure
+//      may exist, and a second NPC body is a second tutorial by construction.
+//      See the removal note in ResolveGuide for the proving capture lines.
 //   3. the Heart of Elarion (the guide wakes AT the Heart — canon),
 //   4. a SAFE TOWN anchor (never the wave-spawn ring — owner F8 2026-07-08
 //      "enemies spawn on you"), else invalid (the flow degrades: no spotlight,
@@ -341,17 +341,25 @@ namespace DeNelle.Village
                 return _guideCache;
             }
 
-            // 2. The steward walk-up body (the PARKED hero-rotation stand-in — spawned
-            //    by CastleCompanionIntroducerInjector / SylasStewardInjector when their
-            //    flags allow). A canon NPC, kept as the physical-presence fallback.
-            var go = GameObject.Find("CompanionIntroducer");
-            if (go == null)
-                go = GameObject.Find("Sylas");   // the steward NPC's canon name (see SylasStewardInjector)
-            if (go != null)
-            {
-                _guideCache = go.transform;
-                return _guideCache;
-            }
+            // 2. ⛔ THE STAND-IN LINK IS REMOVED (WO-971, owner ruling 2026-08-10:
+            //    "why are two tutorials active?" / "remove the original" / "only the new
+            //    wolf one stays"). This link used to read GameObject.Find("Companion-
+            //    Introducer") and then GameObject.Find("Sylas") — the steward body
+            //    SylasStewardInjector seated at the Heart. PROVEN BY CAPTURE (her
+            //    Player.log, 2026-08-10 20:42 build):
+            //        [Flow:SylasSteward] Sylas steward spawned at (2.00, 0.08, 3.00)
+            //        [Flow:Tutorial] guide BODY summoned ('ice-wolf') at (2.00, 0.06, 3.00)
+            //        [Flow:Tutorial] FocusMask resolved highlightId=world.guide target=Sylas
+            //        [Flow:Tutorial] FocusMask resolved highlightId=world.guide target=Pet_ice-wolf
+            //    Two bodies two centimetres apart, and the ONE spotlight alternating between
+            //    them while the objective strip read "Follow Aldwin to the gate". WO-1014
+            //    tried to keep this link and GATE it (seat only when body-less, stand down
+            //    when a body appears); the owner's next felt-test still showed both, and the
+            //    gate is the thing she overruled. A fallback that can be on screen at the
+            //    same time as the real guide is not a fallback, it is a second guide.
+            //    DO NOT RE-ADD A BODY LINK HERE. If the wolf fails to summon the chain falls
+            //    to the Heart below — the tree the guide wakes from — which is honest, is
+            //    never a second character, and is pinned by OneGuideBodyRegression.
 
             // 3. The Heart of Elarion — the guide wakes AT the Heart (canon: its essence
             //    returns from the tree that guarded it), so the Heart is the honest

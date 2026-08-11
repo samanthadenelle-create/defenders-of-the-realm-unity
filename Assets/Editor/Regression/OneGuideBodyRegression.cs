@@ -3,50 +3,73 @@
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.EditorRegression.
 //
-// WO-1014 acceptance line "EXACTLY ONE guide body spawns in the tutorial, EVER."
-// Owner felt-test 2026-08-10 on the 20:42 build, verbatim: "but still wolf and npc".
+// WO-971 acceptance line: "EXACTLY ONE TUTORIAL, AND EXACTLY ONE GUIDE BODY."
+// Owner ruling 2026-08-10, verbatim: "why are two tutorials active?" /
+// "remove the original" / "only the new wolf one stays".
 //
-// THE SHAPE OF THE BUG, so a future reader does not have to re-derive it: the
-// guide's identity resolves down a CHAIN in TutorialWorldAnchors.ResolveGuide -
-// (1) the live pet-Echo body, (2) the steward stand-in found by
-// GameObject.Find("Sylas"), (3) the Heart. SylasStewardInjector seats link (2)
-// on hub load, gated ONLY on "the founding arc is incomplete" - it had no notion
-// that link (1) might exist. That was harmless for exactly as long as the guide
-// had no body. WO-961 shipped the body, and the chain became two figures standing
-// in the same courtyard: the spotlight pointed at the wolf while the stand-in it
-// was supposed to REPLACE stood next to it. Retiring the legacy Sylas DIALOGUE
-// (the same WO's Half A) could never have fixed this - the injector spawns
-// independently of any dialogue, which is exactly why the owner still saw two
-// bodies after the script was clean.
+// ── WHAT WENT WRONG, SO A FUTURE READER NEED NOT RE-DERIVE IT ────────────────
+// PROVEN BY CAPTURE (owner Player.log, the 2026-08-10 20:42 build), four lines:
+//     [Flow:SylasSteward] Sylas steward spawned at (2.00, 0.08, 3.00) - founding beats have a body.
+//     [Flow:Tutorial]  step 'founding_greet' grant.starterPet - guide BODY summoned ('ice-wolf') at (2.00, 0.06, 3.00)
+//     [Flow:Tutorial]  FocusMask resolved highlightId=world.guide target=Sylas
+//     [Flow:Tutorial]  FocusMask resolved highlightId=world.guide target=Pet_ice-wolf
+// Two guide bodies TWO CENTIMETRES apart, and the single "world.guide" spotlight
+// alternating between them while the objective strip read "Follow Aldwin to the
+// gate". Her screenshot shows the gold ring around a peasant NPC with the wolf
+// standing inside the same ring.
 //
-// THE INVARIANT: one authority decides whether the guide has a body, and every
-// consumer asks IT. TutorialWorldAnchors.LiveGuideBody / .HasLiveGuideBody is
-// that authority; the chain head reads it, and the stand-in's spawn gate and
-// stand-down watch read the same call. A second, private copy of that lookup
-// anywhere is the defect returning in a new costume.
+// The cause was structural, not a bug in either body. The guide's identity
+// resolved down a CHAIN in TutorialWorldAnchors.ResolveGuide - (1) the live
+// pet-Echo body, (2) a steward stand-in found by GameObject.Find("Sylas"),
+// (3) the Heart. SylasStewardInjector seated link (2) on hub load. That was
+// harmless for exactly as long as the guide had no body; WO-961 shipped the
+// body and the chain became two figures in one courtyard.
 //
-// WHAT THIS SUITE PROVES, AND WHAT IT CANNOT:
-//   (a) SOURCE INVARIANT (comment-stripped lint) - the authority exists, the
-//       chain consults it FIRST, and the stand-in is gated on it in BOTH
-//       directions (never seat when a body exists; stand down when one appears).
-//   (b) CENSUS - exactly one place in the whole module tree can seat a
-//       GameObject under the load-bearing name "Sylas" that ResolveGuide finds.
-//       A second seater is a second guide body by construction.
+// WO-1014 tried to KEEP link (2) and GATE it (never seat when a body exists;
+// stand down when one appears). That did not hold - the stand-down never fired
+// in the shipped build (ZERO occurrences of its own trace line in her log) - and
+// more importantly the owner overruled the approach itself: a fallback that can
+// be on screen at the same time as the real guide is not a fallback, it is a
+// second guide. WO-971 therefore REMOVES rather than gates.
+//
+// ── WHAT WAS REMOVED (all four, deliberately, by the ruling) ─────────────────
+//   * Assets/_Modules/Village/NPCs/SylasStewardInjector.cs  (the second BODY)
+//   * Assets/_Modules/Village/Tutorial/TutorialDirector.cs  (the legacy FTUE FLOW)
+//   * Assets/_Modules/Village/Tutorial/PetIntroduction.cs   (director-only screen)
+//   * the stand-in link inside TutorialWorldAnchors.ResolveGuide
+// NOT removed, and deliberately so: Sylas the CHARACTER. He is a canon hero name
+// (HeroCanonNames / hero.ranger in en.json), keeps his portrait, his abilities.json
+// kit and his non-tutorial "SylasFirstMeeting" companion beat. Only his role as a
+// tutorial GUIDE BODY is gone. Case 5 pins that distinction so a later cleanup
+// cannot mistake this suite for a licence to delete the character.
+// Also NOT removed: TutorialWaveSpawner, TutorialAutoWalk, TutorialHudOverlay,
+// TutorialDialogue, DialogueService, DialogueCommandSink and CompanionSpawner -
+// they live in the same folder but the SURVIVING arc and live non-tutorial
+// systems consume them (TutorialFlow.cs:1550 adds a TutorialWaveSpawner;
+// DialogueCommandSink adds TutorialAutoWalk + TutorialHudOverlay;
+// ElaraWaveThreeJoin and StoryCompanionInjector call CompanionSpawner). Deleting
+// them would have been an orphaned-reference outage, not a cleanup. Case 6 pins
+// that they still exist, so this suite guards BOTH failure directions.
+//
+// ── WHAT THIS SUITE PROVES, AND WHAT IT CANNOT ──────────────────────────────
+//   (a) SOURCE INVARIANT (comment-stripped lint) - one authority on "does the
+//       guide have a body"; the chain asks it and has NO second body link.
+//   (b) CENSUS over the whole module tree - no file may seat a guide-stand-in
+//       body, and no file may declare a second tutorial FLOW.
 //   NOT provable here: that only one body is on screen at the ARRIVE beat. That
 //   is a RUNTIME fact and needs a capture or the owner's felt-verify - headless
-//   editor code cannot stand in the courtyard and look (the 08-09 lesson; PO
-//   closes, per docs/TICKET_PIPELINE.md).
+//   editor code cannot stand in the courtyard and look. PO closes (§13).
 //
 // Markers: ONE_GUIDE_BODY_OK / ONE_GUIDE_BODY_FAIL.
 // Standalone: run-unity-method DeNelle.Editor.Regression.OneGuideBodyRegression.RunAll
-// Covenant contract Run(out reason) is DataRegression-shaped; wiring into
-// DataRegression.RunAll is left to the committer (that file is lane-fenced).
+// Covenant contract Run(out reason) is DataRegression-shaped; the class name and
+// entry points are UNCHANGED by WO-971, so no DataRegression edit is required
+// (that file is lane-fenced).
 // =============================================================================
 
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Text.RegularExpressions;
 using UnityEngine;
 
@@ -54,13 +77,37 @@ namespace DeNelle.Editor.Regression
 {
     public static class OneGuideBodyRegression
     {
-        private const string AnchorsSrc = "Assets/_Modules/Village/Tutorial/V2/TutorialWorldAnchors.cs";
-        private const string StewardSrc = "Assets/_Modules/Village/NPCs/SylasStewardInjector.cs";
+        private const string AnchorsSrc  = "Assets/_Modules/Village/Tutorial/V2/TutorialWorldAnchors.cs";
+        private const string FlowSrc     = "Assets/_Modules/Village/Tutorial/V2/TutorialFlow.cs";
         private const string ModulesRoot = "Assets/_Modules";
 
-        /// <summary>The load-bearing name ResolveGuide finds the stand-in by. Renaming it
-        /// silently breaks the chain, so the census keys on it.</summary>
+        /// <summary>The name the DELETED stand-in was seated under, and that ResolveGuide
+        /// used to find it by. The census keys on it because re-seating a GameObject under
+        /// this name is the cheapest way to accidentally resurrect the second guide.</summary>
         private const string StandInName = "Sylas";
+
+        /// <summary>Every file WO-971 deleted. Any of them coming back is the ruling undone.</summary>
+        private static readonly string[] RemovedSources =
+        {
+            "Assets/_Modules/Village/NPCs/SylasStewardInjector.cs",
+            "Assets/_Modules/Village/Tutorial/TutorialDirector.cs",
+            "Assets/_Modules/Village/Tutorial/PetIntroduction.cs",
+        };
+
+        /// <summary>Shared machinery the SURVIVING arc and live non-tutorial systems consume.
+        /// Listed so an over-eager "delete the legacy tutorial folder" pass fails loudly
+        /// instead of leaving orphaned references that compile and blank at runtime.</summary>
+        private static readonly string[] MustSurviveSources =
+        {
+            "Assets/_Modules/Village/Tutorial/V2/TutorialFlow.cs",
+            "Assets/_Modules/Village/Tutorial/V2/TutorialWorldAnchors.cs",
+            "Assets/_Modules/Village/Tutorial/TutorialWaveSpawner.cs",
+            "Assets/_Modules/Village/Tutorial/TutorialAutoWalk.cs",
+            "Assets/_Modules/Village/Tutorial/TutorialHudOverlay.cs",
+            "Assets/_Modules/Village/Tutorial/TutorialDialogue.cs",
+            "Assets/_Modules/Village/Tutorial/DialogueCommandSink.cs",
+            "Assets/_Modules/Village/Tutorial/CompanionSpawner.cs",
+        };
 
         /// <summary>Standalone batch entry - prints the marker.</summary>
         public static void RunAll()
@@ -75,10 +122,12 @@ namespace DeNelle.Editor.Regression
             var failures = new List<string>();
             try
             {
-                Case(failures, "single-authority", () => Case1_SingleAuthority(failures));
-                Case(failures, "chain-order",      () => Case2_ChainAsksAuthorityFirst(failures));
-                Case(failures, "standin-gated",    () => Case3_StandInGatedBothWays(failures));
-                Case(failures, "one-seater",       () => Case4_OnlyOneStandInSeater(failures));
+                Case(failures, "single-authority",  () => Case1_SingleAuthority(failures));
+                Case(failures, "no-standin-link",   () => Case2_ChainHasNoStandInLink(failures));
+                Case(failures, "original-removed",  () => Case3_TheOriginalIsRemoved(failures));
+                Case(failures, "one-flow",          () => Case4_ExactlyOneTutorialFlow(failures));
+                Case(failures, "character-kept",    () => Case5_SylasTheCharacterSurvives(failures));
+                Case(failures, "shared-kept",       () => Case6_SharedMachinerySurvives(failures));
             }
             catch (Exception ex)
             {
@@ -87,13 +136,16 @@ namespace DeNelle.Editor.Regression
 
             if (failures.Count == 0)
             {
-                reason = "ONE GUIDE BODY OK - TutorialWorldAnchors.LiveGuideBody/.HasLiveGuideBody is the single " +
-                         "authority on whether the founding guide has a world body; ResolveGuide asks it at the " +
-                         "HEAD of the chain (before the '" + StandInName + "' stand-in link); SylasStewardInjector " +
-                         "asks the SAME call in both directions - it refuses to seat when a body already exists " +
-                         "and stands the stand-in down the moment one appears - and exactly one place in " +
-                         ModulesRoot + " can seat a GameObject under the load-bearing stand-in name, so a second " +
-                         "guide figure cannot be introduced without failing this suite.";
+                reason = "ONE GUIDE BODY OK - exactly ONE tutorial flow arms (TutorialFlow, the founding " +
+                         "wolf-guide arc) and the guide has exactly ONE possible body. " +
+                         "TutorialWorldAnchors.LiveGuideBody/.HasLiveGuideBody remains the single authority " +
+                         "on whether that body exists; ResolveGuide carries NO second body link (the \"" +
+                         StandInName + "\" stand-in is removed, not gated); nothing under " + ModulesRoot +
+                         " can seat a stand-in under that name; the legacy TutorialDirector FTUE and its " +
+                         "director-only screen are deleted; and the shared machinery the surviving arc " +
+                         "depends on is still present. Sylas remains a canon CHARACTER - only his tutorial " +
+                         "guide-body role is gone (WO-971, owner: 'remove the original', 'only the new wolf " +
+                         "one stays').";
                 return true;
             }
             reason = "one-guide-body FAIL x" + failures.Count + ": " + string.Join(" | ", failures);
@@ -118,13 +170,13 @@ namespace DeNelle.Editor.Regression
             if (!Regex.IsMatch(anchors, @"public\s+static\s+Transform\s+LiveGuideBody\s*\("))
                 failures.Add("[single-authority] TutorialWorldAnchors no longer declares " +
                              "'public static Transform LiveGuideBody()' - that call IS the single authority on " +
-                             "whether the guide has a body (WO-1014). Without it every consumer re-implements " +
-                             "the lookup and they drift apart, which is how the stand-in ended up standing next " +
-                             "to the wolf instead of being replaced by it.");
+                             "whether the guide has a body. Without it every consumer re-implements the lookup " +
+                             "and they drift apart, which is exactly how a stand-in ended up standing next to " +
+                             "the wolf instead of being replaced by it.");
 
             if (!Regex.IsMatch(anchors, @"public\s+static\s+bool\s+HasLiveGuideBody"))
                 failures.Add("[single-authority] TutorialWorldAnchors no longer exposes 'HasLiveGuideBody' - " +
-                             "the predicate the stand-in's spawn gate reads.");
+                             "the predicate every consumer must read instead of re-querying the scene.");
 
             // The actual scene lookup may live in exactly ONE place: the authority itself.
             int lookups = Regex.Matches(anchors, @"FindAnyObjectByType\s*<\s*(DeNelle\.Pets\.)?Pet\s*>").Count;
@@ -132,151 +184,182 @@ namespace DeNelle.Editor.Regression
                 failures.Add("[single-authority] TutorialWorldAnchors performs the live-Pet lookup " + lookups +
                              " time(s); it must be exactly ONCE, inside LiveGuideBody. More than one copy is " +
                              "two authorities that can disagree.");
-
-            // And no consumer may roll its own.
-            string steward = ReadStripped(StewardSrc, failures);
-            if (steward != null && Regex.IsMatch(steward, @"FindAnyObjectByType\s*<\s*(DeNelle\.Pets\.)?Pet\s*>"))
-                failures.Add("[single-authority] SylasStewardInjector performs its OWN live-Pet lookup instead " +
-                             "of asking TutorialWorldAnchors.HasLiveGuideBody - the stand-in and the anchor " +
-                             "chain must never be able to disagree about who the guide is.");
         }
 
         // =====================================================================
-        //  Case 2 - the chain is a CHAIN: the body link answers before the stand-in link
+        //  Case 2 - the chain has NO stand-in body link at all
         // =====================================================================
 
-        private static void Case2_ChainAsksAuthorityFirst(List<string> failures)
+        private static void Case2_ChainHasNoStandInLink(List<string> failures)
         {
             string anchors = ReadStripped(AnchorsSrc, failures);
             if (anchors == null) return;
 
-            // Find the METHOD by its declaration (not by any mention of its name) so the
-            // ordering check below reads the real chain body and nothing else.
             var decl = Regex.Match(anchors, @"private\s+static\s+Transform\s+ResolveGuide\s*\(\s*\)");
             if (!decl.Success)
             {
-                failures.Add("[chain-order] TutorialWorldAnchors has no 'private static Transform ResolveGuide()' " +
-                             "- the guide resolution chain has moved; re-point this suite before trusting it.");
+                failures.Add("[no-standin-link] TutorialWorldAnchors has no 'private static Transform " +
+                             "ResolveGuide()' - the guide resolution chain has moved; re-point this suite " +
+                             "before trusting it.");
                 return;
             }
 
-            string body = anchors.Substring(decl.Index);
-            int authority = body.IndexOf("LiveGuideBody()", StringComparison.Ordinal);
-            int standIn = body.IndexOf("\"" + StandInName + "\"", StringComparison.Ordinal);
-
-            if (authority < 0)
-                failures.Add("[chain-order] ResolveGuide does not call LiveGuideBody() - the chain head must ask " +
-                             "the single authority, not re-query the scene itself.");
-            if (standIn < 0)
-                failures.Add("[chain-order] ResolveGuide no longer looks for the \"" + StandInName + "\" stand-in " +
-                             "- the body-less fallback is gone, so a failed guide summon would spotlight the " +
-                             "Heart or empty air instead of a real character.");
-            if (authority >= 0 && standIn >= 0 && authority > standIn)
-                failures.Add("[chain-order] ResolveGuide consults the \"" + StandInName + "\" stand-in BEFORE the " +
-                             "live guide body - the chain is inverted, so the stand-in would win over the real " +
-                             "guide and the spotlight would point at the wrong figure.");
-        }
-
-        // =====================================================================
-        //  Case 3 - the stand-in is gated in BOTH directions
-        // =====================================================================
-
-        private static void Case3_StandInGatedBothWays(List<string> failures)
-        {
-            string steward = ReadStripped(StewardSrc, failures);
-            if (steward == null) return;
-
-            int gates = Regex.Matches(steward, @"HasLiveGuideBody").Count;
-            if (gates < 2)
-                failures.Add("[standin-gated] SylasStewardInjector reads " +
-                             "TutorialWorldAnchors.HasLiveGuideBody " + gates + " time(s); it needs BOTH gates. " +
-                             "(1) Inject() must refuse to seat when the guide already has a body - the reload / " +
-                             "hub re-enter case. (2) the poll in Update() must stand the stand-in DOWN when a " +
-                             "body appears later - the FIRST-RUN case, because the hub loads before the ARRIVE " +
-                             "beat summons the wolf, so the steward legitimately seats first and only becomes a " +
-                             "second figure a beat later. One gate without the other leaves the owner's exact " +
-                             "symptom ('but still wolf and npc') in one of the two paths.");
-
-            var inject = MethodBody(steward, @"private\s+void\s+Inject\s*\(\s*\)");
-            if (inject == null)
-                failures.Add("[standin-gated] SylasStewardInjector has no Inject() method to gate.");
-            else if (!inject.Contains("HasLiveGuideBody"))
-                failures.Add("[standin-gated] SylasStewardInjector.Inject() does not check HasLiveGuideBody - " +
-                             "a hub re-load or a resumed mid-arc save would seat a second guide figure.");
-
-            var update = MethodBody(steward, @"private\s+void\s+Update\s*\(\s*\)");
-            if (update == null)
-                failures.Add("[standin-gated] SylasStewardInjector has no Update() poll to stand the stand-in down.");
-            else
+            string body = MethodBody(anchors, @"private\s+static\s+Transform\s+ResolveGuide\s*\(\s*\)");
+            if (body == null)
             {
-                if (!update.Contains("HasLiveGuideBody"))
-                    failures.Add("[standin-gated] SylasStewardInjector.Update() does not watch HasLiveGuideBody - " +
-                                 "the stand-in seats before the guide's body exists, so WITHOUT this watch the " +
-                                 "two stand side by side for the whole founding arc (the shipped 20:42 defect).");
-                if (!update.Contains("Destroy("))
-                    failures.Add("[standin-gated] SylasStewardInjector.Update() never destroys the stand-in " +
-                                 "holder - watching without acting is not a gate.");
+                failures.Add("[no-standin-link] could not read the body of ResolveGuide().");
+                return;
             }
 
-            // The stand-in must NOT be deleted outright: it is still the honest degradation
-            // path when the guide's body fails to summon (TutorialFlow says so in its own
-            // warn). Pin that the seating code still exists.
-            if (!steward.Contains("SpawnBody("))
-                failures.Add("[standin-gated] SylasStewardInjector no longer spawns a body at all - the stand-in " +
-                             "was DELETED rather than gated. It must survive as the body-less fallback, or a " +
-                             "failed guide summon leaves 'Follow {guide}' pointing at nothing.");
+            if (body.IndexOf("LiveGuideBody()", StringComparison.Ordinal) < 0)
+                failures.Add("[no-standin-link] ResolveGuide does not call LiveGuideBody() - the chain head " +
+                             "must ask the single authority, not re-query the scene itself.");
+
+            // THE RULING, as code: no second BODY may answer "who is the guide".
+            if (body.IndexOf("\"" + StandInName + "\"", StringComparison.Ordinal) >= 0)
+                failures.Add("[no-standin-link] ResolveGuide looks for a GameObject named \"" + StandInName +
+                             "\" again. That link is the SECOND GUIDE the owner ruled out on 2026-08-10 " +
+                             "(\"remove the original\", \"only the new wolf one stays\") - it put a steward NPC " +
+                             "two centimetres from the wolf with the one spotlight alternating between them. " +
+                             "It was already tried as a GATED fallback (WO-1014) and the owner still saw both. " +
+                             "Fall through to the Heart instead.");
+
+            if (body.IndexOf("\"CompanionIntroducer\"", StringComparison.Ordinal) >= 0)
+                failures.Add("[no-standin-link] ResolveGuide looks for a \"CompanionIntroducer\" body again - " +
+                             "the same second-guide defect wearing the other stand-in's name.");
+
+            // The honest degradation path must still exist: the Heart, never a character.
+            if (body.IndexOf("HeartController", StringComparison.Ordinal) < 0)
+                failures.Add("[no-standin-link] ResolveGuide no longer falls back to the HeartController. With " +
+                             "the stand-in removed the Heart IS the degradation path - the tree the guide wakes " +
+                             "from. Without it a failed summon spotlights empty air.");
         }
 
         // =====================================================================
-        //  Case 4 - exactly one place can seat the stand-in
+        //  Case 3 - the ORIGINAL is removed, not disabled and not flag-gated
         // =====================================================================
 
-        private static void Case4_OnlyOneStandInSeater(List<string> failures)
+        private static void Case3_TheOriginalIsRemoved(List<string> failures)
+        {
+            foreach (string path in RemovedSources)
+            {
+                if (!File.Exists(path)) continue;
+                failures.Add("[original-removed] " + path + " is back. The owner ruled on 2026-08-10: " +
+                             "\"remove the original\", \"only the new wolf one stays\" - REMOVED, not disabled " +
+                             "and not flag-gated. A feature flag is what this file already had (ff.tutorialv2 " +
+                             "stood the legacy director down) and the owner still ended up with two tutorials " +
+                             "in the tree. If this file is genuinely needed again, that is an owner decision, " +
+                             "not a merge.");
+            }
+        }
+
+        // =====================================================================
+        //  Case 4 - exactly ONE tutorial flow, and no way to seat a second guide body
+        // =====================================================================
+
+        private static void Case4_ExactlyOneTutorialFlow(List<string> failures)
         {
             if (!Directory.Exists(ModulesRoot))
             {
-                failures.Add("[one-seater] " + ModulesRoot + " does not exist.");
+                failures.Add("[one-flow] " + ModulesRoot + " does not exist.");
                 return;
             }
 
-            // Any assignment of the load-bearing name to a GameObject, or a GameObject
-            // constructed under it. Both are ways to become a thing ResolveGuide finds.
+            // (a) BODY CENSUS. Any assignment of the load-bearing name to a GameObject, or a
+            //     GameObject constructed under it - both are ways to become a second guide.
             var seatPattern = new Regex(
                 @"(\.name\s*=\s*""" + StandInName + @"""|new\s+GameObject\s*\(\s*""" + StandInName + @"""\s*\))");
 
+            // (b) FLOW CENSUS. A tutorial FLOW is a MonoBehaviour that (i) self-installs via
+            //     RuntimeInitializeOnLoadMethod or is added by one, and (ii) drives tutorial
+            //     STEPS. The cheap, stable signature for (ii) is emitting a step-enter trace.
+            //     TutorialFlow is the one legitimate holder.
+            var stepDriver = new Regex(@"STEP-ENTER|AdvanceToNextStep\s*\(");
+
             var seaters = new List<string>();
+            var flows = new List<string>();
             foreach (string path in Directory.GetFiles(ModulesRoot, "*.cs", SearchOption.AllDirectories))
             {
                 string src = StripComments(File.ReadAllText(path));
-                if (seatPattern.IsMatch(src)) seaters.Add(path.Replace('\\', '/'));
+                string norm = path.Replace('\\', '/');
+                if (seatPattern.IsMatch(src)) seaters.Add(norm);
+                if (stepDriver.IsMatch(src)) flows.Add(norm);
             }
 
-            if (seaters.Count != 1)
-                failures.Add("[one-seater] " + seaters.Count + " source file(s) can seat a GameObject named \"" +
-                             StandInName + "\" [" + string.Join(", ", seaters) + "] - expected exactly ONE " +
-                             "(SylasStewardInjector). ResolveGuide finds the stand-in BY THAT NAME, so a second " +
-                             "seater is a second guide figure by construction, and the chain cannot tell them " +
-                             "apart. Note this is about the NPC BODY only: 'Sylas' remains a canon hero/companion " +
-                             "NAME (HeroCanonNames, CompanionSpawner) and this suite deliberately does not " +
-                             "restrict that.");
-            else if (!seaters[0].EndsWith("SylasStewardInjector.cs", StringComparison.OrdinalIgnoreCase))
-                failures.Add("[one-seater] the single stand-in seater is '" + seaters[0] + "', not " +
-                             "SylasStewardInjector.cs - the gating in Case 3 lints the wrong file.");
+            if (seaters.Count != 0)
+                failures.Add("[one-flow] " + seaters.Count + " source file(s) can seat a GameObject named \"" +
+                             StandInName + "\" [" + string.Join(", ", seaters) + "] - expected ZERO. WO-971 " +
+                             "removed the guide stand-in entirely; any seater is a second guide figure by " +
+                             "construction. NOTE this is about the NPC BODY only - \"" + StandInName + "\" " +
+                             "remains a canon hero/companion NAME and this suite deliberately does not " +
+                             "restrict that (see Case 5).");
 
-            // ResolveGuide's stand-in link actually looks for "CompanionIntroducer" FIRST and
-            // only then the steward. That body is seated by CastleCompanionIntroducerInjector,
-            // which stands down under ff.singlehero (default ON) - so today it cannot appear.
-            // Pin that standdown: without it there is a THIRD possible guide figure, seated by
-            // a different file, that the census above would not catch.
-            const string IntroducerSrc = "Assets/_Modules/Village/NPCs/CastleCompanionIntroducerInjector.cs";
-            if (File.Exists(IntroducerSrc))
+            if (flows.Count != 1)
+                failures.Add("[one-flow] " + flows.Count + " source file(s) drive tutorial steps [" +
+                             string.Join(", ", flows) + "] - expected exactly ONE. The owner asked \"why are " +
+                             "two tutorials active?\" and ruled that only the founding wolf-guide arc stays. " +
+                             "Two step drivers is two tutorials, whatever the flags say.");
+            else if (!flows[0].EndsWith("V2/TutorialFlow.cs", StringComparison.OrdinalIgnoreCase))
+                failures.Add("[one-flow] the single tutorial step driver is '" + flows[0] + "', not " +
+                             "V2/TutorialFlow.cs - the surviving arc is supposed to be the founding " +
+                             "wolf-guide flow. Re-point this suite only if the owner moved it deliberately.");
+
+            // (c) The surviving flow must still be the WOLF one (owner: "only the new wolf one stays").
+            string flow = ReadStripped(FlowSrc, failures);
+            if (flow != null && flow.IndexOf("ice-wolf", StringComparison.Ordinal) < 0)
+                failures.Add("[one-flow] " + FlowSrc + " no longer references the 'ice-wolf' guide body. The " +
+                             "surviving tutorial is defined by its guide: the founding arc summons exactly one " +
+                             "Echo with a world body because a beat tells the player to follow it (WO-961).");
+        }
+
+        // =====================================================================
+        //  Case 5 - Sylas the CHARACTER survives; only the guide-body role went
+        // =====================================================================
+
+        private static void Case5_SylasTheCharacterSurvives(List<string> failures)
+        {
+            // The carve-out the owner's ruling did NOT cover. Deleting the injector must not
+            // be read as deleting the person: en.json gives hero.ranger = Sylas, and he owns
+            // a hero kit in abilities.json plus a non-tutorial companion beat.
+            const string CanonNames = "Assets/_Modules/Core";
+            bool nameFound = false;
+            if (Directory.Exists(CanonNames))
             {
-                string intro = StripComments(File.ReadAllText(IntroducerSrc));
-                if (!Regex.IsMatch(intro, @"FeatureFlags\.SingleHero\s*\)\s*return"))
-                    failures.Add("[one-seater] CastleCompanionIntroducerInjector no longer stands down on " +
-                                 "FeatureFlags.SingleHero - it seats a 'CompanionIntroducer' body that " +
-                                 "ResolveGuide prefers even over the steward, so a second stand-in could " +
-                                 "appear beside the guide's real body.");
+                foreach (string path in Directory.GetFiles(CanonNames, "*.cs", SearchOption.AllDirectories))
+                {
+                    if (File.ReadAllText(path).IndexOf("\"" + StandInName + "\"", StringComparison.Ordinal) >= 0)
+                    { nameFound = true; break; }
+                }
+            }
+            if (!nameFound)
+                failures.Add("[character-kept] the canon hero NAME \"" + StandInName + "\" is no longer present " +
+                             "anywhere under " + CanonNames + ". WO-971 removed his tutorial GUIDE BODY, not the " +
+                             "character - en.json binds hero.ranger to him and abilities.json carries his kit. " +
+                             "If this suite's removal was read as 'delete Sylas', that is a mis-read: revert the " +
+                             "character, keep the guide-body removal.");
+
+            const string CompanionBeat = "Assets/_Modules/Village/NPCs/SylasFirstMeeting.cs";
+            if (!File.Exists(CompanionBeat))
+                failures.Add("[character-kept] " + CompanionBeat + " is gone. That is his NON-tutorial companion " +
+                             "beat (already stood down under ff.singlehero) and it is out of WO-971's scope - " +
+                             "only the tutorial arc and the guide body were ruled out.");
+        }
+
+        // =====================================================================
+        //  Case 6 - the shared machinery the surviving arc depends on is intact
+        // =====================================================================
+
+        private static void Case6_SharedMachinerySurvives(List<string> failures)
+        {
+            foreach (string path in MustSurviveSources)
+            {
+                if (File.Exists(path)) continue;
+                failures.Add("[shared-kept] " + path + " is missing. It sits in (or beside) the legacy tutorial " +
+                             "folder but the SURVIVING founding arc or a live non-tutorial system consumes it - " +
+                             "TutorialFlow adds a TutorialWaveSpawner, DialogueCommandSink adds TutorialAutoWalk " +
+                             "and TutorialHudOverlay, and ElaraWaveThreeJoin / StoryCompanionInjector call " +
+                             "CompanionSpawner. Deleting the whole folder is an orphaned-reference outage, not a " +
+                             "cleanup: it compiles right up until the beat runs and blanks.");
             }
         }
 
@@ -290,9 +373,10 @@ namespace DeNelle.Editor.Regression
             return StripComments(File.ReadAllText(path));
         }
 
-        /// <summary>Comment-stripped lint input: every invariant below is about CODE, and
-        /// this repo's comments quote the very identifiers being asserted (they narrate the
-        /// history), so an un-stripped lint would pass on prose alone.</summary>
+        /// <summary>Comment-stripped lint input: every invariant here is about CODE, and this
+        /// repo's comments quote the very identifiers being asserted (they narrate the history),
+        /// so an un-stripped lint would pass on prose alone - including on the removal notes
+        /// this very WO left behind, which name "Sylas" and "CompanionIntroducer" verbatim.</summary>
         private static string StripComments(string src)
         {
             src = Regex.Replace(src, @"/\*.*?\*/", " ", RegexOptions.Singleline);

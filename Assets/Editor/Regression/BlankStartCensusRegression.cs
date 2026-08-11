@@ -37,7 +37,10 @@
 // Emits BLANK_START_OK, or BLANK_START_FAIL listing each extra WITH its spawner.
 // WO-707 (owner ruling 2026-07-13) KILLED the WO-695 FTUE grace forge — a fresh
 // save carries ZERO records and ZERO vendors ("should be placed by player").
-// The one sanctioned NPC at spawn is Sylas the Steward (WO-702 founding guide).
+// WO-971 (owner ruling 2026-08-10) RETIRED the "one sanctioned NPC at spawn is
+// Sylas the Steward (WO-702)" carve-out: that steward body was a SECOND tutorial
+// guide standing beside the wolf, and it is deleted. A blank start now seats NO
+// founding NPC at all — the guide's only body is the wolf the founding arc summons.
 // =============================================================================
 using System;
 using System.Collections.Generic;
@@ -85,7 +88,8 @@ namespace DeNelle.Editor
                 state.StrategicPlacementMigrated = true;
                 // WO-707 (owner ruling 2026-07-13): the WO-695 FTUE grace-default Forge is
                 // KILLED — "should be placed by player". Fresh save = EMPTY BaseLayout;
-                // the vista is the tree, the well, the walls, and Sylas the Steward (WO-702).
+                // the vista is the tree, the well and the walls (WO-971 removed the Sylas
+                // steward body that WO-702 used to add to that list).
                 state.BaseLayout = new List<PlacedStructureData>();
                 var svcGo = new GameObject("BlankStartCensus_GameStateService");
                 svcGo.SetActive(false);   // Awake must never run (no Load over the fixture)
@@ -262,7 +266,8 @@ namespace DeNelle.Editor
             {
                 Debug.Log(log.ToString() +
                     "BLANK_START_OK — fresh save census: tree + well + walls/gates only " +
-                    "(zero records, zero vendors — WO-707: the player places everything; Sylas the Steward is the one sanctioned NPC, WO-702).");
+                    "(zero records, zero vendors — WO-707: the player places everything; WO-971: no founding " +
+                    "steward NPC either, the guide's only body is the wolf the founding arc summons).");
                 return;
             }
             Debug.LogError(log.ToString() + "BLANK_START_FAIL (" + failures.Count + "):\n  - " +

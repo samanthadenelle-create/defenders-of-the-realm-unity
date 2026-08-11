@@ -102,7 +102,14 @@ namespace DeNelle.Editor.Regression
         private const string CatalogRelPath = "Data/Canonical/structures-catalog.json";
         private const string BuildMenuSrc   = "Assets/_Modules/Village/Buildings/UI/BuildMenu.cs";
         private const string PlacementSrc   = "Assets/_Modules/Village/Buildings/TowerPlacementSystem.cs";
-        private const string TutorialSrc    = "Assets/_Modules/Village/Tutorial/TutorialDirector.cs";
+        // WO-971 (2026-08-10): TutorialSrc is RETIRED. It pointed at
+        // Assets/_Modules/Village/Tutorial/TutorialDirector.cs, the legacy FTUE director,
+        // which was DELETED on the owner ruling "remove the original / only the new wolf
+        // one stays". It was the only caller of TowerPlacementSystem.StartPlacing with a
+        // prepaid FREE tower, so the free-tower prepaid-escrow case below has no subject
+        // left; the surviving founding arc (TutorialFlow) never arms a placement — it
+        // completes 'founding_defense' on the player's OWN paid build.tower_placed signal,
+        // so the real-economy path the rest of this suite lints already covers it.
 
         /// <summary>The literals the retired BuildMenu.GetMaterialCount stub returned.</summary>
         private const int RetiredFakeWood  = 20;
@@ -796,32 +803,26 @@ namespace DeNelle.Editor.Regression
                 }
             }
 
-            // -- The TUTORIAL tower is FREE, so it must prepay a ZERO cost ---------
-            string tutSrc = ReadSource(TutorialSrc);
-            if (tutSrc == null)
-            {
-                failures.Add("[prepaid-escrow] cannot read " + TutorialSrc + " - the free-tower check could not run");
-            }
-            else
-            {
-                string tut = StripCommentsAndStrings(tutSrc);
-                Match call = StartPlacingCall.Match(tut);
-                if (!call.Success)
-                {
-                    log.AppendLine("  [prepaid-escrow] TutorialDirector no longer arms a placement - free-tower check skipped");
-                }
-                else
-                {
-                    string args = Squash(call.Groups[1].Value);
-                    if (!ZeroPrepaidArg.IsMatch(args))
-                        failures.Add("[prepaid-escrow] " + TutorialSrc + ":" + LineOf(tut, call.Index) +
-                                     " arms the FREE tutorial tower with 'StartPlacing(" + args + ")' - it charges the " +
-                                     "player NOTHING, so it must prepay a ZERO cost (default). Anything else means " +
-                                     "cancelling the tutorial tower pays out currency that was never spent.");
-                    else
-                        log.AppendLine("  [prepaid-escrow] TutorialDirector prepays a ZERO cost for the free tower ('" + args + "') OK");
-                }
-            }
+            // -- The FREE TUTORIAL tower: SUBJECT REMOVED (WO-971) -----------------
+            // This block used to read TutorialDirector.cs and assert that its FREE tutorial
+            // tower prepaid a ZERO cost, so cancelling it could not pay out currency the
+            // player never spent. That subject no longer exists: the legacy FTUE director
+            // was DELETED on the owner ruling 2026-08-10 ("remove the original", "only the
+            // new wolf one stays"), and it was the tree's ONLY prepaid FREE placement.
+            //
+            // The check is DROPPED rather than generalised, deliberately. The obvious
+            // generalisation - "every prepaid:true call site must prepay ZERO" - is WRONG
+            // and was caught before landing: BuildMenu.cs arms 'StartPlacing(data, prepaid:
+            // true, prepaidCost: cost)', which is CORRECT because it charged the player that
+            // exact cost, and case (a)/(b) above already verifies that pairing. Zero-prepaid
+            // was never the general rule; it was the rule for a tower that cost NOTHING.
+            //
+            // The surviving founding arc never arms a placement at all - 'founding_defense'
+            // completes on the player's own paid 'build.tower_placed' signal - so it is
+            // covered by the real-economy path the rest of this suite lints. If a free
+            // placement is ever re-introduced, restore a targeted check for THAT call site.
+            log.AppendLine("  [prepaid-escrow] free-tower check RETIRED (WO-971: TutorialDirector, its only " +
+                           "subject, is deleted - no prepaid FREE placement exists in the tree)");
         }
 
         // =====================================================================

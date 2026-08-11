@@ -426,9 +426,13 @@ namespace DeNelle.Editor.Regression
                              "hover/drift layer existed to MASK the aether-sprite's missing idle; the ice wolf " +
                              "ships its own idle and run clips, and a hovering quadruped is wrong (WO-961 scope).");
 
-            // -- (e) the resolver PREFERS the live body over the steward stand-in ---------
-            // This is the ordering the owner's "npc" capture was about. Both branches must exist -
-            // the steward is a legitimate fallback - but the Pet must be consulted FIRST.
+            // -- (e) the resolver probes the live body, and the steward link is GONE ------
+            // HISTORY: this used to assert an ORDERING - Pet probed before the "Sylas" steward
+            // stand-in, "both branches must exist, the steward is a legitimate fallback".
+            // WO-971 (owner ruling 2026-08-10) DELETED the steward link, so the ordering
+            // clause below is now vacuous by construction (steward < 0) and the stronger
+            // "no second body link at all" invariant is enforced by OneGuideBodyRegression
+            // [one-guide-body]. The Pet probe assertion still earns its place here.
             int petProbe = anchors.IndexOf("FindAnyObjectByType<DeNelle.Pets.Pet>", StringComparison.Ordinal);
             int steward  = anchors.IndexOf("\"Sylas\"", StringComparison.Ordinal);
             if (petProbe < 0)

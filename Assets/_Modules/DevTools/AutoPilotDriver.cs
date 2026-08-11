@@ -429,24 +429,24 @@ namespace DeNelle.DevTools
                 // post-victory settle -> walk -> return to the hub — and asserts the five things she
                 // had to check by hand (A combat-capable, B on-mesh, C can actually MOVE, D scene not
                 // black, E no duplicate pose writers). Loads scenes both ways, so it sits inside an
-                // intentional-cross window; it restores the hub before the steward phase runs.
+                // intentional-cross window; it restores the hub before the one-guide phase runs.
                 _probes?.SetIntentionalCrossPhase(true);
                 yield return RunPhase("AssertDungeonLoop", AssertDungeonLoop());
                 _probes?.SetIntentionalCrossPhase(false);
 
-                // FTUE-1 REGRESSION LOCK (owner 2026-07-13: "I want a regression test to
-                // validate it"): SylasStewardInjector used to DESTROY ITSELF when its 1Hz
-                // poll saw Onboarded=true (which happens on the TITLE screen over a
-                // completed/skipped save), so a same-app-run New Game had no watcher and
-                // no Sylas. The landed fix unloads the BODY only; the injector stays
-                // resident. This probe poisons the precondition through the REAL API
-                // (FinishOnboarding), asserts the injector survives + the body despawns,
-                // then ResetToNewGame + hub reload and asserts Sylas respawns near the
-                // Heart. Runs LAST deliberately: it resets the save and reloads the scene,
-                // so nothing state-dependent may sit downstream of it. The reload is an
+                // ONE-GUIDE LOCK (WO-971, owner ruling 2026-08-10: "why are two tutorials
+                // active?" / "remove the original" / "only the new wolf one stays").
+                // SUPERSEDES the FTUE-1 "AssertStewardSurvivesNewGame" probe, which asserted
+                // the OPPOSITE — that the Sylas steward body respawned on a New Game. That
+                // steward WAS the second guide: her 20:42 capture put it at (2.00,0.08,3.00)
+                // and the wolf at (2.00,0.06,3.00), with the one 'world.guide' spotlight
+                // alternating between them. The steward is deleted, so the probe that
+                // guarded its lifecycle is replaced by the probe that guards its ABSENCE.
+                // Runs LAST deliberately: it resets the save and reloads the scene, so
+                // nothing state-dependent may sit downstream of it. The reload is an
                 // intentional scene load — window the UNEXPECTED-CROSS probe around it.
                 _probes?.SetIntentionalCrossPhase(true);
-                yield return RunPhase("AssertStewardSurvivesNewGame", AssertStewardSurvivesNewGame());
+                yield return RunPhase("AssertExactlyOneGuideBody", AssertExactlyOneGuideBody());
                 _probes?.SetIntentionalCrossPhase(false);
             }
 
@@ -2267,8 +2267,12 @@ namespace DeNelle.DevTools
 
             // ── link 1: 'world.guide' resolves to a live GUIDE BODY near the Heart ──
             // WO-1012 P2: the guide IS the player's first pet-Echo (root "Pet_<species>",
-            // deployed once the ARRIVE-beat starter grant lands); the steward stand-in
-            // ("CompanionIntroducer" / "Sylas") is the parked-rotation fallback body.
+            // deployed once the ARRIVE-beat starter grant lands).
+            // ⚠ WO-971: this check used to ALSO accept "Sylas" / "CompanionIntroducer" as a
+            // valid guide body. Those stand-ins are DELETED (owner ruling 2026-08-10,
+            // "remove the original", "only the new wolf one stays") — and accepting them
+            // meant this probe would have gone GREEN on the exact build the owner rejected,
+            // where the spotlight sat on a peasant NPC. Only a real pet-Echo body counts now.
             // Resolving only to the Heart/town-anchor fallbacks = NO body ever spawned
             // = the beat has no physical guide — FAIL. (DevTools cannot reference
             // DeNelle.Pets, so the pet body is classified by its PetDeployer name.)
@@ -2282,9 +2286,7 @@ namespace DeNelle.DevTools
                 if (guideT != null)
                 {
                     string n = guideT.name ?? "";
-                    guideIsBody = n.StartsWith("Pet_", StringComparison.OrdinalIgnoreCase) ||
-                                  string.Equals(n, "Sylas", StringComparison.Ordinal) ||
-                                  string.Equals(n, "CompanionIntroducer", StringComparison.Ordinal);
+                    guideIsBody = n.StartsWith("Pet_", StringComparison.OrdinalIgnoreCase);
                     if (guideIsBody) break;
                 }
                 yield return null;
@@ -2292,7 +2294,7 @@ namespace DeNelle.DevTools
             if (!guideIsBody)
             {
                 _lastDetail = $"FAIL link 1 — 'world.guide' never resolved to a guide body (got '{(guideT != null ? guideT.name : "<invalid>")}')";
-                FlowTrace.Fail(Tag, $"AssertFoundingArc: FAIL at link 1 — 'world.guide' resolved to '{(guideT != null ? guideT.name : "<invalid>")}' for 5s on a fresh save; neither a deployed pet-Echo body (ARRIVE-beat grant -> PetDeployer 'Pet_<species>') nor the steward stand-in spawned (read [Flow:PetAcquire] / [Flow:SylasSteward] lines in this run).");
+                FlowTrace.Fail(Tag, $"AssertFoundingArc: FAIL at link 1 — 'world.guide' resolved to '{(guideT != null ? guideT.name : "<invalid>")}' for 5s on a fresh save; no pet-Echo guide body was deployed (ARRIVE-beat grant -> PetDeployer 'Pet_<species>'). Read the [Flow:PetAcquire] lines in this run. WO-971: there is no steward stand-in to fall back to any more — the chain is pet body, then the Heart.");
                 yield break;
             }
             var heart = FindAnyObjectByType<HeartController>();
@@ -3228,116 +3230,91 @@ namespace DeNelle.DevTools
         }
 
         // =====================================================================
-        //  PROBE: AssertStewardSurvivesNewGame — FTUE-1 injector-lifecycle lock
+        //  PROBE: AssertExactlyOneGuideBody — the ONE-GUIDE lock (WO-971)
         // ---------------------------------------------------------------------
-        // ROOT (proven 2026-07-13 from the owner's session log — Bootstrap ENTER +
-        // injector created at Title, then NO Inject line ever): SylasStewardInjector's
-        // 1Hz poll used to Destroy the INJECTOR when it saw Onboarded=true — which
-        // happens on the TITLE screen when the previously-loaded save was completed/
-        // skipped — so a subsequent New Game in the same app run had no watcher and no
-        // Sylas (RuntimeInitializeOnLoadMethod fires once per app run; nothing rebuilt
-        // it). FIX UNDER TEST: the poll unloads the BODY only; the injector stays
-        // resident. Links (each failure NAMES the dead link):
+        // OWNER RULING 2026-08-10, verbatim: "why are two tutorials active?" /
+        // "remove the original" / "only the new wolf one stays".
+        //
+        // PROVEN BY CAPTURE (her Player.log, the 20:42 build) — four lines that
+        // together ARE the bug, which is why this probe exists at all:
+        //   [Flow:SylasSteward] Sylas steward spawned at (2.00, 0.08, 3.00)
+        //   [Flow:Tutorial] guide BODY summoned ('ice-wolf') at (2.00, 0.06, 3.00)
+        //   [Flow:Tutorial] FocusMask resolved highlightId=world.guide target=Sylas
+        //   [Flow:Tutorial] FocusMask resolved highlightId=world.guide target=Pet_ice-wolf
+        // Two guide bodies two centimetres apart and ONE spotlight alternating
+        // between them, while the objective strip read "Follow Aldwin to the gate".
+        //
+        // SUPERSEDES the FTUE-1 probe AssertStewardSurvivesNewGame, which asserted
+        // the exact OPPOSITE (that the steward body respawned on a same-run New
+        // Game). That probe was correct for its day and is now the defect's alibi:
+        // it would have gone GREEN on the very build the owner rejected. When a
+        // ruling reverses, the probe that guarded the old behaviour must be
+        // reversed too, not merely deleted — otherwise nothing watches the new one.
+        //
+        // Links (each failure NAMES the dead link):
         //   link 0  context gates (ff.tutorialv2 / hub / GameStateService) — N/A else
-        //   link 1  injector resident BEFORE poisoning (Instance != null)
-        //   link 2  poison: Onboarded=true via the REAL API (FinishOnboarding — the
-        //           exact call TutorialFlow.cs:617 fires) + >2 of the 1Hz poll ticks
-        //   link 3  THE REGRESSION'S HEART: injector STILL resident after the poll
-        //   link 4  the body despawned (the "use the model, then unload it" half)
-        //   link 5  New Game via the REAL service (ResetToNewGame) + hub reload the
-        //           way the fleet boots (SceneManager.LoadScene(SceneRouter.Castle))
-        //   link 6  a GameObject named 'Sylas' stands near the Heart within 5s
+        //   link 1  a fresh save + hub reload through the REAL services
+        //   link 2  NO steward body: no GameObject named "Sylas" in the hub
+        //   link 3  at most ONE live guide body (DeNelle.Pets.Pet) in the scene
+        //   link 4  "world.guide" resolves to that body, or to the Heart — never
+        //           to a humanoid stand-in
+        // Runs LAST: it resets the save and reloads the scene.
         // =====================================================================
-        private IEnumerator AssertStewardSurvivesNewGame()
+        private IEnumerator AssertExactlyOneGuideBody()
         {
             const string Tag = "Auto";
-            FlowTrace.Step(Tag, "AssertStewardSurvivesNewGame: ENTER — FTUE-1 Sylas injector-lifecycle regression probe.");
+            FlowTrace.Step(Tag, "AssertExactlyOneGuideBody: ENTER - WO-971 one-guide lock (the owner's 'why are two tutorials active?').");
 
-            // ── link 0: context gates ────────────────────────────────────────
+            // -- link 0: context gates ---------------------------------------
             if (!DeNelle.Core.FeatureFlags.TutorialV2)
             {
-                _lastDetail = "ff.tutorialv2 OFF — N/A (skipped)";
-                FlowTrace.Step(Tag, "AssertStewardSurvivesNewGame: ff.tutorialv2 OFF — N/A, skipping.");
+                _lastDetail = "ff.tutorialv2 OFF - N/A (skipped)";
+                FlowTrace.Step(Tag, "AssertExactlyOneGuideBody: ff.tutorialv2 OFF - N/A, skipping.");
                 yield break;
             }
             string scene = ActiveScene();
             if (!DeNelle.Core.HubScenes.IsHub(scene))
             {
-                _lastDetail = $"'{scene}' not a hub — N/A (skipped)";
-                FlowTrace.Step(Tag, $"AssertStewardSurvivesNewGame: scene '{scene}' is not a hub — N/A.");
+                _lastDetail = $"'{scene}' not a hub - N/A (skipped)";
+                FlowTrace.Step(Tag, $"AssertExactlyOneGuideBody: scene '{scene}' is not a hub - N/A.");
                 yield break;
             }
             var svc = DeNelle.Core.State.GameStateService.Instance;
             if (svc == null || svc.State == null)
             {
-                _lastDetail = "GameStateService unavailable — N/A (skipped)";
-                FlowTrace.Warn(Tag, "AssertStewardSurvivesNewGame: GameStateService/State unavailable — N/A.");
+                _lastDetail = "GameStateService unavailable - N/A (skipped)";
+                FlowTrace.Warn(Tag, "AssertExactlyOneGuideBody: GameStateService/State unavailable - N/A.");
                 yield break;
             }
 
-            // ── link 1: injector resident BEFORE poisoning ───────────────────
-            if (SylasStewardInjector.Instance == null)
-            {
-                _lastDetail = "FAIL link 1 — injector not resident before poisoning";
-                FlowTrace.Fail(Tag, "AssertStewardSurvivesNewGame: FAIL at link 1 — SylasStewardInjector.Instance is NULL before the probe poisons anything; the injector never bootstrapped (or already died) this app run — read its [SylasSteward] Bootstrap lines in this log.");
-                yield break;
-            }
-            FlowTrace.Step(Tag, "AssertStewardSurvivesNewGame: link 1 PASS — injector resident before poisoning.");
-
-            // ── link 2: poison the precondition through the REAL API ─────────
-            bool wasOnboarded = svc.State.Onboarded;
-            svc.FinishOnboarding();   // the exact call the tutorial fires (TutorialFlow.cs:617)
-            FlowTrace.Step(Tag, $"AssertStewardSurvivesNewGame: link 2 — Onboarded {wasOnboarded}->true via FinishOnboarding(); waiting 2.5s (>2 of the injector's 1Hz poll ticks).");
-            float t0 = Time.realtimeSinceStartup;
-            while (Time.realtimeSinceStartup - t0 < 2.5f) yield return null;
-
-            // ── link 3: THE REGRESSION'S HEART — injector survives the poll ──
-            if (SylasStewardInjector.Instance == null)
-            {
-                _lastDetail = "FAIL link 3 — injector self-destructed on Onboarded=true (FTUE-1 regressed)";
-                FlowTrace.Fail(Tag, "AssertStewardSurvivesNewGame: FAIL at link 3 — SylasStewardInjector.Instance went NULL after Onboarded=true + 2 poll ticks; the poll destroyed the INJECTOR again (the FTUE-1 root: a same-run New Game will have no watcher and no Sylas).");
-                yield break;
-            }
-            FlowTrace.Step(Tag, "AssertStewardSurvivesNewGame: link 3 PASS — injector still resident after the Onboarded poll (the FTUE-1 fix holds).");
-
-            // ── link 4: the BODY despawned ('use the model, then unload it') ──
-            if (GameObject.Find("Sylas") != null)
-            {
-                _lastDetail = "FAIL link 4 — Sylas body still standing after Onboarded=true";
-                FlowTrace.Fail(Tag, "AssertStewardSurvivesNewGame: FAIL at link 4 — a GameObject named 'Sylas' still exists >2 poll ticks after Onboarded=true; the poll did not unload the body (the 'then unload it' half of the owner ruling is broken).");
-                yield break;
-            }
-            FlowTrace.Step(Tag, "AssertStewardSurvivesNewGame: link 4 PASS — body despawned; the injector alone remains resident.");
-
-            // ── link 5: New Game via the real service + hub reload ───────────
+            // -- link 1: a genuinely fresh founding arc, via the REAL services --
             try { svc.ResetToNewGame(); }
             catch (Exception ex)
             {
-                _lastDetail = "FAIL link 5 — ResetToNewGame threw";
-                FlowTrace.Fail(Tag, $"AssertStewardSurvivesNewGame: FAIL at link 5 — ResetToNewGame() threw {ex.GetType().Name}: {ex.Message}.");
+                _lastDetail = "FAIL link 1 - ResetToNewGame threw";
+                FlowTrace.Fail(Tag, $"AssertExactlyOneGuideBody: FAIL at link 1 - ResetToNewGame() threw {ex.GetType().Name}: {ex.Message}.");
                 yield break;
             }
             string hub = DeNelle.Core.SceneRouter.Castle;
-            FlowTrace.Step(Tag, $"AssertStewardSurvivesNewGame: link 5 — save reset to new game; reloading hub '{hub}' (the same LoadScene-by-name path the fleet boots through).");
             try { SceneManager.LoadScene(hub); }
             catch (Exception ex)
             {
-                _lastDetail = "FAIL link 5 — hub reload threw";
-                FlowTrace.Fail(Tag, $"AssertStewardSurvivesNewGame: FAIL at link 5 — LoadScene('{hub}') threw {ex.GetType().Name}: {ex.Message} (is it in Build Settings?).");
+                _lastDetail = "FAIL link 1 - hub reload threw";
+                FlowTrace.Fail(Tag, $"AssertExactlyOneGuideBody: FAIL at link 1 - LoadScene('{hub}') threw {ex.GetType().Name}: {ex.Message} (is it in Build Settings?).");
                 yield break;
             }
-            t0 = Time.realtimeSinceStartup;
+            float t0 = Time.realtimeSinceStartup;
             while (Time.realtimeSinceStartup - t0 < BootTimeout && ActiveScene() != hub) yield return null;
             if (ActiveScene() != hub)
             {
-                _lastDetail = "FAIL link 5 — hub never became active after the New-Game reload";
-                FlowTrace.Fail(Tag, $"AssertStewardSurvivesNewGame: FAIL at link 5 — '{hub}' never became the active scene within {BootTimeout:0}s after the New-Game reload.");
+                _lastDetail = "FAIL link 1 - hub never became active after the New-Game reload";
+                FlowTrace.Fail(Tag, $"AssertExactlyOneGuideBody: FAIL at link 1 - '{hub}' never became the active scene within {BootTimeout:0}s after the New-Game reload.");
                 yield break;
             }
-            for (int i = 0; i < 3; i++) yield return null;   // let Awake/Start + sceneLoaded handlers (incl. the injector's) run
-            FlowTrace.Step(Tag, $"AssertStewardSurvivesNewGame: link 5 PASS — hub '{hub}' reloaded on a fresh save.");
+            for (int i = 0; i < 3; i++) yield return null;   // let Awake/Start + sceneLoaded injectors run
+            FlowTrace.Step(Tag, $"AssertExactlyOneGuideBody: link 1 PASS - hub '{hub}' reloaded on a fresh save.");
 
-            // Re-resolve the hero (the reload destroyed the old one) — same idiom as the
+            // Re-resolve the hero (the reload destroyed the old one) - same idiom as the
             // PopupClose recovery reload; keeps any later consumer honest.
             _hero = null;
             t0 = Time.realtimeSinceStartup;
@@ -3348,33 +3325,63 @@ namespace DeNelle.DevTools
                 yield return null;
             }
 
-            // ── link 6: Sylas stands again near the Heart within 5s ──────────
-            GameObject sylas = null;
+            // -- link 2: NO steward stand-in body seats, at any point ---------
+            // Watched over a window, not sampled once: the whole point of the WO-1014
+            // failure was that the stand-in seated on hub load and the wolf arrived a
+            // beat LATER, so a single early sample sees one body and calls it fine.
             t0 = Time.realtimeSinceStartup;
-            while (Time.realtimeSinceStartup - t0 < 5f)
+            while (Time.realtimeSinceStartup - t0 < 8f)
             {
-                sylas = GameObject.Find("Sylas");
-                if (sylas != null) break;
+                var standIn = GameObject.Find("Sylas") ?? GameObject.Find("CompanionIntroducer");
+                if (standIn != null)
+                {
+                    _lastDetail = $"FAIL link 2 - stand-in body '{standIn.name}' seated in the hub";
+                    FlowTrace.Fail(Tag, $"AssertExactlyOneGuideBody: FAIL at link 2 - a humanoid guide stand-in named '{standIn.name}' is standing in the hub at {standIn.transform.position}. WO-971 removed the stand-in outright (owner: 'remove the original', 'only the new wolf one stays'); something has re-introduced a second guide figure. Read the [Flow:Tutorial] FocusMask lines in this run - if they alternate between two targets, this is the owner's exact 2026-08-10 report reproduced.");
+                    yield break;
+                }
                 yield return null;
             }
-            if (sylas == null)
+            FlowTrace.Step(Tag, "AssertExactlyOneGuideBody: link 2 PASS - no steward/introducer stand-in body seated during the 8s founding window.");
+
+            // -- link 3: at most ONE live guide body in the scene -------------
+            // DevTools cannot reference DeNelle.Pets (see the asmdef), so the pet body is
+            // classified by its PetDeployer root name "Pet_<species>" - the same idiom
+            // AssertFoundingArc uses. Roots only: a child named Pet_* would double-count.
+            var bodies = new List<string>();
+            foreach (var t in UnityEngine.Object.FindObjectsByType<Transform>(FindObjectsSortMode.None))
             {
-                _lastDetail = "FAIL link 6 — no 'Sylas' within 5s of the New-Game hub reload";
-                FlowTrace.Fail(Tag, "AssertStewardSurvivesNewGame: FAIL at link 6 — no GameObject named 'Sylas' within 5s of the New-Game hub reload; the resident injector's OnSceneLoaded->Inject did not respawn the steward (read the [Flow:SylasSteward] lines in this run).");
+                if (t == null || t.parent != null) continue;
+                if ((t.name ?? "").StartsWith("Pet_", StringComparison.OrdinalIgnoreCase)) bodies.Add(t.name);
+            }
+            if (bodies.Count > 1)
+            {
+                _lastDetail = $"FAIL link 3 - {bodies.Count} guide bodies live";
+                FlowTrace.Fail(Tag, $"AssertExactlyOneGuideBody: FAIL at link 3 - {bodies.Count} live 'Pet_*' bodies in the hub [{string.Join(", ", bodies)}]. The founding arc summons EXACTLY ONE Echo with a world body because a beat tells the player to follow it (WO-961); the rest of the roster stays portrait cards. Two bodies means the spotlight can point at the wrong one.");
                 yield break;
             }
-            var newHeart = FindAnyObjectByType<HeartController>();
-            if (newHeart != null)
+            FlowTrace.Step(Tag, $"AssertExactlyOneGuideBody: link 3 PASS - {bodies.Count} live guide body/bodies (<= 1).");
+
+            // -- link 4: the guide anchor resolves to a body or the Heart -----
+            // The surviving chain is: live pet-Echo body -> the Heart. A HUMANOID answering
+            // here means a body link came back even if no stand-in was found by name.
+            var guideT = DeNelle.Village.TutorialWorldAnchors.LiveGuideBody();
+            if (guideT == null)
             {
-                float d = Vector3.Distance(sylas.transform.position, newHeart.transform.position);
-                if (d > 20f)
-                    FlowTrace.Warn(Tag, $"AssertStewardSurvivesNewGame: link 6 SOFT — Sylas respawned {d:0.0}m from the Heart (expected a courtyard-adjacent spawn <= 20m).");
-                else
-                    FlowTrace.Step(Tag, $"AssertStewardSurvivesNewGame: link 6 PASS — Sylas respawned {d:0.0}m from the Heart.");
+                FlowTrace.Step(Tag, "AssertExactlyOneGuideBody: link 4 - no guide body yet this run; the chain falls to the Heart, which is the intended degradation (never a stand-in character).");
+            }
+            else if (!(guideT.name ?? "").StartsWith("Pet_", StringComparison.OrdinalIgnoreCase))
+            {
+                _lastDetail = $"FAIL link 4 - guide resolved to a non-pet '{guideT.name}'";
+                FlowTrace.Fail(Tag, $"AssertExactlyOneGuideBody: FAIL at link 4 - LiveGuideBody() answered '{guideT.name}', which is not a PetDeployer 'Pet_<species>' root. The guide is the player's first pet-Echo; anything else answering is a stand-in link returning through a new door.");
+                yield break;
+            }
+            else
+            {
+                FlowTrace.Step(Tag, $"AssertExactlyOneGuideBody: link 4 PASS - the guide resolves to the pet-Echo body '{guideT.name}'.");
             }
 
-            _lastDetail = "steward survived Onboarded=true + New Game respawned Sylas";
-            FlowTrace.Step(Tag, "AssertStewardSurvivesNewGame: PASS — the injector survived Onboarded=true (body-only unload) and a same-run New Game respawned Sylas near the Heart (FTUE-1 locked).");
+            _lastDetail = "exactly one guide: no stand-in, <= 1 pet body, chain clean";
+            FlowTrace.Step(Tag, "AssertExactlyOneGuideBody: PASS - the founding arc has exactly ONE guide figure and no legacy stand-in (WO-971 locked).");
         }
 
         private static float TimeoutFor(string phase)
@@ -3391,7 +3398,7 @@ namespace DeNelle.DevTools
                 case "AssertSaveRoundTrip": return 20f;       // WO-452 D — save/load round-trip
                 case "AssertTutorialFirstTower": return 45f;  // P0 real-input build-placement probe (enter + arm + 8 candidate clicks + signal waits)
                 case "AssertFoundingArc": return 75f;         // WO-702: Sylas poll + greet dialogue drive + Hollow placement + grant/DEFEND waits
-                case "AssertStewardSurvivesNewGame": return 60f; // FTUE-1: 2.5s poll wait + New-Game hub reload + hero re-resolve + 5s Sylas wait + slack
+                case "AssertExactlyOneGuideBody": return 60f;    // WO-971: New-Game hub reload + hero re-resolve + an 8s stand-in watch window + slack
                 case "AssertCombatInvariants": return 20f;    // WO-452 C — ~12s defense window + slack
                 case "OpenEachHUDPanel":  return HudPanelTimeout * 8f;
                 case "AssertPopupClose":  return 100f;  // WO-597: ~13 registered ids x (settle + bounded 3s close-wait worst case) + the dialogue-card row

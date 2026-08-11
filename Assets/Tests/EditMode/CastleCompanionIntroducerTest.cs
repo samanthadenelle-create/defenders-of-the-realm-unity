@@ -32,8 +32,9 @@ namespace DeNelle.Tests.EditMode
             "_Modules/Village/CompanionMeetingTrigger.cs";
         private const string SylasMeetingRel =
             "_Modules/Village/NPCs/SylasFirstMeeting.cs";
-        private const string TutorialDirectorRel =
-            "_Modules/Village/Tutorial/TutorialDirector.cs";
+        // NOTE (WO-971, 2026-08-10): TutorialDirectorRel is GONE. The legacy FTUE
+        // director was DELETED on the owner ruling "remove the original / only the new
+        // wolf one stays" — there is no third legacy auto-intro path left to defer.
 
         private static string Read(string rel)
         {
@@ -93,9 +94,14 @@ namespace DeNelle.Tests.EditMode
                 "SylasFirstMeeting (the auto-firing beat) must defer to CastleCompanionIntroducerInjector.Active " +
                 "so the recruit can't fire twice (NPC + this beat both calling RecruitCompanion).");
 
-            Assert.IsTrue(CodeOnly(Read(TutorialDirectorRel)).Contains(flag),
-                "TutorialDirector's fast-path companion hook must defer to CastleCompanionIntroducerInjector.Active " +
-                "(skip the auto intro) while STILL handing off to the wave loop, so the NPC is the single trigger.");
+            // The third legacy path (TutorialDirector's fast-path companion hook) no longer
+            // exists to defer — WO-971 deleted the legacy director outright, which is a
+            // STRONGER guarantee than the assertion it replaces.
+            Assert.IsFalse(File.Exists(Path.Combine(UnityEngine.Application.dataPath,
+                    "_Modules/Village/Tutorial/TutorialDirector.cs")),
+                "TutorialDirector.cs is back. The legacy FTUE director was REMOVED (WO-971, owner ruling " +
+                "2026-08-10: 'remove the original', 'only the new wolf one stays'). Restoring it re-introduces " +
+                "a second tutorial flow AND a third auto companion-intro path.");
         }
 
         [Test]
