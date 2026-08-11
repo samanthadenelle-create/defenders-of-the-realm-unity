@@ -1,6 +1,57 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ RECONCILED 2026-08-10 (CLI): main line next free = **969**. **782–859 + 900–968 CONSUMED.**
+> ## ⚠ RECONCILED 2026-08-10 (CLI): main line next free = **971**. **782–859 + 900–970 CONSUMED.**
+> - **970** = **The bounds align can only YAW — a weapon whose mesh is not authored Y-long never stands
+>   up** — owner felt-report, playing the Mage: the Emberglass Staff (`tripo_staff_a`) *"is not being held
+>   correctly."* PROVEN BY CAPTURE, her Player.log, then settled at source.
+>   `WeaponBoundsOrient.AlignAxesYLongXNarrowZWide` built its result as
+>   `Quaternion.LookRotation(Cross(xAxis, yAxis), yAxis)` with **`yAxis = Vector3.up` a CONSTANT** — so the
+>   output was **yaw-only BY CONSTRUCTION**, and a yaw can never lift a Z-long mesh onto +Y. `alignLong`,
+>   the only term that could tilt it, was used to pick a sign and discarded. Capture signature, twice, a
+>   month apart: staff `raw b0=(0.001,0.001,0.021) -> aligned b1=(0.021,0.001,0.001)` and shield
+>   `raw (0.008,0.002,0.01) -> (0.01,0.002,0.008)` — both just X and Z SWAPPED, longest on X, never Y.
+>   Four downstream seats are written against "prop +Y = the long axis" (`EnsureHandleAtShortYEnd`,
+>   `SeatHiltLowerHalf`, `ComputeMeleeGripRotation`, `ComputeSheathRotation`), so all four ran on the
+>   staff's **1 mm thickness axis**: sheathed `worldBounds=(0.079, 0.097, 1.265)` — the whole 1.265 m along
+>   world Z, **dead horizontal through her back** — and a **2 cm** grip seat on a **1.3 m** haft.
+>   ⚠ The 2026-07-06 shield RCA stood on this exact line, fixed the SCALE symptom, and recorded verbatim
+>   *"the align's ROTATION is left as-is"* — half-fixed a month ago.
+>   ⚠ **INDEPENDENT of WO-966** (settled at source, NOT assumed): `HeroBodySwapper.cs:263` applies the -90
+>   to the BODY ROOT and the skeleton is its child, so mesh and prop rotate TOGETHER — a body yaw cannot
+>   change how the weapon sits relative to the body. Landing 966 would have changed nothing here.
+>   ⚠ NOT staff-specific — permutation-specific: any prop whose SOURCE mesh is not authored Y-long. A
+>   Y-long greatsword passes untouched, which is why swords looked fine and this survived.
+>   ✔ CLEARED, not assumed: the 1.72 parent-scale compensate is CORRECT (`1.264 x 1/1.72 x 1.72 = 1.264`,
+>   matched at BOTH sockets). Adjacent find, ticket separately: back compensates unconditionally (`:1819`)
+>   while the hand guards on `_weaponParentCompensate` (`:1834`) -> a `fullOverride` prop renders a
+>   different SIZE drawn vs sheathed (`shield_A` is the live candidate).
+>   FIX (landed, one file): `localRotation = Inverse(LookRotation(Axis(med), Axis(lng)))` — DERIVED basis
+>   change, no compensating Euler, no pitch where a yaw is meant. Permanent `[Flow:Equip] AlignAxes` trace
+>   added: `longAxis=` + a Y-longest `aligned b1` on her next equip is the proving line.
+>   ⚠ OWNER PIN (§4, untouched): `_staffGripEuler=(0,90,0)` and `sword_A` rot `(117,-2,110)` were dialed on
+>   the broken base and may want a re-dial — her hands, not ours.
+>   File `WorkOrders/WORK_ORDER_970_weapon_align_is_yaw_only_long_axis_never_reaches_y.md`.
+>   **DONE — awaiting batch-gate + commit.**
+>
+> *(banner bumped 970 → 971 in the SAME edit as the mint.)*
+> - **969** = **Opening Pause over the victory summary destroys the pending home return (45s strand)** —
+>   owner F8 **2315**, scene `Dungeon_HealersCottage`. PROVEN BY CAPTURE, whole chain in her Player.log:
+>   `PanelManager:NotifyOpened` ('Pause') -> `previous.Close()` -> `EndStateView.CloseFromArbiter`
+>   -> `Destroy(gameObject)` -> `PostureSignals:SetEndState(false)` (`EndStateView.cs:1665`), then
+>   `[BREAK] error: [Flow:BattleArena] STRANDING WATCHDOG FIRED after 45s - the victory panel was
+>   destroyed without firing its Continue action, so the deferred home return never ran. Returning the
+>   hero anyway. If you are reading this, find WHAT destroyed the end-state (a wave banner or another
+>   modal opening over it) - the watchdog is a safety net, NOT the fix.` (`BattleArena.cs:2495`).
+>   ROOT CAUSE, read at source: the arena's ONLY route home (`doMaskedReturn`) was owned by
+>   `EndStateVM.Primary`, i.e. by a GameObject any modal may destroy. Pause is registered
+>   `RegisterBattleAllowed` (`PauseController.cs:182`) so no gate refuses it — and none should.
+>   FIX = shape **(c)**: the transition is made INDEPENDENT of the panel's lifetime (hand-back on the
+>   MODEL, `EndStateVM.HandBackPendingTransition`, called from BOTH abandon choke points). (a) would
+>   have to block Pause; (b) fixes only Pause and leaves the other two destroy paths. Watchdog kept
+>   verbatim + pinned by the regression.
+>   File `WorkOrders/WORK_ORDER_969_endstate_pending_transition_handoff.md`. **READY TO IMPLEMENT.**
+>
+> *(banner bumped 969 → 970 in the SAME edit as the mint.)*
 > - **968** = **HIGHEST — Dungeon locomotion: mover ownership, dead camera basis, frozen camera** —
 >   owner F8 **2312** verbatim: *"This problem  gets marked as Highest on the board. Everything is wrong
 >   check locomotion"*, and F8 **2313** 22 s later, same scene: *"No camera movement"*. Both in
@@ -616,6 +667,20 @@
 > That is the exact failure this file's own rule warns about — *"never a number copied into any other
 > doc"* — and the copy was **inside the numbering authority itself**. A duplicate cannot be kept honest
 > by discipline; it can only be removed. **The header is the sole source. Do not restore numbers here.**
+>
+> *(UI-seat bumped 1019 -> 1020 in the SAME edit as the WO-1019 mint — Thrain/MAGE action bar: the
+> authored defaults in abilities.json are CORRECT and all-magic (Q Fireball / W Arcane Shell / E Mend /
+> R Meteor), so the reported "inherits the previous character's hotswap, nothing explicit for DPS" is a
+> RUNTIME BINDING defect — the bar does not rebind to the selected hero's class defaults on hero switch.
+> PLUS an owner kit ruling: the Mage plays single-target pull-and-kill and wants POISON, DRAIN (steal
+> health), FIREBALL and THUNDER — poison/drain/thunder do not exist in the mage pool today.)*
+>
+> *(UI-seat bumped 1018 -> 1019 in the SAME edit as the WO-1018 mint — **F8 CAPTURES ARE STILL BEING
+> BURIED — WO-965's fix is HALF-LANDED.** The ack script correctly acks oldest-first, but the PRODUCER
+> never wrote QUEUE.jsonl entries (3 live WARNs 2026-08-10: "seq=NNNN had no QUEUE.jsonl entry;
+> recovered from <file> (producer running pre-WO-965 code?)"), so the pending list is rebuilt from a
+> single recovered capture file and the ack watermark then buries the un-recovered older seq. Observed:
+> acking with 2313 pending closed 2314 and reported "Inbox clean" — 2313 was never triaged by any seat.)*
 >
 > *(UI-seat bumped 1017 -> 1018 in the SAME edit as the WO-1017 mint — F8 seq=2314 ERROR: TOWN SYSTEMS
 > RUN INSIDE DUNGEONS. `TownActivityProbe.Poll` (`TownActivityProbe.cs:147`) FAILs with

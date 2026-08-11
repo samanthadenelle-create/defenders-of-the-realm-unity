@@ -651,6 +651,10 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "hub-tree-aura suite", () => { if (!DeNelle.Editor.Regression.HubTreeAuraWithholdRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[hub-tree-aura] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "hud-class-fallback suite", () => { if (!DeNelle.Editor.Regression.HudHeroClassFallbackRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[hud-class-fallback] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "tutorial-guide-identity suite", () => { if (!DeNelle.Editor.Regression.TutorialGuideIdentityRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[tutorial-guide-identity] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "endstate-handoff suite", () => { if (!DeNelle.Editor.Regression.EndStateTransitionHandoffRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[endstate-handoff] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "town-suspend-floor suite", () => { if (!DeNelle.Editor.Regression.TownSuspendSceneFloorRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[town-suspend-floor] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "equipment-screen-layout suite", () => { if (!DeNelle.Editor.Regression.EquipmentScreenLayoutRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[equipment-screen-layout] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "dungeon-mover-ownership suite", () => { if (!DeNelle.Editor.Regression.DungeonMoverOwnershipRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[dungeon-mover-ownership] " + r); });
 
             // --- THE ORACLE THAT GUARDS THIS FILE: distinct markers, no unregistered
             // oracle, no gate script grepping a marker nobody emits. Registered LAST so
