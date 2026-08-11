@@ -86,6 +86,33 @@ namespace DeNelle.Core.Geometry
         }
 
         // Longest → +Y, narrowest → +X, medium → +Z (crossguard width).
+        //
+        // ── WO-970 ROOT FIX (2026-08-10) — this method could only ever YAW ────────────────────────
+        // PROVEN BY CAPTURE, owner Player.log, Mage carrying 'tripo_staff_a' (Emberglass Staff):
+        //   NormalizeInto 'EquipmentProp_Weapon': raw b0=(0.001, 0.001, 0.021)
+        //                                    aligned b1=(0.021, 0.001, 0.001)
+        // and the same shape a month earlier for shield_A: raw (0.008,0.002,0.01) -> (0.01,0.002,0.008).
+        // In BOTH the "aligned" result is the raw box with X and Z SWAPPED — i.e. a 90 deg yaw — and
+        // the longest axis lands on X, never on +Y. The old construction below built its result as
+        //   Quaternion.LookRotation(Cross(xAxis, yAxis), yAxis)   with   yAxis = Vector3.up (CONSTANT)
+        // so the output rotation ALWAYS had its up on world +Y and its forward horizontal: a yaw-only
+        // rotation, by construction. `alignLong` — the ONLY term that could tilt the mesh's long axis
+        // up onto +Y — was used solely to pick the narrow-axis SIGN and was then thrown away. A yaw can
+        // never lift a Z-long or X-long mesh to Y-long, so every prop whose SOURCE mesh is not already
+        // authored Y-long stayed lying flat.
+        //
+        // Everything downstream is built on the premise this method is supposed to establish:
+        // EnsureHandleAtShortYEnd bins on Y, SeatHiltLowerHalf seats the grip on Y, and
+        // EquipmentController.ComputeMeleeGripRotation / ComputeSheathRotation both map "prop-local +Y
+        // = the blade/haft line" onto the rig. With the premise false they were all operating on the
+        // 1 mm THICKNESS axis: the captured sheathed staff measured worldBounds=(0.079, 0.097, 1.265)
+        // — its whole 1.265 m ran along world Z, dead horizontal through the hero's back — and the
+        // captured grip shift was 0.022 m instead of the ~0.4 m a 1.3 m haft needs.
+        //
+        // The 2026-07-06 shield RCA (comment in NormalizeInto above) found this same failure and
+        // patched only the SCALE symptom, recording verbatim that "the align's ROTATION is left as-is".
+        // This is that rotation, fixed at the root — DERIVED from the bounds permutation, never a
+        // hand-typed Euler (docs/ARCHITECTURE_PRINCIPLES.md §4, docs/WEAPON_ARMOR_ORIENT_LOGIC.md).
         private static void AlignAxesYLongXNarrowZWide(GameObject prop, Vector3 size)
         {
             int lng = (size.x >= size.y && size.x >= size.z) ? 0 : (size.y >= size.z ? 1 : 2);
@@ -93,18 +120,30 @@ namespace DeNelle.Core.Geometry
             if (sht == lng) sht = (lng + 1) % 3;
             int med = 3 - lng - sht;
 
-            Quaternion alignLong = Quaternion.FromToRotation(Axis(lng), Vector3.up);
-            Vector3 yAxis = Vector3.up;
-            Vector3 narrowDir = alignLong * Axis(sht);
-            narrowDir -= Vector3.Dot(narrowDir, yAxis) * yAxis;
-            if (narrowDir.sqrMagnitude < 1e-6f) narrowDir = Vector3.right;
-            Vector3 xAxis = narrowDir.normalized;
-            Vector3 zAxis = Vector3.Cross(xAxis, yAxis).normalized;
-            Vector3 medDir = (alignLong * Axis(med)).normalized;
-            if (Vector3.Dot(zAxis, medDir) < 0f) xAxis = -xAxis;
+            // Build the basis change directly: we need the rotation R that carries the MESH's own
+            // long axis onto +Y and its medium axis onto +Z (the narrow axis then falls on +X, which
+            // is what "Y-long / X-narrow / Z-wide" means). Quaternion.LookRotation(forward, upwards)
+            // yields the rotation S mapping (+Z, +Y) -> (med, long); its INVERSE is exactly the R we
+            // want, because Inverse(S) * long = +Y and Inverse(S) * med = +Z by definition.
+            // med and long are always distinct unit axes, so they are orthogonal and LookRotation is
+            // never degenerate here. The result is a proper rotation, so handedness needs no fixup —
+            // the old Dot(zAxis, medDir) sign patch existed only to repair the hand-built basis.
+            // WHICH END is up is NOT decided here: EnsureHandleAtShortYEnd resolves hilt-vs-tip from
+            // the Z profile immediately after, so this stays a pure axis solve.
+            Quaternion meshToParent = Quaternion.Inverse(
+                Quaternion.LookRotation(Axis(med), Axis(lng)));
+            prop.transform.localRotation = meshToParent;
 
-            prop.transform.localRotation = Quaternion.LookRotation(Vector3.Cross(xAxis, yAxis), yAxis);
+            // §12 permanent trace: names the permutation this solve read and the axis it seated the
+            // length on. If a future capture ever shows longAxis on anything but Y after this line,
+            // the derivation regressed — that is the single line that proves it.
+            DeNelle.Core.Diagnostics.FlowTrace.Step("Equip",
+                $"AlignAxes '{prop.name}': meshSize={size:0.###} longAxis={AxisName(lng)} " +
+                $"narrowAxis={AxisName(sht)} wideAxis={AxisName(med)} -> seated long on +Y " +
+                $"(localEuler={prop.transform.localRotation.eulerAngles:0.#})");
         }
+
+        private static string AxisName(int i) => i == 0 ? "X" : i == 1 ? "Y" : "Z";
 
         // Z is thickest at the hilt; handle is the shorter Y segment — flip if blade points -Y.
         private static void EnsureHandleAtShortYEnd(GameObject prop, Transform parent)
