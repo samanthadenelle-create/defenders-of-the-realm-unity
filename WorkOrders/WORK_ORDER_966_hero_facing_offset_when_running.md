@@ -1,6 +1,52 @@
 # WO-966 — The hero's body faces the wrong way while running (Mage: NW when running N)
 
-**Status:** READY TO IMPLEMENT - MEASURED, no capture needed (see the MEASUREMENT section; the fix is an owner-facing one-line choice)
+**Status:** READY TO IMPLEMENT - ⚠ **"no capture needed" is RETRACTED, see the 2026-08-14 banner below**
+
+> ## ⚠ CORRECTIONS FROM A UNIFIED SME DIAGNOSIS, 2026-08-14 (read before implementing)
+> This ticket was diagnosed together with WO-985 because **they are the same subject and an
+> uncoordinated fix to one breaks the other** — which is exactly what happened on 2026-08-14, in
+> captured data (the dungeon camera/hero yaw pair).
+>
+> **1. ⛔ `HeroBodySwapper.cs:263` IS SHARED SURFACE — it has no lane.** The dungeon Keeper uses the
+> **same `HeroBody`**, swapped by the **same `HeroBodySwapper`** (`DungeonHero.cs:126-127, 188, 215,
+> 301`; `DungeonCameraRig.cs:57-58` exists to survive that swap). Changing `:263` for the Mage
+> **also changes the dungeon Mage's facing**, against a camera that now compensates for nothing.
+> **ONE edit, gated once, verified in BOTH scenes before commit.**
+>
+> **2. "no capture needed" is FALSE.** The measured 94.5° comes from `HeroFacingAudit` on the **FBX
+> asset in the editor** — not from a runtime capture of a **moving, swapped, height-refit, `Rebind`-ed**
+> live body. §12: that LOCATES, it does not CONCLUDE. A capture in **both** scenes is required.
+>
+> **3. THE TITLE'S "45 degrees" IS NOT THE NUMBER.** The audit says **~94.5°**. 45 is the owner's felt
+> estimate (this file already says so at `:30`) — which is what a ~90° body error looks like when the
+> root is still slewing toward the heading (`HeroLocomotion.cs:1156`) at the instant of judgement.
+> **Treat 94.5 as the measured static delta; treat 45 as unproven.**
+>
+> **4. ⚠ THE AUDIT DOES NOT VALIDATE THE FIX IT RECOMMENDS.** `HeroFacingAudit.cs:142` calls
+> `RangerBodyBuilder.MeasureForwardYawNeeded` (`:1123`), which derives forward from the **SHOULDER**
+> axis. The self-correct this ticket proposes enabling, `HeroBodySwapper.AlignBodyFacingToRoot`
+> (`:2157-2168`), derives it from the **HIP** axis. Different measurements. Deadzone 5° (`:2179`) vs
+> the audit's 15° warn band. **Re-point the self-correct at the shared measure, or re-run the audit
+> hip-derived and confirm they agree within the deadzone — before enabling anything.**
+>
+> **5. ⚠ SECTION 3'S PREMISE IS STALE.** It states Mage/Ranger "have no authored FBX — they fall back
+> to a tracked KayKit body". **False at HEAD:** `HeroBodySwapper.cs:128-133` probes
+> `Resources/Heroes/<slug>` FIRST and routes to `BuildLegacyResourcesBody`; `Assets/Resources/Heroes/
+> Mage.fbx` and `Ranger.fbx` both exist. The Mage takes the **`-90` legacy path**, not the identity
+> KayKit fallback. **Any fix reasoning from the KayKit premise targets dead code.**
+>
+> **6. ⚠ THE PROVING INSTRUMENT IS BLIND IN DUNGEONS.** `HeroGaitForensics` gates `bodyErr` on
+> `velMag > 0.2` (`:160`) computed from `_loco.Velocity` (`:132-134`) — but `HeroLocomotion.cs:972-975`
+> **forces `Velocity = Vector3.zero` every frame in a dungeon** (the CharacterController owns the
+> transform). `bodyErr` therefore reports **0 whether or not the body is wrong**. Feed it the measured
+> root speed (`HeroLocomotion.cs:27-31`) before trusting any dungeon number.
+>
+> **7. THE KNIGHT IS STRUCTURALLY IMMUNE — do not read its correctness as a global pass.**
+> `ff.knightv3` is ON by default (`:98-102`), routing the Knight to `KnightV3ForwardYaw = 15f` (`:478`)
+> and out of the `-90` branch entirely. Measured deltas match exactly: Mage 94.5, Ranger 93.7,
+> KnightV3 0. **A Knight regression to ~90 after the fix is the specific alarm** for the latent
+> `:652-659` pair ("walking NORTH but FACING EAST"). Pin `|bodyErr| < 15` **per class**, or the next
+> class to ship inherits the defect invisibly.
 **Renumbered 965 -> 966 on 2026-08-10:** the CLI seat wrote this file WITHOUT bumping the numbering banner - the exact mint-without-bump that caused five collisions on 2026-08-02 - and a parallel lane then legitimately minted 965 for the F8 queue and bumped the banner. That one is referenced in `CLAUDE.md:431`, so under first-on-disk-AND-referenced it keeps 965.
 **Date:** 2026-08-10 · **Priority:** Medium-High (it is felt on every step the player takes)
 **Block:** main line (CLI) · **Lane:** Hero locomotion / gait

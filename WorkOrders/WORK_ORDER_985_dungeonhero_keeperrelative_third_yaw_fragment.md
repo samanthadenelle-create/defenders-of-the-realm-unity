@@ -33,6 +33,40 @@ heroYaw   rigYaw    delta     heroPos
 Both halves are now zeroed (`_headingYawOffset = 0f`; `FaceHeading` returns the bare
 `LookRotation`).
 
+> ## ⚠ PRECISION CORRECTION (SME diagnosis, 2026-08-14, same day this WO was minted)
+> **The `KeeperRelative` fragment is NOT a rotation writer. It is an input-basis READER.**
+> At `DungeonHero.cs:489` it converts the root rotation into an *assumed visual forward* in order to
+> read the stick against it (`:490-491`). It shares the **premise** of the removed pair, not the
+> **mechanism** — so zeroing it is **not symmetric** with zeroing a writer, and it must not be treated
+> as "the third copy of the same line".
+> If the branch is ever kept, `0f` is correct **only because `FaceHeading` (`:726`) no longer offsets**
+> — i.e. this fragment is coupled to `DungeonHero.cs:726`, **NOT** to `DungeonCameraRig._headingYawOffset`.
+> Wire that reasoning into the edit or the next reader re-derives the wrong pairing.
+
+> ## ⛔ THIS TICKET IS COUPLED TO WO-966. `HeroBodySwapper.cs:263` IS SHARED SURFACE.
+> The dungeon Keeper uses the **same `HeroBody`**, swapped by the **same `HeroBodySwapper`**
+> (`DungeonHero.cs:126-127, 188, 215, 301` re-resolves its animator across that swap;
+> `DungeonCameraRig.cs:57-58` exists to survive it). So a WO-966 change to `:263` for the Mage
+> **also changes the dungeon Mage's visible facing**, against a camera that now compensates for nothing.
+> **`:263` has no lane. It is ONE edit, gated once, verified in BOTH scenes before commit.**
+
+> ## ⚠ THE AT-REST CAPTURE DOES NOT CLEAR THIS TICKET.
+> The 2026-08-14 capture showing `rigYaw - heroYaw = 0` ran at `Time.timeScale = 0.00` in the TOWN
+> scene. **A constant offset and a correct rig are indistinguishable at zero velocity** — `FaceHeading`
+> early-returns below `sqrMagnitude < 0.0025f` (`DungeonHero.cs:707`) and `bodyErr` early-returns below
+> `velMag 0.2` (`HeroGaitForensics.cs:160`). Both instruments are silent exactly where the bug lives.
+> **Correct-under-movement is UNPROVEN.** Requires WO-988 (the capture harness certifies frozen-clock,
+> wrong-scene runs) before an acceptance capture means anything.
+
+> ## ⚠ INSTRUMENTATION GAP — the dungeon facing instrument reads a HARD ZERO regardless of truth.
+> `HeroGaitForensics` computes `velMag` from `_loco.Velocity` (`:132-134`) and gates `bodyErr` on
+> `velMag > 0.2f` (`:160`). In a dungeon, `HeroLocomotion.cs:972-975` **forces `Velocity = Vector3.zero`
+> every frame** because `DungeonHero`'s CharacterController owns the transform. So `velMag` is 0,
+> `heading` freezes at `_lastHeading`, and **`bodyErr` reports 0 whether or not the body is wrong.**
+> This is a §1.4b hollow field in the very instrument that would prove this ticket.
+> **Feed it the measured root speed** (the same source `HeroLocomotion.cs:27-31` already uses for the
+> animator) **BEFORE trusting any dungeon facing number.**
+
 ## The remaining fragment
 
 `DungeonHero.cs` still carries a `KeeperRelative` branch that applies `ModelYawOffset = 90f` — a
