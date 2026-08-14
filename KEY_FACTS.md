@@ -38,6 +38,65 @@
 - **The operating dream:** the owner plays and rules; agents build in parallel lanes; every bug is
   a captured line; every system self-reports; the fleet + web bots verify before she ever has to.
 
+## Latest (2026-08-14) — board reconciled, three hollow-assertion bugs fixed, dungeons re-baked
+- **Branch `wip/village2-and-f8-tickets`, HEAD `e9c93415`, tree CLEAN, local == origin +5 UNPUSHED** (push
+  held for the owner). Save schema still **v38** (`SaveSchema.cs:41`). Gates over the settled tree, read off
+  the markers: `Builds/gate-postbake.log` → `COMPILE_GATE_OK` (0 `error CS`) ·
+  `Builds/regression-postbake.log` → **`REGRESSION_OK 159/159 suites`**.
+- **⚠ THE BOARD WAS LYING ABOUT 13 TICKETS.** `BOARD.html` is derived from the `**Status:**` lines, so it
+  was routing agents to rebuild finished systems. **12 WOs had SHIPPED in git while still reading READY or
+  "awaiting batch-gate + commit"** — 965/967/968/969/970/971/972/1014/1015/1016/1017/1019, each now citing
+  its sha. **WO-1020 is bannered SUPERSEDED by WO-972**: both were minted off the SAME owner capture (F8
+  seq 2327) — the UI seat minted a duplicate while the CLI seat shipped the fix. Board moved Ready 511 →
+  499, Done 235 → 246, Unlabeled 0. ⚠ **No `.RESULT.md` was fabricated** (RULES 68) — what was verified is
+  the shipping commit, not the behaviour, so the RESULT debt stays on the books.
+- **⚠ THE DUNGEON RE-BAKE REVERTED AN OWNER RULING, AND THAT IS THE TRANSFERABLE LESSON.** WO-957 changed 13
+  `"Extract"` labels to `"Leave"` **in the emitted LAYOUTS** — but layouts are GENERATED from the graphs, and
+  the graphs still said `"Extract"`. `DungeonBaker.cs:1703` reads `IsNullOrEmpty(e.label) ? "Leave" : e.label`,
+  so the code default is right but **an authored label WINS**. Proven by capture: the first bake stamped
+  `label='Extract'` **×15**, `label='Leave'` **×0**. Fixed at the layer that owns it — the 13 labels are now
+  `"Leave"` in the three content **GRAPHS**, both dual copies. Re-baked: `label='Leave'` ×13, the only
+  remaining `Extract` being the two control fixtures. **This is the "a builder-only row is silently dropped
+  by the next regenerate" class applied to an owner pin — fix the SOURCE, never the generated output.**
+- **Bake result:** `COMPOSE_ALL_OK 7/7`, zero mate failures, **5 PathComplete**. The 2 PathPartial are exactly
+  `dg_descent_probe` + `dg_stair_rig` — the WO-930 control group, deliberately still on the old pair model.
+  Layouts are now `version 2` and every one emits `exitRoomId` — but as the **`entry` FALLBACK**, so WHERE the
+  one true exit sits is still an owner design pick. Scenes are BINARY (batchmode `SaveScene` ignores
+  ForceText) — verified NOT corruption: SerializedFile header + `6000.4.8f1` present, and git reports
+  `Bin -> Bin`, i.e. they were already binary before this bake.
+- **NEW WOs minted (banner bumped in the same edit each time, next free = 983):**
+  **981** = `HeroProgression`'s starter latch is **not persisted — it is INFERRED from hero level** at
+  `RestoreFromSave:202` on the assumption a hero past level 1 already got the gift, *which is exactly what
+  WO-977 disproves*; so WO-977's retry holds in-session only. §B: the per-level grant at `:259` silently drops
+  a point on a null `SkillSystem`, **every level**. **982** = `GraphDungeonComposer` **emits to StreamingAssets
+  ONLY**, so every bake silently drifts the dual copy and **Resources — the copy that WINS at runtime — keeps
+  the stale one**. ⚠ **This is the ROOT of the 08-08 incident `5f0e23aa` treated as a one-off**; the file was
+  fixed, the mechanism was not, and it reproduced across all 7 layouts the next time anyone baked. Nothing
+  catches it — `RoomForgeRegression.cs:162` is a hardcoded 3-file list with no `dg_*` in it (audit F24).
+- **Three hollow-assertion bugs closed** (from `docs/reference/HOLLOW_ASSERTIONS_REGISTRY.md`): **WO-977**
+  starter skill points (grant first, latch on a MEASURED `AvailablePoints` delta) · **WO-978** four economy
+  callers logged the amount *requested* as though it were *credited* — now report measured before/after
+  deltas, **plus** a latch-before-grant in `DailyQuestRewardBridge:119` that could mark a daily permanently
+  claimed having paid nothing · **WO-979** — ⚠ **its stated premise was REFUTED**: `Bind`'s `hud` parameter was
+  never dereferenced anywhere, so wave feedback was never broken; only the trace was. Seam deleted, not "fixed".
+- **⚠ 159/159 WAS GREEN ON A TREE WHERE AN OWNER RULING HAD BEEN SILENTLY REVERTED.** The suite count did not
+  move before or after the bake that flipped 13 player-facing labels back to "Extract". Not one of 159 suites
+  noticed. **The suite is a RATCHET, not a reviewer** — it locks known invariants and cannot read new code.
+  This is the audit's own §0 shape ("every gate asserts a thing EXISTS, almost none assert it is CONSUMED")
+  demonstrated live, and it is the argument for an external read on state/money/latch changes.
+- **WO-980 ruled a DEFECT, not atmosphere** (opened the PNGs): in `docs/proof/2026-08-10-dungeon-headed-AFTER-camera-fix/`
+  the hero is clipped at the bottom edge and rendered BEHIND the Talk/Bag buttons, and ~28% of `01_idle` is
+  void above the room. **Geometric, so it needs neither the owner's eyes nor a colour call** — but the FIX
+  needs a measured headed capture, not a constant picked off a screenshot (`DungeonCameraProfile`:
+  `CameraHeight 1.9` / `CameraDistance 3.2` / `LookAtHeight 1.5`). Same capture is WO-973's required first step.
+- **The "three tickets, one plume" collapses to TWO** — traced at source: `AmbientAuraPolicy.WithheldAmbientAuraKey`
+  is the single literal `"TreeofLifeAura_Aura"` (FireFlies, the Heart tree), which **WO-1002 genuinely closed**.
+  `Poi_NodeAura` is a DIFFERENT key → `Magic circle sun loop`, compared by exact key, so it is **never withheld**
+  and still plays on every POI beacon. **WO-946 is the live one** and is now bounded: retag, or use the policy's
+  existing `ShrinkInsteadOfWithhold` lever. ⚠ **WO-966 deliberately NOT touched** — the overnight report pins
+  the dungeon −90 root yaw as untouchable until ruled; two facing systems tuned against each other manufacture
+  a third bug.
+
 ## Latest (2026-08-10) — the wave-3 settle: 12 lane commits, 143/143 suites, five honest partials
 - **Anchor still `CANON_GROUND_TRUTH_2026-08-09.md`** — ⚠ its header is now WRONG on three facts
   (it claims HEAD `19a50616`, "NOT PUSHED", "63 commits ahead"). Read the tree, not that header.
