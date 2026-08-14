@@ -183,10 +183,11 @@ namespace DeNelle.Village.Hero
         /// which means "render no footer" — this is deliberately NOT defaulted, because a
         /// vendor whose shelf is not capped has nothing to promise.
         ///
-        /// PRESENTATION NOTE (outstanding, other lane): PartyShopVM/PartyShopPanelMvvm must
-        /// bind this the way they already bind <see cref="EmptyLineFor"/> (PartyShopVM.cs
-        /// EmptyLine property + the Status line / an extra row in the panel's list builder).
-        /// The DATA + this accessor are complete; the render wire is a two-line VM/View change.
+        /// WIRED 2026-08-14 (was dead copy — WEAPONS_DEEP_DIVE §3(e)): PartyShopVM.FooterLine
+        /// reads this during BuildBuyGear and PartyShopPanelMvvm.RebuildList renders it as a
+        /// footer row UNDER the last item. It is gated on the <c>thinnedByCap</c> out-flag of
+        /// <see cref="Resolve(string,string,int,IReadOnlyList{string},out bool)"/>, so a FULL
+        /// shelf shows nothing and an EMPTY shelf still shows <see cref="EmptyLineFor"/> only.
         /// </summary>
         public static string FooterLineFor(string vendorContext) =>
             VendorRegistry.FooterLineFor(vendorContext);
@@ -245,7 +246,21 @@ namespace DeNelle.Village.Hero
         /// </summary>
         public static IReadOnlyList<VendorWare> Resolve(string vendorContext, string job, int level,
                                                         IReadOnlyList<string> rosterOverride = null)
+            => Resolve(vendorContext, job, level, rosterOverride, out _);
+
+        /// <summary>
+        /// WO-860 Part B4 (render wire) — the same resolve, additionally reporting whether
+        /// <c>perLevelCap</c> actually DROPPED rows from this shelf. That bit is the ONLY
+        /// licence to render <see cref="FooterLineFor"/>: a shelf the cap did not thin has
+        /// nothing to promise, and a shelf that came back EMPTY is the emptyLine's case.
+        /// Computed inside <see cref="EmitCapped"/> (which is the only place that knows the
+        /// pre-cap candidate count) — never re-derived by the View, which cannot see it.
+        /// </summary>
+        public static IReadOnlyList<VendorWare> Resolve(string vendorContext, string job, int level,
+                                                        IReadOnlyList<string> rosterOverride,
+                                                        out bool thinnedByCap)
         {
+            int cappedDrops = 0;
             var result = new List<VendorWare>();
             var vendor = VendorRegistry.Find(vendorContext);
             var categories = (vendor != null && vendor.Categories != null && vendor.Categories.Count > 0)
@@ -303,7 +318,7 @@ namespace DeNelle.Village.Hero
                             picked.Add(new ShelfPick(w.id, ReqLevel(w.req), w.damageMult,
                                 classOk && levelOk, LockReason(classOk, levelOk, Cap(w.job), w.req)));
                         });
-                        EmitCapped(result, VendorWareKind.Weapon, picked, perLevelCap, "weapon");
+                        cappedDrops += EmitCapped(result, VendorWareKind.Weapon, picked, perLevelCap, "weapon");
                         break;
                     }
 
@@ -331,7 +346,7 @@ namespace DeNelle.Village.Hero
                                 classOk && levelOk,
                                 LockReason(classOk, levelOk, wt.Length == 0 ? "other heroes" : Cap(wt) + " armor", a.req)));
                         });
-                        EmitCapped(result, VendorWareKind.Armor, picked, perLevelCap, "armor");
+                        cappedDrops += EmitCapped(result, VendorWareKind.Armor, picked, perLevelCap, "armor");
                         break;
                     }
 
@@ -415,6 +430,26 @@ namespace DeNelle.Village.Hero
                 FlowTrace.Warn("Vendor",
                     $"{vendorId} resolved EMPTY - authored emptyLine shown: \"{EmptyLineFor(vendorContext)}\"");
 
+            // ── WO-860 B4 footer decision, traced so the THREE shelf states are distinguishable
+            //    in the log without a screenshot. §1.4b: each branch prints a DIFFERENT line and
+            //    names the reason — a single "footer:<bool>" line would prove nothing about WHY.
+            thinnedByCap = cappedDrops > 0 && result.Count > 0;
+            string footer = FooterLineFor(vendorContext);
+            if (result.Count == 0)
+                FlowTrace.Step("Vendor",
+                    $"{vendorId} footer SUPPRESSED (shelf EMPTY - emptyLine owns this state; cap dropped {cappedDrops}).");
+            else if (cappedDrops <= 0)
+                FlowTrace.Step("Vendor",
+                    $"{vendorId} footer SUPPRESSED (shelf FULL - perLevelCap={perLevelCap} dropped 0 of " +
+                    $"{result.Count} shipped row(s); nothing to explain).");
+            else if (string.IsNullOrEmpty(footer))
+                FlowTrace.Warn("Vendor",
+                    $"{vendorId} shelf THINNED (cap dropped {cappedDrops}) but vendors.json authors NO " +
+                    "footerLine - the player gets no explanation for the short shelf.");
+            else
+                FlowTrace.Step("Vendor",
+                    $"{vendorId} footer SHOWN under {result.Count} row(s) (cap dropped {cappedDrops}): \"{footer}\"");
+
             return result;
         }
 
@@ -466,17 +501,19 @@ namespace DeNelle.Village.Hero
         /// every class is SEEDED its starter off-hand (WO-860 A3), but if the owner wants a
         /// shield always purchasable, the fix is a per-slot bucket key here, not a sort tweak.
         /// </summary>
-        private static void EmitCapped(List<VendorWare> result, VendorWareKind kind,
-                                       List<ShelfPick> picked, int perLevelCap, string label)
+        /// <summary>Returns the number of candidate rows the cap DROPPED (0 when uncapped or
+        /// when every bucket fit) — the bit WO-860 B4's footer render is gated on.</summary>
+        private static int EmitCapped(List<VendorWare> result, VendorWareKind kind,
+                                      List<ShelfPick> picked, int perLevelCap, string label)
         {
-            if (picked == null || picked.Count == 0) return;
+            if (picked == null || picked.Count == 0) return 0;
 
             if (perLevelCap <= 0)
             {
                 // Uncapped (pre-860 behaviour): emit in catalog order, untouched.
                 foreach (var p in picked)
                     result.Add(new VendorWare(kind, p.Id, p.Eligible, p.LockReason));
-                return;
+                return 0;
             }
 
             var byLevel = new Dictionary<int, List<ShelfPick>>();
@@ -508,6 +545,8 @@ namespace DeNelle.Village.Hero
                 FlowTrace.Step("Vendor",
                     $"perLevelCap={perLevelCap} on {label}: kept {picked.Count - dropped}/{picked.Count} " +
                     $"row(s) across {levels.Count} level bucket(s) (power desc, id ordinal asc).");
+
+            return dropped;
         }
 
         /// <summary>The rank comparison of rule 2+3 above (power DESC, then id ORDINAL ASC).</summary>

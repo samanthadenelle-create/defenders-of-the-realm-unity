@@ -753,6 +753,15 @@ namespace DeNelle.Village.Hero
                     ? "Nothing to sell."
                     : (!string.IsNullOrEmpty(_vm.EmptyLine) ? _vm.EmptyLine : "No wares in stock."));
             }
+            else if (!string.IsNullOrEmpty(_vm.FooterLine))
+            {
+                // WO-860 B4 / WEAPONS_DEEP_DIVE §3(e): the shelf HAS rows but perLevelCap thinned
+                // it, so the vendor's authored "come back after you level up" line explains the
+                // short list. The VM already decided this (FooterLine is null on a FULL shelf and
+                // null on an EMPTY one) — the View only renders. DISPLAY-ONLY: no button, no
+                // raycast target, so MinTouchPx does not apply.
+                CreateFooterNoteRow(listRoot, _vm.FooterLine);
+            }
 
             FinalizeScroll();
         }
@@ -774,6 +783,40 @@ namespace DeNelle.Village.Hero
             t.raycastTarget = false;
             ElarionUiKit.FitSingleLine(t);   // flag_06: authored empty-lines fit the row
         }
+
+        // WO-860 B4: the capped-shelf FOOTER note — a display-only line that sits UNDER the last
+        // item row. It is deliberately shaped so it can NEVER be mistaken for a purchasable row
+        // and never read as an error, WITHOUT relying on colour (the owner is red/green
+        // colourblind — CLAUDE.md / owner-colorblind memory). Three non-hue cues carry it:
+        //   POSITION — always last, below every item row;
+        //   SHAPE    — no row plate, no icon, no price column, centred + italic (item rows are
+        //              left-aligned text on a plate with a right-hand price);
+        //   TEXT     — the vendor's authored sentence, which states the reason in words.
+        // Wrapped (not FitSingleLine'd) because the authored copy is a full sentence; shrinking
+        // it to one line is what would make it unreadable on a phone.
+        private void CreateFooterNoteRow(Transform parent, string msg)
+        {
+            var go = new GameObject("ShelfFooterNote", typeof(TMPro.TextMeshProUGUI), typeof(LayoutElement));
+            go.transform.SetParent(parent, false);
+            var le = go.GetComponent<LayoutElement>();
+            le.preferredHeight = FooterNoteHeightPx;
+            le.minHeight = FooterNoteHeightPx;
+            var t = go.GetComponent<TMPro.TextMeshProUGUI>();
+            ElarionUiKit.EnsureFont(t);
+            t.text = "— " + msg;          // em-dash lead-in: a NOTE marker, not a shop row
+            t.fontSize = ElarionUi.FontMicro;
+            t.fontStyle = TMPro.FontStyles.Italic;
+            t.color = ElarionUi.ParchmentDim;
+            t.alignment = TMPro.TextAlignmentOptions.Center;
+            t.textWrappingMode = TMPro.TextWrappingModes.Normal;
+            t.overflowMode = TMPro.TextOverflowModes.Truncate;
+            t.raycastTarget = false;      // display-only: never eats a tap meant for a row
+            FlowTrace.Step("Store",
+                $"PartyShop rendered capped-shelf FOOTER note under the list: \"{msg}\"");
+        }
+
+        // Two lines of FontMicro plus breathing room — the authored footer copy is a sentence.
+        private const float FooterNoteHeightPx = 64f;
 
         private void HighlightSelectedRow()
         {

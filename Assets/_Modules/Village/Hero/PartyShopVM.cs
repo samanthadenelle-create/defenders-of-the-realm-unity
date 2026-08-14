@@ -337,6 +337,19 @@ namespace DeNelle.Village.Hero
         /// this instead of a raw "No wares in stock." when a query resolves 0 items.</summary>
         public string EmptyLine { get; }
 
+        /// <summary>
+        /// WO-860 B4 / WEAPONS_DEEP_DIVE §3(e): the vendor's AUTHORED "come back after you level
+        /// up for new stock" line, or NULL meaning "render no footer". Unlike <see cref="EmptyLine"/>
+        /// this is NOT constant for the shop — it is recomputed every <see cref="Rebuild"/> because
+        /// it describes the CURRENT shelf. Exactly three states, and the View must keep them
+        /// distinguishable:
+        ///   1. shelf FULL (the cap dropped nothing)      -> FooterLine == null, no footer row.
+        ///   2. shelf THINNED by perLevelCap, rows &gt; 0 -> FooterLine == the authored line.
+        ///   3. shelf EMPTY                               -> FooterLine == null; EmptyLine owns it.
+        /// Null is also the answer for a vendor that authors no footerLine, and for the SELL tab.
+        /// </summary>
+        public string FooterLine { get; private set; }
+
         /// <summary>Whether this vendor offers BOTH gear kinds (so the category selector is useful).
         /// A weapon-only or armor-only vendor pins the category and hides the selector; non-gear
         /// layouts (goods/jeweler, WO-598) never show the weapons/armor selector at all.</summary>
@@ -723,6 +736,10 @@ namespace DeNelle.Village.Hero
             _rowDetails.Clear();
             _currentStock.Clear();
             _availableTypes.Clear();
+            // WO-860 B4: the footer describes THIS shelf, so it starts cleared every rebuild.
+            // Only BuildBuyGear (the only layout the perLevelCap thins) ever sets it — SELL and
+            // the goods/jeweler shelves therefore never carry a stale footer from a prior tab.
+            FooterLine = null;
 
             if (_store == null)
             {
@@ -759,7 +776,10 @@ namespace DeNelle.Village.Hero
             // fix) + class/level eligibility into one list. SHOW-ALL survives for legitimate
             // aspiration: level-gated (and roster-obtainable wrong-class) items come back locked
             // with a LockReason ("Requires Lv X"), so progression still shows.
-            var shoppable = VendorStockResolver.Resolve(_vendorContext, job, level);
+            // WO-860 B4: the out-flag is the ONLY honest source for "the cap thinned this shelf" —
+            // the VM cannot re-derive it, because by the time it sees the list the dropped rows
+            // are already gone. See FooterLine for the three states this feeds.
+            var shoppable = VendorStockResolver.Resolve(_vendorContext, job, level, null, out bool thinnedByCap);
 
             // Category "dropdown": ALL shows the combined list ARMOR-FIRST then weapons (armor/
             // weapons-first, STORE_EQUIP_SPEC); WEAPONS / ARMOR narrow to one kind. Craftables
@@ -848,6 +868,16 @@ namespace DeNelle.Village.Hero
             Status = _items.Count == 0
                 ? EmptyLine
                 : "Tap a row to BUY (auto-equips) or EQUIP what you own.";
+
+            // WO-860 B4 / WEAPONS_DEEP_DIVE §3(e) — the dead-copy wire. A Knight at the Forge sees
+            // 2 rows because perLevelCap=2 thinned the shelf; without this he gets no explanation
+            // and the shop reads as broken. Gated on BOTH conditions so the three states stay
+            // distinguishable: rows>0 (an empty shelf is EmptyLine's case, never the footer's) AND
+            // thinnedByCap (a full shelf has nothing to promise). _items.Count is used rather than
+            // shoppable.Count because the WO-501 TYPE narrow can drop rows after the resolve.
+            FooterLine = (_items.Count > 0 && thinnedByCap)
+                ? VendorStockResolver.FooterLineFor(_vendorContext)
+                : null;
 
             // ?12: no silent blank - record WHY the BUY list is empty (data vs filtered).
             if (_items.Count == 0)
