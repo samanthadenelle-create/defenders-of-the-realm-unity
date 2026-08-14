@@ -1,14 +1,39 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ RECONCILED 2026-08-14 (CLI): main line next free = **993**. **782–859 + 900–992 CONSUMED.**
+> ## ⚠ RECONCILED 2026-08-14 (CLI): main line next free = **994**. **782–859 + 900–993 CONSUMED.**
+> - **993** = **PETS ARE DESCOPED TO HELPERS — retire the pet PHYSICAL-PRESENCE stack (aura + progression),
+>   but DO NOT TOUCH `PetHeroLeash`.** OWNER RULING 2026-08-14, verbatim: *"we dont use the pet aura
+>   anymore since we descoped them to simply helpers and not physical items around us"*, *"same with pet
+>   progression"*, *"auracontroller can be retired"*. Echoes are **systems** (harvest lanes, flat defense
+>   %), not companions that stand next to you — so the aura/level-visual surface is dead **by design**,
+>   not by accident.
+>   **`PetHeroLeash` GOES TOO — owner ruling, same breath: *"pet leash gone too"*.**
+>   ⚠ **BUT IT HAS 47 NON-SELF REFERENCES AND IS THE TUTORIAL GUIDE LEAD** (`GuideLeadMovementRegression`,
+>   `TutorialFlow.SetLeadTarget` — the WO-962 latch feeds it). The pet plumbing was REPURPOSED into the
+>   thing that walks the player through the FTUE. **So removing it is NOT a delete, it is a FTUE change:
+>   the guided walk must be given a replacement lead or the step must be removed, IN THE SAME CHANGE.**
+>   Deleting the symbol and leaving the tutorial step standing produces a step that silently stops
+>   leading — a dead FTUE with a green gate. Retire by SYMBOL, never by folder.
+>   Clean to retire (verified 2026-08-14): `AuraController` — 1 non-self ref (`GearAura.cs:8`);
+>   `PetAuraVFX` — 1 non-self ref and it is a **comment** (`ParticlePackVfxBatchBuilder.cs:1055`);
+>   `PetBrain` — 2 refs, **both inside `AuraController`**, so they go to zero with it.
+>   ⚠ Also void: WO-128's acceptance criterion *"WO-58 aura — BUILT — DO NOT BREAK"*, which has been
+>   protecting something that **never ran** (`WORK_ORDER_58.RESULT.md:38-43` claims `PetProgression`
+>   calls `SetLevel`/`PlayLevelUpBurst`; **neither call exists at HEAD** — a hollow assertion caught on
+>   2026-05-30 and never closed). Orphans the `Aura_PetLevel1/2/3` catalog keys and the pet registrant in
+>   `VfxAuraProximityCuller`. READY.
 > - **992** = **SIX classes ship in every build, compile clean, and are NEVER INSTANTIATED — dead code
 >   the legacy-close does NOT remove.** Found by the 2026-08-14 phantom sweep: `WeatherManager`,
 >   `TorchFireController`, `AuraController` (WO-52/55/58), `BattlePassManager`, `CryptoPaymentManager`,
 >   `CosmeticApplier` (WO-73), plus the WO-87 Cinemachine controller. Each has an honest RESULT file
 >   that flagged *"scene wiring = manual editor work"*; **that wiring never happened and nobody noticed
->   for ~2.5 months.** ⚠ **CLOSING THE TICKETS AS LEGACY DOES NOT DELETE THE CODE** — it removes the
->   only record of why the code is there, which is strictly worse than leaving the tickets open. Decide
->   per class: WIRE IT or DELETE IT. ⚠ **METHOD NOTE, load-bearing:** Unity serialises script refs by
+>   for ~2.5 months.** ⚠ **WHATEVER THOSE OLD TICKETS RESOLVE TO, IT DOES NOT TOUCH THE CODE** — closing
+>   one removes the only record of why the code is there, so the finding is hoisted here instead. Decide
+>   per class: WIRE IT or DELETE IT. **Owner dispositions 2026-08-14:** `WeatherManager` = **KEEP**
+>   (*"will play into the zones for the map"*); `TorchFireController` + `AuraController` = **RESEARCH
+>   FIRST** (she suspects the latter should target towers/portals, but WO-58's own title is "pet aura
+>   system" — expect a divergence); the other three she reads as *"ideas not implementations yet"* —
+>   confirm before deleting, and ⚠ do NOT wire `CryptoPaymentManager` without an explicit owner call. ⚠ **METHOD NOTE, load-bearing:** Unity serialises script refs by
 >   **GUID**, so a class-NAME grep across `.unity`/`.prefab` finds nothing and reads as "no problem".
 >   Prove wiring by reading the `.cs.meta` guid and searching THAT across scenes/prefabs. WO-87's shape
 >   is the giveaway: controller exists, GUID in no scene, and the builder line that would seat it is
