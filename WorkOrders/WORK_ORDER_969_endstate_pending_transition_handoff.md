@@ -1,6 +1,6 @@
 # WORK ORDER 969 — Opening Pause over the victory summary destroys the pending home return
 
-**Status:** READY TO IMPLEMENT (code landed in this lane; batch-gate + commit owned by the orchestrator)
+**Status:** DONE — shipped `9e07db86` ("fix(arena): WO-969"); owner felt-verify owed (PO closes, §13). RESULT file still owed (not fabricated). *(Status corrected 2026-08-14: the line still read READY after the commit landed.)*
 **Silo:** UI / Arena return path
 **Source:** Owner F8 seq **2315**, scene `Dungeon_HealersCottage`, 2026-08-10
 **Stage:** CLI implemented + edit-only (no Unity run, no gate, no commit in this lane)

@@ -1,6 +1,13 @@
 # WORK ORDER 1016 — HIGHEST: hero locomotion is dead in dungeons (slides in idle; vel always 0.00)
 
-**Status:** READY TO IMPLEMENT — **P0 movement blocker REPORTED FIXED by CLI in a new build (owner, 2026-08-10); WO-1014's walk beat is UNBLOCKED.** ⚠ Scope check before closing: this WO holds THREE defects — §1c total-immobility (the reported fix), §1 dungeon slide-in-idle (`vel=0.00` while position advances), §1b frozen dungeon camera (`camYaw` pinned, `dCam=0.0`). Confirm §1 and §1b with a fresh dungeon capture before marking DONE; do not let the movement fix close the animation + camera halves. Was HIGHEST per owner ruling F8 seq=2312.**
+**Status:** DONE — all THREE defects addressed and capture-proven. §1c total-immobility + §1
+slide-in-idle (`vel=0.00` while position advanced) + §1b frozen dungeon camera all land with
+`1343f280` *feat(dungeon): WO-1016* (locomotion ownership/velocity basis + the self-healing dungeon
+camera). **Proof = a HEADED re-run, not a code read:** `docs/proof/2026-08-10-dungeon-headed-AFTER-camera-fix/`
+— 43 heartbeats, **15 distinct rig poses** (the camera is no longer pinned), and the self-heal line fired
+once, naming the DESTROYED `CinemachineFollow` verbatim.
+⚠ Caveat preserved: what the now-working camera SHOWS — the **framing** question — is deliberately NOT
+closed here; it is carried separately as **WO-980**. Was HIGHEST per owner ruling F8 seq=2312.
 **Minted:** 2026-08-10 (UI seat) — provenance stack bumped 1016 → 1017 in the same edit
 **Lane:** Hero locomotion / animation. Gameplay-felt P0.
 **Provenance:** owner F8 capture **seq=2312**, 2026-08-10 18:33, scene `Dungeon_HealersCottage`,

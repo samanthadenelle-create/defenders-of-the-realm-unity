@@ -1,6 +1,6 @@
 # WORK ORDER 965 — F8 inbox is a QUEUE: no owner capture is ever dropped again
 
-**Status:** DONE (implemented 2026-08-10; awaiting batch-gate + commit by the sole committer)
+**Status:** DONE — shipped `96100bc2` ("fix(harness): WO-965 - the F8 inbox is a QUEUE"). RESULT file still owed (not fabricated). *(Status corrected 2026-08-14: the old line still said "awaiting batch-gate + commit" after the commit landed.)*
 **Silo:** Tooling / harness (no Unity, no game code — scripts + docs only)
 **Lane:** isolated — `.claude/**` + `logs/f8-inbox/README.md` + `.cursor/rules/**` + CLAUDE.md §14
 **Minted:** 2026-08-10 (number off the `CLI_LANES_WO_NUMBERS.md` banner; banner bumped 965 → 966 in the same edit)

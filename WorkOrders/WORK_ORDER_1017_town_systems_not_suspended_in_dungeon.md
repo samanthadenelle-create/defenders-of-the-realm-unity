@@ -1,6 +1,8 @@
 # WORK ORDER 1017 — Town systems keep running inside dungeon scenes (suspension gate never fires)
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — shipped `bb3293a3` *fix(world): WO-1017* (the `SuspendAndResume` gate now fires in
+dungeon scenes). ⚠ Caveat: the `TownActivityProbe` invariant is the proof surface — a future dungeon
+capture printing `suspended=False` in a non-hub scene reopens this.
 **Minted:** 2026-08-10 (UI seat) — provenance stack bumped 1017 → 1018 in the same edit
 **Lane:** Village/world systems + scene gating.
 **Provenance:** F8 capture **seq=2314**, 2026-08-10 18:35, scene `Dungeon_HealersCottage`. Kind=**error**

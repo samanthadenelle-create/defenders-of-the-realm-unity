@@ -1,11 +1,34 @@
 # WORK ORDER 1020 — Walls cannot be built beside each other (adjacency placement blocked)
 
-**Status:** READY TO IMPLEMENT — **HIGH** (a wall that cannot form a run is not a wall)
+**Status:** SUPERSEDED by `WorkOrders/WORK_ORDER_972_walls_cannot_be_built_beside_each_other.md`
+(shipped `66b5628c`). Body frozen below as minted — banner only, per CLAUDE.md §15.
 **Minted:** 2026-08-10 (UI seat) — provenance stack bumped 1020 → 1021 in the same edit
 **Lane:** Build placement VALIDATION (logic). ⚠ **Deliberately NOT in WO-1010**, which is build-UI
 layout only and forbids placement-logic changes. Same screen, different layer.
 **Provenance:** owner F8 **seq=2327**, 2026-08-10 21:05, `Main_Castle_Overworld`, verbatim:
 **"cannot build walls beside each other"**. Capture: `logs/f8-inbox/capture-20260810-210535-seq2327.md`.
+
+---
+
+## ⚠ SUPERSEDED 2026-08-14 — DUPLICATE MINT. Surviving ticket: `WorkOrders/WORK_ORDER_972_walls_cannot_be_built_beside_each_other.md`
+
+**Why:** this is the SAME defect, from the SAME owner capture (F8 **seq 2327**, `Main_Castle_Overworld`,
+verbatim *"cannot build walls beside each other"*), as WO-972 — which the CLI seat had already shipped at
+`66b5628c`. The UI seat minted 1020 in parallel without knowing. No work is lost; nothing here is a
+separate defect.
+
+*(Reference the surviving ticket by FULL FILENAME, never a bare number — three WO numbers in this repo
+already have two claimants each, per `docs/reference/WO_TRUE_STATUS_2026-08-08.md` §2, so "WO-972" alone
+is not a reference.)*
+
+**What the surviving ticket delivered:** a wall now claims **ONE cell** instead of a 2x2 block. The root
+was `MeasureUprightFootprintMetres` collapsing the mesh to `Max(x, z)`, which `FootprintCells` then
+**ceilinged AND squared** — so a 1% overshoot (3.03 m measured against a 3.00 m cell) rounded to 2 and
+squared to a 4-cell claim, making adjacency impossible. Covered by regression
+`WallAdjacencyRegression [wall-adjacency]`.
+
+**Everything below is the original 1020 mint, frozen as written (CLAUDE.md §15) — read it as history, not
+as an open instruction.**
 
 ---
 

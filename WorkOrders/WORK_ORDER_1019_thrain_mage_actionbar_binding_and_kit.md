@@ -1,6 +1,9 @@
 # WORK ORDER 1019 — Thrain (Mage) action bar: stale hero-switch binding + the single-target spell kit
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — shipped in TWO parts: **Part A (the rebind defect)** = `cb9572f5` (PrefsKey /
+hero-switch binding), **Part B (the spell kit)** = `21040296` — **DATA ONLY** (`abilities.json`; no code
+change). ⚠ Caveat: Part B is authored data, so it owes an owner felt-verify of the Mage kit in play
+(lure-and-kill-one-at-a-time feel, poison / drain / fireball / thunder), not just a green gate.
 **Minted:** 2026-08-10 (UI seat) — provenance stack bumped 1019 → 1020 in the same edit
 **Lane:** HUD action bar (binding) + abilities data (kit). Two parts: **A = defect**, **B = design**.
 **Provenance:** owner felt-test 2026-08-10, verbatim: *"can you review the default values for thrain in

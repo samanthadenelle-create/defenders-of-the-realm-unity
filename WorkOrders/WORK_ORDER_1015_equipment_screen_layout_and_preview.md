@@ -1,6 +1,9 @@
 # WORK ORDER 1015 — Equipment/paperdoll screen: empty preview, overprinted slots, dead space, and the GLOBAL rogue "Orient" button
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — shipped `ac0667a4` *fix(ui): WO-1015*.
+⚠ Caveat: this is a **presentation** fix (E1–E6); owner felt-verify of the paperdoll screen still owes a
+verdict, and the E1 "Orient is global — assume more screens" sweep stays a standing check on any screen
+not yet re-captured.
 **Minted:** 2026-08-10 (UI seat) — provenance stack bumped 1015 → 1016 in the same edit
 **Lane:** HUD/UI presentation. **No gear/stat/equip LOGIC changes** — the data is right, the screen is wrong.
 **Provenance:** owner felt-test capture 2026-08-10 ("this is the weapon display screen") — the

@@ -1,6 +1,11 @@
 # WORK ORDER 1014 — Tutorial narrative coherence: ONE guide, one identity, one arc
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — shipped `d10e9e27` *fix(tutorial): WO-1014 - ONE tutorial script, one guide identity*.
+⚠ Caveats carried, not flattened: the §5 / §2b **guide-NAME ruling is still the owner's** (the fix stops
+the affinity field leaking as a name; it does not author a name), and the §1c/§1g presentation notes
+(guide portrait art, `Echoes 1/6` chip overlapping Skip, Skip moving off-canvas) plus the §1e
+`Poi_NodeAura` VFX question are **not** closed by this commit — they belong to their own tickets/owner
+calls. Owner felt-verify still owes the first-3-minutes verdict (§4 last box).
 **Minted:** 2026-08-10 (UI seat) — provenance stack bumped 1014 → 1015 in the same edit
 **Lane:** Tutorial content/narrative + guide behaviour. **Companion to WO-1012** (which owns the
 presentation kit + pacing); this WO owns WHO THE GUIDE IS and WHAT THE SCRIPT SAYS.

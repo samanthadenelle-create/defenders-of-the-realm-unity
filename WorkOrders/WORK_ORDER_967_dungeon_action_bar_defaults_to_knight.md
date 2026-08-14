@@ -1,6 +1,6 @@
 # WORK ORDER 967 — The dungeon action bar defaults to the KNIGHT kit (hardcoded literal)
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — shipped `70eaf1c6` ("fix(hud): WO-967"); owner felt-verify owed (PO closes, §13). RESULT file still owed (not fabricated). *(Status corrected 2026-08-14: the line still read READY after the commit landed.)*
 **Minted:** 2026-08-10 (F8 seq 2312 lane)
 **Silo:** HUD presentation (`DeNelle.Village/HUD`) — file-disjoint from the locomotion + tutorial lanes live on this same scene
 **Stage:** QA RCA complete → CLI implements → PO felt-verifies + closes

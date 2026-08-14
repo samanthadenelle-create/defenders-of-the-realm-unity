@@ -1,6 +1,6 @@
 # WORK ORDER 968 — Dungeon locomotion: mover ownership, dead camera basis, frozen camera
 
-**Status:** READY TO IMPLEMENT (instrumentation already landed in this WO's tree — see §6)
+**Status:** DONE — shipped `e3539f5b` (instrumentation) + `5e464578` (camera heal) + `c7761156` (PROVEN by a headed re-run). All four seams verified against `docs/proof/2026-08-10-dungeon-headed-AFTER-camera-fix/`: ONE transform owner, the animator tracks real movement, the stick basis is correct with no 180 inversion, and the camera heal fired once and worked. The **camera FRAMING** question the working camera then exposed is a SEPARATE ticket — **WO-980**, not this one. Owner felt-verify owed; RESULT file still owed (not fabricated). *(Status corrected 2026-08-14: the line still read READY after all three commits landed.)*
 **Priority:** **HIGHEST** (owner ruling, F8 seq 2312)
 **Scene:** `Dungeon_HealersCottage` (hand-built dungeon pipeline)
 **Silo:** Dungeons / Hero locomotion / Dungeon camera
