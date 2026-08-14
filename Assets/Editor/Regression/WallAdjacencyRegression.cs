@@ -71,6 +71,7 @@ namespace DeNelle.Editor.Regression
         private const string FactorySrc      = "Assets/_Modules/Village/Catalog/StructureFactory.cs";
         private const string ControllerSrc   = "Assets/_Modules/Village/BuildMode/BuildModeController.cs";
         private const string LoaderSrc       = "Assets/_Modules/Village/BuildMode/BaseLayoutLoader.cs";
+        private const string CardVmSrc       = "Assets/_Modules/Village/BuildMode/StructureCardVM.cs";
 
         /// <summary>The wall rows the palette + saves can produce (WO-948: wood builds, stone upgrades).</summary>
         private static readonly string[] WallIds = { "wall_wood", "wall_stone" };
@@ -336,6 +337,30 @@ namespace DeNelle.Editor.Regression
                 failures.Add("[wiring] " + FactorySrc + " has lost the WALL CLAIM proving line - the authored-vs-" +
                              "measured footprint would again be recorded nowhere, and the next wall-claim " +
                              "regression would start from zero evidence.");
+
+            // (6) The PLAYER-FACING footprint label reports the CLAIM, not a second measure of its
+            //     own. BuildStructureInfoPanel renders StructureCardVM.FootprintLabel as the
+            //     "Footprint" row; while it read MeasureUprightFootprintMetres it told the player
+            //     "2x2 cells" for a wall that placement claims as 1x1 - the panel contradicting the
+            //     grid is the same class of defect as seq 2327, just on the reporting side.
+            string cardVm = ReadStripped(CardVmSrc, failures);
+            if (cardVm != null)
+            {
+                if (!cardVm.Contains("MeasureClaimFootprintMetres"))
+                    failures.Add("[wiring] " + CardVmSrc + " no longer derives its Footprint label from " +
+                                 "MeasureClaimFootprintMetres - the info panel is measuring the mesh itself " +
+                                 "again, so a wall's card would read '2x2 cells' while placement claims 1x1.");
+                if (Regex.IsMatch(cardVm, @"MeasureUprightFootprintMetres"))
+                    failures.Add("[wiring] " + CardVmSrc + " still calls MeasureUprightFootprintMetres - the " +
+                                 "label must read the ONE claim authority, never a second divergent measure.");
+                // The label's fallback returns "1x1 cells", which is INDISTINGUISHABLE on screen
+                // from a genuine 1x1 structure. INSTRUMENTATION_STANDARD 1.4b: a trace that cannot
+                // report failure is a bug, so the fallback must say it is a default, not a measure.
+                if (!Regex.IsMatch(cardVm, @"FlowTrace\s*\.\s*Once"))
+                    failures.Add("[wiring] " + CardVmSrc + " has lost the footprint-label fallback trace - a " +
+                                 "failed measure or a null PlacementGrid would silently render '1x1 cells', " +
+                                 "reading identically to a correct 1x1 in both the UI and the log.");
+            }
         }
 
         // ── helpers ───────────────────────────────────────────────────────────

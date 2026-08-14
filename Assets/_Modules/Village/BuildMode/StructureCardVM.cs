@@ -27,6 +27,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using DeNelle.Core.Catalog;
+using DeNelle.Core.Diagnostics;   // FlowTrace — the footprint label must be able to report FAILURE (§12 / §1.4b)
 using CoreCost = DeNelle.Core.Catalog.ResourceCost;
 
 namespace DeNelle.Village
@@ -244,12 +245,24 @@ namespace DeNelle.Village
             }
         }
 
+        /// <summary>
+        /// WO-972 follow-through — the panel states the CLAIM, derived from the same authority
+        /// placement claims with (StructureFactory.MeasureClaimFootprintMetres), NOT a second
+        /// measure of its own. WO-972 decoupled a Wall's grid claim from its fitted mesh
+        /// (BuildModeController.IsValidPlacement + BaseLayoutLoader both moved to the claim
+        /// metric), but this label was still reading the raw mesh measure — so a wall whose
+        /// 3.03 m body ceils to 2 cells would have told the player "2x2 cells" while placement
+        /// claimed 1x1. Identical output for every non-Wall row (the claim metric IS the
+        /// measured metric there); only a Wall's label changes, and it changes to the truth.
+        /// "Derive, don't hand-author" (ARCHITECTURE_PRINCIPLES §4): one claim authority,
+        /// read by everyone who reports it.
+        /// </summary>
         private static string FootprintFor(CatalogEntry e)
         {
             var grid = PlacementGrid.Instance;
             if (grid != null && e != null)
             {
-                float m = StructureFactory.MeasureUprightFootprintMetres(e);
+                float m = StructureFactory.MeasureClaimFootprintMetres(e);
                 if (m > 0f)
                 {
                     Vector2Int f = grid.FootprintCells(m);
@@ -257,6 +270,24 @@ namespace DeNelle.Village
                     int fy = Mathf.Max(1, f.y);
                     return fx + "x" + fy + " cells";
                 }
+                // §1.4b — a trace that cannot report failure is a bug. A non-positive claim
+                // is NOT a 1x1 structure; it means the measure failed. Say so, distinguishably.
+                FlowTrace.Once("Build", "footprint-label-unmeasured-" + (e.id ?? "<null>"),
+                    $"FOOTPRINT LABEL '{e.id}': the claim metric returned {m:0.###}m (non-positive), " +
+                    "so the info panel is showing the 1x1 DEFAULT, not a measured claim. The label " +
+                    "and the grid claim may disagree for this row.");
+            }
+            else
+            {
+                // The other way this label can be wrong, and it reads IDENTICALLY to a real
+                // 1x1 on screen: no PlacementGrid (info panel opened outside build mode) or no
+                // entry at all. Distinct message per cause so a capture never has to guess.
+                FlowTrace.Once("Build",
+                    "footprint-label-nogrid-" + (e != null ? e.id : "<null-entry>"),
+                    e == null
+                        ? "FOOTPRINT LABEL: no CatalogEntry - showing the 1x1 DEFAULT, not a measured claim."
+                        : $"FOOTPRINT LABEL '{e.id}': PlacementGrid.Instance is null (no grid to convert " +
+                          "metres to cells) - showing the 1x1 DEFAULT, not a measured claim.");
             }
             return "1x1 cells";
         }
