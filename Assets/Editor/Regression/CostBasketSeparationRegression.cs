@@ -19,8 +19,13 @@
 //
 // THE PINS ARE ANSWERED (owner, 2026-08-14); catalog v18 applies the first four and v19 the last:
 //   pin 1 "Crystals and Iron"        -> the magical pairing is crystals + iron.
-//   pin 2 "yes AoE healing"          -> healing IS magical: tower_healer + healing_caravan
-//                                       become crystals + iron (+ their existing food).
+//   pin 2 "yes AoE healing"          -> healing IS magical: the healing rows become crystals +
+//                                       iron (+ their existing food). NOTE: one of the two rows
+//                                       this pin was spent on -- the Healer Tower -- was RETIRED
+//                                       from the catalog at v20 (WO-990, owner 2026-08-14: "i do
+//                                       not know what the town healer is" -> "retire"), because it
+//                                       was in NO build category and no player could ever build it.
+//                                       'healing_caravan' is the surviving, reachable healing row.
 //   pin 3 "Crafting (can enbue       -> the jeweler is a CRAFTING shop, therefore REGULAR
 //         preciouus sstones future      today. The owner flagged a FUTURE release may let it
 //         release)"                     imbue precious stones -- a re-classification THEN.
@@ -31,7 +36,9 @@
 //         upgrades anre and       magic. Applied in catalog v19.
 //         can unlock new
 //         teirs of spells"
-// So MagicalIds holds FOUR magical ids and PendingPins is EMPTY.
+// So MagicalIds holds THREE magical ids and PendingPins is EMPTY. (It held FOUR until catalog
+// v20 retired the never-buildable Healer Tower row -- WO-990. The pin is still spent and still
+// binding; there is simply one fewer row for it to apply to.)
 //
 // WHY THE PENDING-PIN MECHANISM STAYS even at zero entries: when a row's side is
 // an open OWNER question, guessing it is exactly the inference-fix CLAUDE.md
@@ -67,7 +74,7 @@
 //                   exemption is stale and is hiding the next regression), and the
 //                   pins are logged distinguishably for the owner call.
 //   4 [applied]     every conversion already made (v17: tower_siege_tower; v18:
-//                   tower_wall_wizard, jeweler, tower_arcane_spire, tower_healer,
+//                   tower_wall_wizard, jeweler, tower_arcane_spire,
 //                   healing_caravan; v19: arcane-tower) stays on its ruled side -- regular rows carry
 //                   zero crystals, magical rows carry zero wood and non-zero
 //                   crystals -- and each basket TOTAL is unchanged from its
@@ -108,7 +115,9 @@ namespace DeNelle.Editor.Regression
         /// The PINNED magical/ethereal set -- rows allowed to carry crystals.
         /// POPULATED 2026-08-14 by the OWNER's answers to WO-947 section 4:
         ///   pin 1 verbatim "Crystals and Iron"  -> the magical basket is crystals + iron, never wood.
-        ///   pin 2 verbatim "yes AoE healing"    -> healing IS magical, so both healing rows are here.
+        ///   pin 2 verbatim "yes AoE healing"    -> healing IS magical. This pin covered TWO rows; only
+        ///                   'healing_caravan' remains, because catalog v20 RETIRED the never-buildable
+        ///                   Healer Tower row (WO-990, owner ruling 2026-08-14). Do not re-add it here.
         ///   pin 5 verbatim "cathedral of magic is where all magic upgrades anre and can unlock new
         ///                   teirs of spells"    -> 'arcane-tower' is the ENGINE of magical
         ///                   progression, not a vendor that deals in magic. Applied catalog v19.
@@ -118,8 +127,9 @@ namespace DeNelle.Editor.Regression
             new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
                 "tower_arcane_spire",   // element Aether / behaviorId ArcaneTower / projectileStyle "spell"
-                "tower_healer",         // owner 2026-08-14 pin 2: "yes AoE healing" -- healing is magical
-                "healing_caravan",      // same ruling; moves with tower_healer
+                "healing_caravan",      // owner 2026-08-14 pin 2: "yes AoE healing" -- healing is magical.
+                                        // The pin's OTHER row (the Healer Tower) was retired from the
+                                        // catalog at v20 by WO-990; this is the surviving healing row.
                 "arcane-tower",         // owner 2026-08-14 pin 5: "cathedral of magic is where all magic
                                         // upgrades anre and can unlock new teirs of spells" -- the ENGINE of
                                         // magical progression. behaviorId 'GameplayBuilding' is its BEHAVIOUR
@@ -183,15 +193,14 @@ namespace DeNelle.Editor.Regression
                     Why = "MAGICAL (element 'Aether', behaviorId 'ArcaneTower', projectileStyle 'spell'); the " +
                           "PAIRING came from OWNER pin 1, verbatim: \"Crystals and Iron\". v18. Wood (40/48/100) " +
                           "folded 1:1 into CRYSTALS, the crystal-BASED side of the ruling." } },
-                { "tower_healer", new AppliedRow {
-                    Magical = true, Totals = new[] { 250 },
-                    Why = "MAGICAL by OWNER ruling 2026-08-14, verbatim: \"yes AoE healing\" -- healing IS magical. " +
-                          "Basket is crystals + iron + the FOOD this row already used. v18. Wood (110) folded 1:1 " +
-                          "into CRYSTALS." } },
+                // NOTE: the Healer Tower row was converted here at v18 under the same pin-2 ruling and
+                // then RETIRED WHOLESALE at catalog v20 (WO-990, owner 2026-08-14). Its AppliedRow was
+                // removed with it -- case 4 FAILS on an entry whose row is missing, so a retirement must
+                // delete both halves. Do not restore either.
                 { "healing_caravan", new AppliedRow {
                     Magical = true, Totals = new[] { 350 },
-                    Why = "MAGICAL by the same OWNER ruling as tower_healer (\"yes AoE healing\"); the two move " +
-                          "together. Basket is crystals + iron + food. v18. Wood (150) folded 1:1 into CRYSTALS." } },
+                    Why = "MAGICAL by OWNER ruling 2026-08-14, verbatim: \"yes AoE healing\" -- healing IS magical. " +
+                          "Basket is crystals + iron + food. v18. Wood (150) folded 1:1 into CRYSTALS." } },
                 { "arcane-tower", new AppliedRow {
                     Magical = true, Totals = new[] { 120 },
                     Why = "MAGICAL by OWNER ruling 2026-08-14, verbatim: \"cathedral of magic is where all magic " +

@@ -132,13 +132,14 @@ namespace DeNelle.Editor
         private static readonly HashSet<string> MissingResourceBaseline = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             "Arena/Backdrops/outerworld_backdrop",
-            // WO-957/1007: the exit arch's KayKit look. The kit lives under the GITIGNORED
-            // Assets/Models/KayKit/ (big-art-out-of-git policy), so the editor branch resolves
-            // the real .mat by AssetDatabase and this Resources path is the PLAYER-build mirror
-            // that has deliberately not been staged yet. DungeonExitInteractable.ResolveKayKitMaterial
-            // already degrades loudly and visibly on a miss ("exit arch renders plain-lit (still
-            // visible)"), which is why this is debt and not a defect - the arch never blanks.
-            "Dungeon/Exit/dungeon_texture",
+            // 2026-08-14: "Dungeon/Exit/dungeon_texture" REMOVED from this baseline — it was a
+            // STALE ASSERTION. The entry claimed the path was an unstaged player-build mirror of a
+            // gitignored KayKit material, but commit 64ebf6658 ("the exit portal stands at
+            // hero-scale") COMMITTED the real asset at Assets/Resources/Dungeon/Exit/dungeon_texture.png
+            // (git-tracked, alongside pillar_decorated.fbx + wall_arched.fbx). A baseline that
+            // excuses the absence of something that now exists hides the next real miss on that
+            // path, so it goes. If the asset is ever removed again, this check FAILS loudly —
+            // which is the correct behaviour, not a reason to re-add the excuse.
             "Audio/Ambient/Heartwood_Critical",
             "Audio/Ambient/Heartwood_Healthy",
             "Audio/Ambient/Heartwood_Strained",

@@ -907,6 +907,20 @@ namespace DeNelle.Village
                     break;
                 }
 
+                // *** RETAINED ON PURPOSE - DO NOT DELETE AS DEAD CODE (WO-990, 2026-08-14). ***
+                // The catalog row that used to point here ('tower_healer') was RETIRED from
+                // structures-catalog.json at v20 by OWNER RULING ("i do not know what the town
+                // healer is" -> "retire"). She did not recognise it because it had NEVER been
+                // buildable: it appeared in NO build category, so no palette could ever offer it.
+                // This case is therefore CURRENTLY UNREFERENCED BY ANY CATALOG ROW, and that is
+                // an expected, recorded state - not rot. It is kept because it is the REFERENCE
+                // IMPLEMENTATION of the WO-891 support-FIELD pattern described below (stats plus
+                // two tags), the worked example every future field structure is meant to be copied
+                // from, together with the commented SlowFieldTower sibling. Its known future
+                // consumer is WO-991 - the MOBILE Healing Caravan with an unlockable heal FIELD,
+                // which is the design successor of the retired row. Any new row that sets
+                // behaviorId "HealerTower" reaches this code unchanged.
+                //
                 // HealerTower - WO-891. The FIRST instance of the general support/offensive
                 // FIELD pattern, and the proof of its thesis: a new structure is stats plus
                 // TWO TAGS. It copies range / fireRate / magnitude off entry.repo exactly the

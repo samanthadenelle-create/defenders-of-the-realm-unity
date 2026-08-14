@@ -61,7 +61,11 @@ namespace DeNelle.Editor.Regression
                 // content that is retired or gated, not a work queue.
                 "mill",                // RETIRED (WO-707): Farm is the food producer
                 "gate_stone",          // Defense LockedIds - gated
-                "tower_healer",        // legacy Support verb only - not reachable from Town/Defenses
+                // (2026-08-14, WO-990: the Healer Tower id left this list because the ROW ITSELF
+                //  was retired from structures-catalog.json v20 by owner ruling. Its entry here
+                //  read "legacy Support verb only - not reachable from Town/Defenses", which was
+                //  the very evidence that the row had never been buildable. See the retained
+                //  StructureFactory "HealerTower" case for the behaviour that deliberately stays.)
                 // Type 'Decoration', and NO build verb maps to Decoration.
                 "deco_torch",
                 "repair_default",      // a repair-economy DATA row, not a building

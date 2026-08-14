@@ -512,7 +512,7 @@ value counts never line up with `type`'s:
 | `mine_crystal` | `Resource` | `CrystalMine` ← identity, not a class |
 | `arcane-tower` | `Resource` | `GameplayBuilding` |
 | `tower_arcane_spire` | `Tower` | `ArcaneTower` ← identity, not a class |
-| `tower_healer` | `Support` | `HealerTower` ← identity, not a class |
+| ~~`tower_healer`~~ | ~~`Support`~~ | ~~`HealerTower`~~ — **ROW RETIRED** 2026-08-14 (WO-990, owner ruling): never buildable (in no build category), removed from `structures-catalog.json` at **v20**. The `HealerTower` **case in `StructureFactory` is deliberately KEPT** as the WO-891 field-pattern reference and is now unreferenced by any row; `healing_caravan` is the design successor. |
 | `healing_caravan` | `Support` | `HealingFountain` ← identity, not a class |
 | `deco_torch`, `repair_default` | `Decoration` | *(absent)* → no behaviour attached |
 
