@@ -1,6 +1,6 @@
 # WORK ORDER 947 — Cost-basket separation: regular structures = wood+iron; magical/ethereal = crystal-based; never all three
 
-**Status:** SPEC — needs owner classification pins (§4), then READY
+**Status:** PARTIALLY APPLIED (catalog v17 + gate shipped 2026-08-14) — **still needs owner classification pins (§4 + the new §6 pin)** before the remaining 5 rows can move
 **Minted:** 2026-08-10 (CLI seat, main line — banner bumped 947 → 948 in the same edit)
 **Silo:** Data (structures-catalog.json dual-copy) + one regression gate — no code-lane conflicts
 **Type:** owner ECONOMY RULING, applied to data + enforced by a gate
@@ -61,7 +61,49 @@ All 21 remaining entries already conform (wood/iron ± food only).
 3. `jeweler`: recommend regular (wood+iron); confirm?
 4. `arcane-tower`: move to crystal-based, or keep wood+iron as the one "mundane school of magic" shop?
 
-## 5. What NOT to touch
+## 5. IMPLEMENTATION LOG — 2026-08-14 (economy/data lane agent)
+
+**Applied (1 of 6 rows):** `tower_siege_tower` — the ONE violator the catalog classifies
+unambiguously *from its own fields*, so no owner pin was consumed:
+- `displayName` = "Sky Ballista (Anti-Air)", `description` = "Wall-mounted spear thrower — fires
+  spears at flying creatures", `element` = `None`, `projectileStyle` = `"bolt"`, and the top-level
+  `_heightCadence` puts it in the **SIEGE ENGINE** group ("Machines, not architecture").
+- Basket: build `w160 i90 c20 → w160 i110 c0`; L1→L2 `w192 i108 c24 → w192 i132 c0`;
+  L2→L3 `w400 i225 c50 → w400 i275 c0`. Crystals folded **1:1 into iron**, so every basket TOTAL
+  (270 / 324 / 675) and the tier-monotonic ladder are unchanged — composition moved, feel did not.
+- `structures-catalog.json` **v16 → v17**, both canonical copies byte-identical
+  (`md5 5e6a53225581b0c2bb0b4cb3524af68f`). A `_costBasketRule` block at the file head + a
+  `_costBasketNote` on the row carry the ruling and the pending state.
+
+**Gate shipped:** `Assets/Editor/Regression/CostBasketSeparationRegression.cs` `[cost-basket]`
+(markers `COST_BASKET_OK` / `COST_BASKET_FAIL`), registered inside the fenced registry in
+`DataRegression.RunAll`. It reads the **authored** baskets (`repo.cost` / `repo.upgradeCost`), not
+`BuildModeController.CostFor` — CostFor folds in the buildCost-crystals fallback and the tower
+softcap, neither of which is a statement about what a row is made of. Cases: `[invariant]` never
+wood+iron+crystals · `[regular]` crystals only on the pinned MAGICAL set, **including the
+all-zero-basket back door** that makes CostFor charge pure `buildCost` crystals · `[pins]` the
+exemption list may only SHRINK (fails if a listed row stops violating, so a landed pin forces the
+exemption's deletion in the same change) · `[applied]` `tower_siege_tower` stays converted with its
+totals intact. `MagicalIds` is **deliberately EMPTY** — until §4 pin 1 lands, no row has an
+owner-sanctioned crystal basket.
+
+**NOT applied — the 5 rows carried as dated, cited exemptions:** `tower_wall_wizard`,
+`tower_healer`, `healing_caravan`, `jeweler`, `tower_arcane_spire`. Deciding any of them is the
+inference-fix CLAUDE.md §12 forbids; they wait on the owner.
+
+## 6. NEW PIN raised 2026-08-14 — `tower_wall_wizard` is id-vs-data contradictory
+
+§2 above classified this row **MAGICAL from its id**. The row's own data says otherwise:
+`displayName` = **"Ballista"**, `element` = `None`, `projectileStyle` = `"bolt"`,
+`behaviorId` = `DefenseTower` — per the owner rename ruling **2026-07-08** recorded verbatim in its
+`orientation.note` ("the model IS a ballista (renamed)"). Read by nature it is a **mechanical
+bolt-thrower like the two other ballistae**, i.e. REGULAR (drop crystals:70), not MAGICAL
+(drop wood:60). The two readings send 70 crystals in opposite directions, so it is an owner call,
+not an agent's. *(Separately: `tower_arcane_spire`'s MAGICAL side is not in doubt — `element`
+`Aether`, `behaviorId` `ArcaneTower`, `projectileStyle` `spell`, and WO-1013 calls it arcane
+outright — only its PAIRING is unpinned by §4 q1.)*
+
+## 7. What NOT to touch
 
 - Affinity/harvest math, Echo systems (WO-811 lane is live), the crystal SINKS (instant-finish,
   queue-slot pricing — WO-911 rulings), Gold/Coins, pack pricing.

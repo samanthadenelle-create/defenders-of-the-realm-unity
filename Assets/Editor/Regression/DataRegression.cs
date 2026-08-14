@@ -662,6 +662,15 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "one-guide-body suite", () => { if (!DeNelle.Editor.Regression.OneGuideBodyRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[one-guide-body] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "wall-adjacency suite", () => { if (!DeNelle.Editor.Regression.WallAdjacencyRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[wall-adjacency] " + r); });
 
+            // --- COST-BASKET SEPARATION (WO-947, owner economy ruling 2026-08-10): regular
+            // structures cost wood + iron and NEVER crystals; magical/ethereal structures are
+            // crystal-based; no basket ever touches all three. Enforced on the AUTHORED
+            // baskets so any NEW catalog row obeys the ruling from day one. Five rows are
+            // carried as a dated, cited pending-pin list because their classification is an
+            // OPEN OWNER call (WO-947 section 4) -- the list can only shrink; the oracle FAILS
+            // if a listed row stops violating without being removed.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "cost-basket suite", () => { if (!DeNelle.Editor.Regression.CostBasketSeparationRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[cost-basket] " + r); });
+
             // --- VFX POOL SHAPE (WO-955, 2026-08-10): a pooled host was DESTROYED while it
             // still sat in a free list, and the next Acquire dereferenced it -- captured twice
             // in one session (HeroHpStateAura in town after arena deaths, then EnemyAuraVFX in
