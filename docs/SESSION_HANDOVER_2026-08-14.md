@@ -10,6 +10,7 @@
 | Artifact | What it holds |
 |---|---|
 | `docs/OPEN_OWNER_QUESTIONS_2026-08-14.md` | **Every decision blocking work**, 16 sections, cited to `path:line`. Start here. |
+| `docs/WEAPONS_DEEP_DIVE_2026-08-14.md` | **96 weapons, 24 obtainable.** Two live menu commands that destroy each other's output; the art-half and design-half are each unfinished in the opposite direction. Owner-commissioned; has a 7-step plan with steps 1–3 dispatchable immediately. |
 | `CLI_LANES_WO_NUMBERS.md` banner | Numbering authority. **Next free: 996.** 984–995 minted today. |
 | `BOARD.html` | Regenerate with `python tools/board_build.py` before any board read. |
 | This file | State, in-flight work, and the methodology corrections. |
