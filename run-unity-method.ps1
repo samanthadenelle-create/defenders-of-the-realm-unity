@@ -11,14 +11,35 @@
 # ASCII-only on purpose: Windows PowerShell 5.1 reads BOM-less files as ANSI,
 # so smart-quotes / em-dashes corrupt and break the parse.
 #
+# WO-984 (2026-08-14): log TEXT alone cannot prove a run happened - a run that
+# never started logs no errors, and a STALE log from a previous run reads exactly
+# like a fresh pass. Pass -ExpectMarker <MARKER> to make the caller declare what
+# success looks like; the wrapper then fails closed (exit 8, with a NAMED reason)
+# when the log is missing / stale / truncated / marker-less. The error-text scan
+# below is KEPT - it catches real failures that still emit a marker.
+# -ExpectMarker is OPTIONAL for backward compatibility: omitted => today's
+# behaviour exactly, plus one NOTICE line so the omission is visible, not silent.
+#
 # Usage: powershell -ExecutionPolicy Bypass -File .\run-unity-method.ps1 `
 #            -Method DeNelle.Editor.TripoAssetPostprocessor.ForceReextractAll `
-#            -LogName tripo-extract.log
+#            -LogName tripo-extract.log `
+#            -ExpectMarker TRIPO_EXTRACT_OK
 # =============================================================================
 param(
     [Parameter(Mandatory=$true)][string]$Method,
     [Parameter(Mandatory=$true)][string]$LogName,
     [int]$TimeoutMin = 30,
+    # WO-984: the marker this run must print to be believed (e.g. COMPILE_GATE_OK,
+    # UI_CAPTURE_OK, CHECKIN_SUITE_OK). Optional - see header.
+    [string]$ExpectMarker = '',
+    # Smallest log a real batchmode run can plausibly produce. Under this we call
+    # the run truncated/aborted rather than passed. Only consulted with -ExpectMarker.
+    [int]$MinLogBytes = 1024,
+    # VERIFICATION MODE (no Unity launch): judge an ALREADY-EXISTING log as if the
+    # run had started at the given time. Value is any parseable date/time string.
+    # Exercises the SAME evidence gate as a real run - this is how the stale-log and
+    # missing-log rows of WO-984 are demonstrated without staging a crashed editor.
+    [string]$JudgeExistingLog = '',
     # Force the ACTIVE BUILD TARGET for this run (e.g. Win64, Android, WebGL).
     # WHY THIS EXISTS (2026-08-05): an APK build leaves the project's active target on
     # Android. A later DESKTOP build then dies with "Native extension for Android target
@@ -34,50 +55,65 @@ $proj       = $PSScriptRoot
 $hubEditors = 'C:\Program Files\Unity\Hub\Editor'
 $pinned     = '6000.4.8f1'
 
-# --- locate editor ------------------------------------------------------------
-$candidates = Get-ChildItem $hubEditors -Directory -ErrorAction SilentlyContinue |
-    Where-Object { Test-Path (Join-Path $_.FullName 'Editor\Unity.exe') }
-if (-not $candidates) { Write-Error "No Unity editor under '$hubEditors'."; exit 2 }
-$chosen = $candidates | Where-Object { $_.Name -eq $pinned } | Select-Object -First 1
-if (-not $chosen) { $chosen = $candidates | Where-Object { $_.Name -like '6000.*' } | Sort-Object Name -Descending | Select-Object -First 1 }
-if (-not $chosen) { $chosen = $candidates | Sort-Object Name -Descending | Select-Object -First 1 }
-$unity = Join-Path $chosen.FullName 'Editor\Unity.exe'
-
-# --- refuse if an editor is already open (project lock) -----------------------
-if (Get-Process -Name 'Unity' -ErrorAction SilentlyContinue) {
-    Write-Error "A 'Unity' editor process is already running - close it before batchmode (project lock)."
-    exit 3
-}
-
 $logDir = Join-Path $proj 'Builds'
 New-Item -ItemType Directory -Path $logDir -Force | Out-Null
 $log = Join-Path $logDir $LogName
-# Tolerate the check-then-delete race (2026-07-13 fleet aggregation: Test-Path passed,
-# the file vanished before Remove-Item ran, and the emitter aborted with exit 1).
-if (Test-Path $log) { Remove-Item $log -Force -ErrorAction SilentlyContinue }
 
-$unityArgs = @('-batchmode', '-quit', '-projectPath', $proj, '-executeMethod', $Method, '-logFile', $log)
-if ($BuildTarget -ne '') { $unityArgs = @('-buildTarget', $BuildTarget) + $unityArgs }
-Write-Host "[run] editor=$($chosen.Name)  method=$Method  buildTarget=$(if ($BuildTarget -ne '') { $BuildTarget } else { '(project active)' })"
-Write-Host "[run] log=$log"
-& $unity @unityArgs | Out-Null
-$wrapperExit = $LASTEXITCODE
+$judgeOnly = ($JudgeExistingLog -ne '')
+$wrapperExit = 0
+$timedOut = $false
 
-# --- wait for the real (possibly relaunched) editor to finish -----------------
-$deadline = (Get-Date).AddMinutes($TimeoutMin)
-Start-Sleep -Seconds 6
-while ((Get-Date) -lt $deadline) {
-    if (-not (Get-Process -Name 'Unity' -ErrorAction SilentlyContinue)) {
-        Start-Sleep -Seconds 4   # settle: catch a relaunch spawning a new PID
-        if (-not (Get-Process -Name 'Unity' -ErrorAction SilentlyContinue)) { break }
+if ($judgeOnly) {
+    try { $runStart = [datetime]::Parse($JudgeExistingLog) }
+    catch { Write-Host "[run] VERDICT=FAIL reason=BAD_JUDGE_TIME value='$JudgeExistingLog' (not a parseable date/time)"; exit 8 }
+    Write-Host "[run] JUDGE-ONLY MODE - no Unity launched. Judging existing log as if the run started at $($runStart.ToString('s'))."
+    Write-Host "[run] log=$log"
+} else {
+    # --- locate editor --------------------------------------------------------
+    $candidates = Get-ChildItem $hubEditors -Directory -ErrorAction SilentlyContinue |
+        Where-Object { Test-Path (Join-Path $_.FullName 'Editor\Unity.exe') }
+    if (-not $candidates) { Write-Error "No Unity editor under '$hubEditors'."; exit 2 }
+    $chosen = $candidates | Where-Object { $_.Name -eq $pinned } | Select-Object -First 1
+    if (-not $chosen) { $chosen = $candidates | Where-Object { $_.Name -like '6000.*' } | Sort-Object Name -Descending | Select-Object -First 1 }
+    if (-not $chosen) { $chosen = $candidates | Sort-Object Name -Descending | Select-Object -First 1 }
+    $unity = Join-Path $chosen.FullName 'Editor\Unity.exe'
+
+    # --- refuse if an editor is already open (project lock) -------------------
+    if (Get-Process -Name 'Unity' -ErrorAction SilentlyContinue) {
+        Write-Error "A 'Unity' editor process is already running - close it before batchmode (project lock)."
+        exit 3
     }
-    Start-Sleep -Seconds 10
-}
-$timedOut = (Get-Date) -ge $deadline
 
-# Clear the stale editor lockfile so the next batchmode launch is not blocked.
-$lock = Join-Path $proj 'Temp\UnityLockfile'
-if (Test-Path $lock) { try { Remove-Item $lock -Force -ErrorAction Stop; Write-Host "[run] removed stale Temp\UnityLockfile" } catch { Write-Host "[run] could not remove lockfile: $($_.Exception.Message)" } }
+    # Tolerate the check-then-delete race (2026-07-13 fleet aggregation: Test-Path passed,
+    # the file vanished before Remove-Item ran, and the emitter aborted with exit 1).
+    if (Test-Path $log) { Remove-Item $log -Force -ErrorAction SilentlyContinue }
+
+    $unityArgs = @('-batchmode', '-quit', '-projectPath', $proj, '-executeMethod', $Method, '-logFile', $log)
+    if ($BuildTarget -ne '') { $unityArgs = @('-buildTarget', $BuildTarget) + $unityArgs }
+    Write-Host "[run] editor=$($chosen.Name)  method=$Method  buildTarget=$(if ($BuildTarget -ne '') { $BuildTarget } else { '(project active)' })"
+    Write-Host "[run] log=$log"
+    # WO-984: the instant the run began. Any log older than this is a leftover from a
+    # PREVIOUS run and must never be read as this run's evidence.
+    $runStart = Get-Date
+    & $unity @unityArgs | Out-Null
+    $wrapperExit = $LASTEXITCODE
+
+    # --- wait for the real (possibly relaunched) editor to finish -------------
+    $deadline = (Get-Date).AddMinutes($TimeoutMin)
+    Start-Sleep -Seconds 6
+    while ((Get-Date) -lt $deadline) {
+        if (-not (Get-Process -Name 'Unity' -ErrorAction SilentlyContinue)) {
+            Start-Sleep -Seconds 4   # settle: catch a relaunch spawning a new PID
+            if (-not (Get-Process -Name 'Unity' -ErrorAction SilentlyContinue)) { break }
+        }
+        Start-Sleep -Seconds 10
+    }
+    $timedOut = (Get-Date) -ge $deadline
+
+    # Clear the stale editor lockfile so the next batchmode launch is not blocked.
+    $lock = Join-Path $proj 'Temp\UnityLockfile'
+    if (Test-Path $lock) { try { Remove-Item $lock -Force -ErrorAction Stop; Write-Host "[run] removed stale Temp\UnityLockfile" } catch { Write-Host "[run] could not remove lockfile: $($_.Exception.Message)" } }
+}
 
 # --- judge success from the log ----------------------------------------------
 $succeeded = $false; $compileErr = $false; $license = $false
@@ -90,9 +126,68 @@ Write-Host "[run] wrapperExit=$wrapperExit timedOut=$timedOut succeeded=$succeed
 Write-Host "[run] --- log tail (45) ---"
 if (Test-Path $log) { Get-Content $log -Tail 45 }
 
+# --- WO-984 evidence gate: prove this run produced this log ------------------
+# Absence of an error is NOT evidence of success. Four ways a "clean" log lies:
+# it is not there, it is a leftover from an earlier run, it is a truncated stub,
+# or it never printed the marker the caller demanded.
+$logExists  = Test-Path $log
+$logSize    = -1
+$logMtimeS  = '(none)'
+$logAgeS    = '(n/a)'
+$markerHit  = $false
+if ($logExists) {
+    $fi        = Get-Item $log
+    $logSize   = $fi.Length
+    $logMtimeS = $fi.LastWriteTime.ToString('s')
+    $logAgeS   = ('{0:N1}s after run start' -f ($fi.LastWriteTime - $runStart).TotalSeconds)
+    if ($ExpectMarker -ne '') {
+        $markerHit = [bool](Select-String -Path $log -Pattern $ExpectMarker -SimpleMatch -Quiet -ErrorAction SilentlyContinue)
+    }
+}
+$evidence = "marker='$ExpectMarker' log=$log mtime=$logMtimeS ($logAgeS) sizeBytes=$logSize runStart=$($runStart.ToString('s'))"
+
+if ($ExpectMarker -eq '') {
+    Write-Host "[run] NOTICE: no -ExpectMarker was supplied - success is being judged by LOG TEXT ONLY. Nothing proves this log came from this run (WO-984). Pass -ExpectMarker <MARKER> to assert it."
+} else {
+    $reason = ''
+    if (-not $logExists) {
+        $reason = 'LOG_MISSING'
+    } elseif ((Get-Item $log).LastWriteTime -lt $runStart.AddSeconds(-2)) {
+        $reason = 'LOG_STALE_FROM_EARLIER_RUN'
+    } elseif ($logSize -lt $MinLogBytes) {
+        $reason = "LOG_TRUNCATED (under MinLogBytes=$MinLogBytes)"
+    } elseif (-not $markerHit) {
+        $reason = 'MARKER_ABSENT'
+    }
+    if ($reason -ne '') {
+        if ($license) {
+            # Keep the license-specific signal (exit 7) - it tells the caller to refresh
+            # the Hub, not to go hunting for a code defect.
+            Write-Host "[run] VERDICT=FAIL reason=LICENSE_ERROR (and $reason) - this run is NOT PROVEN. $evidence"
+            Write-Host "[run] *** LICENSE ERROR (run did not complete) - needs interactive Hub refresh or reboot; do NOT kill processes. ***"
+            exit 7
+        }
+        Write-Host "[run] VERDICT=FAIL reason=$reason - this run is NOT PROVEN. $evidence"
+        exit 8
+    }
+    Write-Host "[run] evidence OK: marker '$ExpectMarker' FOUND in a fresh log. $evidence"
+}
+
 # A transient 505 license-handshake line can appear even on a fully successful
 # batchmode run, so the explicit success marker is authoritative. Only treat the
 # license error as fatal when the run did NOT reach a clean exit.
-if ($succeeded -and -not $compileErr) { exit 0 }
-if ($license) { Write-Host "[run] *** LICENSE ERROR (run did not complete) - needs interactive Hub refresh or reboot; do NOT kill processes. ***"; exit 7 }
+if ($succeeded -and -not $compileErr) {
+    if ($ExpectMarker -eq '') {
+        Write-Host "[run] VERDICT=PASS-UNASSERTED (log text only, NO marker was checked) log=$log mtime=$logMtimeS sizeBytes=$logSize"
+    } else {
+        Write-Host "[run] VERDICT=PASS marker='$ExpectMarker' FOUND log=$log mtime=$logMtimeS sizeBytes=$logSize"
+    }
+    exit 0
+}
+if ($license) {
+    Write-Host "[run] VERDICT=FAIL reason=LICENSE_ERROR (run did not complete) $evidence"
+    Write-Host "[run] *** LICENSE ERROR (run did not complete) - needs interactive Hub refresh or reboot; do NOT kill processes. ***"
+    exit 7
+}
+Write-Host "[run] VERDICT=FAIL reason=LOG_SCAN (no clean-exit line, or compile errors present) $evidence"
 exit 1

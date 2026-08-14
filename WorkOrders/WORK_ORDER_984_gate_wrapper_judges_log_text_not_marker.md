@@ -25,7 +25,22 @@ That was a defensible design when Unity's fork-on-launch quirk made the real exi
 
 ## Proof (captured 2026-08-14, three independent ways)
 
-1. **Nonexistent script path exits 0.**
+> ## ⚠ PROOF 1 IS MISATTRIBUTED — corrected 2026-08-14 by the implementing agent, which RAN it
+> `powershell -File tools\run-unity-method.ps1 ...` (a path that does not exist) exits **-196608** from
+> PowerShell, and **127** via bash — **not 0**. The `exit 0` recorded below came from the **calling
+> layer** that reported the background task, not from this script, which never ran at all. **Nothing
+> inside `run-unity-method.ps1` could have influenced it.**
+> The lesson stands unchanged and is arguably sharper: *an exit code was trusted, and it was produced by
+> a layer nobody had checked.* But the mechanism is not the one written below, and a fix aimed at proof 1
+> would have been aimed at the wrong file.
+>
+> **THE STRONGEST PROOF IS ACTUALLY THIS ONE**, found while demonstrating the fix: a **STALE** log from
+> an earlier run contained BOTH `COMPILE_GATE_OK : 1` **and** `Exiting batchmode successfully`. The old
+> script would have read that stale file and **exited 0** — certifying a run that never happened, using
+> evidence from a different run. That is the defect in its purest form, and it is why the mtime check
+> matters more than the marker check.
+
+1. **Nonexistent script path exits 0.** ⚠ **See the correction banner above — this row is wrong.**
    `powershell -File tools\run-unity-method.ps1 -Method DeNelle.Editor.CompileGate.Run`
    The runner lives at **repo root**, not under `tools/`. PowerShell reported
    *"The argument 'tools\run-unity-method.ps1' to the -File parameter does not exist"* — and the
