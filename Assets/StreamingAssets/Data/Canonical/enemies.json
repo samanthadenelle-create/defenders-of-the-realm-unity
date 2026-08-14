@@ -13,7 +13,7 @@
     "role": "Combat archetype within the family: 'grunt' (basic melee), 'brute' (heavy melee/tank), 'skirmisher' (fast flanker), 'caster' (ranged/support), 'elite' (camp boss / mini-boss). Used by spawners to pick mix + by the codex to balance a warband.",
     "spawn": "Where this enemy appears: 'wave' (village gate siege), 'roam' (wanders an overworld region), 'camp' (garrisons a reclaimable node-camp; cleared to claim the node). A list; an enemy can do more than one. Hollow Ones default to ['wave'].",
     "ai": "'walker' (straight march toward the Heart, melee on contact), 'charger' (faster, ignores buildings), 'skirmisher' (fast, picks weakest wall/target). Wave-1 foundation ships 'walker' only; others are authored for later waves + the orc overworld.",
-    "modelKey": "Mesh key under Resources/Enemies/<key>.fbx. Hollow silhouettes = AccuRig CC_Base (Mage/Warrior/Rogue/Healer) or KayKit legacy (Minion/Golem/Necromancer). Orc = Humanoid Tripo. EnemyFactory.ModelForEnemy resolves id->model; this is the catalog-of-record.",
+    "modelKey": "Mesh key under Resources/Enemies/<key>.fbx. Hollow silhouettes = AccuRig CC_Base (Mage/Warrior/Rogue/Healer) or KayKit legacy (Minion/Golem/Necromancer). Orc = Humanoid Tripo. AUTHORITY (WO-954, 2026-08-14): this field is the FIRST authority on which model an id wears, for EVERY family - not just the Hollows. EnemyFactory.ModelForEnemy honours it whenever the key names a mesh in EnemyResolver.CommittedModels (the committed Resources/Enemies registry); the code switch in EnemyFactory is now only the LAST-RESORT fallback, for ids with no row here and for keys whose art is not imported. A key that is NOT committed is REJECTED by name in the trace and the code stand-in is used, so a typo can never spawn a tinted capsule. As seeded this changes no spawn: every row whose key is committed already matched the code switch. The one art-pending key is ogre -> OgreMage (no OgreMage.fbx exists; stand-in Orc_Shaman), declared in EnemyResolverRegression.artPendingModelKeys.",
     "hp": "Resolved max hit points (hollow values include the React global ENEMY_HP_BUFF x2).",
     "moveSpeed": "NavMeshAgent.speed in world units/sec.",
     "contactDamage": "Damage one melee hit deals to a building / wall / gate (or the hero in the overworld).",
@@ -21,7 +21,7 @@
     "height": "Approximate mesh height (world units) - sizes the NavMeshAgent capsule + the floating HP bar offset.",
     "boss": "true for a faction wave-boss (the Necromancer of the Wound). Orc 'elite' camp-bosses are role='elite', not boss=true (they lead a camp, not a village wave)."
   },
-  "version": 4,
+  "version": 5,
   "enemies": [
     {
       "id": "hollow-walker",

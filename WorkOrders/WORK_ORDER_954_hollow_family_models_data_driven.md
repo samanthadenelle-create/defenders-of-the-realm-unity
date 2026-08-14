@@ -21,6 +21,25 @@ left. thought it was resolved."*
   `RegionMobSpawner.cs:539+` · `EnemyFactory.cs:517` (comment) — the WO-772 divergence class, alive
   for MODELS. `enemies.json` rows carry NO model field (verified: all 19 rows).
 
+> ## ⚠ CORRECTION 2026-08-14 (implementation seat, verified at source)
+> Two §1 claims did NOT survive re-verification and the implementation was re-scoped accordingly:
+> - **"`enemies.json` rows carry NO model field (verified: all 19 rows)" is FALSE.** Every one of the
+>   19 rows already carries `modelKey`, and `EnemyFactory.ModelForEnemy:511` already passed it to
+>   `EnemyResolver.TryResolveHollowModel`. The field did not need adding — what was missing is that
+>   **only the Hollow branch honoured it**; for every other family the code switch won outright.
+>   That is the divergence that was actually fixed.
+> - **`OutpostEnemyGroupSpawner` is no longer a divergent table** — WO-1001 landed after this WO was
+>   written and made it read `enemies.json` first (`DefFor`), with the code block demoted to a
+>   fallback that already `FlowTrace.Warn`s. No change needed there.
+> - **`RegionMobSpawner.ModelForRoamer` had NO CALLERS** (repo-wide grep: one hit, its own
+>   declaration) — dead code stating the OPPOSITE of live behaviour. Removed.
+> - Newly found and fixed en route: `AtbCombatantSwapper` mapped `hollow-king` → `"Dragon"`, a mesh
+>   **retired 2026-07-24 and absent from Resources/Enemies** — that boss staged as a violet capsule
+>   pill, and the null-load was logged as a `Step` reading *"expected fallback"*.
+>
+> **Deliverable 1 is implemented. Deliverable 2 (the re-skin) remains OWNER-PINNED and untouched** —
+> with 1 landed it is now a one-word JSON edit per row, exactly as this WO intended.
+
 ## 2. Deliverables
 
 1. **Data-driven mapping:** add a `model` field per row in `enemies.json` (dual-copy, version bump —

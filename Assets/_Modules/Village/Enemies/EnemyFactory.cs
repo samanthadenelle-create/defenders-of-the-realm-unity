@@ -515,6 +515,35 @@ namespace DeNelle.Village
                 return hollowModel;
             }
 
+            // ── DATA FIRST for EVERY OTHER FAMILY (WO-954) ───────────────────────────
+            // The Hollows have honoured enemies.json's modelKey since WO-772; every other
+            // family did NOT — the switch below won outright, so a row could say "OgreMage"
+            // while the code returned "Orc_Shaman" and nothing anywhere failed. That silent
+            // data/code divergence is the bug WO-954 names. enemies.json is now the FIRST
+            // authority for all families; the switch below is demoted to the last-resort
+            // fallback for ids with no row (synthesised roamers/bosses) and for rows whose
+            // key names art that is not committed.
+            //
+            // BEHAVIOUR-PRESERVING as seeded (verified row-by-row against the 19 enemies.json
+            // rows on 2026-08-14): every row whose key IS committed already agreed with the
+            // switch, and the one row that disagrees ('ogre' -> "OgreMage") is rejected by the
+            // registry gate and keeps its documented Orc_Shaman stand-in. Deliberate: the
+            // first commit changes no pixel, it only moves who decides.
+            if (EnemyResolver.TryResolveDataModel(id, def != null ? def.ModelKey : null,
+                                                  out string dataModel, out string dataReject))
+            {
+                FlowTrace.Once("Enemy", $"data-model-{id}",
+                    $"ModelForEnemy: id '{id}' -> model '{dataModel}' from the enemies.json modelKey (data is the authority).");
+                return dataModel;
+            }
+            // §1.4b: a rejected/absent data key NEVER logs a hollow "model load failed" — the
+            // reason names the id, the key it tried, and why the code table won instead. Only
+            // an actually-present-but-rejected key is a Warn; "no row" is the normal case for a
+            // synthesised def and stays out of the warning channel.
+            if (def != null && !string.IsNullOrEmpty(def.ModelKey))
+                FlowTrace.Once("Enemy", $"data-model-reject-{id}-{def.ModelKey}",
+                    "ModelForEnemy: " + dataReject);
+
             switch (id)
             {
                 // (Hollow Ones are resolved ABOVE via EnemyResolver — the old hard-cased

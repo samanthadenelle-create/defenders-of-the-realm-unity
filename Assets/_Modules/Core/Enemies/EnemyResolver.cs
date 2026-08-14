@@ -57,6 +57,49 @@ namespace DeNelle.Core.Enemies
             "Necromancer",
         };
 
+        // ── THE COMMITTED-MESH REGISTRY (WO-954) ───────────────────────────────────
+        // Every mesh/prefab that ACTUALLY EXISTS under Assets/Resources/Enemies (verified
+        // from the directory listing 2026-08-14, all TRACKED — none of these live under a
+        // gitignored vendor root, so a fresh clone loads them). This is what makes the
+        // enemies.json `modelKey` field SAFE to honour for EVERY family, not just the
+        // Hollows: data may only steer to a name in here, so a typo, a renamed FBX, or a
+        // row naming art that was never imported can never silently degrade a spawn to a
+        // tinted capsule — it is REJECTED, and the caller says so by name (§1.4b).
+        //
+        // PROVING ROW: enemies.json's `ogre` row asks for modelKey "OgreMage", and there is
+        // NO OgreMage.fbx in Resources/Enemies. Without this gate a data-first resolve would
+        // return "OgreMage" and the ogre would spawn as an untextured capsule; with it the
+        // key is rejected by name and EnemyFactory's documented Orc_Shaman stand-in is used.
+        //
+        // Keep in sync with Assets/Resources/Enemies (EnemyResolverRegression check 11
+        // Resources.Loads every name below and FAILS on a missing one, so this set cannot
+        // rot silently). Pure strings — DeNelle.Core carries no UnityEngine dependency.
+        private static readonly HashSet<string> CommittedModels = new HashSet<string>
+        {
+            // Hollow Ones (KayKit legacy + AccuRig)
+            "Skeleton_Minion", "Skeleton_Warrior", "Skeleton_Rogue", "Skeleton_Healer",
+            "Skeleton_Mage", "Skeleton_Golem", "Skeleton_Golem_NEW",
+            "Necromancer", "Necromancer_NEW",
+            // Orc Warband (Tripo) + WO-481 orc family + the outpost raid boss
+            "Orc_Berserker", "Orc_Shaman", "Orc_Necromancer",
+            "Orc_Warrior", "Orc_Tank", "Orc_Mage", "Orc_Warlord",
+            // Troll / Stonebelly (AccuRig, 2026-08-09)
+            "Troll", "Troll_Mage", "Troll_Overlord",
+            // Misc committed bodies
+            "Demon", "Boss_Dragon",
+            // Blink stylized orcs (WO-680) — committed MIRRORS under Resources/Enemies/Blink
+            "Blink/Blink_Orc_Warrior", "Blink/Blink_Orc_Hunter",
+            "Blink/Blink_Orc_Warlock", "Blink/Blink_Orc_Boss",
+        };
+
+        /// <summary>The committed Resources/Enemies mesh keys data is allowed to name.</summary>
+        public static IReadOnlyCollection<string> CommittedModelKeys => CommittedModels;
+
+        /// <summary>True when <paramref name="modelKey"/> names a mesh committed under
+        /// Resources/Enemies (i.e. it is safe for data to steer a spawn to it).</summary>
+        public static bool IsCommittedModel(string modelKey) =>
+            !string.IsNullOrEmpty(modelKey) && CommittedModels.Contains(modelKey);
+
         // ── The Hollow Ones family/class table (codex §2, ratified 2026-07-26) ──────
         // id -> class. Shared base meshes are deliberate (codex): Reaper is a dark
         // scythe Warrior, Cellar is the sorrow-variant Minion, the Apprentice is the
@@ -310,6 +353,55 @@ namespace DeNelle.Core.Enemies
                 model = dataModelKey;      // data wins (A4) — but only to a committed mesh
             else
                 model = cls.ModelKey;      // class-table canonical
+            return true;
+        }
+
+        /// <summary>
+        /// THE DATA-FIRST HOOK for EVERY family (WO-954). Where TryResolveHollowModel only
+        /// serves ids in the Hollow class table, this honours the enemies.json
+        /// <c>modelKey</c> for ANY id — orc, troll, ogre, a future faction — provided the
+        /// key names a mesh in <see cref="CommittedModels"/>.
+        ///
+        /// WHY IT EXISTS: the id→model mapping was scattered across independent CODE
+        /// tables (EnemyFactory's switch, AtbCombatantSwapper's slug map, the outpost
+        /// spawner's fallback defs, a dead roamer table in RegionMobSpawner), so
+        /// enemies.json could say "Troll" while a code table said "Orc_Berserker" and
+        /// nothing failed — the divergence class WO-772 removed for STATS and WO-954
+        /// removes for MODELS. Data is now the first authority; the code tables stay only
+        /// as the last-resort fallback.
+        ///
+        /// Returns false when there is no usable data key, and sets
+        /// <paramref name="rejectReason"/> to a §1.4b-grade explanation naming the id, the
+        /// key that was tried, and WHY it was not honoured — so the caller's trace line can
+        /// never degrade to a hollow "model load failed".
+        /// </summary>
+        public static bool TryResolveDataModel(string id, string dataModelKey,
+                                               out string model, out string rejectReason)
+        {
+            model = null;
+            rejectReason = null;
+
+            if (string.IsNullOrEmpty(dataModelKey))
+            {
+                // Not a failure — most synthesised defs (region roamers, outpost bosses)
+                // legitimately carry no data key. Say so precisely rather than crying wolf.
+                rejectReason = $"enemy id '{id}' carries NO enemies.json modelKey " +
+                               "(row absent, or a code-synthesised def) — falling back to the code table.";
+                return false;
+            }
+
+            if (!CommittedModels.Contains(dataModelKey))
+            {
+                rejectReason = $"enemy id '{id}' asks for model '{dataModelKey}', but that key is NOT in the " +
+                               "committed Resources/Enemies registry (EnemyResolver.CommittedModels) — the art " +
+                               "was never imported under that name, or the row has a typo. Honouring it would " +
+                               "spawn a tinted capsule, so the code table's stand-in is used instead. FIX: import " +
+                               $"'{dataModelKey}' into Assets/Resources/Enemies and add it to CommittedModels, or " +
+                               "correct the modelKey in enemies.json.";
+                return false;
+            }
+
+            model = dataModelKey;
             return true;
         }
 

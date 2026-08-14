@@ -300,9 +300,21 @@ namespace DeNelle.BattleATB
             var prefab = Resources.Load<GameObject>("Enemies/" + enemySlug);
             if (prefab == null)
             {
-                // No model in Resources -> keep the tinted pill (the documented fallback).
-                FlowTrace.Step("AtbSwap",
-                    $"SwapEnemy: Resources/Enemies/{enemySlug} not found — tinting the capsule pill (expected fallback).");
+                // WO-954 / §1.4b: this used to be a Step reading "expected fallback", which is
+                // exactly the hollow line the standard forbids — it made a REAL miss look
+                // routine. Resources/Enemies ships committed bodies for the whole roster, so a
+                // null load here is a broken mapping, not an expectation: it is how
+                // hollow-king → "Dragon" (a mesh retired 2026-07-24) stayed invisible as a
+                // violet pill. Name the breach id, the slug tried, and the fix.
+                var h = DeNelle.Core.SceneRouter.PendingBattle;
+                string breachId = h != null && h.BreachedIds != null && h.BreachedIds.Length > 0
+                                ? h.BreachedIds[0] : "<no handoff>";
+                FlowTrace.Warn("AtbSwap",
+                    $"SwapEnemy: breach id '{breachId}' resolved to slug '{enemySlug}', but " +
+                    $"Resources.Load(\"Enemies/{enemySlug}\") is NULL — no such mesh is committed, so the " +
+                    "enemy stays a TINTED CAPSULE PILL instead of a body. FIX: correct the slug in " +
+                    "AtbCombatantSwapper.ModelSlugForEngineDef / EnemyResolver, or import the mesh into " +
+                    "Assets/Resources/Enemies.");
                 TintEnemy(capsule);
                 return;
             }
@@ -507,11 +519,19 @@ namespace DeNelle.BattleATB
                 if (!string.IsNullOrEmpty(first))
                 {
                     // Village id → model slug (visual); engine def may differ (e.g. bruiser stats).
-                    string lower = first.ToLowerInvariant();
-                    if (lower == "hollow-warrior") return "Skeleton_Warrior";
-                    if (lower == "hollow-walker")  return "Skeleton_Minion";
-                    if (lower == "hollow-rogue")   return "Skeleton_Rogue";
-                    if (lower == "hollow-acolyte") return "Skeleton_Healer";
+                    // WO-954: the four hard-cased hollow ids that used to live here were a
+                    // FIFTH copy of the id→model mapping — they covered only walker/warrior/
+                    // rogue/acolyte, so every other Hollow id (mage / reaper / brute / cellar /
+                    // the mini-boss / the dungeon underscore aliases) fell through to
+                    // ModelSlugForEngineDef and staged as a generic Skeleton_Warrior. Route
+                    // through the ONE shared resolver instead — the same table the village
+                    // spawner uses, so the ATB stage shows the foe that actually breached.
+                    // NOTE: BattleATB may not reference DeNelle.Village (asmdef), so it cannot
+                    // read enemies.json here; passing a null data key means the resolver's
+                    // class table decides — which the data is seeded to agree with.
+                    if (DeNelle.Core.Enemies.EnemyResolver.TryResolveHollowModel(
+                            first, null, out string hollowSlug))
+                        return hollowSlug;
                     return ModelSlugForEngineDef(EngineDefFor(first));
                 }
             }
@@ -556,9 +576,19 @@ namespace DeNelle.BattleATB
                 case "bruiser":           return "Skeleton_Golem";    // heavy tank → large rig
                 case "necromancer":       return "Necromancer";
                 case "hollow-captain":    return "Orc_Berserker";     // elite captain
-                case "hollow-king":       return "Dragon";            // boss
+                // WO-954: was "Dragon" — Resources/Enemies/Dragon.fbx DOES NOT EXIST. The
+                // 3DHaupt CC-BY-NC "Dragon" fbx was RETIRED 2026-07-24 and replaced by the
+                // licensed Boss_Dragon.prefab (EnemyFactory line ~598 already resolves the
+                // village-side dragon keys to it). So hollow-king staged as a NULL prefab and
+                // fell to the violet tinted pill — the boss encounter had no body at all.
+                case "hollow-king":       return "Boss_Dragon";       // boss → licensed rig
                 case "hollow-apprentice": return "Skeleton_Mage";     // caster minion
-                case "hollow-warrior":    return "Skeleton_Warrior"; // AccuRig melee
+                // WO-954: the old comment here read "AccuRig melee" — FALSE. Skeleton_Warrior
+                // is the KayKit-named body the 2026-08-09 AccuRig wave never covered (the
+                // AccuRig imports carry the _NEW suffix: Skeleton_Golem_NEW / Necromancer_NEW).
+                // The comment is corrected rather than the mapping changed — WHICH models the
+                // hollow family should wear is the owner's creative pin (WO-954 deliverable 2).
+                case "hollow-warrior":    return "Skeleton_Warrior";  // KayKit skeleton body
                 case "skeleton":
                 default:                  return "Skeleton_Warrior";  // standard grunt
             }
@@ -636,7 +666,8 @@ namespace DeNelle.BattleATB
             {
                 case "Skeleton_Golem":  return "LargeEnemy";
                 case "Necromancer":     return "Boss";
-                case "Dragon":          return "Dragon";
+                case "Dragon":          return "Dragon";   // legacy key — mesh retired 2026-07-24
+                case "Boss_Dragon":     return "Dragon";   // WO-954: licensed rig, same controller
                 case "Orc_Warrior":     // WO-481 new Tripo orcs are HUMANOID → humanoid controller
                 case "Orc_Tank":
                 case "Orc_Mage":        return "OrcHumanoid";

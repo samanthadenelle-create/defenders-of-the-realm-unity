@@ -527,23 +527,17 @@ namespace DeNelle.Village
             };
         }
 
-        // Archetype -> skeleton model (the readable visual variety). Thematic note: the
-        // Wildlands roster names (orc/caveman/wolf) currently borrow the skeleton family —
-        // the only humanoid enemy models in Resources/Enemies — chosen by ROLE/SIZE so the
-        // silhouette reads the threat. Swap to bespoke models here (one line per id) when
-        // the new character packs land.
-        private static string ModelForRoamer(string enemyId)
-        {
-            switch (enemyId)
-            {
-                case "orc-raider":       return "Skeleton_Warrior"; // heavy melee
-                case "caveman":          return "Skeleton_Golem";   // big brute
-                case "feral-wolf":       return "Skeleton_Rogue";   // fast skirmisher
-                case "tiefling-cultist": return "Skeleton_Mage";    // caster
-                case "necromancer":      return "Necromancer";      // dedicated elite
-                default:                  return "Skeleton_Minion";
-            }
-        }
+        // ── ModelForRoamer REMOVED (WO-954) ──────────────────────────────────────
+        // This file used to carry its OWN id→model table (orc-raider → Skeleton_Warrior,
+        // caveman → Skeleton_Golem, feral-wolf → Skeleton_Rogue, tiefling-cultist →
+        // Skeleton_Mage). It had NO CALLERS — verified by a repo-wide grep, the only hit was
+        // its own declaration — so every region mob has been resolving through
+        // EnemyFactory.ModelForEnemy all along, which maps those same ids to the DISTINCT
+        // non-skeleton bodies (orc-raider → Orc_Berserker, tiefling-cultist → Demon, …).
+        // Dead AND divergent: it was a fifth mapping stating the opposite of live behaviour,
+        // and the next reader to trust it would have "fixed" the wrong table. Model
+        // resolution for roamers lives in enemies.json → EnemyResolver → EnemyFactory, one
+        // path, no copy here.
 
         private static void Despawn(Mob mob)
         {

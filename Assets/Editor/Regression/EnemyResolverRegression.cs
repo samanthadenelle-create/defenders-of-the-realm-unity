@@ -180,12 +180,68 @@ namespace DeNelle.Editor
             if (dungeonKeys.Count != dungeonIds.Length && failures.Count == 0)
                 failures.Add($"{dungeonIds.Length} dungeon ids produced only {dungeonKeys.Count} distinct ResolvedKeys.");
 
+            // 11) WO-954 — THE COMMITTED-MESH REGISTRY IS REAL. Every name in
+            //     EnemyResolver.CommittedModels must actually load from Resources/Enemies.
+            //     This is what lets the resolver honour data for every family: the registry
+            //     is the safety gate, so a rotted entry would let a typo'd/renamed mesh
+            //     through and spawn a tinted capsule. Fails loudly instead.
+            foreach (var key in EnemyResolver.CommittedModelKeys)
+                if (Resources.Load<GameObject>("Enemies/" + key) == null)
+                    failures.Add($"EnemyResolver.CommittedModels lists '{key}', but Resources.Load(\"Enemies/{key}\") " +
+                                 "is NULL — the registry has rotted; data steered to this key would spawn a capsule.");
+
+            // 12) WO-954 — DATA/CODE AGREEMENT for EVERY catalog row, not just the Hollows.
+            //     The bug class: enemies.json said one model and an independent code table
+            //     said another, and nothing failed. For each of the 19 rows either
+            //       (a) the modelKey is committed -> ModelForEnemy MUST return exactly it
+            //           (data is the authority), or
+            //       (b) it is NOT committed -> the row is knowingly art-pending, and the code
+            //           stand-in it falls back to must still load a real body.
+            //     Case (b) is listed by name so a new un-imported key can never sneak in
+            //     silently — adding one now REQUIRES touching this list.
+            var artPendingModelKeys = new HashSet<string> { "OgreMage" };  // no OgreMage.fbx in Resources/Enemies
+            foreach (var e in catalog.Enemies)
+            {
+                if (e == null || string.IsNullOrEmpty(e.Id)) continue;
+                string model = EnemyFactory.ModelForEnemy(e);
+
+                if (Resources.Load<GameObject>("Enemies/" + model) == null)
+                {
+                    failures.Add($"enemies.json row '{e.Id}' resolves to model '{model}' but " +
+                                 $"Resources.Load(\"Enemies/{model}\") is NULL — this row spawns a tinted capsule.");
+                    continue;
+                }
+
+                if (string.IsNullOrEmpty(e.ModelKey)) continue;   // no data opinion — code table owns it
+
+                if (EnemyResolver.IsCommittedModel(e.ModelKey))
+                {
+                    if (model != e.ModelKey)
+                        failures.Add($"DATA/CODE DIVERGENCE: enemies.json row '{e.Id}' asks for model " +
+                                     $"'{e.ModelKey}' (a committed mesh) but EnemyFactory.ModelForEnemy returned " +
+                                     $"'{model}' — a code table is overriding the data authority (WO-954).");
+                }
+                else if (!artPendingModelKeys.Contains(e.ModelKey))
+                {
+                    failures.Add($"enemies.json row '{e.Id}' names modelKey '{e.ModelKey}', which is neither a " +
+                                 "committed mesh (EnemyResolver.CommittedModels) nor a declared art-pending key — " +
+                                 "import the art and register it, fix the typo, or add it to artPendingModelKeys " +
+                                 "with a note.");
+                }
+                else
+                {
+                    log.AppendLine($"  [art-pending] row '{e.Id}' wants '{e.ModelKey}' (not imported) -> stand-in '{model}'");
+                }
+            }
+
             if (failures.Count == 0)
             {
                 reason = $"{EnemyResolver.LintMarker} — {combatIds.Count} approved Hollow ids -> " +
                          $"{resolvedKeys.Count} DISTINCT resolved keys; every base model loads from Resources; " +
                          "factory routes through EnemyResolver; the 5 previously-generic ids each resolve to their " +
-                         "own model; Wildlands reserved as a Phase-2 stub.";
+                         "own model; Wildlands reserved as a Phase-2 stub; " +
+                         $"WO-954: all {EnemyResolver.CommittedModelKeys.Count} committed mesh keys load, and every " +
+                         $"one of the {catalog.Enemies.Count} enemies.json rows agrees with EnemyFactory.ModelForEnemy.";
                 Debug.Log("[enemy-resolver]\n" + log);
                 return true;
             }
