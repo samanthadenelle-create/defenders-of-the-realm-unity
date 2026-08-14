@@ -701,6 +701,13 @@
             "manual": true
         },
         {
+            "key": "Portal_Threshold_Aura",
+            "prefabPath": "Assets/Mirza Beig/Particle Systems/Ultimate VFX/Prefabs/Loop/pf_vfx-ult_demo_psys_loop_portalBlue.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
             "key": "PosionCloud_Cast",
             "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Flash and hits/Hit 24 green explosion.prefab",
             "isLoop": false,

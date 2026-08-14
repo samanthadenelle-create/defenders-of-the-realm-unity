@@ -141,7 +141,24 @@ namespace DeNelle.Editor.Regression
         private static readonly Dictionary<string, int> KnownCatalogExposure =
             new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
             {
-                { "Assets/Resources/VFX/HovlVfxCatalog.asset", 645 },
+                // 645 -> 689 (2026-08-14, owner directive: "i want high end much better vfx
+                // prefabs that actually look good" for the portals). The catalog was regenerated
+                // after tagging 'Portal_Threshold_Aura' -> Mirza Beig Ultimate VFX
+                // 'pf_vfx-ult_demo_psys_loop_portalBlue' in VfxManualPicks.json; the regen also
+                // picked up 'Posion_Cast', whose Spells Pack prefab now resolves on this machine.
+                // Two rows, +44 transitively-referenced pack assets (a pack prefab drags its own
+                // materials/textures).
+                //
+                // DELIBERATE, and it takes the SAME shape as the 645 already recorded here: this
+                // file's own ruling above is that mirroring pack prefabs into git is the WRONG
+                // remedy (big-art-out-of-git, owner 2026-07-15), and .gitignore says so verbatim
+                // for these packs - "only the keys we map in HovlVfxCatalog are referenced by
+                // path; re-import on fresh clone". So the debt is RECORDED, not hidden: on a
+                // machine without the Mirza pack imported, the portal threshold vortex resolves
+                // to nothing and the portals fall back to their procedural glow - which is why
+                // both portal call sites emit a FlowTrace line naming that exact cause instead
+                // of failing silently.
+                { "Assets/Resources/VFX/HovlVfxCatalog.asset", 689 },
                 { "Assets/Resources/VFX/VFXCatalog.asset",      34 },
             };
 

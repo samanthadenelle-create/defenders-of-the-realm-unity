@@ -45,9 +45,11 @@
 // Canon: the village is Elarion (never Avalon). ASCII-only runtime strings.
 // =============================================================================
 using System.Collections.Generic;
+using Cysharp.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.AI;
 using DeNelle.Core.Diagnostics;
+using DeNelle.Core.World;
 
 namespace DeNelle.Village.World
 {
@@ -196,8 +198,13 @@ namespace DeNelle.Village.World
             public VFXHandle GateVfx; // looping magic-circle rune ring at the arch base (null until attached)
             // WO-869 threshold aura. Held so the WO-753 one-owner teardown can Stop() it -
             // an orphaned looping portal aura with no portal under it is the exact bug that
-            // rule exists to prevent. Stays null until the owner tags the key (see below).
+            // rule exists to prevent.
             public VFXHandle ThresholdVfx;
+            // Owner 2026-08-14 ("all of the portals should be this"): the shared PortalStructure
+            // art, swapped in over the code-built cube arch. Held so the Addressables handle is
+            // released on teardown and so the discovery dim can retarget onto the real renderers.
+            public PortalStructure.SwapResult Swap;
+            public bool ArtStanding;
         }
 
         private readonly List<Portal> _portals = new List<Portal>();
@@ -427,6 +434,12 @@ namespace DeNelle.Village.World
             // (Discover()), preserving the fog-of-war reveal.
             if (entry.Discovered) { AttachGateVfx(entry); AttachThresholdAura(entry); }
 
+            // Owner 2026-08-14: wear the SAME structure as the dungeon exit. Kicked async and
+            // deliberately AFTER the cube arch is already standing, so the portal is never
+            // empty for a frame - an Addressables miss leaves the player the cube arch instead
+            // of an invisible landmark (the whole feature is "stumble on a glowing arch").
+            SwapInSharedStructureAsync(entry).Forget();
+
             // WO-869 belt-and-braces: recover this portal's materials RIGHT NOW rather than
             // waiting for the guard's next deferred sweep. SweepGameObject is the per-object
             // seam (hideStrayPrimitives:false, so it repaints and never hides), and the arch is
@@ -616,6 +629,9 @@ namespace DeNelle.Village.World
                     // torn-down portal never leaves an orphaned looping effect behind.
                     p?.GateVfx?.Stop(true);
                     p?.ThresholdVfx?.Stop(true);   // WO-753: no aura outlives its portal
+                    // Release the shared-structure bundle too, or it stays resident for the
+                    // whole session once a portal is torn down.
+                    if (p != null) PortalStructure.Release(ref p.Swap);
                     _portals.RemoveAt(i);
                     continue;
                 }
@@ -716,33 +732,115 @@ namespace DeNelle.Village.World
         // being lost inside it - retune once a real prefab is behind the key.
         private const float ThresholdAuraScale = ArchHalfWidth * 2f;
 
+        // =====================================================================
+        // Owner 2026-08-14: "all of the portals should be this" + "i want high end much better
+        // vfx prefabs that actually look good".
+        // ---------------------------------------------------------------------
+        // Until now the overworld gate and the dungeon exit were two different objects wearing
+        // the word "portal": ~18 code-built cubes here, the owner's Tripo art there. Both now
+        // load the SAME structure through DeNelle.Core.World.PortalStructure.
+        //
+        // The cube arch is NOT deleted - it is the standing fallback while the async load is in
+        // flight and permanently if the content build is missing. On success it is retired and
+        // the discovery layer RETARGETS onto the real renderers, or the fog-of-war reveal would
+        // keep dimming geometry the player can no longer see while the real art blazed away at
+        // full brightness from frame 0.
+        // =====================================================================
+        private async UniTaskVoid SwapInSharedStructureAsync(Portal p)
+        {
+            if (p == null || p.Root == null) return;
+
+            // Landmark scale, not interior scale: this arch is read from across an open field at
+            // ~141 m, where the exit portal's 2.7 m (1.5x hero) would be a speck. PortalHeight is
+            // the existing, owner-tuned landmark height and stays the single source for it.
+            var swap = await PortalStructure.SwapInAsync(p.Root, PortalHeight, "Portal_Owner");
+            if (!swap.Ok || p.Root == null) return;   // Warn already emitted by PortalStructure
+            p.Swap = swap;
+            p.ArtStanding = true;
+
+            // Retire the placeholder cubes now that real art stands in their place.
+            for (int i = 0; i < p.Renderers.Length; i++)
+                if (p.Renderers[i] != null) p.Renderers[i].gameObject.SetActive(false);
+
+            // RETARGET the discovery dim onto the real renderers and re-apply the level this
+            // portal is currently at, so an undiscovered portal stays a faint silhouette.
+            var real = swap.Instance.GetComponentsInChildren<Renderer>(true);
+            p.Renderers = real;
+            p.BaseColors = new Color[real.Length];
+            for (int i = 0; i < real.Length; i++) p.BaseColors[i] = SafeColor(real[i]);
+            ApplyDim(p, p.Discovered ? Mathf.Lerp(UndiscoveredDim, 1f, p.FadeT) : UndiscoveredDim);
+
+            // The procedural glow quad / halo / vortex were the no-art fallback. With real art
+            // and a real catalogued loop they are two additive billboards inside somebody else's
+            // vortex - stand them down (the point light stays; it lights the arch geometry).
+            var vfx = p.Root.GetComponent<PortalVFXController>();
+            if (vfx != null) vfx.SuppressProceduralSurfaces("shared PortalStructure art is standing");
+
+            // Re-seat the aura on the real opening: it was sized to the cube arch, and the
+            // loaded art's bounds are the only honest reference for where the threshold IS.
+            if (p.ThresholdVfx != null) { p.ThresholdVfx.Stop(); p.ThresholdVfx = null; }
+            if (p.Discovered) AttachThresholdAura(p);
+
+            FlowTrace.Step("Portal",
+                $"overworld gate now wears the shared portal structure at {PortalHeight:0.#}m - " +
+                $"{real.Length} real renderer(s), cube arch retired, discovery dim retargeted.");
+        }
+
         private void AttachThresholdAura(Portal p)
         {
             if (p == null || p.Root == null) return;
             if (p.ThresholdVfx != null) return;   // already holding the loop (idempotent)
 
-            // Centre of the opening, between the two pillar rings - the surface you cross.
-            Vector3 thresholdPos = p.Root.position + p.Root.up * (PortalHeight * 0.5f);
+            // Centre of the opening. Once the real art is standing its MEASURED bounds are the
+            // only honest reference (the structure is normalized at runtime, so any literal here
+            // silently goes wrong the next time the art or the height is retuned); 45% of the
+            // opening height is the visual middle of a doorway. Falls back to the cube-arch
+            // geometry while the load is still in flight.
+            Vector3 thresholdPos = p.ArtStanding
+                ? OpeningCentre(p)
+                : p.Root.position + p.Root.up * (PortalHeight * 0.5f);
+            // Fill the opening: the pack effect is authored around a unit disc, so the opening
+            // WIDTH is the honest scale reference - a fixed number is lost inside a 6 m landmark
+            // arch and overflows a 2.7 m interior one.
+            float scale = p.ArtStanding ? OpeningScale(p) : ThresholdAuraScale;
             p.ThresholdVfx = VFXManager.PlayKey(
                 ThresholdAuraKey, thresholdPos, p.Root.rotation, p.Root,
-                null, ThresholdAuraScale);
+                null, scale);
 
             if (p.ThresholdVfx != null)
             {
                 FlowTrace.Step("Portal",
                     $"AttachThresholdAura: '{ThresholdAuraKey}' aura spawned at the threshold centre " +
-                    $"({thresholdPos.x:F1}, {thresholdPos.y:F1}, {thresholdPos.z:F1}) scale={ThresholdAuraScale:0.0} (loop held).");
+                    $"({thresholdPos.x:F1}, {thresholdPos.y:F1}, {thresholdPos.z:F1}) scale={scale:0.0} (loop held).");
                 return;
             }
 
-            // Section 12: say WHY it is absent, and say it once, with the shortlist - so this reads as a
-            // deliberate HOLD in a capture rather than a broken effect someone re-debugs later.
-            FlowTrace.Once("Portal", "threshold-aura-untagged",
-                $"AttachThresholdAura: key '{ThresholdAuraKey}' is NOT catalogued - the aura is HELD, " +
-                "awaiting an owner tag in the VfxCaster (owner tags, CLI maps verbatim). Shortlist from the " +
-                "owned Mirza Beig Ultimate VFX pack: pf_vfx-ult_demo_psys_loop_ghostPortal, ghostPortal2, " +
-                "portalBlue, portalBlueTutorial, portalOrange. Routing is wired - tagging the key is the only " +
-                "step left. The rebuilt arch + PP_GroundFog mist carry the read meanwhile.");
+            // Section 12: say WHY it is absent, and say it once - so this reads as a deliberate
+            // state in a capture rather than a broken effect someone re-debugs later.
+            FlowTrace.Once("Portal", "threshold-aura-unresolved",
+                $"AttachThresholdAura: key '{ThresholdAuraKey}' did NOT resolve. It IS tagged (owner directive " +
+                "2026-08-14) in Assets/Editor/VfxManualPicks.json -> Mirza Beig Ultimate VFX " +
+                "'pf_vfx-ult_demo_psys_loop_portalBlue', so the live causes are: the Hovl catalog has not been " +
+                "regenerated since the tag (Defenders/VFX/Generate Hovl VFX Catalog), or the global loop cap is " +
+                "hit. The arch + PP_GroundFog mist carry the read meanwhile.");
+        }
+
+        /// <summary>Centre of the real opening, measured from the loaded structure's own bounds.
+        /// Never a literal: the structure is height-normalized at runtime, so a hardcoded y goes
+        /// silently wrong the next time the art or PortalHeight is retuned.</summary>
+        private Vector3 OpeningCentre(Portal p)
+        {
+            Bounds b = PortalStructure.MeasureBounds(p.Swap.Instance);
+            if (b.size.y <= 0.001f) return p.Root.position + p.Root.up * (PortalHeight * 0.5f);
+            return new Vector3(b.center.x, b.min.y + b.size.y * 0.45f, b.center.z);
+        }
+
+        /// <summary>Aura scale derived from the real opening width (same reasoning as
+        /// <see cref="OpeningCentre"/>).</summary>
+        private float OpeningScale(Portal p)
+        {
+            Bounds b = PortalStructure.MeasureBounds(p.Swap.Instance);
+            return b.size.x > 0.01f ? Mathf.Max(0.5f, b.size.x * 0.9f) : ThresholdAuraScale;
         }
 
         private static void ApplyDim(Portal p, float brightness)

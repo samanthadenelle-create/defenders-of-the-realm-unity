@@ -839,8 +839,22 @@ MonoBehaviour:
     DefaultLifetime: 0
     Recolorable: 1
     IsLoop: 1
+  - Key: Portal_Threshold_Aura
+    Prefab: {fileID: 1641099969701414, guid: e54b957e0a808ec4c8f17c43a15d5025, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
   - Key: PosionCloud_Cast
     Prefab: {fileID: 1327231448029640, guid: b0035d79b41032446a5de0e41abe9823, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 0
+  - Key: Posion_Cast
+    Prefab: {fileID: 7798317972306338544, guid: 857b0ad3d5093af478a3c817782acb04, type: 3}
     PoolSize: 6
     DefaultScale: 1
     DefaultLifetime: 0

@@ -728,6 +728,41 @@ namespace DeNelle.Village
             }
         }
 
+        // ── Owner 2026-08-14: real pack art + real pack VFX supersede the procedural layer ──
+        // The procedural glow quad / halo / vortex in this file were built (DEF-100) for a
+        // portal that had NO art and NO catalogued effect: they were the fallback that stopped
+        // a portal reading as a flat dead prop. Once the shared PortalStructure art is standing
+        // AND a real pack loop is held at the threshold, those quads stop being a fallback and
+        // start being two additive billboards sitting inside somebody else's vortex.
+        //
+        // They are SUPPRESSED, not deleted, and not disabled by default: an Addressables miss or
+        // an untagged catalog key must still land on the procedural read rather than on nothing
+        // (the same never-invisible discipline as the arch fallback). The point light STAYS -
+        // it is what lights the arch's own geometry, which no particle system does.
+        private bool _proceduralSuppressed;
+
+        /// <summary>Stand the procedural threshold surfaces down because real art + a real
+        /// catalogued effect are now carrying the portal. Idempotent; keeps the point light.</summary>
+        public void SuppressProceduralSurfaces(string reason)
+        {
+            if (_proceduralSuppressed) return;
+            _proceduralSuppressed = true;
+
+            if (glowPlane != null)  glowPlane.enabled = false;
+            if (_haloPlane != null) _haloPlane.enabled = false;
+            if (vortexParticles != null)
+            {
+                vortexParticles.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+                var psr = vortexParticles.GetComponent<ParticleSystemRenderer>();
+                if (psr != null) psr.enabled = false;
+            }
+            StopAccent("procedural surfaces superseded by real art + catalogued VFX");
+
+            FlowTrace.Step("Portal",
+                $"procedural glow/halo/vortex SUPPRESSED ({reason}) - the pack effect is the threshold now; " +
+                "the point light stays because no particle system lights the arch geometry itself.");
+        }
+
         private void EnsureHeroRef()
         {
             if (_hero != null) return;            // cached — no per-frame scan
