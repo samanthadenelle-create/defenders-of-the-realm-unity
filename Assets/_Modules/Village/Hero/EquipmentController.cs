@@ -706,7 +706,7 @@ namespace DeNelle.Village
             }
 
             FlowTrace.Step("Equip", $"branch: RESOURCES map (mesh='{vis.mesh}')");
-            GameObject prop = LoadWeaponMesh(vis.mesh) ?? BuildFallbackPrimitive(vis);
+            GameObject prop = LoadWeaponMesh(vis.mesh, weaponId) ?? BuildFallbackPrimitive(vis);
             if (prop == null) { FlowTrace.Fail("Equip", $"prop load+fallback both null for mesh '{vis.mesh}'"); return; }
 
             AttachLoadedProp(prop, vis, hand, weaponId);
@@ -811,7 +811,7 @@ namespace DeNelle.Village
             // native flag so we never mutate the shared cached IdMap preset.
             var fb = CopyOf(vis);
             fb.native = false;
-            GameObject prop = LoadWeaponMesh(fb.mesh) ?? BuildFallbackPrimitive(fb);
+            GameObject prop = LoadWeaponMesh(fb.mesh, weaponId) ?? BuildFallbackPrimitive(fb);
             if (prop == null) return;
             AttachLoadedProp(prop, fb, hand, weaponId);
         }
@@ -1487,7 +1487,7 @@ namespace DeNelle.Village
             }
 
             FlowTrace.Step("Equip", $"off-hand branch: RESOURCES map (mesh='{vis.mesh}')");
-            GameObject prop = LoadWeaponMesh(vis.mesh) ?? BuildFallbackPrimitive(vis);
+            GameObject prop = LoadWeaponMesh(vis.mesh, id) ?? BuildFallbackPrimitive(vis);
             if (prop == null) { FlowTrace.Fail("Equip", $"off-hand prop null for mesh '{vis.mesh}'"); return; }
 
             FlowTrace.Step("Equip", $"off-hand seated: id='{id}' mesh='{vis.mesh}' hand='{hand.name}'");
@@ -1564,7 +1564,7 @@ namespace DeNelle.Village
         {
             var fb = CopyOf(vis);
             fb.native = false;
-            GameObject prop = LoadWeaponMesh(fb.mesh) ?? BuildFallbackPrimitive(fb);
+            GameObject prop = LoadWeaponMesh(fb.mesh, id) ?? BuildFallbackPrimitive(fb);
             if (prop == null) return;
             AttachOffHandProp(prop, fb, hand, id);
         }
@@ -1598,6 +1598,16 @@ namespace DeNelle.Village
             string offsetKey = !string.IsNullOrEmpty(vis.mesh) ? vis.mesh : id;
             bool hasOffset = AttachmentOffsetRegistry.TryGetOffset(offsetKey, out var fo) ||
                              (offsetKey != id && AttachmentOffsetRegistry.TryGetOffset(id, out fo));
+            if (!hasOffset)
+            {
+                // §12 / §1.4b: ONE bool out of TWO lookups used to have no else-branch, so an
+                // unseated weapon and a deliberately-unauthored one were indistinguishable in the
+                // trace. Name both keys that were tried and what the seat falls back to.
+                FlowTrace.Warn("Equip",
+                    $"off-hand seat: NO OFFSET for key='{offsetKey}' or id='{id}' — " +
+                    "AttachmentOffsetRegistry has no authored row for either. CONSEQUENCE: the prop " +
+                    "takes the un-dialed preset grip (no Seating Editor pose); it may sit wrong in hand.");
+            }
             bool fullOverride = hasOffset && fo.fullOverride;
 
             var gripRoot = new GameObject(OffHandPropName);
@@ -2688,6 +2698,17 @@ namespace DeNelle.Village
             // Job-coded ids without a weapon keyword.
             if (id.StartsWith("mage"))  return Staff("staff_A");
             if (id.StartsWith("ranger"))return Bow("bow_A");
+
+            // ⛔ BEHAVIOUR UNCHANGED — a visible weapon beats an invisible one, so this still
+            // returns a sword. What changed 2026-08-14 is that it now REPORTS. Resolve() never
+            // returns null, so a row with no IdMap entry AND no usable prefabPath/category
+            // silently arms ANY class with sword_A (live: cleric_starter, knight_flameblade,
+            // both category:null). That failure rendered as success to every gate and to F8.
+            FlowTrace.Warn("Equip",
+                $"Resolve: NO VISUAL AUTHORED for id='{weaponId}' — no IdMap entry, and the catalog row " +
+                "gave no usable prefabPath/category (missing row, or prefabPath empty). FALLING BACK to " +
+                "sword_A. CONSEQUENCE: the player is armed with a GENERIC SWORD regardless of class — " +
+                "fix by adding a prefabPath+category to the weapons.json row (preferred) or an IdMap entry.");
             // Default: a sword (knight / generic melee).
             return Sword("sword_A");
         }
@@ -2736,15 +2757,35 @@ namespace DeNelle.Village
         /// then a model/fbx GameObject). Returns null when the prop hasn't been copied
         /// into Resources/Heroes/Props/Weapons yet (see file header gap note).
         /// </summary>
-        private static GameObject LoadWeaponMesh(string meshName)
+        private static GameObject LoadWeaponMesh(string meshName, string forId = null)
         {
             using var _ = FlowTrace.Enter("Equip", $"LoadWeaponMesh '{meshName ?? "<null>"}'");
-            if (string.IsNullOrEmpty(meshName)) return null;
+            string who = string.IsNullOrEmpty(forId) ? "<unknown id>" : forId;
+            if (string.IsNullOrEmpty(meshName))
+            {
+                // WO hollow-report fix (2026-08-14): an empty mesh key is a FAILURE, not a Step.
+                // The caller will fall back to BuildFallbackPrimitive and the player is handed a
+                // grey box with no other record that anything went wrong.
+                FlowTrace.Warn("Equip",
+                    $"LoadWeaponMesh: NO MESH KEY for id='{who}' — nothing to load from '{WeaponPropResourceDir}'. " +
+                    "CONSEQUENCE: the player sees a tinted grey box (BuildFallbackPrimitive), not this weapon.");
+                return null;
+            }
             string path = WeaponPropResourceDir + meshName;
             var prefab = Resources.Load<GameObject>(path);
-            FlowTrace.Step("Equip",
-                $"LoadWeaponMesh: path='{path}' prefab={(prefab != null ? "found" : "MISSING -> primitive fallback")}");
-            return prefab != null ? Instantiate(prefab) : null;
+            if (prefab == null)
+            {
+                // ⚠ THIS WAS A FlowTrace.Step UNTIL 2026-08-14 — a hard art failure that reported as
+                // routine, so it tripped no gate and raised no F8 flag while the hero visibly carried
+                // the wrong thing. Promoted to Warn and made to name id + key + player-visible result.
+                FlowTrace.Warn("Equip",
+                    $"LoadWeaponMesh: MISSING mesh for id='{who}' — key='{meshName}' path='{path}' " +
+                    "did not resolve under Resources. CONSEQUENCE: the player sees a tinted grey box " +
+                    "(BuildFallbackPrimitive), or a generic sword if Resolve() already substituted one.");
+                return null;
+            }
+            FlowTrace.Step("Equip", $"LoadWeaponMesh: id='{who}' path='{path}' prefab=found");
+            return Instantiate(prefab);
         }
 
         /// <summary>

@@ -11,6 +11,7 @@
         "UniTask",
         "Unity.AI.Navigation",
         "Unity.Addressables",
+        "Unity.Addressables.Editor",
         "Unity.ResourceManager"
     ],
     "includePlatforms": [

@@ -78,6 +78,9 @@ using System.Text;
 using System.Text.RegularExpressions;
 using DeNelle.Core.Diagnostics;
 using Newtonsoft.Json.Linq;
+using UnityEditor;
+using UnityEditor.AddressableAssets;
+using UnityEditor.AddressableAssets.Settings;
 using UnityEngine;
 
 namespace DeNelle.Editor
@@ -511,6 +514,15 @@ namespace DeNelle.Editor
         //       catalog (so the Gear Caster picks + HeroBodySwapper defaults resolve).
         //   (b) CATALOG RESOLVES — every Resources row is well-formed: a non-empty id,
         //       no duplicate ids within a catalog (a dup = ambiguous GearCatalog lookup).
+        //   (c) ART RESOLVES (added 2026-08-14) — every row that DECLARES a prefabPath walks
+        //       to a real asset: an Addressable address present in a group whose asset is
+        //       still on disk, or a Resources.Load that returns non-null. Without this,
+        //       GEAR_CURATION_OK stayed green with all 65 art-bearing weapons missing their
+        //       art (Assets/Blink/ is gitignored — that IS the fresh-clone state).
+        //   (d) SUBSET (added 2026-08-14) — Resources weapon ids ⊆ StreamingAssets weapon ids.
+        //       Resources is a curated projection; a Resources-only id means it drifted off
+        //       its source. WEAPONS ONLY — armor legitimately has 15 Resources-only ids today
+        //       and is logged, not failed.
         // Emits GEAR_CURATION_OK / GEAR_CURATION_FAIL. Absent picks file = WARN + skip.
         // NOTE (authoring 2026-07-18): EXPECTED RED until GearCurationExporter is run —
         // the pre-export Resources copies (34 weapons / 20 armor, no blink) do not yet
@@ -561,9 +573,184 @@ namespace DeNelle.Editor
                 failures.Add($"GEAR_CURATION_FAIL: referenced default armor id(s) NOT present in Resources " +
                              $"(HeroBodySwapper class-default armor would no-op): {Preview(missingDefaults)}");
 
-            if (resolveOk && missingPicks.Count == 0 && missingDefaults.Count == 0)
+            // (c) ART RESOLVES (2026-08-14, WEAPONS_DEEP_DIVE §3f).
+            // Until today GEAR_CURATION_OK asserted ONLY that picked ids existed as rows and
+            // that ids were non-empty + unique. That is compatible with all 65 art-bearing
+            // curated weapons having NO ART AT ALL — which is the state on any fresh clone,
+            // because Assets/Blink/ is gitignored. A green marker that survives the entire
+            // weapon art library going missing is not a gate. This walks each declared
+            // prefabPath to a real asset.
+            bool artOk = true;
+            artOk &= CheckPrefabPathsResolve("weapons.json", Path.Combine(resourcesRoot, "weapons.json"),
+                                             "weapons", failures, log);
+            artOk &= CheckPrefabPathsResolve("armor.json", Path.Combine(resourcesRoot, "armor.json"),
+                                             "armor", failures, log);
+
+            // (d) SUBSET ORACLE — the Resources weapons id set must be a SUBSET of the
+            // StreamingAssets one. Verified true today (Resources-only weapon ids = 0), which
+            // is what makes it assertable: Resources is a curated PROJECTION of the library,
+            // so an id that exists only in Resources means the projection was hand-edited
+            // away from its source (or a landmine re-inflated one copy and not the other).
+            // ⚠ WEAPONS ONLY, DELIBERATELY. armor.json does NOT satisfy this today — it has
+            // 15 Resources-only ids (armor_knight_*, the authored class defaults). Asserting
+            // armor here would ship a check that is red on arrival, so armor's Resources-only
+            // count is LOGGED as information and not failed. If armor is ever reconciled to a
+            // pure projection, promote the log line to a failure.
+            bool subsetOk = CheckResourcesIsSubsetOfStreaming("weapons.json", "weapons",
+                                                              resourcesRoot, streamingRoot,
+                                                              failures, log, assertIt: true);
+            CheckResourcesIsSubsetOfStreaming("armor.json", "armor",
+                                              resourcesRoot, streamingRoot,
+                                              failures, log, assertIt: false);
+
+            if (resolveOk && artOk && subsetOk && missingPicks.Count == 0 && missingDefaults.Count == 0)
                 log.AppendLine($"GEAR_CURATION_OK — all {included.Count} curated pick id(s) + {ReferencedDefaultArmorIds.Length} referenced " +
-                               "default armor id(s) present in the Resources catalog; every Resources row resolves (non-empty, unique id)");
+                               "default armor id(s) present in the Resources catalog; every Resources row resolves (non-empty, unique id); " +
+                               "every declared prefabPath resolves to a real asset (Addressable entry with an on-disk asset, or a loadable " +
+                               "Resources prefab); Resources weapon ids are a subset of StreamingAssets");
+        }
+
+        /// <summary>
+        /// (c) Every row that DECLARES a prefabPath must resolve to a real asset:
+        ///   • Addressable rows (loadVia=="addressable", or a "gear/" address) — the address must
+        ///     exist as an AddressableAssetEntry AND that entry's asset must still be on disk.
+        ///     A dangling entry (the .asset file keeps the GUID after the source folder is gone)
+        ///     is treated as MISSING, which is the whole point: gitignored art must go red.
+        ///   • Resources rows — Resources.Load&lt;GameObject&gt; must return non-null.
+        /// Rows with NO prefabPath are skipped and counted (they are the designed-but-unarted
+        /// half; that is a design gap tracked by WO-500, not a broken reference).
+        /// </summary>
+        private static bool CheckPrefabPathsResolve(string label, string resourcesPath, string arrayKey,
+                                                    List<string> failures, StringBuilder log)
+        {
+            if (!File.Exists(resourcesPath)) return true;   // absence already failed by ReadCatalogIds
+            JObject robj = TryParseObject(resourcesPath);
+            var arr = robj?[arrayKey] as JArray;
+            if (arr == null) return true;
+
+            AddressableAssetSettings settings = AddressableAssetSettingsDefaultObject.Settings;
+            var addresses = new HashSet<string>(StringComparer.Ordinal);
+            var danglingAddresses = new HashSet<string>(StringComparer.Ordinal);
+            if (settings != null)
+            {
+                foreach (var group in settings.groups)
+                {
+                    if (group == null) continue;
+                    foreach (var entry in group.entries)
+                    {
+                        if (entry == null || string.IsNullOrEmpty(entry.address)) continue;
+                        addresses.Add(entry.address);
+                        string assetPath = AssetDatabase.GUIDToAssetPath(entry.guid);
+                        if (string.IsNullOrEmpty(assetPath) ||
+                            (!File.Exists(assetPath) && !Directory.Exists(assetPath)))
+                            danglingAddresses.Add(entry.address);
+                    }
+                }
+            }
+            else
+            {
+                log.AppendLine($"  art[{label}]: AddressableAssetSettingsDefaultObject.Settings == null — " +
+                               "Addressable rows cannot be resolved, skipped (Resources rows still checked)");
+            }
+
+            int noPath = 0, addrOk = 0, resOk = 0, skippedAddr = 0;
+            var missing = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var tok in arr)
+            {
+                var row = tok as JObject;
+                if (row == null) continue;
+                string id = (string)row["id"] ?? "<no id>";
+                string prefabPath = (string)row["prefabPath"];
+                if (string.IsNullOrEmpty(prefabPath)) { noPath++; continue; }
+
+                string loadVia = (string)row["loadVia"];
+                bool viaAddressable =
+                    (!string.IsNullOrEmpty(loadVia) && loadVia.Equals("addressable", StringComparison.OrdinalIgnoreCase)) ||
+                    prefabPath.StartsWith("gear/", StringComparison.OrdinalIgnoreCase);
+
+                if (viaAddressable)
+                {
+                    if (settings == null) { skippedAddr++; continue; }
+                    if (!addresses.Contains(prefabPath))
+                        missing.Add($"{id} -> address '{prefabPath}' NOT in any Addressable group");
+                    else if (danglingAddresses.Contains(prefabPath))
+                        missing.Add($"{id} -> address '{prefabPath}' is a DANGLING entry (asset not on disk — gitignored/moved art)");
+                    else addrOk++;
+                }
+                else
+                {
+                    if (Resources.Load<GameObject>(prefabPath) == null)
+                        missing.Add($"{id} -> Resources.Load('{prefabPath}') returned null");
+                    else resOk++;
+                }
+            }
+
+            log.AppendLine($"  art[{label}]: {addrOk} addressable OK, {resOk} Resources OK, {noPath} row(s) declare no prefabPath, " +
+                           $"{skippedAddr} addressable row(s) skipped, {missing.Count} UNRESOLVABLE");
+
+            if (missing.Count > 0)
+            {
+                failures.Add($"GEAR_CURATION_FAIL: {missing.Count} curated row(s) have an unresolvable prefabPath in '{label}' " +
+                             $"(the weapon has NO ART — the player is handed a generic sword or a grey primitive, and nothing else " +
+                             $"reports it): {Preview(missing)}");
+                return false;
+            }
+            return true;
+        }
+
+        /// <summary>
+        /// (d) Resources ids ⊆ StreamingAssets ids. Resources is a curated PROJECTION of the
+        /// StreamingAssets library, so a Resources-only id means the projection drifted off its
+        /// source. Failed only when <paramref name="assertIt"/> (see the armor exemption above).
+        /// </summary>
+        private static bool CheckResourcesIsSubsetOfStreaming(string label, string arrayKey,
+                                                              string resourcesRoot, string streamingRoot,
+                                                              List<string> failures, StringBuilder log,
+                                                              bool assertIt)
+        {
+            string rPath = Path.Combine(resourcesRoot, label);
+            string sPath = Path.Combine(streamingRoot, label);
+            if (!File.Exists(rPath) || !File.Exists(sPath))
+            {
+                log.AppendLine($"  subset[{label}]: skipped — one copy missing (r={File.Exists(rPath)} s={File.Exists(sPath)})");
+                return true;
+            }
+
+            var rArr = TryParseObject(rPath)?[arrayKey] as JArray;
+            var sArr = TryParseObject(sPath)?[arrayKey] as JArray;
+            if (rArr == null || sArr == null)
+            {
+                log.AppendLine($"  subset[{label}]: skipped — '{arrayKey}' array absent in one copy");
+                return true;
+            }
+
+            var streamingIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var tok in sArr)
+            {
+                string sid = (tok as JObject)?["id"]?.ToString();
+                if (!string.IsNullOrEmpty(sid)) streamingIds.Add(sid);
+            }
+
+            var resourcesOnly = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+            int rCount = 0;
+            foreach (var tok in rArr)
+            {
+                string rid = (tok as JObject)?["id"]?.ToString();
+                if (string.IsNullOrEmpty(rid)) continue;
+                rCount++;
+                if (!streamingIds.Contains(rid)) resourcesOnly.Add(rid);
+            }
+
+            log.AppendLine($"  subset[{label}]: {rCount} Resources id(s) vs {streamingIds.Count} StreamingAssets id(s) — " +
+                           $"Resources-only={resourcesOnly.Count}{(assertIt ? "" : " (INFORMATIONAL — not asserted, see armor exemption)")}");
+
+            if (resourcesOnly.Count > 0 && assertIt)
+            {
+                failures.Add($"GEAR_CURATION_FAIL: '{label}' Resources copy holds {resourcesOnly.Count} id(s) NOT in StreamingAssets " +
+                             $"— the curated projection drifted off its library source: {Preview(resourcesOnly)}");
+                return false;
+            }
+            return true;
         }
 
         /// <summary>Asserts one Resources catalog is well-formed: no empty ids, no duplicate ids
