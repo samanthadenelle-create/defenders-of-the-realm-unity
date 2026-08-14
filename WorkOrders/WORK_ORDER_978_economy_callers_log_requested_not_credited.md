@@ -1,6 +1,6 @@
 # WORK ORDER 978 — Economy callers log the amount REQUESTED, not the amount CREDITED
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — all four callers now log MEASURED before/after wallet deltas as `credited/requested` with a `Warn` on any shortfall; `EconomyService.cs` untouched (it was already correct). No site fell back to a bare `requested=` label: every callee is `void` (or returns levels/bool, not an amount), but each had an observable total (`EconomyService.Wood/Food/Iron/Crystals/Coins`, `GameState.Resources.*`, `GlimmerCurrencyService.Glimmer`, `HeroProgression.LifetimeXp`, `VillageInventory.Get`, `GameState.EchoCount`), so every axis is a real measurement. Also fixed in scope: `DailyQuestRewardBridge`'s latch-before-grant (same shape as WO-977) — a re-entrancy set now guards double-grants and `ClaimedAtUnix` latches only after a confirmed credit. **The §6 open question (what should happen AT cap) is still open for the owner — logging only.** Regression + `DataRegression` registration NOT added (lane-fenced to the committer).
 **Lane:** Economy / instrumentation
 **Severity:** player-facing, and **invisible in every capture** — which is what makes it expensive
 **Minted:** 2026-08-10 (CLI), from the hollow-assertion audit (`docs/reference/HOLLOW_ASSERTIONS_REGISTRY.md`)
@@ -11,9 +11,13 @@
 
 Four callers log the value they *passed in* as though it landed:
 
-- `Assets/_Modules/Village/Raids/RaidVictoryController.cs:277`
+> ⚠ **Path correction (found during implementation):** three of the four paths below were wrong in
+> the original mint — there is no `Village/Raids/`, `Village/Outposts/`, or `Village/Economy/`
+> directory. Corrected here so the next reader does not grep for files that do not exist.
+
+- `Assets/_Modules/Village/World/Camps/RaidVictoryController.cs:277`
 - `Assets/_Modules/Village/Quests/DailyQuestRewardBridge.cs:126`
-- `Assets/_Modules/Village/Outposts/ChallengeOutpostVictoryController.cs:147`
+- `Assets/_Modules/Village/World/Camps/ChallengeOutpostVictoryController.cs:147`
 - `Assets/_Modules/Village/Population/PopulationService.cs:211`
 
 `EconomyService.Grant` routes to the **clampable `EarnedIncome`** kind. So when the town bank is at
@@ -21,7 +25,7 @@ cap, **the player is credited 0 while the log reads `+500 crystals`.**
 
 ## 2. ⚠ The authority is HONEST — do not "fix" `EconomyService`
 
-`Assets/_Modules/Village/Economy/EconomyService.cs:416` already prints the **post-clamp amount** *and*
+`Assets/_Modules/Village/EconomyService.cs:416` already prints the **post-clamp amount** *and*
 the **resulting total**. It is doing exactly the right thing.
 
 **The bug is entirely caller-side.** Anyone who reads this ticket and starts editing `EconomyService`

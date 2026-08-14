@@ -265,6 +265,19 @@ namespace DeNelle.Village.World.Camps
         /// falls back to the persistent <see cref="GameStateService"/> crystal/food
         /// mutators when a raid scene has no EconomyService (both target the SAME
         /// GameState.Resources wallet, so the grant lands and persists either way).
+        ///
+        /// <para>WO-978 — THIS TRACE REPORTS THE MEASURED CREDIT, NOT THE REQUEST. It used to
+        /// print <c>loot.Crystals</c>/<c>loot.Food</c> — the numbers we ASKED for — as though they
+        /// had landed. <c>EconomyService.Grant</c> returns <c>void</c> and routes to the
+        /// <b>clampable</b> <c>BankGrantKind.EarnedIncome</c> kind (EconomyService.cs :363 → :396),
+        /// so a town bank at its storage ceiling credits LESS than the raid awarded — possibly
+        /// zero — while the old line still read "+500 crystals". That is exactly the shape of
+        /// "I did the raid and got nothing" being unfalsifiable from a capture.
+        /// <b>EconomyService itself is honest</b> (its own trace at :416 prints the post-clamp
+        /// amount and the resulting total) — the bug was entirely caller-side, and it is fixed
+        /// here, not there. Since the API hands back nothing, we take the only honest reading
+        /// available: the wallet totals BEFORE and AFTER, and we log the DELTA — a measured
+        /// quantity rather than a derived one.</para>
         /// </summary>
         private void GrantLoot(ResourceCost loot)
         {
@@ -273,23 +286,75 @@ namespace DeNelle.Village.World.Camps
             var eco = EconomyService.Instance;
             if (eco != null)
             {
+                // The wallet properties read straight through to the single GameState-backed
+                // store (WO-842), so before/after is a real measurement of what was credited.
+                int w0 = eco.Wood, f0 = eco.Food, i0 = eco.Iron, c0 = eco.Crystals, g0 = eco.Coins;
                 eco.Grant(loot);
-                FlowTrace.Step("Raid", $"LOOT granted via EconomyService: +{loot.Crystals} crystals, +{loot.Food} food.");
+                LogCredit("EconomyService", loot,
+                          eco.Wood - w0, eco.Food - f0, eco.Iron - i0,
+                          eco.Crystals - c0, eco.Coins - g0);
                 return;
             }
 
             var gs = GameStateService.Instance;
-            if (gs != null)
+            var state = gs != null ? gs.State : null;
+            if (gs != null && state != null)
             {
+                // AddCrystals/AddFood are void too — measure GameState.Resources either side.
+                // Note this fallback route has NO wood/iron/gold mover at all, so any of those
+                // axes in the loot are DROPPED; LogCredit will say so instead of hiding it.
+                int c0 = state.Resources.Crystals, f0 = state.Resources.Food;
                 if (loot.Crystals != 0) gs.AddCrystals(loot.Crystals);
                 if (loot.Food != 0) gs.AddFood(loot.Food);
-                FlowTrace.Step("Raid", $"LOOT granted via GameStateService fallback: +{loot.Crystals} crystals, +{loot.Food} food.");
+                LogCredit("GameStateService fallback", loot,
+                          0, state.Resources.Food - f0, 0,
+                          state.Resources.Crystals - c0, 0);
+            }
+            else if (gs != null)
+            {
+                FlowTrace.Fail("Raid", "LOOT LOST — GameStateService is present but has no loaded State; " +
+                                       $"the win awarded {Describe(loot)} and NONE of it was credited.");
             }
             else
             {
-                FlowTrace.Warn("Raid", "LOOT NOT granted — no EconomyService and no GameStateService present.");
+                FlowTrace.Fail("Raid", "LOOT LOST — no EconomyService and no GameStateService present; " +
+                                       $"the win awarded {Describe(loot)} and NONE of it was credited.");
             }
         }
+
+        /// <summary>
+        /// WO-978 — the one place a raid loot grant is reported, always as
+        /// <c>credited/requested</c> per axis. A shortfall is a <see cref="FlowTrace.Warn"/>
+        /// naming both numbers and the consequence, never a routine Step, so a capture SHOWS
+        /// the clamp instead of agreeing with the payout that never happened.
+        /// </summary>
+        private static void LogCredit(string route, ResourceCost requested,
+                                      int dWood, int dFood, int dIron, int dCrystals, int dCoins)
+        {
+            string measured =
+                $"wood {dWood}/{requested.Wood}, food {dFood}/{requested.Food}, iron {dIron}/{requested.Iron}, " +
+                $"crystals {dCrystals}/{requested.Crystals}, gold {dCoins}/{requested.Coins} (credited/requested)";
+
+            bool shortfall = dWood     < requested.Wood
+                          || dFood     < requested.Food
+                          || dIron     < requested.Iron
+                          || dCrystals < requested.Crystals
+                          || dCoins    < requested.Coins;
+
+            if (shortfall)
+                FlowTrace.Warn("Raid",
+                    $"LOOT SHORT via {route} — the wallet took LESS than the raid awarded: {measured}. " +
+                    "Raid loot is EarnedIncome, which TownBankCapacity clamps against the town storage " +
+                    "ceiling — the player earned this and did not receive it. (WO-978: what should happen " +
+                    "at cap is an OPEN owner question; this line only stops the log from claiming payment.)");
+            else
+                FlowTrace.Step("Raid", $"LOOT credited via {route}: {measured}.");
+        }
+
+        /// <summary>Human-readable requested loot, for the never-credited failure lines.</summary>
+        private static string Describe(ResourceCost loot)
+            => $"requested wood {loot.Wood}, food {loot.Food}, iron {loot.Iron}, " +
+               $"crystals {loot.Crystals}, gold {loot.Coins}";
 
         // =====================================================================
         //  ARMY RECONCILE (the WIN half of the wounded / veterancy model)

@@ -51,6 +51,14 @@ namespace DeNelle.Village.World.Camps
 
         private bool _cleared;
 
+        // WO-978 — the MEASURED clear reward (what the wallet/hero actually took), not the
+        // constants above. The victory screen renders THESE so the player-facing spoils can
+        // never advertise a number the economy refused. _rewardShort drives a plain-WORDS
+        // caveat on the screen (owner is red/green colourblind — never colour alone).
+        private int _goldCredited;
+        private int _xpCredited;
+        private bool _rewardShort;
+
         // ── Self-install: only in the challenge-outpost scene, once. ──────────────
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Register()
@@ -140,11 +148,65 @@ namespace DeNelle.Village.World.Camps
             using var _ = FlowTrace.Enter(Sys, "CLEARED — garrison wiped");
 
             // (3a) Reward: Gold + hero XP (not crystals — see header).
+            //
+            // WO-978 — THE OLD LINE HERE WAS UNFALSIFIABLE. It printed
+            //   $"reward granted: {ClearGold} gold + {ClearXp} XP."
+            // where BOTH values are compile-time consts declared 100 lines up — a trace built
+            // entirely from constants can never disagree with itself, so it read as proof of
+            // payment even when both grants no-oped. Both calls were also null-conditional:
+            // a missing EconomyService / HeroProgression paid NOTHING, silently.
+            //
+            // Neither API hands back a credited amount (AddCoins returns void; AddXp returns
+            // LEVELS GAINED, not XP), so we measure the observable totals either side and log
+            // the DELTA. HeroProgression.LifetimeXp is monotonic, which makes it the honest
+            // XP meter (Xp alone resets on each level-up).
             Guard.Try(Sys, "GrantReward", () =>
             {
-                EconomyService.Instance?.AddCoins(ClearGold);
-                HeroProgression.Instance?.AddXp(ClearXp);
-                FlowTrace.Step(Sys, $"reward granted: {ClearGold} gold + {ClearXp} XP.");
+                var eco = EconomyService.Instance;
+                if (eco == null)
+                {
+                    _rewardShort = true;
+                    FlowTrace.Fail(Sys, $"clear reward LOST — no EconomyService in this scene; the requested " +
+                                        $"{ClearGold} gold was NEVER credited (the player cleared the outpost for nothing).");
+                }
+                else
+                {
+                    int before = eco.Coins;
+                    eco.AddCoins(ClearGold);
+                    _goldCredited = eco.Coins - before;
+                    if (_goldCredited == ClearGold)
+                        FlowTrace.Step(Sys, $"gold credited: +{_goldCredited} of {ClearGold} requested -> total {eco.Coins}.");
+                    else
+                    {
+                        _rewardShort = true;
+                        FlowTrace.Warn(Sys, $"gold SHORT: credited {_goldCredited} of {ClearGold} requested -> total {eco.Coins}. " +
+                                            "AddCoins silently no-ops when GameStateService has no loaded State — " +
+                                            "the outpost was cleared and the player was not paid in full.");
+                    }
+                }
+
+                var hero = HeroProgression.Instance;
+                if (hero == null)
+                {
+                    _rewardShort = true;
+                    FlowTrace.Fail(Sys, $"clear reward LOST — no HeroProgression in this scene; the requested " +
+                                        $"{ClearXp} XP was NEVER credited.");
+                }
+                else
+                {
+                    float xpBefore = hero.LifetimeXp;
+                    int levelsGained = hero.AddXp(ClearXp);          // return value = LEVELS, not XP
+                    _xpCredited = Mathf.RoundToInt(hero.LifetimeXp - xpBefore);
+                    if (_xpCredited >= ClearXp)
+                        FlowTrace.Step(Sys, $"XP credited: +{_xpCredited} of {ClearXp} requested " +
+                                            $"(levels gained {levelsGained}, lifetime {hero.LifetimeXp:0}).");
+                    else
+                    {
+                        _rewardShort = true;
+                        FlowTrace.Warn(Sys, $"XP SHORT: credited {_xpCredited} of {ClearXp} requested " +
+                                            $"(lifetime {hero.LifetimeXp:0}) — the hero did not receive the clear reward.");
+                    }
+                }
             });
 
             // (3b) Victory screen with a "Return to Castle" primary + auto-dismiss
@@ -155,15 +217,23 @@ namespace DeNelle.Village.World.Camps
                 {
                     Kind = EndStateKind.Victory,
                     Title = "Outpost Cleared",
-                    Subtitle = "The garrison is broken.",
+                    // WO-978 §4.3 — words, never colour alone. If the economy took less than
+                    // the clear awarded, the screen SAYS so rather than showing a number that
+                    // silently differs from the wallet.
+                    Subtitle = _rewardShort
+                        ? "The garrison is broken. Some of the reward could not be paid out."
+                        : "The garrison is broken.",
                     PrimaryLabel = "Return to Castle",
                     PrimaryRoute = "close",
                     Primary = ReturnHome,
                     AutoDismissSeconds = 6f,
                 };
                 // WO-697: reward numbers through the ONE kit formatter (compact >= 10k).
-                vm.Spoils.Add(new SpoilRowVM { Label = "Gold", Amount = "+" + DeNelle.Core.UI.ElarionUi.CompactNumber(ClearGold) });
-                vm.Spoils.Add(new SpoilRowVM { Label = "XP", Amount = "+" + DeNelle.Core.UI.ElarionUi.CompactNumber(ClearXp) });
+                // WO-978: the numbers are the MEASURED credits (_goldCredited/_xpCredited),
+                // not the ClearGold/ClearXp constants — the spoils row must state what the
+                // player actually received.
+                vm.Spoils.Add(new SpoilRowVM { Label = "Gold", Amount = "+" + DeNelle.Core.UI.ElarionUi.CompactNumber(_goldCredited) });
+                vm.Spoils.Add(new SpoilRowVM { Label = "XP", Amount = "+" + DeNelle.Core.UI.ElarionUi.CompactNumber(_xpCredited) });
                 EndStateView.Show(vm);
                 FlowTrace.Step(Sys, "victory end-state shown.");
             });

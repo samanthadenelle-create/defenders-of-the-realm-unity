@@ -139,7 +139,15 @@ namespace DeNelle.Village.Population
                 return;
             }
 
+            // WO-978: measure what the counter actually took (Mathf.Max can absorb a negative
+            // request) rather than echoing `amount` back.
+            int xpBefore = s.PopulationXP;
             if (amount > 0) s.PopulationXP = Mathf.Max(0, s.PopulationXP + amount);
+            int xpCredited = s.PopulationXP - xpBefore;
+            if (amount > 0 && xpCredited < amount)
+                FlowTrace.Warn("Population",
+                    $"AddPopulationXP SHORT from '{source}': credited {xpCredited} of {amount} requested " +
+                    $"-> xp={s.PopulationXP}.");
 
             // Source -> counter. Waves reuse GameState.WavesCompleted (EchoService owns it);
             // village-upgrade carries no XP/counter (cap is derived from the tier).
@@ -150,7 +158,7 @@ namespace DeNelle.Village.Population
             }
 
             FlowTrace.Step("Population",
-                $"AddPopulationXP +{amount} from '{source}' -> xp={s.PopulationXP}, quests={s.PopulationQuests}, " +
+                $"AddPopulationXP credited {xpCredited}/{amount} from '{source}' -> xp={s.PopulationXP}, quests={s.PopulationQuests}, " +
                 $"outposts={s.PopulationOutposts}, waves={s.WavesCompleted}, tier={VillageTierService.Current}, " +
                 $"slots={EchoSlotsUnlocked}/{MaxEchoSlots}, cap={PopulationCap}.");
 
@@ -205,13 +213,44 @@ namespace DeNelle.Village.Population
                     continue;
 
                 // Grant: persist the new slot, drive the existing workforce, notify.
+                //
+                // WO-978 -- THIS BLOCK USED TO SELF-REPORT. The trace printed
+                // s.PopulationEchoSlots, the field assigned three lines above it, so it could
+                // only ever agree with itself; and EchoService.GrantEcho was null-conditional
+                // and returns void, so the ECHO half of the unlock could silently not happen
+                // (no service, no GameState, or already at EchoService.MaxEchoes) while the log
+                // announced "the village grows stronger". Now: read the slot count back through
+                // the EchoSlotsUnlocked ACCESSOR (which re-reads and clamps live state, so it can
+                // disagree with the write) and measure the echo roster either side of the grant.
+                int slotsBefore = EchoSlotsUnlocked;
+                int echoesBefore = s.EchoCount;
+
                 s.PopulationEchoSlots = Mathf.Clamp(m.EchoSlot, 1, MaxEchoSlots);
-                EchoService.Instance?.GrantEcho($"population-milestone slot {m.EchoSlot} ({reason})");
+
+                var echoes = EchoService.Instance;
+                if (echoes == null)
+                    FlowTrace.Warn("Population",
+                        $"milestone slot {m.EchoSlot} ({reason}): no EchoService -- the SLOT opened but NO Echo was " +
+                        "granted, so the player has an empty workforce seat and no spirit to fill it.");
+                else
+                    echoes.GrantEcho($"population-milestone slot {m.EchoSlot} ({reason})");
+
                 GameStateService.Instance?.Save();
 
-                FlowTrace.Step("Population",
-                    $"Echo slot {m.EchoSlot} UNLOCKED ({reason}) -- the village grows stronger. " +
-                    $"slots now {s.PopulationEchoSlots}/{MaxEchoSlots}.");
+                int slotsNow = EchoSlotsUnlocked;          // measured read-back, not the write
+                int echoesGranted = s.EchoCount - echoesBefore;
+
+                if (slotsNow != m.EchoSlot || echoesGranted < 1)
+                    FlowTrace.Warn("Population",
+                        $"Echo slot {m.EchoSlot} ({reason}) did NOT fully land: slots {slotsBefore} -> {slotsNow} " +
+                        $"(wanted {m.EchoSlot}), echoes {echoesBefore} -> {s.EchoCount} (granted {echoesGranted}, wanted 1). " +
+                        "A slot without an Echo is an unlock the player cannot use -- GrantEcho no-ops at its own cap " +
+                        "and before GameState exists.");
+                else
+                    FlowTrace.Step("Population",
+                        $"Echo slot {m.EchoSlot} UNLOCKED ({reason}) -- the village grows stronger. " +
+                        $"slots {slotsBefore} -> {slotsNow}/{MaxEchoSlots}, echoes {echoesBefore} -> {s.EchoCount}.");
+
                 EchoSlotUnlocked?.Invoke(m.EchoSlot);
                 unlockedAny = true;
             }

@@ -104,6 +104,12 @@ namespace DeNelle.Village.Quests
 
         // ── Reward dispense ────────────────────────────────────────────────────
 
+        // WO-978 — RE-ENTRANCY GUARD, the thing the old latch-first was really buying.
+        // Holds the quests whose payout is IN FLIGHT right now, so a re-fire during the
+        // grants cannot double-pay. It replaces the latch as the double-grant defence,
+        // which is what frees the latch to move AFTER the grants (see HandleQuestCompleted).
+        private readonly HashSet<string> _payingOut = new HashSet<string>();
+
         private void HandleQuestCompleted(DailyQuestInstance q)
         {
             if (q == null || q.ClaimedAtUnix != 0) return; // already paid out
@@ -114,16 +120,83 @@ namespace DeNelle.Village.Quests
                 return;
             }
 
-            // Latch FIRST so any re-fire (a later Repaint / double event) cannot
-            // double-grant, even if a grant call below early-returns.
-            q.ClaimedAtUnix = System.DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            // ── WO-978 / same defect shape as WO-977: THE LATCH NO LONGER RUNS FIRST ──
+            // It used to read:
+            //     q.ClaimedAtUnix = ...UtcNow...;   // "latch FIRST so a re-fire cannot double-grant"
+            // placed ABOVE every grant. The double-grant it prevented is real, but the price was
+            // worse than the bug: any grant below that no-oped (no service, no GameState, a full
+            // town bank) left the quest PERMANENTLY MARKED CLAIMED having paid nothing, with no
+            // way for the player to ever collect it. A re-entrancy set buys the same protection
+            // without spending the player's reward, so the latch now lands only once a payout is
+            // confirmed — and if NOTHING was credited we leave the quest claimable and say so.
+            string key = (q.TemplateId ?? "?") + "|" + q.Slot;
+            if (!_payingOut.Add(key))
+            {
+                FlowTrace.Warn("Economy", $"DailyQuest '{q.TemplateId}' re-entered while its payout was still in flight — " +
+                                          "ignoring the duplicate event (no double-grant).");
+                return;
+            }
+
+            int paidAxes = 0, requestedAxes = 0;
+            try
+            {
+                PayOut(q, reward, ref paidAxes, ref requestedAxes);
+            }
+            finally
+            {
+                _payingOut.Remove(key);
+            }
+
+            if (requestedAxes == 0 || paidAxes > 0)
+            {
+                // Something landed (or the row asks for nothing at all) — latch it so the
+                // credited part can never be paid twice.
+                q.ClaimedAtUnix = System.DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                FlowTrace.Step("Economy", $"DailyQuest '{q.TemplateId}' CLAIMED (latched) after {paidAxes}/{requestedAxes} " +
+                                          "reward axes were confirmed credited.");
+            }
+            else
+            {
+                FlowTrace.Fail("Economy", $"DailyQuest '{q.TemplateId}' paid NOTHING — {requestedAxes} reward axis/axes were " +
+                                          "requested and 0 landed. Deliberately NOT latching ClaimedAtUnix, so the quest stays " +
+                                          "claimable and the player does not lose the reward (WO-978).");
+            }
+        }
+
+        /// <summary>
+        /// Dispenses every axis of the slot reward, counting how many were REQUESTED and how
+        /// many actually CREDITED. WO-978: not one of these APIs returns a credited amount
+        /// (<c>AddCrystals</c>/<c>AddFood</c>/<c>EconomyService.Grant</c> are all <c>void</c>;
+        /// <c>TryAddGlimmer</c> returns only a bool), so each grant is measured as a
+        /// BEFORE/AFTER delta on the wallet it targets — a measured quantity, never the catalog
+        /// number we asked for. Every null service now names its consequence rather than
+        /// no-oping silently, copying the idiom of this file's honest sibling
+        /// <see cref="GrantRandomItem"/>.
+        /// </summary>
+        private void PayOut(DailyQuestInstance q, DailyQuestSlotReward reward,
+                            ref int paidAxes, ref int requestedAxes)
+        {
+            var gs = GameStateService.Instance;
+            var state = gs != null ? gs.State : null;
 
             // Crystals -> the canonical resource wallet (the same store the build
             // menu reads/spends). AddCrystals clamps, persists, raises ResourcesChanged.
             if (reward.RewardCrystals > 0)
             {
-                GameStateService.Instance?.AddCrystals(reward.RewardCrystals);
-                FlowTrace.Step("Economy", $"DailyQuest '{q.TemplateId}' granted {reward.RewardCrystals} crystals");
+                requestedAxes++;
+                if (state == null)
+                {
+                    FlowTrace.Fail("Economy", $"DailyQuest '{q.TemplateId}' crystals LOST — no GameState loaded; " +
+                                              $"{reward.RewardCrystals} crystals were never credited.");
+                }
+                else
+                {
+                    int before = state.Resources.Crystals;
+                    gs.AddCrystals(reward.RewardCrystals);
+                    int credited = state.Resources.Crystals - before;
+                    if (credited > 0) paidAxes++;
+                    Report(q, "crystals", credited, reward.RewardCrystals, state.Resources.Crystals);
+                }
             }
 
             // Food -> the food wallet (Resources.Food).
@@ -133,12 +206,33 @@ namespace DeNelle.Village.Quests
             // GameStateService.AddFood directly, which is BELOW the cap seam - an unclamped back door
             // that would have let dailies alone push food past a full bank with no warn. AddFood stays
             // as the no-EconomyService fallback only (EditMode / headless boots).
+            // WO-978: this is THE axis the cap actually bites — so it is the one that most needed to
+            // stop printing the catalog number.
             if (reward.RewardFood > 0)
             {
+                requestedAxes++;
                 var eco = EconomyService.Instance;
-                if (eco != null) eco.Grant(food: reward.RewardFood);
-                else GameStateService.Instance?.AddFood(reward.RewardFood);
-                FlowTrace.Step("Economy", $"DailyQuest '{q.TemplateId}' granted {reward.RewardFood} food");
+                if (eco != null)
+                {
+                    int before = eco.Food;
+                    eco.Grant(food: reward.RewardFood);
+                    int credited = eco.Food - before;
+                    if (credited > 0) paidAxes++;
+                    Report(q, "food", credited, reward.RewardFood, eco.Food);
+                }
+                else if (state != null)
+                {
+                    int before = state.Resources.Food;
+                    gs.AddFood(reward.RewardFood);
+                    int credited = state.Resources.Food - before;
+                    if (credited > 0) paidAxes++;
+                    Report(q, "food (no-EconomyService fallback)", credited, reward.RewardFood, state.Resources.Food);
+                }
+                else
+                {
+                    FlowTrace.Fail("Economy", $"DailyQuest '{q.TemplateId}' food LOST — no EconomyService and no GameState; " +
+                                              $"{reward.RewardFood} food was never credited.");
+                }
             }
 
             // Wisdom (WO-763, owner 2026-07-25): dailies NO LONGER pay Wisdom — Wisdom is
@@ -148,31 +242,87 @@ namespace DeNelle.Village.Quests
             // worth claiming without cheapening the skill economy.
             if (reward.RewardWisdom > 0)
             {
-                GameStateService.Instance?.AddCrystals(reward.RewardWisdom);
-                FlowTrace.Step("Economy", $"DailyQuest '{q.TemplateId}' redirected {reward.RewardWisdom} wisdom -> crystals (WO-763)");
+                requestedAxes++;
+                if (state == null)
+                {
+                    FlowTrace.Fail("Economy", $"DailyQuest '{q.TemplateId}' wisdom->crystals redirect LOST — no GameState; " +
+                                              $"{reward.RewardWisdom} crystals were never credited.");
+                }
+                else
+                {
+                    int before = state.Resources.Crystals;
+                    gs.AddCrystals(reward.RewardWisdom);
+                    int credited = state.Resources.Crystals - before;
+                    if (credited > 0) paidAxes++;
+                    Report(q, "wisdom->crystals (WO-763)", credited, reward.RewardWisdom, state.Resources.Crystals);
+                }
             }
 
             // Glimmer -> the cosmetic-shop currency. A steady, non-grindy trickle.
+            // WO-978: the bool return was DISCARDED here. It is now checked AND cross-read
+            // against the balance, because a true return still only means "non-zero request".
             if (reward.RewardGlimmer > 0)
             {
-                GlimmerCurrencyService.Instance?.TryAddGlimmer(reward.RewardGlimmer);
-                FlowTrace.Step("Economy", $"DailyQuest '{q.TemplateId}' granted {reward.RewardGlimmer} glimmer");
+                requestedAxes++;
+                var glim = GlimmerCurrencyService.Instance;
+                if (glim == null)
+                {
+                    FlowTrace.Fail("Economy", $"DailyQuest '{q.TemplateId}' glimmer LOST — GlimmerCurrencyService not ready; " +
+                                              $"{reward.RewardGlimmer} glimmer was never credited.");
+                }
+                else
+                {
+                    int before = glim.Glimmer;
+                    bool ok = glim.TryAddGlimmer(reward.RewardGlimmer);
+                    int credited = glim.Glimmer - before;
+                    if (credited > 0) paidAxes++;
+                    if (!ok && credited == 0)
+                        FlowTrace.Warn("Economy", $"DailyQuest '{q.TemplateId}' glimmer REFUSED by TryAddGlimmer " +
+                                                  $"(requested {reward.RewardGlimmer}) — balance unchanged at {glim.Glimmer}.");
+                    else
+                        Report(q, "glimmer", credited, reward.RewardGlimmer, glim.Glimmer);
+                }
             }
 
             // Random item -> roll a consumable from the catalog and grant it into the
             // persisted larder (VillageInventory.Add -> GameState.GearInventory). The
             // pool is the data-driven ConsumableCatalog, not a hardcoded id.
             if (reward.RewardRandomItem)
-                GrantRandomItem(q);
+            {
+                requestedAxes++;
+                if (GrantRandomItem(q)) paidAxes++;
+            }
         }
 
-        private void GrantRandomItem(DailyQuestInstance q)
+        /// <summary>
+        /// WO-978 — the single reporting shape for a daily-quest payout axis:
+        /// <c>credited/requested</c> plus the resulting total (mirroring EconomyService.cs:416).
+        /// A shortfall is a Warn naming both numbers and the likely cause, never a Step.
+        /// </summary>
+        private static void Report(DailyQuestInstance q, string axis, int credited, int requested, int total)
+        {
+            if (credited >= requested)
+                FlowTrace.Step("Economy", $"DailyQuest '{q.TemplateId}' credited {credited}/{requested} {axis} -> total {total}");
+            else
+                FlowTrace.Warn("Economy", $"DailyQuest '{q.TemplateId}' SHORT on {axis}: credited {credited} of {requested} " +
+                                          $"requested -> total {total}. Daily payouts are EarnedIncome, which the town bank cap " +
+                                          "clamps — the player completed the quest and did not receive the full reward (WO-978).");
+        }
+
+        /// <summary>
+        /// Rolls and grants the wildcard consumable. This method was ALREADY the honest
+        /// sibling in this file — it Warns on every null instead of no-oping — so WO-978
+        /// changed only its signature: it now RETURNS whether the item actually landed, so
+        /// the caller's claimed-latch can depend on a confirmed credit rather than on the
+        /// call having been attempted.
+        /// </summary>
+        private bool GrantRandomItem(DailyQuestInstance q)
         {
             var pool = ConsumableCatalog.All;
             if (pool == null || pool.Count == 0)
             {
                 FlowTrace.Warn("Economy", $"DailyQuest '{q.TemplateId}' random-item reward skipped — empty consumable catalog");
-                return;
+                return false;
             }
 
             // Deterministic-enough roll; no need for a seeded RNG for a cosmetic drop.
@@ -180,18 +330,30 @@ namespace DeNelle.Village.Quests
             if (def == null || string.IsNullOrEmpty(def.Id))
             {
                 FlowTrace.Warn("Economy", $"DailyQuest '{q.TemplateId}' random-item reward skipped — null catalog entry");
-                return;
+                return false;
             }
 
             var inv = VillageInventory.Instance;
             if (inv == null)
             {
                 FlowTrace.Warn("Economy", $"DailyQuest '{q.TemplateId}' random-item '{def.Id}' lost — VillageInventory not ready");
-                return;
+                return false;
             }
 
+            // VillageInventory.Add is void, but Get(id) is an observable count — measure it
+            // rather than asserting the call worked (WO-978).
+            int before = inv.Get(def.Id);
             inv.Add(def.Id, 1);
-            FlowTrace.Step("Economy", $"DailyQuest '{q.TemplateId}' granted random item '{def.Id}' x1");
+            int credited = inv.Get(def.Id) - before;
+            if (credited > 0)
+            {
+                FlowTrace.Step("Economy", $"DailyQuest '{q.TemplateId}' credited random item '{def.Id}' x{credited} -> now holding {inv.Get(def.Id)}");
+                return true;
+            }
+
+            FlowTrace.Warn("Economy", $"DailyQuest '{q.TemplateId}' random item '{def.Id}' did NOT land — " +
+                                      $"inventory count unchanged at {inv.Get(def.Id)}; the player was not given the wildcard reward.");
+            return false;
         }
     }
 }
