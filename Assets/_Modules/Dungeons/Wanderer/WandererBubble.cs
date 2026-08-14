@@ -40,11 +40,18 @@ namespace DeNelle.Dungeons
                  "sits at — clears the NPC's head.")]
         [SerializeField] private float _height = 2.6f;
 
+        // WO-973: these were 4.4 x 1.7 with a 34-char wrap and a hardcoded 0.16 text
+        // scale — ~2.4x the shipped village bubble (DeNelle.Village.TownsfolkBubble:
+        // 1.8 x 0.7, wrap 22, textScale 0.07) on every axis at once. That comparison is
+        // authored-value against authored-value, so it does not depend on the camera
+        // that was frozen during the run which found this. Matched to the shipped
+        // sibling's numbers; the glyph metrics below are matched too, so the two
+        // bubbles now read at the same size.
         [Tooltip("World-unit width of the bubble panel.")]
-        [SerializeField] private float _panelWidth = 4.4f;
+        [SerializeField] private float _panelWidth = 1.8f;
 
         [Tooltip("World-unit height of the bubble panel.")]
-        [SerializeField] private float _panelHeight = 1.7f;
+        [SerializeField] private float _panelHeight = 0.7f;
 
         [Header("Style")]
         [Tooltip("Bubble panel fill colour (warm parchment).")]
@@ -53,8 +60,18 @@ namespace DeNelle.Dungeons
         [Tooltip("Bubble text colour (dark ink).")]
         [SerializeField] private Color _textColor = new Color(0.149f, 0.122f, 0.094f, 1f);
 
-        [Tooltip("Characters per line before the text wraps.")]
-        [SerializeField] private int _wrapWidth = 34;
+        [Tooltip("Characters per line before the text wraps. Smaller = narrower bubble. " +
+                 "Wrap and panel size are ONE knob, not two: the wrap sets the line length, " +
+                 "the line length sets the text bounds, and ResizePanelToText grows the quad " +
+                 "to those bounds. Tune them together.")]
+        [SerializeField] private int _wrapWidth = 22;
+
+        [Tooltip("Character scale of the text — keep small so the bubble doesn't dominate " +
+                 "the frame. WO-973: this used to be a hardcoded Vector3.one * 0.16f in " +
+                 "Build(), which meant it could not be tuned from the scene at all (the " +
+                 "scene serialises _panelWidth/_panelHeight/_wrapWidth but could not serialise " +
+                 "a literal). Serialised so the bake carries it like every other number.")]
+        [SerializeField] private float _textScale = 0.07f;
 
         // ── Runtime ──────────────────────────────────────────────────────────
 
@@ -84,10 +101,12 @@ namespace DeNelle.Dungeons
 
             // Re-fit the panel once TextMesh bounds become valid (DEF-107) — a few
             // frames of re-measure catches the real glyph extents post-render.
+            bool settledThisFrame = false;
             if (_resizePending > 0)
             {
                 ResizePanelToText();
                 _resizePending--;
+                settledThisFrame = _resizePending == 0;
             }
 
             // Billboard the bubble to the active camera so it stays readable
@@ -99,6 +118,136 @@ namespace DeNelle.Dungeons
                 if (toCam.sqrMagnitude > 0.0001f)
                     _root.rotation = Quaternion.LookRotation(toCam, Vector3.up);
             }
+
+            // WO-973: measure AFTER the final resize AND after the billboard, so the
+            // numbers describe the frame the player actually sees. Earlier emit points
+            // (Bryn.Configure, or Show) all report a pre-settle size — the panel is
+            // still at its authored minimum and Camera.main may not be seated yet.
+            if (settledThisFrame) TraceSettledGeometry();
+        }
+
+        // ── Legibility instrumentation (WO-973) ──────────────────────────────
+
+        /// <summary>
+        /// Emits the ONE line that can tell a healthy bubble from an unreadable one.
+        /// The old <c>bubble=ok</c> asserted construction and said nothing about
+        /// legibility — it printed green next to a card covering 60 % of the screen.
+        /// This prints the MEASURED world span, the resulting SCREEN span as a
+        /// fraction of the viewport, how far off the camera's image plane the
+        /// billboard actually sits, and whether the parent chain is shearing the
+        /// quad — so the broken case reads differently from the healthy one.
+        /// Never stripped (§12); flag off via <c>FlowTrace.Enabled</c> if it ever
+        /// gets noisy.
+        /// </summary>
+        private void TraceSettledGeometry()
+        {
+            Guard.Try("Dungeon", "WandererBubble.TraceSettledGeometry", () =>
+            {
+                if (_panelRenderer == null || _root == null) return;
+
+                Transform panelT = _panelRenderer.transform;
+
+                // ── World span: the panel quad plus the glyphs, encapsulated. ──
+                Bounds world = _panelRenderer.bounds;
+                var textRenderer = _text != null ? _text.GetComponent<Renderer>() : null;
+                if (textRenderer != null) world.Encapsulate(textRenderer.bounds);
+
+                Vector3 panelScale = panelT.lossyScale;
+                Vector3 parentScale = transform.lossyScale;
+
+                // HYPOTHESIS A — inherited NON-UNIFORM scale. A rotated child under a
+                // non-uniformly scaled parent is genuinely SHEARED (the transform stops
+                // being a similarity), and the quad renders as a parallelogram no matter
+                // what the camera does. shear=1.00 rules this out; anything else is it.
+                float maxP = Mathf.Max(parentScale.x, Mathf.Max(parentScale.y, parentScale.z));
+                float minP = Mathf.Min(parentScale.x, Mathf.Min(parentScale.y, parentScale.z));
+                float shear = minP > 0.0001f ? maxP / minP : -1f;
+
+                // HYPOTHESIS B — billboard obliquity. LookRotation(toCam) aims the quad at
+                // the camera's POSITION, not at its image PLANE, so the quad is oblique to
+                // the view by the off-axis angle and foreshortens into a trapezoid. The
+                // bigger the card and the nearer the camera, the more visible that is.
+                // offAxis=0 deg means plane-aligned (no perspective skew possible).
+                float offAxis = -1f, distToCam = -1f;
+                float wFrac = -1f, hFrac = -1f, areaFrac = -1f;
+                int cornersOffscreen = -1, cornersBehind = -1;
+
+                Camera cam = _faceCamera != null ? _faceCamera : Camera.main;
+                if (cam == null)
+                {
+                    FlowTrace.Warn("Dungeon",
+                        $"WandererBubble.settled on '{name}': NO CAMERA — cannot measure screen span. " +
+                        $"render=TextMesh+Quad (no Canvas) worldSpan={world.size.x:F2}x{world.size.y:F2}m " +
+                        $"panelScale={panelScale.x:F2}x{panelScale.y:F2} parentScale={parentScale.x:F2},{parentScale.y:F2},{parentScale.z:F2} " +
+                        $"shear={shear:F2} wrap={_wrapWidth} textScale={_textScale:F3} lines={CountLines()}");
+                    return;
+                }
+
+                distToCam = Vector3.Distance(cam.transform.position, _root.position);
+                offAxis = Vector3.Angle(_root.forward, cam.transform.forward);
+
+                // ── Screen span: project the quad's four corners. ──
+                float minX = float.MaxValue, maxX = float.MinValue;
+                float minY = float.MaxValue, maxY = float.MinValue;
+                cornersOffscreen = 0;
+                cornersBehind = 0;
+                float pw = Mathf.Max(1, cam.pixelWidth);
+                float ph = Mathf.Max(1, cam.pixelHeight);
+                for (int i = 0; i < 4; i++)
+                {
+                    var local = new Vector3((i == 0 || i == 3) ? -0.5f : 0.5f,
+                                            (i < 2) ? 0.5f : -0.5f, 0f);
+                    Vector3 sp = cam.WorldToScreenPoint(panelT.TransformPoint(local));
+                    if (sp.z <= 0f) cornersBehind++;
+                    if (sp.x < 0f || sp.x > pw || sp.y < 0f || sp.y > ph) cornersOffscreen++;
+                    if (sp.x < minX) minX = sp.x;
+                    if (sp.x > maxX) maxX = sp.x;
+                    if (sp.y < minY) minY = sp.y;
+                    if (sp.y > maxY) maxY = sp.y;
+                }
+                wFrac = (maxX - minX) / pw;
+                hFrac = (maxY - minY) / ph;
+                areaFrac = wFrac * hFrac;
+
+                string body =
+                    $"WandererBubble.settled on '{name}': render=TextMesh+Quad (no Canvas) " +
+                    $"worldSpan={world.size.x:F2}x{world.size.y:F2}m " +
+                    $"panelScale={panelScale.x:F2}x{panelScale.y:F2} parentScale={parentScale.x:F2},{parentScale.y:F2},{parentScale.z:F2} " +
+                    $"shear={shear:F2} wrap={_wrapWidth} textScale={_textScale:F3} lines={CountLines()} " +
+                    $"distToCam={distToCam:F2}m billboardOffAxis={offAxis:F1}deg " +
+                    $"screenSpan={wFrac * 100f:F0}%x{hFrac * 100f:F0}% area={areaFrac * 100f:F0}% " +
+                    $"cornersOffscreen={cornersOffscreen}/4 cornersBehindCam={cornersBehind}/4";
+
+                // The line has to READ differently when it is broken, or it is the same
+                // hollow "ok" this WO exists to kill. A card eating a third of the frame,
+                // or with a corner past the viewport edge (that is how the text was
+                // clipped mid-word), is a READABILITY defect and says so.
+                bool oversize = areaFrac > 0.35f;
+                bool clipped = cornersOffscreen > 0 || cornersBehind > 0;
+                if (oversize || clipped)
+                {
+                    FlowTrace.Warn("Dungeon",
+                        body + " — UNREADABLE: " +
+                        (oversize ? $"covers {areaFrac * 100f:F0}% of frame (>35% budget); " : "") +
+                        (clipped ? "part of the panel is outside the viewport, so the line is cut off; " : "") +
+                        "shear!=1.00 means an inherited non-uniform parent scale; " +
+                        "shear==1.00 with a large billboardOffAxis means perspective foreshortening " +
+                        "of an oversized card.");
+                }
+                else
+                {
+                    FlowTrace.Step("Dungeon", body + " — legible.");
+                }
+            });
+        }
+
+        /// <summary>Line count of the wrapped body — the driver behind panel height.</summary>
+        private int CountLines()
+        {
+            if (_text == null || string.IsNullOrEmpty(_text.text)) return 0;
+            int n = 1;
+            foreach (char c in _text.text) if (c == '\n') n++;
+            return n;
         }
 
         // ── IWandererBubble ──────────────────────────────────────────────────
@@ -124,6 +273,17 @@ namespace DeNelle.Dungeons
             _resizePending = 3;
 
             SetVisible(true);
+
+            // WO-973: Show was entirely untraced — there was no line at all saying the
+            // bubble had been asked to speak. This one deliberately says PRE-SETTLE: the
+            // panel is still at its authored minimum for up to 3 more frames, so it is
+            // NOT the legibility measurement. TraceSettledGeometry is (LateUpdate, on
+            // the frame _resizePending hits 0).
+            FlowTrace.Step("Dungeon",
+                $"WandererBubble.Show on '{name}': chars={(_text.text != null ? _text.text.Length : 0)} " +
+                $"lines={CountLines()} wrap={_wrapWidth} textScale={_textScale:F3} " +
+                $"authoredPanel={_panelWidth:F2}x{_panelHeight:F2}m — PRE-SETTLE, " +
+                "measured size follows in WandererBubble.settled.");
         }
 
         /// <summary>
@@ -192,13 +352,16 @@ namespace DeNelle.Dungeons
             var textGo = new GameObject("BubbleText");
             textGo.transform.SetParent(_root, false);
             textGo.transform.localPosition = new Vector3(0f, 0f, -0.02f);
-            textGo.transform.localScale = Vector3.one * 0.16f;
+            textGo.transform.localScale = Vector3.one * _textScale;
             _text = textGo.AddComponent<TextMesh>();
             _text.anchor = TextAnchor.MiddleCenter;
             _text.alignment = TextAlignment.Center;
             _text.color = _textColor;
-            _text.fontSize = 64;
-            _text.characterSize = 0.5f;
+            // WO-973: glyph world size scales as localScale * characterSize * fontSize.
+            // This was 0.16 * 0.5 * 64 = 5.12 against the shipped village bubble's
+            // 0.07 * 0.32 * 96 = 2.15 — 2.4x. Matched to the village metrics exactly.
+            _text.fontSize = 96;
+            _text.characterSize = 0.32f;
             _text.richText = false;
 
             _built = true;

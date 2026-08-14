@@ -153,9 +153,16 @@ namespace DeNelle.Dungeons
                 transform.position = _basePosition;
                 transform.rotation = Quaternion.Euler(0f, _def.facingY, 0f);
                 if (_def.speakRadius > 0f) _speakRadius = _def.speakRadius;
+                // WO-973: this used to print `bubble=ok`, which is nothing but a non-null
+                // cast check — it read as "the bubble is fine" while the bubble was an
+                // unreadable card covering ~60 % of the screen. `bubbleSeam=wired` is
+                // honest about the only thing this line can prove at Configure time. The
+                // legibility measurement lives in WandererBubble.settled, emitted after
+                // the panel resize settles and the billboard has run.
                 FlowTrace.Step("Dungeon",
                     $"Bryn.Configure '{_def.npcId}' at {_basePosition} (speakRadius={_speakRadius}, " +
-                    $"bubble={(_bubble != null ? "ok" : "MUTE")}).");
+                    $"bubbleSeam={(_bubble != null ? "wired" : "MUTE")}) — seam only; " +
+                    "see WandererBubble.settled for the measured on-screen size.");
             }
             else
             {
