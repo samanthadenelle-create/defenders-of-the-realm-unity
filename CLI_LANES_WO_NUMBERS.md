@@ -1,6 +1,32 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ RECONCILED 2026-08-14 (CLI): main line next free = **990**. **782–859 + 900–989 CONSUMED.**
+> ## ⚠ RECONCILED 2026-08-14 (CLI): main line next free = **992**. **782–859 + 900–991 CONSUMED.**
+> - **991** = **The Healing Caravan: MOBILE (very slow) + an unlockable heal FIELD for the Tree of Life
+>   and nearby troops.** OWNER DESIGN 2026-08-14, verbatim: *"the healing tower idea is what caravans
+>   replaced. this way they can eventually be unlocked to recover damage like for tree of life and
+>   nearby troops"* + *"by a caravan its mobile, but very slow"*. This is **why** a caravan replaced the
+>   tower rather than re-skinning it: a tower is a fixed point; a caravan trades placement permanence for
+>   **reach**, and very slow movement is the cost that balances a heal field that can go where it is
+>   needed. ⚠ **NOT SHIPPED — `healing_caravan` currently carries `behaviorId: HealingFountain`, a
+>   static bespoke singleton.** Mobility and the heal field are both design intent today; no doc may
+>   claim the caravan moves. ⚠ The retired `HealerTower` case (`StructureFactory.cs:935`, kept by WO-990)
+>   is the **worked example of exactly the support-FIELD pattern this needs** — build on it, do not
+>   reinvent it, and do not resurrect `tower_healer`. **SPEC — needs design detail before implementation.**
+> - **990** = **RETIRE the `tower_healer` catalog row — it has never been buildable — but KEEP the
+>   `HealerTower` BEHAVIOUR, which is the reference implementation of the field pattern.** OWNER RULING
+>   2026-08-14: *"i do not know what the town healer is"* → *"retire"*. It is unrecognisable because it
+>   is **unreachable**: `tower_healer` appears in NO build category (`build-categories.json` lists only
+>   `healing_caravan`), and `BuildCardArtRegression.cs:64` says so in a comment —
+>   *"legacy Support verb only - not reachable from Town/Def"*. ⚠ **It cost a pin today:** WO-947 spent
+>   owner ruling 2 (*"yes AoE healing"*) partly on a building nobody can build, and an agent reported it
+>   as *"Support, not locked"* and player-reachable — a claim the data refutes. Third id-over-data
+>   misread of the day (see WO-989, arcane-tower).
+>   ⛔ **DO NOT DELETE THE BEHAVIOUR.** `StructureFactory.cs:935` `case "HealerTower"` is, per its own
+>   header, *"WO-891. The FIRST instance of the general support/offensive FIELD pattern, and the proof of
+>   its thesis: a new structure is stats plus TWO TAGS"* — and `:925` holds a commented-out
+>   `case "SlowFieldTower":`, the intended next sibling. Deleting it discards the worked example the
+>   pattern is meant to be copied from. **Retire the ROW and the menu/catalog surface; keep the code as
+>   the documented reference.** READY.
 > - **989** = **`tower_wall_wizard` still carries a wizard IDENTITY for a structure the owner renamed to
 >   Ballista — rename the id (and prefab path) behind a READ-MIGRATION ALIAS.** OWNER ASK 2026-08-14:
 >   *"tower_wall_wizard - Where did that name come from? Should match Ballista"*. Traced: the id dates
