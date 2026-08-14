@@ -332,15 +332,17 @@ namespace DeNelle.Village
         {
             if (_hovlPools.TryGetValue(key, out var q))
             {
-                while (q.Count > 0)
+                // WO-955: this drain used to drop destroyed entries SILENTLY ("Drop destroyed
+                // entries and keep looking"), which is the §12 no-silent-failure violation that
+                // let the VFXType twin of the same corruption reach the owner as an NRE before
+                // anyone knew hosts were dying in a free list at all. Same seam, same rule, one
+                // implementation: a destroyed dormant host is evidence of a bad RETURN and now
+                // says so once per drain.
+                var reused = VfxPoolGuard.DrainToLiveHost(q, "hovl:" + key, out _);
+                if (reused != null)
                 {
-                    var reused = q.Dequeue();
-                    if (reused != null)
-                    {
-                        reused.transform.SetParent(null, false);
-                        return reused;
-                    }
-                    // Drop destroyed entries and keep looking.
+                    reused.transform.SetParent(null, false);
+                    return reused;
                 }
             }
             // Pool empty (or all-null) — instantiate a fresh one (pooled after use).
@@ -391,22 +393,107 @@ namespace DeNelle.Village
             // reparent ONLY when the object is still active (the normal loop-stop, where returning to the
             // pool root keeps things tidy) and DEACTIVATE IN PLACE otherwise. This never issues the
             // illegal call, so nothing to log. AcquireHovl re-seats the parent on next use regardless
-            // (SetParent(null) then SetParent(newParent), lines ~242/252) and tolerates the object being
-            // destroyed with its tower (drops null entries, instantiates fresh) — so leaving a dormant
-            // loop parented under a torn-down tower is harmless.
+            // (SetParent(null) then SetParent(newParent), lines ~242/252).
+            //
+            // ⚠ THE REST OF THIS PARAGRAPH IS RETIRED BY WO-955 (2026-08-10). It used to conclude
+            // that AcquireHovl "tolerates the object being destroyed with its tower (drops null
+            // entries, instantiates fresh) — so leaving a dormant loop parented under a torn-down
+            // tower is harmless." It is NOT harmless: the drop was SILENT, so nobody learned that
+            // dormant hosts were dying, and the identical shape in the VFXType pool reached the
+            // owner as an NRE (VFXManager.cs:876, twice on 2026-08-10). Deactivating in place is
+            // still right — issuing the illegal reparent is not the answer. ENQUEUING the result
+            // is what was wrong, and that is what the guard below now refuses.
             if (go.activeInHierarchy && go.transform.parent != _poolRoot)
                 go.transform.SetParent(_poolRoot, false);
             go.transform.localScale = Vector3.one;   // clear any scale override for reuse
             go.SetActive(false);
 
+            // The budget bookkeeping settles NOW, whatever happens to the pooling below: the
+            // loop has stopped, so its slot is free this instant. Only the ENQUEUE is allowed
+            // to wait. (Moved above the pooling branch by WO-955 — leaving it after a branch
+            // that can defer or drop would have turned a pooling decision into a budget leak.)
+            bool wasLoop = _hovlLoopObjects.Remove(go);
+            if (wasLoop) { if (_activeLoops > 0) _activeLoops--; }
+            else         { UnregisterOneshot(go); }   // removing the live-set slot IS the decrement
+
+            // WO-955 — the write side. The branch above deliberately SKIPS the reparent while
+            // the host is mid-(de)activation (that non-throwing Unity refusal is what the
+            // 2026-07-17 comment above documents), and this method then enqueued the host
+            // ANYWAY, with a note that it "tolerates the object being destroyed with its tower
+            // (drops null entries)". That toleration IS the defect: a queue entry parented under
+            // a scene object is not covered by the DontDestroyOnLoad pool root, so the tower's
+            // teardown leaves a corpse in the free list — and the poisoned list outlives the
+            // scene, which is why the captured NRE surfaced in dg_ember_deep from a caller that
+            // had nothing to do with the tower. Only a host genuinely parked under the pool root
+            // may be enqueued; anything else waits one frame for the cascade to end.
+            if (VfxPoolGuard.IsPoolSafe(go, _poolRoot))
+            {
+                EnqueueHovl(go, key);
+                return;
+            }
+
+            for (int i = 0; i < _pendingHovlReturns.Count; i++)
+                if (_pendingHovlReturns[i].go == go) return;   // already waiting
+
+            _pendingHovlReturns.Add((go, key));
+            FlowTrace.Throttle("VFXManager", "hovl-deferred-pool", 5f,
+                $"ReturnHovlToPool('{key}'): host could not be reparented to the pool root yet (still under " +
+                $"{VfxPoolGuard.DescribeParent(go)}) — pooling DEFERRED one frame rather than enqueuing an " +
+                "unprotected slot (WO-955). Budget already reclaimed.");
+        }
+
+        // The enqueue tail, so the direct and deferred paths cannot drift apart.
+        private void EnqueueHovl(GameObject go, string key)
+        {
             if (!_hovlPools.ContainsKey(key))
                 _hovlPools[key] = new Queue<GameObject>();
             _hovlPools[key].Enqueue(go);
             _hovlKeyOf[go] = key;
+        }
 
-            bool wasLoop = _hovlLoopObjects.Remove(go);
-            if (wasLoop) { if (_activeLoops > 0) _activeLoops--; }
-            else         { UnregisterOneshot(go); }   // removing the live-set slot IS the decrement
+        // WO-955: returns whose reparent has to wait out a host (de)activation/teardown window.
+        // Mirrors the VFXType path's _pendingReturns (WO-929) rather than inventing a second
+        // shape. Swept once, from Update; there is no second chance, because a host that is
+        // STILL not under the pool root a frame later is not a timing problem.
+        private readonly List<(GameObject go, string key)> _pendingHovlReturns
+            = new List<(GameObject, string)>();
+
+        /// <summary>
+        /// One-frame-later completion of a deferred Hovl pool return. Called from
+        /// <c>VFXManager.Update</c> alongside the VFXType sweep.
+        /// </summary>
+        private void SweepPendingHovlReturns()
+        {
+            if (_pendingHovlReturns.Count == 0) return;
+
+            for (int i = 0; i < _pendingHovlReturns.Count; i++)
+            {
+                var (go, key) = _pendingHovlReturns[i];
+
+                // Destroyed with its owner in the meantime — the expected outcome for a
+                // teardown-time return, and now a HARMLESS one: the host never entered the
+                // free list, so there is no corpse to hand back. Budget was settled at return.
+                if (go == null) continue;
+
+                if (go.transform.parent != _poolRoot && _poolRoot != null)
+                    go.transform.SetParent(_poolRoot, false);
+
+                if (VfxPoolGuard.IsPoolSafe(go, _poolRoot))
+                {
+                    EnqueueHovl(go, key);
+                    continue;
+                }
+
+                // Refused twice: not a (de)activation-window timing issue. Drop the slot rather
+                // than pool an unprotected one — capacity self-heals on the next AcquireHovl.
+                FlowTrace.Warn("VFXManager",
+                    $"SweepPendingHovlReturns('{key}'): host is STILL not under the pool root a frame later " +
+                    $"(parent={VfxPoolGuard.DescribeParent(go)}) — NOT pooled (WO-955). This is no longer a " +
+                    "timing window; the named parent is holding a VFX host it does not own, and its teardown " +
+                    "is what would have poisoned the free list.");
+            }
+
+            _pendingHovlReturns.Clear();
         }
 
         /// <summary>Defer a Hovl pool return by <paramref name="delay"/> seconds (graceful loop stop).</summary>

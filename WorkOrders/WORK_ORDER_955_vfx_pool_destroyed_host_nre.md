@@ -1,10 +1,24 @@
 # WORK ORDER 955 — VFXManager.Acquire NRE: the pool's free list hands back a DESTROYED host
 
-**Status:** READY TO IMPLEMENT — remaining scope only. The Acquire guard LANDED 2026-08-10 (same
+**Status:** IMPLEMENTED — awaiting gate + PO felt-verify. The Acquire guard LANDED 2026-08-10 (same
 wave, CLI direct, committed): dead slots are evicted with a `FlowTrace.Warn` naming WO-955 and
-Acquire self-heals via fresh instantiate; the NRE class is closed. REMAINING (this ticket's live
-scope): (a) the teardown-destroyer hunt — the new Warn IS the instrument, the next capture that
-fires it names the poisoning window; (b) the pool-shape regression case.
+Acquire self-heals via fresh instantiate; the NRE class is closed. 2026-08-14 (this pass) closes the
+remainder:
+- **The WRITE side is now guarded, and it is where the corpses came from.** Both return paths
+  enqueued UNCONDITIONALLY after a `SetParent(_poolRoot)` that Unity *refuses and logs rather than
+  throws* — a host left under a scene object entered the free list and died with its scene. The
+  Hovl path did not even attempt the reparent in that window and enqueued anyway, with a comment
+  calling the resulting corpse tolerable (`VFXManager.Hovl.cs` ~397, now retired in place). New seam
+  `VfxPoolGuard` owns both halves; `CompleteReturn` drops an unprotected slot with a Warn NAMING THE
+  PARENT (the destroyer-hunt payload), and `ReturnHovlToPool` defers one frame (mirroring WO-929)
+  before dropping with a Warn.
+- **The Hovl drain's SILENT null-drop is gone** — it was the same defect, unlogged, in the sibling
+  sub-pool.
+- **Regression `[vfx-pool-shape]` registered** in `DataRegression.RunAll` (6 cases, real
+  `DestroyImmediate` hosts).
+- **(a) the teardown-destroyer hunt stays OPEN as an observation, not a claim.** The specific
+  destroyer is UNPROVEN — no capture has yet fired the new Warns. The mechanism above is proven from
+  source + the 2026-07-17 captured refusal; WHICH teardown trips it is what the next capture names.
 **Minted:** 2026-08-10 (CLI seat, main line — banner bumped 955 → 956 in the same edit)
 **Silo:** Village/Vfx (VFXManager pool) — no overlap with live lanes
 **Origin:** captured exception, owner session 2026-08-10 16:12:25 UTC (break_12_exception), during

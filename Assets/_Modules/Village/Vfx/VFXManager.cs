@@ -872,22 +872,17 @@ namespace DeNelle.Village
         {
             if (_pools.TryGetValue(type, out var q))
             {
-                while (q.Count > 0)
+                // WO-955: a scene/arena teardown can destroy a pooled host while it still
+                // sits in this free list, and the poisoned list PERSISTS across scene loads
+                // (two captured NREs, 2026-08-10: HeroHpStateAura in town after arena
+                // deaths, then EnemyAuraVFX in dg_ember_deep). A destroyed host is a dead
+                // slot: drain past it — never dereference a corpse, never throw out of a
+                // Play call. Capacity self-heals via the fresh instantiate below. The drain
+                // (and its Warn) lives in VfxPoolGuard so the string-keyed Hovl pool cannot
+                // drift away from the rule; see that file's header for the write-side half.
+                var reused = VfxPoolGuard.DrainToLiveHost(q, type.ToString(), out _);
+                if (reused != null)
                 {
-                    var reused = q.Dequeue();
-                    // WO-955: a scene/arena teardown can destroy a pooled host while it still
-                    // sits in this free list, and the poisoned list PERSISTS across scene loads
-                    // (two captured NREs, 2026-08-10: HeroHpStateAura in town after arena
-                    // deaths, then EnemyAuraVFX in dg_ember_deep). A destroyed host is a dead
-                    // slot: evict it loudly and keep draining — never dereference a corpse,
-                    // never throw out of a Play call. Capacity self-heals via the fresh
-                    // instantiate below.
-                    if (reused == null)
-                    {
-                        FlowTrace.Warn("VFXManager",
-                            $"Acquire({type}): pooled host was DESTROYED while in the free list — dead slot evicted, rebuilding on demand (WO-955; find the teardown that destroys pooled hosts).");
-                        continue;
-                    }
                     reused.transform.SetParent(null, false);   // un-parent from pool root
                     return reused;
                 }
@@ -956,9 +951,32 @@ namespace DeNelle.Village
             go.transform.SetParent(_poolRoot, false);
             go.SetActive(false);
 
-            if (!_pools.ContainsKey(type))
-                _pools[type] = new Queue<GameObject>();
-            _pools[type].Enqueue(go);
+            // WO-955 (the write side — this is where the corpses in the free list come from).
+            // Transform.SetParent is REFUSED-AND-LOGGED, not thrown, when the current parent is
+            // mid-(de)activation or mid-teardown (proven from data in ReturnHovlToPool's header:
+            // owner F8 2026-07-17, a Guard.Try wrapper caught nothing for 55 minutes because
+            // nothing was ever thrown). The line above therefore has a silent failure mode, and
+            // the enqueue below used to run REGARDLESS: a host still parented under a scene
+            // object would enter the free list, the scene would unload, and the pool would be
+            // holding a corpse — the WO-955 NRE, one scene load later, in an unrelated caller.
+            // The WO-929 defer above covers the window we know about; this is the backstop that
+            // proves it. It fires ONLY when the reparent did not take, and it names the parent,
+            // which is the destroyer this ticket is hunting.
+            if (!VfxPoolGuard.IsPoolSafe(go, _poolRoot))
+            {
+                FlowTrace.Warn("VFXManager",
+                    $"CompleteReturn({type}): the reparent to the pool root DID NOT TAKE — host is still " +
+                    $"under {VfxPoolGuard.DescribeParent(go)}. NOT enqueued: a free-list slot that is not " +
+                    "under the DontDestroyOnLoad pool root dies with its scene and poisons the pool " +
+                    "(WO-955). The slot is dropped and capacity self-heals on the next Acquire; the " +
+                    "named parent is the teardown to fix.");
+            }
+            else
+            {
+                if (!_pools.ContainsKey(type))
+                    _pools[type] = new Queue<GameObject>();
+                _pools[type].Enqueue(go);
+            }
 
             // bug-triage P1: decrement the counter for the bucket this object actually came
             // from (tracked in _loopObjects at acquire), instead of guessing oneshot-first
@@ -1005,6 +1023,10 @@ namespace DeNelle.Village
                 }
                 _pendingReturns.Clear();
             }
+
+            // WO-955: the same one-frame completion for the string-keyed Hovl pool, which has
+            // its own return path (VFXManager.Hovl.cs) and therefore its own deferred list.
+            SweepPendingHovlReturns();
         }
 
         /// <summary>Live oneshot count, DERIVED from the tracked slot set after pruning any whose

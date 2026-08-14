@@ -662,6 +662,15 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "one-guide-body suite", () => { if (!DeNelle.Editor.Regression.OneGuideBodyRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[one-guide-body] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "wall-adjacency suite", () => { if (!DeNelle.Editor.Regression.WallAdjacencyRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[wall-adjacency] " + r); });
 
+            // --- VFX POOL SHAPE (WO-955, 2026-08-10): a pooled host was DESTROYED while it
+            // still sat in a free list, and the next Acquire dereferenced it -- captured twice
+            // in one session (HeroHpStateAura in town after arena deaths, then EnemyAuraVFX in
+            // dg_ember_deep, a scene the first caller never touched: the pool hangs off the
+            // DDOL singleton, so a poisoned list outlives the scene that poisoned it). Asserts
+            // both halves of VfxPoolGuard: drain past corpses on the way out, and refuse to
+            // enqueue any host that is not parked under the pool root on the way in.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "vfx-pool-shape suite", () => { if (!DeNelle.Editor.Regression.VfxPoolShapeRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[vfx-pool-shape] " + r); });
+
             // --- THE ORACLE THAT GUARDS THIS FILE: distinct markers, no unregistered
             // oracle, no gate script grepping a marker nobody emits. Registered LAST so
             // it sees the fully-built registry above it (it reads SOURCE, not runtime
