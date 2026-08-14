@@ -4,7 +4,13 @@
 
 # WORK ORDER 899 — HUD polish: analog joystick + wide compass + attack-button blend
 
-**Status:** READY TO IMPLEMENT - partial (reconciled 2026-08-09, per this file's own 08-08 banner - commit `a35163e1` shipped the analog stick, compass strip and attack button, but its own body excludes this WO's section 4 and records that no UI capture was taken, while this WO's acceptance requires `UI_CAPTURE_OK`)
+**Status:** PARTIAL - remainder named by the 2026-08-14 phantom sweep
+
+> **PARTIAL - re-scoped 2026-08-14 (phantom sweep).** Most of this WO is present in HEAD; a named
+> remainder is outstanding. No per-WO path:line was recorded here: see the 2026-08-14 phantom sweep for the
+> implementation site and the remainder. Do not re-implement the shipped part.
+> (Any prior dated reconciliation note on this file stands - see the preserved line below.)
+> _Prior status line, preserved: Status: READY TO IMPLEMENT - partial (reconciled 2026-08-09, per this file's own 08-08 banner - commit `a35163e1` shipped the analog stick, compass strip and attack button, but its own body excludes this WO's section 4 and records that no UI capture was taken, while this WO's acceptance requires `UI_CAPTURE_OK`)_
 
 **Status:** PARTIAL (reconciled 2026-08-08) · **Silo:** HUD/UI · **For:** CLAUDE CLI · **Date:** 2026-08-07
 **PO:** Samantha (owner) · **Author:** UI seat

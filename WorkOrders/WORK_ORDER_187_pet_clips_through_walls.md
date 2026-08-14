@@ -1,6 +1,12 @@
 # WORK ORDER 187 — Pet Clips Through Walls
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE
+
+> **DONE - verified in HEAD 2026-08-14 (phantom sweep).** The work is present at Pet.cs:329-341.
+> Status had read READY because the landing commit did not flip this line in the same commit
+> (CLAUDE.md §2), so the DERIVED board (BOARD.html) kept re-serving finished work.
+> _Prior status line, preserved: Status: READY TO IMPLEMENT_
+
 **Lane:** B (Combat/AI — code, parallel-safe). Separate issue from WO-184 (pet T-pose).
 **Source:** playtest 2026-05-31
 **Priority:** P2 (immersion break; pet ignores collision)

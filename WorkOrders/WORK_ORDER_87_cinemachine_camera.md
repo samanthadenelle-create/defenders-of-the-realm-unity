@@ -1,6 +1,12 @@
 # WORK ORDER 87 — Cinemachine Camera System
 
-**Status:** READY TO IMPLEMENT
+**Status:** PARTIAL - remaining: re-target off the DELETED Village.unity
+
+> **PARTIAL - re-scoped 2026-08-14 (phantom sweep).** Remaining work: RE-TARGET. The Cinemachine controller exists, but its GUID is in no scene or prefab and the builder line is commented out at VillageSceneBuilder.Characters.cs:119. Remaining: re-target it off the DELETED Village.unity.
+> Everything else in this WO is present in HEAD. The named remainder IS the ticket now - do not
+> re-implement the shipped part.
+> _Prior status line, preserved: Status: READY TO IMPLEMENT_
+
 **Date:** 2026-05-28
 **Priority:** High
 **Scope:** Medium — replace manual camera with Cinemachine virtual cameras + impulse shake

@@ -1,6 +1,12 @@
 # WORK ORDER 1010 — Build-mode UI redesign: "Carousel + minimize" (CoC grammar, chips on the ghost)
 
-**Status:** READY TO IMPLEMENT — **§7 defect pass NEARLY CLOSED 2026-08-09 evening** (see the
+**Status:** PARTIAL - remaining: external-tester re-test only (all code is in HEAD)
+
+> **PARTIAL - re-scoped 2026-08-14 (phantom sweep).** Remaining work: EXTERNAL-TESTER RE-TEST ONLY. All of the code is present in HEAD; this file's own RESULT is stale.
+> Everything else in this WO is present in HEAD. The named remainder IS the ticket now - do not
+> re-implement the shipped part.
+> _Prior status line, preserved: Status: READY TO IMPLEMENT — **§7 defect pass NEARLY CLOSED 2026-08-09 evening** (see the_
+
 RESULT §7 addendum: D17/D19/D5/D6/D12 closed capture-proven, D16 stopgap + P3 hint + PICK
 band-tightening shipped; remaining = D8 owner ruling, tester re-test, felt-verify; tutorial
 redesign split to WO-1012)

@@ -1,6 +1,12 @@
 # WORK ORDER 936 — Catalog gating + progression truth pass
 
-**Status:** READY TO IMPLEMENT
+**Status:** PARTIAL - remaining: Finding A only (Finding B struck as a false alarm)
+
+> **PARTIAL - re-scoped 2026-08-14 (phantom sweep).** Remaining work: Finding A is UNTOUCHED (BuildPaletteVM.cs:183). Finding B is struck as a false alarm.
+> Everything else in this WO is present in HEAD. The named remainder IS the ticket now - do not
+> re-implement the shipped part.
+> _Prior status line, preserved: Status: READY TO IMPLEMENT_
+
 **Minted:** 2026-08-09 (CLI seat) — number from the `CLI_LANES_WO_NUMBERS.md` banner (bumped 936 → 937 in the same edit)
 **Lane:** Catalog / progression data. **Presentation untouched** — this is about what the data PROMISES vs what the code DELIVERS.
 **Provenance:** Owner questions during the WO-1010 art pass, 2026-08-09 — *"where do players upgrade wood?"* and

@@ -1,7 +1,14 @@
 # WORK ORDER 429 — Store stock served from the DB (the "real call")
 
 **Priority:** P1
-**Status:** READY (client side) — depends on a backend GET endpoint (React repo)
+**Status:** PARTIAL - remainder named by the 2026-08-14 phantom sweep
+
+> **PARTIAL - re-scoped 2026-08-14 (phantom sweep).** Most of this WO is present in HEAD; a named
+> remainder is outstanding. No per-WO path:line was recorded here: see the 2026-08-14 phantom sweep for the
+> implementation site and the remainder. Do not re-implement the shipped part.
+> (Any prior dated reconciliation note on this file stands - see the preserved line below.)
+> _Prior status line, preserved: Status: READY (client side) — depends on a backend GET endpoint (React repo)_
+
 **Lane:** 7 — Persistence / Backend (+ Lane 8 store)
 **Filed:** 2026-06-11 (owner) as WO-414. **Renumbered → 429 on 2026-06-12** (nightly reconcile):
 the number 414 was also used on the Notion board for "Black circle under TALK button —

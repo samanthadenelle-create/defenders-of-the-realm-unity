@@ -1,6 +1,13 @@
 # WORK ORDER 551 — Geometry-First Weapon Seating (offset = nudge, not replacement)
 
-**Status:** READY TO IMPLEMENT (runtime model implemented in this WO; Forge-preview slice specced as follow-up)
+**Status:** DONE
+
+> **DONE - verified in HEAD 2026-08-14 (phantom sweep).** No per-WO path:line was recorded for this one:
+> verified present in HEAD by the 2026-08-14 phantom sweep; see that sweep for the implementation site.
+> Status had read READY because the landing commit did not flip this line in the same commit
+> (CLAUDE.md §2), so the DERIVED board (BOARD.html) kept re-serving finished work.
+> _Prior status line, preserved: Status: READY TO IMPLEMENT (runtime model implemented in this WO; Forge-preview slice specced as follow-up)_
+
 **Silo:** Combat/AI + Hero attach (code only — `Assets/_Modules/Village/Hero/*`, `Assets/OffsetForge/offsets.json`)
 **Owner action required:** slot this WO number into the master backlog (`MASTER_PIPELINES_BACKLOG_2026-06-06.md` + `CLI_LANES_WO_NUMBERS.md`) and felt-verify in-game; re-calibrate `sword_A` only if the geometric seat reads off (see Owner Decisions).
 

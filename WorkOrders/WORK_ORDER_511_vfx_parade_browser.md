@@ -1,6 +1,13 @@
 # WORK_ORDER_511 — VFX Parade (owner-curated effect browser)
 
-**Status:** READY TO IMPLEMENT (owner-requested 2026-06-24) · Tooling/VFX lane · editor-only
+**Status:** DONE
+
+> **DONE - verified in HEAD 2026-08-14 (phantom sweep).** No per-WO path:line was recorded for this one:
+> verified present in HEAD by the 2026-08-14 phantom sweep; see that sweep for the implementation site.
+> Status had read READY because the landing commit did not flip this line in the same commit
+> (CLAUDE.md §2), so the DERIVED board (BOARD.html) kept re-serving finished work.
+> _Prior status line, preserved: Status: READY TO IMPLEMENT (owner-requested 2026-06-24) · Tooling/VFX lane · editor-only_
+
 **Origin:** owner — "run a routine where we implement all of them 10 sec apart and I capture the numbers of
 the best to use... with so many... I'm not sure you can visualize what they are and when to apply." CORRECT:
 the AI can't see pixels, so it wires VFX blind by name. This tool makes the OWNER the visual judge and emits

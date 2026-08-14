@@ -1,6 +1,12 @@
 # WO-374: Character Selection UI — Card Layout & Framing Fix
 
-**Status:** READY TO IMPLEMENT  
+**Status:** SUPERSEDED
+
+> **SUPERSEDED - determined 2026-08-14 (phantom sweep).** Successor: WO-C / WO-559.
+> This WO was still being re-served by the DERIVED board (BOARD.html) because its Status line was
+> never flipped when the successor work landed (CLAUDE.md §2). Body preserved below unchanged.
+> _Prior status line, preserved: Status: READY TO IMPLEMENT_
+
 **Estimated Effort:** P0 (0.5 days — layout + styling)  
 **Priority:** HIGH (blocking character selection flow)  
 **Lane:** 4 UI/HUD

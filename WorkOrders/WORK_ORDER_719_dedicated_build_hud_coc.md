@@ -1,6 +1,13 @@
 # WORK ORDER 719 — Dedicated Build HUD (Clash-of-Clans-simple chrome)
 
-**Status:** READY TO IMPLEMENT  
+**Status:** DONE (code) - AWAITING PO FELT-VERIFY
+
+> **CODE DONE - verified in HEAD 2026-08-14 (phantom sweep).** The work is present at
+> BuildHudController.cs:64,71 + BuildModeController.cs:3847. NOT closed: this WO's own RESULT
+> reserves closure for the owner's felt-verify, and per CLAUDE.md §13 the PO closes, not the CLI.
+> Status had read READY because the landing commit did not flip this line in the same commit (§2).
+> _Prior status line, preserved: Status: READY TO IMPLEMENT_
+
 **Priority:** P0 (build mode IS the demo)  
 **Phase:** 2 (Pillars)  
 **Effort:** M–L  

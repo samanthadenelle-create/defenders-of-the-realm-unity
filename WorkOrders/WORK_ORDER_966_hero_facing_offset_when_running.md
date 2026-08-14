@@ -1,6 +1,11 @@
 # WO-966 — The hero's body faces the wrong way while running (Mage: NW when running N)
 
-**Status:** READY TO IMPLEMENT - ⚠ **"no capture needed" is RETRACTED, see the 2026-08-14 banner below**
+**Status:** PARTIAL - remaining: THE FIX (only instrumentation landed; yaw still hardcoded)
+
+> **PARTIAL - re-scoped 2026-08-14 (phantom sweep).** Remaining work: THE FIX ITSELF. Only the instrumentation landed; HeroBodySwapper.cs:263 STILL HARDCODES the yaw. Cross-reference WO-985, which reached the same diagnosis independently.
+> Everything else in this WO is present in HEAD. The named remainder IS the ticket now - do not
+> re-implement the shipped part.
+> _Prior status line, preserved: Status: READY TO IMPLEMENT - ⚠ **"no capture needed" is RETRACTED, see the 2026-08-14 banner below**_
 
 > ## ⚠ CORRECTIONS FROM A UNIFIED SME DIAGNOSIS, 2026-08-14 (read before implementing)
 > This ticket was diagnosed together with WO-985 because **they are the same subject and an

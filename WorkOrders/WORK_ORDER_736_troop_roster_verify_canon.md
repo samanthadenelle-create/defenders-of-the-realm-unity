@@ -1,6 +1,12 @@
 # WORK ORDER 736 — Troop Roster Verify, Regression, Canon Close
 
-**Status:** READY TO IMPLEMENT  
+**Status:** DONE
+
+> **DONE - verified in HEAD 2026-08-14 (phantom sweep).** The work is present at TroopDef.cs:124 + TroopUnlock.cs:34-80 + TroopTrainingPanel.cs:103-445 + TroopRosterRegression wired at DataRegression.cs:313.
+> Status had read READY because the landing commit did not flip this line in the same commit
+> (CLAUDE.md §2), so the DERIVED board (BOARD.html) kept re-serving finished work.
+> _Prior status line, preserved: Status: READY TO IMPLEMENT_
+
 **Priority:** P0 (program close for 732–735)  
 **Silo:** QA / Regression / Canon  
 **Depends on:** WO-732, WO-733; **734 + 735 recommended**  

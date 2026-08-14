@@ -1,6 +1,13 @@
 # WORK_ORDER_588 — Game Guide / Tutorial Codex (data-driven, opened from Settings)
 
-**Status:** READY TO IMPLEMENT (owner request 2026-06-29) · UI/Onboarding lane · data-driven content
+**Status:** DONE
+
+> **DONE - verified in HEAD 2026-08-14 (phantom sweep).** No per-WO path:line was recorded for this one:
+> verified present in HEAD by the 2026-08-14 phantom sweep; see that sweep for the implementation site.
+> Status had read READY because the landing commit did not flip this line in the same commit
+> (CLAUDE.md §2), so the DERIVED board (BOARD.html) kept re-serving finished work.
+> _Prior status line, preserved: Status: READY TO IMPLEMENT (owner request 2026-06-29) · UI/Onboarding lane · data-driven content_
+
 **Origin:** owner — *"a full tutorial section with tabs on left for quests, basic mechanics, inventory, crafting,
 armory, leveling, objectives, exploration, one for each building type (what & why), the skill tree & hot-swap,
 arena battles, defense building, and echoes. Create it as a tutorial guide and link to Settings so they can use it

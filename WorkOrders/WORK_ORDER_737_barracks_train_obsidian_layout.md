@@ -1,6 +1,12 @@
 # WORK ORDER 737 — Barracks Train Panel: Proper Obsidian Layout Spec
 
-**Status:** READY TO IMPLEMENT  
+**Status:** DONE
+
+> **DONE - verified in HEAD 2026-08-14 (phantom sweep).** The work is present at TroopDef.cs:124 + TroopUnlock.cs:34-80 + TroopTrainingPanel.cs:103-445 + TroopRosterRegression wired at DataRegression.cs:313.
+> Status had read READY because the landing commit did not flip this line in the same commit
+> (CLAUDE.md §2), so the DERIVED board (BOARD.html) kept re-serving finished work.
+> _Prior status line, preserved: Status: READY TO IMPLEMENT_
+
 **Priority:** P0 (UI law — unlock ladder is unreadable without this layout)  
 **Silo:** UI / Obsidian conformance  
 **Depends on:** WO-732 (roster data; may stub 2 troops if 732 not landed), WO-733 unlock helper preferred  

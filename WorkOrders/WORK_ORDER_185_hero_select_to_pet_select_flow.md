@@ -1,6 +1,12 @@
 # WORK ORDER 185 — Hero Select Skips Pet Select (drops straight into village)
 
-**Status:** READY TO IMPLEMENT
+**Status:** PARTIAL - remaining: it is flag-gated OFF at FeatureFlags.cs:181
+
+> **PARTIAL - re-scoped 2026-08-14 (phantom sweep).** Remaining work: shipped but FLAG-GATED OFF at FeatureFlags.cs:181.
+> Everything else in this WO is present in HEAD. The named remainder IS the ticket now - do not
+> re-implement the shipped part.
+> _Prior status line, preserved: Status: READY TO IMPLEMENT_
+
 **Lane:** UI / FTUE — code, parallel-safe
 **Source:** playtest 2026-05-31
 **Priority:** P1 (onboarding flow broken — player never picks a pet)

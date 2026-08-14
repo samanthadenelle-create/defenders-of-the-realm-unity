@@ -1,6 +1,12 @@
 # WORK ORDER 437 — Input / State discipline: battle-lock + hotkey gate (THE streamline)
 
-**Status: READY TO IMPLEMENT** (owner-confirmed rule 2026-06-17). Editor-closed (gate + felt-test).
+**Status:** DONE
+
+> **DONE - verified in HEAD 2026-08-14 (phantom sweep).** The work is present at BattleLock.cs:40.
+> Status had read READY because the landing commit did not flip this line in the same commit
+> (CLAUDE.md §2), so the DERIVED board (BOARD.html) kept re-serving finished work.
+> _Prior status line, preserved: Status: READY TO IMPLEMENT** (owner-confirmed rule 2026-06-17). Editor-closed (gate + felt-test)._
+
 **Why:** the base loop has NO input/state discipline → ~11 panels on global single-key hotkeys spam
 open ("13 windows load, none good"), panels open mid-battle (shop while companion fights), nothing
 gates by game state. This is the single highest-leverage base-loop stability fix.

@@ -1,6 +1,13 @@
 # WORK_ORDER_124: Unified VFX Factory (Three-Library Router) + Spell System + Polish
 
-**Status:** READY TO IMPLEMENT  
+**Status:** PARTIAL - remainder named by the 2026-08-14 phantom sweep
+
+> **PARTIAL - re-scoped 2026-08-14 (phantom sweep).** Most of this WO is present in HEAD; a named
+> remainder is outstanding. No per-WO path:line was recorded here: see the 2026-08-14 phantom sweep for the
+> implementation site and the remainder. Do not re-implement the shipped part.
+> (Any prior dated reconciliation note on this file stands - see the preserved line below.)
+> _Prior status line, preserved: Status: READY TO IMPLEMENT_
+
 **Owner:** Creative + Architecture  
 **Priority:** High (foundational VFX infrastructure + spell system)  
 **Related:** SPELL_BOOK_DESIGN.md, VFXManager.cs, AbilityVfxKit.cs, EnvironmentVFX.cs, VFXCatalog.cs, VFXType.cs  

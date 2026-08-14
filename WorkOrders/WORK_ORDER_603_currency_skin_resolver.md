@@ -1,6 +1,12 @@
 # WORK ORDER 603 — Currency Skin Resolver
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE
+
+> **DONE - verified in HEAD 2026-08-14 (phantom sweep).** The work is present at CurrencySkinResolver.cs:38,47,57,288.
+> Status had read READY because the landing commit did not flip this line in the same commit
+> (CLAUDE.md §2), so the DERIVED board (BOARD.html) kept re-serving finished work.
+> _Prior status line, preserved: Status: READY TO IMPLEMENT_
+
 **Lane:** Monetization/Backend (isolated — no scene files, no gameplay dependencies)
 **Priority:** HIGH — blocks Seekerthon submission (deadline: July 13, 6:30 PM)
 **Created by:** UI (2026-07-03)

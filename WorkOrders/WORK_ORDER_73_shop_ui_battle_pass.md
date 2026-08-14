@@ -1,6 +1,12 @@
 # WORK ORDER 73 — Shop UI + Battle Pass System
 
-**Status:** READY TO IMPLEMENT
+**Status:** PARTIAL - remaining: scene/instance wiring (zero instances, zero callers)
+
+> **PARTIAL - re-scoped 2026-08-14 (phantom sweep).** Remaining work: SCENE/INSTANCE WIRING. BattlePassManager, CryptoPaymentManager and CosmeticApplier all exist in HEAD with ZERO instances and ZERO callers. Remaining: instantiate + call them.
+> Everything else in this WO is present in HEAD. The named remainder IS the ticket now - do not
+> re-implement the shipped part.
+> _Prior status line, preserved: Status: READY TO IMPLEMENT_
+
 **Date:** 2026-05-28
 **Priority:** High
 **Scope:** Medium — three scripts + prefab wiring guide

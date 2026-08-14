@@ -1,6 +1,12 @@
 # WO-963 — The build carousel follows the tutorial's teaching order
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE
+
+> **DONE - verified in HEAD 2026-08-14 (phantom sweep).** The work is present at BuildPaletteVM.cs:278-281 + BuildCarouselTutorialOrderRegression.
+> Status had read READY because the landing commit did not flip this line in the same commit
+> (CLAUDE.md §2), so the DERIVED board (BOARD.html) kept re-serving finished work.
+> _Prior status line, preserved: Status: READY TO IMPLEMENT_
+
 **Date:** 2026-08-10 · **Priority:** Medium (first-session legibility)
 **Block:** main line (CLI) · **Lane:** Build mode / catalog data
 **Owner ask 2026-08-10:** F8 seq 2302, verbatim — *"Can we order the carousel in order of how the

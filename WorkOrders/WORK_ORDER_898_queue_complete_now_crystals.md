@@ -4,7 +4,12 @@
 
 # WORK ORDER 898 — Queue: progress bars + "Complete now" with crystals (any item, any channel)
 
-**Status:** READY TO IMPLEMENT - partial (reconciled 2026-08-09, per this file's own 08-08 banner - only the progress bars shipped (`e03aecf6`, `11f57266`); `crystalsPerBracket` returns zero hits repo-wide, so the data-driven crystal-finish pricing, the impulse dialog and the Jupiter fallback were never built. Note the monetization premise MOVED when `ef40c0e7` purged premium-currency ad rewards)
+**Status:** PARTIAL - remaining: the crystal-finish pricing (crystalsPerBracket has zero hits)
+
+> **PARTIAL - re-scoped 2026-08-14 (phantom sweep).** Remaining work: the data-driven crystal-finish pricing — `crystalsPerBracket` has ZERO code hits repo-wide. Only the progress bars shipped.
+> Everything else in this WO is present in HEAD. The named remainder IS the ticket now - do not
+> re-implement the shipped part.
+> _Prior status line, preserved: Status: READY TO IMPLEMENT - partial (reconciled 2026-08-09, per this file's own 08-08 banner - only the progress bars shipped (`e03aecf6`, `11f57266`); `crystalsPerBracket` returns zero hits repo-wide, so the data-driven crystal-finish pricing, the impulse dialog and the Jupiter fallback were never built. Note the monetization premise MOVED when `ef40c0e7` purged premium-currency ad rewards)_
 
 **Status:** PARTIAL (reconciled 2026-08-08) · **Silo:** Queue / economy / monetization / UI · **For:** CLAUDE CLI · **Date:** 2026-08-05
 **PO:** Samantha (owner) · **Author:** UI seat

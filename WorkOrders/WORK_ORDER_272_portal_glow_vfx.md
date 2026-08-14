@@ -1,7 +1,13 @@
 # WO-272: Portal interior glow VFX — signal it's worth exploring
 **Linear:** [DEF-100](https://linear.app/defenders-of-the-realm/issue/DEF-100/portal-interior-glow-vfx-signal-its-worth-exploring)
 **Lane:** VFX/Audio
-**Status:** READY TO IMPLEMENT
+**Status:** DONE
+
+> **DONE - verified in HEAD 2026-08-14 (phantom sweep).** The work is present at PortalVFXController.cs:92,46,658-703.
+> Status had read READY because the landing commit did not flip this line in the same commit
+> (CLAUDE.md §2), so the DERIVED board (BOARD.html) kept re-serving finished work.
+> _Prior status line, preserved: Status: READY TO IMPLEMENT_
+
 **Priority:** Medium
 
 ## Acceptance Criteria

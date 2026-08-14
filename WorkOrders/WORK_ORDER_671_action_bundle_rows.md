@@ -1,6 +1,12 @@
 # WORK ORDER 671 — Action Bundle Rows (VFX + SFX + timing on the keyword registry)
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE
+
+> **DONE - verified in HEAD 2026-08-14 (phantom sweep).** The work is present at ActionBundleCatalog.cs:50-60 + HeroAbilities.cs:2009,2077.
+> Status had read READY because the landing commit did not flip this line in the same commit
+> (CLAUDE.md §2), so the DERIVED board (BOARD.html) kept re-serving finished work.
+> _Prior status line, preserved: Status: READY TO IMPLEMENT_
+
 **Minted:** 2026-07-11 (owner WO, Grok-drafted + owner-approved, reconciled to `docs/ACTION_KEYWORD_REGISTRY_ARCHITECTURE.md`)
 **Depends on:** WO-670 slice 1 (registry foundation, committed `941ef16c`)
 **Lane split:** (A) editor/authoring — row model + Motion Caster window · (B) runtime presentation consumer

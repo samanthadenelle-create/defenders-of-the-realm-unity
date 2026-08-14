@@ -1,6 +1,13 @@
 # WORK ORDER 116 — Living NPCs: Authorable Dialogue, Barks & Region Quest-Threads
 
-**Status:** READY TO IMPLEMENT
+**Status:** PARTIAL - remainder named by the 2026-08-14 phantom sweep
+
+> **PARTIAL - re-scoped 2026-08-14 (phantom sweep).** Most of this WO is present in HEAD; a named
+> remainder is outstanding. No per-WO path:line was recorded here: see the 2026-08-14 phantom sweep for the
+> implementation site and the remainder. Do not re-implement the shipped part.
+> (Any prior dated reconciliation note on this file stands - see the preserved line below.)
+> _Prior status line, preserved: Status: READY TO IMPLEMENT_
+
 **Date:** 2026-05-29
 **Priority:** High — turns the four regional questlines into something the player can actually meet and follow; populates Rung 3 exploration
 **Scope:** Medium — one new `NpcData` ScriptableObject + a field-NPC runtime that **extends the existing village NPC stack** (AmbientNPC / TownsfolkDialogue / TownsfolkBubble / VillageNpcInjector), a lightweight quest-thread hook, and the nine canon NPCs as the first data set

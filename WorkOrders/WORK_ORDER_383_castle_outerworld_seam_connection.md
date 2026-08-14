@@ -1,6 +1,12 @@
 # WORK_ORDER_383 — Castle ↔ OuterWorld seam connection (+ hero-strand bug fix)
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE
+
+> **DONE - verified in HEAD 2026-08-14 (phantom sweep).** The work is present at HeroLocomotion.cs:455-522.
+> Status had read READY because the landing commit did not flip this line in the same commit
+> (CLAUDE.md §2), so the DERIVED board (BOARD.html) kept re-serving finished work.
+> _Prior status line, preserved: Status: READY TO IMPLEMENT_
+
 **Lane:** 5 World/Explore
 **Source:** This session (2026-06-09)
 **Created:** 2026-06-09 — to track the previously-untracked castle↔OuterWorld connection work and the live seam bug found in playtest.

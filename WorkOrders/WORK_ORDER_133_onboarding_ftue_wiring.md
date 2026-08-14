@@ -1,6 +1,13 @@
 # WORK ORDER 133 — First-run tutorial / onboarding wiring (FTUE)
 
-**Status:** READY TO IMPLEMENT
+**Status:** PARTIAL - remainder named by the 2026-08-14 phantom sweep
+
+> **PARTIAL - re-scoped 2026-08-14 (phantom sweep).** Most of this WO is present in HEAD; a named
+> remainder is outstanding. No per-WO path:line was recorded here: see the 2026-08-14 phantom sweep for the
+> implementation site and the remainder. Do not re-implement the shipped part.
+> (Any prior dated reconciliation note on this file stands - see the preserved line below.)
+> _Prior status line, preserved: Status: READY TO IMPLEMENT_
+
 **Priority:** P0 — no FTUE at all; cold-open cinematic replays every launch
 **Date:** 2026-05-30
 **Source:** docs/QA_player_sanity_pass_2026-05-30.md (P0-A; also resolves P2-K)

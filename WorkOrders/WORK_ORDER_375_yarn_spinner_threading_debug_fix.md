@@ -1,6 +1,12 @@
 # WO-375: Yarn Spinner Threading Safety & Debug Element Removal
 
-**Status:** READY TO IMPLEMENT  
+**Status:** SUPERSEDED
+
+> **SUPERSEDED - determined 2026-08-14 (phantom sweep).** Successor: `DialogueService` (YarnSpinner is gone).
+> This WO was still being re-served by the DERIVED board (BOARD.html) because its Status line was
+> never flipped when the successor work landed (CLAUDE.md §2). Body preserved below unchanged.
+> _Prior status line, preserved: Status: READY TO IMPLEMENT_
+
 **Estimated Effort:** P0 (1–1.5 days — debugging + fix + validation)  
 **Priority:** CRITICAL (dialogue broken, blue bar recurring 5+ times)  
 **Lane:** 4 UI/HUD

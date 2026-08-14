@@ -1,6 +1,13 @@
 # WORK ORDER 128 — The Cull: A Pet Ability That Answers the Backline
 
-**Status:** READY TO IMPLEMENT
+**Status:** PARTIAL - remainder named by the 2026-08-14 phantom sweep
+
+> **PARTIAL - re-scoped 2026-08-14 (phantom sweep).** Most of this WO is present in HEAD; a named
+> remainder is outstanding. No per-WO path:line was recorded here: see the 2026-08-14 phantom sweep for the
+> implementation site and the remainder. Do not re-implement the shipped part.
+> (Any prior dated reconciliation note on this file stands - see the preserved line below.)
+> _Prior status line, preserved: Status: READY TO IMPLEMENT_
+
 **Date:** 2026-05-30
 **Priority:** Medium-High — gives pets a role-counter verb (answers the ranged/caster threat), the missing depth between "pet hunts nearest" and the NORTH_STAR's role-weighted combat; pays off in a per-element VFX moment
 **Scope:** Medium — one additive ability component in `DeNelle.Village`, one optional additive field on `PetData`, two small additive seams in `DeNelle.Core.Combat` (read enemy role + a displace verb). NO change to the Pet hunt loop, the WO-58 aura, or WO-119 harvest.

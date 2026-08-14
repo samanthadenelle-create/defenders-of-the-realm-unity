@@ -1,6 +1,12 @@
 # WO-368: Camera Distance Fix — Movement Regression & Orientation Validation
 
-**Status:** READY TO IMPLEMENT  
+**Status:** DONE
+
+> **DONE - verified in HEAD 2026-08-14 (phantom sweep).** The work is present at CameraModeController.cs:364-371.
+> Status had read READY because the landing commit did not flip this line in the same commit
+> (CLAUDE.md §2), so the DERIVED board (BOARD.html) kept re-serving finished work.
+> _Prior status line, preserved: Status: READY TO IMPLEMENT_
+
 **Estimated Effort:** P0 (0.5 days — debug + fix)  
 **Priority:** CRITICAL (movement broken)  
 **Lane:** Build/Perf

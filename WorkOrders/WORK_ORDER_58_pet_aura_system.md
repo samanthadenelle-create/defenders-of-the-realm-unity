@@ -1,6 +1,12 @@
 # WORK ORDER 58 — Pet Aura System with Level Scaling
 
-**Status:** READY TO IMPLEMENT
+**Status:** PARTIAL - remaining: editor/scene wiring (code is dead, zero scene refs)
+
+> **PARTIAL - re-scoped 2026-08-14 (phantom sweep).** Remaining work: EDITOR/SCENE WIRING. AuraController is code-complete but a GUID search finds ZERO prefab/scene references, so it is dead code. Remaining: wire it in the editor.
+> Everything else in this WO is present in HEAD. The named remainder IS the ticket now - do not
+> re-implement the shipped part.
+> _Prior status line, preserved: Status: READY TO IMPLEMENT_
+
 **Date:** 2026-05-28
 **Priority:** Medium-High
 **Scope:** Medium — new component, prefab wiring, level-up hook

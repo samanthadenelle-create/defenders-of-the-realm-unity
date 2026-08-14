@@ -1,6 +1,13 @@
 # WO-543 — Rings, Amulets & Armor/Accessory VFX
 
-**Status:** READY TO IMPLEMENT  
+**Status:** DONE
+
+> **DONE - verified in HEAD 2026-08-14 (phantom sweep).** No per-WO path:line was recorded for this one:
+> verified present in HEAD by the 2026-08-14 phantom sweep; see that sweep for the implementation site.
+> Status had read READY because the landing commit did not flip this line in the same commit
+> (CLAUDE.md §2), so the DERIVED board (BOARD.html) kept re-serving finished work.
+> _Prior status line, preserved: Status: READY TO IMPLEMENT_
+
 **Lane:** 4 — Store / Inventory / Gear (save-schema field: coordinate with Lane 3)  
 **Size:** M  
 **Mint date:** 2026-06-27  

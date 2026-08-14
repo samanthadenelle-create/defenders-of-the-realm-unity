@@ -1,6 +1,12 @@
 # WO-602 — P1: no way back into town (return crossing invisible/broken)
 
-**Status:** READY TO IMPLEMENT — P1, blocks the core loop (venture out → CANNOT return home)
+**Status:** SUPERSEDED
+
+> **SUPERSEDED - determined 2026-08-14 (phantom sweep).** Successor: the merged world — with mergedworld ON the injector early-returns, so there is nothing to inject.
+> This WO was still being re-served by the DERIVED board (BOARD.html) because its Status line was
+> never flipped when the successor work landed (CLAUDE.md §2). Body preserved below unchanged.
+> _Prior status line, preserved: Status: READY TO IMPLEMENT — P1, blocks the core loop (venture out → CANNOT return home)_
+
 **Origin:** owner felt-test 2026-07-03 ~01:15: "I cannot get back to town. There is no way to get
 back in to test build." She exited the castle, played the world, and found no discoverable or
 functioning re-entry.

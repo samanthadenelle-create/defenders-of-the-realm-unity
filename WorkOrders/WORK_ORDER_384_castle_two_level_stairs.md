@@ -1,6 +1,12 @@
 # WORK_ORDER_384 — Castle two-level access: wide climbable stairs + NavMesh connection
 
-**Status:** READY TO IMPLEMENT
+**Status:** SUPERSEDED
+
+> **SUPERSEDED - determined 2026-08-14 (phantom sweep).** Successor: the single-level castle pivot.
+> This WO was still being re-served by the DERIVED board (BOARD.html) because its Status line was
+> never flipped when the successor work landed (CLAUDE.md §2). Body preserved below unchanged.
+> _Prior status line, preserved: Status: READY TO IMPLEMENT_
+
 **Lane:** 1 World/Env (castle geometry) — `CastleHubBuilder.cs` is single-writer (§9), one agent.
 **Source:** This session (2026-06-09)
 **Depends on:** none. **Related:** WO-383 (OuterWorld seam — *horizontal*; this is the *vertical* ground↔battlements link).

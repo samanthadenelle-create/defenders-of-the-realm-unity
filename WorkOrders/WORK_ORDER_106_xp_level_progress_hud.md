@@ -1,6 +1,12 @@
 # WORK ORDER 106 — XP / Level Progress HUD + Gear Screen
 
-**Status:** READY TO IMPLEMENT
+**Status:** PARTIAL - remaining: the gear progress panel (the XP bar re-shipped in the HUD kit)
+
+> **PARTIAL - re-scoped 2026-08-14 (phantom sweep).** Remaining work: the GEAR PROGRESS PANEL. The XP bar re-shipped inside the HUD kit, but the gear progress panel never came back — `LifetimeXp` has zero UI consumers. Note this WO's RESULT names two files that are now DELETED.
+> Everything else in this WO is present in HEAD. The named remainder IS the ticket now - do not
+> re-implement the shipped part.
+> _Prior status line, preserved: Status: READY TO IMPLEMENT_
+
 **Date:** 2026-05-29
 **Priority:** High — player feedback, core progression feel
 **Scope:** Small–Medium — two UI components, no gameplay changes

@@ -1,7 +1,13 @@
 # WORK ORDER 413 — Upgradable buildings wrongly offer the shop menu
 
 **Priority:** P1
-**Status:** READY TO IMPLEMENT
+**Status:** DONE
+
+> **DONE - verified in HEAD 2026-08-14 (phantom sweep).** The work is present at BuildingInteractable.cs:297-309.
+> Status had read READY because the landing commit did not flip this line in the same commit
+> (CLAUDE.md §2), so the DERIVED board (BOARD.html) kept re-serving finished work.
+> _Prior status line, preserved: Status: READY TO IMPLEMENT_
+
 **Lane:** 6 — Economy / Progression
 **Filed:** 2026-06-11 (owner, via Notion). Canon rule saved to memory: `isupgradable-isshoppable-building-rule`.
 **Related:** WO-411 #9 ("Talk: <building>" prompt) · buildings-collection capability model (ARCHITECTURE §2b).

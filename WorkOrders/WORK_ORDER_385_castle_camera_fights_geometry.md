@@ -1,6 +1,11 @@
 # WORK_ORDER_385 — Castle camera "fights the castle": world-locked seat + wall-collision jam
 
-**Status:** READY TO IMPLEMENT - UNVERIFIED (reconciled 2026-08-09 - the claimed fix commit `4291324` does NOT resolve in this repo's history (git: fatal: ambiguous argument), and no other commit references WO-385, so the FADE FIX LANDED claim below cannot be confirmed from the tree. Re-verify the symptom before re-implementing)
+**Status:** DONE
+
+> **DONE - verified in HEAD 2026-08-14 (phantom sweep).** The work is present at SmartMobileCamera.cs:1231-1288.
+> Status had read READY because the landing commit did not flip this line in the same commit
+> (CLAUDE.md §2), so the DERIVED board (BOARD.html) kept re-serving finished work.
+> _Prior status line, preserved: Status: READY TO IMPLEMENT - UNVERIFIED (reconciled 2026-08-09 - the claimed fix commit `4291324` does NOT resolve in this repo's history (git: fatal: ambiguous argument), and no other commit references WO-385, so the FADE FIX LANDED claim below cannot be confirmed from the tree. Re-verify the symptom before re-implementing)_
 
 **Status:** FADE FIX LANDED (commit 4291324, COMPILE_GATE_OK) — PENDING OWNER PLAYTEST. Global, not castle-only.
 **Lane:** Camera / Hero (DeNelle.Village.Hero) — `SmartMobileCamera.cs`. Code-only, no scene/bake.

@@ -4,7 +4,13 @@
 
 # WORK ORDER 896 — Skill tree: simplify to a connected progression line (kill the dense grid)
 
-**Status:** READY TO IMPLEMENT - partial (reconciled 2026-08-09, per this file's own 08-08 banner - commit `287ac354` shipped the progression line, but the commit itself concedes overflow remains and mitigates it with a MORE BELOW cue, against this WO's acceptance criterion that nothing is clipped)
+**Status:** PARTIAL - remainder named by the 2026-08-14 phantom sweep
+
+> **PARTIAL - re-scoped 2026-08-14 (phantom sweep).** Most of this WO is present in HEAD; a named
+> remainder is outstanding. No per-WO path:line was recorded here: see the 2026-08-14 phantom sweep for the
+> implementation site and the remainder. Do not re-implement the shipped part.
+> (Any prior dated reconciliation note on this file stands - see the preserved line below.)
+> _Prior status line, preserved: Status: READY TO IMPLEMENT - partial (reconciled 2026-08-09, per this file's own 08-08 banner - commit `287ac354` shipped the progression line, but the commit itself concedes overflow remains and mitigates it with a MORE BELOW cue, against this WO's acceptance criterion that nothing is clipped)_
 
 **Status:** PARTIAL (reconciled 2026-08-08) · **Silo:** UI / talents · **For:** CLAUDE CLI · **Date:** 2026-08-05
 **PO:** Samantha (owner) · **Author:** UI seat

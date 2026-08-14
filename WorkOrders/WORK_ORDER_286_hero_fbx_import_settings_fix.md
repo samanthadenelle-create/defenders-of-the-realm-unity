@@ -1,6 +1,13 @@
 # WORK ORDER 286 — BUG: Swapped hero FBX import settings (green T-pose + isReadable spam)
 
-**Status:** READY TO IMPLEMENT
+**Status:** PARTIAL - remainder named by the 2026-08-14 phantom sweep
+
+> **PARTIAL - re-scoped 2026-08-14 (phantom sweep).** Most of this WO is present in HEAD; a named
+> remainder is outstanding. No per-WO path:line was recorded here: see the 2026-08-14 phantom sweep for the
+> implementation site and the remainder. Do not re-implement the shipped part.
+> (Any prior dated reconciliation note on this file stands - see the preserved line below.)
+> _Prior status line, preserved: Status: READY TO IMPLEMENT_
+
 **Date:** 2026-06-06
 **Author:** UI (creative/architecture lane)
 **Priority:** 🔴 URGENT — heroes/companions render as a solid-green, spread-eagle

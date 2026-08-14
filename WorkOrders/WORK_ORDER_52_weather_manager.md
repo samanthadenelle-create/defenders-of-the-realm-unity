@@ -1,6 +1,12 @@
 # WORK ORDER 52 — WeatherManager + Shooting Stars & Atmosphere
 
-**Status:** READY TO IMPLEMENT
+**Status:** PARTIAL - remaining: editor/scene wiring + a ShootingStar prefab (code is dead, zero scene refs)
+
+> **PARTIAL - re-scoped 2026-08-14 (phantom sweep).** Remaining work: EDITOR/SCENE WIRING. WeatherManager is code-complete but a GUID search finds ZERO prefab/scene references, so it is dead code. Remaining: wire it in the editor + author a ShootingStar prefab.
+> Everything else in this WO is present in HEAD. The named remainder IS the ticket now - do not
+> re-implement the shipped part.
+> _Prior status line, preserved: Status: READY TO IMPLEMENT_
+
 **Date:** 2026-05-28
 **Priority:** Medium-High
 **Scope:** Medium — new manager, two coroutine systems, particle wiring

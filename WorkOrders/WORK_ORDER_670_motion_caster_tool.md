@@ -1,6 +1,12 @@
 # WORK ORDER 670 — Motion Caster (standalone clip-casting tool)
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE
+
+> **DONE - verified in HEAD 2026-08-14 (phantom sweep).** The work is present at MotionCasterWindow.cs:151.
+> Status had read READY because the landing commit did not flip this line in the same commit
+> (CLAUDE.md §2), so the DERIVED board (BOARD.html) kept re-serving finished work.
+> _Prior status line, preserved: Status: READY TO IMPLEMENT_
+
 **Minted:** 2026-07-11 (owner ask, verbatim: "create a separate tool stand alone where i load in the model, and you load the rig with all the motion options, and I can select what I want and tie it back to keyword that we can save to each type Enemy family or player")
 **Lane:** Editor tools (`DeNelle.Editor` / `Assets/Editor`) — editor-only, no runtime code.
 **Numbering:** 670 (Grok audit block ended 664; 665–669 suggested/reserved in `GROK_CLI_SESSION_HANDOFF_2026-07-09.md` §4 — confirm in `CLI_LANES_WO_NUMBERS.md` on mint).

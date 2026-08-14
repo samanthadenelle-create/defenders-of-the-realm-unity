@@ -1,6 +1,12 @@
 # WORK ORDER 108 — Player Build Mode: Give the Player VillageSceneBuilder's Power
 
-**Status:** ⭐ READY TO IMPLEMENT — **TOP PRIORITY after the playtest regressions (WO-166)**
+**Status:** DONE
+
+> **DONE - verified in HEAD 2026-08-14 (phantom sweep).** The work is present at BuildModeController.cs:442/1851/1983/3255/3384 + SaveSchema.cs:321.
+> Status had read READY because the landing commit did not flip this line in the same commit
+> (CLAUDE.md §2), so the DERIVED board (BOARD.html) kept re-serving finished work.
+> _Prior status line, preserved: Status: ⭐ READY TO IMPLEMENT — **TOP PRIORITY after the playtest regressions (WO-166)**_
+
 **Date:** 2026-05-29 · **promoted to build-ready 2026-05-30**
 **Priority:** NORTH STAR KEYSTONE — the CREATE verb. The single most important gap. **Build this NEXT**
 once the village is playable. Per `VISION_GAP_ANALYSIS`: the bones are all built; THIS is the layer that

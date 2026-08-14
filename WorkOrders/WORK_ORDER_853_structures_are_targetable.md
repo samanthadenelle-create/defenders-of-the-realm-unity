@@ -4,7 +4,13 @@
 
 # WORK ORDER 853 — Structures are targetable (the disjoint-contract seam)
 
-**Status:** READY TO IMPLEMENT - partial (reconciled 2026-08-09, per this file's own 08-08 banner - `35b1020f` shipped `StructureTargetableRegression.cs` and `f2069890` ruled sec.7's 50/30/20 split (`RaidScoring.cs:123/137/144`), but sec.11 records acceptance 1's pathing half as deferred and acceptance 2 as unmet)
+**Status:** PARTIAL - remainder named by the 2026-08-14 phantom sweep
+
+> **PARTIAL - re-scoped 2026-08-14 (phantom sweep).** Most of this WO is present in HEAD; a named
+> remainder is outstanding. No per-WO path:line was recorded here: see the 2026-08-14 phantom sweep for the
+> implementation site and the remainder. Do not re-implement the shipped part.
+> (Any prior dated reconciliation note on this file stands - see the preserved line below.)
+> _Prior status line, preserved: Status: READY TO IMPLEMENT - partial (reconciled 2026-08-09, per this file's own 08-08 banner - `35b1020f` shipped `StructureTargetableRegression.cs` and `f2069890` ruled sec.7's 50/30/20 split (`RaidScoring.cs:123/137/144`), but sec.11 records acceptance 1's pathing half as deferred and acceptance 2 as unmet)_
 
 **Status: PARTIAL**
 **Minted:** 2026-08-03 (CLI, main-line block; banner bumped 853 → 854 in the same edit)

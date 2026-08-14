@@ -1,6 +1,12 @@
 # WORK_ORDER_482 (Arena refinement) — BattleArena as a BOUNDED JSON MODULE + SceneDirector lifecycle
 
-**Status:** READY TO IMPLEMENT - partial (reconciled 2026-08-09 from the tree - the data boundary LANDED: `Assets/_Modules/Core/Arena/ArenaContracts.cs` names this WO as its spec and carries the ArenaRequest / ArenaResult seam. The dedicated arena SCENE and the SceneDirector lifecycle do NOT exist: no arena scene under `Assets/Scenes` and no `SceneDirector*.cs` anywhere. DUPLICATE NUMBER: two files claim 482)
+**Status:** PARTIAL - remainder named by the 2026-08-14 phantom sweep
+
+> **PARTIAL - re-scoped 2026-08-14 (phantom sweep).** Most of this WO is present in HEAD; a named
+> remainder is outstanding. No per-WO path:line was recorded here: see the 2026-08-14 phantom sweep for the
+> implementation site and the remainder. Do not re-implement the shipped part.
+> (Any prior dated reconciliation note on this file stands - see the preserved line below.)
+> _Prior status line, preserved: Status: READY TO IMPLEMENT - partial (reconciled 2026-08-09 from the tree - the data boundary LANDED: `Assets/_Modules/Core/Arena/ArenaContracts.cs` names this WO as its spec and carries the ArenaRequest / ArenaResult seam. The dedicated arena SCENE and the SceneDirector lifecycle do NOT exist: no arena scene under `Assets/Scenes` and no `SceneDirector*.cs` anywhere. DUPLICATE NUMBER: two files claim 482)_
 
 **Status:** DESIGN LOCKED (owner-directed, 2026-06-23). Supersedes the far-offset arena hack
 in `BattleArena.cs` (region at (5000,5000) inside the live scene). Extends WO-482 / memory

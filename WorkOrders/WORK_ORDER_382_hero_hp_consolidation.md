@@ -1,6 +1,12 @@
 # WO-382: Hero HP Display — Remove Duplication, Use Party Panel Only
 
-**Status:** READY TO IMPLEMENT  
+**Status:** DONE
+
+> **DONE - verified in HEAD 2026-08-14 (phantom sweep).** The work is present at HudKitController.cs:259,1455.
+> Status had read READY because the landing commit did not flip this line in the same commit
+> (CLAUDE.md §2), so the DERIVED board (BOARD.html) kept re-serving finished work.
+> _Prior status line, preserved: Status: READY TO IMPLEMENT_
+
 **Estimated Effort:** P0 (0.25 days — remove UI element)  
 **Priority:** HIGH (visual clutter)  
 **Lane:** 4 UI/HUD

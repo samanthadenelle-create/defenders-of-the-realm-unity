@@ -1,6 +1,18 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ RECONCILED 2026-08-14 (CLI): main line next free = **992**. **782–859 + 900–991 CONSUMED.**
+> ## ⚠ RECONCILED 2026-08-14 (CLI): main line next free = **993**. **782–859 + 900–992 CONSUMED.**
+> - **992** = **SIX classes ship in every build, compile clean, and are NEVER INSTANTIATED — dead code
+>   the legacy-close does NOT remove.** Found by the 2026-08-14 phantom sweep: `WeatherManager`,
+>   `TorchFireController`, `AuraController` (WO-52/55/58), `BattlePassManager`, `CryptoPaymentManager`,
+>   `CosmeticApplier` (WO-73), plus the WO-87 Cinemachine controller. Each has an honest RESULT file
+>   that flagged *"scene wiring = manual editor work"*; **that wiring never happened and nobody noticed
+>   for ~2.5 months.** ⚠ **CLOSING THE TICKETS AS LEGACY DOES NOT DELETE THE CODE** — it removes the
+>   only record of why the code is there, which is strictly worse than leaving the tickets open. Decide
+>   per class: WIRE IT or DELETE IT. ⚠ **METHOD NOTE, load-bearing:** Unity serialises script refs by
+>   **GUID**, so a class-NAME grep across `.unity`/`.prefab` finds nothing and reads as "no problem".
+>   Prove wiring by reading the `.cs.meta` guid and searching THAT across scenes/prefabs. WO-87's shape
+>   is the giveaway: controller exists, GUID in no scene, and the builder line that would seat it is
+>   COMMENTED OUT (`VillageSceneBuilder.Characters.cs:119`). READY.
 > - **991** = **The Healing Caravan: MOBILE (very slow) + an unlockable heal FIELD for the Tree of Life
 >   and nearby troops.** OWNER DESIGN 2026-08-14, verbatim: *"the healing tower idea is what caravans
 >   replaced. this way they can eventually be unlocked to recover damage like for tree of life and

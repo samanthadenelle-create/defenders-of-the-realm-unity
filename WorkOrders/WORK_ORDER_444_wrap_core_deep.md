@@ -2,6 +2,9 @@
 
 **Status:** READY TO IMPLEMENT (reconciled 2026-08-09 - a standing standard plus a phased coverage pass; no `.RESULT.md` and no commit references WO-444, so the phased coverage is unproven. Prior line: STANDING STANDARD + phased coverage pass)
 
+> **CHECKED 2026-08-14 (phantom sweep) - STAYS READY.** Only 1 of the 11 flows is done, and the commit
+> that cites this WO is unrelated store work. This is real outstanding work, not a phantom.
+
 **Status: STANDING STANDARD + phased coverage pass.** Owner (2026-06-17): "the whole core should be
 wrapped deep… add a debugger and tries at all critical logic." Operationalizes `ARCHITECTURE_PRINCIPLES`/
 `CLAUDE.md §12` + `docs/INSTRUMENTATION_STANDARD.md` as COVERAGE, not just per-bug. The wave-start

@@ -1,6 +1,12 @@
 # WORK_ORDER_506 — BATTLE ARENA: real scene + landscape (first pass)
 
-**Status:** READY TO IMPLEMENT (all decisions resolved owner+Grok 2026-06-24) · World/Arena lane · 2026-06-24
+**Status:** DONE
+
+> **DONE - verified in HEAD 2026-08-14 (phantom sweep).** The work is present at BattleArena.cs:623.
+> Status had read READY because the landing commit did not flip this line in the same commit
+> (CLAUDE.md §2), so the DERIVED board (BOARD.html) kept re-serving finished work.
+> _Prior status line, preserved: Status: READY TO IMPLEMENT (all decisions resolved owner+Grok 2026-06-24) · World/Arena lane · 2026-06-24_
+
 **Origin:** owner directive "basics first — a scene and landscape, then bells & whistles; simple play should be
 a scene." Synthesized from the Grok Prompt-1 brief + the real codebase (this WO is the SME extrapolation, not a
 verbatim copy of the brief).

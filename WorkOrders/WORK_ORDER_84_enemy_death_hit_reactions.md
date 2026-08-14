@@ -1,6 +1,12 @@
 # WORK ORDER 84 — Enemy Death & Hit Reaction Polish (Phase 2)
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE
+
+> **DONE - verified in HEAD 2026-08-14 (phantom sweep).** The work is present at Enemy.cs:2248,2648,2805.
+> Status had read READY because the landing commit did not flip this line in the same commit
+> (CLAUDE.md §2), so the DERIVED board (BOARD.html) kept re-serving finished work.
+> _Prior status line, preserved: Status: READY TO IMPLEMENT_
+
 **Date:** 2026-05-28
 **Priority:** High
 **Scope:** Medium — edits to EnemyHealth + new EnemyHitReaction component

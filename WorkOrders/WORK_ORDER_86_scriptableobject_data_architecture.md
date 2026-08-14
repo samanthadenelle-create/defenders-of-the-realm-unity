@@ -1,6 +1,12 @@
 # WORK ORDER 86 — ScriptableObject Data Architecture
 
-**Status:** READY TO IMPLEMENT
+**Status:** SUPERSEDED
+
+> **SUPERSEDED - determined 2026-08-14 (phantom sweep).** Successor: the canonical JSON catalogs (the data layer went JSON-first, not ScriptableObject).
+> This WO was still being re-served by the DERIVED board (BOARD.html) because its Status line was
+> never flipped when the successor work landed (CLAUDE.md §2). Body preserved below unchanged.
+> _Prior status line, preserved: Status: READY TO IMPLEMENT_
+
 **Date:** 2026-05-28
 **Priority:** High
 **Scope:** Large — five new ScriptableObjects + refactor of Tower, Enemy, Wave, Ability, Pet scripts to read from them

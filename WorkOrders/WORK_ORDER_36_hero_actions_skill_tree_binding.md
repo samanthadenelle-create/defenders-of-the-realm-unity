@@ -1,6 +1,12 @@
 # WORK ORDER 36 — Hero Ability Actions Mapped to Hero Class + Skill Tree
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE
+
+> **DONE - verified in HEAD 2026-08-14 (phantom sweep).** The work is present at HeroAbilities.cs:277,284-315 + HeroTalentModifiers.cs:62,583-603.
+> Status had read READY because the landing commit did not flip this line in the same commit
+> (CLAUDE.md §2), so the DERIVED board (BOARD.html) kept re-serving finished work.
+> _Prior status line, preserved: Status: READY TO IMPLEMENT_
+
 **Date:** 2026-05-26
 **Author:** Owner design spec — playtest feedback
 **Priority:** High — currently all three hero classes cast Mage abilities

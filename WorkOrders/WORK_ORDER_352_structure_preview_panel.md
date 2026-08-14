@@ -1,6 +1,10 @@
 # WO-352: Structure Info Preview Panel
 
-**Status:** READY TO IMPLEMENT  
+**Status:** READY TO IMPLEMENT
+
+> **CHECKED 2026-08-14 (phantom sweep) - STAYS READY.** The panel exists, but the subscription is
+> DELIBERATELY disabled at BuildModeController.cs:3828. This is real outstanding work, not a phantom.
+
 **Estimated Effort:** P1 (2–3 days)  
 **Priority:** High (UX clarity blocker)  
 **Lane:** HUD/UI (parallel to WO-353, WO-354)

@@ -1,6 +1,12 @@
 # WORK ORDER 554 — Shared Obsidian Panel Chrome (black + gold trim, one Close)
 
-**Status:** READY (implemented in worktree; awaiting orchestrator gate + commit)
+**Status:** DONE
+
+> **DONE - verified in HEAD 2026-08-14 (phantom sweep).** The work is present at ElarionUiKit.cs:187,537.
+> Status had read READY because the landing commit did not flip this line in the same commit
+> (CLAUDE.md §2), so the DERIVED board (BOARD.html) kept re-serving finished work.
+> _Prior status line, preserved: Status: READY (implemented in worktree; awaiting orchestrator gate + commit)_
+
 **Owner directive (BINDING, 2026-06-28):** the panel canvas/background brown is unappealing.
 Go to a **BLACK panel + just a GOLD TRIM**. **No per-panel "X" buttons — every panel uses ONE
 consistent Close button.** The chrome is **created ONCE in the presentation layer and reused** by

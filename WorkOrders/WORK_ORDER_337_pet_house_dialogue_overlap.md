@@ -1,6 +1,12 @@
 # WORK ORDER 337 — Echo Hollow: Dialogue Text Overlaps Choice Options
 
-**Status:** READY TO IMPLEMENT
+**Status:** UNVERIFIED - needs a playtest
+
+> **UNVERIFIED - 2026-08-14 (phantom sweep).** The commit that cited this WO is a MISCITE. The layout
+> appears to have been fixed incidentally by an unrelated DialogueView rewrite, which cannot be
+> confirmed from code alone. This needs a PLAYTEST, not a code call. No verdict is being guessed.
+> _Prior status line, preserved: Status: READY TO IMPLEMENT_
+
 **Lane:** 4 (UI/HUD) — parallel-safe
 **Priority:** HIGH — dialogue is unreadable; core Echo acquisition flow broken
 **Screenshot evidence:** docs/screenshots/pet_house_dialogue_overlap.png (2026-06-07)

@@ -1,6 +1,12 @@
 # WO-358: Yarn Spinner Welcome Dialogue Auto-Load
 
-**Status:** READY TO IMPLEMENT  
+**Status:** SUPERSEDED
+
+> **SUPERSEDED - determined 2026-08-14 (phantom sweep).** Successor: WO-557 / WO-561 (YarnSpinner was removed from the project).
+> This WO was still being re-served by the DERIVED board (BOARD.html) because its Status line was
+> never flipped when the successor work landed (CLAUDE.md §2). Body preserved below unchanged.
+> _Prior status line, preserved: Status: READY TO IMPLEMENT_
+
 **Estimated Effort:** P1 (1 day)  
 **Priority:** Medium (first-time narrative flow)  
 **Lane:** Narrative/Dialogue
