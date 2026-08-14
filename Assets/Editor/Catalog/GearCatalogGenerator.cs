@@ -37,6 +37,35 @@
 //   -executeMethod DeNelle.Editor.Catalog.GearCatalogGenerator.Generate
 // READ-ONLY over assets (AssetDatabase.FindAssets + path reads); writes JSON +
 // one coverage markdown. Does NOT run Unity gameplay; does NOT commit.
+// -----------------------------------------------------------------------------
+// ⛔⛔ READ THIS BEFORE CHANGING ANY WRITE PATH BELOW (2026-08-14, Step 1 of
+//     docs/WEAPONS_DEEP_DIVE_2026-08-14.md §1 — "Landmine A"):
+//
+//   THE TWO weapons.json COPIES ARE NOT MIRRORS. THEY HAVE DIFFERENT ROLES.
+//     Assets/Resources/Data/Canonical/weapons.json      = the CURATED runtime set (96 rows)
+//     Assets/StreamingAssets/Data/Canonical/weapons.json = the LIBRARY          (431 rows)
+//   (armor.json is asymmetric the same way: 24 curated / 30 library.)
+//
+//   ⚠ THE 96 IS IRREPLACEABLE STATE, NOT REGENERABLE OUTPUT. It is the residue of a
+//   ONE-TIME HAND PRUNE — git: b78c81cfd (434 rows) -> 0d8185d1a "curate catalog —
+//   434->34 weapons" -> walked back up to 96 by GearCurationExporter. StreamingAssets
+//   was never pruned. **NO TOOL IN THIS REPO CAN REPRODUCE THE 96.** If it is ever
+//   overwritten, the only recovery is git. GearCurationExporter cannot undo it either
+//   — it is additive-only and never drops a row.
+//
+//   WHAT USED TO BE HERE (the landmine): MergeAndWrite read `Resources ?? Streaming`
+//   into ONE root, appended every scanned row, and wrote that SAME json to BOTH paths.
+//   Running this menu item would have re-inflated Resources 96 -> 431, publishing 335
+//   dormant placeholder weapons into the shipped catalog. It survived only because
+//   nobody had run the command since the prune.
+//
+//   THE INVARIANTS, now enforced in code and FAILING CLOSED:
+//     1. Resources may only have EXISTING rows REFRESHED. It never gains a row.
+//     2. StreamingAssets is the library and is the only copy that may grow.
+//     3. A write is REFUSED (FlowTrace.Fail, nothing written) if either file's row
+//        count would move beyond the rows this pass actually touched.
+//     4. Resources ids must remain a SUBSET of StreamingAssets ids (subset oracle).
+//   Do not "simplify" this back into a single shared root. See also GearIconRenderer.cs.
 // =============================================================================
 
 using System;
@@ -48,6 +77,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEngine;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Editor.Catalog
 {
@@ -61,6 +91,17 @@ namespace DeNelle.Editor.Catalog
         private const string ArmorResources    = "Assets/Resources/Data/Canonical/armor.json";
         private const string ArmorStreaming     = "Assets/StreamingAssets/Data/Canonical/armor.json";
         private const string CoverageDoc        = "docs/GEAR_GENERATOR_COVERAGE.md";
+
+        // FlowTrace system tag (§12 — instrumentation is PERMANENT, never stripped).
+        private const string FlowSystem = "GearCatalog";
+
+        // Set true by any hard refusal in MergeAndWrite so Generate withholds the
+        // success marker. Fail closed: a refused run must never read as a pass.
+        private static bool Refused;
+
+        // Set by WriteIfChanged when a post-write disk verification failed and the file
+        // was rolled back. Folded into Refused by MergeAndWrite.
+        private static bool WriteRefused;
 
         // weapons.json / armor.json schema version. Bump ONLY when the row shape
         // changes; the generator preserves the existing value otherwise.
@@ -119,6 +160,10 @@ namespace DeNelle.Editor.Catalog
         [MenuItem("Defenders/Catalog/Generate Gear Catalog")]
         public static void Generate()
         {
+            Refused = false;
+            WriteRefused = false;
+            FlowTrace.Step(FlowSystem, "Generate — scanning gear sources");
+
             // 1. SCAN every source → derive a generated row per model.
             var generatedWeapons = new List<JObject>();
             var generatedArmor   = new List<JObject>();
@@ -164,9 +209,16 @@ namespace DeNelle.Editor.Catalog
             WriteCoverageDoc(scanned, skipped, wEmitted, aEmitted);
 
             Debug.Log($"[GearCatalogGenerator] Scanned {scanned} loadable models " +
-                      $"({skipped} skipped). weapons.json now {wEmitted} rows, " +
-                      $"armor.json now {aEmitted} rows. Coverage → {CoverageDoc}.");
+                      $"({skipped} skipped). weapons.json (curated) now {wEmitted} rows, " +
+                      $"armor.json (curated) now {aEmitted} rows. Coverage → {CoverageDoc}.");
             AssetDatabase.Refresh();
+
+            // WO-984 evidence marker. Withheld on ANY refusal — a fail-closed run must
+            // never be readable as a pass.
+            if (Refused)
+                Debug.LogError("GEAR_CATALOG_GEN_REFUSED — a row-count guard fired; see the FlowTrace Fail line above. No catalog file was written.");
+            else
+                Debug.Log($"GEAR_CATALOG_GEN_OK curatedWeapons={wEmitted} curatedArmor={aEmitted}");
         }
 
         // =====================================================================
@@ -395,27 +447,163 @@ namespace DeNelle.Editor.Catalog
         // MERGE (idempotent, manual-preserving) + EMIT (both copies in sync)
         // =====================================================================
 
-        /// <summary>Read the existing catalog, merge in the generated rows preserving every
-        /// authored/manual row, write BOTH copies. Returns the final row count.</summary>
+        /// <summary>Merge the generated rows into BOTH catalog copies, each in its OWN role:
+        /// StreamingAssets is the LIBRARY (may gain rows), Resources is the CURATED runtime set
+        /// (may only have existing rows refreshed — NEVER gains a row). Fails closed if either
+        /// file's row count would move beyond what this pass legitimately touched.
+        /// Returns the final CURATED (Resources) row count.</summary>
         private static int MergeAndWrite(string arrayKey, string label,
             List<JObject> generated, string resourcesPath, string streamingPath)
         {
-            // Read the existing source-of-truth (Resources copy is canonical-first).
-            JObject root = ReadJsonObject(resourcesPath) ?? ReadJsonObject(streamingPath);
-            if (root == null)
+            // ── READ EACH COPY INDEPENDENTLY ─────────────────────────────────────
+            // The OLD code read `Resources ?? StreamingAssets` into ONE root and wrote
+            // that single root to BOTH paths. That is the landmine: the 96-row curated
+            // Resources copy became the content of the 431-row StreamingAssets library,
+            // and every scanned row was appended back onto Resources (96 -> 431).
+            JObject curatedRoot = ReadJsonObject(resourcesPath);   // Resources      = CURATED
+            JObject libraryRoot = ReadJsonObject(streamingPath);   // StreamingAssets = LIBRARY
+
+            if (libraryRoot == null)
             {
-                root = new JObject { ["version"] = SchemaVersion };
+                // No library on disk yet. Seeding the LIBRARY from the CURATED copy is the
+                // safe direction (the library is a superset; growing it is allowed).
+                libraryRoot = curatedRoot != null
+                    ? (JObject)curatedRoot.DeepClone()
+                    : new JObject { ["version"] = SchemaVersion };
+                FlowTrace.Warn(FlowSystem, $"{label}: no library copy at {streamingPath} — seeding it from the curated copy.");
+            }
+            if (libraryRoot["version"] == null) libraryRoot["version"] = SchemaVersion;
+
+            // ── PASS 1 — LIBRARY (StreamingAssets): refresh + APPEND new rows ────
+            JArray libExisting = libraryRoot[arrayKey] as JArray ?? new JArray();
+            int libBefore = libExisting.Count;
+
+            var libById = new Dictionary<string, JObject>(StringComparer.OrdinalIgnoreCase);
+            var libOrder = new List<string>();
+            IndexRows(libExisting, libById, libOrder);
+
+            int libRefreshed = 0, libAdded = 0, libPreserved = 0;
+            foreach (var gen in generated)
+            {
+                string id = gen["id"].ToString();
+                if (libById.TryGetValue(id, out var prev))
+                {
+                    if (IsUntouchable(prev)) { libPreserved++; continue; }
+                    RefreshGeneratedRow(prev, gen);
+                    libRefreshed++;
+                }
+                else
+                {
+                    libById[id] = gen;
+                    libOrder.Add(id);
+                    libAdded++;
+                }
             }
 
-            // Preserve version (bump only if shape changed — not here).
-            if (root["version"] == null) root["version"] = SchemaVersion;
+            var libOut = new JArray();
+            foreach (var id in libOrder) libOut.Add(libById[id]);
+            libraryRoot[arrayKey] = libOut;
 
-            JArray existing = root[arrayKey] as JArray ?? new JArray();
+            // ── PASS 2 — CURATED (Resources): REFRESH ONLY, never add ────────────
+            // The curated set is IRREPLACEABLE hand-pruned state (see the file header).
+            // A generated row whose id is not already curated is deliberately DROPPED
+            // here — that drop is the whole point of the curation.
+            int curBefore = 0, curAfter = 0, curRefreshed = 0, curPreserved = 0, curNotCurated = 0;
+            JArray curOut = null;
 
-            // Index existing rows by id (case-insensitive).
-            var byId = new Dictionary<string, JObject>(StringComparer.OrdinalIgnoreCase);
-            var order = new List<string>();
-            foreach (var tok in existing)
+            if (curatedRoot == null)
+            {
+                // Fail closed: do NOT manufacture a curated file out of the library.
+                // That is exactly the 96 -> 431 inflation this rewrite exists to prevent.
+                FlowTrace.Fail(FlowSystem,
+                    $"{label}: curated copy MISSING at {resourcesPath}. REFUSING to create it from the library " +
+                    "(that would publish every dormant placeholder into the runtime catalog). Restore the file from git.");
+                Debug.LogError($"[GearCatalogGenerator] {label}: curated copy missing at {resourcesPath} — REFUSED. No file written.");
+                Refused = true;
+                return 0;
+            }
+
+            if (curatedRoot["version"] == null) curatedRoot["version"] = SchemaVersion;
+            JArray curExisting = curatedRoot[arrayKey] as JArray ?? new JArray();
+            curBefore = curExisting.Count;
+
+            var curById = new Dictionary<string, JObject>(StringComparer.OrdinalIgnoreCase);
+            var curOrder = new List<string>();
+            IndexRows(curExisting, curById, curOrder);
+
+            foreach (var gen in generated)
+            {
+                string id = gen["id"].ToString();
+                if (!curById.TryGetValue(id, out var prev)) { curNotCurated++; continue; }
+                if (IsUntouchable(prev)) { curPreserved++; continue; }
+                // DeepClone: the same `gen` JObject may already have been parented into the
+                // library array above; never re-parent a token across two documents.
+                RefreshGeneratedRow(prev, (JObject)gen.DeepClone());
+                curRefreshed++;
+            }
+
+            curOut = new JArray();
+            foreach (var id in curOrder) curOut.Add(curById[id]);
+            curatedRoot[arrayKey] = curOut;
+            curAfter = curOut.Count;
+
+            // ── THE HARD REFUSAL — fail closed on any unexplained row-count move ──
+            int libAfter = libOut.Count;
+            int libExpected = libBefore + libAdded;
+            if (curAfter != curBefore)
+            {
+                FlowTrace.Fail(FlowSystem,
+                    $"{label}: REFUSED — curated (Resources) row count would move {curBefore} -> {curAfter}. " +
+                    "This pass may only REFRESH curated rows, never add or drop one. Nothing was written.");
+                Debug.LogError($"[GearCatalogGenerator] {label}: REFUSED (curated {curBefore} -> {curAfter}). No file written.");
+                Refused = true;
+                return curBefore;
+            }
+            if (libAfter != libExpected)
+            {
+                FlowTrace.Fail(FlowSystem,
+                    $"{label}: REFUSED — library (StreamingAssets) row count would move {libBefore} -> {libAfter}, " +
+                    $"but this pass only added {libAdded} row(s) (expected {libExpected}). Nothing was written.");
+                Debug.LogError($"[GearCatalogGenerator] {label}: REFUSED (library {libBefore} -> {libAfter}, expected {libExpected}). No file written.");
+                Refused = true;
+                return curBefore;
+            }
+
+            // ── SUBSET ORACLE — curated ids must be a subset of the library ───────
+            // Verified 2026-08-14: Resources-only ids = 0 today. A violation means the two
+            // files have diverged in a way no tool here can reconcile; warn loudly, do not
+            // silently "fix" it by copying rows across.
+            var libIds = new HashSet<string>(libById.Keys, StringComparer.OrdinalIgnoreCase);
+            var orphans = new List<string>();
+            foreach (var id in curOrder) if (!libIds.Contains(id)) orphans.Add(id);
+            if (orphans.Count > 0)
+            {
+                FlowTrace.Warn(FlowSystem,
+                    $"{label}: SUBSET ORACLE violated — {orphans.Count} curated id(s) are absent from the library: " +
+                    string.Join(", ", orphans.GetRange(0, Math.Min(10, orphans.Count))) +
+                    (orphans.Count > 10 ? ", ..." : ""));
+            }
+
+            // ── WRITE (each file its own content; skip semantically-identical writes) ──
+            // Each write is VERIFIED AGAINST DISK afterwards and rolled back on a row-count
+            // move — an in-memory-only check would be hollow (nothing after this point can
+            // change the counts). The FILE is the oracle.
+            bool wroteCur = WriteIfChanged(resourcesPath, curatedRoot.ToString(Formatting.Indented), arrayKey, curAfter);
+            bool wroteLib = WriteIfChanged(streamingPath, libraryRoot.ToString(Formatting.Indented), arrayKey, libAfter);
+            if (WriteRefused) Refused = true;
+
+            Debug.Log($"[GearCatalogGenerator] {label}: +{libAdded} new, {curRefreshed} refreshed, " +
+                      $"{curAfter} preserved (curated rows, count unchanged). " +
+                      $"library {libBefore} -> {libAfter} ({libRefreshed} refreshed, {libPreserved} untouchable); " +
+                      $"{curNotCurated} scanned row(s) not curated (left in the library only). " +
+                      $"wrote: curated={wroteCur} library={wroteLib}.");
+            return curAfter;
+        }
+
+        /// <summary>Index rows by id (case-insensitive, first occurrence wins) preserving order.</summary>
+        private static void IndexRows(JArray rows, Dictionary<string, JObject> byId, List<string> order)
+        {
+            foreach (var tok in rows)
             {
                 if (tok is JObject obj && obj["id"] != null)
                 {
@@ -423,53 +611,63 @@ namespace DeNelle.Editor.Catalog
                     if (!byId.ContainsKey(id)) { byId[id] = obj; order.Add(id); }
                 }
             }
+        }
 
-            int refreshed = 0, added = 0, preserved = 0;
+        /// <summary>RULE: never touch a manual row, and never touch a row that was hand-authored
+        /// (no `generated` marker = the v1 catalog).</summary>
+        private static bool IsUntouchable(JObject row)
+        {
+            bool isManual     = row.Value<bool?>("manual") == true;
+            bool wasGenerated = row.Value<bool?>("generated") == true;
+            return isManual || !wasGenerated;
+        }
 
-            foreach (var gen in generated)
+        /// <summary>Write only when the on-disk JSON differs SEMANTICALLY, so a no-op run leaves an
+        /// EMPTY `git diff` (the Step-1 proof). The comparison is JToken.DeepEquals, NOT bytes:
+        /// a byte comparison re-indents any hand-edited row and produces a churn diff that would
+        /// collide with whatever lane is authoring the balance curve. Formatting is THEIRS to own;
+        /// this generator only ever writes when a VALUE actually changed.</summary>
+        private static bool WriteIfChanged(string assetPath, string contents, string arrayKey, int expectedRows)
+        {
+            string normalized = contents.Replace("\r\n", "\n");
+            string full = Path.GetFullPath(assetPath);
+            string original = null;
+            try
             {
-                string id = gen["id"].ToString();
-                if (byId.TryGetValue(id, out var prev))
+                if (File.Exists(full))
                 {
-                    bool isManual   = prev.Value<bool?>("manual") == true;
-                    bool wasGenerated = prev.Value<bool?>("generated") == true;
-
-                    // RULE: never touch a manual row, and never touch a row that was
-                    // hand-authored (no generated marker = the v1 catalog).
-                    if (isManual || !wasGenerated)
+                    original = File.ReadAllText(full);
+                    if (original.Replace("\r\n", "\n") == normalized) return false;      // identical bytes
+                    if (JToken.DeepEquals(JObject.Parse(original), JObject.Parse(normalized)))
                     {
-                        preserved++;
-                        continue;
+                        FlowTrace.Step(FlowSystem, $"{assetPath}: semantically unchanged — write SKIPPED (no formatting churn).");
+                        return false;
                     }
-
-                    // Refresh a generated row: re-derive the LOOK/derived fields, but
-                    // KEEP any human-tuned stat values already on the row (so a partial
-                    // edit before locking isn't blown away). We only overwrite fields
-                    // the generator owns and that are still at their generated default.
-                    RefreshGeneratedRow(prev, gen);
-                    refreshed++;
-                }
-                else
-                {
-                    byId[id] = gen;
-                    order.Add(id);
-                    added++;
                 }
             }
+            catch (Exception ex)
+            {
+                FlowTrace.Warn(FlowSystem, $"could not compare {assetPath} before write: {ex.Message}");
+            }
 
-            // Rebuild the array in original order + appended new rows.
-            var outArr = new JArray();
-            foreach (var id in order) outArr.Add(byId[id]);
+            WriteUtf8NoBom(assetPath, normalized);
 
-            root[arrayKey] = outArr;
+            // ── VERIFY AGAINST DISK, roll back on any row-count move ────────────
+            int onDiskRows = -1;
+            try { onDiskRows = (ReadJsonObject(assetPath)?[arrayKey] as JArray)?.Count ?? -1; }
+            catch (Exception ex) { FlowTrace.Fail(FlowSystem, $"{assetPath}: could not re-read after write: {ex.Message}"); }
 
-            string json = root.ToString(Formatting.Indented);
-            WriteUtf8NoBom(resourcesPath, json);
-            WriteUtf8NoBom(streamingPath, json);
-
-            Debug.Log($"[GearCatalogGenerator] {label}: +{added} new, {refreshed} refreshed, " +
-                      $"{preserved} preserved (manual/authored). Total {outArr.Count}.");
-            return outArr.Count;
+            if (onDiskRows != expectedRows)
+            {
+                if (original != null) File.WriteAllText(full, original, new UTF8Encoding(false));
+                FlowTrace.Fail(FlowSystem,
+                    $"{assetPath}: REFUSED — on-disk '{arrayKey}' row count is {onDiskRows} after the write, " +
+                    $"expected {expectedRows}. The original bytes have been RESTORED.");
+                Debug.LogError($"[GearCatalogGenerator] {assetPath}: REFUSED (on-disk rows {onDiskRows}, expected {expectedRows}). File rolled back.");
+                WriteRefused = true;
+                return false;
+            }
+            return true;
         }
 
         /// <summary>Refresh the generator-owned/derived fields on an existing generated row,

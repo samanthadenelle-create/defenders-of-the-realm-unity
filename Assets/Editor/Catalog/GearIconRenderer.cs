@@ -18,9 +18,8 @@
 //   3. SAVE Assets/Resources/ItemIcons/<id>.png, import as a Sprite (alpha, no
 //      compression banding), set the entry iconPath = "ItemIcons/<id>" (Resources-
 //      relative, no extension) so it is Resources-loadable at runtime.
-//   4. WRITE both Resources + StreamingAssets copies of weapons.json / armor.json
-//      in sync (mirrors GearCatalogGenerator's MergeAndWrite — NEVER overwrites a
-//      manual:true or a hand-authored row's existing data; only fills iconPath).
+//   4. PATCH iconPath into EACH copy of weapons.json / armor.json IN PLACE, per row
+//      (never cross-writing whole files — see the landmine note below).
 //
 // IDEMPOTENT: an entry that already has an iconPath AND an existing PNG on disk is
 // skipped — a second run with no new entries is a no-op (same bytes out).
@@ -32,6 +31,31 @@
 //   or headless -executeMethod DeNelle.Editor.Catalog.GearIconRenderer.RenderIcons
 // EDITOR-ONLY. Reads assets + Addressables settings, writes PNGs + the gear JSON.
 // Does NOT run Unity gameplay; does NOT commit.
+// -----------------------------------------------------------------------------
+// ⛔⛔ READ THIS BEFORE CHANGING ANY WRITE PATH BELOW (2026-08-14, Step 1 of
+//     docs/WEAPONS_DEEP_DIVE_2026-08-14.md §1 — "Landmine B"):
+//
+//   THE TWO weapons.json COPIES ARE NOT MIRRORS. THEY HAVE DIFFERENT ROLES.
+//     Assets/Resources/Data/Canonical/weapons.json      = the CURATED runtime set (96 rows)
+//     Assets/StreamingAssets/Data/Canonical/weapons.json = the LIBRARY          (431 rows)
+//   (armor.json is asymmetric the same way: 24 curated / 30 library.)
+//
+//   ⚠ NEITHER COUNT IS REGENERABLE OUTPUT — BOTH ARE IRREPLACEABLE STATE. The 96 is the
+//   residue of a ONE-TIME HAND PRUNE (git: b78c81cfd 434 rows -> 0d8185d1a "curate
+//   catalog — 434->34 weapons" -> walked back to 96 by GearCurationExporter).
+//   **NO TOOL IN THIS REPO CAN REPRODUCE THE 96, AND NOTHING RE-DERIVES THE 431.**
+//   If either is overwritten, the only recovery is git.
+//
+//   WHAT USED TO BE HERE (the landmine): ProcessCatalog read ONE root (the 96-row
+//   Resources copy) and wrote that SAME json to BOTH paths whenever any row got an
+//   icon. The first successful render would have TRUNCATED StreamingAssets 431 -> 96,
+//   destroying the browse library the Gear Caster depends on. It survived only because
+//   nobody had run the command since the prune.
+//
+//   THE INVARIANT, now enforced in code and FAILING CLOSED: an icon pass NEVER changes
+//   a row count. Each file is read, patched PER ROW BY ID, and written back on its own;
+//   a write is REFUSED (FlowTrace.Fail, nothing written) if its row count moved at all.
+//   Do not "simplify" this back into a single shared root. See also GearCatalogGenerator.cs.
 // =============================================================================
 
 using System;
@@ -71,9 +95,14 @@ namespace DeNelle.Editor.Catalog
         // ticks per asset, calling Repaint-equivalent churn between, before giving up.
         private const int MaxPreviewPolls = 200;
 
+        // Set true by any hard refusal in PatchCopyInPlace so RenderIcons withholds the
+        // success marker. Fail closed: a refused run must never read as a pass.
+        private static bool Refused;
+
         [MenuItem("Defenders/Catalog/Render Gear Icons")]
         public static void RenderIcons()
         {
+            Refused = false;
             Directory.CreateDirectory(Path.GetFullPath(IconAssetFolder));
 
             // Build the address→guid map ONCE from the Addressables "Gear" group.
@@ -98,19 +127,32 @@ namespace DeNelle.Editor.Catalog
                 foreach (var f in failures) sb.AppendLine($"    - {f}");
             }
             Debug.Log(sb.ToString().TrimEnd());
+
+            // WO-984 evidence marker. Withheld on ANY refusal.
+            if (Refused)
+                Debug.LogError("GEAR_ICON_RENDER_REFUSED — a row-count guard fired; see the FlowTrace Fail line above. That catalog copy was NOT written.");
+            else
+                Debug.Log($"GEAR_ICON_RENDER_OK rendered={rendered} skipped={skipped} failed={failed}");
         }
 
         // =====================================================================
         // Per-catalog pass
         // =====================================================================
 
-        /// <summary>Process one catalog (weapons|armor): render an icon for each row with a
-        /// null/empty iconPath, then write BOTH copies in sync if anything changed. Returns
-        /// the number of icons rendered.</summary>
+        /// <summary>Process one catalog (weapons|armor): render an icon for each CURATED row with a
+        /// null/empty iconPath, then patch the resulting iconPath into EACH copy in place, per row.
+        /// Row counts are asserted unchanged on both files; any move REFUSES the write.
+        /// Returns the number of icons rendered.</summary>
         private static int ProcessCatalog(string arrayKey, string resourcesPath, string streamingPath,
             Dictionary<string, string> addrToGuid, ref int skipped, ref int failed, List<string> failures)
         {
-            JObject root = ReadJsonObject(resourcesPath) ?? ReadJsonObject(streamingPath);
+            // Read EACH copy independently — they are different documents with different
+            // row counts (see the landmine note in the file header). The driving set is the
+            // CURATED copy, which is what the old code iterated; behaviour is unchanged.
+            JObject curatedRoot = ReadJsonObject(resourcesPath);
+            JObject libraryRoot = ReadJsonObject(streamingPath);
+
+            JObject root = curatedRoot ?? libraryRoot;
             if (root == null)
             {
                 Debug.LogWarning($"[GearIconRenderer] {arrayKey}: no catalog JSON found at " +
@@ -126,7 +168,9 @@ namespace DeNelle.Editor.Catalog
             }
 
             int rendered = 0;
-            bool dirty = false;
+
+            // id -> the iconPath this pass minted. Applied to BOTH copies afterwards.
+            var patches = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
             foreach (var tok in rows)
             {
@@ -179,23 +223,97 @@ namespace DeNelle.Editor.Catalog
                     continue;
                 }
 
-                row["iconPath"] = IconResourcePrefix + id; // "ItemIcons/<id>", no extension
+                patches[id] = IconResourcePrefix + id; // "ItemIcons/<id>", no extension
                 rendered++;
-                dirty = true;
                 FlowTrace.Step("GearIcon", $"{id}: rendered → {IconResourcePrefix + id}");
             }
 
-            if (dirty)
-            {
-                if (root["version"] == null) root["version"] = 1;
-                string json = root.ToString(Newtonsoft.Json.Formatting.Indented);
-                WriteUtf8NoBom(resourcesPath, json);
-                WriteUtf8NoBom(streamingPath, json);
-                Debug.Log($"[GearIconRenderer] {arrayKey}: wrote {rendered} new iconPath(s) " +
-                          $"to both copies ({resourcesPath} + StreamingAssets).");
-            }
+            if (patches.Count == 0) return rendered;
+
+            // ── PATCH IN PLACE, PER ROW, PER FILE ────────────────────────────────
+            // Each copy keeps its OWN rows and its OWN row count. A row whose id this
+            // pass did not render is untouched; a row absent from a copy is skipped,
+            // never inserted (inserting is how the counts would drift).
+            int curPatched = PatchCopyInPlace(arrayKey, resourcesPath, curatedRoot, patches, out bool curRefused);
+            int libPatched = PatchCopyInPlace(arrayKey, streamingPath, libraryRoot, patches, out bool libRefused);
+            if (curRefused || libRefused) Refused = true;
+
+            Debug.Log($"[GearIconRenderer] {arrayKey}: minted {patches.Count} iconPath(s); " +
+                      $"patched {curPatched} row(s) in the curated copy and {libPatched} row(s) " +
+                      $"in the library copy, IN PLACE. Row counts unchanged on both.");
 
             return rendered;
+        }
+
+        /// <summary>Apply the id→iconPath patches to ONE catalog copy in place and write it back.
+        /// REFUSES the write (FlowTrace.Fail, nothing written) if the row count moved — an icon
+        /// pass must never add or drop a row. Returns how many rows were patched.</summary>
+        private static int PatchCopyInPlace(string arrayKey, string assetPath, JObject copyRoot,
+            Dictionary<string, string> patches, out bool refused)
+        {
+            refused = false;
+            if (copyRoot == null) return 0; // that copy does not exist — nothing to patch, nothing to create.
+
+            JArray rows = copyRoot[arrayKey] as JArray;
+            if (rows == null)
+            {
+                FlowTrace.Warn("GearIcon", $"{assetPath}: no '{arrayKey}' array — skipped (not created).");
+                return 0;
+            }
+
+            int before = rows.Count;
+            int patched = 0;
+            foreach (var tok in rows)
+            {
+                if (!(tok is JObject row)) continue;
+                string id = row.Value<string>("id");
+                if (string.IsNullOrEmpty(id)) continue;
+                if (!patches.TryGetValue(id, out string iconPath)) continue;
+                if (row.Value<string>("iconPath") == iconPath) continue;
+                row["iconPath"] = iconPath;
+                patched++;
+            }
+
+            if (patched == 0) return 0; // byte-identical — leave the file alone entirely.
+
+            if (copyRoot["version"] == null) copyRoot["version"] = 1;
+
+            // ── THE HARD REFUSAL — verified AGAINST DISK, then rolled back ───────
+            // NOTE: comparing two in-memory counts here would be a HOLLOW assertion —
+            // this method never adds or drops a JObject, so such a check can never fail
+            // and proves nothing (docs/INSTRUMENTATION_STANDARD.md §1.4b). The real
+            // oracle is the FILE: write it, re-read it from disk, and assert the row
+            // count survived. On any mismatch the original bytes are RESTORED.
+            string full = Path.GetFullPath(assetPath);
+            string original = File.Exists(full) ? File.ReadAllText(full) : null;
+
+            WriteUtf8NoBom(assetPath, copyRoot.ToString(Newtonsoft.Json.Formatting.Indented));
+
+            int after = -1;
+            try
+            {
+                JObject reread = ReadJsonObject(assetPath);
+                after = (reread?[arrayKey] as JArray)?.Count ?? -1;
+            }
+            catch (Exception ex)
+            {
+                FlowTrace.Fail("GearIcon", $"{assetPath}: could not re-read after write: {ex.Message}");
+            }
+
+            if (after != before)
+            {
+                if (original != null) File.WriteAllText(full, original, new UTF8Encoding(false));
+                FlowTrace.Fail("GearIcon",
+                    $"{assetPath}: REFUSED — on-disk row count moved {before} -> {after} after the write. " +
+                    "An icon pass may only stamp iconPath onto existing rows, never add or drop one. " +
+                    "The original bytes have been RESTORED.");
+                Debug.LogError($"[GearIconRenderer] {assetPath}: REFUSED (rows {before} -> {after} on disk). File rolled back.");
+                refused = true;
+                return 0;
+            }
+
+            FlowTrace.Step("GearIcon", $"{assetPath}: patched {patched} iconPath(s) in place; on-disk rows VERIFIED unchanged at {before}.");
+            return patched;
         }
 
         // =====================================================================
