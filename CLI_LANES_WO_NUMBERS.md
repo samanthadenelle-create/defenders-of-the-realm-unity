@@ -1,6 +1,25 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ RECONCILED 2026-08-10 (CLI): main line next free = **981**. **782–859 + 900–980 CONSUMED.**
+> ## ⚠ RECONCILED 2026-08-14 (CLI): main line next free = **982**. **782–859 + 900–981 CONSUMED.**
+> - **981** = **The skill-point grants in `HeroProgression` are INFERRED and silently droppable** —
+>   found by the orchestrator while gate-reviewing the WO-977 fix, 2026-08-14. Two sections, one file,
+>   one fix session. **§A — the starter latch is not persisted, it is GUESSED FROM LEVEL.**
+>   `HeroProgression.cs:202` (`RestoreFromSave`) does `if (_level > 1) _hasGrantedStarterPoints = true;`
+>   on the stated assumption *"a restored hero past level 1 already received its first-level-up starter
+>   gift in the run that earned the level"* — **which is precisely the assumption WO-977 disproves.** So
+>   WO-977's retry-on-next-level-up holds only WITHIN a session: a player whose grant failed at the
+>   level-1→2 boundary and then reloads is re-latched at `:202` and loses both points permanently. The
+>   durable fix is to persist the latch (a `SaveSchema` bump — mind the CORE_SAVE version-triple oracle,
+>   `SaveMigrator` top step must equal `CurrentVersion`) **or** derive it from a measured point count
+>   rather than from level. ⚠ **Until this lands, WO-977's new Fail message overstates its guarantee**
+>   and the message wording must say "this session". **§B — the per-level grant at `:259` drops a point
+>   silently on a null `SkillSystem.Instance`.** It IS `try`-wrapped, so a *throw* is loud, but the `?.`
+>   no-op is not: `SkillSystem.Instance` is a plain static self-bootstrapped `AfterSceneLoad` while
+>   `HeroProgression.Bootstrap` is `BeforeSceneLoad`, so the null window is real, not theoretical — and
+>   this one fires on EVERY level, not once. Same treatment as WO-977: measure the `AvailablePoints`
+>   delta, `Fail` naming the consequence when it does not move. **READY.**
+>
+> *(banner bumped 981 → 982 in the SAME edit as the mint.)*
 > - **980** = **Dungeon camera FRAMING after the WO-968 fix — blown-out wall, hero as silhouette.**
 >   The camera fix itself is PROVEN (43 heartbeats, 15 distinct rig poses, heal line fired once naming
 >   the DESTROYED CinemachineFollow verbatim). This is about what the now-working camera SHOWS:

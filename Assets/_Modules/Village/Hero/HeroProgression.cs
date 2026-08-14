@@ -261,12 +261,45 @@ namespace DeNelle.Village
 
             // DEF-82 — on the very first level-up, gift two bonus skill points so
             // new players can immediately engage the skill tree.
+            // WO-977: the latch used to flip BEFORE the grants and the two `?.` calls were
+            // UNWRAPPED — a null SkillSystem.Instance (or a throw) silently granted ZERO
+            // points while the already-true latch made the loss PERMANENT (fires once per
+            // player, so a save replay can never reproduce it). Now: grant FIRST, latch
+            // ONLY on a CONFIRMED AvailablePoints delta, and trace the MEASURED before/after
+            // instead of asserting the intent (INSTRUMENTATION_STANDARD §1.4b).
             if (!_hasGrantedStarterPoints)
             {
-                _hasGrantedStarterPoints = true;
-                SkillSystem.Instance?.GrantSkillPoint();
-                SkillSystem.Instance?.GrantSkillPoint();
-                FlowTrace.Step("HeroXp", "granted 2 starter skill points (first level-up).");
+                const int StarterPoints = 2;
+                var skills = SkillSystem.Instance;
+                if (skills == null)
+                {
+                    FlowTrace.Fail("HeroXp", $"DEF-82 starter grant SKIPPED at level {newLevel} — SkillSystem.Instance is NULL; player received 0 of {StarterPoints} starter skill points. NOT latched — retries on the next level-up IN THIS SESSION ONLY: RestoreFromSave latches on level>1, so a reload before then loses them permanently (WO-981 §A).");
+                }
+                else
+                {
+                    int before = skills.AvailablePoints;
+                    int calls = 0;
+                    try
+                    {
+                        for (int i = 0; i < StarterPoints; i++) { skills.GrantSkillPoint(); calls++; }
+                    }
+                    catch (System.Exception e)
+                    {
+                        FlowTrace.Fail("HeroXp", $"DEF-82 starter grant THREW at level {newLevel} after {calls}/{StarterPoints} calls — {StarterPoints - calls} starter skill points NOT granted: {e.GetType().Name}: {e.Message}");
+                    }
+
+                    int after = skills.AvailablePoints;
+                    int delta = after - before;
+                    if (delta >= StarterPoints)
+                    {
+                        _hasGrantedStarterPoints = true;   // latch ONLY on confirmed success
+                        FlowTrace.Step("HeroXp", $"DEF-82 starter skill points GRANTED at level {newLevel}: availablePoints {before}->{after} (delta={delta}, calls={calls}/{StarterPoints}) — latched.");
+                    }
+                    else
+                    {
+                        FlowTrace.Fail("HeroXp", $"DEF-82 starter grant INCOMPLETE at level {newLevel}: availablePoints {before}->{after} (delta={delta}, expected {StarterPoints}, calls={calls}) — points LOST this level. NOT latched, retries on the next level-up IN THIS SESSION ONLY (RestoreFromSave latches on level>1 — WO-981 §A).");
+                    }
+                }
             }
 
             try { OnLevelUp?.Invoke(newLevel); }

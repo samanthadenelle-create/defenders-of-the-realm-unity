@@ -1,6 +1,6 @@
 # WORK ORDER 977 — Starter skill points can be silently never granted, and the latch says otherwise
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — code landed 2026-08-14 (`HeroProgression.ApplyLevelRewards`): grants run first, the latch flips ONLY on a confirmed `SkillSystem.AvailablePoints` delta, a null `SkillSystem.Instance` and a throw each raise a `FlowTrace.Fail` naming the lost points, and the old hollow `"granted 2 starter skill points"` line is replaced with a measured `availablePoints <before>-><after> (delta=…, calls=…)` trace. **Still owed:** the §4 regression covering the null + healthy paths is NOT written (`DataRegression.cs` is lane-fenced to the committer), and no runtime capture proving the null path can be produced — the null case fires at most once per player and cannot be forced from this seat, so the null branch is verified by construction/review only, not by captured data.
 **Lane:** Village / Hero progression
 **Severity:** player-facing, **fires for every player exactly once**
 **Minted:** 2026-08-10 (CLI), from the hollow-assertion audit (`docs/reference/HOLLOW_ASSERTIONS_REGISTRY.md`)
