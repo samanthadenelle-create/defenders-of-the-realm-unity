@@ -1,6 +1,96 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ RECONCILED 2026-08-14 (CLI): main line next free = **983**. **782–859 + 900–982 CONSUMED.**
+> ## ⚠ RECONCILED 2026-08-14 (CLI): main line next free = **989**. **782–859 + 900–988 CONSUMED.**
+> - **988** = **`headed-dungeon-capture.ps1` reports `HEADED_CAPTURE_OK` on a run that loaded the WRONG
+>   SCENE with a FROZEN CLOCK.** PROVEN 2026-08-14: a run tagged `wo1007-portal-camera` emitted
+>   `HEADED_CAPTURE_OK 10 shots`; the copied `Player.log` from that same run says
+>   `scene='Main_Castle_Overworld'` (the TOWN — the `-Scene` parameter is accepted and then never
+>   forces a load) and `WORLD CLOCK FROZEN: Time.timeScale=0.00 ... The hero CANNOT move, turn or`.
+>   All ten shots are the frozen town; the synthetic WASD landed in an **open bug-report text field**
+>   visible in `10_facing_exit.png`. ⚠ **Same class as WO-984** — the harness proves a frame rendered
+>   and nothing else, which is precisely what its own closing line already admits (*"A green marker
+>   proves a frame rendered, never that it looks right"*). **FIX:** after load, assert from the live log
+>   that (a) the ACTIVE SCENE equals `-Scene`, (b) `Time.timeScale > 0`, (c) the hero POSITION CHANGED
+>   between `01_idle` and `03_forward_far`, and (d) no modal/text-input has focus. Any failure =
+>   non-zero exit and NO marker. A capture that cannot fail is worse than no capture: it manufactures
+>   evidence. READY.
+> - **987** = **Dungeon exit portal: TOUCH to interact, then a "CONTINUE TO EXIT / CANCEL" confirm.**
+>   OWNER RULING 2026-08-14, verbatim: *"should be action on interacting with the portal. Touch portal to
+>   interact"*, *"if you want a confirm there that could be smart"*, *"confirm exiting portal"*,
+>   *"continue or exit"*, clarified to **"continue to exit or cancel"**.
+>   ⚠ **THE TWO FACES ARE `Continue to exit` AND `Cancel` — they are NOT two ways forward.** The first
+>   reading ("Continue" vs "Exit") would have shipped a dialog offering to keep playing or to leave,
+>   which is a different feature and an easy mis-build. Cancel RETURNS THE PLAYER TO THE RUN, unchanged.
+>   Today the exit is proximity/prompt-driven; the ruling makes **contact with the portal** the trigger
+>   and adds a **two-choice confirm** so a player cannot lose a run by walking into the exit. ⚠ Do NOT
+>   reuse the raw violet plate — the interact button is being re-skinned to the Obsidian kit under
+>   WO-1005 Part 1 (owner confirmed the purple goes, town included). READY.
+> - **986** = **`PlacementGrid.FootprintCells` SQUARES the grid claim, so every THIN structure over-claims
+>   on its narrow axis — WO-972 routed around this for walls only.** SURFACED 2026-08-14 while verifying
+>   WO-972. `PlacementGrid.cs:235-238` computes ONE scalar and returns `new Vector2Int(cells, cells)`;
+>   `StructureFactory.cs:693` collapses the mesh with `Max(b.size.x, b.size.z)`, discarding the 1.42 m
+>   depth. Walls were fixed by feeding the claim a different METRIC (authored fp=2.1 -> `Ceil(2.1/3)=1`),
+>   **not** by fixing the squaring. So any other row whose mesh overshoots one axis by even 1% still
+>   claims a square block on its thin axis. ⚠ **This is an OWNER-SCOPED decision, deliberately NOT slipped
+>   into the wall ticket:** a real fix means a non-square `(x,z)` footprint threaded through the grid, the
+>   occupancy map, the yaw-inflation path (`:262-264`, `|sin|+|cos|`) **and every saved layout's occupancy
+>   replay** — i.e. it touches every placeable structure and existing player saves. Decide whether thin
+>   structures other than walls actually hurt in play before paying that. **SPEC — needs an owner call.**
+> - **985** = **`DungeonHero.FaceHeading`'s dead `KeeperRelative` branch still applies `ModelYawOffset = 90f`
+>   — the THIRD fragment of a matched pair whose other two halves were removed today.** 2026-08-14: the
+>   camera's `_headingYawOffset = 90f` existed *solely* to undo `FaceHeading`'s `Euler(0,-90,0)`. Removing
+>   only the `-90` left the camera 90° to the side (F8 seq 2328; delta constant 90.0 across 39 heartbeats).
+>   Both halves are now zeroed — **but `KeeperRelative` is a third copy of the same offset, currently
+>   unreachable.** It is bannered STALE, not deleted, because deleting an unreachable branch destroys the
+>   evidence of what the pair used to be. ⚠ The hazard is specific: if anyone re-enables that branch it
+>   re-introduces the exact bug against a camera that no longer compensates. **Do NOT "clean it up" and do
+>   NOT flip it on to test — decide whether the branch has a future, then either wire it WITH a zeroed
+>   offset or remove it in one deliberate edit that names the pairing.** READY.
+> - **984** = **The Unity method wrapper judges success by LOG TEXT, not by a MARKER — so a gate that
+>   never ran reports exit 0.** PROVEN THREE WAYS on 2026-08-14: (1) `powershell -File
+>   tools\run-unity-method.ps1` — a path that **does not exist**, the runner lives at repo root — exited
+>   **0**; (2) the same call with the script found but `-LogName` missing exited **1** only because
+>   PowerShell's own mandatory-parameter check caught it, not the wrapper; (3) reading `Builds\build.log`
+>   instead of the gate's own log showed `COMPILE_GATE_OK : 0` on a tree that was in fact clean. ⚠ **This
+>   is the SAME defect class as the 44-row hollow-assertion registry, sitting in the tooling we use to
+>   verify everything else** — and it is worse than a hollow trace, because a hollow gate makes every
+>   downstream "verified" claim unfounded. The wrapper's own header admits the design (*"judge success
+>   from the log (compile errors / exceptions / 'Aborting batchmode')"*) — that was a reasonable choice
+>   when markers did not exist; markers exist now and are per-entry-point distinct (`COMPILE_GATE_OK`,
+>   `REGRESSION_OK <n>/<n> suites`, `CHECKIN_SUITE_OK`, `SESSION_GUARDS_OK`, `UI_CAPTURE_OK`). **FIX:**
+>   require the caller to declare the expected marker, and FAIL when it is absent, when the log is older
+>   than the run, or when the log does not exist. Absence of an error is not evidence of success.
+>   Acceptance: a deliberately-broken invocation (bad path, bad method name, stale log) must exit
+>   NON-ZERO. Today none of those do. READY.
+> - **983** = **Ground fog THROUGHOUT the composed dungeons** — owner direction 2026-08-14, verbatim
+>   *"THIS THROUGHOUT THE DUNGEON"*, pointing at the Unity Particle Pack demo scene **Ground Fog**
+>   (*"slow moving noise + a sprite sheet animation to give the effect of rolling fog"*).
+>   **THE KEY IS ALREADY CATALOGUED — map it verbatim, do NOT pick a substitute** (memory
+>   `vfx-map-owner-tags-no-creative-pick`): `PP_GroundFog` →
+>   `Assets/UnityTechnologies/ParticlePack/EffectExamples/Smoke & Steam Effects/Prefabs/GroundFog.prefab`.
+>   ⚠ Do NOT use `Env_GroundFog` — that `VFXType` ordinal is an ORPHAN with **no catalog row and no
+>   prefab** (`VFX_AUDIO_WIRING_MAP.md`); it looks like the right name and renders nothing.
+>   **Today `PP_GroundFog` has exactly ONE consumer — `DungeonWorldPortalSpawner`, the OVERWORLD portal.
+>   Nothing inside a dungeon plays it.** That is the whole gap; the asset and the key both already exist.
+>   ⛔ **THE TRAP, AND IT IS THE EXPENSIVE ONE.** That prefab lives in a **GITIGNORED** root
+>   (`Assets/UnityTechnologies/`, the 191 MB Particle Pack). Referencing it straight from the bake
+>   reproduces the 2026-08-06 P0 verbatim — **27 of 28 tracked VFX prefabs / 183 references pointed into
+>   gitignored art** and rendered magenta-or-nothing on every machine without the packs. It works HERE
+>   and is invisible until a clone. **Mirror it first** via `VfxResourceArtMirror` into
+>   `Assets/Resources/VFX/` (deps included — `CopyAsset` duplicates the PREFAB ONLY), then wire the
+>   mirrored copy, then confirm `VFX_ART_MIRROR_OK`.
+>   ⚠ Second trap: **fog is a LOOP.** A loop played fire-and-forget permanently consumes one of the
+>   **20 global loop slots** and never returns it (the 08-06 loop-cap P0 — after ~20 the archer renders
+>   no projectile and the Tree of Life aura starves). Seat one instance per ROOM with a retained handle
+>   released on room unload, or declare a finite lifetime so `VFXManager` routes it through the
+>   leak-proof oneshot path. **Never one per tick, never per enemy.**
+>   Seat it in the bake beside the existing dressing pass (`DungeonDresser.DressRoom`, already seats ~8
+>   props/room and is wired into `DungeonBaker` pre-NavMesh), so every composed dungeon gets it and the
+>   fleet cannot diverge. Acceptance = a headed capture (`tools/capture/headed-dungeon-capture.ps1`)
+>   showing rolling fog in `dg_ember_deep`, **plus** the absence of `SKIPPED - active loops 20/20`
+>   across that run. **READY.**
+>
+> *(banner bumped 983 → 984 in the SAME edit as the mint.)*
 > - **982** = **`GraphDungeonComposer` emits the compose-layout to StreamingAssets ONLY — so every bake
 >   silently creates dual-copy drift, and Resources (the copy that WINS at runtime) keeps the stale one.**
 >   PROVEN BY A BAKE, 2026-08-14: a clean `ComposeAllBatch` run left **all 7** `dg_*.json` layouts drifted,

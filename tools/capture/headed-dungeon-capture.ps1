@@ -97,7 +97,7 @@ function Get-ClientBounds([IntPtr]$h) {
     return @{ X = $p.X; Y = $p.Y; W = ($r.R - $r.L); H = ($r.B - $r.T) }
 }
 
-# ⛔ THE GUARD THAT MUST NEVER BE REMOVED (added 2026-08-14 after a real incident).
+# [STOP] THE GUARD THAT MUST NEVER BE REMOVED (added 2026-08-14 after a real incident).
 # CopyFromScreen grabs whatever pixels sit at these SCREEN COORDINATES - not the window's own
 # surface. SetForegroundWindow FAILS SILENTLY when the calling process does not own the
 # foreground, so an occluded game window means you photograph whatever is in front of it. On
@@ -130,6 +130,10 @@ function Test-HasContent([System.Drawing.Bitmap]$bmp) {
 }
 
 function Save-Shot([IntPtr]$h, [string]$name) {
+    # Re-assert per shot: the run REQUIRES focus (input), so losing it mid-sequence means the
+    # hero stopped responding and this game pauses. Catch it at the frame it happens rather
+    # than shipping a folder of Pause overlays that look like gameplay.
+    Assert-Frontmost $h $name
     $b = Get-ClientBounds $h
     if ($b.W -le 0 -or $b.H -le 0) { Write-Warning "shot '$name': zero client rect - skipped"; return $null }
 
@@ -203,14 +207,28 @@ Start-Sleep -Seconds $LoadWaitSec
 [void][Win]::SetForegroundWindow($hwnd)
 Start-Sleep -Milliseconds 1200
 
-$isFront = ([Win]::GetForegroundWindow() -eq $hwnd)
-if (-not $isFront) {
-    # NOT fatal any more: PrintWindow reads the window's own surface, so a background game is
-    # still capturable. It IS fatal for the screen-read fallback, which Save-Shot guards.
-    Write-Warning ("game is NOT frontmost - relying on PrintWindow. Real key input still needs " +
-                   "focus, so the hero may not move; if the shots look static, re-run with the " +
-                   "game focused and nothing else on screen.")
+# [STOP] REFUSE, do not warn (hardened 2026-08-14 after a run produced a PAUSE MENU).
+# PrintWindow can photograph a BACKGROUND window's own surface, so the earlier version merely
+# warned and carried on. That was wrong for a DRIVEN capture: SendInput only reaches the
+# FOCUSED window, so without focus the hero never moves - and this game pauses on focus loss,
+# so the shots came back as the Pause overlay. Seven files that looked like evidence and were
+# not. A capture tool that emits misleading frames is worse than one that emits none.
+$isFront = $false
+for ($i = 0; $i -lt 5 -and -not $isFront; $i++) {
+    [void][Win]::ShowWindow($hwnd, 9)
+    [void][Win]::SetForegroundWindow($hwnd)
+    Start-Sleep -Milliseconds 700
+    $isFront = ([Win]::GetForegroundWindow() -eq $hwnd)
 }
+if (-not $isFront) {
+    $proc | Stop-Process -Force -ErrorAction SilentlyContinue
+    Write-Error ("CAPTURE_FAIL: could not hold the foreground after 5 attempts. Driven capture " +
+                 "needs focus - without it SendInput never reaches the game, the hero does not " +
+                 "move, and the game pauses, so every frame would be a Pause overlay. NOTHING " +
+                 "was captured. Close/minimise other windows and re-run.")
+    exit 4
+}
+Write-Output "[capture] foreground held - input will reach the game"
 
 # --- the beats ---------------------------------------------------------------
 # Named so a diff against a prior run is meaningful. Keep these names stable.
@@ -223,6 +241,21 @@ Hold-Key 'D' 1.8 $hwnd; Save-Shot $hwnd '05_right'       | Out-Null
 Hold-Key 'S' 1.2 $hwnd; Save-Shot $hwnd '06_back'        | Out-Null
 Start-Sleep -Seconds 1
 Save-Shot $hwnd '07_settled'       | Out-Null
+
+# ?? WALK OUT AND LOOK BACK (owner method, 2026-08-14) ?????????????????????????
+# The dungeon EXIT is seated within ~4m of the hero spawn, so at t=0 the camera is
+# effectively inside it and the shots above show geometry filling the frame rather than
+# the object. The only way to actually SEE the exit is to walk away from it and turn
+# around. Measured from the trace: a 1s A/D hold swings hero yaw ~40-45deg, so ~4s of
+# sustained turn is roughly the 180 needed. Keep these beats - they are how the exit,
+# the portal and the beacon get judged at all.
+Hold-Key 'W' 2.5 $hwnd; Save-Shot $hwnd '08_walked_out'  | Out-Null
+Hold-Key 'D' 4.0 $hwnd
+Start-Sleep -Milliseconds 600
+Save-Shot $hwnd '09_turned_back'   | Out-Null
+Hold-Key 'D' 1.2 $hwnd
+Start-Sleep -Milliseconds 600
+Save-Shot $hwnd '10_facing_exit'   | Out-Null
 
 # --- harvest the matching trace ----------------------------------------------
 $logSrc = Join-Path $env:USERPROFILE 'AppData\LocalLow\DeNelle\Echoes of Elarion\Player.log'

@@ -1,7 +1,28 @@
 # WO-962 — `guide_gate` must LATCH on step enter, not re-resolve to the nearest gate
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE
 **Date:** 2026-08-10 · **Priority:** HIGH (it hard-blocks the second beat of the FTUE)
+
+> **LANDED in commit `e2759f1e9`** — *"fix(tutorial): WO-962 - guide_gate LATCHES on step enter
+> instead of chasing the nearest gate"*. The Status line above was never flipped in that commit,
+> so the derived board (`tools/board_build.py`) kept re-serving this ticket as READY and it was
+> re-routed to an implementation agent on 2026-08-14; that agent found the fix already present
+> at HEAD and flipped the line rather than re-implementing it. Verified at source, not inferred:
+> - `Assets/_Modules/Village/Tutorial/V2/TutorialWorldAnchors.cs` — `LatchAnchor` / `ClearLatch` /
+>   `IsLatched`; `TryResolveAnchor` reads the latch before any live resolve; `TraceDivergenceOnce`
+>   records the would-have-moved answer and never writes it back; the `world.gate_direction`
+>   resolver points at the LATCHED gate transform while a latch is held.
+> - `Assets/_Modules/Village/Tutorial/V2/TutorialFlow.cs` — `EnterStep` latches a
+>   `hero.reached:<anchor>` step's anchor (L588-592); `TickProximityProbe` re-calls `LatchAnchor`
+>   idempotently for a late-resolving anchor (L1718-1724); `ClearLatch` on teardown (L473),
+>   `CompleteCurrentStep` (L1238) and `FinishFlow` (L1271). `ReachedRadius` is still `6f` and
+>   `WatchdogSeconds` still `120f` — the two forbidden "fixes" of §3 were not taken.
+> - `Assets/Editor/Regression/TutorialAnchorLatchRegression.cs` — acceptance 4, replaying the
+>   F8 seq 2301 south→east→north resolver through `LiveResolverOverride`; registered in
+>   `DataRegression.RunAll` (`[tutorial-anchor-latch]`).
+>
+> Acceptance 2 and 3 (the hero physically reaches the latched gate in a clean FTUE run) are
+> felt/AutoPilot verification and remain the PO's to close.
 **Block:** main line (CLI) · **Lane:** Tutorial / world anchors
 **Source:** owner F8 seq 2301, 2026-08-10 16:04, `Main_Castle_Overworld`
 
