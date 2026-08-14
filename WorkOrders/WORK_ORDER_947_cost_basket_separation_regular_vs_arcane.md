@@ -1,6 +1,6 @@
 # WORK ORDER 947 — Cost-basket separation: regular structures = wood+iron; magical/ethereal = crystal-based; never all three
 
-**Status:** PARTIALLY APPLIED (catalog v17 + gate shipped 2026-08-14) — **still needs owner classification pins (§4 + the new §6 pin)** before the remaining 5 rows can move
+**Status:** DONE (catalog v18, 2026-08-14) — all four §4 pins + the §6 pin ANSWERED by the owner and applied to all 6 rows; the gate's exemption list is EMPTY. **One NEW pin remains OPEN and is deliberately unconverted: `arcane-tower` (§8).**
 **Minted:** 2026-08-10 (CLI seat, main line — banner bumped 947 → 948 in the same edit)
 **Silo:** Data (structures-catalog.json dual-copy) + one regression gate — no code-lane conflicts
 **Type:** owner ECONOMY RULING, applied to data + enforced by a gate
@@ -103,7 +103,58 @@ not an agent's. *(Separately: `tower_arcane_spire`'s MAGICAL side is not in doub
 `Aether`, `behaviorId` `ArcaneTower`, `projectileStyle` `spell`, and WO-1013 calls it arcane
 outright — only its PAIRING is unpinned by §4 q1.)*
 
-## 7. What NOT to touch
+## 8. IMPLEMENTATION LOG — 2026-08-14 (economy/data lane agent, catalog v18) — THE PINS LANDED
+
+**Owner rulings, verbatim (2026-08-14):**
+1. *"Crystals and Iron"* → the MAGICAL basket is **crystals + iron** (not crystals+wood). §4 q1 CLOSED.
+2. *"yes AoE healing"* → healing **IS** magical → `tower_healer` + `healing_caravan` are MAGICAL. §4 q2 CLOSED.
+3. *"Crafting (can enbue preciouus sstones future release)"* → `jeweler` is a **CRAFTING** shop → **REGULAR**.
+   ⚠ The owner flagged that a **FUTURE release may let it imbue precious stones** — that would be a
+   re-classification **then**, and is expressly **not** a reason to make it magical today. §4 q3 CLOSED.
+4. *"thats a baliista mechanical"* → `tower_wall_wizard` is **MECHANICAL → REGULAR**. The **DATA** reading
+   beats the **ID** reading (displayName "Ballista", element None, projectileStyle "bolt" per the owner's
+   2026-07-08 rename); `wizard` in the id is stale naming. §6 pin CLOSED.
+
+**All 5 remaining rows applied, totals PRESERVED (the `tower_siege_tower` 1:1 discipline):**
+
+| id | side | before | after | total |
+|---|---|---|---|---|
+| `tower_wall_wizard` | REGULAR | w60 i30 **c70** / w72 i36 c84 / w150 i75 c175 | w60 **i100** / w72 **i120** / w150 **i250** | 160 / 192 / 400 (unchanged) |
+| `jeweler` | REGULAR | w50 i40 **c30** | w50 **i70** | 120 (unchanged) |
+| `tower_arcane_spire` | MAGICAL | **w40** i40 c85 / w48 i48 c102 / w100 i100 c212 | i40 **c125** / i48 **c150** / i100 **c312** | 165 / 198 / 412 (unchanged) |
+| `tower_healer` | MAGICAL | **w110** f40 i70 c30 | f40 i70 **c140** | 250 (unchanged) |
+| `healing_caravan` | MAGICAL | **w150** f60 i100 c40 | f60 i100 **c190** | 350 (unchanged) |
+
+- REGULAR rows fold the dropped **crystals 1:1 into IRON** (the v17 `tower_siege_tower` precedent).
+- MAGICAL rows fold the dropped **wood 1:1 into CRYSTALS** — chosen because the ruling calls magical
+  structures crystal-**BASED**; folding into iron would have left the mundane side dominant. Iron is left
+  exactly as authored. Every basket total and every tier-monotonic ladder is byte-for-byte unchanged.
+- `structures-catalog.json` **v17 → v18**, both canonical copies byte-identical
+  (`md5 113f5485ed22740f9ee2040930479957`). `_costBasketRule` rewritten; a `_costBasketNote` carrying the
+  owner's verbatim words added to each converted row.
+- **`CatalogBootstrap.RegisterFallback` mirrored** for `tower_wall_wizard` + `tower_arcane_spire` (the only
+  two of the five it registers) — `BuildEconomyRegression` gate 12 `[fallback-parity]` deep-compares every
+  public `RepoProps` field, so an un-mirrored basket is a red build.
+
+**Gate updated (`CostBasketSeparationRegression.cs`):** `MagicalIds` now holds the three magical ids;
+`PendingPins` is **EMPTY** (the mechanism stays for any future pin — it is not a mute button); `[applied]`
+became a table over **all six** converted rows, asserting the ruled side (regular → 0 crystals; magical →
+0 wood **and** non-zero crystals) plus the preserved totals.
+
+## 9. NEW OPEN PIN — `arcane-tower` ("Cathedral of Magic"), NOT converted
+
+Cost today **wood:60 iron:60 crystals:0** — it does **not** violate the invariant, so it was never on the
+exemption list and the gate is silent about it. But under pin 1 a magical building should be crystals+iron.
+The evidence is genuinely split and an agent must not decide it:
+- **Reads magical:** the name "Cathedral of Magic", `npcModel: Mage`, its baked twin
+  `ArcaneTower_MagicUpgrades`, and it is the home of the magic research/upgrade tree.
+- **Reads regular:** `behaviorId` is **`GameplayBuilding`**, not a caster — its own `_heightNote` says
+  "*despite the id this is not a tower — it is a GameplayBuilding, the town's one civic landmark*". By the
+  pin-3 logic the owner just used for the jeweler (a shop that *deals in* magic is still a shop), a civic
+  building that *sells* magic upgrades is REGULAR.
+**Owner call needed.** If magical: w60 i60 → **i60 c60** keeps the total at 120.
+
+## 10. What NOT to touch (was §7; renumbered so the log sections read in order)
 
 - Affinity/harvest math, Echo systems (WO-811 lane is live), the crystal SINKS (instant-finish,
   queue-slot pricing — WO-911 rulings), Gold/Coins, pack pricing.

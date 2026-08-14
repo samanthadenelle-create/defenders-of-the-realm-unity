@@ -14,22 +14,33 @@
 //    separation. So it doesn't touch all three."
 // Operationalized:
 //   * REGULAR structures cost wood + iron (+/- food where already used). NEVER crystals.
-//   * MAGICAL / ETHEREAL structures are crystal-based.
+//   * MAGICAL / ETHEREAL structures are CRYSTALS + IRON -- never wood.
 //   * INVARIANT: no row's build cost or upgrade step holds wood AND iron AND crystals.
 //
-// WHY THE PENDING-PIN LIST EXISTS (read this before "fixing" a listed row):
-// WO-947 section 4 asks the owner FOUR classification questions and, as of
-// 2026-08-14, all four are still listed OPEN in KEY_FACTS.md ("Owner pins still
-// open: ... WO-947 four cost-basket calls"). Until pin 1 (the arcane pairing:
-// crystals+iron or crystals+wood?) lands, NO row may legally be made crystal-
-// based, so MagicalIds below is deliberately EMPTY. Guessing a side for the
-// remaining rows is exactly the inference-fix CLAUDE.md section 12 forbids, so
-// they are carried here as a DATED, CITED exemption list instead of silently
-// passing or silently failing.
+// THE PINS ARE ANSWERED (owner, 2026-08-14) and catalog v18 applies all of them:
+//   pin 1 "Crystals and Iron"        -> the magical pairing is crystals + iron.
+//   pin 2 "yes AoE healing"          -> healing IS magical: tower_healer + healing_caravan
+//                                       become crystals + iron (+ their existing food).
+//   pin 3 "Crafting (can enbue       -> the jeweler is a CRAFTING shop, therefore REGULAR
+//         preciouus sstones future      today. The owner flagged a FUTURE release may let it
+//         release)"                     imbue precious stones -- a re-classification THEN.
+//   pin 4 "thats a baliista          -> tower_wall_wizard is MECHANICAL, therefore REGULAR.
+//         mechanical"                   The DATA reading beat the ID reading.
+// So MagicalIds now holds the three magical ids and PendingPins is EMPTY.
 //
-// The list SELF-CLEANS: case 3 FAILS if a listed row has stopped violating, so a
-// pin that lands and gets applied forces the exemption to be deleted in the same
-// change. It can only shrink.
+// WHY THE PENDING-PIN MECHANISM STAYS even at zero entries: when a row's side is
+// an open OWNER question, guessing it is exactly the inference-fix CLAUDE.md
+// section 12 forbids. Such a row is carried here as a DATED, CITED exemption
+// instead of silently passing or silently failing -- and the list SELF-CLEANS,
+// because case 3 FAILS if a listed row has stopped violating, so a pin that lands
+// and gets applied forces the exemption to be deleted in the same change. It can
+// only shrink. It is NOT a mute button for a gate failure.
+//
+// STILL UNPINNED, deliberately unconverted: 'arcane-tower' ("Cathedral of Magic")
+// is wood:60 iron:60 with NO crystals, so it does not violate anything and is not
+// listed anywhere here. But under pin 1 a magical building should be crystals +
+// iron, and it is a GameplayBuilding (the town's civic magic-upgrades shop), not a
+// spellcaster -- so its side is the owner's call, not this file's.
 //
 // Cases:
 //   1 [invariant]   no entry's build cost / upgrade step holds wood AND iron AND
@@ -42,11 +53,13 @@
 //   3 [pins]        every pending-pin id still EXISTS and still VIOLATES (else the
 //                   exemption is stale and is hiding the next regression), and the
 //                   pins are logged distinguishably for the owner call.
-//   4 [applied]     the one conversion already made (tower_siege_tower, WO-947,
-//                   catalog v17) stays converted: zero crystals at build and at
-//                   both upgrade steps, and the basket TOTALS are unchanged from
-//                   the pre-ruling values (270 / 324 / 675) -- the fold was 1:1
-//                   into iron, so a revert or a stealth re-balance both trip here.
+//   4 [applied]     every conversion already made (v17: tower_siege_tower; v18:
+//                   tower_wall_wizard, jeweler, tower_arcane_spire, tower_healer,
+//                   healing_caravan) stays on its ruled side -- regular rows carry
+//                   zero crystals, magical rows carry zero wood and non-zero
+//                   crystals -- and each basket TOTAL is unchanged from its
+//                   pre-ruling value, because every fold was 1:1. A revert or a
+//                   stealth re-balance both trip here.
 //
 // DELIBERATELY NOT DUPLICATED HERE: the structures-catalog dual-copy byte-equal
 // check (BuildEconomyRegression.CheckDualCopy) and cost-slot sanity / tier
@@ -80,48 +93,84 @@ namespace DeNelle.Editor.Regression
 
         /// <summary>
         /// The PINNED magical/ethereal set -- rows allowed to carry crystals.
-        /// DELIBERATELY EMPTY: WO-947 pin 1 (crystals + iron, or crystals + wood?)
-        /// is still open, so no row has an owner-sanctioned crystal basket yet.
+        /// POPULATED 2026-08-14 by the OWNER's answers to WO-947 section 4:
+        ///   pin 1 verbatim "Crystals and Iron"  -> the magical basket is crystals + iron, never wood.
+        ///   pin 2 verbatim "yes AoE healing"    -> healing IS magical, so both healing rows are here.
         /// Adding an id here is an OWNER ruling, never an agent's inference.
         /// </summary>
         private static readonly HashSet<string> MagicalIds =
             new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
-                // (empty -- awaiting WO-947 section 4 pin 1)
+                "tower_arcane_spire",   // element Aether / behaviorId ArcaneTower / projectileStyle "spell"
+                "tower_healer",         // owner 2026-08-14 pin 2: "yes AoE healing" -- healing is magical
+                "healing_caravan",      // same ruling; moves with tower_healer
             };
 
         /// <summary>
         /// Rows still on their PRE-RULING basket because their classification is an
-        /// OPEN OWNER PIN (WO-947 section 4; still open per KEY_FACTS.md 2026-08-14).
-        /// Each carries the exact question the owner owes an answer to. This list may
-        /// only SHRINK -- case 3 fails if an entry here has stopped violating.
+        /// OPEN OWNER PIN. **EMPTY as of 2026-08-14** -- the owner answered all four
+        /// WO-947 section 4 pins plus the section 6 id-vs-data pin, and catalog v18
+        /// applies every one of them, so there is nothing left to excuse. The
+        /// mechanism stays (case 3 fails if a listed row has stopped violating) so a
+        /// FUTURE pin can be carried the same dated, cited way instead of an agent
+        /// guessing a side -- the inference-fix CLAUDE.md section 12 forbids.
         /// </summary>
         private static readonly Dictionary<string, string> PendingPins =
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
-                { "tower_wall_wizard",
-                  "PIN (raised 2026-08-14, NOT in the original WO-947 section 4): the WO audit called this row " +
-                  "MAGICAL from its ID, but the row's own data says mechanical -- displayName 'Ballista', " +
-                  "element None, projectileStyle 'bolt', per the owner rename ruling 2026-07-08 recorded in its " +
-                  "orientation.note. Id-vs-data conflict; owner call before the basket moves." },
-                { "tower_healer",
-                  "PIN (WO-947 section 4 question 2): is HEALING magical? If magical -> crystals + iron (+ food); " +
-                  "if regular -> drop the crystals." },
-                { "healing_caravan",
-                  "PIN (WO-947 section 4 question 2): same question as tower_healer -- both move together." },
-                { "jeweler",
-                  "PIN (WO-947 section 4 question 3): trade uses crystals as a MATERIAL, but it is a regular shop. " +
-                  "WO-947 recommends REGULAR (wood + iron); owner to confirm." },
-                { "tower_arcane_spire",
-                  "PIN (WO-947 section 4 question 1): the SIDE is not in doubt -- element 'Aether', behaviorId " +
-                  "'ArcaneTower', projectileStyle 'spell' make it MAGICAL, and WO-1013 states it outright. What is " +
-                  "unpinned is the PAIRING: crystals + iron (WO-947's recommendation) or crystals + wood? Until " +
-                  "that lands its crystal-based basket cannot be authored." },
+                // (empty -- every WO-947 pin was answered by the owner on 2026-08-14 and applied in
+                //  structures-catalog.json v18. Do NOT re-add a row here to dodge a gate failure;
+                //  an entry here is an OWNER question on record, not a mute button.)
             };
 
-        // The one row WO-947 has actually been applied to (catalog v17, 2026-08-14).
-        private const string AppliedId = "tower_siege_tower";
-        private static readonly int[] AppliedTotals = { 270, 324, 675 };   // build, L1->L2, L2->L3
+        /// <summary>
+        /// Every row WO-947 has actually been converted (catalog v17 + v18). Each records the
+        /// SIDE it was ruled onto and the basket TOTALS (build, then each upgrade step) that the
+        /// conversion deliberately PRESERVED -- both folds were 1:1, so first-cost feel did not
+        /// move. A revert, a dropped fold, or a stealth re-balance all trip case 4.
+        /// </summary>
+        private sealed class AppliedRow
+        {
+            public bool Magical;       // true -> crystals + iron, wood must be 0; false -> wood + iron, crystals must be 0
+            public int[] Totals;       // build cost, then one per upgrade step
+            public string Why;         // the owner's own words + the catalog evidence
+        }
+
+        private static readonly Dictionary<string, AppliedRow> AppliedRows =
+            new Dictionary<string, AppliedRow>(StringComparer.OrdinalIgnoreCase)
+            {
+                { "tower_siege_tower", new AppliedRow {
+                    Magical = false, Totals = new[] { 270, 324, 675 },
+                    Why = "REGULAR on the catalog's own evidence (displayName 'Sky Ballista (Anti-Air)', " +
+                          "'Wall-mounted spear thrower', element None, projectileStyle 'bolt', _heightCadence " +
+                          "SIEGE ENGINE group). v17, 2026-08-14. Crystals folded 1:1 into IRON." } },
+                { "tower_wall_wizard", new AppliedRow {
+                    Magical = false, Totals = new[] { 160, 192, 400 },
+                    Why = "REGULAR by OWNER ruling 2026-08-14, verbatim: \"thats a baliista mechanical\". The " +
+                          "'wizard' in the id is stale naming; the row's data (displayName 'Ballista', element " +
+                          "None, projectileStyle 'bolt', owner rename 2026-07-08) is what was ruled on. v18. " +
+                          "Crystals (70/84/175) folded 1:1 into IRON." } },
+                { "jeweler", new AppliedRow {
+                    Magical = false, Totals = new[] { 120 },
+                    Why = "REGULAR by OWNER ruling 2026-08-14, verbatim: \"Crafting (can enbue preciouus sstones " +
+                          "future release)\" -- it is a crafting shop, it trades in gems rather than being built " +
+                          "of magic. The owner flagged a FUTURE release may let it imbue precious stones; that is " +
+                          "a re-classification THEN, not now. v18. Crystals (30) folded 1:1 into IRON." } },
+                { "tower_arcane_spire", new AppliedRow {
+                    Magical = true, Totals = new[] { 165, 198, 412 },
+                    Why = "MAGICAL (element 'Aether', behaviorId 'ArcaneTower', projectileStyle 'spell'); the " +
+                          "PAIRING came from OWNER pin 1, verbatim: \"Crystals and Iron\". v18. Wood (40/48/100) " +
+                          "folded 1:1 into CRYSTALS, the crystal-BASED side of the ruling." } },
+                { "tower_healer", new AppliedRow {
+                    Magical = true, Totals = new[] { 250 },
+                    Why = "MAGICAL by OWNER ruling 2026-08-14, verbatim: \"yes AoE healing\" -- healing IS magical. " +
+                          "Basket is crystals + iron + the FOOD this row already used. v18. Wood (110) folded 1:1 " +
+                          "into CRYSTALS." } },
+                { "healing_caravan", new AppliedRow {
+                    Magical = true, Totals = new[] { 350 },
+                    Why = "MAGICAL by the same OWNER ruling as tower_healer (\"yes AoE healing\"); the two move " +
+                          "together. Basket is crystals + iron + food. v18. Wood (150) folded 1:1 into CRYSTALS." } },
+            };
 
         [Serializable]
         private sealed class StructuresFile
@@ -161,9 +210,10 @@ namespace DeNelle.Editor.Regression
             if (failures.Count == 0)
             {
                 reason = "COST BASKET OK - no structure row mixes wood + iron + crystals and no row outside the " +
-                         "pinned magical set carries crystals, except the " + PendingPins.Count + " dated WO-947 " +
-                         "pending-pin row(s) (each still violating, each still awaiting an owner classification); " +
-                         "'" + AppliedId + "' stays converted with its basket totals intact.";
+                         "pinned magical set (" + MagicalIds.Count + " row(s)) carries crystals; " +
+                         PendingPins.Count + " dated WO-947 pending-pin row(s) remain (0 = every owner pin " +
+                         "answered and applied); all " + AppliedRows.Count + " converted row(s) stay on their " +
+                         "ruled side with their basket totals intact.";
                 Debug.Log("COST_BASKET_OK\n" + log);
                 return true;
             }
@@ -290,6 +340,14 @@ namespace DeNelle.Editor.Regression
         // =====================================================================
         private static void CasePendingPinsStillStand(List<CatalogEntry> entries, List<string> failures, StringBuilder log)
         {
+            if (PendingPins.Count == 0)
+            {
+                log.AppendLine("  [pins] NONE OPEN - every WO-947 classification pin was answered by the owner on " +
+                               "2026-08-14 and applied in structures-catalog.json v18. The exemption list is empty, " +
+                               "so no row is excused from the ruling.");
+                return;
+            }
+
             var byId = new Dictionary<string, CatalogEntry>(StringComparer.OrdinalIgnoreCase);
             foreach (var e in entries)
                 if (e != null && !string.IsNullOrEmpty(e.id) && !byId.ContainsKey(e.id)) byId[e.id] = e;
@@ -335,48 +393,72 @@ namespace DeNelle.Editor.Regression
         // =====================================================================
         private static void CaseAppliedRowStaysConverted(List<CatalogEntry> entries, List<string> failures, StringBuilder log)
         {
-            CatalogEntry row = null;
+            var byId = new Dictionary<string, CatalogEntry>(StringComparer.OrdinalIgnoreCase);
             foreach (var e in entries)
-                if (e != null && string.Equals(e.id, AppliedId, StringComparison.OrdinalIgnoreCase)) { row = e; break; }
+                if (e != null && !string.IsNullOrEmpty(e.id) && !byId.ContainsKey(e.id)) byId[e.id] = e;
 
-            if (row == null || row.repo == null)
+            foreach (var kv in AppliedRows)
             {
-                failures.Add("[applied] '" + AppliedId + "' is missing from the catalog - the one row WO-947 has " +
-                             "been applied to cannot be verified");
-                return;
-            }
+                string id = kv.Key;
+                AppliedRow spec = kv.Value;
 
-            var baskets = new List<ResourceCost> { row.repo.cost };
-            if (row.repo.upgradeCost != null)
-                foreach (var step in row.repo.upgradeCost) baskets.Add(step);
+                CatalogEntry row;
+                if (!byId.TryGetValue(id, out row) || row == null || row.repo == null)
+                {
+                    failures.Add("[applied] '" + id + "' is missing from the catalog - a row WO-947 has been " +
+                                 "applied to cannot be verified. " + spec.Why);
+                    continue;
+                }
 
-            if (baskets.Count != AppliedTotals.Length)
-            {
-                failures.Add("[applied] '" + AppliedId + "' authors " + baskets.Count + " basket(s), expected " +
-                             AppliedTotals.Length + " (build + two upgrade steps) - the WO-947 conversion was " +
-                             "authored against that ladder shape");
-                return;
-            }
+                var baskets = new List<ResourceCost> { row.repo.cost };
+                if (row.repo.upgradeCost != null)
+                    foreach (var step in row.repo.upgradeCost) baskets.Add(step);
 
-            for (int i = 0; i < baskets.Count; i++)
-            {
-                var c = baskets[i];
-                string which = i == 0 ? "build cost" : "upgrade step " + i;
-                if (c.crystals != 0)
-                    failures.Add("[applied] '" + AppliedId + "' " + which + " charges " + c.crystals + " crystals - " +
-                                 "WO-947 converted this row to REGULAR (wood + iron) on the catalog's own evidence " +
-                                 "(displayName 'Sky Ballista (Anti-Air)', 'Wall-mounted spear thrower', element None, " +
-                                 "projectileStyle 'bolt', _heightCadence SIEGE ENGINE group). It has been reverted.");
-                int total = c.wood + c.food + c.iron + c.crystals;
-                if (total != AppliedTotals[i])
-                    failures.Add("[applied] '" + AppliedId + "' " + which + " totals " + total + ", expected " +
-                                 AppliedTotals[i] + " - the WO-947 conversion folded crystals 1:1 into IRON " +
-                                 "specifically so first-cost FEEL was unchanged. A different total is a balance " +
-                                 "change riding on a composition ruling; if it is intended, update AppliedTotals " +
-                                 "with the owner's new numbers.");
+                if (baskets.Count != spec.Totals.Length)
+                {
+                    failures.Add("[applied] '" + id + "' authors " + baskets.Count + " basket(s), expected " +
+                                 spec.Totals.Length + " (build + upgrade steps) - the WO-947 conversion was " +
+                                 "authored against that ladder shape. " + spec.Why);
+                    continue;
+                }
+
+                for (int i = 0; i < baskets.Count; i++)
+                {
+                    var c = baskets[i];
+                    string which = i == 0 ? "build cost" : "upgrade step " + i;
+
+                    if (spec.Magical)
+                    {
+                        // Magical basket = CRYSTALS + IRON (owner pin 1, 2026-08-14). Wood is out.
+                        if (c.wood != 0)
+                            failures.Add("[applied] '" + id + "' " + which + " charges " + c.wood + " wood - WO-947 " +
+                                         "converted this row to MAGICAL (crystals + iron, NEVER wood). It has been " +
+                                         "reverted or re-authored. " + spec.Why);
+                        if (c.crystals <= 0)
+                            failures.Add("[applied] '" + id + "' " + which + " charges NO crystals - a magical row " +
+                                         "under WO-947 is crystal-BASED. " + spec.Why);
+                    }
+                    else
+                    {
+                        // Regular basket = WOOD + IRON (+/- food). Crystals are out.
+                        if (c.crystals != 0)
+                            failures.Add("[applied] '" + id + "' " + which + " charges " + c.crystals + " crystals - " +
+                                         "WO-947 converted this row to REGULAR (wood + iron, NEVER crystals). It has " +
+                                         "been reverted. " + spec.Why);
+                    }
+
+                    int total = c.wood + c.food + c.iron + c.crystals;
+                    if (total != spec.Totals[i])
+                        failures.Add("[applied] '" + id + "' " + which + " totals " + total + ", expected " +
+                                     spec.Totals[i] + " - every WO-947 conversion folded the dropped resource 1:1 " +
+                                     "into the surviving side specifically so first-cost FEEL was unchanged. A " +
+                                     "different total is a balance change riding on a composition ruling; if it is " +
+                                     "intended, update AppliedRows with the owner's new numbers. " + spec.Why);
+                }
+
+                log.AppendLine("  [applied] '" + id + "' converted " + (spec.Magical ? "MAGICAL (crystals+iron)" : "REGULAR (wood+iron)") +
+                               ", totals " + string.Join("/", Array.ConvertAll(spec.Totals, t => t.ToString())) + " preserved");
             }
-            log.AppendLine("  [applied] '" + AppliedId + "' converted: crystals 0 at build + both steps, totals " +
-                           string.Join("/", Array.ConvertAll(AppliedTotals, t => t.ToString())) + " preserved");
         }
     }
 }

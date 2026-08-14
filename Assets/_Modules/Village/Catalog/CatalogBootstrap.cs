@@ -252,12 +252,19 @@ namespace DeNelle.Village
                 {
                     behaviorId = "DefenseTower",
                     buildCost  = 150,
-                    cost       = new DeNelle.Core.Catalog.ResourceCost { wood = 60, food = 0, iron = 30, crystals = 70 },
+                    // WO-947 cost basket, pin 4 (OWNER 2026-08-14 verbatim: "thats a baliista
+                    // mechanical"): this row is REGULAR -- wood + iron, NEVER crystals. The
+                    // "wizard" in the id is stale naming, not a classification; the row's own
+                    // data (displayName "Ballista", element None, projectileStyle "bolt") is what
+                    // the owner ruled on. The former crystals (70 / 84 / 175) were folded 1:1
+                    // into IRON so every basket TOTAL is unchanged (160 / 192 / 400).
+                    // MIRRORS structures-catalog.json v18 -- gate 12 [fallback-parity] enforces.
+                    cost       = new DeNelle.Core.Catalog.ResourceCost { wood = 60, food = 0, iron = 100, crystals = 0 },
                     maxLevel   = 3,
                     upgradeCost = new[]
                     {
-                        new DeNelle.Core.Catalog.ResourceCost { wood =  72, food = 0, iron = 36, crystals =  84 },   // L1â†’L2
-                        new DeNelle.Core.Catalog.ResourceCost { wood = 150, food = 0, iron = 75, crystals = 175 },   // L2â†’L3
+                        new DeNelle.Core.Catalog.ResourceCost { wood =  72, food = 0, iron = 120, crystals = 0 },   // L1â†’L2
+                        new DeNelle.Core.Catalog.ResourceCost { wood = 150, food = 0, iron = 250, crystals = 0 },   // L2â†’L3
                     },
                     navSurface = NavSurfaceKind.Blocker,
                     // 2026-08-05 cadence pass (owner ruling: every structure on ONE cadence,
@@ -309,12 +316,18 @@ namespace DeNelle.Village
                 {
                     behaviorId = "ArcaneTower",
                     buildCost  = 200,
-                    cost       = new DeNelle.Core.Catalog.ResourceCost { wood = 40, food = 0, iron = 40, crystals = 85 },
+                    // WO-947 cost basket, pin 1 (OWNER 2026-08-14 verbatim: "Crystals and Iron"):
+                    // this row is MAGICAL (element Aether, behaviorId ArcaneTower, projectileStyle
+                    // "spell"), so its basket is CRYSTALS + IRON and WOOD IS REMOVED. The former
+                    // wood (40 / 48 / 100) was folded 1:1 into CRYSTALS -- the ruling calls magical
+                    // structures crystal-BASED -- so every basket TOTAL is unchanged (165/198/412).
+                    // MIRRORS structures-catalog.json v18 -- gate 12 [fallback-parity] enforces.
+                    cost       = new DeNelle.Core.Catalog.ResourceCost { wood = 0, food = 0, iron = 40, crystals = 125 },
                     maxLevel   = 3,
                     upgradeCost = new[]
                     {
-                        new DeNelle.Core.Catalog.ResourceCost { wood =  48, food = 0, iron =  48, crystals = 102 },   // L1â†’L2
-                        new DeNelle.Core.Catalog.ResourceCost { wood = 100, food = 0, iron = 100, crystals = 212 },   // L2â†’L3
+                        new DeNelle.Core.Catalog.ResourceCost { wood = 0, food = 0, iron =  48, crystals = 150 },   // L1â†’L2
+                        new DeNelle.Core.Catalog.ResourceCost { wood = 0, food = 0, iron = 100, crystals = 312 },   // L2â†’L3
                     },
                     upgradeVisualPath  = new[] { "Structures/ArcaneSpire_2",        "Structures/ArcaneSpire_3" },
                     upgradeTexturePath = new[] { "Structures/ArcaneSpire_2_Albedo", "Structures/ArcaneSpire_3_Albedo" },
