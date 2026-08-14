@@ -1,6 +1,7 @@
 {
-  "version": 1,
+  "version": 2,
   "dungeonId": "dg_stairwell_probe",
+  "exitRoomId": "entry",
   "cellSize": 1.0,
   "rooms": [
     {

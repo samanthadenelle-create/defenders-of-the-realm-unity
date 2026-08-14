@@ -1,6 +1,6 @@
 # WORK ORDER 957 — EXIT beacon appears on EVERY stairwell in multi-floor dungeons
 
-**Status:** READY TO IMPLEMENT (PARTIAL - the code half LANDED + gated 2026-08-10 and the "Leave" relabel is in the data; the RE-BAKE, the exitRoomId authoring and the per-layout regression remain - see the 2026-08-10 note at the bottom)
+**Status:** READY TO IMPLEMENT (PARTIAL - RE-BAKE DONE 2026-08-14: all 7 dungeons re-composed, COMPOSE_ALL_OK 7/7, 13 pads now bake label='Leave' and every layout emits exitRoomId. The code half landed + gated 2026-08-10. REMAINING: exitRoomId is the 'entry' FALLBACK everywhere - WHERE the one true exit sits is still an owner design pick; the per-layout one-beacon regression is still unwritten; Assets/Resources/Dungeon/Exit/ still absent so a PLAYER build takes the primitive-arch fallback. See the 2026-08-14 note at the bottom)
 **Minted:** 2026-08-10 (CLI seat, main line — banner bumped 957 → 958 in the same edit)
 **Silo:** Dungeons (exit beacon placement) — companions: WO-1007 (arch → icon), WO-1008 (beacon reads
 as light); this WO is the PLACEMENT bug, those are the PRESENTATION tickets

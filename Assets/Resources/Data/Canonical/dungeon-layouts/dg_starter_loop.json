@@ -1,6 +1,7 @@
 {
-  "version": 1,
+  "version": 2,
   "dungeonId": "dg_starter_loop",
+  "exitRoomId": "entry",
   "cellSize": 1.0,
   "rooms": [
     {

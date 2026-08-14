@@ -230,7 +230,7 @@
         0,
         -2.5
       ],
-      "label": "Extract"
+      "label": "Leave"
     },
     {
       "id": "sv-extract-l1",
@@ -240,7 +240,7 @@
         0,
         0
       ],
-      "label": "Extract"
+      "label": "Leave"
     },
     {
       "id": "sv-extract-l2",
@@ -250,7 +250,7 @@
         0,
         0
       ],
-      "label": "Extract"
+      "label": "Leave"
     },
     {
       "id": "sv-extract-l3",
@@ -260,7 +260,7 @@
         0,
         0
       ],
-      "label": "Extract"
+      "label": "Leave"
     }
   ],
   "traps": [

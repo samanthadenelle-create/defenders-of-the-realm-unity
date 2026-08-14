@@ -1,6 +1,21 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ RECONCILED 2026-08-14 (CLI): main line next free = **982**. **782–859 + 900–981 CONSUMED.**
+> ## ⚠ RECONCILED 2026-08-14 (CLI): main line next free = **983**. **782–859 + 900–982 CONSUMED.**
+> - **982** = **`GraphDungeonComposer` emits the compose-layout to StreamingAssets ONLY — so every bake
+>   silently creates dual-copy drift, and Resources (the copy that WINS at runtime) keeps the stale one.**
+>   PROVEN BY A BAKE, 2026-08-14: a clean `ComposeAllBatch` run left **all 7** `dg_*.json` layouts drifted,
+>   StreamingAssets stamped 09:00 today against Resources still at 08-08/08-10. Synced by hand this time.
+>   ⚠ **This is the ROOT of the 2026-08-08 incident that `5f0e23aa` treated as a one-off** — that commit
+>   caught `dg_sunken_vault.json` holding the OLD 17-room layout in Resources and fixed the file; the
+>   MECHANISM that produced it was never fixed, so it reproduced across all seven the very next time
+>   anyone baked. **⚠ And nothing catches it:** `RoomForgeRegression.cs:162`'s dual-copy sweep is a
+>   hardcoded 3-file list containing **no `dg_*` layout at all** (audit F24), so the gate is structurally
+>   blind to exactly the files the composer writes. FIX = have the emit path write BOTH canonical roots
+>   (mirror `CanonicalJson`'s dual-copy law), **and** widen `RoomForgeRegression` to enumerate every
+>   `dg_*` layout on disk rather than a literal list — the guard and the writer must land together or the
+>   next bake re-opens it. **READY.**
+>
+> *(banner bumped 982 → 983 in the SAME edit as the mint.)*
 > - **981** = **The skill-point grants in `HeroProgression` are INFERRED and silently droppable** —
 >   found by the orchestrator while gate-reviewing the WO-977 fix, 2026-08-14. Two sections, one file,
 >   one fix session. **§A — the starter latch is not persisted, it is GUESSED FROM LEVEL.**
