@@ -168,12 +168,30 @@ and **zero for any Blink mesh key** — all 65 art-bearing weapons take the un-d
 
 ## 5. The plan
 
-### ⛔ Two OWNER DECISIONS gate everything downstream
+> ## ✅ BOTH DECISIONS MADE — OWNER, 2026-08-14: *"approve WO-500 curve and finish the 65"*
+>
+> **D1 = RATIFIED.** WO-500's balance curve is approved. It stops being a proposal and becomes the
+> authority the 65 rows are graded against.
+>
+> **D2 = OPTION A.** Finish the 65 `blink_*` rows — apply the curve, set `manual: true`, drop the
+> `excludeIdPrefixes` that hides them from the Forge. Option B (commission art for the 31 designed
+> weapons) is **not** taken; the 65 already have models and icons, so the missing half was a spreadsheet
+> rather than an art budget.
+>
+> **Steps 1–4 dispatched 2026-08-14.** Sequencing note for anyone reading later: Step 1 (disarming the
+> two landmine commands) ran **concurrently with** Step 4 (applying the curve), because either landmine
+> firing would have destroyed the curve work. They touch disjoint files.
+>
+> ⚠ **Step 4 was instructed to read WO-500 at source and apply what it actually says — never to invent
+> a curve.** If WO-500 does not cover some class or weapon category present in the 65, that is a REAL
+> GAP to be named and left untouched, not filled with plausible numbers.
 
-**D1 — Ratify or reject WO-500's balance curve.** A finished design proposal that has been waiting for
-review. **This is the single decision that unblocks weapons.**
+### ⛔ The two decisions that gated this (both now ANSWERED — kept for the record)
 
-**D2 — Which half do we finish?**
+**D1 — Ratify or reject WO-500's balance curve.** A finished design proposal that had been waiting for
+review. **This was the single decision that unblocked weapons.** → **RATIFIED.**
+
+**D2 — Which half do we finish?** → **(A), finish the 65.**
 - **(A) Finish the 65** — apply a curve to the `blink_*` rows, set `manual:true`, drop
   `excludeIdPrefixes`. Buys a real ladder with art and icons already done. Cost: a balance pass on 65
   rows. Keeps the 15 MB bundle and the gitignored-art dependency.

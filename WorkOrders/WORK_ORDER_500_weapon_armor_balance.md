@@ -1,6 +1,30 @@
 # WORK ORDER 500 — Weapon & Armor Balance Pass (Knight-first, Elarion)
 
-**Status:** PROPOSAL / DESIGN — READY FOR OWNER REVIEW (not yet READY TO IMPLEMENT)
+**Status:** ✅ APPROVED — OWNER RATIFIED 2026-08-14. Being applied to the 65 `blink_*` rows.
+
+> ## ✅ RATIFIED — owner, 2026-08-14: *"approve WO-500 curve and finish the 65"*
+> This stops being a proposal. **The curve below is now the authority** the generated rows are graded
+> against. Two decisions were made in one breath:
+> - **The curve is approved as designed** (TierBaseValue per rarity, the `statWorth` formula, the
+>   multiplicative premiums, the `damageMult` 1.0 → 2.4 ladder).
+> - **Option A: finish the 65** `blink_*` rows rather than commissioning art for the 31 designed
+>   weapons. The 65 already have models *and* icons — as this WO's §0 diagnosed, the missing half was
+>   always a spreadsheet, not an art budget.
+>
+> **Applying this unhides them.** The `"excludeIdPrefixes": ["blink_"]` on the Forge vendor row is
+> WO-860 Part B deliberately hiding flat placeholders; once the curve lands, that exclusion is what
+> comes off. Before this change **24 of 96 weapons were obtainable** — 72 could not be acquired by any
+> non-debug path.
+>
+> ⚠ **Do not invent numbers for anything this curve does not cover.** If a class or weapon category
+> present in the 65 has no rule here, that is a REAL GAP: name it, leave those rows untouched, and
+> bring it back to the owner. Filling it with plausible values is how an unratified curve gets shipped
+> under a ratified one's name.
+>
+> ⚠ Every row touched gets `manual: true`, so a future generator pass cannot flatten it back to
+> `damageMult: 1.0`.
+>
+> _Prior status line, preserved: PROPOSAL / DESIGN — READY FOR OWNER REVIEW (not yet READY TO IMPLEMENT)_
 **Type:** Balance + creative design (data-only when applied; no code change)
 **Author:** design pass (read-only survey + curve design)
 **Silo:** Gear data (`weapons.json` / `armor.json`) — no scene, no `.cs`
