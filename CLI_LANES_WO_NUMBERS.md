@@ -1,6 +1,25 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ RECONCILED 2026-08-14 (CLI): main line next free = **994**. **782–859 + 900–993 CONSUMED.**
+> ## ⚠ RECONCILED 2026-08-14 (CLI): main line next free = **997**. **782–859 + 900–996 CONSUMED.**
+> *(⚠ 994 and 995 were minted as FILES without bumping this banner — the exact mint-without-bump that
+> §2 names as the collision cause, committed by the seat that spent the day enforcing it against others.
+> Caught and reconciled 2026-08-14 while minting 996. No collision occurred; both files are on disk and
+> referenced.)*
+> - **996** = **`armor.json`'s two canonical copies are PARTIALLY DISJOINT — each holds content the
+>   other lacks, and the class ladders exist in only ONE of them.** MEASURED AT SOURCE 2026-08-14:
+>   Resources **v2 / 24 rows**, StreamingAssets **v1 / 30 rows**; **15 Resources-only** (the entire
+>   `armor_{knight,mage,ranger}_{common..legendary}` ladder) and **21 StreamingAssets-only** (all
+>   `blink_armor_*`). Only **9 rows shared**. ⚠ **THIS IS NOT THE WEAPONS SHAPE** — weapons is a
+>   deliberate curated subset from `GearCurationExporter` (Resources-only ids = 0). Armor has no such
+>   pipeline and has drifted in **BOTH** directions, so "Resources is a subset" is FALSE here and any
+>   oracle written on that assumption is wrong for armor. ⚠ **SHIPPING RISK:** Resources WINS at runtime
+>   so the editor looks fine; whatever reads the StreamingAssets fallback gets a roster with **no class
+>   armor ladders at all**. Schema versions also differ (v2 vs v1). Found FOUR independent times on
+>   2026-08-14 — the 300–599 sweep, WO-544's verification, WO-976's assertion-(d) scoping, and WO-500
+>   step 1's new subset oracle. ⛔ **Do NOT "fix" it by copying rows across.** Decide which copy is
+>   AUTHORITATIVE and which is DERIVED, then make one generate the other. READY.
+> - **995** = dungeon boot self-evicts to town via the exit trigger (see `WorkOrders/WORK_ORDER_995_*.md`).
+> - **994** = the shield seat is stranded against the base WO-970 moved (see `WorkOrders/WORK_ORDER_994_*.md`).
 > - **993** = **PETS ARE DESCOPED TO HELPERS — retire the pet PHYSICAL-PRESENCE stack (aura + progression),
 >   but DO NOT TOUCH `PetHeroLeash`.** OWNER RULING 2026-08-14, verbatim: *"we dont use the pet aura
 >   anymore since we descoped them to simply helpers and not physical items around us"*, *"same with pet
