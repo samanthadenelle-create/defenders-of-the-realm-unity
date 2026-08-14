@@ -75,3 +75,35 @@ is in that set**, which is the gap named above).
 **Owner felt-verify meanwhile:** a wave-clear at the 16:9 desktop resolution that produced
 `need=276px well=249px scale=0.9`, and a WO-672 Repair-All banner (the CTA path - the one that broke).
 The log must NOT carry `body rows COMPRESSED to fit`.
+
+---
+
+## 2026-08-14 - THE CAPTURE CASE LANDED (HUD lane agent, edit-only - NOT yet run)
+
+The remaining scope (WO §2 bullet 3) is implemented in `Assets/Editor/UICaptureLaunch.cs`. It does NOT
+close this WO by itself: **no harness run has executed it yet** (this seat is edit-only and does not
+gate). What exists now:
+
+- `CaptureEndStateWaveClear()` is registered in `RunCaptureHeadless`, and runs **two real compact
+  banners per capture target** (1920x1080 - the failing 16:9 desktop resolution - plus 2340x1080 and
+  the Seeker's 2670x1200): the **Repair-All / CTA** banner with a full 4-row damage report (the shape
+  that broke) and the **plain no-CTA** banner. Fixtures, not `EndStateVM.FromWaveClear` - that factory
+  reads the live wall-damage ledger and wallet, neither of which stands up in a synchronous edit-mode
+  render. Both go through the REAL `EndStateView.Show`, so the geometry under test is the shipped path.
+- **The absence assertion is checked, not hoped for:** `FlowTrace.Sink` is tapped for the duration of
+  each build (restored in a `finally`), and a captured `body rows COMPRESSED to fit` line FAILS the run.
+- **It is not trusted alone.** A new settled-layout probe measures the RESOLVED `Zone_RewardWell` rect
+  and the resolved `Band` stack in kit reference px and **recomputes** the compression factor as
+  `stack extent / need`. (BuildBody lays bands at `px * scale` with `BandGapPx * scale` between them,
+  so the measured extent IS `need x scale` - the factor comes from geometry, not from the view's own
+  arithmetic.) Below 0.995, or a band outside its well, fails.
+- **Silence cannot pass.** No `need=` line, no `Zone_RewardWell`, zero bands, a null `Show`, or zero
+  cases measured all report `UI_ENDSTATE_FIT_FAIL`, and the OK marker always prints the four numbers.
+- New DISTINCT marker: **`UI_ENDSTATE_FIT_OK <n> banners`** / `UI_ENDSTATE_FIT_FAIL x<n>` (per
+  CLAUDE.md §8 - never share a marker string with the other entry points).
+
+**To close this WO:** run `DeNelle.Editor.UICaptureLaunch.RunCaptureHeadless`, confirm
+`UI_ENDSTATE_FIT_OK 6 banners` with `scale` >= 0.995 on every case, and OPEN the six
+`Builds/ui-capture/EndStateWaveClear_*.png`. A `UI_ENDSTATE_FIT_FAIL` re-opens the geometry half.
+The pre-existing `UI_GEOMETRY_FAIL x16` (WO-941 RumorBoard/RealmMap) baseline may grow by any EndState
+finding this newly-captured canvas surfaces - triage it, do not baseline it.

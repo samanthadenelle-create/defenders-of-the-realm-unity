@@ -35,6 +35,11 @@
 //                                              was shot at (or _DEGRADED, an error)
 //     UI_GEOMETRY_OK <n> canvases           -- numeric layout assertions passed
 //                                              (or UI_GEOMETRY_FAIL x<n>, an error)
+//     UI_ENDSTATE_FIT_OK <n> banners        -- WO-952: no `body rows COMPRESSED to fit`
+//                                              fired AND the RESOLVED band stack measures
+//                                              >= 0.995 of the content's own demand
+//                                              (or UI_ENDSTATE_FIT_FAIL x<n>, an error).
+//                                              Carries the numbers on BOTH paths.
 //
 // =============================================================================
 //  THE FIDELITY HOLE THIS FILE USED TO HAVE (fixed 2026-08-05) -- READ THIS
@@ -94,6 +99,7 @@ using UnityEngine.Rendering;
 using UnityEngine.UI;
 using TMPro;
 using DeNelle.Core.UI;    // PanelManager / PanelHandle (lore-modal arbiter teardown)
+using DeNelle.Core.Diagnostics;   // FlowTrace / ITraceSink (WO-952 EndState fit tap)
 using DeNelle.Core.Quests;   // QuestDef/QuestStage/QuestReward (rumor-board worst-case fixture)
 using DeNelle.Dungeons;   // LoreReadingModal, LoreReadRequest, LoreFragmentSet (WO-795)
 using DeNelle.Village;    // EchoUnlockDialogue, EchoRosterCatalog, EchoRosterEntry, Tower, BuildMenu
@@ -482,6 +488,8 @@ namespace DeNelle.Editor
             _geoMoveFailure = null;
             _geoFailures.Clear();
             _geoCanvasesChecked = 0;
+            _endStateFits.Clear();
+            _endStateFitFailures.Clear();
             try
             {
                 Directory.CreateDirectory(OutDir);
@@ -515,6 +523,7 @@ namespace DeNelle.Editor
                 count += CaptureQueueRail();         // WO-864: the CoC queue card rail
                 count += CaptureBuildGhostChips();   // WO-1010 P1: chips on the ghost
                 count += CapturePaletteCollapsed();  // WO-1010 P2: dock open + collapsed w/ restore tab
+                count += CaptureEndStateWaveClear(); // WO-952: the wave-clear banner's fit, MEASURED
 
                 Debug.Log("[UICap-HL] done -> " + Path.GetFullPath(OutDir));
             }
@@ -527,6 +536,7 @@ namespace DeNelle.Editor
             // shared string -- that is how a 22-case pass once read as a full-suite pass).
             ReportFidelity();
             ReportGeometry();
+            ReportEndStateFit();
 
             // The marker a headless caller greps to confirm the run produced pixels.
             Debug.Log("UI_CAPTURE_OK " + count);
@@ -2505,6 +2515,406 @@ namespace DeNelle.Editor
             });
         }
 
+        // =====================================================================
+        //  WO-952 -- the EndState (wave-clear) banner, WITH EYES AND WITH A NUMBER.
+        // ---------------------------------------------------------------------
+        //  THE DEFECT THIS EXISTS FOR (F8 daemon, 2026-08-10, captured TWICE in one
+        //  session on the desktop exe -- capture-20260810-102345.md and seq 2268):
+        //
+        //    [Flow:EndState] body rows COMPRESSED to fit: need=276px well=249px scale=0.9
+        //    - the panel hit its screen-height clamp; every band is now below its own
+        //      content size
+        //
+        //  The geometry half of WO-952 landed on 2026-08-10 (EndStateView.Bind's owned
+        //  compact solve). It shipped SOURCE-REASONED: no capture case covered the
+        //  EndState at all, so nothing in the harness could have told us if it worked --
+        //  and "no capture case" is indistinguishable from "the case passes".
+        //
+        //  WHAT THIS ASSERTS, and why it is not a hollow assertion
+        //  (INSTRUMENTATION_STANDARD 1.4b -- a trace that cannot report failure is a bug):
+        //    (1) The banner's OWN instrumentation is TAPPED for the duration of the build
+        //        (FlowTrace.Sink swap, restored in a finally). If the `COMPRESSED to fit`
+        //        Fail line fires, this run FAILS -- the absence of that line is the
+        //        acceptance signal the WO asked for, and it is now checked, not hoped for.
+        //    (2) It is NOT trusted on its own. The SETTLED layout is MEASURED: the resolved
+        //        body-well rect and the resolved band stack, both read back off the real
+        //        RectTransforms in kit reference px, and the compression factor is
+        //        RECOMPUTED from them (extent / need) instead of read off the view's own
+        //        arithmetic. A pass prints all four numbers; a run where the numbers cannot
+        //        be obtained is reported as a FAILURE, never as silence.
+        //  So this case fails loudly in three distinct ways: the trace fired, the measured
+        //  fit was short, or nothing could be measured at all.
+        //
+        //  FIXTURES, not the live factory. EndStateVM.FromWaveClear(n) reads the live wall
+        //  damage ledger / wallet / repair controller, none of which stand up in a
+        //  synchronous edit-mode render -- and a fixture is what pins the WORST case anyway.
+        //  Two are built: the Repair-All banner (a CTA + a full 4-row damage report -- the
+        //  exact shape that broke, because a CTA-carrying banner kept the stale close-band
+        //  reservation) and the plain no-CTA banner (the path that never broke, so a
+        //  regression in it would otherwise be silent).
+        // =====================================================================
+
+        /// <summary>Per-case measured fit record (all lengths in kit reference px).</summary>
+        private struct EndStateFit
+        {
+            public string Label;
+            public float NeedPx;          // the view's own traced content demand
+            public float WellPx;          // MEASURED resolved body-well height
+            public float ExtentPx;        // MEASURED first-band top -> last-band bottom
+            public int Bands;
+            public float MeasuredScale;   // ExtentPx / NeedPx -- recomputed, not read
+            public float UnitFactor;      // measured root px per kit reference px (~1.0)
+            public bool TracedCompression;
+        }
+
+        private static readonly List<EndStateFit> _endStateFits = new List<EndStateFit>();
+        private static readonly List<string> _endStateFitFailures = new List<string>();
+
+        /// <summary>Compression is real below this (the view's own threshold, same rationale:
+        /// a self-fitting solve lands on target within float residue, a real clamp lands far
+        /// below -- the captured defect measured 0.9).</summary>
+        private const float EndStateFitFloor = 0.995f;
+
+        /// <summary>Optional probe run on the settled, camera-space layout inside
+        /// <see cref="RenderCanvasToPng"/> (canvas, label, w, h).</summary>
+        private static Action<GameObject, string, int, int> _settledProbe;
+
+        // Per-case hand-off between the trace tap and the settled-layout probe.
+        private static float _endStateNeedPx;
+        private static bool _endStateSawCompression;
+
+        /// <summary>Forwards every FlowTrace line to the real sink AND keeps the
+        /// [Flow:EndState] ones, so the panel's own instrumentation becomes this
+        /// harness's evidence instead of scrolling past in a log nobody greps.</summary>
+        private sealed class EndStateTraceTap : ITraceSink
+        {
+            private readonly ITraceSink _inner;
+            public readonly List<string> Lines = new List<string>();
+
+            public EndStateTraceTap(ITraceSink inner) { _inner = inner; }
+
+            private void Keep(string line)
+            {
+                if (!string.IsNullOrEmpty(line) && line.IndexOf("[Flow:EndState]", StringComparison.Ordinal) >= 0)
+                    Lines.Add(line);
+            }
+
+            public void Info(string line)  { Keep(line); if (_inner != null) _inner.Info(line); }
+            public void Warn(string line)  { Keep(line); if (_inner != null) _inner.Warn(line); }
+            public void Error(string line) { Keep(line); if (_inner != null) _inner.Error(line); }
+        }
+
+        private static int CaptureEndStateWaveClear()
+        {
+            return ForEachTarget("EndStateWaveClear", CaptureEndStateWaveClearOnce);
+        }
+
+        private static int CaptureEndStateWaveClearOnce(CaptureTarget target)
+        {
+            int saved = 0;
+            saved += CaptureOneEndStateBanner(target, "EndStateWaveClear_repairAll", true);
+            saved += CaptureOneEndStateBanner(target, "EndStateWaveClear_plain", false);
+            return saved;
+        }
+
+        /// <summary>Build ONE real compact EndState banner, tap its trace, shoot it, and
+        /// measure its settled fit. <paramref name="withCta"/> selects the Repair-All
+        /// (CTA-carrying) shape -- the one the 2026-08-10 capture caught.</summary>
+        private static int CaptureOneEndStateBanner(CaptureTarget target, string caseName, bool withCta)
+        {
+            int saved = 0;
+            GameObject tempEventSystem = null;
+            EndStateView view = null;
+            GameObject canvasGo = null;
+            ITraceSink prevSink = FlowTrace.Sink;
+            var tap = new EndStateTraceTap(prevSink);
+            string label = caseName + "_" + target.Tag;
+
+            _endStateNeedPx = 0f;
+            _endStateSawCompression = false;
+
+            try
+            {
+                if (UnityEngine.Object.FindAnyObjectByType<UnityEngine.EventSystems.EventSystem>() == null)
+                {
+                    tempEventSystem = new GameObject("~UICapEventSystem");
+                    tempEventSystem.AddComponent<UnityEngine.EventSystems.EventSystem>();
+                }
+
+                FlowTrace.Sink = tap;
+                view = EndStateView.Show(BuildWaveClearFixture(withCta));
+                FlowTrace.Sink = prevSink;
+
+                if (view == null)
+                {
+                    RecordEndStateFitFailure(label + ": EndStateView.Show returned null -- the banner did " +
+                        "not build, so this run measured NOTHING about its fit (an unbuilt panel is a " +
+                        "failure of the case, not a pass by absence).");
+                    return 0;
+                }
+                canvasGo = view.gameObject;
+
+                // The view's own numbers, harvested from its instrumentation. `need=` is printed
+                // by BOTH the owned compact solve's Step and the fit Fail/Step lines, so it is
+                // present on every path a compact banner can take.
+                _endStateNeedPx = ParseNumberAfter(tap.Lines, "need=");
+                _endStateSawCompression = ContainsLine(tap.Lines, "body rows COMPRESSED to fit");
+
+                // The reveal is a coroutine, and coroutines never tick in an edit-mode render --
+                // so every CanvasGroup is still parked at its start-of-tween alpha 0 and the frame
+                // would be blank. Stamp the tween's FINISHED state (what the player sees a beat
+                // later); geometry is untouched by this, only opacity.
+                foreach (var cg in canvasGo.GetComponentsInChildren<CanvasGroup>(true))
+                    if (cg != null) cg.alpha = 1f;
+
+                _settledProbe = MeasureEndStateFit;
+                if (RenderCanvasToPng(canvasGo, OutDir + label + ".png", target.W, target.H)) saved++;
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("[UICap-HL] end-state banner capture threw: " + e);
+                RecordEndStateFitFailure(label + ": the capture threw before it could measure the fit (" +
+                    e.GetType().Name + ": " + e.Message + ")");
+            }
+            finally
+            {
+                _settledProbe = null;
+                FlowTrace.Sink = prevSink;
+                // Edit-mode teardown MUST be DestroyImmediate (the view's own Close uses runtime
+                // Destroy). EndStateView.OnDestroy unsubscribes sceneLoaded and clears the
+                // end-state posture signal, so nothing leaks into the editor session.
+                if (canvasGo != null) UnityEngine.Object.DestroyImmediate(canvasGo);
+                if (tempEventSystem != null) UnityEngine.Object.DestroyImmediate(tempEventSystem);
+            }
+
+            return saved;
+        }
+
+        /// <summary>The worst-case wave-clear banner as DATA. Row/label shapes mirror
+        /// EndStateVM.FromWaveClear's own output (rewards + a damage report, capped at its
+        /// CompactMaxSpoilRows = 4); the live factory is not callable headlessly because it
+        /// reads the wall-damage ledger and the wallet.</summary>
+        private static EndStateVM BuildWaveClearFixture(bool withCta)
+        {
+            var vm = new EndStateVM
+            {
+                Kind = EndStateKind.WaveResults,
+                Title = "Wave 7 Cleared!",
+                Subtitle = "The wave broke against your walls.\nThe north gate took the worst of it.",
+                Compact = true,
+                PrimaryLabel = null,      // compact banners auto-dismiss; no primary CTA
+                PrimaryRoute = "dismiss",
+                AutoDismissSeconds = 0f,  // no coroutine to leave pending in edit mode
+                Stars = -1,
+                TimeSeconds = -1f,
+            };
+
+            vm.Spoils.Add(new SpoilRowVM { Label = "Wood", Amount = "+240" });
+            vm.Spoils.Add(new SpoilRowVM { Label = "Iron", Amount = "+85" });
+            if (withCta)
+            {
+                // The CTA path: a full damage report (4 rows = the banner's hard cap) under a
+                // Repair-All button. This is the shape that produced need=276px / well=249px.
+                vm.Spoils.Add(new SpoilRowVM { Label = "North Gate", Amount = "DESTROYED, looted 120" });
+                vm.Spoils.Add(new SpoilRowVM { Label = "Wall x3", Amount = "damaged" });
+                vm.CtaLabel = "Repair All - 120 wood, 40 iron";
+                vm.CtaEnabled = true;
+                vm.CtaRoute = "repair-all";
+            }
+            return vm;
+        }
+
+        /// <summary>MEASURE the banner's settled fit off its real RectTransforms and RECOMPUTE
+        /// the compression factor. Runs inside RenderCanvasToPng (camera-space, post-rebuild),
+        /// which is the only place a rect read is in kit reference px.
+        ///
+        /// The band stack's measured extent is, by construction, need x scale: BuildBody lays
+        /// bands top-down at (px * scale) with (BandGapPx * scale) between them, so
+        /// first-band-top -> last-band-bottom == (sum px + gaps) * scale == need * scale. So
+        /// extent / need IS the compression factor -- derived from resolved geometry, with no
+        /// dependence on the view's own arithmetic. Anything that cannot be measured is
+        /// recorded as a FAILURE: silence is not a pass.</summary>
+        private static void MeasureEndStateFit(GameObject canvasGo, string label, int w, int h)
+        {
+            RectTransform root = canvasGo != null ? canvasGo.GetComponent<RectTransform>() : null;
+            if (root == null)
+            {
+                RecordEndStateFitFailure(label + ": no root RectTransform on the captured canvas -- nothing measurable.");
+                return;
+            }
+
+            RectTransform well = null;
+            foreach (var rt in canvasGo.GetComponentsInChildren<RectTransform>(true))
+            {
+                if (rt != null && rt.gameObject.name == "Zone_RewardWell") { well = rt; break; }
+            }
+            if (well == null)
+            {
+                RecordEndStateFitFailure(label + ": the banner built no 'Zone_RewardWell' -- EndStateView's " +
+                    "body well is gone or renamed, so this gate is measuring nothing and must not read as green.");
+                return;
+            }
+
+            var bandRects = new List<Rect>();
+            for (int i = 0; i < well.childCount; i++)
+            {
+                var child = well.GetChild(i) as RectTransform;
+                if (child == null || child.gameObject.name != "Band") continue;
+                if (TryRectInRoot(child, root, out Rect br)) bandRects.Add(br);
+            }
+            if (bandRects.Count == 0)
+            {
+                RecordEndStateFitFailure(label + ": zero 'Band' rows resolved inside the body well -- the " +
+                    "banner rendered no content bands, so its fit is unproven (and the png is empty of rows).");
+                return;
+            }
+            if (!TryRectInRoot(well, root, out Rect wellRect))
+            {
+                RecordEndStateFitFailure(label + ": the body well resolved to a degenerate rect -- no measurement possible.");
+                return;
+            }
+
+            float top = float.MinValue, bottom = float.MaxValue;
+            float outsideBy = float.MinValue;
+            foreach (var br in bandRects)
+            {
+                if (br.yMax > top) top = br.yMax;
+                if (br.yMin < bottom) bottom = br.yMin;
+                outsideBy = Mathf.Max(outsideBy, OutsideBy(br, wellRect));
+            }
+            float extentPx = top - bottom;
+
+            // Root-space px per kit reference px. Expected ~1.0 (the kit's own reference space);
+            // measured rather than assumed, because `need` is a KIT number and the extent is a
+            // MEASURED one -- comparing them across a silently different unit is exactly the kind
+            // of hidden mismatch that makes a green gate meaningless.
+            float kitH = ElarionUiKit.PostScaleCanvasHeight(canvasGo.transform);
+            float unit = kitH > 1f ? root.rect.height / kitH : 0f;
+            if (unit <= 0.01f) unit = 1f;
+
+            float needRootPx = _endStateNeedPx * unit;
+            float measuredScale = needRootPx > 1f ? extentPx / needRootPx : 0f;
+
+            var fit = new EndStateFit
+            {
+                Label = label,
+                NeedPx = _endStateNeedPx,
+                WellPx = wellRect.height / Mathf.Max(0.0001f, unit),
+                ExtentPx = extentPx / Mathf.Max(0.0001f, unit),
+                Bands = bandRects.Count,
+                MeasuredScale = measuredScale,
+                UnitFactor = unit,
+                TracedCompression = _endStateSawCompression,
+            };
+            _endStateFits.Add(fit);
+
+            string numbers = "need=" + fit.NeedPx.ToString("0") + "px (traced) well=" +
+                             fit.WellPx.ToString("0") + "px (MEASURED) bands=" + fit.Bands +
+                             " stack=" + fit.ExtentPx.ToString("0") + "px (MEASURED) -> measured scale=" +
+                             fit.MeasuredScale.ToString("0.###") + " [root px per ref px = " +
+                             unit.ToString("0.###") + "]";
+
+            if (_endStateNeedPx <= 1f)
+            {
+                RecordEndStateFitFailure(label + ": the banner printed NO `need=` line, so there is no content " +
+                    "demand to measure the well against. " + numbers + ". Treat this case as unproven, not passing.");
+                return;
+            }
+            if (fit.TracedCompression)
+            {
+                RecordEndStateFitFailure(label + ": the panel's own net fired `body rows COMPRESSED to fit` -- " +
+                    "every band is below its own content size. " + numbers);
+                return;
+            }
+            if (measuredScale < EndStateFitFloor)
+            {
+                RecordEndStateFitFailure(label + ": MEASURED compression -- the resolved band stack is only " +
+                    measuredScale.ToString("0.###") + " of the content's demand. " + numbers);
+                return;
+            }
+            if (outsideBy > GeoContainSlackPx)
+            {
+                RecordEndStateFitFailure(label + ": a body band resolves " + outsideBy.ToString("0.#") +
+                    "px OUTSIDE the body well it is laid into. " + numbers);
+                return;
+            }
+
+            Debug.Log("[UICap-ENDSTATE] " + label + " fits: " + numbers);
+        }
+
+        private static void RecordEndStateFitFailure(string message)
+        {
+            _endStateFitFailures.Add(message);
+            Debug.LogError("[UICap-ENDSTATE] " + message);
+        }
+
+        /// <summary>First number following <paramref name="token"/> in any of the captured lines
+        /// (e.g. "need=276px" -> 276). Returns 0 when the token never appeared.</summary>
+        private static float ParseNumberAfter(List<string> lines, string token)
+        {
+            if (lines == null || string.IsNullOrEmpty(token)) return 0f;
+            foreach (var line in lines)
+            {
+                if (line == null) continue;
+                int i = line.IndexOf(token, StringComparison.Ordinal);
+                if (i < 0) continue;
+                i += token.Length;
+                int start = i;
+                while (i < line.Length && (char.IsDigit(line[i]) || line[i] == '.' || line[i] == '-')) i++;
+                if (i > start && float.TryParse(line.Substring(start, i - start),
+                        System.Globalization.NumberStyles.Float,
+                        System.Globalization.CultureInfo.InvariantCulture, out float v))
+                    return v;
+            }
+            return 0f;
+        }
+
+        private static bool ContainsLine(List<string> lines, string needle)
+        {
+            if (lines == null) return false;
+            foreach (var line in lines)
+                if (line != null && line.IndexOf(needle, StringComparison.Ordinal) >= 0) return true;
+            return false;
+        }
+
+        /// <summary>The WO-952 acceptance marker. DISTINCT from UI_CAPTURE_OK / UI_GEOMETRY_OK
+        /// (CLAUDE.md 8: one marker per entry point -- a shared string is how a partial pass once
+        /// read as a full one), and it always carries the MEASUREMENTS, never a bare "ok".</summary>
+        private static void ReportEndStateFit()
+        {
+            if (_endStateFits.Count == 0 && _endStateFitFailures.Count == 0)
+            {
+                Debug.LogError("UI_ENDSTATE_FIT_FAIL x0 -- ZERO end-state banners were measured this run, so " +
+                               "nothing here proves the WO-952 wave-clear fit. An absent case is not a passing case.");
+                return;
+            }
+
+            var sb = new System.Text.StringBuilder();
+            foreach (var f in _endStateFits)
+            {
+                if (sb.Length > 0) sb.Append(" | ");
+                sb.Append(f.Label).Append(" need=").Append(f.NeedPx.ToString("0"))
+                  .Append("px well=").Append(f.WellPx.ToString("0"))
+                  .Append("px stack=").Append(f.ExtentPx.ToString("0"))
+                  .Append("px bands=").Append(f.Bands)
+                  .Append(" scale=").Append(f.MeasuredScale.ToString("0.###"));
+            }
+
+            if (_endStateFitFailures.Count > 0)
+            {
+                Debug.LogError("UI_ENDSTATE_FIT_FAIL x" + _endStateFitFailures.Count + " failure(s) over " +
+                               _endStateFits.Count + " measured case(s) -- see the " +
+                               "[UICap-ENDSTATE] lines above. Measured: " +
+                               (sb.Length > 0 ? sb.ToString() : "(nothing measurable)"));
+                return;
+            }
+
+            Debug.Log("UI_ENDSTATE_FIT_OK " + _endStateFits.Count + " banners -- no `body rows COMPRESSED to " +
+                      "fit` fired and the RESOLVED band stack measures at least " +
+                      EndStateFitFloor.ToString("0.###") + " of the content's own demand in every case. " +
+                      "Measured: " + sb);
+        }
+
         private static bool RenderCanvasToPng(GameObject canvasGo, string path, int w, int h)
         {
             if (canvasGo == null) return false;
@@ -2569,6 +2979,19 @@ namespace DeNelle.Editor
                 // THE NUMERIC GEOMETRY GATE. Runs on the SETTLED layout, before the pixels
                 // exist -- eyes-on review is not a defence and never was (CLAUDE.md §12).
                 AuditGeometry(canvasGo, Path.GetFileNameWithoutExtension(path), w, h);
+
+                // A PANEL-SPECIFIC measurement on the SAME settled, camera-space layout the
+                // audit just ran on. This is the only point in the run where a rect read is
+                // in kit reference px (an overlay canvas's own rect is still the editor's
+                // 640x480 in batchmode -- see the file banner), so any probe that has to
+                // compare a RESOLVED rect against an authored px budget must run HERE.
+                // Set by the capture that needs it, cleared in its finally; guarded, because a
+                // throwing probe must never cost the run its screenshot.
+                if (_settledProbe != null)
+                {
+                    try { _settledProbe(canvasGo, Path.GetFileNameWithoutExtension(path), w, h); }
+                    catch (Exception pe) { Debug.LogError("[UICap-HL] settled-layout probe threw: " + pe); }
+                }
 
                 // Render (SRP-correct path first; fall back to legacy Camera.Render).
                 var req = new RenderPipeline.StandardRequest { destination = rt };
