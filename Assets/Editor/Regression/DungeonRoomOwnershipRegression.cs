@@ -24,6 +24,11 @@
 //                     RuntimeInitializeOnLoadMethod hook + TryBind path.
 //   6 [exit-beacon]   An injected exit carries the discoverability beacon:
 //                     DungeonExitBeacon + a Light + the walk-in trigger.
+//   8 [exit-beacon-layouts] (WO-957 residual) PER COMPOSED LAYOUT: exactly ONE
+//                     object wears the beacon, the extract PADS wear none, and
+//                     there is one Pad_Marker per authored extract. Built by
+//                     invoking the REAL baker path + the REAL injector spawn, so
+//                     the trueExit argument itself is under test.
 //
 // Markers: DUNGEON_ROOM_OWNERSHIP_OK / DUNGEON_ROOM_OWNERSHIP_FAIL.
 // Standalone: run-unity-method DeNelle.Editor.Regression.DungeonRoomOwnershipRegression.RunAll
@@ -75,6 +80,7 @@ namespace DeNelle.Editor.Regression
                 Case(failures, "binder", () => Case5_Binder(failures));
                 Case(failures, "exit-beacon", () => Case6_ExitBeacon(failures));
                 Case(failures, "pursuit-bound", () => Case7_PursuitBound(failures));
+                Case(failures, "exit-beacon-layouts", () => Case8_OneBeaconPerLayout(failures, notes));
             }
             finally
             {
@@ -85,7 +91,8 @@ namespace DeNelle.Editor.Regression
             if (failures.Count == 0)
             {
                 reason = "DUNGEON ROOM OWNERSHIP OK - encounter schema + dual-copy, brain wake/confine math, " +
-                         "spawner serialized fields, shared room-AABB math, runtime binder, exit beacon" + noteStr;
+                         "spawner serialized fields, shared room-AABB math, runtime binder, exit beacon, " +
+                         "one beacon per composed layout" + noteStr;
                 return true;
             }
             reason = "dungeon-rooms FAIL x" + failures.Count + ": " + string.Join(" | ", failures) + noteStr;
@@ -432,6 +439,220 @@ namespace DeNelle.Editor.Regression
             brain.SetRoomArea("junction", junction, wanderSlack, wakeRadius);
             if (!brain.HasRoomArea || brain.AreaRoomId != "junction")
                 failures.Add("[pursuit-bound] SetRoomArea contract broke - the pursuit bound has nothing to ride on");
+        }
+
+        // =====================================================================
+        //  CASE 8 - WO-957 residual: ONE beacon per composed layout
+        // =====================================================================
+        //
+        // WHAT WO-957 RULED. A composed dungeon has exactly ONE true exit - the arch +
+        // beacon presentation. Every PER-FLOOR extract is a QUIET leave pad: a flat
+        // Pad_Marker disc and a small "Leave" label, with NO beam and NO Light. Before
+        // WO-957 every stairwell landing wore the full beacon, so a mid-dungeon floor
+        // read as "the way out".
+        //
+        // WHY THE EXISTING COVERAGE COULD NOT SEE A REGRESSION. Case 6 spawns ONE exit
+        // and asserts it HAS a beacon. Nothing counted beacons, and nothing asserted a
+        // pad has none - so the count could go from 1 to 6 and the suite stayed green.
+        //
+        // HOW THIS CASE IS BUILT, AND WHY IT IS BUILT THIS WAY. The composed dg_*.unity
+        // scenes cannot answer this question: they serialize BINARY (a text grep of them
+        // proves nothing), and the TRUE exit is not baked at all - DungeonExitSpawner
+        // injects it at runtime, so a baked scene legitimately holds ZERO beacons. So the
+        // pair is RECONSTRUCTED here from the two REAL production paths:
+        //   * the pads, by invoking DungeonBaker.PlaceComposeExtracts itself (reflection -
+        //     DeNelle.EditorRegression cannot reference DeNelle.Editor). That means the
+        //     `trueExit:false` ARGUMENT the baker passes is under test, not just the
+        //     branch it selects. RoomSeat degrades to the raw offset with no room
+        //     instances and SampleNav returns the point unchanged with no navmesh, so this
+        //     is headless-safe.
+        //   * the true exit, by DungeonExitInteractable.Spawn(pos) - the exact call
+        //     DungeonExitSpawner.TryInject makes (DungeonExitInteractable.cs:107), so the
+        //     `trueExit` DEFAULT that call leans on is pinned below too.
+        //
+        // THE FAILURE MESSAGE CARRIES THE DIAGNOSIS, because the same assertion catches
+        // two OPPOSITE bugs and they must never share a message:
+        //   >1 beacons  =  the pads regressed to full beacons (the WO-957 defect)
+        //    0 beacons  =  the true exit is missing (the F8 seq 622 'no way to exit' one)
+        //
+        // PROVE IT BITES (~30 s each, and BOTH have been reasoned through the call path):
+        //   * pads-regressed: in DungeonBaker.PlaceComposeExtracts:1709 change the fourth
+        //     Invoke arg from `false` to `true`, or delete the `if (!_isTrueExit) {
+        //     BuildLeavePad(glow); return; }` early return at DungeonExitInteractable:277.
+        //     Either one makes every pad run BuildBeacon, so dg_ember_deep reports
+        //     "has 6 beacons (expected 1)" AND names each Extract_* carrying a beam/Light.
+        //   * true-exit-missing: delete the BuildBeacon(glow) call at
+        //     DungeonExitInteractable:307 - every layout reports "has 0 beacons".
+        //
+        private static void Case8_OneBeaconPerLayout(List<string> failures, List<string> notes)
+        {
+            // The Resources copy is the RUNTIME authority over StreamingAssets (dual-copy law);
+            // Case 1 already proves the two copies are content-identical for the starter loop.
+            const string dir = "Assets/Resources/Data/Canonical/dungeon-layouts";
+
+            var bakerT = FindType("DeNelle.Editor.RoomForge.DungeonBaker");
+            if (bakerT == null)
+            {
+                failures.Add("[exit-beacon] DeNelle.Editor.RoomForge.DungeonBaker not found - the pad-placing " +
+                             "path cannot be exercised, so this case would pass vacuously. A vacuous pass is " +
+                             "worse than no case: it advertises coverage that does not exist.");
+                return;
+            }
+            var place = bakerT.GetMethod("PlaceComposeExtracts", BindingFlags.NonPublic | BindingFlags.Static);
+            if (place == null)
+            {
+                failures.Add("[exit-beacon] DungeonBaker.PlaceComposeExtracts not found (renamed/removed) - the " +
+                             "WO-957 leave pads are built by that method and nothing else exercises its " +
+                             "trueExit:false argument");
+                return;
+            }
+
+            // The default DungeonExitSpawner.TryInject relies on: Spawn(pos) with no trueExit
+            // argument MUST mean the full arch+beacon. If that default ever flips, the injected
+            // return exit turns into a quiet pad and every dungeon loses its marked way home.
+            var spawnM = typeof(DungeonExitInteractable).GetMethod("Spawn",
+                BindingFlags.Public | BindingFlags.Static);
+            if (spawnM == null)
+            {
+                failures.Add("[exit-beacon] DungeonExitInteractable.Spawn(static) not found");
+                return;
+            }
+            bool sawTrueExitParam = false;
+            foreach (var p in spawnM.GetParameters())
+            {
+                if (p.Name != "trueExit") continue;
+                sawTrueExitParam = true;
+                if (!(p.HasDefaultValue && p.DefaultValue is bool b && b))
+                    failures.Add("[exit-beacon] Spawn's 'trueExit' parameter no longer defaults to TRUE. " +
+                                 "DungeonExitSpawner.TryInject calls Spawn(pos) with no fourth argument, so a " +
+                                 "flipped default silently turns the ONE true exit into a quiet leave pad.");
+            }
+            if (!sawTrueExitParam)
+                failures.Add("[exit-beacon] DungeonExitInteractable.Spawn has no 'trueExit' parameter - the " +
+                             "WO-957 two-presentation split is gone, so pads and the true exit can no longer differ");
+
+            if (!Directory.Exists(dir)) { failures.Add("[exit-beacon] layout directory missing: " + dir); return; }
+
+            int covered = 0;
+            foreach (string path in Directory.GetFiles(dir, "*.json"))
+            {
+                string id = Path.GetFileNameWithoutExtension(path);
+
+                // ── NAMED, LOGGED SKIPS. An unnamed skip is how a suite silently stops
+                //    covering something, so each one says WHICH file and WHY.
+                if (id == "rooms-catalog")
+                {
+                    notes.Add("[exit-beacon] skipped 'rooms-catalog' - it is the room CATALOG, not a compose layout");
+                    continue;
+                }
+                if (id == "dg_stair_rig" || id == "dg_descent_probe")
+                {
+                    notes.Add($"[exit-beacon] QUARANTINED '{id}' - it is the WO-930 A/B CONTROL GROUP, deliberately " +
+                              "left on the retired stair-pair model and deliberately still labelled " +
+                              "\"Extract\"/\"Extract (deep)\". Its extracts are fixtures, not shipping content " +
+                              "(DungeonMultiLevelRegression header: do NOT clean them up). When WO-930 §5 retires " +
+                              "the pair model, delete this skip in the same commit.");
+                    continue;
+                }
+
+                DungeonComposeLayout layout;
+                try { layout = JsonConvert.DeserializeObject<DungeonComposeLayout>(File.ReadAllText(path)); }
+                catch (Exception ex)
+                {
+                    failures.Add($"[exit-beacon] {id} failed to parse ({ex.GetType().Name}: {ex.Message})");
+                    continue;
+                }
+                if (layout == null || layout.rooms == null || layout.rooms.Count == 0)
+                {
+                    failures.Add($"[exit-beacon] {id} deserialized with no rooms - either it is not a compose " +
+                                 "layout (add a named skip above) or the schema drifted and this case is blind to it");
+                    continue;
+                }
+
+                int wantPads = layout.extracts != null ? layout.extracts.Count : 0;
+
+                var root = new GameObject("__wo957_" + id);
+                s_spawned.Add(root);
+
+                // (a) THE REAL BAKER PATH builds the pads, with the real trueExit argument.
+                int placed;
+                try
+                {
+                    placed = (int)place.Invoke(null, new object[]
+                    {
+                        root.transform, new Dictionary<string, GameObject>(), layout
+                    });
+                }
+                catch (Exception ex)
+                {
+                    failures.Add($"[exit-beacon] {id} PlaceComposeExtracts threw {ex.GetType().Name}: {ex.Message}");
+                    continue;
+                }
+                if (placed != wantPads)
+                    failures.Add($"[exit-beacon] {id} authors {wantPads} extract(s) but the baker placed {placed} - " +
+                                 "an authored leave pad that never gets built is a floor with no way to bank out");
+
+                // (b) THE REAL INJECTOR CALL builds the one true exit.
+                var trueExit = DungeonExitInteractable.Spawn(new Vector3(0f, 0f, -2.6f));
+                if (trueExit == null)
+                {
+                    failures.Add($"[exit-beacon] {id} DungeonExitInteractable.Spawn returned null - no true exit " +
+                                 "could be seated at all");
+                    continue;
+                }
+                trueExit.transform.SetParent(root.transform, true);
+
+                // (c) COUNT. One beacon, one Pad_Marker per authored extract, no pad wearing either cue.
+                int beacons = 0, pads = 0;
+                foreach (var exit in root.GetComponentsInChildren<DungeonExitInteractable>(true))
+                {
+                    if (exit == null) continue;
+                    bool hasBeam = exit.transform.Find("Beacon_Beam") != null;
+                    bool hasPad = exit.transform.Find("Pad_Marker") != null;
+                    if (hasBeam) beacons++;
+                    if (hasPad) pads++;
+
+                    // The baker names every pad "Extract_<id>" (DungeonBaker:1712); the injected
+                    // return exit is "DungeonExit (Return)". That name IS the discriminator
+                    // DungeonExitSpawner.TryInject:97 uses, so it is the right one to assert on.
+                    if (!exit.name.StartsWith("Extract", StringComparison.Ordinal)) continue;
+                    if (hasBeam)
+                        failures.Add($"[exit-beacon] {id} leave pad '{exit.name}' carries a Beacon_Beam - a " +
+                                     "per-floor pad must wear the QUIET affordance (flat disc + the word " +
+                                     "\"Leave\"). A beam on a mid-dungeon landing is exactly the WO-957 defect: " +
+                                     "the floor reads as the way out.");
+                    if (exit.GetComponentInChildren<Light>(true) != null)
+                        failures.Add($"[exit-beacon] {id} leave pad '{exit.name}' carries a Light - pads are " +
+                                     "deliberately unlit (the stairwell candles already spend 3 of the URP " +
+                                     "4-per-object realtime budget, so a light per pad EVICTS the ones that matter)");
+                }
+
+                if (beacons != 1)
+                {
+                    // ⚠ TWO OPPOSITE BUGS, TWO DIFFERENT SENTENCES. "beacon count wrong" would be a
+                    // hollow assertion (INSTRUMENTATION_STANDARD §1.4b) - the COUNT names the defect.
+                    string diagnosis = beacons > 1
+                        ? "pads may have regressed to full beacons - check DungeonBaker.PlaceComposeExtracts " +
+                          "still passes trueExit:FALSE and DungeonExitInteractable.BuildVisual still returns " +
+                          "early into BuildLeavePad"
+                        : "true exit missing - nothing in this layout wears the arch+beacon, so the one way " +
+                          "home is unmarked (the F8 seq 622 'no way to exit' capture)";
+                    failures.Add($"[exit-beacon] {id} has {beacons} beacon(s) (expected 1) - {diagnosis}");
+                }
+                if (pads != wantPads)
+                    failures.Add($"[exit-beacon] {id} has {pads} Pad_Marker(s) but authors {wantPads} extract(s). " +
+                                 "Every authored extract must build the quiet pad disc; a missing one is an " +
+                                 "invisible leave point, an extra one is a pad nobody authored.");
+
+                covered++;
+            }
+
+            if (covered == 0)
+                failures.Add("[exit-beacon] NO compose layout was checked - every file was skipped or failed to " +
+                             "parse, so this case passed on nothing. A test that cannot fail advertises coverage " +
+                             "that does not exist.");
+            else
+                notes.Add($"[exit-beacon] one-beacon rule checked on {covered} composed layout(s)");
         }
 
         // ---- helpers --------------------------------------------------------
