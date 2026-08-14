@@ -11,7 +11,14 @@
 //
 // WO-41 refactor: reflection removed throughout. HUD calls now go through
 // CoreServices.Hud (IVillageHud) and audio through AbilityAudioBridge which
-// itself uses CoreServices.Audio. FindHud() stub kept so TrySpawn compiles.
+// itself uses CoreServices.Audio.
+//
+// WO-979: this director binds NO HUD reference of its own, deliberately. Every
+// HUD call it makes is `CoreServices.Hud?.<x>()` at the point of use, so it
+// always talks to whatever HUD is registered NOW rather than to a stale
+// reference captured at scene-load. The old `FindHud()` seam (a stub whose whole
+// body was `return null;`) and the `object hud` parameter on Bind() are REMOVED
+// for that reason — see Bind() and TrySpawn() below.
 // =============================================================================
 
 using DeNelle.Core;
@@ -40,11 +47,24 @@ namespace DeNelle.Village
         private float _compassTimer;         // WO-39 poll throttle
         private Transform _heartT;
 
-        /// <summary>Wires the wave manager before the GameObject is activated.</summary>
-        public void Bind(WaveManager wave, object hud)
+        /// <summary>
+        /// Wires the wave manager before the GameObject is activated.
+        /// <para>
+        /// WO-979: the second parameter (<c>object hud</c>) is GONE, and so is the
+        /// <c>FindHud()</c> stub that fed it. It was never dereferenced — this method's
+        /// entire body was, and still is, <c>_wave = wave;</c> — while the caller logged
+        /// <c>hudBound=…</c> beside it, reading a DIFFERENT object (the global
+        /// <c>CoreServices.Hud</c>) than the one it named. That trace answered "did the
+        /// wave HUD bind?" with a confident True about somebody else's registration.
+        /// This director deliberately holds NO HUD reference: it calls
+        /// <c>CoreServices.Hud?.…</c> at each point of use, so it always reaches the HUD
+        /// registered at that moment and degrades quietly (never NREs) when none is.
+        /// Do not re-add a hud parameter here — add the call at the use site instead.
+        /// </para>
+        /// </summary>
+        public void Bind(WaveManager wave)
         {
             _wave = wave;
-            // hud parameter kept for call-site compatibility; CoreServices.Hud used directly.
         }
 
         // ── WO-39: poll live enemies -> light the compass arms ────────────────
@@ -204,8 +224,19 @@ namespace DeNelle.Village
         {
             _imminentFired = true;
 
-            Debug.Log($"[WaveFeedbackDirector] Wave-imminent ALERT fired ({reason}); " +
-                      $"hudBound={CoreServices.Hud != null}.");
+            // WO-979: this line also said "hudBound", the same misleading name TrySpawn
+            // used. Here the value at least MATCHES what the alert consumes — SetImminent
+            // and SetCompassImminent both go through CoreServices.Hud — so it is renamed
+            // to what it actually reads and given the failure branch it never had. The
+            // audio sting + haptic below fire either way; only the visuals depend on it.
+            if (CoreServices.Hud == null)
+                FlowTrace.Warn("WaveFeedback",
+                    $"wave-imminent alert fired ({reason}) with CoreServices.Hud NULL — " +
+                    "sting + haptic will play but the red vignette and compass flash will NOT render.");
+            else
+                FlowTrace.Step("WaveFeedback",
+                    $"wave-imminent alert fired ({reason}); hudRegistered=True " +
+                    $"({CoreServices.Hud.GetType().Name}).");
 
             SetImminent(true);
             SetCompassImminent(true);   // WO-40: flash ALL compass arms amber during the alert
@@ -315,17 +346,48 @@ namespace DeNelle.Village
             var go = new GameObject("WaveFeedbackDirector");
             go.SetActive(false);
             var dir = go.AddComponent<WaveFeedbackDirector>();
-            var hud = FindHud();
-            dir.Bind(wave, hud);
+            dir.Bind(wave);
             go.SetActive(true);
-            Debug.Log($"[WaveFeedbackDirector] Installed (wave feedback active). hudBound={CoreServices.Hud != null}.");
-        }
 
-        private static object FindHud()
-        {
-            // WO-41: HUD is now registered in CoreServices.Hud; no reflection needed.
-            // Stub kept so Bind(wave, hud) call-site compiles unchanged.
-            return null;
+            // ── WO-979: report what THIS director actually holds ─────────────────
+            // The line that used to sit here read:
+            //     "Installed (wave feedback active). hudBound={CoreServices.Hud != null}."
+            // fired unconditionally, right beside a FindHud() stub that returned null
+            // every time. It NAMED one thing (this director's HUD bind) and REPORTED
+            // another (a global some other system registers), so it printed True on
+            // every wave-scene load forever and steered any reader away from the
+            // broken seam. The seam is now deleted (see Bind), and each claim below is
+            // falsifiable against the exact reference it names.
+            bool waveBound = dir._wave != null;
+            bool hudRegistered = CoreServices.Hud != null;
+
+            if (!waveBound)
+            {
+                // Unreachable via the guard at the top of TrySpawn, which is precisely
+                // why it is asserted: if that guard ever changes, this fails loudly
+                // instead of a "wave feedback active" line over a dead director.
+                FlowTrace.Fail("WaveFeedback",
+                    "install ABORTED: Bind left _wave null — NO wave feedback will fire " +
+                    "(no clear banner, no imminent alert, no compass) for this scene.");
+                return;
+            }
+
+            if (!hudRegistered)
+            {
+                // Not fatal: audio + haptics still fire, and the HUD may register a
+                // frame later (calls are all `?.`-guarded at the use site). Named as a
+                // Warn because the VISUAL half of wave feedback is silently absent
+                // until it does.
+                FlowTrace.Warn("WaveFeedback",
+                    $"installed, waveBound=True, but CoreServices.Hud is NOT registered at install " +
+                    $"(scene='{SceneManager.GetActiveScene().name}') — wave-clear banner, imminent " +
+                    "vignette and compass arms will NOT render until a VillageHudController registers.");
+                return;
+            }
+
+            FlowTrace.Step("WaveFeedback",
+                $"installed: waveBound=True (wave='{wave.name}'), CoreServices.Hud registered " +
+                $"({CoreServices.Hud.GetType().Name}), scene='{SceneManager.GetActiveScene().name}'.");
         }
 
         /// <summary>
