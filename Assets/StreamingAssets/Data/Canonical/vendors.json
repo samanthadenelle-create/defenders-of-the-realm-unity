@@ -38,9 +38,7 @@
       "maxReqLevel": 0,
       "onlyEquippable": true,
       "perLevelCap": 2,
-      "excludeIdPrefixes": [
-        "blink_"
-      ],
+      "excludeIdPrefixes": [],
       "emptyLine": "Nothing on the rack fits your hand yet - come back after you level up and I'll have new stock.",
       "footerLine": "That's all I can offer at your level - come back after you level up for new stock."
     },

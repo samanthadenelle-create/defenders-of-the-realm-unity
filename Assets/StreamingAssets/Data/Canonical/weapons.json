@@ -2,7 +2,7 @@
   "version": 1,
   "_note": "Gear v1 weapon catalog (data-driven, same pattern as abilities.json). damageMult joins the hero's damage chain (base x talent x level x timing x WEAPON). reach = MELEE hitbox radius in metres for MELEE jobs (knight) — overrides PlayerAttackController's fixed AttackRange (3.2) when >0; a heavier/longer blade outreaches a lighter one. Ranged jobs (mage/ranger) attack via AbilityDef.Range and leave reach 0 (unset) so their range is unchanged. req starts level-gated; add dex/arcane/might keys later. icon = emoji placeholder until real art ships (swap the field, zero code change). PRICING (buyWood/buyFood/buyIron/buyCrystals): tiered by rarity (common floor -> legendary sink, ~2.5x/tier); CRYSTALS gate rare+ (the aether/crystal arc); resource mix reflects the weapon's nature (knight=iron blade, ranger=wood bow, mage=wood staff + crystal head). Lean economy by design.",
   "weapons": [
-        {
+    {
       "id": "mage_oak",
       "name": "Oakheart Staff",
       "icon": "🪄",
@@ -220,7 +220,7 @@
       "manual": true,
       "flavor": "A crystal head cut cold and kept cold. What it strikes forgets how to hurry."
     },
-                {
+    {
       "id": "cleric_starter",
       "name": "Acolyte's Mace",
       "icon": "🔨",
@@ -328,7 +328,7 @@
       "buyIron": 20,
       "buyCrystals": 0
     },
-                {
+    {
       "id": "tripo_dagger_a",
       "name": "Bramblefang",
       "icon": "🔪",
@@ -602,7 +602,7 @@
       "makersMark": "Emberhand",
       "flavor": "Emberhand steel of the dawn watch; a crit ignites the strike."
     },
-        {
+    {
       "id": "blink_axe1h_01",
       "name": "Axe1h 01 (Blink)",
       "icon": "🪓",
@@ -879,7 +879,7 @@
     },
     {
       "id": "blink_axe1h_12",
-      "name": "Axe1h 12 (Blink)",
+      "name": "Reaver's Hatchet",
       "icon": "🪓",
       "kind": "Weapon",
       "category": "axe",
@@ -889,7 +889,7 @@
       "rarity": "common",
       "prefabPath": "gear/weapon/Axe1h_12",
       "generated": true,
-      "manual": false,
+      "manual": true,
       "loadVia": "addressable",
       "damageMult": 1.0,
       "reach": 0.0,
@@ -929,7 +929,7 @@
     },
     {
       "id": "blink_axe1h_14",
-      "name": "Axe1h 14 (Blink)",
+      "name": "Woodsman's Axe",
       "icon": "🪓",
       "kind": "Weapon",
       "category": "axe",
@@ -939,7 +939,7 @@
       "rarity": "common",
       "prefabPath": "gear/weapon/Axe1h_14",
       "generated": true,
-      "manual": false,
+      "manual": true,
       "loadVia": "addressable",
       "damageMult": 1.0,
       "reach": 0.0,
@@ -979,22 +979,22 @@
     },
     {
       "id": "blink_axe1h_16",
-      "name": "Axe1h 16 (Blink)",
+      "name": "Footman's Waraxe",
       "icon": "🪓",
       "kind": "Weapon",
       "category": "axe",
       "job": "knight",
       "hand": "1h",
       "damageType": "melee",
-      "rarity": "common",
+      "rarity": "uncommon",
       "prefabPath": "gear/weapon/Axe1h_16",
       "generated": true,
-      "manual": false,
+      "manual": true,
       "loadVia": "addressable",
-      "damageMult": 1.0,
+      "damageMult": 1.25,
       "reach": 0.0,
       "req": {
-        "level": 1
+        "level": 3
       },
       "buyWood": 20,
       "buyFood": 20,
@@ -1029,22 +1029,22 @@
     },
     {
       "id": "blink_axe1h_18",
-      "name": "Axe1h 18 (Blink)",
+      "name": "Ironband Hatchet",
       "icon": "🪓",
       "kind": "Weapon",
       "category": "axe",
       "job": "knight",
       "hand": "1h",
       "damageType": "melee",
-      "rarity": "common",
+      "rarity": "uncommon",
       "prefabPath": "gear/weapon/Axe1h_18",
       "generated": true,
-      "manual": false,
+      "manual": true,
       "loadVia": "addressable",
-      "damageMult": 1.0,
+      "damageMult": 1.25,
       "reach": 0.0,
       "req": {
-        "level": 1
+        "level": 3
       },
       "buyWood": 20,
       "buyFood": 20,
@@ -1079,28 +1079,30 @@
     },
     {
       "id": "blink_axe1h_20",
-      "name": "Axe1h 20 (Blink)",
+      "name": "Emberbite Axe",
       "icon": "🪓",
       "kind": "Weapon",
       "category": "axe",
       "job": "knight",
       "hand": "1h",
       "damageType": "melee",
-      "rarity": "common",
+      "rarity": "rare",
       "prefabPath": "gear/weapon/Axe1h_20",
       "generated": true,
-      "manual": false,
+      "manual": true,
       "loadVia": "addressable",
-      "damageMult": 1.0,
+      "damageMult": 1.6,
       "reach": 0.0,
       "req": {
-        "level": 1
+        "level": 6
       },
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
       "buyCrystals": 0,
-      "iconPath": "ItemIcons/blink_axe1h_20"
+      "iconPath": "ItemIcons/blink_axe1h_20",
+      "makersMark": "Emberhand",
+      "flavor": "Emberhand-marked; the head throws embers on the cleave."
     },
     {
       "id": "blink_axe1h_21",
@@ -1179,28 +1181,30 @@
     },
     {
       "id": "blink_axe1h_24",
-      "name": "Axe1h 24 (Blink)",
+      "name": "Cinderfall Waraxe",
       "icon": "🪓",
       "kind": "Weapon",
       "category": "axe",
       "job": "knight",
       "hand": "1h",
       "damageType": "melee",
-      "rarity": "common",
+      "rarity": "epic",
       "prefabPath": "gear/weapon/Axe1h_24",
       "generated": true,
-      "manual": false,
+      "manual": true,
       "loadVia": "addressable",
-      "damageMult": 1.0,
+      "damageMult": 2.1,
       "reach": 0.0,
       "req": {
-        "level": 1
+        "level": 10
       },
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
       "buyCrystals": 0,
-      "iconPath": "ItemIcons/blink_axe1h_24"
+      "iconPath": "ItemIcons/blink_axe1h_24",
+      "makersMark": "Emberhand",
+      "flavor": "Emberhand's heavy line - the ground remembers where it landed."
     },
     {
       "id": "blink_axe1h_25",
@@ -1306,7 +1310,7 @@
     },
     {
       "id": "blink_axe2h_04",
-      "name": "Axe2h 04 (Blink)",
+      "name": "Splitting Maul",
       "icon": "🪓",
       "kind": "Weapon",
       "category": "axe",
@@ -1316,7 +1320,7 @@
       "rarity": "common",
       "prefabPath": "gear/weapon/Axe2h_04",
       "generated": true,
-      "manual": false,
+      "manual": true,
       "loadVia": "addressable",
       "damageMult": 1.0,
       "reach": 0.0,
@@ -1431,7 +1435,7 @@
     },
     {
       "id": "blink_axe2h_09",
-      "name": "Axe2h 09 (Blink)",
+      "name": "Timberfell Greataxe",
       "icon": "🪓",
       "kind": "Weapon",
       "category": "axe",
@@ -1441,7 +1445,7 @@
       "rarity": "common",
       "prefabPath": "gear/weapon/Axe2h_09",
       "generated": true,
-      "manual": false,
+      "manual": true,
       "loadVia": "addressable",
       "damageMult": 1.0,
       "reach": 0.0,
@@ -1506,22 +1510,22 @@
     },
     {
       "id": "blink_axe2h_12",
-      "name": "Axe2h 12 (Blink)",
+      "name": "Ironwood Splitter",
       "icon": "🪓",
       "kind": "Weapon",
       "category": "axe",
       "job": "knight",
       "hand": "2h",
       "damageType": "melee",
-      "rarity": "common",
+      "rarity": "uncommon",
       "prefabPath": "gear/weapon/Axe2h_12",
       "generated": true,
-      "manual": false,
+      "manual": true,
       "loadVia": "addressable",
-      "damageMult": 1.0,
+      "damageMult": 1.25,
       "reach": 0.0,
       "req": {
-        "level": 1
+        "level": 3
       },
       "buyWood": 20,
       "buyFood": 20,
@@ -1581,22 +1585,22 @@
     },
     {
       "id": "blink_axe2h_15",
-      "name": "Axe2h 15 (Blink)",
+      "name": "Bulwark Greataxe",
       "icon": "🪓",
       "kind": "Weapon",
       "category": "axe",
       "job": "knight",
       "hand": "2h",
       "damageType": "melee",
-      "rarity": "common",
+      "rarity": "uncommon",
       "prefabPath": "gear/weapon/Axe2h_15",
       "generated": true,
-      "manual": false,
+      "manual": true,
       "loadVia": "addressable",
-      "damageMult": 1.0,
+      "damageMult": 1.25,
       "reach": 0.0,
       "req": {
-        "level": 1
+        "level": 3
       },
       "buyWood": 20,
       "buyFood": 20,
@@ -1706,28 +1710,30 @@
     },
     {
       "id": "blink_axe2h_20",
-      "name": "Axe2h 20 (Blink)",
+      "name": "Emberfall Cleaver",
       "icon": "🪓",
       "kind": "Weapon",
       "category": "axe",
       "job": "knight",
       "hand": "2h",
       "damageType": "melee",
-      "rarity": "common",
+      "rarity": "rare",
       "prefabPath": "gear/weapon/Axe2h_20",
       "generated": true,
-      "manual": false,
+      "manual": true,
       "loadVia": "addressable",
-      "damageMult": 1.0,
+      "damageMult": 1.6,
       "reach": 0.0,
       "req": {
-        "level": 1
+        "level": 6
       },
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
       "buyCrystals": 0,
-      "iconPath": "ItemIcons/blink_axe2h_20"
+      "iconPath": "ItemIcons/blink_axe2h_20",
+      "makersMark": "Emberhand",
+      "flavor": "Emberhand-marked; the head throws embers on the cleave."
     },
     {
       "id": "blink_axe2h_21",
@@ -1756,107 +1762,115 @@
     },
     {
       "id": "blink_axe2h_22",
-      "name": "Axe2h 22 (Blink)",
+      "name": "Ashen Reaver",
       "icon": "🪓",
       "kind": "Weapon",
       "category": "axe",
       "job": "knight",
       "hand": "2h",
       "damageType": "melee",
-      "rarity": "common",
+      "rarity": "rare",
       "prefabPath": "gear/weapon/Axe2h_22",
       "generated": true,
-      "manual": false,
+      "manual": true,
       "loadVia": "addressable",
-      "damageMult": 1.0,
+      "damageMult": 1.6,
       "reach": 0.0,
       "req": {
-        "level": 1
+        "level": 6
       },
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
       "buyCrystals": 0,
-      "iconPath": "ItemIcons/blink_axe2h_22"
+      "iconPath": "ItemIcons/blink_axe2h_22",
+      "makersMark": "Emberhand",
+      "flavor": "Emberhand-marked; the head throws embers on the cleave."
     },
     {
       "id": "blink_axe2h_23",
-      "name": "Axe2h 23 (Blink)",
+      "name": "Dawnward Executioner",
       "icon": "🪓",
       "kind": "Weapon",
       "category": "axe",
       "job": "knight",
       "hand": "2h",
       "damageType": "melee",
-      "rarity": "common",
+      "rarity": "epic",
       "prefabPath": "gear/weapon/Axe2h_23",
       "generated": true,
-      "manual": false,
+      "manual": true,
       "loadVia": "addressable",
-      "damageMult": 1.0,
+      "damageMult": 2.1,
       "reach": 0.0,
       "req": {
-        "level": 1
+        "level": 10
       },
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
       "buyCrystals": 0,
-      "iconPath": "ItemIcons/blink_axe2h_23"
+      "iconPath": "ItemIcons/blink_axe2h_23",
+      "makersMark": "Emberhand",
+      "flavor": "Emberhand's heavy line - the ground remembers where it landed."
     },
     {
       "id": "blink_axe2h_24",
-      "name": "Axe2h 24 (Blink)",
+      "name": "Emberhand Sundering Axe",
       "icon": "🪓",
       "kind": "Weapon",
       "category": "axe",
       "job": "knight",
       "hand": "2h",
       "damageType": "melee",
-      "rarity": "common",
+      "rarity": "epic",
       "prefabPath": "gear/weapon/Axe2h_24",
       "generated": true,
-      "manual": false,
+      "manual": true,
       "loadVia": "addressable",
-      "damageMult": 1.0,
+      "damageMult": 2.1,
       "reach": 0.0,
       "req": {
-        "level": 1
+        "level": 10
       },
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
       "buyCrystals": 0,
-      "iconPath": "ItemIcons/blink_axe2h_24"
+      "iconPath": "ItemIcons/blink_axe2h_24",
+      "makersMark": "Emberhand",
+      "flavor": "Emberhand's heavy line - the ground remembers where it landed."
     },
     {
       "id": "blink_axe2h_25",
-      "name": "Axe2h 25 (Blink)",
+      "name": "Wardstone Cleaver",
       "icon": "🪓",
       "kind": "Weapon",
       "category": "axe",
       "job": "knight",
       "hand": "2h",
       "damageType": "melee",
-      "rarity": "common",
+      "rarity": "epic",
       "prefabPath": "gear/weapon/Axe2h_25",
       "generated": true,
-      "manual": false,
+      "manual": true,
       "loadVia": "addressable",
-      "damageMult": 1.0,
+      "damageMult": 2.1,
       "reach": 0.0,
       "req": {
-        "level": 1
+        "level": 10
       },
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
       "buyCrystals": 0,
-      "iconPath": "ItemIcons/blink_axe2h_25"
+      "iconPath": "ItemIcons/blink_axe2h_25",
+      "makersMark": "Emberhand",
+      "flavor": "Emberhand's heavy line - the ground remembers where it landed."
     },
     {
       "id": "blink_bow2h_01",
-      "name": "Bow2h 01 (Blink)",
+      "name": "Greenwarden Shortbow",
       "icon": "🏹",
       "kind": "Weapon",
       "category": "bow",
@@ -1866,7 +1880,7 @@
       "rarity": "common",
       "prefabPath": "gear/weapon/Bow2h_01",
       "generated": true,
-      "manual": false,
+      "manual": true,
       "loadVia": "addressable",
       "damageMult": 1.0,
       "req": {
@@ -1904,7 +1918,7 @@
     },
     {
       "id": "blink_bow2h_03",
-      "name": "Bow2h 03 (Blink)",
+      "name": "Snarewood Bow",
       "icon": "🏹",
       "kind": "Weapon",
       "category": "bow",
@@ -1914,7 +1928,7 @@
       "rarity": "common",
       "prefabPath": "gear/weapon/Bow2h_03",
       "generated": true,
-      "manual": false,
+      "manual": true,
       "loadVia": "addressable",
       "damageMult": 1.0,
       "req": {
@@ -1928,7 +1942,7 @@
     },
     {
       "id": "blink_bow2h_04",
-      "name": "Bow2h 04 (Blink)",
+      "name": "Fieldwarden Bow",
       "icon": "🏹",
       "kind": "Weapon",
       "category": "bow",
@@ -1938,7 +1952,7 @@
       "rarity": "common",
       "prefabPath": "gear/weapon/Bow2h_04",
       "generated": true,
-      "manual": false,
+      "manual": true,
       "loadVia": "addressable",
       "damageMult": 1.0,
       "req": {
@@ -1952,7 +1966,7 @@
     },
     {
       "id": "blink_bow2h_05",
-      "name": "Bow2h 05 (Blink)",
+      "name": "Copse Hunter's Bow",
       "icon": "🏹",
       "kind": "Weapon",
       "category": "bow",
@@ -1962,7 +1976,7 @@
       "rarity": "common",
       "prefabPath": "gear/weapon/Bow2h_05",
       "generated": true,
-      "manual": false,
+      "manual": true,
       "loadVia": "addressable",
       "damageMult": 1.0,
       "req": {
@@ -2024,21 +2038,21 @@
     },
     {
       "id": "blink_bow2h_08",
-      "name": "Bow2h 08 (Blink)",
+      "name": "Forester's Recurve",
       "icon": "🏹",
       "kind": "Weapon",
       "category": "bow",
       "job": "ranger",
       "hand": "2h",
       "damageType": "ranged",
-      "rarity": "common",
+      "rarity": "uncommon",
       "prefabPath": "gear/weapon/Bow2h_08",
       "generated": true,
-      "manual": false,
+      "manual": true,
       "loadVia": "addressable",
-      "damageMult": 1.0,
+      "damageMult": 1.25,
       "req": {
-        "level": 1
+        "level": 3
       },
       "buyWood": 20,
       "buyFood": 20,
@@ -2048,21 +2062,21 @@
     },
     {
       "id": "blink_bow2h_09",
-      "name": "Bow2h 09 (Blink)",
+      "name": "Yewbranch Bow",
       "icon": "🏹",
       "kind": "Weapon",
       "category": "bow",
       "job": "ranger",
       "hand": "2h",
       "damageType": "ranged",
-      "rarity": "common",
+      "rarity": "uncommon",
       "prefabPath": "gear/weapon/Bow2h_09",
       "generated": true,
-      "manual": false,
+      "manual": true,
       "loadVia": "addressable",
-      "damageMult": 1.0,
+      "damageMult": 1.25,
       "req": {
-        "level": 1
+        "level": 3
       },
       "buyWood": 20,
       "buyFood": 20,
@@ -2144,21 +2158,21 @@
     },
     {
       "id": "blink_bow2h_13",
-      "name": "Bow2h 13 (Blink)",
+      "name": "Thicketwarden Recurve",
       "icon": "🏹",
       "kind": "Weapon",
       "category": "bow",
       "job": "ranger",
       "hand": "2h",
       "damageType": "ranged",
-      "rarity": "common",
+      "rarity": "uncommon",
       "prefabPath": "gear/weapon/Bow2h_13",
       "generated": true,
-      "manual": false,
+      "manual": true,
       "loadVia": "addressable",
-      "damageMult": 1.0,
+      "damageMult": 1.25,
       "req": {
-        "level": 1
+        "level": 3
       },
       "buyWood": 20,
       "buyFood": 20,
@@ -2240,21 +2254,21 @@
     },
     {
       "id": "blink_bow2h_17",
-      "name": "Bow2h 17 (Blink)",
+      "name": "Longwatch Bow",
       "icon": "🏹",
       "kind": "Weapon",
       "category": "bow",
       "job": "ranger",
       "hand": "2h",
       "damageType": "ranged",
-      "rarity": "common",
+      "rarity": "uncommon",
       "prefabPath": "gear/weapon/Bow2h_17",
       "generated": true,
-      "manual": false,
+      "manual": true,
       "loadVia": "addressable",
-      "damageMult": 1.0,
+      "damageMult": 1.25,
       "req": {
-        "level": 1
+        "level": 3
       },
       "buyWood": 20,
       "buyFood": 20,
@@ -2264,99 +2278,107 @@
     },
     {
       "id": "blink_bow2h_18",
-      "name": "Bow2h 18 (Blink)",
+      "name": "Glade Longbow",
       "icon": "🏹",
       "kind": "Weapon",
       "category": "bow",
       "job": "ranger",
       "hand": "2h",
       "damageType": "ranged",
-      "rarity": "common",
+      "rarity": "rare",
       "prefabPath": "gear/weapon/Bow2h_18",
       "generated": true,
-      "manual": false,
+      "manual": true,
       "loadVia": "addressable",
-      "damageMult": 1.0,
+      "damageMult": 1.6,
       "req": {
-        "level": 1
+        "level": 6
       },
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
       "buyCrystals": 0,
-      "iconPath": "ItemIcons/blink_bow2h_18"
+      "iconPath": "ItemIcons/blink_bow2h_18",
+      "makersMark": "Heartwood",
+      "flavor": "Heartwood-marked; the stave is living wood and it leans into the loose."
     },
     {
       "id": "blink_bow2h_19",
-      "name": "Bow2h 19 (Blink)",
+      "name": "Leafsong Recurve",
       "icon": "🏹",
       "kind": "Weapon",
       "category": "bow",
       "job": "ranger",
       "hand": "2h",
       "damageType": "ranged",
-      "rarity": "common",
+      "rarity": "rare",
       "prefabPath": "gear/weapon/Bow2h_19",
       "generated": true,
-      "manual": false,
+      "manual": true,
       "loadVia": "addressable",
-      "damageMult": 1.0,
+      "damageMult": 1.6,
       "req": {
-        "level": 1
+        "level": 6
       },
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
       "buyCrystals": 0,
-      "iconPath": "ItemIcons/blink_bow2h_19"
+      "iconPath": "ItemIcons/blink_bow2h_19",
+      "makersMark": "Heartwood",
+      "flavor": "Heartwood-marked; the stave is living wood and it leans into the loose."
     },
     {
       "id": "blink_bow2h_20",
-      "name": "Bow2h 20 (Blink)",
+      "name": "Stormcopse Longbow",
       "icon": "🏹",
       "kind": "Weapon",
       "category": "bow",
       "job": "ranger",
       "hand": "2h",
       "damageType": "ranged",
-      "rarity": "common",
+      "rarity": "rare",
       "prefabPath": "gear/weapon/Bow2h_20",
       "generated": true,
-      "manual": false,
+      "manual": true,
       "loadVia": "addressable",
-      "damageMult": 1.0,
+      "damageMult": 1.6,
       "req": {
-        "level": 1
+        "level": 6
       },
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
       "buyCrystals": 0,
-      "iconPath": "ItemIcons/blink_bow2h_20"
+      "iconPath": "ItemIcons/blink_bow2h_20",
+      "makersMark": "Heartwood",
+      "flavor": "Heartwood-marked; the stave is living wood and it leans into the loose."
     },
     {
       "id": "blink_bow2h_21",
-      "name": "Bow2h 21 (Blink)",
+      "name": "Wardenroot Bow",
       "icon": "🏹",
       "kind": "Weapon",
       "category": "bow",
       "job": "ranger",
       "hand": "2h",
       "damageType": "ranged",
-      "rarity": "common",
+      "rarity": "rare",
       "prefabPath": "gear/weapon/Bow2h_21",
       "generated": true,
-      "manual": false,
+      "manual": true,
       "loadVia": "addressable",
-      "damageMult": 1.0,
+      "damageMult": 1.6,
       "req": {
-        "level": 1
+        "level": 6
       },
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
       "buyCrystals": 0,
-      "iconPath": "ItemIcons/blink_bow2h_21"
+      "iconPath": "ItemIcons/blink_bow2h_21",
+      "makersMark": "Heartwood",
+      "flavor": "Heartwood-marked; the stave is living wood and it leans into the loose."
     },
     {
       "id": "blink_bow2h_22",
@@ -2384,75 +2406,81 @@
     },
     {
       "id": "blink_bow2h_23",
-      "name": "Bow2h 23 (Blink)",
+      "name": "Eclipse Heartbow",
       "icon": "🏹",
       "kind": "Weapon",
       "category": "bow",
       "job": "ranger",
       "hand": "2h",
       "damageType": "ranged",
-      "rarity": "common",
+      "rarity": "epic",
       "prefabPath": "gear/weapon/Bow2h_23",
       "generated": true,
-      "manual": false,
+      "manual": true,
       "loadVia": "addressable",
-      "damageMult": 1.0,
+      "damageMult": 2.1,
       "req": {
-        "level": 1
+        "level": 10
       },
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
       "buyCrystals": 0,
-      "iconPath": "ItemIcons/blink_bow2h_23"
+      "iconPath": "ItemIcons/blink_bow2h_23",
+      "makersMark": "Heartwood",
+      "flavor": "Heartwood at its oldest - the shot remembers the last thing it struck."
     },
     {
       "id": "blink_bow2h_24",
-      "name": "Bow2h 24 (Blink)",
+      "name": "Heartwood Sentinel Longbow",
       "icon": "🏹",
       "kind": "Weapon",
       "category": "bow",
       "job": "ranger",
       "hand": "2h",
       "damageType": "ranged",
-      "rarity": "common",
+      "rarity": "epic",
       "prefabPath": "gear/weapon/Bow2h_24",
       "generated": true,
-      "manual": false,
+      "manual": true,
       "loadVia": "addressable",
-      "damageMult": 1.0,
+      "damageMult": 2.1,
       "req": {
-        "level": 1
+        "level": 10
       },
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
       "buyCrystals": 0,
-      "iconPath": "ItemIcons/blink_bow2h_24"
+      "iconPath": "ItemIcons/blink_bow2h_24",
+      "makersMark": "Heartwood",
+      "flavor": "Heartwood at its oldest - the shot remembers the last thing it struck."
     },
     {
       "id": "blink_bow2h_25",
-      "name": "Bow2h 25 (Blink)",
+      "name": "Thornsong Warbow",
       "icon": "🏹",
       "kind": "Weapon",
       "category": "bow",
       "job": "ranger",
       "hand": "2h",
       "damageType": "ranged",
-      "rarity": "common",
+      "rarity": "epic",
       "prefabPath": "gear/weapon/Bow2h_25",
       "generated": true,
-      "manual": false,
+      "manual": true,
       "loadVia": "addressable",
-      "damageMult": 1.0,
+      "damageMult": 2.1,
       "req": {
-        "level": 1
+        "level": 10
       },
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
       "buyCrystals": 0,
-      "iconPath": "ItemIcons/blink_bow2h_25"
+      "iconPath": "ItemIcons/blink_bow2h_25",
+      "makersMark": "Heartwood",
+      "flavor": "Heartwood at its oldest - the shot remembers the last thing it struck."
     },
     {
       "id": "blink_claws1h_01",
@@ -6890,7 +6918,7 @@
     },
     {
       "id": "blink_shield1h_04",
-      "name": "Shield1h 04 (Blink)",
+      "name": "Oakband Heater",
       "icon": "🛡",
       "kind": "Weapon",
       "category": "shield",
@@ -6901,7 +6929,7 @@
       "defense": 0.04,
       "prefabPath": "gear/weapon/Shield1h_04",
       "generated": true,
-      "manual": false,
+      "manual": true,
       "loadVia": "addressable",
       "damageMult": 1.0,
       "reach": 0.0,
@@ -6916,7 +6944,7 @@
     },
     {
       "id": "blink_shield1h_05",
-      "name": "Shield1h 05 (Blink)",
+      "name": "Levy Buckler",
       "icon": "🛡",
       "kind": "Weapon",
       "category": "shield",
@@ -6927,7 +6955,7 @@
       "defense": 0.04,
       "prefabPath": "gear/weapon/Shield1h_05",
       "generated": true,
-      "manual": false,
+      "manual": true,
       "loadVia": "addressable",
       "damageMult": 1.0,
       "reach": 0.0,
@@ -6942,7 +6970,7 @@
     },
     {
       "id": "blink_shield1h_06",
-      "name": "Shield1h 06 (Blink)",
+      "name": "Banded Roundshield",
       "icon": "🛡",
       "kind": "Weapon",
       "category": "shield",
@@ -6953,7 +6981,7 @@
       "defense": 0.04,
       "prefabPath": "gear/weapon/Shield1h_06",
       "generated": true,
-      "manual": false,
+      "manual": true,
       "loadVia": "addressable",
       "damageMult": 1.0,
       "reach": 0.0,
@@ -6968,7 +6996,7 @@
     },
     {
       "id": "blink_shield1h_07",
-      "name": "Shield1h 07 (Blink)",
+      "name": "Watchman's Targe",
       "icon": "🛡",
       "kind": "Weapon",
       "category": "shield",
@@ -6979,7 +7007,7 @@
       "defense": 0.04,
       "prefabPath": "gear/weapon/Shield1h_07",
       "generated": true,
-      "manual": false,
+      "manual": true,
       "loadVia": "addressable",
       "damageMult": 1.0,
       "reach": 0.0,
@@ -6994,7 +7022,7 @@
     },
     {
       "id": "blink_shield1h_08",
-      "name": "Shield1h 08 (Blink)",
+      "name": "Plank Heater",
       "icon": "🛡",
       "kind": "Weapon",
       "category": "shield",
@@ -7005,7 +7033,7 @@
       "defense": 0.04,
       "prefabPath": "gear/weapon/Shield1h_08",
       "generated": true,
-      "manual": false,
+      "manual": true,
       "loadVia": "addressable",
       "damageMult": 1.0,
       "reach": 0.0,
@@ -7020,7 +7048,7 @@
     },
     {
       "id": "blink_shield1h_09",
-      "name": "Shield1h 09 (Blink)",
+      "name": "Militia Buckler",
       "icon": "🛡",
       "kind": "Weapon",
       "category": "shield",
@@ -7031,7 +7059,7 @@
       "defense": 0.04,
       "prefabPath": "gear/weapon/Shield1h_09",
       "generated": true,
-      "manual": false,
+      "manual": true,
       "loadVia": "addressable",
       "damageMult": 1.0,
       "reach": 0.0,
@@ -7098,7 +7126,7 @@
     },
     {
       "id": "blink_shield1h_12",
-      "name": "Shield1h 12 (Blink)",
+      "name": "Garrison Kiteshield",
       "icon": "🛡",
       "kind": "Weapon",
       "category": "shield",
@@ -7109,7 +7137,7 @@
       "defense": 0.06,
       "prefabPath": "gear/weapon/Shield1h_12",
       "generated": true,
-      "manual": false,
+      "manual": true,
       "loadVia": "addressable",
       "damageMult": 1.0,
       "reach": 0.0,
@@ -7176,7 +7204,7 @@
     },
     {
       "id": "blink_shield1h_15",
-      "name": "Shield1h 15 (Blink)",
+      "name": "Bastion Targe",
       "icon": "🛡",
       "kind": "Weapon",
       "category": "shield",
@@ -7187,7 +7215,7 @@
       "defense": 0.06,
       "prefabPath": "gear/weapon/Shield1h_15",
       "generated": true,
-      "manual": false,
+      "manual": true,
       "loadVia": "addressable",
       "damageMult": 1.0,
       "reach": 0.0,
@@ -7202,7 +7230,7 @@
     },
     {
       "id": "blink_shield1h_16",
-      "name": "Shield1h 16 (Blink)",
+      "name": "Oathweld Wardshield",
       "icon": "🛡",
       "kind": "Weapon",
       "category": "shield",
@@ -7213,7 +7241,7 @@
       "defense": 0.09,
       "prefabPath": "gear/weapon/Shield1h_16",
       "generated": true,
-      "manual": false,
+      "manual": true,
       "loadVia": "addressable",
       "damageMult": 1.0,
       "reach": 0.0,
@@ -7224,7 +7252,9 @@
       "buyFood": 20,
       "buyIron": 20,
       "buyCrystals": 0,
-      "iconPath": "ItemIcons/blink_shield1h_16"
+      "iconPath": "ItemIcons/blink_shield1h_16",
+      "makersMark": "Oathweld",
+      "flavor": "Oathweld-bound; it turns a sliver of the blow back as Heart-ward."
     },
     {
       "id": "blink_shield1h_17",
@@ -7254,7 +7284,7 @@
     },
     {
       "id": "blink_shield1h_18",
-      "name": "Shield1h 18 (Blink)",
+      "name": "Vigil Kiteshield",
       "icon": "🛡",
       "kind": "Weapon",
       "category": "shield",
@@ -7265,7 +7295,7 @@
       "defense": 0.09,
       "prefabPath": "gear/weapon/Shield1h_18",
       "generated": true,
-      "manual": false,
+      "manual": true,
       "loadVia": "addressable",
       "damageMult": 1.0,
       "reach": 0.0,
@@ -7276,11 +7306,13 @@
       "buyFood": 20,
       "buyIron": 20,
       "buyCrystals": 0,
-      "iconPath": "ItemIcons/blink_shield1h_18"
+      "iconPath": "ItemIcons/blink_shield1h_18",
+      "makersMark": "Oathweld",
+      "flavor": "Oathweld-bound; it turns a sliver of the blow back as Heart-ward."
     },
     {
       "id": "blink_shield1h_19",
-      "name": "Shield1h 19 (Blink)",
+      "name": "Emberwatch Bulwark",
       "icon": "🛡",
       "kind": "Weapon",
       "category": "shield",
@@ -7291,7 +7323,7 @@
       "defense": 0.09,
       "prefabPath": "gear/weapon/Shield1h_19",
       "generated": true,
-      "manual": false,
+      "manual": true,
       "loadVia": "addressable",
       "damageMult": 1.0,
       "reach": 0.0,
@@ -7302,11 +7334,13 @@
       "buyFood": 20,
       "buyIron": 20,
       "buyCrystals": 0,
-      "iconPath": "ItemIcons/blink_shield1h_19"
+      "iconPath": "ItemIcons/blink_shield1h_19",
+      "makersMark": "Oathweld",
+      "flavor": "Oathweld-bound; it turns a sliver of the blow back as Heart-ward."
     },
     {
       "id": "blink_shield1h_20",
-      "name": "Shield1h 20 (Blink)",
+      "name": "Heartguard Kiteshield",
       "icon": "🛡",
       "kind": "Weapon",
       "category": "shield",
@@ -7317,7 +7351,7 @@
       "defense": 0.09,
       "prefabPath": "gear/weapon/Shield1h_20",
       "generated": true,
-      "manual": false,
+      "manual": true,
       "loadVia": "addressable",
       "damageMult": 1.0,
       "reach": 0.0,
@@ -7328,11 +7362,13 @@
       "buyFood": 20,
       "buyIron": 20,
       "buyCrystals": 0,
-      "iconPath": "ItemIcons/blink_shield1h_20"
+      "iconPath": "ItemIcons/blink_shield1h_20",
+      "makersMark": "Oathweld",
+      "flavor": "Oathweld-bound; it turns a sliver of the blow back as Heart-ward."
     },
     {
       "id": "blink_shield1h_21",
-      "name": "Shield1h 21 (Blink)",
+      "name": "Oathbound Tower Shield",
       "icon": "🛡",
       "kind": "Weapon",
       "category": "shield",
@@ -7343,7 +7379,7 @@
       "defense": 0.09,
       "prefabPath": "gear/weapon/Shield1h_21",
       "generated": true,
-      "manual": false,
+      "manual": true,
       "loadVia": "addressable",
       "damageMult": 1.0,
       "reach": 0.0,
@@ -7354,7 +7390,9 @@
       "buyFood": 20,
       "buyIron": 20,
       "buyCrystals": 0,
-      "iconPath": "ItemIcons/blink_shield1h_21"
+      "iconPath": "ItemIcons/blink_shield1h_21",
+      "makersMark": "Oathweld",
+      "flavor": "Oathweld-bound; it turns a sliver of the blow back as Heart-ward."
     },
     {
       "id": "blink_shield1h_22",
@@ -7410,7 +7448,7 @@
     },
     {
       "id": "blink_shield1h_24",
-      "name": "Shield1h 24 (Blink)",
+      "name": "Oathweld Bastion Wall",
       "icon": "🛡",
       "kind": "Weapon",
       "category": "shield",
@@ -7421,7 +7459,7 @@
       "defense": 0.13,
       "prefabPath": "gear/weapon/Shield1h_24",
       "generated": true,
-      "manual": false,
+      "manual": true,
       "loadVia": "addressable",
       "damageMult": 1.0,
       "reach": 0.0,
@@ -7432,11 +7470,13 @@
       "buyFood": 20,
       "buyIron": 20,
       "buyCrystals": 0,
-      "iconPath": "ItemIcons/blink_shield1h_24"
+      "iconPath": "ItemIcons/blink_shield1h_24",
+      "makersMark": "Oathweld",
+      "flavor": "Oathweld plating; a block leaves a shimmer in the air where the wall stood."
     },
     {
       "id": "blink_shield1h_25",
-      "name": "Shield1h 25 (Blink)",
+      "name": "Dawnward Bulwark",
       "icon": "🛡",
       "kind": "Weapon",
       "category": "shield",
@@ -7447,7 +7487,7 @@
       "defense": 0.13,
       "prefabPath": "gear/weapon/Shield1h_25",
       "generated": true,
-      "manual": false,
+      "manual": true,
       "loadVia": "addressable",
       "damageMult": 1.0,
       "reach": 0.0,
@@ -7458,7 +7498,9 @@
       "buyFood": 20,
       "buyIron": 20,
       "buyCrystals": 0,
-      "iconPath": "ItemIcons/blink_shield1h_25"
+      "iconPath": "ItemIcons/blink_shield1h_25",
+      "makersMark": "Oathweld",
+      "flavor": "Oathweld plating; a block leaves a shimmer in the air where the wall stood."
     },
     {
       "id": "blink_spellbook1h_01",
@@ -8817,7 +8859,7 @@
     },
     {
       "id": "blink_sword1h_07",
-      "name": "Sword1h 07 (Blink)",
+      "name": "Levy Blade",
       "icon": "🗡",
       "kind": "Weapon",
       "category": "sword",
@@ -8827,10 +8869,10 @@
       "rarity": "common",
       "prefabPath": "gear/weapon/Sword1h_07",
       "generated": true,
-      "manual": false,
+      "manual": true,
       "loadVia": "addressable",
       "damageMult": 1.0,
-      "reach": 0.0,
+      "reach": 2.8,
       "req": {
         "level": 1
       },
@@ -8892,7 +8934,7 @@
     },
     {
       "id": "blink_sword1h_10",
-      "name": "Sword1h 10 (Blink)",
+      "name": "Watchman's Arming Sword",
       "icon": "🗡",
       "kind": "Weapon",
       "category": "sword",
@@ -8902,10 +8944,10 @@
       "rarity": "common",
       "prefabPath": "gear/weapon/Sword1h_10",
       "generated": true,
-      "manual": false,
+      "manual": true,
       "loadVia": "addressable",
       "damageMult": 1.0,
-      "reach": 0.0,
+      "reach": 2.8,
       "req": {
         "level": 1
       },
@@ -8917,22 +8959,22 @@
     },
     {
       "id": "blink_sword1h_11",
-      "name": "Sword1h 11 (Blink)",
+      "name": "Ashford Arming Sword",
       "icon": "🗡",
       "kind": "Weapon",
       "category": "sword",
       "job": "knight",
       "hand": "1h",
       "damageType": "melee",
-      "rarity": "common",
+      "rarity": "uncommon",
       "prefabPath": "gear/weapon/Sword1h_11",
       "generated": true,
-      "manual": false,
+      "manual": true,
       "loadVia": "addressable",
-      "damageMult": 1.0,
-      "reach": 0.0,
+      "damageMult": 1.25,
+      "reach": 3.4,
       "req": {
-        "level": 1
+        "level": 3
       },
       "buyWood": 20,
       "buyFood": 20,
@@ -8942,22 +8984,22 @@
     },
     {
       "id": "blink_sword1h_12",
-      "name": "Sword1h 12 (Blink)",
+      "name": "Bastion Sideblade",
       "icon": "🗡",
       "kind": "Weapon",
       "category": "sword",
       "job": "knight",
       "hand": "1h",
       "damageType": "melee",
-      "rarity": "common",
+      "rarity": "uncommon",
       "prefabPath": "gear/weapon/Sword1h_12",
       "generated": true,
-      "manual": false,
+      "manual": true,
       "loadVia": "addressable",
-      "damageMult": 1.0,
-      "reach": 0.0,
+      "damageMult": 1.25,
+      "reach": 3.4,
       "req": {
-        "level": 1
+        "level": 3
       },
       "buyWood": 20,
       "buyFood": 20,
@@ -8992,28 +9034,30 @@
     },
     {
       "id": "blink_sword1h_14",
-      "name": "Sword1h 14 (Blink)",
+      "name": "Emberhand Vigil",
       "icon": "🗡",
       "kind": "Weapon",
       "category": "sword",
       "job": "knight",
       "hand": "1h",
       "damageType": "melee",
-      "rarity": "common",
+      "rarity": "rare",
       "prefabPath": "gear/weapon/Sword1h_14",
       "generated": true,
-      "manual": false,
+      "manual": true,
       "loadVia": "addressable",
-      "damageMult": 1.0,
-      "reach": 0.0,
+      "damageMult": 1.6,
+      "reach": 4.0,
       "req": {
-        "level": 1
+        "level": 6
       },
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
       "buyCrystals": 0,
-      "iconPath": "ItemIcons/blink_sword1h_14"
+      "iconPath": "ItemIcons/blink_sword1h_14",
+      "makersMark": "Emberhand",
+      "flavor": "Emberhand-marked steel; the fold still shows where the ember took."
     },
     {
       "id": "blink_sword1h_15",
@@ -9042,28 +9086,30 @@
     },
     {
       "id": "blink_sword1h_16",
-      "name": "Sword1h 16 (Blink)",
+      "name": "Cinderguard Blade",
       "icon": "🗡",
       "kind": "Weapon",
       "category": "sword",
       "job": "knight",
       "hand": "1h",
       "damageType": "melee",
-      "rarity": "common",
+      "rarity": "rare",
       "prefabPath": "gear/weapon/Sword1h_16",
       "generated": true,
-      "manual": false,
+      "manual": true,
       "loadVia": "addressable",
-      "damageMult": 1.0,
-      "reach": 0.0,
+      "damageMult": 1.6,
+      "reach": 4.0,
       "req": {
-        "level": 1
+        "level": 6
       },
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
       "buyCrystals": 0,
-      "iconPath": "ItemIcons/blink_sword1h_16"
+      "iconPath": "ItemIcons/blink_sword1h_16",
+      "makersMark": "Emberhand",
+      "flavor": "Emberhand-marked steel; the fold still shows where the ember took."
     },
     {
       "id": "blink_sword1h_17",
@@ -9167,53 +9213,57 @@
     },
     {
       "id": "blink_sword1h_21",
-      "name": "Sword1h 21 (Blink)",
+      "name": "Dawnward Edge",
       "icon": "🗡",
       "kind": "Weapon",
       "category": "sword",
       "job": "knight",
       "hand": "1h",
       "damageType": "melee",
-      "rarity": "common",
+      "rarity": "epic",
       "prefabPath": "gear/weapon/Sword1h_21",
       "generated": true,
-      "manual": false,
+      "manual": true,
       "loadVia": "addressable",
-      "damageMult": 1.0,
-      "reach": 0.0,
+      "damageMult": 2.1,
+      "reach": 4.6,
       "req": {
-        "level": 1
+        "level": 10
       },
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
       "buyCrystals": 0,
-      "iconPath": "ItemIcons/blink_sword1h_21"
+      "iconPath": "ItemIcons/blink_sword1h_21",
+      "makersMark": "Emberhand",
+      "flavor": "Emberhand work at its height - dawn-light runs the fuller when it bites."
     },
     {
       "id": "blink_sword1h_22",
-      "name": "Sword1h 22 (Blink)",
+      "name": "Emberhand Reliquary Blade",
       "icon": "🗡",
       "kind": "Weapon",
       "category": "sword",
       "job": "knight",
       "hand": "1h",
       "damageType": "melee",
-      "rarity": "common",
+      "rarity": "epic",
       "prefabPath": "gear/weapon/Sword1h_22",
       "generated": true,
-      "manual": false,
+      "manual": true,
       "loadVia": "addressable",
-      "damageMult": 1.0,
-      "reach": 0.0,
+      "damageMult": 2.1,
+      "reach": 4.6,
       "req": {
-        "level": 1
+        "level": 10
       },
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
       "buyCrystals": 0,
-      "iconPath": "ItemIcons/blink_sword1h_22"
+      "iconPath": "ItemIcons/blink_sword1h_22",
+      "makersMark": "Emberhand",
+      "flavor": "Emberhand work at its height - dawn-light runs the fuller when it bites."
     },
     {
       "id": "blink_sword1h_23",
@@ -9292,7 +9342,7 @@
     },
     {
       "id": "blink_sword2h_01",
-      "name": "Sword2h 01 (Blink)",
+      "name": "Field Greatsword",
       "icon": "🗡",
       "kind": "Weapon",
       "category": "sword",
@@ -9302,7 +9352,7 @@
       "rarity": "common",
       "prefabPath": "gear/weapon/Sword2h_01",
       "generated": true,
-      "manual": false,
+      "manual": true,
       "loadVia": "addressable",
       "damageMult": 1.0,
       "reach": 0.0,
@@ -9492,7 +9542,7 @@
     },
     {
       "id": "blink_sword2h_09",
-      "name": "Sword2h 09 (Blink)",
+      "name": "Militia Longblade",
       "icon": "🗡",
       "kind": "Weapon",
       "category": "sword",
@@ -9502,7 +9552,7 @@
       "rarity": "common",
       "prefabPath": "gear/weapon/Sword2h_09",
       "generated": true,
-      "manual": false,
+      "manual": true,
       "loadVia": "addressable",
       "damageMult": 1.0,
       "reach": 0.0,
@@ -9517,22 +9567,22 @@
     },
     {
       "id": "blink_sword2h_10",
-      "name": "Sword2h 10 (Blink)",
+      "name": "Ironwood Greatsword",
       "icon": "🗡",
       "kind": "Weapon",
       "category": "sword",
       "job": "knight",
       "hand": "2h",
       "damageType": "melee",
-      "rarity": "common",
+      "rarity": "uncommon",
       "prefabPath": "gear/weapon/Sword2h_10",
       "generated": true,
-      "manual": false,
+      "manual": true,
       "loadVia": "addressable",
-      "damageMult": 1.0,
+      "damageMult": 1.25,
       "reach": 0.0,
       "req": {
-        "level": 1
+        "level": 3
       },
       "buyWood": 20,
       "buyFood": 20,
@@ -9817,22 +9867,22 @@
     },
     {
       "id": "blink_sword2h_22",
-      "name": "Sword2h 22 (Blink)",
+      "name": "Bulwark Claymore",
       "icon": "🗡",
       "kind": "Weapon",
       "category": "sword",
       "job": "knight",
       "hand": "2h",
       "damageType": "melee",
-      "rarity": "common",
+      "rarity": "uncommon",
       "prefabPath": "gear/weapon/Sword2h_22",
       "generated": true,
-      "manual": false,
+      "manual": true,
       "loadVia": "addressable",
-      "damageMult": 1.0,
+      "damageMult": 1.25,
       "reach": 0.0,
       "req": {
-        "level": 1
+        "level": 3
       },
       "buyWood": 20,
       "buyFood": 20,
@@ -9867,53 +9917,57 @@
     },
     {
       "id": "blink_sword2h_24",
-      "name": "Sword2h 24 (Blink)",
+      "name": "Emberfall Greatsword",
       "icon": "🗡",
       "kind": "Weapon",
       "category": "sword",
       "job": "knight",
       "hand": "2h",
       "damageType": "melee",
-      "rarity": "common",
+      "rarity": "rare",
       "prefabPath": "gear/weapon/Sword2h_24",
       "generated": true,
-      "manual": false,
+      "manual": true,
       "loadVia": "addressable",
-      "damageMult": 1.0,
+      "damageMult": 1.6,
       "reach": 0.0,
       "req": {
-        "level": 1
+        "level": 6
       },
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
       "buyCrystals": 0,
-      "iconPath": "ItemIcons/blink_sword2h_24"
+      "iconPath": "ItemIcons/blink_sword2h_24",
+      "makersMark": "Emberhand",
+      "flavor": "Emberhand-marked steel; the fold still shows where the ember took."
     },
     {
       "id": "blink_sword2h_25",
-      "name": "Sword2h 25 (Blink)",
+      "name": "Dawnbreak Warblade",
       "icon": "🗡",
       "kind": "Weapon",
       "category": "sword",
       "job": "knight",
       "hand": "2h",
       "damageType": "melee",
-      "rarity": "common",
+      "rarity": "epic",
       "prefabPath": "gear/weapon/Sword2h_25",
       "generated": true,
-      "manual": false,
+      "manual": true,
       "loadVia": "addressable",
-      "damageMult": 1.0,
+      "damageMult": 2.1,
       "reach": 0.0,
       "req": {
-        "level": 1
+        "level": 10
       },
       "buyWood": 20,
       "buyFood": 20,
       "buyIron": 20,
       "buyCrystals": 0,
-      "iconPath": "ItemIcons/blink_sword2h_25"
+      "iconPath": "ItemIcons/blink_sword2h_25",
+      "makersMark": "Emberhand",
+      "flavor": "Emberhand work at its height - dawn-light runs the fuller when it bites."
     },
     {
       "id": "blink_wand1h_01",
@@ -10531,6 +10585,94 @@
       "buyIron": 120,
       "makersMark": "Emberhand",
       "flavor": "Quenched in ember-oil at the Emberhand forge, its edge wakes to fire when it bites. A cheap early brand a warden can carry to SEE what an elemental edge does."
+    },
+    {
+      "id": "tripo_bow_a",
+      "name": "Bow A (Tripo)",
+      "icon": "🏹",
+      "kind": "Weapon",
+      "category": "bow",
+      "job": "ranger",
+      "hand": "2h",
+      "damageType": "ranged",
+      "rarity": "common",
+      "prefabPath": "Heroes/Props/Weapons/bow_A",
+      "generated": true,
+      "manual": false,
+      "damageMult": 1.0,
+      "req": {
+        "level": 1
+      },
+      "buyWood": 20,
+      "buyFood": 20,
+      "buyIron": 20,
+      "buyCrystals": 0
+    },
+    {
+      "id": "tripo_bow_b",
+      "name": "Bow B (Tripo)",
+      "icon": "🏹",
+      "kind": "Weapon",
+      "category": "bow",
+      "job": "ranger",
+      "hand": "2h",
+      "damageType": "ranged",
+      "rarity": "common",
+      "prefabPath": "Heroes/Props/Weapons/bow_B",
+      "generated": true,
+      "manual": false,
+      "damageMult": 1.0,
+      "req": {
+        "level": 1
+      },
+      "buyWood": 20,
+      "buyFood": 20,
+      "buyIron": 20,
+      "buyCrystals": 0
+    },
+    {
+      "id": "tripo_bow_c",
+      "name": "Bow C (Tripo)",
+      "icon": "🏹",
+      "kind": "Weapon",
+      "category": "bow",
+      "job": "ranger",
+      "hand": "2h",
+      "damageType": "ranged",
+      "rarity": "common",
+      "prefabPath": "Heroes/Props/Weapons/bow_C",
+      "generated": true,
+      "manual": false,
+      "damageMult": 1.0,
+      "req": {
+        "level": 1
+      },
+      "buyWood": 20,
+      "buyFood": 20,
+      "buyIron": 20,
+      "buyCrystals": 0
+    },
+    {
+      "id": "tripo_wand_a",
+      "name": "Wand A (Tripo)",
+      "icon": "🪄",
+      "kind": "Weapon",
+      "category": "wand",
+      "job": "mage",
+      "hand": "1h",
+      "damageType": "magic",
+      "rarity": "common",
+      "prefabPath": "Heroes/Props/Weapons/wand_A",
+      "generated": true,
+      "manual": false,
+      "damageMult": 1.0,
+      "req": {
+        "level": 1
+      },
+      "buyWood": 20,
+      "buyFood": 20,
+      "buyIron": 20,
+      "buyCrystals": 0
     }
   ]
 }
