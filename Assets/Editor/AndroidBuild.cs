@@ -102,6 +102,11 @@ namespace DeNelle.Editor
                 options = BuildOptions.None,
             };
 
+            // WO-974: build Addressables content EXPLICITLY. Without this the bundles are rebuilt
+            // only if an uncommitted per-machine Editor preference happens to say so — so a fresh
+            // clone or CI ships stale/absent StreamingAssets/aa and resolves nothing at runtime.
+            AddressablesContentBuild.EnsureBuilt("AndroidBuild");
+
             BuildReport report = BuildPipeline.BuildPlayer(options);
             BuildSummary summary = report.summary;
 

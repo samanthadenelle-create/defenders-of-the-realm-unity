@@ -72,6 +72,9 @@ namespace DeNelle.Editor
             };
 
             Debug.Log($"[DesktopBuild] WebGL build -> {dir} ({scenes.Length} scenes). This can take many minutes.");
+            // WO-974: build Addressables content EXPLICITLY (see AddressablesContentBuild).
+            AddressablesContentBuild.EnsureBuilt("DesktopBuild.WebGL");
+
             BuildReport webReport = BuildPipeline.BuildPlayer(options);
             BuildSummary webSummary = webReport.summary;
 
@@ -237,6 +240,9 @@ namespace DeNelle.Editor
                 // flip could not achieve either.
                 options = development ? BuildOptions.Development : BuildOptions.None,
             };
+
+            // WO-974: build Addressables content EXPLICITLY (see AddressablesContentBuild).
+            AddressablesContentBuild.EnsureBuilt("DesktopBuild.Windows");
 
             BuildReport report = BuildPipeline.BuildPlayer(options);
             BuildSummary summary = report.summary;
