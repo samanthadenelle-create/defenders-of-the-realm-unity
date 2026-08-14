@@ -481,8 +481,11 @@ namespace DeNelle.Dungeons
 
             if (DungeonStickBasis == StickBasis.KeeperRelative)
             {
-                // The root carries FaceHeading's -90 model offset, so the VISUAL forward is the
-                // root forward rotated back by +90.
+                // ⚠ STALE AS OF 2026-08-14 — this branch is DEAD (DungeonStickBasis is
+                // CameraRelative) and its premise is now false: FaceHeading no longer applies a
+                // -90 model offset, so the root forward IS the visual forward and this +90 would
+                // over-rotate. If KeeperRelative is ever switched on, ModelYawOffset must go to 0
+                // or be derived — do not resurrect this branch as written.
                 Quaternion visual = transform.rotation * Quaternion.Euler(0f, ModelYawOffset, 0f);
                 fwd = Vector3.ProjectOnPlane(visual * Vector3.forward, Vector3.up);
                 right = Vector3.ProjectOnPlane(visual * Vector3.right, Vector3.up);
@@ -703,9 +706,24 @@ namespace DeNelle.Dungeons
             heading.y = 0f;
             if (heading.sqrMagnitude < 0.0025f) return;
 
-            // DEF-7: Tripo FBX exports have a 90° model offset — same fix as HeroLocomotion.cs
-            Quaternion target = Quaternion.LookRotation(heading, Vector3.up)
-                                * Quaternion.Euler(0f, -90f, 0f);
+            // ⛔ THE -90 IS REMOVED — owner report 2026-08-14: "rotation of hero off. Facing left
+            // always so 90 degrees." It was a DOUBLE CORRECTION, and the comment that justified it
+            // was false.
+            //
+            // It read: "DEF-7: Tripo FBX exports have a 90° model offset — same fix as
+            // HeroLocomotion.cs". HeroLocomotion does NOT do this: a sweep for Euler(0f, ±90) in
+            // that file returns ZERO hits; town writes rotation straight from the heading
+            // (HeroLocomotion.cs:232 / :1063). So the dungeon was the only place applying it.
+            //
+            // The model offset is already owned, PER CLASS, by HeroBodySwapper.cs:263 —
+            // `forwardYaw = (cls == HeroClass.Knight) ? 15f : -90f` — applied to the body root at
+            // swap time. Adding another -90 here rotated the whole rig on top of a body that was
+            // already correct, which is exactly the reported 90° left-facing on KnightV3 (whose
+            // body yaw is 15f, not -90f — the -90 premise belongs to the RETIRED Tripo body).
+            //
+            // Now: face the heading, and let the body's own convention do the model correction.
+            // One owner per concern (ARCHITECTURE_PRINCIPLES §2b.1).
+            Quaternion target = Quaternion.LookRotation(heading, Vector3.up);
             transform.rotation = Quaternion.RotateTowards(
                 transform.rotation, target, _turnSpeed * Time.deltaTime);
         }

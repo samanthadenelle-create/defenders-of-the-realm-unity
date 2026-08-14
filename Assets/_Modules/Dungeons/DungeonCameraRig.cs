@@ -49,15 +49,36 @@
 //   - Iso (ff.dungeoniso)     - the legacy CinemachineFollow top-down chase, kept
 //                               verbatim for an A/B against the old look.
 //
-// -- Why a heading-corrected PIVOT (the load-bearing gotcha) --
-// DungeonHero.FaceHeading sets transform.rotation = LookRotation(heading) *
-// Euler(0,-90,0) - the Tripo FBX carries a 90 deg model-yaw offset, so the hero
-// TRANSFORM's forward is 90 deg off the VISUAL forward. ThirdPersonFollow frames
-// behind Follow.rotation, so pointing it straight at the hero transform would seat
-// the camera at the Keeper's SIDE, not behind. We therefore Follow a child pivot
-// parented to the hero with a constant local yaw (_headingYawOffset, default +90)
-// that UNDOES the FBX offset - pivot.forward == the Keeper's visual heading. If a
-// dungeon ever ships a hero rig with NO such offset, zero _headingYawOffset.
+// -- Why a follow PIVOT exists at all, and why it now carries ZERO yaw --
+// WHY A PIVOT: CinemachineThirdPersonFollow frames the seat behind Follow.ROTATION,
+// not behind the hero's visual mesh. So the rig needs one transform whose forward IS
+// the Keeper's visual heading, and it must track the hero every frame. That transform
+// is "DungeonOTSPivot", a child parented to the hero (see EnsurePivot). The pivot stays
+// even at zero yaw - it is also the object HealFollowTarget re-creates when the async
+// HeroBodySwapper rebuilds the hero's children out from under Follow (WO-968 F5).
+//
+// ⛔ THE +90 IS REMOVED (owner F8 seq 2328, 2026-08-14: "camera doesnt work right").
+// VERIFIED AT SOURCE TODAY: DungeonHero.FaceHeading (DungeonHero.cs:726) is now a plain
+// `Quaternion.LookRotation(heading, Vector3.up)` - **the hero TRANSFORM's forward IS the
+// visual forward.** The per-class MODEL yaw is owned in exactly ONE place,
+// HeroBodySwapper.cs:263 (`forwardYaw = (cls == HeroClass.Knight) ? 15f : -90f`), applied
+// to the BODY root at swap time - it never touches the hero root the camera follows.
+// The pivot therefore carries NO extra yaw: _headingYawOffset default is 0.
+//
+// WHAT WENT WRONG (the lesson, do not re-learn it): FaceHeading used to post-multiply
+// Euler(0,-90,0) for the retired Tripo body, and this rig's +90 existed for the SOLE
+// purpose of undoing that -90. They were a MATCHED PAIR. On 2026-08-14 the -90 was
+// removed as a double correction and the +90 was left behind, so the surviving half
+// became the whole error: 39 [Flow:DungeonCam] heartbeats in
+// docs/proof/2026-08-14-portal-scale-facing/Player.log show rigYaw - heroYaw pinned at a
+// constant ~+90 (min 77.8 / max 100.2, the spread is only damping lag) while the hero
+// translated normally - i.e. the camera sat at the Keeper's SIDE, exactly the symptom the
+// pivot was invented to prevent, now CAUSED by it.
+//
+// IF A FUTURE RIG REINTRODUCES A BODY OFFSET: it belongs in HeroBodySwapper (one owner
+// per concern, ARCHITECTURE_PRINCIPLES §2b.1), NOT here. Only re-introduce a nonzero
+// _headingYawOffset if something rotates the hero ROOT away from its visual forward, and
+// if you do, change BOTH halves in the SAME commit and say so in both files.
 //
 // -- FPV look layer (implemented 2026-07-26) --
 //   - Independent look: RIGHT-half touch-drag / desktop mouse-delta accumulate into
@@ -142,11 +163,13 @@ namespace DeNelle.Dungeons
                  "Higher = smoother/laggier. ~0.18 is a calm, non-nauseating follow.")]
         [SerializeField] private Vector3 _otsDamping = new Vector3(0.18f, 0.18f, 0.18f);
 
-        [Tooltip("Local yaw (deg) applied to the follow PIVOT so it points at the " +
-                 "Keeper's VISUAL forward, undoing DungeonHero.FaceHeading's -90 deg " +
-                 "Tripo FBX model offset. Default +90. Zero this only for a dungeon " +
-                 "hero rig that has NO model-yaw offset.")]
-        [SerializeField] private float _headingYawOffset = 90f;
+        [Tooltip("Extra local yaw (deg) on the follow PIVOT. DEFAULT 0 as of 2026-08-14 " +
+                 "(owner F8 seq 2328): DungeonHero.FaceHeading no longer applies a model " +
+                 "offset, so the hero transform's forward already IS the visual forward and " +
+                 "any nonzero value here seats the camera at the Keeper's SIDE. The per-class " +
+                 "model yaw belongs to HeroBodySwapper.cs:263, not to this rig. Set nonzero " +
+                 "ONLY for a hero whose ROOT is rotated off its visual forward.")]
+        [SerializeField] private float _headingYawOffset = 0f;
 
         [Tooltip("ThirdPersonFollow's built-in obstacle avoidance. WO-920 turns this OFF by " +
                  "default: in a tight room it pulls the camera in on the wall behind the Keeper " +
@@ -399,8 +422,11 @@ namespace DeNelle.Dungeons
                 _tpf.CameraSide = 0.5f;
 
                 // Seed the independent look from the Keeper's VISUAL forward so FPV opens
-                // looking down the corridor (transform yaw + the FBX heading offset), then
-                // the LateUpdate look layer takes over decoupled from FaceHeading.
+                // looking down the corridor. Since 2026-08-14 the transform yaw ALREADY is the
+                // visual forward and _headingYawOffset is 0, so this is the hero's yaw plus
+                // nothing; the term is kept so a rig that ever needs a root correction stays
+                // consistent with the pivot. The LateUpdate look layer then takes over,
+                // decoupled from FaceHeading.
                 _lookYaw = hero.eulerAngles.y + _headingYawOffset;
                 _lookPitch = 0f;
                 DriveFpvPivot();   // orient the pivot NOW so the immediate seat matches
@@ -449,8 +475,10 @@ namespace DeNelle.Dungeons
             }
             _pivot.SetParent(hero, worldPositionStays: false);
             _pivot.localPosition = Vector3.zero;
-            // Constant local yaw undoes the FBX model offset so pivot.forward is the
-            // Keeper's visual heading; position tracks the hero automatically.
+            // pivot.forward IS the Keeper's visual heading and position tracks the hero
+            // automatically. _headingYawOffset is 0 by default (2026-08-14) — the hero root's
+            // forward is already the visual forward; this stays a field only so a future rig
+            // with a rotated ROOT has a seam. Never re-add a body/model offset here.
             _pivot.localRotation = Quaternion.Euler(0f, _headingYawOffset, 0f);
         }
 
@@ -511,8 +539,13 @@ namespace DeNelle.Dungeons
         // Owner F8 seq 2313, verbatim: "No camera movement". What the capture PROVES:
         //   * Camera.main's yaw was a CONSTANT 180.0, dCam=0.0, across a window in which the hero
         //     both translated (-28.0,-1.8 -> -26.9,-4.7) and turned (yaw 270 -> 42).
-        //   * 180 is EXACTLY the bind-time seat: the layout spawns the Keeper at facingY=90 and
-        //     EnsurePivot stamps _headingYawOffset (+90) as the pivot's local yaw. 90 + 90 = 180.
+        //   * 180 was EXACTLY the bind-time seat AT THE TIME: the layout spawns the Keeper at
+        //     facingY=90 and EnsurePivot then stamped _headingYawOffset (+90) as the pivot's
+        //     local yaw, i.e. 90 + 90 = 180.
+        //     ⚠ THE ARITHMETIC ABOVE IS HISTORICAL, NOT CURRENT. _headingYawOffset is 0 as of
+        //     2026-08-14 (seq 2328, see the file header), so today the same spawn seats the rig
+        //     at 90 + 0 = 90. The seq-2313 REASONING is unaffected - the point was that the yaw
+        //     never CHANGED, not what its value was - but do not read 180 as the expected seat.
         //   * It is NOT the authored scene pose either — the baked Main Camera yaw is 0.
         // So the camera was framed ONCE by SeatThirdPersonImmediate on Bind and never tracked
         // again. That refutes two of the four candidates outright: Bind DID run (the camera left
@@ -718,10 +751,12 @@ namespace DeNelle.Dungeons
         // ONLY camera evidence in the whole capture was HeroGaitForensics' camYaw — which read a
         // CONSTANT 180.0 with dCam=0.0 across a window in which the hero both translated and turned.
         //
-        // 180 is not an arbitrary number: the layout spawns the Keeper at facingY=90
-        // (healers-cottage.json spawn) and EnsurePivot stamps _headingYawOffset (+90) on the pivot,
-        // so 90 + 90 = 180 is EXACTLY the pose SeatThirdPersonImmediate seats on Bind. The camera
-        // therefore appears PARKED AT ITS BIND SEAT — it was framed once and never followed again.
+        // 180 was not an arbitrary number: the layout spawns the Keeper at facingY=90
+        // (healers-cottage.json spawn) and EnsurePivot stamped _headingYawOffset (+90) on the
+        // pivot, so 90 + 90 = 180 was EXACTLY the pose SeatThirdPersonImmediate seated on Bind.
+        // The camera therefore appeared PARKED AT ITS BIND SEAT — framed once, never followed again.
+        // ⚠ HISTORICAL SUM: _headingYawOffset is 0 since 2026-08-14 (seq 2328), so the equivalent
+        // bind seat for that spawn is now 90 + 0 = 90. Recompute before comparing to a new capture.
         // What that capture CANNOT say is why, and there are several live candidates that a single
         // read of this line separates:
         //   • Follow==null      - the vcam has no target (Bind never ran, or the target went away).

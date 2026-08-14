@@ -30,6 +30,8 @@ using DeNelle.Dungeons.RoomForge;
 using DeNelle.Village;
 using Newtonsoft.Json;
 using UnityEngine;
+using UnityEngine.AddressableAssets;
+using UnityEngine.ResourceManagement.AsyncOperations;
 using UnityEngine.SceneManagement;
 
 namespace DeNelle.Dungeons
@@ -217,6 +219,29 @@ namespace DeNelle.Dungeons
         // reason as _label above.
         [SerializeField] private bool _isTrueExit = true;
 
+        /// <summary>Addressable key for the owner's Portal art. Content-addressed, not a path,
+        /// so moving the FBX cannot break it. Registered by DungeonPortalAddressable.</summary>
+        private const string PortalAddress = "dungeon/exit/portal";
+
+        /// <summary>Hero height, matching the NavMeshAgent the hero actually runs on
+        /// (HeroLocomotion.cs: `_agent.height = 1.8f`). Referenced, not re-guessed.</summary>
+        private const float HeroHeightRef = 1.8f;
+
+        /// <summary>Owner ruling 2026-08-14: the exit portal reads at 1.5x a person.
+        /// As-authored the Tripo mesh imported at roughly a THIRD of hero height — a doorway
+        /// you could not walk through. Derived from the hero rather than hand-typed as a
+        /// world scale, so a hero-rig change carries it (ARCHITECTURE_PRINCIPLES §4: derive
+        /// from bounds + reference, never slap on a constant).</summary>
+        private const float PortalHeroMultiple = 1.5f;
+
+        /// <summary>Placeholder geometry retired once the Portal loads. The beacon children
+        /// (Beacon_Beam / Beacon_Label) are deliberately ABSENT - WO-1008 rules the shaft of
+        /// light stays, and DungeonRoomOwnershipRegression finds Beacon_Beam by name.</summary>
+        private static readonly string[] ArchChildNames =
+        {
+            "Arch_KayKit", "Pillar_L", "Pillar_R", "Lintel", "Sheet"
+        };
+
         /// <summary>Create the exit at <paramref name="position"/> and build its visual.</summary>
         /// <param name="onLeave">Optional rich-scene leave action (ExitToVillage). Null => Castle route.</param>
         /// <param name="label">Interact-button prompt text.</param>
@@ -280,6 +305,172 @@ namespace DeNelle.Dungeons
             // glow beam that reads over enemy heads and from the corridor mouth, and a
             // billboarded ASCII "EXIT" label. All decorative (no colliders).
             BuildBeacon(glow);
+
+            // Owner direction 2026-08-14: the exit is her Tripo Portal, not a stone arch.
+            // Kicked ASYNC and deliberately AFTER the arch is already standing, so the exit is
+            // never empty for a single frame - if the bundle is missing the player keeps the
+            // KayKit arch instead of walking into an invisible softlock.
+            SwapInPortalAsync().Forget();
+        }
+
+        // ── Owner's Portal art, loaded through Addressables ───────────────────────
+        // NOT Resources.Load: everything under Resources/ is force-included in every player
+        // build whether referenced or not, and this asset is 5.3 MB of FBX + 2.2 MB of
+        // embedded textures. The web payload already grew 42% (165 -> 234 MB) on 2026-08-10.
+        //
+        // NOT WaitForCompletion either, despite the call site being synchronous: there is ZERO
+        // precedent for it in this tree (verified), and a blocking Addressables wait on WebGL -
+        // the primary platform - is a known hazard. The three existing Addressables consumers
+        // (EquipmentController, HeroArmorVisual, HeroBodySwapper) all load ASYNC; this matches
+        // them rather than inventing a second pattern.
+        //
+        // ⚠ Depends on WO-974: until an explicit BuildPlayerContent ran in every player-build
+        // seam, this key resolved HERE and resolved to nothing on a clone or CI.
+        private AsyncOperationHandle<GameObject> _portalHandle;
+
+        private async UniTaskVoid SwapInPortalAsync()
+        {
+            GameObject prefab = null;
+            try
+            {
+                _portalHandle = Addressables.LoadAssetAsync<GameObject>(PortalAddress);
+                // Await the handle, then read Result off the handle itself. ToUniTask() on
+                // AsyncOperationHandle<T> yields no value in this UniTask version, so the
+                // asset comes from the handle, not from the await expression.
+                await _portalHandle.ToUniTask();
+                prefab = _portalHandle.Status == AsyncOperationStatus.Succeeded
+                    ? _portalHandle.Result
+                    : null;
+            }
+            catch (Exception e)
+            {
+                // Loud, never silent: a missing bundle is exactly the WO-974/975 failure class,
+                // and it must be visible in the capture rather than inferred from bare geometry.
+                FlowTrace.Warn(Sys, $"portal addressable '{PortalAddress}' did not load ({e.GetType().Name}: " +
+                                    $"{e.Message}) - keeping the arch. This is what a missing content build " +
+                                    "looks like at runtime.");
+                return;
+            }
+
+            if (prefab == null || this == null || gameObject == null)
+            {
+                FlowTrace.Warn(Sys, $"portal addressable '{PortalAddress}' resolved NULL - keeping the arch.");
+                return;
+            }
+
+            var portal = Instantiate(prefab, transform);
+            portal.name = "Portal_Owner";
+            portal.transform.localPosition = Vector3.zero;
+            portal.transform.localRotation = Quaternion.identity;
+            NormalizeToHeight(portal, HeroHeightRef * PortalHeroMultiple);
+            // Decorative only - the root SphereCollider is the walk-in trigger and must stay
+            // the only collider, or the hero can be blocked out of their own exit.
+            foreach (var col in portal.GetComponentsInChildren<Collider>(true)) Destroy(col);
+
+            // Retire the placeholder geometry now that real art is standing, but keep the
+            // BEACON and its label: WO-1008's ruling is that the shaft of light STAYS.
+            foreach (var childName in ArchChildNames)
+            {
+                var t = transform.Find(childName);
+                if (t != null) t.gameObject.SetActive(false);
+            }
+
+            FlowTrace.Step(Sys, $"PORTAL swapped in from '{PortalAddress}' - arch geometry retired, beacon kept.");
+        }
+
+        /// <summary>Uniformly scale so the RENDERED height matches <paramref name="target"/>,
+        /// then RE-SEAT the instance so its base stands on the seat it was placed at.
+        ///
+        /// Measures encapsulated renderer bounds — the same idiom as
+        /// AtbCombatantSwapper.NormalizeHeight, deliberately reused rather than re-invented.
+        /// ⚠ The re-seat is NOT optional garnish: `NormalizeHeight` is SCALE-ONLY, and every
+        /// placement-sensitive caller of it follows with a bounds re-centre for the reason
+        /// stated verbatim at AtbCombatantSwapper.cs:184-187 — "Tripo pivots are far off
+        /// centre, so scaling localScale flings the visible mesh away from the capsule (the
+        /// 'hero in empty area' bug)". The owner's Portal IS a Tripo asset (Portal.fbx
+        /// .tripo-extracted), and this call multiplies its scale by ~2.7, which multiplies
+        /// any pivot-to-mesh offset by the same factor. Without the re-seat a doorway can end
+        /// up sunk in the floor or hanging in the air while the height reads perfectly correct.
+        ///
+        /// Traces the RESOLVED WORLD SPAN (min.y / centre / max.y) BEFORE and AFTER, not just
+        /// measured-vs-target: a height-only line cannot tell "correctly seated" apart from
+        /// "2.7m tall and floating 3m up", which is the hollow-assertion class
+        /// docs/INSTRUMENTATION_STANDARD.md §1.4b exists to stop. General-purpose: it seats to
+        /// whatever world position the instance already carries, so it is not portal-specific.</summary>
+        private static void NormalizeToHeight(GameObject go, float target)
+        {
+            var rends = go.GetComponentsInChildren<Renderer>(true);
+            if (rends.Length == 0)
+            {
+                FlowTrace.Warn(Sys, $"'{go.name}' has NO renderers - cannot normalize height OR re-seat " +
+                                    "(it will render at its authored scale and wherever its pivot lands, " +
+                                    "or not at all).");
+                return;
+            }
+
+            // The seat = the world position the instance was placed at. Scaling localScale is
+            // about the pivot, so the pivot does not move; capture it once and drive the mesh
+            // back onto it afterwards.
+            Vector3 seat = go.transform.position;
+
+            Bounds b = MeasureBounds(rends);
+            float h = b.size.y;
+            if (h <= 0.001f)
+            {
+                FlowTrace.Warn(Sys, $"'{go.name}' measured {h:0.###}m tall at span y[{b.min.y:0.##}..{b.max.y:0.##}] " +
+                                    "- degenerate bounds, leaving scale AND seat untouched (it may render " +
+                                    "flat or invisible at the exit).");
+                return;
+            }
+
+            float k = target / h;
+            FlowTrace.Step(Sys, $"'{go.name}' normalize BEFORE: seat {seat} | span y[{b.min.y:0.##}..{b.max.y:0.##}] " +
+                                $"h={h:0.##}m | centre {b.center} | target {target:0.##}m " +
+                                $"(hero {HeroHeightRef:0.##}m x {PortalHeroMultiple:0.##}, scale x{k:0.###})");
+            go.transform.localScale *= k;
+
+            // Re-measure AFTER the scale — the bounds moved, and by how much is exactly the
+            // unknown the trace above cannot answer on its own.
+            Bounds scaled = MeasureBounds(rends);
+            Vector3 delta = new Vector3(seat.x - scaled.center.x,
+                                        seat.y - scaled.min.y,      // base ON the floor, not centre
+                                        seat.z - scaled.center.z);
+            go.transform.position += delta;
+
+            Bounds seated = MeasureBounds(rends);
+            FlowTrace.Step(Sys, $"'{go.name}' normalize AFTER: scaled span y[{scaled.min.y:0.##}..{scaled.max.y:0.##}] " +
+                                $"centre {scaled.center} -> re-seat delta {delta} -> final span " +
+                                $"y[{seated.min.y:0.##}..{seated.max.y:0.##}] h={seated.size.y:0.##}m " +
+                                $"centre {seated.center} (base sits on seat y {seat.y:0.##})");
+            // The one thing that must be TRUE at the end, asserted rather than assumed. A
+            // near-zero delta here is the proof that the pivot was already at the base; a large
+            // one is the flung-mesh case being corrected. Either way the reader sees which.
+            if (Mathf.Abs(seated.min.y - seat.y) > 0.05f)
+                FlowTrace.Warn(Sys, $"'{go.name}' re-seat did NOT land: base y {seated.min.y:0.###} vs seat " +
+                                    $"y {seat.y:0.###} (off by {seated.min.y - seat.y:0.###}m) - the portal is " +
+                                    "sunk into or floating above the floor. Suspect a non-uniform parent scale " +
+                                    "or a renderer that moves after this frame (animated/particle bounds).");
+        }
+
+        /// <summary>Encapsulated WORLD bounds over an already-fetched renderer set. Split out so
+        /// the before/after/final measurements in <see cref="NormalizeToHeight"/> are provably the
+        /// same measurement three times — a second inline copy is how they drift.</summary>
+        private static Bounds MeasureBounds(Renderer[] rends)
+        {
+            Bounds b = default; bool has = false;
+            for (int i = 0; i < rends.Length; i++)
+            {
+                var r = rends[i];
+                if (r == null) continue;
+                if (!has) { b = r.bounds; has = true; } else b.Encapsulate(r.bounds);
+            }
+            return b;
+        }
+
+        private void OnDestroy()
+        {
+            // Release the handle or the bundle stays resident for the session.
+            if (_portalHandle.IsValid()) Addressables.Release(_portalHandle);
         }
 
         // ── WO-1007: the KayKit Option C monument arch ────────────────────────────
@@ -445,13 +636,20 @@ namespace DeNelle.Dungeons
             // ⚠ THE NAME IS PINNED the same way Beacon_Beam is - the ownership regression
             // finds this child by name. Build it through the shared BuildWorldLabel so the
             // true exit and the WO-957 leave pad can never drift apart.
-            Transform label = BuildWorldLabel("Beacon_Label", "EXIT",
-                new Vector3(0f, 3.6f, 0f), fontSize: 48, characterSize: 0.14f);
+            // ⛔ THE WORD IS REMOVED — owner ruling 2026-08-14, verbatim: "remove the word
+            // completely". Not renamed to "Leave": REMOVED. A billboarded ASCII "EXIT" floating
+            // in a dungeon read as debug text; the portal and the beacon now carry the meaning
+            // by SHAPE and LIGHT, which is what the affordance was always meant to do.
+            // Deliberately NOT deleting BuildWorldLabel — the WO-957 leave pads still use it and
+            // it is the one world-label path (no UXML). Verified before removing: nothing under
+            // Assets/Editor pins "Beacon_Label" or the string "EXIT", so no suite goes red.
+            // Beacon_Beam is a DIFFERENT child and IS pinned by the ownership regression — kept.
+            Transform label = null;
 
             var beacon = beaconGo.AddComponent<DungeonExitBeacon>();
             beacon.Bind(light, label);
             FlowTrace.Step(Sys, $"exit beacon armed at {transform.position} " +
-                $"(light range {light.range:F0}, beam, label={(label != null ? "yes" : "no")})");
+                $"(light range {light.range:F0}, beam, label=REMOVED per owner ruling)");
         }
 
         /// <param name="translucent">WO-1008: force the transparent surface on a NON-quad too.
