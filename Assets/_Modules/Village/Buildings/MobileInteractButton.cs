@@ -295,6 +295,19 @@ namespace DeNelle.Village
             // exist and Fail-loud if any is missing — a capture self-reports a dead touch path.
             using var _ = FlowTrace.Enter("MobileInteract", "BuildCanvas (mobile's only interact button)");
 
+            // OBSIDIAN RE-SKIN (WO-1005): the face is the kit's 9-sliced grey plate, not a raw
+            // violet rectangle. Resolved OUTSIDE the visual assignment so the verify block below can
+            // report WHICH state we ended in — a null sprite on an Image still renders as a solid
+            // colour block, i.e. it looks EXACTLY like the bug this fixes while compiling green.
+            // Never let that pass silently (INSTRUMENTATION_STANDARD §1.4b).
+            // NOTE: this is a RE-SKIN ONLY. The hand-rolled, EventSystem-free tap path (TryGetTap)
+            // is deliberately untouched — ElarionUiKit.BuildObsidianButton (ElarionUiKitObsidian.cs)
+            // returns a uGUI Button that would need an EventSystem, which would kill touch here.
+            string skinSpriteName = ElarionUiKit.ObsidianButtonSpriteName(
+                ElarionUiKit.ObsidianButtonStyle.Style1,
+                ElarionUiKit.ObsidianButtonColor.Gray);
+            Sprite skinSprite = null;
+
             bool ok = Guard.Try("MobileInteract", "build interact canvas", () =>
             {
                 var go = new GameObject("InteractCanvas");
@@ -309,7 +322,21 @@ namespace DeNelle.Village
                 var btnGo = new GameObject("InteractButton");
                 btnGo.transform.SetParent(_canvas.transform, false);
                 var img = btnGo.AddComponent<Image>();
-                img.color = new Color(0.16f, 0.10f, 0.30f, 0.94f);   // village-violet
+                skinSprite = RpgUiCatalog.Get(RpgUiCatalog.RoleButton, skinSpriteName);
+                if (skinSprite != null)
+                {
+                    img.sprite = skinSprite;
+                    img.type = Image.Type.Sliced;
+                    img.fillCenter = true;
+                    img.color = Color.white;   // the plate art IS the face; no tint over it
+                }
+                else
+                {
+                    // Art absent (pack not imported) — keep the legacy solid so the ONLY mobile
+                    // interact affordance still RENDERS. The verify block below reports this
+                    // distinguishably; a silent solid block is the failure mode we refuse.
+                    img.color = new Color(0.16f, 0.10f, 0.30f, 0.94f);   // village-violet fallback
+                }
                 _btnRect = img.rectTransform;
                 // Bottom-centre, thumb-reachable, clear of the virtual joystick (left)
                 // and the action buttons (right).
@@ -324,7 +351,11 @@ namespace DeNelle.Village
                 _label = lblGo.AddComponent<Text>();
                 _label.font = BuiltinFont();
                 _label.alignment = TextAnchor.MiddleCenter;
-                _label.color = new Color(0.97f, 0.93f, 1.00f);
+                // Kit ink on the kit plate (Parchment); the legacy near-white stays on the fallback.
+                // Luminance carries the read either way — no state is conveyed by hue.
+                _label.color = skinSprite != null
+                    ? ElarionUiKit.ObsidianButtonLabelColor(ElarionUiKit.ObsidianButtonColor.Gray)
+                    : new Color(0.97f, 0.93f, 1.00f);
                 _label.fontSize = 26;
                 _label.fontStyle = FontStyle.Bold;
                 _label.text = "Interact";
@@ -349,7 +380,19 @@ namespace DeNelle.Village
                     "mobile interact button is broken/invisible; phone players cannot interact.");
                 return;
             }
-            FlowTrace.Step("MobileInteract", "BuildCanvas: canvas + button + label built and verified (touch path live).");
+            // SKIN VERIFICATION (WO-1005): report the two outcomes with DIFFERENT text and DIFFERENT
+            // levels, because they look identical on screen only if we stay quiet — an unresolved
+            // sprite leaves a solid colour block, i.e. the exact defect this WO fixes.
+            if (skinSprite != null)
+                FlowTrace.Step("MobileInteract",
+                    "BuildCanvas: canvas + button + label built and verified (touch path live). " +
+                    $"skin=obsidian sprite='{skinSprite.name}'");
+            else
+                FlowTrace.Warn("MobileInteract",
+                    "BuildCanvas: canvas + button + label built and verified (touch path live). " +
+                    $"skin=FALLBACK-solid (sprite unresolved: role='{RpgUiCatalog.RoleButton}' " +
+                    $"name='{skinSpriteName}') — the interact button is a flat violet plate, NOT the " +
+                    "Obsidian face; check Resources/RpgUi/button import.");
         }
 
         private static Font BuiltinFont() =>
