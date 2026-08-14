@@ -1,6 +1,23 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ RECONCILED 2026-08-14 (CLI): main line next free = **989**. **782–859 + 900–988 CONSUMED.**
+> ## ⚠ RECONCILED 2026-08-14 (CLI): main line next free = **990**. **782–859 + 900–989 CONSUMED.**
+> - **989** = **`tower_wall_wizard` still carries a wizard IDENTITY for a structure the owner renamed to
+>   Ballista — rename the id (and prefab path) behind a READ-MIGRATION ALIAS.** OWNER ASK 2026-08-14:
+>   *"tower_wall_wizard - Where did that name come from? Should match Ballista"*. Traced: the id dates
+>   from the ORIGINAL build-catalog commit `9de2aac56`, where it genuinely was a wizard tower. The owner
+>   ruling of **2026-07-08** (quoted in the row's own `orientation.note`) renamed the MODEL to a ballista
+>   and the row was retuned to match — `displayName "Ballista"`, `element None`, `projectileStyle "bolt"`.
+>   **The display name and the stats were renamed; the IDENTITY never was.** The `id` and
+>   `visualPrefabPath: "Structures/WizardTower_1"` are the last two fields still calling it a wizard.
+>   ⚠ **THIS IS THE COST OF LEAVING IT:** WO-947 read the row as MAGICAL *from its id* and would have
+>   sent **70 crystals in the wrong direction**; it took an owner pin (2026-08-14, *"thats a baliista
+>   mechanical"*) to settle a question the data had already answered. A stale identity is not cosmetic —
+>   it actively misroutes downstream work, the same way the stale WO-number block and the hardcoded repo
+>   root did.
+>   ⛔ **NOT A FIND-AND-REPLACE.** The id is referenced in **15 files** AND **catalog ids are PERSISTED**
+>   (save schema v36 `everBuiltStructureIds`; base layouts replay by id). A bare rename orphans every
+>   saved town holding one. **Use the project's own precedent — the `harvest:3` → `wood:3` token change
+>   was READ-MIGRATED with no schema bump.** READY.
 > - **988** = **`headed-dungeon-capture.ps1` reports `HEADED_CAPTURE_OK` on a run that loaded the WRONG
 >   SCENE with a FROZEN CLOCK.** PROVEN 2026-08-14: a run tagged `wo1007-portal-camera` emitted
 >   `HEADED_CAPTURE_OK 10 shots`; the copied `Player.log` from that same run says
