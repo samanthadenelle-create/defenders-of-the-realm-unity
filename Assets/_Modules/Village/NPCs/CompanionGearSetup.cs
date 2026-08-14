@@ -204,8 +204,14 @@ namespace DeNelle.Village
                     // catch unnamed; lo stays null -> caller Fails on the null loadout.
                     FlowTrace.Try("CompanionGear", "AddComponent<GearLoadout>",
                         () => lo = root.AddComponent<GearLoadout>());
+                    // WO-976 sibling (registry LOW, deliberately ADVISORY): `result=ok` is a non-null
+                    // check on an AddComponent that essentially cannot return null, so it is NOT
+                    // coverage — it is a breadcrumb that the lazy-add branch was taken. Left in place
+                    // and labelled rather than dressed up: the real failure handling is the
+                    // FlowTrace.Try above (a throw self-reports) plus the caller's Fail on a null
+                    // loadout. Do not read this line as verification.
                     FlowTrace.Step("CompanionGear",
-                        $"no GearLoadout on '{root.name}' — lazily added (result={(lo != null ? "ok" : "<null>")}).");
+                        $"no GearLoadout on '{root.name}' — lazily added (ADVISORY, not a verify: addReturned={(lo != null ? "non-null" : "<null>")}).");
                 }
                 else
                 {

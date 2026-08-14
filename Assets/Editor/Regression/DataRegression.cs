@@ -317,6 +317,9 @@ namespace DeNelle.Editor
             if (!AdServiceSeamRegression.Run(out var adSeamReason)) failures.Add(adSeamReason); else log.AppendLine("[ad-seam] " + adSeamReason);
             // --- WO-912 sec.9.3 + D4/D7: no ad reward may ever grant a real-money currency ---
             if (!AdPlacementCovenantRegression.Run(out var adCovReason)) failures.Add(adCovReason); else log.AppendLine("[ad-covenant] " + adCovReason);
+            // --- WO-976: the `hasSurface` false green stays dead — each of the four visibility
+            //     failure classes must still be able to FIRE, and the named skip is not a pass ---
+            if (!UiSurfaceProbeRegression.Run(out var uiSurfaceReason)) failures.Add(uiSurfaceReason); else log.AppendLine("[ui-surface-probe] " + uiSurfaceReason);
             if (!TownsfolkDialogueRegression.Run(out var townsfolkReason)) failures.Add(townsfolkReason); else log.AppendLine("[townsfolk] " + townsfolkReason);
             if (!AtbEngineRegression.Run(out var atbReason)) failures.Add(atbReason); else log.AppendLine("[atb-engine] " + atbReason);
             if (!EconomyMetaCatalogRegression.Run(out var econMetaReason)) failures.Add(econMetaReason); else log.AppendLine("[econ-meta] " + econMetaReason);

@@ -526,7 +526,14 @@ namespace DeNelle.HUD.Kit
             if (_enemyBuf.Count != _lastEnemyCount)
             {
                 FlowTrace.Step("Compass",
-                    $"enemy tick source count {_lastEnemyCount} -> {_enemyBuf.Count} (provider={(EnemyProvider != null ? "wired" : "NULL")}, hero={(_hero != null ? "ok" : "NULL")}).");
+                    // WO-976 sibling (registry LOW): `hero=ok` was a bare non-null check reading as a
+                    // health claim — the WRONG hero (a stale pre-reload instance, or a body proxy
+                    // rather than the root) printed `ok` while every bearing computed from it was
+                    // wrong. Retokened to `heroRef=` + the object's name: still cheap, but now the
+                    // capture shows WHICH transform we bound, so a wrong-hero bind is readable.
+                    // Advisory breadcrumb, not a verification — the falsifiable compass assertion
+                    // lives in AutoPilotDriver.AssertCompassMarks (measured pip rect vs a px floor).
+                    $"enemy tick source count {_lastEnemyCount} -> {_enemyBuf.Count} (provider={(EnemyProvider != null ? "wired" : "NULL")}, heroRef={(_hero != null ? _hero.name : "NULL")}).");
                 _lastEnemyCount = _enemyBuf.Count;
             }
         }

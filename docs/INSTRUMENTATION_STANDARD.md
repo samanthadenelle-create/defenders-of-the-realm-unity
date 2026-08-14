@@ -113,6 +113,26 @@ rather than the amount requested. Prefer a line that can embarrass you.
 
 Full ranked inventory: **`docs/reference/HOLLOW_ASSERTIONS_REGISTRY.md`**.
 
+**For UI visibility specifically, use the shared probe — do not re-derive the arithmetic.**
+`DeNelle.Core.Diagnostics.UiSurfaceProbe` (`Assets/_Modules/Core/Diagnostics/UiSurfaceProbe.cs`,
+WO-976) measures a UI Toolkit or uGUI surface's **resolved rect in px, resolved opacity, sorting
+order and viewport intersection**, and reports the four failure classes **separately** —
+`SURFACE_ZERO_SIZE` / `SURFACE_TRANSPARENT` / `SURFACE_OFFSCREEN` / `SURFACE_BEHIND`. They are four
+different bugs with four different fixes; a single "panel not visible" line sends the reader hunting
+in the wrong place. Two rules travel with it:
+
+- **Measure AFTER layout settles.** A size read at `Show()` time is pre-settle and hollow for a
+  *different* reason (WandererBubble needs 3 frames; 8 is the observed ceiling). Poll, don't guess.
+- **When it cannot be measured, emit a NAMED SKIP — never a pass.** Batchmode runs no layout pass,
+  so an unguarded probe emits four spurious failures there, and the next reader "fixes" that by
+  weakening the thresholds — which lands straight back on a hollow line. `IsUnmeasurableEnvironment`
+  exists to make that skip explicit and logged. *"Not measured"* and *"measured and fine"* must
+  never be the same value.
+
+The falsification of that probe — each class made to fire on purpose — is pinned by
+`Assets/Editor/Regression/UiSurfaceProbeRegression.cs` (marker `UI_SURFACE_PROBE_OK`). **A fix to a
+false green that is not itself falsified is just a new false green.**
+
 ### 1.5 Mobile / WebGL / perf
 Mirror `BreakCaptureHarness`'s own rule (it disables itself on WebGL):
 - **Ships to players:** `Guard` (control-flow safety) + the `[BREAK]` console line +
