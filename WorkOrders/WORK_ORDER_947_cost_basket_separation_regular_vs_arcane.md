@@ -1,6 +1,6 @@
 # WORK ORDER 947 — Cost-basket separation: regular structures = wood+iron; magical/ethereal = crystal-based; never all three
 
-**Status:** DONE (catalog v18, 2026-08-14) — all four §4 pins + the §6 pin ANSWERED by the owner and applied to all 6 rows; the gate's exemption list is EMPTY. **One NEW pin remains OPEN and is deliberately unconverted: `arcane-tower` (§8).**
+**Status:** DONE — **FULLY APPLIED, NO OPEN PINS** (catalog v19, 2026-08-14). All four §4 pins + the §6 pin landed in v18 (6 rows); the **final** §9 pin — `arcane-tower` / "Cathedral of Magic" — was ruled MAGICAL by the owner and applied in **v19** (§11). The gate's exemption list is EMPTY and stays empty; `MagicalIds` holds **four** ids.
 **Minted:** 2026-08-10 (CLI seat, main line — banner bumped 947 → 948 in the same edit)
 **Silo:** Data (structures-catalog.json dual-copy) + one regression gate — no code-lane conflicts
 **Type:** owner ECONOMY RULING, applied to data + enforced by a gate
@@ -141,7 +141,7 @@ outright — only its PAIRING is unpinned by §4 q1.)*
 became a table over **all six** converted rows, asserting the ruled side (regular → 0 crystals; magical →
 0 wood **and** non-zero crystals) plus the preserved totals.
 
-## 9. NEW OPEN PIN — `arcane-tower` ("Cathedral of Magic"), NOT converted
+## 9. ~~NEW OPEN PIN~~ — `arcane-tower` ("Cathedral of Magic") — **ANSWERED 2026-08-14, see §11**
 
 Cost today **wood:60 iron:60 crystals:0** — it does **not** violate the invariant, so it was never on the
 exemption list and the gate is silent about it. But under pin 1 a magical building should be crystals+iron.
@@ -152,7 +152,88 @@ The evidence is genuinely split and an agent must not decide it:
   "*despite the id this is not a tower — it is a GameplayBuilding, the town's one civic landmark*". By the
   pin-3 logic the owner just used for the jeweler (a shop that *deals in* magic is still a shop), a civic
   building that *sells* magic upgrades is REGULAR.
-**Owner call needed.** If magical: w60 i60 → **i60 c60** keeps the total at 120.
+~~**Owner call needed.**~~ **ANSWERED — MAGICAL.** w60 i60 → **i60 c60**, total 120. See §11 for the ruling and the reasoning it overrides. *(The "reads regular" bullet above is preserved verbatim as the record of a reading the owner OVERRULED — do not treat it as live guidance.)*
+
+## 11. FINAL RULING + IMPLEMENTATION LOG — 2026-08-14 (economy/data lane agent, catalog v19)
+
+**Owner ruling, verbatim:**
+> *"cathedral of magic is where all magic upgrades anre and can unlock new teirs of spells"*
+
+→ `arcane-tower` is **MAGICAL**. Basket becomes **crystals + iron**.
+
+### Why this OVERRIDES the §9 "reads regular" analysis — recorded so nobody re-litigates it
+
+A prior agent applied the owner's own pin-3 jeweler logic (*"a shop that DEALS IN magic is still a shop"*)
+and concluded **REGULAR**, citing `repo.behaviorId: "GameplayBuilding"` and the row's own `_heightNote`
+(*"despite the id this is not a tower — it is a GameplayBuilding, the town's one civic landmark"*). That
+reading was reasonable on the surface evidence — which is exactly why it is written down here.
+
+**The owner's distinction:**
+- The **jeweler SELLS** things that happen to be precious. It *deals in* value; it is not *made of* it.
+- The **Cathedral is WHERE MAGIC UPGRADES LIVE AND WHERE NEW SPELL TIERS UNLOCK.** It is the **ENGINE of
+  magical progression**, not a vendor that deals in magic. That is a difference in KIND, not in degree.
+- **`behaviorId: GameplayBuilding` describes its BEHAVIOUR** — it is not a firing tower, it hosts an
+  interaction — **NOT its cost class.** Likewise the `_heightNote` is a *sizing* note and the id is stale
+  naming. None of the three is evidence about what the building is MADE of.
+
+The surface evidence genuinely points both ways, so the ruling is the tiebreak. **Do not re-classify this
+row off the id, the `behaviorId`, or the `_heightNote`.** The distinction is mirrored verbatim into the
+row's new `_costNote`, into `_costBasketRule`, and into the gate's header + `AppliedRows` entry.
+
+### Applied (total PRESERVED, same 1:1 discipline as the three v18 magical rows)
+
+| id | side | before | after | total |
+|---|---|---|---|---|
+| `arcane-tower` | MAGICAL | **w60** i60 c0 | i60 **c60** | 120 (unchanged) |
+
+- **No `upgradeCost` ladder on this row** (singleton, no `maxLevel`) — exactly **ONE** basket to transform.
+- `structures-catalog.json` **v18 → v19**, both canonical copies byte-identical:
+  **`md5 b1e207690290dc2cedcfcf7b1aef47fc`** (64,393 bytes, 0 NUL bytes).
+- `_costBasketRule` rewritten: the last pin is spent, WO-947 is fully applied, no open classification
+  questions. A `_costNote` carrying the owner's verbatim words + the overruled reading was added to the row.
+- **`CatalogBootstrap.RegisterFallback` checked — `arcane-tower` is NOT in the fallback mirror.** That file
+  registers exactly three rows (`tower_ground_archer`, `tower_wall_wizard`, `tower_arcane_spire`), so
+  `BuildEconomyRegression` gate 12 `[fallback-parity]` has nothing to compare here. **No mirror edit needed**
+  (verified by grep, not assumed — an un-mirrored basket would be a red build).
+
+### Gate updated (`Assets/Editor/Regression/CostBasketSeparationRegression.cs`)
+
+- `MagicalIds` += **`arcane-tower`** (with the ruling verbatim in the comment) → **four** ids.
+- `AppliedRows` += `arcane-tower` → `Magical = true`, `Totals = { 120 }`, `Why` = the ruling + the
+  overruled reading. Case 4 `[applied]` therefore now asserts **0 wood AND crystals > 0 AND total 120**
+  for this row — a revert or a stealth re-balance trips it.
+- `PendingPins` **left EMPTY** and the case-3 shrink-only mechanism **untouched** — not weakened, not bypassed.
+- Header + docstrings updated (pin 5, v19). **No FlowTrace / Guard call was stripped** (CLAUDE.md §12).
+
+### Verified from the re-parsed DATA (not from the diff)
+
+Both copies re-parsed after the edit:
+- **(a) ZERO rows carry wood AND iron AND crystals together** — 42 baskets scanned, 0 violators.
+- **(b) The crystal-carrying rows are EXACTLY the four magical ids:**
+  `arcane-tower`, `healing_caravan`, `tower_arcane_spire`, `tower_healer`.
+
+### Blast radius (REPORTED, not changed)
+
+- **Player-reachable NOW, not locked.** `arcane-tower` is `type: Resource` → it lands in the **Town**
+  palette, and `build-categories.json` Town `lockedIds` = `[jeweler, mine_crystal, mill, lumbermill,
+  armorer, collector_forge]` — `arcane-tower` is **not** among them and is **not** in `visibleLockedIds`.
+- **Early-resource impact is near-zero, for a reason worth knowing.** `StartingBudget.StrategicWood /
+  StrategicIron` are both **0** (v32 replaced the founding seed with first-build freebies), so nothing is
+  seeded either way. More to the point, `BuildModeController.FreeBuildAvailable` **lane 3** makes the
+  **first placement of each distinct NON-tower id FREE** — and `IsTowerEntry` is FALSE for this row
+  (`type: Resource`, `behaviorId: GameplayBuilding`). Since the row is `singleton: true`, the normal player
+  builds the Cathedral **free, once**. The new crystal cost is only ever felt on a **re-build after a sell
+  or a destroy**, where the player now needs **60 crystals instead of 60 wood**.
+- **⚠ A STALE COMMENT, flagged not fixed:** `BuildModeController.FreeBuildAvailable`'s doc comment (lane 2)
+  claims *"so **arcane-tower** / tower_arcane_spire / ... is charged from the very first placement"*. That is
+  **false for `arcane-tower`** — `IsTowerEntry` tests `type == Tower` or `behaviorId` in
+  {`DefenseTower`,`ArcaneTower`}, and this row is `Resource` / `GameplayBuilding`, so it takes the lane-3
+  freebie. The comment was wrong before this change and is unaffected by it; it is called out because a
+  reader pricing this row will otherwise trust it.
+- **Sell/refund:** `RefundCostFor` derives from `CostFor`, so a sold Cathedral now refunds in the crystal
+  basket rather than wood — mechanically consistent, no special case needed.
+- **In-flight queue jobs** stamped their **paid basket** at commit (save v37 `paidWood/.../paidCrystals`), so
+  a job enqueued before this change still refunds exactly what it paid. No migration needed.
 
 ## 10. What NOT to touch (was §7; renumbered so the log sections read in order)
 

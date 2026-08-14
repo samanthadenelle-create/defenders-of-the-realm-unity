@@ -17,7 +17,7 @@
 //   * MAGICAL / ETHEREAL structures are CRYSTALS + IRON -- never wood.
 //   * INVARIANT: no row's build cost or upgrade step holds wood AND iron AND crystals.
 //
-// THE PINS ARE ANSWERED (owner, 2026-08-14) and catalog v18 applies all of them:
+// THE PINS ARE ANSWERED (owner, 2026-08-14); catalog v18 applies the first four and v19 the last:
 //   pin 1 "Crystals and Iron"        -> the magical pairing is crystals + iron.
 //   pin 2 "yes AoE healing"          -> healing IS magical: tower_healer + healing_caravan
 //                                       become crystals + iron (+ their existing food).
@@ -26,7 +26,12 @@
 //         release)"                     imbue precious stones -- a re-classification THEN.
 //   pin 4 "thats a baliista          -> tower_wall_wizard is MECHANICAL, therefore REGULAR.
 //         mechanical"                   The DATA reading beat the ID reading.
-// So MagicalIds now holds the three magical ids and PendingPins is EMPTY.
+//   pin 5 "cathedral of magic  -> 'arcane-tower' ("Cathedral of Magic") is MAGICAL. It is the
+//         is where all magic      ENGINE of magical progression, not a vendor that deals in
+//         upgrades anre and       magic. Applied in catalog v19.
+//         can unlock new
+//         teirs of spells"
+// So MagicalIds holds FOUR magical ids and PendingPins is EMPTY.
 //
 // WHY THE PENDING-PIN MECHANISM STAYS even at zero entries: when a row's side is
 // an open OWNER question, guessing it is exactly the inference-fix CLAUDE.md
@@ -36,11 +41,19 @@
 // and gets applied forces the exemption to be deleted in the same change. It can
 // only shrink. It is NOT a mute button for a gate failure.
 //
-// STILL UNPINNED, deliberately unconverted: 'arcane-tower' ("Cathedral of Magic")
-// is wood:60 iron:60 with NO crystals, so it does not violate anything and is not
-// listed anywhere here. But under pin 1 a magical building should be crystals +
-// iron, and it is a GameplayBuilding (the town's civic magic-upgrades shop), not a
-// spellcaster -- so its side is the owner's call, not this file's.
+// THE LAST PIN IS SPENT (owner, 2026-08-14): 'arcane-tower' ("Cathedral of Magic")
+// was the one row left unclassified. It is MAGICAL -- crystals + iron -- and catalog
+// v19 folds its wood:60 1:1 into CRYSTALS (basket total 120 unchanged).
+// This OVERRULES the earlier reading that put it on the REGULAR side by the jeweler
+// analogy ("a shop that DEALS IN magic is still a shop"), which cited behaviorId
+// 'GameplayBuilding' and the row's _heightNote ("despite the id this is not a tower --
+// it is the town's one civic landmark"). THE OWNER'S DISTINCTION, recorded here
+// because the surface evidence genuinely points both ways and the next reader will
+// hit the same fork: the jeweler SELLS things that happen to be precious; the
+// Cathedral is WHERE MAGIC UPGRADES LIVE AND WHERE NEW SPELL TIERS UNLOCK -- the
+// ENGINE of magical progression, not a vendor. 'behaviorId: GameplayBuilding'
+// describes its BEHAVIOUR (it is not a firing tower), NOT its cost class.
+// WO-947 is now FULLY APPLIED: no open classification questions remain.
 //
 // Cases:
 //   1 [invariant]   no entry's build cost / upgrade step holds wood AND iron AND
@@ -55,7 +68,7 @@
 //                   pins are logged distinguishably for the owner call.
 //   4 [applied]     every conversion already made (v17: tower_siege_tower; v18:
 //                   tower_wall_wizard, jeweler, tower_arcane_spire, tower_healer,
-//                   healing_caravan) stays on its ruled side -- regular rows carry
+//                   healing_caravan; v19: arcane-tower) stays on its ruled side -- regular rows carry
 //                   zero crystals, magical rows carry zero wood and non-zero
 //                   crystals -- and each basket TOTAL is unchanged from its
 //                   pre-ruling value, because every fold was 1:1. A revert or a
@@ -96,6 +109,9 @@ namespace DeNelle.Editor.Regression
         /// POPULATED 2026-08-14 by the OWNER's answers to WO-947 section 4:
         ///   pin 1 verbatim "Crystals and Iron"  -> the magical basket is crystals + iron, never wood.
         ///   pin 2 verbatim "yes AoE healing"    -> healing IS magical, so both healing rows are here.
+        ///   pin 5 verbatim "cathedral of magic is where all magic upgrades anre and can unlock new
+        ///                   teirs of spells"    -> 'arcane-tower' is the ENGINE of magical
+        ///                   progression, not a vendor that deals in magic. Applied catalog v19.
         /// Adding an id here is an OWNER ruling, never an agent's inference.
         /// </summary>
         private static readonly HashSet<string> MagicalIds =
@@ -104,13 +120,19 @@ namespace DeNelle.Editor.Regression
                 "tower_arcane_spire",   // element Aether / behaviorId ArcaneTower / projectileStyle "spell"
                 "tower_healer",         // owner 2026-08-14 pin 2: "yes AoE healing" -- healing is magical
                 "healing_caravan",      // same ruling; moves with tower_healer
+                "arcane-tower",         // owner 2026-08-14 pin 5: "cathedral of magic is where all magic
+                                        // upgrades anre and can unlock new teirs of spells" -- the ENGINE of
+                                        // magical progression. behaviorId 'GameplayBuilding' is its BEHAVIOUR
+                                        // (not a firing tower), NOT its cost class. Overrules the jeweler-analogy
+                                        // reading; see the header. Applied catalog v19.
             };
 
         /// <summary>
         /// Rows still on their PRE-RULING basket because their classification is an
         /// OPEN OWNER PIN. **EMPTY as of 2026-08-14** -- the owner answered all four
-        /// WO-947 section 4 pins plus the section 6 id-vs-data pin, and catalog v18
-        /// applies every one of them, so there is nothing left to excuse. The
+        /// WO-947 section 4 pins plus the section 6 id-vs-data pin plus the final
+        /// 'arcane-tower' pin, and catalog v18 + v19
+        /// apply every one of them, so there is nothing left to excuse. The
         /// mechanism stays (case 3 fails if a listed row has stopped violating) so a
         /// FUTURE pin can be carried the same dated, cited way instead of an agent
         /// guessing a side -- the inference-fix CLAUDE.md section 12 forbids.
@@ -119,12 +141,12 @@ namespace DeNelle.Editor.Regression
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
                 // (empty -- every WO-947 pin was answered by the owner on 2026-08-14 and applied in
-                //  structures-catalog.json v18. Do NOT re-add a row here to dodge a gate failure;
+                //  structures-catalog.json v18 + v19. Do NOT re-add a row here to dodge a gate failure;
                 //  an entry here is an OWNER question on record, not a mute button.)
             };
 
         /// <summary>
-        /// Every row WO-947 has actually been converted (catalog v17 + v18). Each records the
+        /// Every row WO-947 has actually been converted (catalog v17 + v18 + v19). Each records the
         /// SIDE it was ruled onto and the basket TOTALS (build, then each upgrade step) that the
         /// conversion deliberately PRESERVED -- both folds were 1:1, so first-cost feel did not
         /// move. A revert, a dropped fold, or a stealth re-balance all trip case 4.
@@ -170,6 +192,15 @@ namespace DeNelle.Editor.Regression
                     Magical = true, Totals = new[] { 350 },
                     Why = "MAGICAL by the same OWNER ruling as tower_healer (\"yes AoE healing\"); the two move " +
                           "together. Basket is crystals + iron + food. v18. Wood (150) folded 1:1 into CRYSTALS." } },
+                { "arcane-tower", new AppliedRow {
+                    Magical = true, Totals = new[] { 120 },
+                    Why = "MAGICAL by OWNER ruling 2026-08-14, verbatim: \"cathedral of magic is where all magic " +
+                          "upgrades anre and can unlock new teirs of spells\" -- it is the ENGINE of magical " +
+                          "progression, not a vendor that deals in magic (the jeweler-analogy reading, which " +
+                          "cited behaviorId 'GameplayBuilding' and the row's civic-landmark _heightNote, is " +
+                          "OVERRULED: behaviorId describes BEHAVIOUR, not cost class). v19. Wood (60) folded " +
+                          "1:1 into CRYSTALS, so the basket is crystals 60 + iron 60, total 120 unchanged. " +
+                          "No upgrade ladder on this row (singleton, maxLevel unset), so ONE basket." } },
             };
 
         [Serializable]
@@ -343,7 +374,7 @@ namespace DeNelle.Editor.Regression
             if (PendingPins.Count == 0)
             {
                 log.AppendLine("  [pins] NONE OPEN - every WO-947 classification pin was answered by the owner on " +
-                               "2026-08-14 and applied in structures-catalog.json v18. The exemption list is empty, " +
+                               "2026-08-14 and applied in structures-catalog.json v18 + v19. The exemption list is empty, " +
                                "so no row is excused from the ruling.");
                 return;
             }
