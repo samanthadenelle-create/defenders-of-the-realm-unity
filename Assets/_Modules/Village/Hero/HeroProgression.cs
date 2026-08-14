@@ -60,6 +60,11 @@ namespace DeNelle.Village
 
         private bool _hasGrantedStarterPoints;
 
+        /// <summary>WO-977/981: AvailablePoints at the FIRST starter-grant attempt. -1 = not yet
+        /// attempted. Held across a failed attempt so a retry grants only the remainder — see the
+        /// partial-throw case in ApplyLevelRewards.</summary>
+        private int _starterBaseline = -1;
+
         /// <summary>Fired on each level gained — arg = new level (for VFX / sound).</summary>
         public event Action<int> OnLevelUp;
         /// <summary>Fired whenever XP changes — args = (current XP, XP needed for next level).</summary>
@@ -277,11 +282,24 @@ namespace DeNelle.Village
                 }
                 else
                 {
-                    int before = skills.AvailablePoints;
+                    // The baseline is captured ONCE, on the first attempt, and survives a failed
+                    // one. GrantSkillPoint increments BEFORE firing OnSkillsChanged, so a throwing
+                    // subscriber leaves the increment landed; re-reading AvailablePoints as the
+                    // baseline on a retry would treat that survivor as pre-existing and grant the
+                    // full 2 again — 3 points instead of 2. Measuring every attempt against the
+                    // ORIGINAL baseline makes the whole sequence idempotent, however many attempts
+                    // it takes.
+                    if (_starterBaseline < 0) _starterBaseline = skills.AvailablePoints;
+                    int before = _starterBaseline;
                     int calls = 0;
                     try
                     {
-                        for (int i = 0; i < StarterPoints; i++) { skills.GrantSkillPoint(); calls++; }
+                        while (skills.AvailablePoints - _starterBaseline < StarterPoints)
+                        {
+                            skills.GrantSkillPoint();
+                            calls++;
+                            if (calls > StarterPoints) break;   // belt: never spin on a no-op granter
+                        }
                     }
                     catch (System.Exception e)
                     {

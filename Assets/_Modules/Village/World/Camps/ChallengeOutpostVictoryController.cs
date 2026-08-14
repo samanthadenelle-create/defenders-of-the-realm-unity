@@ -174,7 +174,10 @@ namespace DeNelle.Village.World.Camps
                     int before = eco.Coins;
                     eco.AddCoins(ClearGold);
                     _goldCredited = eco.Coins - before;
-                    if (_goldCredited == ClearGold)
+                    // >=, not ==: shortfall means credited < requested. Strict equality would flag a
+                // future bonus/multiplier on AddCoins as a SHORT payout and tell the player their
+                // reward was capped while their wallet went UP. Matches the XP branch below.
+                if (_goldCredited >= ClearGold)
                         FlowTrace.Step(Sys, $"gold credited: +{_goldCredited} of {ClearGold} requested -> total {eco.Coins}.");
                     else
                     {

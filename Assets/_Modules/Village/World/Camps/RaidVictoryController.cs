@@ -279,9 +279,20 @@ namespace DeNelle.Village.World.Camps
         /// available: the wallet totals BEFORE and AFTER, and we log the DELTA — a measured
         /// quantity rather than a derived one.</para>
         /// </summary>
+        // WO-978 follow-up: the MEASURED credit, kept so the VICTORY SCREEN can show what the
+        // player actually received. Fixing only the log was half the ticket — at a capped town
+        // bank the trace read "credited 0/500" while the screen still advertised "+500 crystals",
+        // which is the same "I raided and got nothing" unfalsifiability one layer up. The sibling
+        // ChallengeOutpostVictoryController already does this; the raid path did not.
+        private int  _crystalsCredited;
+        private int  _foodCredited;
+        private bool _rewardShort;
+
         private void GrantLoot(ResourceCost loot)
         {
             if (loot.IsZero) return;
+
+            _crystalsCredited = 0; _foodCredited = 0; _rewardShort = false;
 
             var eco = EconomyService.Instance;
             if (eco != null)
@@ -290,9 +301,12 @@ namespace DeNelle.Village.World.Camps
                 // store (WO-842), so before/after is a real measurement of what was credited.
                 int w0 = eco.Wood, f0 = eco.Food, i0 = eco.Iron, c0 = eco.Crystals, g0 = eco.Coins;
                 eco.Grant(loot);
-                LogCredit("EconomyService", loot,
-                          eco.Wood - w0, eco.Food - f0, eco.Iron - i0,
-                          eco.Crystals - c0, eco.Coins - g0);
+                int dw = eco.Wood - w0, df = eco.Food - f0, di = eco.Iron - i0,
+                    dc = eco.Crystals - c0, dg = eco.Coins - g0;
+                _crystalsCredited = dc; _foodCredited = df;
+                _rewardShort = dw < loot.Wood || df < loot.Food || di < loot.Iron
+                            || dc < loot.Crystals || dg < loot.Coins;
+                LogCredit("EconomyService", loot, dw, df, di, dc, dg);
                 return;
             }
 
@@ -306,9 +320,14 @@ namespace DeNelle.Village.World.Camps
                 int c0 = state.Resources.Crystals, f0 = state.Resources.Food;
                 if (loot.Crystals != 0) gs.AddCrystals(loot.Crystals);
                 if (loot.Food != 0) gs.AddFood(loot.Food);
+                int dcF = state.Resources.Crystals - c0, dfF = state.Resources.Food - f0;
+                _crystalsCredited = dcF; _foodCredited = dfF;
+                // This route has no wood/iron/gold mover, so those axes are dropped outright —
+                // that counts as short for the player-facing caveat, not just for the log.
+                _rewardShort = dcF < loot.Crystals || dfF < loot.Food
+                            || loot.Wood != 0 || loot.Iron != 0 || loot.Coins != 0;
                 LogCredit("GameStateService fallback", loot,
-                          0, state.Resources.Food - f0, 0,
-                          state.Resources.Crystals - c0, 0);
+                          0, dfF, 0, dcF, 0);
             }
             else if (gs != null)
             {
@@ -478,12 +497,25 @@ namespace DeNelle.Village.World.Camps
                 // AutoDismissSeconds (fed _autoReturnSeconds) IS the anti-soft-lock guard
                 // that previously lived in AutoReturnRoutine — same route, same timing.
                 // WO-771.6: the win now carries stars + %-destruction + the loot breakdown.
-                EndStateView.Show(EndStateVM.FromRaidVictory(
+                // WO-978 follow-up: show the CREDITED amounts, never the requested ones. At a
+                // capped bank these differ, and the screen is what the player believes.
+                var vm = EndStateVM.FromRaidVictory(
                     joinedCompanionName, ReturnHome, _autoReturnSeconds,
                     result != null ? result.Stars : -1,
                     result != null ? result.DestructionPercent : -1,
                     result != null ? result.ElapsedSeconds : -1f,
-                    loot.Crystals, loot.Food));
+                    _crystalsCredited, _foodCredited);
+
+                if (_rewardShort && vm != null)
+                {
+                    // WORDS, never colour alone — the owner is red/green colourblind, so a dimmed
+                    // number would carry no information at all. Same sentence the outpost uses.
+                    vm.Subtitle = string.IsNullOrEmpty(vm.Subtitle)
+                        ? "Some of the reward could not be paid out."
+                        : vm.Subtitle + " Some of the reward could not be paid out.";
+                }
+
+                EndStateView.Show(vm);
 
                 FlowTrace.Step("Raid", $"RETURN — victory screen shown for '{configId}' " +
                     (joinedCompanionName != null ? $"(+{joinedCompanionName})" : "(party already full)") +

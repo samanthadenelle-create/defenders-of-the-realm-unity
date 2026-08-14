@@ -157,9 +157,19 @@ namespace DeNelle.Village.Quests
             }
             else
             {
+                // ⚠ This message used to promise the player "does not lose the reward". That was
+                // FALSE and is exactly the hollow-assertion class WO-978 exists to kill — verified:
+                // DailyQuestService.Report skips any quest whose Completed is already true, so
+                // QuestCompleted fires EXACTLY ONCE per quest and can never re-invoke this bridge;
+                // nothing else calls PayOut; and EnsureToday rolls a fresh set at midnight. So an
+                // unlatched, zero-credit quest is unreachable — the reward IS lost today.
+                // Not latching is still the right call (it costs nothing and leaves the door open
+                // for a reclaim path), but the trace must not claim a retry that does not exist.
                 FlowTrace.Fail("Economy", $"DailyQuest '{q.TemplateId}' paid NOTHING — {requestedAxes} reward axis/axes were " +
-                                          "requested and 0 landed. Deliberately NOT latching ClaimedAtUnix, so the quest stays " +
-                                          "claimable and the player does not lose the reward (WO-978).");
+                                          "requested and 0 landed (town bank at cap is the usual cause). ClaimedAtUnix is NOT " +
+                                          "latched, but there is NO reclaim path today: QuestCompleted fires once per quest and " +
+                                          "the day's set is rolled at midnight, so THE REWARD IS LOST. What should happen at cap " +
+                                          "is the open owner question in WO-978 section 6.");
             }
         }
 

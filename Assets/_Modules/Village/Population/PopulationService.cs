@@ -144,10 +144,18 @@ namespace DeNelle.Village.Population
             int xpBefore = s.PopulationXP;
             if (amount > 0) s.PopulationXP = Mathf.Max(0, s.PopulationXP + amount);
             int xpCredited = s.PopulationXP - xpBefore;
-            if (amount > 0 && xpCredited < amount)
+            // NOT a shortfall check. Unlike EconomyService.Grant there is no cap seam here: the
+            // only clamp is Mathf.Max(0, ...), and with amount > 0 and the PopulationXP >= 0
+            // invariant this method itself maintains, the sum is always positive and the clamp is
+            // a no-op — so credited can never be LESS than requested. A "SHORT" warn here would be
+            // unreachable by construction (the hollow-assertion class this whole pass is closing),
+            // and would send the next reader hunting a cap that does not exist. The only way the
+            // numbers can disagree is signed-int overflow, so THAT is what is asserted.
+            if (amount > 0 && xpCredited != amount)
                 FlowTrace.Warn("Population",
-                    $"AddPopulationXP SHORT from '{source}': credited {xpCredited} of {amount} requested " +
-                    $"-> xp={s.PopulationXP}.");
+                    $"AddPopulationXP OVERFLOW from '{source}': credited {xpCredited} for a request of " +
+                    $"{amount} -> xp={s.PopulationXP}. PopulationXP has wrapped or been corrupted; " +
+                    "this is not a cap.");
 
             // Source -> counter. Waves reuse GameState.WavesCompleted (EchoService owns it);
             // village-upgrade carries no XP/counter (cap is derived from the tier).
