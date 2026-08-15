@@ -386,7 +386,7 @@ namespace DeNelle.Village.Talents
 
         public event Action Changed;
 
-        public string Title { get; private set; } = "Skills";
+        public string Title { get; private set; } = "TALENT TREE";
 
         public void Close() => _onClose?.Invoke();
 
@@ -1112,6 +1112,10 @@ namespace DeNelle.Village.Talents
 
         /// <summary>True when a real node is selected (the detail strip has content).</summary>
         public bool HasSelection => HeroTalentCatalog.FindNode(_selectedId) != null;
+
+        /// <summary>Id of the selected node ("" when none). The View uses this for the
+        /// focus plate so the selected seat always matches the detail strip.</summary>
+        public string SelectedNodeId => _selectedId ?? "";
 
         /// <summary>Display name of the selected node, or "" when none.</summary>
         public string SelectedNodeName

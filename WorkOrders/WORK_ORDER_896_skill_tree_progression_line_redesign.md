@@ -4,18 +4,40 @@
 
 # WORK ORDER 896 — Skill tree: simplify to a connected progression line (kill the dense grid)
 
-**Status:** PARTIAL - remainder named by the 2026-08-14 phantom sweep
+**Status:** IMPLEMENTED — awaiting owner felt-close (2026-08-15 sparse Obsidian graph)
 
-> **PARTIAL - re-scoped 2026-08-14 (phantom sweep).** Most of this WO is present in HEAD; a named
-> remainder is outstanding. No per-WO path:line was recorded here: see the 2026-08-14 phantom sweep for the
-> implementation site and the remainder. Do not re-implement the shipped part.
-> (Any prior dated reconciliation note on this file stands - see the preserved line below.)
-> _Prior status line, preserved: Status: READY TO IMPLEMENT - partial (reconciled 2026-08-09, per this file's own 08-08 banner - commit `287ac354` shipped the progression line, but the commit itself concedes overflow remains and mitigates it with a MORE BELOW cue, against this WO's acceptance criterion that nothing is clipped)_
+> ## OWNER CONFIRMATION 2026-08-15 (BINDING visual north star)
+> Owner, on the **Obsidian kit demo Talent Tree** (screenshot
+> `C:\Users\Elden\OneDrive\Pictures\Screenshots\Screenshot 2026-08-15 175853.png`):
+>
+> *"Thats what I really always wanted"* / *"isnt that much better?"*
+>
+> **Yes.** That demo is the **authoritative look**, not the dense grid and not a still-busy
+> “horizontal tracks + MORE BELOW” mitigation of `287ac354`.
+>
+> ### Demo properties that MUST land in the live Hero Skills panel
+> | Property | Demo |
+> |----------|------|
+> | Density | **Few large nodes**, lots of dark empty space |
+> | Graph | **Sparse tree** with gold connectors between prerequisites (not a packed spreadsheet) |
+> | Focus | **One big outlined plate** = current / selected |
+> | State | Ranks on plate (`3/3`, `5/5`); locked = dim; available = clear |
+> | Chrome | Dark frame, gold trim, crest **TALENT TREE** title, single **Confirm** |
+> | Feel | Calm, scannable, progression readable in one glance |
+>
+> ### What to kill
+> - Dense multi-row icon grids  
+> - Clipped top/side rows and “MORE BELOW” as a substitute for fit  
+> - Competing labels / overlapping chrome  
+> - Any “busy” layout that fails owner focus even if “technically tracks”
+>
+> Live panel: `HeroSkillTreePanelMvvm.cs` (+ VM). Kit: `ElarionUiKit` / `RpgUiCatalog.FrameTalent` /
+> Obsidian talent demo surface (`ObsidianComponentGalleryBuilder` · TalentTree).
 
-**Status:** PARTIAL (reconciled 2026-08-08) · **Silo:** UI / talents · **For:** CLAUDE CLI · **Date:** 2026-08-05
-**PO:** Samantha (owner) · **Author:** UI seat
-**Owner ruling:** *"this skill tree is hard to read — simplify the tree, just have the skills connected by a line showing progression."*
-**Obsidian toolkit (owner pointer):** build with `docs/UI_BLINK_TEMPLATE_CANON.md` + `ElarionUiKit` (the Obsidian kit) — same chrome, node plates, and gold/parchment palette the rest of the game uses.
+**Silo:** UI / talents · **For:** CLAUDE CLI · **Date:** 2026-08-05  
+**PO:** Samantha (owner) · **Author:** UI seat  
+**Owner ruling (original):** *"this skill tree is hard to read — simplify the tree, just have the skills connected by a line showing progression."*  
+**Owner ruling (2026-08-15):** match the **Obsidian demo** above — that is the product.
 
 ## 0. Problem (grounded)
 `Assets/_Modules/Village/Talents/HeroSkillTreePanelMvvm.cs` renders talents as a **dense multi-row icon GRID**.
@@ -64,4 +86,5 @@ Replace the grid with **horizontal tracks, each a single line of nodes connected
 **Owner felt-close:** opens Grom's skills, immediately reads the progression as a line of connected nodes, taps one to see what it does.
 
 ## 5. RESULT
-`WorkOrders/WORK_ORDER_896_skill_tree_progression_line_redesign.RESULT.md` — the screenshot proving the connected-line layout.
+`WorkOrders/WORK_ORDER_896_skill_tree_progression_line_redesign.RESULT.md` — sparse graph shipped 2026-08-15;
+`COMPILE_GATE_OK` + `SKILLS_PANEL_LAYOUT_OK`. Owner felt-close still open (visual product).

@@ -1,63 +1,28 @@
 // =============================================================================
-// HeroSkillTreePanelMvvm — the Knight skill-tree VIEW (MVVM slice). A DUMB SKIN.
+// HeroSkillTreePanelMvvm — the hero skill-tree VIEW (MVVM slice). A DUMB SKIN.
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.Village   Namespace: DeNelle.Village.Talents
 //
-// WO-896 (2026-08-05) — PROGRESSION LINE, not a grid. Owner ruling: "this skill tree
-// is hard to read - simplify the tree, just have the skills connected by a line showing
-// progression." The authored-x/y NODE GRAPH is retired. The panel now draws vm.Tracks:
-// each track is one horizontal LINE of nodes (left = earlier, right = later) with a
-// title block on its left and a connecting line running THROUGH the node centres; tracks
-// stack top-down and scroll. A node click STAGES / UNSTAGES it into a plan; nothing is
-// spent until CONFIRM (plan→commit flow, unchanged). ALL state/logic (track order, node
-// state, lock reasons, pending set, plan cost) lives in HeroSkillTreeVM — the View never
-// reads game state (ui-mvvm-binding-seam rule). The LOADOUT (quick-swap) band, the detail
-// column, Cancel/Respec/CONFIRM and the WISDOM chip are untouched by WO-896.
+// WO-896 (owner 2026-08-15) — SPARSE OBSIDIAN TALENT GRAPH, not a dense grid and
+// not the busy "horizontal tracks + MORE BELOW" mitigation. Authoritative look =
+// the Obsidian kit Talent Tree demo (Screenshot 2026-08-15 175853.png):
+//   * Few LARGE nodes, lots of dark empty space
+//   * Gold connectors along prerequisites (diagonal OK)
+//   * One thick gold FOCUS plate for the selected / next node
+//   * Rank pip on the plate ("1/1" owned, "0/1" locked)
+//   * Calm chrome — FrameTalent + crest title "TALENT TREE"
+//   * Detail / loadout / Cancel-Respec-CONFIRM stay (game needs them; demo is pure)
 //
-// COLOURBLIND LAW (owner is red/green colourblind — the binding constraint of WO-896):
-// every state is separable with COLOUR STRIPPED OUT. Owned = the only FILLED plate +
-// check tick; Next = the only OVERSIZED plate (132 vs 112) + double ring + a "NEXT: "
-// label prefix; Locked = thinnest border + PADLOCK glyph; Inert (WO-910: no runtime
-// consumer) = a SLASH across the plate + "!" badge + "[!] " prefix. Connectors differ by
-// THICKNESS and DASH PATTERN (solid 8 / solid 4 / dashed 3 / dotted 2), never by hue.
-// See the full matrix above BuildTrackNode.
+// COLOURBLIND LAW (owner is red/green colourblind): every state is separable with
+// colour stripped. Owned = filled plate + rank 1/1; Next/Selected = oversized +
+// thick gold outer frame; Locked = dim + padlock; Inert = slash + "!". Connectors
+// differ by THICKNESS (solid 8 / solid 4 / dashed 3), never by hue.
 //
-// WO-865 (2026-08-04, from the real Seeker capture 07-skills-panel.png): the panel
-// body is laid out as DISJOINT FIXED-PIXEL BANDS, never fractions of the body well.
-// See the geometry block below the field list for the arithmetic that proves why —
-// in one line: FrameTalent's body resolves to ~493 px tall at 2340x1080, the action
-// row was a 0.065 fraction of it (32 px), and ElarionUiKit.ClampMinTouch then grew
-// each button to the 112 px touch floor SYMMETRICALLY, straight over the graph well
-// and the quick-swap slots. Same failure class as WO-841 / WO-852. The stack now is
-//   columns region (graph well + ability band | detail column)  /  action row
-// and the tracks live on a fixed-pixel row lattice inside a RectMask2D scroll well
-// (WO-896 replaced the authored x/y lattice + its reserved section-band row with
-// stacked track rows; every row still clears the SectionClearPx floor).
+// WO-865 FIXED-PIXEL BANDS still own the outer chrome (action / ability / detail).
+// The graph itself is a free-form scroll canvas on authored x/y (auto-layout when
+// unset) so nodes never pack into a spreadsheet.
 //
-// WO-676 §B (owner-approved icon-only redesign, 2026-07-11; AMENDED by WO-896): nodes
-// are icon plates carrying ONE state badge — cost pip (available), -n pip + ring
-// (planned), check stamp (owned), padlock (locked), "!" + slash (inert). WO-896 adds
-// the SHORT NAME under each plate (the line has to be readable without tapping); the
-// full desc/state text still lives in the right-hand detail column. Wisdom is a
-// CurrencyChip (top-right);
-// the plan summary folds into the CONFIRM label ("CONFIRM n · −cost"); quick-swap
-// and respec feedback are transient toasts (BuildFeedbackToast) — target ≤2
-// persistent text strips outside the graph. Colorblind law: every state carries a
-// shape/stamp/pip, never hue alone (dim = luminance, pips/stamps = shape+text).
-//
-// Code-built uGUI ONLY (no UXML — §8). Line geometry uses a fixed-pixel content rect
-// (sized in RebuildTracks from the track/row count) so every connector is an axis-
-// aligned bar with deterministic bounds at build time (no dependence on a layout
-// pass). The content scrolls (owner: one scrollable canvas, Knight + Shared).
-//
-// OWNER F8 2026-07-11 (minimal pass): node FACES are deliberately MINIMAL — a flat
-// obsidian plate + thin gilt line border, small tinted-down icon ("remove the
-// background image and just a simple icon with the lines"). The painted talent_N
-// plate art is retired from node faces; the ornate Obsidian look stays on the
-// PANEL frame (BuildObsidianPanel) and the quick-swap tiles. Every sprite lookup
-// remains null-safe.
-//
-// Registers PanelId.HeroSkillTree (+ legacy HeroTalents route; the Skills tab).
+// Code-built uGUI ONLY (no UXML — §8). Registers PanelId.HeroSkillTree.
 // =============================================================================
 
 using System.Collections.Generic;
@@ -185,42 +150,44 @@ namespace DeNelle.Village.Talents
         /// <summary>Retired lattice: authored Y the "Universal - any class" band divided the graph at.</summary>
         public const float SectionBandY = 0.965f;
 
-        // ── WO-896 PROGRESSION-LINE LATTICE (the live one) ───────────────────────
-        // A TRACK ROW is: [ title block ][ node | line | node | line | node | node ]
-        // Every number is a FIXED reference pixel (the WO-865 law), so a row can never be
-        // squeezed under its own touch/line-box floors no matter the device aspect.
+        // ── WO-896 SPARSE GRAPH LATTICE (Obsidian demo north star) ─────────────────
+        // Nodes sit on an authored 0..1 canvas (hero-talents.json x/y). GraphUnit* maps
+        // that canvas to fixed reference pixels so the lattice still clears a full node
+        // plate (SkillsPanelLayoutRegression [grid] pins this). Unset nodes auto-layout
+        // from tier/column without packing into a dense grid.
 
-        /// <summary>Width of a track's left-hand title block (kind tag + name + note).</summary>
-        public const float TrackTitleWpx = 200f;
-        /// <summary>Centre-to-centre pitch of two nodes on a track: a node plate plus clear air.
-        /// It is also the width of the name label under each node.</summary>
+        /// <summary>FOCUS plate (selected OR track "next") — deliberately LARGER so it
+        /// reads at arm's length with colour stripped (colourblind law).</summary>
+        public const float NodeFocusPx = 148f;
+
+        /// <summary>Connector stroke for an earned path (both ends owned/planned).</summary>
+        public const float ConnectorThickPx = 8f;
+        /// <summary>Connector stroke for the live frontier (parent owned, child not).</summary>
+        public const float ConnectorMidPx = 5f;
+        /// <summary>Connector stroke for not-yet-earned links.</summary>
+        public const float ConnectorThinPx = 3f;
+
+        /// <summary>How far a connector stops short of each plate centre so the line
+        /// ends at the plate rim rather than running under the icon.</summary>
+        public const float ConnectorInsetFrac = 0.48f;
+
+        /// <summary>Rank pip ("1/1") band seated on the TOP of every plate — demo look.</summary>
+        public const float RankBandPx = 28f;
+
+        // Track-row leftovers kept so SkillsPanelLayoutRegression / older names stay
+        // resolvable; the live layout never builds track rows.
+        public const float TrackTitleWpx = 0f;
         public const float NodePitchPx = 200f;
-        /// <summary>The FOCUS ("next") plate is deliberately LARGER than every other plate — a
-        /// SIZE difference, readable with colour stripped out (the owner is red/green colourblind).</summary>
-        public const float NodeNextPx = 132f;
-        /// <summary>The name label under a node: TWO whole FontFloor line boxes (30 x 1.25 = 37.5),
-        /// so a two-word talent ("Farsight Emplacements") wraps instead of ellipsizing.</summary>
-        public const float NodeLabelBandPx = 78f;
-        /// <summary>Air between a node plate and its name label.</summary>
-        public const float NodeLabelGapPx = 6f;
-        /// <summary>Air above the node band inside a row — also the headroom the oversized "next"
-        /// plate and its outer ring grow into.</summary>
+        public const float NodeNextPx = NodeFocusPx;
+        public const float NodeLabelBandPx = 0f;
+        public const float NodeLabelGapPx = 0f;
         public const float TrackTopPadPx = 10f;
-        /// <summary>One track row: pad + node plate + gap + a two-line name band.</summary>
-        public const float TrackRowPx = TrackTopPadPx + NodeSizePx + NodeLabelGapPx + NodeLabelBandPx;
-        /// <summary>Clear air between two track rows.</summary>
-        public const float TrackGapPx = 18f;
-        /// <summary>Nodes per row before a track wraps to a continuation row. Four keeps the whole
-        /// content rect inside the graph well's width at the reference device (no side-scrolling
-        /// for a normal tier-1..tier-4 chain).</summary>
+        public const float TrackRowPx = NodeSizePx + TrackTopPadPx * 2f;
+        public const float TrackGapPx = 24f;
         public const int TrackWrapCount = 4;
-        /// <summary>Inset around the whole scroll content, so the first row is WHOLE at rest.</summary>
-        public const float ContentPadPx = 14f;
-        /// <summary>Title block: the small-caps kind tag ("WAR PATH") line box.</summary>
+        public const float ContentPadPx = GraphPadPx;
         public const float TrackKindBandPx = 38f;
-        /// <summary>Title block: the track name — two line boxes.</summary>
         public const float TrackNameBandPx = 76f;
-        /// <summary>Title block: the qualifier note ("after Thunderbolt") line box.</summary>
         public const float TrackNoteBandPx = 38f;
 
         // ── The only FRACTIONS left in the layout: the column split and the in-tile text
@@ -240,11 +207,6 @@ namespace DeNelle.Village.Talents
         // Last drawn layout signature — §12 instrumentation logs a line only when the drawn
         // shape CHANGES, never once per Render (Render fires on every selection tap).
         private string _lastLayoutSig;
-        // "MORE BELOW" overflow cue, pinned to the WELL (not the scrolling content) and shown
-        // only when the tracks are taller than the well. The well resolves to ~221 ref px at
-        // 2340x1080 — about one track row — so without a cue a player can believe the tree ends
-        // at the first path. Text, not an icon: it survives greyscale (colourblind law).
-        private GameObject _scrollHint;
 
         public bool IsOpen => _ui != null;
 
@@ -422,67 +384,99 @@ namespace DeNelle.Village.Talents
             _lastQuickStatus = quick;
         }
 
-        // ── WO-896: build the PROGRESSION LINE (tracks of connected nodes) ───────
-        // The dense authored-x/y GRID is retired (owner ruling: "this skill tree is hard to
-        // read - simplify the tree, just have the skills connected by a line showing
-        // progression"). Every vm.Tracks entry becomes a ROW: a title block on the left, then
-        // up to TrackWrapCount node plates sitting ON a line that runs THROUGH their centres,
-        // left = earlier, right = later. Rows stack top-down inside the SAME RectMask2D scroll
-        // well, on a fixed-pixel content rect that is padded on all sides — so the first row is
-        // WHOLE at rest (no clipped top row, the WO-896 §0 defect) and a long tree just scrolls.
+        // ── WO-896: SPARSE TALENT GRAPH (Obsidian demo) ───────────────────────────
+        // Flatten every track seat onto a free-form canvas. Authored x/y drive placement
+        // when present; missing seats auto-layout by tier/column (and branch) with room
+        // to breathe. Gold connectors follow real prerequisites (diagonal OK). No name
+        // labels under plates (detail column owns the copy). No "MORE BELOW" cue.
 
         private void RebuildTracks()
         {
             if (_graphContent == null || _vm == null) { ClearContent(); return; }
-            // Render() re-runs on EVERY tap (selection is VM state), so the line is rebuilt
-            // constantly. Keep where the player had scrolled to — snapping back to the top on
-            // each tap would make the lower tracks unusable now that tracks stack vertically.
             Vector2 keptScroll = _graphContent.anchoredPosition;
             ClearContent();
 
+            var seats = new List<SkillTrackNodeVM>(64);
+            var byId = new Dictionary<string, SkillTrackNodeVM>(64);
             var tracks = _vm.Tracks;
-            int trackCount = tracks != null ? tracks.Count : 0;
-            float contentW = ContentPadPx * 2f + TrackTitleWpx + TrackWrapCount * NodePitchPx;
-            // The row height can never fall under the section-clearance floor (a node plate plus
-            // a label band plus air) — the same floor SkillsPanelLayoutRegression pins.
-            float rowH = Mathf.Max(TrackRowPx, SectionClearPx);
-
-            float y = ContentPadPx;
-            int rowsBuilt = 0;
-            for (int t = 0; t < trackCount; t++)
+            if (tracks != null)
             {
-                var track = tracks[t];
-                if (track == null || track.Nodes == null || track.Nodes.Count == 0) continue;
-                int seats = track.Nodes.Count;
-                int rowsInTrack = (seats + TrackWrapCount - 1) / TrackWrapCount;
-                for (int r = 0; r < rowsInTrack; r++)
+                for (int t = 0; t < tracks.Count; t++)
                 {
-                    var captured = track;
-                    int rowIndex = r;
-                    int from = r * TrackWrapCount;
-                    int count = Mathf.Min(TrackWrapCount, seats - from);
-                    float rowTop = y;
-                    // One bad node can never blank the whole tree (§12 / Guard law).
-                    Guard.Try("SkillTree", "build track row '" + captured.Title + "' #" + rowIndex,
-                        () => BuildTrackRow(captured, rowIndex, from, count, rowTop, contentW, rowH));
-                    y += rowH + TrackGapPx;
-                    rowsBuilt++;
+                    var track = tracks[t];
+                    if (track == null || track.Nodes == null) continue;
+                    for (int i = 0; i < track.Nodes.Count; i++)
+                    {
+                        var seat = track.Nodes[i];
+                        if (string.IsNullOrEmpty(seat.Node.Id)) continue;
+                        seats.Add(seat);
+                        byId[seat.Node.Id] = seat;
+                    }
                 }
             }
 
-            if (rowsBuilt == 0)
+            if (seats.Count == 0)
             {
                 var empty = ElarionUiKit.Label(_graphContent, "No talents to show yet.", 0f, 1f,
                     ElarionUi.ParchmentDim, ElarionUi.FontBody,
                     TMPro.TextAlignmentOptions.Center, 0.06f, 0.94f);
                 ElarionUiKit.FitSingleLine(empty);
-                FlowTrace.Warn("SkillTree", "progression line drew ZERO rows - the graph well is empty");
+                FlowTrace.Warn("SkillTree", "sparse graph drew ZERO nodes - the graph well is empty");
+                _graphContent.sizeDelta = new Vector2(
+                    ContentPadPx * 2f + GraphUnitWpx * 0.5f,
+                    ContentPadPx * 2f + GraphUnitHpx * 0.4f);
+                return;
             }
 
-            float contentH = Mathf.Max(rowH + ContentPadPx * 2f, y - TrackGapPx + ContentPadPx);
+            // Norm positions (0..1+, may extend past 1 for auto secondary branches).
+            var norm = new Dictionary<string, Vector2>(seats.Count);
+            ResolveGraphNorms(seats, norm);
+
+            float pad = GraphPadPx;
+            float maxX = 0f, maxY = 0f;
+            var centers = new Dictionary<string, Vector2>(seats.Count);
+            foreach (var kv in norm)
+            {
+                float cx = pad + kv.Value.x * GraphUnitWpx;
+                float cyDown = pad + kv.Value.y * GraphUnitHpx; // px DOWN from content top
+                centers[kv.Key] = new Vector2(cx, cyDown);
+                if (cx > maxX) maxX = cx;
+                if (cyDown > maxY) maxY = cyDown;
+            }
+
+            float contentW = maxX + pad + NodeFocusPx;
+            float contentH = maxY + pad + NodeFocusPx + RankBandPx;
             _graphContent.sizeDelta = new Vector2(contentW, contentH);
-            // Rest position = flush top-LEFT (the first row WHOLE, never mid-plate); a scrolled
-            // player keeps their place, clamped so the content can never sit off its own well.
+
+            // Connectors FIRST so opaque plates draw over their ends.
+            for (int i = 0; i < seats.Count; i++)
+            {
+                var seat = seats[i];
+                var prereqs = seat.Node.Prereqs;
+                if (prereqs == null) continue;
+                if (!centers.TryGetValue(seat.Node.Id, out var to)) continue;
+                for (int p = 0; p < prereqs.Count; p++)
+                {
+                    string pr = prereqs[p];
+                    if (string.IsNullOrEmpty(pr)) continue;
+                    if (!centers.TryGetValue(pr, out var from)) continue;
+                    if (!byId.TryGetValue(pr, out var parentSeat)) continue;
+                    BuildGraphConnector(_graphContent, from, to, parentSeat, seat);
+                }
+            }
+
+            string selectedId = _vm.SelectedNodeId ?? "";
+            for (int i = 0; i < seats.Count; i++)
+            {
+                var seat = seats[i];
+                if (!centers.TryGetValue(seat.Node.Id, out var c)) continue;
+                bool focus = seat.State == SkillNodeState.Next
+                          || (!string.IsNullOrEmpty(selectedId) && selectedId == seat.Node.Id);
+                Guard.Try("SkillTree", "build graph node '" + seat.Node.Id + "'",
+                    () => BuildGraphNode(seat, c.x, c.y, focus));
+            }
+
+            // Keep scroll place; rest = flush top-left so the first nodes are whole.
             var well = _graphContent.parent as RectTransform;
             float wellW = well != null ? well.rect.width : 0f;
             float wellH = well != null ? well.rect.height : 0f;
@@ -492,245 +486,218 @@ namespace DeNelle.Village.Talents
                 Mathf.Clamp(keptScroll.x, -maxRight, 0f),
                 Mathf.Clamp(keptScroll.y, 0f, maxDown));
 
-            UpdateScrollHint();   // (also re-evaluated live on every scroll — see BuildScrollGraph)
-
-            string sig = trackCount + "/" + rowsBuilt + "/" + contentH.ToString("F0");
+            string sig = seats.Count + "/" + contentW.ToString("F0") + "x" + contentH.ToString("F0");
             if (sig != _lastLayoutSig)
             {
                 _lastLayoutSig = sig;
-                FlowTrace.Step("SkillTree", "progression line drawn: " + trackCount + " track(s), " +
-                                            rowsBuilt + " row(s), content " + contentW.ToString("F0") +
-                                            "x" + contentH.ToString("F0") + " px");
+                FlowTrace.Step("SkillTree", "sparse graph drawn: " + seats.Count + " node(s), content " +
+                                            contentW.ToString("F0") + "x" + contentH.ToString("F0") + " px");
             }
         }
 
-        // One track row: the title block, then the connectors (behind), then the plates + labels.
-        private void BuildTrackRow(SkillTrackVM track, int rowIndex, int from, int count,
-                                   float rowTop, float contentW, float rowH)
+        /// <summary>Map every seat to a 0..1(+)-ish canvas position. Authored x/y win;
+        /// missing seats auto-layout by tier/column so ranger/mage (no authoring) and
+        /// knight secondary branches still read as a calm tree, not a packed grid.</summary>
+        private static void ResolveGraphNorms(List<SkillTrackNodeVM> seats,
+                                              Dictionary<string, Vector2> norm)
         {
-            var row = PxRect(_graphContent, "Track" + rowIndex + "_" + track.Title, 0f, rowTop, contentW, rowH);
-            BuildTrackTitle(row, track, rowIndex);
-
-            var seats = track.Nodes;
-            float cy = -(TrackTopPadPx + NodeSizePx * 0.5f);   // plate centre, px DOWN from the row top
-
-            // Connectors FIRST so the opaque plates draw over their ends.
-            for (int i = 1; i < count; i++)
-                BuildConnector(row, seats[from + i - 1], seats[from + i], NodeCenterX(i - 1), NodeCenterX(i), cy);
-
-            for (int i = 0; i < count; i++)
+            // Pass 1 — authored.
+            int autoIdx = 0;
+            for (int i = 0; i < seats.Count; i++)
             {
-                var seat = seats[from + i];
-                BuildTrackNode(row, seat, NodeCenterX(i), cy);
-                BuildNodeLabel(row, seat, NodeCenterX(i), cy);
+                var n = seats[i].Node;
+                if (n.X >= 0f && n.Y >= 0f)
+                    norm[n.Id] = new Vector2(n.X, n.Y);
             }
-        }
 
-        /// <summary>Centre X (content px) of the i-th node seat in a row.</summary>
-        private static float NodeCenterX(int i)
-        {
-            return ContentPadPx + TrackTitleWpx + i * NodePitchPx + NodePitchPx * 0.5f;
-        }
-
-        // The left-hand title block: kind tag over the track name over an optional qualifier
-        // ("after Thunderbolt" / "no order - pick any" / "prerequisite is hidden"). Continuation
-        // rows carry "(cont.)" instead, so a wrapped pool never reads as a second track.
-        private static void BuildTrackTitle(Transform row, SkillTrackVM track, int rowIndex)
-        {
-            var host = PxRect(row, "TrackTitle", ContentPadPx, 0f, TrackTitleWpx, TrackRowPx);
-            if (rowIndex > 0)
+            // Pass 2 — missing: prefer a seat under a placed prerequisite, else tier/column.
+            for (int pass = 0; pass < 3; pass++)
             {
-                var cont = ElarionUiKit.Label(host, "(cont.)", 0f, 1f, ElarionUi.ParchmentDim,
-                    ElarionUi.FontMicro, TMPro.TextAlignmentOptions.MidlineRight, 0.04f, 0.96f);
-                PinBandFromTop(cont.rectTransform, TrackTopPadPx + NodeSizePx * 0.5f - TrackKindBandPx * 0.5f,
-                               TrackKindBandPx);
-                ElarionUiKit.FitSingleLine(cont);
-                return;
-            }
+                bool any = false;
+                for (int i = 0; i < seats.Count; i++)
+                {
+                    var n = seats[i].Node;
+                    if (norm.ContainsKey(n.Id)) continue;
+                    any = true;
 
-            var kind = ElarionUiKit.Label(host, track.Kind, 0f, 1f, ElarionUi.Gilt,
-                ElarionUi.FontMicro, TMPro.TextAlignmentOptions.MidlineLeft, 0.04f, 0.98f, bold: true);
-            PinBandFromTop(kind.rectTransform, TrackTopPadPx, TrackKindBandPx);
-            ElarionUiKit.FitSingleLine(kind);
+                    Vector2? under = null;
+                    if (n.Prereqs != null)
+                    {
+                        for (int p = 0; p < n.Prereqs.Count; p++)
+                        {
+                            string pr = n.Prereqs[p];
+                            if (!string.IsNullOrEmpty(pr) && norm.TryGetValue(pr, out var pp))
+                            {
+                                // Slight fan-out so multi-children of one parent don't stack.
+                                float fan = ((autoIdx++ % 5) - 2) * 0.06f;
+                                under = new Vector2(
+                                    Mathf.Clamp01(pp.x + fan),
+                                    Mathf.Min(1.15f, pp.y + 0.16f));
+                                break;
+                            }
+                        }
+                    }
+                    if (under.HasValue) { norm[n.Id] = under.Value; continue; }
 
-            var name = ElarionUiKit.Label(host, track.Title, 0f, 1f, ElarionUi.Parchment,
-                ElarionUi.FontBody, TMPro.TextAlignmentOptions.TopLeft, 0.04f, 0.98f, bold: true);
-            PinBandFromTop(name.rectTransform, TrackTopPadPx + TrackKindBandPx + 2f, TrackNameBandPx);
-            ElarionUiKit.FitBlock(name);
-
-            if (!string.IsNullOrEmpty(track.Note))
-            {
-                var note = ElarionUiKit.Label(host, track.Note, 0f, 1f, ElarionUi.ParchmentDim,
-                    ElarionUi.FontMicro, TMPro.TextAlignmentOptions.TopLeft, 0.04f, 0.98f);
-                PinBandFromTop(note.rectTransform, TrackTopPadPx + TrackKindBandPx + TrackNameBandPx + 4f,
-                               TrackNoteBandPx);
-                ElarionUiKit.FitSingleLine(note);
+                    // Tier/column fallback (shared rides a calm bottom band).
+                    float y;
+                    if (n.IsShared) y = 0.94f;
+                    else
+                    {
+                        int t = Mathf.Clamp(n.Tier <= 0 ? 1 : n.Tier, 1, 4);
+                        y = 0.14f + (t - 1) * 0.18f;
+                        if (n.Column >= 5) y = Mathf.Min(1.05f, y + 0.10f);
+                    }
+                    int col = Mathf.Max(0, n.Column);
+                    float x = 0.08f + (col % 10) * 0.09f;
+                    if (n.IsShared) x = 0.08f + (i % 8) * 0.11f;
+                    norm[n.Id] = new Vector2(Mathf.Clamp(x, 0.04f, 1.10f), y);
+                }
+                if (!any) break;
             }
         }
 
-        // ── The connecting PROGRESSION LINE (weight + dash pattern carry the meaning) ──
-        // COLOURBLIND LAW: the four connector readings differ by THICKNESS and DASH PATTERN,
-        // never by hue — they are all the same gilt ink at different weights/alphas.
-        //   earned path (both ends owned/planned) : SOLID, 8 px
-        //   live frontier (parent owned, child not): SOLID, 4 px
-        //   not earned yet                         : DASHED, 3 px
-        //   unordered shelf (no prerequisite link) : DOTTED, 2 px
-        private static void BuildConnector(Transform row, SkillTrackNodeVM prev, SkillTrackNodeVM seat,
-                                           float xPrev, float xNext, float cy)
+        // Gold progression line between two plate centres. Thickness = state (colourblind).
+        private static void BuildGraphConnector(Transform host, Vector2 fromDown, Vector2 toDown,
+                                                SkillTrackNodeVM parent, SkillTrackNodeVM child)
         {
-            float x0 = xPrev + NodeSizePx * 0.5f;
-            float x1 = xNext - NodeSizePx * 0.5f;
-            if (x1 <= x0) return;
+            // Content space: +x right, +yDown down. Image rotation uses the same axes once
+            // we convert yDown -> anchored y (-yDown).
+            float x0 = fromDown.x, y0 = fromDown.y;
+            float x1 = toDown.x, y1 = toDown.y;
+            float dx = x1 - x0, dy = y1 - y0;
+            float len = Mathf.Sqrt(dx * dx + dy * dy);
+            if (len < 8f) return;
 
-            bool prevActive = prev.State == SkillNodeState.Owned || prev.State == SkillNodeState.Planned;
-            bool thisActive = seat.State == SkillNodeState.Owned || seat.State == SkillNodeState.Planned;
+            float inset = NodeSizePx * ConnectorInsetFrac;
+            if (len <= inset * 2f + 4f) return;
+            float ux = dx / len, uy = dy / len;
+            float ax = x0 + ux * inset, ay = y0 + uy * inset;
+            float bx = x1 - ux * inset, by = y1 - uy * inset;
+            float mx = (ax + bx) * 0.5f, my = (ay + by) * 0.5f;
+            float barLen = Mathf.Sqrt((bx - ax) * (bx - ax) + (by - ay) * (by - ay));
+            // Atan2 of (dx, -dy) because anchored Y is flipped vs our down-positive layout.
+            float angle = Mathf.Atan2(-(by - ay), (bx - ax)) * Mathf.Rad2Deg;
 
-            // No prerequisite link = an unordered SHELF: a fine dotted rail and NO arrowhead,
-            // so the line can never imply a pick order the data does not have.
-            if (!seat.LinksToPrev) { BuildDashRun(row, x0, x1, cy, 2f, 6f, 12f, 0.28f); return; }
+            bool parentActive = parent.State == SkillNodeState.Owned || parent.State == SkillNodeState.Planned;
+            bool childActive = child.State == SkillNodeState.Owned || child.State == SkillNodeState.Planned;
+            float thick, alpha;
+            if (parentActive && childActive) { thick = ConnectorThickPx; alpha = 0.92f; }
+            else if (parentActive) { thick = ConnectorMidPx; alpha = 0.82f; }
+            else { thick = ConnectorThinPx; alpha = 0.40f; }
 
-            if (prevActive && thisActive) BuildBar(row, x0, x1, cy, 8f, 0.90f);
-            else if (prevActive) BuildBar(row, x0, x1, cy, 4f, 0.78f);
-            else BuildDashRun(row, x0, x1, cy, 3f, 16f, 12f, 0.42f);
-            // Every REAL progression link ends in an arrowhead: the unlock DIRECTION is a
-            // shape on the line, not an inference from left-to-right reading order.
-            BuildArrowHead(row, x1, cy, prevActive ? 0.90f : 0.55f);
+            if (parentActive || childActive)
+                BuildRotatedBar(host, mx, my, barLen, thick, angle, alpha);
+            else
+                BuildRotatedDash(host, ax, ay, bx, by, thick, alpha);
         }
 
-        private static void BuildBar(Transform row, float x0, float x1, float cy, float thickness, float alpha)
+        private static void BuildRotatedBar(Transform host, float cxDown, float cyDown,
+                                            float length, float thickness, float angleDeg, float alpha)
         {
-            var go = new GameObject("Line", typeof(Image));
-            go.transform.SetParent(row, false);
+            var go = new GameObject("Edge", typeof(Image));
+            go.transform.SetParent(host, false);
             var rt = (RectTransform)go.transform;
             rt.anchorMin = rt.anchorMax = new Vector2(0f, 1f);
             rt.pivot = new Vector2(0.5f, 0.5f);
-            rt.sizeDelta = new Vector2(x1 - x0, thickness);
-            rt.anchoredPosition = new Vector2((x0 + x1) * 0.5f, cy);
+            rt.sizeDelta = new Vector2(length, thickness);
+            rt.anchoredPosition = new Vector2(cxDown, -cyDown);
+            rt.localRotation = Quaternion.Euler(0f, 0f, angleDeg);
             var img = go.GetComponent<Image>();
             img.color = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, alpha);
             img.raycastTarget = false;
         }
 
-        // A ">" head built from two rotated bars, tip on the receiving node's edge.
-        private static void BuildArrowHead(Transform row, float tipX, float cy, float alpha)
+        private static void BuildRotatedDash(Transform host, float ax, float ay, float bx, float by,
+                                             float thickness, float alpha)
         {
-            ArrowBar(row, tipX - 5f, cy + 3.5f, -35f, alpha);
-            ArrowBar(row, tipX - 5f, cy - 3.5f, 35f, alpha);
+            float dx = bx - ax, dy = by - ay;
+            float len = Mathf.Sqrt(dx * dx + dy * dy);
+            if (len < 4f) return;
+            float angle = Mathf.Atan2(-dy, dx) * Mathf.Rad2Deg;
+            const float dash = 14f, gap = 10f;
+            float step = dash + gap;
+            float ux = dx / len, uy = dy / len;
+            for (float d = 0f; d < len; d += step)
+            {
+                float seg = Mathf.Min(dash, len - d);
+                if (seg < 2f) break;
+                float mx = ax + ux * (d + seg * 0.5f);
+                float my = ay + uy * (d + seg * 0.5f);
+                BuildRotatedBar(host, mx, my, seg, thickness, angle, alpha);
+            }
         }
 
-        private static void ArrowBar(Transform row, float cx, float cy, float angle, float alpha)
-        {
-            var go = new GameObject("Arrow", typeof(Image));
-            go.transform.SetParent(row, false);
-            var rt = (RectTransform)go.transform;
-            rt.anchorMin = rt.anchorMax = new Vector2(0f, 1f);
-            rt.pivot = new Vector2(0.5f, 0.5f);
-            rt.sizeDelta = new Vector2(13f, 3.5f);
-            rt.anchoredPosition = new Vector2(cx, cy);
-            rt.localRotation = Quaternion.Euler(0f, 0f, angle);
-            var img = go.GetComponent<Image>();
-            img.color = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, alpha);
-            img.raycastTarget = false;
-        }
+        // ── ONE NODE ON THE GRAPH ────────────────────────────────────────────────
+        // COLOURBLIND LAW matrix (unchanged intent, sparse presentation):
+        //  state      plate FILL        border   size   badge SHAPE          rank
+        //  ---------  ----------------  -------  -----  -------------------  -----
+        //  Owned      SOLID (light)     2 px     112    check tick           1/1
+        //  Planned    solid + ring      3 px     112    "-n" text pip        0/1
+        //  Next       hollow + focus    6 px     148    cost number pip      0/1
+        //  Available  hollow            3 px     112    cost number pip      0/1
+        //  Inert      hollow + SLASH    3 px     112    "!" pip              0/1
+        //  Locked     hollow (dimmest)  1.5 px   112    PADLOCK glyph        0/1
+        // Selected also wears the focus frame even when not Next.
 
-        private static void BuildDashRun(Transform row, float x0, float x1, float cy,
-                                         float thickness, float dashPx, float gapPx, float alpha)
-        {
-            float step = Mathf.Max(4f, dashPx + gapPx);
-            for (float x = x0; x < x1; x += step)
-                BuildBar(row, x, Mathf.Min(x + dashPx, x1), cy, thickness, alpha);
-        }
-
-        /// <summary>Show the "MORE BELOW" cue only while there IS more track under the fold and
-        /// the player has not already scrolled to it. Cheap enough to run per scroll event.</summary>
-        private void UpdateScrollHint()
-        {
-            if (_scrollHint == null || _graphContent == null) return;
-            var well = _graphContent.parent as RectTransform;
-            float wellH = well != null ? well.rect.height : 0f;
-            float maxDown = wellH > 1f ? Mathf.Max(0f, _graphContent.rect.height - wellH) : 0f;
-            _scrollHint.SetActive(maxDown > 8f && _graphContent.anchoredPosition.y < maxDown - 8f);
-        }
-
-        /// <summary>A fixed-pixel child rect seated from its parent's TOP-LEFT corner
-        /// (<paramref name="y"/> counts DOWN). The whole line layout is built from these.</summary>
-        private static RectTransform PxRect(Transform parent, string name, float x, float y, float w, float h)
-        {
-            var go = new GameObject(name, typeof(RectTransform));
-            go.transform.SetParent(parent, false);
-            var rt = (RectTransform)go.transform;
-            rt.anchorMin = rt.anchorMax = new Vector2(0f, 1f);
-            rt.pivot = new Vector2(0f, 1f);
-            rt.sizeDelta = new Vector2(w, h);
-            rt.anchoredPosition = new Vector2(x, -y);
-            return rt;
-        }
-
-        // ── ONE NODE ON THE LINE ─────────────────────────────────────────────────
-        // COLOURBLIND LAW (the single most important constraint in WO-896): the six states
-        // are separable with ALL COLOUR STRIPPED OUT. Nothing below is carried by hue.
-        //
-        //  state      plate FILL        border   size   badge SHAPE          label prefix
-        //  ---------  ----------------  -------  -----  -------------------  ------------
-        //  Owned      SOLID (light)     2 px     112    check tick (2 bars)  -
-        //  Planned    solid + ring      3 px     112    "-n" text pip        "PLANNED: "
-        //  Next       hollow (dark)     6 px +   132    cost number pip      "NEXT: "
-        //                               outer ring      (biggest plate)
-        //  Available  hollow (dark)     3 px     112    cost number pip      -
-        //  Inert      hollow + SLASH    3 px     112    "!" pip              "[!] "
-        //  Locked     hollow (dimmest)  1.5 px   112    PADLOCK glyph        -
-        //
-        // Click = select (+ stage/unstage for an actionable node) — unchanged plan->CONFIRM flow.
-
-        private void BuildTrackNode(Transform row, SkillTrackNodeVM seat, float cx, float cy)
+        private void BuildGraphNode(SkillTrackNodeVM seat, float cxDown, float cyDown, bool focus)
         {
             var node = seat.Node;
             if (string.IsNullOrEmpty(node.Id)) return;
             var state = seat.State;
 
-            float size = state == SkillNodeState.Next ? NodeNextPx : NodeSizePx;
+            float size = focus ? NodeFocusPx : NodeSizePx;
 
             var go = new GameObject("Node_" + node.Id, typeof(Image), typeof(Button));
-            go.transform.SetParent(row, false);
+            go.transform.SetParent(_graphContent, false);
             var rt = go.GetComponent<RectTransform>();
             rt.anchorMin = rt.anchorMax = new Vector2(0f, 1f);
             rt.pivot = new Vector2(0.5f, 0.5f);
-            rt.anchoredPosition = new Vector2(cx, cy);
-            // A node is a BUTTON — it always carries the kit touch floor, even at 112.
+            rt.anchoredPosition = new Vector2(cxDown, -cyDown);
             rt.sizeDelta = new Vector2(size, size);
 
-            // Root image = the gilt LINE border; the dark fill is a child inset by the line
-            // width, so the border reads as a crisp ring whose THICKNESS encodes the state.
             var img = go.GetComponent<Image>();
-            ElarionUiKit.ApplyRounded(img);
-            img.color = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, BorderAlphaFor(state));
+            // Obsidian talent border when mirrored — demo plate art; rounded fallback otherwise.
+            Sprite border = TalentBorderSprite(node);
+            if (border != null)
+            {
+                img.sprite = border;
+                img.type = Image.Type.Sliced;
+                img.color = BorderTintFor(state, focus);
+            }
+            else
+            {
+                ElarionUiKit.ApplyRounded(img);
+                img.color = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, BorderAlphaFor(state));
+            }
 
-            float border = BorderWidthFor(state);
+            float borderW = BorderWidthFor(state);
+            if (focus) borderW = Mathf.Max(borderW, 6f);
+
             var fillGo = new GameObject("Fill", typeof(Image));
             fillGo.transform.SetParent(go.transform, false);
             var fillRt = (RectTransform)fillGo.transform;
             fillRt.anchorMin = Vector2.zero; fillRt.anchorMax = Vector2.one;
-            fillRt.offsetMin = new Vector2(border, border);
-            fillRt.offsetMax = new Vector2(-border, -border);
+            // Talent borders have ornate rims — inset the fill so the kit art rim shows.
+            float inset = border != null ? size * 0.14f : borderW;
+            fillRt.offsetMin = new Vector2(inset, inset);
+            fillRt.offsetMax = new Vector2(-inset, -inset);
             var fillImg = fillGo.GetComponent<Image>();
             ElarionUiKit.ApplyRounded(fillImg);
             fillImg.color = PlateFillFor(state);
             fillImg.raycastTarget = false;
 
-            // Capstone — a THICKER gilt rim behind the plate (procedural, no art), so the
-            // tier-capper still reads special on the line.
-            if (node.IsCapstone) BuildOuterRing(go.transform, 0.05f,
-                new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b,
-                          state == SkillNodeState.Locked ? 0.40f : 0.85f));
-
-            // The FOCUS node wears a second, wider ring — with the +20 px plate it is the one
-            // node on the row you can pick out at arm's length with the colour gone.
-            if (state == SkillNodeState.Next) BuildOuterRing(go.transform, 0.055f,
-                new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.95f));
-
-            // Planned ring (unchanged plan->CONFIRM affordance).
-            if (state == SkillNodeState.Planned) BuildOuterRing(go.transform, 0.05f,
-                new Color(ElarionUi.Affordable.r, ElarionUi.Affordable.g, ElarionUi.Affordable.b, 0.9f));
+            // Focus = thick gold outer frame (demo's selected plate).
+            if (focus)
+                BuildOuterRing(go.transform, 0.07f,
+                    new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.98f));
+            else if (node.IsCapstone)
+                BuildOuterRing(go.transform, 0.05f,
+                    new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b,
+                              state == SkillNodeState.Locked ? 0.40f : 0.85f));
+            if (state == SkillNodeState.Planned)
+                BuildOuterRing(go.transform, 0.05f,
+                    new Color(ElarionUi.Affordable.r, ElarionUi.Affordable.g, ElarionUi.Affordable.b, 0.9f));
 
             var btn = go.GetComponent<Button>();
             btn.targetGraphic = img;
@@ -739,8 +706,6 @@ namespace DeNelle.Village.Talents
             string id = node.Id;
             btn.onClick.AddListener(() => { if (_vm != null) _vm.Select(id); });
 
-            // Icon — quiet in the plate centre. On an OWNED (light-filled) plate the glyph
-            // flips to near-black ink: the contrast reversal is itself a colour-free tell.
             bool dim = state == SkillNodeState.Locked || state == SkillNodeState.Inert;
             var sprite = LoadIcon(node.IconPath);
             if (sprite != null)
@@ -748,8 +713,8 @@ namespace DeNelle.Village.Talents
                 var iconGo = new GameObject("Icon", typeof(Image));
                 iconGo.transform.SetParent(go.transform, false);
                 var ir = iconGo.GetComponent<RectTransform>();
-                ir.anchorMin = new Vector2(0.20f, 0.20f);
-                ir.anchorMax = new Vector2(0.80f, 0.80f);
+                ir.anchorMin = new Vector2(0.22f, 0.20f);
+                ir.anchorMax = new Vector2(0.78f, 0.76f);
                 ir.offsetMin = Vector2.zero; ir.offsetMax = Vector2.zero;
                 var iImg = iconGo.GetComponent<Image>();
                 iImg.sprite = sprite;
@@ -761,7 +726,6 @@ namespace DeNelle.Village.Talents
             }
             else
             {
-                // No icon art yet — a two-letter monogram keeps the node identifiable.
                 string mono = string.IsNullOrEmpty(node.Name)
                     ? "?" : node.Name.Substring(0, Mathf.Min(2, node.Name.Length));
                 var monoLbl = ElarionUiKit.Label(go.transform, mono, 0.24f, 0.76f,
@@ -771,13 +735,16 @@ namespace DeNelle.Village.Talents
                 ElarionUiKit.FitSingleLine(monoLbl);
             }
 
-            // WO-910 — an INERT node (reachable, but nothing in the game reads its effect yet)
-            // wears a SLASH across the plate. It is the loudest possible "this grants nothing",
-            // it survives greyscale, and it is presentation only: the node stays selectable and
-            // purchasable, so the owner's pending hide-or-wire ruling is not pre-empted here.
+            // Rank pip — demo "3/3" grammar; our unlocks are binary so 1/1 or 0/1.
+            string rank = (state == SkillNodeState.Owned || state == SkillNodeState.Planned) ? "1/1" : "0/1";
+            var rankLbl = ElarionUiKit.Label(go.transform, rank, 0.08f, 0.34f,
+                state == SkillNodeState.Owned ? ElarionUi.Gilt : ElarionUi.Parchment,
+                (int)ElarionUiKit.FontFloor, TMPro.TextAlignmentOptions.Center, 0.10f, 0.90f, bold: true);
+            rankLbl.raycastTarget = false;
+            ElarionUiKit.FitSingleLine(rankLbl);
+
             if (state == SkillNodeState.Inert) BuildNodeSlash(go.transform, size);
 
-            // ONE badge per state (shape/stamp/pip — never hue alone).
             switch (state)
             {
                 case SkillNodeState.Owned:
@@ -799,28 +766,53 @@ namespace DeNelle.Village.Talents
             }
         }
 
-        // The short name UNDER the node (WO-896 §1). The state prefix is ASCII text — the
-        // last, hue-free line of defence for a player who cannot separate the plate colours.
-        private static void BuildNodeLabel(Transform row, SkillTrackNodeVM seat, float cx, float cy)
+        private static Sprite TalentBorderSprite(SkillNodeVM node)
         {
-            string prefix;
-            switch (seat.State)
+            // Capstone uses the ornate 6-slot border; tiers 1-4 pick talent_N / slot_talent_N.
+            if (node.IsCapstone)
             {
-                case SkillNodeState.Next: prefix = "NEXT: "; break;
-                case SkillNodeState.Planned: prefix = "PLANNED: "; break;
-                case SkillNodeState.Inert: prefix = "[!] "; break;
-                default: prefix = ""; break;
+                var cap = RpgUiCatalog.Get("slot", "slot_talent_6");
+                if (cap != null) return cap;
             }
-            string name = string.IsNullOrEmpty(seat.Node.Name) ? seat.Node.Id : seat.Node.Name;
+            int t = Mathf.Clamp(node.Tier <= 0 ? 1 : node.Tier, 1, 4);
+            var sp = RpgUiCatalog.Get("slot", "slot_talent_" + t);
+            if (sp != null) return sp;
+            sp = RpgUiCatalog.Get("slot", "talent_" + t);
+            if (sp != null) return sp;
+            return RpgUiCatalog.Get("slot", "slot_talent");
+        }
 
-            float top = -cy + NodeSizePx * 0.5f + NodeLabelGapPx;   // px DOWN from the row top
-            var host = PxRect(row, "NodeLabel", cx - NodePitchPx * 0.5f, top, NodePitchPx, NodeLabelBandPx);
-            var lbl = ElarionUiKit.Label(host, prefix + name, 0f, 1f,
-                seat.State == SkillNodeState.Locked || seat.State == SkillNodeState.Inert
-                    ? ElarionUi.ParchmentDim : ElarionUi.Parchment,
-                (int)ElarionUiKit.FontFloor, TMPro.TextAlignmentOptions.Top, 0.04f, 0.96f,
-                bold: seat.State == SkillNodeState.Next || seat.State == SkillNodeState.Owned);
-            ElarionUiKit.FitBlock(lbl);   // wraps to two whole line boxes, never spills
+        private static Color BorderTintFor(SkillNodeState state, bool focus)
+        {
+            if (focus) return new Color(1f, 0.92f, 0.55f, 1f);
+            switch (state)
+            {
+                case SkillNodeState.Owned:
+                    return new Color(1f, 0.88f, 0.45f, 1f);
+                case SkillNodeState.Planned:
+                    return new Color(0.85f, 0.95f, 0.70f, 1f);
+                case SkillNodeState.Next:
+                case SkillNodeState.Available:
+                    return new Color(0.95f, 0.90f, 0.70f, 0.95f);
+                case SkillNodeState.Inert:
+                    return new Color(0.55f, 0.55f, 0.55f, 0.70f);
+                default:
+                    return new Color(0.45f, 0.45f, 0.50f, 0.55f);
+            }
+        }
+
+        /// <summary>A fixed-pixel child rect seated from its parent's TOP-LEFT corner
+        /// (<paramref name="y"/> counts DOWN). Kept for band helpers / ability tiles.</summary>
+        private static RectTransform PxRect(Transform parent, string name, float x, float y, float w, float h)
+        {
+            var go = new GameObject(name, typeof(RectTransform));
+            go.transform.SetParent(parent, false);
+            var rt = (RectTransform)go.transform;
+            rt.anchorMin = rt.anchorMax = new Vector2(0f, 1f);
+            rt.pivot = new Vector2(0f, 1f);
+            rt.sizeDelta = new Vector2(w, h);
+            rt.anchoredPosition = new Vector2(x, -y);
+            return rt;
         }
 
         // A rounded ring behind the plate, peeking <paramref name="grow"/> of the plate on
@@ -994,7 +986,7 @@ namespace DeNelle.Village.Talents
             ElarionUiKit.Scrim(_ui.transform, onTapClose: () => { if (_vm != null) _vm.Close(); });
 
             // SHARED Obsidian chrome (WO-554): black panel + gold trim + gold header + ONE Close.
-            var chrome = ElarionUiKit.BuildObsidianPanel(_ui.transform, "Skills",
+            var chrome = ElarionUiKit.BuildObsidianPanel(_ui.transform, "TALENT TREE",
                 new Vector2(0.07f, 0.05f), new Vector2(0.93f, 0.95f), () => { if (_vm != null) _vm.Close(); },
                 headerX0: 0.04f, headerX1: 0.74f, frameName: RpgUiCatalog.FrameTalent,
                 medallionIcon: "talent");
@@ -1139,21 +1131,9 @@ namespace DeNelle.Village.Talents
             vr.anchorMin = Vector2.zero; vr.anchorMax = Vector2.one;
             vr.offsetMin = Vector2.zero; vr.offsetMax = Vector2.zero;
             var vImg = viewportGo.GetComponent<Image>();
-            // BLACK GRID node-canvas (owner: "a grid that's black like the image for maximum
-            // value/contrast"). A procedural near-black tile with a single faint gilt-grey rule
-            // on two edges, tiled across the viewport. Opaque, so it overrides the obsidian fill
-            // in the graph rect, and raycastable so drag-scroll still works.
-            var grid = GridSprite();
-            if (grid != null)
-            {
-                vImg.sprite = grid;
-                vImg.type = Image.Type.Tiled;
-                vImg.color = Color.white;
-            }
-            else
-            {
-                vImg.color = new Color(0.012f, 0.012f, 0.016f, 1f); // flat black fallback
-            }
+            // Calm dark canvas (Obsidian demo): near-black slab, no busy grid lines.
+            // Opaque so it overrides the frame fill; raycastable so drag-scroll still works.
+            vImg.color = new Color(0.018f, 0.016f, 0.022f, 1f);
 
             var contentGo = new GameObject("GraphContent", typeof(RectTransform));
             contentGo.transform.SetParent(viewportGo.transform, false);
@@ -1167,28 +1147,11 @@ namespace DeNelle.Village.Talents
             _graphContent.anchorMin = _graphContent.anchorMax = new Vector2(0f, 1f);
             _graphContent.pivot = new Vector2(0f, 1f);
             _graphContent.sizeDelta = new Vector2(
-                ContentPadPx * 2f + TrackTitleWpx + TrackWrapCount * NodePitchPx,
-                TrackRowPx + ContentPadPx * 2f);
+                ContentPadPx * 2f + GraphUnitWpx,
+                ContentPadPx * 2f + GraphUnitHpx * 0.55f);
             _graphContent.anchoredPosition = Vector2.zero;
 
-            // WO-896 overflow cue — a fixed corner tag on the WELL (never inside the scrolling
-            // content, or it would scroll away with the thing it is describing).
-            var hintGo = new GameObject("ScrollHint", typeof(Image));
-            hintGo.transform.SetParent(viewportGo.transform, false);
-            var hr = (RectTransform)hintGo.transform;
-            hr.anchorMin = hr.anchorMax = Vector2.zero;
-            hr.pivot = Vector2.zero;
-            hr.anchoredPosition = new Vector2(6f, 6f);
-            hr.sizeDelta = new Vector2(200f, 40f);
-            var hImg = hintGo.GetComponent<Image>();
-            ElarionUiKit.ApplyRounded(hImg);
-            hImg.color = new Color(0.05f, 0.045f, 0.06f, 0.88f);
-            hImg.raycastTarget = false;   // never eats a drag-scroll
-            var hLbl = ElarionUiKit.Label(hintGo.transform, "MORE BELOW", 0f, 1f, ElarionUi.Gilt,
-                (int)ElarionUiKit.FontFloor, TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f, bold: true);
-            ElarionUiKit.FitSingleLine(hLbl);
-            hintGo.SetActive(false);
-            _scrollHint = hintGo;
+            // WO-896: no MORE BELOW cue — sparse graph + scroll is the product.
 
             var scroll = areaGo.GetComponent<ScrollRect>();
             scroll.content = _graphContent;
@@ -1198,7 +1161,6 @@ namespace DeNelle.Village.Talents
             scroll.movementType = ScrollRect.MovementType.Elastic;
             scroll.elasticity = 0.08f;
             scroll.scrollSensitivity = 28f;
-            scroll.onValueChanged.AddListener(_ => UpdateScrollHint());
         }
 
         // Cancel / Respec / CONFIRM (§B.2 — no plan-summary strip; the plan folds into
@@ -1439,7 +1401,6 @@ namespace DeNelle.Village.Talents
             _detailDesc = null;
             _detailState = null;
             _quickRoot = null;
-            _scrollHint = null;
             _lastLayoutSig = null;
             _lastQuickStatus = null;
             _lastRespecStatus = null;
