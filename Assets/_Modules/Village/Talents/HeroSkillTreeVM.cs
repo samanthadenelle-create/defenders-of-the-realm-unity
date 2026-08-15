@@ -676,9 +676,9 @@ namespace DeNelle.Village.Talents
             _branches.Clear();
 
             var tree = HeroTalentCatalog.GetTree(_heroSlug);
-            Title = tree != null && !string.IsNullOrEmpty(tree.DisplayName)
-                ? tree.DisplayName + " Skills"
-                : "Skills";
+            // WO-896 F8 overcrowding: the Obsidian demo chrome is "TALENT TREE", not a
+            // packed "Grom (Knight) Skills" header. Hero name stays on the detail strip.
+            Title = "TALENT TREE";
 
             var svc = WisdomCurrencyService.Instance;
             int wisdom = svc != null ? svc.Wisdom : 0;

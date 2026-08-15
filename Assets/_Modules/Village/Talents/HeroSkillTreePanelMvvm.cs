@@ -396,7 +396,7 @@ namespace DeNelle.Village.Talents
             Vector2 keptScroll = _graphContent.anchoredPosition;
             ClearContent();
 
-            var seats = new List<SkillTrackNodeVM>(64);
+            var allSeats = new List<SkillTrackNodeVM>(64);
             var byId = new Dictionary<string, SkillTrackNodeVM>(64);
             var tracks = _vm.Tracks;
             if (tracks != null)
@@ -409,11 +409,18 @@ namespace DeNelle.Village.Talents
                     {
                         var seat = track.Nodes[i];
                         if (string.IsNullOrEmpty(seat.Node.Id)) continue;
-                        seats.Add(seat);
+                        allSeats.Add(seat);
                         byId[seat.Node.Id] = seat;
                     }
                 }
             }
+
+            // WO-896 F8 2026-08-15 "look at the overcrowding": drawing every locked leaf
+            // (41 seats) is the dense board the owner flagged. Calm frontier only — demo density.
+            var seats = FilterCalmFrontier(allSeats, byId);
+            if (seats.Count < allSeats.Count)
+                FlowTrace.Step("SkillTree", "calm frontier: showing " + seats.Count +
+                                            " of " + allSeats.Count + " node(s) (deep locked chains hidden)");
 
             if (seats.Count == 0)
             {
@@ -427,6 +434,11 @@ namespace DeNelle.Village.Talents
                     ContentPadPx * 2f + GraphUnitHpx * 0.4f);
                 return;
             }
+
+            // Visible-only byId so connectors never point at hidden plates.
+            var visibleById = new Dictionary<string, SkillTrackNodeVM>(seats.Count);
+            for (int i = 0; i < seats.Count; i++)
+                visibleById[seats[i].Node.Id] = seats[i];
 
             // Norm positions (0..1+, may extend past 1 for auto secondary branches).
             var norm = new Dictionary<string, Vector2>(seats.Count);
@@ -460,7 +472,7 @@ namespace DeNelle.Village.Talents
                     string pr = prereqs[p];
                     if (string.IsNullOrEmpty(pr)) continue;
                     if (!centers.TryGetValue(pr, out var from)) continue;
-                    if (!byId.TryGetValue(pr, out var parentSeat)) continue;
+                    if (!visibleById.TryGetValue(pr, out var parentSeat)) continue;
                     BuildGraphConnector(_graphContent, from, to, parentSeat, seat);
                 }
             }
@@ -486,13 +498,84 @@ namespace DeNelle.Village.Talents
                 Mathf.Clamp(keptScroll.x, -maxRight, 0f),
                 Mathf.Clamp(keptScroll.y, 0f, maxDown));
 
-            string sig = seats.Count + "/" + contentW.ToString("F0") + "x" + contentH.ToString("F0");
+            string sig = seats.Count + "/" + allSeats.Count + "/" + contentW.ToString("F0") + "x" + contentH.ToString("F0");
             if (sig != _lastLayoutSig)
             {
                 _lastLayoutSig = sig;
-                FlowTrace.Step("SkillTree", "sparse graph drawn: " + seats.Count + " node(s), content " +
+                FlowTrace.Step("SkillTree", "sparse graph drawn: " + seats.Count + " visible of " +
+                                            allSeats.Count + " node(s), content " +
                                             contentW.ToString("F0") + "x" + contentH.ToString("F0") + " px");
             }
+        }
+
+        /// <summary>
+        /// WO-896 F8 overcrowding filter — the Obsidian demo shows a handful of plates, not the
+        /// full catalog. Keep the live frontier only:
+        ///   • Owned / Planned / Next / Available / Inert (anything the player can act on)
+        ///   • Class roots (no prerequisites) so a fresh tree still has entry points
+        ///   • Locked children of Owned/Planned (the next step along a bought path)
+        /// Hide deep locked chains and the locked Universal shelf until the player has engaged
+        /// the tree (any owned/planned). Hidden nodes stay in the VM — they appear as soon as
+        /// their parent is bought.
+        /// </summary>
+        private static List<SkillTrackNodeVM> FilterCalmFrontier(
+            List<SkillTrackNodeVM> all, Dictionary<string, SkillTrackNodeVM> byId)
+        {
+            var keep = new List<SkillTrackNodeVM>(all.Count);
+            bool anyEngaged = false;
+            for (int i = 0; i < all.Count; i++)
+            {
+                var st = all[i].State;
+                if (st == SkillNodeState.Owned || st == SkillNodeState.Planned)
+                { anyEngaged = true; break; }
+            }
+
+            for (int i = 0; i < all.Count; i++)
+            {
+                var seat = all[i];
+                var st = seat.State;
+                if (st == SkillNodeState.Owned || st == SkillNodeState.Planned
+                    || st == SkillNodeState.Next || st == SkillNodeState.Available
+                    || st == SkillNodeState.Inert)
+                {
+                    keep.Add(seat);
+                    continue;
+                }
+
+                // Locked — only roots or children of an engaged parent.
+                var prereqs = seat.Node.Prereqs;
+                bool isRoot = prereqs == null || prereqs.Count == 0;
+                if (!isRoot)
+                {
+                    isRoot = true;
+                    for (int p = 0; p < prereqs.Count; p++)
+                    {
+                        if (string.IsNullOrEmpty(prereqs[p])) continue;
+                        if (byId.ContainsKey(prereqs[p])) { isRoot = false; break; }
+                    }
+                }
+
+                if (isRoot)
+                {
+                    // Universal free-pick pool stays off a brand-new locked board (demo density).
+                    if (seat.Node.IsShared && !anyEngaged) continue;
+                    keep.Add(seat);
+                    continue;
+                }
+
+                bool parentEngaged = false;
+                for (int p = 0; p < prereqs.Count; p++)
+                {
+                    string pr = prereqs[p];
+                    if (string.IsNullOrEmpty(pr)) continue;
+                    if (!byId.TryGetValue(pr, out var parent)) continue;
+                    if (parent.State == SkillNodeState.Owned || parent.State == SkillNodeState.Planned)
+                    { parentEngaged = true; break; }
+                }
+                if (parentEngaged) keep.Add(seat);
+            }
+
+            return keep;
         }
 
         /// <summary>Map every seat to a 0..1(+)-ish canvas position. Authored x/y win;
