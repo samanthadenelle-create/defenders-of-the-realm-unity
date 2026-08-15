@@ -1,6 +1,6 @@
 # WORK ORDER 995 - Booting into a dungeon self-evicts to town: the hero spawns INSIDE the exit trigger
 
-**Status:** READY TO IMPLEMENT
+**Status:** IMPLEMENTED — 2026-08-15 (code; PO 10× boot verify owed)
 **Minted:** 2026-08-14 (CLI)
 **Silo:** Dungeon routing
 **Found by:** WO-988 acceptance runs (11 live launches)

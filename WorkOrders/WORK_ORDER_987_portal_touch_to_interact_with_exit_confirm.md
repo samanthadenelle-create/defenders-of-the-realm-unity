@@ -1,6 +1,6 @@
 # WORK ORDER 987 — Dungeon exit portal: TOUCH to interact, then a "Continue to exit / Cancel" confirm
 
-**Status:** READY TO IMPLEMENT
+**Status:** IMPLEMENTED — 2026-08-15 touch opens Obsidian confirm; PO felt-verify owed.
 **Minted:** 2026-08-14 (CLI)
 **Silo:** Dungeon exit / UX
 **Source:** OWNER RULING, 2026-08-14

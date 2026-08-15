@@ -298,21 +298,24 @@ namespace DeNelle.Editor.Regression
             if (factory == null || controller == null || loader == null) return;
 
             // (1) The claim seam exists and branches on Wall.
-            if (!factory.Contains("MeasureClaimFootprintMetres"))
-                failures.Add("[wiring] " + FactorySrc + " no longer defines MeasureClaimFootprintMetres - the " +
+            // WO-986: MeasureClaimFootprintXZ is the CoC non-square authority; Metres wraps it.
+            bool hasClaimApi = factory.Contains("MeasureClaimFootprintMetres")
+                            || factory.Contains("MeasureClaimFootprintXZ");
+            if (!hasClaimApi)
+                failures.Add("[wiring] " + FactorySrc + " no longer defines MeasureClaimFootprintMetres/XZ - the " +
                              "wall claim has been folded back into the measured mesh.");
             else if (!Regex.IsMatch(factory, @"CatalogType\s*\.\s*Wall"))
-                failures.Add("[wiring] " + FactorySrc + " defines MeasureClaimFootprintMetres but no longer " +
+                failures.Add("[wiring] " + FactorySrc + " defines a claim API but no longer " +
                              "branches on CatalogType.Wall - every row would claim off the authored footprint, " +
                              "which under-claims real buildings.");
 
             // (2) BOTH claim sites use it. If placement and replay disagree, a reload Occupies a
             //     different cell set than placement promised and the run re-breaks on load.
-            if (!controller.Contains("MeasureClaimFootprintMetres"))
-                failures.Add("[wiring] " + ControllerSrc + " no longer claims via MeasureClaimFootprintMetres - " +
+            if (!controller.Contains("MeasureClaimFootprintMetres") && !controller.Contains("MeasureClaimFootprintXZ"))
+                failures.Add("[wiring] " + ControllerSrc + " no longer claims via MeasureClaimFootprintMetres/XZ - " +
                              "live placement is back on the mesh-driven 2x2 claim (the seq-2327 reject).");
-            if (!loader.Contains("MeasureClaimFootprintMetres"))
-                failures.Add("[wiring] " + LoaderSrc + " no longer claims via MeasureClaimFootprintMetres - " +
+            if (!loader.Contains("MeasureClaimFootprintMetres") && !loader.Contains("MeasureClaimFootprintXZ"))
+                failures.Add("[wiring] " + LoaderSrc + " no longer claims via MeasureClaimFootprintMetres/XZ - " +
                              "placement and REPLAY would claim different cells, so a saved wall run would " +
                              "re-break the next time the town loads.");
 
@@ -346,9 +349,9 @@ namespace DeNelle.Editor.Regression
             string cardVm = ReadStripped(CardVmSrc, failures);
             if (cardVm != null)
             {
-                if (!cardVm.Contains("MeasureClaimFootprintMetres"))
+                if (!cardVm.Contains("MeasureClaimFootprintMetres") && !cardVm.Contains("MeasureClaimFootprintXZ"))
                     failures.Add("[wiring] " + CardVmSrc + " no longer derives its Footprint label from " +
-                                 "MeasureClaimFootprintMetres - the info panel is measuring the mesh itself " +
+                                 "MeasureClaimFootprintMetres/XZ - the info panel is measuring the mesh itself " +
                                  "again, so a wall's card would read '2x2 cells' while placement claims 1x1.");
                 if (Regex.IsMatch(cardVm, @"MeasureUprightFootprintMetres"))
                     failures.Add("[wiring] " + CardVmSrc + " still calls MeasureUprightFootprintMetres - the " +

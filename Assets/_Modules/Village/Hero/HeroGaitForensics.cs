@@ -129,8 +129,19 @@ namespace DeNelle.Village
         {
             if (_loco == null) return;
 
+            // WO-966 / WO-985: in dungeons HeroLocomotion forces Velocity=0 (CharacterController
+            // owns the transform), so bodyErr was a hollow 0. Prefer the published MEASURED root
+            // speed + planar velocity when the written Velocity is dead.
             Vector3 vel = _loco.Velocity;
             float velMag = vel.magnitude;
+            float measured = _loco.MeasuredRootSpeed;
+            if (velMag < 0.05f && measured > 0.05f)
+            {
+                // Heading from root yaw (travel faces root when foreign CC owns motion).
+                float rootYaw = transform.eulerAngles.y * Mathf.Deg2Rad;
+                vel = new Vector3(Mathf.Sin(rootYaw), 0f, Mathf.Cos(rootYaw)) * measured;
+                velMag = measured;
+            }
             float heading = velMag > 0.05f ? Mathf.Atan2(vel.x, vel.z) * Mathf.Rad2Deg : _lastHeading;
             float yaw = transform.eulerAngles.y;
             var cam = Camera.main;

@@ -571,19 +571,26 @@ namespace DeNelle.Village
                 float mult = structure ? _structureDamageMult : _unitDamageMult;
                 if (mult > 0f) dmg *= mult;
             }
-            foe.TakeDamage(dmg, _element);
-
-            // Strike anim by class:
-            //   Mage/Cleric → Cast (spell), melee → Attack (slash/stab), archer → Attack (draw/loose).
-            // Prefer the class-correct trigger; fall back so a misbound controller still reads as striking.
-            if (_animator != null)
+            // WO-935: mage strike uses unified CombatCast (anim + VFX) then damage.
+            Transform foeTf = (foe as Component) != null ? (foe as Component).transform : null;
+            if (_useCastStrike)
             {
-                if (_useCastStrike && _hasCast)
-                    _animator.SetTrigger(AnimCast);
-                else if (_hasAttack)
-                    _animator.SetTrigger(AnimAttack);
-                else if (_hasCast)
-                    _animator.SetTrigger(AnimCast);
+                CombatCast.Play(CombatCast.Fireball, transform, foeTf, () =>
+                {
+                    if (foe != null && foe.IsAlive)
+                        foe.TakeDamage(CombatMark.ScaleDamage(foe, dmg), _element);
+                });
+            }
+            else
+            {
+                foe.TakeDamage(CombatMark.ScaleDamage(foe, dmg), _element);
+                if (_animator != null)
+                {
+                    if (_hasAttack)
+                        _animator.SetTrigger(AnimAttack);
+                    else if (_hasCast)
+                        _animator.SetTrigger(AnimCast);
+                }
             }
         }
 

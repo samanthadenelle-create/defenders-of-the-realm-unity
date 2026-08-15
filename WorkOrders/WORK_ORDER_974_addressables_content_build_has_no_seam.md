@@ -1,6 +1,6 @@
 # WORK ORDER 974 — The Addressables content build has no seam; it rides a machine-local Editor Preference
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — AddressablesContentBuild.EnsureBuilt on all player builds; abort on fail (2026-08-15).
 **Lane:** Build path / Addressables
 **Minted:** 2026-08-10 (CLI), from an architect verification ordered by the owner:
 *"make sure that addressables are implemented as supposed to be. Have an architect read and verify."*

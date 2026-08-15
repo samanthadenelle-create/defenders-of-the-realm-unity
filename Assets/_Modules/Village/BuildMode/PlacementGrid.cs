@@ -231,37 +231,69 @@ namespace DeNelle.Village
             _occupied = new string[Mathf.Max(1, gridWidth), Mathf.Max(1, gridHeight)];
         }
 
-        /// <summary>Convert a metric footprint radius (CatalogEntry placement) to whole cells.</summary>
+        /// <summary>
+        /// Metres → whole cells on ONE axis. Shared by square and CoC non-square paths.
+        /// </summary>
+        public int MetresToCells(float metres)
+            => Mathf.Max(1, Mathf.CeilToInt(Mathf.Max(0.01f, metres) / cellSize));
+
+        /// <summary>
+        /// LEGACY square claim from a single scalar (max axis). Kept for regressions and
+        /// any caller that still passes one number. Prefer
+        /// <see cref="FootprintCells(float, float)"/> / <see cref="FootprintCells(Vector2)"/>
+        /// for CoC-style thin structures (WO-986).
+        /// </summary>
         public Vector2Int FootprintCells(float footprintMetres)
         {
-            int cells = Mathf.Max(1, Mathf.CeilToInt(Mathf.Max(0.01f, footprintMetres) / cellSize));
+            int cells = MetresToCells(footprintMetres);
             return new Vector2Int(cells, cells);
         }
 
         /// <summary>
-        /// WO-673 L5 (45° rotation) — the ROTATION-HONEST footprint claim. The footprint
-        /// model is a square of side max(width,depth) metres (MeasureUprightFootprintMetres);
-        /// at cardinal yaws the rotated mesh's world AABB stays inside that square
-        /// (multiplier = 1, byte-identical to the legacy claim), but at a diagonal yaw the
-        /// AABB grows by up to |sin θ|+|cos θ| (√2 at 45°). Claiming the UNROTATED square
-        /// there would under-claim by ~41% — the "placement lies about its cells" bug the
-        /// architecture review vetoed (WO673_ARCHITECTURE_REVIEW G-F). So the claim inflates
-        /// by exactly that factor: slightly conservative for non-square meshes (over-claiming
-        /// is honest; under-claiming is the bug), exact for square ones.
+        /// WO-986 CoC-style: claim cells from independent X and Z metres (Vector2.x = width,
+        /// .y = depth). Named Vector2 so it cannot collide with the (metres, yawDegrees)
+        /// scalar rotation overload.
+        /// </summary>
+        public Vector2Int FootprintCells(Vector2 footprintMetres)
+            => new Vector2Int(MetresToCells(footprintMetres.x), MetresToCells(footprintMetres.y));
+
+        /// <summary>
+        /// WO-673 L5 + WO-986 — rotation-honest claim for a SQUARE scalar footprint
+        /// (legacy). At cardinals = <see cref="FootprintCells(float)"/>; at diagonals
+        /// inflates by |sin|+|cos| (√2 at 45°). Prefer the Vector2 overload for thin props.
         /// </summary>
         public Vector2Int FootprintCells(float footprintMetres, float yawDegrees)
         {
-            // Snap the multiplier to EXACTLY 1 at cardinal yaws: |sin|+|cos| computes to
-            // 1.0000000000000002 at 180° etc., and on an exact-cell-multiple footprint that
-            // epsilon bumps the claim a whole cell (6m: 2x2 -> 3x3) — a byte-identity break
-            // the strategic-placement regression gate catches. Cardinal = legacy, verbatim.
             float yawMod = Mathf.Abs(Mathf.DeltaAngle(0f, yawDegrees)) % 90f;
             bool cardinal = yawMod < 0.01f || yawMod > 89.99f;
             if (cardinal) return FootprintCells(footprintMetres);
 
             float rad = yawDegrees * Mathf.Deg2Rad;
-            float inflate = Mathf.Abs(Mathf.Sin(rad)) + Mathf.Abs(Mathf.Cos(rad));   // √2 at 45°
+            float inflate = Mathf.Abs(Mathf.Sin(rad)) + Mathf.Abs(Mathf.Cos(rad));
             return FootprintCells(footprintMetres * inflate);
+        }
+
+        /// <summary>
+        /// WO-986 CoC-style rotation-honest claim for a NON-SQUARE footprint.
+        /// Rotates the (width×depth) rectangle by yaw and claims the axis-aligned AABB
+        /// in metres, then converts to cells. Cardinals are byte-identical to the
+        /// unrotated Vector2 claim (trig epsilon snapped).
+        /// </summary>
+        public Vector2Int FootprintCells(Vector2 footprintMetres, float yawDegrees)
+        {
+            float w = Mathf.Max(0.01f, footprintMetres.x);
+            float d = Mathf.Max(0.01f, footprintMetres.y);
+            float yawMod = Mathf.Abs(Mathf.DeltaAngle(0f, yawDegrees)) % 90f;
+            bool cardinal = yawMod < 0.01f || yawMod > 89.99f;
+            if (cardinal) return FootprintCells(new Vector2(w, d));
+
+            float rad = yawDegrees * Mathf.Deg2Rad;
+            float absC = Mathf.Abs(Mathf.Cos(rad));
+            float absS = Mathf.Abs(Mathf.Sin(rad));
+            // AABB of a rotated rectangle: |c|·w + |s|·d on each world axis.
+            float worldW = absC * w + absS * d;
+            float worldD = absS * w + absC * d;
+            return FootprintCells(new Vector2(worldW, worldD));
         }
 
         // ── Overlay (build-mode only) ──────────────────────────────────────────

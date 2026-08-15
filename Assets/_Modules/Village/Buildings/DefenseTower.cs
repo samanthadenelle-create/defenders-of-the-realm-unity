@@ -1198,7 +1198,9 @@ namespace DeNelle.Village
             switch (catalogId)
             {
                 // Ballista (owner 2026-08-04: "Use the SimpleCast projectile for the ballista").
-                case "tower_wall_wizard": return "SimpleCast_Projectile";
+                case "tower_ballista":
+                case "tower_wall_wizard": // WO-989 legacy id (alias until saves migrate)
+                    return "SimpleCast_Projectile";
                 default:                  return null;
             }
         }

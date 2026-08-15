@@ -1541,7 +1541,8 @@ namespace DeNelle.Village
             // EXCEPT a Wall, whose claim comes off the authored placement.footprint so a
             // 3.03 m palisade on a 3.00 m cell stays a ONE-CELL tile instead of squaring up
             // into the 2x2 block that rejected the neighbouring cell (F8 seq 2327).
-            footprint = _grid.FootprintCells(StructureFactory.MeasureClaimFootprintMetres(entry), ArmedYawDegrees);
+            // WO-986: CoC non-square claim (x,z) + yaw AABB — not max-axis square.
+            footprint = _grid.FootprintCells(StructureFactory.MeasureClaimFootprintXZ(entry), ArmedYawDegrees);
             _lastRejectDetail = null;   // per-evaluation; only an Occupied gate below sets it
 
             // SURFACE ROLE (data-driven, PlacementRules.mustSitOn) — a WallWalk defense MUST seat

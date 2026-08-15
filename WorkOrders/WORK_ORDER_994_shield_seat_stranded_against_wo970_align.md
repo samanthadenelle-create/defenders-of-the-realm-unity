@@ -1,13 +1,34 @@
 # WORK ORDER 994 - The shield's authored seat is stranded against a base WO-970 moved
 
-**Status:** READY TO IMPLEMENT
+**Status:** IMPLEMENTED — 2026-08-15 scene-load re-equip + height cache clear (dungeon→town port)
 **Minted:** 2026-08-14 (CLI)
 **Silo:** Gear / equip seating
 **Source:** OWNER REPORT - *"still same problem when porting from dungeon with Shield position"*
 
 ---
 
-## Root cause, proven from captured data
+## OWNER PIN 2026-08-15 (re-scope the remaining bug)
+
+> **Shield is perfect until porting from dungeon to town. Only then does it break.**
+
+### What this means
+
+| Context | Owner feel |
+|---------|------------|
+| Town / steady play | **Seat is good** — do **not** re-dial `shield_A` as a global fix |
+| Dungeon | **OK** while inside |
+| **Exit dungeon → town** | **Breaks** — only this transition |
+
+### Remaining work (port seam, not Seating Editor A)
+
+1. Trace **dungeon exit / scene load / equip re-apply** path: what re-parents or re-`NormalizeInto`s the off-hand after `SceneRouter` to Castle.
+2. Suspects (instrument, don't guess): height/scale change town vs dungeon (WO-994 height amp), `ApplyHoldPose` / sheathe on scene load, second `EquipmentController` attach, `fullOverride` + compensate asymmetry on re-equip.
+3. Fix so **town post-port matches pre-port / in-dungeon good seat** — preserve the dial that already feels perfect.
+4. ⛔ Do **not** invent new `offsets.json` eulers “to fix town” if that ruins the good dungeon/town steady pose.
+
+---
+
+## Root cause, proven from captured data (still useful for the port path)
 
 WO-970 (`af5e2e7d8`, 2026-08-10 19:27) fixed `AlignAxesYLongXNarrowZWide` so a weapon's long axis
 finally reaches +Y. Same mesh, same authored delta, before and after:

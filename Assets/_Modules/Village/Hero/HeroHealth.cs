@@ -503,6 +503,17 @@ namespace DeNelle.Village
             // so a hero respawning into a lingering melee isn't instantly re-killed.
             if (Time.time < _invulnUntil) return;
 
+            // WO-910: dodge talent — full miss (no DR stack); identity when chance is 0.
+            if (_abilities == null) _abilities = GetComponent<HeroAbilities>();
+            string dodgeClass = _abilities != null ? _abilities.HeroClass : null;
+            float dodge = DeNelle.Village.Talents.HeroTalentModifiers.DodgeChance(dodgeClass);
+            if (dodge > 0f && UnityEngine.Random.value < dodge)
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Step("HeroHealth",
+                    $"DODGE id={GetInstanceID()} chance={dodge:F2} amount={amount:F1} (WO-910)");
+                return;
+            }
+
             // Perfect parry — a hit landing inside the player's parry window is NEGATED and turned
             // into the riposte payoff (Knight block now; the caster's magical deflect reuses the
             // same OpenParryWindow seam). Same-GameObject lookup, lazily cached.

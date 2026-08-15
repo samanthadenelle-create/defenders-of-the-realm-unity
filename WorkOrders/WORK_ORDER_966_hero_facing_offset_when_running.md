@@ -1,6 +1,6 @@
 # WO-966 — The hero's body faces the wrong way while running (Mage: NW when running N)
 
-**Status:** PARTIAL - remaining: THE FIX (only instrumentation landed; yaw still hardcoded)
+**Status:** IMPLEMENTED — 2026-08-15 (Mage/Ranger skin at 0 + shoulder AlignBodyFacingToRoot; Knight +15 untouched; gait uses MeasuredRootSpeed). PO felt-verify Mage run-north.
 
 > **PARTIAL - re-scoped 2026-08-14 (phantom sweep).** Remaining work: THE FIX ITSELF. Only the instrumentation landed; HeroBodySwapper.cs:263 STILL HARDCODES the yaw. Cross-reference WO-985, which reached the same diagnosis independently.
 > Everything else in this WO is present in HEAD. The named remainder IS the ticket now - do not

@@ -1,14 +1,9 @@
 # WORK ORDER 702 — The Founding of Elarion: NPC-guided blank-start tutorial *(renumbered from a colliding fresh 699 mint, 2026-07-13 — 699 is the SEL-1 hero-select chips WO)*
 
-**Status: READY TO IMPLEMENT** (owner directive 2026-07-13, verbatim intent: "start with the
-empty structure, tree in the middle, an NPC gives a tutorial — this is your castle, this is what
-we want to defend; lay out the structures where you want; remind them placement is strategic
-because it can be attacked and their greenery and lumber yards could be damaged").
-**Lane:** Onboarding/FTUE. **Type:** NEW beat content on BUILT systems (Tutorial V2 interpreter +
-DialogueService + BuildMode signals). **Depends:** BLANK-1 (the start must actually be blank
-first) · supersedes WO-695's grace-default pre-placed Forge once landed (the guided beat replaces
-the stopgap; keep the grace default only as the skip-path fallback).
-**Numbering:** minted from the CLI_LANES banner (next free was 699); mint the Notion row on claim.
+**Status:** CLOSED — SUPERSEDED by WO-1012 / WO-971 (ONE guide, ONE FTUE redesign).
+**Lane:** Onboarding/FTUE.
+**Historical intent (archived):** blank-start NPC-guided founding tutorial (Steward at the tree,
+strategic placement, Founder's Plan ghost). Do not re-implement under this number.
 
 ## The beat sequence (data-driven — tutorial-steps.json rows + dialogue nodes, not code)
 

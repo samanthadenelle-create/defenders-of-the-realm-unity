@@ -1,6 +1,6 @@
 # WORK ORDER 976 — `hasSurface` is a false green: `panelSettings=ok canvas=ok` proves nothing
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — surfaceWired + measured UiSurfaceProbe verify (WO-976).
 **Lane:** Instrumentation / Core UI
 **Minted:** 2026-08-10 (CLI). Found by a sweep during the WO-973 read-only prep — i.e. this ticket
 exists because the last false-green cost us a defect that had to be found in a **screenshot**.

@@ -105,7 +105,12 @@ namespace DeNelle.Editor
             // WO-974: build Addressables content EXPLICITLY. Without this the bundles are rebuilt
             // only if an uncommitted per-machine Editor preference happens to say so — so a fresh
             // clone or CI ships stale/absent StreamingAssets/aa and resolves nothing at runtime.
-            AddressablesContentBuild.EnsureBuilt("AndroidBuild");
+            if (!AddressablesContentBuild.EnsureBuilt("AndroidBuild"))
+            {
+                Debug.LogError("[AndroidBuild] ABORTED — Addressables content build failed (WO-974).");
+                EditorApplication.Exit(1);
+                return;
+            }
 
             BuildReport report = BuildPipeline.BuildPlayer(options);
             BuildSummary summary = report.summary;

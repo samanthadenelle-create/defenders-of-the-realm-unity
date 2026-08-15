@@ -1017,7 +1017,12 @@ namespace DeNelle.Village
             // Higher accel when grabbing speed, higher decel when releasing,
             // so the hero responds promptly to a key press but glides slightly
             // when stopped (no instant-snap to zero).
-            Vector3 targetVelocity = move * (moveSpeedCap * HeroHealth.MoveSpeedMultiplier);   // injured-stance slow (1.0 = healthy)
+            // WO-910: talent moveSpeed multiplies on top of injured slow (identity when none).
+            float talentMove = 1f;
+            var abMove = GetComponent<HeroAbilities>();
+            if (abMove != null)
+                talentMove = DeNelle.Village.Talents.HeroTalentModifiers.MoveSpeedMultiplier(abMove.HeroClass);
+            Vector3 targetVelocity = move * (moveSpeedCap * HeroHealth.MoveSpeedMultiplier * talentMove);
             float maxStep = (targetVelocity.sqrMagnitude > Velocity.sqrMagnitude
                 ? _accelMetresPerSec2
                 : _decelMetresPerSec2) * Time.deltaTime;
@@ -1841,7 +1846,11 @@ namespace DeNelle.Village
             // cleanly at the waypoint (mirrors the pet's arrival damping).
             Vector3 dir = dist > 0.0001f ? to / dist : Vector3.zero;
             float speedScale = Mathf.Clamp01(dist / Mathf.Max(0.01f, AutoWalkArriveRadius));
-            Vector3 targetVelocity = dir * (_moveSpeed * speedScale * HeroHealth.MoveSpeedMultiplier);   // injured-stance slow (1.0 = healthy)
+            float talentMoveNav = 1f;
+            var abNav = GetComponent<HeroAbilities>();
+            if (abNav != null)
+                talentMoveNav = DeNelle.Village.Talents.HeroTalentModifiers.MoveSpeedMultiplier(abNav.HeroClass);
+            Vector3 targetVelocity = dir * (_moveSpeed * speedScale * HeroHealth.MoveSpeedMultiplier * talentMoveNav);
 
             float maxStep = (targetVelocity.sqrMagnitude > Velocity.sqrMagnitude
                 ? _accelMetresPerSec2

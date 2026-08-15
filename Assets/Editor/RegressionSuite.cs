@@ -84,7 +84,7 @@ namespace DeNelle.Editor
         private static readonly string[] ExpectedCatalogIds =
         {
             // towers
-            "tower_ground_archer", "tower_wall_wizard",
+            "tower_ground_archer", "tower_ballista",
             // walls + gate
             "wall_wood", "wall_stone", "gate_stone",
             // resource / build buildings

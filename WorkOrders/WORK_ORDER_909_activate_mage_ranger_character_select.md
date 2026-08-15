@@ -31,7 +31,7 @@
 >   nodes total.
 > - Full ledger: `docs/reference/SESSION_INDEX_2026-08-06.md` §6.3, §6.4, §8.
 
-**Status:** LANDED (see the banner above) — original header read: READY TO IMPLEMENT
+**Status:** DONE — LANDED (see the banner above) — original header read: READY TO IMPLEMENT
 **Silo:** Hero / character-select / onboarding
 **PO:** Samantha (owner)
 **For:** CLAUDE CLI (sole committer, headless-verifier)

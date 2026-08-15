@@ -213,6 +213,12 @@ namespace DeNelle.Editor
             // equip is non-null AND its prefab reference resolves.
             CheckArmedHeroInvariant(failures, log);
 
+            // --- WO-996: armor dual-copy — Resources (curated) ⊆ StreamingAssets (library) ---
+            CheckArmorDualCopy(failures, log);
+
+            // --- WO-975: Gear.asset GUIDs resolve on disk (not dangling / gitignored hollow) ---
+            CheckGearAddressableGroup(failures, log);
+
             // --- HAND-SLOT EQUIP RULES (owner 2026-06-18, docs/STORE_EQUIP_SPEC.md) -
             // Drive the REAL GearLoadout equip flow on a throwaway GameObject and assert the
             // mutually-exclusive main-hand/off-hand rules hold: a 2H clears the off-hand; an
@@ -320,6 +326,8 @@ namespace DeNelle.Editor
             // --- WO-976: the `hasSurface` false green stays dead — each of the four visibility
             //     failure classes must still be able to FIRE, and the named skip is not a pass ---
             if (!UiSurfaceProbeRegression.Run(out var uiSurfaceReason)) failures.Add(uiSurfaceReason); else log.AppendLine("[ui-surface-probe] " + uiSurfaceReason);
+            // --- WO-935/991/910/994: CombatCast + caravan mobility + Hunter mark + shield port ---
+            if (!CombatCastCaravanMarkRegression.Run(out var castCaravanReason)) failures.Add(castCaravanReason); else log.AppendLine("[combat-cast-caravan-mark] " + castCaravanReason);
             if (!TownsfolkDialogueRegression.Run(out var townsfolkReason)) failures.Add(townsfolkReason); else log.AppendLine("[townsfolk] " + townsfolkReason);
             if (!AtbEngineRegression.Run(out var atbReason)) failures.Add(atbReason); else log.AppendLine("[atb-engine] " + atbReason);
             if (!EconomyMetaCatalogRegression.Run(out var econMetaReason)) failures.Add(econMetaReason); else log.AppendLine("[econ-meta] " + econMetaReason);
@@ -2676,6 +2684,92 @@ namespace DeNelle.Editor
                 Debug.LogWarning($"[DataRegression] Addressable key probe threw for '{key}': {ex.Message}");
                 return false;
             }
+        }
+
+        // WO-996: after the library merge, every Resources armor id must exist in StreamingAssets
+        // (same subset shape as weapons). Schema versions must agree.
+        private static void CheckArmorDualCopy(List<string> failures, StringBuilder log)
+        {
+            log.AppendLine("[armor-dual-copy] Resources armor ids ⊆ StreamingAssets (WO-996):");
+            string rPath = "Assets/Resources/Data/Canonical/armor.json";
+            string sPath = "Assets/StreamingAssets/Data/Canonical/armor.json";
+            if (!System.IO.File.Exists(rPath) || !System.IO.File.Exists(sPath))
+            {
+                failures.Add("armor-dual-copy: one or both armor.json copies are missing on disk");
+                return;
+            }
+            try
+            {
+                var rTok = Newtonsoft.Json.Linq.JObject.Parse(System.IO.File.ReadAllText(rPath));
+                var sTok = Newtonsoft.Json.Linq.JObject.Parse(System.IO.File.ReadAllText(sPath));
+                int rVer = rTok.Value<int?>("version") ?? 0;
+                int sVer = sTok.Value<int?>("version") ?? 0;
+                if (rVer != sVer)
+                    failures.Add($"armor-dual-copy: schema version mismatch Resources=v{rVer} StreamingAssets=v{sVer}");
+                var rIds = new HashSet<string>();
+                var sIds = new HashSet<string>();
+                foreach (var row in rTok["armor"] as Newtonsoft.Json.Linq.JArray ?? new Newtonsoft.Json.Linq.JArray())
+                    if (row["id"] != null) rIds.Add(row["id"].ToString());
+                foreach (var row in sTok["armor"] as Newtonsoft.Json.Linq.JArray ?? new Newtonsoft.Json.Linq.JArray())
+                    if (row["id"] != null) sIds.Add(row["id"].ToString());
+                int missing = 0;
+                foreach (var id in rIds)
+                {
+                    if (!sIds.Contains(id))
+                    {
+                        missing++;
+                        if (missing <= 8)
+                            failures.Add($"armor-dual-copy: Resources id '{id}' missing from StreamingAssets library");
+                    }
+                }
+                if (missing > 8)
+                    failures.Add($"armor-dual-copy: …and {missing - 8} more Resources-only ids");
+                log.AppendLine($"  Resources={rIds.Count} StreamingAssets={sIds.Count} version R={rVer}/S={sVer} missingFromLibrary={missing}");
+            }
+            catch (System.Exception ex)
+            {
+                failures.Add($"armor-dual-copy: parse threw {ex.GetType().Name}: {ex.Message}");
+            }
+        }
+
+        // WO-975: every Gear.asset serialize-entry GUID must resolve to an on-disk asset.
+        private static void CheckGearAddressableGroup(List<string> failures, StringBuilder log)
+        {
+            log.AppendLine("[gear-addressable-group] Gear.asset entry GUIDs resolve on disk (WO-975):");
+            const string gearAsset = "Assets/AddressableAssetsData/AssetGroups/Gear.asset";
+            if (!System.IO.File.Exists(gearAsset))
+            {
+                failures.Add("gear-addressable-group: Gear.asset missing");
+                return;
+            }
+            var re = new System.Text.RegularExpressions.Regex(
+                @"^\s+-\s+m_GUID:\s+([0-9a-fA-F]{32})\s*$",
+                System.Text.RegularExpressions.RegexOptions.Multiline);
+            string text = System.IO.File.ReadAllText(gearAsset);
+            var seen = new HashSet<string>();
+            int total = 0, ok = 0, dangling = 0;
+            foreach (System.Text.RegularExpressions.Match m in re.Matches(text))
+            {
+                string guid = m.Groups[1].Value.ToLowerInvariant();
+                if (!seen.Add(guid)) continue;
+                total++;
+                string path = UnityEditor.AssetDatabase.GUIDToAssetPath(guid);
+                if (string.IsNullOrEmpty(path) ||
+                    (!System.IO.File.Exists(path) && !System.IO.Directory.Exists(path)))
+                {
+                    dangling++;
+                    if (dangling <= 6)
+                        failures.Add($"gear-addressable-group: dangling GUID {guid} path='{path}'");
+                }
+                else ok++;
+            }
+            if (total == 0)
+                failures.Add("gear-addressable-group: zero serialize-entry GUIDs in Gear.asset");
+            if (dangling > 6)
+                failures.Add($"gear-addressable-group: …and {dangling - 6} more dangling GUIDs");
+            log.AppendLine($"  entries={total} resolvable={ok} dangling={dangling}");
+            // Soft note: AddressableKeyExists remains advisory for per-key probes (WO-975 §3).
+            log.AppendLine("  note: AddressableKeyExists() is deliberately advisory for single-key probes; this suite is the hard fence.");
         }
 
         // =====================================================================

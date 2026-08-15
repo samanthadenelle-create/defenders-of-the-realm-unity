@@ -45,9 +45,10 @@ namespace DeNelle.Editor
         // Agreement band, same threshold the Ranger builder warns at.
         private const float WarnDegrees = 15f;
 
-        // MIRROR of HeroBodySwapper.cs:263 for comparison only - the swapper is the authority.
+        // MIRROR of HeroBodySwapper BuildLegacyResourcesBody for comparison only.
+        // WO-966: non-Knight skins at 0 then AlignBodyFacingToRoot (shoulder); Knight stays +15.
         private const float SwapperYawKnight   = 15f;
-        private const float SwapperYawNonKnight = -90f;
+        private const float SwapperYawNonKnight = 0f;
 
         private const string HeroDir = "Assets/Resources/Heroes";
 
@@ -62,9 +63,9 @@ namespace DeNelle.Editor
         private static readonly Target[] Targets =
         {
             new Target { Path = HeroDir + "/Mage.fbx",     Label = "Mage",
-                         AppliedYaw = SwapperYawNonKnight, AppliedNote = "non-Knight -90" },
+                         AppliedYaw = SwapperYawNonKnight, AppliedNote = "non-Knight 0 + AlignBodyFacingToRoot (WO-966)" },
             new Target { Path = HeroDir + "/Ranger.fbx",   Label = "Ranger",
-                         AppliedYaw = SwapperYawNonKnight, AppliedNote = "non-Knight -90" },
+                         AppliedYaw = SwapperYawNonKnight, AppliedNote = "non-Knight 0 + AlignBodyFacingToRoot (WO-966)" },
             new Target { Path = HeroDir + "/KnightV3.fbx", Label = "KnightV3",
                          AppliedYaw = SwapperYawKnight,    AppliedNote = "Knight +15 (Offset Forge locked)" },
         };

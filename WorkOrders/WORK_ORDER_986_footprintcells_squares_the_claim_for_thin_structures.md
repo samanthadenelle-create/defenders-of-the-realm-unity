@@ -1,9 +1,29 @@
 # WORK ORDER 986 — `PlacementGrid.FootprintCells` squares the grid claim, so every THIN structure over-claims on its narrow axis
 
-**Status:** SPEC — NEEDS AN OWNER CALL (do not implement without one)
+**Status:** IMPLEMENTED — 2026-08-15 CoC non-square XZ claim + yaw AABB; walls stay authored 1-cell; PO felt-verify thin props
 **Minted:** 2026-08-14 (CLI)
 **Silo:** Build mode / placement grid
 **Surfaced by:** verification of WO-972 (walls cannot be built beside each other)
+
+---
+
+## OWNER RULING 2026-08-15
+
+> **YES — CoC style.**
+
+Thin structures **must** pack along their real axes (walls, fences, stalls, banners, etc.).
+The square-claim collapse is a defect to fix for the whole placement system, not a wall-only
+workaround forever.
+
+### Implementation law under this ruling
+
+1. Thread **non-square `(x, z)` footprint** through `FootprintCells`, occupancy, and yaw inflation.
+2. **Derive** from mesh/catalog claim authority — do **not** hand-author a second `fp` table for
+   every thin row (WO-972 wall bypass stays until replaced by the general path).
+3. **Saved-layout occupancy replay** is in scope — plan migration / re-claim on load so old towns
+   do not silently overlap or leave ghost claims.
+4. Feel target: **Clash of Clans–style** dense packing of elongated buildings, not square pads for
+   every prop.
 
 ---
 

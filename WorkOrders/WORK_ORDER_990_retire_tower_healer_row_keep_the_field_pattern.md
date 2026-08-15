@@ -1,6 +1,6 @@
 # WORK ORDER 990 — Retire the `tower_healer` row (never buildable) — but KEEP the `HealerTower` behaviour
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — tower_healer absent from catalogs; HealerTower behaviour retained (2026-08-15).
 **Minted:** 2026-08-14 (CLI)
 **Silo:** Catalog / data hygiene
 **Source:** OWNER RULING, 2026-08-14 — *"i do not know what the town healer is"* → *"retire"*

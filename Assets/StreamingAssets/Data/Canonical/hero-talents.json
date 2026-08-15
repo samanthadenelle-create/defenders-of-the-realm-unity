@@ -2,7 +2,12 @@
   "version": 2,
   "respecCostCrystals": 300,
   "sharedNodeCost": 2,
-  "tierCosts": { "tier1": 1, "tier2": 2, "tier3": 3, "tier4": 5 },
+  "tierCosts": {
+    "tier1": 1,
+    "tier2": 2,
+    "tier3": 3,
+    "tier4": 5
+  },
   "_comment": "v2 canonical talent design (TALENT_ICON_ATLAS_SPEC_2026-06-27) + WO-676 strategic branches: knight = 32 nodes across three branches — WAR (hero combat; the legacy 20 + Venombrand, branch key absent = war), STEWARD (economy, 6 nodes, ids knight.s*), BULWARK (defensive structures, 5 nodes, ids knight.b*) — plus 8+3 Shared Universal. Node id = <hero>.t<tier>n<slot> (branch nodes: s/b prefix); iconPath = Talents/<hero>/<hero>_NN (NN 21-32 = WO-676 art follow-up, sprites pending). Prereq = same-slot tier below / same-branch chain. ALL THREE heroes stored (canonical); only KNIGHT effects are wired for V1 (solo Knight north star) — mage/ranger load as data+icons, effects no-op until V2. Ally-dependent Knight effects are no-op in solo V1 (any self-portion applies) and tagged '(allies — V2)'; '(... — V-later)' marks a behavioural handler not yet built. STEWARD/BULWARK effect types are summed by HeroTalentModifiers (HeroTalentEffectTypes consts); their consumer reads land in lanes A1/A2 (WO-676 §A).",
   "trees": {
     "knight": {
@@ -10,44 +15,615 @@
       "displayName": "Grom (Knight)",
       "_title": "Bulwark of Elarion",
       "nodes": [
-        { "id": "knight.t1n1", "name": "Iron Resolve",        "tier": "tier1", "slot": 1, "cost": 1, "kind": "stat",    "iconPath": "Talents/knight/knight_01", "description": "+18% damage reduction. Passive -18% incoming damage.", "effect": { "type": "damageReduction", "value": 0.18 }, "x": 0.12, "y": 0.66, "prerequisites": [] },
-        { "id": "knight.t1n2", "name": "Thunderbolt",          "tier": "tier1", "slot": 2, "cost": 1, "kind": "skill",   "iconPath": "Talents/knight/knight_02", "abilityId": "knight.thunderbolt", "description": "Unlocks Thunderbolt — a ranged bolt (30 dmg @ 16m, 3s cd).", "effect": { "type": "unlockAbility", "ability": "knight.thunderbolt" }, "x": 0.31, "y": 0.66, "prerequisites": [] },
-        { "id": "knight.t1n3", "name": "Guardian Stance",      "tier": "tier1", "slot": 3, "cost": 1, "kind": "stat",    "iconPath": "Talents/knight/knight_03", "description": "+25% block chance. Passive chance to fully block a hit.", "effect": { "type": "blockChance", "value": 0.25 }, "x": 0.5, "y": 0.66, "prerequisites": [] },
-        { "id": "knight.t1n4", "name": "Mending Salve",        "tier": "tier1", "slot": 4, "cost": 1, "kind": "skill",   "iconPath": "Talents/knight/knight_04", "abilityId": "knight.mending-salve", "description": "Unlocks Mending Salve — heals 42 in a 5m ring (16s cd).", "effect": { "type": "unlockAbility", "ability": "knight.mending-salve" }, "x": 0.69, "y": 0.66, "prerequisites": [] },
-        { "id": "knight.t1n5", "name": "Throwing Spear",       "tier": "tier1", "slot": 5, "cost": 1, "kind": "skill",   "iconPath": "Talents/knight/knight_05", "abilityId": "knight.ranged-poke", "description": "Unlocks Throwing Spear — a ranged poke (28 dmg @ 16m, 1.2s cd).", "effect": { "type": "unlockAbility", "ability": "knight.ranged-poke" }, "x": 0.88, "y": 0.66, "prerequisites": [] },
-
-        { "id": "knight.t2n1", "name": "Shield Slam",          "tier": "tier2", "slot": 1, "cost": 2, "kind": "skill",   "iconPath": "Talents/knight/knight_06", "abilityId": "knight.shield-bash", "description": "Unlocks Shield Slam — 22 dmg + a 2.5s slow up close (8s cd).", "effect": { "type": "unlockAbility", "ability": "knight.shield-bash" }, "x": 0.12, "y": 0.48, "prerequisites": ["knight.t1n1"] },
-        { "id": "knight.t2n2", "name": "Emberbrand Throw",     "tier": "tier2", "slot": 2, "cost": 2, "kind": "skill",   "iconPath": "Talents/knight/knight_07", "abilityId": "knight.emberbrand-throw", "description": "Unlocks Emberbrand Throw — 12 dmg + 8 dps burn for 4s @ 14m (10s cd).", "effect": { "type": "unlockAbility", "ability": "knight.emberbrand-throw" }, "x": 0.31, "y": 0.48, "prerequisites": ["knight.t1n2"] },
-        { "id": "knight.t2n3", "name": "Warden's Roar",        "tier": "tier2", "slot": 3, "cost": 2, "kind": "skill",   "iconPath": "Talents/knight/knight_08", "abilityId": "knight.wardens-roar", "description": "Unlocks Warden's Roar — taunts foes within 6m + 10 dmg (14s cd).", "effect": { "type": "unlockAbility", "ability": "knight.wardens-roar" }, "x": 0.5, "y": 0.48, "prerequisites": ["knight.t1n3"] },
-        { "id": "knight.t2n4", "name": "Pinning Spear",        "tier": "tier2", "slot": 4, "cost": 2, "kind": "skill",   "iconPath": "Talents/knight/knight_09", "abilityId": "knight.snare-arrow", "description": "Unlocks Pinning Spear — 18 dmg + a 2.5s slow @ 14m (11s cd).", "effect": { "type": "unlockAbility", "ability": "knight.snare-arrow" }, "x": 0.69, "y": 0.48, "prerequisites": ["knight.t1n4"] },
-        { "id": "knight.t2n5", "name": "Bulwark",              "tier": "tier2", "slot": 5, "cost": 2, "kind": "stat",    "iconPath": "Talents/knight/knight_10", "description": "+30% defense. Passive -30% incoming damage (self).", "effect": { "type": "defense", "value": 0.30 }, "x": 0.88, "y": 0.48, "prerequisites": ["knight.t1n5"] },
-
-        { "id": "knight.t3n1", "name": "Suppressing Volley",   "tier": "tier3", "slot": 1, "cost": 3, "kind": "skill",   "iconPath": "Talents/knight/knight_11", "abilityId": "knight.suppressing-volley", "description": "Unlocks Suppressing Volley — 36 dmg to all foes in a 6m arc (20s cd).", "effect": { "type": "unlockAbility", "ability": "knight.suppressing-volley" }, "x": 0.12, "y": 0.3, "prerequisites": ["knight.t2n1"] },
-        { "id": "knight.t3n2", "name": "Oathmend",             "tier": "tier3", "slot": 2, "cost": 3, "kind": "skill",   "iconPath": "Talents/knight/knight_12", "abilityId": "knight.oathmend", "description": "Unlocks Oathmend — heals 10 HP/s for 5s (50 total, 20s cd).", "effect": { "type": "unlockAbility", "ability": "knight.oathmend" }, "x": 0.31, "y": 0.3, "prerequisites": ["knight.t2n2"] },
-        { "id": "knight.t3n3", "name": "Legendary Vanguard",   "tier": "tier3", "slot": 3, "cost": 3, "kind": "stat",    "iconPath": "Talents/knight/knight_13", "description": "+35% defense.", "effect": { "type": "defense", "value": 0.35 }, "x": 0.5, "y": 0.3, "prerequisites": ["knight.t2n3"] },
-        { "id": "knight.t3n4", "name": "Retaliation Surge",    "tier": "tier3", "slot": 4, "cost": 3, "kind": "passive", "iconPath": "Talents/knight/knight_14", "description": "Attackers hurt themselves on your armor — 30% of every melee hit rebounds onto the striker.", "effect": { "type": "reflect", "value": 0.30, "note": "(reflect — wired WO-566; re-described WO-676 strategic wording)" }, "x": 0.69, "y": 0.3, "prerequisites": ["knight.t2n4"] },
-        { "id": "knight.t3n5", "name": "Sweeping Cut",         "tier": "tier3", "slot": 5, "cost": 3, "kind": "skill",   "iconPath": "Talents/knight/knight_15", "abilityId": "knight.sweeping-cut", "description": "Unlocks Sweeping Cut — 30 dmg to all foes in a 5m arc (12s cd).", "effect": { "type": "unlockAbility", "ability": "knight.sweeping-cut" }, "x": 0.88, "y": 0.3, "prerequisites": ["knight.t2n5"] },
-
-        { "id": "knight.t4n1", "name": "Eternal Aegis",        "tier": "tier4", "slot": 1, "cost": 5, "kind": "skill",   "iconPath": "Talents/knight/knight_16", "abilityId": "knight.eternal-aegis", "description": "Unlocks Eternal Aegis — cast 8s of full invulnerability (90s cd).", "effect": { "type": "unlockAbility", "ability": "knight.eternal-aegis" }, "x": 0.12, "y": 0.12, "prerequisites": ["knight.t3n1"] },
-        { "id": "knight.t4n2", "name": "Second Wind",          "tier": "tier4", "slot": 2, "cost": 5, "kind": "skill",   "iconPath": "Talents/knight/knight_17", "abilityId": "knight.second-wind", "description": "Unlocks Second Wind — heals 35 HP (45s cd).", "effect": { "type": "unlockAbility", "ability": "knight.second-wind" }, "x": 0.31, "y": 0.12, "prerequisites": ["knight.t3n2"] },
-        { "id": "knight.t4n3", "name": "Last Stand",           "tier": "tier4", "slot": 3, "cost": 5, "kind": "passive", "iconPath": "Talents/knight/knight_18", "description": "Below 20% HP: -60% damage taken + reflect 50% for 5s (120s cd).", "effect": { "type": "laststand", "value": 0.60, "reflect": 0.50, "threshold": 0.20, "duration": 5, "cooldown": 120, "note": "(laststand low-HP — wired WO-566)" }, "x": 0.5, "y": 0.12, "prerequisites": ["knight.t3n3"] },
-        { "id": "knight.t4n4", "name": "Holy Retribution",     "tier": "tier4", "slot": 4, "cost": 5, "kind": "passive", "iconPath": "Talents/knight/knight_19", "description": "Foes you taunt with Warden's Roar catch holy fire — 12 dps for 4s while they are held on you.", "effect": { "type": "modifyAbility", "ability": "knight.wardens-roar", "value": 12, "duration": 4, "note": "(taunt-burn — WIRED WO-676: HeroAbilities.ResolveTaunt applies Burn + BurnDoT per held foe)" }, "x": 0.69, "y": 0.12, "prerequisites": ["knight.t3n4"] },
-        { "id": "knight.t4n5", "name": "Champion's Combo",     "tier": "tier4", "slot": 5, "cost": 5, "kind": "skill",   "iconPath": "Talents/knight/knight_20", "abilityId": "knight.champions-combo", "description": "Unlocks Champion's Combo — a 3x40 (120) dmg flurry to foes in front (30s cd).", "effect": { "type": "unlockAbility", "ability": "knight.champions-combo" }, "x": 0.88, "y": 0.12, "prerequisites": ["knight.t3n5"] },
-
-        { "id": "knight.t2n6", "name": "Venombrand",           "tier": "tier2", "slot": 6, "cost": 2, "kind": "passive", "branch": "war",     "iconPath": "Talents/knight/knight_21", "description": "Your Thunderbolt and Throwing Spear leave venom in the wound — 5 dps for 6s, stacking twice on a foe you keep hitting.", "effect": { "type": "modifyAbility", "stat": "poison", "ability": "knight.thunderbolt,knight.ranged-poke", "value": 5, "duration": 6, "targets": 2, "note": "(poison rider — wired WO-676; VFX follow-up: distinct green DRIP trail + drip icon, never color-only)" }, "prerequisites": ["knight.t1n2"] },
-
-        { "id": "knight.s1n1", "name": "Provider's Bond",      "tier": "tier1", "slot": 7, "cost": 1, "kind": "stat",    "branch": "steward", "iconPath": "Talents/knight/knight_22", "description": "Your echoes and collectors work 15% faster — the stockpile grows even while you fight.", "effect": { "type": "harvestRate", "value": 0.15 }, "prerequisites": [] },
-        { "id": "knight.s1n2", "name": "Deep Reserves",        "tier": "tier1", "slot": 8, "cost": 1, "kind": "stat",    "branch": "steward", "iconPath": "Talents/knight/knight_23", "description": "Collectors hold 50% more before filling up — less harvest sits at risk while you are away.", "effect": { "type": "collectorCap", "value": 0.50 }, "prerequisites": [] },
-        { "id": "knight.s2n1", "name": "Master Mason",         "tier": "tier2", "slot": 7, "cost": 2, "kind": "stat",    "branch": "steward", "iconPath": "Talents/knight/knight_24", "description": "Repairs cost 25% less — patching walls after a raid stops draining the treasury.", "effect": { "type": "repairCost", "value": 0.25 }, "prerequisites": ["knight.s1n1"] },
-        { "id": "knight.s2n2", "name": "Foreman's Pace",       "tier": "tier2", "slot": 8, "cost": 2, "kind": "stat",    "branch": "steward", "iconPath": "Talents/knight/knight_25", "description": "Building and upgrading finishes 20% sooner — your defenses stand ready before the next wave.", "effect": { "type": "buildTime", "value": 0.20 }, "prerequisites": ["knight.s1n2"] },
-        { "id": "knight.s3n1", "name": "Salvager",             "tier": "tier3", "slot": 7, "cost": 3, "kind": "stat",    "branch": "steward", "iconPath": "Talents/knight/knight_26", "description": "Selling or losing a structure returns 15% more of its cost — rebuilding after a bad night hurts less.", "effect": { "type": "salvage", "value": 0.15 }, "prerequisites": ["knight.s2n1"] },
-        { "id": "knight.s4n1", "name": "Bountiful Banners",    "tier": "tier4", "slot": 6, "cost": 5, "kind": "stat",    "branch": "steward", "iconPath": "Talents/knight/knight_27", "description": "Every wave you survive pays 20% more — the longer Elarion holds, the richer it grows.", "effect": { "type": "waveReward", "value": 0.20 }, "prerequisites": ["knight.s3n1"] },
-
-        { "id": "knight.b1n1", "name": "Keen Ballistics",      "tier": "tier1", "slot": 9, "cost": 1, "kind": "stat",    "branch": "bulwark", "iconPath": "Talents/knight/knight_28", "description": "Your towers hit 15% harder — every emplacement you build pulls more weight.", "effect": { "type": "towerDamage", "value": 0.15 }, "prerequisites": [] },
-        { "id": "knight.b2n1", "name": "Farsight Emplacements","tier": "tier2", "slot": 9, "cost": 2, "kind": "stat",    "branch": "bulwark", "iconPath": "Talents/knight/knight_29", "description": "Towers see 2m farther — raiders come under fire before they ever reach your walls.", "effect": { "type": "towerRange", "value": 2, "note": "additive METERS, not a fraction" }, "prerequisites": ["knight.b1n1"] },
-        { "id": "knight.b2n2", "name": "Hardened Ramparts",    "tier": "tier2", "slot": 10, "cost": 2, "kind": "stat",   "branch": "bulwark", "iconPath": "Talents/knight/knight_30", "description": "Walls and gates take 20% less damage — your perimeter holds longer without you.", "effect": { "type": "structureToughness", "value": 0.20 }, "prerequisites": ["knight.b1n1"] },
-        { "id": "knight.b3n1", "name": "Standing Orders",      "tier": "tier3", "slot": 8, "cost": 3, "kind": "stat",    "branch": "bulwark", "iconPath": "Talents/knight/knight_31", "description": "Towers fire 12% faster — sustained fire that thins a raid before it lands.", "effect": { "type": "towerAttackSpeed", "value": 0.12 }, "prerequisites": ["knight.b2n1"] },
-        { "id": "knight.b4n1", "name": "Warden of Elarion",    "tier": "tier4", "slot": 7, "cost": 5, "kind": "stat",    "branch": "bulwark", "iconPath": "Talents/knight/knight_32", "description": "While a wave is live, every defense takes 25% less damage — the whole village digs in when the horns sound.", "effect": { "type": "structureToughnessWave", "value": 0.25, "note": "(owner pin 4: DEFEND-scoped -25% — consumer adds this only while WaveManager reports a live wave)" }, "prerequisites": ["knight.b2n2"] }
+        {
+          "id": "knight.t1n1",
+          "name": "Iron Resolve",
+          "tier": "tier1",
+          "slot": 1,
+          "cost": 1,
+          "kind": "stat",
+          "iconPath": "Talents/knight/knight_01",
+          "description": "+18% damage reduction. Passive -18% incoming damage.",
+          "effect": {
+            "type": "damageReduction",
+            "value": 0.18
+          },
+          "x": 0.12,
+          "y": 0.66,
+          "prerequisites": []
+        },
+        {
+          "id": "knight.t1n2",
+          "name": "Thunderbolt",
+          "tier": "tier1",
+          "slot": 2,
+          "cost": 1,
+          "kind": "skill",
+          "iconPath": "Talents/knight/knight_02",
+          "abilityId": "knight.thunderbolt",
+          "description": "Unlocks Thunderbolt — a ranged bolt (30 dmg @ 16m, 3s cd).",
+          "effect": {
+            "type": "unlockAbility",
+            "ability": "knight.thunderbolt"
+          },
+          "x": 0.31,
+          "y": 0.66,
+          "prerequisites": []
+        },
+        {
+          "id": "knight.t1n3",
+          "name": "Guardian Stance",
+          "tier": "tier1",
+          "slot": 3,
+          "cost": 1,
+          "kind": "stat",
+          "iconPath": "Talents/knight/knight_03",
+          "description": "+25% block chance. Passive chance to fully block a hit.",
+          "effect": {
+            "type": "blockChance",
+            "value": 0.25
+          },
+          "x": 0.5,
+          "y": 0.66,
+          "prerequisites": []
+        },
+        {
+          "id": "knight.t1n4",
+          "name": "Mending Salve",
+          "tier": "tier1",
+          "slot": 4,
+          "cost": 1,
+          "kind": "skill",
+          "iconPath": "Talents/knight/knight_04",
+          "abilityId": "knight.mending-salve",
+          "description": "Unlocks Mending Salve — heals 42 in a 5m ring (16s cd).",
+          "effect": {
+            "type": "unlockAbility",
+            "ability": "knight.mending-salve"
+          },
+          "x": 0.69,
+          "y": 0.66,
+          "prerequisites": []
+        },
+        {
+          "id": "knight.t1n5",
+          "name": "Throwing Spear",
+          "tier": "tier1",
+          "slot": 5,
+          "cost": 1,
+          "kind": "skill",
+          "iconPath": "Talents/knight/knight_05",
+          "abilityId": "knight.ranged-poke",
+          "description": "Unlocks Throwing Spear — a ranged poke (28 dmg @ 16m, 1.2s cd).",
+          "effect": {
+            "type": "unlockAbility",
+            "ability": "knight.ranged-poke"
+          },
+          "x": 0.88,
+          "y": 0.66,
+          "prerequisites": []
+        },
+        {
+          "id": "knight.t2n1",
+          "name": "Shield Slam",
+          "tier": "tier2",
+          "slot": 1,
+          "cost": 2,
+          "kind": "skill",
+          "iconPath": "Talents/knight/knight_06",
+          "abilityId": "knight.shield-bash",
+          "description": "Unlocks Shield Slam — 22 dmg + a 2.5s slow up close (8s cd).",
+          "effect": {
+            "type": "unlockAbility",
+            "ability": "knight.shield-bash"
+          },
+          "x": 0.12,
+          "y": 0.48,
+          "prerequisites": [
+            "knight.t1n1"
+          ]
+        },
+        {
+          "id": "knight.t2n2",
+          "name": "Emberbrand Throw",
+          "tier": "tier2",
+          "slot": 2,
+          "cost": 2,
+          "kind": "skill",
+          "iconPath": "Talents/knight/knight_07",
+          "abilityId": "knight.emberbrand-throw",
+          "description": "Unlocks Emberbrand Throw — 12 dmg + 8 dps burn for 4s @ 14m (10s cd).",
+          "effect": {
+            "type": "unlockAbility",
+            "ability": "knight.emberbrand-throw"
+          },
+          "x": 0.31,
+          "y": 0.48,
+          "prerequisites": [
+            "knight.t1n2"
+          ]
+        },
+        {
+          "id": "knight.t2n3",
+          "name": "Warden's Roar",
+          "tier": "tier2",
+          "slot": 3,
+          "cost": 2,
+          "kind": "skill",
+          "iconPath": "Talents/knight/knight_08",
+          "abilityId": "knight.wardens-roar",
+          "description": "Unlocks Warden's Roar — taunts foes within 6m + 10 dmg (14s cd).",
+          "effect": {
+            "type": "unlockAbility",
+            "ability": "knight.wardens-roar"
+          },
+          "x": 0.5,
+          "y": 0.48,
+          "prerequisites": [
+            "knight.t1n3"
+          ]
+        },
+        {
+          "id": "knight.t2n4",
+          "name": "Pinning Spear",
+          "tier": "tier2",
+          "slot": 4,
+          "cost": 2,
+          "kind": "skill",
+          "iconPath": "Talents/knight/knight_09",
+          "abilityId": "knight.snare-arrow",
+          "description": "Unlocks Pinning Spear — 18 dmg + a 2.5s slow @ 14m (11s cd).",
+          "effect": {
+            "type": "unlockAbility",
+            "ability": "knight.snare-arrow"
+          },
+          "x": 0.69,
+          "y": 0.48,
+          "prerequisites": [
+            "knight.t1n4"
+          ]
+        },
+        {
+          "id": "knight.t2n5",
+          "name": "Bulwark",
+          "tier": "tier2",
+          "slot": 5,
+          "cost": 2,
+          "kind": "stat",
+          "iconPath": "Talents/knight/knight_10",
+          "description": "+30% defense. Passive -30% incoming damage (self).",
+          "effect": {
+            "type": "defense",
+            "value": 0.3
+          },
+          "x": 0.88,
+          "y": 0.48,
+          "prerequisites": [
+            "knight.t1n5"
+          ]
+        },
+        {
+          "id": "knight.t3n1",
+          "name": "Suppressing Volley",
+          "tier": "tier3",
+          "slot": 1,
+          "cost": 3,
+          "kind": "skill",
+          "iconPath": "Talents/knight/knight_11",
+          "abilityId": "knight.suppressing-volley",
+          "description": "Unlocks Suppressing Volley — 36 dmg to all foes in a 6m arc (20s cd).",
+          "effect": {
+            "type": "unlockAbility",
+            "ability": "knight.suppressing-volley"
+          },
+          "x": 0.12,
+          "y": 0.3,
+          "prerequisites": [
+            "knight.t2n1"
+          ]
+        },
+        {
+          "id": "knight.t3n2",
+          "name": "Oathmend",
+          "tier": "tier3",
+          "slot": 2,
+          "cost": 3,
+          "kind": "skill",
+          "iconPath": "Talents/knight/knight_12",
+          "abilityId": "knight.oathmend",
+          "description": "Unlocks Oathmend — heals 10 HP/s for 5s (50 total, 20s cd).",
+          "effect": {
+            "type": "unlockAbility",
+            "ability": "knight.oathmend"
+          },
+          "x": 0.31,
+          "y": 0.3,
+          "prerequisites": [
+            "knight.t2n2"
+          ]
+        },
+        {
+          "id": "knight.t3n3",
+          "name": "Legendary Vanguard",
+          "tier": "tier3",
+          "slot": 3,
+          "cost": 3,
+          "kind": "stat",
+          "iconPath": "Talents/knight/knight_13",
+          "description": "+35% defense.",
+          "effect": {
+            "type": "defense",
+            "value": 0.35
+          },
+          "x": 0.5,
+          "y": 0.3,
+          "prerequisites": [
+            "knight.t2n3"
+          ]
+        },
+        {
+          "id": "knight.t3n4",
+          "name": "Retaliation Surge",
+          "tier": "tier3",
+          "slot": 4,
+          "cost": 3,
+          "kind": "passive",
+          "iconPath": "Talents/knight/knight_14",
+          "description": "Attackers hurt themselves on your armor — 30% of every melee hit rebounds onto the striker.",
+          "effect": {
+            "type": "reflect",
+            "value": 0.3,
+            "note": "(reflect — wired WO-566; re-described WO-676 strategic wording)"
+          },
+          "x": 0.69,
+          "y": 0.3,
+          "prerequisites": [
+            "knight.t2n4"
+          ]
+        },
+        {
+          "id": "knight.t3n5",
+          "name": "Sweeping Cut",
+          "tier": "tier3",
+          "slot": 5,
+          "cost": 3,
+          "kind": "skill",
+          "iconPath": "Talents/knight/knight_15",
+          "abilityId": "knight.sweeping-cut",
+          "description": "Unlocks Sweeping Cut — 30 dmg to all foes in a 5m arc (12s cd).",
+          "effect": {
+            "type": "unlockAbility",
+            "ability": "knight.sweeping-cut"
+          },
+          "x": 0.88,
+          "y": 0.3,
+          "prerequisites": [
+            "knight.t2n5"
+          ]
+        },
+        {
+          "id": "knight.t4n1",
+          "name": "Eternal Aegis",
+          "tier": "tier4",
+          "slot": 1,
+          "cost": 5,
+          "kind": "skill",
+          "iconPath": "Talents/knight/knight_16",
+          "abilityId": "knight.eternal-aegis",
+          "description": "Unlocks Eternal Aegis — cast 8s of full invulnerability (90s cd).",
+          "effect": {
+            "type": "unlockAbility",
+            "ability": "knight.eternal-aegis"
+          },
+          "x": 0.12,
+          "y": 0.12,
+          "prerequisites": [
+            "knight.t3n1"
+          ]
+        },
+        {
+          "id": "knight.t4n2",
+          "name": "Second Wind",
+          "tier": "tier4",
+          "slot": 2,
+          "cost": 5,
+          "kind": "skill",
+          "iconPath": "Talents/knight/knight_17",
+          "abilityId": "knight.second-wind",
+          "description": "Unlocks Second Wind — heals 35 HP (45s cd).",
+          "effect": {
+            "type": "unlockAbility",
+            "ability": "knight.second-wind"
+          },
+          "x": 0.31,
+          "y": 0.12,
+          "prerequisites": [
+            "knight.t3n2"
+          ]
+        },
+        {
+          "id": "knight.t4n3",
+          "name": "Last Stand",
+          "tier": "tier4",
+          "slot": 3,
+          "cost": 5,
+          "kind": "passive",
+          "iconPath": "Talents/knight/knight_18",
+          "description": "Below 20% HP: -60% damage taken + reflect 50% for 5s (120s cd).",
+          "effect": {
+            "type": "laststand",
+            "value": 0.6,
+            "reflect": 0.5,
+            "threshold": 0.2,
+            "duration": 5,
+            "cooldown": 120,
+            "note": "(laststand low-HP — wired WO-566)"
+          },
+          "x": 0.5,
+          "y": 0.12,
+          "prerequisites": [
+            "knight.t3n3"
+          ]
+        },
+        {
+          "id": "knight.t4n4",
+          "name": "Holy Retribution",
+          "tier": "tier4",
+          "slot": 4,
+          "cost": 5,
+          "kind": "passive",
+          "iconPath": "Talents/knight/knight_19",
+          "description": "Foes you taunt with Warden's Roar catch holy fire — 12 dps for 4s while they are held on you.",
+          "effect": {
+            "type": "modifyAbility",
+            "ability": "knight.wardens-roar",
+            "value": 12,
+            "duration": 4,
+            "note": "(taunt-burn — WIRED WO-676: HeroAbilities.ResolveTaunt applies Burn + BurnDoT per held foe)"
+          },
+          "x": 0.69,
+          "y": 0.12,
+          "prerequisites": [
+            "knight.t3n4"
+          ]
+        },
+        {
+          "id": "knight.t4n5",
+          "name": "Champion's Combo",
+          "tier": "tier4",
+          "slot": 5,
+          "cost": 5,
+          "kind": "skill",
+          "iconPath": "Talents/knight/knight_20",
+          "abilityId": "knight.champions-combo",
+          "description": "Unlocks Champion's Combo — a 3x40 (120) dmg flurry to foes in front (30s cd).",
+          "effect": {
+            "type": "unlockAbility",
+            "ability": "knight.champions-combo"
+          },
+          "x": 0.88,
+          "y": 0.12,
+          "prerequisites": [
+            "knight.t3n5"
+          ]
+        },
+        {
+          "id": "knight.t2n6",
+          "name": "Venombrand",
+          "tier": "tier2",
+          "slot": 6,
+          "cost": 2,
+          "kind": "passive",
+          "branch": "war",
+          "iconPath": "Talents/knight/knight_21",
+          "description": "Your Thunderbolt and Throwing Spear leave venom in the wound — 5 dps for 6s, stacking twice on a foe you keep hitting.",
+          "effect": {
+            "type": "modifyAbility",
+            "stat": "poison",
+            "ability": "knight.thunderbolt,knight.ranged-poke",
+            "value": 5,
+            "duration": 6,
+            "targets": 2,
+            "note": "(poison rider — wired WO-676; VFX follow-up: distinct green DRIP trail + drip icon, never color-only)"
+          },
+          "prerequisites": [
+            "knight.t1n2"
+          ]
+        },
+        {
+          "id": "knight.s1n1",
+          "name": "Provider's Bond",
+          "tier": "tier1",
+          "slot": 7,
+          "cost": 1,
+          "kind": "stat",
+          "branch": "steward",
+          "iconPath": "Talents/knight/knight_22",
+          "description": "Your echoes and collectors work 15% faster — the stockpile grows even while you fight.",
+          "effect": {
+            "type": "harvestRate",
+            "value": 0.15
+          },
+          "prerequisites": []
+        },
+        {
+          "id": "knight.s1n2",
+          "name": "Deep Reserves",
+          "tier": "tier1",
+          "slot": 8,
+          "cost": 1,
+          "kind": "stat",
+          "branch": "steward",
+          "iconPath": "Talents/knight/knight_23",
+          "description": "Collectors hold 50% more before filling up — less harvest sits at risk while you are away.",
+          "effect": {
+            "type": "collectorCap",
+            "value": 0.5
+          },
+          "prerequisites": []
+        },
+        {
+          "id": "knight.s2n1",
+          "name": "Master Mason",
+          "tier": "tier2",
+          "slot": 7,
+          "cost": 2,
+          "kind": "stat",
+          "branch": "steward",
+          "iconPath": "Talents/knight/knight_24",
+          "description": "Repairs cost 25% less — patching walls after a raid stops draining the treasury.",
+          "effect": {
+            "type": "repairCost",
+            "value": 0.25
+          },
+          "prerequisites": [
+            "knight.s1n1"
+          ]
+        },
+        {
+          "id": "knight.s2n2",
+          "name": "Foreman's Pace",
+          "tier": "tier2",
+          "slot": 8,
+          "cost": 2,
+          "kind": "stat",
+          "branch": "steward",
+          "iconPath": "Talents/knight/knight_25",
+          "description": "Building and upgrading finishes 20% sooner — your defenses stand ready before the next wave.",
+          "effect": {
+            "type": "buildTime",
+            "value": 0.2
+          },
+          "prerequisites": [
+            "knight.s1n2"
+          ]
+        },
+        {
+          "id": "knight.s3n1",
+          "name": "Salvager",
+          "tier": "tier3",
+          "slot": 7,
+          "cost": 3,
+          "kind": "stat",
+          "branch": "steward",
+          "iconPath": "Talents/knight/knight_26",
+          "description": "Selling or losing a structure returns 15% more of its cost — rebuilding after a bad night hurts less.",
+          "effect": {
+            "type": "salvage",
+            "value": 0.15
+          },
+          "prerequisites": [
+            "knight.s2n1"
+          ]
+        },
+        {
+          "id": "knight.s4n1",
+          "name": "Bountiful Banners",
+          "tier": "tier4",
+          "slot": 6,
+          "cost": 5,
+          "kind": "stat",
+          "branch": "steward",
+          "iconPath": "Talents/knight/knight_27",
+          "description": "Every wave you survive pays 20% more — the longer Elarion holds, the richer it grows.",
+          "effect": {
+            "type": "waveReward",
+            "value": 0.2
+          },
+          "prerequisites": [
+            "knight.s3n1"
+          ]
+        },
+        {
+          "id": "knight.b1n1",
+          "name": "Keen Ballistics",
+          "tier": "tier1",
+          "slot": 9,
+          "cost": 1,
+          "kind": "stat",
+          "branch": "bulwark",
+          "iconPath": "Talents/knight/knight_28",
+          "description": "Your towers hit 15% harder — every emplacement you build pulls more weight.",
+          "effect": {
+            "type": "towerDamage",
+            "value": 0.15
+          },
+          "prerequisites": []
+        },
+        {
+          "id": "knight.b2n1",
+          "name": "Farsight Emplacements",
+          "tier": "tier2",
+          "slot": 9,
+          "cost": 2,
+          "kind": "stat",
+          "branch": "bulwark",
+          "iconPath": "Talents/knight/knight_29",
+          "description": "Towers see 2m farther — raiders come under fire before they ever reach your walls.",
+          "effect": {
+            "type": "towerRange",
+            "value": 2,
+            "note": "additive METERS, not a fraction"
+          },
+          "prerequisites": [
+            "knight.b1n1"
+          ]
+        },
+        {
+          "id": "knight.b2n2",
+          "name": "Hardened Ramparts",
+          "tier": "tier2",
+          "slot": 10,
+          "cost": 2,
+          "kind": "stat",
+          "branch": "bulwark",
+          "iconPath": "Talents/knight/knight_30",
+          "description": "Walls and gates take 20% less damage — your perimeter holds longer without you.",
+          "effect": {
+            "type": "structureToughness",
+            "value": 0.2
+          },
+          "prerequisites": [
+            "knight.b1n1"
+          ]
+        },
+        {
+          "id": "knight.b3n1",
+          "name": "Standing Orders",
+          "tier": "tier3",
+          "slot": 8,
+          "cost": 3,
+          "kind": "stat",
+          "branch": "bulwark",
+          "iconPath": "Talents/knight/knight_31",
+          "description": "Towers fire 12% faster — sustained fire that thins a raid before it lands.",
+          "effect": {
+            "type": "towerAttackSpeed",
+            "value": 0.12
+          },
+          "prerequisites": [
+            "knight.b2n1"
+          ]
+        },
+        {
+          "id": "knight.b4n1",
+          "name": "Warden of Elarion",
+          "tier": "tier4",
+          "slot": 7,
+          "cost": 5,
+          "kind": "stat",
+          "branch": "bulwark",
+          "iconPath": "Talents/knight/knight_32",
+          "description": "While a wave is live, every defense takes 25% less damage — the whole village digs in when the horns sound.",
+          "effect": {
+            "type": "structureToughnessWave",
+            "value": 0.25,
+            "note": "(owner pin 4: DEFEND-scoped -25% — consumer adds this only while WaveManager reports a live wave)"
+          },
+          "prerequisites": [
+            "knight.b2n2"
+          ]
+        }
       ]
     },
     "ranger": {
@@ -56,29 +632,368 @@
       "_title": "Windstrider",
       "_comment": "WO-861 A2 (owner-approved 2026-08-02) — Sylas, the archer. Four branches: SUSTAIN (Nature's Gift, Bloodbound Draw) — ARROW MASTERY (Emberhead / Venomcraft / Deep Freeze buff the matching weapons.json ammoEffect rider on ranger.q, via the existing modifyAbility+stat rider contract HeroTalentModifiers.TryGetAbilityDotRider already reads) — RANGED DPS (Quick Draw, Eagle Vision, Precision Strike, Multishot, pierce/chain) — MOBILITY/EVASION (Tumble Step, move speed, stealth). Node ids, tiers, slots, costs, icons and the prerequisite graph are UNCHANGED so no save-side unlock is orphaned; only the retuned nodes' name/description/effect changed.",
       "nodes": [
-        { "id": "ranger.t1n1", "name": "Quick Draw",        "tier": "tier1", "slot": 1, "cost": 1, "kind": "stat",    "iconPath": "Talents/ranger/ranger_01", "description": "+25% attack speed.", "effect": { "type": "attackSpeed", "value": 0.25 }, "prerequisites": [] },
-        { "id": "ranger.t1n2", "name": "Hunter's Mark",     "tier": "tier1", "slot": 2, "cost": 1, "kind": "skill",   "iconPath": "Talents/ranger/ranger_02", "abilityId": "ranger.hunters-mark", "description": "Mark a foe: it takes +20% damage for 6s (10s cd).", "effect": { "type": "unlockAbility", "ability": "ranger.hunters-mark", "note": "(NEW ability — stub)" }, "prerequisites": [] },
-        { "id": "ranger.t1n3", "name": "Tumble Step",       "tier": "tier1", "slot": 3, "cost": 1, "kind": "skill",   "iconPath": "Talents/ranger/ranger_03", "abilityId": "ranger.tumble-step", "description": "Dash 6m with a 0.4s dodge window (8s cd).", "effect": { "type": "unlockAbility", "ability": "ranger.tumble-step", "note": "(NEW ability — stub)" }, "prerequisites": [] },
-        { "id": "ranger.t1n4", "name": "Nature's Gift",     "tier": "tier1", "slot": 4, "cost": 1, "kind": "stat",    "iconPath": "Talents/ranger/ranger_04", "description": "+20% health regen in combat.", "effect": { "type": "healthRegen", "value": 0.20 }, "prerequisites": [] },
-        { "id": "ranger.t1n5", "name": "Arrow Storm Prep",  "tier": "tier1", "slot": 5, "cost": 1, "kind": "skill",   "iconPath": "Talents/ranger/ranger_05", "abilityId": "ranger.multishot", "description": "Unlocks Multishot — 3 arrows, 18 dmg each (9s cd).", "effect": { "type": "unlockAbility", "ability": "ranger.multishot", "note": "(NEW ability — stub)" }, "prerequisites": [] },
-
-        { "id": "ranger.t2n1", "name": "Windstrider Boots", "tier": "tier2", "slot": 1, "cost": 2, "kind": "stat",    "iconPath": "Talents/ranger/ranger_06", "description": "+30% move speed.", "effect": { "type": "moveSpeed", "value": 0.30 }, "prerequisites": ["ranger.t1n1"] },
-        { "id": "ranger.t2n2", "name": "Venomcraft",        "tier": "tier2", "slot": 2, "cost": 2, "kind": "passive", "iconPath": "Talents/ranger/ranger_07", "description": "Venomtip arrows bite deeper — 8 dps poison for 8s, stacking twice.", "effect": { "type": "modifyAbility", "ability": "ranger.q", "stat": "poison", "value": 8, "duration": 8, "targets": 2, "note": "buffs the ranger_arrow_poison ammoEffect rider (base 5 dps / 6s / x2)" }, "prerequisites": ["ranger.t1n2"] },
-        { "id": "ranger.t2n3", "name": "Eagle Vision",      "tier": "tier2", "slot": 3, "cost": 2, "kind": "stat",    "iconPath": "Talents/ranger/ranger_08", "description": "+25% range; +15% crit chance.", "effect": { "type": "critChance", "value": 0.15, "note": "+25% range (range — V2)" }, "prerequisites": ["ranger.t1n3"] },
-        { "id": "ranger.t2n4", "name": "Deep Freeze",       "tier": "tier2", "slot": 4, "cost": 2, "kind": "passive", "iconPath": "Talents/ranger/ranger_09", "description": "Rimeshot arrows bite colder — the slow deepens to 50% and holds 4s.", "effect": { "type": "modifyAbility", "ability": "ranger.q", "stat": "slow", "value": 0.50, "duration": 4, "note": "buffs the ranger_arrow_frost ammoEffect rider (base -35% / 2.5s); NO rider consumer for a slow yet" }, "prerequisites": ["ranger.t1n4"] },
-        { "id": "ranger.t2n5", "name": "Shadow Veil",       "tier": "tier2", "slot": 5, "cost": 2, "kind": "passive", "iconPath": "Talents/ranger/ranger_10", "description": "Tumble Step grants 2s of stealth.", "effect": { "type": "stealth", "duration": 2, "note": "(V2)" }, "prerequisites": ["ranger.t1n5"] },
-
-        { "id": "ranger.t3n1", "name": "Bloodbound Draw",   "tier": "tier3", "slot": 1, "cost": 3, "kind": "passive", "iconPath": "Talents/ranger/ranger_11", "description": "Healing Shot returns 30% more life to you.", "effect": { "type": "modifyAbility", "ability": "ranger.healing-shot", "stat": "heal", "value": 0.30, "note": "read by HeroTalentModifiers.HealAmountMultiplier (stat==heal)" }, "prerequisites": ["ranger.t2n1"] },
-        { "id": "ranger.t3n2", "name": "Emberhead",         "tier": "tier3", "slot": 2, "cost": 3, "kind": "passive", "iconPath": "Talents/ranger/ranger_12", "description": "Emberhead arrows burn hotter — 9 dps for 6s.", "effect": { "type": "modifyAbility", "ability": "ranger.q", "stat": "burn", "value": 9, "duration": 6, "note": "buffs the ranger_arrow_fire ammoEffect rider (base 6 dps / 4s)" }, "prerequisites": ["ranger.t2n2"] },
-        { "id": "ranger.t3n3", "name": "Leafcloak",         "tier": "tier3", "slot": 3, "cost": 3, "kind": "stat",    "iconPath": "Talents/ranger/ranger_13", "description": "+35% dodge for 3s after a dash/move skill.", "effect": { "type": "dodge", "value": 0.35, "duration": 3, "note": "(onEvent — V2)" }, "prerequisites": ["ranger.t2n3"] },
-        { "id": "ranger.t3n4", "name": "Beast Companion",   "tier": "tier3", "slot": 4, "cost": 3, "kind": "active",  "iconPath": "Talents/ranger/ranger_14", "description": "Summon a wolf (120 HP, 15 dmg) for 20s (60s cd).", "effect": { "type": "summon", "duration": 20, "cooldown": 60, "note": "(summon — V2)" }, "prerequisites": ["ranger.t2n4"] },
-        { "id": "ranger.t3n5", "name": "Precision Strike",  "tier": "tier3", "slot": 5, "cost": 3, "kind": "skill",   "iconPath": "Talents/ranger/ranger_15", "abilityId": "ranger.precision-strike", "description": "Aimed shot: 90 dmg @ 18m (12s cd).", "effect": { "type": "unlockAbility", "ability": "ranger.precision-strike", "note": "(NEW ability — stub)" }, "prerequisites": ["ranger.t2n5"] },
-
-        { "id": "ranger.t4n1", "name": "Storm of Arrows",   "tier": "tier4", "slot": 1, "cost": 5, "kind": "skill",   "iconPath": "Talents/ranger/ranger_16", "abilityId": "ranger.storm-of-arrows", "description": "Ult: 120 dmg over an 8m arrow rain (60s cd).", "effect": { "type": "unlockAbility", "ability": "ranger.storm-of-arrows", "note": "(NEW ability — stub)" }, "prerequisites": ["ranger.t3n1"] },
-        { "id": "ranger.t4n2", "name": "Windstrider Legend","tier": "tier4", "slot": 2, "cost": 5, "kind": "stat",    "iconPath": "Talents/ranger/ranger_17", "description": "Permanent +45% move speed and +30% dodge.", "effect": { "type": "moveSpeed", "value": 0.45, "note": "+30% dodge (V2)" }, "prerequisites": ["ranger.t3n2"] },
-        { "id": "ranger.t4n3", "name": "Phantom Hunter",    "tier": "tier4", "slot": 3, "cost": 5, "kind": "passive", "iconPath": "Talents/ranger/ranger_18", "description": "First shot from stealth deals +50% damage.", "effect": { "type": "stealth", "value": 0.50, "note": "(proc — V2)" }, "prerequisites": ["ranger.t3n3"] },
-        { "id": "ranger.t4n4", "name": "Nature's Fury",     "tier": "tier4", "slot": 4, "cost": 5, "kind": "passive", "iconPath": "Talents/ranger/ranger_19", "description": "Arrows apply a 14 dps nature DoT for 5s.", "effect": { "type": "onEvent", "value": 14, "duration": 5, "note": "(dot — V2)" }, "prerequisites": ["ranger.t3n4"] },
-        { "id": "ranger.t4n5", "name": "Elarion's Arrow",   "tier": "tier4", "slot": 5, "cost": 5, "kind": "passive", "iconPath": "Talents/ranger/ranger_20", "description": "Arrows pierce and chain to 1 extra foe at 50% damage.", "effect": { "type": "modifyAbility", "note": "pierce/chain (V2)" }, "prerequisites": ["ranger.t3n5"] }
+        {
+          "id": "ranger.t1n1",
+          "name": "Quick Draw",
+          "tier": "tier1",
+          "slot": 1,
+          "cost": 1,
+          "kind": "stat",
+          "iconPath": "Talents/ranger/ranger_01",
+          "description": "+25% attack speed.",
+          "effect": {
+            "type": "attackSpeed",
+            "value": 0.25
+          },
+          "prerequisites": []
+        },
+        {
+          "id": "ranger.t1n2",
+          "name": "Hunter's Mark",
+          "tier": "tier1",
+          "slot": 2,
+          "cost": 1,
+          "kind": "skill",
+          "iconPath": "Talents/ranger/ranger_02",
+          "abilityId": "ranger.hunters-mark",
+          "description": "Mark a foe: it takes +20% damage for 6s (10s cd).",
+          "effect": {
+            "type": "unlockAbility",
+            "ability": "ranger.hunters-mark"
+          },
+          "prerequisites": []
+        },
+        {
+          "id": "ranger.t1n3",
+          "name": "Tumble Step",
+          "tier": "tier1",
+          "slot": 3,
+          "cost": 1,
+          "kind": "skill",
+          "iconPath": "Talents/ranger/ranger_03",
+          "abilityId": "ranger.tumble-step",
+          "description": "Dash 6m with a 0.4s dodge window (8s cd).",
+          "effect": {
+            "type": "unlockAbility",
+            "ability": "ranger.tumble-step",
+            "note": "(NEW ability — stub)"
+          },
+          "prerequisites": []
+        },
+        {
+          "id": "ranger.t1n4",
+          "name": "Nature's Gift",
+          "tier": "tier1",
+          "slot": 4,
+          "cost": 1,
+          "kind": "stat",
+          "iconPath": "Talents/ranger/ranger_04",
+          "description": "+20% health regen in combat.",
+          "effect": {
+            "type": "healthRegen",
+            "value": 0.2
+          },
+          "prerequisites": []
+        },
+        {
+          "id": "ranger.t1n5",
+          "name": "Arrow Storm Prep",
+          "tier": "tier1",
+          "slot": 5,
+          "cost": 1,
+          "kind": "skill",
+          "iconPath": "Talents/ranger/ranger_05",
+          "abilityId": "ranger.multishot",
+          "description": "Unlocks Multishot — 3 arrows, 18 dmg each (9s cd).",
+          "effect": {
+            "type": "unlockAbility",
+            "ability": "ranger.multishot",
+            "note": "(NEW ability — stub)"
+          },
+          "prerequisites": []
+        },
+        {
+          "id": "ranger.t2n1",
+          "name": "Windstrider Boots",
+          "tier": "tier2",
+          "slot": 1,
+          "cost": 2,
+          "kind": "stat",
+          "iconPath": "Talents/ranger/ranger_06",
+          "description": "+30% move speed.",
+          "effect": {
+            "type": "moveSpeed",
+            "value": 0.3
+          },
+          "prerequisites": [
+            "ranger.t1n1"
+          ]
+        },
+        {
+          "id": "ranger.t2n2",
+          "name": "Venomcraft",
+          "tier": "tier2",
+          "slot": 2,
+          "cost": 2,
+          "kind": "passive",
+          "iconPath": "Talents/ranger/ranger_07",
+          "description": "Venomtip arrows bite deeper — 8 dps poison for 8s, stacking twice.",
+          "effect": {
+            "type": "modifyAbility",
+            "ability": "ranger.q",
+            "stat": "poison",
+            "value": 8,
+            "duration": 8,
+            "targets": 2,
+            "note": "buffs the ranger_arrow_poison ammoEffect rider (base 5 dps / 6s / x2)"
+          },
+          "prerequisites": [
+            "ranger.t1n2"
+          ]
+        },
+        {
+          "id": "ranger.t2n3",
+          "name": "Eagle Vision",
+          "tier": "tier2",
+          "slot": 3,
+          "cost": 2,
+          "kind": "stat",
+          "iconPath": "Talents/ranger/ranger_08",
+          "description": "+25% range; +15% crit chance.",
+          "effect": {
+            "type": "critChance",
+            "value": 0.15
+          },
+          "prerequisites": [
+            "ranger.t1n3"
+          ]
+        },
+        {
+          "id": "ranger.t2n4",
+          "name": "Deep Freeze",
+          "tier": "tier2",
+          "slot": 4,
+          "cost": 2,
+          "kind": "passive",
+          "iconPath": "Talents/ranger/ranger_09",
+          "description": "Rimeshot arrows bite colder — the slow deepens to 50% and holds 4s.",
+          "effect": {
+            "type": "modifyAbility",
+            "ability": "ranger.q",
+            "stat": "slow",
+            "value": 0.5,
+            "duration": 4,
+            "note": "buffs the ranger_arrow_frost ammoEffect rider (base -35% / 2.5s); NO rider consumer for a slow yet"
+          },
+          "prerequisites": [
+            "ranger.t1n4"
+          ]
+        },
+        {
+          "id": "ranger.t2n5",
+          "name": "Shadow Veil",
+          "tier": "tier2",
+          "slot": 5,
+          "cost": 2,
+          "kind": "passive",
+          "iconPath": "Talents/ranger/ranger_10",
+          "description": "Tumble Step grants 2s of stealth.",
+          "effect": {
+            "type": "stealth",
+            "duration": 2,
+            "note": "(V2)"
+          },
+          "prerequisites": [
+            "ranger.t1n5"
+          ]
+        },
+        {
+          "id": "ranger.t3n1",
+          "name": "Bloodbound Draw",
+          "tier": "tier3",
+          "slot": 1,
+          "cost": 3,
+          "kind": "passive",
+          "iconPath": "Talents/ranger/ranger_11",
+          "description": "Healing Shot returns 30% more life to you.",
+          "effect": {
+            "type": "modifyAbility",
+            "ability": "ranger.healing-shot",
+            "stat": "heal",
+            "value": 0.3,
+            "note": "read by HeroTalentModifiers.HealAmountMultiplier (stat==heal)"
+          },
+          "prerequisites": [
+            "ranger.t2n1"
+          ]
+        },
+        {
+          "id": "ranger.t3n2",
+          "name": "Emberhead",
+          "tier": "tier3",
+          "slot": 2,
+          "cost": 3,
+          "kind": "passive",
+          "iconPath": "Talents/ranger/ranger_12",
+          "description": "Emberhead arrows burn hotter — 9 dps for 6s.",
+          "effect": {
+            "type": "modifyAbility",
+            "ability": "ranger.q",
+            "stat": "burn",
+            "value": 9,
+            "duration": 6,
+            "note": "buffs the ranger_arrow_fire ammoEffect rider (base 6 dps / 4s)"
+          },
+          "prerequisites": [
+            "ranger.t2n2"
+          ]
+        },
+        {
+          "id": "ranger.t3n3",
+          "name": "Leafcloak",
+          "tier": "tier3",
+          "slot": 3,
+          "cost": 3,
+          "kind": "stat",
+          "iconPath": "Talents/ranger/ranger_13",
+          "description": "+35% dodge for 3s after a dash/move skill.",
+          "effect": {
+            "type": "dodge",
+            "value": 0.35,
+            "duration": 3
+          },
+          "prerequisites": [
+            "ranger.t2n3"
+          ]
+        },
+        {
+          "id": "ranger.t3n4",
+          "name": "Beast Companion",
+          "tier": "tier3",
+          "slot": 4,
+          "cost": 3,
+          "kind": "active",
+          "iconPath": "Talents/ranger/ranger_14",
+          "description": "Summon a wolf (120 HP, 15 dmg) for 20s (60s cd).",
+          "effect": {
+            "type": "summon",
+            "duration": 20,
+            "cooldown": 60,
+            "note": "(summon — V2)"
+          },
+          "prerequisites": [
+            "ranger.t2n4"
+          ]
+        },
+        {
+          "id": "ranger.t3n5",
+          "name": "Precision Strike",
+          "tier": "tier3",
+          "slot": 5,
+          "cost": 3,
+          "kind": "skill",
+          "iconPath": "Talents/ranger/ranger_15",
+          "abilityId": "ranger.precision-strike",
+          "description": "Aimed shot: 90 dmg @ 18m (12s cd).",
+          "effect": {
+            "type": "unlockAbility",
+            "ability": "ranger.precision-strike",
+            "note": "(NEW ability — stub)"
+          },
+          "prerequisites": [
+            "ranger.t2n5"
+          ]
+        },
+        {
+          "id": "ranger.t4n1",
+          "name": "Storm of Arrows",
+          "tier": "tier4",
+          "slot": 1,
+          "cost": 5,
+          "kind": "skill",
+          "iconPath": "Talents/ranger/ranger_16",
+          "abilityId": "ranger.storm-of-arrows",
+          "description": "Ult: 120 dmg over an 8m arrow rain (60s cd).",
+          "effect": {
+            "type": "unlockAbility",
+            "ability": "ranger.storm-of-arrows",
+            "note": "(NEW ability — stub)"
+          },
+          "prerequisites": [
+            "ranger.t3n1"
+          ]
+        },
+        {
+          "id": "ranger.t4n2",
+          "name": "Windstrider Legend",
+          "tier": "tier4",
+          "slot": 2,
+          "cost": 5,
+          "kind": "stat",
+          "iconPath": "Talents/ranger/ranger_17",
+          "description": "Permanent +45% move speed and +30% dodge.",
+          "effect": {
+            "type": "moveSpeed",
+            "value": 0.45
+          },
+          "prerequisites": [
+            "ranger.t3n2"
+          ]
+        },
+        {
+          "id": "ranger.t4n3",
+          "name": "Phantom Hunter",
+          "tier": "tier4",
+          "slot": 3,
+          "cost": 5,
+          "kind": "passive",
+          "iconPath": "Talents/ranger/ranger_18",
+          "description": "First shot from stealth deals +50% damage.",
+          "effect": {
+            "type": "stealth",
+            "value": 0.5,
+            "note": "(proc — V2)"
+          },
+          "prerequisites": [
+            "ranger.t3n3"
+          ]
+        },
+        {
+          "id": "ranger.t4n4",
+          "name": "Nature's Fury",
+          "tier": "tier4",
+          "slot": 4,
+          "cost": 5,
+          "kind": "passive",
+          "iconPath": "Talents/ranger/ranger_19",
+          "description": "Arrows apply a 14 dps nature DoT for 5s.",
+          "effect": {
+            "type": "onEvent",
+            "value": 14,
+            "duration": 5,
+            "note": "(dot — V2)"
+          },
+          "prerequisites": [
+            "ranger.t3n4"
+          ]
+        },
+        {
+          "id": "ranger.t4n5",
+          "name": "Elarion's Arrow",
+          "tier": "tier4",
+          "slot": 5,
+          "cost": 5,
+          "kind": "passive",
+          "iconPath": "Talents/ranger/ranger_20",
+          "description": "Arrows pierce and chain to 1 extra foe at 50% damage.",
+          "effect": {
+            "type": "modifyAbility",
+            "note": "pierce/chain (V2)"
+          },
+          "prerequisites": [
+            "ranger.t3n5"
+          ]
+        }
       ]
     },
     "mage": {
@@ -87,44 +1002,562 @@
       "_title": "Aetherweaver",
       "_comment": "WO-861 A1 (owner-approved 2026-08-02) — Thrain, the ranged glass cannon. Four branches: MANA CONSERVATION + RECOVERY (Mana Flow, Aether Surge, Manaweave, Aether Form, Eternal Arcana — mana IS the survival mechanic) — SPELL POWER (Arcane Focus, Flame Mastery, Runic Overload, Aetherweaver Ascension) — SURVIVABILITY (Warded Flesh +20% HP, Blink Mastery +15% HP, Arcane Shield strengthens the Shell) — LEARNABLE SPELLS (mage.void-rift, mage.cataclysm, mage.blink, mage.manaweave; mage.frost-nova + mage.arcane-bolt are unlocked by the Cathedral of Magic instead, per A3). Node ids, tiers, slots, costs, icons and the prerequisite graph are UNCHANGED so no save-side unlock is orphaned. Slug stays 'mage'; art sheet = Wizard.",
       "nodes": [
-        { "id": "mage.t1n1", "name": "Arcane Focus",         "tier": "tier1", "slot": 1, "cost": 1, "kind": "stat",    "iconPath": "Talents/wizard/wizard_01", "description": "+20% spell damage.", "effect": { "type": "damageBonus", "value": 0.20 }, "prerequisites": [] },
-        { "id": "mage.t1n2", "name": "Mana Flow",            "tier": "tier1", "slot": 2, "cost": 1, "kind": "stat",    "iconPath": "Talents/wizard/wizard_02", "description": "+25% mana regen.", "effect": { "type": "manaRegen", "value": 0.25 }, "prerequisites": [] },
-        { "id": "mage.t1n3", "name": "Warded Flesh",         "tier": "tier1", "slot": 3, "cost": 1, "kind": "stat",    "iconPath": "Talents/wizard/wizard_03", "description": "+20% max health.", "effect": { "type": "maxHpPct", "value": 0.20 }, "prerequisites": [] },
-        { "id": "mage.t1n4", "name": "Spellweaver",          "tier": "tier1", "slot": 4, "cost": 1, "kind": "stat",    "iconPath": "Talents/wizard/wizard_04", "description": "-15% cooldowns.", "effect": { "type": "cdReduction", "value": 0.15 }, "prerequisites": [] },
-        { "id": "mage.t1n5", "name": "Rune Binding",         "tier": "tier1", "slot": 5, "cost": 1, "kind": "passive", "iconPath": "Talents/wizard/wizard_05", "description": "Arcane Bolt chains to 1 extra foe at 40%.", "effect": { "type": "modifyAbility", "ability": "mage.arcane-bolt", "note": "chain (V2)" }, "prerequisites": [] },
-
-        { "id": "mage.t2n1", "name": "Aether Surge",         "tier": "tier2", "slot": 1, "cost": 2, "kind": "passive", "iconPath": "Talents/wizard/wizard_06", "description": "+3 mana per kill.", "effect": { "type": "onEvent", "value": 3, "note": "onKill mana (V2)" }, "prerequisites": ["mage.t1n1"] },
-        { "id": "mage.t2n2", "name": "Manaweave",            "tier": "tier2", "slot": 2, "cost": 2, "kind": "skill",   "iconPath": "Talents/wizard/wizard_07", "abilityId": "mage.manaweave", "description": "Learn Manaweave — draw 5 mana back over 3s (30s cd).", "effect": { "type": "unlockAbility", "ability": "mage.manaweave", "note": "A1 mana-recovery active; also granted by Cathedral of Magic tier 3" }, "prerequisites": ["mage.t1n2"] },
-        { "id": "mage.t2n3", "name": "Arcane Shield",        "tier": "tier2", "slot": 3, "cost": 2, "kind": "stat",    "iconPath": "Talents/wizard/wizard_08", "description": "Arcane Shell blocks 40% more damage and holds 2s longer.", "effect": { "type": "shieldStrength", "ability": "mage.shell", "value": 0.40, "duration": 2, "note": "no shieldStrength consumer yet (V2)" }, "prerequisites": ["mage.t1n3"] },
-        { "id": "mage.t2n4", "name": "Flame Mastery",        "tier": "tier2", "slot": 4, "cost": 2, "kind": "passive", "iconPath": "Talents/wizard/wizard_09", "description": "Fireball explosion radius +35%.", "effect": { "type": "modifyAbility", "ability": "mage.fireball", "value": 0.35, "note": "(V2)" }, "prerequisites": ["mage.t1n4"] },
-        { "id": "mage.t2n5", "name": "Blink Mastery",        "tier": "tier2", "slot": 5, "cost": 2, "kind": "skill",   "iconPath": "Talents/wizard/wizard_10", "abilityId": "mage.blink", "description": "Learn Blink — a 6m step through the weave (8s cd); +15% max health.", "effect": { "type": "maxHpPct", "value": 0.15, "ability": "mage.blink", "note": "unlock rides kind=skill+abilityId; the effect payload carries the A1 +15% HP" }, "prerequisites": ["mage.t1n5"] },
-
-        { "id": "mage.t3n1", "name": "Cataclysm Prep",       "tier": "tier3", "slot": 1, "cost": 3, "kind": "passive", "iconPath": "Talents/wizard/wizard_11", "description": "Meteor Strike radius +60%.", "effect": { "type": "modifyAbility", "ability": "mage.meteor", "value": 0.60, "note": "(V2)" }, "prerequisites": ["mage.t2n1"] },
-        { "id": "mage.t3n2", "name": "Spell Echo",           "tier": "tier3", "slot": 2, "cost": 3, "kind": "passive", "iconPath": "Talents/wizard/wizard_12", "description": "25% chance a cast fires twice.", "effect": { "type": "proc", "chance": 0.25, "note": "duplicate (V2)" }, "prerequisites": ["mage.t2n2"] },
-        { "id": "mage.t3n3", "name": "Aether Form",          "tier": "tier3", "slot": 3, "cost": 3, "kind": "stat",    "iconPath": "Talents/wizard/wizard_13", "description": "-30% mana cost.", "effect": { "type": "manaCostReduction", "value": 0.30 }, "prerequisites": ["mage.t2n3"] },
-        { "id": "mage.t3n4", "name": "Runic Overload",       "tier": "tier3", "slot": 4, "cost": 3, "kind": "active",  "iconPath": "Talents/wizard/wizard_14", "description": "Active: +60% spell damage for 6s (45s cd).", "effect": { "type": "onEvent", "value": 0.60, "duration": 6, "cooldown": 45, "note": "temp buff (V2)" }, "prerequisites": ["mage.t2n4"] },
-        { "id": "mage.t3n5", "name": "Void Rift",            "tier": "tier3", "slot": 5, "cost": 3, "kind": "skill",   "iconPath": "Talents/wizard/wizard_15", "abilityId": "mage.void-rift", "description": "Active: 40 dmg + 1.5s stun in 5m (18s cd).", "effect": { "type": "unlockAbility", "ability": "mage.void-rift", "note": "(NEW ability — stub)" }, "prerequisites": ["mage.t2n5"] },
-
-        { "id": "mage.t4n1", "name": "Cataclysm",            "tier": "tier4", "slot": 1, "cost": 5, "kind": "skill",   "iconPath": "Talents/wizard/wizard_16", "abilityId": "mage.cataclysm", "description": "Ult: 600 dmg over a 9m blast (50s cd).", "effect": { "type": "unlockAbility", "ability": "mage.cataclysm", "note": "(NEW ability — stub)" }, "prerequisites": ["mage.t3n1"] },
-        { "id": "mage.t4n2", "name": "Aetherweaver Ascension","tier": "tier4", "slot": 2, "cost": 5, "kind": "stat",   "iconPath": "Talents/wizard/wizard_17", "description": "All spells +25% damage and effect.", "effect": { "type": "damageBonus", "value": 0.25, "note": "(V2)" }, "prerequisites": ["mage.t3n2"] },
-        { "id": "mage.t4n3", "name": "Eternal Arcana",       "tier": "tier4", "slot": 3, "cost": 5, "kind": "stat",    "iconPath": "Talents/wizard/wizard_18", "description": "Permanent +40% spell power and +40% mana regen.", "effect": { "type": "damageBonus", "value": 0.40, "note": "+40% mana regen (V2)" }, "prerequisites": ["mage.t3n3"] },
-        { "id": "mage.t4n4", "name": "Reality Rift",         "tier": "tier4", "slot": 4, "cost": 5, "kind": "active",  "iconPath": "Talents/wizard/wizard_19", "description": "Active: 30 dps zone in 6m for 6s (40s cd).", "effect": { "type": "onEvent", "value": 30, "duration": 6, "cooldown": 40, "note": "dot zone (V2)" }, "prerequisites": ["mage.t3n4"] },
-        { "id": "mage.t4n5", "name": "Elarion's Legacy",     "tier": "tier4", "slot": 5, "cost": 5, "kind": "passive", "iconPath": "Talents/wizard/wizard_20", "description": "20% chance any spell auto-recasts.", "effect": { "type": "proc", "chance": 0.20, "note": "duplicate (V2)" }, "prerequisites": ["mage.t3n5"] }
+        {
+          "id": "mage.t1n1",
+          "name": "Arcane Focus",
+          "tier": "tier1",
+          "slot": 1,
+          "cost": 1,
+          "kind": "stat",
+          "iconPath": "Talents/wizard/wizard_01",
+          "description": "+20% spell damage.",
+          "effect": {
+            "type": "damageBonus",
+            "value": 0.2
+          },
+          "prerequisites": []
+        },
+        {
+          "id": "mage.t1n2",
+          "name": "Mana Flow",
+          "tier": "tier1",
+          "slot": 2,
+          "cost": 1,
+          "kind": "stat",
+          "iconPath": "Talents/wizard/wizard_02",
+          "description": "+25% mana regen.",
+          "effect": {
+            "type": "manaRegen",
+            "value": 0.25
+          },
+          "prerequisites": []
+        },
+        {
+          "id": "mage.t1n3",
+          "name": "Warded Flesh",
+          "tier": "tier1",
+          "slot": 3,
+          "cost": 1,
+          "kind": "stat",
+          "iconPath": "Talents/wizard/wizard_03",
+          "description": "+20% max health.",
+          "effect": {
+            "type": "maxHpPct",
+            "value": 0.2
+          },
+          "prerequisites": []
+        },
+        {
+          "id": "mage.t1n4",
+          "name": "Spellweaver",
+          "tier": "tier1",
+          "slot": 4,
+          "cost": 1,
+          "kind": "stat",
+          "iconPath": "Talents/wizard/wizard_04",
+          "description": "-15% cooldowns.",
+          "effect": {
+            "type": "cdReduction",
+            "value": 0.15
+          },
+          "prerequisites": []
+        },
+        {
+          "id": "mage.t1n5",
+          "name": "Rune Binding",
+          "tier": "tier1",
+          "slot": 5,
+          "cost": 1,
+          "kind": "passive",
+          "iconPath": "Talents/wizard/wizard_05",
+          "description": "Arcane Bolt chains to 1 extra foe at 40%.",
+          "effect": {
+            "type": "modifyAbility",
+            "ability": "mage.arcane-bolt",
+            "note": "chain (V2)"
+          },
+          "prerequisites": []
+        },
+        {
+          "id": "mage.t2n1",
+          "name": "Aether Surge",
+          "tier": "tier2",
+          "slot": 1,
+          "cost": 2,
+          "kind": "passive",
+          "iconPath": "Talents/wizard/wizard_06",
+          "description": "+3 mana per kill.",
+          "effect": {
+            "type": "onEvent",
+            "value": 3,
+            "note": "onKill mana (V2)"
+          },
+          "prerequisites": [
+            "mage.t1n1"
+          ]
+        },
+        {
+          "id": "mage.t2n2",
+          "name": "Manaweave",
+          "tier": "tier2",
+          "slot": 2,
+          "cost": 2,
+          "kind": "skill",
+          "iconPath": "Talents/wizard/wizard_07",
+          "abilityId": "mage.manaweave",
+          "description": "Learn Manaweave — draw 5 mana back over 3s (30s cd).",
+          "effect": {
+            "type": "unlockAbility",
+            "ability": "mage.manaweave",
+            "note": "A1 mana-recovery active; also granted by Cathedral of Magic tier 3"
+          },
+          "prerequisites": [
+            "mage.t1n2"
+          ]
+        },
+        {
+          "id": "mage.t2n3",
+          "name": "Arcane Shield",
+          "tier": "tier2",
+          "slot": 3,
+          "cost": 2,
+          "kind": "stat",
+          "iconPath": "Talents/wizard/wizard_08",
+          "description": "Arcane Shell blocks 40% more damage and holds 2s longer.",
+          "effect": {
+            "type": "shieldStrength",
+            "ability": "mage.shell",
+            "value": 0.4,
+            "duration": 2,
+            "note": "no shieldStrength consumer yet (V2)"
+          },
+          "prerequisites": [
+            "mage.t1n3"
+          ]
+        },
+        {
+          "id": "mage.t2n4",
+          "name": "Flame Mastery",
+          "tier": "tier2",
+          "slot": 4,
+          "cost": 2,
+          "kind": "passive",
+          "iconPath": "Talents/wizard/wizard_09",
+          "description": "Fireball explosion radius +35%.",
+          "effect": {
+            "type": "modifyAbility",
+            "ability": "mage.fireball",
+            "value": 0.35,
+            "note": "(V2)"
+          },
+          "prerequisites": [
+            "mage.t1n4"
+          ]
+        },
+        {
+          "id": "mage.t2n5",
+          "name": "Blink Mastery",
+          "tier": "tier2",
+          "slot": 5,
+          "cost": 2,
+          "kind": "skill",
+          "iconPath": "Talents/wizard/wizard_10",
+          "abilityId": "mage.blink",
+          "description": "Learn Blink — a 6m step through the weave (8s cd); +15% max health.",
+          "effect": {
+            "type": "maxHpPct",
+            "value": 0.15,
+            "ability": "mage.blink",
+            "note": "unlock rides kind=skill+abilityId; the effect payload carries the A1 +15% HP"
+          },
+          "prerequisites": [
+            "mage.t1n5"
+          ]
+        },
+        {
+          "id": "mage.t3n1",
+          "name": "Cataclysm Prep",
+          "tier": "tier3",
+          "slot": 1,
+          "cost": 3,
+          "kind": "passive",
+          "iconPath": "Talents/wizard/wizard_11",
+          "description": "Meteor Strike radius +60%.",
+          "effect": {
+            "type": "modifyAbility",
+            "ability": "mage.meteor",
+            "value": 0.6,
+            "note": "(V2)"
+          },
+          "prerequisites": [
+            "mage.t2n1"
+          ]
+        },
+        {
+          "id": "mage.t3n2",
+          "name": "Spell Echo",
+          "tier": "tier3",
+          "slot": 2,
+          "cost": 3,
+          "kind": "passive",
+          "iconPath": "Talents/wizard/wizard_12",
+          "description": "25% chance a cast fires twice.",
+          "effect": {
+            "type": "proc",
+            "chance": 0.25,
+            "note": "duplicate (V2)"
+          },
+          "prerequisites": [
+            "mage.t2n2"
+          ]
+        },
+        {
+          "id": "mage.t3n3",
+          "name": "Aether Form",
+          "tier": "tier3",
+          "slot": 3,
+          "cost": 3,
+          "kind": "stat",
+          "iconPath": "Talents/wizard/wizard_13",
+          "description": "-30% mana cost.",
+          "effect": {
+            "type": "manaCostReduction",
+            "value": 0.3
+          },
+          "prerequisites": [
+            "mage.t2n3"
+          ]
+        },
+        {
+          "id": "mage.t3n4",
+          "name": "Runic Overload",
+          "tier": "tier3",
+          "slot": 4,
+          "cost": 3,
+          "kind": "active",
+          "iconPath": "Talents/wizard/wizard_14",
+          "description": "Active: +60% spell damage for 6s (45s cd).",
+          "effect": {
+            "type": "onEvent",
+            "value": 0.6,
+            "duration": 6,
+            "cooldown": 45,
+            "note": "temp buff (V2)"
+          },
+          "prerequisites": [
+            "mage.t2n4"
+          ]
+        },
+        {
+          "id": "mage.t3n5",
+          "name": "Void Rift",
+          "tier": "tier3",
+          "slot": 5,
+          "cost": 3,
+          "kind": "skill",
+          "iconPath": "Talents/wizard/wizard_15",
+          "abilityId": "mage.void-rift",
+          "description": "Active: 40 dmg + 1.5s stun in 5m (18s cd).",
+          "effect": {
+            "type": "unlockAbility",
+            "ability": "mage.void-rift",
+            "note": "(NEW ability — stub)"
+          },
+          "prerequisites": [
+            "mage.t2n5"
+          ]
+        },
+        {
+          "id": "mage.t4n1",
+          "name": "Cataclysm",
+          "tier": "tier4",
+          "slot": 1,
+          "cost": 5,
+          "kind": "skill",
+          "iconPath": "Talents/wizard/wizard_16",
+          "abilityId": "mage.cataclysm",
+          "description": "Ult: 600 dmg over a 9m blast (50s cd).",
+          "effect": {
+            "type": "unlockAbility",
+            "ability": "mage.cataclysm",
+            "note": "(NEW ability — stub)"
+          },
+          "prerequisites": [
+            "mage.t3n1"
+          ]
+        },
+        {
+          "id": "mage.t4n2",
+          "name": "Aetherweaver Ascension",
+          "tier": "tier4",
+          "slot": 2,
+          "cost": 5,
+          "kind": "stat",
+          "iconPath": "Talents/wizard/wizard_17",
+          "description": "All spells +25% damage and effect.",
+          "effect": {
+            "type": "damageBonus",
+            "value": 0.25
+          },
+          "prerequisites": [
+            "mage.t3n2"
+          ]
+        },
+        {
+          "id": "mage.t4n3",
+          "name": "Eternal Arcana",
+          "tier": "tier4",
+          "slot": 3,
+          "cost": 5,
+          "kind": "stat",
+          "iconPath": "Talents/wizard/wizard_18",
+          "description": "Permanent +40% spell power and +40% mana regen.",
+          "effect": {
+            "type": "damageBonus",
+            "value": 0.4
+          },
+          "prerequisites": [
+            "mage.t3n3"
+          ]
+        },
+        {
+          "id": "mage.t4n4",
+          "name": "Reality Rift",
+          "tier": "tier4",
+          "slot": 4,
+          "cost": 5,
+          "kind": "active",
+          "iconPath": "Talents/wizard/wizard_19",
+          "description": "Active: 30 dps zone in 6m for 6s (40s cd).",
+          "effect": {
+            "type": "onEvent",
+            "value": 30,
+            "duration": 6,
+            "cooldown": 40,
+            "note": "dot zone (V2)"
+          },
+          "prerequisites": [
+            "mage.t3n4"
+          ]
+        },
+        {
+          "id": "mage.t4n5",
+          "name": "Elarion's Legacy",
+          "tier": "tier4",
+          "slot": 5,
+          "cost": 5,
+          "kind": "passive",
+          "iconPath": "Talents/wizard/wizard_20",
+          "description": "20% chance any spell auto-recasts.",
+          "effect": {
+            "type": "proc",
+            "chance": 0.2,
+            "note": "duplicate (V2)"
+          },
+          "prerequisites": [
+            "mage.t3n5"
+          ]
+        }
       ]
     }
   },
   "shared": [
-    { "id": "shared.n1", "name": "Vitality",           "tier": "shared", "slot": 1, "cost": 2, "kind": "stat",    "iconPath": "Talents/shared/shared_01", "description": "+25% max HP.", "effect": { "type": "maxHpPct", "value": 0.25 }, "x": 0.08, "y": 0.88, "prerequisites": [] },
-    { "id": "shared.n2", "name": "Resilience",         "tier": "shared", "slot": 2, "cost": 2, "kind": "stat",    "iconPath": "Talents/shared/shared_02", "description": "+20% damage reduction.", "effect": { "type": "damageReduction", "value": 0.20 }, "x": 0.2, "y": 0.88, "prerequisites": [] },
-    { "id": "shared.n3", "name": "Wisdom Surge",       "tier": "shared", "slot": 3, "cost": 2, "kind": "stat",    "hidden": true, "iconPath": "Talents/shared/shared_03", "description": "+1 Wisdom point per hero level.", "effect": { "type": "wisdomPerLevel", "value": 1, "note": "hidden until a per-level wisdom grant path exists — G3 wire-or-hide" }, "x": 0.33, "y": 0.88, "prerequisites": [] },
-    { "id": "shared.n4", "name": "Battle Instinct",    "tier": "shared", "slot": 4, "cost": 2, "kind": "stat",    "hidden": true, "iconPath": "Talents/shared/shared_04", "description": "+15% crit chance.", "effect": { "type": "critChance", "value": 0.15, "note": "hidden until a crit mechanic exists — G3 wire-or-hide" }, "x": 0.45, "y": 0.88, "prerequisites": [] },
-    { "id": "shared.n5", "name": "Aether Bond",        "tier": "shared", "slot": 5, "cost": 2, "kind": "stat",    "iconPath": "Talents/shared/shared_05", "description": "+20% mana/energy regen.", "effect": { "type": "manaRegen", "value": 0.20 }, "x": 0.57, "y": 0.88, "prerequisites": [] },
-    { "id": "shared.n6", "name": "Legendary Resolve",  "tier": "shared", "slot": 6, "cost": 2, "kind": "passive", "iconPath": "Talents/shared/shared_06", "description": "Revive once per run at 40% HP.", "effect": { "type": "revive", "value": 0.40, "note": "(revive — wired WO-566)" }, "x": 0.69, "y": 0.88, "prerequisites": [] },
-    { "id": "shared.n7", "name": "Swift Recovery",     "tier": "shared", "slot": 7, "cost": 2, "kind": "stat",    "iconPath": "Talents/shared/shared_07", "description": "+50% HP regen when out of combat.", "effect": { "type": "healthRegen", "value": 0.50, "note": "out of combat" }, "x": 0.82, "y": 0.88, "prerequisites": [] },
-    { "id": "shared.n8", "name": "Elarion's Blessing", "tier": "shared", "slot": 8, "cost": 2, "kind": "stat",    "iconPath": "Talents/shared/shared_08", "description": "+10% to all stats.", "effect": { "type": "allStatsPct", "value": 0.10 }, "x": 0.94, "y": 0.88, "prerequisites": [] },
-    { "id": "shared.n9",  "name": "Arcane Bolt", "tier": "shared", "slot": 9,  "cost": 1, "kind": "skill", "iconPath": "Talents/shared/shared_05", "abilityId": "universal.arcane-bolt", "description": "Unlocks Arcane Bolt — a learnable ranged magic dart (22 dmg @ 14m, 2s cd). Assignable to the hot-swap bar.", "effect": { "type": "unlockAbility", "ability": "universal.arcane-bolt" }, "x": 0.2,  "y": 0.98, "prerequisites": [] },
-    { "id": "shared.n10", "name": "Mend",        "tier": "shared", "slot": 10, "cost": 1, "kind": "skill", "iconPath": "Talents/shared/shared_07", "abilityId": "universal.mend",        "description": "Unlocks Mend — a small self-heal (25 HP, 12s cd). Assignable to the hot-swap bar.", "effect": { "type": "unlockAbility", "ability": "universal.mend" }, "x": 0.5,  "y": 0.98, "prerequisites": [] },
-    { "id": "shared.n11", "name": "Dash",        "tier": "shared", "slot": 11, "cost": 1, "kind": "skill", "iconPath": "Talents/shared/shared_04", "abilityId": "universal.dash",        "description": "Unlocks Dash — a 6m blink dodge (8s cd, cooldown-gated). Assignable to the hot-swap bar.", "effect": { "type": "unlockAbility", "ability": "universal.dash" }, "x": 0.8,  "y": 0.98, "prerequisites": [] }
+    {
+      "id": "shared.n1",
+      "name": "Vitality",
+      "tier": "shared",
+      "slot": 1,
+      "cost": 2,
+      "kind": "stat",
+      "iconPath": "Talents/shared/shared_01",
+      "description": "+25% max HP.",
+      "effect": {
+        "type": "maxHpPct",
+        "value": 0.25
+      },
+      "x": 0.08,
+      "y": 0.88,
+      "prerequisites": []
+    },
+    {
+      "id": "shared.n2",
+      "name": "Resilience",
+      "tier": "shared",
+      "slot": 2,
+      "cost": 2,
+      "kind": "stat",
+      "iconPath": "Talents/shared/shared_02",
+      "description": "+20% damage reduction.",
+      "effect": {
+        "type": "damageReduction",
+        "value": 0.2
+      },
+      "x": 0.2,
+      "y": 0.88,
+      "prerequisites": []
+    },
+    {
+      "id": "shared.n3",
+      "name": "Wisdom Surge",
+      "tier": "shared",
+      "slot": 3,
+      "cost": 2,
+      "kind": "stat",
+      "hidden": true,
+      "iconPath": "Talents/shared/shared_03",
+      "description": "+1 Wisdom point per hero level.",
+      "effect": {
+        "type": "wisdomPerLevel",
+        "value": 1,
+        "note": "hidden until a per-level wisdom grant path exists — G3 wire-or-hide"
+      },
+      "x": 0.33,
+      "y": 0.88,
+      "prerequisites": []
+    },
+    {
+      "id": "shared.n4",
+      "name": "Battle Instinct",
+      "tier": "shared",
+      "slot": 4,
+      "cost": 2,
+      "kind": "stat",
+      "hidden": true,
+      "iconPath": "Talents/shared/shared_04",
+      "description": "+15% crit chance.",
+      "effect": {
+        "type": "critChance",
+        "value": 0.15,
+        "note": "hidden until a crit mechanic exists — G3 wire-or-hide"
+      },
+      "x": 0.45,
+      "y": 0.88,
+      "prerequisites": []
+    },
+    {
+      "id": "shared.n5",
+      "name": "Aether Bond",
+      "tier": "shared",
+      "slot": 5,
+      "cost": 2,
+      "kind": "stat",
+      "iconPath": "Talents/shared/shared_05",
+      "description": "+20% mana/energy regen.",
+      "effect": {
+        "type": "manaRegen",
+        "value": 0.2
+      },
+      "x": 0.57,
+      "y": 0.88,
+      "prerequisites": []
+    },
+    {
+      "id": "shared.n6",
+      "name": "Legendary Resolve",
+      "tier": "shared",
+      "slot": 6,
+      "cost": 2,
+      "kind": "passive",
+      "iconPath": "Talents/shared/shared_06",
+      "description": "Revive once per run at 40% HP.",
+      "effect": {
+        "type": "revive",
+        "value": 0.4,
+        "note": "(revive — wired WO-566)"
+      },
+      "x": 0.69,
+      "y": 0.88,
+      "prerequisites": []
+    },
+    {
+      "id": "shared.n7",
+      "name": "Swift Recovery",
+      "tier": "shared",
+      "slot": 7,
+      "cost": 2,
+      "kind": "stat",
+      "iconPath": "Talents/shared/shared_07",
+      "description": "+50% HP regen when out of combat.",
+      "effect": {
+        "type": "healthRegen",
+        "value": 0.5,
+        "note": "out of combat"
+      },
+      "x": 0.82,
+      "y": 0.88,
+      "prerequisites": []
+    },
+    {
+      "id": "shared.n8",
+      "name": "Elarion's Blessing",
+      "tier": "shared",
+      "slot": 8,
+      "cost": 2,
+      "kind": "stat",
+      "iconPath": "Talents/shared/shared_08",
+      "description": "+10% to all stats.",
+      "effect": {
+        "type": "allStatsPct",
+        "value": 0.1
+      },
+      "x": 0.94,
+      "y": 0.88,
+      "prerequisites": []
+    },
+    {
+      "id": "shared.n9",
+      "name": "Arcane Bolt",
+      "tier": "shared",
+      "slot": 9,
+      "cost": 1,
+      "kind": "skill",
+      "iconPath": "Talents/shared/shared_05",
+      "abilityId": "universal.arcane-bolt",
+      "description": "Unlocks Arcane Bolt — a learnable ranged magic dart (22 dmg @ 14m, 2s cd). Assignable to the hot-swap bar.",
+      "effect": {
+        "type": "unlockAbility",
+        "ability": "universal.arcane-bolt"
+      },
+      "x": 0.2,
+      "y": 0.98,
+      "prerequisites": []
+    },
+    {
+      "id": "shared.n10",
+      "name": "Mend",
+      "tier": "shared",
+      "slot": 10,
+      "cost": 1,
+      "kind": "skill",
+      "iconPath": "Talents/shared/shared_07",
+      "abilityId": "universal.mend",
+      "description": "Unlocks Mend — a small self-heal (25 HP, 12s cd). Assignable to the hot-swap bar.",
+      "effect": {
+        "type": "unlockAbility",
+        "ability": "universal.mend"
+      },
+      "x": 0.5,
+      "y": 0.98,
+      "prerequisites": []
+    },
+    {
+      "id": "shared.n11",
+      "name": "Dash",
+      "tier": "shared",
+      "slot": 11,
+      "cost": 1,
+      "kind": "skill",
+      "iconPath": "Talents/shared/shared_04",
+      "abilityId": "universal.dash",
+      "description": "Unlocks Dash — a 6m blink dodge (8s cd, cooldown-gated). Assignable to the hot-swap bar.",
+      "effect": {
+        "type": "unlockAbility",
+        "ability": "universal.dash"
+      },
+      "x": 0.8,
+      "y": 0.98,
+      "prerequisites": []
+    }
   ],
   "notes": "v2 + WO-676 — 83 nodes (knight 32 = WAR 21 + STEWARD 6 + BULWARK 5; ranger/mage 20 each; shared 11). Tier costs 1/2/3/5 Wisdom; shared nodes 2 each (skill trio 1). Prereq = same-slot tier below / same-branch chain. V1 wires KNIGHT effects only (HeroTalentModifiers); mage/ranger stored as data+icons. NOTE: tier4 capstone exclusivity (one per hero) now spans branches — Bountiful Banners / Warden of Elarion compete with the five WAR capstones, which IS the strategic 'what kind of lord am I' choice (WO-676 law 2). Owner-open: Wisdom curve, shared-pool cap — see TALENT_ICON_ATLAS_SPEC_2026-06-27 §7."
 }

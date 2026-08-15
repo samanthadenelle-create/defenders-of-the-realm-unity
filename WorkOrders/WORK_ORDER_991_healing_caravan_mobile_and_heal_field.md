@@ -1,79 +1,54 @@
 # WORK ORDER 991 — The Healing Caravan: mobile (very slow) + an unlockable heal field
 
-**Status:** SPEC — needs design detail before implementation
+**Status:** IMPLEMENTED — 2026-08-15 HealingCaravanMobility (slow follow + glass HP); heal field unlock still later
 **Minted:** 2026-08-14 (CLI)
-**Silo:** Support structures / town defense
-**Source:** OWNER DESIGN, 2026-08-14
+**Silo:** Support structures / town defense / siege units
+**Source:** OWNER DESIGN, 2026-08-14 + movement ruling 2026-08-15
 
 ---
 
-## The design, verbatim
+## OWNER RULING 2026-08-15 (movement + role)
 
-> *"the healing tower idea is what caravans replaced. this way they can eventually be unlocked to
-> recover damage like for tree of life and nearby troops"*
->
+> **Offensive/defensive unit.** Slow-rolls **following hero movement**.  
+> **Too slow to be useful for an entire siege** — so it **must** be slow, and **very easily damagable**.
+
+### Closed forks
+
+| # | Answer |
+|---|--------|
+| How does it move? | **Follow-the-hero** (slow roll / lag behind the player), not free patrol or instant relocate |
+| How slow? | **Useless as a full-siege escort** — feel: deliberate crawl; player must **place the fight**, not drag the caravan through every lane |
+| Fragility | **Very easily damaged** — glass support unit; enemies and siege pressure can kill it if left exposed |
+| Role | **Offensive/defensive support unit** (not a static building-only prop) — heals/support presence that moves with the campaign of the hero |
+
+### Still open (implementer defaults OK; pin if wrong)
+
+| # | Suggested default |
+|---|-------------------|
+| Heal while moving? | **Yes, reduced** (e.g. 50% field strength while rolling; full while hero is near + caravan not moving) — keeps follow mode useful without making it a mobile fortress |
+| Unlock heal field | Building tier or research after caravan is placed (base = mobile shell; field unlocks later) |
+| Heal targets | **Heart + nearby troops** first; other structures later if feel asks |
+| Grid claim while moving | **No fixed grid claim while rolling** — freestanding unit (like a slow troop), re-claims only if “parked” / siege-mode later |
+
+---
+
+## The design, earlier (still valid)
+
+> *"the healing tower idea is what caravans replaced… recover damage like for tree of life and nearby troops"*  
 > *"by a caravan its mobile, but very slow"*
 
-## What this establishes
+**1.** Healer tower successor (WO-990 retired the row; keep `HealerTower` field pattern).  
+**2.** Mobility is the point — slow is the balance cost.  
+**3.** Heal field is an unlock.  
+**4.** Field heal: Tree + troops.
 
-**1. The caravan is the Healer Tower's successor, by design.** `tower_healer` is being retired
-(WO-990) not as cleanup but as **supersession** — its role is filled. The healing *idea* was never
-abandoned; it moved to a better container.
+## ⚠ NONE OF THIS IS SHIPPED YET
 
-**2. Mobility is the reason the container changed.** A tower is a fixed point. A caravan trades
-placement permanence for **reach** — and *very slow* movement is the cost that balances a heal field
-which can go where it is needed. That trade is the feature. A fast caravan would be strictly better
-than a tower and would make placement meaningless; a static caravan is just a tower with different art.
+`healing_caravan` still uses `behaviorId: HealingFountain` (static). Do not claim it moves until code lands.
 
-**3. The heal field is an UNLOCK, not a base capability.** The owner's framing is *"eventually be
-unlocked"* — so the caravan earns this, it does not start with it.
+## Build on existing pattern
 
-**4. What it heals: the Tree of Life (the Heart of Elarion) and nearby troops.** Note this is
-explicitly a **field** — an area effect around the caravan — as distinct from `HealingFountain`'s
-bespoke job of topping the Heart up out of battle.
-
-## ⚠ NONE OF THIS IS SHIPPED
-
-`healing_caravan` currently carries `behaviorId: HealingFountain` — a static, bespoke singleton.
-
-**Mobility and the heal field are both design intent today.** No doc, catalog note, or commit message
-may state that the caravan moves or heals a field. This banner exists because undated aspirational
-copy is exactly how canon rots (CLAUDE.md §15) — and because a reader seeing "Healing Caravan" plus a
-`HealingFountain` behaviour will reasonably assume one of the two is a bug.
-
-## Build on the pattern that already exists — do not reinvent it
-
-`StructureFactory.cs:935` `case "HealerTower":` is retained by WO-990 **specifically** because it is:
-
-> *"WO-891. The FIRST instance of the general support/offensive FIELD pattern, and the proof of its
-> thesis: a new structure is stats plus TWO TAGS. It copies range / fireRate / magnitude off entry.repo
-> exactly the way DefenseTower's case above does, then hands SupportFieldStructure an element tag
-> (presentation) and an effect tag (gameplay)."*
-
-That is the worked example of the exact mechanism this feature needs. `:925` also holds a
-commented-out `case "SlowFieldTower":`, a sibling of the same pattern.
-
-⛔ **Do not resurrect `tower_healer`** to deliver this. The row is retired; the *pattern* is what
-survives. Adding a heal field to the reachable caravan is the goal — reintroducing an unreachable
-tower is not.
-
-## Open design questions (owner input needed before this leaves SPEC)
-
-These are genuine forks, not implementation details:
-
-1. **How does it move?** Player-commanded relocation (pick it up, it walks there slowly), a patrol
-   between set points, or follow-the-hero? Each is a different control surface and a different UI.
-2. **Can it heal while moving**, or only while parked? This decides whether slowness is a *repositioning
-   cost* or an *uptime cost* — very different balance levers.
-3. **How slow is very slow** — relative to hero walk speed? A number is not needed yet; a comparison is
-   (e.g. "half hero walk", "so slow you plan around it").
-4. **What unlocks the heal field?** A perk, a building tier, an Echo, a research line? Note the
-   arcane-wellspring perk already gates the caravan itself.
-5. **Does it heal structures, troops, or both?** The ruling names the Tree of Life **and** nearby
-   troops — confirm whether other buildings are in scope, since that decides whether it reads as a
-   repair vehicle or a medic.
-6. **Does mobility interact with the placement grid at all?** A moving structure that claims grid cells
-   is a different problem from one that does not (see WO-986 on footprint claims).
+`StructureFactory` `HealerTower` / `SupportFieldStructure` — field tags, not a new engine.
 
 ## Constraints already known
 

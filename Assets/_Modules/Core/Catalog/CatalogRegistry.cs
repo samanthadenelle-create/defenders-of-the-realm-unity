@@ -39,9 +39,39 @@ namespace DeNelle.Core.Catalog
                 DeNelle.Core.Diagnostics.FlowTrace.Step("Catalog", $"registered id='{entry.id}' (type={entry.type}); total={_byId.Count}.");
         }
 
-        /// <summary>Look up a single entry by id; null if absent.</summary>
-        public static CatalogEntry Get(string id) =>
-            (id != null && _byId.TryGetValue(id, out var e)) ? e : null;
+        // WO-989: persisted saves / layouts may still carry the pre-rename Ballista id.
+        // Read-migrate with no schema bump; log once so we know when the alias is still needed.
+        private const string LegacyBallistaId = "tower_wall_wizard";
+        private const string CanonicalBallistaId = "tower_ballista";
+        private static bool s_loggedBallistaAlias;
+
+        /// <summary>Look up a single entry by id; null if absent. Applies read-side id aliases.</summary>
+        public static CatalogEntry Get(string id)
+        {
+            if (id == null) return null;
+            if (_byId.TryGetValue(id, out var e)) return e;
+
+            // WO-989 Ballista identity: old id resolves to tower_ballista.
+            if (id == LegacyBallistaId && _byId.TryGetValue(CanonicalBallistaId, out e))
+            {
+                if (!s_loggedBallistaAlias)
+                {
+                    s_loggedBallistaAlias = true;
+                    DeNelle.Core.Diagnostics.FlowTrace.Step("Catalog",
+                        $"WO-989 alias: id '{LegacyBallistaId}' -> '{CanonicalBallistaId}' " +
+                        "(save/layout read-migration; remove when no live save carries the old id).");
+                }
+                return e;
+            }
+            return null;
+        }
+
+        /// <summary>Canonical id for writes after read-migration (WO-989).</summary>
+        public static string CanonicalStructureId(string id)
+        {
+            if (id == LegacyBallistaId) return CanonicalBallistaId;
+            return id;
+        }
 
         /// <summary>
         /// Resolve a placed structure's catalog id to the id its UPGRADE ladder is keyed on.

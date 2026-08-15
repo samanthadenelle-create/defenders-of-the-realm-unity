@@ -1,6 +1,6 @@
 # WORK ORDER 984 — The Unity method wrapper judges success by LOG TEXT, not by a MARKER
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — ExpectMarker + stale/mtime gate already in run-unity-method.ps1 (2026-08-15 verified)
 **Minted:** 2026-08-14 (CLI)
 **Silo:** Tooling / verification harness
 **Lane:** Infrastructure — file-disjoint from all gameplay lanes

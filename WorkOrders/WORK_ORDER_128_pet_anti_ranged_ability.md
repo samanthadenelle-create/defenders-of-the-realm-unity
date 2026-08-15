@@ -1,6 +1,6 @@
 # WORK ORDER 128 — The Cull: A Pet Ability That Answers the Backline
 
-**Status:** PARTIAL - remainder named by the 2026-08-14 phantom sweep
+**Status:** CLOSED — SUPERSEDED by WO-993 Echoes-as-faucet / retire physical pet stack.
 
 > **PARTIAL - re-scoped 2026-08-14 (phantom sweep).** Most of this WO is present in HEAD; a named
 > remainder is outstanding. No per-WO path:line was recorded here: see the 2026-08-14 phantom sweep for the

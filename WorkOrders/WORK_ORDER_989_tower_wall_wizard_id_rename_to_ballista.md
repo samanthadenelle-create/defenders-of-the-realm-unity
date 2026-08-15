@@ -1,6 +1,6 @@
 # WORK ORDER 989 — `tower_wall_wizard` still carries a wizard identity for a structure renamed to Ballista
 
-**Status:** READY TO IMPLEMENT
+**Status:** IMPLEMENTED — 2026-08-15 `tower_ballista` + CatalogRegistry alias + load rewrite; art path still WizardTower_1
 **Minted:** 2026-08-14 (CLI)
 **Silo:** Catalog / data identity
 **Source:** OWNER ASK, 2026-08-14 — *"tower_wall_wizard - Where did that name come from? Should match Ballista"*

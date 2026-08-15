@@ -161,11 +161,11 @@ namespace DeNelle.Editor
             if (!dtSrc.Contains("\"SimpleCast_Projectile\""))
                 failures.Add("DefenseTower.cs does NOT reference 'SimpleCast_Projectile' - the owner's Ballista " +
                              "projectile tag (2026-08-04) is not wired");
-            if (!dtSrc.Contains("\"tower_wall_wizard\""))
-                failures.Add("DefenseTower.cs does NOT reference the catalog id 'tower_wall_wizard' - without the " +
+            if (!dtSrc.Contains("\"tower_ballista\"") && !dtSrc.Contains("\"tower_wall_wizard\""))
+                failures.Add("DefenseTower.cs does NOT reference the catalog id 'tower_ballista' (or legacy wizard id) - without the " +
                              "per-tower id table the Ballista is indistinguishable from the Archer (both bolt/None/" +
                              "ground) and silently borrows the archer arrow");
-            log.AppendLine("  (d) Ballista owner tag: tower_wall_wizard -> SimpleCast_Projectile");
+            log.AppendLine("  (d) Ballista owner tag: tower_ballista -> SimpleCast_Projectile");
 
             // (e) WO-870 range-derived sizing constants exist and sit in sane bands.
             float fraction = ParseConst(dtSrc, FractionRx);

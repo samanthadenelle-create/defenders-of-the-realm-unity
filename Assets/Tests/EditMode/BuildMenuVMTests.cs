@@ -112,7 +112,7 @@ namespace DeNelle.Tests.EditMode
         public void a_row_with_no_authored_asset_resolves_nothing()
         {
             var assets = ShippedTowerAssets();
-            Assert.That(BuildMenuVM.ResolveTowerAssetName("tower_wall_wizard", "Ballista", assets), Is.Null);
+            Assert.That(BuildMenuVM.ResolveTowerAssetName("tower_ballista", "Ballista", assets), Is.Null);
             Assert.That(BuildMenuVM.ResolveTowerAssetName("tower_arcane_spire", "Arcane Spire", assets), Is.Null);
             Assert.That(BuildMenuVM.ResolveTowerAssetName("tower_catapult", "Catapult", assets), Is.Null);
             Assert.That(BuildMenuVM.ResolveTowerAssetName("tower_siege_tower", "Sky Ballista (Anti-Air)", assets), Is.Null);

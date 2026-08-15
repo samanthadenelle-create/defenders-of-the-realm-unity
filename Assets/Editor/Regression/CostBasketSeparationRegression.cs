@@ -29,7 +29,7 @@
 //   pin 3 "Crafting (can enbue       -> the jeweler is a CRAFTING shop, therefore REGULAR
 //         preciouus sstones future      today. The owner flagged a FUTURE release may let it
 //         release)"                     imbue precious stones -- a re-classification THEN.
-//   pin 4 "thats a baliista          -> tower_wall_wizard is MECHANICAL, therefore REGULAR.
+//   pin 4 "thats a baliista          -> tower_ballista is MECHANICAL, therefore REGULAR.
 //         mechanical"                   The DATA reading beat the ID reading.
 //   pin 5 "cathedral of magic  -> 'arcane-tower' ("Cathedral of Magic") is MAGICAL. It is the
 //         is where all magic      ENGINE of magical progression, not a vendor that deals in
@@ -74,7 +74,7 @@
 //                   exemption is stale and is hiding the next regression), and the
 //                   pins are logged distinguishably for the owner call.
 //   4 [applied]     every conversion already made (v17: tower_siege_tower; v18:
-//                   tower_wall_wizard, jeweler, tower_arcane_spire,
+//                   tower_ballista, jeweler, tower_arcane_spire,
 //                   healing_caravan; v19: arcane-tower) stays on its ruled side -- regular rows carry
 //                   zero crystals, magical rows carry zero wood and non-zero
 //                   crystals -- and each basket TOTAL is unchanged from its
@@ -176,7 +176,7 @@ namespace DeNelle.Editor.Regression
                     Why = "REGULAR on the catalog's own evidence (displayName 'Sky Ballista (Anti-Air)', " +
                           "'Wall-mounted spear thrower', element None, projectileStyle 'bolt', _heightCadence " +
                           "SIEGE ENGINE group). v17, 2026-08-14. Crystals folded 1:1 into IRON." } },
-                { "tower_wall_wizard", new AppliedRow {
+                { "tower_ballista", new AppliedRow {
                     Magical = false, Totals = new[] { 160, 192, 400 },
                     Why = "REGULAR by OWNER ruling 2026-08-14, verbatim: \"thats a baliista mechanical\". The " +
                           "'wizard' in the id is stale naming; the row's data (displayName 'Ballista', element " +

@@ -4,7 +4,7 @@
 
 # WORK ORDER 906 — The Catapult becomes a DEPLOYED offensive siege unit
 
-**Status:** NOT STARTED (reconciled 2026-08-08, see banner). Blocked on nothing, but see §5 sequencing.
+**Status:** CLOSED — SUPERSEDED by WO-933 siege catapult troop (shipped).
 **Minted:** 2026-08-04 (CLI), owner ruling
 **Lane:** Combat / Raid. Moves content between two systems — read §2 before writing code.
 **Adjacent:** WO-853 (structures are targetable — the thing this sieges), WO-820 (raid full-army gate),

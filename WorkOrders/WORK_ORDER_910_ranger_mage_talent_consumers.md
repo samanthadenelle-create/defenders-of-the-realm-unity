@@ -1,10 +1,34 @@
 # WORK ORDER 910 - Ranger + Mage talent trees have no consumers (owner design ruling needed)
 
-**Status: READY FOR OWNER RULING** (this is a DESIGN call, not an implementation ticket)
+**Status:** READY — PARTIAL path B — stats + Hunter's Mark LIVE; remaining unlock/summon/onEvent fantasy
 **Date:** 2026-08-05
 **Silo:** Combat/AI + data (`hero-talents.json`, `TalentConsumerRegistry`) - no scene work
 **Raised by:** CLI regression lane, from `TalentStrategyRegression` G3 going red after the
 Mage/Ranger unlock removed the audit blind spot.
+
+---
+
+## OWNER RULING 2026-08-15
+
+> **B — all the way, full design.**
+
+Do **not** ship a minimum spine only. Do **not** hide the 31 dead nodes as the fix.
+Every Ranger + Mage talent that is player-visible must get a **real designed consumer**
+(combat effect, ability unlock, or proc as the node claims) — including expensive rows
+(Beast Companion, Storm of Arrows, Cataclysm, unlockAbility stubs, etc.).
+
+### Implementation shape under this ruling
+
+1. **Design pass first (owner/UI seat or design doc):** for each of the 31 nodes, name the
+   feel, numbers, and which systems it touches (stat vs ability vs summon vs proc).
+2. **CLI implements by cluster**, not inventing fantasy:
+   - cheap stats (`attackSpeed` / `moveSpeed` / `critChance` / …) first as groundwork
+   - then `modifyAbility` riders, then `unlockAbility` as **their own feature slices**
+   - summons / capstones last with VFX + anim + balance pins
+3. **Debt list stays audited** until each id is green; no re-hiding whole trees.
+4. Knight remains the reference for “fully green tree.”
+
+This WO becomes the **program umbrella**; mint child WOs per ability cluster when design is pinned.
 
 ---
 

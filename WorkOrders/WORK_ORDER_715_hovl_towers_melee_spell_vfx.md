@@ -1,6 +1,6 @@
 # WORK ORDER 715 — Hovl VFX proper wire: towers + sword/shield combos + spellcasting
 
-**Status:** READY TO IMPLEMENT  
+**Status:** CLOSED — SUPERSEDED by WO-935 paid anim/VFX program (do not dual-build).
 **Priority:** P0 (feel / demo look) — Pi mobile-web demo  
 **Lane:** VFX / Combat Feel  
 **Effort:** Medium–Large (data-first; small code seams)  

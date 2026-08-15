@@ -1,6 +1,6 @@
 # WORK ORDER 935 — Paid animation + VFX pack connection program
 
-**Status:** READY TO IMPLEMENT (SME-backed — do not start until phases below are sequenced)  
+**Status:** READY — PARTIAL Phase 1 LIVE: CombatCast + troop mage fireball; full pack matrix remains
 **Lane:** Art / Combat feel / Catalog  
 **Seat:** CLI implements; UI/PO ratifies element picks and feel  
 **Banner:** main line next free after mint = **936** (this number = 935)

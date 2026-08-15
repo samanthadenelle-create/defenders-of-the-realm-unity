@@ -631,69 +631,71 @@ namespace DeNelle.Village
         /// repo.placement.footprint as a fallback when the visual can't be measured.
         /// The temp object is destroyed before return (no scene side-effects).
         /// </summary>
-        // Cache the (relatively expensive) upright measurement per entry id — the ghost
-        // loop calls this every frame while arming. Keyed by id + a hash of the orientation
-        // so a live re-orient (build-mode orient editor) invalidates the stale value.
-        private static readonly System.Collections.Generic.Dictionary<string, float> s_footprintCache =
-            new System.Collections.Generic.Dictionary<string, float>();
+        // Cache upright XZ per entry id — ghost loop calls every frame while arming.
+        // Key folds orientation + scale so a live re-orient invalidates.
+        private static readonly System.Collections.Generic.Dictionary<string, Vector2> s_footprintXzCache =
+            new System.Collections.Generic.Dictionary<string, Vector2>();
 
+        /// <summary>
+        /// Scalar max(width,depth) — legacy callers / regressions. Prefer
+        /// <see cref="MeasureUprightFootprintXZ"/> for CoC non-square claims (WO-986).
+        /// </summary>
         public static float MeasureUprightFootprintMetres(CatalogEntry entry)
+        {
+            Vector2 xz = MeasureUprightFootprintXZ(entry);
+            return Mathf.Max(xz.x, xz.y);
+        }
+
+        /// <summary>
+        /// WO-986: upright mesh claim in metres as (size.x, size.z) — NOT collapsed to max
+        /// and squared. Thin structures keep a thin axis so they pack CoC-style.
+        /// </summary>
+        public static Vector2 MeasureUprightFootprintXZ(CatalogEntry entry)
         {
             float authored = entry != null && entry.repo != null && entry.repo.placement != null
                 ? Mathf.Max(1f, entry.repo.placement.footprint) : 3f;
-            if (entry == null || string.IsNullOrEmpty(entry.visualPrefabPath)) return authored;
+            Vector2 authoredV = new Vector2(authored, authored);
+            if (entry == null || string.IsNullOrEmpty(entry.visualPrefabPath)) return authoredV;
 
-            // Cache key folds in the orientation so a live re-orient re-measures.
-            // Includes the per-axis EffectiveScale so a non-uniform stretch invalidates
-            // the stale footprint (a wider wall must report a wider footprint).
             var o = entry.orientation;
             Vector3 es = o != null ? o.EffectiveScale : Vector3.one;
             string key = o != null && o.manual
-                ? $"{entry.id}|{o.Euler.x:0.#},{o.Euler.y:0.#},{o.Euler.z:0.#}|{es.x:0.##},{es.y:0.##},{es.z:0.##}"
-                : entry.id;
-            if (s_footprintCache.TryGetValue(key, out float cached)) return cached;
+                ? $"{entry.id}|{o.Euler.x:0.#},{o.Euler.y:0.#},{o.Euler.z:0.#}|{es.x:0.##},{es.y:0.##},{es.z:0.##}|xz"
+                : entry.id + "|xz";
+            if (s_footprintXzCache.TryGetValue(key, out Vector2 cached)) return cached;
 
             var probe = new GameObject("FootprintProbe");
             probe.hideFlags = HideFlags.HideAndDontSave;
-            float result = authored;
+            Vector2 result = authoredV;
             try
             {
-                // G: guard the off-screen skin+measure — a throwing prefab logs + falls back to the
-                // authored footprint (the temp object is still destroyed in finally), never throws up.
-                Guard.Try("Structure", $"measure upright footprint '{entry.id}'", () =>
+                Guard.Try("Structure", $"measure upright footprint XZ '{entry.id}'", () =>
                 {
-                    // WO-764: match Create's fit-to-height (YHeightVariable * heightMul) so the
-                    // measured XZ footprint reflects the ACTUAL placed scale, not a footprint-fit
-                    // scale - otherwise ghost/placement footprint disagrees with the placed size.
-                    // WO-928: go through OptsFor for the SAME reason, now extended to the rotation
-                    // policy. This probe must measure the model in the pose it will actually be
-                    // placed in: a preserve-row measured with the reset applied would report the
-                    // LYING-DOWN footprint (long in one axis), and BuildModeController claims grid
-                    // cells from this number - so the ghost would claim the wrong cells and the
-                    // placed structure would not match what the player was shown.
                     var opts = OptsFor(entry);
-
                     var visual = VisualFactory.Skin(probe.transform, entry.visualPrefabPath, opts);
                     if (visual == null)
                     {
                         FlowTrace.Warn("Structure",
-                            $"MeasureUprightFootprint '{entry.id}': visual '{entry.visualPrefabPath}' failed to skin — using authored footprint {authored:0.##}m.");
+                            $"MeasureUprightFootprintXZ '{entry.id}': visual '{entry.visualPrefabPath}' failed to skin — using authored {authored:0.##}m square.");
                         return;
                     }
                     if (entry.orientation != null && entry.orientation.manual)
                     {
                         visual.transform.localRotation = Quaternion.Euler(entry.orientation.Euler) * visual.transform.localRotation;
                         visual.transform.localPosition += entry.orientation.Offset;
-                        // Same per-axis effective scale as Create() so the measured footprint
-                        // matches the stretched mesh that actually gets placed.
                         if (entry.orientation.HasScale)
                             visual.transform.localScale = Vector3.Scale(visual.transform.localScale, entry.orientation.EffectiveScale);
                     }
                     if (TryWorldBounds(visual, out Bounds b))
-                        result = Mathf.Max(0.1f, Mathf.Max(b.size.x, b.size.z));
+                    {
+                        // World AABB after orientation — CoC claim axes (WO-986).
+                        result = new Vector2(
+                            Mathf.Max(0.1f, b.size.x),
+                            Mathf.Max(0.1f, b.size.z));
+                    }
                     else
                         FlowTrace.Warn("Structure",
-                            $"MeasureUprightFootprint '{entry.id}': no measurable bounds — using authored footprint {authored:0.##}m.");
+                            $"MeasureUprightFootprintXZ '{entry.id}': no measurable bounds — using authored square.");
                 });
             }
             finally
@@ -701,7 +703,7 @@ namespace DeNelle.Village
                 if (Application.isPlaying) Object.Destroy(probe);
                 else                       Object.DestroyImmediate(probe);
             }
-            s_footprintCache[key] = result;
+            s_footprintXzCache[key] = result;
             return result;
         }
 
@@ -738,25 +740,33 @@ namespace DeNelle.Village
         /// already-saved wall replays at the exact same world position and merely claims
         /// fewer (never more) cells — a shrinking claim can never invalidate a saved layout.
         /// </summary>
+        /// <summary>Legacy scalar claim (max axis). Prefer <see cref="MeasureClaimFootprintXZ"/>.</summary>
         public static float MeasureClaimFootprintMetres(CatalogEntry entry)
         {
-            float measured = MeasureUprightFootprintMetres(entry);
+            Vector2 xz = MeasureClaimFootprintXZ(entry);
+            return Mathf.Max(xz.x, xz.y);
+        }
+
+        /// <summary>
+        /// WO-986 / WO-972 claim metric as non-square metres (x, z).
+        /// Walls: both axes use authored placement.footprint (one-cell tile, CoC wall runs).
+        /// Everything else: measured upright mesh XZ (no squaring of max).
+        /// Shrinking a prior square claim on load is safe; never expands phantom cells.
+        /// </summary>
+        public static Vector2 MeasureClaimFootprintXZ(CatalogEntry entry)
+        {
+            Vector2 measured = MeasureUprightFootprintXZ(entry);
             if (entry == null || entry.type != CatalogType.Wall) return measured;
 
             float authored = entry.repo != null && entry.repo.placement != null
                 ? Mathf.Max(0.01f, entry.repo.placement.footprint)
-                : measured;
+                : Mathf.Max(measured.x, measured.y);
 
-            // PERMANENT PROVING LINE (§12). The measured metres are the number that turned a
-            // one-cell palisade into a 2x2 claim, and they were logged NOWHERE — the RCA had
-            // to bound them from a MeshCollider dump plus the blocker clamp. Never again:
-            // this states both numbers, once per entry id, so the next capture answers it.
             FlowTrace.Once("Build", "wall-claim-" + entry.id,
-                $"WALL CLAIM '{entry.id}': the grid claim is driven by the AUTHORED " +
-                $"placement.footprint={authored:0.###}m, while the fitted MESH measures " +
-                $"{measured:0.###}m across. The mesh is NOT resized — only the cell claim is " +
-                $"decoupled, so a wall is a one-cell tile and a run of them has no holes.");
-            return authored;
+                $"WALL CLAIM '{entry.id}': grid claim AUTHORED placement.footprint={authored:0.###}m " +
+                $"(both axes → one-cell tile), mesh measures ({measured.x:0.###} x {measured.y:0.###})m. " +
+                "Mesh is NOT resized — claim only (WO-972 + WO-986).");
+            return new Vector2(authored, authored);
         }
 
         /// <summary>World-space renderer bounds of <paramref name="go"/> (renderer-first, collider fallback).</summary>
@@ -904,6 +914,12 @@ namespace DeNelle.Village
                 {
                     var f = root.AddComponent<HealingFountain>();
                     f.Configure(entry);
+                    // WO-991: caravan is a mobile glass support unit that slow-follows the hero.
+                    if (entry != null && entry.id == "healing_caravan")
+                    {
+                        var mob = root.AddComponent<HealingCaravanMobility>();
+                        mob.Configure(entry);
+                    }
                     break;
                 }
 

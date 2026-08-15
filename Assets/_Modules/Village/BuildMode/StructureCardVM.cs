@@ -262,20 +262,18 @@ namespace DeNelle.Village
             var grid = PlacementGrid.Instance;
             if (grid != null && e != null)
             {
-                float m = StructureFactory.MeasureClaimFootprintMetres(e);
-                if (m > 0f)
+                // WO-986: report non-square claim cells (same authority as placement).
+                Vector2 xz = StructureFactory.MeasureClaimFootprintXZ(e);
+                if (xz.x > 0f && xz.y > 0f)
                 {
-                    Vector2Int f = grid.FootprintCells(m);
+                    Vector2Int f = grid.FootprintCells(xz);
                     int fx = Mathf.Max(1, f.x);
                     int fy = Mathf.Max(1, f.y);
                     return fx + "x" + fy + " cells";
                 }
-                // §1.4b — a trace that cannot report failure is a bug. A non-positive claim
-                // is NOT a 1x1 structure; it means the measure failed. Say so, distinguishably.
                 FlowTrace.Once("Build", "footprint-label-unmeasured-" + (e.id ?? "<null>"),
-                    $"FOOTPRINT LABEL '{e.id}': the claim metric returned {m:0.###}m (non-positive), " +
-                    "so the info panel is showing the 1x1 DEFAULT, not a measured claim. The label " +
-                    "and the grid claim may disagree for this row.");
+                    $"FOOTPRINT LABEL '{e.id}': claim XZ returned ({xz.x:0.###},{xz.y:0.###})m (non-positive), " +
+                    "so the info panel is showing the 1x1 DEFAULT, not a measured claim.");
             }
             else
             {

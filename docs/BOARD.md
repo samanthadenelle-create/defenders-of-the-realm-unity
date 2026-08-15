@@ -121,15 +121,50 @@ no one's build should start failing because a WO file is sloppy.
 
 ---
 
-## 6. What this board is NOT
+## 6. Priority when tickets conflict (owner 2026-08-15)
+
+Two rules keep a 900+ Ready column from thrashing the team:
+
+### 6a. Recency window — last 50–100 WOs win on contradiction
+
+The **last ~50–100 work orders by WO number** (both mint blocks: main line *and* UI seat)
+are weighted as **valid** when they **contradict** older tickets.
+
+- **Floor (refresh when minting):** as of 2026-08-15, last 100 ≈ **WO-915+**, last 50 ≈ **WO-965+**
+  (max on disk was **1020**). Recompute as `max(WO#) − 99` / `max − 49` when the banner moves.
+- **On conflict** (same system, opposite acceptance criteria, or a Done RESULT that kills an older
+  Ready goal): **implement / believe the newer WO.** Close or partial-scope the older one
+  (`CLOSED — SUPERSEDED by WO-NNN` or `READY — PARTIAL: <remainder that does not fight NNN>`).
+- **Not a free close-all:** older tickets that are **orthogonal** (no contradiction) still need the
+  age/validity check (§6b). Recency only breaks ties.
+
+Live priority stack + known supersession pairs: **`BOARD_NOW.md`** (repo root).
+
+### 6b. Age — >14 days verify first (outside the recency window)
+
+Any open ticket whose file has been idle **>14 days** and sits **below** the last-100 floor is
+**VERIFY FIRST** before implementation: still broken at HEAD, partial, done+RESULT, or closed.
+Do not treat a multi-month Ready status as a work order.
+
+### 6c. Working stack
+
+`BOARD_NOW.md` is the human-ordered pull list (P0–P3). `BOARD.html` is the full inventory.
+When they disagree on *what to do next*, **`BOARD_NOW.md` wins** until regenerated after a
+priority session; when they disagree on *status*, the WO file’s `**Status:**` line wins
+(regenerate the HTML).
+
+---
+
+## 7. What this board is NOT
 
 - Not a service, not CI, not a database. It is one Python file and one HTML output.
 - Not a place to record work: the WO markdown is. The board only *shows* what the markdown says.
 - Not a Notion replacement to be re-mirrored anywhere. The retired mirror's failure mode — a second
   copy nobody could reach — is exactly what "derive it in 2 seconds" prevents.
 
-## 7. Related
+## 8. Related
 
+- `BOARD_NOW.md` — prioritized pull list + recency supersession table
 - `CLI_LANES_WO_NUMBERS.md` — the **sole** numbering authority (bump the banner in the same edit as a mint)
 - `WorkOrders/` — the data
 - `tools/board_build.py` — the generator

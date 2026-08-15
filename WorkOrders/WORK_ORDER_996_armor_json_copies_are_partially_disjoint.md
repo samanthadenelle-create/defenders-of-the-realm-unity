@@ -1,6 +1,6 @@
 # WORK ORDER 996 — `armor.json`'s two canonical copies are PARTIALLY DISJOINT
 
-**Status:** READY TO IMPLEMENT
+**Status:** IMPLEMENTED — SA library +15 class ladders; Resources curated; subset regression (2026-08-15).
 **Minted:** 2026-08-14 (CLI)
 **Silo:** Gear / canonical data
 **Found:** four independent times in one day, from four different directions

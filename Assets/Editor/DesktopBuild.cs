@@ -73,7 +73,13 @@ namespace DeNelle.Editor
 
             Debug.Log($"[DesktopBuild] WebGL build -> {dir} ({scenes.Length} scenes). This can take many minutes.");
             // WO-974: build Addressables content EXPLICITLY (see AddressablesContentBuild).
-            AddressablesContentBuild.EnsureBuilt("DesktopBuild.WebGL");
+            // Content failure must fail the player build — a green player with empty aa is a hollow ship.
+            if (!AddressablesContentBuild.EnsureBuilt("DesktopBuild.WebGL"))
+            {
+                Debug.LogError("[DesktopBuild] WebGL ABORTED — Addressables content build failed (WO-974).");
+                EditorApplication.Exit(1);
+                return;
+            }
 
             BuildReport webReport = BuildPipeline.BuildPlayer(options);
             BuildSummary webSummary = webReport.summary;
@@ -242,7 +248,12 @@ namespace DeNelle.Editor
             };
 
             // WO-974: build Addressables content EXPLICITLY (see AddressablesContentBuild).
-            AddressablesContentBuild.EnsureBuilt("DesktopBuild.Windows");
+            if (!AddressablesContentBuild.EnsureBuilt("DesktopBuild.Windows"))
+            {
+                Debug.LogError("[DesktopBuild] Windows ABORTED — Addressables content build failed (WO-974).");
+                EditorApplication.Exit(1);
+                return;
+            }
 
             BuildReport report = BuildPipeline.BuildPlayer(options);
             BuildSummary summary = report.summary;

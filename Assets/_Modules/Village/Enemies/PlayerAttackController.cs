@@ -70,7 +70,11 @@ namespace DeNelle.Village
         {
             if (_gear == null) _gear = GetComponent<GearLoadout>();
             var w = _gear != null ? _gear.EquippedWeapon : null;
-            return (w != null && w.reach > 0f) ? w.reach : _attackRange;
+            float r = (w != null && w.reach > 0f) ? w.reach : _attackRange;
+            // WO-910: talent range multiplies reach (identity when none).
+            string cls = _abilities != null ? _abilities.HeroClass : null;
+            r *= DeNelle.Village.Talents.HeroTalentModifiers.RangeMultiplier(cls);
+            return r;
         }
 
         [Tooltip("Minimum seconds between attacks.")]
@@ -446,7 +450,10 @@ namespace DeNelle.Village
 
         private void StartAttack()
         {
-            _nextAttackTime = Time.time + _attackCooldown;
+            // WO-910: attackSpeed talents shorten the swing cooldown (1 + ΣattackSpeed).
+            string atkClass = _abilities != null ? _abilities.HeroClass : null;
+            float atkSpd = DeNelle.Village.Talents.HeroTalentModifiers.AttackSpeedMultiplier(atkClass);
+            _nextAttackTime = Time.time + (_attackCooldown / Mathf.Max(0.25f, atkSpd));
             _swingStartTime = Time.time;
             _isInSwing      = true;
             _perfectTapElapsed = -1f;   // P1-6: each swing needs its OWN second tap
@@ -656,6 +663,13 @@ namespace DeNelle.Village
                 float damage = _baseDamage * weaponMult;
                 if (isPerfect) damage *= _perfectHitMultiplier;
                 if (riposte)   damage *= RiposteMultiplier;   // parry counter — big hit on the tank
+                damage = CombatMark.ScaleDamage(damageable, damage);
+
+                // WO-910: critChance talent roll (additive). Distinct from perfect-hit timing.
+                string critClass = _abilities != null ? _abilities.HeroClass : null;
+                float critChance = DeNelle.Village.Talents.HeroTalentModifiers.CritChanceBonus(critClass);
+                bool isCrit = critChance > 0f && Random.value < critChance;
+                if (isCrit) damage *= 1.5f;
 
                 Vector3 hitPos = col.transform.position + Vector3.up;
 
@@ -674,7 +688,7 @@ namespace DeNelle.Village
                 // the next felt-test this MUST read dealtByHero=True (was never emitted while suppressed).
                 FlowTrace.Step("Combat",
                     $"hero MELEE hit '{col.transform.root.name}' faction={damageable.Faction} " +
-                    $"dealtByHero=True amount={damage:F1} (perfect={isPerfect} riposte={riposte}).");
+                    $"dealtByHero=True amount={damage:F1} (perfect={isPerfect} riposte={riposte} crit={isCrit}).");
                 damageable.TakeDamage(damage, DamageElement.None);
                 anyHit = true;
                 lastHitDamage = damage;

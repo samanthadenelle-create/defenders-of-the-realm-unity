@@ -26,6 +26,7 @@ using System;
 using Cysharp.Threading.Tasks;
 using DeNelle.Core;
 using DeNelle.Core.Diagnostics;
+using DeNelle.Core.UI;
 using DeNelle.Core.World;
 using DeNelle.Dungeons.RoomForge;
 using DeNelle.Village;
@@ -196,6 +197,12 @@ namespace DeNelle.Dungeons
         private const float ActivateRadius = 4.5f;   // shared-button prompt range
         private const float TriggerRadius = 2.0f;    // walk-in trigger radius
         private const float CheckInterval = 0.15f;
+        // WO-995: boot-in self-evict. The hero can spawn inside (or inches outside) the exit
+        // sphere; _armed alone was not enough when the first proximity sample was already
+        // "clear" and the next physics step shoved the collider back in. A short scene-load
+        // grace plus a sustained-clear arm stops Leave() on spawn without breaking a real walk-in.
+        private const float BootGraceSeconds = 2.0f;
+        private const float ClearHoldSeconds = 0.35f;
 
         private Transform _hero;
         private bool _heroFound;
@@ -203,6 +210,11 @@ namespace DeNelle.Dungeons
         private bool _leaving;
         private bool _armed;                          // walk-in only after hero first steps clear
         private float _nextProximityCheck;
+        private float _clearSince = -1f;              // realtime when first observed clear of the volume
+        private bool _bootTraceEmitted;
+        // WO-987: touch raises an Obsidian confirm; Leave only after "Continue to exit".
+        private bool _confirmOpen;
+        private GameObject _confirmCanvas;
 
         // WO-770.1: a RICH dungeon (DungeonController) supplies a leave action so the exit routes
         // through ExitToVillage (banks the run's crafting scatter + ends the run cleanly) instead
@@ -719,26 +731,155 @@ namespace DeNelle.Dungeons
             if (Time.time >= _nextProximityCheck)
             {
                 _nextProximityCheck = Time.time + CheckInterval;
-                float distSqr = (_hero.position - transform.position).sqrMagnitude;
+                float dist = Vector3.Distance(_hero.position, transform.position);
+                float distSqr = dist * dist;
                 _isInRange = distSqr <= ActivateRadius * ActivateRadius;
-                // Arm the walk-in trigger only once the hero has been clear of it, so
-                // spawning on top of the exit does not yank the player straight home.
-                if (!_armed && distSqr > (TriggerRadius + 0.75f) * (TriggerRadius + 0.75f))
-                    _armed = true;
+                // WO-995: arm only after the hero has been OUTSIDE the walk-in volume for a
+                // sustained hold (and after boot grace). Instant "clear" samples on a jittering
+                // spawn are not enough.
+                float clearRadius = TriggerRadius + 0.75f;
+                bool clear = dist > clearRadius;
+                if (!_armed)
+                {
+                    if (clear)
+                    {
+                        if (_clearSince < 0f) _clearSince = Time.realtimeSinceStartup;
+                        bool graceDone = Time.timeSinceLevelLoad >= BootGraceSeconds;
+                        bool held = (Time.realtimeSinceStartup - _clearSince) >= ClearHoldSeconds;
+                        if (graceDone && held)
+                        {
+                            _armed = true;
+                            FlowTrace.Step(Sys,
+                                $"exit ARMED after clear-hold: heroDist={dist:F2}m clearR={clearRadius:F2}m " +
+                                $"levelT={Time.timeSinceLevelLoad:F2}s exitPos={transform.position} heroPos={_hero.position}");
+                        }
+                    }
+                    else
+                    {
+                        _clearSince = -1f;
+                        if (!_bootTraceEmitted)
+                        {
+                            _bootTraceEmitted = true;
+                            FlowTrace.Warn(Sys,
+                                $"WO-995 spawn INSIDE/near exit volume: heroDist={dist:F2}m " +
+                                $"triggerR={TriggerRadius:F2}m exitPos={transform.position} heroPos={_hero.position} " +
+                                $"- Leave() blocked until clear-hold + {BootGraceSeconds:0.#}s boot grace.");
+                        }
+                    }
+                }
             }
 
+            // WO-987: touch is the trigger (OnTriggerEnter). While confirming, hide the
+            // proximity button so a second tap cannot race past the dialog.
+            if (_confirmOpen || _leaving)
+            {
+                MobileInteractButton.Release(this);
+                return;
+            }
+            // Optional secondary: in-range button also opens the SAME confirm (not a raw Leave).
             if (_isInRange)
-                MobileInteractButton.Request(this, _label, Leave);
+                MobileInteractButton.Request(this, _label, RequestExitConfirm);
             else
                 MobileInteractButton.Release(this);
         }
 
         private void OnTriggerEnter(Collider other)
         {
-            if (_leaving || !_armed || other == null) return;
+            if (_leaving || _confirmOpen || other == null) return;
             if (!IsHeroCollider(other)) return;
-            FlowTrace.Step(Sys, "hero walked into the RETURN exit");
-            Leave();
+            if (!CanLeave(out string refuse))
+            {
+                FlowTrace.Warn(Sys, $"OnTriggerEnter REFUSED exit confirm: {refuse}");
+                return;
+            }
+            FlowTrace.Step(Sys, "hero TOUCHED the RETURN exit — opening confirm (WO-987)");
+            RequestExitConfirm();
+        }
+
+        /// <summary>
+        /// WO-987: present Continue-to-exit / Cancel. Stray dismiss = Cancel. Never exits
+        /// without an explicit Continue face.
+        /// </summary>
+        private void RequestExitConfirm()
+        {
+            if (_leaving || _confirmOpen) return;
+            if (!CanLeave(out string refuse))
+            {
+                FlowTrace.Warn(Sys, $"RequestExitConfirm REFUSED: {refuse}");
+                return;
+            }
+
+            _confirmOpen = true;
+            MobileInteractButton.Release(this);
+
+            // Gold = primary irreversible CTA (not green Confirm — owner is red/green colourblind;
+            // faces distinguished by position LEFT cancel / RIGHT continue + text, never hue alone).
+            try
+            {
+                var modal = ElarionUiKit.BuildConfirmModal(
+                    name: "DungeonExitConfirm",
+                    title: "Leave dungeon?",
+                    message: "Continue to exit returns you to town. Cancel keeps you in the dungeon.",
+                    confirmLabel: "Continue to exit",
+                    cancelLabel: "Cancel",
+                    onConfirm: OnConfirmContinueToExit,
+                    onCancel: OnConfirmCancel,
+                    confirmKind: ElarionUiKit.ButtonKind.Gold,
+                    sortingOrder: 34000);
+                _confirmCanvas = modal.canvas;
+                FlowTrace.Step(Sys,
+                    "exit CONFIRM SHOWN faces=[Continue to exit | Cancel] default=Cancel " +
+                    $"(portal='{name}' trueExit={_isTrueExit})");
+            }
+            catch (Exception ex)
+            {
+                _confirmOpen = false;
+                FlowTrace.Warn(Sys,
+                    $"exit CONFIRM FAILED TO APPEAR: {ex.GetType().Name}: {ex.Message} — " +
+                    "portal touch will feel like a no-op until this is fixed.");
+            }
+        }
+
+        private void OnConfirmContinueToExit()
+        {
+            FlowTrace.Step(Sys, "exit CONFIRM RESOLVED face=continue-to-exit");
+            DismissConfirmUi();
+            ExecuteLeave();
+        }
+
+        private void OnConfirmCancel()
+        {
+            FlowTrace.Step(Sys,
+                "exit CONFIRM RESOLVED face=cancel — run state UNCHANGED; hero remains in dungeon");
+            DismissConfirmUi();
+            // Stay armed so a second walk-in reopens the same confirm.
+        }
+
+        private void DismissConfirmUi()
+        {
+            _confirmOpen = false;
+            if (_confirmCanvas != null)
+            {
+                UnityEngine.Object.Destroy(_confirmCanvas);
+                _confirmCanvas = null;
+            }
+        }
+
+        /// <summary>WO-995: walk-in / button leave is only legal once armed past boot grace.</summary>
+        private bool CanLeave(out string refuseReason)
+        {
+            if (Time.timeSinceLevelLoad < BootGraceSeconds)
+            {
+                refuseReason = $"boot grace ({Time.timeSinceLevelLoad:F2}s < {BootGraceSeconds:0.#}s)";
+                return false;
+            }
+            if (!_armed)
+            {
+                refuseReason = "exit not armed (hero has not held clear of the volume)";
+                return false;
+            }
+            refuseReason = null;
+            return true;
         }
 
         // True when `other` belongs to the hero rig — WITHOUT depending on HeroLocomotion's enabled
@@ -752,11 +893,25 @@ namespace DeNelle.Dungeons
             return other.GetComponentInParent<HeroLocomotion>() != null;
         }
 
-        private void Leave()
+        /// <summary>
+        /// Legacy name kept for callers; routes through the WO-987 confirm so nothing
+        /// can exit without an explicit "Continue to exit".
+        /// </summary>
+        private void Leave() => RequestExitConfirm();
+
+        /// <summary>Actually leave — only after confirm Continue (or internal re-entry).</summary>
+        private void ExecuteLeave()
         {
             if (_leaving) return;
+            // Defensive re-check (confirm may have been open across a long pause).
+            if (!CanLeave(out string refuse))
+            {
+                FlowTrace.Warn(Sys, $"ExecuteLeave REFUSED: {refuse}");
+                return;
+            }
             _leaving = true;
             MobileInteractButton.Release(this);
+            DismissConfirmUi();
 
             // WO-893: arm the MATERIALISE beat for the hub. PortalVFXController.OnHeroExit
             // existed but was called by nothing, so a portal round trip burst on the way IN
@@ -787,6 +942,7 @@ namespace DeNelle.Dungeons
         private void OnDisable()
         {
             MobileInteractButton.Release(this);
+            DismissConfirmUi();
         }
     }
 

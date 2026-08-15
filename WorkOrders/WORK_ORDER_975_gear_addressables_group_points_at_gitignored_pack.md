@@ -1,9 +1,42 @@
 # WORK ORDER 975 — The `Gear` Addressables group points at a gitignored art pack
 
-**Status:** READY TO IMPLEMENT
+**Status:** READY — PARTIAL - hard fence landed; **OWNER RULING 2026-08-15 closes path A (do not promote Blink)**
 **Lane:** Build path / Addressables / asset pipeline
 **Minted:** 2026-08-10 (CLI), from the same architect verification as WO-974, ordered by the owner:
 *"make sure that addressables are implemented as supposed to be. Have an architect read and verify."*
+
+---
+
+## 0. OWNER RULING 2026-08-15 (closes “track Blink?”)
+
+> **B — do not want Blink as real ship content.** It is **only a placeholder.**
+> **Armor is never changed on the 3D character** — it holds **damage/defense stats** and is
+> **visualized in menu screens as 2D only** (icons), not as skinned 3D body packs.
+
+### What this means for this ticket
+
+| Was on the table | Ruling |
+|------------------|--------|
+| **A.** Promote ~426 Blink prefabs into git / tracked Addressables | **NO** — do not commit Blink; do not treat it as the gear pipeline |
+| **B.** Keep Blink local-only + loud fail if missing | **Yes for residual placeholder keys**, but the **product goal is to stop needing Blink** for armor at all |
+| Armor Addressable 3D body swap | **OUT OF SCOPE / JUNKED** (aligns with `FeatureFlags` Blink-armor pivot: armor is stats + 2D) |
+
+### Correct end state (implementation target)
+
+1. **Armor rows** = id, stats, costs, **2D `iconPath`** (Resources or tracked icons). No player path requires `Assets/Blink/...` armor prefabs. Armor is **never** a 3D body swap.
+2. **Weapons are placed items** (owner 2026-08-15, same breath): real **3D props** seated on the hero
+   (hand / back sockets via `EquipmentController`). They are **not** 2D-only like armor. Ship path for
+   weapon meshes must be **tracked / build-reachable** (Resources props, curated Addressables, or
+   mirror) — **not** “import whole Blink pack,” but also not “icons only.”
+3. **Gear.asset** should not assert a hollow player when Blink is absent for **armor** — drop armor
+   Blink entries over time. For **weapons**, fence only keys the catalog actually uses for 3D attach.
+4. Hard fence must not force “import all of Blink.” Prefer: fence **canonical catalog keys that declare
+   Addressable/3D load**, not every leftover Gear.asset GUID.
+5. Clean-clone / CI: green without `/Assets/Blink/` for armor + menu; weapons resolve from **non-Blink
+   or curated tracked** mesh paths.
+
+Remaining work = **decouple armor (2D+stats) from Blink**, **keep weapons as placed 3D** on a shippable
+mesh path — not promote the full Blink pack.
 
 ---
 

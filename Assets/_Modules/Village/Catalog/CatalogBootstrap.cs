@@ -237,13 +237,12 @@ namespace DeNelle.Village
                 },
             });
 
-            // Ballista (catalog id is still the legacy "tower_wall_wizard") â€” long range,
-            // slowest fire, heaviest PHYSICAL single hit, HITS AIR. Owner ruling 2026-07-08:
-            // the model IS a ballista and it is GROUND-placed, not wall-walk.
-            // MIRRORS: structures-catalog.json entry "tower_wall_wizard".
+            // Ballista — WO-989 id is tower_ballista (was tower_wall_wizard).
+            // Owner ruling 2026-07-08: model IS a ballista, GROUND-placed, not wall-walk.
+            // MIRRORS: structures-catalog.json entry "tower_ballista".
             CatalogRegistry.Register(new CatalogEntry
             {
-                id          = "tower_wall_wizard",
+                id          = "tower_ballista",
                 displayName = "Ballista",
                 type        = CatalogType.Tower,
                 kind        = EntryKind.Cell,
@@ -272,7 +271,7 @@ namespace DeNelle.Village
                     // CLASS is now pinned to the owner-ruled archer ANCHOR of 1.2 x base = 4.8 m,
                     // measured at 49.9% of a house's diameter. Was the WO-764 class value 1.25;
                     // a tower sitting 4% off the anchor was the in-family outlier the ruling removes.
-                    // Mirrors structures-catalog.json "tower_wall_wizard" (parity gate 12 enforces).
+                    // Mirrors structures-catalog.json "tower_ballista" (parity gate 12 enforces).
                     heightMul = 1.2f,
                     range = 22f, damage = 30f, fireRate = 0.5f,
                     canHitAir = true, element = DamageElement.None,

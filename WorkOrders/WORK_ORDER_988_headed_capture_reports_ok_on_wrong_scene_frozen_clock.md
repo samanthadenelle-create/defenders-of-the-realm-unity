@@ -1,6 +1,6 @@
 # WORK ORDER 988 — `headed-dungeon-capture.ps1` reports `HEADED_CAPTURE_OK` on a wrong-scene, frozen-clock run
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — harness already refused on SelfTest 5/5 (2026-08-15 verified)
 **Minted:** 2026-08-14 (CLI)
 **Silo:** Tooling / verification harness
 **Sibling:** WO-984 (the Unity method wrapper judges by log text, not markers) — same defect class

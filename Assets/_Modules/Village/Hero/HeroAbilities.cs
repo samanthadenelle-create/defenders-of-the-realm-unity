@@ -1089,6 +1089,9 @@ namespace DeNelle.Village
                             float dealt = ApplyMeasuredDamage(hitFoe, hitDmg, hitEl);
                             DeNelle.Core.Combat.DamageAttribution.Record(hitFoe, HeroProgression.Id, hitDmg);
                             if (snare) hitFoe.ApplyStatus(StatusEffect.Slow, 2.5f); // castAbility.ts snare
+                            // WO-910 Hunter's Mark: mark on connect (talent unlockAbility equips this id).
+                            if (IsHuntersMark(hitDef))
+                                CombatMark.Apply(hitFoe, 6f, 1.2f);
                             // WO-676 Venombrand: venom in the wound — stack-capped poison DoT.
                             if (venom) ApplyPoisonRider(hitFoe, venomDps, venomSecs, venomStacks);
                             // WO-861 A4: the equipped arrow's on-hit rider (Ranger basic only).
@@ -1259,8 +1262,17 @@ namespace DeNelle.Village
         {
             if (foe == null || !foe.IsAlive || amount <= 0f) return 0f;
             float before = foe.Hp;
-            foe.TakeDamage(amount, element);
+            foe.TakeDamage(CombatMark.ScaleDamage(foe, amount), element);
             return Mathf.Max(0f, before - foe.Hp);
+        }
+
+        /// <summary>WO-910: Hunter's Mark ability id (talent unlockAbility equips this).</summary>
+        private static bool IsHuntersMark(AbilityDef def)
+        {
+            if (def == null || string.IsNullOrEmpty(def.Id)) return false;
+            string id = def.Id;
+            return id.IndexOf("hunters-mark", System.StringComparison.OrdinalIgnoreCase) >= 0
+                || id.IndexOf("hunter_mark", System.StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         /// <summary>

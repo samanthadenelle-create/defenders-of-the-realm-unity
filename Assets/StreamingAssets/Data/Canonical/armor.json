@@ -1,37 +1,24 @@
 {
-  "version": 1,
-  "_note": "Gear v1 armor catalog. defense = fractional incoming-damage reduction (0.04 = 4%). hpBonus is carried for a later pass (v1 applies defense only, to avoid HeroHealth maxHp surgery untested). job 'any' = all classes. req level-gated like weapons. PRICING (buy*): iron-primary (plate/mail) + food (hides/padding); crystals gate the rare+ Oathweld wards; tiered common floor -> legendary sink.",
+  "version": 2,
+  "_note": "WO-996 2026-08-15: StreamingAssets is the ARMOR LIBRARY (superset). Class ladders merged from Resources (runtime curated set). Resources remains the curated runtime roster (wins at CanonicalJson). Do not add blink_ placeholders into Resources. Gear v1 armor catalog. defense = fractional incoming-damage reduction (0.04 = 4%). hpBonus is carried for a later pass (v1 applies defense only, to avoid HeroHealth maxHp surgery untested). job 'any' = all classes. req level-gated like weapons. PRICING (buy*): iron-primary (plate/mail) + food (hides/padding); crystals gate the rare+ Oathweld wards; tiered common floor -> legendary sink.",
   "armor": [
     {
-      "id": "armor_cloth",
-      "name": "Wanderer's Cloth",
-      "icon": "🧥",
+      "id": "aegis_plate",
+      "name": "Aegis of Elarion",
+      "icon": "🛡️",
       "job": "any",
-      "rarity": "common",
-      "defense": 0.04,
-      "hpBonus": 10,
+      "rarity": "legendary",
+      "defense": 0.28,
+      "hpBonus": 100,
       "req": {
-        "level": 1
+        "level": 10
       },
-      "buyWood": 20,
-      "buyFood": 30,
-      "buyIron": 10
-    },
-    {
-      "id": "armor_leather",
-      "name": "Tanned Leather",
-      "icon": "🧥",
-      "job": "any",
-      "weight": "light",
-      "rarity": "uncommon",
-      "defense": 0.08,
-      "hpBonus": 25,
-      "req": {
-        "level": 3
-      },
-      "buyWood": 40,
-      "buyFood": 80,
-      "buyIron": 60
+      "buyWood": 300,
+      "buyIron": 2000,
+      "buyCrystals": 200,
+      "setId": "aegis",
+      "makersMark": "Oathweld",
+      "saga": "The reforged Aegis — Borin's steel, Halvard's Oathweld plating, Pell's Heartwood core, Wren's Last Pressing. Worn with a full Aegis weapon, the Oathweld returns a portion of damage taken as a ward on the Heart."
     },
     {
       "id": "armor_chain",
@@ -52,6 +39,232 @@
       "makersMark": "Oathweld"
     },
     {
+      "id": "armor_cloth",
+      "name": "Wanderer's Cloth",
+      "icon": "🧥",
+      "job": "any",
+      "rarity": "common",
+      "defense": 0.04,
+      "hpBonus": 10,
+      "req": {
+        "level": 1
+      },
+      "buyWood": 20,
+      "buyFood": 30,
+      "buyIron": 10
+    },
+    {
+      "id": "armor_knight_common",
+      "name": "Ironward Plate",
+      "icon": "🛡️",
+      "job": "knight",
+      "weight": "heavy",
+      "rarity": "common",
+      "defense": 0.06,
+      "hpBonus": 20,
+      "perk": "Reduces incoming melee damage by a small additional amount while standing still.",
+      "req": {
+        "level": 1
+      },
+      "buyIron": 70,
+      "buyFood": 20,
+      "iconPath": "ItemIcons/armor_knight_common",
+      "flavor": "Iron plates fitted for a soldier, not a knight — good enough to keep you standing through the first charge."
+    },
+    {
+      "id": "armor_knight_epic",
+      "name": "Emberbrand Plate",
+      "icon": "🛡️",
+      "job": "knight",
+      "weight": "heavy",
+      "rarity": "epic",
+      "defense": 0.25,
+      "hpBonus": 85,
+      "perk": "Charge attacks release an ember burst on impact, dealing bonus fire-adjacent damage.",
+      "req": {
+        "level": 10
+      },
+      "buyIron": 1200,
+      "buyFood": 100,
+      "buyCrystals": 60,
+      "iconPath": "ItemIcons/armor_knight_epic",
+      "makersMark": "Emberhand",
+      "flavor": "Emberhand poured the last of their forge-heat into this plate. The seams still run hot to the touch."
+    },
+    {
+      "id": "armor_knight_legendary",
+      "name": "Oathplate of Elarion",
+      "icon": "🛡️",
+      "job": "knight",
+      "weight": "heavy",
+      "rarity": "legendary",
+      "defense": 0.35,
+      "hpBonus": 120,
+      "perk": "A portion of damage taken is reflected to attackers. Oathweld runes pulse brighter as the wearer's HP falls.",
+      "req": {
+        "level": 10
+      },
+      "buyIron": 3000,
+      "buyCrystals": 300,
+      "setId": "oathplate",
+      "iconPath": "ItemIcons/armor_knight_legendary",
+      "makersMark": "Oathweld",
+      "saga": "The plate of the first defenders — dark iron sealed with Oathweld runes that glow gold and orange. It remembers every oath sworn over it. The runes are not decoration; they are the oaths themselves, still binding."
+    },
+    {
+      "id": "armor_knight_rare",
+      "name": "Vigil Plate",
+      "icon": "🛡️",
+      "job": "knight",
+      "weight": "heavy",
+      "rarity": "rare",
+      "defense": 0.18,
+      "hpBonus": 60,
+      "perk": "Gain a brief damage reduction buff after landing a charged attack.",
+      "req": {
+        "level": 6
+      },
+      "buyIron": 600,
+      "buyFood": 80,
+      "buyCrystals": 15,
+      "iconPath": "ItemIcons/armor_knight_rare",
+      "makersMark": "Oathweld",
+      "flavor": "Named for the knights who kept the night watch at the four gates — they wore this and were still standing at dawn."
+    },
+    {
+      "id": "armor_knight_uncommon",
+      "name": "Bastion Plate",
+      "icon": "🛡️",
+      "job": "knight",
+      "weight": "heavy",
+      "rarity": "uncommon",
+      "defense": 0.12,
+      "hpBonus": 40,
+      "perk": "Extended stun on Shield Bash when HP is above 75%.",
+      "req": {
+        "level": 3
+      },
+      "buyIron": 250,
+      "buyFood": 50,
+      "iconPath": "ItemIcons/armor_knight_uncommon",
+      "flavor": "Heavy rivets, layered shoulderguards — the kind of plate that says you expect to be hit more than once."
+    },
+    {
+      "id": "armor_leather",
+      "name": "Tanned Leather",
+      "icon": "🧥",
+      "job": "any",
+      "weight": "light",
+      "rarity": "uncommon",
+      "defense": 0.08,
+      "hpBonus": 25,
+      "req": {
+        "level": 3
+      },
+      "buyWood": 40,
+      "buyFood": 80,
+      "buyIron": 60
+    },
+    {
+      "id": "armor_mage_common",
+      "name": "Apprentice Robes",
+      "icon": "🧥",
+      "job": "mage",
+      "weight": "light",
+      "rarity": "common",
+      "defense": 0.03,
+      "hpBonus": 8,
+      "perk": "Minor increase to mana regeneration rate.",
+      "req": {
+        "level": 1
+      },
+      "buyWood": 30,
+      "buyFood": 20,
+      "buyCrystals": 2,
+      "iconPath": "ItemIcons/armor_mage_common",
+      "flavor": "Issued by the tutors on the first day. Washed twice a year whether it needed it or not."
+    },
+    {
+      "id": "armor_mage_epic",
+      "name": "Starwoven Robe",
+      "icon": "🧥",
+      "job": "mage",
+      "weight": "light",
+      "rarity": "epic",
+      "defense": 0.2,
+      "hpBonus": 65,
+      "perk": "Meteor Strike pulls nearby enemies toward the point of impact.",
+      "req": {
+        "level": 10
+      },
+      "buyWood": 400,
+      "buyFood": 100,
+      "buyCrystals": 80,
+      "iconPath": "ItemIcons/armor_mage_epic",
+      "makersMark": "Last-Pressing",
+      "flavor": "Dark as the space between stars, sewn with constellation patterns in silver-blue thread — what you wear when the sky is what you're drawing power from."
+    },
+    {
+      "id": "armor_mage_legendary",
+      "name": "Aethercloak of Elarion",
+      "icon": "🧥",
+      "job": "mage",
+      "weight": "light",
+      "rarity": "legendary",
+      "defense": 0.28,
+      "hpBonus": 90,
+      "perk": "Reduces all spell mana costs. Chance for spell echo on cast. Trails blue aether light when moving.",
+      "req": {
+        "level": 10
+      },
+      "buyWood": 1000,
+      "buyFood": 200,
+      "buyCrystals": 350,
+      "setId": "aethercloak",
+      "iconPath": "ItemIcons/armor_mage_legendary",
+      "makersMark": "Last-Pressing",
+      "saga": "The Keeper's robe from the Bright Centuries — deep void-black lined with living aether, constellation patterns that shift as the wearer moves. It was the master's. She wore it into the dark. It came back; she didn't."
+    },
+    {
+      "id": "armor_mage_rare",
+      "name": "Arcane Sigil Vestments",
+      "icon": "🧥",
+      "job": "mage",
+      "weight": "light",
+      "rarity": "rare",
+      "defense": 0.13,
+      "hpBonus": 40,
+      "perk": "Increases all spell damage. Runes on the vestments glow brighter with each successive cast.",
+      "req": {
+        "level": 6
+      },
+      "buyWood": 150,
+      "buyFood": 60,
+      "buyCrystals": 30,
+      "iconPath": "ItemIcons/armor_mage_rare",
+      "makersMark": "Last-Pressing",
+      "flavor": "The sigils were pressed into the cloth — orange runes that run across every panel. The vest does not look like armor. It looks like a warning."
+    },
+    {
+      "id": "armor_mage_uncommon",
+      "name": "Aetherweave Mantle",
+      "icon": "🧥",
+      "job": "mage",
+      "weight": "light",
+      "rarity": "uncommon",
+      "defense": 0.08,
+      "hpBonus": 22,
+      "perk": "Reduces Frost Nova cooldown.",
+      "req": {
+        "level": 3
+      },
+      "buyWood": 80,
+      "buyFood": 40,
+      "buyCrystals": 8,
+      "iconPath": "ItemIcons/armor_mage_uncommon",
+      "flavor": "Woven with aether thread — purple-trimmed, rune-edged, the kind of thing a mage wears when they want to be taken seriously."
+    },
+    {
       "id": "armor_plate",
       "name": "Elarion Plate",
       "icon": "🛡️",
@@ -70,22 +283,103 @@
       "makersMark": "Oathweld"
     },
     {
-      "id": "aegis_plate",
-      "name": "Aegis of Elarion",
-      "icon": "🛡️",
-      "job": "any",
-      "rarity": "legendary",
-      "defense": 0.28,
-      "hpBonus": 100,
+      "id": "armor_ranger_common",
+      "name": "Scout's Leather",
+      "icon": "🧥",
+      "job": "ranger",
+      "weight": "light",
+      "rarity": "common",
+      "defense": 0.05,
+      "hpBonus": 12,
+      "perk": "Slightly increased movement speed when no enemies are within close range.",
+      "req": {
+        "level": 1
+      },
+      "buyFood": 40,
+      "buyWood": 20,
+      "buyIron": 15,
+      "iconPath": "ItemIcons/armor_ranger_common",
+      "flavor": "The gear of those who range ahead and come back to report — light enough to run, tough enough to matter."
+    },
+    {
+      "id": "armor_ranger_epic",
+      "name": "Windstrider Coat",
+      "icon": "🧥",
+      "job": "ranger",
+      "weight": "light",
+      "rarity": "epic",
+      "defense": 0.22,
+      "hpBonus": 70,
+      "perk": "Dodge chance increases briefly after firing Suppressing Volley.",
       "req": {
         "level": 10
       },
-      "buyWood": 300,
-      "buyIron": 2000,
+      "buyFood": 150,
+      "buyWood": 600,
+      "buyCrystals": 55,
+      "iconPath": "ItemIcons/armor_ranger_epic",
+      "makersMark": "Heartwood",
+      "flavor": "A long coat of dark treated leather, silver swirls worked into the lining — built by a scout who survived every patrol she was sent on."
+    },
+    {
+      "id": "armor_ranger_legendary",
+      "name": "Leafcloak of Elarion",
+      "icon": "🧥",
+      "job": "ranger",
+      "weight": "light",
+      "rarity": "legendary",
+      "defense": 0.3,
+      "hpBonus": 95,
+      "perk": "Aim charges faster. Nature-adjacent damage bonus on all ranged attacks. Glows faintly green near the Heart.",
+      "req": {
+        "level": 10
+      },
+      "buyFood": 300,
+      "buyWood": 1500,
       "buyCrystals": 200,
-      "setId": "aegis",
-      "makersMark": "Oathweld",
-      "saga": "The reforged Aegis — Borin's steel, Halvard's Oathweld plating, Pell's Heartwood core, Wren's Last Pressing. Worn with a full Aegis weapon, the Oathweld returns a portion of damage taken as a ward on the Heart."
+      "setId": "leafcloak",
+      "iconPath": "ItemIcons/armor_ranger_legendary",
+      "makersMark": "Heartwood",
+      "saga": "The first scout who came back from the outer paths wore this. It was grown for her by the Tree itself — the leaves are not attached, they are part of the armor. It has never been fully still."
+    },
+    {
+      "id": "armor_ranger_rare",
+      "name": "Heartwood Warden",
+      "icon": "🧥",
+      "job": "ranger",
+      "weight": "light",
+      "rarity": "rare",
+      "defense": 0.16,
+      "hpBonus": 50,
+      "perk": "Increases critical chance on ranged attacks.",
+      "req": {
+        "level": 6
+      },
+      "buyFood": 100,
+      "buyWood": 300,
+      "buyCrystals": 12,
+      "iconPath": "ItemIcons/armor_ranger_rare",
+      "makersMark": "Heartwood",
+      "flavor": "Heartwood-grown leather with living leaf overlays — the forest remembers who wore it and which way they were running."
+    },
+    {
+      "id": "armor_ranger_uncommon",
+      "name": "Shadowhide Vest",
+      "icon": "🧥",
+      "job": "ranger",
+      "weight": "light",
+      "rarity": "uncommon",
+      "defense": 0.1,
+      "hpBonus": 28,
+      "perk": "Extends Snare Arrow root duration.",
+      "req": {
+        "level": 3
+      },
+      "buyFood": 100,
+      "buyWood": 60,
+      "buyIron": 40,
+      "iconPath": "ItemIcons/armor_ranger_uncommon",
+      "flavor": "Cured in dark oils to cut the gleam — what you wear when being seen is the real danger."
     },
     {
       "id": "blink_armor_basic1",
@@ -113,6 +407,33 @@
       "buyIron": 20,
       "buyCrystals": 0,
       "iconPath": "ItemIcons/blink_armor_basic1"
+    },
+    {
+      "id": "blink_armor_basic10",
+      "name": "Basic10 (Blink)",
+      "icon": "🧥",
+      "kind": "Gear",
+      "category": "outfit",
+      "job": "any",
+      "hand": "1h",
+      "damageType": "melee",
+      "rarity": "common",
+      "prefabPath": "gear/armor/Basic10_Male",
+      "generated": true,
+      "manual": false,
+      "loadVia": "addressable",
+      "slot": "Body",
+      "weight": "light",
+      "defense": 0.04,
+      "hpBonus": 10.0,
+      "req": {
+        "level": 1
+      },
+      "buyWood": 20,
+      "buyFood": 20,
+      "buyIron": 20,
+      "buyCrystals": 0,
+      "iconPath": "ItemIcons/blink_armor_basic10"
     },
     {
       "id": "blink_armor_basic2",
@@ -329,33 +650,6 @@
       "buyIron": 20,
       "buyCrystals": 0,
       "iconPath": "ItemIcons/blink_armor_basic9"
-    },
-    {
-      "id": "blink_armor_basic10",
-      "name": "Basic10 (Blink)",
-      "icon": "🧥",
-      "kind": "Gear",
-      "category": "outfit",
-      "job": "any",
-      "hand": "1h",
-      "damageType": "melee",
-      "rarity": "common",
-      "prefabPath": "gear/armor/Basic10_Male",
-      "generated": true,
-      "manual": false,
-      "loadVia": "addressable",
-      "slot": "Body",
-      "weight": "light",
-      "defense": 0.04,
-      "hpBonus": 10.0,
-      "req": {
-        "level": 1
-      },
-      "buyWood": 20,
-      "buyFood": 20,
-      "buyIron": 20,
-      "buyCrystals": 0,
-      "iconPath": "ItemIcons/blink_armor_basic10"
     },
     {
       "id": "blink_armor_bear",

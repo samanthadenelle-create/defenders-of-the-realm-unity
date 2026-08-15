@@ -45,6 +45,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
 using UnityEngine.ResourceManagement.AsyncOperations;
+using UnityEngine.SceneManagement;
 using DeNelle.Core;
 using DeNelle.Core.Diagnostics;
 using DeNelle.Core.Geometry;
@@ -481,6 +482,38 @@ namespace DeNelle.Village
             // attachment-offsets.json wins over shipped defaults per id).
             AttachmentOffsetRegistry.Reload();
             EquipBestForHero();
+            // WO-994: dungeon→town port breaks shield seat — height cache + hold pose must re-run
+            // after the hub body/height settles (owner: seat is perfect until that transition only).
+            SceneManager.sceneLoaded -= OnSceneLoadedReapplyGear;
+            SceneManager.sceneLoaded += OnSceneLoadedReapplyGear;
+        }
+
+        private void OnSceneLoadedReapplyGear(Scene scene, LoadSceneMode mode)
+        {
+            if (!isActiveAndEnabled) return;
+            // Hub/castle after dungeon is the failure mode; still safe to reapply on any load.
+            StartCoroutine(CoReapplyGearAfterSceneLoad(scene.name));
+        }
+
+        private IEnumerator CoReapplyGearAfterSceneLoad(string sceneName)
+        {
+            // Wait for HeroBody swap / height retarget (dungeon keeper vs town body).
+            yield return null;
+            yield return null;
+            InvalidateHeroHeightCache();
+            CacheRig();
+            // Full re-equip so NormalizeInto + fullOverride seat against the NEW height/scale.
+            EquipBestForHero();
+            ApplyHoldPose();
+            FlowTrace.Step("Equip",
+                $"WO-994 post-scene gear reapply scene='{sceneName}' height={_cachedHeroHeightM:0.###}m " +
+                $"offHand={(_currentOffHandProp != null)} weapon={(_gripRoot != null)}");
+        }
+
+        /// <summary>WO-994: clear proportional height so the next seat uses live body bounds.</summary>
+        public void InvalidateHeroHeightCache()
+        {
+            _cachedHeroHeightM = 0f;
         }
 
         // Idempotent: resolve the GearLoadout (it may be added AFTER this controller on the
@@ -524,6 +557,7 @@ namespace DeNelle.Village
 
         private void OnDisable()
         {
+            SceneManager.sceneLoaded -= OnSceneLoadedReapplyGear;
             if (_loadout != null && _subscribed) _loadout.OnGearChanged -= HandleGearChanged;
             _subscribed = false;
             // Release any open Addressables weapon handle so a Blink prefab never leaks
@@ -1698,10 +1732,6 @@ namespace DeNelle.Village
                 if (gripRoot != null) Destroy(gripRoot);
                 return;
             }
-            FlowTrace.Step("Equip", $"AttachOffHandProp: off-hand '{id}' verified rendered + seated on '{hand.name}' " +
-                $"(native={vis.native}, localPos={gripRoot.transform.localPosition}, worldPos={gripRoot.transform.position}). " +
-                "§12: if the owner still sees it off the arm, this is the exact landed seat to tune the Blink grip against.");
-
             // Record the DRAWN off-hand target, then place by carry state (drawn on the off-hand in
             // combat, sheathed on the back socket out of combat) — same as the main weapon, so the
             // shield is not shown floating on the arm in town (owner design 2026-07-04).
@@ -1709,6 +1739,24 @@ namespace DeNelle.Village
             _offHandDrawnLocalPos = gripRoot.transform.localPosition;
             _offHandDrawnLocalRot = gripRoot.transform.localRotation;
             ApplyHoldPose();
+
+            // WO-994 C: measured world pose AFTER ApplyHoldPose (the hollow pre-pose line only
+            // echoed offsets.json and ran before the carry-state re-parent).
+            Transform propChild = gripRoot.transform.childCount > 0 ? gripRoot.transform.GetChild(0) : null;
+            var rend = gripRoot.GetComponentInChildren<Renderer>();
+            Bounds wb = rend != null ? rend.bounds : new Bounds(gripRoot.transform.position, Vector3.zero);
+            string parentName = gripRoot.transform.parent != null ? gripRoot.transform.parent.name : "<null>";
+            bool drawnNow = _combatActive && !(_seatingEditActive && _seatEditSheathed);
+            FlowTrace.Step("Equip",
+                $"AttachOffHandProp MEASURED after hold: id='{id}' parent='{parentName}' " +
+                $"state={(drawnNow ? "DRAWN" : "SHEATHED")} fullOverride={fullOverride} " +
+                $"comp={_offHandParentCompensate} " +
+                $"gripLocalEuler={gripRoot.transform.localEulerAngles} " +
+                $"propLocalEuler={(propChild != null ? propChild.localEulerAngles.ToString() : "n/a")} " +
+                $"worldEuler={gripRoot.transform.eulerAngles} " +
+                $"worldBounds=c{wb.center} s{wb.size} " +
+                $"boneLossy={(gripRoot.transform.parent != null ? gripRoot.transform.parent.lossyScale.ToString() : "n/a")} " +
+                $"worldPos={gripRoot.transform.position}");
         }
 
         private void DestroyCurrentOffHand()
@@ -1854,7 +1902,11 @@ namespace DeNelle.Village
                 if (!drawn && back != null)
                 {
                     offT.SetParent(back, false);
-                    CompensateParentScale(offT, _offHandAuthoredScale);
+                    // WO-994 B: sheathed path used to compensate UNCONDITIONALLY while the drawn
+                    // path respected _offHandParentCompensate (false for fullOverride shields).
+                    // That made one prop render at two sizes (hand vs back). Same guard both ways.
+                    if (_offHandParentCompensate)
+                        CompensateParentScale(offT, _offHandAuthoredScale);
                     offT.localPosition = _sheatheOffHandLocalPos;
                     // DE-BAND-AID NOTE (2026-07-07): _sheatheOffHandLocalEuler (the hand-tuned magic
                     // euler, owner Z+=180 correction 2026-07-04) is now only the DEFAULT under the

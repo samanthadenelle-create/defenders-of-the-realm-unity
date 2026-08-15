@@ -2160,6 +2160,9 @@ namespace DeNelle.Village
         {
             if (_dead || amount <= 0f) return;
 
+            // WO-910 Hunter's Mark: marked foes take amplified damage.
+            amount = CombatMark.ScaleDamage(this, amount);
+
             // Ticket #61: consume the hero-source stamp ONCE for this hit. Only the hero's
             // attack/ability paths stamp it true (via EnemyDamageable.MarkNextHitFromHero);
             // tower / pet / DoT / environment leave it false. Gates the combo / kill-streak /

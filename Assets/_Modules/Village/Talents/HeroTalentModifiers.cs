@@ -65,6 +65,31 @@ namespace DeNelle.Village.Talents
             return Mathf.Clamp(1f + sum, 1f, MaxDamageMultiplier);
         }
 
+        // ── WO-910 cluster 1: plain combat stats (attackSpeed / moveSpeed / critChance) ──
+        private const float MaxAttackSpeedMult = 2.0f;   // +100% swings ceiling
+        private const float MaxMoveSpeedMult   = 1.75f;  // +75% run ceiling
+        private const float MaxCritChance      = 0.50f;  // 50% crit chance ceiling
+
+        /// <summary>1 + Σ(attackSpeed). PlayerAttackController shortens swing cooldown.</summary>
+        public static float AttackSpeedMultiplier(string heroClass)
+        {
+            float sum = StatSum(heroClass, "attackSpeed");
+            return Mathf.Clamp(1f + sum, 1f, MaxAttackSpeedMult);
+        }
+
+        /// <summary>1 + Σ(moveSpeed). Multiplied on top of injured slow in HeroLocomotion.</summary>
+        public static float MoveSpeedMultiplier(string heroClass)
+        {
+            float sum = StatSum(heroClass, "moveSpeed");
+            return Mathf.Clamp(1f + sum, 1f, MaxMoveSpeedMult);
+        }
+
+        /// <summary>Σ(critChance) additive chance [0..MaxCritChance]. Melee basic attack.</summary>
+        public static float CritChanceBonus(string heroClass)
+        {
+            return Mathf.Clamp(StatSum(heroClass, "critChance"), 0f, MaxCritChance);
+        }
+
         public static float CooldownMultiplier(string heroClass)
         {
             float sum = StatSum(heroClass, "cdReduction") + LegacyCooldown(heroClass);
@@ -308,11 +333,27 @@ namespace DeNelle.Village.Talents
             return m == null ? 1f : Mult(m.MageManaRegenMult, 1f / MaxMageManaRegen, MaxMageManaRegen);
         }
 
-        /// <summary>Cathedral mana-COST multiplier (0.85 = costs 15% less). 1 baseline.</summary>
+        /// <summary>Cathedral mana-COST multiplier (0.85 = costs 15% less). 1 baseline.
+        /// WO-910: also folds talent <c>manaCostReduction</c> (additive fraction off cost).</summary>
         public static float MageManaCostMultiplier(string heroClass)
         {
             var m = ActiveMageMods(heroClass);
-            return m == null ? 1f : Mult(m.MageManaCostMult, MinMageManaCost, MaxMageManaCost);
+            float cathedral = m == null ? 1f : Mult(m.MageManaCostMult, MinMageManaCost, MaxMageManaCost);
+            float talentCut = Mathf.Clamp(StatSum(heroClass, "manaCostReduction"), 0f, 0.5f);
+            return Mathf.Clamp(cathedral * (1f - talentCut), MinMageManaCost, 1f);
+        }
+
+        /// <summary>1 + Σ(range). Melee/ability reach scale (WO-910).</summary>
+        public static float RangeMultiplier(string heroClass)
+        {
+            float sum = StatSum(heroClass, "range");
+            return Mathf.Clamp(1f + sum, 1f, 1.75f);
+        }
+
+        /// <summary>Σ(dodge) chance to fully ignore a hit [0..0.5] (WO-910).</summary>
+        public static float DodgeChance(string heroClass)
+        {
+            return Mathf.Clamp(StatSum(heroClass, "dodge"), 0f, 0.5f);
         }
 
         /// <summary>Cathedral Arcane Shell strength multiplier, applied to the shield's REDUCTION

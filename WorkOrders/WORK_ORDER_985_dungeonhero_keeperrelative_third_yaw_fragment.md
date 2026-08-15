@@ -1,6 +1,6 @@
 # WORK ORDER 985 — `DungeonHero`'s dead `KeeperRelative` branch is a third copy of a yaw offset whose pair was removed
 
-**Status:** READY TO IMPLEMENT
+**Status:** IMPLEMENTED — 2026-08-15 (`ModelYawOffset` 90→0; coupled to FaceHeading; branch still dead)
 **Minted:** 2026-08-14 (CLI)
 **Silo:** Dungeon locomotion / camera
 **Lane:** Dungeon — conflicts with any other work in `DungeonHero.cs` / `DungeonCameraRig.cs`; one agent at a time

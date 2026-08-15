@@ -258,9 +258,12 @@ namespace DeNelle.Village
             }
 
             float targetH = (cls == HeroClass.Knight) ? TargetHeightMeters * 1.0286f : TargetHeightMeters;
-            // WO-326: -90f was the legacy forward-yaw for the Tripo/AccuRIG FBXs.
-            // Knight LOCKED via Offset Forge 2026-06-23: forwardYaw +15 (owner felt-verified perfect).
-            float forwardYaw = (cls == HeroClass.Knight) ? 15f : -90f;
+            // WO-326 / WO-966: Knight LOCKED via Offset Forge 2026-06-23: forwardYaw +15
+            // (owner felt-verified). Mage/Ranger legacy FBXs used a guessed -90 that HeroFacingAudit
+            // measured as ~94° off travel heading. They skin at identity yaw; WireHeroBody then runs
+            // AlignBodyFacingToRoot (shoulder axis = same measure as the audit) to derive residual.
+            // Knight keeps the hardcoded seat and SKIPS self-correct (hip-derived mis-reads Tripo).
+            float forwardYaw = (cls == HeroClass.Knight) ? 15f : 0f;
             GameObject body = null;
             Guard.Try("HeroBody", "VisualFactory.Skin (legacy Resources)", () =>
             {
@@ -283,7 +286,10 @@ namespace DeNelle.Village
             }
             body.name = "HeroBody";
 
-            WireHeroBody(body, cls, slug, controllerSnapshot, isBlink: false);
+            // WO-966: non-Knight legacy needs skeleton-derived facing (shared with dungeon Keeper
+            // via the same HeroBody path). Knight stays on the locked +15 with no self-correct.
+            WireHeroBody(body, cls, slug, controllerSnapshot, isBlink: false,
+                alignFacingToRoot: cls != HeroClass.Knight);
         }
 
         // ─────────────────────────────────────────────────────────────────────────────
@@ -514,7 +520,8 @@ namespace DeNelle.Village
         // Tripo/CC5 material + embedded-strip + sole-nudge steps are skipped (clean assets).
         private void WireHeroBody(GameObject body, HeroClass cls, string slug,
                                   RuntimeAnimatorController controllerSnapshot, bool isBlink,
-                                  bool usePackage = false, bool useKnightV3 = false)
+                                  bool usePackage = false, bool useKnightV3 = false,
+                                  bool alignFacingToRoot = false)
         {
             // DEF-232 spawn-time validation: the camera (SmartMobileCamera) follows the hero
             // ROOT by tag; HeroLocomotion drives that same root. The visible body must sit
@@ -649,15 +656,13 @@ namespace DeNelle.Village
                         "Defenders → Animation → Setup " + slug + " Animator. Hero will not animate.");
             }
 
-            // DEF-232 (facing) self-correct — for the BLINK rig only. The Blink body comment above
-            // (BuildBlinkHeroBody) relies on this skeleton-derived alignment because Blink applies NO
-            // forward yaw. The LEGACY Tripo body already carries the PROVEN static -90° yaw
-            // (BuildLegacyResourcesBody, the EXACT same convention the orcs use in EnemyFactory:
-            // LocalRotation = Euler(0,-90,0)). Re-deriving forward from the hip lateral axis on the
-            // Tripo Knight rig mis-reads its bind pose and rotates the already-correct body ~90° off —
-            // the "walking NORTH but FACING EAST" regression. Skip the self-correct on the legacy path
-            // so the Knight keeps its proven -90° (model-forward = move-forward), matching the orcs.
-            if (isBlink)
+            // DEF-232 / WO-966 (facing) self-correct.
+            // Blink: always (no authored forward yaw on the skin).
+            // Legacy Mage/Ranger: also (guessed -90 was ~94° off per HeroFacingAudit); they skin at
+            // identity and derive residual here via the SAME shoulder axis the audit uses.
+            // Legacy Knight / KnightV3: NEVER — locked +15 seat; hip-derived self-correct was the
+            // "walking NORTH but FACING EAST" regression.
+            if (isBlink || alignFacingToRoot)
                 AlignBodyFacingToRoot(body, anim);
             // PACKAGE: do NOT overwrite — the prefab's bound KnightPackage.controller is already live on
             // this animator (Skin preserved it). Re-assigning would be a no-op here but the guard makes
@@ -2138,33 +2143,41 @@ namespace DeNelle.Village
         }
 
         /// <summary>
-        /// DEF-232 (facing) self-correct. The legacy fix rotated EVERY hero body by a hard-coded
-        /// -90° on the assumption all meshes import facing +X. That's a guessed Euler: a body that
-        /// imports facing some other axis is left angled, so the character STRAFES across the screen
-        /// ("walks at 45°") even though HeroLocomotion drives the ROOT dead-straight (proven by
-        /// world-coords). Here we DERIVE the body's true forward from the skeleton — the hip-to-hip
-        /// vector is the character's lateral axis on EVERY humanoid rig, so forward = right × up is
-        /// rig-independent (no guess) — then rotate the body by only the RESIDUAL needed to match the
-        /// root's heading. Residual + 5° deadzone ⇒ an already-aligned body (the working heroes) gets
-        /// a NO-OP; this can ONLY fix a misaligned body, never disturb a correct one. Non-humanoid /
-        /// unmappable rigs fall back to the base seat untouched.
+        /// DEF-232 / WO-966 (facing) self-correct. DERIVE the body's true forward from the skeleton
+        /// then rotate only the RESIDUAL so mesh forward matches the root heading.
+        ///
+        /// ⚠ MEASURE AXIS = SHOULDERS (LeftUpperArm → RightUpperArm), the SAME maths as
+        /// <c>RangerBodyBuilder.MeasureForwardYawNeeded</c> / <c>HeroFacingAudit</c>. An earlier
+        /// hip-axis version disagreed with the audit deadzone and could not be trusted to land
+        /// the number the audit reported. Hips remain a last-resort fallback only.
+        ///
+        /// Residual + 5° deadzone ⇒ already-aligned body is a NO-OP. Non-humanoid / unmappable
+        /// rigs leave the base seat untouched.
         /// </summary>
         private void AlignBodyFacingToRoot(GameObject body, Animator anim)
         {
             if (body == null || anim == null) return;
             if (!anim.isHuman || anim.avatar == null || !anim.avatar.isValid) return;
 
-            var leftLeg  = anim.GetBoneTransform(HumanBodyBones.LeftUpperLeg);
-            var rightLeg = anim.GetBoneTransform(HumanBodyBones.RightUpperLeg);
-            if (leftLeg == null || rightLeg == null) return;     // can't derive — keep the base seat
+            // WO-966: prefer shoulders (audit parity); hips only if arms missing.
+            Transform left  = anim.GetBoneTransform(HumanBodyBones.LeftUpperArm);
+            Transform right = anim.GetBoneTransform(HumanBodyBones.RightUpperArm);
+            string axis = "shoulder";
+            if (left == null || right == null)
+            {
+                left  = anim.GetBoneTransform(HumanBodyBones.LeftUpperLeg);
+                right = anim.GetBoneTransform(HumanBodyBones.RightUpperLeg);
+                axis = "hip-fallback";
+            }
+            if (left == null || right == null) return;
 
-            // Character RIGHT = left-hip → right-hip (laterally placed on every humanoid), ground-projected.
-            Vector3 rightDir = rightLeg.position - leftLeg.position;
+            // Character RIGHT = left → right lateral, ground-projected.
+            Vector3 rightDir = right.position - left.position;
             rightDir.y = 0f;
-            if (rightDir.sqrMagnitude < 1e-6f) return;           // degenerate pose — bail safely
+            if (rightDir.sqrMagnitude < 1e-6f) return;
             rightDir.Normalize();
 
-            // FORWARD = right × up (Unity left-handed: Cross((1,0,0),(0,1,0)) == (0,0,1)).
+            // FORWARD = right × up (Unity LH: Cross(+X,+Y) = +Z).
             Vector3 bodyForward = Vector3.Cross(rightDir, Vector3.up);
 
             Vector3 rootForward = transform.forward;
@@ -2179,16 +2192,16 @@ namespace DeNelle.Village
             const float DeadzoneDeg = 5f;
             if (Mathf.Abs(delta) <= DeadzoneDeg)
             {
-                Debug.Log($"[HeroBodySwapper] facing OK — body within {delta:F1}° of root heading; no correction.");
+                FlowTrace.Step("HeroBody",
+                    $"facing OK — body within {delta:F1}° of root heading (axis={axis}); no correction.");
                 return;
             }
 
-            // Rotate the body about its OWN origin (position preserved) to face the root heading.
             body.transform.rotation = Quaternion.AngleAxis(delta, Vector3.up) * body.transform.rotation;
-            Debug.Log($"[HeroBodySwapper] facing self-correct: skeleton forward {curYaw:F0}° vs root {tgtYaw:F0}° → rotated body {delta:F0}° (derive-from-skeleton, replaces guessed -90°).");
+            FlowTrace.Step("HeroBody",
+                $"facing self-correct: skeleton forward {curYaw:F0}° vs root {tgtYaw:F0}° → " +
+                $"rotated body {delta:F0}° (axis={axis}, WO-966 shoulder-parity).");
 
-            // A yaw on an off-pivot mesh can shift its bounds — re-centre XZ and re-plant feet so the
-            // body stays dead-on the root the camera follows.
             ValidateBodyCentredOverRoot(body);
             PlantFeetOnGround(body);
         }

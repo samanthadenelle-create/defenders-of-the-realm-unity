@@ -127,7 +127,12 @@ namespace DeNelle.Editor
             // WO-974: build Addressables content EXPLICITLY (see AddressablesContentBuild).
             // Matters most here: the web payload is served remotely, so an absent catalog is
             // invisible until a player loads the deployed build and nothing resolves.
-            AddressablesContentBuild.EnsureBuilt("WebGLBuild");
+            if (!AddressablesContentBuild.EnsureBuilt("WebGLBuild"))
+            {
+                Debug.LogError("[WebGLBuild] ABORTED — Addressables content build failed (WO-974).");
+                EditorApplication.Exit(1);
+                return;
+            }
 
             BuildReport report = BuildPipeline.BuildPlayer(options);
             BuildSummary summary = report.summary;

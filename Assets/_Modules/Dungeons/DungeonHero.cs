@@ -456,8 +456,15 @@ namespace DeNelle.Dungeons
 
         private const StickBasis DungeonStickBasis = StickBasis.CameraRelative;
 
-        /// <summary>Degrees the Tripo FBX visual forward leads the root transform (DEF-7).</summary>
-        private const float ModelYawOffset = 90f;
+        /// <summary>
+        /// WO-985: was 90f as the third copy of the FaceHeading/-90 + camera/+90 pair.
+        /// FaceHeading no longer offsets (2026-08-14), so KeeperRelative MUST use 0 — root
+        /// forward IS visual forward. Coupled to <see cref="FaceHeading"/> only, not to
+        /// DungeonCameraRig._headingYawOffset. Branch is still dead (DungeonStickBasis =
+        /// CameraRelative); if ever switched on, leave this at 0 unless FaceHeading re-gains
+        /// a model offset.
+        /// </summary>
+        private const float ModelYawOffset = 0f;
 
         private float _nextBasisFailAt;
 
@@ -481,11 +488,8 @@ namespace DeNelle.Dungeons
 
             if (DungeonStickBasis == StickBasis.KeeperRelative)
             {
-                // ⚠ STALE AS OF 2026-08-14 — this branch is DEAD (DungeonStickBasis is
-                // CameraRelative) and its premise is now false: FaceHeading no longer applies a
-                // -90 model offset, so the root forward IS the visual forward and this +90 would
-                // over-rotate. If KeeperRelative is ever switched on, ModelYawOffset must go to 0
-                // or be derived — do not resurrect this branch as written.
+                // WO-985: branch still DEAD (basis = CameraRelative). ModelYawOffset is 0 so if
+                // ever enabled it reads stick against root/visual forward (FaceHeading pair).
                 Quaternion visual = transform.rotation * Quaternion.Euler(0f, ModelYawOffset, 0f);
                 fwd = Vector3.ProjectOnPlane(visual * Vector3.forward, Vector3.up);
                 right = Vector3.ProjectOnPlane(visual * Vector3.right, Vector3.up);

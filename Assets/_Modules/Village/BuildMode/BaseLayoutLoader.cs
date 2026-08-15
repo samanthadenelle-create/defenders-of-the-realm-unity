@@ -266,6 +266,14 @@ namespace DeNelle.Village
                     $"Spawn: BaseLayout id '{data.itemId}' not in registry — structure skipped (one building lost).");
                 return null;
             }
+            // WO-989: rewrite persisted legacy ids to canonical so the next save is clean.
+            string canonicalId = CatalogRegistry.CanonicalStructureId(data.itemId);
+            if (!string.IsNullOrEmpty(canonicalId) && canonicalId != data.itemId)
+            {
+                FlowTrace.Step("BaseLayout",
+                    $"WO-989 spawn id migrate '{data.itemId}' -> '{canonicalId}'");
+                data.itemId = canonicalId;
+            }
 
             var cell = new Vector2Int(data.cellX, data.cellZ);
             Vector3 pos = grid.CellToWorld(cell);
@@ -314,9 +322,10 @@ namespace DeNelle.Village
             // different cell set than placement promised and the run would re-break on load.
             // The BLOCKER is unaffected in practice: AddFootprintBlocker sizes the box as
             // Clamp(rendered * 0.85, cellSize, claim), which is 3x3 m for a wall at either claim.
-            float footprintMetres = StructureFactory.MeasureClaimFootprintMetres(entry);
-            Vector2Int blockerFootprint = grid.FootprintCells(footprintMetres);
-            Vector2Int footprint = grid.FootprintCells(footprintMetres, yawDeg);
+            // WO-986: same non-square claim as BuildModeController (save replay must match place).
+            Vector2 claimXz = StructureFactory.MeasureClaimFootprintXZ(entry);
+            Vector2Int blockerFootprint = grid.FootprintCells(claimXz);
+            Vector2Int footprint = grid.FootprintCells(claimXz, yawDeg);
 
             AddFootprintBlocker(go, blockerFootprint, grid.cellSize);
 

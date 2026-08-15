@@ -398,7 +398,7 @@ namespace DeNelle.Editor
             AddTowerShots(shots, "tower_arcane_spire", "Arcane Spire");
             AddTowerShots(shots, "tower_catapult", "Catapult");
             AddTowerShots(shots, "tower_siege_tower", "Sky Ballista (Anti-Air)");
-            AddTowerShots(shots, "tower_wall_wizard", "Ballista");
+            AddTowerShots(shots, "tower_ballista", "Ballista");
 
             // === 16  A building on fire -- the LIVE path ========================
             // StructureBurn is the one owner of a burning structure (StructureBurn.cs
@@ -623,7 +623,8 @@ namespace DeNelle.Editor
         private static string ProjectileKeyFor(string catalogId, DamageElement element,
                                                string style, bool airOnly, int tier)
         {
-            if (string.Equals(catalogId, "tower_wall_wizard", StringComparison.Ordinal))
+            if (string.Equals(catalogId, "tower_ballista", StringComparison.Ordinal)
+                || string.Equals(catalogId, "tower_wall_wizard", StringComparison.Ordinal))
                 return "SimpleCast_Projectile";   // owner tag, :1201
 
             string s = (style ?? string.Empty).Trim().ToLowerInvariant();

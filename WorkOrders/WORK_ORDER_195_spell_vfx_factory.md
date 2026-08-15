@@ -1,6 +1,6 @@
 # WORK_ORDER_124: Unified VFX Factory (Three-Library Router) + Spell System + Polish
 
-**Status:** PARTIAL - remainder named by the 2026-08-14 phantom sweep
+**Status:** CLOSED — SUPERSEDED by WO-935 unified cast spine (factory code remains).
 
 > **PARTIAL - re-scoped 2026-08-14 (phantom sweep).** Most of this WO is present in HEAD; a named
 > remainder is outstanding. No per-WO path:line was recorded here: see the 2026-08-14 phantom sweep for the

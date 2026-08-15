@@ -138,6 +138,14 @@ namespace DeNelle.Editor
             { "healthregen",         "HeroHealth.RegenTick via HeroTalentModifiers.HealthRegenBonus (WO-676 G3 wire — town/Oathmend regen paths)" },
             { "manaregen",           "HeroAbilities.Update mana tick via HeroTalentModifiers.ManaRegenBonus (WO-676 G3 wire)" },
 
+            // ── WO-910 cluster 1 (owner path B full design — cheap stats first) ──
+            { "attackspeed",         "PlayerAttackController swing cooldown via HeroTalentModifiers.AttackSpeedMultiplier (WO-910)" },
+            { "movespeed",           "HeroLocomotion velocity via HeroTalentModifiers.MoveSpeedMultiplier (WO-910)" },
+            { "critchance",          "PlayerAttackController melee crit roll via HeroTalentModifiers.CritChanceBonus (WO-910)" },
+            { "range",               "PlayerAttackController.EffectiveRange via HeroTalentModifiers.RangeMultiplier (WO-910)" },
+            { "dodge",               "HeroHealth.TakeDamage dodge roll via HeroTalentModifiers.DodgeChance (WO-910)" },
+            { "manacostreduction",   "HeroAbilities.ManaCostOf via HeroTalentModifiers.MageManaCostMultiplier talent fold (WO-910)" },
+
             // ── WO-676 strategic types (consumers land in the concurrent A1/A2
             //    lanes this batch; the composed tree is gated as one — if a lane
             //    slips, the citation is the work order for wiring it) ──────────
@@ -204,13 +212,9 @@ namespace DeNelle.Editor
         // =====================================================================
         //  KnownDeadNodeBaseline — TRACKED DEBT, dated 2026-08-05, WO-910
         // ---------------------------------------------------------------------
-        //  31 nodes (17 ranger + 14 mage) are PLAYER-REACHABLE talents whose effect
-        //  has NO implemented consumer, pending an OWNER DESIGN PASS (WO-910). They
-        //  are listed here so G3 keeps AUDITING them and reports them as tracked debt
-        //  instead of either lying about them or blocking every other lane's gate.
-        //  Split: 16 unregistered-effect-key + 15 registered-key-with-a-stub-note.
-        //  Knight (32 nodes) and shared (9) are fully green — this is isolated to the
-        //  two classes unlocked on 2026-08-05.
+        //  TRACKED DEBT for Ranger/Mage (owner path B full design, WO-910). The ratchet
+        //  only SHRINKS: 2026-08-15 cluster 1 wired attackSpeed/moveSpeed/critChance and
+        //  pruned those four ids from this set. Remaining debt must be designed + wired.
         //
         //  WHY A BASELINE AND NOT "hidden": true ON EACH NODE (the rejected fix —
         //  this reasoning must survive, or someone will "fix" this by hiding them):
@@ -234,25 +238,20 @@ namespace DeNelle.Editor
         // =====================================================================
         private static readonly HashSet<string> KnownDeadNodeBaseline = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
-            // -- unregistered effect key: no consumer exists anywhere (16) --
-            "ranger.t1n1",  // Quick Draw            attackSpeed
-            "ranger.t2n1",  // Windstrider Boots     moveSpeed
-            "ranger.t2n3",  // Eagle Vision          critChance
+            // pruned 2026-08-15 cluster 1+2: attackSpeed, moveSpeed, critChance, dodge,
+            // manaCostReduction, range; damageBonus notes cleared on mage.t4n2/t4n3
             "ranger.t2n4",  // Deep Freeze           modifyAbility:slow
             "ranger.t2n5",  // Shadow Veil           stealth
             "ranger.t3n2",  // Emberhead             modifyAbility:burn
-            "ranger.t3n3",  // Leafcloak             dodge
             "ranger.t3n4",  // Beast Companion       summon
-            "ranger.t4n2",  // Windstrider Legend    moveSpeed
             "ranger.t4n3",  // Phantom Hunter        stealth
             "ranger.t4n4",  // Nature's Fury         onEvent
             "mage.t2n1",    // Aether Surge          onEvent
             "mage.t2n3",    // Arcane Shield         shieldStrength
-            "mage.t3n3",    // Aether Form           manaCostReduction
             "mage.t3n4",    // Runic Overload        onEvent
             "mage.t4n4",    // Reality Rift          onEvent
-            // -- registered key, but the note declares a stub the consumer does not deliver (15) --
-            "ranger.t1n2",  // Hunter's Mark         unlockAbility "(NEW ability - stub)"
+            // -- registered key, stub note / real feature still owed --
+            // pruned ranger.t1n2 Hunter's Mark — unlockAbility + CombatMark on ability hit
             "ranger.t1n3",  // Tumble Step           unlockAbility "(NEW ability - stub)"
             "ranger.t1n5",  // Arrow Storm Prep      unlockAbility "(NEW ability - stub)"
             "ranger.t3n5",  // Precision Strike      unlockAbility "(NEW ability - stub)"
@@ -264,8 +263,6 @@ namespace DeNelle.Editor
             "mage.t3n2",    // Spell Echo            proc "duplicate (V2)"
             "mage.t3n5",    // Void Rift             unlockAbility "(NEW ability - stub)"
             "mage.t4n1",    // Cataclysm             unlockAbility "(NEW ability - stub)"
-            "mage.t4n2",    // Aetherweaver Ascension damageBonus "(V2)"
-            "mage.t4n3",    // Eternal Arcana        damageBonus "+40% mana regen (V2)"
             "mage.t4n5",    // Elarion's Legacy      proc "duplicate (V2)"
         };
 
