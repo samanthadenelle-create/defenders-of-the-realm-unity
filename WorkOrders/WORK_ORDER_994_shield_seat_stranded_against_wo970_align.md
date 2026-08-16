@@ -236,3 +236,35 @@ half already existed (`AttachOffHandProp MEASURED after hold`). Brace + NUL gate
 all three files. NO seat numbers, offsets, guards, or frame counts changed.
 Next: CLI batch-gates (`COMPILE_GATE_OK`) + commits, deploy to Seeker, owner plays ONE
 dungeon->town port with the shield, pull the capture — probes decide A vs B vs C.
+
+### ADDENDUM 2026-08-16 — SEAT-DRIFT TRIPWIRE + PERMANENT GATE COVERAGE (owner directives:
+"always check the shield placement step-in values to the offset forge work and verify" /
+"the offset sets it correctly - look at the data at each point and compare")
+
+The authored Offset Forge seat is trusted-correct; the defect is a later step changing the
+numbers. Landed (working tree, FlowTrace/regression only - still no seat numbers touched):
+
+1. **Seat-drift tripwire** (`EquipmentController.cs`, fields + `RecordOffHandSeatWrite` +
+   `VerifyOffHandSeat` above `ApplyHoldPose`): every off-hand seat WRITE records a snapshot
+   (local TRS + parent + parent lossyScale). A write differing beyond tolerance (1cm /
+   0.5deg / 1%) from the last recorded write logs BOTH old and new values with the writer
+   name (`WO-994 seatWrite by=...` - the port bug = the same path writing different numbers
+   after the port). The scene-load checkpoint (`VerifyOffHandSeat("scene-load-pre-reapply")`,
+   called BEFORE the re-equip) emits `FlowTrace.Fail` (`WO-994 SEAT DRIFT at ...`) if the
+   live transform differs from the last logged write - an UNLOGGED writer, captured to
+   break-log WITH screenshot. Change-only: the per-frame ApplyHoldPose no-change path costs
+   two compares, no allocation, no log spam.
+2. **`AttachmentOffsetRegression` [attachment-offset]** (new file
+   `Assets/Editor/Regression/AttachmentOffsetRegression.cs`, registered above the
+   DataRegression END fence; markers `ATTACHMENT_OFFSET_OK/FAIL`): closes the audited
+   coverage gap (nothing anywhere covered AttachmentOffsetRegistry or seated-prop
+   transforms). Case 1 loads the real Resources-first registry and pins `shield_A`
+   (present + fullOverride + scale>0 + non-identity rot) and `shield_A@sheathed` (present)
+   WITHOUT pinning euler values (canon data, owner may re-dial). Case 2 comment-stripped
+   source lint: both tripwire writes, the scene-load checkpoint, both registry probes and
+   the fullOverride `Quaternion.Euler(fo.eulerRot)` application must stay wired.
+3. `AttachmentOffsetRegistry.Count` accessor supports Case 1 + probe 1.
+
+Brace + NUL gate green on all files. The tripwire makes the answer readable from ONE
+ported run: the last `seatWrite` line before the break vs the first line after names the
+exact step (or the SEAT DRIFT Fail names the unlogged writer).

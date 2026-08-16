@@ -509,6 +509,10 @@ namespace DeNelle.Village
             yield return null;
             InvalidateHeroHeightCache();
             CacheRig();
+            // WO-994 tripwire checkpoint: BEFORE the re-equip touches anything, assert the
+            // surviving shield still sits exactly where the last logged write put it. Drift
+            // here = the PORT itself (or an unlogged writer during the load) moved the seat.
+            VerifyOffHandSeat("scene-load-pre-reapply");
             // WO-994 probes 1+2 (candidates A+B): registry state + bake-marker/body identity
             // at the exact frame the re-seat runs. The frame number orders the race against
             // HeroBodySwapper's marker-add line (which logs its own frame).
@@ -1913,6 +1917,85 @@ namespace DeNelle.Village
         // renders in combat (where it seats right); out of combat there is no hand grip to look wrong,
         // and the retired IdleHoldOffsetEuler tilt (the single context-dependent rotation) is gone.
         // Runs on every combat-state change (Update auto-mirror / SetCombatActive) and once per attach.
+        // ── WO-994 SEAT DRIFT TRIPWIRE (owner 2026-08-16: "the offset sets it correctly —
+        // look at the data at each point and compare"). Every WRITE of the off-hand seat
+        // records a snapshot; a write whose numbers differ beyond tolerance from the LAST
+        // recorded write logs BOTH old and new (the port bug = the same path writing
+        // different numbers after the port, or the parent/bone scale changing under
+        // unchanged numbers). A checkpoint (scene load) that finds the live transform
+        // differing from the last recorded write names an UNLOGGED writer — that is a
+        // Fail (break-log + screenshot). Change-only: silent while numbers repeat, so the
+        // per-frame ApplyHoldPose no-change path costs two compares and no allocation.
+        private bool       _offSeatHas;
+        private string     _offSeatWriter;
+        private Vector3    _offSeatPos;
+        private Quaternion _offSeatRot;
+        private Vector3    _offSeatScale;
+        private Transform  _offSeatParentT;
+        private Vector3    _offSeatParentLossy;
+
+        private const float SeatPosTolM    = 0.01f;  // 1 cm
+        private const float SeatAngTolDeg  = 0.5f;
+        private const float SeatScaleTolFr = 0.01f;  // 1%
+
+        private void RecordOffHandSeatWrite(string writer)
+        {
+            if (_currentOffHandProp == null) return;
+            var t = _currentOffHandProp.transform;
+            Vector3 pLossy = t.parent != null ? t.parent.lossyScale : Vector3.one;
+            bool moved = !_offSeatHas
+                || Vector3.Distance(t.localPosition, _offSeatPos) > SeatPosTolM
+                || Quaternion.Angle(t.localRotation, _offSeatRot) > SeatAngTolDeg
+                || (t.localScale - _offSeatScale).magnitude
+                   > SeatScaleTolFr * Mathf.Max(_offSeatScale.magnitude, 1e-4f)
+                || !ReferenceEquals(t.parent, _offSeatParentT)
+                || (pLossy - _offSeatParentLossy).magnitude
+                   > SeatScaleTolFr * Mathf.Max(_offSeatParentLossy.magnitude, 1e-4f);
+            if (moved)
+            {
+                bool sameWriter = _offSeatHas && _offSeatWriter == writer;
+                string parentNow  = t.parent != null ? t.parent.name : "<null>";
+                string parentPrev = _offSeatParentT != null ? _offSeatParentT.name : "<null>";
+                FlowTrace.Step("Equip",
+                    $"WO-994 seatWrite by={writer} key='{_currentOffHandMeshKey}' " +
+                    $"pos={t.localPosition} rot={t.localEulerAngles} scale={t.localScale} " +
+                    $"parent='{parentNow}' parentLossy={pLossy}" +
+                    (sameWriter
+                        ? $" PREV pos={_offSeatPos} rot={_offSeatRot.eulerAngles} scale={_offSeatScale} " +
+                          $"parent='{parentPrev}' parentLossy={_offSeatParentLossy}"
+                        : $" (prev writer={(_offSeatHas ? _offSeatWriter : "<none>")})"));
+            }
+            _offSeatHas = true; _offSeatWriter = writer;
+            _offSeatPos = t.localPosition; _offSeatRot = t.localRotation; _offSeatScale = t.localScale;
+            _offSeatParentT = t.parent; _offSeatParentLossy = pLossy;
+        }
+
+        /// <summary>WO-994: assert the off-hand still sits where the LAST logged write put it.
+        /// Drift here = an UNLOGGED writer (or a context change under it) moved the seat.</summary>
+        private void VerifyOffHandSeat(string checkpoint)
+        {
+            if (!_offSeatHas || _currentOffHandProp == null) return;
+            var t = _currentOffHandProp.transform;
+            Vector3 pLossy = t.parent != null ? t.parent.lossyScale : Vector3.one;
+            bool drifted =
+                   Vector3.Distance(t.localPosition, _offSeatPos) > SeatPosTolM
+                || Quaternion.Angle(t.localRotation, _offSeatRot) > SeatAngTolDeg
+                || !ReferenceEquals(t.parent, _offSeatParentT)
+                || (pLossy - _offSeatParentLossy).magnitude
+                   > SeatScaleTolFr * Mathf.Max(_offSeatParentLossy.magnitude, 1e-4f);
+            string parentNow  = t.parent != null ? t.parent.name : "<null>";
+            string parentPrev = _offSeatParentT != null ? _offSeatParentT.name : "<null>";
+            if (drifted)
+                FlowTrace.Fail("Equip",
+                    $"WO-994 SEAT DRIFT at {checkpoint}: off-hand moved since last write by={_offSeatWriter}. " +
+                    $"NOW pos={t.localPosition} rot={t.localEulerAngles} parent='{parentNow}' parentLossy={pLossy} " +
+                    $"EXPECTED pos={_offSeatPos} rot={_offSeatRot.eulerAngles} parent='{parentPrev}' " +
+                    $"parentLossy={_offSeatParentLossy}");
+            else
+                FlowTrace.Step("Equip",
+                    $"WO-994 seatVerify {checkpoint} ok (last write by={_offSeatWriter} parent='{parentNow}')");
+        }
+
         private void ApplyHoldPose()
         {
             // A live SHEATHED seating edit pins the props to the back socket even if combat starts —
@@ -1970,6 +2053,7 @@ namespace DeNelle.Village
                     // entry this line is the exact shipped pose (zero regression).
                     offT.localRotation = ApplyGlobalWeaponYaw(Quaternion.Euler(_sheatheOffHandLocalEuler));
                     ApplySheathedOffset(offT, _currentOffHandMeshKey);
+                    RecordOffHandSeatWrite("ApplyHoldPose.sheathed");   // WO-994 tripwire
                 }
                 else if (_offHandHand != null)
                 {
@@ -1977,6 +2061,7 @@ namespace DeNelle.Village
                     if (_offHandParentCompensate) CompensateParentScale(offT, _offHandAuthoredScale);
                     offT.localPosition = _offHandDrawnLocalPos;
                     offT.localRotation = _offHandDrawnLocalRot;
+                    RecordOffHandSeatWrite("ApplyHoldPose.drawn");      // WO-994 tripwire
                 }
             }
 

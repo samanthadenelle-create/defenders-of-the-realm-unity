@@ -708,6 +708,13 @@ namespace DeNelle.Editor
             // duplicate-icon defect cannot return.
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "talent-icons suite", () => { if (!DeNelle.Editor.Regression.TalentIconMapRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[talent-icons] " + r); });
 
+            // --- ATTACHMENT OFFSETS (WO-994, 2026-08-16): the 08-16 harness audit found
+            // NOTHING covered AttachmentOffsetRegistry or seated-prop transforms - the
+            // owner's dialed shield seat could vanish (row lost, fullOverride flipped,
+            // mirror unparseable) with every marker green. Pins the shield_A rows through
+            // the real Resources-first read path + the WO-994 seat-drift tripwire wiring.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "attachment-offset suite", () => { if (!DeNelle.Editor.Regression.AttachmentOffsetRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[attachment-offset] " + r); });
+
             // --- THE ORACLE THAT GUARDS THIS FILE: distinct markers, no unregistered
             // oracle, no gate script grepping a marker nobody emits. Registered LAST so
             // it sees the fully-built registry above it (it reads SOURCE, not runtime
