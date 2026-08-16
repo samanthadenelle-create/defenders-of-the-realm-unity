@@ -54,6 +54,8 @@ namespace DeNelle.Core.HudModel
         public float ManaExact { get; private set; } = -1f;
         /// <summary>WO-997 §3b: exact max mana partner of <see cref="ManaExact"/> (-1 = not pushed).</summary>
         public float MaxManaExact { get; private set; } = -1f;
+        /// <summary>WO-999: class resource display name (Mana / Vigor / Focus). Empty = generic MP.</summary>
+        public string ResourceDisplayName { get; private set; } = "";
 
         /// <summary>Raised after any field changes.</summary>
         public event Action Changed;
@@ -62,7 +64,7 @@ namespace DeNelle.Core.HudModel
         /// The two OPTIONAL trailing floats (WO-997 §3b) carry the exact mana; the default -1
         /// means "not provided" and readers fall back to the int Mana/MaxMana.</summary>
         public void Set(int hp, int maxHp, int mana, int maxMana, int xp, int xpToNext, int level, string classId, int wisdom,
-                        float manaExact = -1f, float maxManaExact = -1f)
+                        float manaExact = -1f, float maxManaExact = -1f, string resourceDisplayName = null)
         {
             Hp = hp;
             MaxHp = maxHp;
@@ -75,8 +77,10 @@ namespace DeNelle.Core.HudModel
             Level = level;
             ClassId = classId;
             Wisdom = wisdom;
+            ResourceDisplayName = resourceDisplayName ?? "";
             Changed?.Invoke();
-            FlowTrace.Throttle("HUD", "herovitals", 1f, $"HP {Hp}/{MaxHp} MP {Mana}/{MaxMana} XP {Xp}/{XpToNext} Lv{Level} Wis{Wisdom} [{ClassId}]");
+            FlowTrace.Throttle("HUD", "herovitals", 1f,
+                $"HP {Hp}/{MaxHp} {ResourceDisplayName} {Mana}/{MaxMana} XP {Xp}/{XpToNext} Lv{Level} Wis{Wisdom} [{ClassId}]");
         }
     }
 
@@ -377,7 +381,7 @@ namespace DeNelle.Core.HudModel
             // Rebuild the slot record with the new cooldown (records are immutable).
             var src = Slots[index];
             var updated = new AbilitySlotRecord(src.Key, src.Glyph, src.Name, src.Desc, src.IconKey,
-                src.AccentHex, src.Equipped, remaining, total);
+                src.AccentHex, src.Equipped, remaining, total, src.ManaCost, src.Affordable);
 
             var copy = new AbilitySlotRecord[Slots.Count];
             for (int i = 0; i < Slots.Count; i++) copy[i] = Slots[i];

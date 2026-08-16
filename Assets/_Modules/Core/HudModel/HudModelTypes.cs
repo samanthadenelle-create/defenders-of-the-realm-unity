@@ -111,10 +111,15 @@ namespace DeNelle.Core.HudModel
         public readonly float CooldownRemaining;
         /// <summary>Total cooldown duration in seconds.</summary>
         public readonly float CooldownTotal;
+        /// <summary>WO-999: resource cost of this skill (0 = free basic / free universal). Display as a digit pip.</summary>
+        public readonly float ManaCost;
+        /// <summary>WO-999: whether the hero can afford the cost right now (true when free or mana &gt;= cost).</summary>
+        public readonly bool Affordable;
 
         /// <summary>Constructs an immutable ability-slot snapshot from all fields.</summary>
         public AbilitySlotRecord(string key, string glyph, string name, string desc, string iconKey,
-            string accentHex, bool equipped, float cooldownRemaining, float cooldownTotal)
+            string accentHex, bool equipped, float cooldownRemaining, float cooldownTotal,
+            float manaCost = 0f, bool affordable = true)
         {
             Key = key;
             Glyph = glyph;
@@ -125,6 +130,8 @@ namespace DeNelle.Core.HudModel
             Equipped = equipped;
             CooldownRemaining = cooldownRemaining;
             CooldownTotal = cooldownTotal;
+            ManaCost = manaCost;
+            Affordable = affordable;
         }
     }
 

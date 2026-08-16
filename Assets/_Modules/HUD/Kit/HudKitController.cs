@@ -1498,10 +1498,15 @@ namespace DeNelle.HUD.Kit
             // can never go blank. NOTE: the nameplate has NO portrait Image socket today; adding
             // one is a layout change and is deliberately left as a follow-up, not smuggled in here.
             if (_vitals.NameLabel != null)
-                _vitals.NameLabel.text = (string.IsNullOrEmpty(v.ClassId)
-                                              ? "Hero"
-                                              : DeNelle.Core.State.HeroCanonNames.ForJob(v.ClassId)) +
-                                         "  Lv " + Mathf.Max(1, v.Level);
+            {
+                string heroName = string.IsNullOrEmpty(v.ClassId)
+                    ? "Hero"
+                    : DeNelle.Core.State.HeroCanonNames.ForJob(v.ClassId);
+                // WO-999: append resource identity (Mana / Vigor / Focus) so the bar reads
+                // as a class economy, not generic "MP".
+                string res = string.IsNullOrEmpty(v.ResourceDisplayName) ? "" : (" · " + v.ResourceDisplayName);
+                _vitals.NameLabel.text = heroName + "  Lv " + Mathf.Max(1, v.Level) + res;
+            }
             // Owner 07-06: in-plate XP strip — fillAmount = xp/xpToNext, mirroring the HP/MP
             // fill-binding contract (§1.1). XpToNext<=0 = no HeroProgression data yet (the model
             // default; the producer never pushed) -> strip stays hidden, never blank/stuck-full.
@@ -1628,14 +1633,38 @@ namespace DeNelle.HUD.Kit
                     h.SetIcon(string.IsNullOrEmpty(s.IconKey) ? null : UiStyle.Icon(s.IconKey));
                 }
                 // WO-611: combat HUD medallions use the SOFT under-glow; else the hard radial sweep.
+                bool cooling = s.CooldownRemaining > 0f && s.CooldownTotal > 0f;
                 if (medallion)
                 {
                     _abilityGlows[i].Set(s.CooldownRemaining, s.CooldownTotal);
-                    // The glow path skips SetCooldown, so keep the tap-gate contract here.
-                    if (h.button != null) h.button.interactable = !(s.CooldownRemaining > 0f && s.CooldownTotal > 0f);
+                    // Tap gate: cooling OR unaffordable resource (WO-999 mobile economy).
+                    if (h.button != null) h.button.interactable = !cooling && s.Affordable;
                 }
                 else
                     h.SetCooldown(s.CooldownRemaining, s.CooldownTotal);
+
+                // WO-999: cost digit on the face (count badge). Free skills blank.
+                // Direct text so cost "1" is not swallowed by SetCount's charge-badge rule.
+                if (h.count != null)
+                {
+                    int costShown = s.ManaCost > 0.05f ? Mathf.RoundToInt(s.ManaCost) : 0;
+                    h.count.text = costShown > 0 ? costShown.ToString() : "";
+                }
+                // Dim face when unaffordable (not on cooldown-only) — luminance, not hue.
+                if (h.frame != null && s.Equipped)
+                {
+                    float a = s.Affordable ? 1f : 0.42f;
+                    var c = h.frame.color;
+                    h.frame.color = new Color(c.r, c.g, c.b, a);
+                }
+                if (h.icon != null && s.Equipped && h.icon.enabled)
+                {
+                    float a = s.Affordable ? 1f : 0.45f;
+                    var c = h.icon.color;
+                    h.icon.color = new Color(c.r, c.g, c.b, a);
+                }
+                if (!medallion && h.button != null && s.Equipped)
+                    h.button.interactable = !cooling && s.Affordable;
             }
         }
 

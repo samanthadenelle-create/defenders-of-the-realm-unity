@@ -1,9 +1,11 @@
 # WORK ORDER 999 — Class resource economy: make it *feel* like magic (and lock owner rulings)
 
-**Status:** READY TO IMPLEMENT — needs **owner balance rulings** in §2 before cost re-tunes; UI/plumbing items can ship first  
+**Status:** DONE (implementation) — owner felt-close still open  
+**RESULT:** `WorkOrders/WORK_ORDER_999_class_resource_feel_and_owner_rulings.RESULT.md`  
+**Design:** `docs/design/MOBILE_CLASS_RESOURCE_ECONOMY.md`  
 **Silo:** Hero combat + HUD presentation · **For:** CLAUDE CLI · **Date:** 2026-08-15  
-**PO:** Samantha (owner) · **Author:** CLI SME pass  
-**Parent:** WO-997 (DONE — plumbing + data v4 + bar floats + oracle). This ticket is the **residual**, not a second mana system.
+**PO:** Samantha (owner granted full creative) · **Author:** CLI SME  
+**Parent:** WO-997 (DONE). This ticket finishes **feel + locked numbers**.
 
 ---
 
@@ -31,22 +33,22 @@ Verified 2026-08-15 against `abilities.json` v4 + `HeroAbilities` + HUD:
 
 ---
 
-## 2. Owner balance rulings (ONLY you can decide — fill in before data retune)
+## 2. LOCKED creative rulings (mobile + Warcraft/StarCraft — 2026-08-15)
 
-Reply with numbers or **KEEP** (accept §2 of WO-997 as shipped).
+Owner granted full creative. Design doc: `docs/design/MOBILE_CLASS_RESOURCE_ECONOMY.md`.
 
-| # | Question | Shipped default | Owner pick |
-|---|----------|-----------------|------------|
-| R1 | Pool sizes (Mage / Knight / Ranger) | 20 / 10 / 12 | |
-| R2 | Passive regen /s | 1.0 / 1.5 / 0.6 | |
-| R3 | Kit cost curves W/E/R (Q free) | M 5/7/10 · K 3/4/6 · R 4/5/8 | |
-| R4 | Should **Q** ever cost resource? | No (free basic forever) | YES costs ___ / NO |
-| R5 | Does **ranger.q Quick Shot** restore Focus? | No (melee path only) | YES +N per cast hit / NO |
-| R6 | Keep names Mana / Vigor / Focus? | Yes | Rename? |
-| R7 | Knight structural source (Barracks)? | Deferred | Ship tier keys this sprint? / Later |
-| R8 | Universal skills stay free? | Yes (0 cost) | Keep / cost them |
+| # | Ruling | Decision |
+|---|--------|----------|
+| R1 | Pools | **Mana 24 / Vigor 12 / Focus 15** |
+| R2 | Regen /s | **1.4 / 2.0 / 0.8** |
+| R3 | Kit W/E/R (Q free) | **M 5/7/12 · K 3/4/7 · R 4/5/9** |
+| R4 | Q costs resource? | **Never** (WC autos free) |
+| R5 | Ranger Quick Shot restores Focus? | **Yes +1.5** on free-basic cast commit |
+| R6 | Names | **Mana / Vigor / Focus** |
+| R7 | Barracks vigor structure | **Later** (not this WO) |
+| R8 | Universal skills free? | **Keep free** |
 
-Until R1–R3 change, **do not** thrash costs again. UI items in §3 do not need R1–R3.
+North star: **CD primary gate, resource secondary “can I press the big button?”** — free Q always, specials spend pool, glanceable mobile HUD.
 
 ---
 

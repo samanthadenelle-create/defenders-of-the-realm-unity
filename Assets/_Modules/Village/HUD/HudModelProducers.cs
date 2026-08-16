@@ -36,6 +36,7 @@ using DeNelle.Village;
 using DeNelle.Village.Arena;   // BattleStarRating
 using DeNelle.Village.Crafting;
 using DeNelle.Village.Items;   // ConsumableUseService — enforced potion use-cooldown readers
+using DeNelle.Village.Talents; // HeroTalentModifiers — ManaCostOf mult for ability face costs
 using DeNelle.Core.HUD;
 using CoreWavePhase = DeNelle.Core.HudModel.WavePhase;
 
@@ -204,6 +205,7 @@ namespace DeNelle.Village.Hud
         // steps, so sub-point regen never re-pushed the model and the bar looked frozen.
         // Change-gated with an epsilon so a 0.2-mana regen tick per 0.20s poll flows.
         private float _manaExact = float.MinValue, _maxManaExact = float.MinValue;
+        private string _resourceName = "";
         private const float ManaEpsilon = 0.05f;
 
         public HeroVitalsProducer(IHudModel m) : base(m, 0.20f) { }
@@ -245,6 +247,9 @@ namespace DeNelle.Village.Hud
             var wis = DeNelle.Village.Talents.WisdomCurrencyService.Instance;
             int wisdom = wis != null ? wis.Wisdom : Mathf.Max(0, _wisdom);
 
+            // WO-999: class resource identity (Mana / Vigor / Focus) for the bar label.
+            string resName = _abilities != null ? (_abilities.ResourceDisplayName ?? "") : _resourceName;
+
             // WO-997 §3b: the mana gate is the FLOAT epsilon (0.05), not the int equality —
             // a 5 Hz poll of a 1.0/s regen moves ~0.2 mana per poll, so the model now pushes
             // every poll during regen instead of once per whole point.
@@ -252,16 +257,18 @@ namespace DeNelle.Village.Hud
                 Mathf.Abs(manaExact - _manaExact) < ManaEpsilon &&
                 Mathf.Abs(maxManaExact - _maxManaExact) < ManaEpsilon &&
                 xp == _xp && xpToNext == _xpToNext && level == _level && cls == _classId &&
-                wisdom == _wisdom) return;
+                wisdom == _wisdom && resName == _resourceName) return;
 
             _hp = hp; _maxHp = maxHp; _mana = mana; _maxMana = maxMana;
             _manaExact = manaExact; _maxManaExact = maxManaExact;
             _xp = xp; _xpToNext = xpToNext; _level = level; _classId = cls; _wisdom = wisdom;
+            _resourceName = resName;
             // Sanitize the never-resolved sentinel (float.MinValue) to the model's own
             // "not provided" sentinel (-1) so readers cleanly fall back to the ints.
             Model.HeroVitals.Set(hp, maxHp, mana, maxMana, xp, xpToNext, level, cls, wisdom,
                                  manaExact < 0f ? -1f : manaExact,
-                                 maxManaExact < 0f ? -1f : maxManaExact);
+                                 maxManaExact < 0f ? -1f : maxManaExact,
+                                 resName);
         }
     }
 
@@ -607,13 +614,27 @@ namespace DeNelle.Village.Hud
                     unmapped.Add($"{key}='{def.Id ?? def.Name}' (effect='{def.Effect}')");
                 }
                 string accent = equipped ? def.Color : null;
+                // WO-999: cost pip + affordability — mirror ManaCostOf (Cathedral mult for mage).
+                float manaCost = 0f;
+                if (equipped)
+                {
+                    manaCost = def.ManaCost;
+                    if (_abilities != null)
+                        manaCost *= HeroTalentModifiers.MageManaCostMultiplier(_abilities.HeroClass);
+                }
+                float curMana = _abilities != null ? _abilities.Mana : 0f;
+                bool affordable = !equipped || manaCost <= 0f || curMana + 0.001f >= manaCost;
 
-                slots.Add(new AbilitySlotRecord(key, key, name, "", icon, accent, equipped, remaining, total));
+                slots.Add(new AbilitySlotRecord(key, key, name, "", icon, accent, equipped, remaining, total,
+                                                manaCost, affordable));
                 sb.Append(key).Append('=').Append(equipped ? name : "-")
-                  .Append(':').Append(Mathf.CeilToInt(remaining)).Append('/').Append(Mathf.RoundToInt(total)).Append('|');
+                  .Append(':').Append(Mathf.CeilToInt(remaining)).Append('/').Append(Mathf.RoundToInt(total))
+                  .Append('@').Append(manaCost.ToString("0.#")).Append(affordable ? "" : "!").Append('|');
             }
 
-            string sig = sb.ToString();
+            // Include live mana bucket so unaffordable faces flip when regen crosses a threshold.
+            float manaBucket = _abilities != null ? Mathf.Floor(_abilities.Mana * 2f) * 0.5f : -1f;
+            string sig = sb.ToString() + "|m=" + manaBucket.ToString("0.0");
             if (sig == _sig) return;
             _sig = sig;
             // WO-967: the right-hand ability bar used to emit NOTHING — a repo-wide grep of the

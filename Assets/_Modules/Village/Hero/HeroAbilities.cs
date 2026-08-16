@@ -796,6 +796,12 @@ namespace DeNelle.Village
             PlayCastVfxKey(def, origin, castVariant);
 
             ResolveEffect(def, origin);
+
+            // WO-999 (mobile WC/SC): free basics restore class resource on cast commit
+            // (ranger Focus via Quick Shot). Paid skills never restore — spend is spend.
+            // Melee path still uses PlayerAttackController for non-cast basics.
+            if (_onHitRestore > 0f && ManaCostOf(def) <= 0f && !isHealCast)
+                RestoreMana(_onHitRestore);
         }
 
         // =====================================================================
