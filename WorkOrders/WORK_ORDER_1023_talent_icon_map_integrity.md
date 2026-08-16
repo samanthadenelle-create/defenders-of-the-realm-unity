@@ -1,6 +1,6 @@
 # WORK ORDER 1023 — Talent icon map: 2 duplicate icons, no coverage guard, 4 unused icon pools
 
-**Status:** READY TO IMPLEMENT
+**Status:** IMPLEMENTED — PENDING GATE
 **Minted:** 2026-08-15 (UI seat) — provenance stack bumped 1023 → 1024 in the same edit
 **Lane:** Data + editor regression. File-disjoint from WO-1021 (presentation `.cs`) — run in parallel.
 **Provenance:** owner ask 2026-08-15 — *"check and confirm which is the strongest match for all trees"*

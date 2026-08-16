@@ -274,8 +274,8 @@
       "id": "ranger.t2n2",
       "name": "Venomcraft",
       "iconPath": "Talents/ranger/ranger_07",
-      "blinkSource": "Classes/Assassin/Rogue/Rogue7.png",
-      "why": "poison craft"
+      "blinkSource": "Classes/Assassin/Rogue/Rogue6.png",
+      "why": "blade dripping venom into a cauldron \u2014 literal poison CRAFT; re-tagged off Rogue7 (WO-1023: Rogue7 stays with knight.t2n6 Venombrand; duplicate icon = recognition failure, and the horizontal blade+cauldron silhouette is distinct from Rogue7's fist-gripped dagger in greyscale)"
     },
     {
       "id": "ranger.t2n3",
@@ -568,8 +568,8 @@
       "id": "shared.n9",
       "name": "Arcane Bolt",
       "iconPath": "Talents/shared/shared_09",
-      "blinkSource": "Classes/Elementalist/Arcanist/Arcanist1.png",
-      "why": "ranged magic dart"
+      "blinkSource": "Classes/Elementalist/Arcanist/Arcanist17.png",
+      "why": "three streaking bolt projectiles \u2014 reads ranged magic dart; re-tagged off Arcanist1 (WO-1023: Arcanist1 stays with mage.t1n1 Arcane Focus; the triple-comet silhouette is distinct from Arcanist1's single braided streak in greyscale)"
     },
     {
       "id": "shared.n10",

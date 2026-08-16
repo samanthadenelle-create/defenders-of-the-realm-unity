@@ -89,7 +89,7 @@
 | `ranger.t1n4` | Nature's Gift | `Classes/Symbiose/Druid/Druid1.png` | nature regen |
 | `ranger.t1n5` | Arrow Storm Prep | `Classes/Assassin/Ranger/Ranger2.png` | quiver / multishot prep |
 | `ranger.t2n1` | Windstrider Boots | `Classes/Assassin/Rogue/Rogue3.png` | swift feet / move speed |
-| `ranger.t2n2` | Venomcraft | `Classes/Assassin/Rogue/Rogue7.png` | poison craft |
+| `ranger.t2n2` | Venomcraft | `Classes/Assassin/Rogue/Rogue6.png` | blade dripping venom into a cauldron — literal poison CRAFT; re-tagged off Rogue7 (WO-1023: Rogue7 stays with knight.t2n6 Venombrand; duplicate icon = recognition failure, and the horizontal blade+cauldron silhouette is distinct from Rogue7's fist-gripped dagger in greyscale) |
 | `ranger.t2n3` | Eagle Vision | `Classes/Assassin/Hunter/Hunter4.png` | sight / crit range |
 | `ranger.t2n4` | Deep Freeze | `Classes/Elementalist/Cryomancer/Cryomancer2.png` | ice slow arrows |
 | `ranger.t2n5` | Shadow Veil | `Classes/Assassin/Rogue/Rogue1.png` | stealth cloak |
@@ -131,7 +131,7 @@
 | `shared.n6` | Legendary Resolve | `Classes/HolyDarkness/Paladin/Paladin12.png` | revive / resolve |
 | `shared.n7` | Swift Recovery | `Classes/HolyDarkness/Priest/Priest8.png` | OOC regen |
 | `shared.n8` | Elarion's Blessing | `Classes/HolyDarkness/Paladin/Paladin1.png` | all-stats blessing |
-| `shared.n9` | Arcane Bolt | `Classes/Elementalist/Arcanist/Arcanist1.png` | ranged magic dart |
+| `shared.n9` | Arcane Bolt | `Classes/Elementalist/Arcanist/Arcanist17.png` | three streaking bolt projectiles — reads ranged magic dart; re-tagged off Arcanist1 (WO-1023: Arcanist1 stays with mage.t1n1 Arcane Focus; the triple-comet silhouette is distinct from Arcanist1's single braided streak in greyscale) |
 | `shared.n10` | Mend | `Classes/HolyDarkness/Priest/Priest5.png` | self heal skill |
 | `shared.n11` | Dash | `Classes/Assassin/Rogue/Rogue4.png` | blink dodge dash |
 
