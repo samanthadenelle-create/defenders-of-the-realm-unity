@@ -29,7 +29,12 @@ namespace DeNelle.Core.Diagnostics
 {
     public static class FloorDeepDiag
     {
-        private const string TargetScene = "MainCastle_Hall";
+        // WO-1112: RESOLVED, never a literal. This was `const string TargetScene = "MainCastle_Hall"`
+        // -- the LEGACY hub file. The live hub is whatever SceneRouter.Castle resolves to under
+        // ff.MergedWorld, so a diagnostic pinned to the literal simply never fired in the scene the
+        // owner is standing in: silence read as "the floor is fine". HubSceneLiteralRegression FAILS
+        // if this is ever pinned back to a literal.
+        private static string TargetScene => DeNelle.Core.SceneRouter.Castle;
         private static GameObject _host;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -65,7 +70,7 @@ namespace DeNelle.Core.Diagnostics
 
         private static void Dump()
         {
-            FlowTrace.Step("FloorDeep", "===== DEEP FLOOR DUMP (MainCastle_Hall, post-MagentaGuard) =====");
+            FlowTrace.Step("FloorDeep", "===== DEEP FLOOR DUMP (" + TargetScene + ", post-MagentaGuard) =====");
 
             // --- Camera + ambient + fog ------------------------------------------
             var cam = Camera.main;

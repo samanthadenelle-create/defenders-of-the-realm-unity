@@ -39,7 +39,10 @@ namespace DeNelle.Core.Diagnostics
 {
     public static class ArcaneTowerDiag
     {
-        private const string TargetScene  = "Main_Castle_Overworld";
+        // WO-1112: RESOLVED, never a literal. Right today, stale the day ff.MergedWorld flips or
+        // the hub is renamed -- the same shape that left FloorDeepDiag/UICaptureMode pinned to the
+        // retired MainCastle_Hall. HubSceneLiteralRegression FAILS if this is pinned to a literal.
+        private static string TargetScene => DeNelle.Core.SceneRouter.Castle;
         private const string TargetObject = "ArcaneTower_MagicUpgrades";
         private static GameObject _host;
 

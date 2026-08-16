@@ -63,19 +63,61 @@ BUCKET_COLOR = {"Ready": "#e0b341", "Blocked": "#d06060", "Spec": "#7fa8d9",
                 "Unlabeled": "#999999", "Done": "#6fae6f", "Closed": "#777777",
                 "Doc": "#a98fd0"}
 
+# ── the WO-numbering authority (WO-1112) ──────────────────────────────────────
+# THE BANNER IS PROSE, NOT A TABLE. This parser expected markdown table rows
+# (`| **main line** | ... | **1112** |`) and CLI_LANES_WO_NUMBERS.md contains ZERO of
+# them - the live banner is blockquote prose at line 3:
+#     > ## RECONCILED 2026-08-16 (CLI): main line next free = **1112**.
+# so both regexes returned None and the board drew "Next mint - CLI: ?, UI seat: ?".
+#
+# That silence is the actual bug, worse than the wrong regex: a "?" reads as "nobody
+# filled this in yet", not as "the numbering authority is UNREADABLE" - and an unreadable
+# authority is the exact precondition for the five-collision day the banner itself
+# documents (a seat that cannot read the next free number mints on top of another seat).
+# So a parse failure is now LOUD in all three places a person could be looking: the board
+# renders a visible error strip instead of a question mark, the console prints the miss,
+# and --check refuses.
+#
+# Forms are tried NEWEST-FIRST BY FILE ORDER (the file is prepend-ordered, newest banner on
+# top) and superseded headers strike their number through (`~~1000~~`), which no pattern
+# matches - so a retired banner cannot win over the live one.
+_BANNER_MAIN = [
+    r"main line next free\s*=\s*\*\*(\d+)\*\*",                       # live prose form
+    r"\|\s*\*\*main line\*\*\s*\|[^|]*\|\s*\*\*(\d+)\*\*",            # legacy table row
+]
+_BANNER_UI = [
+    r"UI[- ]seat bumped\s*\d+\s*->\s*\*?\*?(\d+)",                    # live prose form
+    r"UI seat next free\s*=\s*\*\*(\d+)\*\*",
+    r"\|\s*\*\*1000[^|]*\*\*\s*\|[^|]*\|\s*\*\*(\d+)\*\*",            # legacy table row
+]
+
+def _first_match(text, patterns):
+    """Earliest match in FILE ORDER across all patterns (newest banner is at the top)."""
+    best = None
+    for pat in patterns:
+        m = re.search(pat, text)
+        if m and (best is None or m.start() < best.start()):
+            best = m
+    return best.group(1) if best else None
+
 def parse_banner():
-    """Next-free WO numbers from the numbering authority (the two-block table)."""
+    """(main_next, ui_next, errors) from the numbering authority. Never silently None."""
     path = os.path.join(ROOT, "CLI_LANES_WO_NUMBERS.md")
-    main = ui = None
+    errors = []
     try:
         text = open(path, encoding="utf-8", errors="replace").read()
-        m = re.search(r"\|\s*\*\*main line\*\*\s*\|[^|]*\|\s*\*\*(\d+)\*\*", text)
-        u = re.search(r"\|\s*\*\*1000[^|]*\*\*\s*\|[^|]*\|\s*\*\*(\d+)\*\*", text)
-        main = m.group(1) if m else None
-        ui = u.group(1) if u else None
-    except OSError:
-        pass
-    return main, ui
+    except OSError as e:
+        return None, None, ["CLI_LANES_WO_NUMBERS.md unreadable ({}) - the WO-numbering "
+                            "authority cannot be parsed at all.".format(e)]
+    main = _first_match(text, _BANNER_MAIN)
+    ui = _first_match(text, _BANNER_UI)
+    if main is None:
+        errors.append("could not parse the MAIN-LINE next-free number from CLI_LANES_WO_NUMBERS.md "
+                      "(expected e.g. 'main line next free = **1112**')")
+    if ui is None:
+        errors.append("could not parse the UI-SEAT next-free number from CLI_LANES_WO_NUMBERS.md "
+                      "(expected e.g. 'UI-seat bumped 1030 -> 1031')")
+    return main, ui, errors
 
 # ── CREATED date, never modified date (WO-940) ────────────────────────────────
 # The board's date column used to be os.path.getmtime - LAST MODIFIED. Any edit (a status
@@ -157,7 +199,7 @@ def parse_wos():
     return rows
 
 def build_html(rows):
-    main_next, ui_next = parse_banner()
+    main_next, ui_next, banner_errors = parse_banner()
     counts = {b: 0 for b in BUCKET_ORDER}
     for r in rows: counts[r["bucket"]] += 1
     stamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -201,6 +243,15 @@ def build_html(rows):
         + f'<button class="abtn on" data-a="all">all <span class="cnt">{len(rows)}</span></button>'
         '</span>')
 
+    # A parse miss is NEVER a quiet "?" (WO-1112). The mint numbers are the collision guard;
+    # if the board cannot read them it must SAY so, in the place the reader is already looking.
+    if banner_errors:
+        mint_html = ('<span class="bannererr">MINT NUMBERS UNREADABLE &mdash; '
+                     + html.escape("; ".join(banner_errors))
+                     + ' &mdash; do NOT mint from this board; read CLI_LANES_WO_NUMBERS.md directly.</span>')
+    else:
+        mint_html = f'Next mint &mdash; CLI: <b>{main_next}</b>, UI seat: <b>{ui_next}</b>'
+
     canon_links = "".join(
         f'<a href="{p}">{n}</a>' for n, p in [
             ("Canon loader", "SESSION_CANON_LOADER.md"), ("Handover", "docs/HANDOVER.md"),
@@ -227,6 +278,8 @@ def build_html(rows):
  .status{{color:#999;font-size:12px}} .age{{color:#666;font-size:12px;white-space:nowrap}}
  .res{{background:#2c4a2c;color:#9c9;font-size:10px;padding:1px 6px;border-radius:8px;margin-left:6px}}
  .oldm{{border:1px solid #b08030;color:#d0a050;font-size:10px;padding:0 5px;border-radius:8px;margin-left:5px}}
+ .bannererr{{background:#5a1f1f;border:1px solid #d06060;color:#ffd7d7;padding:2px 8px;
+             border-radius:6px;font-weight:bold}}
  .agef{{margin-left:18px;color:#888;font-size:13px}}
  .abtn{{background:#1e2027;border:1px solid #555;color:#ccc;padding:6px 12px;margin-left:6px;
         border-radius:14px;cursor:pointer;opacity:.35}} .abtn.on{{opacity:1;border-color:#e0b341}}
@@ -234,7 +287,7 @@ def build_html(rows):
 <h1>Echoes of Elarion — Work Order Board</h1>
 <div class="sub">Generated <b>{stamp}</b> from the repo (WorkOrders/*.md) — the repo is the source of
  truth, this page is a view. Regenerate: <b>python tools/board_build.py</b>
- &nbsp;|&nbsp; Next mint — CLI: <b>{main_next or "?"}</b>, UI seat: <b>{ui_next or "?"}</b></div>
+ &nbsp;|&nbsp; {mint_html}</div>
 <div class="canon">{canon_links}</div>
 <input id="q" placeholder="Search number / title / status...">{filters}{age_filters}
 <table><tbody id="tb">
@@ -266,6 +319,10 @@ def main():
     check = "--check" in sys.argv
 
     rows = parse_wos()
+    # Parsed here as well as inside build_html so the MISS reaches the console (and the
+    # --check exit code), not just the page. A seat reading the terminal must not have to
+    # open the HTML to discover the numbering authority went unreadable (WO-1112).
+    _main_next, _ui_next, banner_errors = parse_banner()
     html_text = build_html(rows)
     with open(OUT, "w", encoding="utf-8") as f:
         f.write(html_text)
@@ -299,11 +356,26 @@ def main():
               f"(flagged, not renumbered - resolve first-on-disk-and-referenced-wins):")
         for n in sorted(dupes):
             print(f"    WO-{n}: " + " | ".join(sorted(dupes[n])))
+    # WO-1112: the mint numbers are the two-seat collision guard. An unreadable banner is a
+    # LOUD failure, never a "?" on the page - a seat that cannot read the next free number
+    # mints on top of another seat, which is the five-collision day the banner documents.
+    if banner_errors:
+        print("BANNER_PARSE_FAIL - CLI_LANES_WO_NUMBERS.md could not be read for mint numbers:")
+        for e in banner_errors:
+            print(f"    {e}")
+        print("    The board renders a visible error instead of a mint number. "
+              "Fix the banner (or tools/board_build.py's patterns) before minting.")
+    else:
+        print(f"BANNER_OK next mint - CLI: {_main_next}, UI seat: {_ui_next}")
+
     if check:
-        if unlabeled:
-            print(f"BOARD_CHECK_FAIL {len(unlabeled)} unlabeled")
+        problems = []
+        if unlabeled: problems.append(f"{len(unlabeled)} unlabeled")
+        if banner_errors: problems.append(f"{len(banner_errors)} banner parse error(s)")
+        if problems:
+            print("BOARD_CHECK_FAIL " + ", ".join(problems))
             return 1
-        print("BOARD_CHECK_OK 0 unlabeled")
+        print("BOARD_CHECK_OK 0 unlabeled, mint numbers readable")
     return 0
 
 if __name__ == "__main__":

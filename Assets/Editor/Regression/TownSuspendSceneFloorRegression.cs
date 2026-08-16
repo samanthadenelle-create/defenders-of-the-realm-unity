@@ -69,9 +69,13 @@ namespace DeNelle.Editor.Regression
     {
         private const string ProbeSrc = "Assets/_Modules/Village/World/TownActivityProbe.cs";
 
-        // A hub the floor must NOT engage for. Main_Castle_Overworld is the home hub
-        // (CLAUDE.md S7) and is also the clean state this suite restores to.
-        private const string Hub = "Main_Castle_Overworld";
+        // A hub the floor must NOT engage for -- the live home hub (CLAUDE.md S7), which is also
+        // the clean state this suite restores to. WO-1112: RESOLVED from SceneRouter.Castle rather
+        // than the "Main_Castle_Overworld" literal it used to be, so the day ff.MergedWorld flips
+        // or the hub is renamed this suite still restores the town to a scene that exists.
+        // (The legacy names in Case1's mustNotSuspend array below stay LITERAL on purpose: they are
+        // deliberate coverage of retired names, i.e. test INPUTS, not a resolution of "the hub".)
+        private static string Hub => DeNelle.Core.SceneRouter.Castle;
 
         /// <summary>Standalone batch entry - prints the marker.</summary>
         public static void RunAll()

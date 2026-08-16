@@ -108,9 +108,32 @@ namespace DeNelle.Core
         public static bool IsDungeon(string sceneName)
         {
             if (string.IsNullOrEmpty(sceneName)) return false;
-            return sceneName.StartsWith("dg_", StringComparison.OrdinalIgnoreCase)
+            return IsComposedDungeon(sceneName)
                 || sceneName.StartsWith("Dungeon", StringComparison.OrdinalIgnoreCase)
                 || sceneName.Equals(OutpostSceneName, StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// True ONLY for a COMPOSED dungeon (<c>dg_*</c>, baked by DungeonBaker /
+        /// GraphDungeonComposer). The narrower half of <see cref="IsDungeon"/>.
+        /// </summary>
+        /// <remarks>
+        /// WHY THE NARROWER TEST EARNS ITS OWN NAME (WO-1112, the dungeon twin of WO-1109):
+        /// the two dungeon pipelines need OPPOSITE hero handling, so "is this a dungeon?"
+        /// is the wrong question at the hero seam and answering it with IsDungeon would ship
+        /// a bug. A COMPOSED scene's baked hero is a bare rig (HeroLocomotion +
+        /// HeroBodySwapper, DungeonBaker.PopulateForPlay) with NO HeroAbilities, so the town
+        /// hero must be CARRIED in over it. A hand-built scene's hero is owned by that
+        /// scene's DungeonController through SERIALIZED references; carrying a hero in there
+        /// makes HeroControlEnsurer.DedupeHeroes destroy the baked one and null those refs.
+        /// Same word, opposite correct behaviour — hence one test per pipeline, in the one
+        /// file that already owns scene-family naming (this class exists because that answer
+        /// had drifted into three partial copies, WO-411/920).
+        /// </remarks>
+        public static bool IsComposedDungeon(string sceneName)
+        {
+            return !string.IsNullOrEmpty(sceneName)
+                && sceneName.StartsWith("dg_", StringComparison.OrdinalIgnoreCase);
         }
 
         // ─────────────────────────────────────────────────────────────────────

@@ -58,7 +58,13 @@ namespace DeNelle.Diagnostics
 
         private const string Tag = "UICap";
         private const string HostName = "~UICaptureMode";
-        private const string BootScene = "MainCastle_Hall";
+        // WO-1112: RESOLVED, never a literal. This was `const string BootScene = "MainCastle_Hall"`
+        // -- the LEGACY hub file, not the live one -- so UI_CAPTURE_OK screenshotted a scene the
+        // player never boots into and could not see a hub HUD regression at all. A gate that
+        // photographs the wrong room is worse than no gate, because the PNGs are trusted.
+        // SceneRouter.Castle follows ff.MergedWorld, so the capture always boots the live hub.
+        // HubSceneLiteralRegression FAILS if this is ever pinned back to a literal.
+        private static string BootScene => DeNelle.Core.SceneRouter.Castle;
         private const string OutRoot = "Builds/UICaps/";
 
         // Web-paced dwell: on WebGL the real pixels come from the webbot's Playwright

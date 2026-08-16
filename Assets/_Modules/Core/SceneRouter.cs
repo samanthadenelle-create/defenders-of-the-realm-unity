@@ -148,8 +148,23 @@ namespace DeNelle.Core
         /// </para>
         /// </summary>
         public static string Castle => DeNelle.Core.FeatureFlags.MergedWorld
-            ? "Main_Castle_Overworld"
-            : "MainCastle_Hall";
+            ? CastleCandidates[0]
+            : CastleCandidates[1];
+
+        /// <summary>
+        /// EVERY value <see cref="Castle"/> can resolve to — [0] merged (ff.MergedWorld ON),
+        /// [1] the legacy two-scene hub. THE ONLY PLACE either name is spelled out.
+        /// <para>
+        /// WO-1112: exists because <see cref="Castle"/> is flag-dependent, so an oracle that
+        /// asserts against the RESOLVED value only proves the branch the gate machine happens
+        /// to be flagged into. A guard that must hold for the home hub in BOTH configurations
+        /// (e.g. <c>TowerRespawnRegression</c> vs <c>BaseLayoutLoader._hubScenesNoBaseLayout</c>)
+        /// iterates this instead of re-typing the names — which is exactly how three separate
+        /// gates ended up pinned to the retired <c>MainCastle_Hall</c> literal while the live hub
+        /// moved on. Add a hub-scene variant HERE and every gate follows for free.
+        /// </para>
+        /// </summary>
+        public static readonly string[] CastleCandidates = { "Main_Castle_Overworld", "MainCastle_Hall" };
         /// <summary>The ATB Last-Stand battle scene (React global AtbBattleHost).</summary>
         public const string ATBBattle = "ATBBattle";
 
@@ -559,9 +574,55 @@ namespace DeNelle.Core
             {
                 FlowTrace.Step("Hero",
                     $"{via} carry ARMED: DontDestroyOnLoad hero '{heroGo.name}' (detached from '{priorParent}') " +
-                    $"across the Single load to '{targetScene}' — the raid hero IS the town hero.");
+                    $"across the Single load to '{targetScene}' — the destination hero IS the town hero.");
             }
             return carried;
+        }
+
+        /// <summary>
+        /// Enters a DUNGEON scene by its already-resolved scene name, carrying the town hero
+        /// across the Single load when — and only when — the destination is a COMPOSED
+        /// (<c>dg_*</c>) dungeon. The dungeon twin of <see cref="GoRaid"/>, and deliberately
+        /// the SAME mechanism: it hands <see cref="CarryHeroAcrossSingleLoad"/> to
+        /// <see cref="LoadSceneWithFade"/> as its <c>beforeLoad</c> hook, so there is exactly
+        /// one carry implementation in the project.
+        /// <para>
+        /// WO-1112 — WHY THE CARRY IS NEEDED AT ALL. DungeonBaker.PopulateForPlay bakes the
+        /// composed Keeper with HeroLocomotion + HeroBodySwapper and NOTHING ELSE, so it has
+        /// no <c>HeroAbilities</c>; <c>HeroAbilityInput</c> is [RequireComponent(HeroAbilities)]
+        /// and never attaches, and <c>AssignableSkillBar</c>'s ability ref stays null. Net
+        /// effect for the player: in every composed dungeon Q/W/E/R did nothing, SILENTLY —
+        /// not one trace line was emitted, which is why it survived nightly play. Carrying the
+        /// real town hero brings its abilities, gear, loadout, progression and HP with it,
+        /// exactly as WO-1109 did for raids.
+        /// </para>
+        /// <para>
+        /// ⚠ THE GATE IS LOAD-BEARING — DO NOT WIDEN IT TO <c>HubScenes.IsDungeon</c>. A
+        /// HAND-BUILT dungeon (<c>Dungeon_HealersCottage</c> etc.) bakes a hero its
+        /// DungeonController owns through SERIALIZED references. Carrying a second hero in
+        /// there makes HeroControlEnsurer.DedupeHeroes destroy the baked one (it keeps the
+        /// DontDestroyOnLoad instance by design), which nulls those refs and breaks the rich
+        /// pipeline that works today. Composed scenes have no such owner — their baked rig is
+        /// the bare one described above, and losing it to the dedupe is the POINT.
+        /// </para>
+        /// </summary>
+        public static void GoDungeonScene(string sceneName)
+        {
+            bool composed = DeNelle.Core.HubScenes.IsComposedDungeon(sceneName);
+            FlowTrace.Step("SceneRouter",
+                $"GoDungeonScene name='{sceneName ?? "<null>"}' composed={composed} " +
+                (composed
+                    ? "— hero carry armed as the pre-load hook (WO-1112)."
+                    : "— hand-built pipeline: NO carry (that scene's DungeonController owns its own baked hero)."));
+
+            // Same timing contract as GoRaid: the carry rides the beforeLoad hook so it fires
+            // after the build-settings gate + save flush + fade, on the last line before the
+            // load commits. Inline would orphan a detached DDOL hero on an aborted load and
+            // leave the player driving a detached hero around a live town during the fade.
+            if (composed)
+                LoadSceneWithFade(sceneName, beforeLoad: () => CarryHeroAcrossSingleLoad("GoDungeonScene", sceneName)).Forget();
+            else
+                LoadSceneWithFade(sceneName).Forget();
         }
 
         /// <summary>

@@ -64,8 +64,10 @@ namespace DeNelle.Editor.Regression
     {
         private const string HudSrc = "Assets/_Modules/Village/Hero/HeroEquipHud.cs";
 
-        /// <summary>The live home hub (CLAUDE.md sec.7). The whole ticket is that this was missing.</summary>
-        private const string LiveHub = "Main_Castle_Overworld";
+        /// <summary>The live home hub (CLAUDE.md sec.7). The whole ticket is that this was missing.
+        /// WO-1112: RESOLVED from SceneRouter, never a literal — a hardcoded hub name in a gate
+        /// goes stale silently and the gate then proves a predicate about a retired scene.</summary>
+        private static string LiveHub => DeNelle.Core.SceneRouter.Castle;
 
         /// <summary>A scene that must NOT read as a hub, so a predicate stuck on `true` is caught.</summary>
         private const string NotAHub = "Title";

@@ -154,13 +154,21 @@ namespace DeNelle.Editor
                 if (victorySrc == null) failures.Add("RaidVictoryController.cs not found under Assets/_Modules");
                 else
                 {
-                    RequireAll(failures, "RaidVictoryController.cs", victorySrc,
+                    // WO-1112 — THE PAYOUT ORACLE IS NOW FALSIFIABLE. Until today this block tested
+                    // victorySrc RAW while the (A) block three lines up carefully stripped comments,
+                    // with a comment explaining why. RaidVictoryController.cs names EconomyService
+                    // FIVE times in the GrantLoot XML doc comment BEFORE the live grant, so deleting
+                    // the entire raid payout left RAID_SCORING_OK printing. Half a fix is the worst
+                    // outcome available: the suite is trusted precisely because the other half exists.
+                    string victoryCode = StripComments(victorySrc);
+                    RequireAll(failures, "RaidVictoryController.cs (code)", victoryCode,
                         "GrantLoot", "RaidScoring", "Finalize");
-                    bool grantsToEconomy = victorySrc.Contains("EconomyService")
-                                        || victorySrc.Contains("AddCrystals")
-                                        || victorySrc.Contains("AddFood");
+                    bool grantsToEconomy = victoryCode.Contains("EconomyService")
+                                        || victoryCode.Contains("AddCrystals")
+                                        || victoryCode.Contains("AddFood");
                     if (!grantsToEconomy)
-                        failures.Add("RaidVictoryController.cs GrantLoot does not reach the village economy (EconomyService/AddCrystals/AddFood)");
+                        failures.Add("RaidVictoryController.cs GrantLoot does not reach the village economy in LIVE CODE " +
+                                     "(EconomyService/AddCrystals/AddFood appear nowhere outside comments) - the raid pays nothing");
                 }
 
                 // (C) a live raid HUD view exists, code-built (uGUI) — NOT uxml.
@@ -168,11 +176,17 @@ namespace DeNelle.Editor
                 if (hudSrc == null) failures.Add("RaidHudController.cs not found under Assets/_Modules (no live raid HUD)");
                 else
                 {
+                    // WO-1112: STRIPPED, same reason as the victory block above - RaidHudController.cs
+                    // names RaidScoring in its file header comment, so the raw test could not tell a
+                    // live binding from a sentence about one. (The uxml check below is stripped for the
+                    // mirror-image reason: on RAW source a comment EXPLAINING the no-uxml rule reads as
+                    // a violation of it.)
+                    string hudCode = StripComments(hudSrc);
                     // Shows the four readouts + is built through the kit (code-built).
-                    RequireAll(failures, "RaidHudController.cs", hudSrc,
+                    RequireAll(failures, "RaidHudController.cs (code)", hudCode,
                         "ElarionUiKit", "RaidScoring", "RemainingSeconds", "DestructionPct");
                     // §8: code-built uGUI, never uxml.
-                    if (hudSrc.Contains(".uxml") || hudSrc.Contains("UIDocument") || hudSrc.Contains("VisualElement"))
+                    if (hudCode.Contains(".uxml") || hudCode.Contains("UIDocument") || hudCode.Contains("VisualElement"))
                         failures.Add("RaidHudController.cs references uxml/UIDocument/VisualElement — the raid HUD must be code-built uGUI (repo rule §8)");
                 }
 
@@ -221,6 +235,34 @@ namespace DeNelle.Editor
                 failures.Add($"[split] the spire ({RaidScoring.SpireWeight:P0}) is no longer the largest term " +
                              $"(structures {RaidScoring.StructuresWeight:P0}, garrison {RaidScoring.GarrisonWeight:P0}) - " +
                              "the objective must remain the primary objective");
+
+            // =================================================================
+            //  (E) THE ORACLE'S OWN FALSIFIABILITY — WO-1112.
+            //
+            //  Every source-lint above is only worth the strip that feeds it, and a
+            //  future edit can silently un-strip one (that is EXACTLY how (B) shipped
+            //  half-fixed for weeks: (A) stripped, (B) and (C) did not). So we prove the
+            //  strip still does its job against a SYNTHETIC file whose only mention of
+            //  the payout is prose. If this case ever passes-through, the whole
+            //  source-lint section has quietly become unfalsifiable again.
+            // =================================================================
+            const string proseOnly =
+                "/// <summary>Reuses <see cref=\"EconomyService\"/>; calls GrantLoot after Finalize.</summary>\n" +
+                "// RaidScoring drives it. AddCrystals / AddFood are the fallback.\n" +
+                "public sealed class Deleted { void Nothing() { } }\n";
+            string proseStripped = StripComments(proseOnly);
+            foreach (var ghost in new[] { "EconomyService", "GrantLoot", "RaidScoring", "AddCrystals", "AddFood", "Finalize" })
+            {
+                if (proseStripped.Contains(ghost))
+                    failures.Add($"[falsifiability] StripComments left '{ghost}' behind on a comment-only sample - " +
+                                 "the source-lints in (B)/(C) can be satisfied by a DOC COMMENT, so deleting the live " +
+                                 "raid payout would leave RAID_SCORING_OK printing. Fix the strip, never the assertion.");
+            }
+            // And the strip must not eat live code with it (an over-eager strip would pass (E)
+            // by blanking everything, then fail every real check for the wrong reason).
+            if (!proseStripped.Contains("public sealed class Deleted"))
+                failures.Add("[falsifiability] StripComments destroyed live code on the sample - it is stripping more " +
+                             "than comments, so every source-lint above is now testing a mutilated file.");
 
             if (failures.Count == 0)
             {
