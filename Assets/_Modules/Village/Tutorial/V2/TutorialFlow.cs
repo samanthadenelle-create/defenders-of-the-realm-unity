@@ -1231,7 +1231,21 @@ namespace DeNelle.Village
 
             // WO-1012 P2: end the guide-lead the moment the beat completes — the leash
             // resumes natural exploration (safe no-op when no lead was active).
+            bool wasLeading = DeNelle.Pets.PetHeroLeash.IsLeading;
             DeNelle.Pets.PetHeroLeash.ClearLeadTarget();
+
+            // WO-1108 Lane B — ARRIVAL AND VANISH ARE THE SAME EVENT. Owner, verbatim:
+            // "it takes you to the gate, gives you your dialogue, then it disappears."
+            // Deliberately hung on the EXISTING lead-clear point rather than on a step id:
+            // a lead was in force means THIS was the escort beat (the only lead beat the
+            // data authors — tutorial-steps.json has exactly one hero.reached completion),
+            // so the two can never disagree about when the escort ended. Fires on a skipped
+            // /watchdog-rescued beat too: the escort is over either way, and a body left
+            // standing there is the defect. The appearance owner is EchoWorldPresence —
+            // this line does not decide when the Echo comes back.
+            if (wasLeading)
+                DeNelle.Village.World.Camps.EchoWorldPresence.NotifyEscortComplete(
+                    $"tutorial step '{step.Id}' {(skipped ? "skipped" : "complete")}");
 
             // WO-962: the anchor latch dies WITH the step (completed OR watchdog-skipped),
             // so a re-entered step resolves once again instead of inheriting a stale target.
@@ -1268,6 +1282,14 @@ namespace DeNelle.Village
             ObjectiveStripUi.Hide();
             TutorialSkipUi.Hide();   // the ONE skip leaves with the flow
             DeNelle.Pets.PetHeroLeash.ClearLeadTarget();   // WO-1012 P2: no lead outlives the flow
+
+            // WO-1108 Lane B: no guide BODY outlives the flow either. SkipAll routes here
+            // (it reuses FinishFlow), so a player who skips at beat 1 — before any lead was
+            // ever asserted, i.e. before the CompleteCurrentStep vanish could fire — must
+            // not be left with a wolf standing in the town forever. Unconditional and
+            // idempotent: NotifyEscortComplete only sweeps when there is something to sweep.
+            DeNelle.Village.World.Camps.EchoWorldPresence.NotifyEscortComplete("FTUE flow finished");
+
             TutorialWorldAnchors.ClearLatch("flow finished");   // WO-962: no latch outlives the flow
             PressureHeld = false;
 
@@ -1443,23 +1465,24 @@ namespace DeNelle.Village
             // find one, and build a configured one if the scene ships none. The hub CAN ship
             // without a deployer, and a null here is exactly the silent no-body this ticket exists
             // to kill.
-            var deployer = EnsureGuidePetDeployer();
-            if (deployer == null)
-            {
-                FlowTrace.Warn("Tutorial", $"step '{step.Id}' grant.starterPet — no PetDeployer, so the guide has NO BODY " +
-                    "and 'Follow {guide}' will fall through to the steward stand-in. Data grant still applied.");
-            }
-            else
+            // WO-1108 Lane B: the summon is ROUTED THROUGH THE SINGLE APPEARANCE OWNER
+            // (EchoWorldPresence) instead of calling PetDeployer.SummonAt here. Nothing
+            // about the beat changes — EchoWorldPresence uses the same SummonAt path and
+            // the same EnsurePetDeployer self-heal — but all THREE appearance transitions
+            // (escort summon / vanish on arrival / the one post-battle reappearance) now
+            // read from one owner and one trace stream, which is what stops a second seam
+            // (the retired WO-360 outpost summon) from growing back.
             {
                 Vector3 birthPos = transform != null ? transform.position : Vector3.zero;
                 if (TutorialWorldAnchors.TryResolveAnchor("guide_anchor", out Vector3 anchorPos)) birthPos = anchorPos;
 
-                var body = Guard.Try("Tutorial", "summon the founding guide's body",
-                    () => deployer.SummonAt(birthPos), null);
+                bool bodyBorn = DeNelle.Village.World.Camps.EchoWorldPresence.SummonEscortBody(
+                    birthPos, $"tutorial step '{step.Id}' grant.starterPet");
 
-                if (body != null)
+                if (bodyBorn)
                     FlowTrace.Step("Tutorial", $"step '{step.Id}' grant.starterPet — guide BODY summoned ('{StarterPetSpecies}') at {birthPos} " +
-                        "(WO-961: exactly one Echo has a world body, because a beat says to follow it; the roster stays portrait cards).");
+                        "(WO-961: exactly one Echo has a world body, because a beat says to follow it; the roster stays portrait cards). " +
+                        "WO-1108: it VANISHES when the gate beat completes and returns once, after the first battle.");
                 else
                     FlowTrace.Warn("Tutorial", $"step '{step.Id}' grant.starterPet — guide body NOT summoned (species '{StarterPetSpecies}'); " +
                         "'Follow {guide}' will resolve to the steward stand-in. Check Resources/Pets/ice-wolf.prefab resolves.");
@@ -1495,44 +1518,13 @@ namespace DeNelle.Village
         // player at -- so the body and the objective can never disagree about where the guide is.
         // Do NOT resurrect a Hollow-relative position; it would put the body where the beat isn't.
 
-        /// <summary>
-        /// The PetDeployer that gives the founding guide its body (WO-961) -- found, or built if the
-        /// scene ships none. Mirrors <c>DialogueCommandSink.EnsurePetDeployer</c> /
-        /// <c>EchoAutoDeployTrigger.EnsurePetDeployer</c> rather than inventing a fourth spelling:
-        /// Heart-centred, project "Enemy" layer mask, bond ranks off the save.
-        /// <para/>
-        /// This exists because <c>PetDeployer</c> has NO singleton accessor. Returns null only if the
-        /// component could not be created at all; every caller must treat null as "no body" and say so.
-        /// </summary>
-        private DeNelle.Pets.PetDeployer EnsureGuidePetDeployer()
-        {
-            var deployer = FindAnyObjectByType<DeNelle.Pets.PetDeployer>();
-            if (deployer != null) return deployer;
-
-            var go = new GameObject("PetDeployer");
-            deployer = go.AddComponent<DeNelle.Pets.PetDeployer>();
-            if (deployer == null) return null;
-
-            Vector3 heartPos = Vector3.zero;
-            var heart = FindAnyObjectByType<HeartController>();
-            if (heart != null) heartPos = heart.transform.position;
-            deployer.SetHeartPosition(heartPos);
-
-            int enemyLayer = LayerMask.NameToLayer("Enemy");
-            deployer.SetEnemyMask(enemyLayer >= 0 ? (1 << enemyLayer) : ~0);
-
-            var svc = GameStateService.Instance;
-            var bonds = svc != null && svc.State != null ? svc.State.PetBonds : null;
-            if (bonds != null)
-                deployer.SetBondRanks(bonds.Count > 0 ? bonds[0] : 0,
-                                      bonds.Count > 1 ? bonds[1] : 0,
-                                      bonds.Count > 2 ? bonds[2] : 0);
-
-            FlowTrace.Step("Tutorial",
-                $"guide body: no PetDeployer in the scene - built one at heart={heartPos} " +
-                "(self-heal, same shape as DialogueCommandSink/EchoAutoDeployTrigger).");
-            return deployer;
-        }
+        // EnsureGuidePetDeployer() REMOVED (WO-1108 Lane B, 2026-08-16) — it was the FOURTH
+        // spelling of the same PetDeployer self-heal (DialogueCommandSink, EchoAutoDeployTrigger,
+        // this one), and its own doc comment already flagged that. Its single caller,
+        // ApplyStarterPetGrant, now goes through EchoWorldPresence.SummonEscortBody, which
+        // reuses EchoAutoDeployTrigger.EnsurePetDeployer. One appearance owner, one self-heal.
+        // Do NOT re-add a local copy: a private deployer here is how a second body-spawning
+        // seam gets built without the appearance owner ever knowing a body exists.
 
         // =====================================================================
         //  WO-T4 — scripted town wave (spec step 4: horn blast, no Start-Wave press)

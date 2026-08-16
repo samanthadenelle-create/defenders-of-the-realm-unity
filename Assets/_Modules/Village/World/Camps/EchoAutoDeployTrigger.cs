@@ -1,35 +1,61 @@
 // =============================================================================
-// EchoAutoDeployTrigger — WO-360: summon Echo (the pet) when the player enters an
-// enemy-outpost combat zone, so the Echo fights alongside them and persists.
+// EchoAutoDeployTrigger + EchoWorldPresence + EchoPresenceWatcher
+// THE SINGLE OWNER OF WHEN THE ECHO'S WORLD BODY APPEARS AND VANISHES (WO-1108 B).
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.Village   Namespace: DeNelle.Village.World.Camps
 //
-// THE BEAT: walk into an EnemyOutpost's combat radius → the player's chosen Echo
-// (the FTUE-named starter pet) is summoned at the player's position, golden-VFX
-// flourish if a summon/celebration VFX exists, a 3s mini-tutorial toast pops, and
-// the Echo joins the auto-fight (Pet in Defend mode hunts the garrison via the
-// SAME IDamageable/TargetManager path the village uses). The Echo PERSISTS — it is
-// never despawned here, so it keeps fighting through the raid AND trails the hero
-// during exploration afterward (PetHeroLeash, added by PetDeployer.SpawnPet).
+// OWNER RULE, verbatim (2026-08-16): "The only thing that should happen for the pet
+// or the echo is it takes you to the gate, gives you your dialogue, then it
+// disappears. The only time it reappears is after your battle."
+//
+// So there are exactly THREE appearance transitions in the whole game, and all three
+// go through EchoWorldPresence below:
+//   1. ESCORT SUMMON  - the FTUE guide's body wakes for beat 1/8 and leads beat 2/8
+//                       ("Follow {guide} to the gate"). Called by
+//                       TutorialFlow.ApplyStarterPetGrant.
+//   2. VANISH         - the moment beat 2/8 completes. Fired at the EXISTING
+//                       PetHeroLeash.ClearLeadTarget point in TutorialFlow, so
+//                       ARRIVAL AND VANISH ARE THE SAME EVENT and cannot disagree.
+//   3. REAPPEAR       - exactly ONCE, when the first battle RESOLVES. Guarded by the
+//                       same once-per-session static idiom this file already used.
+//
+// ---------------------------------------------------------------------------
+// WHY WO-360's OUTPOST SUMMON IS RETIRED HERE (the two-seam reconcile)
+// ---------------------------------------------------------------------------
+// This file used to be a SECOND, independent appearance owner: entering an enemy
+// outpost's combat radius summoned the Echo (once per session, static guard) and its
+// header stated "The Echo PERSISTS - it is never despawned here". That is the direct
+// opposite of the rule above on BOTH halves:
+//   * it appeared BEFORE/AS the battle started, not after it resolved, and
+//   * it never went away again.
+// Two owners would have shown the Echo twice by two different rules. The WO forbade
+// adding a third seam, so the outpost trigger is RE-POINTED rather than duplicated:
+// it no longer summons anything. It now only marks that the player has walked into
+// the fight (a trace), and the appearance itself waits for the battle to resolve.
+// The WO-360 presentation (golden flourish + the mini-tutorial toast) is NOT lost --
+// it MOVED to the reappearance, which is where the player now actually meets the
+// Echo again.
+//
+// The battle-resolve edge is read from BattleLock (DeNelle.Core.Combat) - the ONE
+// assembly-neutral "is a battle running" predicate, which both ATBCombatManager and
+// ArenaMode register into. Watching the true->false edge means this seam does not
+// care WHICH battle system resolved, and no battle owner needs a new callback.
 //
 // REUSE (no reinvented wheels):
-//   * PetDeployer.SummonAt(pos, Defend) — the ONE pet summon path (WO-360 add).
-//     Self-heals a PetDeployer in the world scene if none exists (mirrors
-//     DialogueCommandBridge.EnsurePetDeployer).
-//   * VFXManager.Play(Juice_LevelUp, pos) — best-effort golden flourish; the
-//     project has no dedicated "pet summon" VFX, so we reuse the celebratory
-//     level-up burst. Null-safe (no VFXManager = no flourish, never an error).
-//   * EchoTutorialUI.Show(name) — the code-built bottom-left mini-tutorial toast.
-//
-// IDEMPOTENT: summons the Echo at most once per session (a static guard) — the
-// player only meets their Echo at the outpost once. Re-entering the trigger is a
-// no-op. EnemyOutpost attaches this in Start() (Attach()), sizing the trigger to
-// the garrison ring so the deploy fires as the player reaches the fight.
+//   * PetDeployer.SummonAt(pos, Defend) - the ONE pet summon path (WO-360).
+//   * PetDeployer.DespawnAllEchoBodies  - the WO-1108 despawn verb (the mirror of
+//     SpawnPet; before this WO no despawn path existed anywhere in the pet stack).
+//   * VFXManager.Play(Juice_LevelUp, pos) - best-effort golden flourish. Null-safe.
+//   * EchoTutorialUI.Show(name) - the code-built bottom-left mini-tutorial toast.
+//   * EnsurePetDeployer() - the same self-heal DialogueCommandSink / TutorialFlow use.
 //
 // Isolation/safety: lives in DeNelle.Village; references DeNelle.Pets via the
-// Village asmdef. Every cross-call null-guarded + try/caught. ASCII-only strings.
+// Village asmdef. Every cross-call null-guarded + Guard/try-caught. ASCII-only
+// strings. Per CLAUDE.md sec.12 every transition self-reports through FlowTrace so a
+// single capture can prove WHICH beat fired -- never strip these lines.
 // =============================================================================
 
+using DeNelle.Core.Diagnostics;
 using DeNelle.Core.State;
 using DeNelle.Pets;
 using UnityEngine;
@@ -37,18 +63,18 @@ using UnityEngine;
 namespace DeNelle.Village.World.Camps
 {
     /// <summary>
-    /// A SphereCollider trigger that, the first time the Player enters an enemy
-    /// outpost's combat radius, summons the player's Echo (pet) to fight alongside
-    /// them — with a golden flourish + a one-shot mini-tutorial toast. Idempotent
-    /// per session. Attach via <see cref="Attach"/> from <see cref="EnemyOutpost"/>.
+    /// A SphereCollider trigger that marks the first time the Player enters an enemy
+    /// outpost's combat radius. WO-1108: it NO LONGER SUMMONS the Echo -- appearance is
+    /// owned solely by <see cref="EchoWorldPresence"/>, which brings the Echo back only
+    /// after the battle RESOLVES. Idempotent per session. Attach via <see cref="Attach"/>
+    /// from <see cref="EnemyOutpost"/>.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class EchoAutoDeployTrigger : MonoBehaviour
     {
-        // The Echo meets the player at the outpost ONCE per session (it then
-        // persists). A static guard keeps multiple outposts / re-entries from
-        // re-summoning. (Session-scoped on purpose: the live Echo carries over.)
-        private static bool s_summonedThisSession;
+        // Fires at most once per session (multiple outposts / re-entries are no-ops).
+        // Kept as the WO-360 static-guard idiom; only what it guards changed.
+        private static bool s_outpostEnteredThisSession;
 
         private float _triggerRadius = 12f;
         private bool _fired;
@@ -81,20 +107,20 @@ namespace DeNelle.Village.World.Camps
 
         private void OnTriggerEnter(Collider other)
         {
-            TrySummon(other);
+            TryMarkBattleEntered(other);
         }
 
         // Belt-and-braces: if the player is already standing inside the radius when
         // the trigger spawns, OnTriggerEnter won't fire — poll a couple of frames.
         private void Start()
         {
-            if (!s_summonedThisSession && !_fired)
+            if (!s_outpostEnteredThisSession && !_fired)
                 Invoke(nameof(PollForPlayer), 0.25f);
         }
 
         private void PollForPlayer()
         {
-            if (_fired || s_summonedThisSession) return;
+            if (_fired || s_outpostEnteredThisSession) return;
             var player = GameObject.FindWithTag("Player");
             if (player != null &&
                 Vector3.Distance(player.transform.position, transform.position) <= _triggerRadius)
@@ -103,9 +129,9 @@ namespace DeNelle.Village.World.Camps
             }
         }
 
-        private void TrySummon(Collider other)
+        private void TryMarkBattleEntered(Collider other)
         {
-            if (_fired || s_summonedThisSession || other == null) return;
+            if (_fired || s_outpostEnteredThisSession || other == null) return;
             // The hero is tagged "Player" (CLAUDE.md §7); accept the player or a
             // child collider of the player root.
             if (!other.CompareTag("Player"))
@@ -116,59 +142,28 @@ namespace DeNelle.Village.World.Camps
             Fire(other.transform.position);
         }
 
+        // WO-1108: THIS NO LONGER SUMMONS. Walking into the outpost is the START of a
+        // battle, and the owner's rule is that the Echo reappears only AFTER one. All
+        // this does now is record the beat so a capture can prove the ordering
+        // (entered-fight -> battle resolved -> REAPPEAR) instead of leaving the
+        // reappearance looking like it came from nowhere.
         private void Fire(Vector3 atPosition)
         {
-            if (_fired || s_summonedThisSession) return;
+            if (_fired || s_outpostEnteredThisSession) return;
             _fired = true;
-            s_summonedThisSession = true;
+            s_outpostEnteredThisSession = true;
 
-            string echoName = ResolveEchoName();
-
-            try
-            {
-                var deployer = EnsurePetDeployer();
-                if (deployer != null)
-                {
-                    Pet echo = deployer.SummonAt(atPosition, PetMode.Defend);
-                    if (echo != null)
-                    {
-                        echo.name = string.IsNullOrEmpty(echoName) ? "Echo" : echoName;
-                        PlaySummonFlourish(echo.transform.position);
-                    }
-                    else
-                    {
-                        Debug.LogWarning("[EchoAutoDeployTrigger] SummonAt returned null — Echo not deployed.");
-                    }
-                }
-                else
-                {
-                    Debug.LogWarning("[EchoAutoDeployTrigger] Could not resolve/create a PetDeployer — Echo not deployed.");
-                }
-            }
-            catch (System.Exception ex)
-            {
-                Debug.LogWarning($"[EchoAutoDeployTrigger] Echo summon error (continuing): {ex.Message}");
-            }
-
-            // Mini-tutorial toast — non-blocking, 3s, tap-to-dismiss. Try/caught so a
-            // UI hiccup never blocks the raid.
-            try { EchoTutorialUI.Show(echoName); }
-            catch (System.Exception ex)
-            {
-                Debug.LogWarning($"[EchoAutoDeployTrigger] EchoTutorialUI error (ignored): {ex.Message}");
-            }
+            FlowTrace.Step("Echo",
+                $"outpost combat radius ENTERED at {atPosition} -- the WO-360 summon here is RETIRED " +
+                "(WO-1108: one appearance owner, EchoWorldPresence). The Echo does NOT appear for the " +
+                "fight; it returns once the battle RESOLVES, with the flourish + toast that used to " +
+                $"play here. awaitingReappear={EchoWorldPresence.AwaitingBattleReappear}, " +
+                $"alreadyReappeared={EchoWorldPresence.ReappearedThisSession}.");
         }
 
-        // Best-effort GOLDEN flourish at the summon point. The project has no
-        // dedicated "pet summon" VFX — reuse the celebratory level-up burst, which
-        // reads gold. VFXManager.Play is static + null-safe (no manager = no-op).
-        private static void PlaySummonFlourish(Vector3 pos)
-        {
-            try { VFXManager.Play(VFXType.Juice_LevelUp, pos); }
-            catch { /* VFX is cosmetic — never let it break the deploy */ }
-        }
-
-        private static string ResolveEchoName()
+        /// <summary>The player's name for their Echo, or "Echo". Shared with
+        /// <see cref="EchoWorldPresence"/> so there is ONE spelling of the name lookup.</summary>
+        internal static string ResolveEchoName()
         {
             var state = GameStateService.Instance?.State;
             if (state != null && !string.IsNullOrWhiteSpace(state.PetName))
@@ -179,7 +174,8 @@ namespace DeNelle.Village.World.Camps
         // Self-heal a PetDeployer in the world scene if none exists (mirrors
         // DialogueCommandBridge.EnsurePetDeployer): the OuterWorld may ship without
         // one. Heart/origin centre, project "Enemy" layer mask, save-bond ranks.
-        private static PetDeployer EnsurePetDeployer()
+        // internal: EchoWorldPresence reuses it rather than inventing a fifth spelling.
+        internal static PetDeployer EnsurePetDeployer()
         {
             var deployer = FindAnyObjectByType<PetDeployer>();
             if (deployer != null) return deployer;
@@ -207,6 +203,275 @@ namespace DeNelle.Village.World.Camps
 
             Debug.Log($"[EchoAutoDeployTrigger] Self-healed a PetDeployer (heart={heartPos}).");
             return deployer;
+        }
+    }
+
+    // =========================================================================
+    //  EchoWorldPresence — THE SINGLE APPEARANCE OWNER (WO-1108 Lane B)
+    // =========================================================================
+    /// <summary>
+    /// Owns the Echo's world body lifecycle: escort summon -> vanish on arrival ->
+    /// exactly ONE reappearance after the first battle resolves. Every transition is
+    /// FlowTrace'd so one capture proves which beat fired (CLAUDE.md sec.12).
+    /// <para/>
+    /// State is SESSION-scoped statics, matching the WO-360 idiom this file already
+    /// used (<c>s_outpostEnteredThisSession</c>): the live body carries across scene loads,
+    /// so a per-scene guard would re-fire the beat every time the hub reloads.
+    /// </summary>
+    public static class EchoWorldPresence
+    {
+        private static bool s_escortSummoned;
+        private static bool s_despawnedAfterEscort;
+        private static bool s_reappearedThisSession;
+
+        /// <summary>True once the escort body has been summoned this session.</summary>
+        public static bool EscortSummoned => s_escortSummoned;
+
+        /// <summary>True once the escort beat ended and the body was removed.</summary>
+        public static bool DespawnedAfterEscort => s_despawnedAfterEscort;
+
+        /// <summary>True once the post-battle reappearance has happened (it happens once).</summary>
+        public static bool ReappearedThisSession => s_reappearedThisSession;
+
+        /// <summary>True while the Echo is off-stage waiting for a battle to resolve.</summary>
+        public static bool AwaitingBattleReappear => s_despawnedAfterEscort && !s_reappearedThisSession;
+
+        /// <summary>How many Echo/pet bodies are in the world right now (scene-counted).</summary>
+        public static int LiveBodyCount => PetDeployer.LiveBodyCount;
+
+        /// <summary>
+        /// TRANSITION 1 — the escort body. Called by TutorialFlow's starter-pet grant so
+        /// the "Follow {guide} to the gate" beat has something to follow. Routed through
+        /// this owner (rather than TutorialFlow calling PetDeployer directly) so ALL THREE
+        /// transitions are visible in one place and in one trace stream.
+        /// </summary>
+        public static bool SummonEscortBody(Vector3 at, string reason)
+        {
+            var deployer = EchoAutoDeployTrigger.EnsurePetDeployer();
+            if (deployer == null)
+            {
+                FlowTrace.Fail("Echo",
+                    $"echo ESCORT SUMMON FAILED ({reason}): no PetDeployer could be found or built, so the " +
+                    "guide has NO BODY and 'Follow {guide} to the gate' points at nothing.");
+                return false;
+            }
+
+            Pet body = Guard.Try("Echo", "summon the escort body", () => deployer.SummonAt(at), null);
+            if (body == null)
+            {
+                FlowTrace.Warn("Echo",
+                    $"echo ESCORT SUMMON produced no body ({reason}) at {at} -- PetDeployer.SummonAt returned " +
+                    "null (no pet owned/chosen, or the catalog is empty). The escort beat will fall through " +
+                    "to the steward stand-in.");
+                return false;
+            }
+
+            s_escortSummoned = true;
+            string echoName = EchoAutoDeployTrigger.ResolveEchoName();
+            if (!string.IsNullOrEmpty(echoName)) body.name = echoName;
+            FlowTrace.Step("Echo",
+                $"echo APPEAR (escort): body '{body.name}' summoned at {at} ({reason}). bodies={LiveBodyCount}. " +
+                "It leads the gate beat and then VANISHES at that beat's completion (WO-1108).");
+            return true;
+        }
+
+        /// <summary>
+        /// TRANSITION 2 — the vanish. Fired from TutorialFlow at the EXISTING
+        /// PetHeroLeash.ClearLeadTarget point, so arrival and vanish are the same event
+        /// and cannot disagree. Idempotent: a second call only sweeps strays.
+        /// </summary>
+        public static void NotifyEscortComplete(string reason)
+        {
+            int removed = 0;
+            Guard.Try("Echo", "despawn the echo after the escort",
+                () => removed = PetDeployer.DespawnAllEchoBodies(reason));
+
+            if (s_despawnedAfterEscort)
+            {
+                FlowTrace.Step("Echo",
+                    $"echo VANISH re-asserted ({reason}) -- already despawned this session; swept {removed} " +
+                    $"stray body/bodies. bodies={LiveBodyCount}.");
+                return;
+            }
+
+            s_despawnedAfterEscort = true;
+            FlowTrace.Step("Echo",
+                $"echo VANISH: the escort beat is over ({reason}); removed {removed} world body/bodies, " +
+                $"bodies={LiveBodyCount}. From here the Echo reappears EXACTLY ONCE, when the first battle " +
+                "resolves (owner ruling WO-1108).");
+
+            if (removed == 0 && s_escortSummoned)
+                FlowTrace.Warn("Echo",
+                    "echo VANISH found NO body to remove even though an escort body was summoned this " +
+                    "session -- something destroyed or re-parented it outside PetDeployer, so the despawn " +
+                    "verb had nothing to tear down. Route every pet spawn through PetDeployer.SummonAt.");
+        }
+
+        /// <summary>
+        /// TRANSITION 3 — the one reappearance. Called by <see cref="EchoPresenceWatcher"/>
+        /// on the battle-resolve edge. Returns true only on the single firing.
+        /// </summary>
+        public static bool TryReappearAfterBattle(string reason)
+        {
+            if (s_reappearedThisSession)
+            {
+                FlowTrace.Step("Echo",
+                    $"echo REAPPEAR suppressed ({reason}) -- it already returned this session. The " +
+                    "once-per-session static guard is the whole point: the Echo comes back after the " +
+                    "FIRST battle, not after every battle.");
+                return false;
+            }
+            if (!s_despawnedAfterEscort)
+            {
+                FlowTrace.Step("Echo",
+                    $"echo REAPPEAR skipped ({reason}) -- the escort vanish has not happened this session, " +
+                    "so there is nothing off-stage to bring back (nothing to do, not an error).");
+                return false;
+            }
+
+            bool inBattle = false;
+            Guard.Try("Echo", "reappear battle-gate", () => inBattle = DeNelle.Core.Combat.BattleLock.IsInBattle());
+            if (inBattle)
+            {
+                FlowTrace.Warn("Echo",
+                    $"echo REAPPEAR refused ({reason}) -- BattleLock still reports a battle in progress. " +
+                    "The Echo returns AFTER the fight, never during it.");
+                return false;
+            }
+
+            var deployer = EchoAutoDeployTrigger.EnsurePetDeployer();
+            if (deployer == null)
+            {
+                FlowTrace.Fail("Echo",
+                    $"echo REAPPEAR FAILED ({reason}): no PetDeployer could be found or built. The Echo is " +
+                    "off-stage with no way back -- the player never sees it again this session.");
+                return false;
+            }
+
+            Vector3 at = ResolveReturnPosition();
+            Pet echo = Guard.Try("Echo", "summon the echo after the battle",
+                () => deployer.SummonAt(at, PetMode.Defend), null);
+            if (echo == null)
+            {
+                FlowTrace.Fail("Echo",
+                    $"echo REAPPEAR FAILED ({reason}): PetDeployer.SummonAt returned null at {at} (no pet " +
+                    "owned/chosen, or the catalog is empty). The guard is NOT consumed, so a later battle " +
+                    "resolve can still bring it back.");
+                return false;
+            }
+
+            s_reappearedThisSession = true;
+            string echoName = EchoAutoDeployTrigger.ResolveEchoName();
+            if (!string.IsNullOrEmpty(echoName)) echo.name = echoName;
+
+            // The WO-360 presentation, MOVED here from the outpost entry (see the file
+            // header): this is where the player actually meets the Echo again.
+            PlaySummonFlourish(echo.transform.position);
+            Guard.Try("Echo", "echo reappear toast", () => EchoTutorialUI.Show(echoName));
+
+            FlowTrace.Step("Echo",
+                $"echo REAPPEAR: '{echo.name}' returned at {at} after the battle ({reason}). " +
+                $"bodies={LiveBodyCount}. This fires ONCE per session and never again.");
+            return true;
+        }
+
+        /// <summary>
+        /// Clears the session statics. The lifecycle oracle drives the three transitions
+        /// in one process, so it needs a defined starting point; nothing in gameplay calls
+        /// this (a session IS the scope).
+        /// </summary>
+        public static void ResetSessionState()
+        {
+            s_escortSummoned = false;
+            s_despawnedAfterEscort = false;
+            s_reappearedThisSession = false;
+        }
+
+        // The hero is tagged "Player" (CLAUDE.md sec.7). Falls back to the Heart, then
+        // the origin, so the Echo never returns into the void.
+        private static Vector3 ResolveReturnPosition()
+        {
+            var player = GameObject.FindWithTag("Player");
+            if (player != null) return player.transform.position;
+
+            var heart = Object.FindAnyObjectByType<HeartController>();
+            if (heart != null)
+            {
+                FlowTrace.Warn("Echo",
+                    "echo REAPPEAR could not find a 'Player'-tagged hero -- returning the Echo at the Heart " +
+                    "instead. It should return to the player's side.");
+                return heart.transform.position;
+            }
+
+            FlowTrace.Warn("Echo",
+                "echo REAPPEAR found neither a 'Player'-tagged hero nor a Heart -- returning the Echo at the " +
+                "world origin.");
+            return Vector3.zero;
+        }
+
+        // Best-effort GOLDEN flourish. The project has no dedicated "pet summon" VFX --
+        // reuse the celebratory level-up burst, which reads gold (WO-360 pick, kept).
+        private static void PlaySummonFlourish(Vector3 pos)
+        {
+            try { VFXManager.Play(VFXType.Juice_LevelUp, pos); }
+            catch { /* VFX is cosmetic -- never let it break the reappearance */ }
+        }
+    }
+
+    // =========================================================================
+    //  EchoPresenceWatcher — the battle-resolve edge detector
+    // =========================================================================
+    /// <summary>
+    /// Polls <c>BattleLock.IsInBattle()</c> and calls
+    /// <see cref="EchoWorldPresence.TryReappearAfterBattle"/> on the true-&gt;false edge.
+    /// Code-built + DontDestroyOnLoad (mirrors PetHarvestBootstrap): no scene edit, no
+    /// new callback on any battle owner, and it does not care which battle system ran.
+    /// </summary>
+    public sealed class EchoPresenceWatcher : MonoBehaviour
+    {
+        private const float PollSeconds = 0.5f;
+
+        private static EchoPresenceWatcher _instance;
+        private bool _wasInBattle;
+        private float _timer;
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+        private static void Boot()
+        {
+            if (_instance != null) return;
+            var go = new GameObject("EchoPresenceWatcher");
+            _instance = go.AddComponent<EchoPresenceWatcher>();
+            Object.DontDestroyOnLoad(go);
+        }
+
+        private void OnDestroy()
+        {
+            if (_instance == this) _instance = null;
+        }
+
+        private void Update()
+        {
+            _timer -= Time.unscaledDeltaTime;
+            if (_timer > 0f) return;
+            _timer = PollSeconds;
+
+            bool inBattle = false;
+            Guard.Try("Echo", "battle-resolve probe",
+                () => inBattle = DeNelle.Core.Combat.BattleLock.IsInBattle());
+
+            if (inBattle == _wasInBattle) return;
+            _wasInBattle = inBattle;
+
+            if (inBattle)
+            {
+                FlowTrace.Step("Echo",
+                    $"battle STARTED (BattleLock) -- awaitingReappear={EchoWorldPresence.AwaitingBattleReappear}, " +
+                    $"alreadyReappeared={EchoWorldPresence.ReappearedThisSession}. The Echo returns when this resolves.");
+                return;
+            }
+
+            FlowTrace.Step("Echo", "battle RESOLVED (BattleLock true->false) -- evaluating the one reappearance.");
+            EchoWorldPresence.TryReappearAfterBattle("first battle resolved");
         }
     }
 }

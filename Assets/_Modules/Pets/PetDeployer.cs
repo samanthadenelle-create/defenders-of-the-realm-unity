@@ -402,8 +402,152 @@ namespace DeNelle.Pets
         public void ClearDeployed()
         {
             foreach (var pet in _deployed)
-                if (pet != null) Destroy(pet.gameObject);
+                if (pet != null) DestroySafe(pet.gameObject);
             _deployed.Clear();
+        }
+
+        // =====================================================================
+        //  WO-1108 Lane B — THE DESPAWN VERB (the mirror of SpawnPet)
+        // =====================================================================
+        // Owner, verbatim (2026-08-16): "The only thing that should happen for the pet
+        // or the echo is it takes you to the gate, gives you your dialogue, then it
+        // disappears. The only time it reappears is after your battle."
+        //
+        // Until this WO there was NO despawn path for a pet ANYWHERE in the codebase --
+        // verified by grep over the whole pet stack, and stated outright in
+        // EchoAutoDeployTrigger's header ("The Echo PERSISTS -- it is never despawned
+        // here"). Spawn had a verb; vanish did not, so "it disappears" was unbuildable.
+        //
+        // TEARDOWN ORDER MATTERS (this is the whole reason it is a verb and not a
+        // Destroy call at the call site):
+        //   1. the leash component is DISABLED FIRST, so PetHeroLeash's static
+        //      enabled-listener census (s_enabledLeashes) decrements exactly once and
+        //      no half-torn leash consumes a lead anchor on the next frame;
+        //   2. the harvester is disabled (it owns Suspend/RestoreLeash and would
+        //      otherwise re-enable a leash on a corpse);
+        //   3. the static guide-lead is CLEARED -- lead state is static, so a body that
+        //      dies mid-lead would otherwise strand an anchor nothing can reach and the
+        //      next SetLeadTarget would Warn "ZERO enabled PetHeroLeash" forever;
+        //   4. only then is the GameObject destroyed.
+        // The appearance POLICY (when it vanishes, when it may come back) is NOT here --
+        // it belongs to the single appearance owner, EchoWorldPresence (Village). This
+        // is the mechanism only.
+
+        /// <summary>
+        /// Despawns every pet body this deployer owns and returns how many were removed.
+        /// Idempotent (a second call removes nothing and returns 0). Safe in edit mode.
+        /// </summary>
+        public int DespawnEcho(string reason) => DespawnEcho(reason, null);
+
+        // `torn` (optional) collects the instance ids actually destroyed. It exists because
+        // Object.Destroy is DEFERRED to end-of-frame in play mode: without it the orphan
+        // sweep below would re-find a pet this pass already tore down and mis-report a
+        // perfectly tracked body as an orphan.
+        private int DespawnEcho(string reason, HashSet<int> torn)
+        {
+            int removed = 0;
+            for (int i = _deployed.Count - 1; i >= 0; i--)
+            {
+                Pet pet = _deployed[i];
+                _deployed.RemoveAt(i);
+                if (pet == null) continue;
+                if (TearDownPetBody(pet, torn)) removed++;
+            }
+
+            // No lead may outlive the body it was steering (the lead seam is STATIC).
+            PetHeroLeash.ClearLeadTarget();
+
+            FlowTrace.Step("Echo",
+                $"echo body DESPAWN via PetDeployer: removed={removed} (reason: {reason ?? "<none>"}). " +
+                "Leash disabled before destroy + guide-lead cleared, so nothing consumes a stale anchor next frame.");
+            return removed;
+        }
+
+        /// <summary>
+        /// How many pet/Echo bodies are alive in the world right now. Counted from the
+        /// scene (not from a deployer's bookkeeping) so an orphan body -- one whose
+        /// deployer was destroyed -- still counts. This is the honest "is the Echo in
+        /// the world" predicate the lifecycle oracle asserts against.
+        /// </summary>
+        public static int LiveBodyCount
+        {
+            get
+            {
+                var pets = FindObjectsByType<Pet>(FindObjectsSortMode.None);
+                if (pets == null) return 0;
+                int n = 0;
+                for (int i = 0; i < pets.Length; i++) if (pets[i] != null) n++;
+                return n;
+            }
+        }
+
+        /// <summary>
+        /// Despawns EVERY pet body in the world: each deployer's tracked pets, then an
+        /// orphan sweep for bodies no live deployer owns (a self-healed deployer that was
+        /// itself destroyed leaves those behind, and they are exactly the bodies the owner
+        /// would still see standing there). Returns the total removed.
+        /// </summary>
+        public static int DespawnAllEchoBodies(string reason)
+        {
+            var torn = new HashSet<int>();
+            int removed = 0;
+            var deployers = FindObjectsByType<PetDeployer>(FindObjectsSortMode.None);
+            if (deployers != null)
+                foreach (var d in deployers)
+                    if (d != null) removed += d.DespawnEcho(reason, torn);
+
+            // Orphan sweep — a body with no owning deployer is still a body on screen.
+            var strays = FindObjectsByType<Pet>(FindObjectsSortMode.None);
+            if (strays != null)
+                foreach (var pet in strays)
+                {
+                    if (pet == null) continue;
+                    if (torn.Contains(pet.GetInstanceID())) continue;   // already handled above
+                    string strayName = pet.name;                        // read BEFORE the teardown
+                    if (TearDownPetBody(pet, torn))
+                    {
+                        removed++;
+                        FlowTrace.Warn("Echo",
+                            $"echo despawn swept an ORPHAN pet body '{strayName}' that no PetDeployer tracked " +
+                            $"(reason: {reason ?? "<none>"}). Spawning outside PetDeployer leaves bodies the " +
+                            "appearance owner cannot see -- route every summon through PetDeployer.SummonAt.");
+                    }
+                }
+
+            PetHeroLeash.ClearLeadTarget();
+            return removed;
+        }
+
+        // Disable-then-destroy, Guard-wrapped: one bad body logs and is skipped, never
+        // aborting the sweep. Returns true when a body was actually torn down.
+        private static bool TearDownPetBody(Pet pet, HashSet<int> torn)
+        {
+            if (pet == null) return false;
+            var go = pet.gameObject;
+            if (go == null) return false;
+
+            int id = pet.GetInstanceID();
+            bool ok = false;
+            Guard.Try("Echo", "tear down echo body '" + go.name + "'", () =>
+            {
+                var leash = go.GetComponent<PetHeroLeash>();
+                if (leash != null) leash.enabled = false;      // census decrements exactly once
+                var harvester = go.GetComponent<PetHarvester>();
+                if (harvester != null) harvester.enabled = false;
+                DestroySafe(go);
+                ok = true;
+            });
+            if (ok) torn?.Add(id);
+            return ok;
+        }
+
+        // Destroy() throws in edit mode (the headless oracle runs there); DestroyImmediate
+        // is illegal during play. One helper so no call site has to remember which.
+        private static void DestroySafe(GameObject go)
+        {
+            if (go == null) return;
+            if (Application.isPlaying) Destroy(go);
+            else DestroyImmediate(go);
         }
 
         private Pet SpawnPet(PetDef def, Vector3 slot)

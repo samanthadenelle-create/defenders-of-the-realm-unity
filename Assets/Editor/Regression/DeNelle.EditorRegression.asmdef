@@ -4,6 +4,7 @@
     "references": [
         "DeNelle.Core",
         "DeNelle.Village",
+        "DeNelle.Pets",
         "DeNelle.Data",
         "DeNelle.BattleATB",
         "DeNelle.Dungeons",
