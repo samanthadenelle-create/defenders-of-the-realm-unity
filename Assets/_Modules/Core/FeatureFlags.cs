@@ -666,6 +666,15 @@ namespace DeNelle.Core
         /// site so a UI capture shows WHY the tab is missing instead of reading as a vanished tab.</summary>
         public static bool MapTab => Get("maptab", defaultOn: false);
 
+        /// <summary>WO-991 (owner ruling 2026-08-15) — KILL SWITCH for the Healing Caravan's mobile
+        /// shell (HealingCaravanMobility: slow follow-the-hero crawl + glass HP + the status chip).
+        /// Default ON: the shell SHIPPED 2026-08-15 and this flag exists so a felt-test regression
+        /// can flatten the caravan back to the static HealingFountain-only behaviour WITHOUT a
+        /// rebuild (PlayerPrefs "ff.caravanmobile" = 0). The flag gates ONLY the mobility/chip
+        /// attach in StructureFactory — HealingFountain's out-of-battle Heart heal is untouched
+        /// either way. The heal-FIELD unlock (later WO-991 slice) will gate separately.</summary>
+        public static bool HealingCaravanMobile => Get("caravanmobile", defaultOn: true);
+
         /// <summary>WO-611 — when ON, the owner-designed COMBAT HUD renders inside the HudKit: a
         /// VIRTUAL D-PAD (cross/plus, steel body + gold chevrons + centre hub) for movement instead of
         /// the 4-round-button cluster; an oblong stadium ATTACK PILL (gold-trimmed, energy-sword) at the

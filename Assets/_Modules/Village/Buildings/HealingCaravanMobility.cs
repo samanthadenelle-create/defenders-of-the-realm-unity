@@ -67,6 +67,29 @@ namespace DeNelle.Village
                     "NavMeshObstacle found on the caravan root — a carving obstacle kills the agent's own navmesh. Removing it (mobile unit must not carve).");
                 Destroy(obstacle);
             }
+
+            // WO-991 item 5 — the ONE status chip: HP half = the existing
+            // FloatingHealthBar (glass HP in the shared combat-bar language;
+            // hideAtFull:false — an escorted support unit must be locatable at a
+            // glance), state half = CaravanStatusChip ("FOLLOWING / IDLE" by
+            // text + luminance, colourblind-safe). Guarded: a chip failure logs
+            // and is skipped — it must never take the follow/damage shell down.
+            Guard.Try("Caravan", "attach-status-chip", () =>
+            {
+                FloatingHealthBar.Attach(gameObject,
+                    fraction: () => _hp / MaxHpGlass,
+                    isDead: () => _dead,
+                    heightOffset: 2.9f,
+                    hideAtFull: false,
+                    destroyOnDead: true);
+                CaravanStatusChip.Attach(this);
+            });
+
+            // WO-991 slice 2 (owner VFX tag 2026-08-16): the healing aura + the
+            // Safe Zone range ring. Own Guard so a field/ring failure can never
+            // take the chip or the follow/damage shell down (and vice versa).
+            // Same ff.caravanmobile gate — this component only exists when ON.
+            Guard.Try("Caravan", "attach-heal-field", () => CaravanHealField.Attach(this));
         }
 
         private void Update()

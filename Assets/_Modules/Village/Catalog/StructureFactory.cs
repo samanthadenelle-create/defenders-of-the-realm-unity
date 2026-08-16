@@ -915,10 +915,20 @@ namespace DeNelle.Village
                     var f = root.AddComponent<HealingFountain>();
                     f.Configure(entry);
                     // WO-991: caravan is a mobile glass support unit that slow-follows the hero.
+                    // Kill switch ff.caravanmobile (default ON): OFF flattens the caravan back to
+                    // the static HealingFountain-only behaviour without a rebuild.
                     if (entry != null && entry.id == "healing_caravan")
                     {
-                        var mob = root.AddComponent<HealingCaravanMobility>();
-                        mob.Configure(entry);
+                        if (DeNelle.Core.FeatureFlags.HealingCaravanMobile)
+                        {
+                            var mob = root.AddComponent<HealingCaravanMobility>();
+                            mob.Configure(entry);
+                        }
+                        else
+                        {
+                            DeNelle.Core.Diagnostics.FlowTrace.Warn("Caravan",
+                                "ff.caravanmobile OFF -> healing_caravan built STATIC (no follow, no glass HP, no chip)");
+                        }
                     }
                     break;
                 }
