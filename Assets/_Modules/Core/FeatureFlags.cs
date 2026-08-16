@@ -719,7 +719,9 @@ namespace DeNelle.Core
         /// pets are HARVEST / COMPANION only per docs/COMBAT_PIVOT_NORTHSTAR.md ("no pets in battle"; pets =
         /// autonomous harvesters in V1): a Defend pet's hunt/target/attack loop (<see cref="DeNelle.Pets.Pet"/>
         /// Update/Attack/OverlapSphere scan) NO-OPs — the pet acquires no target and deals no damage, and it
-        /// earns no combat XP (<see cref="DeNelle.Pets.PetProgression"/> does not register as an IXpEarner).
+        /// earns no combat XP. (The XP half is no longer a FLAG concern at all: WO-993 retired PetProgression
+        /// outright, so no pet registers as an IXpEarner in either flag state. HeroProgression is the only
+        /// earner left. This flag still gates the FIGHT half in Pet.Update and PetHarvester.)
         /// The pet stays alive as a companion and <see cref="DeNelle.Pets.PetHarvester"/> keeps gathering
         /// (harvest no longer yields to a fight that can't happen). When ON, the full pet combat behaviour is
         /// restored. Default OFF — reversible: PlayerPrefs "ff.petcombat" = 1.</summary>

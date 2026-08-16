@@ -169,10 +169,12 @@ namespace DeNelle.Pets
                 pet.Configure(def, bond, slot, _deployMode);
                 pet.SetEnemyMask(_enemyMask);
 
-                // Level progression: attach AFTER Configure so PetId is set when
-                // PetProgression enables and registers under it (XP system).
-                if (pet.GetComponent<PetProgression>() == null)
-                    pet.gameObject.AddComponent<PetProgression>();
+                // PetProgression attach REMOVED (WO-993, owner ruling 2026-08-14: "same with pet
+                // progression"). Echoes are a FAUCET, not a levelling companion — the level-scaling
+                // surface (Pet.SetProgressionMultipliers) went with it. The remaining IXpEarner is
+                // HeroProgression; XpEarnerRegistry / ProgressionManager are untouched and still
+                // grant the hero. Do NOT re-add a per-pet earner here: it would register an id the
+                // damage ledger can credit, silently reviving levelling behind ff.petcombat.
 
                 _deployed.Add(pet);
             }
@@ -279,8 +281,7 @@ namespace DeNelle.Pets
                 Pet spawned = SpawnPet(def, slot);
                 spawned.Configure(def, bond, slot, _deployMode);
                 spawned.SetEnemyMask(_enemyMask);
-                if (spawned.GetComponent<PetProgression>() == null)
-                    spawned.gameObject.AddComponent<PetProgression>();
+                // PetProgression attach REMOVED (WO-993) — see DeployStarterPets.
                 _deployed.Add(spawned);
             }
         }
@@ -342,8 +343,9 @@ namespace DeNelle.Pets
             Pet pet = SpawnPet(chosen, worldPosition);
             pet.Configure(chosen, bond, worldPosition, mode);
             pet.SetEnemyMask(_enemyMask);
-            if (pet.GetComponent<PetProgression>() == null)
-                pet.gameObject.AddComponent<PetProgression>();
+            // PetProgression attach REMOVED (WO-993) — see DeployStarterPets. This is the
+            // GUIDE's spawn path (SummonAt); the guide keeps its body, its animator and its
+            // PetHeroLeash-driven walk. Only the levelling surface is gone.
 
             _deployed.Add(pet);
             return pet;

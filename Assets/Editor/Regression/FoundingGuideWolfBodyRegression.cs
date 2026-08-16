@@ -466,10 +466,25 @@ namespace DeNelle.Editor.Regression
                              "the guide.");
 
             // -- (d) the floating-spirit layer stays retired on a quadruped ---------------
-            if (flow.Contains("EchoSpiritPresentation"))
-                failures.Add("[guide-body] " + TutorialFlowSrc + " references EchoSpiritPresentation. That " +
-                             "hover/drift layer existed to MASK the aether-sprite's missing idle; the ice wolf " +
-                             "ships its own idle and run clips, and a hovering quadruped is wrong (WO-961 scope).");
+            //
+            // WIDENED 2026-08-16 (WO-993), NOT relaxed. WO-993 DELETED EchoSpiritPresentation.cs
+            // outright (owner: the guide is a grounded wolf that walks, not a floating spirit), so
+            // the type no longer exists and this lint is now belt-and-braces against the FILE being
+            // re-added. But the scan had a real GAP that Lane B opened the same day: it watched only
+            // TutorialFlow, and the summon MOVED one hop to the appearance owner. A re-added
+            // AddComponent<EchoSpiritPresentation>() at the new spawn site would have attached the
+            // hover to the wolf with this case still green. Both sites are watched now.
+            const string SpiritLayer = "EchoSpiritPresentation";
+            const string SpiritWhy =
+                " references " + SpiritLayer + ". That hover/yaw-drift/Aura_HeartPulse layer existed " +
+                "to MASK the aether-sprite's missing idle; the ice wolf ships its own idle and run " +
+                "clips, and a hovering quadruped is wrong (WO-961 scope, retired outright by WO-993). " +
+                "Note this is the ECHO's use only - Aura_HeartPulse itself is NOT orphaned and the " +
+                "Heart of Elarion keeps it.";
+            if (flow.Contains(SpiritLayer))
+                failures.Add("[guide-body] " + TutorialFlowSrc + SpiritWhy);
+            if (presence != null && presence.Contains(SpiritLayer))
+                failures.Add("[guide-body] " + PresenceSrc + SpiritWhy);
 
             // -- (e) the resolver probes the live body, and the steward link is GONE ------
             // HISTORY: this used to assert an ORDERING - Pet probed before the "Sylas" steward

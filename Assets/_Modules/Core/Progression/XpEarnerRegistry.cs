@@ -1,8 +1,12 @@
 // =============================================================================
 // XpEarnerRegistry — process-wide map of earner-id -> live IXpEarner.
 // -----------------------------------------------------------------------------
-// Earners (HeroProgression in DeNelle.Village, PetProgression in DeNelle.Pets)
-// register on enable and unregister on disable. The Village ProgressionManager
+// Earners register on enable and unregister on disable. As of WO-993 there is
+// exactly ONE impl: HeroProgression (DeNelle.Village). PetProgression was retired
+// with the physical pet stack (Echoes are a faucet, not a levelling companion),
+// so no pet registers here. The seam itself is KEPT — it is what lets the Village
+// ProgressionManager grant XP without referencing another gameplay module, and it
+// is the join point for any future earner. The Village ProgressionManager
 // drains the per-enemy damage ledger on a kill and resolves each contributor's
 // id to its IXpEarner here, so it can grant shared XP across the asmdef seam
 // without referencing the other gameplay module. Pure C#, no Unity coupling.

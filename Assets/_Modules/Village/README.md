@@ -39,7 +39,7 @@ waves, buildings, outer world. References **Core only** — never HUD directly
 | `Monetization/` | `RewardedAdManager` |
 | `NPCs/` | Townsfolk, story companions, `SylasFirstMeeting`, dialogue bubbles |
 | `PatriciaLight/` (12) | Defend-the-Tower mode: `PatriciaLightController`, tower aim, FP/OTS cameras, breach choice |
-| `Pets/` | Village-side pet hooks: `AuraController`, contextual behaviour, tower repair visuals |
+| `Pets/` | Village-side pet hooks: contextual behaviour, tower repair visuals. (`AuraController` DELETED 2026-08-16, WO-993 — owner: "auracontroller can be retired". Not to be confused with `Heart/HeartAuraController`, `Hero/GearAura` or `Vfx/AmbientAuraPolicy`, all live.) |
 | `Progression/` | `ProgressionManager`, `TierSystem`, level-up VFX, wave XP bridge |
 | `Quests/` | `DailyQuestGateBridge` |
 | `Talents/` | Hero talent catalog/modifiers, talent tree panel, Wisdom currency |

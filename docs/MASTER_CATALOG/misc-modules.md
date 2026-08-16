@@ -240,7 +240,7 @@ ingredient floor-scatter placements beyond the scene bake) · `lore-fragments.js
 ### Pets — asmdef `DeNelle.Pets` (15 files)
 Starter-warden pillar: `PetDeployer` (spawns the 3 starter pets on a radius-11 ring around the Heart; takes the
 Heart position as a plain Vector3 — **no Village reference, integrator-wired**, `:2-14`), `Pet` + combat/AI,
-`PetCatalog` (pets.json), `PetProgression`, `PetAcquisitionService`, harvest/mining bridges (`PetHarvester`,
+`PetCatalog` (pets.json), ~~`PetProgression`~~ (DELETED 2026-08-16, WO-993 - pet levelling descoped; `Pet.SetProgressionMultipliers` went with it and `HeroProgression` is now the only `IXpEarner`), `PetAcquisitionService`, harvest/mining bridges (`PetHarvester`,
 `MineNodeBridge`), presentation (`PetAnimatorController/PetClipPlayer/PetEmoteController/PetIdleRoutines/
 PetBillboard/PetAttackVfxBridge/PetHeroLeash`). LIVE (village loop).
 

@@ -6,9 +6,16 @@
 // Create assets via Assets > Create > Defenders/Data/Pet.
 //
 // NOTE: PetType (in DeNelle.Core.Data) remains the canonical species reference
-// used by PetDeployer. PetData is the BALANCE LAYER used by Pet.cs and
-// PetProgression.cs to override hardcoded constants at runtime. When PetData is
-// null, both scripts fall back to their existing hardcoded values.
+// used by PetDeployer. PetData is the BALANCE LAYER used by Pet.cs to override
+// hardcoded constants at runtime. When PetData is null, Pet.cs falls back to its
+// existing hardcoded values.
+//
+// ORPHANED FIELDS (WO-993, 2026-08-16): damagePerLevel + hpMultiplierPerLevel are
+// NO LONGER READ BY ANYTHING. Their only reader was PetProgression.cs, deleted with
+// the pet levelling surface (owner ruling "same with pet progression"). They are kept
+// rather than removed because they are SERIALIZED fields on shipped .asset files -
+// deleting them is a data migration, not a code retirement. Do not wire them back up
+// without an owner ruling that re-opens pet levelling.
 // =============================================================================
 
 using UnityEngine;

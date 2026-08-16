@@ -333,7 +333,7 @@ Two generations coexist deliberately:
   shared kit Close is retired locally as a duplicate dismiss. Both CTAs seat at one fixed
   480x132 ref-px box on one baseline; all copy parents to the plate (`layout.body`) which
   carries a RectMask2D)**, EchoWispInjector,
-  EchoSpiritPresentation, EchoWaveUnlockBridge, EchoBalanceCatalog (owner-tunable knobs,
+  ~~EchoSpiritPresentation~~ (DELETED 2026-08-16, WO-993 - the founding Echo's ethereal hover/yaw-drift/Aura_HeartPulse layer; the guide is a GROUNDED WOLF that walks and keeps its body + PetHeroLeash lead), EchoWaveUnlockBridge, EchoBalanceCatalog (owner-tunable knobs,
   echoes-balance.json: WO-830 `preferredLaneMatchBonus 0.40`, 3 `crossBonuses` pairs
   Provisions/Forge/Fortune @ +0.10, `hiddenTriSynergyBonus 0.25`, Bran+Maren rates 0.45 each
   so the combined crystal trickle stays the slowest faucet).

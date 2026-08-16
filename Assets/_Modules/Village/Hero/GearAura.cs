@@ -5,8 +5,11 @@
 //
 // Registry section 6c: "the Aura beat sourced from an item, not a cast". A heal relic
 // gives the body a soft RISING restoration column; an elemental weapon faintly smoulders
-// on its own socket. Mirrors ArcaneAura's handle discipline and the Pets/AuraController
-// seat idea, but holds POOLED VFXType loops rather than instantiating art.
+// on its own socket. Mirrors ArcaneAura's handle discipline, but holds POOLED VFXType
+// loops rather than instantiating art.
+// (It used to also cite Pets/AuraController as prior art for the "seat" idea; that file
+// was RETIRED by WO-993 with the physical pet stack. GearAura is unaffected and stays —
+// it is the HERO's equipped-item aura and never had a pet dependency.)
 //
 // ## THE RISK THIS COMPONENT EXISTS TO CONTAIN
 //

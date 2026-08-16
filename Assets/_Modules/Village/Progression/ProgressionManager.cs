@@ -154,8 +154,8 @@ namespace DeNelle.Village.Progression
                 // level-up (hero AND pets flow through here). Null-safe.
                 // VFX spawns at FOOT level (owner ask 2026-07-10) — earner.WorldPosition
                 // is a HEAD-height point used for the TEXT label above; the burst wants
-                // the ground. Both IXpEarner impls (HeroProgression/PetProgression) are
-                // Components on the character ROOT, so transform.position is the feet.
+                // the ground. The IXpEarner impl (HeroProgression — PetProgression retired,
+                // WO-993) is a Component on the character ROOT, so transform.position is the feet.
                 // Fallback to WorldPosition for any future non-Component earner.
                 Vector3 footPos = (earner as Component)?.transform.position ?? earner.WorldPosition;
                 LevelUpVFXController.Instance?.PlayLevelUp(footPos, earner.Level);

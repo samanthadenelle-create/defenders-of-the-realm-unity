@@ -137,12 +137,9 @@ namespace DeNelle.Pets
         private IDamageable _cachedFoe;                 // last NearestHostile result
         private IDamageable _cachedRangedThreat;        // last NearestRangedThreat result
 
-        // ── Level progression (PetProgression drives these) ──────────────────
-        // Stat multipliers from the pet's level. Default 1 (level 1 = base def
-        // stats). _baseMaxHp captures the configured max so HP scaling is applied
-        // off the base, not compounded each level.
-        private float _progressionDmgMult = 1f;
-        private float _baseMaxHp;
+        // ── Level progression: RETIRED (WO-993) ──────────────────────────────
+        // _progressionDmgMult / _baseMaxHp are GONE with PetProgression and
+        // SetProgressionMultipliers. A pet's damage is _attackDamage, flat.
 
         // ── Natural locomotion (additive) ────────────────────────────────────
         // MoveToward eases speed up/down through _currentSpeed instead of
@@ -649,22 +646,13 @@ namespace DeNelle.Pets
             return best;
         }
 
-        /// <summary>
-        /// Applies a level-progression stat bonus (called by PetProgression on
-        /// level-up). Damage scales the per-hit damage; HP scales max HP off the
-        /// configured base, preserving the current HP fraction so a level-up does
-        /// not heal or hurt the pet.
-        /// </summary>
-        public void SetProgressionMultipliers(float damageMult, float hpMult)
-        {
-            _progressionDmgMult = Mathf.Max(1f, damageMult);
-
-            if (_baseMaxHp <= 0f) _baseMaxHp = _maxHp;   // capture the configured max once
-            float newMax = _baseMaxHp * Mathf.Max(1f, hpMult);
-            float frac = _maxHp > 0f ? _hp / _maxHp : 1f;
-            _maxHp = newMax;
-            _hp = newMax * frac;
-        }
+        // SetProgressionMultipliers() REMOVED (WO-993, owner ruling 2026-08-14 "same with pet
+        // progression"). Its ONLY caller was PetProgression, which is retired: Echoes are a
+        // faucet, not a levelling companion. Leaving a public setter with no caller reads as a
+        // live path and re-invites a pet XP loop. The pet's damage is now simply _attackDamage.
+        // NOTE: PetData.damagePerLevel / hpMultiplierPerLevel are now UNREAD but deliberately
+        // KEPT on the SO — they are serialized fields on shipped .asset files and deleting them
+        // is a data migration, not a code retirement. They are orphaned, not live.
 
         // Pet hits tint their floating damage number green (the hero's read cyan).
         private static readonly Color PetDamageColor = new Color(0.55f, 1.00f, 0.55f);
@@ -673,7 +661,7 @@ namespace DeNelle.Pets
         private void Attack(IDamageable foe)
         {
             _attackCdRemaining = _attackCooldown;
-            float dealt = _attackDamage * _progressionDmgMult;
+            float dealt = _attackDamage;   // WO-993: no level multiplier — pet progression retired
             // Source-tint this hit green so its floating number reads as PET damage,
             // distinct from the hero's cyan hits (IDamageTintable lives in Core).
             (foe as IDamageTintable)?.SetNextDamageTint(PetDamageColor);

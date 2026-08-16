@@ -162,7 +162,7 @@ not "provably unused", until these are read by hand.
 | `Assets/_Modules/Village/Enemies/Enemy.cs:1880` | `PlayKey` | `impactKey` |
 | `Assets/_Modules/Village/Enemies/EnemyAuraVFX.cs:219` | `VFXManager.Play*` | `_type` |
 | `Assets/_Modules/Village/Enemies/PlayerAttackController.cs:697` | `PlayKey` | `elementKey` |
-| `Assets/_Modules/Village/Harvest/EchoSpiritPresentation.cs:105` | `VFXManager.Play*` | `_auraType` |
+| ~~`Assets/_Modules/Village/Harvest/EchoSpiritPresentation.cs:105`~~ RETIRED 2026-08-16 (WO-993) - the Echo aura consumer is gone; `Aura_HeartPulse` KEEPS its Heart-of-Elarion + ArcaneAura consumers and its Hovl bridge row | `VFXManager.Play*` | `_auraType` |
 | `Assets/_Modules/Village/Harvest/HarvestAura.cs:361` | `VFXManager.Play*` | `type` |
 | `Assets/_Modules/Village/Hero/AbilityAudioBridge.cs:89` | `Resources.Load<AudioClip>` | `"" + kind` |
 | `Assets/_Modules/Village/Hero/GearAura.cs:380` | `VFXManager.Play*` | `type` |
@@ -416,7 +416,7 @@ bucketed `FALLBACK`, which reads as "ships, but with placeholder art".
 | `Portal_Enter` | **WIRED** | Assets/Resources/VFX/Portal/Portal_Enter.prefab | PortalVFXController.cs, VFXManager.cs | RESOLVED |
 | `Portal_Exit` | **WIRED** | Assets/Resources/VFX/Portal/Portal_Exit.prefab | PortalVFXController.cs, VFXManager.cs | RESOLVED |
 | `WaveClear_Celebration` | **WIRED** | ...s/Lana Studio/Casual RPG VFX/Prefabs/States/Level_up.prefab | BattleArena.cs, VFXManager.cs, WaveCelebrationManager.cs | RESOLVED |
-| `LevelUp_Celebration` | **WIRED** | ...s/Lana Studio/Casual RPG VFX/Prefabs/States/Level_up.prefab | CollectorStackView.cs, AuraController.cs, VFXManager.cs | RESOLVED |
+| `LevelUp_Celebration` | **WIRED** | ...s/Lana Studio/Casual RPG VFX/Prefabs/States/Level_up.prefab | CollectorStackView.cs, ~~AuraController.cs~~ (DELETED 2026-08-16, WO-993), VFXManager.cs | RESOLVED |
 | `Combo_Tier1` | **WIRED** | ...ana Studio/Casual RPG VFX/Prefabs/Burst/Flash_circle.prefab | VFXManager.cs, KillComboTracker.cs | RESOLVED |
 | `Combo_Tier2` | **WIRED** | ...dio/Casual RPG VFX/Prefabs/Burst/Flash_dubble_circle.prefab | VFXManager.cs, KillComboTracker.cs | RESOLVED |
 | `Pet_Aura_Fire` | **ORPHAN** | - | VFXManager.cs | NOROW - only its own declaration/plumbing references it; no VFXCatalog row |

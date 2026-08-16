@@ -127,11 +127,13 @@ namespace DeNelle.Editor
             // the HDR arcane-violet tint applies. IsLoop below is only the fallback literal - the
             // generator DERIVES the real flag from the prefab at build time (see the pLoop block).
             { "Dungeon_Portal_Gate",    new Pick(MAGIC + "Magic circle dark star.prefab", poolSize: 3, recolorable: true, isLoop: true) },
-            // Heart-of-Elarion + founding-Echo ambient AURA (owner 2026-07-16 "the aura on the
-            // tree/echo renders as ugly white squares"). VFXType.Aura_HeartPulse BRIDGES to this
-            // key (VFXManager._hovlKeyForType), so BOTH HeartAuraController (the tree nucleus) and
-            // EchoSpiritPresentation (the floating spirit) render this REAL soft glow loop instead of
-            // the textureless procedural billboard-square fallback. "Buff white twist" is the
+            // Heart-of-Elarion ambient AURA (owner 2026-07-16 "the aura on the tree/echo renders
+            // as ugly white squares"). VFXType.Aura_HeartPulse BRIDGES to this key
+            // (VFXManager._hovlKeyForType), so HeartAuraController (the tree nucleus) renders this
+            // REAL soft glow loop instead of the textureless procedural billboard-square fallback.
+            // WO-993 (2026-08-16): the founding-Echo half of that sentence is retired with
+            // EchoSpiritPresentation -- the guide is a grounded wolf now, not a floating spirit.
+            // The KEY and the Heart's use of it are UNCHANGED. "Buff white twist" is the
             // documented companion-ambient aura (Docs/VFX/HovlStudio_Inventory.md #25) -- a soft
             // NEUTRAL-WHITE VOLUMETRIC glow (not a flat ground rune ring), so it fits an airborne
             // nucleus better than the Magic-circle loop. COLORBLIND-SAFE (owner red/green): reads by

@@ -115,9 +115,14 @@ namespace DeNelle.Village
         // curated Hovl loop wired by string key in the HovlVfxCatalog. PlayLoop consults
         // this map BEFORE the procedural fallback, so the real pooled Hovl glow plays
         // instead of the textureless additive billboard SQUARES the procedural system
-        // draws. Aura_HeartPulse is shared by BOTH HeartAuraController (the Heart-of-
-        // Elarion tree nucleus) and EchoSpiritPresentation (the founding-Echo spirit) --
-        // both call PlayAura(Aura_HeartPulse) -- so one bridge row fixes both auras.
+        // draws. Aura_HeartPulse is HeartAuraController's (the Heart-of-Elarion tree
+        // nucleus) -- plus ArcaneAura's combat-spire key. THE ROW STAYS.
+        // WO-993 (2026-08-16): the SECOND consumer named here, EchoSpiritPresentation (the
+        // founding-Echo floating spirit), is RETIRED -- the guide is a grounded wolf that
+        // walks, not a hovering glow. Only the ECHO's use of this key went; the Heart's did
+        // NOT. Do not delete this bridge row on the strength of that retirement: removing it
+        // sends the Heart's aura back to the textureless procedural billboard SQUARES this
+        // bridge exists to fix.
         // Add a row here (+ the matching key in HovlVfxCatalogGenerator.Map + a catalog
         // regen) to route any other unwired VFXType loop to a Hovl prefab.
         private static readonly Dictionary<VFXType, string> _hovlKeyForType
