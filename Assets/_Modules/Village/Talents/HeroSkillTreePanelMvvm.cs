@@ -340,6 +340,9 @@ namespace DeNelle.Village.Talents
             Close();
             BuildChrome();
 
+            // No slug argument = the VM resolves the LIVE hero class (GameState.HeroClass) itself.
+            // Do NOT pass a literal here: a hardcoded slug is what made a Ranger browse — and spend
+            // Wisdom on — the KNIGHT tree while HeroTalentModifiers folded stats from the real class.
             _vm = new HeroSkillTreeVM(Close);
             Bind(_vm);
 

@@ -137,9 +137,15 @@ namespace DeNelle.Village.Buildings.Progression
                 }
 
                 // CLAUDE.md 12 - a full-wallet player must NEVER hit a silent no-op again: name WHY
-                // the spend failed (the GameState wallet vs. the tier cost) on a [Flow:Upgrade] Fail
+                // the spend failed (the GameState wallet vs. the tier cost) on a [Flow:Upgrade]
                 // line, so a future "tap does nothing" is one read, not a re-theorise.
-                FlowTrace.Fail("Upgrade", id + " tier-" + targetTier + " spend REJECTED - need W"
+                // SEVERITY: Capture, NOT Fail (2026-08-16). "Too poor to upgrade" is a NORMAL,
+                // player-facing outcome - the VM answers it with "You can't afford that yet." - so
+                // a broke player minted an F8 error (plus a screenshot) on every tier tap and buried
+                // the real captures. Every sibling spend path already logs this non-error
+                // (PlacedStructureUpgradeService, ResourceBuildingState, WallRepairController,
+                // ShopVM). The state dump is UNCHANGED; only the severity is honest now.
+                FlowTrace.Capture("Upgrade", id + " tier-" + targetTier + " spend REJECTED - need W"
                     + def.CostWood + "/F" + def.CostFood + "/C" + def.CostCrystal + ", wallet W"
                     + ResourceLedger.Balance(HarvestResource.Wood) + "/F"
                     + ResourceLedger.Balance(HarvestResource.Food) + "/C"

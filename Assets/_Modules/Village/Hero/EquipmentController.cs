@@ -147,15 +147,25 @@ namespace DeNelle.Village
         private static WeaponVisual Bow(string mesh) => new WeaponVisual
         {
             mesh = mesh, leftHand = true, kind = WeaponClass.Bow,   // bow goes in the off/bow (LEFT) hand
-            // owner spec: bow longest->Y, grip=center; TUNABLE — nudge gripEuler on playtest
-            // NormalizeInto already seats the bow to spec deterministically: LONGEST axis
-            // (limbs/nock-to-nock) -> local +Y (upright), NARROWEST -> +X (thin left-right,
-            // curve depth -> +Z forward), bounds-CENTRE at the grip root origin (hand grips
-            // the middle of the curve). So gripEuler stays ZERO here — exactly the
-            // proven-correct value HeroBowAttachment uses for the Ranger's held bow
-            // (HeroBowAttachment.GripLocalEuler == (0,0,0); a prior +91 Z tweak rotated the
-            // already-correct bow ~90° sideways — that WAS the "bow is turned" bug). Keep this
-            // a single value: if a touch off in-hand, nudge ONLY this gripEuler on playtest.
+            // owner spec: bow longest->Y, grip=center. NormalizeInto seats the bow to spec in the
+            // GRIP ROOT's own frame: LONGEST axis (limbs/nock-to-nock) -> local +Y, NARROWEST -> +X,
+            // curve depth -> +Z, grip at the root origin.
+            //
+            // ⚠ CORRECTED 2026-08-16 — see HeroBowAttachment.cs:55-65 for the full record.
+            // This block used to argue that "gripEuler stays ZERO here — exactly the proven-correct
+            // value HeroBowAttachment uses ... a prior +91 Z tweak rotated the already-correct bow
+            // ~90 degrees sideways — that WAS the 'bow is turned' bug". THAT PREMISE WAS FALSE.
+            // NormalizeInto has no knowledge of the BONE the grip root gets parented to, so a zero
+            // euler maps the limb span onto the hand bone's raw +Y (the fist axis) and the bow lies
+            // HORIZONTALLY across the body. HeroBowAttachment no longer relies on a zero euler at
+            // all: it DERIVES the hand-local seat via WeaponBoundsOrient.ComputeBowHeldRotation.
+            // This comment is preserved-and-marked rather than deleted because the wrong conclusion
+            // recorded here is what caused the correct fix to be reverted once already.
+            //
+            // NOTE: on the HERO this preset is not reached — DeferBowToBowAttachment skips bows so
+            // HeroBowAttachment owns the held bow. It still serves companions/non-rangers, which
+            // fall to `_baseGripRot = Quaternion.Euler(_baseGripEuler)` (zero). If a companion bow
+            // reads sideways, the answer is the same DERIVATION, not a dialed constant here.
             gripPos = new Vector3(0f, 0f, 0f), gripEuler = new Vector3(0f, 0f, 0f),
             heldLength = 0.92f, tint = new Color(0.36f, 0.22f, 0.10f)
         };
@@ -309,9 +319,14 @@ namespace DeNelle.Village
         private bool _weaponHandleOpen;
         private int _equipGeneration;
 
-        // If true, a bow equip is skipped here because HeroBowAttachment owns the
-        // ranger's held bow (set when the hero already carries that component).
-        private bool _deferBowToBowAttachment;
+        // True while HeroBowAttachment owns the ranger's held bow, so a bow equip is SKIPPED here.
+        // ⚠ EVALUATED LIVE, NEVER CACHED (fix 2026-08-16). This used to be a bool cached in Awake().
+        // HeroBodySwapper adds the EquipmentController (running its Awake) at BuildBody long BEFORE
+        // it calls HeroBowAttachment.AttachTo, so the cached value was permanently FALSE, the skip
+        // below never fired, and the ranger got TWO bows: the attachment's (correctly seated) and
+        // this controller's (seated from _baseGripEuler = zero euler). Component-add ORDER must not
+        // be able to defeat the de-dupe.
+        private bool DeferBowToBowAttachment => GetComponent<HeroBowAttachment>() != null;
 
         // ── Hold-state (idle lowered  vs  combat ready) ──────────────────────────────
         // Driven off the SAME combat signal the camera/locomotion use: HeroLocomotion
@@ -464,8 +479,9 @@ namespace DeNelle.Village
         {
             CacheRig();
             _loadout = GetComponent<GearLoadout>();
-            // The ranger's bow is owned by HeroBowAttachment; don't double-attach.
-            _deferBowToBowAttachment = GetComponent<HeroBowAttachment>() != null;
+            // NOTE: the "does HeroBowAttachment own the bow?" question is NOT answered here any
+            // more — see DeferBowToBowAttachment. At Awake the answer is always "no" because the
+            // attachment component is added later in the same body build.
         }
 
         private void OnEnable()
@@ -729,9 +745,9 @@ namespace DeNelle.Village
 
             // The ranger's held bow is HeroBowAttachment's job — skip here to avoid two bows.
             // NOTE: this only applies to the HERO (which carries HeroBowAttachment). A COMPANION
-            // archer has NO HeroBowAttachment, so _deferBowToBowAttachment is false and its bow is
+            // archer has NO HeroBowAttachment, so DeferBowToBowAttachment is false and its bow is
             // attached HERE — that is the path BUG 1 needed working (its bow now seats like the hero's).
-            if (_deferBowToBowAttachment && vis.mesh != null && vis.mesh.StartsWith("bow"))
+            if (DeferBowToBowAttachment && vis.mesh != null && vis.mesh.StartsWith("bow"))
             {
                 FlowTrace.Step("Equip", "bow deferred to HeroBowAttachment (hero owns the held bow) -> skip");
                 return;

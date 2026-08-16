@@ -334,15 +334,22 @@ namespace DeNelle.Village.Talents
     }
 
     /// <summary>
-    /// Pure ViewModel for the Knight skill tree. Exposes <see cref="Nodes"/> (one
+    /// Pure ViewModel for the LIVE hero's skill tree (see the ctor: the slug is resolved from
+    /// GameState.HeroClass, never hardcoded). Exposes <see cref="Nodes"/> (one
     /// <see cref="SkillNodeVM"/> per authored node) + the wallet header (RemainingWisdom,
     /// RemainingSkillPoints) + the column/branch labels. Raises <see cref="Changed"/>
     /// after each unlock and on any WisdomCurrencyService change.
     /// </summary>
     public sealed class HeroSkillTreeVM : IPanelViewModel, IDisposable
     {
-        // V1 hero slug — solo Knight north star. Swap to a ctor arg when multi-hero lands.
-        public const string HeroSlug = "knight";
+        // Hero slug = the LIVE class, resolved per-construction (fix 2026-08-16).
+        // HISTORY / CORRECTION: this used to be `public const string HeroSlug = "knight"` with the
+        // note "solo Knight north star — swap to a ctor arg when multi-hero lands". Multi-hero HAS
+        // landed: HeroTalentModifiers.ForEachUnlocked reads the LIVE class and calls
+        // HeroTalentCatalog.GetTree(slug), so a Ranger player browsed KNIGHT nodes, spent Wisdom on
+        // them, and gained NOTHING (the applier never looked at "knight." ids). The constant is now
+        // only the last-resort FALLBACK for "no GameState / no class chosen yet".
+        private const string FallbackSlug = "knight";
 
         private readonly string _heroSlug;
         private readonly Action _onClose;
@@ -366,10 +373,14 @@ namespace DeNelle.Village.Talents
         private Action _barHandler;
         private AssignableSkillBar _barSub;
 
-        public HeroSkillTreeVM(Action onClose, string heroSlug = HeroSlug)
+        public HeroSkillTreeVM(Action onClose, string heroSlug = null)
         {
-            _heroSlug = string.IsNullOrEmpty(heroSlug) ? HeroSlug : heroSlug;
+            _heroSlug = string.IsNullOrWhiteSpace(heroSlug)
+                ? ResolveLiveHeroSlug()
+                : heroSlug.Trim().ToLowerInvariant();
             _onClose = onClose;
+
+            RefundStrandedTrees();
 
             var svc = WisdomCurrencyService.Instance;
             if (svc != null)
@@ -380,6 +391,63 @@ namespace DeNelle.Village.Talents
             SubscribeBar();
 
             Rebuild();
+        }
+
+        /// <summary>
+        /// The LIVE hero class slug (the same source HeroTalentModifiers folds its stats from) —
+        /// GameState.HeroClass via <c>HeroTalentClassReader.Slug()</c>, falling back to
+        /// <see cref="FallbackSlug"/> only when no class has been chosen. NEVER a constant: a
+        /// constant here is exactly the bug this method exists to make impossible.
+        /// </summary>
+        private static string ResolveLiveHeroSlug()
+        {
+            string slug = Guard.Try("SkillTree", "resolve live hero slug",
+                () => HeroTalentClassReader.Slug(), FallbackSlug);
+            if (string.IsNullOrWhiteSpace(slug)) slug = FallbackSlug;
+            slug = slug.Trim().ToLowerInvariant();
+            FlowTrace.Step("SkillTree", "hero slug resolved LIVE = '" + slug + "'");
+            return slug;
+        }
+
+        /// <summary>
+        /// One-shot honesty pass: Wisdom banked on a tree the player can no longer SEE is
+        /// unreachable and unrespeccable (the respec button only ever targets the visible tree).
+        /// That state is reachable for anyone who spent points while the panel was hardcoded to
+        /// "knight". Any unlocked node belonging to a hero tree other than the live one is refunded
+        /// at FULL cost, FREE (no crystal charge — the player never chose to make this trade).
+        /// </summary>
+        private void RefundStrandedTrees()
+        {
+            Guard.Try("SkillTree", "refund stranded talent trees", () =>
+            {
+                var svc = WisdomCurrencyService.Instance;
+                if (svc == null) return;
+                var owned = svc.Unlocked;
+                if (owned == null || owned.Count == 0) return;
+
+                foreach (var tree in HeroTalentCatalog.AllTrees)
+                {
+                    string slug = tree?.HeroSlug;
+                    if (string.IsNullOrWhiteSpace(slug)) continue;
+                    slug = slug.Trim().ToLowerInvariant();
+                    if (slug == _heroSlug) continue;
+
+                    string prefix = slug + ".";
+                    bool stranded = false;
+                    foreach (var id in owned)
+                    {
+                        if (id != null && id.StartsWith(prefix, StringComparison.Ordinal))
+                        { stranded = true; break; }
+                    }
+                    if (!stranded) continue;
+
+                    FlowTrace.Warn("SkillTree",
+                        "stranded talents on '" + slug + "' while playing '" + _heroSlug +
+                        "' - refunding that tree in full, free of charge.");
+                    svc.RespecHero(slug);
+                    RespecStatus = "Talents spent on another class were refunded.";
+                }
+            });
         }
 
         // ── IPanelViewModel ───────────────────────────────────────────────────

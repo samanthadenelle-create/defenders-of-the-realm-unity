@@ -514,6 +514,12 @@ namespace DeNelle.Editor
             // Distinct marker CASTLE_PLANS_SEAT_OK -- a shared marker is how a 22-case pass once
             // read as the full suite's pass (canon sec 8).
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "castle-plans-seat suite", () => { if (!DeNelle.Editor.CastlePlansSeatRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[castle-plans-seat] " + r); });
+            // 2026-08-16: three player-visible defects pinned together - the talent panel must
+            // resolve the LIVE hero class (a Ranger was spending Wisdom on the knight tree), the
+            // ranger bow de-dupe must not be defeatable by component-add order (two bows), and an
+            // unaffordable upgrade tap must not log as an F8 error. Distinct marker
+            // LIVE_CLASS_BOW_AFFORD_OK (canon sec 8: a shared marker hides which suite really ran).
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "live-class-bow-afford suite", () => { if (!DeNelle.Editor.Regression.LiveClassBowAndAffordSeverityRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[live-class-bow-afford] " + r); });
 
             // --- WO-853 structures are targetable: Faction derived (never serialized) on every
             // IDamageable, walls stay on layer Structure (towers must not shoot through them),

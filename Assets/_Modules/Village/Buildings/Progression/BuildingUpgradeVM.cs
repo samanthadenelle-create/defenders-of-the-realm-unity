@@ -537,9 +537,12 @@ namespace DeNelle.Village.Buildings.Progression
                 {
                     Status = "You can't afford that yet.";
                     // CLAUDE.md 12 - never a silent no-op again: the service logs wallet-vs-cost;
-                    // mirror an honest [Flow:Upgrade] Fail here naming the tier cost that was short.
+                    // mirror an honest [Flow:Upgrade] line here naming the tier cost that was short.
+                    // SEVERITY: Capture, NOT Fail (2026-08-16) - the branch immediately above sets
+                    // the player-facing "You can't afford that yet.", i.e. this is a NORMAL outcome.
+                    // As a Fail it minted an F8 error + screenshot on every tap by a broke player.
                     if (nextDef != null)
-                        FlowTrace.Fail("Upgrade", _buildingId + " tier-" + next
+                        FlowTrace.Capture("Upgrade", _buildingId + " tier-" + next
                             + " UpgradeNext -> TryUpgrade FALSE (needed W" + nextDef.CostWood
                             + "/F" + nextDef.CostFood + "/C" + nextDef.CostCrystal
                             + ", have W" + ResourceLedger.Balance(HarvestResource.Wood)
