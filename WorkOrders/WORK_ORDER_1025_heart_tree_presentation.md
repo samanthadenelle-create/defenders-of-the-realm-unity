@@ -1,11 +1,24 @@
 # WORK ORDER 1025 — Heart of Elarion reads amateurish: unidentified VFX + an unlit single-texture tree
 
-**Status:** READY TO IMPLEMENT (⚠ step 1 is INSTRUMENTATION, not a fix — see §3)
+**Status:** STEPS 1 + 2-FIREFLIES-SLICE LANDED IN WORKING TREE 2026-08-16 (pending committer gate)
+— step 1: the §3 audit instrumentation in `HeartAuraController.cs` (WO-1025 AUDIT [EARLY/SETTLED]
+passes). Step 2 fireflies slice (orchestrator GO on the 08-16 owner rulings, §4d): the existing
+FireFlies loop re-enabled at the hub tree via a site-scoped `AmbientAuraPolicy` exemption;
+`HubTreeAuraWithholdRegression` updated to the new canon. All files brace-balanced, NUL-clean,
+uncommitted. STILL OPEN: the yellow-cone/starburst emitter hunt (gated on the captured AUDIT
+trace) + step 3 (tree material maps).
 **Minted:** 2026-08-15 (UI seat) — provenance stack bumped 1025 → 1026 in the same edit
 **Lane:** World art / VFX presentation. Disjoint from WO-1021 (talent UI), WO-1022 (scene GUIDs),
 WO-1024 (repair lifecycle).
 **Provenance:** owner 2026-08-15, verbatim: **"these graphics on tree look amatuerish"**, with an
 in-game screenshot of the Heart of Elarion at the hub centre.
+**OWNER RULING (2026-08-16, verbatim):** **"For the tree of life use the butterflies or fireflies."**
+— settles the tree's ambient direction: butterflies or fireflies, NOT auras/glows (consistent with
+the WO-1002 removal of the yellow aura). See §4c research note.
+**OWNER FOLLOW-UP (2026-08-16, verbatim):** **"that was already there"** — the butterfly/firefly
+effect already exists in the project (it is the catalogued `TreeofLifeAura_Aura` → `FireFlies`
+loop; see §4c). The implementation slice of step 2 is therefore REUSE-VERBATIM of the existing
+effect — no new particle authoring, no creative substitution.
 **Surface:** `Main_Castle_Overworld`, the world tree at scene centre — the game's single most-looked-at
 object. It is the emotional centrepiece of the whole pillar (canon §7: the Heart is the world tree the
 Echoes are drawn from), so its finish sets the perceived quality of everything around it.
@@ -112,6 +125,112 @@ against the trunk's real bounds — the controller already computes `crown=(0.00
 `sequenced-vfx-special-cases-for-special-events`) — the Heart plausibly qualifies as a marquee object.
 But that licenses a richer **presentation**, never a second spawner or pool. Reuse `VFXManager`.
 
+## 4b. STEP 1 LANDED (2026-08-16, working tree, pending committer gate)
+
+`HeartAuraController.cs` now runs a read-only **`WO-1025 AUDIT`** pass at every hub-centerpiece
+Heart (`_hasTreeBody` gate — combat/raid Hearts untouched), TWICE: `[EARLY]` at the end of
+`BuildAura` and `[SETTLED]` at +4 s (after the ~2.5 s late ground-snap and any late spawner), so a
+spawn/destroy between the two shows as a diff. Each pass emits `[Flow:Heart]` lines (measured
+outcomes per INSTRUMENTATION_STANDARD §1.4b — resolved world pos/lossyScale, live
+material/shader/mainTexture, isPlaying/particleCount, never authored intent):
+
+- **CHILD** lines — every ParticleSystem / Renderer / Projector / Light under the Heart root
+  (incl. inactive). The tree renderers' lines prove at runtime whether the DEF-267
+  `TreeOfLifeMaterialFixer` material applied and that it is basecolor-only.
+- **NEAR** lines — every non-child ParticleSystem / Projector within 25 m XZ of the anchor
+  (suspect #2: another system spawning at the Heart's transform).
+- **TREE** lines + a `Warn` when the scene-wide `TreeOfLife_Visual` count != 1 (stale-duplicate
+  suspect, §2b).
+- Each emitter line carries `key=` — the VFX catalog identity resolved from the live hierarchy
+  (`[VFX_<type>]` / `[ProceduralLoop_<type>]` pool names), `NOT-POOLED clone '<name>'` for an
+  Instantiate outside VFXManager (itself a finding: a second spawner), or `not catalogued`
+  (scene-attached / baked art).
+
+No presentation value changed; suppression flags untouched. The next graphics-enabled run at the
+hub will NAME the yellow-cone/starburst emitter in the capture — that is the step 2 gate.
+
+## 4c. RESEARCH NOTE — butterflies / fireflies on disk + live usage (2026-08-16, per owner ruling)
+
+**Live, catalogued, already-praised — the "that was already there" effect:**
+- Catalog key **`TreeofLifeAura_Aura` → prefab `FireFlies`** (isLoop; owner-tagged in
+  `Assets/Editor/VfxManualPicks.json`; played via `VFXManager.PlayKey`).
+- Wired to the Heart tree TODAY at `HeartAuraController.StartGreenTreeAura` (crown-seated,
+  crown-tracked) — but **currently WITHHELD at the hub** by
+  `AmbientAuraPolicy.WithheldAmbientAuraKey = "TreeofLifeAura_Aura"` (`AmbientAuraPolicy.cs:51`,
+  WO-1002 / F8 seq 2306, the "rejected yellow plume").
+- Owner verbatim on record, `PoiCalloutSystem.cs:57-58`: *"the fireflies are great at the tree"*.
+  Nodes used the same key at scale 0.60 until the 2026-08-06 retag to `Poi_NodeAura`; the retag
+  comment (`PoiCalloutSystem.cs:44-49`) also records the known constraint: the sparse
+  low-luminance fireflies are **imperceptible in bright midday hub lighting** at small scale.
+- **⚠ TENSION to resolve in step 2, owner-routed:** the 08-16 ruling asks for fireflies at the
+  tree; WO-1002 withholds exactly that key there. §2 already shows the amateurish yellow cone is
+  NOT the fireflies (they are suppressed and not spawning) — so the WO-1002 withhold may have
+  removed the wrong thing while the real offender kept drawing. Reconciling (e.g. re-enabling the
+  key at the hub once the true emitter is removed) is an OWNER decision; per §6 the flags are not
+  flipped unilaterally.
+
+**Disk assets (paths, git status):**
+- `Assets/UnityTechnologies/ParticlePack/EffectExamples/Misc Effects/Prefabs/FireFlies.prefab` —
+  the source prefab. **Gitignored pack.**
+- `Assets/Resources/VFX/_Shared/` — `FireFly.mat`, `FireFlyTrail.mat`, `FireFly.fbx`,
+  `FireFly.shader`, `FireFlyAlbedo/Emission.tif`, `FireFlyWings.png` — the **git-TRACKED runtime
+  mirror** of the firefly art (survives fresh clone / CI).
+- `Assets/Mirza Beig/Particle Systems/Ultimate VFX/Prefabs/Loop/pf_vfx-ult_demo_psys_loop_fireflies.prefab`
+  — a second fireflies loop. **Gitignored, zero code references.**
+- **Butterflies:** `Assets/polyperfect/Low Poly Ultimate Pack/_M/Prefabs_M/Animals_M/Butterfly.prefab`
+  (+ `_T` tier, `SM_Butterfly.fbx`) — an animal MESH prefab, not a particle effect. **Gitignored
+  pack, zero code references today.** No butterfly particle/VFX asset exists anywhere in the tree.
+
+**Greyscale read (owner is colourblind — judged on value/motion, never hue):** fireflies = small
+bright emissive points in motion against the dark canopy — strong value contrast, reads in
+greyscale, best at night; known weak in bright midday at sparse scale (above). Butterflies would
+be mesh agents needing new spawner/flight wiring (a second spawner — §7 forbids one) and their
+greyscale read depends on material value, unverified.
+
+**Working DEFAULT (not a lock): FIREFLIES** — already catalogued, already wired to the tree crown,
+already owner-praised verbatim, night-visible, git-tracked art. The owner can flip to butterflies
+in one word; that flip would need the polyperfect mesh through the mirror/Addressables pipeline
+plus flight animation — a materially bigger slice.
+
+## 4d. STEP 2 FIREFLIES SLICE LANDED (2026-08-16, orchestrator GO, working tree, pending gate)
+
+**GO recorded:** the orchestrator seat issued GO for the fireflies slice on the strength of the two
+08-16 owner rulings (quoted verbatim in Provenance above), which are NEWER than and specific
+against the WO-1002 withhold at this one site. The OR in "butterflies or fireflies" resolved to
+**fireflies** because the butterfly exists only as a gitignored polyperfect mesh prefab with zero
+code references (a new spawner — §7 forbids one), while the fireflies are the already-catalogued,
+already-crown-wired, owner-praised `TreeofLifeAura_Aura` → `FireFlies` loop ("that was already
+there"). No new particle authoring; no creative substitution.
+
+**WO-1002 reconciliation:** §2 proved the amateurish yellow cone is NOT the fireflies (they were
+suppressed and not spawning while it drew). So the 08-10 "yellow glow" rejection and the 08-16
+fireflies return do not conflict — the exemption is **fireflies-only, one key at one site**, and
+every other WO-1002/WO-890 suppression stays byte-intact: the generic
+`AmbientAuraPolicy.ShouldWithhold` is unchanged, harvest nodes still refuse the key, the
+white-swirl withhold is untouched, and the aura ban stands everywhere else.
+
+**Implementation (narrowest possible exemption):**
+- `Assets/_Modules/Village/Vfx/AmbientAuraPolicy.cs` — new `HeartTreeFirefliesExempt = true`
+  (static readonly, one flag to undo) + site-scoped `ShouldWithholdAtHeartTree(key)`; the generic
+  `ShouldWithhold` is byte-identical.
+- `Assets/_Modules/Village/Heart/HeartAuraController.cs` — `ShouldWithholdTreeAura` now routes
+  through `ShouldWithholdAtHeartTree`; both branches (play / traced withhold) stay wired.
+- `Assets/Editor/Regression/HubTreeAuraWithholdRegression.cs` — Case 2 hub assertion FLIPPED to
+  the new canon (withholding at the hub is now the FAIL); Case 1 adds: exemption flag must be
+  TRUE, `ShouldWithholdAtHeartTree(rejected)` must be FALSE, generic `ShouldWithhold(rejected)`
+  must STAY TRUE (surgical scope). Marker unchanged: `HUB_TREE_AURA_OK`.
+
+**EXPECTED AUDIT DELTA (what the verifier greps for on the next graphics-enabled hub run):**
+1. Crown-tether line flips: `treeAuraSuppressed=False` and `treeHandle=live`
+   (was `True` / `none` in F8 seq 2398); `whiteSwirlSuppressed=True` UNCHANGED.
+2. A `[Flow:Heart]` start line appears: `TreeofLifeAura_Aura FireFlies ambient started at crown ...`.
+3. `WO-1025 AUDIT[SETTLED]` header shows `treeAuraSuppressed=False`, and a CHILD ParticleSystem
+   line appears under the Heart root with the FireFlies material, `playing=True`,
+   `particles>0`, seated near the crown Y.
+4. The yellow cone + white starburst emitter lines (whatever the AUDIT names them as) must NOT be
+   the FireFlies instance — and that emitter hunt remains OPEN until the trace names it.
+5. `HUB_TREE_AURA_OK` with the new reason text ("PLAYS on the hub centerpiece Heart").
+
 ## 5. STEP 3 — the tree MODEL itself (separate contributor, do not skip)
 
 `Assets/Art/Tree_Of_Life/` contains exactly one texture:
@@ -131,7 +250,9 @@ fixing only the particles will leave the object still reading cheap.
 
 ## 6. Do NOT
 
-- Do not flip `_suppressWhiteSwirl` / `_suppressTreeAura` (§2)
+- Do not flip `_suppressWhiteSwirl` / `_suppressTreeAura` (§2). *(Amended 2026-08-16, §4d: the
+  TREE-AURA half is superseded by the owner's fireflies ruling — it now resolves FALSE at the hub
+  via the site-scoped policy exemption, not by flipping the flag. The white-swirl half stands.)*
 - Do not delete or quieten the `[Flow:Heart]` traces — §12: instrumentation is permanent. **That trace
   is the only reason we know the obvious diagnosis was wrong.**
 - Do not reference `Assets/Blink/**` directly at runtime — gitignored, breaks fresh clone / CI / WebGL

@@ -70,6 +70,28 @@ namespace DeNelle.Village
         public static bool ShouldWithhold(string key)
             => IsRejectedAmbientKey(key) && !ShrinkInsteadOfWithhold;
 
+        // -- WO-1025 HEART-TREE FIREFLIES EXEMPTION (owner rulings 2026-08-16) --------------------
+        // Verbatim: "For the tree of life use the butterflies or fireflies." and, on the effect,
+        // "that was already there" -- i.e. the EXISTING catalogued 'TreeofLifeAura_Aura' ->
+        // FireFlies loop returns to the hub Heart tree. These rulings are NEWER than and specific
+        // against the WO-1002 withhold at that one site. Everything else from WO-1002/WO-890 stays
+        // byte-intact: ShouldWithhold above is UNCHANGED for every other caller (harvest nodes
+        // still refuse the key at PoiCalloutSystem.EnsureNodeAura), and the yellow-aura rejection
+        // itself stands -- WO-1025 sec 2 proved the amateurish yellow cone is NOT the fireflies.
+        // This is the narrowest possible exemption: ONE key, ONE site, one readonly flag to undo.
+
+        /// <summary>TRUE (owner 2026-08-16): the hub Heart tree plays the FireFlies loop again.
+        /// Read ONLY by <see cref="ShouldWithholdAtHeartTree"/> -- no other site consults it.
+        /// (static readonly, not const, so neither branch is ever CS0162 unreachable.)</summary>
+        public static readonly bool HeartTreeFirefliesExempt = true;
+
+        /// <summary>The HEART-TREE-SITE variant of <see cref="ShouldWithhold"/>: identical for
+        /// every key except the rejected FireFlies key, which the 2026-08-16 owner ruling exempts
+        /// at this one site while <see cref="HeartTreeFirefliesExempt"/> is true. Harvest nodes
+        /// and any future site keep calling <see cref="ShouldWithhold"/> and are unaffected.</summary>
+        public static bool ShouldWithholdAtHeartTree(string key)
+            => ShouldWithhold(key) && !(HeartTreeFirefliesExempt && IsRejectedAmbientKey(key));
+
         /// <summary>Scale multiplier a withheld-site caller should pass when it is still
         /// allowed to play <paramref name="key"/> (i.e. under the shrink flip). 1 for every
         /// other key, so a non-rejected effect is never quietly resized.</summary>

@@ -10,16 +10,27 @@
 // tree, 2026-08-07, which sat READY and unimplemented), and this capture. This suite
 // exists so a fourth ask is impossible without a RED regression first.
 //
+// SUPERSEDING OWNER RULINGS AT ONE SITE (WO-1025, 2026-08-16, verbatim):
+//   "For the tree of life use the butterflies or fireflies."  /  "that was already there"
+// The EXISTING 'TreeofLifeAura_Aura' -> FireFlies loop returns to the HUB HEART TREE via
+// AmbientAuraPolicy.HeartTreeFirefliesExempt (site-scoped ShouldWithholdAtHeartTree).
+// WO-1025 sec 2 proved the amateurish yellow cone is NOT the fireflies, so the 08-10
+// rejection and the 08-16 return do not conflict: the harvest-node withhold and the
+// generic ShouldWithhold gate stay byte-intact. Case 2 now asserts the NEW canon (hub
+// plays), and Case 1 asserts the exemption is surgical (generic gate still closed).
+//
 // WHAT IT PROVES, EXECUTABLY (not by lint, where it can be executed):
 //
 //   (a) POLICY CONTRACT - AmbientAuraPolicy names the rejected key, ships with
 //       ShrinkInsteadOfWithhold FALSE (removal is the primary outcome), keeps the
-//       0.2 alternative available as ONE value, and never resizes an unrelated key.
+//       0.2 alternative available as ONE value, never resizes an unrelated key,
+//       and scopes the WO-1025 fireflies exemption to the heart-tree site only.
 //
-//   (b) HUB WITHHOLD vs COMBAT/RAID KEEP - the real decision predicate
+//   (b) HUB PLAYS (WO-1025) vs COMBAT/RAID KEEP - the real decision predicate
 //       HeartAuraController.ShouldWithholdTreeAura is called with both worlds:
 //         hasTreeBody = TRUE  (the hub centerpiece, a visible Tree-of-Life child)
-//                            -> WITHHELD, no yellow plume at the base.
+//                            -> NOT withheld; the FireFlies loop plays at the crown
+//                               (owner 2026-08-16 exemption; withholding here is now a FAIL).
 //         hasTreeBody = FALSE (a bare combat/raid Heart)
 //                            -> NOT withheld; those Hearts keep their aura, which
 //                               WO-1002 section 1 makes an explicit non-goal to remove.
@@ -83,11 +94,12 @@ namespace DeNelle.Editor.Regression
 
             if (failures.Count == 0)
             {
-                reason = "HUB TREE AURA OK - the rejected '" + AmbientAuraPolicy.WithheldAmbientAuraKey +
-                         "' loop is WITHHELD on the hub centerpiece Heart (tree body present) and on " +
-                         "harvest nodes, a bare combat/raid Heart still starts its aura, the withhold " +
-                         "is traced rather than silent, and the 0.2 'small instead of gone' " +
-                         "alternative is one value away (ShrinkInsteadOfWithhold).";
+                reason = "HUB TREE AURA OK - the '" + AmbientAuraPolicy.WithheldAmbientAuraKey +
+                         "' FireFlies loop PLAYS on the hub centerpiece Heart (WO-1025 owner exemption, " +
+                         "2026-08-16) while staying WITHHELD on harvest nodes (generic gate intact), a " +
+                         "bare combat/raid Heart still starts its aura, the withhold arm is traced " +
+                         "rather than silent, and the 0.2 'small instead of gone' alternative is one " +
+                         "value away (ShrinkInsteadOfWithhold).";
                 return true;
             }
             reason = "hub-tree-aura FAIL x" + failures.Count + ": " + string.Join(" | ", failures);
@@ -117,8 +129,20 @@ namespace DeNelle.Editor.Regression
                              "fourth ask. Flip this only on an explicit owner instruction.");
 
             if (!AmbientAuraPolicy.ShouldWithhold(AmbientAuraPolicy.WithheldAmbientAuraKey))
-                failures.Add("[policy] ShouldWithhold(rejected key) returned FALSE - the gate is open and " +
-                             "the yellow plume would play again.");
+                failures.Add("[policy] ShouldWithhold(rejected key) returned FALSE - the GENERIC gate is " +
+                             "open (harvest nodes would play the rejected loop). The WO-1025 fireflies " +
+                             "exemption is heart-tree-site-scoped ONLY and must never open this gate.");
+
+            // WO-1025 (owner 2026-08-16): the heart-tree site plays the FireFlies loop again.
+            // The exemption flag ships TRUE; an accidental flip-off silently re-removes an effect
+            // the owner explicitly asked for, so it goes red here.
+            if (!AmbientAuraPolicy.HeartTreeFirefliesExempt)
+                failures.Add("[policy] HeartTreeFirefliesExempt is FALSE - the owner ruled 2026-08-16 " +
+                             "('use the butterflies or fireflies' / 'that was already there') that the " +
+                             "FireFlies loop returns to the hub Heart tree. Flip only on owner word.");
+            if (AmbientAuraPolicy.ShouldWithholdAtHeartTree(AmbientAuraPolicy.WithheldAmbientAuraKey))
+                failures.Add("[policy] ShouldWithholdAtHeartTree(rejected key) returned TRUE - the " +
+                             "WO-1025 fireflies exemption is not reaching the heart-tree site.");
 
             if (AmbientAuraPolicy.ShouldWithhold("Cathedral_Aura") ||
                 AmbientAuraPolicy.ShouldWithhold("Aura_HeartPulse") ||
@@ -152,10 +176,13 @@ namespace DeNelle.Editor.Regression
             // hasTreeBody TRUE == the hub static-town Heart of Elarion: a visible non-particle
             // Tree-of-Life renderer under the anchor. This is the SAME single hub-detection the
             // white Aura_HeartPulse swirl already rides - no second gate was invented.
-            if (!HeartAuraController.ShouldWithholdTreeAura(true))
-                failures.Add("[hub-vs-raid] the HUB centerpiece Heart (hasTreeBody=true) is NOT withholding " +
-                             "'" + AmbientAuraPolicy.WithheldAmbientAuraKey + "' - the yellow plume is back " +
-                             "at the world tree's base (WO-1002 acceptance 1).");
+            // WO-1025 (owner 2026-08-16) FLIPS this assertion from the WO-1002 era: the hub tree
+            // must now PLAY the FireFlies loop (exemption live), so withholding here is the FAIL.
+            if (HeartAuraController.ShouldWithholdTreeAura(true))
+                failures.Add("[hub-vs-raid] the HUB centerpiece Heart (hasTreeBody=true) is WITHHOLDING " +
+                             "'" + AmbientAuraPolicy.WithheldAmbientAuraKey + "' - the owner ruled " +
+                             "2026-08-16 that the FireFlies loop returns to the world tree " +
+                             "(WO-1025 heart-tree exemption is not in effect).");
 
             // hasTreeBody FALSE == a bare combat / raid Heart. WO-1002 section 1 makes keeping their
             // aura an explicit requirement, so over-removal fails here just as loudly.

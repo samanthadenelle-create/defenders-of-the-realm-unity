@@ -33,6 +33,7 @@
 // the Heart just looking auraless.
 // =============================================================================
 
+using System.Collections.Generic;
 using UnityEngine;
 using DeNelle.Core.Diagnostics;
 
@@ -131,6 +132,29 @@ namespace DeNelle.Village
         private float _crownTrackTimer;
         private bool  _crownReported;                     // §12 Once-trace guard
 
+        // -- WO-1025 STEP 1: PRESENTATION AUDIT (INSTRUMENT, do not fix) --------------------------
+        // The owner's screenshot shows a yellow cone + white starburst at the hub tree while BOTH
+        // authored loops are traced as WITHHELD (crown-tether line) -- so an UNIDENTIFIED emitter is
+        // drawing. Per CLAUDE.md sec 12 no edit is earned until a captured trace NAMES it. This audit
+        // dumps, as MEASURED outcomes (INSTRUMENTATION_STANDARD sec 1.4b: resolved world transforms / live
+        // materials / renderer states, never authored intent):
+        //   1. every ParticleSystem / Renderer / Projector / Light under the Heart root (children of
+        //      HeartOfElarion incl. TreeOfLife_Visual -- WO-1025 sec 2b says the emitter is
+        //      scene-attached or runtime-spawned there),
+        //   2. every non-child ParticleSystem / Projector within AuditNearRadius of the anchor
+        //      (another system spawning AT the Heart's transform, e.g. alongside HeartRegen), and
+        //   3. every 'TreeOfLife_Visual' instance scene-wide (a stale duplicate that escaped the
+        //      CastleHubBuilder dedup pass is itself a live suspect -- WO-1025 sec 2b),
+        // each with its VFX catalog identity (pool names carry the key: '[VFX_<type>]' /
+        // '[ProceduralLoop_<type>]') or 'not catalogued', plus world position and lossy scale.
+        // Runs TWICE: EARLY (end of BuildAura) and SETTLED (+4s, after the late ground-snap and any
+        // late spawner), so a component destroyed/spawned between the two is visible as a diff.
+        private const float AuditSettleDelay = 4f;    // > the ~2.5s late ground-snap window
+        private const float AuditNearRadius  = 25f;   // world metres around the anchor, XZ
+        private const int   AuditMaxLines    = 40;    // per-section cap so a runaway pool can't firehose
+        private float _auditSettleTimer = AuditSettleDelay;
+        private bool  _auditSettledDone;
+
         // -- Self-bootstrap (attach onto the Heart at runtime; no scene edit) -----
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -195,6 +219,11 @@ namespace DeNelle.Village
             // predicate that means "this Heart is the static-town centerpiece with a visible tree".
             // NO second detection is invented: a bare combat/raid Heart has no tree body, so it keeps
             // its aura exactly as before (the withhold is HUB-ONLY, per WO-1002 section 1).
+            // WO-1025 (owner 2026-08-16, "use the butterflies or fireflies" / "that was already
+            // there"): AmbientAuraPolicy.HeartTreeFirefliesExempt now EXEMPTS this one key at this
+            // one site, so the predicate below returns FALSE at the hub and the FireFlies loop
+            // plays at the crown again. Both branches stay wired; the withhold trace still fires
+            // if the exemption is ever turned off.
             _suppressTreeAura = ShouldWithholdTreeAura(_hasTreeBody);
 
             // A pivot child hosts the glow + owns the size pulse, so scaling the aura never pollutes
@@ -261,6 +290,10 @@ namespace DeNelle.Village
 
             // Seed the readout so tier one is traced from the first frame.
             ApplyHealthTell(force: true);
+
+            // WO-1025 STEP 1: name the unidentified emitter. Hub centerpiece only -- the artifact
+            // is at the hub tree; combat/raid Hearts are not the subject and would only add noise.
+            if (_hasTreeBody) AuditHeartPresentation("EARLY");
         }
 
         // -- The recoil (WO-891 adjacent) -----------------------------------------
@@ -319,14 +352,18 @@ namespace DeNelle.Village
         /// <summary>
         /// THE WO-1002 DECISION, as a pure predicate so it is testable headlessly (a live BuildAura
         /// needs a VFXManager + a play session, which would green-tick over a null).
-        /// TRUE only when this Heart is the HUB centerpiece (<paramref name="hasTreeBody"/> -- the
-        /// same single hub-detection the white swirl uses) AND the policy says the rejected ambient
-        /// loop is withheld. A combat/raid Heart has no visible tree body, so it is always FALSE and
-        /// keeps its aura. Flipping <see cref="AmbientAuraPolicy.ShrinkInsteadOfWithhold"/> also makes
-        /// it FALSE -- the hub then plays the loop small (0.2) instead of not at all.
+        /// WO-1025 (owner rulings 2026-08-16, "For the tree of life use the butterflies or
+        /// fireflies" + "that was already there"): the predicate now routes through
+        /// <see cref="AmbientAuraPolicy.ShouldWithholdAtHeartTree"/>, whose fireflies exemption
+        /// makes this FALSE at the hub -- the EXISTING FireFlies loop plays at the crown again.
+        /// Everything else is unchanged: a combat/raid Heart (no tree body) is always FALSE and
+        /// keeps its aura; harvest nodes still consult the un-exempted ShouldWithhold; and turning
+        /// <see cref="AmbientAuraPolicy.HeartTreeFirefliesExempt"/> off restores the WO-1002
+        /// withhold verbatim. Flipping <see cref="AmbientAuraPolicy.ShrinkInsteadOfWithhold"/>
+        /// also makes it FALSE -- the hub then plays the loop small (0.2) instead of not at all.
         /// </summary>
         public static bool ShouldWithholdTreeAura(bool hasTreeBody)
-            => hasTreeBody && AmbientAuraPolicy.ShouldWithhold(TreeAuraKey);
+            => hasTreeBody && AmbientAuraPolicy.ShouldWithholdAtHeartTree(TreeAuraKey);
 
         /// <summary>Spawn the OWNER-TAGGED GREEN Tree-of-Life ambient loop (<see cref="TreeAuraKey"/>
         /// FireFlies) at <paramref name="worldSeat"/> (the tree crown when a centerpiece exists).
@@ -387,6 +424,186 @@ namespace DeNelle.Village
             return true;
         }
 
+        // -- WO-1025 STEP 1: presentation audit (read-only; changes NOTHING) ------
+
+        /// <summary>Dump every candidate emitter/renderer at the hub tree as MEASURED runtime state
+        /// (WO-1025 sec 3): children of the Heart root, near-field non-child emitters, and every
+        /// TreeOfLife_Visual instance scene-wide. Each line carries the VFX catalog identity (or
+        /// "not catalogued"), resolved world position/scale, and live material/shader/texture --
+        /// never authored intent (INSTRUMENTATION_STANDARD §1.4b). Read-only.</summary>
+        private void AuditHeartPresentation(string phase)
+        {
+            Guard.Try("Heart", $"WO-1025 presentation audit ({phase})", () =>
+            {
+                Vector3 anchor = transform.position;
+                FlowTrace.Step("Heart",
+                    $"WO-1025 AUDIT[{phase}] '{name}': anchorPos={anchor:F2}, " +
+                    $"whiteSwirlSuppressed={_suppressWhiteSwirl}, treeAuraSuppressed={_suppressTreeAura} -- " +
+                    $"dumping Heart-child hierarchy + non-child emitters within {AuditNearRadius:F0}m.");
+
+                // 1) CHILDREN of the Heart root (incl. inactive -- a disabled-but-present emitter is
+                //    still evidence). ParticleSystems first (the prime suspects), then non-particle
+                //    renderers (tree body: proves whether the DEF-267 material fixer applied), then
+                //    projectors and lights.
+                int lines = 0;
+                foreach (var ps in GetComponentsInChildren<ParticleSystem>(true))
+                {
+                    if (ps == null) continue;
+                    if (++lines > AuditMaxLines) { TruncNote(phase, "CHILD ParticleSystems"); break; }
+                    EmitLine(phase, "CHILD", "ParticleSystem", ps.transform, DescribeParticle(ps));
+                }
+                lines = 0;
+                foreach (var r in GetComponentsInChildren<Renderer>(true))
+                {
+                    if (r == null || r is ParticleSystemRenderer) continue;   // PS covered above
+                    if (++lines > AuditMaxLines) { TruncNote(phase, "CHILD Renderers"); break; }
+                    EmitLine(phase, "CHILD", r.GetType().Name, r.transform, DescribeRenderer(r));
+                }
+                lines = 0;
+                foreach (var p in GetComponentsInChildren<Projector>(true))
+                {
+                    if (p == null) continue;
+                    if (++lines > AuditMaxLines) { TruncNote(phase, "CHILD Projectors"); break; }
+                    EmitLine(phase, "CHILD", "Projector", p.transform,
+                        $"enabled={p.enabled}, mat='{(p.material != null ? p.material.name : "none")}'");
+                }
+                lines = 0;
+                foreach (var l in GetComponentsInChildren<Light>(true))
+                {
+                    if (l == null) continue;
+                    if (++lines > AuditMaxLines) { TruncNote(phase, "CHILD Lights"); break; }
+                    EmitLine(phase, "CHILD", "Light", l.transform,
+                        $"enabled={l.enabled}, type={l.type}, intensity={l.intensity:F2}, range={l.range:F2}");
+                }
+
+                // 2) NEAR-FIELD non-child emitters: another system spawning at the Heart's transform
+                //    (WO-1025 sec 3 suspect #2 -- HeartRegen is live in the same capture) renders here
+                //    without being a child, so a child-only dump would miss it entirely.
+                int near = 0; lines = 0;
+                foreach (var ps in FindObjectsByType<ParticleSystem>(
+                             FindObjectsInactive.Include, FindObjectsSortMode.None))
+                {
+                    if (ps == null || ps.transform.IsChildOf(transform)) continue;
+                    if (!WithinNearRadius(ps.transform.position, anchor)) continue;
+                    near++;
+                    if (++lines > AuditMaxLines) { TruncNote(phase, "NEAR ParticleSystems"); break; }
+                    EmitLine(phase, "NEAR", "ParticleSystem", ps.transform, DescribeParticle(ps));
+                }
+                lines = 0;
+                foreach (var p in FindObjectsByType<Projector>(
+                             FindObjectsInactive.Include, FindObjectsSortMode.None))
+                {
+                    if (p == null || p.transform.IsChildOf(transform)) continue;
+                    if (!WithinNearRadius(p.transform.position, anchor)) continue;
+                    near++;
+                    if (++lines > AuditMaxLines) { TruncNote(phase, "NEAR Projectors"); break; }
+                    EmitLine(phase, "NEAR", "Projector", p.transform,
+                        $"enabled={p.enabled}, mat='{(p.material != null ? p.material.name : "none")}'");
+                }
+
+                // 3) TreeOfLife_Visual instances SCENE-WIDE. CastleHubBuilder dedups extras
+                //    (:1731-1758); a stale duplicate that escaped that pass is a live suspect
+                //    (WO-1025 sec 2b). count!=1 at the hub is the anomaly this line exists to catch.
+                var treeRoots = new HashSet<Transform>();
+                foreach (var r in FindObjectsByType<Renderer>(
+                             FindObjectsInactive.Include, FindObjectsSortMode.None))
+                {
+                    if (r == null) continue;
+                    for (var t = r.transform; t != null; t = t.parent)
+                        if (t.name == "TreeOfLife_Visual") { treeRoots.Add(t); break; }
+                }
+                foreach (var t in treeRoots)
+                    EmitLine(phase, "TREE", "TreeOfLife_Visual", t,
+                        $"activeInHierarchy={t.gameObject.activeInHierarchy}, isHeartChild={t.IsChildOf(transform)}");
+                if (treeRoots.Count != 1)
+                    FlowTrace.Warn("Heart",
+                        $"WO-1025 AUDIT[{phase}] '{name}': TreeOfLife_Visual count is {treeRoots.Count} " +
+                        "(expected exactly 1 at the hub) -- a stale duplicate/missing tree is a live suspect.");
+
+                FlowTrace.Step("Heart",
+                    $"WO-1025 AUDIT[{phase}] '{name}': audit complete -- nearFieldEmitters={near}, " +
+                    $"treeOfLifeVisualCount={treeRoots.Count}.");
+            });
+        }
+
+        private static bool WithinNearRadius(Vector3 pos, Vector3 anchor)
+        {
+            float dx = pos.x - anchor.x, dz = pos.z - anchor.z;
+            return (dx * dx + dz * dz) <= AuditNearRadius * AuditNearRadius;
+        }
+
+        private void EmitLine(string phase, string where, string kind, Transform t, string detail)
+        {
+            FlowTrace.Step("Heart",
+                $"WO-1025 AUDIT[{phase}] {where} {kind} '{PathOf(t)}': key={CatalogIdentity(t)}, " +
+                $"worldPos={t.position:F2}, lossyScale={t.lossyScale:F2}, " +
+                $"activeInHierarchy={t.gameObject.activeInHierarchy}, {detail}");
+        }
+
+        private void TruncNote(string phase, string section)
+        {
+            FlowTrace.Warn("Heart",
+                $"WO-1025 AUDIT[{phase}] '{name}': {section} truncated at {AuditMaxLines} lines -- " +
+                "more exist than fit the cap (itself an anomaly worth reading).");
+        }
+
+        /// <summary>Measured particle state: playing/count/emission plus the LIVE renderer material,
+        /// shader and main texture -- what is actually on screen, not what was authored.</summary>
+        private static string DescribeParticle(ParticleSystem ps)
+        {
+            var psr = ps.GetComponent<ParticleSystemRenderer>();
+            var mat = psr != null ? psr.sharedMaterial : null;
+            var tex = mat != null ? mat.mainTexture : null;
+            return $"playing={ps.isPlaying}, particles={ps.particleCount}, " +
+                   $"emissionEnabled={ps.emission.enabled}, rendererEnabled={(psr != null && psr.enabled)}, " +
+                   $"mat='{(mat != null ? mat.name : "none")}', " +
+                   $"shader='{(mat != null && mat.shader != null ? mat.shader.name : "none")}', " +
+                   $"mainTex='{(tex != null ? tex.name : "none")}'";
+        }
+
+        /// <summary>Measured renderer state: enabled, live material/shader/main texture (proves at
+        /// runtime whether the DEF-267 TreeOfLifeMaterialFixer applied, and whether normal-less
+        /// basecolor is all the tree has), and the resolved world bounds size.</summary>
+        private static string DescribeRenderer(Renderer r)
+        {
+            var mat = r.sharedMaterial;
+            var tex = mat != null ? mat.mainTexture : null;
+            return $"enabled={r.enabled}, mat='{(mat != null ? mat.name : "none")}', " +
+                   $"shader='{(mat != null && mat.shader != null ? mat.shader.name : "none")}', " +
+                   $"mainTex='{(tex != null ? tex.name : "none")}', boundsSize={r.bounds.size:F2}";
+        }
+
+        /// <summary>The pooled-VFX catalog identity, resolved from the LIVE hierarchy: VFXManager
+        /// names pool instances '[VFX_&lt;type&gt;]' and procedural loops '[ProceduralLoop_&lt;type&gt;]',
+        /// so an ancestor carrying either prefix IS the catalog key. A '(Clone)' with neither prefix
+        /// was Instantiate'd OUTSIDE the pool (a second spawner -- itself a finding). Anything else
+        /// is 'not catalogued' (scene-attached or baked art).</summary>
+        private static string CatalogIdentity(Transform t)
+        {
+            for (var cur = t; cur != null; cur = cur.parent)
+            {
+                if (cur.name.StartsWith("[VFX_") || cur.name.StartsWith("[ProceduralLoop_"))
+                    return cur.name;
+            }
+            for (var cur = t; cur != null; cur = cur.parent)
+            {
+                if (cur.name.EndsWith("(Clone)"))
+                    return $"NOT-POOLED clone '{cur.name}' (instantiated outside VFXManager)";
+            }
+            return "not catalogued";
+        }
+
+        /// <summary>Hierarchy path from the scene root (capped at 10 segments), so a trace line
+        /// names WHERE an emitter lives without needing the editor open.</summary>
+        private static string PathOf(Transform t)
+        {
+            string path = t.name;
+            int depth = 0;
+            for (var cur = t.parent; cur != null && depth < 10; cur = cur.parent, depth++)
+                path = cur.name + "/" + path;
+            return path;
+        }
+
         // -- Per-frame color-free health tell ------------------------------------
 
         private void Update()
@@ -394,6 +611,18 @@ namespace DeNelle.Village
             if (_heart == null) return;
             UpdateCrownTrack();
             ApplyHealthTell(force: false);
+
+            // WO-1025 STEP 1: the SETTLED audit pass -- after the late ground-snap (~2.5s) and any
+            // late runtime spawner, so what it dumps is what the player's screenshot actually shows.
+            if (_hasTreeBody && !_auditSettledDone)
+            {
+                _auditSettleTimer -= Time.deltaTime;
+                if (_auditSettleTimer <= 0f)
+                {
+                    _auditSettledDone = true;
+                    AuditHeartPresentation("SETTLED");
+                }
+            }
         }
 
         // Keep the tree-seated auras locked on the LIVE crown so the LATE ground-snap (SeatOnGround
