@@ -858,6 +858,19 @@ namespace DeNelle.Village
                 var raidDeploy = FindAnyObjectByType<DeNelle.Village.RaidDeployController>();
                 if (raidDeploy != null)
                 {
+                    // WO-1110 §3 — DEATH PAYS WHAT RETREAT PAYS. Death used to reconcile the
+                    // army and stop there, never calling RaidScoring.Finalize/LootFor, so a
+                    // player who razed two thirds of a base and then FELL got less than one who
+                    // razed the same and tapped Retreat. That inverted the incentive the retreat
+                    // -loot block exists to remove, and it punished the more committed play.
+                    // Owner default (WO-1110, flagged as unruled): the loot is credit for damage
+                    // already done, so death settles through the SAME SettlePartialLoot the
+                    // retreat/timeout exit uses. It runs BEFORE the reconcile, matching
+                    // DoRetreat's order, and is idempotent (RaidScoring.Finalized latch) so a
+                    // victory or retreat that already settled makes this a logged no-op.
+                    DeNelle.Core.Diagnostics.Guard.Try("Raid", "settle partial loot on hero death",
+                        () => raidDeploy.SettlePartialLoot("hero death"));
+
                     DeNelle.Core.Diagnostics.Guard.Try("Raid", "settle army on hero death",
                         () => raidDeploy.ReconcileRaidEnd(0));
                     DeNelle.Core.Diagnostics.FlowTrace.Step("Raid",

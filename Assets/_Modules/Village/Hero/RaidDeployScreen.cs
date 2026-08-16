@@ -72,7 +72,17 @@ namespace DeNelle.Village.Hero
         /// </summary>
         public static void Open(SceneConfigDef def)
         {
-            if (def == null) { Debug.LogWarning("[RaidDeployScreen] Open(null) ignored."); return; }
+            if (def == null)
+            {
+                // WO-1110 §2 — a lone Debug.LogWarning gave the PLAYER nothing: the deploy
+                // screen simply never opened. Trace it AND say so on screen, so a missing def
+                // never reads as an unresponsive UI.
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("Raid",
+                    "RaidDeployScreen.Open(null) - no SceneConfigDef, the deploy screen cannot open.");
+                ElarionUiKit.ShowToast("That raid could not be opened.",
+                    ElarionUiKit.ToastTone.Danger);
+                return;
+            }
             var existing = _instance;
             if (existing == null)
             {

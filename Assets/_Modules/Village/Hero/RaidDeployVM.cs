@@ -341,7 +341,14 @@ namespace DeNelle.Village.Hero
 
         private string ComputeArmyCapText()
         {
-            if (_army == null) return "Army: -";
+            if (_army == null)
+            {
+                // WO-1110 §2 — this used to fall through silently. "Army: -" is the honest
+                // readout when there is no army, but the reason must reach a capture.
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("Raid",
+                    "army cap text: no army on the VM - the deploy screen reads 'Army: -'.");
+                return "Army: -";
+            }
             try
             {
                 Func<string, int> slotOf = id =>
@@ -352,8 +359,14 @@ namespace DeNelle.Village.Hero
                 int used = _army.SlotsUsed(slotOf);
                 return "Army: " + used + " / " + _army.MaxArmySize + " slots";
             }
-            catch
+            catch (Exception ex)
             {
+                // WO-1110 §2 — was a bare `catch { return "Army: -"; }`. The fallback string
+                // stays (the screen must still render), but a swallowed throw here made the
+                // army readout report "unknown" with nothing anywhere saying why.
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("Raid",
+                    "army cap text THREW - the deploy screen reads 'Army: -' instead of a slot " +
+                    "count: " + ex.GetType().Name + ": " + ex.Message);
                 return "Army: -";
             }
         }

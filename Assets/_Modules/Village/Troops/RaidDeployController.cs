@@ -147,11 +147,40 @@ namespace DeNelle.Village
         // END the raid (retreat) when time runs out. Null when scoring isn't present.
         private RaidScoring _scoring;
 
+        /// <summary>
+        /// WO-1110 fault-injection hook: when true the next <see cref="BuildHud"/> throws.
+        /// Exists so the "a HUD build failure still leaves an exit" acceptance can be PROVEN
+        /// by a deliberate injection rather than by reading the diff (CLAUDE.md §12 — the
+        /// data proves it, not the reasoning). Never set outside a test/AutoPilot harness.
+        /// </summary>
+        public static bool DebugForceBuildHudThrow;
+
         private void Start()
         {
             _camera = Camera.main;
-            BuildHud();
+
+            // ORDER IS LOAD-BEARING (WO-1110 §1). The clock-expiry subscriber is the raid's
+            // LAST-RESORT exit: if the HUD fails to build there is no tray and no Retreat
+            // button, and the ONLY way out is the 180s OnTimeExpired -> DoRetreat rescue.
+            // BuildHud() used to run FIRST and unguarded, so a throw inside it skipped the
+            // StartCoroutine line entirely and left the player in the raid's one exitless
+            // state. Subscribe first, build presentation second, and guard the build — the
+            // exit hatch must never depend on presentation succeeding.
             StartCoroutine(BindScoringRoutine());
+
+            bool built = DeNelle.Core.Diagnostics.Guard.Try("Raid", "build raid deploy HUD", BuildHud);
+            if (!built)
+            {
+                // The tray/Retreat button are gone; say so loudly and tell the player the
+                // clock will still evac them, so a blank raid never reads as a softlock.
+                DeNelle.Core.Diagnostics.FlowTrace.Fail("Raid",
+                    "deploy HUD failed to build - no tray and no Retreat button. The raid clock " +
+                    "subscriber IS installed (bound before the build), so OnTimeExpired will still " +
+                    "retreat the player; the raid is degraded, not softlocked.");
+                DeNelle.Core.UI.ElarionUiKit.ShowToast(
+                    "Raid controls failed to load - you will be evacuated when the clock runs out.",
+                    DeNelle.Core.UI.ElarionUiKit.ToastTone.Danger, lifeSeconds: 6f);
+            }
         }
 
         private void OnDestroy()
@@ -457,16 +486,7 @@ namespace DeNelle.Village
 
         private void DoRetreat()
         {
-            // WO-932 next set: settle score + partial loot BEFORE army reconcile / leave.
-            // Victory path grants loot in RaidVictoryController; retreat/timeout used to
-            // skip Finalize entirely so a half-razed base paid nothing and left scorer open.
-            if (_scoring == null) _scoring = RaidScoring.Instance;
-            if (_scoring != null && !_scoring.Finalized)
-            {
-                RaidResult result = _scoring.Finalize(false);
-                ResourceCost loot = _scoring.LootFor(result);
-                GrantRetreatLoot(loot, result);
-            }
+            SettlePartialLoot("retreat");
 
             // A retreat / clock-expiry exit is never a 3-star clear -> 0 stars, no veterancy.
             ReconcileRaidEnd(0);
@@ -477,7 +497,49 @@ namespace DeNelle.Village
             SceneRouter.GoCastle();
         }
 
-        /// <summary>WO-932: partial loot on retreat/timeout (stars may still be 1 from ≥50% razed).</summary>
+        /// <summary>
+        /// THE ONE partial-loot settlement, shared by EVERY non-victory raid exit
+        /// (WO-932 for retreat/timeout; WO-1110 §3 adds hero death).
+        ///
+        /// WO-932 next set: settle score + partial loot BEFORE army reconcile / leave.
+        /// Victory path grants loot in RaidVictoryController; retreat/timeout used to
+        /// skip Finalize entirely so a half-razed base paid nothing and left scorer open.
+        ///
+        /// BUG THIS CLOSES (WO-1110 §3): hero death reconciled the army but NEVER called
+        /// Finalize/LootFor, so dying forfeited razing credit that retreating paid — the
+        /// exact inverse of the perverse incentive the retreat-loot block was written to
+        /// remove, punishing the more committed play. Owner default (unruled, stated in the
+        /// WO): death pays the SAME partial loot as retreat, because the loot is credit for
+        /// damage already done. Both exits now call THIS method, so they cannot drift apart.
+        ///
+        /// Idempotent via <c>RaidScoring.Finalized</c>: whichever exit lands first settles,
+        /// the rest are logged no-ops — a raid can never be paid twice.
+        /// </summary>
+        /// <param name="exitLabel">Which exit is settling ("retreat" / "hero death") — trace only.</param>
+        public void SettlePartialLoot(string exitLabel)
+        {
+            if (_scoring == null) _scoring = RaidScoring.Instance;
+            if (_scoring == null)
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("Raid",
+                    $"{exitLabel} settle: no RaidScoring in the scene - no partial loot to pay.");
+                return;
+            }
+            if (_scoring.Finalized)
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Raid",
+                    $"{exitLabel} settle: raid already finalized - loot was paid by the first exit.");
+                return;
+            }
+
+            RaidResult result = _scoring.Finalize(false);
+            ResourceCost loot = _scoring.LootFor(result);
+            DeNelle.Core.Diagnostics.FlowTrace.Step("Raid",
+                $"{exitLabel} settle: partial loot for {result?.DestructionPercent ?? 0}% razed.");
+            GrantRetreatLoot(loot, result);
+        }
+
+        /// <summary>WO-932: partial loot on retreat/timeout/death (stars may still be 1 from >=50% razed).</summary>
         private static void GrantRetreatLoot(ResourceCost loot, RaidResult result)
         {
             int stars = result != null ? result.Stars : 0;
@@ -616,6 +678,15 @@ namespace DeNelle.Village
 
         private void BuildHud()
         {
+            // WO-1110 acceptance: the ONLY way to prove the exit survives a HUD failure is to
+            // actually break the HUD. One-shot so the injection cannot wedge a real session.
+            if (DebugForceBuildHudThrow)
+            {
+                DebugForceBuildHudThrow = false;
+                throw new System.InvalidOperationException(
+                    "WO-1110 fault injection: forced BuildHud failure.");
+            }
+
             if (_ui != null) Destroy(_ui);
 
             // A plain overlay canvas (NOT a modal scrim — the world stays visible/playable).

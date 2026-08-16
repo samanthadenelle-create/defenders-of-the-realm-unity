@@ -617,21 +617,41 @@ namespace DeNelle.Village
         /// </summary>
         public float ResolveRewardMultiplier()
         {
+            // WO-1110 §2 — THE EXPENSIVE SILENT FAILURE. This used to be `catch { }` with a
+            // bare `return 1f` fallback, so a catalog miss (or a throw) silently paid x1 where
+            // the card promised x2.2: a 55% pay cut the player cannot see and no trace records.
+            // The fallback is unchanged - 1f is still the right neutral number - but EVERY path
+            // that reaches it now says so, so an underpay is visible in a capture (CLAUDE.md §12:
+            // a catch that swallows without logging is forbidden).
+            string configId = null;
+            string scene = "?";
             try
             {
-                string configId = null;
                 if (_spawner != null) configId = _spawner.ConfigId;
                 SceneConfigDef def = null;
                 if (!string.IsNullOrEmpty(configId))
                     def = SceneConfigCatalog.Find(configId);
                 if (def == null)
                 {
-                    string scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name;
+                    scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name;
                     def = SceneConfigCatalog.FindBySceneName(scene);
                 }
                 if (def != null && def.rewardMultiplier > 0f) return def.rewardMultiplier;
+
+                FlowTrace.Warn("Raid",
+                    $"reward multiplier UNRESOLVED - paying x1. configId='{configId ?? "(none)"}' " +
+                    $"scene='{scene}' def={(def == null ? "MISS" : "found")} " +
+                    $"rewardMultiplier={(def == null ? "n/a" : def.rewardMultiplier.ToString("0.##"))}. " +
+                    "If this raid's card advertised a bonus multiplier the player is being UNDERPAID.");
             }
-            catch { /* catalog optional in unit tests */ }
+            catch (System.Exception ex)
+            {
+                // Catalog is legitimately absent in edit-mode unit tests; that is a Warn-level
+                // fact, not a crash - but it is NEVER swallowed silently again.
+                FlowTrace.Warn("Raid",
+                    $"reward multiplier THREW - paying x1. configId='{configId ?? "(none)"}' " +
+                    $"scene='{scene}': {ex.GetType().Name}: {ex.Message}");
+            }
             return 1f;
         }
     }

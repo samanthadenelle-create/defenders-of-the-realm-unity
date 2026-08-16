@@ -271,7 +271,19 @@ namespace DeNelle.Village.Hero
         private void OnCardTapped(string id)
         {
             var def = _vm != null ? _vm.DefFor(id) : null;
-            if (def == null) return;
+            if (def == null)
+            {
+                // WO-1110 §2 — this was a bare `return`: the card visibly depressed and then
+                // NOTHING happened, with no toast and no log. A dead tap reads to the player as
+                // a frozen game, and left no trace for whoever gets the bug report.
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("Raid",
+                    "raid card tap resolved NO SceneConfigDef - id='" + (id ?? "(null)") +
+                    "' vm=" + (_vm == null ? "null" : "present") + ". The tap is dead; " +
+                    "the card is on the grid but its def is missing from the catalog.");
+                ElarionUiKit.ShowToast("That raid is unavailable right now.",
+                    ElarionUiKit.ToastTone.Danger);
+                return;
+            }
             RaidDeployScreen.Open(def);
             // UIF-01: the deploy screen registers with the single-modal arbiter, so opening it
             // now CLOSES this grid (one modal at a time — the Echo roster->card precedent). The
