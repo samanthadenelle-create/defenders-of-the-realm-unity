@@ -231,8 +231,47 @@ namespace DeNelle.Village.Buildings.Progression
         }
 
         /// <summary>
+        /// MIGRATION SUPPORT (see <see cref="DualFamilyLevelResetMigration"/>). The RAW
+        /// persisted level for <paramref name="buildingId"/> — WITHOUT the def lookup and
+        /// WITHOUT the 1..MaxLevel clamp <see cref="GetLevel"/> applies — or
+        /// <paramref name="missing"/> when no key exists. A migration has to see what is
+        /// actually ON DISK: GetLevel hides an out-of-range write behind its clamp and would
+        /// report a level the store does not hold, so a corrupt value could read as clean.
+        /// </summary>
+        internal static int RawStoredLevel(string buildingId, int missing = -1)
+        {
+            if (string.IsNullOrEmpty(buildingId)) return missing;
+            string k = Key(buildingId);
+            return PlayerPrefs.HasKey(k) ? PlayerPrefs.GetInt(k, missing) : missing;
+        }
+
+        /// <summary>
+        /// MIGRATION SUPPORT: force ONE building back to level 1 by DELETING its persisted
+        /// key (<see cref="GetLevel"/> then reads its default of 1). Deliberately narrow —
+        /// unlike <see cref="ResetAll"/> this touches NO other building and does NOT call
+        /// <c>TechTree.ResetAll</c>, so a legitimately-earned Magic-gated tech unlock is never
+        /// revoked. Costs, GameState.BuildingTiers and the city ladder are untouched.
+        /// Returns true when a key was actually removed; raises <see cref="LevelChanged"/> so
+        /// a live harvester/collector re-reads its yield and tick interval.
+        /// </summary>
+        internal static bool ResetLevelToOne(string buildingId)
+        {
+            if (string.IsNullOrEmpty(buildingId)) return false;
+            string k = Key(buildingId);
+            if (!PlayerPrefs.HasKey(k)) return false;
+            PlayerPrefs.DeleteKey(k);
+            PlayerPrefs.Save();
+            LevelChanged?.Invoke(buildingId);
+            return true;
+        }
+
+        /// <summary>
         /// Resets all resource-building levels to 1 (used by a New Game / dev
         /// reset). Mirrors the carve-out semantics elsewhere; cheap.
+        /// <para>NOT usable as a targeted migration: it wipes EVERY resource building
+        /// (including any that is not dual-family and therefore holds a legitimate level)
+        /// AND calls <c>TechTree.ResetAll</c>, which revokes the Magic-gated unlocks. Use
+        /// <see cref="ResetLevelToOne"/> for a per-id reset.</para>
         /// </summary>
         public static void ResetAll()
         {

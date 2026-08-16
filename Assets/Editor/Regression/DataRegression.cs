@@ -405,6 +405,7 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "pack-grant suite", () => { if (!PackGrantRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[pack-grant] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "upgrade-authority suite", () => { if (!BuildingUpgradeAuthorityRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[upgrade-authority] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "upgrade-family suite", () => { if (!UpgradeFamilyPrecedenceRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[upgrade-family] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "dualfamily-level-reset suite", () => { if (!DualFamilyLevelResetRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[dualfamily-level-reset] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "crystal-production suite", () => { if (!CrystalProductionRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[crystal-production] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "sfx-resolve suite", () => { if (!SfxResolveRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[sfx-resolve] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "dungeon-exit suite", () => { if (!DungeonExitRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[dungeon-exit] " + r); });
@@ -459,6 +460,8 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "dungeon-composed-pillars suite", () => { if (!DeNelle.Editor.Regression.DungeonComposedPillarsRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[dungeon-composed-pillars] " + r); });
             // --- WO-1001 slice 1 multi-level dungeons: StairDown/StairUp sockets oppose and carry half a floor each, a vertical mate drops exactly one floor, a stacked pair is not an overlap (that abort is what made descents impossible), doors keep the planar-only nudge, and the GENERATED stair prefabs on disk actually carry the poses ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "dungeon-multilevel suite", () => { if (!DeNelle.Editor.Regression.DungeonMultiLevelRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[dungeon-multilevel] " + r); });
+            // --- WO-957 egress trim (owner F8 seq 2508: "Should be single entry point in maybe 2 total out"): a CONTENT dungeon authors AT MOST ONE extract - the BACK exit, seated in the room DungeonTreasureCache resolves as deepest - plus the one injected front exit. Nothing asserted the count before, which is how 13 per-stairwell pads accreted and gave dg_ember_deep SIX ways out. Also pins the WO-930 control-group exemption and the Resources/StreamingAssets dual-copy hash. ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "dungeon-egress suite", () => { if (!DeNelle.Editor.Regression.DungeonEgressRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[dungeon-egress] " + r); });
             // --- WO-850 dungeon treasure cache: fixed-bundle validity against materials.json, deepest-room BFS (undirected + ordinal tie-break), per-dungeon first-clear one-shot, panel single-exit ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "dungeon-treasure suite", () => { if (!DeNelle.Editor.Regression.DungeonTreasureRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[dungeon-treasure] " + r); });
             // --- WO-852 Echo card layout: chip rows at/above MinTouchPx, fixed-pixel bands (no 1f/n fraction slicing), scroll well, per-frame rebuild guard ---
@@ -813,6 +816,14 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "collector-props suite", () => { if (!DeNelle.Editor.Regression.CollectorStackPropCatalogRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[collector-props] " + r); });
 
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "placed-upgrade-page suite", () => { if (!DeNelle.Editor.PlacedUpgradePageTruthRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[placed-upgrade-page] " + r); });
+
+            // WO-1041/WO-1042 — the dungeon's justification, pinned. Gems must stay unbuyable
+            // (the Jeweler was SELLING all three for gold before this ticket, which voided the
+            // pillar's whole thesis); the polish job must stay unbuyable-to-completion (a paid
+            // instant resolve of a random outcome is a loot box, owner ruling 2026-08-16); every
+            // completed run must pay; the grade must move ODDS ONLY; free/ad/paid must share one
+            // odds table with DISCLOSED percentages derived from it.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "dungeon-gem-exclusivity suite", () => { if (!DeNelle.Editor.DungeonGemExclusivityRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[dungeon-gem-exclusivity] " + r); });
 
             // --- THE ORACLE THAT GUARDS THIS FILE: distinct markers, no unregistered
             // oracle, no gate script grepping a marker nobody emits. Registered LAST so
