@@ -1,18 +1,11 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ RECONCILED 2026-08-15 (CLI): main line next free = **999**. **782–859 + 900–998 CONSUMED.**
-> *(CLI bumped 997 -> 999 in the SAME edit as the 997 + 998 mints, 2026-08-15 late. **997** = class
-> resource/mana system — SPEC, ready for owner review (per-class pool/regen/cost identities on the ONE
-> existing pool + `ManaCostOf` reader; includes the mana-BAR legibility fix — the bar exists and is
-> live, `RoundToInt` + 5 Hz polling just make it unreadable; owner picks in its §5). **998** = NO
-> repair surface in the merged hub while structures burn — F8 seq 2397+2398 proving lines from
-> `RepairAvailabilityProbe`, `WallRepairController=ABSENT HubRepairAffordance=ABSENT` in both
-> Countdown and Active; fix at the owning layer + register the orphan `RepairProbeRegression`.
-> ⚠ **998 is CLOSED — SUPERSEDED by the UI seat's WO-1024** (same defect, minted by both seats within
-> minutes of each other off the same F8 burst; 1024 carries the source-verified root cause — the
-> `HubRepairAffordance` one-shot install gate runs before the town exists. The number stays consumed).
-> ⚠ 997 was FIRST minted as "1024" — the UI seat's block — by this seat; caught and renumbered before
-> any reference existed. The blocks are disjoint for a reason; mint from YOUR OWN row.)*
+> ## ⚠ RECONCILED 2026-08-15 (CLI): main line next free = **1000**. **782–859 + 900–999 CONSUMED.**
+> *(CLI bumped 999 -> 1000 in the SAME edit as minting **WO-999**. **999** = class resource economy
+> residual — ability-face cost pips + ResourceDisplayName on the bar + ranger Quick Shot Focus +
+> owner balance rulings left open by WO-997 (which is DONE implementation; RESULT on disk).
+> **997** = class resource system DONE (pools/costs/bar floats/`[class-resource]` oracle).
+> **998** CLOSED — SUPERSEDED by UI seat WO-1024 (hub repair surface). Numbers stay consumed.)*
 > *(⚠ 994 and 995 were minted as FILES without bumping this banner — the exact mint-without-bump that
 > §2 names as the collision cause, committed by the seat that spent the day enforcing it against others.
 > Caught and reconciled 2026-08-14 while minting 996. No collision occurred; both files are on disk and

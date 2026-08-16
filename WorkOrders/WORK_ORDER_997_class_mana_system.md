@@ -1,11 +1,17 @@
 # WORK ORDER 997 — Class resource system: mana costs, recharge, and identity per class
 
-**Status:** SPEC — READY FOR OWNER REVIEW (all numbers are proposals; balance intent is the owner's)
-**Minted:** 2026-08-15 (CLI seat, main-line block) — banner bumped 997 -> 999 in the same edit as this
-mint + WO-998. *(First minted as "1024" — the UI seat's block — caught and renumbered before any
-reference existed; the two-block discipline is the lesson, again.)*
-**Lane:** Hero combat data + `HeroAbilities` plumbing. File-disjoint from WO-1021 (talent UI) and WO-991 (caravan).
-**Provenance:** owner ask 2026-08-15 (relayed mid-session): *"Full mana system for classes, costs, recharge, designed for the game."*
+**Status:** DONE (implementation) — residual feel + owner rulings → **WO-999**  
+**RESULT:** `WorkOrders/WORK_ORDER_997_class_mana_system.RESULT.md`  
+**Minted:** 2026-08-15 (CLI seat, main-line block) — banner bumped 997 -> 999 with this mint + WO-998.  
+**Closed as implementation:** 2026-08-15 SME pass — data v4 + plumbing + bar floats + `[class-resource]` oracle live at HEAD.  
+**Lane:** Hero combat data + `HeroAbilities` plumbing.  
+**Provenance:** owner ask 2026-08-15: *"Full mana system for classes, costs, recharge, designed for the game."*
+
+> ### ⚠ SME CORRECTION (2026-08-15, post-implementation)
+> A later brief restated the **pre-v4** gap (“every skill costs 0 against a 10 pool”). That is
+> **stale**. At HEAD, each class has a `resource` block and W/E/R kit costs are non-zero mid-curve
+> (mage 5/7/10 on pool 20; knight 3/4/6 on 10; ranger 4/5/8 on 12 + melee on-hit Focus). What remains
+> is **feel + presentation + open owner rulings** — see WO-999, not a second greenfield mana system.
 
 ## 1. The measured gap (read at source 2026-08-15)
 
