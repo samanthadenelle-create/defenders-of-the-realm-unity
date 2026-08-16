@@ -524,7 +524,7 @@ namespace DeNelle.Editor
                 count += CaptureBuildGhostChips();   // WO-1010 P1: chips on the ghost
                 count += CapturePaletteCollapsed();  // WO-1010 P2: dock open + collapsed w/ restore tab
                 count += CaptureEndStateWaveClear(); // WO-952: the wave-clear banner's fit, MEASURED
-                count += CapturePetEngageDialogue(); // WO-1030: DialogueView options state (2-opt real + 4-opt worst case)
+                count += CaptureDialogueOptions(); // WO-1030 DialogueView options state (2-opt + 4-opt worst case); WO-1031 re-pointed off the deleted pet_engage builder
 
                 Debug.Log("[UICap-HL] done -> " + Path.GetFullPath(OutDir));
             }
@@ -852,43 +852,65 @@ namespace DeNelle.Editor
         }
 
         // ---------------------------------------------------------------------
-        //  Panel: the Echo (pet) engagement dialogue -- DialogueView rendering the
-        //  code-built pet_engage prompt in its OPTIONS state (WO-1030: 'Repair
-        //  structures' was sliced by the panel edge in landscape; the option band is
-        //  now reserved FIRST and the text well scrolls). Shot at every landscape
+        //  Panel: DialogueView in its OPTIONS state (WO-1030: 'Repair structures'
+        //  was sliced by the panel edge in landscape; the option band is now
+        //  reserved FIRST and the text well scrolls). Shot at every landscape
         //  target (including the Seeker's real 2670x1200) in two flavors:
-        //    * the REAL 2-option def via PetTaskController.BuildEngageDef("ice-wolf")
-        //      (speaker "Frost", so the speakers-block portrait resolve is exercised);
-        //    * a synthetic 4-option node -- the many-option worst case that must
-        //      scroll with a visible affordance, never silently clip.
+        //    * a 2-option node -- the common case, which must fit scroll-free;
+        //    * a 4-option node -- the many-option worst case that must scroll with
+        //      a visible affordance, never silently clip.
+        //
+        //  WO-1031: these used to shoot PetTaskController.BuildEngageDef("ice-wolf")
+        //  (speaker "Frost"). That prompt is DELETED -- the guide wolf is Echo #1,
+        //  Aldwin, and tasking lives in the Echo tab. The capture is now driven by
+        //  SYNTHETIC probe defs, because what it proves is the SHARED DialogueView
+        //  layout (canon reference implementation, UI_BLINK_TEMPLATE_CANON.md sec. 8)
+        //  which every conversation in the game depends on -- so the WO-1030 fix
+        //  keeps its screenshot coverage after the pet prompt's removal.
+        //
         //  DialogueView lives in DeNelle.HUD, which DeNelle.Editor does NOT
         //  reference, so the view is resolved by reflection (like PauseController).
         //  Its OnEnable/OnDisable are invoked explicitly: edit mode never calls
         //  MonoBehaviour lifecycle on AddComponent, and the Opened subscription is
         //  how the view builds its panel when DialogueService.PlayDef fires.
         // ---------------------------------------------------------------------
-        private static int CapturePetEngageDialogue()
+        private static int CaptureDialogueOptions()
         {
-            return ForEachTarget("PetEngageDialogue", CapturePetEngageDialogueOnce);
+            return ForEachTarget("DialogueOptions", CaptureDialogueOptionsOnce);
         }
 
-        private static int CapturePetEngageDialogueOnce(CaptureTarget target)
+        private static int CaptureDialogueOptionsOnce(CaptureTarget target)
         {
             int saved = 0;
-            saved += CaptureDialogueDefOnce(target,
-                DeNelle.Village.PetTaskController.BuildEngageDef("ice-wolf"),
-                "PetEngageDialogue_2opt");
-            saved += CaptureDialogueDefOnce(target, BuildFourOptionProbeDef(),
-                "PetEngageDialogue_4opt");
+            saved += CaptureDialogueDefOnce(target, BuildOptionProbeDef(2),
+                "DialogueOptions_2opt");
+            saved += CaptureDialogueDefOnce(target, BuildOptionProbeDef(4),
+                "DialogueOptions_4opt");
             return saved;
         }
 
-        /// <summary>The many-option WORST CASE (WO-1030 acceptance: a 4-option node either
-        /// fits or scrolls with a visible affordance). Same speaker as the real prompt so
-        /// the two shots differ ONLY by option count.</summary>
-        private static DeNelle.Core.Dialogue.DialogueDef BuildFourOptionProbeDef()
+        /// <summary>An n-option probe node (WO-1030 acceptance: 2 options fit scroll-free;
+        /// a 4-option node either fits or scrolls with a visible affordance). One builder so
+        /// the two shots differ ONLY by option count. Speaker is a catalog speaker, never an
+        /// invented name (WO-1031: no species -> name table exists any more).</summary>
+        private static DeNelle.Core.Dialogue.DialogueDef BuildOptionProbeDef(int optionCount)
         {
-            var def = new DeNelle.Core.Dialogue.DialogueDef { Id = "uicap_dialogue_4opt", StartNode = "root" };
+            string[] labels =
+            {
+                "Gather resources",
+                "Repair structures",
+                "Stand watch at the gate",
+                "Rest by the Heart of Elarion",
+            };
+            var def = new DeNelle.Core.Dialogue.DialogueDef
+            {
+                Id = "uicap_dialogue_" + optionCount + "opt",
+                StartNode = "root",
+            };
+            var options = new List<DeNelle.Core.Dialogue.DialogueOption>();
+            for (int i = 0; i < optionCount && i < labels.Length; i++)
+                options.Add(new DeNelle.Core.Dialogue.DialogueOption { Text = labels[i], Goto = "" });
+
             def.Nodes.Add(new DeNelle.Core.Dialogue.DialogueNode
             {
                 Id = "root",
@@ -896,17 +918,11 @@ namespace DeNelle.Editor
                 {
                     new DeNelle.Core.Dialogue.DialogueLine
                     {
-                        Speaker = "Frost",
-                        Text = "Keeper, the many-option worst case: every choice below must stay reachable.",
+                        Speaker = "Your Echo",
+                        Text = "Keeper, the option-layout probe: every choice below must stay reachable.",
                     },
                 },
-                Options = new List<DeNelle.Core.Dialogue.DialogueOption>
-                {
-                    new DeNelle.Core.Dialogue.DialogueOption { Text = "Gather resources", Goto = "" },
-                    new DeNelle.Core.Dialogue.DialogueOption { Text = "Repair structures", Goto = "" },
-                    new DeNelle.Core.Dialogue.DialogueOption { Text = "Stand watch at the gate", Goto = "" },
-                    new DeNelle.Core.Dialogue.DialogueOption { Text = "Rest by the Heart of Elarion", Goto = "" },
-                },
+                Options = options,
             });
             return def;
         }

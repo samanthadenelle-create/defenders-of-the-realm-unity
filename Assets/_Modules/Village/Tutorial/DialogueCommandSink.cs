@@ -172,9 +172,10 @@ namespace DeNelle.Village
                 // ── Pets → PetDeployer / PetAcquisitionService ────────────────────
                 case "spawn_starting_pet": EnsurePetDeployer()?.DeployStarterPets(); break;
                 case "spawn_named_pet":    SpawnNamedPet(a0); break;
-                // Pet engagement task pick (Harvest/Repair) — the "pet_task" verb fires from
-                // the code-built PetTaskController prompt; route the choice back to the pet.
-                case "pet_task":           PetTaskController.ApplyEngagementChoice(a0); break;
+                // WO-1031: the "pet_task" verb is REMOVED with the world engage prompt that
+                // was its only producer. Echo tasking lives in the Echo tab (EchoCardView ->
+                // EchoAssignments: the WO-830 resource picker + the WO-811 repair chip).
+                // Do NOT re-register it; an authored dialogue must not route tasking here.
 
                 // ── Camera → SmartMobileCamera (synchronous; no auto-restore hold) ─
                 case "camera_focus":

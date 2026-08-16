@@ -89,15 +89,10 @@
    "portrait": "Portraits/pet-house"
   },
   {
-   "name": "Frost",
-   "affiliation": "Echo of Elarion",
-   "portrait": "PetPortraits/pet-ice-wolf",
-   "_note": "WO-1030: the pet_engage prompt speaks as the Echo's DISPLAY name (PetTaskController.SpeakerName), but no speaker record carried these names, so the resolver fell through to the silhouette. Portraits are the Echoes' own rendered PetPortraits sprites - the same art the deployed billboard shows, not a creative substitution."
-  },
-  {
    "name": "Ember",
    "affiliation": "Echo of Elarion",
-   "portrait": "PetPortraits/pet-flame-pup"
+   "portrait": "PetPortraits/pet-flame-pup",
+   "_note": "WO-1031: the 'Frost' record was DELETED with the pet_engage prompt - the guide wolf is Echo #1, Aldwin, and 'Frost' was an invented name from PetTaskController.SpeakerName that bypassed EchoRosterCatalog. Ember/Aether/'Your Echo' are RETAINED pending an owner ruling (WO-1030 added them alongside Frost and they have no surviving producer either). Portraits are the Echoes' own rendered PetPortraits sprites - the same art the deployed billboard shows, not a creative substitution."
   },
   {
    "name": "Aether",

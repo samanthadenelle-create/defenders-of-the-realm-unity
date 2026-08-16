@@ -1,38 +1,46 @@
 // =============================================================================
-// EchoEngageDialogueRegression [echo-engage-dialogue] (WO-1030) - the Echo
-// engagement prompt's choices are NEVER clipped and its speaker resolves art.
+// EchoEngageDialogueRegression [echo-engage-dialogue] - INVERTED by WO-1031.
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.EditorRegression. Namespace: DeNelle.Editor.Regression.
 //
-// WHAT SHIPPED (owner screenshot 2026-08-16, Main_Castle_Overworld): the "Frost"
-// Echo task prompt rendered with "Repair structures" sliced by the panel edge in
-// landscape, and the medallion showed the generic silhouette instead of the Echo.
-//   DEFECT A root: DialogueView.ResizeToContent clamped TEXT+OPTIONS as ONE sum
-//     (Mathf.Clamp(contentPx, MinBodyPx, _maxBodyPx)); on a short landscape canvas
-//     the ceiling cut the bottom of the OPTION LIST - an unreachable choice.
-//   DEFECT B root: PetTaskController.SpeakerName returns DISPLAY names ("Frost"/
-//     "Ember"/"Aether") but dialogues.json's speakers block had no records for
-//     them, so the portrait resolver fell through to the silhouette even though
-//     the Echoes' own rendered portraits exist (Resources/PetPortraits/pet-*).
+// WHAT CHANGED (owner rulings 2026-08-16: "remove this screen then", "it gets
+// managed from the echo tab", "the wolf isnt frost or shouldnt be its the first
+// Echo"; F8 seq 2432 + 2502): the Echo/pet world ENGAGEMENT PROMPT is DELETED.
+// This suite was written 2026-08-15 under WO-1030 and asserted that prompt's
+// shape - including that the ice-wolf speaks as "Frost". That is now false BY
+// DESIGN, so the suite is INVERTED rather than deleted: a removal that nothing
+// guards is a removal that quietly comes back.
 //
-// THE LAWS THIS PINS:
-//   1 [def]       PetTaskController.BuildEngageDef (now static/public - the UI
-//                 capture shoots the SAME builder) yields the 2-option prompt with
-//                 both pet_task routings intact.
-//   2 [speakers]  Every species' display speaker (and the "Your Echo" default) has
-//                 a speakers-block record whose portrait path LOADS as a Sprite -
-//                 the resolve is exercised end to end, not just the JSON's shape.
-//   3 [reserve]   DialogueView reserves the OPTION band first (options are not
-//                 optional): the reserve-first arithmetic + the kit option scroll
-//                 zone + the MEASURED VerifyOptionsFit (shared UiSurfaceProbe
-//                 arithmetic) are present, and the two banned old shapes - the
-//                 48px sub-touch-floor row and the 0..0.60 fraction overlay - are
-//                 gone by name.
-//   4 [fit]       ARITHMETIC pin at the real landscape surfaces (1920x1080 and the
-//                 Seeker's 2670x1200): a 2-OPTION node fits WITHOUT option
-//                 scrolling, from the view's own constants regex-read out of the
-//                 source (never a second hand-maintained copy).
-//   5 [hygiene]   No embedded NUL in the touched sources (CLAUDE.md Sec. 0).
+// THE LAWS THIS PINS NOW:
+//   1 [removed]   PetTaskController carries NO BuildEngageDef / SpeakerName /
+//                 Engage / TickEngagement / ApplyEngagementChoice member and its
+//                 source names neither "pet_engage" nor "Frost" - the prompt and
+//                 the invented species->name table cannot return unnoticed.
+//                 (Reflection, not just source-lint: a re-add in ANY form fails.)
+//   2 [verb]      The "pet_task" dialogue verb is unregistered in
+//                 DialogueCommandSink AND unproduced by the authored dialogue
+//                 data - no orphan verb, no dead-end command.
+//   3 [name]      No "Frost" speaker record survives in EITHER dialogues.json
+//                 copy. The guide wolf is Echo #1, ALDWIN (EchoRosterCatalog) -
+//                 "Frost" was never a character. Names are DERIVED from the
+//                 roster catalog, never hand-authored (WO-1031 sec. 2b/2d).
+//                 Aldwin/Alduin are DIFFERENT characters (DungeonLoreReadable
+//                 Regression:74-91) - this suite never rewrites one into the other.
+//   4 [reserve]   RETAINED FROM WO-1030 AND STILL LOAD-BEARING. DialogueView
+//                 reserves the OPTION band first (options are not optional). This
+//                 lives in the SHARED DialogueView (canon reference implementation,
+//                 UI_BLINK_TEMPLATE_CANON.md sec. 8) - EVERY conversation in the
+//                 game depends on it. Removing the pet prompt does not make the
+//                 clipping bug go away anywhere else (WO-1031 sec. 6).
+//   5 [fit]       RETAINED FROM WO-1030. ARITHMETIC pin at the real landscape
+//                 surfaces (1920x1080 and the Seeker's 2670x1200): a 2-OPTION node
+//                 fits WITHOUT option scrolling, derived from the view's own
+//                 constants regex-read out of the source (never a second copy).
+//   6 [hygiene]   No embedded NUL in the touched sources (CLAUDE.md Sec. 0).
+//
+// DO NOT "restore" laws 1-3 to their WO-1030 form. If a future ticket brings
+// Echo tasking back to a world surface, it needs an owner ruling and a NEW pin -
+// this one exists to make the removal falsifiable.
 //
 // SOURCE-LINT + data + arithmetic only: no scene, no play mode, so it runs in the
 // headless DataRegression batch. Never throws.
@@ -45,6 +53,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Reflection;
 using System.Text.RegularExpressions;
 using UnityEngine;
 
@@ -54,6 +63,13 @@ namespace DeNelle.Editor.Regression
     {
         private const string ViewSrc = "Assets/_Modules/HUD/DialogueView.cs";
         private const string CtrlSrc = "Assets/_Modules/Village/Pets/PetTaskController.cs";
+        private const string SinkSrc = "Assets/_Modules/Village/Tutorial/DialogueCommandSink.cs";
+
+        private static readonly string[] DialogueJson =
+        {
+            "Assets/Resources/Data/Canonical/dialogue/dialogues.json",
+            "Assets/StreamingAssets/Data/Canonical/dialogue/dialogues.json",
+        };
 
         public static void RunAll()
         {
@@ -66,8 +82,9 @@ namespace DeNelle.Editor.Regression
             var failures = new List<string>();
             try
             {
-                CheckEngageDef(failures);
-                CheckSpeakerPortraits(failures);
+                CheckPromptRemoved(failures);
+                CheckVerbUnregistered(failures);
+                CheckNoFrostSpeaker(failures);
                 CheckReserveFirstSource(failures);
                 CheckFitArithmetic(failures);
                 CheckHygiene(failures);
@@ -82,79 +99,94 @@ namespace DeNelle.Editor.Regression
                 reason = failures.Count + " failure(s): " + string.Join(" | ", failures.ToArray());
                 return false;
             }
-            reason = "pet_engage def intact; Frost/Ember/Aether/'Your Echo' speaker portraits load as " +
-                     "Sprites; DialogueView reserves the option band first (banned shapes absent, " +
-                     "measured verify present); 2-option node fits scroll-free at 1920x1080 and " +
-                     "2670x1200 from the source's own constants; no NULs.";
+            reason = "WO-1031 removal holds: no engage-prompt members on PetTaskController, no " +
+                     "invented species->name table, no 'pet_task' verb (sink or data), no 'Frost' " +
+                     "speaker record in either dialogues.json; and the WO-1030 DialogueView laws " +
+                     "still stand (reserve-first option band; 2-option node fits scroll-free at " +
+                     "1920x1080 and 2670x1200 from the source's own constants); no NULs.";
             return true;
         }
 
-        // -- 1 [def] ----------------------------------------------------------
-        private static void CheckEngageDef(List<string> failures)
+        // -- 1 [removed] ------------------------------------------------------
+        // The prompt is gone at the TYPE level (reflection - a re-add under any
+        // signature fails) and at the SOURCE level (the tokens that carried the
+        // invented naming scheme).
+        private static void CheckPromptRemoved(List<string> failures)
         {
-            var def = DeNelle.Village.PetTaskController.BuildEngageDef("ice-wolf");
-            if (def == null) { failures.Add("[def] BuildEngageDef returned null"); return; }
-            var root = def.EntryNode();
-            if (root == null || root.Options == null || root.Options.Count != 2)
+            const BindingFlags All = BindingFlags.Public | BindingFlags.NonPublic |
+                                     BindingFlags.Static | BindingFlags.Instance;
+            var t = typeof(DeNelle.Village.PetTaskController);
+            foreach (var member in new[]
+                     { "BuildEngageDef", "SpeakerName", "Engage", "TickEngagement", "ApplyEngagementChoice" })
             {
-                failures.Add("[def] entry node must carry exactly 2 options (got " +
-                             (root == null || root.Options == null ? "none" : root.Options.Count.ToString()) + ")");
-                return;
+                if (t.GetMethod(member, All) != null)
+                    failures.Add("[removed] PetTaskController." + member + " is back - WO-1031 deleted " +
+                                 "the world engagement prompt; Echo tasking belongs to the Echo tab " +
+                                 "(EchoCardView -> EchoAssignments), not a world-modal dialogue");
             }
-            if (root.Lines == null || root.Lines.Count == 0 ||
-                !string.Equals(root.Lines[0].Speaker, "Frost", StringComparison.Ordinal))
-                failures.Add("[def] ice-wolf must speak as 'Frost' (got '" +
-                             (root.Lines != null && root.Lines.Count > 0 ? root.Lines[0].Speaker : "<none>") + "')");
-            foreach (var optionTarget in new[] { root.Options[0].Goto, root.Options[1].Goto })
+
+            string src = ReadSrc(CtrlSrc, failures);
+            if (src == null) return;
+            foreach (var token in new[] { "pet_engage", "\"Frost\"", "\"Ember\"", "\"Aether\"" })
+                if (src.IndexOf(token, StringComparison.Ordinal) >= 0)
+                    failures.Add("[removed] PetTaskController.cs names " + token + " again - the " +
+                                 "species->display-name table bypasses EchoRosterCatalog, the name " +
+                                 "authority. The guide wolf is Echo #1, Aldwin (WO-1031 sec. 2b/2d)");
+        }
+
+        // -- 2 [verb] ---------------------------------------------------------
+        private static void CheckVerbUnregistered(List<string> failures)
+        {
+            string sink = ReadSrc(SinkSrc, failures);
+            if (sink != null && Regex.IsMatch(sink, "case\\s*\"pet_task\""))
+                failures.Add("[verb] DialogueCommandSink registers the 'pet_task' verb again - it has " +
+                             "no producer since WO-1031 removed BuildEngageDef; an unrouted verb is a " +
+                             "dead-end choice");
+
+            foreach (var path in DialogueJson)
             {
-                var node = def.FindNode(optionTarget);
-                bool routed = false;
-                if (node != null && node.Commands != null)
-                    foreach (var c in node.Commands)
-                        if (c != null && string.Equals(c.Verb, "pet_task", StringComparison.Ordinal)) routed = true;
-                if (!routed)
-                    failures.Add("[def] option target '" + optionTarget +
-                                 "' does not fire the pet_task verb - the choice would be a dead end");
+                string json = ReadSrc(path, failures);
+                if (json == null) continue;
+                if (json.IndexOf("pet_task", StringComparison.Ordinal) >= 0)
+                    failures.Add("[verb] " + path + " emits the 'pet_task' verb - nothing consumes it " +
+                                 "(WO-1031); route Echo tasking through the Echo tab instead");
             }
         }
 
-        // -- 2 [speakers] -----------------------------------------------------
-        private static void CheckSpeakerPortraits(List<string> failures)
+        // -- 3 [name] ---------------------------------------------------------
+        private static void CheckNoFrostSpeaker(List<string> failures)
         {
-            // The display names come from the REAL builder, so a SpeakerName edit that
-            // orphans a record fails here instead of shipping a silhouette.
-            var species = new[] { "ice-wolf", "flame-pup", "aether-sprite", "unknown-species" };
-            foreach (var s in species)
+            foreach (var path in DialogueJson)
             {
-                var def = DeNelle.Village.PetTaskController.BuildEngageDef(s);
-                string speaker = def != null && def.EntryNode() != null && def.EntryNode().Lines.Count > 0
-                    ? def.EntryNode().Lines[0].Speaker : null;
-                if (string.IsNullOrEmpty(speaker))
-                {
-                    failures.Add("[speakers] no speaker for species '" + s + "'");
-                    continue;
-                }
-                var rec = DeNelle.Core.Dialogue.DialogueCatalog.FindSpeaker(speaker);
-                if (rec == null)
-                {
-                    failures.Add("[speakers] no speakers-block record for '" + speaker +
-                                 "' (species '" + s + "') - the portrait falls to the silhouette (WO-1030 B)");
-                    continue;
-                }
-                if (string.IsNullOrEmpty(rec.Portrait))
-                {
-                    failures.Add("[speakers] record '" + speaker + "' carries no portrait path");
-                    continue;
-                }
-                var sprite = Resources.Load<Sprite>(rec.Portrait);
-                if (sprite == null)
-                    failures.Add("[speakers] portrait '" + rec.Portrait + "' for '" + speaker +
-                                 "' does not load as a Sprite from Resources - the resolve chain " +
-                                 "(Resources.Load<Sprite>) would fall to the silhouette");
+                string json = ReadSrc(path, failures);
+                if (json == null) continue;
+                if (Regex.IsMatch(json, "\"name\"\\s*:\\s*\"Frost\""))
+                    failures.Add("[name] " + path + " carries a \"Frost\" speaker record again. The " +
+                                 "guide wolf is Echo #1, ALDWIN (EchoRosterCatalog.ByCount(1)) - the " +
+                                 "tutorial already says 'Follow Aldwin to the gate'. 'Frost' was an " +
+                                 "invented name and must not return (WO-1031 sec. 2d). Note Aldwin != " +
+                                 "Alduin the Mournful - do not correct one into the other");
             }
+
+            // Dual-copy law (CLAUDE.md): the Resources and StreamingAssets copies must match.
+            try
+            {
+                if (File.Exists(DialogueJson[0]) && File.Exists(DialogueJson[1]))
+                {
+                    var a = File.ReadAllBytes(DialogueJson[0]);
+                    var b = File.ReadAllBytes(DialogueJson[1]);
+                    bool same = a.Length == b.Length;
+                    for (int i = 0; same && i < a.Length; i++) if (a[i] != b[i]) same = false;
+                    if (!same)
+                        failures.Add("[name] the Resources and StreamingAssets dialogues.json copies " +
+                                     "are NOT byte-identical - the dual-copy law was broken by the " +
+                                     "speaker-block edit");
+                }
+            }
+            catch (Exception ex) { failures.Add("[name] dual-copy compare: " + ex.Message); }
         }
 
-        // -- 3 [reserve] ------------------------------------------------------
+        // -- 4 [reserve] ------------------------------------------------------
         private static void CheckReserveFirstSource(List<string> failures)
         {
             string src = ReadSrc(ViewSrc, failures);
@@ -186,7 +218,7 @@ namespace DeNelle.Editor.Regression
                              "content-fit ceiling can push its bottom rows off the panel again");
         }
 
-        // -- 4 [fit] ----------------------------------------------------------
+        // -- 5 [fit] ----------------------------------------------------------
         // Replicates DialogueView's derivation FROM ITS OWN SOURCE CONSTANTS (regex-read,
         // never a second hand-maintained table) and asserts the WO-1030 acceptance line:
         // a 2-option node fits with ZERO option scrolling at the real landscape surfaces.
@@ -241,10 +273,10 @@ namespace DeNelle.Editor.Regression
             }
         }
 
-        // -- 5 [hygiene] ------------------------------------------------------
+        // -- 6 [hygiene] ------------------------------------------------------
         private static void CheckHygiene(List<string> failures)
         {
-            foreach (var path in new[] { ViewSrc, CtrlSrc })
+            foreach (var path in new[] { ViewSrc, CtrlSrc, SinkSrc })
             {
                 try
                 {
