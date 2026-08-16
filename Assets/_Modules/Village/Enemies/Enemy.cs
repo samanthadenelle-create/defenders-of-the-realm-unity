@@ -2769,11 +2769,21 @@ namespace DeNelle.Village
                 float variance = _def.RewardVariance;
 
                 // DEF-88: per-enemy XP directly to the hero, now variance-rolled.
-                int rolledXp = 0;
-                if (HeroProgression.Instance != null)
+                // WO-1104: the amount is MEASURED from HeroProgression's own lifetime total
+                // either side of the grant, never assumed from the roll. A grant that is
+                // rejected downstream (null carrier, clamp, non-positive) then reports 0 and
+                // shows nothing, instead of a label promising XP the player never banked.
+                int rolledXp = 0, creditedXp = 0;
+                var heroProg = HeroProgression.Instance;
+                if (heroProg != null)
                 {
                     rolledXp = EnemyDef.RollReward(_def.XpReward, variance);
-                    if (rolledXp > 0) HeroProgression.Instance.AddXp(rolledXp);
+                    if (rolledXp > 0)
+                    {
+                        float xpBefore = heroProg.LifetimeXp;
+                        heroProg.AddXp(rolledXp);
+                        creditedXp = Mathf.RoundToInt(heroProg.LifetimeXp - xpBefore);
+                    }
                 }
 
                 // DEF-32: grant Glimmer (cosmetic currency) on kill. Resolved via
@@ -2790,30 +2800,53 @@ namespace DeNelle.Village
                 int goldBase = _def.CoinReward > 0
                     ? _def.CoinReward
                     : Mathf.Max(4, Mathf.RoundToInt(_def.XpReward * 0.4f));
+                // WO-1104: gold is MEASURED the same way — the wallet balance either side of
+                // the mover. AddCoins clamps at zero and no-ops when GameState is absent, so
+                // the requested delta is NOT proof anything was banked.
                 int rolledGold = EnemyDef.RollReward(goldBase, variance);
-                if (rolledGold > 0) EconomyService.Instance?.AddCoins(rolledGold);
+                int creditedGold = 0;
+                var econ = EconomyService.Instance;
+                if (rolledGold > 0 && econ != null)
+                {
+                    int goldBefore = econ.Coins;
+                    econ.AddCoins(rolledGold);
+                    creditedGold = Mathf.Max(0, econ.Coins - goldBefore);
+                }
 
-                // §12 permanent trace: base/variance/rolled/final per grant (kills are
-                // cold-path — one line per kill is cheap and makes the roll provable).
+                // §12 permanent trace: base/variance/ROLLED (asked) vs CREDITED (measured
+                // state delta) per grant. Kills are cold-path — one line per kill is cheap and
+                // makes both the roll AND the landing provable. Printing rolled as if it were
+                // final would be a hollow assertion; the two are logged separately on purpose,
+                // and a mismatch is the signal that a grant was swallowed downstream.
                 DeNelle.Core.Diagnostics.FlowTrace.Step("Reward",
                     $"KILL GRANT id={_def.Id} baseXp={_def.XpReward} baseGold={goldBase} " +
                     $"var={variance:0.00} rolledXp={rolledXp} rolledGold={rolledGold} " +
-                    $"finalXp={rolledXp} finalGold={rolledGold} packBodies={_def.PackBodies}");
+                    $"creditedXp={creditedXp} creditedGold={creditedGold} packBodies={_def.PackBodies}");
+                if (creditedXp != rolledXp || creditedGold != rolledGold)
+                    DeNelle.Core.Diagnostics.FlowTrace.Warn("Reward",
+                        $"KILL GRANT SHORTFALL id={_def.Id} askedXp={rolledXp} bankedXp={creditedXp} " +
+                        $"askedGold={rolledGold} bankedGold={creditedGold} - a grant did not land " +
+                        "(missing HeroProgression / EconomyService / clamped wallet).");
 
-                // WO-1103 item 3+4 routing on the ROLLED amounts:
-                //  - kill INSIDE a live staged arena -> bank into the battle's per-enemy
-                //    stream so the victory SUMMARY reports the TOTAL actually banked.
-                //  - kill OUTSIDE the arena (field kill — ranged pick-off, wave, camp) ->
-                //    ONE aggregate earned label at the corpse (a pack leader carries the
-                //    whole family payout, so this is one toast per pack, never per body).
-                if (rolledXp > 0 || rolledGold > 0)
+                // WO-1103 item 3+4, on the CREDITED amounts (WO-1104): never announce an award
+                // that did not bank.
+                //  - kill INSIDE a live staged arena -> bank into the battle's per-enemy stream
+                //    so the victory SUMMARY reports the TOTAL actually banked, AND pop the same
+                //    earned label at the corpse. WO-1104 (owner felt-test 2026-08-16: "if you
+                //    fight five enemies that experience should be much larger... I couldn't tell
+                //    that"): the arena used to bank SILENTLY, so a five-kill fight looked exactly
+                //    like a one-kill fight until the end screen. One label per body is what makes
+                //    five kills read as five awards.
+                //  - kill OUTSIDE the arena (field kill — ranged pick-off, wave, camp) -> ONE
+                //    aggregate earned label at the corpse (a pack leader carries the whole family
+                //    payout, so this is one toast per pack, never per body).
+                if (creditedXp > 0 || creditedGold > 0)
                 {
                     bool arenaKill = DeNelle.Village.Arena.BattleArena.AnyBattleInProgress
                                      && DeNelle.Village.Arena.BattleArena.IsArenaPosition(transform.position);
                     if (arenaKill)
-                        DeNelle.Village.Arena.BattleArena.Instance?.ReportArenaKillGrant(rolledXp, rolledGold);
-                    else
-                        ShowFieldKillReward(rolledXp, rolledGold);
+                        DeNelle.Village.Arena.BattleArena.Instance?.ReportArenaKillGrant(creditedXp, creditedGold);
+                    ShowFieldKillReward(creditedXp, creditedGold);
                 }
             }
 
@@ -2872,13 +2905,18 @@ namespace DeNelle.Village
         private static readonly Color FieldKillRewardColor = new Color(1f, 0.82f, 0.30f, 1f);
 
         /// <summary>
-        /// WO-1103 item 4 (B2): ONE aggregate earned-rewards label for an out-of-arena
-        /// kill ("+N XP  +M gold" at the corpse — the LEVEL UP precedent, reusing
+        /// WO-1103 item 4 (B2) + WO-1104: ONE aggregate earned-rewards label per KILL
+        /// ("+N XP  +M gold" at the corpse — the LEVEL UP precedent, reusing
         /// <see cref="DamageNumberSpawner.SpawnLabel"/>; NO new notification system).
+        /// WO-1104 widened it from field-only to EVERY kill: an arena kill banked silently
+        /// before, so a five-body fight and a one-body fight looked identical while they
+        /// were being fought (owner felt-test 2026-08-16).
         /// A pack-carrying leader (def.PackBodies &gt; 1 — leader-carry payout KEPT,
         /// owner default) is worded "Pack bounty" so the oversized grant reads as the
         /// whole family's payout, not a bug. Followers pay 0 and never reach here, so
         /// a pack is one toast, never per-body spam. Camera-null-safe via SpawnLabel.
+        /// The amounts passed in are the MEASURED credited deltas, so the label can never
+        /// promise an award the player did not actually bank.
         /// </summary>
         private void ShowFieldKillReward(int xp, int gold)
         {
@@ -2891,12 +2929,16 @@ namespace DeNelle.Village
                 sb.Append("+").Append(gold).Append(" gold");
             }
             string label = sb.ToString();
-            DamageNumberSpawner.SpawnLabel(label, transform.position + Vector3.up * 1.6f,
-                                           FieldKillRewardColor, 1.15f);
+            var spawned = DamageNumberSpawner.SpawnLabel(label, transform.position + Vector3.up * 1.6f,
+                                                         FieldKillRewardColor, 1.15f);
             // §12 permanent trace: the notification call-site fires provably (B2 was
-            // "no call site at all" — this line is the captured evidence it now exists).
+            // "no call site at all" — this line is the captured evidence it now exists), and
+            // 'shown' records whether the label BODY was really leased (SpawnLabel returns
+            // null with no camera) — the fired/rendered distinction the owner's "I couldn't
+            // tell if it awarded anything" needs to be answerable from a capture alone.
             DeNelle.Core.Diagnostics.FlowTrace.Step("Reward",
-                $"FIELD KILL TOAST '{label}' id={(_def != null ? _def.Id : "?")} at {transform.position}");
+                $"KILL REWARD TOAST '{label}' id={(_def != null ? _def.Id : "?")} " +
+                $"shown={(spawned != null)} at {transform.position}");
         }
 
         /// <summary>

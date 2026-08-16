@@ -66,6 +66,14 @@ namespace DeNelle.Core.UI
             /// on the first valid xp/xpToNext push, so a missing HeroProgression can never show a
             /// blank/full bar. Null unless built with <c>withXpStrip: true</c>.</summary>
             public GameObject XpRow;
+            /// <summary>
+            /// WO-1104: the transient "+N XP" gain readout that rides just ABOVE the plate
+            /// (owner felt-test 2026-08-16: "I couldn't tell if it awarded anything... whether
+            /// it's simply just a flashing on the bar"). The binder retexts + fades it on every
+            /// measured XP gain; it is a NUMBER, so the paired strip flash is never colour-only
+            /// (red/green colourblind law). Built INACTIVE and only with <c>withXpStrip: true</c>.
+            /// </summary>
+            public TMP_Text XpGainLabel;
         }
 
         /// <summary>
@@ -204,6 +212,22 @@ namespace DeNelle.Core.UI
 
                 h.XpFill = xpFillImg;
                 h.XpRow = xpBg;
+
+                // WO-1104 — the XP GAIN readout. Anchored just BELOW the plate (y -0.34..-0.02
+                // of the root) so it never collides with the name/level row or the masked bars,
+                // and reads as a pop OFF the plate rather than more chrome ON it. BELOW, not
+                // above: the hero plate sits at the TOP of its HUD zone, so a label hung above
+                // it would be clipped off-screen — the zone's free space is underneath. Right-
+                // aligned, gilt, bold; built inactive and driven entirely by the binder
+                // (HudKitController.AnimateXpGain). Kit factory only — no hand-rolled TMP.
+                h.XpGainLabel = Label(rootGo.transform, "", -0.34f, -0.02f,
+                                      ElarionUi.Gilt, ElarionUi.FontHead,
+                                      TextAlignmentOptions.MidlineRight, 0.30f, 0.98f, bold: true);
+                h.XpGainLabel.enableAutoSizing = true;
+                h.XpGainLabel.fontSizeMin = 28f;
+                h.XpGainLabel.fontSizeMax = 64f;
+                h.XpGainLabel.raycastTarget = false;
+                h.XpGainLabel.gameObject.SetActive(false);
                 // Hidden until the binder pushes a real xp/xpToNext — a missing HeroProgression
                 // therefore hides the strip (never a blank or stuck-full bar).
                 xpBg.SetActive(false);

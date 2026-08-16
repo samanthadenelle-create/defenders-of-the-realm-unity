@@ -86,9 +86,12 @@ namespace DeNelle.Village.Arena
                                Action onAbandon = null)
         {
             var vm = won
+                // WO-1104: gold + kill count now ride along so the victory screen shows the
+                // coin the fight actually banked and how many bodies earned it.
                 ? EndStateVM.FromBattleVictory(stars, durationSeconds,
                       rewards.Xp, rewards.Wisdom, rewards.Wood, rewards.Iron, rewards.GearName,
-                      onContinue, autoTimeoutSeconds, perfect, primaryRoute: null, onAbandon: onAbandon)
+                      onContinue, autoTimeoutSeconds, perfect, primaryRoute: null, onAbandon: onAbandon,
+                      gold: rewards.Gold, kills: rewards.Kills)
                 : EndStateVM.FromBattleDefeat();
             EndStateView.Show(vm);
 

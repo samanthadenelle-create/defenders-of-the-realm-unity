@@ -77,6 +77,28 @@ namespace DeNelle.HUD.Kit
         private const float ManaFillLerpSpeed  = 9f;         // exponential ease rate (~0.11s to 63%)
         private const float ManaSpendThreshold = 0.02f;      // fill drop that counts as a spend
         private const float ManaFlashSeconds   = 0.25f;      // spend flash duration
+
+        // WO-1104 — KILL REWARD VISIBILITY (owner felt-test 2026-08-16, verbatim: "I couldn't
+        // tell when I killed in the field. I couldn't tell if it awarded anything... whether
+        // it's simply just a flashing on the bar"). Every XP gain is MEASURED here from the
+        // model's own state delta (never from an amount some producer claims it granted), then
+        // presented two ways: the XP strip BRIGHTENS (flash) and a "+N XP" readout pops just
+        // under the plate. Repeat gains inside the merge window ADD INTO the live readout, so a
+        // five-kill fight visibly climbs to a bigger number than a one-kill fight — that
+        // climbing total IS the "more enemies = more experience" read the owner could not see.
+        // Number + brightness, never hue (red/green colourblind law).
+        private bool  _xpPrevValid;                          // a baseline has been captured
+        private int   _xpPrevXp, _xpPrevToNext, _xpPrevLevel;
+        private int   _xpGainRunning;                        // merged total currently displayed
+        private float _xpGainLastTime;                       // unscaled time of the last merge
+        private float _xpGainHoldUntil;                      // unscaled time the readout starts fading
+        private float _xpFlashUntil;                         // unscaled time the strip flash ends
+        private Color _xpFillBaseColor = Color.white;        // BUILT strip colour, restored after a flash
+        private bool  _xpFillBaseCaptured;
+        private const float XpGainMergeSeconds = 1.5f;       // repeat gain inside this window merges
+        private const float XpGainHoldSeconds  = 1.6f;       // readable hold before the fade
+        private const float XpGainFadeSeconds  = 0.45f;      // fade-out duration
+        private const float XpFlashSeconds     = 0.35f;      // strip brighten duration
         private ElarionUiKit.CurrencyChipHandle _wisdomChip;
         private ElarionUiKit.PartyNameplateHandle _heartPlate;   // WO-432: Heart of Elarion on the shared plate
         private ElarionUiKit.TargetFrameHandle _targetFrame;
@@ -1523,6 +1545,8 @@ namespace DeNelle.HUD.Kit
                         FlowTrace.Step("HudKit", "xp bar bound " + v.Xp + "/" + v.XpToNext);
                     }
                 }
+                // WO-1104: MEASURE the gain off this push versus the last one, and present it.
+                if (hasXp) NoteXpGain(v.Xp, v.XpToNext, v.Level);
             }
             _wisdomChip.SetAmount(v.Wisdom);
         }
@@ -2120,11 +2144,141 @@ namespace DeNelle.HUD.Kit
             }
         }
 
+        // =====================================================================
+        // WO-1104 — XP GAIN FEEDBACK (owner felt-test 2026-08-16)
+        // =====================================================================
+
+        /// <summary>
+        /// MEASURE one XP push against the previous one and, when it is a real gain, arm the
+        /// two feedback channels: the strip flash + the "+N XP" readout.
+        ///
+        /// THE AMOUNT IS A MEASURED STATE DELTA, NOT A REQUESTED GRANT. The HUD never sees
+        /// "the grant code asked for 14 XP" — it sees the hero's banked XP move, which is the
+        /// only number that proves something actually landed. (Project law: never log/present
+        /// the amount requested in place of the amount credited.)
+        ///
+        /// A level-up is folded in: the carry across the boundary is
+        /// (prevToNext - prevXp) + newXp, a FLOOR for a multi-level jump (rare; a single kill
+        /// never crosses two levels). A level going DOWN, or an implausibly large jump, is a
+        /// save restore / dev grant, not a kill — suppressed and traced, never popped.
+        /// </summary>
+        private void NoteXpGain(int xp, int xpToNext, int level)
+        {
+            if (xpToNext <= 0) return;
+
+            if (!_xpPrevValid)
+            {
+                // First bind is a BASELINE, never a gain (the whole banked total would pop).
+                _xpPrevValid = true;
+                _xpPrevXp = xp; _xpPrevToNext = xpToNext; _xpPrevLevel = level;
+                return;
+            }
+
+            int gained;
+            if (level == _xpPrevLevel) gained = xp - _xpPrevXp;
+            else if (level > _xpPrevLevel) gained = Mathf.Max(0, _xpPrevToNext - _xpPrevXp) + xp;
+            else gained = 0;   // level DOWN = a restore/reset, never an award
+
+            int levelsGained = Mathf.Max(0, level - _xpPrevLevel);
+            _xpPrevXp = xp; _xpPrevToNext = xpToNext; _xpPrevLevel = level;
+
+            if (gained <= 0) return;
+
+            // Restore/dev-grant guard: a single award never exceeds two levels' worth.
+            if (gained > xpToNext * 2)
+            {
+                FlowTrace.Warn("HudKit",
+                    $"XP GAIN SUPPRESSED measuredDelta={gained} (> 2x xpToNext={xpToNext}) - " +
+                    "reads as a save restore or dev grant, not a kill award; no pop shown.");
+                return;
+            }
+
+            float now = Time.unscaledTime;
+            bool merged = _xpGainRunning > 0 && (now - _xpGainLastTime) <= XpGainMergeSeconds;
+            _xpGainRunning = merged ? _xpGainRunning + gained : gained;
+            _xpGainLastTime = now;
+            _xpGainHoldUntil = now + XpGainHoldSeconds;
+            _xpFlashUntil = now + XpFlashSeconds;
+
+            if (_vitals.XpGainLabel != null)
+            {
+                // Word + number carry the meaning; the flash is the redundant channel.
+                string text = "+" + _xpGainRunning + " XP";
+                if (levelsGained > 0) text += "  LEVEL UP";
+                SetXpGainText(text);
+            }
+
+            // §12 permanent trace: the MEASURED delta, the merged running total, and whether
+            // the readout surface actually existed - so a capture can tell "credited but not
+            // shown" from "never credited". No hollow assertion: 'measuredDelta' is the state
+            // move, not an amount anybody asked for.
+            FlowTrace.Step("HudKit",
+                $"XP GAIN measuredDelta={gained} runningShown={_xpGainRunning} merged={merged} " +
+                $"levels={levelsGained} xp={xp}/{xpToNext} lv={level} " +
+                $"labelPresent={(_vitals.XpGainLabel != null)} stripPresent={(_vitals.XpFill != null)}");
+        }
+
+        /// <summary>Retext + reveal the gain readout at full alpha (single writer for the label).</summary>
+        private void SetXpGainText(string text)
+        {
+            var lbl = _vitals.XpGainLabel;
+            if (lbl == null) return;
+            lbl.text = text;
+            var c = lbl.color; c.a = 1f; lbl.color = c;
+            if (!lbl.gameObject.activeSelf) lbl.gameObject.SetActive(true);
+        }
+
+        /// <summary>
+        /// WO-1104 per-frame XP feedback: brighten-decay on the strip fill (never a hue swap)
+        /// and hold-then-fade on the "+N XP" readout. Cheap; early-outs when nothing is armed.
+        /// </summary>
+        private void AnimateXpGain()
+        {
+            // 1) Strip flash — brightness pulse toward white, decaying to the BUILT colour.
+            var fill = _vitals.XpFill;
+            if (fill != null)
+            {
+                if (!_xpFillBaseCaptured) { _xpFillBaseColor = fill.color; _xpFillBaseCaptured = true; }
+                if (_xpFlashUntil > 0f)
+                {
+                    float remain = _xpFlashUntil - Time.unscaledTime;
+                    if (remain <= 0f) { fill.color = _xpFillBaseColor; _xpFlashUntil = 0f; }
+                    else
+                    {
+                        float t = Mathf.Clamp01(remain / XpFlashSeconds);
+                        fill.color = Color.Lerp(_xpFillBaseColor, Color.white, 0.85f * t);
+                    }
+                }
+            }
+
+            // 2) Readout — hold at full alpha, then fade out and retire the running total so
+            //    the NEXT fight starts its own count (a fresh climb, not a lifetime tally).
+            var lbl = _vitals.XpGainLabel;
+            if (lbl == null || !lbl.gameObject.activeSelf) return;
+            float over = Time.unscaledTime - _xpGainHoldUntil;
+            if (over <= 0f) return;
+            var col = lbl.color;
+            if (over >= XpGainFadeSeconds)
+            {
+                col.a = 1f; lbl.color = col;          // reset for the next pop
+                lbl.gameObject.SetActive(false);
+                _xpGainRunning = 0;
+            }
+            else
+            {
+                col.a = 1f - (over / XpGainFadeSeconds);
+                lbl.color = col;
+            }
+        }
+
         private void Update()
         {
             // WO-997 §3b: ease the hero plate's mana fill toward its target + run the
             // spend flash (brightness pulse, colourblind-safe). Cheap; early-outs when idle.
             AnimateManaFill();
+
+            // WO-1104: run the XP strip flash + the "+N XP" readout hold/fade.
+            AnimateXpGain();
 
             // WO-611: drive the animated lock crosshair badge from the target model (combat HUD only).
             // 0 = no target (unlocked/faint), 1 = target held but not locked (acquiring pulse),

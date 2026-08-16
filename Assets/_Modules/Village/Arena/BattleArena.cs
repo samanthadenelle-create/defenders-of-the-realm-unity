@@ -65,6 +65,15 @@ namespace DeNelle.Village.Arena
         public int Wood;
         /// <summary>Iron granted (star-scaled).</summary>
         public int Iron;
+        /// <summary>WO-1104: GOLD banked during the fight (the per-kill stream Enemy.Die
+        /// already credited). It was granted but never REPORTED before, so a fight's coin
+        /// income was invisible on the victory screen — owner felt-test 2026-08-16
+        /// ("I couldn't tell if it awarded anything").</summary>
+        public int Gold;
+        /// <summary>WO-1104: bodies actually downed this fight. Shown on the victory screen so
+        /// a five-kill win reads as a bigger fight than a one-kill win, not just a bigger
+        /// number nobody can attribute.</summary>
+        public int Kills;
         /// <summary>Display name of the gear that dropped, or null if none.</summary>
         public string GearName;
     }
@@ -2355,7 +2364,8 @@ namespace DeNelle.Village.Arena
             // to the view (not inferred from code-reading). gear='-' when nothing dropped.
             if (won)
                 FlowTrace.Step("BattleArena",
-                    $"SUMMARY xp={totals.Xp} wisdom={totals.Wisdom} wood={totals.Wood} iron={totals.Iron} gear={(string.IsNullOrEmpty(totals.GearName) ? "-" : totals.GearName)}");
+                    $"SUMMARY xp={totals.Xp} wisdom={totals.Wisdom} wood={totals.Wood} iron={totals.Iron} " +
+                    $"gold={totals.Gold} kills={totals.Kills} gear={(string.IsNullOrEmpty(totals.GearName) ? "-" : totals.GearName)}");
 
             // WO-560: VICTORY REWARD BURST (juice). On a win, fire a celebratory VFX at the
             // hero + a small loot-pop per reward granted, escalating with the star rating
@@ -2868,6 +2878,11 @@ namespace DeNelle.Village.Arena
                 add?.Invoke(prog, new object[] { (float)xp });
             }
             summary.Xp = xp + Mathf.Max(0, streamXp);
+            // WO-1104: report the coin stream + the kill count the payout was computed from.
+            // Both are already-banked facts (Enemy.Die credited the gold; _killCount is the
+            // measured body count) — nothing is granted a second time here.
+            summary.Gold = Mathf.Max(0, streamGold);
+            summary.Kills = paidKills;
             FlowTrace.Step("BattleArena",
                 $"GrantWinReward: battle slice +{xp} XP (kills={paidKills} threat={threat} base={xpBase} mult={mult:0.00}); " +
                 $"per-enemy stream +{Mathf.Max(0, streamXp)} XP / +{Mathf.Max(0, streamGold)} gold already banked " +

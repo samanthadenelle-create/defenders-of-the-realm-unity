@@ -166,14 +166,23 @@ namespace DeNelle.Village.UI
             // WO-969: the SAME return, wired as the hand-back. The arena's masked home return is
             // the only route out of a won arena, so it must survive this screen being destroyed.
             // Callers that pass nothing keep the old (view-owned) behaviour.
-            Action onAbandon = null)
+            Action onAbandon = null,
+            // WO-1104 (owner felt-test 2026-08-16): GOLD banked during the fight - granted per
+            // kill by Enemy.Die but never REPORTED, so coin income was invisible here - plus the
+            // KILL COUNT, so a five-body win reads as a bigger fight than a one-body win instead
+            // of just a bigger unattributable number. Both default to 0: every existing caller
+            // (and the handoff regression's positional calls) keeps its exact behaviour.
+            int gold = 0, int kills = 0)
         {
+            string felled = kills > 1 ? kills + " foes felled. "
+                          : kills == 1 ? "1 foe felled. "
+                          : "";
             var vm = new EndStateVM
             {
                 Kind = EndStateKind.Victory,
                 Title = "Victory!",
-                Subtitle = perfect ? "Flawless! The realm is safer because of you!"
-                                   : "The realm is safer because of you!",
+                Subtitle = felled + (perfect ? "Flawless! The realm is safer because of you!"
+                                             : "The realm is safer because of you!"),
                 Stars = Mathf.Clamp(stars, 0, 3),
                 Perfect = perfect,
                 TimeSeconds = Mathf.Max(0f, durationSeconds),
@@ -192,6 +201,14 @@ namespace DeNelle.Village.UI
                     // WO-697: reward numbers render through the ONE kit formatter
                     // (ElarionUi.CompactNumber) — never verbatim six-digit strings.
                     Label = "Experience", Amount = "+" + ElarionUi.CompactNumber(xp),
+                });
+            if (gold > 0)
+                vm.Spoils.Add(new SpoilRowVM
+                {
+                    // Icon left null on purpose (the Iron-row lesson above): EndStateView
+                    // resolves the CONCEPT icon from the label - "gold" -> currency/currency_gold
+                    // in concept-icons.json - which is a real PNG with alpha.
+                    Label = "Gold", Amount = "+" + ElarionUi.CompactNumber(gold),
                 });
             if (wisdom > 0)
                 vm.Spoils.Add(new SpoilRowVM
