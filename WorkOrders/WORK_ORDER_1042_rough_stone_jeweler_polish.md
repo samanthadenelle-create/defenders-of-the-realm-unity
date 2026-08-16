@@ -116,6 +116,34 @@ first — the stone was already earned by descending; charging twice dulls the r
 **Do the ring path in this ticket. File socketing as its own future WO.** Bundling them would put a
 shipped, nearly-free loop behind a months-long system.
 
+### ★ For that future socketing WO — the UI reference ALREADY EXISTS (owner, 2026-08-16)
+
+> *"obsidian has a socketing example in their demo too"* — correct, and verified on disk:
+
+| asset | path | mirrored? |
+|---|---|---|
+| **`Socketing.prefab`** | `Assets/Blink/Art/UI/Obsidian_UI/Prefabs_Obsidian/` | ❌ not yet |
+| `Socketing_Slot.png` | `Slots_Obsidian/` | ✅ as `Resources/RpgUi/slot/slot_socket.png` |
+| `Socketing_Slot_2.png` | `Slots_Obsidian/` | ❌ **not mirrored** |
+| (bonus) `Enchanting.prefab`, `Crafting.prefab` | `Prefabs_Obsidian/` | ❌ also unmined |
+
+**This meaningfully lowers the socketing UI cost.** Per Grok-02 §1, the pack's assembled prefabs are
+the **"parameter source of truth — measure the hierarchy"**, and this is the same relationship
+`TalentTree.prefab` has to WO-1021: a complete, working reference screen for the thing we would
+otherwise design from scratch.
+
+⚠ **The SYSTEM is still the work** (§6 table) — a reference screen does not supply the stat pipeline,
+the save schema, or the socket model. But the layout, slot geometry and interaction grammar are
+answered, and that is usually the half that produces the most owner-visible churn.
+
+⚠ **Mirroring is required before use** — `Assets/Blink` is **gitignored** (BLINK_SME §2.1), so the
+prefab must go through `BlinkPrefabMirror` into committed `Resources/RpgUi/prefabs/`. BLINK_SME §5.3
+records the full-screen prefabs as the mirror's planned-but-unstarted **"second pass"** — so this would
+be its first customer. `Socketing_Slot_2.png` needs a `RpgUiImporter` row alongside it.
+
+**Do not action any of this here** — it is intelligence for the future ticket, recorded so nobody
+re-derives it or designs a socketing screen from a blank page.
+
 ## 7. Acceptance criteria
 
 - [ ] A dungeon completion can yield a **rough stone** — unidentified, with flavour text, outcome hidden

@@ -1147,6 +1147,17 @@
 > ⚠ §2.1b and §2.1d are INDEPENDENT and BOTH required — spacing alone still leaves 10 huge plates;
 > focus alone still leaves overlap. Owner has said "messy" TWICE; half a fix earns a third report.)*
 >
+> *(WO-1042 §6 AMENDED 2026-08-16, no new number — owner: *"obsidian has a socketing example in their
+> demo too"*. VERIFIED ON DISK: `Prefabs_Obsidian/**Socketing.prefab**` exists (assembled screen), plus
+> `Socketing_Slot.png` (✅ mirrored as `slot_socket.png`) and `Socketing_Slot_2.png` (❌ NOT mirrored);
+> `Enchanting.prefab` + `Crafting.prefab` are also unmined. This materially lowers the FUTURE socketing
+> WO's UI cost — per Grok-02 §1 the assembled prefabs are the **"parameter source of truth - measure the
+> hierarchy"**, the same relationship `TalentTree.prefab` has to WO-1021. ⚠ The SYSTEM is still the work
+> (no stat pipeline / save schema / socket model), but layout + slot geometry + interaction grammar are
+> answered. ⚠ Must be MIRRORED first — `Assets/Blink` is gitignored, and BLINK_SME §5.3 records the
+> full-screen prefabs as `BlinkPrefabMirror`'s planned-but-UNSTARTED "second pass", so socketing would
+> be its first customer. Recorded as intelligence only — NOT actioned in 1042.)*
+>
 > *(UI-seat bumped 1042 -> 1043 in the SAME edit as the WO-1042 mint — owner design 2026-08-16: the
 > **ROUGH STONE -> JEWELER POLISH -> refined gem** link. She named a REAL gap WO-1041 left open:
 > `jeweler-recipes.json` demands SPECIFIC gems (`ing_ember_crystal` etc.) in exact counts, so a direct
