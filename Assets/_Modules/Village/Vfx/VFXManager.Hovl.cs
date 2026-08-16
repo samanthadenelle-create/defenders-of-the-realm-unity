@@ -775,6 +775,66 @@ namespace DeNelle.Village
             return Mathf.Clamp(targetWorldSize / measured, lo, hi);
         }
 
+        // instanceID -> measured authored visual size, for prefabs that have NO catalog row
+        // (the WO-1035 portal-circle mirror is a plain tracked Resources prefab). Same
+        // measure-once-per-process contract as _hovlMeasuredSize above.
+        private static readonly Dictionary<int, float> _prefabMeasuredSize
+            = new Dictionary<int, float>();
+
+        /// <summary>
+        /// Measured authored visual size (world units) of an UNCATALOGUED prefab — the same
+        /// measurement <see cref="MeasureKeyVisualSize"/> performs, for callers that hold a
+        /// plain prefab reference instead of a catalog key (e.g. a tracked Resources mirror).
+        /// Cached per prefab instance id. 0 = unmeasurable.
+        /// <para/>
+        /// Exposed rather than re-implemented at the call site: a second copy of the
+        /// startSize/mesh-bounds walk is exactly the duplicated-state drift CLAUDE.md §5 keeps
+        /// having to un-rot, and the two copies would answer differently the first time a
+        /// vendor prefab used a curve-mode start size.
+        /// </summary>
+        public static float MeasureVisualSize(GameObject prefab)
+        {
+            if (prefab == null) return 0f;
+            int id = prefab.GetInstanceID();
+            if (_prefabMeasuredSize.TryGetValue(id, out float cached)) return cached;
+
+            float measured = 0f;
+            Guard.Try("VFXManager", "measure prefab '" + prefab.name + "'",
+                      () => { measured = MeasurePrefabVisualSize(prefab); });
+            if (measured > 0f)
+            {
+                _prefabMeasuredSize[id] = measured;
+                FlowTrace.Once("VFXManager", "prefab-measure:" + id,
+                    $"MeasureVisualSize('{prefab.name}') -> authored visual size {measured:0.###} m.");
+            }
+            return measured;
+        }
+
+        /// <summary>
+        /// <see cref="ResolveFitScale(string,float,float,float)"/> for an uncatalogued prefab.
+        /// Returns 1f (authored size, unchanged) and says so once when the prefab cannot be
+        /// measured, so an unmeasurable prefab SELF-REPORTS instead of silently shipping at 1.0.
+        /// </summary>
+        public static float ResolveFitScale(GameObject prefab, float targetWorldSize,
+                                            float minScale, float maxScale)
+        {
+            if (prefab == null || targetWorldSize <= 0f) return 1f;
+
+            float measured = MeasureVisualSize(prefab);
+            if (measured <= 0f)
+            {
+                FlowTrace.Once("VFXManager", "prefab-fit-nomeasure:" + prefab.GetInstanceID(),
+                    $"ResolveFitScale('{prefab.name}'): prefab could not be measured (no ParticleSystem " +
+                    $"or mesh bounds) - falling back to scale 1.0 for a requested {targetWorldSize:0.###} m.");
+                return 1f;
+            }
+
+            float lo = Mathf.Min(minScale, maxScale);
+            float hi = Mathf.Max(minScale, maxScale);
+            if (hi <= 0f) return 1f;
+            return Mathf.Clamp(targetWorldSize / measured, lo, hi);
+        }
+
         /// <summary>
         /// Max authored visual extent of a prefab: the largest particle start size across
         /// every child ParticleSystem, and the largest mesh bounds diagonal across every

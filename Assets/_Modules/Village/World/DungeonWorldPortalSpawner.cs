@@ -738,9 +738,39 @@ namespace DeNelle.Village.World
         // tags a row with this key, the aura lights up with no further code change. Until then
         // PlayKey is a clean no-op and the rebuilt geometry + PP_GroundFog mist carry the read.
         private const string ThresholdAuraKey = "Portal_Threshold_Aura";
-        // Sized to the 2*ArchHalfWidth opening so a tagged prefab fills the threshold rather than
-        // being lost inside it - retune once a real prefab is behind the key.
-        private const float ThresholdAuraScale = ArchHalfWidth * 2f;
+
+        // =====================================================================
+        // WO-1035 SEATING RATIOS (owner 2026-08-16, verbatim: "the portal VFX prefab is
+        // supposed to be inside the portal model, not larger than it" / "Maybe 1/3 of
+        // protal.fbx height centered at y/2 x(end-start)/2 to be centered").
+        // ---------------------------------------------------------------------
+        // WHAT WAS WRONG - and it was arithmetic, not art. The old code passed
+        //     scale = bounds.size.x * 0.9
+        // straight into VFXManager.PlayKey / localScale. That number is a WORLD SIZE IN
+        // METRES (~4-5 m for a 6 m landmark arch), but the parameter it fed is a
+        // MULTIPLIER on an already-several-metres-wide authored prefab: the portalBlue
+        // vortex is authored around a ~2 m particle and "Magic circle dark star" around a
+        // ~5 m plane. Multiplying one by the other is what produced 15-25 m effects
+        // standing beside a 6 m portal - the owner's "huge blobs".
+        //
+        // THE FIX, and why it cannot drift: measure the portal, take the owner's fraction
+        // of it to get a TARGET SIZE IN METRES, then ask VFXManager to MEASURE THE PREFAB
+        // and return the multiplier that makes it read at that size (ResolveFitScale, the
+        // WO-870 fit-to-size seam - "measure -> normalize -> scale by the gameplay number,
+        // never trust authored scale"). Both halves are measured; the only constants below
+        // are documented RATIOS against those measurements, never metres.
+        // =====================================================================
+
+        /// <summary>Owner's fraction: the effect spans ~1/3 of the portal's measured extent, so it
+        /// fills the middle of the opening and is contained by the arch on every side.</summary>
+        private const float OpeningSpanFraction = 1f / 3f;
+
+        /// <summary>Clamp on the derived fit multiplier. NOT a size: it is the bound on
+        /// target/measured, so a degenerate measurement (a prefab that measures 0.01) cannot turn
+        /// into a 500x effect, and a huge one cannot collapse to nothing. Deliberately wide - the
+        /// derivation, not the clamp, is meant to pick the number.</summary>
+        private const float MinFitScale = 0.02f;
+        private const float MaxFitScale = 20f;
 
         // =====================================================================
         // Owner 2026-08-14: "all of the portals should be this" + "i want high end much better
@@ -812,18 +842,14 @@ namespace DeNelle.Village.World
             if (p == null || p.Root == null) return;
             if (p.ThresholdVfx != null) return;   // already holding the loop (idempotent)
 
-            // Centre of the opening. Once the real art is standing its MEASURED bounds are the
-            // only honest reference (the structure is normalized at runtime, so any literal here
-            // silently goes wrong the next time the art or the height is retuned); 45% of the
-            // opening height is the visual middle of a doorway. Falls back to the cube-arch
-            // geometry while the load is still in flight.
-            Vector3 thresholdPos = p.ArtStanding
-                ? OpeningCentre(p)
-                : p.Root.position + p.Root.up * (PortalHeight * 0.5f);
-            // Fill the opening: the pack effect is authored around a unit disc, so the opening
-            // WIDTH is the honest scale reference - a fixed number is lost inside a 6 m landmark
-            // arch and overflows a 2.7 m interior one.
-            float scale = p.ArtStanding ? OpeningScale(p) : ThresholdAuraScale;
+            // MEASURED seat + MEASURED size (WO-1035). Both come from the portal's own renderer
+            // bounds - the real structure's once it is standing, the cube arch's while the async
+            // swap is in flight - so a re-scaled, re-authored or swapped mesh carries the effect
+            // with it instead of stranding it at a literal.
+            Bounds b = MeasurePortalBounds(p, out string src);
+            Vector3 thresholdPos = OpeningCentre(p, b);
+            float target = OpeningTargetSize(b);
+            float scale = VFXManager.ResolveFitScale(ThresholdAuraKey, target, MinFitScale, MaxFitScale);
             p.ThresholdVfx = VFXManager.PlayKey(
                 ThresholdAuraKey, thresholdPos, p.Root.rotation, p.Root,
                 null, scale);
@@ -831,8 +857,10 @@ namespace DeNelle.Village.World
             if (p.ThresholdVfx != null)
             {
                 FlowTrace.Step("Portal",
-                    $"AttachThresholdAura: '{ThresholdAuraKey}' aura spawned at the threshold centre " +
-                    $"({thresholdPos.x:F1}, {thresholdPos.y:F1}, {thresholdPos.z:F1}) scale={scale:0.0} (loop held).");
+                    $"AttachThresholdAura: '{ThresholdAuraKey}' aura seated at the measured opening centre " +
+                    $"({thresholdPos.x:F1}, {thresholdPos.y:F1}, {thresholdPos.z:F1}) - {BoundsLine(b, src)} " +
+                    $"target={target:0.00}m (x{OpeningSpanFraction:0.###} of the smaller measured span) " +
+                    $"authored={VFXManager.MeasureKeyVisualSize(ThresholdAuraKey):0.00}m -> scale={scale:0.000} (loop held).");
                 return;
             }
 
@@ -900,12 +928,14 @@ namespace DeNelle.Village.World
                 return;
             }
 
-            // Same honest references the threshold aura uses: measured art bounds once the
-            // real structure stands, cube-arch geometry while the swap is in flight.
-            Vector3 centre = p.ArtStanding
-                ? OpeningCentre(p)
-                : p.Root.position + p.Root.up * (PortalHeight * 0.5f);
-            float scale = p.ArtStanding ? OpeningScale(p) : ThresholdAuraScale;
+            // Same measured references the threshold aura uses (WO-1035): the real structure's
+            // bounds once it stands, the cube arch's while the swap is in flight. The circle
+            // prefab has NO catalog row, so it is measured directly through the same fit-to-size
+            // seam rather than by a second copy of that measurement here.
+            Bounds b = MeasurePortalBounds(p, out string src);
+            Vector3 centre = OpeningCentre(p, b);
+            float target = OpeningTargetSize(b);
+            float scale = VFXManager.ResolveFitScale(_circlePrefab, target, MinFitScale, MaxFitScale);
 
             Quaternion rot = p.Root.rotation * Quaternion.Euler(90f, 0f, 0f);
 
@@ -915,29 +945,81 @@ namespace DeNelle.Village.World
             p.CircleVfx = go;
 
             FlowTrace.Step("Portal",
-                $"AttachPortalCircle: '{CirclePrefabResourcePath}' stood vertical for portal '{p.Key}' at " +
-                $"({centre.x:F1}, {centre.y:F1}, {centre.z:F1}) rot=+90X over facingYaw " +
-                $"{p.Root.eulerAngles.y:F0} scale={scale:0.0} " +
+                $"AttachPortalCircle: '{CirclePrefabResourcePath}' stood vertical INSIDE the opening of portal " +
+                $"'{p.Key}' at ({centre.x:F1}, {centre.y:F1}, {centre.z:F1}) rot=+90X over facingYaw " +
+                $"{p.Root.eulerAngles.y:F0} - {BoundsLine(b, src)} target={target:0.00}m " +
+                $"authored={VFXManager.MeasureVisualSize(_circlePrefab):0.00}m -> scale={scale:0.000} " +
                 "(owner pick 2026-08-16: Magic circle dark star as the portal face).");
         }
 
-        /// <summary>Centre of the real opening, measured from the loaded structure's own bounds.
-        /// Never a literal: the structure is height-normalized at runtime, so a hardcoded y goes
-        /// silently wrong the next time the art or PortalHeight is retuned.</summary>
-        private Vector3 OpeningCentre(Portal p)
+        // =====================================================================
+        // THE ONE MEASURED REFERENCE (WO-1035). Every seat + size above reads from here,
+        // so the aura and the circle can never disagree about where the opening is.
+        // =====================================================================
+
+        /// <summary>World renderer bounds of whatever portal geometry is CURRENTLY standing:
+        /// the loaded shared structure once the async swap has landed, else the code-built cube
+        /// arch (which is the deliberate standing fallback, not an error state). Falls back once
+        /// more to a synthetic box from the arch's own authoring constants if nothing measurable
+        /// exists yet, so this never returns degenerate bounds to a caller.</summary>
+        private Bounds MeasurePortalBounds(Portal p, out string src)
         {
-            Bounds b = PortalStructure.MeasureBounds(p.Swap.Instance);
-            if (b.size.y <= 0.001f) return p.Root.position + p.Root.up * (PortalHeight * 0.5f);
-            return new Vector3(b.center.x, b.min.y + b.size.y * 0.45f, b.center.z);
+            if (p != null && p.ArtStanding && p.Swap.Instance != null)
+            {
+                Bounds art = PortalStructure.MeasureBounds(p.Swap.Instance);
+                if (art.size.y > 0.001f) { src = "sharedArt"; return art; }
+            }
+
+            // Cube-arch fallback: measure the primitives that are actually up rather than
+            // re-deriving them, so a retune of BuildArch carries automatically.
+            if (p != null && p.Renderers != null)
+            {
+                Bounds b = default; bool has = false;
+                for (int i = 0; i < p.Renderers.Length; i++)
+                {
+                    var r = p.Renderers[i];
+                    if (r == null || !r.gameObject.activeInHierarchy) continue;
+                    if (!has) { b = r.bounds; has = true; } else b.Encapsulate(r.bounds);
+                }
+                if (has && b.size.y > 0.001f) { src = "cubeArch"; return b; }
+            }
+
+            // Last resort - the arch's authoring constants, which is what BuildArch will build.
+            src = "synthetic";
+            Vector3 root = p != null && p.Root != null ? p.Root.position : Vector3.zero;
+            float w = (ArchHalfWidth + PillarThickness) * 2f;
+            return new Bounds(root + Vector3.up * (PortalHeight * 0.5f),
+                              new Vector3(w, PortalHeight, ArchHalfDepth * 2f + PillarThickness));
         }
 
-        /// <summary>Aura scale derived from the real opening width (same reasoning as
-        /// <see cref="OpeningCentre"/>).</summary>
-        private float OpeningScale(Portal p)
+        /// <summary>Centre of the opening = the measured bounds centre (the owner's "centered at
+        /// y/2 x(end-start)/2"). Never a literal: the structure is height-normalized at runtime,
+        /// so a hardcoded y goes silently wrong the next time the art or PortalHeight is retuned.</summary>
+        private Vector3 OpeningCentre(Portal p, Bounds b)
         {
-            Bounds b = PortalStructure.MeasureBounds(p.Swap.Instance);
-            return b.size.x > 0.01f ? Mathf.Max(0.5f, b.size.x * 0.9f) : ThresholdAuraScale;
+            if (b.size.y <= 0.001f)
+                return (p != null && p.Root != null ? p.Root.position : Vector3.zero)
+                       + Vector3.up * (PortalHeight * 0.5f);
+            return b.center;
         }
+
+        /// <summary>Target world size of the effect: the owner's 1/3 fraction of the portal's
+        /// measured extent. Taken against the SMALLER of the two facing spans (height, width) so
+        /// the effect is contained on BOTH axes - a wide-and-short arch would otherwise get an
+        /// effect that overflows its pillars while its height read perfectly correct.</summary>
+        private float OpeningTargetSize(Bounds b)
+        {
+            float span = Mathf.Min(b.size.x, b.size.y);
+            if (span <= 0.001f) span = PortalHeight;
+            return span * OpeningSpanFraction;
+        }
+
+        /// <summary>The measured numbers, formatted once, so a capture reads NUMBERS at the next
+        /// tuning pass instead of inviting another guess (CLAUDE.md section 12).</summary>
+        private static string BoundsLine(Bounds b, string src) =>
+            $"measured[{src}] size=({b.size.x:0.00}x{b.size.y:0.00}x{b.size.z:0.00}) " +
+            $"centre=({b.center.x:0.0},{b.center.y:0.0},{b.center.z:0.0}) " +
+            $"y[{b.min.y:0.00}..{b.max.y:0.00}]";
 
         private static void ApplyDim(Portal p, float brightness)
         {
