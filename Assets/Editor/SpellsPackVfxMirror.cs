@@ -23,7 +23,9 @@ namespace DeNelle.Editor
             ("Projectiles/Projectiles/Projectile_Fire_3.prefab", "Projectile_Fire_3.prefab"),
             ("Projectiles/Casting/Casting_Fire.prefab",        "Casting_Fire.prefab"),
             ("Projectiles/Casting/Casting_Fire_2.prefab",      "Casting_Fire_2.prefab"),
-            ("Spells/Spell_Fire_6.prefab",                     "Spell_Fire_6.prefab"),
+            // Spell_Fire_6 row REMOVED (owner ban 2026-08-16, verbatim: "D:\EoA\Assets\Resources\
+            // VFX\Projectiles\Spell_Fire_6.prefab - Do Not use anywhere"). Fire impact is now the
+            // ParticlePack BigExplosion mirror (StatusVfxMirrors.cs). Enforced by BannedVfxRegression.
         };
 
         [MenuItem("Defenders/VFX/Mirror Spells Pack To Resources")]

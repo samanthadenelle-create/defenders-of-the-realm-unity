@@ -90,6 +90,7 @@ namespace DeNelle.Editor
         // ParticlePackVfxBatchBuilder (Defenders/VFX/Build Particle Pack VFX Batch).
         // Same rule as BossVfx: the PREFAB is tracked so the row does not point straight
         // into the gitignored Assets/UnityTechnologies pack.
+        private const string StatusVfx  = "Assets/Resources/VFX/Status/"; // StatusVfxMirrors.cs mirrors (ParticlePack)
         private const string EnvVfx     = "Assets/Resources/VFX/Env/";
         private const string WeaponVfx  = "Assets/Resources/VFX/Weapon/";
         private const string AuraVfx    = "Assets/Resources/VFX/Aura/";
@@ -105,11 +106,16 @@ namespace DeNelle.Editor
             // Upgrade from the small Hit_stone spark to a readable SLASH ARC so every
             // sword connect reads as a strike, not a pebble poof. Still a cheap oneshot.
             { "Impact_Physical",        new Pick(Lana + "Slash/Slash_stone_once.prefab") },
-            // FIREBALL headline (overnight build): the mage/hero fireball's regular fire-impact
-            // burst is the rich Spells Pack Spell_Fire_6 (a fiery detonation) instead of the small
-            // Lana Hit_fire spark, so a fireball reads as a real fireball. URP-proofed at load by
-            // VFXManager.ProofUrpParticleShaders (memory: half-upgraded URP pack = pixelated).
-            { "Impact_Flame",           new Pick(Res + "Spell_Fire_6.prefab") },
+            // OWNER BAN (2026-08-16, verbatim): "D:\EoA\Assets\Resources\VFX\Projectiles\
+            // Spell_Fire_6.prefab - Do Not use anywhere". Minutes earlier the owner tagged
+            // "BigExplosion.prefab (UnityTechnologies ParticlePack) -> Fire Spell impact", so the
+            // fire-impact burst is now the ParticlePack BigExplosion via its EXISTING committed
+            // mirror (StatusVfxMirrors.cs -> Assets/Resources/VFX/Status/BigExplosion.prefab, the
+            // same mirror AtbStatusVfx.FireImpactPath already plays for ATB fire impacts). The old
+            // Spells Pack Spell_Fire_6 pick is banned outright and enforced by
+            // BannedVfxRegression (BANNED_VFX_OK/FAIL). Still a cheap oneshot burst; URP-proofed
+            // at load by VFXManager.ProofUrpParticleShaders.
+            { "Impact_Flame",           new Pick(StatusVfx + "BigExplosion.prefab") },
             { "Impact_Ice",             new Pick(Lana + "Range_attack/Hit_frost.prefab") },
             { "Impact_Aether",          new Pick(Lana + "Range_attack/Hit_magic.prefab") },
             { "Impact_Heal",            new Pick(Lana + "Range_attack/Hit_heart.prefab") },

@@ -944,9 +944,17 @@ namespace DeNelle.Editor
 
             "WO-887 element-proc recipes (TinyExplosion fire, IceLance shards, EnergyExplosion " +
             "arcane, GoopSpray nature): NOT built, because every one would be bytes with no " +
+            // OWNER BAN (2026-08-16, verbatim): "D:\EoA\Assets\Resources\VFX\Projectiles\
+            // Spell_Fire_6.prefab - Do Not use anywhere". Paired with the owner tag
+            // "BigExplosion.prefab (UnityTechnologies ParticlePack) -> Fire Spell impact",
+            // Impact_Flame moved off the old Spells Pack detonation onto the ParticlePack
+            // BigExplosion mirror (Assets/Resources/VFX/Status/BigExplosion.prefab). The
+            // deferral string below no longer names the banned prefab because these strings
+            // are CODE to BannedVfxRegression's lint - the verbatim ban lives in this comment.
             "consumer. The four impact moments that DO have enum values are already pointed at " +
-            "deliberate, tracked, better picks - Impact_Flame at the Spells Pack Spell_Fire_6 " +
-            "detonation (the 'fireball headline' pick), Impact_ExplosionAether at Explosion_Arcane, " +
+            "deliberate, tracked, better picks - Impact_Flame at the ParticlePack BigExplosion " +
+            "mirror (repointed 2026-08-16 off the banned Spells Pack fire detonation, see the " +
+            "owner-ban comment above + BannedVfxRegression), Impact_ExplosionAether at Explosion_Arcane, " +
             "Impact_Ice at Lana Hit_frost, Impact_Physical at the Lana slash ARC that an owner " +
             "ruling on 2026-08-02 chose over an impact burst - so re-pointing them at smaller pack " +
             "recipes would be a downgrade dressed as progress. The nature/poison row has no home at " +

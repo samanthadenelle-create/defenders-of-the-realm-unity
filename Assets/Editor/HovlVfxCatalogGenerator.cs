@@ -85,6 +85,9 @@ namespace DeNelle.Editor
         // do, exactly as the death ladder was moved onto tracked art by WO-886.
         private const string DAMAGE = "Assets/Resources/VFX/Damage/";
 
+        // Tracked aura mirrors (same not-Hovl-and-that-is-the-point law as DAMAGE above).
+        private const string AURA   = "Assets/Resources/VFX/Aura/";
+
         // -- Curated shortlist: key -> {prefab path, pool, scale, lifetime, recolor, loop} --
         // Exact paths verified against Docs/VFX/HovlStudio_Inventory.md §5. Owner re-points
         // any line and re-runs. Projectile-loops are LOOP (play until impact); casts/impacts/
@@ -104,22 +107,26 @@ namespace DeNelle.Editor
             { "Arcane_Projectile",      new Pick(AAA + "Projectile VFX loop/Projectile 17 nova violet.prefab", isLoop: true) },
             { "Arcane_Cast",            new Pick(AAA + "Flash and hits/Flash 17 nova violet.prefab") },
             { "Arcane_Impact",          new Pick(AAA + "Flash and hits/Hit 17 nova violet.prefab") },
-            // Arcane TOWER ambient aura (owner 2026-07-15 "arcane towers should have an aura") — a
-            // looping magic circle held at the spire base. Reads by MOTION + LUMINANCE (a slow
-            // rotating rune ring), colorblind-safe; the violet tint is only a hint. Same prefab as
-            // Poi_NodeAura (known-imported), recolorable ON so ArcaneAura's HDR violet applies. Loop
-            // -> PlayKey returns a VFXHandle ArcaneAura.cs Stop()s on destroy.
-            { "Arcane_Aura",            new Pick(MAGIC + "Loop version/Magic circle sun loop.prefab", poolSize: 3, recolorable: true, isLoop: true) },
+            // Arcane TOWER ambient aura (owner 2026-07-15 "arcane towers should have an aura").
+            // ⚠ KEY WITHHELD - OWNER BAN (2026-08-16, verbatim): "Assets\Hovl Studio\Magic circles\
+            // Prefabs\Loop version\Magic circle sun loop.prefab" - "remove". The old pick was that
+            // sun loop; owner ban 2026-08-16; replacement awaits an owner tag - do NOT substitute
+            // (memory: vfx-map-owner-tags-no-creative-pick). With no Map row the key simply never
+            // reaches the catalog, and VFXManager.PlayKey("Arcane_Aura") degrades to the throttled
+            // hovl-nokey FlowTrace no-op that ArcaneAura.cs is documented to tolerate (its header:
+            // "PlayKey no-ops ... the aura simply appears once the catalog row is authored").
+            // Enforced by BannedVfxRegression (BANNED_VFX_OK/FAIL).
+            //   { "Arcane_Aura",  <withheld - awaiting owner tag> },
             // Dungeon-ENTRANCE portal gateway (owner felt-test 2026-07-15 "the dungeon
-            // portal arch looks plain -- can creative make it magical?"). A looping magic
-            // circle laid as a glowing rune ring at the overworld arch base so the entrance
-            // reads as an ACTIVE arcane gateway ("step here, it's magical"). Same URP-clean,
-            // proven-imported Hovl magic-circle prefab the Arcane_Aura / Poi_NodeAura keys
-            // use (guaranteed present). Recolorable ON so DungeonWorldPortalSpawner's HDR
-            // arcane-violet tint applies; loop -> PlayKey returns a VFXHandle the spawner
-            // holds. COLORBLIND-SAFE (owner red/green): reads by MOTION + LUMINANCE (a slow
-            // rotating rune ring), the violet is only a hint. Attached in DungeonWorldPortalSpawner.
-            { "Dungeon_Portal_Gate",    new Pick(MAGIC + "Loop version/Magic circle sun loop.prefab", poolSize: 3, recolorable: true, isLoop: true) },
+            // portal arch looks plain -- can creative make it magical?"). A magic circle laid
+            // at the overworld arch base so the entrance reads as an ACTIVE arcane gateway.
+            // REPOINTED 2026-08-16: the old pick was the now-banned sun loop (owner ban verbatim
+            // above); the owner tagged, same day, verbatim: "Magic circle dark star.prefab - use
+            // this rotated for the portals" - so this key is the DARK STAR circle (the rotation is
+            // the portal-face presentation lane's wiring, not a catalog concern). Recolorable ON so
+            // the HDR arcane-violet tint applies. IsLoop below is only the fallback literal - the
+            // generator DERIVES the real flag from the prefab at build time (see the pLoop block).
+            { "Dungeon_Portal_Gate",    new Pick(MAGIC + "Magic circle dark star.prefab", poolSize: 3, recolorable: true, isLoop: true) },
             // Heart-of-Elarion + founding-Echo ambient AURA (owner 2026-07-16 "the aura on the
             // tree/echo renders as ugly white squares"). VFXType.Aura_HeartPulse BRIDGES to this
             // key (VFXManager._hovlKeyForType), so BOTH HeartAuraController (the tree nucleus) and
@@ -232,10 +239,14 @@ namespace DeNelle.Editor
 
             // ═══ WO-VFX-POI: point-of-interest CALLOUTS (owner red/green colorblind — these read
             // by MOTION / SHAPE / LUMINANCE / VERTICALITY, never hue) ═══
-            // Near-field NODE aura — a looping high-luminance ground circle under a harvest node.
-            // Recolour OFF (keep the bright neutral gold ring); small pool (only ~6 live at once,
-            // capped by PoiCalloutSystem to the shared loop budget).
-            { "Poi_NodeAura",           new Pick(MAGIC + "Loop version/Magic circle sun loop.prefab", poolSize: 6, recolorable: false, isLoop: true) },
+            // Near-field NODE aura — a looping ground aura under a harvest node. Small pool
+            // (only ~6 live at once, capped by PoiCalloutSystem to the shared loop budget).
+            // REPOINTED 2026-08-16: the old pick was the now-banned "sun loop" magic circle
+            // (owner ban verbatim at the Arcane_Aura note above). The owner tagged, same day,
+            // verbatim: "Aura_PetLevel2 -> Node Auras" - and this key IS the node aura, so it
+            // now points at the TRACKED Resources mirror (fresh-clone safe, unlike the
+            // gitignored Hovl art it replaces). Recolour OFF (keep the authored look).
+            { "Poi_NodeAura",           new Pick(AURA + "Aura_PetLevel2.prefab", poolSize: 6, recolorable: false, isLoop: true) },
             // Far-field ENEMY FORTRESS beacon — a TALL looping pillar/beam visible from range,
             // stands until the outpost is cleared. Verticality is the read (not hue). Scale up so it
             // towers over the fort silhouette.
