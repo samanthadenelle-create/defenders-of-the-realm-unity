@@ -1,6 +1,8 @@
 // =============================================================================
 // CastleDefensePlansService -- WO-1013 "Castle Defense Plans": the ONE authored
-// drop that unlocks the Arcane Spire after the player survives wave 2.
+// drop that unlocks the Arcane Spire after the player survives RequiredWavesSurvived
+// waves (owner ruling 2026-08-16 moved that 2 -> 3; the constant is the authority --
+// never restate the number in prose, that is how this header went stale once already).
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.Village   Namespace: DeNelle.Village
 //
@@ -8,25 +10,30 @@
 // no scene authoring, no VillageSceneBuilder re-save). One persistent service;
 // a cheap 1 s scan (the EchoWaveUnlockBridge cadence) decides everything from
 // PERSISTED STATE, so every acceptance shape falls out of one rule:
-//   spawn IFF GameState.WavesCompleted >= 2 AND the unlock is not collected
-//         AND no prop is already standing AND this scene runs the town wave loop.
-// - "survive wave 2": WavesCompleted is the persisted lifetime wave-clear counter
+//   spawn IFF GameState.WavesCompleted >= RequiredWavesSurvived AND the unlock is
+//         not collected AND no prop is already standing AND this scene runs the
+//         town wave loop.
+// - "survive the waves": WavesCompleted is the persisted lifetime wave-clear counter
 //   (EchoService increments it off WaveManager.OnWaveCleared). Waves only run
 //   post-onboarding, so the gate is WAVES, not tutorial completion -- skip-tutorial
 //   players are covered for free (WO-1013 acceptance).
 // - "persists until collected": the prop is deterministically re-spawned from
 //   state on every scene entry / restart until the flag flips. Nothing is saved
 //   about the prop itself.
-// - "wave 3+ drop nothing scripted": once collected the flag closes the rule
+// - "later waves drop nothing scripted": once collected the flag closes the rule
 //   forever. ShouldSpawnDrop is pure so the regression pins the truth table.
 //
 // The prop mirrors the DungeonTreasureCache visual grammar (primitives + point
 // light -- no chest prefab ships under Resources/) and the ComposedKeyPickup
 // trigger grammar (sphere trigger + hero check) via CastleDefensePlansPickup.
 // No banner, no modal, no announcement chrome (WO-1013 SS3): it glints at the
-// gate, nothing more.
+// gate, nothing more. That ruling STANDS -- see BuildVisual for the WO-1105
+// discoverability work, which stays strictly inside it (a world-space landmark
+// pillar on the prop, the same one an enemy fortress already carries; still
+// nothing announced, nothing on the HUD).
 // =============================================================================
 
+using System.Collections.Generic;
 using DeNelle.Core.Diagnostics;
 using DeNelle.Core.State;
 using UnityEngine;
@@ -43,6 +50,15 @@ namespace DeNelle.Village
             var go = new GameObject("CastleDefensePlansService");
             Object.DontDestroyOnLoad(go);
             go.AddComponent<CastleDefensePlansService>();
+
+            // WO-1105 (canon sec 12): PROVE the service installed. Until now Init emitted
+            // nothing and every early return in Update was silent, so a run where the drop
+            // never spawned produced a log byte-identical to one where it did -- which is
+            // precisely why F8 seq 2505 was nearly mis-diagnosed as "the service never runs
+            // in the hub". One line here + the Update heartbeat close that hole.
+            FlowTrace.Step("Progression",
+                "plans-service installed (DDOL, self-bootstrap; threshold " +
+                CastleDefensePlansService.RequiredWavesSurvived + " waves survived) -- WO-1013");
         }
     }
 
@@ -60,11 +76,27 @@ namespace DeNelle.Village
         /// The celebration screen + the Echo FTUE beat that ride this same moment are WO-1104.</summary>
         public const int RequiredWavesSurvived = 3;
 
+        /// <summary>Metres the seat is pulled INSIDE the wall line, measured from the GATE
+        /// itself. One inset for both seat sources (Gate component or WaveSpawnPoint), so
+        /// there is exactly one number describing "just inside the gate mouth".</summary>
+        public const float GateInsetMetres = 3.5f;
+
+        /// <summary>The AUTHORED gate-to-spawn offset: CastleHubBuilder.PlaceCastleSpawnPoints
+        /// seats every WaveSpawnPoint exactly this far OUTSIDE the gate it feeds (canon SS7).
+        /// Only used to recover a gate anchor from a marker whose GatePosition was never
+        /// Configure()'d -- the authored GatePosition is preferred in every normal case.</summary>
+        public const float SpawnToGateMetres = 12f;
+
         public static CastleDefensePlansService Instance { get; private set; }
 
         private GameObject _prop;
         private float _nextScan;
         private const float ScanInterval = 1.0f;   // the EchoWaveUnlockBridge cadence
+
+        /// <summary>Seconds between [Flow:Progression] not-spawning heartbeat lines. The scan
+        /// itself runs at 1 Hz; the heartbeat is throttled well below that so a long session
+        /// cannot flood the log while still naming the reason on every look.</summary>
+        private const float HeartbeatSeconds = 5f;
 
         // first-spire-built funnel: emit ONCE, on the transition observed this session
         // (a save that already built one stays silent -- baseline taken on first scan).
@@ -98,7 +130,16 @@ namespace DeNelle.Village
 
             var svc = GameStateService.Instance;
             var state = svc != null ? svc.State : null;
-            if (state == null) return;
+            if (state == null)
+            {
+                // WO-1105 (canon sec 12): NAME the reason. Every early return below used to be
+                // silent, so "the drop did not spawn" and "the drop spawned fine" logged the
+                // same nothing.
+                FlowTrace.Throttle("Progression", "plans-idle-nostate", HeartbeatSeconds,
+                    "plans-drop idle: no GameState yet (GameStateService" +
+                    (svc == null ? ".Instance" : ".State") + " is null) -- still scanning");
+                return;
+            }
 
             // -- first-spire-built funnel (transition-only, once per session) --------
             if (!_baselineTaken)
@@ -116,11 +157,26 @@ namespace DeNelle.Village
 
             // -- the one spawn rule --------------------------------------------------
             bool unlocked = ProgressionUnlocks.IsUnlocked(CastleDefensePlansPickup.SpireCatalogId);
-            if (!ShouldSpawnDrop(state.WavesCompleted, unlocked, _prop != null)) return;
+            bool propAlive = _prop != null;
+            if (!ShouldSpawnDrop(state.WavesCompleted, unlocked, propAlive))
+            {
+                FlowTrace.Throttle("Progression", "plans-idle-rule", HeartbeatSeconds,
+                    $"plans-drop not spawning: wavesCompleted={state.WavesCompleted} " +
+                    $"(need >={RequiredWavesSurvived}) unlocked={unlocked} propAlive={propAlive} " +
+                    "-- ShouldSpawnDrop false");
+                return;
+            }
 
             // Only the defended town runs the village wave loop; a raid/dungeon/battle
             // scene has no village WaveManager and must never grow the drop.
-            if (FindAnyObjectByType<WaveManager>() == null) return;
+            if (FindAnyObjectByType<WaveManager>() == null)
+            {
+                FlowTrace.Throttle("Progression", "plans-idle-nowavemgr", HeartbeatSeconds,
+                    $"plans-drop WITHHELD: the rule says spawn (wavesCompleted={state.WavesCompleted}) " +
+                    "but this scene has no village WaveManager -- not the defended town " +
+                    "(raid/dungeon/battle), so no drop grows here");
+                return;
+            }
 
             Guard.Try("Progression", "spawn plans drop", () => SpawnDrop(state.WavesCompleted));
         }
@@ -157,11 +213,32 @@ namespace DeNelle.Village
         }
 
         /// <summary>
-        /// Seat the drop AT THE GATE (WO-1013 SS1): prefer the first cardinal
-        /// <see cref="Gate"/> (lowest gateId ordinal -- deterministic), pulled 3.5 m
-        /// toward the village centre so it lands inside the perimeter; else the
-        /// SpawnPoint tag nearest the centre (canon: 12 m outside each gate) pulled
-        /// 8 m inward; else a fixed near-centre fallback. Ground-snapped by raycast.
+        /// One candidate seat source for the plans drop: the marker's NAME (the stable
+        /// tie-break key), its world position, and the world position of the gate it feeds
+        /// (<see cref="Vector3.zero"/> when the marker was never Configure()'d). A plain
+        /// value type so <see cref="TryResolveSpawnSeat"/> is pure and pinnable headless.
+        /// </summary>
+        public readonly struct SeatCandidate
+        {
+            public readonly string Name;
+            public readonly Vector3 Position;
+            public readonly Vector3 GatePosition;
+
+            public SeatCandidate(string name, Vector3 position, Vector3 gatePosition)
+            {
+                Name = name ?? "";
+                Position = position;
+                GatePosition = gatePosition;
+            }
+        }
+
+        /// <summary>
+        /// Seat the drop JUST INSIDE THE GATE MOUTH (WO-1013 SS1, corrected by WO-1105):
+        /// prefer the first cardinal <see cref="Gate"/> by ordinal gateId, pulled
+        /// <see cref="GateInsetMetres"/> toward the village centre; else the cardinal
+        /// <see cref="WaveSpawnPoint"/> chosen by ordinal NAME, seated off the gate that
+        /// marker feeds and pulled the same inset inward; else a fixed near-centre
+        /// fallback. Ground-snapped by raycast.
         /// </summary>
         private static Vector3 ResolveGateSeat(out string source)
         {
@@ -177,7 +254,7 @@ namespace DeNelle.Village
                             gates[i].GateId ?? "", pick.GateId ?? "") < 0)
                         pick = gates[i];
                 }
-                seat = PullTowardCentre(pick.transform.position, 3.5f);
+                seat = PullTowardCentre(pick.transform.position, GateInsetMetres);
                 source = $"gate:{pick.GateId ?? pick.name}";
             }
             else
@@ -193,27 +270,84 @@ namespace DeNelle.Village
                 // throw on missing project settings. CastleHubBuilder.cs:2415 already noted that
                 // EnemyBrain guards undefined tags -- this site was the one that did not.
                 var spawns = FindObjectsByType<WaveSpawnPoint>(FindObjectsSortMode.None);
-                if (spawns != null && spawns.Length > 0)
+                var candidates = new List<SeatCandidate>(spawns != null ? spawns.Length : 0);
+                if (spawns != null)
                 {
-                    WaveSpawnPoint nearest = spawns[0];
-                    float best = float.MaxValue;
                     for (int i = 0; i < spawns.Length; i++)
                     {
                         if (spawns[i] == null) continue;
-                        float d = spawns[i].transform.position.sqrMagnitude;
-                        if (d < best) { best = d; nearest = spawns[i]; }
+                        candidates.Add(new SeatCandidate(
+                            spawns[i].name, spawns[i].transform.position, spawns[i].GatePosition));
                     }
-                    // SpawnPoints sit 12 m OUTSIDE each gate (canon SS7) -- pull well inside.
-                    seat = PullTowardCentre(nearest.transform.position, 8f);
-                    source = "spawnpoint:" + nearest.name;
                 }
-                else
+
+                if (!TryResolveSpawnSeat(candidates, out seat, out source))
                 {
                     seat = new Vector3(0f, 0f, 10f);   // near the Heart, on the approach
                     source = "fallback:heart-approach";
                 }
             }
             return GroundSnap(seat);
+        }
+
+        /// <summary>
+        /// The seat maths, PURE so the guardrail pins both properties headless: the seat lands
+        /// INSIDE the wall line, and the same candidate set always yields the same seat no
+        /// matter what order FindObjectsByType returned them in.
+        /// </summary>
+        /// <remarks>
+        /// TWO WO-1105 defects live here, both found from owner F8 seq 2505 ("Im on wave five
+        /// and still cannot build arcane towers" -- the drop HAD spawned at wave 3; she never
+        /// walked over it):
+        ///
+        /// 1. OUTSIDE THE WALLS. The old code pulled a FIXED 8 m off the SPAWN MARKER and the
+        ///    comment claimed that seated it "well inside". It did not. CastleHubBuilder
+        ///    .PlaceCastleSpawnPoints seats every marker 12 m OUTSIDE its gate, so in the hub
+        ///    the markers sit at |p| ~= 52.8 while the gate ring is at |p| ~= 40.8 -- an 8 m
+        ///    pull landed the prop at ~44.8, roughly 4 m OUTSIDE the wall, behind a perimeter
+        ///    the player has no reason to walk. The fix takes no second magic number: each
+        ///    marker already CARRIES the world position of the gate it feeds
+        ///    (WaveSpawnPoint.GatePosition, authored at bake time), so the anchor is READ from
+        ///    the scene and the only tunable left is the one inset shared with the Gate branch.
+        ///
+        /// 2. NON-DETERMINISM. All four cardinal markers are equidistant from the centre, so
+        ///    the old "nearest by sqrMagnitude, strict d &lt; best" compare never broke the tie
+        ///    and resolved on FindObjectsByType ITERATION ORDER -- the same save could drop at
+        ///    a different gate run to run, while the docstring promised determinism. The pick
+        ///    is now by ordinal NAME, a key that cannot tie.
+        /// </remarks>
+        /// <returns>False when there is no usable candidate (caller falls back).</returns>
+        public static bool TryResolveSpawnSeat(IReadOnlyList<SeatCandidate> candidates,
+                                               out Vector3 seat, out string source)
+        {
+            seat = Vector3.zero;
+            source = null;
+            if (candidates == null || candidates.Count == 0) return false;
+
+            int pick = -1;
+            for (int i = 0; i < candidates.Count; i++)
+            {
+                if (pick < 0 ||
+                    string.CompareOrdinal(candidates[i].Name, candidates[pick].Name) < 0)
+                    pick = i;
+            }
+            if (pick < 0) return false;
+
+            var c = candidates[pick];
+            Vector3 anchor = c.GatePosition;
+            string via = "gate-pos";
+            if (anchor.x * anchor.x + anchor.z * anchor.z < 0.01f)
+            {
+                // Marker never Configure()'d: recover the gate by walking the AUTHORED
+                // gate-to-spawn offset back inward from the marker itself.
+                anchor = PullTowardCentre(c.Position, SpawnToGateMetres);
+                via = "spawn-inset";
+            }
+            if (anchor.x * anchor.x + anchor.z * anchor.z < 0.01f) return false;
+
+            seat = PullTowardCentre(anchor, GateInsetMetres);
+            source = "spawnpoint:" + c.Name + "(" + via + ")";
+            return true;
         }
 
         private static Vector3 PullTowardCentre(Vector3 from, float metres)
@@ -251,13 +385,54 @@ namespace DeNelle.Village
             lightGo.transform.localPosition = new Vector3(0f, 1.2f, 0f);
             var light = lightGo.AddComponent<Light>();
             light.type = LightType.Point;
-            light.color = new Color(1f, 0.86f, 0.5f);
-            light.range = 8f;
-            light.intensity = 1.8f;
+            light.color = GlintTint;
+            light.range = 14f;      // WO-1105: 8 m did not reach past the gate arch
+            light.intensity = 2.4f;
 
             var glint = parent.gameObject.AddComponent<CastlePlansGlint>();
             glint.Bind(light);
+
+            // -- DISCOVERABILITY (WO-1105, owner F8 seq 2505) ------------------------
+            // The drop spawned correctly at wave 3 and the owner played two more waves
+            // without ever seeing it. An 0.85 m primitive satchel with a short point light,
+            // ~37 m from a town-centred camera, is simply not findable at hub scale -- the
+            // WO-1013 SS1 ruling was made for a small village.
+            //
+            // THE RULING IS NOT OVERTURNED. "No banner, no modal, no announcement chrome"
+            // still holds exactly: nothing is announced, nothing is pushed to the HUD, no
+            // text appears, and the player is never interrupted. This is the minimum that
+            // makes it FINDABLE without crossing that line -- the SAME far-field landmark
+            // pillar the open world already uses to mark a landmark you can see from range
+            // (PoiBeacon.Landmark -> PoiCalloutSystem -> the catalogued "Poi_Landmark"
+            // pillar loop). It is still only a thing that glints at the gate; now it is a
+            // thing you can see glinting FROM the town centre.
+            //
+            // Colour-blind canon (PoiBeacon header): the pillar reads by verticality /
+            // motion / luminance, never hue -- the tint stays the neutral pale gold of the
+            // glint, not a semantic colour.
+            //
+            // Guarded + null-tolerant on purpose: PoiCallouts is a feature flag and PlayKey
+            // no-ops when the key is unauthored, so the beacon is a BONUS on top of the
+            // prop's own light -- if the callout system is off the drop is still lit, and a
+            // failure here can never cost the player the unlock.
+            Guard.Try("Progression", "plans landmark beacon", () =>
+            {
+                var beacon = PoiBeacon.Attach(parent.gameObject, PoiBeacon.PoiTier.Landmark,
+                    calloutRadius: 500f,     // landmark tier: visible across the hub
+                    handoffRadius: 4f,       // fades as the hero arrives on it
+                    tint: GlintTint);
+                // Prove the marker exists, so a future "I still could not see it" is triaged
+                // from data instead of theory (canon sec 12).
+                FlowTrace.Step("Progression",
+                    "plans-drop landmark beacon " + (beacon != null ? "attached" : "NOT attached") +
+                    " (PoiCallouts flag=" + DeNelle.Core.FeatureFlags.PoiCallouts +
+                    ") -- world-space pillar only; no banner, no modal (WO-1013 SS3 upheld)");
+            });
         }
+
+        /// <summary>Neutral high-luminance pale gold shared by the prop's glint light and its
+        /// landmark pillar. NOT a semantic hue (owner is red/green colour-blind).</summary>
+        private static readonly Color GlintTint = new Color(1f, 0.86f, 0.5f, 1f);
 
         private static void AddDecor(Transform parent, PrimitiveType type, Vector3 localPos,
             Vector3 scale, Color color, Vector3 euler = default)
