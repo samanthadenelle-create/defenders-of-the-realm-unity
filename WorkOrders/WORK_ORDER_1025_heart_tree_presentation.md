@@ -70,6 +70,10 @@ cannot render a hard-edged cone mesh or a polygonal starburst sprite, so it is n
    normal/roughness/AO — so the surface still reads flat under URP lighting. Scope §5 to authoring the
    missing maps (or a normal-from-height bake) onto the EXISTING fixer material, citing DEF-267.
 
+**CROSS-REF (2026-08-16):** the GOLD glow half is identified and owned by **WO-946** (PoiCalloutSystem
+"Poi_NodeAura"/"Poi_Landmark" spawns uncovered by AmbientAuraPolicy's single-key gate); this WO keeps
+the white starburst hunt + the tree material.
+
 ## 3. STEP 1 — INSTRUMENT. Do not edit until the trace names the emitter (CLAUDE.md §12)
 
 The emitter is **unidentified**. Static reading located candidates and did not conclude, which is

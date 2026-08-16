@@ -126,6 +126,98 @@ a view fix without the oracle move ships the same false green this WO exists to 
 **Architecture note (canon):** per `docs/UI_BLINK_TEMPLATE_CANON.md` §3, frame geometry is tuned in
 `ZonesFor` and nowhere else. Per-screen absolute pixel lattices are the thing that rule exists to stop.
 
+#### 2.1c DEVICE MEASUREMENTS 2026-08-16 (owner Seeker felt-test) — AWAITING OWNER RULING
+
+> **Status of this section: SPEC ADDENDUM ONLY. Do NOT implement until the owner rules on it.**
+> It records what the 2026-08-16 device captures prove that 2.1b does not yet cover. 2.1b's pitch
+> law + separation pass + [grid] oracle move stand unchanged; the items below EXTEND them.
+
+Evidence: two Seeker captures, original 2670x1200, measured on a 2000x899 display scale
+(multiply displayed y by ~1.335 for original px):
+
+- `s3.png` — the clean tree, no dialog.
+- `s2.png` — the same screen with the Shield Slam spend dialog open.
+
+**1. Measured row overlaps (s3.png, displayed px).** Three tier rows land at:
+
+| row | y-band (displayed) | overlap with next |
+|---|---|---|
+| Row A (top, 3 large gold plates) | y ~190-380 | A/B overlap ~35 px |
+| Row B (middle, green-border plates) | y ~345-510 | B/C overlap ~15 px |
+| Row C (bottom, 5 gold plates) | y ~495-610 | — |
+
+Row B's LOCK icons (bottom-right corner of each locked plate) render ON TOP of Row C's plate tops.
+Row A's three plates touch with ZERO horizontal gap — they read as one continuous yellow block,
+x ~865-1250. Corner cost pips land on NEIGHBOURING plates (the exact misread 2.1b item 1 names,
+now measured on device). These numbers are the acceptance bar: after the fix, no two row y-bands
+may intersect and no plate may touch another at rest.
+
+**2. LEFT-half dead space — normalise X, not just Y.** In s3.png the band x ~200-310 inside the
+panel body is empty while the content crowds the centre-right (Row A starts at x ~865 in a well
+that begins ~x 200). 2.1b's "distribute rows over the FULL well height" normalises the VISIBLE
+Y range only. Requirement: apply the SAME normalisation to the visible X range (map the visible
+min..max x to the well width), or add an explicit centring pass that balances left/right slack.
+Either way, the well must not show a dead column on one side while plates collide on the other.
+
+**3. TOP-EDGE CLIP (s2.png).** The top tier row is clipped by the panel's TOP edge — the plates
+under the header bar are cut mid-plate (their `0/1` pips sit at the very edge of the body well).
+The y-range normalisation of 2.1b MUST inset its target range by **plate half-height PLUS the
+focus growth** (`NodeFocusPx/2` at the top and bottom of the well, i.e. the focused size, not
+`NodeSizePx/2`) so the first and last rows sit fully inside the mask at every state. Mapping row
+centres to the raw well edge is what produces this clip.
+
+**4. SPEND POPUP CLIPS ITS OWN BODY TEXT (separate small defect — do not fold into the graph
+work).** In s2.png the confirm dialog's question line — "Spend 2 Wisdom for Shield Slam?" — is
+sliced horizontally by the Cancel/CONFIRM button row: only the top ~60% of the glyphs render.
+This is a band-budget bug in the SPEND POPUP (the e0513c755 Obsidian FrameCore dialog), not in
+`ResolveGraphNorms` / the graph. It gets its own bullet here so it is not lost inside the layout
+fix: the dialog body band must reserve a whole line box for the question line (or the button row
+must anchor below the measured text height). Track/fix it as its own item.
+
+**5. ORACLE HOLE — why the suite is green over this broken screen (verified at source
+2026-08-16).** `Assets/Editor/Regression/SkillsPanelLayoutRegression.cs` header (line 45)
+promises `[grid]` guarantees "the graph content can never exceed / be sliced by its container" —
+but every `[grid]` check reads AUTHORED data only:
+
+- `:347` `ReadText(TalentsJson)` — the lattice check parses `hero-talents.json` x/y pairs;
+- `:320-324` / `:329-333` — the pitch checks measure the tightest AUTHORED column/row gap
+  against `L.NodeSize`;
+- `:366` — nodes with `x < 0` ("-1 = unset/auto") are `continue`d, i.e. every AUTO-PLACED node
+  is EXCLUDED from the oracle entirely;
+- the string `ResolveGraphNorms` does not appear anywhere in the file — the RUNTIME output
+  (where the fan-out formula at `HeroSkillTreePanelMvvm.cs:589-592` actually lands nodes) is
+  never evaluated.
+
+So the oracle certifies the authored lattice while the screen is drawn from the resolved one.
+That is exactly why the suite is green over the overlapping rows in s3.png. Requirement: the fix
+MUST extend `[grid]` (or add a sibling case) to evaluate the RESOLVED positions — run
+`ResolveGraphNorms` + the 2.1b separation pass headlessly and assert the minimum pitch and the
+well-inset containment on ITS output — or the separation pass regresses silently the first time
+someone touches the fan-out math. This is the same-change coupling rule of 2.1b's "ORACLE GAP"
+paragraph, widened from "move the pitch basis" to "test the resolved output".
+
+**PROOF — the acceptance standard for this defect class (owner directive 2026-08-16, verified at
+source).** Batchmode UI-capture is **INVALID as proof** here. `Assets/Editor/UICaptureLaunch.cs`
+banner (lines 70-85) records why, from captured data: under `-batchmode` no editor window layout
+is built, so there is no GameView for `Screen.*` to mirror — it stays on the 640x480 offscreen
+default even when the game-view size reflection SUCCEEDS (`Builds/ui-capture-rail.log:475`
+"batchmode=True ... screen=640x480"; that run logged `UI_CAPTURE_FIDELITY_DEGRADED 38/38`). The
+harness therefore drives ElarionUiKit's INJECTABLE surface — which can render "correct" while the
+device renders broken, because this defect's root is runtime `ResolveGraphNorms` against the REAL
+well rect. Valid proof, in priority order:
+
+1. **DEVICE screenshot from the Seeker APK** — true 2670x1200, the instrument that caught the
+   defect. The fix is proven when the same shot that showed the defect (`s3.png`) clears it.
+2. **Headed Unity EDITOR play-mode capture at 2670x1200** — secondary corroboration only, never
+   a substitute for (1).
+
+It must be a **TRUE BEFORE/AFTER**: same class tree (s3 = the knight tree at WISD 175), same
+device, same resolution. The AFTER image must visibly satisfy ALL of: no plate overlap; pitch
+>= `NodeFocusPx * 1.35`; no cost pip over a neighbouring plate; no panel-edge clip; rows spread
+across the FULL well height; content CENTRED on X. And the image must be PAIRED WITH NUMBERS —
+the measured RESOLVED plate rects (logged or dumped from the running panel), because the `[grid]`
+oracle's authored-only read (item 5 above) proves nothing about this screen.
+
 ### 2.2 Stop the opaque slab masking the frame
 
 **Defect:** `BuildScrollGraph` paints the viewport `new Color(0.018f, 0.016f, 0.022f, 1f)` at **full

@@ -1,6 +1,23 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ RECONCILED 2026-08-15 (CLI): main line next free = **1000**. **782–859 + 900–999 CONSUMED.**
+> ## ⚠ RECONCILED 2026-08-16 (CLI): main line next free = **1101**. **782–859 + 900–999 CONSUMED; the
+> CLI line JUMPS 1000→1100** — 1000–1099 is the UI seat's reserved block (consumed through 1029, their
+> row below) and the main line ran into it: the C-1 conflict went live. Same fix shape as the original
+> two-block split: disjoint again by construction. ⚠ FLAGGED FOR OWNER RATIFICATION (C-1) — if she
+> prefers different ranges, renumber forward only, never reuse.
+> *(CLI minted **WO-1100** and bumped 1100 -> 1101 in this SAME edit. **1100** = the dungeon-portal
+> threshold aura renders with a NULL material/shader on slot 0 — owner F8 seq 2404–2415 (12 identical
+> proving lines, 2026-08-16 06:53, editor session): `[Flow:MagentaProbe] FAIL
+> cause=DungeonWorldPortalSpawner.BuildPortal obj='...[Hovl_Portal_Threshold_Aura]' material='NULL'
+> shader='NULL' class=M2`. The `Portal_Threshold_Aura` key resolves to a Hovl-derived prefab whose
+> slot-0 material is GONE on this machine — the VFX self-containment class (the `Casting_Fire`
+> precedent: `CopyAsset` mirrors the prefab, not its materials), most likely introduced/exposed by
+> `d7e2e4eae` "real pack vortex" + the `0e4690036` portal-material metas. MagentaGuard's WO-869
+> recovery sweep fires but a NULL slot is not a broken-shader repaint. READY — triage step: name the
+> prefab the key resolves to, check its material GUIDs against disk + the `VFX_ART_MIRROR_OK` gate's
+> scope (this prefab is evidently OUTSIDE it — that gate scans `Resources/VFX`, so a portal prefab
+> living elsewhere escapes; widening the gate's scope is part of DONE).)*
+> ## (superseded header, kept for history) RECONCILED 2026-08-15 (CLI): main line next free = ~~1000~~. **782–859 + 900–999 CONSUMED.**
 > *(CLI bumped 999 -> 1000 in the SAME edit as minting **WO-999**. **999** = class resource economy
 > residual — ability-face cost pips + ResourceDisplayName on the bar + ranger Quick Shot Focus +
 > owner balance rulings left open by WO-997 (which is DONE implementation; RESULT on disk).
