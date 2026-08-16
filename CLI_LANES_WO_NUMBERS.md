@@ -1,6 +1,19 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ RECONCILED 2026-08-16 (CLI): main line next free = **1101**. **782–859 + 900–999 CONSUMED; the
+> ## ⚠ RECONCILED 2026-08-16 (CLI): main line next free = **1104**.
+> *(CLI minted **WO-1103** and bumped 1103 -> 1104 in this SAME edit. **1103** = kill rewards:
+> per-enemy base value + bounded variance + kill-count scaling in the arena, and the overworld
+> ranged-kill earned-rewards notification — full source-cited audit 2026-08-16 embedded in the WO;
+> also fixes two proven arena payout bugs (capped spawns pay full roster; 5% bonus boss pays 0).)*
+> *(CLI minted **WO-1102** and bumped 1102 -> 1103 in this SAME edit. **1102** = fleet instances
+> discard Step-level stdout: `run-autopilot-fleet.ps1:127` launches the player with NO `-logFile`,
+> so N>1 instances contend for the default Player.log and non-error FlowTrace evidence is LOST
+> (proven 2026-08-16: two DungeonLoop runs with the WO-994 probes live left zero Step lines on
+> disk; Player.log mtime never moved). Fix = per-instance `-logFile <runDir>\player.log`.)*
+> *(CLI minted **WO-1101** and bumped 1101 -> 1102 in this SAME edit. **1101** = environment
+> variety lane, owner directive 2026-08-16 "from grass textures to different biome maps" —
+> terrain/ground texture variety + per-area biome map spec; file
+> `WorkOrders/WORK_ORDER_1101_biome_maps_and_grass_texture_variety.md`.)* **782–859 + 900–999 CONSUMED; the
 > CLI line JUMPS 1000→1100** — 1000–1099 is the UI seat's reserved block (consumed through 1029, their
 > row below) and the main line ran into it: the C-1 conflict went live. Same fix shape as the original
 > two-block split: disjoint again by construction. ⚠ FLAGGED FOR OWNER RATIFICATION (C-1) — if she
@@ -1070,6 +1083,20 @@
 > That is the exact failure this file's own rule warns about — *"never a number copied into any other
 > doc"* — and the copy was **inside the numbering authority itself**. A duplicate cannot be kept honest
 > by discipline; it can only be removed. **The header is the sole source. Do not restore numbers here.**
+>
+> *(UI-seat bumped 1030 -> 1031 in the SAME edit as the WO-1030 mint — owner screenshot 2026-08-16:
+> the **Echo task dialogue ("Frost") CLIPS ITS OPTION LIST**. Chain traced:
+> `PetTaskController.BuildEngageDef():168-212` -> `DialogueService.PlayDef` -> `DialogueView`.
+> ⚠ **Options ARE measured** (`optionsPx` IS summed into `contentPx`, `DialogueView.cs:734-740`) — the
+> bug is the **CEILING**: `Mathf.Clamp(contentPx, MinBodyPx, _maxBodyPx)` where `_maxBodyPx` is
+> proportional to `CanvasLocalHeight()` via the HUD-safe band (`:664-678`), so LANDSCAPE starves it and
+> the overflow is the bottom of the option list. **Do NOT delete the clamp or widen the HUD-safe band** —
+> that clamp IS the 2026-07-16 owner fix and the band is what clears TargetInfo + the action bar. Fix =
+> reserve OPTIONS height FIRST, clamp the TEXT: text scrolls, choices never do. Also: portrait is a
+> generic silhouette — check the resolver KEY (display name "Frost" vs an id) before commissioning art;
+> a name→key mismatch looks identical to missing art. ⚠ **OWNER RULING same day: the FTUE guide IS the
+> wolf.fbx and is CORRECT** — WO-1022 §5's WO-993/`PetHeroLeash` note was corrected because it pointed a
+> seat at removing it. READY.)*
 >
 > *(UI-seat bumped 1026 -> 1030 in the SAME edit as the WO-1026/1027/1028/1029 mints — the owner's
 > **CoC + WC3 design review**, full analysis in `docs/DESIGN_REVIEW_COC_WC3_LENS_2026-08-15.md`.

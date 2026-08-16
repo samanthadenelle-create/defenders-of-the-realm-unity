@@ -595,6 +595,18 @@ namespace DeNelle.Editor
             // it silently coming back ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "vfx-self-contained suite", () => { if (!DeNelle.Editor.Regression.VfxResourceSelfContainmentRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[vfx-self-contained] " + r); });
 
+            // --- VFX NULL SLOTS (WO-1100, 2026-08-16): a catalogued prefab carrying an
+            // ENABLED ParticleSystemRenderer with ALL material slots null draws
+            // engine-default MAGENTA, the runtime deliberately refuses to repaint a
+            // particle slot (the 08-05 white-blob lesson), and every spawn F8-spams a
+            // MagentaProbe M2 FAIL -- 12 owner captures per session for the portal
+            // threshold aura, whose slot-level shape NO existing gate asserted (the
+            // self-containment gate measures gitignored REACH, and this prefab's reach
+            // is owner-baselined on purpose). DISABLED all-null renderers are the
+            // vendor container pattern -- noted, normalized at spawn by VFXManager,
+            // never failed. Ratcheted over the 5 known ParticlePack offenders. ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "vfx-null-slot suite", () => { if (!DeNelle.Editor.Regression.VfxParticleNullSlotRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[vfx-null-slot] " + r); });
+
             // --- ENEMY RIG <-> CONTROLLER COHERENCE (2026-08-09): a Humanoid model on a
             // Generic-clip controller (or the reverse) T-poses and slides. The runtime
             // ALREADY detects this -- but only for an enemy that actually spawns in a play
@@ -672,6 +684,9 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "town-movement-floor suite", () => { if (!DeNelle.Editor.Regression.TownMovementFloorRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[town-movement-floor] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "one-guide-body suite", () => { if (!DeNelle.Editor.Regression.OneGuideBodyRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[one-guide-body] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "wall-adjacency suite", () => { if (!DeNelle.Editor.Regression.WallAdjacencyRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[wall-adjacency] " + r); });
+            // --- Owner VFX bans (2026-08-16): Spell_Fire_6 + 'Magic circle sun loop' stay dead -
+            //     source lint + baked-catalog GUID scan (both VFXCatalog and HovlVfxCatalog). ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "banned-vfx suite", () => { if (!DeNelle.Editor.Regression.BannedVfxRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[banned-vfx] " + r); });
             // --- WO-997 class resource economy: every playable class authors a valid resource block,
             //     every cost fits its owning class's pool, at least one costed non-ultimate per kit
             //     (kills the "everything is cooldown-gated" gap), both abilities.json copies identical. ---
@@ -707,6 +722,18 @@ namespace DeNelle.Editor
             // Venomcraft off Rogue7, shared Arcane Bolt off Arcanist1) so the
             // duplicate-icon defect cannot return.
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "talent-icons suite", () => { if (!DeNelle.Editor.Regression.TalentIconMapRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[talent-icons] " + r); });
+
+            // --- BANNED VFX (owner ban 2026-08-16: "Spell_Fire_6 - Do Not use anywhere"):
+            // source-lints all runtime+editor code and the baked VFXCatalog.asset (live-resolved
+            // GUID) for the banned prefab; color Variants deliberately NOT banned (scope note in
+            // the suite header). Replacement pick = BigExplosion (owner-tagged same day).
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "banned-vfx suite", () => { if (!DeNelle.Editor.Regression.BannedVfxRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[banned-vfx] " + r); });
+
+            // --- ECHO ENGAGE DIALOGUE (WO-1030, 2026-08-16): options were clipped by a
+            // text+options sum clamp (48px rows under the touch floor, fraction overlay) and
+            // Echo portraits fell to silhouette for want of speaker records. Pins the
+            // reserve-first sizing tokens, the speaker-record portraits, and the fit math.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "echo-engage-dialogue suite", () => { if (!DeNelle.Editor.Regression.EchoEngageDialogueRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[echo-engage-dialogue] " + r); });
 
             // --- ATTACHMENT OFFSETS (WO-994, 2026-08-16): the 08-16 harness audit found
             // NOTHING covered AttachmentOffsetRegistry or seated-prop transforms - the

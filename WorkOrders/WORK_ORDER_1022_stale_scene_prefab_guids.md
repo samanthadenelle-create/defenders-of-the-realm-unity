@@ -120,8 +120,17 @@ Surfaced while draining the queue (all 60 acked 2026-08-15, `NO_CAPTURE ack=2388
 | seq=2352 | `[Flow:Tutorial] STEP-STUCK :: founding_defense — no 'build.tower_placed' after 600s in-step` |
 | seq=2342 | `[Flow:RepairProbe] SURFACES scene='Main_Castle_Overworld' WallRepairController=ABSENT` |
 
-⚠ The `founding_walk` stall may interact with **WO-993** (`PetHeroLeash` is the tutorial guide lead and
-is slated for retirement). Check that ticket before diagnosing the FTUE stall independently.
+⚠ **OWNER RULING 2026-08-16 — READ BEFORE TOUCHING THE FTUE GUIDE:** *"the one for guide is the
+wolf.fbx and is the correct FTUE."* The wolf guide is **CORRECT AND INTENDED** — it is the shipped
+one-guide lock (`112d1c0dc`, *"only the wolf FTUE when tutorialv2 is ON"*). **Do NOT remove, replace or
+"fix" the wolf guide while diagnosing the `founding_walk` stall.** The stall is a
+`hero.reached:guide_gate` event that never fires; the guide's identity is settled and is not the
+defect.
+
+⚠ This line previously read *"may interact with **WO-993** (`PetHeroLeash` is the tutorial guide lead
+and is slated for retirement)"* — which pointed a diagnosing seat straight at removing the very guide
+the owner has now confirmed is correct. Retirement of `PetHeroLeash` as a *mechanism* is a separate
+question from the wolf being the *right guide*; do not let the former delete the latter.
 
 ## 6. Noise fix worth folding in (small, same lane)
 
