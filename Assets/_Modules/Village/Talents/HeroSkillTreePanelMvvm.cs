@@ -27,6 +27,7 @@
 // Code-built uGUI ONLY (no UXML — §8). Registers PanelId.HeroSkillTree.
 // =============================================================================
 
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
@@ -92,9 +93,9 @@ namespace DeNelle.Village.Talents
         /// floor; it is a little taller than the floor because the tile stacks TWO fixed line
         /// boxes (slot numeral + a two-line ability name).</summary>
         public const float AbilityRowPx = 132f;
-        /// <summary>A graph node plate. Nodes are BUTTONS, so they carry the touch floor too
-        /// (they were 96 px -- below the floor -- before WO-865).</summary>
-        public const float NodeSizePx = ElarionUiKit.MinTouchPx;
+        /// <summary>Default talent plate size (RPG north star: large enough that skill art
+        /// reads at a glance). Always >= kit MinTouchPx so nodes stay tappable.</summary>
+        public const float NodeSizePx = 136f;
 
         /// <summary>Right column: the WISDOM currency chip band.</summary>
         public const float WisdomBandPx = 52f;
@@ -148,20 +149,20 @@ namespace DeNelle.Village.Talents
         // plate (SkillsPanelLayoutRegression [grid] pins this). Unset nodes auto-layout
         // from tier/column without packing into a dense grid.
 
-        /// <summary>FOCUS plate (selected OR track "next") — deliberately LARGER so it
-        /// reads at arm's length with colour stripped (colourblind law).</summary>
-        public const float NodeFocusPx = 148f;
+        /// <summary>FOCUS plate (selected OR next) — oversized gold frame, demo/RPG feel.</summary>
+        public const float NodeFocusPx = 168f;
 
-        /// <summary>Connector stroke for an earned path (both ends owned/planned).</summary>
-        public const float ConnectorThickPx = 8f;
-        /// <summary>Connector stroke for the live frontier (parent owned, child not).</summary>
-        public const float ConnectorMidPx = 5f;
-        /// <summary>Connector stroke for not-yet-earned links.</summary>
-        public const float ConnectorThinPx = 3f;
+        /// <summary>Earned path (both ends owned/planned) — solid gold, demo-thick.</summary>
+        public const float ConnectorThickPx = 10f;
+        /// <summary>Live frontier (parent owned, child not) — solid gold, slightly thinner.</summary>
+        public const float ConnectorMidPx = 8f;
+        /// <summary>Not-yet-earned link — still SOLID gold (RPG trees always show structure),
+        /// only dimmer. Dashed edges read as "broken UI", not "locked progression".</summary>
+        public const float ConnectorThinPx = 6f;
 
         /// <summary>How far a connector stops short of each plate centre so the line
-        /// ends at the plate rim rather than running under the icon.</summary>
-        public const float ConnectorInsetFrac = 0.48f;
+        /// meets the plate rim rather than running under the icon.</summary>
+        public const float ConnectorInsetFrac = 0.42f;
 
         /// <summary>Rank pip ("1/1") band seated on the TOP of every plate — demo look.</summary>
         public const float RankBandPx = 28f;
@@ -475,73 +476,80 @@ namespace DeNelle.Village.Talents
         }
 
         /// <summary>
-        /// WO-896 F8 overcrowding filter — the Obsidian demo shows a handful of plates, not the
-        /// full catalog. Keep the live frontier only:
-        ///   • Owned / Planned / Next / Available / Inert (anything the player can act on)
-        ///   • Class roots (no prerequisites) so a fresh tree still has entry points
-        ///   • Locked children of Owned/Planned (the next step along a bought path)
-        /// Hide deep locked chains and the locked Universal shelf until the player has engaged
-        /// the tree (any owned/planned). Hidden nodes stay in the VM — they appear as soon as
-        /// their parent is bought.
+        /// Calm frontier (RPG talent-tree density): enough nodes for GOLD CONNECTORS to
+        /// read, never the full 40-seat spreadsheet.
+        ///   • Actionable: Owned / Planned / Next / Available / Inert
+        ///   • Class roots (no prereqs) — entry face of the tree
+        ///   • One locked step past any root OR owned/planned parent (so lines exist on day 1)
+        ///   • Universal shelf only after the tree is engaged
+        /// Hidden seats reappear as parents unlock.
         /// </summary>
         private static List<SkillTrackNodeVM> FilterCalmFrontier(
             List<SkillTrackNodeVM> all, Dictionary<string, SkillTrackNodeVM> byId)
         {
-            var keep = new List<SkillTrackNodeVM>(all.Count);
+            var rootIds = new HashSet<string>(StringComparer.Ordinal);
             bool anyEngaged = false;
             for (int i = 0; i < all.Count; i++)
             {
-                var st = all[i].State;
-                if (st == SkillNodeState.Owned || st == SkillNodeState.Planned)
-                { anyEngaged = true; break; }
+                var seat = all[i];
+                var st = seat.State;
+                if (st == SkillNodeState.Owned || st == SkillNodeState.Planned) anyEngaged = true;
+                if (IsRootSeat(seat, byId)) rootIds.Add(seat.Node.Id);
             }
+
+            var keep = new List<SkillTrackNodeVM>(all.Count);
+            var keptIds = new HashSet<string>(StringComparer.Ordinal);
 
             for (int i = 0; i < all.Count; i++)
             {
                 var seat = all[i];
                 var st = seat.State;
+                bool keepIt = false;
+
                 if (st == SkillNodeState.Owned || st == SkillNodeState.Planned
                     || st == SkillNodeState.Next || st == SkillNodeState.Available
                     || st == SkillNodeState.Inert)
+                    keepIt = true;
+                else if (rootIds.Contains(seat.Node.Id))
                 {
-                    keep.Add(seat);
-                    continue;
+                    // Universal free-pick pool stays off a brand-new locked board.
+                    if (!(seat.Node.IsShared && !anyEngaged)) keepIt = true;
                 }
-
-                // Locked — only roots or children of an engaged parent.
-                var prereqs = seat.Node.Prereqs;
-                bool isRoot = prereqs == null || prereqs.Count == 0;
-                if (!isRoot)
+                else
                 {
-                    isRoot = true;
-                    for (int p = 0; p < prereqs.Count; p++)
+                    // One step past a root or an owned/planned parent → connector can draw.
+                    var prereqs = seat.Node.Prereqs;
+                    if (prereqs != null)
                     {
-                        if (string.IsNullOrEmpty(prereqs[p])) continue;
-                        if (byId.ContainsKey(prereqs[p])) { isRoot = false; break; }
+                        for (int p = 0; p < prereqs.Count; p++)
+                        {
+                            string pr = prereqs[p];
+                            if (string.IsNullOrEmpty(pr)) continue;
+                            if (rootIds.Contains(pr)) { keepIt = true; break; }
+                            if (!byId.TryGetValue(pr, out var parent)) continue;
+                            if (parent.State == SkillNodeState.Owned || parent.State == SkillNodeState.Planned)
+                            { keepIt = true; break; }
+                        }
                     }
                 }
 
-                if (isRoot)
-                {
-                    // Universal free-pick pool stays off a brand-new locked board (demo density).
-                    if (seat.Node.IsShared && !anyEngaged) continue;
-                    keep.Add(seat);
-                    continue;
-                }
-
-                bool parentEngaged = false;
-                for (int p = 0; p < prereqs.Count; p++)
-                {
-                    string pr = prereqs[p];
-                    if (string.IsNullOrEmpty(pr)) continue;
-                    if (!byId.TryGetValue(pr, out var parent)) continue;
-                    if (parent.State == SkillNodeState.Owned || parent.State == SkillNodeState.Planned)
-                    { parentEngaged = true; break; }
-                }
-                if (parentEngaged) keep.Add(seat);
+                if (!keepIt) continue;
+                if (keptIds.Add(seat.Node.Id)) keep.Add(seat);
             }
 
             return keep;
+        }
+
+        private static bool IsRootSeat(SkillTrackNodeVM seat, Dictionary<string, SkillTrackNodeVM> byId)
+        {
+            var prereqs = seat.Node.Prereqs;
+            if (prereqs == null || prereqs.Count == 0) return true;
+            for (int p = 0; p < prereqs.Count; p++)
+            {
+                if (string.IsNullOrEmpty(prereqs[p])) continue;
+                if (byId.ContainsKey(prereqs[p])) return false;
+            }
+            return true; // every prereq is hidden/missing → treat as root
         }
 
         /// <summary>Map every seat to a 0..1(+)-ish canvas position. Authored x/y win;
@@ -606,18 +614,18 @@ namespace DeNelle.Village.Talents
             }
         }
 
-        // Gold progression line between two plate centres. Thickness = state (colourblind).
+        // Gold progression line between plate centres (RPG talent-tree standard:
+        // structure is ALWAYS visible; state is carried by thickness + alpha, never by hiding the line).
         private static void BuildGraphConnector(Transform host, Vector2 fromDown, Vector2 toDown,
                                                 SkillTrackNodeVM parent, SkillTrackNodeVM child)
         {
-            // Content space: +x right, +yDown down. Image rotation uses the same axes once
-            // we convert yDown -> anchored y (-yDown).
             float x0 = fromDown.x, y0 = fromDown.y;
             float x1 = toDown.x, y1 = toDown.y;
             float dx = x1 - x0, dy = y1 - y0;
             float len = Mathf.Sqrt(dx * dx + dy * dy);
             if (len < 8f) return;
 
+            // Inset by half a plate so the bar meets the rim, not the icon centre.
             float inset = NodeSizePx * ConnectorInsetFrac;
             if (len <= inset * 2f + 4f) return;
             float ux = dx / len, uy = dy / len;
@@ -625,20 +633,19 @@ namespace DeNelle.Village.Talents
             float bx = x1 - ux * inset, by = y1 - uy * inset;
             float mx = (ax + bx) * 0.5f, my = (ay + by) * 0.5f;
             float barLen = Mathf.Sqrt((bx - ax) * (bx - ax) + (by - ay) * (by - ay));
-            // Atan2 of (dx, -dy) because anchored Y is flipped vs our down-positive layout.
             float angle = Mathf.Atan2(-(by - ay), (bx - ax)) * Mathf.Rad2Deg;
 
             bool parentActive = parent.State == SkillNodeState.Owned || parent.State == SkillNodeState.Planned;
-            bool childActive = child.State == SkillNodeState.Owned || child.State == SkillNodeState.Planned;
+            bool childActive = child.State == SkillNodeState.Owned || child.State == SkillNodeState.Planned
+                            || child.State == SkillNodeState.Next || child.State == SkillNodeState.Available;
             float thick, alpha;
-            if (parentActive && childActive) { thick = ConnectorThickPx; alpha = 0.92f; }
-            else if (parentActive) { thick = ConnectorMidPx; alpha = 0.82f; }
-            else { thick = ConnectorThinPx; alpha = 0.40f; }
+            if (parentActive && childActive) { thick = ConnectorThickPx; alpha = 0.95f; }
+            else if (parentActive) { thick = ConnectorMidPx; alpha = 0.88f; }
+            else { thick = ConnectorThinPx; alpha = 0.55f; } // locked path still solid gold
 
-            if (parentActive || childActive)
-                BuildRotatedBar(host, mx, my, barLen, thick, angle, alpha);
-            else
-                BuildRotatedDash(host, ax, ay, bx, by, thick, alpha);
+            // Glow underlay (professional double-pass) then core gold stroke.
+            BuildRotatedBar(host, mx, my, barLen, thick + 4f, angle, alpha * 0.28f);
+            BuildRotatedBar(host, mx, my, barLen, thick, angle, alpha);
         }
 
         private static void BuildRotatedBar(Transform host, float cxDown, float cyDown,
@@ -657,37 +664,9 @@ namespace DeNelle.Village.Talents
             img.raycastTarget = false;
         }
 
-        private static void BuildRotatedDash(Transform host, float ax, float ay, float bx, float by,
-                                             float thickness, float alpha)
-        {
-            float dx = bx - ax, dy = by - ay;
-            float len = Mathf.Sqrt(dx * dx + dy * dy);
-            if (len < 4f) return;
-            float angle = Mathf.Atan2(-dy, dx) * Mathf.Rad2Deg;
-            const float dash = 14f, gap = 10f;
-            float step = dash + gap;
-            float ux = dx / len, uy = dy / len;
-            for (float d = 0f; d < len; d += step)
-            {
-                float seg = Mathf.Min(dash, len - d);
-                if (seg < 2f) break;
-                float mx = ax + ux * (d + seg * 0.5f);
-                float my = ay + uy * (d + seg * 0.5f);
-                BuildRotatedBar(host, mx, my, seg, thickness, angle, alpha);
-            }
-        }
-
-        // ── ONE NODE ON THE GRAPH ────────────────────────────────────────────────
-        // COLOURBLIND LAW matrix (unchanged intent, sparse presentation):
-        //  state      plate FILL        border   size   badge SHAPE          rank
-        //  ---------  ----------------  -------  -----  -------------------  -----
-        //  Owned      SOLID (light)     2 px     112    check tick           1/1
-        //  Planned    solid + ring      3 px     112    "-n" text pip        0/1
-        //  Next       hollow + focus    6 px     148    cost number pip      0/1
-        //  Available  hollow            3 px     112    cost number pip      0/1
-        //  Inert      hollow + SLASH    3 px     112    "!" pip              0/1
-        //  Locked     hollow (dimmest)  1.5 px   112    PADLOCK glyph        0/1
-        // Selected also wears the focus frame even when not Next.
+        // ── ONE NODE ON THE GRAPH (RPG talent plate) ─────────────────────────────
+        // Art is king. Locks are quiet (dim + small corner glyph). Focus is LOUD
+        // (size + double gold ring). Rank sits on the plate top like the Obsidian demo.
 
         private void BuildGraphNode(SkillTrackNodeVM seat, float cxDown, float cyDown, bool focus)
         {
@@ -706,7 +685,6 @@ namespace DeNelle.Village.Talents
             rt.sizeDelta = new Vector2(size, size);
 
             var img = go.GetComponent<Image>();
-            // Obsidian talent border when mirrored — demo plate art; rounded fallback otherwise.
             Sprite border = TalentBorderSprite(node);
             if (border != null)
             {
@@ -720,15 +698,14 @@ namespace DeNelle.Village.Talents
                 img.color = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, BorderAlphaFor(state));
             }
 
-            float borderW = BorderWidthFor(state);
-            if (focus) borderW = Mathf.Max(borderW, 6f);
+            float borderW = focus ? 5f : BorderWidthFor(state);
 
+            // Dark plate behind the skill art (full-bleed art reads like AAA talent trees).
             var fillGo = new GameObject("Fill", typeof(Image));
             fillGo.transform.SetParent(go.transform, false);
             var fillRt = (RectTransform)fillGo.transform;
             fillRt.anchorMin = Vector2.zero; fillRt.anchorMax = Vector2.one;
-            // Talent borders have ornate rims — inset the fill so the kit art rim shows.
-            float inset = border != null ? size * 0.14f : borderW;
+            float inset = border != null ? size * 0.12f : borderW;
             fillRt.offsetMin = new Vector2(inset, inset);
             fillRt.offsetMax = new Vector2(-inset, -inset);
             var fillImg = fillGo.GetComponent<Image>();
@@ -736,17 +713,23 @@ namespace DeNelle.Village.Talents
             fillImg.color = PlateFillFor(state);
             fillImg.raycastTarget = false;
 
-            // Focus = thick gold outer frame (demo's selected plate).
+            // FOCUS: double gold frame (demo / PoE / Diablo style selected node).
             if (focus)
-                BuildOuterRing(go.transform, 0.07f,
-                    new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.98f));
+            {
+                BuildOuterRing(go.transform, 0.10f,
+                    new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.55f));
+                BuildOuterRing(go.transform, 0.055f,
+                    new Color(1f, 0.92f, 0.45f, 1f));
+            }
             else if (node.IsCapstone)
+            {
                 BuildOuterRing(go.transform, 0.05f,
                     new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b,
-                              state == SkillNodeState.Locked ? 0.40f : 0.85f));
+                              state == SkillNodeState.Locked ? 0.35f : 0.80f));
+            }
             if (state == SkillNodeState.Planned)
-                BuildOuterRing(go.transform, 0.05f,
-                    new Color(ElarionUi.Affordable.r, ElarionUi.Affordable.g, ElarionUi.Affordable.b, 0.9f));
+                BuildOuterRing(go.transform, 0.045f,
+                    new Color(ElarionUi.Affordable.r, ElarionUi.Affordable.g, ElarionUi.Affordable.b, 0.85f));
 
             var btn = go.GetComponent<Button>();
             btn.targetGraphic = img;
@@ -755,64 +738,123 @@ namespace DeNelle.Village.Talents
             string id = node.Id;
             btn.onClick.AddListener(() => { if (_vm != null) _vm.Select(id); });
 
-            bool dim = state == SkillNodeState.Locked || state == SkillNodeState.Inert;
+            bool locked = state == SkillNodeState.Locked;
+            bool inert = state == SkillNodeState.Inert;
             var sprite = LoadIcon(node.IconPath);
             if (sprite != null)
             {
                 var iconGo = new GameObject("Icon", typeof(Image));
                 iconGo.transform.SetParent(go.transform, false);
                 var ir = iconGo.GetComponent<RectTransform>();
-                ir.anchorMin = new Vector2(0.22f, 0.20f);
-                ir.anchorMax = new Vector2(0.78f, 0.76f);
+                // Larger art well — skill art is the product, not the chrome.
+                ir.anchorMin = new Vector2(0.14f, 0.14f);
+                ir.anchorMax = new Vector2(0.86f, 0.86f);
                 ir.offsetMin = Vector2.zero; ir.offsetMax = Vector2.zero;
                 var iImg = iconGo.GetComponent<Image>();
                 iImg.sprite = sprite;
                 iImg.preserveAspect = true;
                 iImg.raycastTarget = false;
-                iImg.color = state == SkillNodeState.Owned ? new Color(0.10f, 0.09f, 0.08f, 0.95f)
-                           : dim ? new Color(0.82f, 0.80f, 0.77f, 0.35f)
-                           : new Color(0.86f, 0.84f, 0.81f, 0.95f);
+                // Full colour when open; locked = dimmed ART (not a giant padlock over it).
+                if (state == SkillNodeState.Owned)
+                    iImg.color = Color.white;
+                else if (locked || inert)
+                    iImg.color = new Color(0.55f, 0.55f, 0.58f, 0.72f);
+                else
+                    iImg.color = Color.white;
             }
             else
             {
                 string mono = string.IsNullOrEmpty(node.Name)
                     ? "?" : node.Name.Substring(0, Mathf.Min(2, node.Name.Length));
-                var monoLbl = ElarionUiKit.Label(go.transform, mono, 0.24f, 0.76f,
-                    state == SkillNodeState.Owned ? new Color(0.10f, 0.09f, 0.08f, 1f)
-                        : dim ? ElarionUi.ParchmentDim : ElarionUi.Parchment,
+                var monoLbl = ElarionUiKit.Label(go.transform, mono, 0.22f, 0.78f,
+                    locked ? ElarionUi.ParchmentDim : ElarionUi.Parchment,
                     ElarionUi.FontTitle, TMPro.TextAlignmentOptions.Center, 0.10f, 0.90f, bold: true);
                 ElarionUiKit.FitSingleLine(monoLbl);
             }
 
-            // Rank pip — demo "3/3" grammar; our unlocks are binary so 1/1 or 0/1.
+            // Rank — demo grammar, top of plate, small so it doesn't eat the art.
             string rank = (state == SkillNodeState.Owned || state == SkillNodeState.Planned) ? "1/1" : "0/1";
-            var rankLbl = ElarionUiKit.Label(go.transform, rank, 0.08f, 0.34f,
-                state == SkillNodeState.Owned ? ElarionUi.Gilt : ElarionUi.Parchment,
-                (int)ElarionUiKit.FontFloor, TMPro.TextAlignmentOptions.Center, 0.10f, 0.90f, bold: true);
+            Color rankInk = state == SkillNodeState.Owned ? ElarionUi.Gilt
+                          : locked ? new Color(0.75f, 0.72f, 0.68f, 0.75f)
+                          : ElarionUi.Parchment;
+            var rankLbl = ElarionUiKit.Label(go.transform, rank, 0.72f, 0.96f, rankInk,
+                (int)ElarionUiKit.FontFloor, TMPro.TextAlignmentOptions.Center, 0.12f, 0.88f, bold: true);
             rankLbl.raycastTarget = false;
             ElarionUiKit.FitSingleLine(rankLbl);
 
-            if (state == SkillNodeState.Inert) BuildNodeSlash(go.transform, size);
+            if (inert) BuildNodeSlash(go.transform, size);
 
+            // Quiet state badges only — never a padlock the size of the icon.
             switch (state)
             {
                 case SkillNodeState.Owned:
-                    BuildNodeCheckStamp(go.transform);
+                    // Subtle owned tick — art already reads "yours" via full colour + 1/1.
                     break;
                 case SkillNodeState.Planned:
-                    BuildNodeStamp(go.transform, "-" + node.WisdomCost, ElarionUi.Affordable);
+                    BuildQuietCornerPip(go.transform, "-" + node.WisdomCost, ElarionUi.Affordable);
                     break;
                 case SkillNodeState.Next:
                 case SkillNodeState.Available:
-                    BuildNodeStamp(go.transform, node.WisdomCost.ToString(), ElarionUi.Parchment);
+                    BuildQuietCornerPip(go.transform, node.WisdomCost.ToString(), ElarionUi.Parchment);
                     break;
                 case SkillNodeState.Inert:
-                    BuildNodeStamp(go.transform, "!", ElarionUi.Parchment);
+                    BuildQuietCornerPip(go.transform, "!", ElarionUi.Parchment);
                     break;
                 default:
-                    BuildNodeLockGlyph(go.transform);
+                    // Locked: tiny lock in corner, art stays visible underneath.
+                    BuildQuietLockCorner(go.transform);
                     break;
             }
+        }
+
+        /// <summary>Small bottom-right cost/state pip — never covers the skill art centre.</summary>
+        private static void BuildQuietCornerPip(Transform nodeRoot, string glyph, Color ink)
+        {
+            var pip = new GameObject("Pip", typeof(Image));
+            pip.transform.SetParent(nodeRoot, false);
+            var pr = (RectTransform)pip.transform;
+            pr.anchorMin = new Vector2(0.68f, 0.02f);
+            pr.anchorMax = new Vector2(0.98f, 0.28f);
+            pr.offsetMin = Vector2.zero; pr.offsetMax = Vector2.zero;
+            var pImg = pip.GetComponent<Image>();
+            ElarionUiKit.ApplyRounded(pImg);
+            pImg.color = new Color(0.04f, 0.035f, 0.05f, 0.88f);
+            pImg.raycastTarget = false;
+            if (!string.IsNullOrEmpty(glyph))
+            {
+                var lbl = ElarionUiKit.Label(pip.transform, glyph, 0.05f, 0.95f, ink,
+                    ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.06f, 0.94f, bold: true);
+                lbl.raycastTarget = false;
+                ElarionUiKit.FitSingleLine(lbl);
+            }
+        }
+
+        /// <summary>Tiny padlock in the corner — locked is "dim art + small glyph", not a wall of UI.</summary>
+        private static void BuildQuietLockCorner(Transform nodeRoot)
+        {
+            var host = new GameObject("QuietLock", typeof(RectTransform));
+            host.transform.SetParent(nodeRoot, false);
+            var hr = (RectTransform)host.transform;
+            hr.anchorMin = new Vector2(0.70f, 0.04f);
+            hr.anchorMax = new Vector2(0.96f, 0.30f);
+            hr.offsetMin = Vector2.zero; hr.offsetMax = Vector2.zero;
+
+            var disc = new GameObject("Disc", typeof(Image));
+            disc.transform.SetParent(host.transform, false);
+            var dr = (RectTransform)disc.transform;
+            dr.anchorMin = Vector2.zero; dr.anchorMax = Vector2.one;
+            dr.offsetMin = Vector2.zero; dr.offsetMax = Vector2.zero;
+            var dImg = disc.GetComponent<Image>();
+            ElarionUiKit.ApplyRounded(dImg);
+            dImg.color = new Color(0.04f, 0.035f, 0.05f, 0.82f);
+            dImg.raycastTarget = false;
+
+            var ink = new Color(ElarionUi.Parchment.r, ElarionUi.Parchment.g, ElarionUi.Parchment.b, 0.80f);
+            // Compact lock shape (body + shackle) — scaled for the corner disc.
+            LockBar(host.transform, new Vector2(0.5f, 0.34f), new Vector2(14f, 11f), ink);
+            LockBar(host.transform, new Vector2(0.36f, 0.58f), new Vector2(2.5f, 9f), ink);
+            LockBar(host.transform, new Vector2(0.64f, 0.58f), new Vector2(2.5f, 9f), ink);
+            LockBar(host.transform, new Vector2(0.5f, 0.70f), new Vector2(11f, 2.5f), ink);
         }
 
         private static Sprite TalentBorderSprite(SkillNodeVM node)
@@ -976,23 +1018,22 @@ namespace DeNelle.Village.Talents
             lImg.raycastTarget = false;
         }
 
-        // Plate FILL by state. OWNED is the only FILLED plate — a solid light face against
-        // five dark ones, i.e. a luminance step, not a hue (colourblind law). PLANNED is
-        // half-filled, so "already yours" and "about to be yours" still differ in greyscale.
+        // Plate FILL — RPG style: always a dark well so skill art stays full-colour.
+        // Owned vs open is the gold border + rank 1/1 (not a washed gold plate that kills art).
         private static Color PlateFillFor(SkillNodeState state)
         {
             switch (state)
             {
                 case SkillNodeState.Owned:
-                    return new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.88f);
+                    return new Color(0.08f, 0.07f, 0.05f, 0.98f); // warm dark under gold rim
                 case SkillNodeState.Planned:
-                    return new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.42f);
+                    return new Color(0.06f, 0.07f, 0.05f, 0.96f);
                 case SkillNodeState.Locked:
-                    return new Color(0.030f, 0.028f, 0.040f, 0.96f);
+                    return new Color(0.025f, 0.024f, 0.032f, 0.98f);
                 case SkillNodeState.Inert:
-                    return new Color(0.040f, 0.038f, 0.050f, 0.96f);
+                    return new Color(0.035f, 0.033f, 0.040f, 0.96f);
                 default:
-                    return new Color(0.055f, 0.050f, 0.070f, 0.96f);
+                    return new Color(0.045f, 0.040f, 0.055f, 0.97f);
             }
         }
 
