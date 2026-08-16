@@ -87,10 +87,25 @@ namespace DeNelle.Village.Buildings.Progression
 
         private readonly bool _isCity;
         private readonly bool _isResource;
+        // The THIRD family (placed structures — towers, walls, containers, mines, caravans).
+        // UpgradeFamily.PlacedStructure and the COMPLETION side have existed since the
+        // dual-family fix; only this START/READ side was missing, which is why the Manage
+        // screen's Defense rows rendered "tier 0 of 0 - nothing left to upgrade here" for a
+        // level-1-of-3 tower (BuildUnknown's MaxTier = 0 -> the maxed card).
+        private readonly bool _isPlaced;
+        private readonly string _placedItemId;   // "" unless _isPlaced
+        private readonly int _placedCellX;
+        private readonly int _placedCellZ;
 
         private readonly Action<ResourceSnapshot> _ecoHandler;
         private readonly Action _modHandler;
         private readonly Action<string> _levelHandler;
+        // The Obsidian queue's own change signal. The city/resource ladders get their refresh
+        // from ModifierService/ResourceBuildingState, but a PLACED structure's level lands in
+        // GameState.BaseLayout, which raises neither — without this the panel would sit on a
+        // stale "Level 1 of 3" after its own upgrade completed while it was open.
+        private readonly BuildTimerService _timerForEvents;
+        private readonly Action _queueHandler;
         private bool _disposed;
 
         private readonly List<ItemVM> _perks = new List<ItemVM>();
@@ -140,9 +155,23 @@ namespace DeNelle.Village.Buildings.Progression
             _economy = economy;
             _onClose = onClose;
 
-            // Decide the family EXACTLY like CmdStructureStatus (city tiers win; else legacy).
-            _isCity = BuildingTierCatalog.IsUpgradable(_buildingId);
-            _isResource = !_isCity && ResourceBuildingProgression.IsResourceBuilding(_buildingId);
+            // Decide the family through the SHARED resolver (city tiers win; else legacy) — the
+            // SAME call CompletedUpgradeApplier makes at timer completion. These two sides used to
+            // hand-derive the precedence in opposite orders, which started a dual-family upgrade
+            // (farm/lumbermill/forge) on the city ladder and applied it to the resource one.
+            var family = UpgradeFamilyResolver.Resolve(_buildingId);
+            _isCity = family == UpgradeFamily.City;
+            _isResource = family == UpgradeFamily.Resource;
+            // A key that carries '@' but does NOT parse is not a placed structure — it falls
+            // through to BuildUnknown rather than pretending to be a ladder it cannot read.
+            string pid = "";
+            int pcx = 0, pcz = 0;
+            bool parsed = family == UpgradeFamily.PlacedStructure
+                          && PlacedUpgradeKey.TryParse(_buildingId, out pid, out pcx, out pcz);
+            _isPlaced = parsed;
+            _placedItemId = parsed ? pid : "";
+            _placedCellX = parsed ? pcx : 0;
+            _placedCellZ = parsed ? pcz : 0;
 
             // WO-842 (F8 2026-08-02, arcane-tower "TryUpgrade FALSE" with a full wallet):
             // these handlers used to call Raise() ONLY — the View re-rendered STALE tiles.
@@ -161,6 +190,12 @@ namespace DeNelle.Village.Buildings.Progression
             ModifierService.Changed += _modHandler;
             _levelHandler = _ => { Rebuild(); Raise(); };
             ResourceBuildingState.LevelChanged += _levelHandler;
+            _timerForEvents = DeNelle.Core.FeatureFlags.BuildTimers ? BuildTimerService.Instance : null;
+            if (_timerForEvents != null)
+            {
+                _queueHandler = () => { Rebuild(); Raise(); };
+                _timerForEvents.QueueChanged += _queueHandler;
+            }
 
             Rebuild();
 
@@ -195,6 +230,7 @@ namespace DeNelle.Village.Buildings.Progression
             if (_economy != null && _ecoHandler != null) _economy.OnChanged -= _ecoHandler;
             if (_modHandler != null) ModifierService.Changed -= _modHandler;
             if (_levelHandler != null) ResourceBuildingState.LevelChanged -= _levelHandler;
+            if (_timerForEvents != null && _queueHandler != null) _timerForEvents.QueueChanged -= _queueHandler;
             Changed = null;
         }
 
@@ -297,7 +333,18 @@ namespace DeNelle.Village.Buildings.Progression
         /// <summary>"Tier" for a city building, "Level" for a legacy resource building. The card's
         /// copy is composed from this so ONE card serves both families (owner: a drill-in from the
         /// Manage screen lands here and must stand alone).</summary>
-        public string TierWord => _isResource ? "Level" : "Tier";
+        public string TierWord => (_isResource || _isPlaced) ? "Level" : "Tier";
+
+        /// <summary>
+        /// The id the panel's 3D preview band resolves its MODEL from: the placed item id for a
+        /// placed structure, else the ladder/building id. The View passes this straight to
+        /// <see cref="StructurePreviewSource"/> — the View itself never touches the catalog.
+        /// </summary>
+        public string PreviewId => _isPlaced ? _placedItemId : _buildingId;
+
+        /// <summary>The level whose model the preview should show (the CURRENT one — the band
+        /// shows what stands in the town today, and the card beside it describes the next step).</summary>
+        public int PreviewLevel => CurrentTier < 1 ? 1 : CurrentTier;
 
         /// <summary>True when there is a next tier/level to show (i.e. not maxed and a ladder exists).</summary>
         public bool HasNextUpgrade => MaxTier > 0 && CurrentTier < MaxTier;
@@ -341,7 +388,7 @@ namespace DeNelle.Village.Buildings.Progression
         {
             get
             {
-                if (!_isCity && !_isResource) return UpgradeActionState.Unavailable;
+                if (!_isCity && !_isResource && !_isPlaced) return UpgradeActionState.Unavailable;
                 if (!HasNextUpgrade) return UpgradeActionState.Maxed;
 
                 var t = DeNelle.Core.FeatureFlags.BuildTimers ? BuildTimerService.Instance : null;
@@ -541,6 +588,20 @@ namespace DeNelle.Village.Buildings.Progression
                 return;
             }
 
+            if (_isPlaced)
+            {
+                // ONE start path, TWO doorways: this is the SAME service the in-world
+                // BuildModeController.UpgradeSelected tap calls. The charge / busy gate / depth
+                // gate / StartUpgrade sequence is never re-implemented here.
+                var r = PlacedStructureUpgradeService.TryStart(_buildingId);
+                Status = string.IsNullOrEmpty(r.Message) ? "Nothing to unlock here." : r.Message;
+                FlowTrace.Step("Upgrade", _buildingId + " placed upgrade -> " + r.Outcome
+                    + " (target level " + r.TargetLevel + ")");
+                Rebuild();
+                Raise();
+                return;
+            }
+
             Status = "Nothing to unlock here.";
             Raise();
         }
@@ -634,10 +695,16 @@ namespace DeNelle.Village.Buildings.Progression
 
             if (_isCity) BuildCity();
             else if (_isResource) BuildResource();
+            else if (_isPlaced) BuildPlaced();
             else BuildUnknown();
 
             // WO-895 — compose the NEXT-upgrade card's content from whichever ladder just built.
             ComposeNextUpgrade();
+
+            // A placed structure sits on the per-instance LEVEL ladder, which has no Village Tier
+            // gate at all — so it gets no village-tier control (a tile that gates nothing here
+            // would be a dead affordance).
+            if (_isPlaced) return;
 
             // WO-481 — surface the Heart-of-Elarion Village Tier control as the FIRST tile of every
             // building's grid (the enhancement panel is the surface the player already opens with F
@@ -867,6 +934,74 @@ namespace DeNelle.Village.Buildings.Progression
                     : "Tap the gold tile to unlock the next enhancement.";
         }
 
+        /// <summary>
+        /// The THIRD ladder: a PLACED structure ("itemId@cellX_cellZ") — tower, wall, storage
+        /// container, crystal mine, healing caravan. Level from the persisted BaseLayout record,
+        /// ceiling from repo.maxLevel, cost from the SAME BuildModeController.UpgradeCostFor the
+        /// in-world tap charges. No new cost math exists here and none may be added: a second
+        /// price would be the dual-authority defect all over again.
+        /// </summary>
+        private void BuildPlaced()
+        {
+            var entry = DeNelle.Core.Catalog.CatalogRegistry.Get(_placedItemId);
+            Title = entry != null && !string.IsNullOrEmpty(entry.displayName)
+                ? entry.displayName : Titleize(_placedItemId);
+            CurrentTier = PlacedStructureUpgradeService.LevelOf(_placedItemId, _placedCellX, _placedCellZ);
+            MaxTier = PlacedStructureUpgradeService.MaxLevelFor(entry);
+
+            FlowTrace.Step("Upgrade", _buildingId + " band-state IN: curLevel=" + CurrentTier
+                + "/" + MaxTier + " (placed structure)");
+
+            // One tile per level so the grid is never empty and the View's content signature
+            // moves when the level does. Same row grammar as BuildResource's level tiles.
+            for (int level = 1; level <= MaxTier; level++)
+            {
+                bool isCurrent = level <= CurrentTier;
+                bool isNext = level == CurrentTier + 1;
+                bool locked = level > CurrentTier + 1;
+
+                string costStr;
+                bool affordable = false;
+                if (level <= 1)
+                {
+                    costStr = "Base";
+                }
+                else
+                {
+                    var stepCost = PlacedStructureUpgradeService.CostForNext(entry, level - 1);
+                    costStr = CostString(new EcoCost
+                    {
+                        Wood = stepCost.wood,
+                        Food = stepCost.food,
+                        Iron = stepCost.iron,
+                        Crystals = stepCost.crystals,
+                    });
+                    if (isNext) affordable = BuildModeController.CanAfford(stepCost);
+                }
+
+                string id = TierId(level);
+                _costById[id] = isCurrent ? "Unlocked" : costStr;
+                _effectById[id] = "Level " + level + " strength and durability";
+                if (level > 1)
+                    _keyLineById[id] = "UPGRADES " + Title.ToUpperInvariant() + " TO LEVEL " + level;
+                _gateById[id] = isCurrent ? ""
+                    : locked ? GateBuildingTier
+                    : !affordable ? GateCost : "";
+                _perks.Add(new ItemVM(id, "Level " + level, IconRoleTier, id, 0, "", affordable,
+                                      rarity: null, equipped: isCurrent, locked: locked,
+                                      lockReason: locked
+                                          ? "Unlock 'Level " + (level - 1) + "' to open Level " + level : null));
+            }
+
+            FlowTrace.Step("Upgrade", _buildingId + " band-state OUT: next=level-"
+                + (CurrentTier + 1) + " max=" + MaxTier);
+
+            if (string.IsNullOrEmpty(Status))
+                Status = CurrentTier >= MaxTier
+                    ? "Every enhancement here is unlocked."
+                    : "Tap upgrade to raise this structure a level.";
+        }
+
         private void BuildUnknown()
         {
             Title = Titleize(_buildingId);
@@ -883,6 +1018,7 @@ namespace DeNelle.Village.Buildings.Progression
         {
             if (_isCity) ComposeNextCity();
             else if (_isResource) ComposeNextResource();
+            else if (_isPlaced) ComposeNextPlaced();
 
             FlowTrace.Step("Upgrade", _buildingId + " next-card: has=" + HasNextUpgrade
                 + " " + TierWord.ToLowerInvariant() + "=" + CurrentTier + "/" + MaxTier
@@ -962,6 +1098,45 @@ namespace DeNelle.Village.Buildings.Progression
                 _nextAffordable = ResourceLedger.CanAfford(cur.UpgradeCost)
                                   && (cur.MagicCost <= 0 || ResourceLedger.MagicBalance() >= cur.MagicCost);
             }
+        }
+
+        /// <summary>
+        /// The next-upgrade card for a PLACED structure. Cost comes from the one resolver
+        /// (<see cref="PlacedStructureUpgradeService.CostForNext"/>) and affordability from the
+        /// wallet the tap actually charges (BuildModeController.CanAfford -> EconomyService), so
+        /// the card can never advertise "Ready" against a wallet that will refuse.
+        /// </summary>
+        private void ComposeNextPlaced()
+        {
+            _currentTierName = "Level " + CurrentTier;
+            if (!HasNextUpgrade) return;
+
+            var entry = DeNelle.Core.Catalog.CatalogRegistry.Get(_placedItemId);
+            int next = NextTier;
+            _nextTierName = "Level " + next;
+            _nextDescription = "Raises " + Ascii(Title) + " to Level " + next + " of " + MaxTier + ".";
+            _nextBonuses.Add("Stronger " + Ascii(Title) + " at Level " + next);
+
+            var cost = PlacedStructureUpgradeService.CostForNext(entry, CurrentTier);
+            AddWalletCostLine("Wood", cost.wood, _economy?.Wood ?? 0);
+            AddWalletCostLine("Food", cost.food, _economy?.Food ?? 0);
+            AddWalletCostLine("Iron", cost.iron, _economy?.Iron ?? 0);
+            AddWalletCostLine("Crystals", cost.crystals, _economy?.Crystals ?? 0);
+            _nextAffordable = BuildModeController.CanAfford(cost);
+        }
+
+        /// <summary>A cost line whose HAVE column is read from the SAME wallet the placed-structure
+        /// charge debits (EconomyService), not the harvest ledger the city/resource ladders use.</summary>
+        private void AddWalletCostLine(string label, int amount, int have)
+        {
+            if (amount <= 0) return;
+            _nextCostLines.Add(new UpgradeCostLine
+            {
+                Label = label,
+                Amount = amount,
+                Have = have,
+                Short = have < amount,
+            });
         }
 
         private void AddCostLine(HarvestResource r, int amount)

@@ -2337,7 +2337,9 @@ namespace DeNelle.Village
             // F8-51 — selling a structure mid-build/upgrade cancels its timer job (the
             // caller-owns-refund contract on CancelJob; the 50% sell refund below stands).
             if (DeNelle.Core.FeatureFlags.BuildTimers)
-                BuildTimerService.Instance?.CancelJob($"{ps.itemId}@{ps.gridCell.x}_{ps.gridCell.y}");
+                BuildTimerService.Instance?.CancelJob(
+                    DeNelle.Village.Buildings.Progression.PlacedUpgradeKey.Compose(
+                        ps.itemId, ps.gridCell.x, ps.gridCell.y));
 
             // Refund ~50% of the full multi-resource cost into the persisted ledger
             // (EconomyService.Grant → GameState-backed Crystals/Food + in-session
@@ -2358,7 +2360,15 @@ namespace DeNelle.Village
         // =====================================================================
 
         /// <summary>
-        /// UPGRADE the selected structure one tier: if it is below its catalog maxLevel AND
+        /// OPEN the upgrade PAGE for the selected structure — the ONE destination every doorway
+        /// leads to (owner ruling 2026-08-16). A city/resource building opens under its ladder id;
+        /// a placed structure (tower / wall / container / mine / caravan) opens under its job key
+        /// so the panel resolves UpgradeFamily.PlacedStructure and shows its real level ladder.
+        /// The charge/queue itself lives in PlacedStructureUpgradeService — the panel's CTA calls
+        /// it, and so does the kill-switch fallback below; this method starts nothing of its own.
+        /// <para/>
+        /// HISTORICAL (retired 2026-08-16): this method used to ALSO be a second destination —
+        /// if it is below its catalog maxLevel AND
         /// the next-tier cost is affordable, spend that cost through the persisted ledger,
         /// increment <see cref="PlacedStructure.level"/>, step the visual (StructureTierVisual)
         /// and the gameplay stats (DefenseTower range/damage · WallSegment toughness) up a tier,
@@ -2391,142 +2401,65 @@ namespace DeNelle.Village
             // collector fell through to the tower inline path and toasted "Max tier reached".
             string upgradeId = CatalogRegistry.ResolveUpgradeId(ps.itemId);
 
-            // ROUTE BY KIND (owner F8 2026-07-17): a CITY/RESOURCE building upgrades through the
-            // WC3-style perk/tier PANEL (BuildingUpgradePanelMvvm, WO-675/680); a DEFENSE TOWER
-            // (e.g. tower_arcane_spire — the Arcane Spire in the shot) upgrades INLINE by stepping
-            // its towers.json tier (range/damage). Tower ids are NOT in BuildingTierCatalog nor
-            // ResourceBuildingProgression, so opening the panel for one would target an empty /
-            // default building — the panel is the WRONG surface for a tower.
-            bool panelBuilding =
-                DeNelle.Core.State.BuildingTierCatalog.IsUpgradable(upgradeId) ||
-                DeNelle.Village.Buildings.Progression.ResourceBuildingProgression.IsResourceBuilding(upgradeId);
+            // ONE DESTINATION, MANY DOORWAYS (owner ruling 2026-08-16: "upgrades should be
+            // accessable from manage tab. You should go to the modeled page to manage all
+            // towers ... cleaner to do like the others"). EVERY upgradable structure now opens
+            // the SAME BuildingUpgradePanelMvvm page — a city/resource building under its ladder
+            // id, a PLACED structure (tower / wall / container / mine / caravan) under its job
+            // key, which UpgradeFamilyResolver classifies as PlacedStructure.
+            //
+            // The old inline tier-bump that used to live here (a charge + timer start with NO
+            // page) is RETIRED as a second destination: its LOGIC survives verbatim inside
+            // PlacedStructureUpgradeService, which the panel's CTA and the kill-switch fallback
+            // below both call. The family is resolved by the SHARED UpgradeFamilyResolver — this
+            // site no longer hand-derives it.
+            var family = DeNelle.Village.Buildings.Progression.UpgradeFamilyResolver.Resolve(upgradeId);
+            bool ladderBuilding = family == DeNelle.Village.Buildings.Progression.UpgradeFamily.City
+                               || family == DeNelle.Village.Buildings.Progression.UpgradeFamily.Resource;
+            string jobKey = DeNelle.Village.Buildings.Progression.PlacedUpgradeKey.Compose(
+                ps.itemId, ps.gridCell.x, ps.gridCell.y);
+            bool placedLadder = !ladderBuilding && maxLevel > 1;
+            string panelId = ladderBuilding ? upgradeId : jobKey;
 
             FlowTrace.Step("BuildUpgrade",
-                $"click id='{ps.itemId}' upgradeId='{upgradeId}' lvl={level}/{maxLevel} panelBuilding={panelBuilding} " +
+                $"click id='{ps.itemId}' upgradeId='{upgradeId}' lvl={level}/{maxLevel} family={family} " +
+                $"ladderBuilding={ladderBuilding} placedLadder={placedLadder} " +
                 $"panelFlag={DeNelle.Core.FeatureFlags.BuildingUpgradePanel} buildTimers={DeNelle.Core.FeatureFlags.BuildTimers}");
 
-            if (panelBuilding)
+            if (!ladderBuilding && !placedLadder)
             {
-                if (!DeNelle.Core.FeatureFlags.BuildingUpgradePanel)
-                {
-                    FlowTrace.Warn("BuildUpgrade", $"panel flag OFF (kill-switch) for building '{ps.itemId}' — no upgrade surface.");
-                    BuildFeedbackToast.Show("Upgrades unavailable.");
-                    return;
-                }
+                FlowTrace.Step("BuildUpgrade", $"'{ps.itemId}' has no upgrade ladder (maxLevel {maxLevel}) — nothing to open.");
+                BuildFeedbackToast.Show("No upgrades for this structure.");
+                return;
+            }
+
+            if (DeNelle.Core.FeatureFlags.BuildingUpgradePanel)
+            {
                 // Canonical guarded open (same path HudKitController uses): routes to the
-                // registered BuildingUpgradePanelMvvm.Open(buildingId) for THIS building.
-                bool opened = DeNelle.Core.UI.PanelRouter.Open(DeNelle.Core.UI.PanelId.BuildingUpgrade, upgradeId);
+                // registered BuildingUpgradePanelMvvm.Open(id) for THIS structure.
+                bool opened = DeNelle.Core.UI.PanelRouter.Open(DeNelle.Core.UI.PanelId.BuildingUpgrade, panelId);
                 if (opened)
-                    FlowTrace.Step("BuildUpgrade", $"opened BuildingUpgrade panel for building '{upgradeId}'.");
-                else
-                    FlowTrace.Fail("BuildUpgrade", $"PanelRouter.Open(BuildingUpgrade,'{upgradeId}') returned false — panel did NOT open.");
-                return;
-            }
-
-            // ── DEFENSE TOWER inline tier-bump (towers.json range/damage step) ──
-            if (level >= maxLevel)
-            {
-                FlowTrace.Step("BuildUpgrade", $"'{ps.itemId}' already at max tier ({maxLevel}) — no upgrade.");
-                BuildFeedbackToast.Show("Max tier reached.");
-                return;
-            }
-
-            DeNelle.Core.Catalog.ResourceCost cost = UpgradeCostFor(entry, level);
-            if (!CanAfford(cost))
-            {
-                FlowTrace.Warn("BuildUpgrade", $"'{ps.itemId}' UNAFFORDABLE at tier {level + 1} — needs {Describe(cost)}.");
-                BuildFeedbackToast.Show(ShortfallMessage(cost));
-                // Re-show so the button reflects the (still-unaffordable) state.
-                ShowSelectionPanel(ps);
-                return;
-            }
-
-            // ── F8-51 TIMER GATE (before any charge, so a rejection costs nothing) ──
-            // "Should not be able to upgrade till build is complete, should not be able to
-            // upgrade instantly twice." Any structure with an in-flight build/upgrade job
-            // (same key) is LOCKED. WO-773: a FULL Builder slot no longer REJECTS — the job
-            // QUEUES on the Obsidian Builder channel (the freed builder auto-pulls it), so
-            // the old "All build slots busy" reject is gone; StartUpgrade enqueues below.
-            string jobKey = $"{ps.itemId}@{ps.gridCell.x}_{ps.gridCell.y}";
-            var timerSvc = DeNelle.Core.FeatureFlags.BuildTimers ? BuildTimerService.Instance : null;
-            if (timerSvc != null)
-            {
-                if (timerSvc.IsBuilding(jobKey))
                 {
-                    double rem = timerSvc.RemainingSeconds(jobKey);
-                    FlowTrace.Warn("BuildUpgrade", $"upgrade '{jobKey}' REJECTED (busy: {rem:0}s)");
-                    BuildFeedbackToast.Show($"Under construction ({rem:0}s).");
-                    ShowSelectionPanel(ps);
+                    FlowTrace.Step("BuildUpgrade", $"opened BuildingUpgrade panel for '{panelId}'.");
                     return;
                 }
-
-                // WO-911 (M1, ruling Q4) — DEPTH GATE, in this same before-any-charge block so a
-                // refusal costs the player nothing. Distinct from the busy check above: that one is
-                // "this structure is already working", this one is "the whole Builders LINE is full".
-                if (timerSvc.IsLineFull(DeNelle.Core.Jobs.ChannelId.Builder))
-                {
-                    string why = $"Builders queue is full ({timerSvc.QueueDepth(DeNelle.Core.Jobs.ChannelId.Builder)}/" +
-                                 $"{timerSvc.QueueDepthLimit(DeNelle.Core.Jobs.ChannelId.Builder)}). " +
-                                 "Cancel or finish an item first.";
-                    FlowTrace.Warn("BuildUpgrade", $"upgrade '{jobKey}' REFUSED — {why}");
-                    BuildFeedbackToast.Show(why);
-                    ShowSelectionPanel(ps);
-                    return;
-                }
+                FlowTrace.Fail("BuildUpgrade", $"PanelRouter.Open(BuildingUpgrade,'{panelId}') returned false — panel did NOT open.");
+                if (ladderBuilding) return;   // no headless fallback exists for the tier/perk ladders
             }
-
-            // Charge ONLY after the affordability gate passes (mirrors the place-charge rule).
-            if (!ChargeLedger(cost))
+            else if (ladderBuilding)
             {
-                FlowTrace.Warn("BuildUpgrade", $"upgrade '{jobKey}' ABORTED: the ledger DECLINED {Describe(cost)} -- no level granted, nothing charged.");
-                BuildFeedbackToast.Show(ShortfallMessage(cost));
-                ShowSelectionPanel(ps);
+                FlowTrace.Warn("BuildUpgrade", $"panel flag OFF (kill-switch) for building '{ps.itemId}' — no upgrade surface.");
+                BuildFeedbackToast.Show("Upgrades unavailable.");
                 return;
             }
 
-            int newLevel = level + 1;
-
-            // F8-51 — the upgrade takes TIME: cost is charged NOW (above), the level/visual
-            // applies at timer COMPLETION (BuildTimerService.CompleteJob -> CompletedUpgrade
-            // Applier -> ApplyUpgradeLevel; offline-fair). Scaffold + countdown = the same
-            // WO-612 affordance placement uses. A null job here (service raced away) degrades
-            // to the instant apply below so a paid charge is never lost. GUARDED (§12) so a
-            // throw self-reports via FlowTrace.Fail instead of vanishing into the button click.
-            bool handled = Guard.Try("BuildUpgrade", $"start/apply upgrade '{jobKey}' -> tier {newLevel}", () =>
-            {
-                if (timerSvc != null)
-                {
-                    // WO-911 (M2): the basket ChargeLedger debited at :2328 rides the job so a
-                    // cancel refunds 100% of it (ruling Q1).
-                    var job = timerSvc.StartUpgrade(jobKey, newLevel, BuildTimerService.ToJobCost(cost));
-                    if (job != null)
-                    {
-                        UnderConstructionVisual.Attach(ps, jobKey);
-                        bool queued = job.Value.StartMs <= 0;   // WO-773 — full Builder slot → queued (not started yet)
-                        FlowTrace.Step("BuildUpgrade",
-                            $"'{ps.itemId}' tier {newLevel}/{maxLevel} timer {(queued ? "QUEUED" : "STARTED")} " +
-                            $"({timerSvc.RemainingSeconds(jobKey):0}s), charged {Describe(cost)}.");
-                        BuildFeedbackToast.Show(queued
-                            ? $"Queued for tier {newLevel} (builders busy)..."
-                            : $"Upgrading to tier {newLevel} ({timerSvc.RemainingSeconds(jobKey):0}s)...");
-                        ShowSelectionPanel(ps);
-                        return;
-                    }
-                }
-
-                ApplyUpgradeLevel(ps, newLevel);
-                FlowTrace.Step("BuildUpgrade",
-                    $"'{ps.itemId}' upgraded INSTANTLY to tier {newLevel}/{maxLevel}, charged {Describe(cost)}.");
-                // Success toast + level-up VFX now fire inside ApplyUpgradeLevel (shared by both
-                // the instant path here AND the timer-completion path), so no toast here — that
-                // would double-toast the instant path.
-                // Re-show the panel at the new tier (refreshed cost / Max-tier state).
-                ShowSelectionPanel(ps);
-            });
-
-            if (!handled)
-                FlowTrace.Fail("BuildUpgrade",
-                    $"upgrade apply for '{ps.itemId}' THREW after charge — see Guard log (charged {Describe(cost)}).");
+            // ── KILL-SWITCH / PANEL-FAILED FALLBACK for a PLACED structure ──
+            // No page available, but the upgrade must still be reachable. This calls the SAME
+            // service the panel's CTA does — one behaviour, two callers, never a second copy of
+            // the charge -> gate -> StartUpgrade sequence.
+            var upgrade = DeNelle.Village.Buildings.Progression.PlacedStructureUpgradeService.TryStart(jobKey);
+            if (!string.IsNullOrEmpty(upgrade.Message)) BuildFeedbackToast.Show(upgrade.Message);
+            ShowSelectionPanel(ps);
         }
 
         /// <summary>
@@ -2606,6 +2539,12 @@ namespace DeNelle.Village
         internal static void ApplyTierStats(PlacedStructure ps, int level)
         {
             if (ps == null) return;
+            // DELIBERATELY still 1..3, NOT RepoProps.MaxStructureLevel: this is the TOWER/WALL stat
+            // ladder (s_towerTierMul has 3 rungs, WallSegment.SetTier clamps 1..3). WO-966 raised the
+            // LEVEL ceiling to 6 for the storage containers, which carry neither DefenseTower nor
+            // WallSegment -- so nothing here reads a 4th rung. Widening this clamp without widening
+            // s_towerTierMul would index past the table; widening the table is a tower-balance
+            // decision, not a storage one.
             int tier = Mathf.Clamp(level, 1, 3);
             var entry = CatalogRegistry.Get(ps.itemId);
             var repo = entry != null ? entry.repo : null;
@@ -2651,16 +2590,20 @@ namespace DeNelle.Village
         private static readonly float[] s_towerTierMul = { 1f, 1f, 1.25f, 1.55f };
 
         /// <summary>
-        /// The catalog max upgrade level for an entry (S5). Clamped to the visual tier ceiling
-        /// (3 — StructureTierVisual supports 1..3). Defaults to 1 (not upgradeable) for a null
-        /// entry or a row that omits maxLevel.
+        /// The catalog max upgrade level for an entry (S5). Clamped to the ONE named ceiling
+        /// <see cref="DeNelle.Core.Catalog.RepoProps.MaxStructureLevel"/> (6 since WO-966 -- it was
+        /// a hardcoded 3, tied to StructureTierVisual's 1..3 accent ladder, which made the storage
+        /// containers' owner-ruled levels 4-6 unreachable dead data). The VISUAL still tops out at
+        /// tier 3 (StructureTierVisual.Apply clamps internally), which is a cosmetic gap, not a
+        /// gameplay one. Defaults to 1 (not upgradeable) for a null entry or a row that omits
+        /// maxLevel.
         /// </summary>
-        private static int MaxLevelFor(CatalogEntry entry)
-        {
-            var repo = entry != null ? entry.repo : null;
-            if (repo == null) return 1;
-            return Mathf.Clamp(repo.maxLevel, 1, 3);
-        }
+        // DELEGATES to PlacedStructureUpgradeService.MaxLevelFor — the ONE ceiling rule, so the
+        // controller, the upgrade panel's VM and the oracles can never disagree about where a
+        // placed structure's ladder ends (two clamps in two files is how the WO-966 levels 4-6
+        // became unreachable dead data in the first place).
+        internal static int MaxLevelFor(CatalogEntry entry)
+            => DeNelle.Village.Buildings.Progression.PlacedStructureUpgradeService.MaxLevelFor(entry);
 
         /// <summary>Resolve upgrade cost for the given level transition (L→L+1). Null-safe.</summary>
         public static DeNelle.Core.Catalog.ResourceCost UpgradeCostFor(CatalogEntry entry, int fromLevel)
@@ -2891,7 +2834,8 @@ namespace DeNelle.Village
         ///
         /// F8 seq 632 ROOT CAUSE 2 (2026-08-02): founding_stores was retargeted from
         /// `lumberyard` to `collector_lumbermill`. The catalog proves why: `lumberyard` is
-        /// behaviorId GameplayBuilding with storageCapacity 500 / storageResource "wood" -- a
+        /// behaviorId GameplayBuilding with storageCapacity 1000 (was 500 before WO-966) /
+        /// storageResource "wood" -- a
         /// STOCKPILE that stores timber and harvests nothing -- while `collector_lumbermill`
         /// (displayName "Lumbermill") is behaviorId ResourceCollector, the card that actually
         /// harvests. The step's own copy said "it harvests timber for you", so the awaited id
@@ -3179,7 +3123,10 @@ namespace DeNelle.Village
         /// back to the crystal wallet read if the service isn't up yet, so the build
         /// menu still gates on Crystals in a service-less edge case.
         /// </summary>
-        private static bool CanAfford(DeNelle.Core.Catalog.ResourceCost cost)
+        // internal (was private) so the ONE placed-structure upgrade start path
+        // (PlacedStructureUpgradeService) gates on the SAME wallet read this controller does,
+        // instead of growing a second affordability rule.
+        internal static bool CanAfford(DeNelle.Core.Catalog.ResourceCost cost)
         {
             var econ = EconomyService.Instance;
             if (econ != null) return econ.CanAfford(ToEconomy(cost));

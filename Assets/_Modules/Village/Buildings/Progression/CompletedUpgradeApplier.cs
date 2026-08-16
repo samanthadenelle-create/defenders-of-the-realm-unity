@@ -9,11 +9,13 @@
 // Owner directive F8-51 (2026-07-11): "Should not be able to upgrade till build
 // is complete, should not be able to upgrade instantly twice, each should have a
 // build or upgrade timer." Costs are charged at COMMIT (unchanged); the level and
-// visual apply HERE, at timer COMPLETION. The job key names the family:
-//   * a resource building id (farm / lumbermill / forge)  -> ResourceBuildingState
-//   * a WO-430 city-tier building id                       -> BuildingUpgradeService
+// visual apply HERE, at timer COMPLETION. The job key names the family, resolved by
+// the SHARED UpgradeFamilyResolver (city tiers WIN over the legacy resource ladder —
+// the same precedence the START side uses; see UpgradeFamilyResolver's header):
 //   * a placed-structure key "itemId@cellX_cellZ"          -> BaseLayout record +
 //     the live PlacedStructure (BuildModeController.ApplyUpgradeLevel), if spawned.
+//   * a WO-430 city-tier building id                       -> BuildingUpgradeService
+//   * a legacy-only resource building id                   -> ResourceBuildingState
 //
 // The persisted BaseLayout record is ALWAYS updated (even when the live object
 // is not spawned yet — e.g. the offline sweep fires before BaseLayoutLoader
@@ -47,37 +49,75 @@ namespace DeNelle.Village.Buildings.Progression
                 return;
             }
 
-            // Placed-structure keys are the only ones carrying '@' (UnderConstructionVisual.KeyFor).
-            if (id.IndexOf('@') >= 0) { ApplyPlacedStructure(id, level); return; }
+            // FAMILY PRECEDENCE — resolved by the SHARED UpgradeFamilyResolver, the SAME call the
+            // START side (BuildingUpgradeVM) and DialogueCommandSink.structure_upgrade make. This
+            // file used to check IsResourceBuilding FIRST and IsUpgradable SECOND — the OPPOSITE of
+            // the start side's "city tiers win; else legacy" — so a dual-family building
+            // (farm / lumbermill / forge, present in BOTH ladders) was STARTED on the city ladder
+            // and APPLIED to the resource one: BuildingUpgradeService.ApplyTier (the only writer of
+            // GameState.BuildingTiers / Save / Recompute / ApplyStructureHp) never ran and the
+            // player's tier panel dead-ended after paying. Never re-derive the order here.
+            var family = UpgradeFamilyResolver.Resolve(id);
+            bool dual = UpgradeFamilyResolver.IsDualFamily(id);
+            FlowTrace.Step("BuildTimer",
+                $"upgrade '{id}' completed -> resolved {UpgradeFamilyResolver.LadderName(family)}"
+                + (dual ? " [DUAL-FAMILY id: city precedence]" : ""));
 
-            if (ResourceBuildingProgression.IsResourceBuilding(id))
+            switch (family)
             {
-                ResourceBuildingState.ApplyCompletedUpgrade(id, level);
-                FlowTrace.Step("BuildTimer", $"upgrade '{id}' completed -> level applied (level {level})");
-                return;
-            }
+                // Placed-structure keys are the only ones carrying '@' (UnderConstructionVisual.KeyFor).
+                case UpgradeFamily.PlacedStructure:
+                    ApplyPlaced(id, level);
+                    return;
 
-            if (BuildingTierCatalog.IsUpgradable(id))
-            {
-                BuildingUpgradeService.ApplyTier(id, level);
-                FlowTrace.Step("BuildTimer", $"upgrade '{id}' completed -> level applied (tier {level})");
-                return;
-            }
+                case UpgradeFamily.City:
+                {
+                    BuildingUpgradeService.ApplyTier(id, level);
+                    // READ-BACK: name the ladder AND the level that actually landed. A silent
+                    // no-op inside ApplyTier (no GameStateService) can no longer read as success.
+                    int landed = ModifierService.TierOf(id);
+                    if (landed == level)
+                        FlowTrace.Step("BuildTimer",
+                            $"upgrade '{id}' applied to CITY-TIER ladder: GameState.BuildingTiers['{id}'] = {landed} (target {level})");
+                    else
+                        FlowTrace.Fail("BuildTimer",
+                            $"upgrade '{id}' targeted CITY-TIER ladder tier {level} but GameState.BuildingTiers['{id}'] reads {landed} after apply -- the tier did NOT land (player paid, ladder did not move)");
+                    return;
+                }
 
-            FlowTrace.Warn("BuildTimer",
-                $"upgrade '{id}' completed but matches no upgrade family (not resource / city / placed key) — level {level} NOT applied");
+                case UpgradeFamily.Resource:
+                {
+                    ResourceBuildingState.ApplyCompletedUpgrade(id, level);
+                    // READ-BACK: ResourceBuildingState clamps to the def's MaxLevel, so a target
+                    // above the ladder's top silently lands LOWER. Say which level actually landed.
+                    int landedLevel = ResourceBuildingState.GetLevel(id);
+                    if (landedLevel == level)
+                        FlowTrace.Step("BuildTimer",
+                            $"upgrade '{id}' applied to RESOURCE-LEVEL ladder: PlayerPrefs level = {landedLevel} (target {level})");
+                    else
+                        FlowTrace.Fail("BuildTimer",
+                            $"upgrade '{id}' targeted RESOURCE-LEVEL ladder level {level} but the stored level reads {landedLevel} after apply (clamped or not written) -- the ladder did NOT reach the paid level");
+                    return;
+                }
+
+                default:
+                    FlowTrace.Warn("BuildTimer",
+                        $"upgrade '{id}' completed but matches no upgrade family (not resource / city / placed key) — level {level} NOT applied");
+                    return;
+            }
         }
 
         // ── Placed structure ("itemId@cellX_cellZ", the WO-612 job-key shape) ─────
-        private static void ApplyPlacedStructure(string key, int level)
+        /// <summary>
+        /// Land <paramref name="level"/> on the placed structure named by <paramref name="key"/>:
+        /// persisted BaseLayout record first, then the live object's visual + stats if it is
+        /// spawned. PUBLIC because it is also the TIMERS-OFF apply path
+        /// (<see cref="PlacedStructureUpgradeService"/>) — one apply, never a second copy, so
+        /// the instant path and the timer path can never diverge.
+        /// </summary>
+        public static void ApplyPlaced(string key, int level)
         {
-            int at = key.LastIndexOf('@');
-            string itemId = key.Substring(0, at);
-            string cellPart = key.Substring(at + 1);
-            int us = cellPart.IndexOf('_');
-            if (at <= 0 || us <= 0
-                || !int.TryParse(cellPart.Substring(0, us), out int cx)
-                || !int.TryParse(cellPart.Substring(us + 1), out int cz))
+            if (!PlacedUpgradeKey.TryParse(key, out string itemId, out int cx, out int cz))
             {
                 FlowTrace.Fail("BuildTimer",
                     $"upgrade '{key}' completed but the placed-structure key did not parse — level {level} NOT applied");
@@ -91,17 +131,7 @@ namespace DeNelle.Village.Buildings.Progression
 
             // 2) Live object, if spawned: full visual + stat apply (reskin / tier accent /
             //    tower range-damage / wall toughness) via the same path the instant upgrade uses.
-            PlacedStructure live = null;
-            var loader = BaseLayoutLoader.Instance;
-            if (loader != null)
-            {
-                var loaded = loader.Loaded;
-                for (int i = 0; i < loaded.Count; i++)
-                {
-                    var p = loaded[i];
-                    if (p != null && p.itemId == itemId && p.gridCell == cell) { live = p; break; }
-                }
-            }
+            PlacedStructure live = PlacedStructureUpgradeService.FindLive(itemId, cell);
             if (live != null) BuildModeController.ApplyUpgradeLevel(live, level);
             else FlowTrace.Step("BuildTimer",
                 $"upgrade '{key}' completed with no live structure in scene — persisted level {level}; visual applies on next spawn");

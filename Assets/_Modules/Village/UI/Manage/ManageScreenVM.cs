@@ -577,17 +577,35 @@ namespace DeNelle.Village.UI
 
                 var entry = CatalogRegistry.Get(placed.itemId);
                 if (entry == null || entry.repo == null) continue;
-                if (entry.repo.maxLevel <= 1) continue;                  // nothing to upgrade to
+                // The SHARED ceiling (clamped to RepoProps.MaxStructureLevel) — the same number
+                // the upgrade page and BuildModeController use. Reading raw repo.maxLevel here
+                // would offer a row for a rung the controller then refuses.
+                int ceiling = Buildings.Progression.PlacedStructureUpgradeService.MaxLevelFor(entry);
+                if (ceiling <= 1) continue;                              // nothing to upgrade to
 
                 int level = Mathf.Max(1, placed.level);
-                if (level >= entry.repo.maxLevel) continue;              // already maxed
-                string key = placed.itemId + "@" + level;
-                if (!seen.Add(key)) continue;                            // one row per id+level
+                if (level >= ceiling) continue;                          // already maxed
+                string dedupe = placed.itemId + "#" + level;
+                if (!seen.Add(dedupe)) continue;                         // one row per id+level
 
                 var cost = BuildModeController.UpgradeCostFor(entry, level);
-                string id = placed.itemId;
-                AddBrowseRow(NameOf(entry, id) + " -> L" + (level + 1), cost, "Open",
-                             () => OpenUpgradePanel(id));
+                // THE JOB KEY, NOT THE BARE ID (defect fixed 2026-08-16). This CTA used to pass
+                // placed.itemId, which UpgradeFamilyResolver classifies as None -> the panel's
+                // BuildUnknown set MaxTier = 0 and rendered "has reached tier 0 of 0 - there is
+                // nothing left to upgrade here" for a tower standing at level 1 of 3. Manage told
+                // the player a tower was maxed. The '@' in the key is what makes the resolver
+                // answer PlacedStructure and the page show the real ladder.
+                //
+                // ONE ROW PER id+level (the dedupe above) means this key names the FIRST placed
+                // instance at that level — the row says "Stone Wall -> L2" and lands on a Stone
+                // Wall that is at L1. Deliberate: keying rows per instance would emit one row per
+                // wall segment. The trace names which instance was chosen.
+                string jobKey = Buildings.Progression.PlacedUpgradeKey.Compose(
+                    placed.itemId, placed.cellX, placed.cellZ);
+                FlowTrace.Step("Manage", "defense row '" + placed.itemId + "' L" + level
+                    + "/" + ceiling + " -> opens placed key '" + jobKey + "'");
+                AddBrowseRow(NameOf(entry, placed.itemId) + " -> L" + (level + 1), cost, "Open",
+                             () => OpenUpgradePanel(jobKey));
             }
         }
 

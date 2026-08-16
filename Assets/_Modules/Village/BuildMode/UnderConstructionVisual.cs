@@ -95,8 +95,11 @@ namespace DeNelle.Village
         private ConstructionWorker _worker;
 
         /// <summary>Job key for a placed structure — unique per placement (id + cell).</summary>
+        // Delegates to the ONE composer (PlacedUpgradeKey) — the shape is grammar the
+        // UpgradeFamilyResolver reads, so it may not be spelled by hand in a second place.
         public static string KeyFor(PlacedStructureData data)
-            => $"{data.itemId}@{data.cellX}_{data.cellZ}";
+            => DeNelle.Village.Buildings.Progression.PlacedUpgradeKey.Compose(
+                   data.itemId, data.cellX, data.cellZ);
 
         /// <summary>Attach the scaffold to a freshly placed / freshly loaded structure.</summary>
         public static void Attach(PlacedStructure ps, string key)

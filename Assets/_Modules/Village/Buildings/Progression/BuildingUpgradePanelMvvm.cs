@@ -192,6 +192,29 @@ namespace DeNelle.Village.Buildings.Progression
         private UpgradeActionState _lastActionState = UpgradeActionState.Unavailable;
         private bool _hasRenderedAction;
 
+        // ── THE MODEL BAND (owner ruling 2026-08-16: "go to the modeled page") ────
+        // A live 3D render of the structure that stands in the town, in a LEFT column beside
+        // the next-upgrade card. Built on the PROVEN RawImage + manually-driven off-screen
+        // camera rig (TowerPreviewCamera / RotateModelMenu:115-120 / HeroPreviewViewer) —
+        // NOT BuildPreviewModal (UI conformance debt baseline) and NOT the UIElements
+        // TowerPlacementRotateMenu (UXML does not render in player builds, CLAUDE.md §8).
+        // When no prefab resolves the column is not built at all and the card keeps the full
+        // width with its existing 2D portrait — never an empty black box.
+        private RectTransform _previewHost;
+        private RawImage _previewImage;
+        private TowerPreviewCamera _previewRig;
+        private string _previewKey;               // "<id>@<level>" the live rig was built for
+        private float _previewYaw;
+        /// <summary>Fraction of the body the model column takes when a model resolved.</summary>
+        public const float PreviewColumnWidth = 0.32f;
+        /// <summary>Idle turntable speed (deg/sec) — motion, never a colour signal.</summary>
+        private const float PreviewSpinDegPerSec = 18f;
+        // A narrower card wraps sooner, so the single-line budget shrinks with it. Derived,
+        // never a second literal (WO-832 §4: fixed bands, honest thresholds).
+        private int BonusLineChars => _previewImage != null
+            ? Mathf.RoundToInt(BonusSingleLineChars * (1f - PreviewColumnWidth - 0.02f))
+            : BonusSingleLineChars;
+
         // ── Registration ─────────────────────────────────────────────────────────
 
         private void Awake()
@@ -206,6 +229,7 @@ namespace DeNelle.Village.Buildings.Progression
             Unbind();
             _vm?.Dispose();
             _vm = null;
+            DisposePreviewRig();   // the RenderTexture + off-screen rig never outlive the panel
             if (_ui != null) Destroy(_ui);
             _ui = null;
             PanelRouter.Unregister(PanelId.BuildingUpgrade, OpenGeneric);
@@ -268,6 +292,15 @@ namespace DeNelle.Village.Buildings.Progression
             if (_vm == null) return;
             var st = DeNelle.Core.UI.ObsidianQueueGate.Status;
             if (st.Version != _queueVersionSeen) { _queueVersionSeen = st.Version; Render(); }
+
+            // The model band's turntable. SetRotation IS the draw (URP never auto-renders an
+            // off-screen Base camera), so this call is what keeps the RawImage alive — it runs
+            // ONLY while the Upgrade tab is showing a live rig.
+            if (_previewRig != null && _previewRig.IsValid && _activeTab == 0 && _previewImage != null)
+            {
+                _previewYaw = Mathf.Repeat(_previewYaw + PreviewSpinDegPerSec * Time.unscaledDeltaTime, 360f);
+                _previewRig.SetRotation(Quaternion.Euler(0f, _previewYaw, 0f));
+            }
 
             // WO-841 — the cheap per-second countdown tick. If the button is showing the
             // "In progress - M:SS" label, rewrite ONLY its text (and nudge the fill bar)
@@ -431,7 +464,11 @@ namespace DeNelle.Village.Buildings.Progression
             // BODY host (below tabs, above footer).
             _bodyHost = MakeZone(panel, "BodyHost", new Vector2(0.012f, 0.095f), new Vector2(0.988f, 0.705f));
             _upgradePage = BuildUpgradePage(_bodyHost);
-            _skillsPage  = BuildScrollPage(_bodyHost, "SkillsPage", out _skillsContent);
+            // No Skills tab => no Skills page. RebuildSkills/ApplyTabVisibility are null-safe.
+            _skillsContent = null;
+            _skillsPage = null;
+            if (_tabs.Count > 1) _skillsPage = BuildScrollPage(_bodyHost, "SkillsPage", out _skillsContent);
+            else _activeTab = 0;
             ApplyTabVisibility();
 
             // FOOTER — one centered gold-bordered Close.
@@ -626,10 +663,28 @@ namespace DeNelle.Village.Buildings.Progression
 
         // ── Tab row (dark plates; selected = gold underline + gold text, WO-832) ──
 
+        /// <summary>
+        /// True when this building has ANY research perk to show. A placed structure (tower /
+        /// wall / container) has NO perk data in building-tiers.json at all, so its Skills tab
+        /// would render nothing but the "No research skills" note — an empty tab is a worse
+        /// divergence from "the others" than a hidden one, so the tab is not built. The perk SET
+        /// is static per building (only its owned/affordable state moves), so deciding once at
+        /// chrome-build time can never go stale while the panel is open.
+        /// </summary>
+        private bool HasSkills()
+        {
+            if (_vm == null) return false;
+            foreach (var item in _vm.Perks)
+                if (item.Id != null && item.Id.StartsWith("perk:")) return true;
+            return false;
+        }
+
         private void BuildTabs(RectTransform host)
         {
             _tabs.Clear();
-            string[] labels = { "Upgrade", "Skills" };
+            string[] labels = HasSkills()
+                ? new[] { "Upgrade", "Skills" }
+                : new[] { "Upgrade" };
             const float gap = 0.012f;
             for (int i = 0; i < labels.Length; i++)
             {
@@ -679,7 +734,7 @@ namespace DeNelle.Village.Buildings.Progression
 
         private void OnTab(int index)
         {
-            _activeTab = Mathf.Clamp(index, 0, 1);
+            _activeTab = Mathf.Clamp(index, 0, Mathf.Max(0, _tabs.Count - 1));
             FlowTrace.Step("UpgradeUI", "tab -> " + (_activeTab == 0 ? "Upgrade" : "Skills"));
             RestyleTabs();
             ApplyTabVisibility();
@@ -707,8 +762,15 @@ namespace DeNelle.Village.Buildings.Progression
             _progressHost.offsetMin = new Vector2(0f, -ProgressStripPx);
             _progressHost.offsetMax = Vector2.zero;
 
-            // 2. NEXT-UPGRADE CARD — everything below the strip. FULL WIDTH: this is the
-            //    body now (the old 65/35 split is gone with the rail).
+            // 2. MODEL COLUMN — the left band that holds the live 3D render. Built empty here
+            //    and filled (or left unbuilt, and the card widened) by RebuildUpgrade once the
+            //    VM says which model resolves.
+            _previewHost = MakeZone(page.transform, "ModelBand",
+                new Vector2(0f, 0f), new Vector2(PreviewColumnWidth, 1f));
+            _previewHost.offsetMax = new Vector2(0f, -(ProgressStripPx + BandGapPx * 2f));
+
+            // 3. NEXT-UPGRADE CARD — everything below the strip, right of the model column.
+            //    Full width when no model resolved (the old WO-895 geometry, unchanged).
             _nextCardHost = MakeZone(page.transform, "NextCardHost", Vector2.zero, Vector2.one);
             _nextCardHost.offsetMax = new Vector2(0f, -(ProgressStripPx + BandGapPx * 2f));
 
@@ -728,6 +790,11 @@ namespace DeNelle.Village.Buildings.Progression
 
             ClearChildren(_progressHost);
             ClearChildren(_nextCardHost);
+
+            // The model band FIRST: it decides whether the card is full-width or right-column,
+            // so the card must be laid out after it (§2 Guarded — a bad prefab logs and the page
+            // still renders its text, it never blanks the panel).
+            Guard.Try("UpgradeUI", "build model band for '" + _vm.Title + "'", RebuildPreview);
 
             if (_vm.MaxTier <= 0)
             {
@@ -912,7 +979,7 @@ namespace DeNelle.Village.Buildings.Progression
             {
                 string text = bonuses[i];
                 if (string.IsNullOrEmpty(text)) continue;
-                bool twoLine = text.Length > BonusSingleLineChars;
+                bool twoLine = text.Length > BonusLineChars;
                 float rowPx = twoLine ? BonusRow2Px : BonusRow1Px;
                 if (cursor + rowPx > zoneH) break;
                 BuildBonusRow(zone, cursor, rowPx, twoLine, text);
@@ -1640,6 +1707,11 @@ namespace DeNelle.Village.Buildings.Progression
             _ctaProgressFill = null;
             _ctaCountdownLastSec = -1;
             _hasRenderedAction = false;  // WO-895 — next open re-traces the opening state
+            // The model rig owns a RenderTexture + an off-screen camera/light/prefab instance:
+            // it MUST be disposed with the chrome or every open leaks a rig (RotateModelMenu's
+            // lifecycle, mirrored). Disposed BEFORE the canvas dies so the RawImage never holds
+            // a released texture for a frame.
+            DisposePreviewRig();
             if (_ui != null)
             {
                 var fx = _ui.GetComponent<PanelOpenCloseFx>();
@@ -1653,7 +1725,86 @@ namespace DeNelle.Village.Buildings.Progression
             _progressHost = null;
             _nextCardHost = null;
             _skillsContent = null;
+            _previewHost = null;
             PanelManager.NotifyClosed(_panelHandle);
+        }
+
+        // ── THE MODEL BAND — build / spin / dispose ──────────────────────────────
+        // Lifecycle copied from the PROVEN uGUI precedent (RotateModelMenu:114-120 +
+        // Update's per-frame ApplyRotation): URP will NOT auto-render an off-screen Base
+        // camera, so TowerPreviewCamera keeps its camera disabled and renders on demand;
+        // every SetRotation call IS the draw. Rebuilt only when the subject changes.
+        private void RebuildPreview()
+        {
+            if (_vm == null || _previewHost == null) return;
+
+            string id = _vm.PreviewId;
+            int level = _vm.PreviewLevel;
+            string key = (id ?? "") + "@" + level;
+            if (key == _previewKey && _previewImage != null) return;   // same subject — keep the rig
+
+            DisposePreviewRig();
+            ClearChildren(_previewHost);
+            _previewKey = key;
+
+            GameObject prefab = null;
+            DeNelle.Core.Catalog.OrientationFix orientation = null;
+            bool resolved = Guard.Try("UpgradeUI", "resolve preview model for '" + (id ?? "?") + "'",
+                () => StructurePreviewSource.TryResolve(id, level, out prefab, out orientation))
+                && prefab != null;
+
+            if (resolved)
+            {
+                _previewRig = new TowerPreviewCamera();
+                // A rig that fails to build leaves Texture null — treated exactly like an
+                // unresolved model (2D portrait, full-width card), never a black box.
+                if (!Guard.Try("UpgradeUI", "begin preview rig", () => _previewRig.Begin(prefab, orientation))
+                    || _previewRig.Texture == null)
+                {
+                    FlowTrace.Warn("UpgradeUI", "preview rig failed to start for '" + key
+                        + "' - falling back to the 2D portrait");
+                    DisposePreviewRig();
+                    resolved = false;
+                }
+            }
+
+            if (!resolved)
+            {
+                // No model column: give the card the full body width (the WO-895 geometry).
+                if (_nextCardHost != null) _nextCardHost.anchorMin = new Vector2(0f, _nextCardHost.anchorMin.y);
+                return;
+            }
+
+            // A framed viewport in the kit's chrome vocabulary (RoundedCard) with ONE RawImage
+            // inside it — the same shape the rotate menu uses, no new widget invented.
+            RectTransform frame = RoundedCard(_previewHost, "ModelViewport",
+                new Vector2(0.02f, 0.02f), new Vector2(0.98f, 0.98f), SubPanelFill, BorderGoldDim, 2f);
+            var viewGo = new GameObject("ModelView", typeof(RawImage));
+            viewGo.transform.SetParent(frame, false);
+            var vrt = (RectTransform)viewGo.transform;
+            vrt.anchorMin = new Vector2(0.04f, 0.06f);
+            vrt.anchorMax = new Vector2(0.96f, 0.94f);
+            vrt.offsetMin = Vector2.zero; vrt.offsetMax = Vector2.zero;
+            _previewImage = viewGo.GetComponent<RawImage>();
+            _previewImage.texture = _previewRig.Texture;
+            _previewImage.color = Color.white;       // show the RT unmodulated
+            _previewImage.raycastTarget = false;
+
+            _previewYaw = 0f;
+            _previewRig.SetRotation(Quaternion.identity);
+
+            if (_nextCardHost != null)
+                _nextCardHost.anchorMin = new Vector2(PreviewColumnWidth, _nextCardHost.anchorMin.y);
+
+            FlowTrace.Step("UpgradeUI", "model band built for '" + key + "'");
+        }
+
+        private void DisposePreviewRig()
+        {
+            if (_previewImage != null) _previewImage.texture = null;
+            _previewImage = null;
+            if (_previewRig != null) { _previewRig.Dispose(); _previewRig = null; }
+            _previewKey = null;
         }
 
         private static RectTransform MakeZone(Transform parent, string name, Vector2 min, Vector2 max)
