@@ -215,6 +215,10 @@ namespace DeNelle.Dungeons
         // WO-987: touch raises an Obsidian confirm; Leave only after "Continue to exit".
         private bool _confirmOpen;
         private GameObject _confirmCanvas;
+        // Top-band modal (34000): the arbiter must see it or back-button/battle-lock route
+        // around an invisible dialog. Register lazily; NotifyOpened can REJECT (WO-437) and
+        // invokes the handle's Close on its way out (the DungeonTreasurePanel precedent).
+        private PanelHandle _confirmHandle;
 
         // WO-770.1: a RICH dungeon (DungeonController) supplies a leave action so the exit routes
         // through ExitToVillage (banks the run's crafting scatter + ends the run cleanly) instead
@@ -827,6 +831,20 @@ namespace DeNelle.Dungeons
                     confirmKind: ElarionUiKit.ButtonKind.Gold,
                     sortingOrder: 34000);
                 _confirmCanvas = modal.canvas;
+
+                if (_confirmHandle == null)
+                    _confirmHandle = PanelManager.Register("DungeonExitConfirm",
+                        OnConfirmCancel, () => _confirmOpen);
+                if (!PanelManager.NotifyOpened(_confirmHandle))
+                {
+                    // Rejection already ran OnConfirmCancel (arbiter closes on its way out),
+                    // so the canvas is torn down and _confirmOpen is false here.
+                    FlowTrace.Warn(Sys,
+                        "PanelManager REJECTED the exit confirm (battle-lock) — confirm not shown; " +
+                        "portal stays armed for a retry after the fight.");
+                    return;
+                }
+
                 FlowTrace.Step(Sys,
                     "exit CONFIRM SHOWN faces=[Continue to exit | Cancel] default=Cancel " +
                     $"(portal='{name}' trueExit={_isTrueExit})");
@@ -863,6 +881,7 @@ namespace DeNelle.Dungeons
                 UnityEngine.Object.Destroy(_confirmCanvas);
                 _confirmCanvas = null;
             }
+            if (_confirmHandle != null) PanelManager.NotifyClosed(_confirmHandle);
         }
 
         /// <summary>WO-995: walk-in / button leave is only legal once armed past boot grace.</summary>

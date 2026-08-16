@@ -38,6 +38,30 @@
 - **The operating dream:** the owner plays and rules; agents build in parallel lanes; every bug is
   a captured line; every system self-reports; the fleet + web bots verify before she ever has to.
 
+## Latest (2026-08-15 late) — Grok-stack audit + gate-red fix wave (this seat)
+- **The 10-commit pushed stack `fba0b1079..0e4690036` (WO-896 talent tree, WO-986 CoC footprints, portals,
+  caravan, tutorial one-guide lock) was audited: it had been PUSHED UNGATED** — the last regression run
+  (17:49, RED 158/163) predated the final three commits and no gate ran over HEAD. Re-gated at HEAD:
+  `COMPILE_GATE_OK` · `REGRESSION_FAIL 3 (160/163)` · `UI_CAPTURE_OK 68`/`FIDELITY_OK 47` (all 16
+  `UI_GEOMETRY_FAIL` = the known WO-941 RumorBoard/RealmMap baseline — nothing new). The 17:49
+  talent wire-or-hide + WO-986 `[wiring]` reds HAD been reconciled by the stack's own later commits.
+- **Three reds fixed (this seat, `Builds/data-regression-redfix.log` → 163/164):** (1) WO-987 exit
+  confirm now registers with PanelManager (`DungeonExitInteractable` Register/NotifyOpened/NotifyClosed,
+  DungeonTreasurePanel precedent); (2) `StarterLoadoutRegression` case 6 was silently re-litigating a
+  superseded ruling — `af96fe788` (WO-500 D2 Option A) deliberately emptied the forge `blink_` exclusion;
+  rewritten as JSON↔VendorDef AGREEMENT (still catches loader drift); (3) the orphan
+  `WandererBubbleLegibilityRegression` is REGISTERED as `[wanderer-bubble]` (suite count 163 → 164).
+- **⚠ THE ONE REMAINING RED IS HONEST AND PLAYER-FACING: WO-973's bubble fix has had NO EFFECT in play.**
+  `[scene-matches-code]` proves `Dungeon_HealersCottage.unity` still carries `_panelWidth 4.4` /
+  `_panelHeight 1.7` vs corrected code `1.8` / `0.7` — Unity deserialises the scene copy OVER the
+  initialiser. **Fix = re-bake Dungeon_HealersCottage in an ISOLATED WORKTREE** (memory
+  `dungeon-scene-shared-tree-corruption`). Until then Bryn's giant bubble ships. The oracle sat
+  unregistered (never ran) from 08-14 until tonight.
+- **⚠ No talent-tree capture case exists** — the WO-896 P0 UI has zero pixel verification (WO-942 class);
+  the capture set has 22 distinct panels, none of them the skill tree. F8 seq 2389–2392 (scene-open +
+  3 missing-prefab GUIDs in the hub scene, never-in-git machine-local assets from ~07-04) triaged,
+  acked, and ticketed by the UI seat as **WO-1022**; talent demo-parity gaps = **WO-1021**.
+
 ## Latest (2026-08-14) — board reconciled, three hollow-assertion bugs fixed, dungeons re-baked
 - **Branch `wip/village2-and-f8-tickets`, HEAD `e9c93415`, tree CLEAN, local == origin +5 UNPUSHED** (push
   held for the owner). Save schema still **v38** (`SaveSchema.cs:41`). Gates over the settled tree, read off

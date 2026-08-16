@@ -672,6 +672,10 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "town-movement-floor suite", () => { if (!DeNelle.Editor.Regression.TownMovementFloorRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[town-movement-floor] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "one-guide-body suite", () => { if (!DeNelle.Editor.Regression.OneGuideBodyRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[one-guide-body] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "wall-adjacency suite", () => { if (!DeNelle.Editor.Regression.WallAdjacencyRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[wall-adjacency] " + r); });
+            // --- WO-973 Bryn bubble legibility: code defaults small + scene copy agrees + ratio vs the
+            //     shipped TownsfolkBubble. Case 2 is a DRIFT CATCHER that stays red until the
+            //     Dungeon_HealersCottage bake rewrites the serialised copy — an honest red, not noise. ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "wanderer-bubble suite", () => { if (!DeNelle.Editor.Regression.WandererBubbleLegibilityRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[wanderer-bubble] " + r); });
 
             // --- COST-BASKET SEPARATION (WO-947, owner economy ruling 2026-08-10): regular
             // structures cost wood + iron and NEVER crystals; magical/ethereal structures are

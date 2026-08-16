@@ -526,9 +526,25 @@ namespace DeNelle.Editor.Regression
                         failures.Add($"[vendor-data] '{vendorId}' onlyEquippable did not load onto VendorDef");
                     if (!string.IsNullOrEmpty(footer) && def.FooterLine != footer)
                         failures.Add($"[vendor-data] '{vendorId}' footerLine did not load onto VendorDef");
-                    if (def.ExcludeIdPrefixes == null || def.ExcludeIdPrefixes.Count == 0)
-                        failures.Add($"[vendor-data] '{vendorId}' excludeIdPrefixes did not load onto VendorDef - " +
-                                     "the placeholder rows would come straight back onto the shelf");
+                    // af96fe788 (2026-08-14, WO-500 D2 Option A) deliberately EMPTIED the
+                    // forge's exclusion to surface the finished 65 - so "must be non-empty"
+                    // became a stale ruling this oracle was silently re-litigating. The
+                    // falsifiable assertion is AGREEMENT: the loaded list matches the JSON
+                    // array exactly, which still catches a loader that drops the field.
+                    if (row["excludeIdPrefixes"] is JArray jsonPrefixes)
+                    {
+                        var authored = new List<string>();
+                        foreach (var t in jsonPrefixes) authored.Add((string)t);
+                        var loaded = def.ExcludeIdPrefixes ?? new List<string>();
+                        bool agree = loaded.Count == authored.Count;
+                        if (agree)
+                            foreach (var p in authored)
+                                if (!loaded.Contains(p)) { agree = false; break; }
+                        if (!agree)
+                            failures.Add($"[vendor-data] '{vendorId}' excludeIdPrefixes JSON " +
+                                         $"[{string.Join(",", authored)}] != loaded VendorDef " +
+                                         $"[{string.Join(",", loaded)}] - the loader dropped or mangled the field");
+                    }
                 }
 
                 if (VendorStockResolver.FooterLineFor(vendorId) != footer)
