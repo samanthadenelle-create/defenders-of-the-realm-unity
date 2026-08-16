@@ -1614,9 +1614,7 @@ namespace DeNelle.HUD.Kit
         private void OnAbilities()
         {
             var a = _models != null ? _models.Abilities : null;
-            if (a == null) return;
-            DrivePrimaryFace(a);
-            if (_abilitySlots == null) return;
+            if (a == null || _abilitySlots == null) return;
             for (int i = 0; i < _abilitySlots.Length; i++)
             {
                 var h = _abilitySlots[i];
@@ -1658,6 +1656,17 @@ namespace DeNelle.HUD.Kit
                     h.SetLabel(null);
                     h.SetIcon(string.IsNullOrEmpty(s.IconKey) ? null : UiStyle.Icon(s.IconKey));
                 }
+                // ⭐ WO-1105 REVISION (owner 2026-08-16, verbatim: "change the bow and arrow attack
+                // to the action bar and leave the attack as the dagger attack"). The bow is an
+                // action-bar ability now, so the word she asked for rides ITS slot: "with [Sylas]
+                // ... it should be a picture of a bow and arrow. It should be the word shoot" —
+                // BOTH, which is exactly what SetCaption gives (a bottom strip that sits WITH the
+                // icon, unlike SetLabel, which replaces the face). Empty verb => no strip, so only
+                // abilities that AUTHOR a verb in abilities.json show one; the view holds no class
+                // knowledge and could not, since DeNelle.HUD may not reference DeNelle.Village.
+                // The word is also what keeps the control readable without colour (owner is
+                // red/green colourblind — meaning never rides on hue).
+                h.SetCaption(s.Verb);
                 // WO-611: combat HUD medallions use the SOFT under-glow; else the hard radial sweep.
                 bool cooling = s.CooldownRemaining > 0f && s.CooldownTotal > 0f;
                 if (medallion)
@@ -1694,46 +1703,6 @@ namespace DeNelle.HUD.Kit
             }
         }
 
-        /// <summary>
-        /// WO-1105 (owner felt-test 2026-08-16) — drives the big PRIMARY ATTACK control from the
-        /// model, which nothing did before: `_attackSlot` was written ONCE at build time with a
-        /// literal sword sprite and never touched again, so it was class-blind AND cooldown-blind.
-        /// <para>
-        /// (2) "if there is a cool down timer, it needs to show that there's a cool down timer
-        /// between button clicks." — driven through <see cref="ElarionUiKit.ActionSlotHandle
-        /// .SetCooldown"/>, the SAME call every non-medallion cooldown in this file already uses
-        /// (assignable skills, both potions, status instances). One cooldown presentation in the
-        /// game: the radial-360 sweep + the integer seconds + the interactable gate. No second
-        /// visual was invented.
-        /// </para>
-        /// <para>
-        /// (3) "instead of it being a sword, it should be a picture of a bow and arrow. It should
-        /// be the word shoot." — icon AND word, both read off the model (which read them off the
-        /// class's AUTHORED basic). The view holds no class knowledge whatsoever; it cannot, since
-        /// DeNelle.HUD may not reference DeNelle.Village.
-        /// </para>
-        /// </summary>
-        private void DrivePrimaryFace(DeNelle.Core.HudModel.AbilityLoadoutModel a)
-        {
-            if (_attackSlot == null) return;
-
-            // Icon first, caption second: SetIcon re-enables the sprite face, and the caption is a
-            // separate bottom strip that rides WITH it (unlike SetLabel, which replaces the face).
-            if (!string.IsNullOrEmpty(a.PrimaryIconKey))
-                _attackSlot.SetIcon(UiStyle.Icon(a.PrimaryIconKey));
-            _attackSlot.SetCaption(a.PrimaryLabel);
-            _attackSlot.SetCooldown(a.PrimaryCooldownRemaining, a.PrimaryCooldownTotal);
-
-            // ⚠ THE ONE DEVIATION, AND IT IS A GAMEPLAY RULE, NOT A STYLE CHOICE: SetCooldown also
-            // gates `button.interactable`, which is right for an ABILITY (a cooling ability does
-            // nothing) and WRONG here. Owner ruling R3: while the bow cools, the primary input is
-            // the OFFHAND DAGGER — PlayerAttackController.TriggerBasicAttack deliberately falls
-            // THROUGH a cooling bow to the melee swing so "the player is never left inputless".
-            // Letting the sweep disable the button would delete that verb and leave an archer
-            // standing there unable to act. The SWEEP is the feedback; the control stays live.
-            if (_attackSlot.button != null) _attackSlot.button.interactable = true;
-        }
-
         // WO-611: present an UNASSIGNED combat medallion — dimmed face, no icon, no tap, no stale
         // cooldown text — so the Q/W/E/R arc always renders in hostile postures (combat-HUD only;
         // callers gate on the glow driver's presence, which exists only when the flag was ON at build).
@@ -1741,6 +1710,7 @@ namespace DeNelle.HUD.Kit
         {
             if (h == null) return;
             h.SetLabel(null);   // 2026-07-11: drop a stale text face (Dodge/Attack) with the icon
+            h.SetCaption(null); // WO-1105 REVISION: and the verb strip ("Shoot"), or it outlives its ability
             if (h.icon != null) h.icon.enabled = false;
             if (h.frame != null) h.frame.color = new Color(1f, 1f, 1f, 0.45f);
             if (h.button != null) h.button.interactable = false;

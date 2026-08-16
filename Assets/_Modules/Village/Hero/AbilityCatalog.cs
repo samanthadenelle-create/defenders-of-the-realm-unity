@@ -84,24 +84,29 @@ namespace DeNelle.Village
         [JsonProperty("icon")] public string Icon;
 
         /// <summary>
-        /// OPTIONAL player-facing VERB for this ability when it is the class's PRIMARY attack —
-        /// the one word the big attack control wears ("Shoot" for the ranger's bow, "Cast" for the
-        /// mage's fireball). ASCII only.
+        /// OPTIONAL one-word player-facing VERB for this ability — the caption its ACTION-BAR
+        /// medallion wears under its icon ("Shoot" for the ranger's bow, "Cast" for the mage's
+        /// fireball). ASCII only.
         /// <para>
         /// WO-1105, owner felt-test 2026-08-16, verbatim: "with [Sylas], instead of it being a
-        /// sword, it should be a picture of a bow and arrow. It should be the word shoot." This is a
-        /// DATA field precisely so no C# ever branches on class to answer it: the HUD producer asks
-        /// HeroAbilities.TryGetRangedPrimary which def is the primary and reads THAT def's verb, so
-        /// the Knight keeps his melee verb and the Mage gets his own with no switch statement. The
-        /// hardcoded per-class table is the defect class this project has been bitten by repeatedly
-        /// (IsLoop, HeroTalentNodeDef.Hidden, the town that laid itself on its side), and
-        /// HudModelProducers already records the exact prior incident of it here: "The owner,
-        /// playing a MAGE, got Sword Heroic / Shield Charge".
+        /// sword, it should be a picture of a bow and arrow. It should be the word shoot." Her
+        /// follow-up ruling the same day — "change the bow and arrow attack to the action bar and
+        /// leave the attack as the dagger attack" — put the bow on the BAR rather than on the
+        /// primary attack, so this word rides the SLOT (AbilitySlotRecord.Verb ->
+        /// ActionSlotHandle.SetCaption), not the attack pill.
         /// </para>
         /// <para>
-        /// Absent/empty on an ability that is not a class primary — nothing reads it there. The
-        /// melee sweep is class-agnostic and has no def, so its verb is the one universal fallback
-        /// in the producer, not an entry here.
+        /// This is a DATA field precisely so no C# ever branches on class to answer it: the HUD
+        /// producer reads whatever def resolved into the slot and copies ITS verb. The hardcoded
+        /// per-class table is the defect class this project has been bitten by repeatedly (IsLoop,
+        /// HeroTalentNodeDef.Hidden, the town that laid itself on its side), and HudModelProducers
+        /// records the exact prior incident of it: "The owner, playing a MAGE, got Sword Heroic /
+        /// Shield Charge".
+        /// </para>
+        /// <para>
+        /// Absent/empty on most abilities, and an empty verb draws NO caption — so a slot without
+        /// one looks exactly as it always has. The melee/dagger primary attack is class-agnostic
+        /// and has no def at all, so it has no entry here and wears no verb.
         /// </para>
         /// </summary>
         [JsonProperty("verb")] public string Verb;

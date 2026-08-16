@@ -59,11 +59,12 @@ namespace DeNelle.Village.Hud
             {
                 var atk = Object.FindAnyObjectByType<PlayerAttackController>();
                 if (atk == null) { FlowTrace.Warn("HudKit", "attack fired but no PlayerAttackController in scene"); return; }
-                // WO-1105: this button is the ONLY attack input on a phone, and TriggerBasicAttack
-                // now resolves the class's PRIMARY verb - a bow shot for a ranged class, the melee
-                // swing otherwise - so the trace says ATTACKED rather than claiming a swing.
-                bool attacked = atk.TriggerBasicAttack();
-                FlowTrace.Step("HudKit", "attack command -> TriggerBasicAttack " + (attacked ? "ATTACKED" : "gated"));
+                // ⭐ WO-1105 REVISION (owner 2026-08-16, verbatim: "change the bow and arrow attack
+                // to the action bar and leave the attack as the dagger attack"): this button is the
+                // MELEE/DAGGER swing for every class. The archer's bow is an action-bar ability
+                // (the Q medallion -> HeroAbilities.TryCast), so this input never spends an arrow.
+                bool swung = atk.TriggerBasicAttack();
+                FlowTrace.Step("HudKit", "attack command -> TriggerBasicAttack " + (swung ? "SWUNG" : "gated"));
             });
 
             HudCommands.RegisterCycleSelect(id =>

@@ -4,11 +4,26 @@
 // regression-registry: registered by the committer (do NOT self-register here —
 // DataRegression.cs is lane-fenced; the orchestrator adds the [ranged-primary] row).
 //
-// WHY: WO-1105 made the PRIMARY attack input resolve through the class's ranged
-// basic (the locked Q def) for any class whose basic is a ranged one, and seats a
-// bow's grip on the ROUNDED EDGE - the apex of the riser's bulge in Z at mid-Y
-// (GripAnchor.BowGrip) - instead of the bounds centre. Both rest on DATA that a
-// catalog regeneration can silently rewrite. This suite pins that data:
+// ⭐ REVISED 2026-08-16 (owner ruling, verbatim: "change the bow and arrow attack to
+// the action bar and leave the attack as the dagger attack"). THE ASSERTIONS BELOW
+// CHANGED SIDES, THEY WERE NOT WEAKENED. This suite used to assert the bow was the
+// PRIMARY ATTACK INPUT; the owner reversed that, so it now asserts the ARRANGEMENT
+// she asked for, and Case 5 + Case 6 FAIL if the old arrangement is ever restored:
+//
+//   * the PRIMARY attack is the class-agnostic melee/dagger sweep, for every class
+//     including the ranger (PlayerAttackController must not route the primary input
+//     through a ranged cast);
+//   * the BOW is an ACTION-BAR ABILITY - ranger.q, in the Q slot the bar already
+//     renders - fired deliberately, wearing its authored verb + bow icon;
+//   * the bow slot GREYS OUT under its cooldown like every other ability. The
+//     morning's deliberate deviation (the face kept `interactable = true` through the
+//     sweep, because a cooling bow would otherwise leave the archer inputless) is
+//     MOOT - the dagger is always available - and Case 6 pins that it is gone.
+//
+// WHY: WO-1105 seats a bow's grip on the ROUNDED EDGE - the apex of the riser's bulge
+// in Z at mid-Y (GripAnchor.BowGrip) - instead of the bounds centre, and the archer's
+// whole presentation rests on DATA that a catalog regeneration can silently rewrite.
+// This suite pins that data:
 //
 //   Case 1 — CROSSBOW EXCLUSION (owner ruling R4a, the load-bearing guard).
 //            The RUNTIME weapons catalog (the Resources copy, the one that WINS at
@@ -41,14 +56,29 @@
 //            part of the bow is where the grip is." The two answers are 0.30 m
 //            apart on a 1 m bow, so this case cannot pass under the old rule.
 //
-//   Case 3 — the ranged-primary DISCRIMINATOR still separates the classes it must.
+//   Case 3 — the ranged-basic DISCRIMINATOR still separates the classes it must.
 //            HeroAbilities.TryGetRangedPrimary accepts a basic whose effect is
 //            strike/drainshot AND whose range exceeds the hero's melee reach by more
-//            than 2x. Pinned here against a reference melee reach of 3.2 m
-//            (PlayerAttackController's serialized fallback): ranger must PASS and
-//            knight must FAIL. If knight.q is ever re-authored into a long-range
-//            strike, the Knight would silently inherit a ranged primary and lose his
-//            swing — this case fails first.
+//            than 2x. It no longer picks the primary INPUT (the owner's revision), but
+//            it is still the one derived "does this class shoot?" test, and both
+//            HeroTargetIndicator's auto-acquire/tap-override range gate (R1/R2) and
+//            the Focus no-double-refund rule in PlayerAttackController.ResolveAttack
+//            read it. Pinned against a reference melee reach of 3.2 m: ranger must
+//            PASS and knight must FAIL.
+//
+//   Case 5 — the BOW IS AN ACTION-BAR ABILITY AND THE PRIMARY IS THE DAGGER.
+//            ranger.q must be authored into the "q" bar slot (the bar renders the four
+//            locked/loadout slots Q/W/E/R and casts the resolved def), and
+//            PlayerAttackController's primary input must NOT route through a ranged
+//            cast: no FirePrimary/FireRangedPrimary/ResolveRangedTarget, and Update
+//            must call StartAttack directly. This is the owner's ruling in assertion
+//            form — restoring the morning's arrangement fails here first.
+//
+//   Case 6 — the COOLDOWN SPECIAL CASE IS GONE. HudKitController must not force
+//            `interactable = true` on the primary-attack face, and must still gate the
+//            ability medallions on `!cooling`. The bow greys out while it cools like
+//            every other ability; the justification for the exception (a cooling bow
+//            leaving the ranger with no input) died with the dagger primary.
 //
 // Parsed straight from the JSON (never through a live catalog), so a copy that
 // parses but was only half-regenerated is still caught.
@@ -104,18 +134,22 @@ namespace DeNelle.Editor.Regression
             {
                 Case(failures, "ranger-basic-ranged", () => Case2_RangerBasicIsRanged(abilities, failures, notes));
                 Case(failures, "discriminator", () => Case3_DiscriminatorStillSeparates(abilities, failures, notes));
+                Case(failures, "bow-on-action-bar", () => Case5_BowIsAnActionBarAbility(abilities, failures, notes));
             }
 
             Case(failures, "bow-grip-apex", () => Case4_BowGripSeatsOnRoundedEdge(failures, notes));
+            Case(failures, "cooldown-greys-out", () => Case6_NoCooldownSpecialCase(failures, notes));
 
             string noteStr = notes.Count > 0 ? " [notes: " + string.Join("; ", notes) + "]" : "";
             if (failures.Count == 0)
             {
-                reason = "RANGED PRIMARY OK - 4/4 cases pass (no crossbow can reach the runtime weapons " +
+                reason = "RANGED PRIMARY OK - 6/6 cases pass (no crossbow can reach the runtime weapons " +
                          "catalog while the R4a exclusion stands, the ranger basic is still a costed-" +
-                         "cooldown ranged strike, the ranged-primary discriminator still admits the " +
-                         "ranger while rejecting the knight, and the bow grip still seats on the ROUNDED " +
-                         "EDGE apex rather than the straight/string edge)" + noteStr;
+                         "cooldown ranged strike carrying its verb + bow icon, the ranged-basic " +
+                         "discriminator still admits the ranger while rejecting the knight, the bow grip " +
+                         "still seats on the ROUNDED EDGE apex rather than the straight/string edge, the " +
+                         "BOW is an ACTION-BAR ability while the PRIMARY attack is the melee/dagger " +
+                         "sweep, and the bow slot greys out under its cooldown with no special case)" + noteStr;
                 return true;
             }
             reason = "RANGED PRIMARY FAIL x" + failures.Count + ": " + string.Join(" | ", failures) + noteStr;
@@ -234,25 +268,25 @@ namespace DeNelle.Editor.Regression
                              "ruling R3: the bow primary carries a REAL cooldown (an archer is not a " +
                              "click-spam weapon), and the offhand dagger is what covers while it cools.");
 
-            // The primary attack FACE is derived from this def, so its two presentation fields are
+            // The BOW'S ACTION-BAR FACE is derived from this def, so its two presentation fields are
             // data and are pinned here. Losing either sends the archer back to a generic face -
             // the owner's "the action bars seem to reflect something more generic" - and no C#
             // change would be needed to cause it, which is precisely why it needs a guard.
             string verb = ((string)q["verb"] ?? string.Empty).Trim();
             if (verb.Length == 0)
-                failures.Add("[ranger-basic-ranged] ranger.q has no 'verb' - the primary attack control " +
-                             "reads its word from THIS field (owner 2026-08-16: 'It should be the word " +
-                             "shoot'). With it absent the control falls back to the ability NAME and the " +
-                             "archer's button reads 'Quick Shot' instead of the verb.");
+                failures.Add("[ranger-basic-ranged] ranger.q has no 'verb' - the bow's action-bar " +
+                             "medallion reads its caption from THIS field (owner 2026-08-16: 'It should " +
+                             "be the word shoot'). With it absent the slot shows the icon alone and the " +
+                             "word she asked for is gone, with no C# change needed to cause it.");
             else if (!IsAscii(verb))
                 failures.Add("[ranger-basic-ranged] ranger.q verb '" + verb + "' is not ASCII.");
 
             if (!ConceptIconMapHas("ranger.q"))
                 failures.Add("[ranger-basic-ranged] concept-icons.json has no 'ranger.q' entry - the " +
-                             "primary attack face resolves its icon through the SAME concept map the " +
-                             "medallions use, and with no entry it falls through to 'strike' -> " +
-                             "abilities/attack_sword. That is literally the reported defect: the archer " +
-                             "showing a SWORD. Bind it to a bow silhouette (today: spellicons/Hunter12).");
+                             "bow's action-bar medallion resolves its icon through this concept map, and " +
+                             "with no entry it falls through to 'strike' -> abilities/attack_sword. That " +
+                             "is literally the reported defect: the archer showing a SWORD. Bind it to a " +
+                             "bow silhouette (today: spellicons/Hunter12).");
 
             notes.Add("ranger.q=" + id + " effect=" + effect + " range=" + range.ToString("0.##") +
                       "m cd=" + cooldown.ToString("0.##") + "s verb='" + verb + "'");
@@ -267,12 +301,15 @@ namespace DeNelle.Editor.Regression
             bool knight = IsRangedPrimary(root, "knight", out string kWhy);
 
             if (!ranger)
-                failures.Add("[discriminator] ranger.q no longer qualifies as a RANGED primary (" + rWhy +
-                             ") - Sylas would go back to swinging a sword as his default verb.");
+                failures.Add("[discriminator] ranger.q no longer qualifies as a RANGED basic (" + rWhy +
+                             ") - HeroTargetIndicator gates the archer's auto-acquire + sticky tap " +
+                             "override on this test (R1/R2), and PlayerAttackController's Focus " +
+                             "no-double-refund rule reads it, so Sylas would lose his targeting AND " +
+                             "start double-earning Focus off the dagger.");
             if (knight)
-                failures.Add("[discriminator] knight.q NOW qualifies as a ranged primary (" + kWhy +
-                             ") - the Knight would silently lose his melee swing as the primary verb. " +
-                             "WO-1105 requires the Knight path to be unaffected.");
+                failures.Add("[discriminator] knight.q NOW qualifies as a ranged basic (" + kWhy +
+                             ") - the Knight would inherit the archer's target-acquire ring and stop " +
+                             "earning his on-hit restore. WO-1105 requires the Knight path unaffected.");
 
             notes.Add("discriminator: ranger=" + (ranger ? "ranged" : "melee") + " (" + rWhy + "), knight=" +
                       (knight ? "ranged" : "melee") + " (" + kWhy + ")");
@@ -299,6 +336,115 @@ namespace DeNelle.Editor.Regression
             why = "effect='" + effect + "' range " + range.ToString("0.##") + "m > " +
                   threshold.ToString("0.##") + "m threshold";
             return true;
+        }
+
+        // =====================================================================
+        //  CASE 5 — the BOW is an ACTION-BAR ability; the PRIMARY attack is the dagger
+        // =====================================================================
+        //
+        // Owner ruling 2026-08-16, verbatim: "change the bow and arrow attack to the action bar and
+        // leave the attack as the dagger attack." Two halves, both asserted:
+        //
+        //   (a) DATA — ranger.q must be authored into the "q" BAR SLOT. The action bar renders the
+        //       four resolved slots Q/W/E/R (HudModelProducers.ResolveSlotDef -> HeroAbilities
+        //       .ResolvedDef) and a tap casts that def, so an authored "q" IS the bow being on the
+        //       bar. If the slot key ever moved, the bow would leave the bar with no C# change.
+        //
+        //   (b) SOURCE — PlayerAttackController's primary input must not route through a ranged
+        //       cast. Read as TEXT rather than executed because the alternative needs a live hero
+        //       rig in play mode, which this batchmode suite has no way to stand up; the three
+        //       member names it forbids are the exact ones the reverted arrangement introduced, so
+        //       re-adding it cannot pass. Paired with (a) so a rename alone cannot silence it: the
+        //       positive `StartAttack()` call in Update is asserted PRESENT as well.
+        private const string PlayerAttackControllerPath =
+            "Assets/_Modules/Village/Enemies/PlayerAttackController.cs";
+
+        private static void Case5_BowIsAnActionBarAbility(JObject root, List<string> failures, List<string> notes)
+        {
+            // ── (a) the bow occupies the Q action-bar slot ────────────────────────────────────
+            JToken q = root.SelectToken("classes.ranger.abilities.q");
+            string slotKey = q != null ? ((string)q["slot"] ?? string.Empty).Trim().ToLowerInvariant() : null;
+            if (q == null)
+                failures.Add("[bow-on-action-bar] classes.ranger.abilities.q is missing - the bow IS " +
+                             "the Q action-bar slot; with no def the archer has no bow on the bar at all.");
+            else if (slotKey != "q")
+                failures.Add("[bow-on-action-bar] ranger.q authors slot='" + slotKey + "', expected 'q' - " +
+                             "the action bar renders the four resolved slots Q/W/E/R and casts the def it " +
+                             "resolves, so moving the slot key takes the owner's bow OFF the bar with no " +
+                             "code change (ruling: 'change the bow and arrow attack to the action bar').");
+
+            // ── (b) the primary attack input is the melee/dagger sweep ────────────────────────
+            string src = ReadText(PlayerAttackControllerPath);
+            if (src == null)
+            {
+                failures.Add("[bow-on-action-bar] cannot read " + PlayerAttackControllerPath +
+                             " - the primary-attack half of this case cannot be proved.");
+                return;
+            }
+
+            string[] forbidden = { "FireRangedPrimary", "ResolveRangedTarget", "private void FirePrimary" };
+            var found = new List<string>();
+            foreach (string token in forbidden)
+                if (src.IndexOf(token, StringComparison.Ordinal) >= 0) found.Add(token);
+
+            if (found.Count > 0)
+                failures.Add("[bow-on-action-bar] PlayerAttackController still carries " +
+                             string.Join(", ", found) + " - that is the REVERTED arrangement, where the " +
+                             "primary attack input fired the bow. Owner ruling 2026-08-16: 'leave the " +
+                             "attack as the dagger attack'. The primary verb is the class-agnostic melee " +
+                             "sweep for every class; the bow is fired from the action bar.");
+
+            if (src.IndexOf("StartAttack();", StringComparison.Ordinal) < 0)
+                failures.Add("[bow-on-action-bar] PlayerAttackController no longer calls StartAttack() - " +
+                             "the melee/dagger sweep IS the primary attack, so this is not a rename-proof " +
+                             "detail: with no call the primary input does nothing at all.");
+
+            notes.Add("bow-on-action-bar: ranger.q slot='" + (slotKey ?? "?") + "', primary input = melee sweep");
+        }
+
+        // =====================================================================
+        //  CASE 6 — the bow slot greys out on cooldown; no special case survives
+        // =====================================================================
+        //
+        // The 2026-08-16 morning pass shipped ONE deliberate deviation: the attack face kept
+        // `button.interactable = true` through its cooldown sweep, reasoning that disabling it would
+        // leave the ranger with no input while the bow cooled. With the dagger as the primary attack
+        // that reasoning is GONE — the player always has an attack — so the bow, like every other
+        // ability, greys out while it cools. A special case whose justification has died is exactly
+        // the kind of thing that survives silently in a large file, so it is pinned rather than
+        // trusted to a comment.
+        private const string HudKitControllerPath = "Assets/_Modules/HUD/Kit/HudKitController.cs";
+
+        private static void Case6_NoCooldownSpecialCase(List<string> failures, List<string> notes)
+        {
+            string src = ReadText(HudKitControllerPath);
+            if (src == null)
+            {
+                failures.Add("[cooldown-greys-out] cannot read " + HudKitControllerPath +
+                             " - cannot prove the cooldown special case is gone.");
+                return;
+            }
+
+            if (src.IndexOf("_attackSlot.button.interactable = true", StringComparison.Ordinal) >= 0 ||
+                src.IndexOf("DrivePrimaryFace", StringComparison.Ordinal) >= 0)
+                failures.Add("[cooldown-greys-out] HudKitController still forces the primary-attack face " +
+                             "interactable through its cooldown sweep (DrivePrimaryFace / " +
+                             "'_attackSlot.button.interactable = true'). That deviation existed ONLY " +
+                             "because a cooling BOW would have left the archer inputless; the owner's " +
+                             "2026-08-16 ruling made the dagger the primary attack, so the reason is gone " +
+                             "and the standard SetCooldown gate must stand unmodified.");
+
+            // The positive half: the ability medallions - which is where the bow now lives - must
+            // still gate their tap on the cooldown. Both HUD shapes are asserted, because the bow
+            // renders as a soft-glow medallion when CombatHud611 is ON and a radial-sweep slot when
+            // it is OFF, and only the medallion branch sets interactable explicitly.
+            if (src.IndexOf("interactable = !cooling", StringComparison.Ordinal) < 0)
+                failures.Add("[cooldown-greys-out] no ability slot in HudKitController gates " +
+                             "`interactable` on `!cooling` - the bow (ranger.q, the Q medallion) would " +
+                             "stay tappable while it cools, which is the opposite of the ruling: it must " +
+                             "grey out like every other ability in the game.");
+
+            notes.Add("cooldown-greys-out: no primary-face interactable override; medallions gate on !cooling");
         }
 
         // =====================================================================

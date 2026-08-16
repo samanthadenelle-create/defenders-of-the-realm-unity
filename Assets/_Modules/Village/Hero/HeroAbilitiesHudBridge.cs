@@ -421,11 +421,39 @@ namespace DeNelle.Village
                 : "?";
         }
 
+        /// <summary>
+        /// A tap on one of the four action-bar medallions. ⭐ WO-1105 REVISION (owner 2026-08-16,
+        /// verbatim: "change the bow and arrow attack to the action bar and leave the attack as the
+        /// dagger attack") — THIS IS THE ARCHER'S SHOT PATH NOW. Sylas's bow is `ranger.q`, the
+        /// class's locked Q def, so the Q medallion tap lands here and fires it through the ordinary
+        /// <see cref="HeroAbilities.TryCast"/> (authored cooldown, cast animation, facing slew,
+        /// ResolveStrikeLike -> LaunchProjectile, damage on ARRIVAL, and the WO-997 Focus restore
+        /// armed for the class basic). The primary-attack button is the melee/dagger swing and never
+        /// spends an arrow.
+        /// <para>
+        /// CLAUDE.md §12: this seam used to be SILENT — a tap that resolved no def, or that was
+        /// swallowed by the cooldown/mana gate inside TryCast, left no line anywhere, so "I pressed
+        /// the bow and nothing happened" had no evidence to read. It names the slot, the def it
+        /// resolved, and whether the cast FIRED or was GATED, so the dead step is one read away.
+        /// </para>
+        /// </summary>
         private void OnAbilityClicked(int slotIndex)
         {
-            if (_abilities == null) return;
+            if (_abilities == null)
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("HudKit",
+                    "action-bar slot " + slotIndex + " tapped but this bridge has no HeroAbilities - no cast.");
+                return;
+            }
             var slot = (AbilitySlot)Mathf.Clamp(slotIndex, 0, 3);
-            _abilities.TryCast(slot);
+            var def = _abilities.ResolvedDef(slot);
+            bool fired = _abilities.TryCast(slot);
+            DeNelle.Core.Diagnostics.FlowTrace.Step("HudKit",
+                "action-bar cast slot=" + slot + " id='" + (def != null ? def.Id : "(none)") +
+                "' name='" + (def != null ? def.Name : "-") + "' -> " + (fired ? "FIRED" : "GATED") +
+                (fired ? "" : " (cooldown " + _abilities.CooldownRemaining(slot).ToString("0.00") +
+                               "s remaining, mana " + _abilities.Mana.ToString("0.#") +
+                               ", or a cast already winding up)"));
         }
     }
 

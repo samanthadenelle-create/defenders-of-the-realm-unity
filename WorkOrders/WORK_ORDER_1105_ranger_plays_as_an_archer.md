@@ -1,6 +1,30 @@
 # WORK ORDER 1105 — Sylas the Ranger plays like a swordsman: give the archer his bow, his target, and his icons
 
 **Status:** READY TO IMPLEMENT (needs one owner ruling — see §5)
+
+> ## ⭐ R5 — OWNER REVISION 2026-08-16, SUPERSEDES §3(a) AND §4 BULLET 1 (BINDING)
+> Owner, verbatim: *"change the bow and arrow attack to the action bar and leave the attack as the
+> dagger attack."*
+>
+> The 08-16 implementation made the bow the **PRIMARY ATTACK INPUT**. That is **REVERSED**:
+> - **PRIMARY attack = the melee/dagger sweep, for every class including the ranger.** The
+>   class-agnostic `PlayerAttackController` sweep is Sylas's offhand dagger and it is his default
+>   verb. `FirePrimary` / `FireRangedPrimary` / `ResolveRangedTarget` / `ResolvePrimaryFace` are
+>   **deleted**; `Update` calls `StartAttack()` directly again.
+> - **BOW = an ACTION-BAR ABILITY.** It needed no new slot: `ranger.q` (Quick Shot, 15 m) **is** the
+>   class's locked **Q** def, which the bar already renders and casts
+>   (`ResolveSlotDef` -> `HeroAbilities.ResolvedDef(Q)`; tap -> `AbilityRequested` ->
+>   `HeroAbilitiesHudBridge.OnAbilityClicked` -> `TryCast(Q)`). Its authored `verb` ("Shoot") now
+>   rides `AbilitySlotRecord.Verb` -> `ActionSlotHandle.SetCaption` on the medallion, next to the bow
+>   icon `concept-icons.json` already binds (`ranger.q` -> `spellicons/Hunter12`).
+> - **THE COOLDOWN SPECIAL CASE IS GONE.** The 08-16 commit deliberately kept the attack face
+>   `interactable` through its sweep so a cooling bow would not leave the archer inputless. With the
+>   dagger always available that justification is dead, so the override and the whole
+>   `DrivePrimaryFace` path are removed and the bow greys out under the standard ability cooldown
+>   gate like every other skill. Pinned by `[ranged-primary]` case `cooldown-greys-out`.
+> - **UNCHANGED:** R1/R2 targeting (auto-acquire + sticky tap override, in-range gating), R4/R4a bow
+>   grip + crossbow exclusion, and the WO-997 Focus rule (the class basic is still the bow, so the
+>   restore rides the arrow and the dagger earns nothing — no double refund).
 **Minted:** 2026-08-16 (CLI seat) — banner bumped 1105 -> 1106 in the same edit
 **Lane:** Hero combat input + targeting + action-bar presentation. ⚠ Touches `PlayerAttackController`
 (shared with the WO-997 Focus hook and WO-1103 rewards) — coordinate, do not fork it.

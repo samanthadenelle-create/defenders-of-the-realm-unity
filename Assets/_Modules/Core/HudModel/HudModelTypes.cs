@@ -115,12 +115,25 @@ namespace DeNelle.Core.HudModel
         public readonly float ManaCost;
         /// <summary>WO-999: whether the hero can afford the cost right now (true when free or mana &gt;= cost).</summary>
         public readonly bool Affordable;
+        /// <summary>
+        /// WO-1105 REVISION (owner 2026-08-16): OPTIONAL one-word player-facing VERB authored on the
+        /// ability (<c>abilities.json</c> "verb" -> <c>AbilityDef.Verb</c>) — "Shoot" on the ranger's
+        /// bow. Empty on every ability that authors none, and an empty verb draws no caption, so the
+        /// word is DATA and no C# ever branches on class to decide it. ASCII only.
+        /// <para>
+        /// Owner, verbatim: "change the bow and arrow attack to the action bar and leave the attack
+        /// as the dagger attack" — the bow is an action-bar ability, so its word rides the SLOT
+        /// record, not the primary-attack face.
+        /// </para>
+        /// </summary>
+        public readonly string Verb;
 
         /// <summary>Constructs an immutable ability-slot snapshot from all fields.</summary>
         public AbilitySlotRecord(string key, string glyph, string name, string desc, string iconKey,
             string accentHex, bool equipped, float cooldownRemaining, float cooldownTotal,
-            float manaCost = 0f, bool affordable = true)
+            float manaCost = 0f, bool affordable = true, string verb = "")
         {
+            Verb = verb ?? "";
             Key = key;
             Glyph = glyph;
             Name = name;

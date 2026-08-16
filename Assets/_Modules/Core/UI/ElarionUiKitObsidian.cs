@@ -977,7 +977,10 @@ namespace DeNelle.Core.UI
             /// WO-1105, owner felt-test 2026-08-16, verbatim: "with [Sylas], instead of it being a
             /// sword, it should be a picture of a bow and arrow. It should be the word shoot." She
             /// asked for BOTH — the picture and the word — and SetLabel can only give one, so the
-            /// caption is the surface that satisfies the sentence as written.
+            /// caption is the surface that satisfies the sentence as written. Per her later ruling
+            /// ("change the bow and arrow attack to the action bar and leave the attack as the
+            /// dagger attack") the surface that wears it is the ACTION-BAR ABILITY SLOT, not the
+            /// primary-attack pill.
             /// </para>
             /// <para>
             /// The word is also what makes the control readable without colour, which is binding
