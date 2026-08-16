@@ -63,6 +63,20 @@ namespace DeNelle.HUD.Kit
         // live handles
         private ElarionUiKit.PartyNameplateHandle _vitals;   // WO-432 shared HP/MP plate (+07-06 XP strip)
         private bool _xpStripBound;                          // one-shot FlowTrace on first XP bind
+
+        // WO-997 §3b: mana-bar legibility. OnVitals now records a TARGET fill (from the
+        // model's exact floats when present) and Update() eases the shown fill toward it,
+        // so regen reads as motion instead of whole-point steps. A DOWNWARD jump (a spend)
+        // arms a brief BRIGHTEN flash on the fill image — brightness, never a hue swap
+        // (owner is red/green colourblind). -1 target = nothing bound yet (first push snaps).
+        private float _manaFillTarget = -1f;                 // 0..1 fill the bar should reach
+        private float _manaFillShown  = -1f;                 // 0..1 fill currently painted
+        private float _manaFlashUntil;                       // unscaled time the spend flash ends
+        private Color _manaFillBaseColor = Color.white;      // the BUILT fill colour, restored after a flash
+        private bool  _manaFillBaseCaptured;
+        private const float ManaFillLerpSpeed  = 9f;         // exponential ease rate (~0.11s to 63%)
+        private const float ManaSpendThreshold = 0.02f;      // fill drop that counts as a spend
+        private const float ManaFlashSeconds   = 0.25f;      // spend flash duration
         private ElarionUiKit.CurrencyChipHandle _wisdomChip;
         private ElarionUiKit.PartyNameplateHandle _heartPlate;   // WO-432: Heart of Elarion on the shared plate
         private ElarionUiKit.TargetFrameHandle _targetFrame;
@@ -1454,7 +1468,28 @@ namespace DeNelle.HUD.Kit
             if (_vitals.HealthFill != null)
                 _vitals.HealthFill.fillAmount = v.MaxHp > 0 ? Mathf.Clamp01((float)v.Hp / v.MaxHp) : 0f;
             if (_vitals.ManaFill != null)   // MP LIVE (§0 fix)
-                _vitals.ManaFill.fillAmount = v.MaxMana > 0 ? Mathf.Clamp01((float)v.Mana / v.MaxMana) : 0f;
+            {
+                // WO-997 §3b: prefer the EXACT floats (sub-point regen reads); the ints stay
+                // the fallback for any producer that never pushed them (sentinel -1).
+                float curMana = v.ManaExact    >= 0f ? v.ManaExact    : v.Mana;
+                float maxMana = v.MaxManaExact >  0f ? v.MaxManaExact : v.MaxMana;
+                float target  = maxMana > 0f ? Mathf.Clamp01(curMana / maxMana) : 0f;
+                if (!_manaFillBaseCaptured)
+                {
+                    _manaFillBaseColor = _vitals.ManaFill.color;
+                    _manaFillBaseCaptured = true;
+                }
+                // A DOWNWARD jump is a spend — arm the brighten flash so burn-down reads.
+                if (_manaFillTarget >= 0f && target < _manaFillTarget - ManaSpendThreshold)
+                    _manaFlashUntil = Time.unscaledTime + ManaFlashSeconds;
+                _manaFillTarget = target;
+                if (_manaFillShown < 0f)   // first bind: snap, no ease-in from empty
+                {
+                    _manaFillShown = target;
+                    _vitals.ManaFill.fillAmount = target;
+                }
+                // Steady-state easing runs in Update() (AnimateManaFill).
+            }
             // FIX 2026-08-05: this rendered the CLASS WORD ("Ranger  Lv 1"), so nothing in the
             // game ever told a player who picked the Ranger that he is SYLAS. The nameplate now
             // shows the CANON NAME from Data/Canonical/en.json (hero.<job>.name), resolved through
@@ -2020,8 +2055,48 @@ namespace DeNelle.HUD.Kit
                                ", inRow " + inRow + ")");
         }
 
+        // WO-997 §3b: per-frame mana-bar animation. Eases the shown fill toward the model's
+        // target (so a 1/s regen is visible MOTION, not a 10% step every second) and runs the
+        // spend flash: a brief brighten of the fill toward white that decays back to the BUILT
+        // colour. Brightness carries the meaning — never a hue swap (red/green colourblind law).
+        private void AnimateManaFill()
+        {
+            var img = _vitals.ManaFill;
+            if (img == null || _manaFillTarget < 0f || _manaFillShown < 0f) return;
+
+            if (!Mathf.Approximately(_manaFillShown, _manaFillTarget))
+            {
+                // Exponential ease — frame-rate independent, snaps when within a hair.
+                float k = 1f - Mathf.Exp(-ManaFillLerpSpeed * Time.unscaledDeltaTime);
+                _manaFillShown = Mathf.Lerp(_manaFillShown, _manaFillTarget, k);
+                if (Mathf.Abs(_manaFillShown - _manaFillTarget) < 0.0015f)
+                    _manaFillShown = _manaFillTarget;
+                img.fillAmount = _manaFillShown;
+            }
+
+            if (_manaFlashUntil > 0f && _manaFillBaseCaptured)
+            {
+                float remain = _manaFlashUntil - Time.unscaledTime;
+                if (remain <= 0f)
+                {
+                    img.color = _manaFillBaseColor;
+                    _manaFlashUntil = 0f;
+                }
+                else
+                {
+                    // 0..1 flash strength, strongest at the spend instant, decaying to 0.
+                    float t = Mathf.Clamp01(remain / ManaFlashSeconds);
+                    img.color = Color.Lerp(_manaFillBaseColor, Color.white, 0.75f * t);
+                }
+            }
+        }
+
         private void Update()
         {
+            // WO-997 §3b: ease the hero plate's mana fill toward its target + run the
+            // spend flash (brightness pulse, colourblind-safe). Cheap; early-outs when idle.
+            AnimateManaFill();
+
             // WO-611: drive the animated lock crosshair badge from the target model (combat HUD only).
             // 0 = no target (unlocked/faint), 1 = target held but not locked (acquiring pulse),
             // 2 = manual lock (locked/gold). Bound to TargetModel.HasTarget/Locked.

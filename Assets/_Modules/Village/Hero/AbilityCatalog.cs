@@ -177,12 +177,34 @@ namespace DeNelle.Village
             ColorUtility.TryParseHtmlString(Color ?? "#ffffff", out var c) ? c : UnityEngine.Color.white;
     }
 
+    /// <summary>
+    /// WO-997: one class's resource ECONOMY — the base pool/regen HeroAbilities seeds on
+    /// class resolve (modifiers such as the Cathedral keys still fold on top), plus the
+    /// class identity bits: the HUD display name (Mana / Vigor / Focus) and the ranger's
+    /// on-hit restore. Optional in abilities.json — an absent block leaves the serialized
+    /// HeroAbilities defaults untouched (legacy behaviour).
+    /// </summary>
+    [Serializable]
+    public sealed class ClassResourceDef
+    {
+        /// <summary>Player-facing resource name (Mana / Vigor / Focus).</summary>
+        [JsonProperty("displayName")] public string DisplayName;
+        /// <summary>Base pool size (before structural/talent modifiers).</summary>
+        [JsonProperty("max")] public float Max;
+        /// <summary>Base passive regen per second (before multipliers).</summary>
+        [JsonProperty("regenPerSecond")] public float RegenPerSecond;
+        /// <summary>Resource restored per landed BASIC-attack hit (ranger Focus); 0 = none.</summary>
+        [JsonProperty("onHitRestore")] public float OnHitRestore;
+    }
+
     /// <summary>One hero class's full Q/W/E/R loadout.</summary>
     [Serializable]
     public sealed class AbilityClassDef
     {
         /// <summary>Display name of the class (Mage / Knight / Ranger).</summary>
         [JsonProperty("displayName")] public string DisplayName;
+        /// <summary>WO-997: the class's resource economy block. Null when not authored.</summary>
+        [JsonProperty("resource")] public ClassResourceDef Resource;
         /// <summary>Q/W/E/R abilities keyed by the lowercase slot letter.</summary>
         [JsonProperty("abilities")] public Dictionary<string, AbilityDef> Abilities = new Dictionary<string, AbilityDef>();
     }
@@ -275,6 +297,20 @@ namespace DeNelle.Village
                 }
             }
             return null;
+        }
+
+        /// <summary>
+        /// WO-997: the class's resource-economy block from abilities.json, or null when the
+        /// class is unknown or authors no block (callers keep their serialized defaults then).
+        /// The Cleric aliases onto the mage loadout upstream (HeroAbilities.Awake maps it to
+        /// "mage" before any lookup), so no alias is needed here.
+        /// </summary>
+        public static ClassResourceDef ResourceFor(string heroClass)
+        {
+            EnsureLoaded();
+            return _data.Classes != null &&
+                   _data.Classes.TryGetValue(NormalizeClass(heroClass), out var cls)
+                ? cls?.Resource : null;
         }
 
         private static string NormalizeClass(string heroClass)

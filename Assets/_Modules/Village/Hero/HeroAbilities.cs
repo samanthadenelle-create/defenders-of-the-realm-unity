@@ -177,6 +177,58 @@ namespace DeNelle.Village
         /// <summary>Hero class id (drives the abilities.json lookup).</summary>
         public string HeroClass => _heroClass;
 
+        // ── WO-997: per-class resource identity (data-driven from abilities.json) ──────
+        // The class 'resource' block seeds the BASE pool + regen on class resolve; every
+        // modifier (EffectiveMaxMana's Cathedral bonus, the regen fold in Update) still
+        // stacks on top exactly as before. An absent block leaves the serialized defaults.
+        private string _resourceDisplayName = "Mana";
+        private float  _onHitRestore;   // resource restored per landed basic-attack hit (ranger Focus)
+
+        /// <summary>WO-997: the player-facing name of this class's resource (Mana / Vigor / Focus).
+        /// The HUD bar/nameplate label may consume this; defaults to "Mana".</summary>
+        public string ResourceDisplayName => _resourceDisplayName;
+
+        /// <summary>WO-997: resource restored per landed BASIC-attack hit (0 for non-ranger classes).
+        /// PlayerAttackController gates its on-hit restore call on this being &gt; 0.</summary>
+        public float OnHitRestore => _onHitRestore;
+
+        /// <summary>
+        /// WO-997: seed the BASE pool/regen from the class's abilities.json 'resource' block.
+        /// Base values ONLY — EffectiveMaxMana / the Update regen fold still apply their
+        /// modifiers on top unchanged. No block authored = no change (legacy defaults hold).
+        /// When <paramref name="preserveFraction"/> is true (a class re-resolve after Awake),
+        /// current mana keeps its FRACTION of the pool so a swap never refunds or steals mana.
+        /// </summary>
+        private void ApplyClassResource(bool preserveFraction)
+        {
+            var res = AbilityCatalog.ResourceFor(_heroClass);
+            if (res == null) return;
+            float oldEffMax = EffectiveMaxMana;
+            if (!string.IsNullOrEmpty(res.DisplayName)) _resourceDisplayName = res.DisplayName;
+            if (res.Max > 0f) _maxMana = res.Max;
+            if (res.RegenPerSecond > 0f) _manaRegenPerSecond = res.RegenPerSecond;
+            _onHitRestore = Mathf.Max(0f, res.OnHitRestore);
+            if (preserveFraction && oldEffMax > 0f)
+                _mana = Mathf.Clamp(_mana / oldEffMax, 0f, 1f) * EffectiveMaxMana;
+            FlowTrace.Step("HeroAbilities",
+                $"class resource applied: {_heroClass} -> {_resourceDisplayName} " +
+                $"max {_maxMana:0.#} regen {_manaRegenPerSecond:0.##}/s onHit +{_onHitRestore:0.#}");
+        }
+
+        /// <summary>
+        /// WO-997: instant resource add, clamped to the effective pool — the single mana-ADD
+        /// seam for the ranger's per-basic-hit Focus restore (and any future flat restore).
+        /// Distinct from the over-time drip (<see cref="RestoreManaOverTime"/>), which stays
+        /// the one home for gradual restores. No-op for amount &lt;= 0.
+        /// </summary>
+        public void RestoreMana(float amount)
+        {
+            if (amount <= 0f) return;
+            _mana = Mathf.Min(EffectiveMaxMana, _mana + amount);
+            FlowTrace.Throttle("HeroAbilities", "restore-mana", 1f,
+                $"+{amount:0.#} {_resourceDisplayName} (now {_mana:0.0}/{EffectiveMaxMana:0.0}).");
+        }
+
         /// <summary>Mana-regen multiplier — bumped by the Aether Sprite's Mana Tide perk.</summary>
         public float ManaRegenMultiplier
         {
@@ -278,6 +330,10 @@ namespace DeNelle.Village
         {
             if (string.IsNullOrWhiteSpace(slug)) return;
             _heroClass = slug.Trim().ToLowerInvariant();
+            // WO-997: re-seed the base pool/regen from the new class's resource block.
+            // Fraction-preserving — this runs after Awake (HeroBodySwapper.Start), so a
+            // full pool stays full and a part-spent pool keeps its ratio, never a top-up.
+            ApplyClassResource(preserveFraction: true);
             Debug.Log($"[HeroAbilities] Hero class set to '{_heroClass}' (abilities will resolve from this loadout).");
         }
 
@@ -322,6 +378,10 @@ namespace DeNelle.Village
             // Safe because every sweep here resolves candidates through AsHostile, which
             // rejects any Faction other than Hostile — the player's own perimeter is Friendly.
             _enemyMask = _enemyMask.value | LayerMask.GetMask("Structure");
+
+            // WO-997: seed the BASE pool/regen from the resolved class's abilities.json
+            // 'resource' block BEFORE filling the pool (no fraction to preserve pre-seed).
+            ApplyClassResource(preserveFraction: false);
 
             // Seed the pool LAST so the mage starts full on its Cathedral-boosted max
             // (identical to the old `_mana = _maxMana` for every other class / unbuilt Cathedral).
@@ -1262,7 +1322,11 @@ namespace DeNelle.Village
         {
             if (foe == null || !foe.IsAlive || amount <= 0f) return 0f;
             float before = foe.Hp;
-            foe.TakeDamage(CombatMark.ScaleDamage(foe, amount), element);
+            // Hunter's Mark scaling happens in ONE place — Enemy.TakeDamageFrom, which every
+            // enemy damage path funnels through (2026-08-15 review, CombatMark GameObject-key
+            // fix). Scaling here too would double-apply (1.2 × 1.2) now that the mark key
+            // resolves per-GameObject instead of per-component.
+            foe.TakeDamage(amount, element);
             return Mathf.Max(0f, before - foe.Hp);
         }
 

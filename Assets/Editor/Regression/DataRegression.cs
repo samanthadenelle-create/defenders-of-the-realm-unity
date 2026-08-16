@@ -672,6 +672,10 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "town-movement-floor suite", () => { if (!DeNelle.Editor.Regression.TownMovementFloorRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[town-movement-floor] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "one-guide-body suite", () => { if (!DeNelle.Editor.Regression.OneGuideBodyRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[one-guide-body] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "wall-adjacency suite", () => { if (!DeNelle.Editor.Regression.WallAdjacencyRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[wall-adjacency] " + r); });
+            // --- WO-997 class resource economy: every playable class authors a valid resource block,
+            //     every cost fits its owning class's pool, at least one costed non-ultimate per kit
+            //     (kills the "everything is cooldown-gated" gap), both abilities.json copies identical. ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "class-resource suite", () => { if (!DeNelle.Editor.Regression.ClassResourceRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[class-resource] " + r); });
             // --- WO-973 Bryn bubble legibility: code defaults small + scene copy agrees + ratio vs the
             //     shipped TownsfolkBubble. Case 2 is a DRIFT CATCHER that stays red until the
             //     Dungeon_HealersCottage bake rewrites the serialised copy — an honest red, not noise. ---
@@ -694,6 +698,15 @@ namespace DeNelle.Editor
             // both halves of VfxPoolGuard: drain past corpses on the way out, and refuse to
             // enqueue any host that is not parked under the pool root on the way in.
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "vfx-pool-shape suite", () => { if (!DeNelle.Editor.Regression.VfxPoolShapeRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[vfx-pool-shape] " + r); });
+
+            // --- TALENT ICON MAP (WO-1023, 2026-08-15): talent-icon-map.json had NO
+            // oracle -- 83/83 coverage, unique art per talent, resolvable iconPaths and
+            // the byte-identical Resources/StreamingAssets twin were all true by care
+            // alone (the WO-996 armor.json shape: Resources wins at runtime, so drift
+            // is invisible in the Editor). Also pins the two WO-1023 re-tags (ranger
+            // Venomcraft off Rogue7, shared Arcane Bolt off Arcanist1) so the
+            // duplicate-icon defect cannot return.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "talent-icons suite", () => { if (!DeNelle.Editor.Regression.TalentIconMapRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[talent-icons] " + r); });
 
             // --- THE ORACLE THAT GUARDS THIS FILE: distinct markers, no unregistered
             // oracle, no gate script grepping a marker nobody emits. Registered LAST so

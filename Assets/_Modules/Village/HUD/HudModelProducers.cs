@@ -200,6 +200,11 @@ namespace DeNelle.Village.Hud
         // last-pushed snapshot for change-gating
         private int _hp = int.MinValue, _maxHp, _mana, _maxMana, _xp, _xpToNext, _level, _wisdom;
         private string _classId;
+        // WO-997 §3b: exact mana snapshot — the ints quantized a small pool to whole-point
+        // steps, so sub-point regen never re-pushed the model and the bar looked frozen.
+        // Change-gated with an epsilon so a 0.2-mana regen tick per 0.20s poll flows.
+        private float _manaExact = float.MinValue, _maxManaExact = float.MinValue;
+        private const float ManaEpsilon = 0.05f;
 
         public HeroVitalsProducer(IHudModel m) : base(m, 0.20f) { }
 
@@ -223,6 +228,10 @@ namespace DeNelle.Village.Hud
 
             int hp      = _health != null ? Mathf.CeilToInt(Mathf.Max(0f, _health.Hp)) : _hp;
             int maxHp   = _health != null ? Mathf.CeilToInt(Mathf.Max(1f, _health.MaxHp)) : _maxHp;
+            // WO-997 §3b: keep the ints for display text, but carry the EXACT floats too so
+            // the bar fill can show sub-point regen/burn (the ints alone step in whole points).
+            float manaExact    = _abilities != null ? _abilities.Mana : _manaExact;
+            float maxManaExact = _abilities != null ? _abilities.MaxMana : _maxManaExact;
             int mana    = _abilities != null ? Mathf.RoundToInt(_abilities.Mana) : _mana;
             int maxMana = _abilities != null ? Mathf.RoundToInt(_abilities.MaxMana) : _maxMana;
             int xp      = _prog != null ? Mathf.RoundToInt(_prog.Xp) : _xp;
@@ -236,13 +245,23 @@ namespace DeNelle.Village.Hud
             var wis = DeNelle.Village.Talents.WisdomCurrencyService.Instance;
             int wisdom = wis != null ? wis.Wisdom : Mathf.Max(0, _wisdom);
 
-            if (hp == _hp && maxHp == _maxHp && mana == _mana && maxMana == _maxMana &&
+            // WO-997 §3b: the mana gate is the FLOAT epsilon (0.05), not the int equality —
+            // a 5 Hz poll of a 1.0/s regen moves ~0.2 mana per poll, so the model now pushes
+            // every poll during regen instead of once per whole point.
+            if (hp == _hp && maxHp == _maxHp &&
+                Mathf.Abs(manaExact - _manaExact) < ManaEpsilon &&
+                Mathf.Abs(maxManaExact - _maxManaExact) < ManaEpsilon &&
                 xp == _xp && xpToNext == _xpToNext && level == _level && cls == _classId &&
                 wisdom == _wisdom) return;
 
             _hp = hp; _maxHp = maxHp; _mana = mana; _maxMana = maxMana;
+            _manaExact = manaExact; _maxManaExact = maxManaExact;
             _xp = xp; _xpToNext = xpToNext; _level = level; _classId = cls; _wisdom = wisdom;
-            Model.HeroVitals.Set(hp, maxHp, mana, maxMana, xp, xpToNext, level, cls, wisdom);
+            // Sanitize the never-resolved sentinel (float.MinValue) to the model's own
+            // "not provided" sentinel (-1) so readers cleanly fall back to the ints.
+            Model.HeroVitals.Set(hp, maxHp, mana, maxMana, xp, xpToNext, level, cls, wisdom,
+                                 manaExact < 0f ? -1f : manaExact,
+                                 maxManaExact < 0f ? -1f : maxManaExact);
         }
     }
 

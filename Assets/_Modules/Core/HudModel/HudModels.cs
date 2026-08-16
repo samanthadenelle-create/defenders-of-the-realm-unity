@@ -45,16 +45,31 @@ namespace DeNelle.Core.HudModel
         /// </summary>
         public int Wisdom { get; private set; }
 
+        /// <summary>
+        /// WO-997 §3b: EXACT (un-rounded) current mana for the HUD bar. The int
+        /// <see cref="Mana"/> quantized a 10-point pool to 10% fill steps, which made
+        /// sub-point regen invisible. Sentinel -1 = "not pushed" — readers fall back
+        /// to the int fields, so every existing Set caller stays source-compatible.
+        /// </summary>
+        public float ManaExact { get; private set; } = -1f;
+        /// <summary>WO-997 §3b: exact max mana partner of <see cref="ManaExact"/> (-1 = not pushed).</summary>
+        public float MaxManaExact { get; private set; } = -1f;
+
         /// <summary>Raised after any field changes.</summary>
         public event Action Changed;
 
-        /// <summary>Producer-only mutator: assign all fields, fire Changed, trace (throttled).</summary>
-        public void Set(int hp, int maxHp, int mana, int maxMana, int xp, int xpToNext, int level, string classId, int wisdom)
+        /// <summary>Producer-only mutator: assign all fields, fire Changed, trace (throttled).
+        /// The two OPTIONAL trailing floats (WO-997 §3b) carry the exact mana; the default -1
+        /// means "not provided" and readers fall back to the int Mana/MaxMana.</summary>
+        public void Set(int hp, int maxHp, int mana, int maxMana, int xp, int xpToNext, int level, string classId, int wisdom,
+                        float manaExact = -1f, float maxManaExact = -1f)
         {
             Hp = hp;
             MaxHp = maxHp;
             Mana = mana;
             MaxMana = maxMana;
+            ManaExact = manaExact;
+            MaxManaExact = maxManaExact;
             Xp = xp;
             XpToNext = xpToNext;
             Level = level;
