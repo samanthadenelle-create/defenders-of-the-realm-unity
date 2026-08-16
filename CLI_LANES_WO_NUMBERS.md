@@ -1,6 +1,22 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ RECONCILED 2026-08-16 (CLI): main line next free = **1106**.
+> ## ⚠ RECONCILED 2026-08-16 (CLI): main line next free = **1108**.
+> *(⚠ **1106 WAS MINTED AS A FILE WITHOUT BUMPING THIS BANNER** — by this seat, hours after writing
+> the note below that names mint-without-bump as THE collision cause. No collision resulted (single
+> seat today), but the rule is the rule: the bump rides the SAME edit as the mint. Reconciled here.
+> **1106** = the "can't afford" reason is unreadable behind the red shaded footprint (owner F8 seq
+> 2504); READY, serialize behind the build-mode column work.
+> **1107** = BUILD-MODE COLUMN FIT (owner-approved 2026-08-16, "Get it done. Do it that way"): the
+> right-edge column claimed 1080 ref px of a canvas that is only **965.4** tall at the Seeker's
+> 2670x1200 — so Done overlapped the Town quick-tab, and had done since before today. Fixed by laying
+> the D14 verb rail HORIZONTALLY (band 132x384 -> 384x132, y 114..246) AND dropping the quick-tab
+> height 132 -> 112 (MinTouch floor). ⚠ MEASURED: the rail move ALONE was insufficient — with 132px
+> tabs the binding tenant becomes the CAROUSEL DOCK (98..401), leaving Done 17.6px over. Both changes
+> were required. Now 923 required vs 941.4 available = 42.4px headroom, clamp never fires. Also
+> deleted a hand-copied `QuickTabStackTopPx` duplicate (BuildHudController now reads BuildPaletteUI's).
+> ⚠ Ultrawide DESKTOP 21:9 (2560x1080 -> 935.3, 3440x1440 -> 931.7) still overflows by ~12-15px and
+> the clamp WILL fire there; not a shipping target, recorded rather than hidden. Source is tagged
+> `COLUMN-FIT 2026-08-16` — grep that token.)*
 > *(CLI minted **WO-1105** and bumped 1105 -> 1106 in this SAME edit. **1105** = the Ranger plays like
 > a swordsman. MEASURED: his authored kit is fully ranged (Q 15 m / W 12 m / E 15 m / R aoe), so the
 > defect is the PRIMARY ATTACK — `PlayerAttackController._attackRange = 3.2f` is a class-agnostic
@@ -1100,6 +1116,21 @@
 > That is the exact failure this file's own rule warns about — *"never a number copied into any other
 > doc"* — and the copy was **inside the numbering authority itself**. A duplicate cannot be kept honest
 > by discipline; it can only be removed. **The header is the sole source. Do not restore numbers here.**
+>
+> *(UI-seat bumped 1039 -> 1040 in the SAME edit as the WO-1039 mint — owner 2026-08-16: build mode
+> *"looks good but disjoined"*. ★ **THIS IS ALREADY HER RULING AND IT WAS HALF-BUILT.**
+> `docs/UI/OBSIDIAN_UI_DESIGN_skilltree_inventory.md` **§6** records verbatim: *"make a styling-type
+> SINGLETON for ONE UI style for EVERYTHING - not piece this and piece that"*, with a full phased spec
+> (§6.1-6.7). MEASURED: `Assets/_Modules/Core/UI/UiStyle.cs` **EXISTS** (phase a landed), kit partially
+> routed (phase b), but **phase (c) migrate-panels NEVER HAPPENED for build mode** and phase (d) never
+> began — **only 10 files in all of `_Modules` reference `UiStyle.`, and `BuildMenu.cs` has ZERO**;
+> `ShopTheme.cs` still duplicates the palette §6.1 flagged. The screen has **4 independent chrome
+> deciders**: `ObjectiveBannerUi` / `TutorialSkipUi` / `BuildHudController` / `BuildMenu` -> 3-4 plate
+> languages in one frame. ⚠ SCOPE = **THIS SCREEN ONLY**, one increment of phase (c) — §6.6 lists EVERY
+> screen as an offender and a migrate-everything ticket is the structural-refactor smuggling
+> ARCHITECTURE_PRINCIPLES forbids. ⚠ Unify the LANGUAGE, not the emphasis (gold stays accents-only;
+> a quieter category column may be correct hierarchy). ⚠ **4 tickets now touch build mode — 1033
+> (landed), 1034, 1037, 1039 — SEQUENCE them, do not run as parallel lanes on the same files.** READY.)*
 >
 > *(UI-seat bumped 1038 -> 1039 in the SAME edit as the WO-1038 mint — **FIVE UNDECLARED TAGS ARE USED
 > IN CODE; every one THROWS.** F8 seq 2434/2435 live: `UnityException: Tag: SpawnPoint is not defined`

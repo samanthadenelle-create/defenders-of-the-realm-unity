@@ -135,25 +135,61 @@ namespace DeNelle.Village
         private readonly List<QuickTab> _quickTabs = new List<QuickTab>(3);
         private const float RestoreTabW = 260f;
 
-        // ── WO-1010 D21: the quick-tab stack's FIXED-PIXEL band math (1920x1080 reference) ──
-        // The right edge is split by ownership (the D7/D8-class lesson — two surfaces must
-        // never draw in one band). Reading the neighbours' published/authored numbers:
-        //   BOTTOM-right — the D14 verb rail: seated ResourceStripReservedPx(98) +
-        //     RailBottomGapPx(16) = 114px up, RailBandH = 384px tall -> the rail owns
-        //     y 114..498 from the bottom.
-        //   TOP-right — the D10 corner Done: a 112px MinTouch hit pad inset 24px from the
-        //     corner -> Done owns the top 136px, i.e. y 944..1080 from the bottom.
-        //   MIDDLE band -> THIS stack: 944 - 498 = 446px free. Three 132px tabs
-        //     (CanonCtaHeight, >= MinTouchPx 112) + two 16px gutters = 428px, centred in the
-        //     band: stack bottom 507 (9px clear of the rail's 498), top 935 (9px clear of
-        //     Done's 944). Tab centres bottom-up: 573 / 721 / 869.
+        // ── The carousel dock's own fixed-pixel height (WO-1010 D21) ───────────
+        // PROMOTED from locals inside EnsureBuilt (COLUMN-FIT 2026-08-16): the quick-tab band math has to
+        // seat clear of the dock, and it must read the dock's REAL height rather than a
+        // number re-typed in a comment. Tray 259 + crystals line 44 = 303.
+        private const float TrayHeightPx   = 259f;
+        private const float CrystalsBandPx = 44f;
+        private const float DockHeightPx   = TrayHeightPx + CrystalsBandPx;   // 303
+
+        // ── WO-1010 D21 / COLUMN-FIT 2026-08-16: the quick-tab stack's FIXED-PIXEL band math ─────
+        // ⚠ THE OLD NOTE HERE REASONED AGAINST AN ASSUMED 1080-TALL CANVAS. IT IS NOT.
+        // Everything below is in 1920x1080 REFERENCE px, but the canvas is only 1080 REFERENCE
+        // px tall on a 16:9 surface. The owner's Seeker is 2670x1200 (20:9) and, with
+        // MatchWidthOrHeight=0.5, resolves to a canvas 2148 x 965.4 REFERENCE px. The old math
+        // spent the vertical budget as though 1080 were available and the column summed to
+        // exactly 1080 — so on the real device Done overlapped the top tab. Never seat off
+        // "1080"; seat off the sum below and check it against PostScaleCanvasHeight.
+        //
+        // The right edge is split by OWNERSHIP (the D7/D8-class lesson — two surfaces must
+        // never draw in one band), measured from the canvas BOTTOM:
+        //   strip      18..98   — BuildHudController.ResourceStripReservedPx
+        //   dock       98..401  — this palette's own carousel (PICK phase) = DockTopPx
+        //   verb row  114..246  — the D14 row (PLACING phase). HORIZONTAL since COLUMN-FIT 2026-08-16
+        //                         (384 wide x 132 tall, bottom-right); it used to be a 384px
+        //                         TALL column here and that 384px was the whole deficit.
+        //   THIS STACK 410..778 — 9px clear of the dock (the taller of the two tenants below
+        //                         it), three QuickTabHeightPx(112) boxes + two 16px gutters
+        //                         = 368px. Tab centres bottom-up: 466 / 594 / 722.
+        //   Done      787..899  — BuildHudController seats it off QuickTabStackTopPx.
+        //   + 24px top inset    -> 923 REQUIRED, vs 965.4 available at 2670x1200 (42.4 spare)
+        //                          and 1080 at 16:9 (157 spare).
+        // Tab height is MinTouchPx(112), NOT CanonCtaHeight(132): the column's scarce axis is
+        // vertical, Done already takes the floor for exactly that reason, and 3x20px of CTA
+        // flourish is what buys the fit. One column, one box size, one rhythm.
         // X: box right edge 72px in from the screen edge -> x 1588..1848 at 1920 wide (the
-        // capture-documented D15 column). Both canvases resolve 1:1 at 1920x1080 in landscape
-        // (this modal canvas is 1080x1920 ref, match 0.5 -> scale 1), so these px are directly
-        // comparable with BuildHudController's.
+        // capture-documented D15 column). Both canvases resolve 1:1 in landscape (this modal
+        // canvas is 1080x1920 ref, match 0.5), so these px are directly comparable with
+        // BuildHudController's.
         private const float QuickTabGutterPx     = 16f;
-        private const float QuickTabStackBottomPx = 507f;
         private const float QuickTabEdgeInsetPx  = 72f;
+        /// <summary>Clearance the stack keeps above the dock and below Done.</summary>
+        private const float QuickTabClearPx      = 9f;
+        /// <summary>One tab's box height — the kit MinTouch floor, matching Done's box.</summary>
+        public const float QuickTabHeightPx = ElarionUiKit.MinTouchPx;   // 112
+        /// <summary>TOP of the carousel dock in reference px from the canvas bottom: the D19
+        /// strip's reserved band + the dock's own fixed height (98 + 303 = 401). PUBLIC so a
+        /// neighbouring lane can prove it seats clear without re-deriving the dock.</summary>
+        public const float DockTopPx = BuildHudController.ResourceStripReservedPx + DockHeightPx;
+        /// <summary>BOTTOM of the quick-tab stack (410) — 9px over the dock, which is the
+        /// TALLER of the two things below it (the D14 verb row tops out at 246).</summary>
+        public const float QuickTabStackBottomPx = DockTopPx + QuickTabClearPx;
+        /// <summary>TOP of the quick-tab stack (778) = 410 + 3*112 + 2*16. PUBLIC because
+        /// BuildHudController seats Done off it — it used to hand-copy the number, and a
+        /// hand-copied number is how the seat went stale the first time.</summary>
+        public const float QuickTabStackTopPx =
+            QuickTabStackBottomPx + QuickTabHeightPx * 3f + QuickTabGutterPx * 2f;
         /// <summary>Bottom breathing room under the card tray so a device safe-area inset
         /// (gesture bar / rounded corner) cannot clip the cost line off the cards.</summary>
         private const float TrayBottomInsetPx = 28f;
@@ -262,9 +298,8 @@ namespace DeNelle.Village
             // dock entirely — the tabs move to the right-edge quick-tab stack. The dock slims
             // to the CARD ROW + one slim crystals line: tray 259px + crystals 44px = 303px,
             // fixed pixels, centred, resting on the D19 resource frame. No dead band.
-            const float TrayHeightPx    = 259f;
-            const float CrystalsBandPx  = 44f;
-            const float DockHeightPx    = TrayHeightPx + CrystalsBandPx;   // 303
+            // (TrayHeightPx / CrystalsBandPx / DockHeightPx are class consts now — COLUMN-FIT 2026-08-16,
+            // so the quick-tab band math can seat off the dock's real height.)
             const float trayTop = TrayHeightPx / DockHeightPx;             // ~0.855 of 303px
             const float headerBottom = 1.0f;
 
@@ -539,11 +574,11 @@ namespace DeNelle.Village
         {
             if (_canvas == null) return;
 
-            // RIGHT EDGE, stacked VERTICALLY in the MIDDLE band (D21 — band math at the
-            // QuickTab* consts above: the D14 rail owns y 114..498 from the bottom, the D10
-            // corner Done owns the top 136px; this stack owns 507..935 between them).
-            // Fixed-pixel 260x132 boxes (CanonCtaHeight >= MinTouchPx 112) so a wide
-            // landscape canvas cannot stretch them into thin bars.
+            // RIGHT EDGE, stacked VERTICALLY in the MIDDLE band (D21/COLUMN-FIT 2026-08-16 — band math at
+            // the QuickTab* consts above: the dock tops out at 401 and the horizontal D14 verb
+            // row at 246; this stack owns 410..778, with Done at 787..899 above it).
+            // Fixed-pixel 260x112 boxes (QuickTabHeightPx = the MinTouchPx floor, the same box
+            // Done uses) so a wide landscape canvas cannot stretch them into thin bars.
             //
             // THREE categories (owner D8 resolution via D21, 2026-08-09): Town / Defense /
             // Castle Structures — where Castle Structures is the RENAMED Walls display
@@ -552,8 +587,8 @@ namespace DeNelle.Village
             // The Walls verb stays behind FeatureFlags.WallsTab (defaultOn flipped TRUE by
             // the same ruling) — flag off = two tabs, exactly as the old bottom row did.
             bool wallsOn = DeNelle.Core.FeatureFlags.WallsTab;
-            float step = ElarionUiKit.CanonCtaHeight + QuickTabGutterPx;                // 148
-            float bottomCentre = QuickTabStackBottomPx + ElarionUiKit.CanonCtaHeight * 0.5f; // 573
+            float step = QuickTabHeightPx + QuickTabGutterPx;                     // 128
+            float bottomCentre = QuickTabStackBottomPx + QuickTabHeightPx * 0.5f; // 466
             // Top -> bottom reads Town / Defense / Castle Structures (the ruling's order).
             AddQuickTab("Town", BuildType.Town, bottomCentre + 2f * step, "BuildPaletteRestoreTab");
             AddQuickTab("Defense", BuildType.Defense, bottomCentre + step, "BuildPaletteQuickTab_Defense");
@@ -567,10 +602,15 @@ namespace DeNelle.Village
                 AddQuickTab(castleCaption, BuildType.Walls, bottomCentre, "BuildPaletteQuickTab_CastleStructures");
             }
             FlowTrace.Step("BuildPalette",
-                "D21 quick-tab stack built: " + _quickTabs.Count + " tabs at x 1588..1848, y band 507..935 " +
-                "(3x132px + 2x16px gutters = 428px centred between the D14 rail top 498 and the corner " +
-                "Done pad bottom 944; 9px clearance each side, 1920x1080 ref); walls/'Castle Structures' " +
-                "tab " + (wallsOn ? "PRESENT" : "ABSENT") + " (FeatureFlags.WallsTab=" + wallsOn + ")");
+                "D21/COLUMN-FIT 2026-08-16 quick-tab stack built: " + _quickTabs.Count + " tabs, box " + RestoreTabW +
+                "x" + QuickTabHeightPx + "px at x-inset " + QuickTabEdgeInsetPx + ", y band " +
+                QuickTabStackBottomPx + ".." + QuickTabStackTopPx + " (3x" + QuickTabHeightPx +
+                "px + 2x" + QuickTabGutterPx + "px gutters), " + QuickTabClearPx +
+                "px clear of the dock top " + DockTopPx + " and of Done's bottom " +
+                (QuickTabStackTopPx + QuickTabClearPx) + "; the D14 verb row is HORIZONTAL now and " +
+                "tops out at " + BuildHudController.VerbRowTopPx + ", far below this stack. " +
+                "Walls/'Castle Structures' tab " + (wallsOn ? "PRESENT" : "ABSENT") +
+                " (FeatureFlags.WallsTab=" + wallsOn + ")");
         }
 
         /// <summary>
@@ -627,7 +667,7 @@ namespace DeNelle.Village
             {
                 rt.anchorMin = rt.anchorMax = new Vector2(1f, 0f);
                 rt.pivot = new Vector2(0.5f, 0.5f);
-                rt.sizeDelta = new Vector2(RestoreTabW, ElarionUiKit.CanonCtaHeight);
+                rt.sizeDelta = new Vector2(RestoreTabW, QuickTabHeightPx);
                 rt.anchoredPosition = new Vector2(-(QuickTabEdgeInsetPx + RestoreTabW * 0.5f), yCentrePx);
             }
 

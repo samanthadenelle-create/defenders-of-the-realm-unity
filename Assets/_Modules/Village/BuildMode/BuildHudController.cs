@@ -12,7 +12,8 @@
 //
 // THREE STATES (Grok, CoC mental model):
 //   Browse   — shop open; NO verb rail; tap a placed building to select it.
-//   Placing  — the LEAN RIGHT-EDGE RAIL (confirm / rotate / cancel); the shop
+//   Placing  — the LEAN VERB ROW (confirm / rotate / cancel, horizontal since COLUMN-FIT 2026-08-16,
+//              seated bottom-right above the resource strip); the shop
 //              collapses to the armed-card summary (BuildPaletteUI.Collapse).
 //   Selected — the selection verbs (Move/Upgrade/Sell/Cancel) render on the SAME
 //              bar family, owned by BuildSelectionUI (kept — the fleet's
@@ -20,14 +21,30 @@
 //
 // WO-1010 §7 OWNER RULINGS D14 / D10 / D17 / D19 (2026-08-08) — THE RIGHT EDGE AND
 // THE BOTTOM BAND ARE THE ONLY CHROME:
-//   D14 — the three placement verbs live in a LEAN, FIXED right-edge rail (right-thumb
-//         territory in landscape). The old "cluster flanks the ghost and flips sides
-//         near an edge" follow logic is DELETED: no chrome sits on or beside the piece
-//         any more, so the rail needs no per-frame layout at all. The ghost keeps ONLY
-//         its name+cost pill, which still follows and still clamps.
-//   D10 — the exit is a COMPACT CORNER control labelled "Done" (the "X" glyph is
-//         dropped). Small visual, full MinTouch invisible hit pad. It caps the rail's
-//         column from the true top-right corner.
+//   D14 — the three placement verbs live in a LEAN, FIXED rail (right-thumb territory in
+//         landscape). The old "cluster flanks the ghost and flips sides near an edge"
+//         follow logic is DELETED: no chrome sits on or beside the piece any more, so the
+//         rail needs no per-frame layout at all. The ghost keeps ONLY its name+cost pill.
+//         COLUMN-FIT 2026-08-16 (2026-08-16) LAID THE RAIL OUT HORIZONTALLY, seated just above the D19
+//         resource strip in the bottom-RIGHT corner — it is NO LONGER a vertical column.
+//         Why: the right edge's VERTICAL axis was over-subscribed. At the 1920x1080
+//         reference the column claimed 114 (strip+gap) + 384 (vertical rail) + 9 + 428
+//         (quick tabs) + 9 + 112 (Done) + 24 (top inset) = EXACTLY 1080, but the owner's
+//         Seeker (2670x1200) resolves to a canvas only 965.4 REFERENCE px tall, so the
+//         column overflowed by ~115px and Done landed on the top quick-tab. Turning the
+//         rail 90 degrees spends the ABUNDANT axis (2148 ref px of width on that device)
+//         instead of the scarce one: the band was 132 WIDE x 384 TALL and is now 384 WIDE
+//         x 132 TALL, handing 252px back to the vertical budget. See RailBandW/RailBandH.
+//   D10 — the exit is labelled "Done" (the "X" glyph is dropped). SUPERSEDED IN PART by
+//         WO-1035 (owner F8 seq 2503, 2026-08-16, "the done should match same style and
+//         stack above defense and town button"): the compact hand-rolled corner plate is
+//         RETIRED. Done is now the COMMON kit button (ElarionUiKit.BuildObsidianButton,
+//         Style1) seated as the TOP ITEM of the palette's D15/D21 right-edge quick-tab
+//         column — same box, same x, same rhythm as the Town/Defense tabs (literally the
+//         same 260x112 box since COLUMN-FIT 2026-08-16 took the tabs down to the MinTouch floor too). See
+//         BuildCornerDone for the seat arithmetic; the 2670x1200 saturation it used to warn
+//         about is RESOLVED by COLUMN-FIT 2026-08-16 (923 needed vs 965.4 available), and the clamp there
+//         is now a net for shorter surfaces rather than the normal path.
 //   D17 — the rail speaks ICON language: confirm renders RpgUiCatalog element/check,
 //         rotate element/rotate, cancel element/cross (the check + rotate sprites
 //         landed 2026-08-09, closing the gap this note used to record). MakeVerb is
@@ -89,39 +106,81 @@ namespace DeNelle.Village
         private const float GhostPillLiftPx = 96f;   // pill floats ABOVE the ghost anchor
         private const float SafePadPx       = 24f;   // never let the pill touch the screen edge
 
-        // ── D14: THE LEAN RIGHT-EDGE RAIL (fixed — no per-frame layout) ────────
+        // ── D14: THE LEAN HORIZONTAL VERB ROW (fixed — no per-frame layout) ────
         // Every dimension is FIXED PIXELS at the 1920x1080 reference (never a fraction
-        // of screen — a wide canvas stretches fraction anchors into thin bars). Band
-        // width = one MinTouch hit column plus a pad each side, so the three 112px hit
-        // boxes sit inside the band instead of straddling its trim.
+        // of screen — a wide canvas stretches fraction anchors into thin bars).
+        //
+        // COLUMN-FIT 2026-08-16 (2026-08-16): the band is a ROW, not a column. Band HEIGHT is now one
+        // MinTouch hit box plus a pad top and bottom; band WIDTH carries the three 112px hit
+        // boxes side by side. The three boxes sit INSIDE the band, never straddling its trim,
+        // exactly as before — only the axis changed.
         private const float RailPadPx       = 10f;
-        private const float RailGutterPx    = 14f;   // gutter between stacked verbs
-        private const float RailEdgeInsetPx = 24f;   // band's own inset from the screen edge
+        private const float RailGutterPx    = 14f;   // gutter BETWEEN the three verbs (now horizontal)
+        private const float RailEdgeInsetPx = 24f;   // band's own inset from the RIGHT screen edge
         /// <summary>
-        /// Clearance between the rail's bottom and the top of the D19 resource strip. The rail
-        /// is anchored to the BOTTOM-right and grows UPWARD, which is what keeps it out of the
-        /// palette lane's D15 quick-tabs — those own the TOP-right. See BuildIntentBar.
+        /// Clearance between the row's bottom and the top of the D19 resource strip. The row is
+        /// anchored BOTTOM-RIGHT and is only <see cref="RailBandH"/> tall, so it tops out far
+        /// below the palette lane's D21 quick-tab stack instead of eating the column the stack
+        /// and Done have to share. See BuildIntentBar.
         /// </summary>
         private const float RailBottomGapPx = 16f;
-        private const float RailBandW       = ChipHitPx + RailPadPx * 2f;                    // 132
-        private const float RailBandH       = ChipHitPx * 3f + RailGutterPx * 2f + RailPadPx * 2f; // 384
+        /// <summary>Band WIDTH: three MinTouch hit boxes + two gutters + a pad each end = 384.</summary>
+        private const float RailBandW       = ChipHitPx * 3f + RailGutterPx * 2f + RailPadPx * 2f; // 384
+        /// <summary>Band HEIGHT: one MinTouch hit box + a pad top and bottom = 132.</summary>
+        private const float RailBandH       = ChipHitPx + RailPadPx * 2f;                          // 132
 
         /// <summary>
         /// Horizontal band (from the RIGHT screen edge, in 1920x1080 reference px) that the
-        /// D14 rail owns. PUBLIC so the carousel / quick-tab lane can seat clear of it
-        /// without reaching into this file — the D7 lesson was that two surfaces drawing in
+        /// D14 verb row owns: 24 + 384 = 408. PUBLIC so a neighbouring lane can seat clear of
+        /// it without reaching into this file — the D7 lesson was that two surfaces drawing in
         /// one band is the defect, not either surface on its own.
+        ///
+        /// ⚠ READ WITH <see cref="VerbRowTopPx"/>: this band is only claimed BELOW that line
+        /// (y 114..246 from the canvas bottom) and only in the PLACING state. The carousel dock
+        /// is wider than 2148-408 and DOES cross this x band — that is not a collision, because
+        /// arming a card Collapses the dock (BuildModeController.Arm -> BuildPaletteUI.Collapse)
+        /// before this row is ever shown. The permanent tenants of the right column (the D21
+        /// quick tabs at x-inset 72 and Done above them) all sit ABOVE VerbRowTopPx.
         /// </summary>
         public const float RailReservedWidthPx = RailEdgeInsetPx + RailBandW;
 
-        // ── D10: the compact corner Done ───────────────────────────────────────
-        // Visual shrinks; the hit area does not. The hit pad is a full MinTouch box in the
-        // true top-right corner and the visible plate is centred inside it, so the art sits
-        // ~80 reference px in from both edges — well clear of a rounded corner or cutout
-        // WITHOUT a live-Screen safe-area read (which would make the headless capture
-        // non-deterministic; fixed reference px is the house rule anyway).
-        private const float CornerInsetPx  = 24f;
-        private const float DoneVisualPx   = 76f;
+        /// <summary>
+        /// TOP of the D14 verb row in reference px from the canvas BOTTOM:
+        /// ResourceStripReservedPx(98) + RailBottomGapPx(16) + RailBandH(132) = 246. PUBLIC for
+        /// the same reason as <see cref="RailReservedWidthPx"/> — it is the line every other
+        /// bottom-anchored surface has to clear.
+        /// </summary>
+        public const float VerbRowTopPx = ResourceStripReservedPx + RailBottomGapPx + RailBandH;
+
+        // ── D10 -> WO-1035: Done JOINS THE RIGHT-EDGE QUICK-TAB COLUMN ─────────
+        // The compact 76px gilt plate is RETIRED. Owner F8 seq 2503 (2026-08-16, verbatim):
+        // "the done should match same style and stack above defense and town button", after
+        // the chat note "The skip button is good. Can we style the close button the same
+        // style as the other ones". So Done is now the SAME kit button as its neighbours
+        // (ElarionUiKit.BuildObsidianButton Style1) seated as the TOP ITEM of the palette's
+        // D15/D21 quick-tab column — one column, one box size, one rhythm.
+        //
+        // COLUMN-FIT 2026-08-16 (2026-08-16): the numbers below no longer MIRROR BuildPaletteUI's D21 band
+        // math — they READ it. The old mirror (a private QuickTabStackTopPx = 935f const here)
+        // was a hand-copied duplicate of a number the palette owns, and duplicated state is
+        // exactly what goes stale. Done now seats off BuildPaletteUI.QuickTabStackTopPx
+        // directly (same assembly, published for this), so re-seating the stack can never
+        // leave this control behind again.
+        private const float CornerInsetPx  = 24f;   // top-edge inset from the canvas top
+        /// <summary>Box width — BuildPaletteUI.RestoreTabW. Same box as a quick tab.</summary>
+        private const float DoneWidthPx = 260f;
+        /// <summary>Box height. MinTouchPx, i.e. the kit floor: the column's scarce axis is
+        /// vertical (see the arithmetic in BuildCornerDone). COLUMN-FIT 2026-08-16 took the quick tabs down
+        /// to the SAME floor (BuildPaletteUI.QuickTabHeightPx) — they used to be 132px
+        /// CanonCtaHeight — so the whole column is now one box size. ClampMinTouch never
+        /// grows a control that is already at the floor.</summary>
+        private const float DoneHeightPx = ElarionUiKit.MinTouchPx;   // 112
+        /// <summary>Column inset — BuildPaletteUI.QuickTabEdgeInsetPx (box RIGHT edge, 72px
+        /// in from the screen edge) so Done lands on the tabs' exact x span.</summary>
+        private const float QuickTabColumnInsetPx = 72f;
+        /// <summary>Clearance between the stack's top tab and Done's bottom edge — the same 9px
+        /// the D21 math reserves under the stack.</summary>
+        private const float DoneStackGapPx = 9f;
 
         // ── D19: the thin bottom-centre resource strip ─────────────────────────
         // BuildWalletRow authors 150x64 chips at 10px spacing and seats its row 24px in
@@ -176,7 +235,8 @@ namespace DeNelle.Village
         // ── WO-1010 P1 state ───────────────────────────────────────────────────
         private RectTransform _canvasRect;
         private RectTransform _ghostPill;    // name + cost, above the ghost (the ONE thing that follows)
-        private RectTransform _verbRail;     // D14: confirm / rotate / cancel, FIXED at the right edge
+        private RectTransform _verbRail;     // D14: confirm / rotate / cancel — a FIXED HORIZONTAL
+                                             // row in the bottom-right, above the D19 strip (COLUMN-FIT 2026-08-16)
         private Button _okChip;
         private TextMeshProUGUI _okChipLabel;   // ASCII fallback path (null when the D17 sprite loaded)
         private Image _okChipRing;
@@ -238,13 +298,26 @@ namespace DeNelle.Village
             _canvasRect = _canvas.transform as RectTransform;
 
             BuildResourceStrip();   // D19 — thin bottom-centre band
-            BuildCornerDone();      // D10 — compact corner exit, caps the rail column
-            BuildIntentBar();       // D14 — ghost pill + the fixed right-edge verb rail
+            BuildCornerDone();      // D10/WO-1035 — kit Done atop the D21 quick-tab column
+            BuildIntentBar();       // D14 — ghost pill + the fixed HORIZONTAL verb row (COLUMN-FIT 2026-08-16)
             BuildNudgePad();        // D12 — state-driven nudge stick (no toggle)
+            // COLUMN-FIT 2026-08-16: state the WHOLE bottom-anchored column in one line, with the measured
+            // canvas height beside it, so a capture answers "does it fit on THIS device?"
+            // without anyone re-deriving the budget from three files.
+            float builtCanvasH = ElarionUiKit.PostScaleCanvasHeight(_canvas.transform);
+            float columnTop = BuildPaletteUI.QuickTabStackTopPx + DoneStackGapPx + DoneHeightPx;
             FlowTrace.Step("BuildHud",
-                "chrome-built (WO-1010 D10/D14/D19): compact corner Done + fixed right rail (" +
-                RailReservedWidthPx + "px reserved) + thin bottom strip (" +
-                ResourceStripReservedPx + "px reserved); the old full-width top bar is GONE");
+                "chrome-built (WO-1010 D10/D14/D19 + WO-1035 + COLUMN-FIT 2026-08-16): canvas " +
+                builtCanvasH.ToString("0.0") + " ref px tall; column from the bottom = strip 18.." +
+                ResourceStripReservedPx + ", dock 98.." + BuildPaletteUI.DockTopPx +
+                " (PICK), HORIZONTAL verb row " + (ResourceStripReservedPx + RailBottomGapPx) +
+                ".." + VerbRowTopPx + " (PLACING), quick tabs " +
+                BuildPaletteUI.QuickTabStackBottomPx + ".." + BuildPaletteUI.QuickTabStackTopPx +
+                ", Done " + (columnTop - DoneHeightPx) + ".." + columnTop + ", + " +
+                CornerInsetPx + "px inset = " + (columnTop + CornerInsetPx) + " needed vs " +
+                builtCanvasH.ToString("0.0") + " available (headroom " +
+                (builtCanvasH - columnTop - CornerInsetPx).ToString("0.0") +
+                "px); the old full-width top bar is GONE");
 
             _canvas.SetActive(false);   // built hidden; Show shows it
         }
@@ -311,51 +384,119 @@ namespace DeNelle.Village
         }
 
         /// <summary>
-        /// D10 — the exit as a COMPACT CORNER control. The owner's markup was verbatim
-        /// "Move to Corner Remove the X, Size smaller and more minized": the label loses the
-        /// "X" glyph and reads just "Done", the visible plate shrinks to <see cref="DoneVisualPx"/>,
-        /// and the 112px MinTouch floor is carried by the SAME invisible hit pad the rail verbs
-        /// use — the visual never grows into a slab. Seated in the true top-right corner on the
-        /// rail's own column so the right edge reads as ONE stack: Done, then the three verbs.
+        /// WO-1035 — Done as the TOP ITEM OF THE RIGHT-EDGE QUICK-TAB COLUMN, built with the
+        /// COMMON kit button. Owner F8 seq 2503 (2026-08-16): "the done should match same
+        /// style and stack above defense and town button". Nothing here is hand-rolled: the
+        /// chrome is ElarionUiKit.BuildObsidianButton(Style1) — the same call the approved
+        /// TutorialSkipUi makes and the same family BuildPaletteUI.AddQuickTab uses — so the
+        /// frame, the 3-state feedback and the MinTouchPx floor all come from the kit. The
+        /// old hand-rolled D10 plate (a 76px gilt disc inside an invisible 112px hit pad)
+        /// is GONE; it was the reason this control read differently from every other button
+        /// on the screen, and it is exactly what the [ui-obsidian] ratchet forbids.
         ///
-        /// NEIGHBOUR RESOLVED (WO-1010 D16, 2026-08-09): ObjectiveBannerUi's floating
-        /// "Skip Tutorial" — which used to anchor (1,1) at y -92, i.e. this exact corner —
-        /// is REMOVED; the banner-integrated control is the one skip. This corner now
-        /// belongs to Done alone.
+        /// COLOUR = Yellow, matching the Defense/Town tabs it now stacks with (the owner's
+        /// "match same style" referent is those buttons). Meaning never rests on the face:
+        /// the label reads "Done" and the tabs carry the gilt active UNDERLINE that Done
+        /// never has.
+        ///
+        /// SEAT (fixed reference px, read off BuildPaletteUI's published D21 consts):
+        ///   x  anchor (1,0), pivot centre, anchoredPosition.x = -(72 + 260/2) = -202
+        ///      -> box spans 72..332 in from the right edge: the SAME column as the quick
+        ///      tabs, to the pixel, at every canvas width.
+        ///   y  BuildPaletteUI.QuickTabStackTopPx(778) + DoneStackGapPx(9) +
+        ///      DoneHeightPx/2(56) = 843 -> box spans y 787..899 from the canvas BOTTOM.
+        ///   Bottom-anchored like the tabs (NOT top-anchored): the whole column must share
+        ///   one origin or the stack shears apart the moment the canvas is not 1080 tall.
+        ///
+        /// COLUMN-FIT 2026-08-16 — THE COLUMN NOW FITS, AND HERE IS THE ARITHMETIC (all from the bottom):
+        ///   strip           18..98    (ResourceStripReservedPx = 98)
+        ///   carousel dock   98..401   (BuildPaletteUI.DockTopPx — PICK phase)
+        ///   D14 verb row   114..246   (VerbRowTopPx — PLACING phase; horizontal since COLUMN-FIT 2026-08-16)
+        ///   quick tabs     410..778   (3 x 112 MinTouch boxes + 2 x 16 gutters, 9px over the dock)
+        ///   Done           787..899
+        ///   + CornerInsetPx 24        -> 923 required.
+        /// The Seeker's 2670x1200 surface resolves to a 965.4 ref-px-tall canvas, so there is
+        /// 42.4px of headroom and the clamp below DOES NOT FIRE on the normal path any more.
+        /// (Before COLUMN-FIT 2026-08-16 the same sum was 1080 exactly — a 114.6px overflow at that aspect,
+        /// which is why Done used to land on the top quick-tab.) The clamp stays as a net for
+        /// yet-shorter surfaces; an unreachable exit is the one unacceptable failure.
+        ///
+        /// D14 ROW CLEARANCE: the verb row is bottom-anchored and tops out at 246. Done's
+        /// bottom is 787 — 541px above it, with the whole quick-tab stack in between — so the
+        /// D7-class collision the old vertical rail caused cannot recur here.
         /// </summary>
         private void BuildCornerDone()
         {
-            var host = new GameObject("BuildDoneCorner", typeof(RectTransform));
-            host.transform.SetParent(_canvas.transform, false);
-            var hrt = (RectTransform)host.transform;
-            hrt.anchorMin = hrt.anchorMax = new Vector2(1f, 1f);
-            hrt.pivot = new Vector2(1f, 1f);
-            hrt.sizeDelta = new Vector2(ChipHitPx, ChipHitPx);
-            // x inset lines the hit box's centre up with the rail band's centre, so the corner
-            // control and the rail read as one right-edge column instead of two loose things.
-            hrt.anchoredPosition = new Vector2(-(RailEdgeInsetPx + (RailBandW - ChipHitPx) * 0.5f),
-                                               -CornerInsetPx);
+            // FIXED-PIXEL MOUNT BAND, then the kit button stretched into it — the
+            // TutorialSkipUi / HudKitController.BuildRailChip idiom. The mount (not the
+            // button) carries the seat because in the kit's PREFAB mode the returned Button
+            // can be a DESCENDANT of the instantiated prefab root, so stamping the button's
+            // own rect would move a child and leave the frame behind. Fraction anchors on the
+            // mount would resolve to a different band at every aspect — the drift the D21
+            // band math exists to forbid — so only the mount's POSITION/SIZE are fixed px.
+            float wantY = BuildPaletteUI.QuickTabStackTopPx + DoneStackGapPx + DoneHeightPx * 0.5f;   // 843
+            float canvasH = ElarionUiKit.PostScaleCanvasHeight(_canvas.transform);
+            float maxY = canvasH - CornerInsetPx - DoneHeightPx * 0.5f;
+            float seatY = Mathf.Min(wantY, maxY);
 
-            var done = MakeVerb(hrt, "DoneCorner", "Done", null, ElarionUi.Gilt,
-                Vector2.zero, DoneVisualPx, 18f, () => _onExit?.Invoke(), out _, out _, out _);
-            // Canonical close name (probe/close convention; the label is now just "Done").
+            var mountGo = new GameObject("BuildDoneSeat", typeof(RectTransform));
+            mountGo.transform.SetParent(_canvas.transform, false);
+            var mount = (RectTransform)mountGo.transform;
+            mount.anchorMin = mount.anchorMax = new Vector2(1f, 0f);
+            mount.pivot = new Vector2(0.5f, 0.5f);
+            mount.sizeDelta = new Vector2(DoneWidthPx, DoneHeightPx);
+            mount.anchoredPosition =
+                new Vector2(-(QuickTabColumnInsetPx + DoneWidthPx * 0.5f), seatY);
+
+            var done = ElarionUiKit.BuildObsidianButton(mount, "Done",
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
+                Vector2.zero, Vector2.one, () => _onExit?.Invoke());
+            if (done == null)
+            {
+                FlowTrace.Fail("BuildHud",
+                    "Done BUILD FAILED - ElarionUiKit.BuildObsidianButton returned no button; " +
+                    "build mode has no exit control this session");
+                return;
+            }
+            // Canonical close name kept (probe/close convention; the label reads "Done").
             done.gameObject.name = "CloseButton";
+
+            if (seatY < wantY - 0.5f)
+                FlowTrace.Warn("BuildHud",
+                    "Done seat CLAMPED: canvas is only " + canvasH.ToString("0") +
+                    " ref px tall, so the wanted y " + wantY.ToString("0") +
+                    " would be off-screen; seated at " + seatY.ToString("0") +
+                    " (bottom " + (seatY - DoneHeightPx * 0.5f).ToString("0") +
+                    ") which OVERLAPS the D21 quick-tab stack top (" +
+                    BuildPaletteUI.QuickTabStackTopPx + "). AFTER COLUMN-FIT 2026-08-16 THIS SHOULD NOT FIRE " +
+                    "AT 2670x1200 (965.4 ref px): the column needs 923 (strip 98 + dock 303 + 9 " +
+                    "+ tabs 368 + 9 + Done 112 + inset 24). If it fires there, the budget moved " +
+                    "again -- re-read the arithmetic in this method's doc, do not re-tune blind.");
+
             FlowTrace.Step("BuildHud",
-                "D10 exit: compact corner 'Done' (visual " + DoneVisualPx + "px inside a " +
-                ChipHitPx + "px hit pad) -- caps the right-edge rail column");
+                "Done exit (WO-1035/COLUMN-FIT 2026-08-16): COMMON kit button ElarionUiKit.BuildObsidianButton(" +
+                "Style1,Yellow) seated as the TOP ITEM of the D15/D21 right-edge quick-tab column -- box " +
+                DoneWidthPx + "x" + DoneHeightPx + "px on the tabs' own x (" +
+                QuickTabColumnInsetPx + "px inset), y centre " + seatY.ToString("0") +
+                " (wanted " + wantY.ToString("0") + " = stack top " +
+                BuildPaletteUI.QuickTabStackTopPx + " + " + DoneStackGapPx + "px gutter -> band " +
+                (wantY - DoneHeightPx * 0.5f).ToString("0") + ".." +
+                (wantY + DoneHeightPx * 0.5f).ToString("0") + "); canvas " + canvasH.ToString("0") +
+                " ref px tall, top inset line " + (canvasH - CornerInsetPx).ToString("0") +
+                ", clamp " + (seatY < wantY - 0.5f ? "FIRED" : "NOT needed"));
         }
 
         // =====================================================================
         //  WO-1010 P1 — the ghost carries its own controls
         // =====================================================================
         /// <summary>
-        /// Builds the ghost's name+cost pill and the D14 right-edge verb rail.
+        /// Builds the ghost's name+cost pill and the D14 verb row (horizontal since COLUMN-FIT 2026-08-16).
         ///
         /// THE SPLIT IS THE RULING: the PILL follows the ghost's projected screen point
         /// (pushed by the brain via TrackGhost) — screen-space, never a world-space billboard,
         /// which would shrink with zoom and fall under the MinTouch floor exactly when the
-        /// player is placing a small wall piece. The RAIL does not follow anything. It is a
-        /// slim FIXED column hugging the right edge, so the piece being placed is never
+        /// player is placing a small wall piece. The VERB ROW does not follow anything. It is a
+        /// slim FIXED band in the bottom-right corner, so the piece being placed is never
         /// covered by its own controls and there is no per-frame layout to get wrong.
         /// </summary>
         private void BuildIntentBar()
@@ -414,27 +555,36 @@ namespace DeNelle.Village
             _placeName.fontSizeMin = 14f;
             _placeName.fontSizeMax = 22f;
 
-            // ── D14: THE LEAN RIGHT-EDGE RAIL ─────────────────────────────────────
-            // A slim obsidian band with its own gold trim, hugging the right edge. The band is
-            // a raycast target so a tap that lands in a gutter is eaten by the chrome instead
-            // of falling through and dragging the ghost out from under the player's other hand.
+            // ── D14: THE LEAN HORIZONTAL VERB ROW (COLUMN-FIT 2026-08-16) ───────────────────────
+            // A slim obsidian band with its own gold trim, seated in the bottom-RIGHT corner
+            // just above the D19 resource strip. The band is a raycast target so a tap that
+            // lands in a gutter is eaten by the chrome instead of falling through and dragging
+            // the ghost out from under the player's other hand.
             //
-            // ANCHORED BOTTOM-RIGHT, GROWING UPWARD — and that is a CAPTURE-PROVEN fix, not a
-            // preference. The first build centred this band vertically (spanning y 348..732 from
-            // the top at the 1080 reference). The 2026-08-09 capture pair showed the palette
-            // lane's D15 quick-tabs occupying the TOP-right of the very same column
-            // (x 1590..1845, y 170..490) — so "Defenses (3)" landed directly on top of the OK
-            // confirm verb. Two surfaces drawing in one band is the D7 defect class, and the
-            // most important control on the screen was the one underneath it. The two canvases
-            // are captured separately, so no single PNG shows the overlap; it only falls out of
-            // comparing their rects, which is why this is written down here.
+            // ANCHORED BOTTOM-RIGHT — capture-proven, and now LAID OUT ACROSS instead of UP.
+            // History, because both halves of it are load-bearing:
+            //  1) The first build centred this band vertically (y 348..732 from the top at the
+            //     1080 reference). The 2026-08-09 capture pair showed the palette lane's D15
+            //     quick-tabs in the TOP-right of the very same column (x 1590..1845,
+            //     y 170..490) — "Defenses (3)" landed directly on the OK confirm verb. Two
+            //     surfaces drawing in one band is the D7 defect class, and the most important
+            //     control on the screen was the one underneath it.
+            //  2) Re-seating it bottom-right fixed THAT, but left a 384px-tall tenant in a
+            //     column that only has ~965 REFERENCE px on the owner's 2670x1200 device (not
+            //     the 1080 every one of these numbers was authored against). The column then
+            //     summed to exactly 1080 and Done overlapped the top quick-tab.
+            // COLUMN-FIT 2026-08-16 turns the band 90 degrees: 384 wide x 132 tall, y 114..246, x 24..408 in
+            // from the right edge. Three MinTouch boxes across 2148 ref px of device width is
+            // trivial; 384px of the vertical was the whole deficit. The verbs stay in genuine
+            // right-thumb reach in landscape — which is what D14 asked for — and the wireframe's
+            // "verbs near the piece, chrome off the piece" reading is unchanged.
             //
-            // The right edge is now split by ownership, matching the target wireframe:
-            //   TOP-right    -> the corner Done (D10)
-            //   MIDDLE-right -> the palette's permanent quick-tab stack (D15/D21, y 507..935)
-            //   BOTTOM-right -> this rail, seated just above the D19 strip (y 114..498)
-            // That also puts the verbs in genuine right-thumb reach in landscape, which is what
-            // D14 asked for in the first place.
+            // The right edge is now split by ownership:
+            //   TOP-right    -> Done (D10/WO-1035, y 787..899 — the quick-tab column's top item)
+            //   MIDDLE-right -> the palette's permanent quick-tab stack (D15/D21, y 410..778)
+            //   BOTTOM-right -> THIS ROW, above the D19 strip (y 114..246, i.e. VerbRowTopPx)
+            // The carousel dock (PICK, y 98..401) crosses this row's x band but never its
+            // TIME: arming Collapses the dock before Placing shows the row.
             var railEdge = ElarionUiKit.AddImage(_intentBar.transform, "GhostVerbRail",
                 new Vector2(1f, 0f), new Vector2(1f, 0f), ElarionUi.Gilt, rounded: true);
             _verbRail = railEdge.transform as RectTransform;
@@ -483,18 +633,23 @@ namespace DeNelle.Village
                 ", rotate=" + (rotateIcon != null ? "SPRITE element/rotate" : "ASCII 'Rot'") +
                 ", cancel=" + (cancelIcon != null ? "SPRITE element/cross" : "ASCII 'X'"));
 
-            // Stacked top -> bottom: confirm, rotate, cancel. Cancel sits FURTHEST from
-            // confirm so the destructive verb is not the one a slipped thumb finds.
-            float step = ChipHitPx + RailGutterPx;
+            // COLUMN-FIT 2026-08-16: laid out LEFT -> RIGHT (was top -> bottom): confirm, rotate, cancel.
+            // The reading order [OK][Rot][X] is deliberately unchanged from the vertical rail
+            // so nothing about the wiring or the muscle memory moves with the axis — and the
+            // invariant that mattered survives: cancel sits FURTHEST from confirm, with rotate
+            // between them, so the destructive verb is not the one a slipped thumb finds.
+            // Fit check (inner band = RailBandW 384 - 2*ChipEdgePx = 378): centres at -126/0/+126
+            // with 112px boxes span -182..+182 = 364 <= 378, so no box straddles the trim.
+            float step = ChipHitPx + RailGutterPx;   // 126
             var railRt = railFill.transform as RectTransform;
             _okChip = MakeVerb(railRt, "OkChip", "OK", confirmIcon, ElarionUi.Gilt,
-                new Vector2(0f, step), ChipVisualPx, 20f,
+                new Vector2(-step, 0f), ChipVisualPx, 20f,
                 () => _onPlace?.Invoke(), out _okChipLabel, out _okChipRing, out _okChipIcon);
             MakeVerb(railRt, "RotChip", "Rot", rotateIcon, ElarionUi.Parchment,
                 Vector2.zero, ChipVisualPx, 20f,
                 () => _onRotateRight?.Invoke(), out _, out _, out _);
             MakeVerb(railRt, "CancelChip", "X", cancelIcon, new Color(0.86f, 0.32f, 0.30f),
-                new Vector2(0f, -step), ChipVisualPx, 20f,
+                new Vector2(step, 0f), ChipVisualPx, 20f,
                 () => _onCancel?.Invoke(), out _, out _, out _);
 
             // Kept as the canonical cancel name so any probe/close convention still resolves
@@ -506,15 +661,22 @@ namespace DeNelle.Village
 
             _intentBar.SetActive(false);   // Placing state shows it
             FlowTrace.Step("BuildHud",
-                "WO-1010 D14: the ghost-following chip cluster is RETIRED -> a FIXED lean right-edge " +
-                "rail [OK][Rot][X] (" + RailBandW + "x" + RailBandH + "px, " + RailEdgeInsetPx +
-                "px inset); the ghost now carries ONLY its name/cost pill, so no chrome sits on the piece");
+                "COLUMN-FIT 2026-08-16 D14: the verb rail is HORIZONTAL -> a FIXED lean row [OK][Rot][X] (" +
+                RailBandW + "x" + RailBandH + "px, bottom-right, " + RailEdgeInsetPx +
+                "px edge inset) seated " + (ResourceStripReservedPx + RailBottomGapPx) +
+                "px up so it clears the D19 strip's reserved " + ResourceStripReservedPx +
+                "px band; row owns y " + (ResourceStripReservedPx + RailBottomGapPx) + ".." +
+                VerbRowTopPx + " and x " + RailEdgeInsetPx + ".." + RailReservedWidthPx +
+                " in from the right edge. It reserves NO part of the column the D21 quick tabs (" +
+                BuildPaletteUI.QuickTabStackBottomPx + ".." + BuildPaletteUI.QuickTabStackTopPx +
+                ") and Done share; the ghost still carries ONLY its name/cost pill");
         }
 
         /// <summary>
         /// WO-1010 P3 — the ONE thin first-run hint line (WO §1). Parented under the
         /// intent bar so it exists only in the PLACE phase, seated at fixed pixels ABOVE
-        /// the D19 strip's reserved band (never on it — the reserved-band rule), with its
+        /// the D19 strip's reserved band (never on it — the reserved-band rule) and clear of
+        /// the COLUMN-FIT 2026-08-16 horizontal verb row (see the seat note in the body), with its
         /// own gold edge around a near-black backing because it floats over live terrain.
         /// Entirely non-raycast: a hint that eats a world tap would drag the ghost.
         /// Built hidden; <see cref="SetState"/> shows it while the first-run gate holds
@@ -523,6 +685,28 @@ namespace DeNelle.Village
         /// </summary>
         private void BuildFirstRunHint(Transform parent)
         {
+            // ── COLUMN-FIT 2026-08-16 SEAT: BESIDE the verb row, or ABOVE it on a narrow canvas ──
+            // The hint is centred and 860px wide; the D14 verb row is now a 384px band hugging
+            // the RIGHT edge in the y span 114..246, and both are PLACING-state siblings, so
+            // they are on screen at the same time. On any landscape canvas they miss each other
+            // by a wide margin (at 2148 ref px the hint spans 644..1504, the row 1740..2124),
+            // but on a canvas narrower than 2*(430 + 408 + 8) = 1692 ref px they would overlap.
+            // Rather than let a hint print through the confirm verb, the line LIFTS to sit just
+            // above the row — still clear of the quick-tab stack (410) by a wide margin.
+            float canvasH = ElarionUiKit.PostScaleCanvasHeight(parent);
+            float canvasW = canvasH * ElarionUiKit.SurfaceWidth /
+                            Mathf.Max(1f, ElarionUiKit.SurfaceHeight);
+            bool besideRow = canvasW * 0.5f >= HintLineW * 0.5f + RailReservedWidthPx + HintGapPx;
+            float hintY = besideRow
+                ? ResourceStripReservedPx + HintGapPx   // 106 — the published low seat
+                : VerbRowTopPx + HintGapPx;             // 254 — lifted over the row
+            FlowTrace.Step("BuildHud",
+                "P3 hint seat: canvas " + canvasW.ToString("0") + "x" + canvasH.ToString("0") +
+                " ref px -> " + (besideRow ? "BESIDE" : "ABOVE") + " the D14 verb row (row band y " +
+                (ResourceStripReservedPx + RailBottomGapPx) + ".." + VerbRowTopPx + ", x " +
+                RailEdgeInsetPx + ".." + RailReservedWidthPx + " from the right edge); hint y " +
+                hintY + ".." + (hintY + HintLineH));
+
             var edge = ElarionUiKit.AddImage(parent, "BuildFirstRunHint",
                 new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), ElarionUi.Gilt, rounded: true);
             _hintLine = edge;
@@ -531,7 +715,7 @@ namespace DeNelle.Village
             {
                 ert.anchorMin = ert.anchorMax = new Vector2(0.5f, 0f);
                 ert.pivot = new Vector2(0.5f, 0f);
-                ert.anchoredPosition = new Vector2(0f, ResourceStripReservedPx + HintGapPx);
+                ert.anchoredPosition = new Vector2(0f, hintY);
                 ert.sizeDelta = new Vector2(HintLineW, HintLineH);
             }
             var edgeImg = edge.GetComponent<Image>();
@@ -560,7 +744,7 @@ namespace DeNelle.Village
 
             _hintLine.SetActive(false);
             FlowTrace.Step("BuildHud",
-                "P3 first-run hint built: seated " + (ResourceStripReservedPx + HintGapPx) +
+                "P3 first-run hint built: seated " + hintY +
                 "px up (clears the D19 reserved " + ResourceStripReservedPx + "px band), " +
                 HintLineW + "x" + HintLineH + "px fixed, non-raycast; gate = first " +
                 HintSessionLimit + " sessions / dismiss after " + HintPlacementLimit + " placements");
@@ -586,7 +770,8 @@ namespace DeNelle.Village
         }
 
         /// <summary>
-        /// One rail verb (or the corner Done): a MinTouch-sized INVISIBLE hit box with a small
+        /// One rail verb (Done no longer uses this — WO-1035 routed it to the common kit
+        /// button; this is the D14 rail's own path): a MinTouch-sized INVISIBLE hit box with a small
         /// visible plate inside it. The transparent parent Image is the raycast target, so the
         /// tappable area is 112px while the art stays ~52px — the WO's invisible-padding rule.
         /// Growing the visual instead would put slabs down the right edge and undo the point of
@@ -745,9 +930,10 @@ namespace DeNelle.Village
         }
 
         // NOTE: AllowTwoLineLabel (the "Rotate Right" -> "Rotate Ri..." ellipsis fix) was
-        // deleted with WO-1010 D14/D10 — every kit word-button it served is gone. The rail
-        // verbs and the corner Done are hand-built plates whose short ASCII labels autosize
-        // inside their own plate, so there is no kit FitSingleLine pass left to opt out of.
+        // deleted with WO-1010 D14/D10. The rail verbs are hand-built plates whose short
+        // ASCII labels autosize inside their own plate; Done is a kit button again
+        // (WO-1035) but its label is the single word "Done" in a 260x112 box, so the kit's
+        // single-line fit has nothing to shorten and there is still nothing to opt out of.
 
         // ── WO-1010 P3: the first-run hint's counters ──────────────────────────
 
