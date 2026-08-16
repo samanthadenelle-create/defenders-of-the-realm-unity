@@ -384,6 +384,59 @@ namespace DeNelle.Village
         /// </summary>
         public AbilityDef ResolvedDef(AbilitySlot slot) => Resolve(slot);
 
+        // ── WO-1105 (1) — IS THIS CLASS'S BASIC A RANGED ONE? ────────────────────────────
+        // THE defect WO-1105 fixes: the primary attack input drove a class-agnostic melee sweep,
+        // so Sylas the ARCHER's default verb was a sword swing while his whole authored kit is
+        // ranged. The primary must resolve through the class's own basic (the LOCKED Q def) when
+        // that basic is a ranged one.
+        //
+        // DERIVED, NEVER A PER-CLASS TABLE (WO-1105 section 3c: "never a hardcoded per-class table
+        // — that is the same hand-authored-vs-derived defect class as IsLoop, Hidden, and the town
+        // that laid itself on its side"). Two measured conditions, both read off the authored def:
+        //   (a) the effect SHAPE launches a projectile — 'strike' / 'drainshot' both resolve through
+        //       ResolveStrikeLike -> LaunchProjectile, where damage lands on ARRIVAL. knight.q is
+        //       'dash' (a gap-closer), so the Knight fails here and never takes this path.
+        //   (b) the authored Range OUTREACHES the hero's own swing by RangedPrimaryReachFactor.
+        //       A basic that beats the swing by a hair is a melee poke (a 3.4 m Shield Bash against
+        //       a 3.2 m reach), not archery; Quick Shot's 15 m against ~3.2 m is 4.7x. The factor is
+        //       dimensionless and the reach is passed in MEASURED from the caller, so there is no
+        //       metre literal anywhere in the test (the WO-1035 units bug is the cautionary case).
+        private const float RangedPrimaryReachFactor = 2f;
+
+        /// <summary>
+        /// True when this hero's class basic is a RANGED basic — with <paramref name="def"/> set to
+        /// the exact def the primary attack should cast (the locked Q def; Q is never loadout-
+        /// swappable, see <see cref="Resolve"/>). <paramref name="meleeReach"/> is the caller's own
+        /// measured melee reach (PlayerAttackController.AttackRange). The SINGLE decision seam:
+        /// PlayerAttackController fires through it and HeroTargetIndicator gates auto-acquire on it,
+        /// so the input and the targeting can never disagree about what the hero's primary is.
+        /// </summary>
+        public bool TryGetRangedPrimary(float meleeReach, out AbilityDef def)
+        {
+            def = null;
+            var q = Resolve(AbilitySlot.Q);
+            if (q == null) return false;
+            string fx = (q.Effect ?? string.Empty).Trim().ToLowerInvariant();
+            if (fx != "strike" && fx != "drainshot") return false;
+            if (q.Range <= Mathf.Max(0.01f, meleeReach) * RangedPrimaryReachFactor) return false;
+            def = q;
+            FlowTrace.Once("Combat", "ranged-primary-" + _heroClass,
+                $"class '{_heroClass}' has a RANGED primary: '{q.Id}' ({q.Name}) effect={fx} " +
+                $"range={q.Range:0.##}m cooldown={q.Cooldown:0.##}s vs measured melee reach " +
+                $"{meleeReach:0.##}m (factor {(q.Range / Mathf.Max(0.01f, meleeReach)):0.##}x, " +
+                $"threshold {RangedPrimaryReachFactor:0.##}x) - the primary attack input fires THIS, " +
+                "and the melee sweep becomes the offhand verb.");
+            return true;
+        }
+
+        /// <summary>
+        /// The authored engage/reach radius (m) of this hero's ranged primary, or 0 when the class
+        /// has none. Read straight off <c>AbilityDef.Range</c> — WO-1105 R2 forbids a metre literal
+        /// anywhere in the range-legibility path.
+        /// </summary>
+        public float RangedPrimaryRange(float meleeReach)
+            => TryGetRangedPrimary(meleeReach, out var def) ? def.Range : 0f;
+
         /// <summary>0..1 cooldown fill for the HUD — 1 = ready, 0 = just cast.</summary>
         public float CooldownFraction(AbilitySlot slot)
         {

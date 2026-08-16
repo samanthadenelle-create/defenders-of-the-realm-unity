@@ -44,11 +44,12 @@ namespace DeNelle.Village
         // today (see file header), so LoadBowPrefab() simply returns null then.
         private const string _resourcesBowPath = "Heroes/Props/Bow";
 
-        // The bow is first NORMALIZED (NormalizeInto) to the owner's spec — longest axis
-        // (limbs) on local +Y, narrowest on +X, grip at the centre of the longest part,
-        // scaled to BowHeldLength. Because NormalizeInto already does that bounds-based
-        // deterministic fit (longest/limbs -> +Y, narrowest -> +X, grip centred, scaled to
-        // target) independent of the FBX's own pivot/orient/scale, the bow arrives in the
+        // The bow is first NORMALIZED (WeaponBoundsOrient.NormalizeInto) to the owner's spec —
+        // longest axis (limbs) on local +Y, narrowest on +X, grip on the STAVE SURFACE at the
+        // midpoint of the long axis (WO-1105 R4 GripAnchor.BowGrip — not the bounds centre, which
+        // is the hollow between string and belly), scaled to BowHeldLength. Because it does that
+        // deterministic bounds-based fit (longest/limbs -> +Y, narrowest -> +X, grip derived,
+        // scaled to target) independent of the FBX's own pivot/orient/scale, the bow arrives in the
         // hand ALREADY oriented to spec — so GripLocalEuler stays ZERO. A previous +91 Z
         // tweak rotated that correct bow ~90 deg sideways, tipping the long axis off +Y —
         // that was the "bow is turned" bug, removed. If a small hand-fit nudge is ever
@@ -207,9 +208,24 @@ namespace DeNelle.Village
             foreach (var rb in prop.GetComponentsInChildren<Rigidbody>(true)) if (rb != null) Destroy(rb);
 
             // Auto-orient the bow to the owner's spec inside a grip root (deterministic,
-            // FBX-orientation-independent): longest axis -> +Y, narrowest -> +X, centred.
+            // FBX-orientation-independent): longest axis -> +Y, narrowest -> +X.
+            //
+            // WO-1105 R4 (owner rule): the seat is NO LONGER the bounds CENTRE. A bow's bounding-box
+            // centre sits in the HOLLOW between string and belly - empty air beside the wood - so the
+            // hand held nothing. WeaponBoundsOrient.GripAnchor.BowGrip keeps the same midpoint on the
+            // long axis and projects it PERPENDICULAR out to the first real surface (the stave),
+            // which is where a hand can close. Derived from the measured mesh every attach.
+            //
+            // This ALSO retires this file's private copy of NormalizeInto: there is now ONE grip
+            // solver (WeaponBoundsOrient) instead of two that could drift apart. The Core solver
+            // scales by the LONGEST MEASURED axis rather than blindly by Y (the 2026-07-06 shield
+            // RCA), which the local copy never picked up. resolveBladeUpFromHilt stays FALSE - a bow
+            // has no hilt end to resolve, and flipping it would be a behaviour change, not a fix.
             var bowRoot = new GameObject("BowProp");
-            NormalizeInto(prop, bowRoot.transform, BowHeldLength);
+            DeNelle.Core.Geometry.WeaponBoundsOrient.NormalizeInto(
+                prop, bowRoot.transform, BowHeldLength,
+                DeNelle.Core.Geometry.WeaponBoundsOrient.GripAnchor.BowGrip,
+                resolveBladeUpFromHilt: false);
 
             bowRoot.transform.SetParent(leftHand, false);
             bowRoot.transform.localPosition = GripLocalPosition;
@@ -275,64 +291,11 @@ namespace DeNelle.Village
             enabled = false;
         }
 
-        /// <summary>
-        /// Parents <paramref name="prop"/> under <paramref name="parent"/> and orients it to
-        /// the owner's spec: the model's LONGEST axis -> parent +Y (vertical limbs), its
-        /// NARROWEST axis -> parent +X (thin left-right; curve depth falls to +Z), the bounds
-        /// CENTRE at the parent origin (hand grips the middle of the longest part), scaled so
-        /// the longest axis is <paramref name="targetLength"/> m. Deterministic from renderer
-        /// bounds — any bow/weapon FBX lands right without hand-guessed Euler angles.
-        /// </summary>
-        private static void NormalizeInto(GameObject prop, Transform parent, float targetLength)
-        {
-            prop.transform.SetParent(parent, false);
-            prop.transform.localPosition = Vector3.zero;
-            prop.transform.localRotation = Quaternion.identity;
-            prop.transform.localScale = Vector3.one;
-
-            if (!TryLocalBounds(prop, parent, out Bounds b0)) return;
-            Vector3 sz = b0.size;
-            int lng = (sz.x >= sz.y && sz.x >= sz.z) ? 0 : (sz.y >= sz.z ? 1 : 2);
-            int sht = (sz.x <= sz.y && sz.x <= sz.z) ? 0 : (sz.y <= sz.z ? 1 : 2);
-            if (sht == lng) sht = (lng + 1) % 3;
-
-            // Longest axis -> +Y.
-            Quaternion alignLong = Quaternion.FromToRotation(Axis(lng), Vector3.up);
-            prop.transform.localRotation = alignLong;
-
-            // Shortest axis -> +X (yaw only).
-            Vector3 shortAfter = alignLong * Axis(sht); shortAfter.y = 0f;
-            if (shortAfter.sqrMagnitude > 1e-5f)
-                prop.transform.localRotation =
-                    Quaternion.FromToRotation(shortAfter.normalized, Vector3.right) * alignLong;
-
-            // Scale longest (now Y) to the target held length.
-            if (TryLocalBounds(prop, parent, out Bounds b1) && b1.size.y > 1e-4f)
-                prop.transform.localScale = Vector3.one * (targetLength / b1.size.y);
-
-            // Recentre so the grip is the middle of the longest part.
-            if (TryLocalBounds(prop, parent, out Bounds b2))
-                prop.transform.localPosition -= b2.center;
-        }
-
-        private static Vector3 Axis(int i) => i == 0 ? Vector3.right : i == 1 ? Vector3.up : Vector3.forward;
-
-        /// <summary>Combined renderer bounds of <paramref name="prop"/> in <paramref name="parent"/>'s local space.</summary>
-        private static bool TryLocalBounds(GameObject prop, Transform parent, out Bounds bounds)
-        {
-            bounds = new Bounds();
-            bool any = false;
-            foreach (var r in prop.GetComponentsInChildren<Renderer>(true))
-            {
-                if (r == null) continue;
-                Bounds wb = r.bounds;
-                Vector3 c = parent.InverseTransformPoint(wb.center);
-                Vector3 e = parent.InverseTransformVector(wb.extents);
-                var lb = new Bounds(c, new Vector3(Mathf.Abs(e.x), Mathf.Abs(e.y), Mathf.Abs(e.z)) * 2f);
-                if (!any) { bounds = lb; any = true; } else bounds.Encapsulate(lb);
-            }
-            return any;
-        }
+        // NOTE (WO-1105 R4): this file's private NormalizeInto / TryLocalBounds / Axis copies were
+        // DELETED. They duplicated DeNelle.Core.Geometry.WeaponBoundsOrient and had already drifted
+        // from it (they scaled by the post-align Y extent rather than the LONGEST MEASURED axis —
+        // the exact bug the 2026-07-06 shield RCA fixed in the Core solver). TryAttach now calls the
+        // Core solver with GripAnchor.BowGrip. One grip solver, one place to fix.
 
         /// <summary>Loads an optional committed bow prefab from Resources; null when absent.</summary>
         private static GameObject LoadBowPrefab()

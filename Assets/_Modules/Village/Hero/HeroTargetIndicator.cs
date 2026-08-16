@@ -24,6 +24,15 @@
 // when the target dies or leaves range. Self-installed on the hero by HeroControlEnsurer
 // — no scene edit, no art asset (ring drawn at runtime).
 //
+// WO-1105 (owner rulings 2026-08-16) — AUTO-TARGET WITH A STICKY TAP OVERRIDE:
+//   R1  a tap on a valid enemy REBINDS the lock and it holds until that foe dies, leaves
+//       range/LoS, or another tap moves it (LateUpdate's clear allow-list is the contract);
+//       the owner-picked Marker 2 Pointer Loop rides the current target via
+//       CastingTelegraphVfx.TryBeginTargetMarker — reused verbatim, never a second marker system.
+//   R2  AUTO acquisition engages only INSIDE the primary ability's authored range
+//       (AutoEngageRange, read off AbilityDef.Range) so "it locked on" IS the range feedback.
+//       Melee classes have no ranged primary, so they keep the 45 m acquire ring unchanged.
+//
 // The transparent-material setup mirrors PetDeployer.BuildSpriteBillboard, which
 // is proven to render in WebGL builds (URP/Unlit transparent, double-sided).
 // =============================================================================
@@ -199,6 +208,10 @@ namespace DeNelle.Village
             SetBarTargeted(_prevTarget, false);
             _prevTarget = null;
             SetVisible(false);
+            // WO-1105 R1: the marker is part of the target read — a full clear drops it too.
+            if (_marker != null) CastingTelegraphVfx.EndTargetMarker(_marker, "lock cleared");
+            _marker = null;
+            _markerTarget = null;
 
             // WO-512 slice 3: a full clear also drops the hero's lock-face (back to free facing).
             DriveLockFace(null);
@@ -226,6 +239,21 @@ namespace DeNelle.Village
         private HeroAbilities _abilities;
         private HeroLocomotion _locomotion;   // WO-512 slice 3: sibling for lock-face/strafe drive
         private float _nextScan;
+
+        // ── WO-1105 R1/R2 — sticky tap override + range-gated auto-acquire + the target marker ──
+        private PlayerAttackController _attack;   // sibling: the MEASURED melee reach for the R2 gate
+        private GameObject _marker;               // live Marker 2 Pointer Loop on the current target
+        private IDamageable _markerTarget;        // which target the live marker is riding
+        private float _markerRefreshAt;           // re-spawn time (the marker carries an auto-destroy net)
+
+        /// <summary>
+        /// Seconds between marker re-spawns. <see cref="CastingTelegraphVfx.TryBeginTargetMarker"/> is
+        /// reused VERBATIM (WO-1105: "do not spawn a second marker system"), and it arms a
+        /// windup + 1 s auto-destroy safety net on every instance. A held target outlives any cast,
+        /// so the marker is simply re-begun on that cadence — the safety net stays intact instead of
+        /// being defeated by passing a fake multi-hour "wind-up".
+        /// </summary>
+        private const float MarkerRefreshSeconds = 6f;
 
         private IDamageable _locked;   // manual lock (null = auto-nearest)
         private IDamageable _prevTarget;  // DEF-206: last frame's CurrentTarget, to flip HP bars on change
@@ -277,6 +305,10 @@ namespace DeNelle.Village
         private void OnDestroy()
         {
             if (_reticle != null) Destroy(_reticle.gameObject);
+            // WO-1105 R1: never leave the target marker parented to a foe after the hero is gone.
+            if (_marker != null) CastingTelegraphVfx.EndTargetMarker(_marker, "indicator destroyed");
+            _marker = null;
+            _markerTarget = null;
             // Don't leave a stale aim override on the abilities component.
             if (_abilities != null) { _abilities.AimPointOverride = null; _abilities.LockedTarget = null; }
             // DEF-206: release the last target's HP-bar flag so it isn't pinned on.
@@ -383,8 +415,22 @@ namespace DeNelle.Village
             }
 
             // Drop a manual lock that died or wandered out of range.
+            //
+            // WO-1105 R1 — THIS IS THE WHOLE STICKINESS CONTRACT, AND IT IS AN ALLOW-LIST OF THREE.
+            // A tap-set _locked is cleared in EXACTLY three places and no others: here (the target
+            // DIED or left the acquire ring / lost line-of-sight, so it is no longer a candidate),
+            // on another tap (Update -> TryLockAtScreenPoint / EngageLock re-points it, or a tap on
+            // empty space releases it), and ClearLock/ReleaseLock. Nothing re-derives it per frame:
+            // the line below is `_locked ?? NearestCandidate()`, so while _locked lives the auto
+            // pick is never consulted. That is what makes "it silently snapped back to the tank
+            // while I was killing the healer" structurally impossible rather than merely unlikely.
             if (_locked != null && (!_locked.IsAlive || !_candidates.Contains(_locked)))
             {
+                var lostMb = _locked as MonoBehaviour;
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Reticle",
+                    "TARGET LOST '" + (lostMb != null ? lostMb.gameObject.name.Replace("(Clone)", "").Trim() : "target")
+                    + "' - " + (!_locked.IsAlive ? "died" : "left range / line-of-sight")
+                    + " -> lock released back to auto-acquire.");
                 _locked = null;
                 // WO-512 slice 3: the locked foe is gone — release lock-face so the Knight stops
                 // facing a dead/absent target and the LookRotation(Velocity) writer resumes.
@@ -414,7 +460,19 @@ namespace DeNelle.Village
                 SetBarTargeted(_prevTarget, false);
                 SetBarTargeted(CurrentTarget, true);
                 _prevTarget = CurrentTarget;
+                // WO-1105 R1: name every acquisition change, with WHICH mechanism owns it, so a
+                // capture answers "did the lock move, and who moved it" without a theory.
+                var newMb = CurrentTarget as MonoBehaviour;
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Reticle",
+                    "TARGET " + (CurrentTarget == null ? "CLEARED" :
+                        (_locked != null ? "OVERRIDDEN (player tap/cycle lock)" : "ACQUIRED (auto)"))
+                    + " -> '" + (newMb != null ? newMb.gameObject.name.Replace("(Clone)", "").Trim() : "none")
+                    + "' autoEngageRange=" + AutoEngageRange().ToString("0.##") + "m.");
             }
+
+            // WO-1105 R1 marker: the owner-picked Marker 2 Pointer Loop rides the CURRENT target
+            // (auto or tap-locked) so "what am I about to shoot" is never colour-only.
+            UpdateTargetMarker();
 
             if (CurrentTarget == null || !CurrentTarget.IsAlive)
             {
@@ -559,6 +617,18 @@ namespace DeNelle.Village
             var d = PickEnemyAtScreenPoint(screenPos);
             if (d == null) return false;
 
+            // WO-1105 R1: THIS is the tap override the owner asked for, and it works on TOUCH as
+            // well as mouse — TapOrClickThisFrame reads Touchscreen.current.primaryTouch first, so a
+            // finger on the Seeker screen reaches here even with ff.lockon OFF (that flag gates the
+            // lock-on CAMERA, which this WO must not flip). Once set, _locked survives until the
+            // foe dies, leaves range/LoS, or another tap moves it — see LateUpdate's three-place
+            // clear allow-list. It is NOT re-derived per frame, so it cannot snap back to the auto
+            // pick mid-fight (the owner's tank-vs-healer failure).
+            var mb = d as MonoBehaviour;
+            DeNelle.Core.Diagnostics.FlowTrace.Step("Reticle",
+                "TARGET OVERRIDE (tap/click) -> '"
+                + (mb != null ? mb.gameObject.name.Replace("(Clone)", "").Trim() : "target")
+                + "' - lock is STICKY until it dies, leaves range, or another tap moves it.");
             _locked = d;   // direct manual lock — bypasses AUTO arc; LoS enforced in PickEnemyAtScreenPoint
             LockEngaged = true;   // WO-512: a direct tap-lock engages the lock-on flag
             return true;
@@ -711,6 +781,74 @@ namespace DeNelle.Village
                 (a.WorldPosition - me).sqrMagnitude.CompareTo((b.WorldPosition - me).sqrMagnitude));
         }
 
+        // ── WO-1105 R2 — RANGE MUST BE LEGIBLE (owner's SECOND shape, no new art) ────────────
+        // Owner verbatim: "either we add a distance ring for archer range, or only after we get
+        // within range does it auto target." The second shape is implemented: for a class with a
+        // RANGED primary, auto-acquire engages ONLY once the foe is inside that ability's AUTHORED
+        // range — so "it locked on" IS the range feedback, and the marker appearing is the moment
+        // the shot becomes possible.
+        //
+        // THE RADIUS IS READ OFF AbilityDef.Range, NEVER A METRE LITERAL (WO-1035 units bug).
+        // Melee classes are UNCHANGED: no ranged primary -> this returns the 45 m _acquireRange the
+        // reticle has always used, so the Knight's acquisition is byte-identical.
+        // A MANUAL lock is deliberately NOT gated by this — a tap is explicit player intent (R1),
+        // and it still releases the moment the foe leaves the acquire ring or dies.
+        private float AutoEngageRange()
+        {
+            if (_abilities == null) _abilities = GetComponent<HeroAbilities>();
+            if (_abilities == null) return _acquireRange;
+            if (_attack == null) _attack = GetComponent<PlayerAttackController>();
+            // The melee reach is the MEASURED discriminator TryGetRangedPrimary compares against;
+            // with no attack controller present there is no swing to outreach, so pass 0 and let
+            // the authored range decide alone.
+            float meleeReach = _attack != null ? _attack.AttackRange : 0f;
+            float r = _abilities.RangedPrimaryRange(meleeReach);
+            return r > 0f ? Mathf.Min(r, _acquireRange) : _acquireRange;
+        }
+
+        // ── WO-1105 R1 — the "it is targeted" read, reusing the owner's pick VERBATIM ────────
+        // CastingTelegraphVfx.TryBeginTargetMarker is the seam that already puts the owner-picked
+        // Hovl "Marker 2 Pointer Loop" on a cast target, unit-parented, with an auto-destroy safety
+        // net. It is reused as-is — no second marker system, no new prefab, no owner VFX pick made
+        // by a CLI. The marker carries the meaning by SHAPE and position, never by colour.
+        private void UpdateTargetMarker()
+        {
+            bool wantMarker = CurrentTarget != null
+                              && (CurrentTarget as UnityEngine.Object) != null
+                              && CurrentTarget.IsAlive;
+            var targetMb = wantMarker ? CurrentTarget as MonoBehaviour : null;
+            if (targetMb == null) wantMarker = false;
+
+            if (!wantMarker)
+            {
+                if (_marker != null) CastingTelegraphVfx.EndTargetMarker(_marker, "target lost");
+                _marker = null;
+                _markerTarget = null;
+                return;
+            }
+
+            if (!ReferenceEquals(CurrentTarget, _markerTarget))
+            {
+                if (_marker != null) CastingTelegraphVfx.EndTargetMarker(_marker, "target changed");
+                _marker = null;
+                _markerTarget = CurrentTarget;
+                _markerRefreshAt = 0f;   // spawn on this frame
+            }
+
+            // The refresh clock advances even when the spawn returns null (telegraph flag off /
+            // mirror prefab absent). Without that, a missing prefab would drive a Resources.Load
+            // EVERY FRAME for as long as anything is targeted — a silent frame-rate sink behind a
+            // feature that is merely unavailable.
+            if (Time.time < _markerRefreshAt) return;
+            if (_marker != null) CastingTelegraphVfx.EndTargetMarker(_marker, "marker refresh");
+            _marker = CastingTelegraphVfx.TryBeginTargetMarker(
+                this, targetMb.transform, null,
+                _locked != null ? "target lock (player pick)" : "target lock (auto)",
+                MarkerRefreshSeconds);
+            _markerTarget = CurrentTarget;
+            _markerRefreshAt = Time.time + MarkerRefreshSeconds;
+        }
+
         // DEF-269: the AUTO target is the nearest candidate the hero is FACING. _candidates
         // is sorted nearest-first, so walk it and return the first one inside the forward arc.
         // Returns null when every hostile in range is behind the hero — so running away ends
@@ -725,6 +863,11 @@ namespace DeNelle.Village
             bool gate = fwd.sqrMagnitude > 0.0001f;
             if (gate) fwd.Normalize();
 
+            // WO-1105 R2: auto-acquire only inside the primary's authored range (identity at
+            // _acquireRange for every melee class — see AutoEngageRange).
+            float engage = AutoEngageRange();
+            float engageSqr = engage * engage;
+
             for (int i = 0; i < _candidates.Count; i++)
             {
                 var cand = _candidates[i];
@@ -735,6 +878,17 @@ namespace DeNelle.Village
                 // NRE (owner F8 2026-06-30, ×8/frame in the Dungeon). Cast to UnityEngine.Object so the
                 // == overload catches the dead object, and skip it.
                 if (cand == null || (cand as UnityEngine.Object) == null || !cand.IsAlive) continue;
+                // R2 range gate. _candidates is sorted nearest-first, so the first one out of
+                // engage range means every remaining one is too — stop, do not auto-acquire.
+                if ((cand.WorldPosition - me).sqrMagnitude > engageSqr)
+                {
+                    DeNelle.Core.Diagnostics.FlowTrace.Throttle("Reticle", "auto-out-of-range", 2f,
+                        "auto-acquire HELD: nearest hostile is "
+                        + Vector3.Distance(cand.WorldPosition, me).ToString("0.##")
+                        + "m away, outside the primary's authored engage range "
+                        + engage.ToString("0.##") + "m (WO-1105 R2 - closing the distance IS the cue).");
+                    return null;
+                }
                 if (!gate) return cand;   // can't determine facing → nearest wins
                 Vector3 to = cand.WorldPosition - me;
                 to.y = 0f;

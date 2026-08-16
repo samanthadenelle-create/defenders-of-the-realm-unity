@@ -990,7 +990,8 @@ namespace DeNelle.Village
                         ? "seat: DEPRECATED GEOMETRY (ff.weapongripinfer) — NormalizeInto + SeatHiltLowerHalf"
                         : "seat: GEOMETRY — NormalizeInto (longest->+Y) + SeatHiltLowerHalf (hilt=lower half, blade +Y)")
                     : "seat: GEOMETRY — NormalizeInto (bounds-true)");
-                NormalizeInto(prop, gripRoot.transform, heldLen, ResolveHiltFromKind(vis.kind));
+                NormalizeInto(prop, gripRoot.transform, heldLen, ResolveHiltFromKind(vis.kind),
+                              ResolveGripAnchorFromKind(vis.kind));   // WO-1105 R4: bow -> stave-surface grip
                 if (meleeSeat)
                 {
                     FlowTrace.Try("Equip", "SeatHiltLowerHalf", () => SeatHiltLowerHalf(prop, gripRoot.transform));
@@ -2618,8 +2619,11 @@ namespace DeNelle.Village
                 }
                 else
                 {
+                    // WO-1105 R4: the Seating-Editor preview must seat a bow the SAME way the attach
+                    // path does, or the preview would show a grip the game never uses.
+                    WeaponClass previewKind = offHand ? WeaponClass.Shield : _currentWeaponKind;
                     NormalizeInto(child, grt, held > 0f ? held : 1f,
-                        ResolveHiltFromKind(offHand ? WeaponClass.Shield : _currentWeaponKind));
+                        ResolveHiltFromKind(previewKind), ResolveGripAnchorFromKind(previewKind));
                     if (melee)
                         SeatHiltLowerHalf(child, grt);
                 }
@@ -3021,11 +3025,25 @@ namespace DeNelle.Village
             kind == WeaponClass.Sword || kind == WeaponClass.Dagger ||
             kind == WeaponClass.Axe || kind == WeaponClass.Hammer;
 
+        /// <summary>
+        /// WO-1105 R4 (owner rule: "that rule will apply to every bow"): a BOW seats its grip on the
+        /// stave SURFACE — the perpendicular from the straight (string) edge's midpoint — because a
+        /// bow's bounds centre is the hollow between string and belly, i.e. empty air. Every other
+        /// kind keeps the bounds-centre seat it has today, so this is bow-only by construction.
+        /// Owner-tuned manual offsets (attachment-offsets.json) are applied downstream as a nudge on
+        /// top and are NEVER overwritten by this derived pass.
+        /// CROSSBOWS (R4a) are excluded: none can reach the runtime catalog while the exclusion
+        /// stands (pinned by RangedPrimaryRegression), so no name-token branch is authored here.
+        /// </summary>
+        private static WeaponBoundsOrient.GripAnchor ResolveGripAnchorFromKind(WeaponClass kind) =>
+            kind == WeaponClass.Bow ? WeaponBoundsOrient.GripAnchor.BowGrip
+                                    : WeaponBoundsOrient.GripAnchor.Centre;
+
         // ── Bounds-normalize (WeaponBoundsOrient: Y-long, X-narrow, Z-wide — BINDING canon) ──
         private static void NormalizeInto(GameObject prop, Transform parent, float targetLength,
-                                        bool resolveHilt = true)
-            => WeaponBoundsOrient.NormalizeInto(prop, parent, targetLength,
-                WeaponBoundsOrient.GripAnchor.Centre, resolveHilt);
+                                        bool resolveHilt = true,
+                                        WeaponBoundsOrient.GripAnchor anchor = WeaponBoundsOrient.GripAnchor.Centre)
+            => WeaponBoundsOrient.NormalizeInto(prop, parent, targetLength, anchor, resolveHilt);
 
         // Seat a NATIVE prop (authored grip-at-origin + correct orientation, e.g. Blink): trust the
         // prefab — parent at identity, scale to the target held length by the LONGEST bound, and do

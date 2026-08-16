@@ -116,6 +116,35 @@ both is what let the authored and fallback paths drift into two different visual
 against the authored JSON — **by reflection** (`ConstFloat(view, "GraphUnitWpx"...)` at :192-193), so a
 RENAME breaks the suite silently too. Leave them as the documented fallback + the regression's anchor.
 
+⚠⚠ **MEASURED 2026-08-16 — THE `[grid]` AUTHORED-PITCH CHECK IS NOW ASSERTING SOMETHING
+GEOMETRICALLY IMPOSSIBLE, AND THAT IS THE PROOF §2.1c WAS RIGHT.**
+
+After the owner's shared-pool ruling (3 bases branching 4 -> 4, WO-1105 commit) the tree has **7
+rows**: 4 class tiers + 3 shared. Run the arithmetic against the constants the oracle itself uses:
+
+| quantity | value |
+|---|---|
+| authored lattice height (`GraphUnitHpx`) | **780 px** |
+| 7 rows x `NodeSizePx` 136 | **952 px needed** |
+| 7 rows x `NodeFocusPx` 168 | **1176 px needed** |
+| space below class tier-1 (y 0.66 -> 1.0) | 265 px = **1.95 rows fit, not 3** |
+
+So no authoring of x/y can satisfy `[grid]` for the tree the owner asked for — the check demands
+136 px of clearance inside a 780 px space that must hold 952 px of plates. Its advice line
+(*"re-author x/y in hero-talents.json, never the plate consts"*) is therefore unfollowable.
+
+**Root cause is the one §2.1c already named:** the check converts AUTHORED 0..1 coordinates to
+pixels through the FALLBACK constants (1180x780) — but the runtime no longer lays out that way. It
+derives the lattice from the measured well (~1695x493) and then runs the separation pass. Authored
+y is now an ORDERING HINT consumed by a solver, not final geometry, so measuring it in plate-pixels
+measures a lattice that does not ship.
+
+**Do NOT weaken or delete the check to make a layout pass** — a green `[grid]` over a broken screen
+is the exact failure this WO exists to end. The fix stays as ruled: move the pitch assertion onto
+the RESOLVED positions (post-separation-pass), and leave the authored data checked for what it
+actually promises — presence, ordering, uniqueness, and the 0..1 contract (which the shared pool now
+satisfies; `TALENT_STRATEGY_OK`, all seven out-of-range failures cleared).
+
 ⚠ **ORACLE GAP — must close IN THE SAME CHANGE as the pitch fix (added 2026-08-15, verified at
 source):** the existing `[grid]` oracle measures authored pitch against `L.NodeSize` (136) —
 `SkillsPanelLayoutRegression.cs:322-332` — i.e. exactly the NodeSizePx-based clearance this WO

@@ -684,6 +684,11 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "town-movement-floor suite", () => { if (!DeNelle.Editor.Regression.TownMovementFloorRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[town-movement-floor] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "one-guide-body suite", () => { if (!DeNelle.Editor.Regression.OneGuideBodyRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[one-guide-body] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "wall-adjacency suite", () => { if (!DeNelle.Editor.Regression.WallAdjacencyRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[wall-adjacency] " + r); });
+            // --- WO-1105: the ranged primary is DERIVED (strike-shaped effect whose authored range
+            //     far exceeds measured melee reach), never a per-class table; ranger.q is a costed
+            //     cooldown'd ranged strike; and the runtime weapons catalog carries NO crossbow
+            //     while the R4a exclusion stands (the Generate Gear Catalog menu would import 125). ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "ranged-primary suite", () => { if (!DeNelle.Editor.Regression.RangedPrimaryRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[ranged-primary] " + r); });
             // --- WO-1104: the spire-plans moment subscribes to the PlansCollected seam, plays ONCE
             //     ever, registers with the arbiter, never touches roster/unlock state, and reads its
             //     speaker from EchoRosterCatalog rather than a name literal. ---

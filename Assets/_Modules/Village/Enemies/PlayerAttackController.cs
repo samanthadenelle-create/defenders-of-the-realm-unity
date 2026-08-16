@@ -50,8 +50,17 @@ namespace DeNelle.Village
         /// Effective melee hitbox radius (m) — read by HeroReachRing to draw the reach ring,
         /// and by the swing's OverlapSphere. Weapon-driven: a melee weapon with reach &gt; 0
         /// (Knight's greatsword/polearm/axe outreach a dagger) overrides the fixed
-        /// <see cref="_attackRange"/>. Ranged classes (mage/ranger) never set reach, so they
-        /// keep the fixed range — their real attacks route through AbilityDef.Range, unchanged.
+        /// <see cref="_attackRange"/>. Ranged classes never set reach, so they keep the fixed range.
+        /// <para>
+        /// ⚠ WO-1105 CORRECTION — the line that used to stand here was FALSE and is the whole reason
+        /// Sylas played like a swordsman. It read: "their real attacks route through AbilityDef.Range,
+        /// unchanged." That holds only if the player's main, spammable attack is an ABILITY; it was
+        /// not. The primary attack input drove THIS sweep for every class, so the archer's default
+        /// verb was a sword swing while his authored kit (Quick Shot 15 m, Snare 12 m, Healing Shot
+        /// 15 m) sat behind Q/W/E/R as "skills". As of WO-1105 the statement is TRUE, because
+        /// <see cref="FireRangedPrimary"/> makes the primary input resolve through the class's ranged
+        /// basic. For a ranged class this radius now serves the OFFHAND verb (R3's dagger) only.
+        /// </para>
         /// </summary>
         public float AttackRange => EffectiveRange();
 
@@ -317,10 +326,10 @@ namespace DeNelle.Village
             // Legacy Input fallback.
             if (!attackPressed && UnityEngine.Input.GetMouseButtonDown(0)) attackPressed = true;
 
-            if (attackPressed && !_isInSwing && Time.time >= _nextAttackTime)
-                StartAttack();
-            else if (attackPressed && _isInSwing)
+            if (attackPressed && _isInSwing)
                 RegisterPerfectTap();   // P1-6: the SECOND tap — the perfect-hit input
+            else if (attackPressed)
+                FirePrimary();          // WO-1105: bow first for ranged classes, else the swing
 
             UpdateBlock();
         }
@@ -422,9 +431,116 @@ namespace DeNelle.Village
             // gesture. Still returns false (no NEW swing started), so every existing caller's
             // contract is unchanged.
             if (_isInSwing) { RegisterPerfectTap(); return false; }
+            // WO-1105: this is the ONLY attack input a phone has, so the archer's bow has to live
+            // here too — before the swing gate. On a ranged class a ready bow fires the arrow and
+            // reports true; a COOLING bow falls through to the melee swing below, which is the
+            // ranger's OFFHAND DAGGER (R3) — the player is never left inputless.
+            if (FireRangedPrimary()) return true;
             if (Time.time < _nextAttackTime) return false;
             StartAttack();
             return true;
+        }
+
+        // ── WO-1105 (1)+(3): the primary attack, bow-first for ranged classes ─────────────
+        //
+        // THE DEFECT (WO-1105 section 1, measured at source): this controller's OverlapSphere sweep
+        // was the primary verb for EVERY class, so playing Sylas the Ranger felt like swinging a
+        // sword even though his whole authored kit is ranged. The fix branches on a DERIVED class
+        // capability (HeroAbilities.TryGetRangedPrimary) instead of adding a per-class table.
+        //
+        // THE KNIGHT IS UNTOUCHED BY CONSTRUCTION: knight.q's effect is 'dash', so
+        // TryGetRangedPrimary returns false for him on condition (a) alone and FirePrimary collapses
+        // to exactly the old `StartAttack()` call — same reach math (EffectiveRange), same
+        // Emberbrand/on-hit procs, same reward crediting, same perfect-hit window.
+
+        /// <summary>
+        /// One press of the primary attack. Ranged classes shoot; everyone else swings. A ranged
+        /// class whose bow is cooling ALSO swings — that swing is the offhand dagger (R3).
+        /// </summary>
+        private void FirePrimary()
+        {
+            if (FireRangedPrimary()) return;
+            if (Time.time < _nextAttackTime) return;
+            StartAttack();
+        }
+
+        /// <summary>
+        /// WO-1105 (1): fire the class's ranged basic — the locked Q def (ranger Quick Shot, 15 m,
+        /// effect=strike) — through the EXISTING cast path. <see cref="HeroAbilities.TryCast"/>
+        /// carries the whole verb already: the authored COOLDOWN (R3 — an archer is not a click-spam
+        /// weapon; ranger.q is 0.45 s in abilities.json, read from data, never a literal here), the
+        /// bow CAST ANIMATION (ActorAnimator.PlayCast -> the Ranger controller's cast state, whose
+        /// clip is the authored Ranger_Aim_Idle bow pose — no new clip authored), the facing slew,
+        /// and ResolveStrikeLike -> LaunchProjectile -> RangedAttackVFX.FireArrow, where damage
+        /// lands on ARRIVAL. That arrival closure is also where WO-997's Focus restore is paid
+        /// (armed by TryCast for the class BASIC via IsClassBasic, consumed on hit-confirm), so the
+        /// refund rides the ARROW with no second restore engine.
+        /// <para>Returns true when an arrow was actually loosed.</para>
+        /// </summary>
+        private bool FireRangedPrimary()
+        {
+            if (_abilities == null) _abilities = GetComponent<HeroAbilities>();
+            if (_abilities == null) return false;
+            if (!_abilities.TryGetRangedPrimary(EffectiveRange(), out var def)) return false;
+
+            // R2 (second shape, owner-preferred): the shot needs a foe inside the ability's AUTHORED
+            // range. Radius read from AbilityDef.Range — never a metre literal (WO-1035 units bug).
+            var foe = ResolveRangedTarget(def.Range);
+            if (foe == null)
+            {
+                FlowTrace.Throttle("Combat", "bow-no-target", 1f,
+                    $"BOW held: no hostile inside the authored range of '{def.Id}' ({def.Range:0.##}m) " +
+                    "- no shot spent. (Offhand dagger still swings if the player keeps pressing.)");
+                return false;
+            }
+
+            float cd = _abilities.CooldownRemaining(AbilitySlot.Q);
+            if (!_abilities.TryCast(AbilitySlot.Q))
+            {
+                // Cooling (or resource-gated). R3: this is exactly when the offhand dagger covers,
+                // so report false and let the caller swing.
+                FlowTrace.Throttle("Combat", "bow-cooling", 1f,
+                    $"BOW NOT READY: '{def.Id}' has {cd:0.00}s of its {def.Cooldown:0.##}s cooldown left " +
+                    "(or is resource-gated / mid wind-up) -> falling through to the OFFHAND melee verb " +
+                    "(R3 dagger), which does NOT refund Focus.");
+                return false;
+            }
+
+            FlowTrace.Step("Combat",
+                $"BOW FIRED '{def.Id}' ({def.Name}) at '{(foe as MonoBehaviour)?.name}' " +
+                $"dist={(foe.WorldPosition - transform.position).magnitude:0.##}m " +
+                $"range={def.Range:0.##}m cooldown={def.Cooldown:0.##}s - arrow in flight, damage lands on ARRIVAL.");
+            return true;
+        }
+
+        /// <summary>
+        /// The foe the bow would shoot: the reticle's current target when it is inside
+        /// <paramref name="range"/> (auto-acquired or tap-locked — HeroTargetIndicator owns that
+        /// choice, WO-1105 R1), else the nearest LoS-clear hostile inside it. Null = nothing to
+        /// shoot. Mirrors the reach test ResolveStrikeLike will apply, so the input never spends a
+        /// cooldown on a shot the resolver would then drop.
+        /// </summary>
+        private IDamageable ResolveRangedTarget(float range)
+        {
+            if (_targetIndicator == null) _targetIndicator = GetComponent<HeroTargetIndicator>();
+            var locked = _targetIndicator != null ? _targetIndicator.CurrentTarget : null;
+            if (locked != null && (locked as UnityEngine.Object) != null && locked.IsAlive &&
+                (locked.WorldPosition - transform.position).sqrMagnitude <= range * range)
+                return locked;
+
+            Collider[] hits = Physics.OverlapSphere(transform.position, range, _enemyLayer);
+            IDamageable best = null;
+            float bestSqr = float.MaxValue;
+            foreach (var col in hits)
+            {
+                if (col == null) continue;
+                var d = col.GetComponentInParent<IDamageable>();
+                if (d == null || !d.IsAlive || d.Faction != CombatFaction.Hostile) continue;
+                if (!HasLoS(d)) continue;
+                float sqr = (d.WorldPosition - transform.position).sqrMagnitude;
+                if (sqr < bestSqr) { bestSqr = sqr; best = d; }
+            }
+            return best;
         }
 
         // ── P1-6: the perfect-hit input ───────────────────────────────────────
@@ -747,8 +863,26 @@ namespace DeNelle.Village
             // the class resource block's onHitRestore > 0, so knight/mage are provably
             // untouched. Once per CONNECTED SWING (not per enemy caught in the sweep), so a
             // crowd cannot multi-refund one attack.
-            if (anyHit && _abilities != null && _abilities.OnHitRestore > 0f)
+            //
+            // WO-1105 R3 — THE OFFHAND DAGGER DOES NOT REFUND. Once the class has a ranged primary
+            // the CLASS BASIC is the bow, and WO-997's rule is "armed for the class basic, paid on
+            // hit-confirm": HeroAbilities already arms + pays that restore inside the ARROW's
+            // arrival closure (IsClassBasic -> _pendingOnHitRestore -> RestoreMana on connect).
+            // Leaving this melee restore ungated would pay Focus TWICE per shot cycle — once on the
+            // arrow, once on the gap-filler swing — and hand the ranger a second, unauthored Focus
+            // engine (the exact WO-999 failure mode: a free spammable move quietly out-earning the
+            // authored 0.8/s passive). The swing is the DAGGER now, so it earns nothing.
+            // Byte-identical for every class WITHOUT a ranged primary (knight: OnHitRestore is 0
+            // anyway, and TryGetRangedPrimary is false for his 'dash' basic).
+            bool basicIsMelee = _abilities == null ||
+                                !_abilities.TryGetRangedPrimary(EffectiveRange(), out _);
+            if (anyHit && _abilities != null && _abilities.OnHitRestore > 0f && basicIsMelee)
                 _abilities.RestoreMana(_abilities.OnHitRestore);
+            else if (anyHit && _abilities != null && _abilities.OnHitRestore > 0f)
+                FlowTrace.Throttle("Combat", "offhand-no-refund", 1f,
+                    $"OFFHAND melee connected but restored 0 {_abilities.ResourceDisplayName} - the " +
+                    "class basic is the BOW, so the on-hit restore rides the arrow (WO-1105 R3). " +
+                    "No double refund.");
 
             // Impact audio — the meaty "connect" the swing was missing. Melee classes get a
             // weapon clash; casters get a spell-hit zap. (TakeDamageFrom already plays the
