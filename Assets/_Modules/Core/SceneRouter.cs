@@ -234,8 +234,20 @@ namespace DeNelle.Core
         /// Fades a full-screen black overlay in, loads <paramref name="sceneName"/>
         /// asynchronously, then fades back out. Returns a <see cref="UniTask"/> —
         /// never <c>async void</c> (Part-3 mandate).
+        /// <para>
+        /// <paramref name="beforeLoad"/> (WO-1109, OPTIONAL — default null keeps every existing
+        /// caller byte-for-byte unchanged) runs on the LAST line before
+        /// <c>SceneManager.LoadSceneAsync</c>, i.e. AFTER the build-settings gate, the save
+        /// flush and the fade-out. That position is the whole point: it is where a caller can
+        /// mutate live scene objects knowing the load is definitely about to happen. The hero
+        /// carry uses it so the hero spends ZERO frames detached-and-DontDestroyOnLoad while
+        /// the old scene is still the live, playable one — the window an abort or a slow
+        /// backend save would otherwise stretch open. It is Guard-wrapped: a throwing hook
+        /// logs and the load still proceeds, because stranding the player on the current
+        /// scene is strictly worse than a missed hook.
+        /// </para>
         /// </summary>
-        public static async UniTask LoadSceneWithFade(string sceneName, float fadeSeconds = DefaultFadeSeconds)
+        public static async UniTask LoadSceneWithFade(string sceneName, float fadeSeconds = DefaultFadeSeconds, Action beforeLoad = null)
         {
             FlowTrace.Step("SceneRouter", $"LoadSceneWithFade name='{sceneName ?? "<null>"}' fade={fadeSeconds:F2}s");
             if (!IsSceneRegistered(sceneName))
@@ -272,6 +284,10 @@ namespace DeNelle.Core
             // one-shot sceneLoaded handler BEFORE the load so the hero is warped back to where
             // they fought the instant the destination scene is active. Self-clearing.
             ArmReturnPointRestore();
+
+            // WO-1109: the last line before the load commits — see the beforeLoad docs above.
+            if (beforeLoad != null)
+                Guard.Try("SceneRouter", $"beforeLoad hook for '{sceneName}'", () => beforeLoad());
 
             var op = SceneManager.LoadSceneAsync(sceneName);
             if (op != null)
@@ -452,8 +468,101 @@ namespace DeNelle.Core
         /// unregistered scene name is rejected by <see cref="LoadSceneWithFade"/> (logs,
         /// no load), so a bad name never silently strands the player.
         /// </para>
+        /// <para>
+        /// WO-1109 — HERO CARRY. A raid loads SINGLE, which destroys every root in the
+        /// hub scene INCLUDING the hero. Until now nothing carried it, so
+        /// <c>HeroControlEnsurer.TryRecoverCarriedHero</c> (keyed on the DontDestroyOnLoad
+        /// scene) found nothing and every single raid entry fell through to
+        /// <c>SpawnEmergencyHero()</c> — whose first line is a <c>FlowTrace.Fail</c>. A Fail
+        /// that lands on EVERY raid entry trains every seat to ignore Hero Fails (§12/§14),
+        /// and if the subsequent body swap ever missed, the player drove a lavender capsule.
+        /// So the hero is marked DontDestroyOnLoad here, exactly as
+        /// <c>SceneTransitionTrigger</c> does for every other Single-load seam (outposts,
+        /// dungeons, arenas, Village2) — the raid hero is now literally the town hero, and
+        /// the ensurer re-homes + seats it at the raid's baked
+        /// <c>HeroStartPoint_PlayerSpawn</c>. The emergency path stays exactly as it was: it
+        /// is still reached (and still Fails loudly) whenever the carry genuinely produced
+        /// no hero, which is now a REAL defect rather than the normal path.
+        /// </para>
         /// </summary>
-        public static void GoRaid(string sceneName) => LoadSceneWithFade(sceneName).Forget();
+        public static void GoRaid(string sceneName)
+        {
+            FlowTrace.Step("SceneRouter", $"GoRaid name='{sceneName ?? "<null>"}' — hero carry armed as the pre-load hook.");
+            // TIMING IS THE CONTRACT, not a detail. The carry is handed to LoadSceneWithFade as
+            // its beforeLoad hook rather than run inline here, so it fires on the last line
+            // before SceneManager.LoadSceneAsync — AFTER the IsSceneRegistered gate, the save
+            // flush and the fade-out. Two things that buys, both of which an inline call gets
+            // WRONG: (a) an unregistered scene aborts the load, and an inline carry would have
+            // already detached the hero from CastleHubRoot and DDOL'd it in a town that never
+            // unloads — an orphan the NEXT Single load drags somewhere it does not belong; and
+            // (b) the fade + backend save can take hundreds of ms, during which an inline carry
+            // leaves the player driving a detached, DontDestroyOnLoad hero around a live town.
+            LoadSceneWithFade(sceneName, beforeLoad: () => CarryHeroAcrossSingleLoad("GoRaid", sceneName)).Forget();
+        }
+
+        /// <summary>
+        /// WO-1109: marks the live hero <see cref="UnityEngine.Object.DontDestroyOnLoad"/> so it
+        /// SURVIVES a Single scene load, and returns true when a hero was actually carried.
+        /// The receiving half is <c>HeroControlEnsurer</c>, which re-homes the carried root out
+        /// of the special DontDestroyOnLoad scene into the freshly-loaded scene and seats it at
+        /// that scene's <c>HeroStartPoint_PlayerSpawn</c> marker — so nothing is left parked in
+        /// DDOL to leak or duplicate on the NEXT transition.
+        /// <para>
+        /// The hero is DETACHED from its parent first (keeping world pose). This is not
+        /// cosmetic: in the merged overworld the hero is nested under <c>CastleHubRoot</c>,
+        /// which also holds WaveManager + HeartController + the Tree of Life, and DDOL-ing the
+        /// ROOT once dragged the whole hub into the destination scene (owner F8 2026-07-10,
+        /// "why is there a tree of life in map"). <c>SceneTransitionTrigger</c> learned that the
+        /// hard way; this carry uses the same shape deliberately.
+        /// </para>
+        /// <para>
+        /// Resolution order is HeroLocomotion-first (reflected — Core must never reference
+        /// DeNelle.Village), then the 'Player' tag, because HeroLocomotion is the exact
+        /// component the receiving ensurer keys on.
+        /// </para>
+        /// </summary>
+        private static bool CarryHeroAcrossSingleLoad(string via, string targetScene)
+        {
+            GameObject heroGo = null;
+
+            var loco = FindHeroLocomotion();
+            if (loco != null) heroGo = loco.gameObject;
+            if (heroGo == null)
+            {
+                try { heroGo = GameObject.FindWithTag("Player"); }
+                catch (Exception e)
+                {
+                    FlowTrace.Warn("Hero", $"{via} carry: FindWithTag('Player') threw ({e.GetType().Name}: {e.Message}) — no tag-based hero.");
+                    heroGo = null;
+                }
+            }
+
+            if (heroGo == null)
+            {
+                // NOT silent (§12): this is the exact condition that makes the destination fall
+                // back to the EMERGENCY hero, so the trace must say so BEFORE the Fail lands.
+                FlowTrace.Warn("Hero",
+                    $"{via} carry: no live hero found to carry into '{targetScene}' — the destination will fall back to " +
+                    "HeroControlEnsurer's EMERGENCY spawn (expect an 'EMERGENCY pill spawned' Fail).");
+                return false;
+            }
+
+            string priorParent = heroGo.transform.parent != null ? heroGo.transform.parent.name : "<none>";
+            bool carried = Guard.Try("Hero", $"{via} carry DontDestroyOnLoad('{heroGo.name}')", () =>
+            {
+                if (heroGo.transform.parent != null)
+                    heroGo.transform.SetParent(null, true);   // detach, keep world pose
+                UnityEngine.Object.DontDestroyOnLoad(heroGo);
+            });
+
+            if (carried)
+            {
+                FlowTrace.Step("Hero",
+                    $"{via} carry ARMED: DontDestroyOnLoad hero '{heroGo.name}' (detached from '{priorParent}') " +
+                    $"across the Single load to '{targetScene}' — the raid hero IS the town hero.");
+            }
+            return carried;
+        }
 
         /// <summary>
         /// Loads the Village scene ASYNCHRONOUSLY behind a full-screen, code-built

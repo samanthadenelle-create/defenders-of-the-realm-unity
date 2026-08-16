@@ -35,10 +35,28 @@ namespace DeNelle.Village
         //
         // RAID (WO-431/453): also activate for RaidBase_* scenes — the raid is HERO-LED, but no
         // hero is baked into the generated raid base, so the ensurer must wire the camera + control
-        // there too. RaidHeroSpawner builds the REAL class body on a hero root one frame after load;
-        // this ensurer then finds it (FindLoco) and wires SmartMobileCamera + the attack/ability
-        // components. If RaidHeroSpawner hasn't run yet, Ensure()'s emergency-spawn fallback keeps
-        // the player controllable so a raid is never un-playable.
+        // there too.
+        //
+        // ⚠ WO-1109 — THE COMMENT THAT USED TO SIT HERE WAS A LIE, AND THE LIE WAS THE BUG.
+        // It claimed: "RaidHeroSpawner builds the REAL class body on a hero root one frame after
+        // load; this ensurer then finds it (FindLoco)". THERE IS NO RaidHeroSpawner. No such type
+        // ever existed anywhere in the repo — the only mention of the name was that sentence. A
+        // seat reading it concluded the raid hero path was designed and wired, and was wrong
+        // (CLAUDE.md MANDATORY FIRST STEP: "verified from the actual code, NOT from comments").
+        // What ACTUALLY happened on every single raid entry: SceneRouter.GoRaid carried nothing,
+        // TryRecoverCarriedHero (keyed on the DontDestroyOnLoad scene) found nothing, and Ensure()
+        // fell straight through to SpawnEmergencyHero() — whose FIRST line is a FlowTrace.Fail. So
+        // a Hero Fail landed in the F8 break-log on EVERY raid, and a trace that always fires is
+        // worse than no trace.
+        //
+        // WHAT HAPPENS NOW (the carry, WO-1109 Option A): SceneRouter.GoRaid marks the live town
+        // hero DontDestroyOnLoad BEFORE the Single load (same shape SceneTransitionTrigger already
+        // uses for outposts / dungeons / arenas / Village2). Ensure() then finds that carried hero,
+        // re-homes it out of the DDOL scene into the raid scene, and seats it at the raid's baked
+        // HeroStartPoint_PlayerSpawn marker — so the raid hero IS the town hero, with its real class
+        // body, gear, loadout and HP. The emergency spawn is still wired and still reachable; it is
+        // now what its name says — an EMERGENCY. Its FlowTrace.Fail firing in a raid means a real
+        // defect again, which is the whole point of restoring it.
         private static bool IsVillageScene(string name) =>
             !string.IsNullOrEmpty(name) && (
                 name == "Village" || name.StartsWith("Village") || name.Contains("Village") ||
@@ -191,6 +209,36 @@ namespace DeNelle.Village
             DedupeHeroes();
             var loco = FindLoco();
             GameObject hero = loco != null ? loco.gameObject : FindHeroByName();
+
+            // ── WO-1109: RE-HOME THE HERO GoRaid CARRIED ─────────────────────────────
+            // FindLoco()/FindHeroByName() call FindObjectsByType, which ALSO returns objects
+            // parked in the special DontDestroyOnLoad scene. So a hero carried across a Single
+            // load is FOUND right here and control takes the hero!=null branch below — meaning
+            // TryRecoverCarriedHero, the ONLY code that re-homes + seats a carried hero, would
+            // never run. Two consequences if we left it: the hero keeps its town world-pose in
+            // the raid (it is never seated at HeroStartPoint_PlayerSpawn), AND it stays parked
+            // in DDOL, which is a LEAK — a DDOL root survives the NEXT Single load too, so on
+            // the return hop it stacks against the hub's own baked "Hero (Blaise)" and
+            // DedupeHeroes has to destroy one every single transition.
+            //
+            // SCOPED TO RAID SCENES ON PURPOSE: this ensurer is the receiving half of the
+            // GoRaid carry specifically. Every OTHER Single-load seam (outposts, dungeons,
+            // arenas, Village2) is crossed by SceneTransitionTrigger, which already owns its
+            // own re-home step inside RepositionPlayerAfterLoad; re-homing those from here too
+            // would race a warp this file does not own. Idempotent — a hero already living in
+            // the active scene fails the DDOL test and this is a no-op.
+            if (hero != null && DeNelle.Core.HubScenes.IsRaid(scene)
+                && hero.transform.root.gameObject.scene.name == "DontDestroyOnLoad")
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Hero",
+                    $"Ensure: carried hero '{hero.name}' is still parked in the DontDestroyOnLoad scene on raid entry '{scene}' — re-homing + seating it.");
+                var rehomed = TryRecoverCarriedHero(scene);
+                if (rehomed != null) hero = rehomed;
+                else
+                    DeNelle.Core.Diagnostics.FlowTrace.Warn("Hero",
+                        $"Ensure: re-home of carried hero '{hero.name}' into '{scene}' returned nothing — hero stays in DDOL (it will be deduped on the next hop).");
+            }
+
             if (hero == null)
             {
                 if (IsVillageScene(scene))
