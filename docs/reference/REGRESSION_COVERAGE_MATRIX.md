@@ -1,6 +1,199 @@
-# REGRESSION COVERAGE MATRIX - known dictionary (2026-07-19)
+# REGRESSION COVERAGE MATRIX - known dictionary
 
-> # ⚠ COUNTS ARE STALE — 2 Sundays overdue (flagged 2026-08-03)
+> # ⭐ CURRENT SECTION = §A below, refreshed **2026-08-16** (Sunday sweep, step 5).
+> Everything from "# Regression-Coverage Proof" onward is the **FROZEN 2026-07-19 ledger** — a dated
+> point-in-time report, never rewritten (CLAUDE.md §15). Read §A for current state; read the frozen body
+> only for its PROPOSED ASSERTIONS, never for its counts.
+
+---
+
+# §A — CURRENT STATE (measured 2026-08-16)
+
+*Every number below was measured at source this session and carries the command or `file:line` that
+re-derives it. Nothing here is quoted from a prior report.*
+
+## A1. CENSUS — the registered-oracle inventory
+
+| Fact | Value | Source |
+|---|---|---|
+| Registration call-sites between the fences in `DataRegression.RunAll` | **187** | `Assets/Editor/Regression/DataRegression.cs`, `START FENCE <<<` at **:276** → `END FENCE <<<` at **:861**; counted with the gate's own regex `\.Run\s*\(\s*out\s+(?:var\s+)?\w+\s*\)` (`RegressionMarkerRegression.cs:502-503`) after line-comment stripping |
+| **DISTINCT oracle types** among those 187 | **187 — zero duplicates** | same scan, de-duplicated by qualified type name |
+| What the live gate reports | `registered oracle suites: 187 (183 green, 4 red)` / `REGRESSION_FAIL: 4 failure(s) (183/187 registered suites green)` | `Builds/data-regression-wave14.log:52719-52720` (2026-08-16 17:42) |
+| Denominator self-check | `[suite-count] denominator pinned: source registers 187 suite(s) and the run accounted for all 187` | `Builds/data-regression-wave14.log:52710` |
+| `.cs` files in `Assets/Editor/Regression/` | 193 (not all are registered suites — helpers and shared scanners live here too) | `ls Assets/Editor/Regression/*.cs \| wc -l` |
+
+> ⚠ **CORRECTION to the sweep brief.** The brief carried **182 registrations / 181 distinct**
+> (`BannedVfxRegression` registered twice). That duplicate was fixed tonight in **`6b446798`**, and five
+> further oracles landed after the brief was written (`CastlePlansSeatRegression`,
+> `SpirePlansCelebrationRegression`, `RangedPrimaryRegression`, `EchoWorldPresenceRegression`,
+> `RaidHeroCarryRegression`, `RaidExitParityRegression`, `DungeonEgressRegression`,
+> `DungeonGemExclusivityRegression`, `DevGrantUncappedRegression`, `HeroDeathSeverityRegression`,
+> `LiveClassBowAndAffordSeverityRegression`). **187/187 is the number as of this measurement.**
+> Never restate it — re-run the scan or read it off the marker (`SUNDAY_HOUSEKEEPING.md` §3 rule 7).
+
+## A2. KNOWN-RED BASELINE — 4 reds, all pre-existing
+
+Verbatim from `Builds/data-regression-wave14.log:52721-52724`.
+
+| # | Tag | What it says | Why it is still red |
+|---|---|---|---|
+| 1 | `[ui-obsidian]` | `UI-OBSIDIAN CONFORMANCE VIOLATION x1 — NEW hand-rolled UI bypassing ElarionUiKit: Assets/_Modules/Village/Buildings/CaravanStatusChip.cs -> 93: _label = labelGo.AddComponent<Text>();` (+fill at `:86` `_canvas = canvasGo.AddComponent<Canvas>()`). 169 UI files scanned, 89 route through `ElarionUiKit`, 14 known-baseline. | The caravan chip has never been ported to the kit. A code fix, not a ruling. |
+| 2 | `vfx-self-contained` | 1 of 69 assets still reaches gitignored art; **`HovlVfxCatalog.asset` exposure GREW from a baselined 689 to 702** assets in gitignored roots. | The ratchet only ever moves down — something added new pack references to the project's single largest exposure. Fix = `DeNelle.Editor.VfxResourceArtMirror.Run`. |
+| 3 | `vfx-null-slot` | **2 findings**, 178 prefabs checked, 0 skipped-unresolved: `PP_DissolveSolidHorizontal` (renderer `Flakes`) and `PP_HeatDistortion` (renderer `HeatDistortion`) each carry 1 ENABLED `ParticleSystemRenderer` with ALL material slots null → engine-default MAGENTA, F8-spamming `MagentaProbe M2 FAIL` on every spawn. | **AWAITING AN OWNER RULING.** The oracle refuses to baseline new debt without one. ⚠ The brief said *"5 ParticlePack prefabs"*; the log says **2 findings** — recorded as measured. |
+| 4 | `[scene-matches-code]` **WANDERER BUBBLE ×4** | `_panelWidth` code 1.8 vs baked scene 4.4; `_panelHeight` 0.7 vs 1.7; `_wrapWidth` 22 vs 34; `_textScale` not serialised in the baked scene at all. Unity deserialises the scene copy OVER the initialiser, so the corrected code defaults have NO effect in play. | **Needs a dungeon re-bake in an isolated worktree** — that is exactly **WO-1043**, which stays READY on purpose. Not a code defect. |
+
+## A3. THE HOLLOW-PASS REGISTER — two structurally different shapes
+
+**This distinction is the valuable part of this dictionary.** A suite that returns `true` without
+asserting anything is a green marker over an unexamined system. There are two shapes and only one of them
+is detectable by any token scan.
+
+*(Companion, different axis: `docs/reference/HOLLOW_ASSERTIONS_REGISTRY.md` catalogues hollow **runtime
+FlowTrace** lines. This section catalogues hollow **oracle passes**. Do not merge them.)*
+
+### Shape 1 — *guard-and-return-true*: a missing file/dir/null yields an unqualified pass
+
+Detectable in principle by a token scan. **The ratchet's own detector is
+`RegressionMarkerRegression.cs:555-571`, and it recognises exactly FOUR guard forms** — `== null`,
+`IsNullOrEmpty`, `!File.Exists`, `!Directory.Exists` (`RegressionMarkerRegression.cs:565-568`) — within a
+4-line window ending at a `return true` that also mentions `reason` and does not also `return false`.
+Anything guarded by a plain boolean **evades it**.
+
+| Suite | Lines | The skip |
+|---|---|---|
+| `HeroLocomotionClipRegression.cs` | **23-26**, **40-44** | `motion-castings.json` missing → `"…missing — skip"`, `return true`; no `knight` target → `"knight locomotion clips OK (no knight target)"`, `return true` |
+| `ModalArbiterRegistrationRegression.cs` | **84-88**, **90-92**, **130-139** | `_Modules` dir absent → SKIPPED/`true`; enumerate throws → SKIPPED/`true`; the `NamedMustRegister` loop adds a **note**, not a failure, when the named fix file is missing |
+| `UiMvvmConformanceRegression.cs` | **159-171** | dir absent → SKIPPED/`true`; enumerate throws → SKIPPED/`true` |
+| `UiObsidianConformanceRegression.cs` | **199-211** | same two skips |
+| `OfflineHarvestRegression.cs` | **57-67** | `GameStateService` seam not installable headless → `"skipped: needs fleet"`, `return true` (twice) |
+| `VillageEconomyRegression.cs` | **65-75** | same "needs fleet" pair |
+| `HudUiRegression.cs` | **225-230** | `_Modules` absent → `LogWarning` + `return true` |
+| `DataWebRegression.cs` | **626**, **629** | `CheckPrefabPathsResolve`: file absent → `return true`; array key absent → `return true` |
+
+**The seven EVADERS** — same hollow shape, boolean guard, so the detector at `:565-568` cannot see them:
+
+| Suite | Lines | Guard that evades the detector |
+|---|---|---|
+| `UpgradeFamilyPrecedenceRegression.cs` | **152-156** | `if (!InstallState(...))` → logs SKIPPED and **bare `return;`** from a `void` case — evades twice over (not even a `return true`) |
+| `BuildingUpgradeAuthorityRegression.cs` | **56-57** | `if (!InstallState(...))` → `reason = "… skipped: … (needs fleet)"; return true;` |
+| `CastlePlansUnlockRegression.cs` | **199-200** | same |
+| `FoundingReachabilityRegression.cs` | **68-69** | same |
+| `PackGrantRegression.cs` | **80-81** | same |
+| `PackCosmeticIntegrityRegression.cs` | **90-91** | same |
+| `DevTimeSkipRegression.cs` | **70-71** | `DevClock.Available == false` → named skip, `return true` |
+
+> These are all **deliberate, named skips** under the harness-integrity rule (never a false FAIL). The
+> hazard is not dishonesty, it is **arithmetic**: a named skip still increments the green count in
+> `REGRESSION_OK <n>/<n>`, so a headless environment where `GameStateService` will not install can report
+> a full green while six economy oracles asserted nothing. **Fix shape: a skip should report as a THIRD
+> state, not as green.**
+
+### Shape 2 — *empty-collection `foreach` with no zero-guard*  ⚠ NO TOKEN SCAN CAN EVER CATCH THIS
+
+A suite iterates a collection, asserts inside the loop, and reports "OK — N checked". If the collection is
+**empty** the loop body never runs, `failures` stays empty, and the suite reports a confident pass over
+zero evidence. There is no token, at any window length, that distinguishes this from a real pass — the
+code is *correct*; only the input is missing. **The only fix is a `count == 0` hard-fail.**
+
+| Suite | Lines | Iterates | Claims on empty |
+|---|---|---|---|
+| `CoreDataHubRegression.cs` | **62-97** | `Directory.GetFiles(streamingDir, "*.json")` | `CORE_DATAHUB_OK` + `"— 0 canonical file(s) read non-empty + Resources dual-copy present"` |
+| `EnemyPoolResetRegression.cs` | **455-472** | `EnumerateModuleSources()` | `"[pool-no-orphan-queue] unkeyed releases destroyed; all Get keys use a live prefix."` |
+| `BuildMenuRealEconomyRegression.cs` | **849-883** (`CaseNoFakeWallet`) | `EnumerateSources()` | `"scanned 0 source file(s), 0 hardcoded-balance site(s)"` |
+| `BuildMenuRealEconomyRegression.cs` | **900-940** (`CaseTrySpendHonoured`) | `EnumerateSources()` | `"0 TrySpend call site(s): 0 unverified, 0 allowlisted"` |
+
+## A4. PROSE-MATCHING EXPOSURE — source-lint suites that can be satisfied by a comment
+
+Measured this session over `Assets/Editor/Regression/*.cs`: a file counts as *reading source* if it
+globs `*.cs`, tests `EndsWith(".cs")`, or calls `EnumerateSources()` / `EnumerateModuleSources()` /
+`ReadSource()`.
+
+| Class | Count | Note |
+|---|---|---|
+| Suites that read `.cs` source and match patterns against it | **49** | |
+| …that strip **both comments AND string literals** (`StripCommentsAndStrings`) | **2** | `BuildMenuRealEconomyRegression.cs`, `LiveClassBowAndAffordSeverityRegression.cs` |
+| …that strip **comments only / partially** (`StripComments`, `StripLineComments`, `IsLiveCode`) | **26** | e.g. `RegressionMarkerRegression.cs:489` strips `//` only — and deliberately does so AFTER slicing, because the fence markers themselves live in comments |
+| …with **NO stripping construct at all** | **21** | `AdPlacementCovenantRegression`, `DataWebRegression`, `DungeonTreasureRegression`, `DynamicDifficultyRegression`, `HelpMenuEntryRegression`, `HudUiRegression`, `ModalArbiterRegistrationRegression`, `RaidArenaShapeRegression`, `RaidHeroCarryRegression`, `SceneRoutingRegression`, `ShaderPinRegression`, `StructureTargetableRegression`, `TowerManagerRegression`, `TownBankCapRegression`, `UiCaptureCoverageRegression`, `UiCaptureFidelityRegression`, `UiMvvmConformanceRegression`, `UiObsidianConformanceRegression`, `UnderConstructionGateRegression`, `WallBuildL1Regression`, `WalletProviderSelectionRegression` |
+
+> ⚠ **CORRECTION to the sweep brief.** The brief said *"~54 suites read `.cs` with NO stripping construct;
+> only ~6 use a full `StripCommentsAndStrings`."* Measured: **49 read source in total**, of which **21**
+> have no stripping and only **2** strip fully. The brief's 54 is larger than the whole population.
+>
+> **Why this matters, proven twice tonight:** `449dd9df1` records the `[spire-celebration]` lint throwing a
+> **FALSE RED** because the screen's honest `FlowTrace` named `TryCollect` inside a *message string* — a
+> lint that cannot tell a call from a sentence punishes the §12 tracing discipline. `64092d611` and
+> `dd17a793` both had to strip comments so their own prose could not satisfy them. **Any new source-lint
+> must strip comments and strings before matching.**
+
+## A5. COVERAGE OF TONIGHT'S DEFECT SET
+
+⚠ **Method, stated because it differs from the brief.** The brief cited "22 defects — 12 covered /
+3 partial / 7 uncovered". **No source list of those 22 exists anywhere in the tree** (searched
+`WorkOrders/`, `docs/`, repo root). Rather than launder an unverifiable tally, the table below is
+enumerated from **tonight's commit record** — each row cites the commit that names the defect. It comes
+out at **28 defects: 19 covered · 2 partial · 7 uncovered**, and the *uncovered* list is what matters.
+
+| # | Defect | Commit | Covering oracle |
+|---|---|---|---|
+| 1 | Plans drop seated ~4 m OUTSIDE the wall ring | `ec247d4f1` | `[castle-plans-seat]` (ring read from authored gate magnitudes) |
+| 2 | Gate choice rode `FindObjectsByType` order while claiming determinism | `ec247d4f1` | `[castle-plans-seat]` — identical across all four rotations |
+| 3 | `ResolveGateSeat` threw on the UNDECLARED `SpawnPoint` tag every 3 s | `449dd9df1` | component lookup + `[castle-plans-seat]` |
+| 4 | Plans threshold 2 → 3 waves | `449dd9df1` | `CastlePlansUnlockRegression` reads `RequiredWavesSurvived` |
+| 5 | `PlansCollected` had ZERO subscribers since WO-1013 | `449dd9df1` | `SPIRE_CELEBRATION_OK` |
+| 6 | Primary attack was a class-agnostic 3.2 m melee sweep for the archer | `562f3d3e5`/`682c6f595` | `[ranged-primary]` (bow-on-slot-Q, no `DrivePrimaryFace`) |
+| 7 | Bow grip seated in the hollow between string and belly | `14a2c66ed` | `[ranged-primary]` `bow-grip-apex`, err = 0 m |
+| 8 | Bow HELD ROTATION 90° off (identity hand-local seat) | `998ca0751` | `[ranged-primary]` derived-rotation cases |
+| 9 | Crossbows could re-inflate silently via `Generate Gear Catalog` (96 → 431) | `562f3d3e5` | `[ranged-primary]` scans id/mesh/name/**category** |
+| 10 | `repairFractionPerHour` code-default `2f` → silent 6× at full roster | `c72d276db` | `EchoSpecializationRegression` pins 0.35 **and** key-present-in-json |
+| 11 | Stored `repair:N` tokens would strand an Echo idle | `c72d276db` | migration case with an explicit "read back as IDLE" failure |
+| 12 | Repair chip / `AssignRepair` could grow back | `c72d276db` | `EchoResourcePickerRegression` group 6 INVERTED + reflection guard |
+| 13 | No despawn path for a pet existed anywhere | `7fcb49a1b` | `ECHO_WORLD_PRESENCE_OK` (real state machine, scene-counted bodies) |
+| 14 | `EchoAutoDeployTrigger` was a SECOND appearance owner | `7fcb49a1b` | `[one-owner]` scans every `.cs` for `SummonAt` |
+| 15 | `PetTaskController`/`WallRepairController` raced Lane A over the same wallet | `7fcb49a1b` | installer deleted; `SetTask(Repair)` refuses loudly; type pinned by `EchoEngageDialogueRegression` |
+| 16 | `maxLevel > 3` hardcoded in EIGHT places (incl. a fallback array) | `38ed0d881` | one constant `RepoProps.MaxStructureLevel` + `[storage-ladder-6]` |
+| 17 | `RaidHeroSpawner` does not exist; every raid spawned the emergency hero | `256fa9ee3` | `RaidHeroCarryRegression` |
+| 18 | The raid hero has NEVER had `HeroAbilities` / a mana pool | `256fa9ee3` | `RaidHeroCarryRegression` |
+| 19 | `FindObjectsByType` returns DDOL objects → a session-long hero leak | `256fa9ee3` | re-home case |
+| 20 | `BuildHud()` unguarded AND ahead of the clock-expiry subscriber = softlock | `64092d611` | `RAID_EXIT_PARITY_OK` + `DebugForceBuildHudThrow` injection |
+| 21 | `ResolveRewardMultiplier` swallowed its catch → a silent 55% pay cut | `64092d611` | `RAID_EXIT_PARITY_OK` fails on any bare catch in the 5 raid files |
+| 22 | Death forfeited the partial loot retreat pays (inverted incentive) | `64092d611` | `SettlePartialLoot` + exit-parity case |
+| 23 | Spirit layer could re-attach at the NEW `EchoWorldPresence` site | `b63bc7190` | `FoundingGuideWolfBodyRegression` case (d) WIDENED to scan both |
+| 24 | Every hero death raised an F8 **error** (false positive in the one §12/§14 instrument) | `6b446798` | `HeroDeathSeverityRegression` — two-sided (deleting the dump fails as loudly as restoring the Fail) |
+| 25 | Dev grants routed to the CAPPED path — ~95% of a 50k grant vaporised, at THREE call sites | `6b446798` | `DevGrantUncappedRegression` |
+| 26 | Dungeon egress 6 → 2 | `dd17a793` | `[dungeon-egress]` `DUNGEON_EGRESS_OK` |
+| 27 | `graph.extracts` would silently regrow the pads on the next Compose (`GraphDungeonComposer:512`) | `dd17a793` | `[dungeon-egress]` case 6 pins that regrowth path specifically |
+| 28 | Jeweler sold "dungeon-exclusive" gems for gold at 20/20/18 g | `eff761fcc` | `DungeonGemExclusivityRegression` |
+
+**PARTIAL (2)** — instrumented or gated, but no oracle asserts the behaviour:
+
+| Defect | Commit | What is missing |
+|---|---|---|
+| `CastleDefensePlansService`'s non-spawn early returns were entirely SILENT | `ec247d4f1` | A 5 s throttled heartbeat was added; **no oracle asserts the heartbeat exists**, so a future refactor can re-silence it. *Would be covered by:* a source-lint case that fails if any early return in that file lacks a `FlowTrace` call. |
+| `JobKind.JewelPolish` inherits paid instant-finish generically | `eff761fcc` | `JobRushPolicy` gates three sites and the oracle covers the current kind; **nothing fails when a FUTURE `JobKind` is added without a policy decision.** *Would be covered by:* an exhaustiveness case over `JobKind` requiring every member to appear in `JobRushPolicy`. |
+
+**UNCOVERED (7)** — named, with what would cover each:
+
+| # | Uncovered | Source | What would cover it |
+|---|---|---|---|
+| U1 | The mage's Q medallion reads "Cast" with a **sword** icon — no `mage.fireball` `concept-icons` row | `682c6f595` | A case asserting every ability authoring a `verb` also authors a `concept-icons` row. Cheap, catches the whole class. |
+| U2 | `HeroCatalog` carries a drifted copy of ability names ("Frost Nova", "Mending Salve") contradicting the live kit | `14a2c66ed` | A cross-catalog identity case: every `HeroCatalog` ability name must equal the `abilities.json` name for the same id. |
+| U3 | Quick Shot's 0.45 s cooldown flashes "1" on the whole-second shared readout | `14a2c66ed` | Not an oracle target as-is — it is a **choice** (longer cooldown = balance, or a fractional readout = new visual). Needs the ruling first. |
+| U4 | Container ladder inverts the 2026-08-04 "base store fills last" ruling from **level 2** | `38ed0d881` | Blocked on an owner ruling — the order-intent case deliberately hard-fails only at level 1. Cover it the moment she rules (presentation rule vs. capacity rule). |
+| U5 | Quitting mid-raid writes nothing to the army — a player can quit to avoid wounding troops | `64092d611` | An oracle asserting army mutation is durable at every raid exit, not only at `ReconcileRaidEnd`. Explicitly recorded-not-fixed. |
+| U6 | One "Leave" word per dungeon still X-rays through geometry (built-in `LegacyRuntime` font material = `GUI/Text Shader`, `ZTest Always`); the same defect exists town-side at `BuildingSign:155`, `StructureAttackAlert:184`, `StructureDamageVisuals:903` | `dd17a793` | A material/shader-predicate case over every `BuildWorldLabel` caller asserting no `ZTest Always`. ⚠ The font fix was **drafted and backed out** — atlases keep the glyph in the ALPHA channel, so naive re-hosting renders black or blank, and that lane had no screenshot capability. |
+| U7 | Raid entry now CARRIES hero HP (30% in → 30% there), removing today's free full heal | `256fa9ee3` | Correct continuity, but a **real difficulty change** — PO felt-verify, then pin whichever she rules. |
+
+## A6. WHAT THIS SECTION IS FOR
+
+Read it before writing a new oracle. The two failure shapes in **A3** and the stripping rule in **A4** are
+the ways a green marker lies in this tree; every new suite should be checked against them at authoring
+time, not discovered on a Sunday.
+
+---
+
+# §B — FROZEN LEDGER, 2026-07-19 (never rewritten — CLAUDE.md §15)
+
+> # ⚠ COUNTS ARE STALE — 2 Sundays overdue (flagged 2026-08-03), SUPERSEDED BY §A (2026-08-16)
 > **Use the PROPOSED ASSERTIONS in this file. Do NOT quote its counts, its VERDICT, or its `Stats` blob.**
 > The body is frozen at 2026-07-19, when the gate ran **16 suites** and the honest verdict was
 > "0 of 73 covered". The gate now runs **`REGRESSION_OK 104/104 suites`** with **`TESTS_OK 912/912`,

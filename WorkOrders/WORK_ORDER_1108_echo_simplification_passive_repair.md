@@ -1,6 +1,6 @@
 # WORK ORDER 1108 — Echo simplification: auto-harvest, count-driven passive repair, escort-then-vanish
 
-**Status:** READY TO IMPLEMENT (owner-approved 2026-08-16)
+**Status:** DONE 2026-08-16 (`c72d276db` Lane A, `7fcb49a1b` Lane B, `38ed0d881` WO-1108b storage ladder) — RESULT filed; pending PO felt-verify
 **Lane:** Echo/harvest (`EchoBonusCalculator`, `EchoAssignments`, `EchoCardVM`) + pet world-presence
 (`PetDeployer`, `PetHeroLeash`, `TutorialFlow`). ⚠ Two disjoint silos — see §5.
 **Minted:** 2026-08-16 (CLI seat) — banner bumped 1108 -> 1109 in the SAME edit.

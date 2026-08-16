@@ -1,6 +1,6 @@
 # WORK ORDER 1109 — Every raid spawns the EMERGENCY pill-hero, because `RaidHeroSpawner` does not exist
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE 2026-08-16 (`256fa9ee3`) — RESULT filed; pending PO felt-verify (the raid-entry HP-carry difficulty change is hers)
 **Minted:** 2026-08-16 (CLI seat) — banner bumped 1109 -> 1112 in the SAME edit (1110, 1111 minted alongside)
 **Lane:** Hero lifecycle / raid entry. ⚠ `HeroControlEnsurer.cs` + `SceneRouter.cs`.
 **Provenance:** SME readiness audit of the raid pillar, 2026-08-16, run against the owner's question

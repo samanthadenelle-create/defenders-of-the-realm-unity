@@ -1,6 +1,15 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
 > ## ⚠ RECONCILED 2026-08-16 (CLI): main line next free = **1112**.
+> ## ⚠ RECONCILED 2026-08-16 (Sunday sweep, step 2): UI seat next free = **1044**.
+> The paragraph below still says the UI block is *"consumed through 1029"*. **That went stale by
+> fourteen numbers** — `WorkOrders/WORK_ORDER_10{30..43}_*.md` all exist on disk, minted 2026-08-15/16
+> (the newest, **1043** = the pending attended dungeon re-bake, minted this sweep and STILL READY —
+> it is a genuinely un-run bake, not a done lane). 1000–1043 are CONSUMED; the UI seat mints at **1044**.
+> ⚠ This is exactly the §2 failure mode the banner warns about — a number written into prose in one edit
+> and never bumped in the next. **Bump THIS row in the same edit as any UI-block mint.** The main line is
+> unaffected and disjoint (1100–, next free 1112 — `WORK_ORDER_1111_*` is the highest on disk).
+>
 > **1109 / 1110 / 1111** = the RAID READINESS SET, from the SME audit run against the owner's
 > *"can i finally test raids fully?"* (2026-08-16). The loop IS closed and there is NO UXML in the raid
 > path — but: **1109** every raid spawns the EMERGENCY pill-hero because `RaidHeroSpawner` DOES NOT

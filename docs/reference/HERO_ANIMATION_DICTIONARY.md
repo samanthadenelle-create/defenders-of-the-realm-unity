@@ -4,6 +4,24 @@
 > ActionBar (Attack + Q/W/E/R); Hot-Swap bar (AssignableSkillBar) placeable actions + mappings.
 > Each row is source-cited (file:line). Refresh every Sunday (SUNDAY_HOUSEKEEPING.md).
 
+> ## ➕ ADDENDUM 2026-08-16 (Sunday sweep, step 5) — SYLAS THE RANGER: the bow is an ABILITY, not the attack
+> The body of this dictionary is **Knight "Grom" only** and stays that way. This addendum records the one
+> ranger fact the sweep had to pin; it is not the start of a ranger audit.
+>
+> | Fact | Source |
+> |---|---|
+> | The **bow is an ACTION-BAR ability on slot Q** (`ranger.q`, "Quick Shot", 25 dmg @ 15 m, 0.45 s cd). Q is the class's LOCKED basic — only W/E/R are loadout-swappable. | `Assets/Resources/Data/Canonical/abilities.json:176-184` (both twins) |
+> | The **primary attack stays the melee/dagger sweep for every class**, ranger included. `FirePrimary` / `FireRangedPrimary` / `ResolveRangedTarget` / `ResolvePrimaryFace` were deleted (~145 lines) so the phone's one attack button never spends an arrow. Owner ruling R5, verbatim: *"change the bow and arrow attack to the action bar and leave the attack as the dagger attack."* | `PlayerAttackController.cs` (commit `682c6f595`); `WorkOrders/WORK_ORDER_1105_ranger_plays_as_an_archer.md` §R5 |
+> | The slot's FACE is **data-driven, never a per-class table**: `AbilityDef.Verb` / `AbilitySlotRecord.Verb` → `SetCaption`. Only `ranger.q` (`"verb": "Shoot"`) and `mage.fireball` (`"verb": "Cast"`) author one. | `abilities.json:180` (Shoot), `abilities.json:21` (Cast) |
+> | Icon: `ranger.q` → `spellicons/Hunter12`, picked by SILHOUETTE (recurve bow with nocked arrow), never by colour. | `Assets/Resources/Data/Canonical/concept-icons.json:89-91` |
+> | ⚠ **The bow's HELD ROTATION is DERIVED, and the seat was 90° WRONG until `998ca0751`.** `HeroBowAttachment` used an identity hand-local rotation, mapping the bow's long axis onto the LeftHand bone's +Y — correct for a SWORD (blade continues the fist), wrong for a BOW (the hand closes AROUND the riser, perpendicular to the limb span). Same mapping, two weapon families, exactly 90° apart. Now built in world from the body's axes (limbs → `body.up`, belly → `body.forward`) and expressed in the bone's local frame, the same construction `ComputeSheathRotation` uses — so there is no sign to guess and it holds on any rig. `ApplyGlobalWeaponYaw` is deliberately DROPPED here. | `WeaponBoundsOrient.ComputeBowHeldRotation` → `Assets/_Modules/Core/Geometry/WeaponBoundsOrient.cs:326`; applied at `Assets/_Modules/Village/Hero/HeroBowAttachment.cs:268-282` |
+> | ⚠ **THIS BUG WAS FOUND ONCE BEFORE AND THE FIX WAS REVERTED.** A prior "+91 Z" tweak was almost certainly someone spotting the same 90° and guessing at the axis; reverting it restored the defect, and a comment then asserted *"the bow arrives in the hand ALREADY oriented to spec — so GripLocalEuler stays ZERO"*, locking the wrong conclusion in for every later reader. **Do not zero it again.** `EquipmentController.cs:434-443` records the IDENTICAL failure for staff/wand/axe/mace, fixed 2026-07-04. | commit `998ca0751`; `HeroBowAttachment.cs:61` |
+> | The **grip POSITION is separate and is measured right** — apex-of-the-rounded-side rule, gate reports `bow-grip-apex err = 0 m`. Fixing rotation did not move it. | commit `14a2c66ed`; oracle `[ranged-primary]` |
+>
+> **Still open (own tickets, not fixed):** the mage's Q medallion now reads "Cast" but its icon is still a
+> SWORD (no `mage.fireball` concept-icons row); and `HeroCatalog` carries a separately drifted copy of
+> ability names ("Frost Nova", "Mending Salve") that the live kit contradicts.
+
 # Hero "Grom" (Knight) — Right ActionBar, Hot-Swap Bar & Full Animation Audit
 
 **Live hero:** single Tripo self-rigged Knight **"Grom"** (class id `knight`, KnightV3 CC/AccuRIG body). Runtime body/animator binding chain: `HeroClass.Knight` → `ff.knightv3` ON (default, `FeatureFlags.cs:463`) → loads `Resources/Heroes/KnightV3.fbx` → `ff.mocaploco` ON (default, `FeatureFlags.cs:476`) binds **`Assets/Resources/Heroes/KnightMocap.controller`** (`HeroBodySwapper.cs:472-486`), falling back to `Knight.controller` only if the mocap load misses. `applyRootMotion=false`, `anim.speed=1.0`.

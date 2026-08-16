@@ -1,6 +1,6 @@
 # WORK ORDER 1107 — Build mode's right edge did not fit the Seeker, and never had
 
-**Status:** IMPLEMENTED 2026-08-16 (awaiting gate + owner felt-verify) — banner bumped 1107 -> 1108
+**Status:** DONE 2026-08-16 (`8e7ce0090`) — gate green (`Builds/data-regression-wave14.log`, 183/187, 4 known reds, none in this lane); RESULT filed; pending PO felt-verify — banner bumped 1107 -> 1108
 in the same edit (⚠ and 1106's missed bump reconciled there; see §5).
 **Lane:** Build-mode layout (`BuildHudController`, `BuildPaletteUI`). Source tagged `COLUMN-FIT 2026-08-16`.
 **Provenance:** owner F8 seq 2503 (*"the done should match same style and stack above defense and town
