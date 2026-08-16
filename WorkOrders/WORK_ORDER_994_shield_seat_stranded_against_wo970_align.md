@@ -1,6 +1,6 @@
 # WORK ORDER 994 - The shield's authored seat is stranded against a base WO-970 moved
 
-**Status:** REOPENED 2026-08-16 — diagnostic spec ready (Section: DIAGNOSTIC SPEC below); AWAITING OWNER GO. Prior 2026-08-15 re-seat did not hold on device.
+**Status:** REOPENED 2026-08-16 — INSTRUMENTATION LANDED in working tree (owner proactive directive 2026-08-16 lifted the wait-for-go); pending CLI batch-gate + commit, then ONE device dungeon->town run names the mechanism. No seat numbers changed.
 **Minted:** 2026-08-14 (CLI)
 **Silo:** Gear / equip seating
 **Source:** OWNER REPORT - *"still same problem when porting from dungeon with Shield position"*
@@ -211,14 +211,28 @@ immediately after the port, or via break-log.jsonl.
    C (offhand idempotent skip on the scene-load path), or none (escalate with the measured
    pose diff in hand).
 
-### Acceptance standard (OWNER DIRECTIVE 2026-08-16 - BINDING)
+### Acceptance standard (OWNER DIRECTIVE 2026-08-16 - BINDING; amended same day)
 
-The proof for the eventual fix is a DEVICE screenshot taken AFTER a dungeon->town transition
-on the Seeker - the seat is perfect until that transition, so a hub-only screenshot does not
-test it. Batchmode/headless captures are INVALID for this class. True before/after = same
-device, same transition path (dungeon with shield correct -> port -> town screenshot).
+**OWNER 2026-08-16: "the same issues happen on the exe."** The seam reproduces on the
+WINDOWS PLAYER, not only the Seeker. Consequences:
+- The platform-specific sub-branch of Candidate A (Android user-file read failing) is
+  WEAKENED - the mechanism is platform-neutral, which fits C (idempotent no-op) and B
+  (bake/frame race) best. The registry probes stay in; the trace still decides.
+- The DIAGNOSTIC loop is fully self-serve on this machine: CLI rebuilds the exe with the
+  probes, drives dungeon -> town in the desktop player, reads its own trace + screenshot.
+  No owner playtest needed to NAME the mechanism.
+- FINAL close remains the owner's felt-verify: screenshot AFTER a dungeon->town transition
+  (exe or Seeker - both are live repro surfaces now). A hub-only screenshot does not test
+  it. Same transition path before/after.
 
 ### Status
 
-Spec complete; instrumentation is the FIRST and ONLY implementation step.
-**AWAITING OWNER GO** before the CLI lands the trace lines.
+Spec complete. **Instrumentation IMPLEMENTED 2026-08-16** under the owner's proactive
+directive (>=70% confidence, don't wait): probes 1-4 landed as FlowTrace-only edits in
+`EquipmentController.cs` (registryProbe START/SCENELOAD, reapplyCtx, off-hand idempotent
+skip line, shieldPose SCENELOAD measured line), `AttachmentOffsetRegistry.cs` (`Count`
+accessor), `HeroBodySwapper.cs` (frame stamp on the marker-add line). Probe 4's attach-path
+half already existed (`AttachOffHandProp MEASURED after hold`). Brace + NUL gate green on
+all three files. NO seat numbers, offsets, guards, or frame counts changed.
+Next: CLI batch-gates (`COMPILE_GATE_OK`) + commits, deploy to Seeker, owner plays ONE
+dungeon->town port with the shield, pull the capture — probes decide A vs B vs C.

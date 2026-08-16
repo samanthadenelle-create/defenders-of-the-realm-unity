@@ -737,7 +737,8 @@ namespace DeNelle.Village
                 gameObject.AddComponent<PackageBakedGearMarker>();
                 FlowTrace.Step("HeroBody",
                     "PACKAGE: tagged hero root with PackageBakedGearMarker BEFORE EquipmentController — " +
-                    "the controller will SKIP weapon/shield prop attach (baked Paladin gear; de-dupes the second sword).");
+                    "the controller will SKIP weapon/shield prop attach (baked Paladin gear; de-dupes the second sword). " +
+                    $"frame={Time.frameCount}");   // WO-994 probe 2: orders the bake vs the scene-load re-seat
             }
             if (GetComponent<EquipmentController>() == null)
                 gameObject.AddComponent<EquipmentController>();

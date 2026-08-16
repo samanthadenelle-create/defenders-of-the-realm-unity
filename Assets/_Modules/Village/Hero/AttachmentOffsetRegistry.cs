@@ -209,6 +209,12 @@ namespace DeNelle.Village
             return null;
         }
 
+        /// <summary>WO-994 probe: number of effective offset rows currently loaded (lazy-loads).</summary>
+        public static int Count
+        {
+            get { EnsureLoaded(); return s_map.Count; }
+        }
+
         public static bool TryGetOffset(string key, out AttachmentOffset offset)
         {
             offset = default;

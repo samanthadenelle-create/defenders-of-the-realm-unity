@@ -481,6 +481,13 @@ namespace DeNelle.Village
             // Always pull the latest local user settings before seating props (persistentDataPath
             // attachment-offsets.json wins over shipped defaults per id).
             AttachmentOffsetRegistry.Reload();
+            // WO-994 probe 1 (candidate A): registry state on the FIRST-equip path, to diff
+            // against the SCENELOAD probe in CoReapplyGearAfterSceneLoad. If SCENELOAD shows
+            // shipped values where START showed user values, the Reload() asymmetry fired.
+            FlowTrace.Step("Offset",
+                $"WO-994 registryProbe path=START rows={AttachmentOffsetRegistry.Count} " +
+                $"shield_A[{DescribeOffsetRow("shield_A")}] " +
+                $"shield_A@sheathed[{DescribeOffsetRow("shield_A@sheathed")}]");
             EquipBestForHero();
             // WO-994: dungeon→town port breaks shield seat — height cache + hold pose must re-run
             // after the hub body/height settles (owner: seat is perfect until that transition only).
@@ -502,18 +509,57 @@ namespace DeNelle.Village
             yield return null;
             InvalidateHeroHeightCache();
             CacheRig();
+            // WO-994 probes 1+2 (candidates A+B): registry state + bake-marker/body identity
+            // at the exact frame the re-seat runs. The frame number orders the race against
+            // HeroBodySwapper's marker-add line (which logs its own frame).
+            FlowTrace.Step("Offset",
+                $"WO-994 registryProbe path=SCENELOAD rows={AttachmentOffsetRegistry.Count} " +
+                $"shield_A[{DescribeOffsetRow("shield_A")}] " +
+                $"shield_A@sheathed[{DescribeOffsetRow("shield_A@sheathed")}]");
+            Transform bodyChild = transform.Find("HeroBody");
+            FlowTrace.Step("Equip",
+                $"WO-994 reapplyCtx scene='{sceneName}' frame={Time.frameCount} baked={PackageBakedGear} " +
+                $"body='{(bodyChild != null ? bodyChild.name : "<none>")}' " +
+                $"animator={(_animator != null ? (_animator.isHuman ? "human" : "generic") : "<null>")}");
             // Full re-equip so NormalizeInto + fullOverride seat against the NEW height/scale.
             EquipBestForHero();
             ApplyHoldPose();
             FlowTrace.Step("Equip",
                 $"WO-994 post-scene gear reapply scene='{sceneName}' height={_cachedHeroHeightM:0.###}m " +
                 $"offHand={(_currentOffHandProp != null)} weapon={(_gripRoot != null)}");
+            // WO-994 probe 4: measured shield pose on the SCENELOAD path after ApplyHoldPose —
+            // the ground truth to diff against the attach-time "AttachOffHandProp MEASURED"
+            // line (which does NOT fire when the idempotent early-out skipped the re-attach).
+            if (_currentOffHandProp != null)
+            {
+                var offT = _currentOffHandProp.transform;
+                var offRend = _currentOffHandProp.GetComponentInChildren<Renderer>();
+                Bounds owb = offRend != null ? offRend.bounds : new Bounds(offT.position, Vector3.zero);
+                Transform offChild = offT.childCount > 0 ? offT.GetChild(0) : null;
+                bool drawnNow = _combatActive && !(_seatingEditActive && _seatEditSheathed);
+                FlowTrace.Step("Equip",
+                    $"WO-994 shieldPose path=SCENELOAD parent='{(offT.parent != null ? offT.parent.name : "<null>")}' " +
+                    $"state={(drawnNow ? "DRAWN" : "SHEATHED")} comp={_offHandParentCompensate} " +
+                    $"gripLocalEuler={offT.localEulerAngles} " +
+                    $"propLocalEuler={(offChild != null ? offChild.localEulerAngles.ToString() : "n/a")} " +
+                    $"worldEuler={offT.eulerAngles} worldBounds=c{owb.center} s{owb.size} " +
+                    $"boneLossy={(offT.parent != null ? offT.parent.lossyScale.ToString() : "n/a")} " +
+                    $"height={_cachedHeroHeightM:0.###}");
+            }
         }
 
         /// <summary>WO-994: clear proportional height so the next seat uses live body bounds.</summary>
         public void InvalidateHeroHeightCache()
         {
             _cachedHeroHeightM = 0f;
+        }
+
+        // WO-994 registry probe: render one offset row for the trace (or MISSING).
+        private static string DescribeOffsetRow(string id)
+        {
+            return AttachmentOffsetRegistry.TryGetOffset(id, out var o)
+                ? $"pos={o.pos} rot={o.eulerRot} scale={o.scale:0.###} full={o.fullOverride}"
+                : "MISSING";
         }
 
         // Idempotent: resolve the GearLoadout (it may be added AFTER this controller on the
@@ -1457,7 +1503,16 @@ namespace DeNelle.Village
             // Idempotent: same off-hand already shown -> nothing to do.
             if (string.Equals(_currentOffHandId, id, System.StringComparison.OrdinalIgnoreCase)
                 && _currentOffHandProp != null)
+            {
+                // WO-994 probe 3 (candidate C): this early-out was SILENT and is what can make
+                // the scene-load re-seat a NO-OP for a surviving shield (no re-NormalizeInto,
+                // height-cache invalidation consumed by nothing). Surface it with the frame.
+                FlowTrace.Step("Equip",
+                    $"off-hand idempotent skip id='{id}' prop='{_currentOffHandProp.name}' " +
+                    $"parent='{(_currentOffHandProp.transform.parent != null ? _currentOffHandProp.transform.parent.name : "<null>")}' " +
+                    $"frame={Time.frameCount}");
                 return;
+            }
 
             // New off-hand request — invalidate any in-flight async off-hand load + drop the old prop/handle.
             _offHandGeneration++;
