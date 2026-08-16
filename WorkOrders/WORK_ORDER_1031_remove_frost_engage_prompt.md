@@ -87,6 +87,38 @@ names as the recurring root cause.
 letter apart* — **Alduin the Mournful** (necromancer, dungeon lore) vs **Aldwin the Ice Echo** (WO-881).
 **Do not "correct" one into the other.** If any replacement copy is written, spell it **Aldwin**.
 
+## 2d. ⛔ OWNER RULING 2026-08-16 — THE WOLF IS ECHO #1. "Frost" was never a character.
+
+> Owner, verbatim: **"the wolf isnt frost or shouldnt be its the first Echo"**
+
+This **confirms §2b at the design level, not just the data level**. The guide wolf's identity is
+**Echo #1 — Aldwin, the founding Ice Echo** (`EchoRosterCatalog.ByCount(1)`). "Frost" was a name
+invented inside `PetTaskController.SpeakerName()` and never existed in the roster, the narrative bible,
+or the tutorial copy.
+
+**Consequence for naming:** anywhere the guide is addressed, it is **Aldwin** — the name the tutorial
+already uses ("Follow Aldwin to the gate"). The species→name table dies with the prompt (§4c); nothing
+should replace it. If a name is ever needed, read it from **`EchoRosterCatalog`**, the authority — do
+not re-hand-author one. (The canon "derive it, don't hand-author it" pattern; `SpeakerName()` is a
+textbook case.)
+
+### ⚠ CONSEQUENCE FOR THE DESPAWN — flag before implementing §4
+
+If the wolf **is** Echo #1, then the guide body and a **roster entry the player has earned** are the
+same character. The HUD chip in the owner's screenshots reads **`Echoes 1/6`** — that 1 is Aldwin.
+
+**The despawn must remove the BODY, not the Echo.**
+
+- [ ] After despawn, the player still **has Echo #1 (Aldwin)** — `Echoes 1/6` unchanged, roster intact,
+      the Echo tab still lists and can assign him
+- [ ] No save state implying the Echo was lost, un-earned, or reset
+- [ ] ⚠ Do not let the despawn path touch `EchoAssignments` or the Echo roster — it despawns a
+      **world actor**, nothing more
+
+**Getting this wrong silently deletes the player's first Echo** — and the Echo lane is a progression
+pillar (`docs/DESIGN_REVIEW_COC_WC3_LENS_2026-08-15.md`). It would read as a save bug, not a tutorial
+bug, and would be diagnosed far from here.
+
 ## 3. WHY it keeps appearing — the part that makes it feel broken
 
 `PetTaskController.TickEngagement()` :137-145:
@@ -163,7 +195,52 @@ or throw.
 - [ ] ⚠ `founding_walk` still completes — the guide survives until `hero.reached:guide_gate`
 - [ ] The despawn `FlowTrace` line, with its trigger, is pasted in the RESULT
 
-## 4b. (HISTORY — superseded by §4) Options considered before the ruling
+## 4c. ⛔ FINAL RULING 2026-08-16 — REMOVE THE SCREEN. UNCONDITIONAL. No options remain.
+
+> Owner, verbatim: **"remove this screen then"** — and, on where the function lives:
+> **"it gets managed from the echo tab"**
+
+**Every open question in this WO is now closed.** There is no "keep tap, drop proximity" variant, no
+phased option, no conditional. The prompt is **deleted**, both trigger paths with it.
+
+### Verified: removal loses NO functionality (checked at source 2026-08-16)
+
+The tasking the prompt offered already has a real home — this dialogue was a **redundant second entry
+point**, not the only one:
+
+| surface | evidence |
+|---|---|
+| `EchoAssignments.cs:14-16` | lane tokens `harvest` / `crafting` / `defense` / `exploration` / `repair` — the same two the prompt offered, plus three it never could |
+| `EchoAssignments.cs:17` | WO-830 per-Echo harvest RESOURCE picker — **richer** than the prompt's bare "Gather resources" |
+| `EchoRepairService` (WO-811) | the repair lane advances real structure repair |
+| `EchoCardView.cs` / `EchoCardVM.cs` | the Echo tab UI that owns assignment |
+
+So the prompt exposed **2 of 5 lanes** with no resource choice, while the Echo tab exposes all five with
+the WO-830 picker. It was strictly the weaker surface. **One home for tasking, and it is the Echo tab.**
+
+⚠ **This also removes a canon violation by construction:** the prompt was the only caller of
+`SpeakerName()`'s invented `ice-wolf → "Frost"` table (§2b). Deleting the prompt deletes the last place
+the game calls Aldwin by the wrong name.
+
+### The removal list is §2 items 1–5, unconditional
+
+`SpeakerName()` · `BuildEngageDef()` · `Engage()` · `TickEngagement()`'s trigger path (**both** tap and
+proximity) · `ApplyEngagementChoice()` + the `pet_task` verb (⚠ still verify no other caller first).
+
+⛔ **§2 items 6–14 remain KEEP, UNMODIFIED** — above all the wolf body and the three guide regressions.
+The §4 despawn ruling still stands and is complementary: **despawn removes the wolf from town; this
+removes the prompt everywhere.** Do both.
+
+### Additional acceptance criteria
+
+- [ ] Tapping the guide wolf does **nothing** — no dialogue, no prompt, no toast
+- [ ] Walking near it does **nothing**
+- [ ] Echo harvest/repair assignment still fully reachable **from the Echo tab**, all five lanes plus
+      the WO-830 resource picker — ⚠ **verify this explicitly**; it is now the ONLY path
+- [ ] No orphaned `pet_task` verb left registered with no producer
+- [ ] `SpeakerName()` is gone — grep proves no `ice-wolf → "Frost"` mapping survives anywhere
+
+## 4b. (HISTORY — superseded by §4 and §4c) Options considered before the rulings
 
 The prompt is the only surface that assigns a pet to **harvest** vs **repair**. Removing it removes
 that control. Three outcomes:
