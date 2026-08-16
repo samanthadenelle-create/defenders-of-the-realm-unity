@@ -1,42 +1,64 @@
 // =============================================================================
-// DungeonHudController — drives the dungeon HUD overlay (Workstream C).
+// DungeonHudController — the dungeon HUD's lantern oil meter, on the Obsidian kit.
 // -----------------------------------------------------------------------------
-// The controller behind DungeonHud.uxml. The dungeon scene had no HUD before
-// this; the village HUD (DeNelle.HUD) is a different scene's overlay owned by
-// another agent. This HUD lives inside DeNelle.Dungeons and ships ONE element
-// for the v2 build: the lantern oil / duration readout (owner acceptance
-// checklist — "torch / lantern duration mechanic: make the duration legible").
+// WO-1005 (dungeon UI cohesion): this View was the last UXML/UIDocument surface a
+// dungeon player could actually see. Two problems in one object:
+//   1. COHESION — the UXML oil panel was its own one-off styling (DungeonHud.uss),
+//      not the obsidian+gold ElarionUiKit chrome every other panel/toast/button
+//      wears. The WO's ruling: every player-facing dungeon overlay uses the kit.
+//   2. UXML IN BUILDS DOES NOT WORK (CLAUDE.md sec.8, learned the hard way) — the
+//      UIDocument came up EMPTY in a player build, so the oil meter the owner
+//      acceptance-listed ("make the duration legible") was blank exactly where it
+//      mattered.
+// The View is now CODE-BUILT uGUI on the kit: an obsidian card (near-black fill +
+// soft gold rim, the ToastCard/ObsidianFill chrome), the kit's ObsidianBar as the
+// oil bar, kit Labels for the caption + burn-time copy, and the shared ToastCard
+// (Danger tone) as the low-oil pill. Nothing here is tappable, so MinTouchPx does
+// not apply; the whole overlay is raycast-transparent (never swallows gameplay).
 //
-// MODULE ISOLATION: the HUD is a PASSIVE display. MVVM (Silo G): the View reads
-// NO game state — it binds a DungeonHudVM that owns the lantern projection (bar
-// fraction, low/critical band, low-oil pill, burn-time copy). The Lantern is fed
-// to the VM through the narrow ILanternReadout seam. Lantern lives in the SAME
-// module (DeNelle.Dungeons), so a direct reference is allowed — no cross-module
-// dependency; only the read-of-state moved into the VM.
+// COLOURBLIND LAW: the low/critical state is carried by the PILL'S WORDS and the
+// burn-time copy, never by hue alone — the fill tint (amber/red) is a secondary
+// reinforcement and only applied when the kit built a tintable fill.
 //
-// The Lantern reference is pushed in by the DungeonController on dungeon load
-// (SetLantern) — the controller already owns the Lantern reference, so the HUD
-// does not need to find it. SetLantern now just routes the ref into the VM (PUSH
-// seam preserved). Until a lantern is bound the oil panel reads "--".
+// MVVM unchanged: DungeonHudVM still owns ALL band logic/copy; this View binds and
+// paints, reading NO game state. The DungeonController SetLantern PUSH seam is
+// preserved verbatim.
 //
-// All UI is UI Toolkit (UXML/USS) — project mandate.
+// LEGACY SEAM: the cottage scene's UIDocument may still carry DungeonHud.uxml
+// (shared with the crafting panel's sub-tree). We hide ONLY the "dungeon-hud-root"
+// sub-tree so the crafting panel keeps its document; the serialized _document field
+// is kept so existing scene data binds without a rebake.
+//
+// Instrumented per CLAUDE.md sec.12 — [Flow:DungeonHud] on build, on the legacy
+// hide, and on every band transition.
 // =============================================================================
 
 using UnityEngine;
+using UnityEngine.UI;
 using UnityEngine.UIElements;
+using DeNelle.Core.Diagnostics;
+using DeNelle.Core.UI;
+// Both UI and UIElements are imported (the kit is uGUI; the legacy hide seam is
+// UIElements) — alias the collisions to the uGUI side the kit is built on.
+using Image = UnityEngine.UI.Image;
 
 namespace DeNelle.Dungeons
 {
     /// <summary>
-    /// Drives the dungeon HUD (DungeonHud.uxml) — a glanceable lantern oil meter
-    /// fed each frame from the <see cref="Lantern"/>'s public API, with a clear
-    /// low-oil warning state. A passive UI view; it never mutates the lantern.
+    /// Drives the dungeon HUD — a glanceable lantern oil meter built from the
+    /// Obsidian ElarionUiKit chrome (WO-1005 cohesion; code-built uGUI, no UXML).
+    /// A passive UI view: it binds a <see cref="DungeonHudVM"/> and paints; it
+    /// never mutates the lantern and never blocks raycasts.
     /// </summary>
-    [RequireComponent(typeof(UIDocument))]
     public sealed class DungeonHudController : MonoBehaviour
     {
-        [Header("UI")]
-        [Tooltip("UIDocument hosting DungeonHud.uxml. Falls back to the component on this GameObject.")]
+        private const string Sys = "DungeonHud";
+
+        // Below DungeonToastView (720) — toasts read over the passive meter.
+        private const int SortingOrder = 600;
+
+        [Header("Legacy UXML host (kept so existing scene data binds; the HUD sub-tree " +
+                "inside it is hidden — the crafting panel may share this document)")]
         [SerializeField] private UIDocument _document;
 
         [Header("Lantern source")]
@@ -45,32 +67,29 @@ namespace DeNelle.Dungeons
         [SerializeField] private Lantern _lantern;
 
         [Header("Empty-oil threshold")]
-        [Tooltip("At or below this oil fraction the bar switches from the low-oil " +
-                 "amber to the critical red. A second band inside the lantern's " +
-                 "own low-oil fraction so the player gets a graded warning.")]
+        [Tooltip("At or below this oil fraction the meter reads CRITICAL (red band). " +
+                 "A second band inside the lantern's own low-oil fraction so the " +
+                 "player gets a graded warning.")]
         [SerializeField, Range(0f, 1f)] private float _criticalOilFraction = 0.1f;
-
-        // ── UXML element-name contract with DungeonHud.uxml ──────────────────
-        private const string RootName = "dungeon-hud-root";
-        private const string OilCaptionName = "oil-caption";
-        private const string OilBarFillName = "oil-bar-fill";
-        private const string OilTimeLabelName = "oil-time-label";
-        private const string OilLowWarningName = "oil-low-warning";
-
-        // ── USS class names styled by DungeonHud.uss ─────────────────────────
-        private const string OilFillWarningClass = "oil-bar-fill--warning";
-        private const string OilFillEmptyClass = "oil-bar-fill--empty";
-        private const string OilLowWarningShownClass = "oil-low-warning--shown";
 
         // ── The ViewModel (owns ALL oil-meter state/band logic + copy) ───────
         private DungeonHudVM _vm;
 
-        // ── Bound UI elements ────────────────────────────────────────────────
-        private VisualElement _root;
-        private VisualElement _oilBarFill;
-        private Label _oilTimeLabel;
-        private Label _oilLowWarning;
-        private bool _bound;
+        // ── Code-built kit UI ────────────────────────────────────────────────
+        private GameObject _canvasGo;
+        private ElarionUiKit.BarHandle _oilBar;
+        private TMPro.TextMeshProUGUI _timeLabel;
+        private GameObject _lowPill;
+
+        // Fill tint band (secondary reinforcement — the pill's WORDS are the carrier).
+        private Color _fillNormal;
+        private bool _fillTintable;
+
+        // Change-only repaint caches (no per-frame string/state churn).
+        private string _lastTimeText;
+        private bool _lastLow;
+        private bool _lastCritical;
+        private bool _legacyHidden;
 
         // =====================================================================
         //  Lifecycle
@@ -87,102 +106,183 @@ namespace DeNelle.Dungeons
 
         private void OnEnable()
         {
-            BindElements();
+            Guard.Try(Sys, "build kit oil HUD", BuildKitHud);
+            HideLegacyUxmlHud();
         }
 
-        // =====================================================================
-        //  Binding
-        // =====================================================================
-
-        private void BindElements()
+        private void OnDisable()
         {
-            _root = _document != null ? _document.rootVisualElement : null;
-            if (_root == null)
+            if (_canvasGo != null)
             {
-                Debug.LogWarning(
-                    "[DungeonHudController] No UIDocument root — dungeon HUD will not display.");
-                return;
+                Destroy(_canvasGo);
+                _canvasGo = null;
+                _oilBar = null;
+                _timeLabel = null;
+                _lowPill = null;
             }
-
-            // The dungeon HUD may share its UIDocument with the crafting panel.
-            // Resolve the HUD sub-tree by its root name so both can co-exist.
-            VisualElement hud = _root.Q<VisualElement>(RootName) ?? _root;
-
-            _oilBarFill = hud.Q<VisualElement>(OilBarFillName);
-            _oilTimeLabel = hud.Q<Label>(OilTimeLabelName);
-            _oilLowWarning = hud.Q<Label>(OilLowWarningName);
-            _bound = true;
-
-            // Paint an initial idle state so the panel is not blank pre-run.
-            RenderOil();
+            // Force a full repaint on the next enable.
+            _lastTimeText = null;
+            _lastLow = false;
+            _lastCritical = false;
         }
 
         /// <summary>
         /// Binds the lantern the oil meter is fed from. Called by the
         /// <see cref="DungeonController"/> on dungeon load — the controller
-        /// already holds the Lantern reference.
+        /// already holds the Lantern reference. PUSH seam preserved.
         /// </summary>
         public void SetLantern(Lantern lantern)
         {
             _lantern = lantern;
-            // PUSH seam preserved: route the pushed ref into the VM (wrapped in the
-            // read-only seam) rather than reading it from the View each frame.
             if (_vm == null) _vm = new DungeonHudVM(_criticalOilFraction);
             _vm.SetLantern(lantern != null ? new LanternReadoutAdapter(lantern) : null);
         }
 
         // =====================================================================
-        //  Per-frame — poll the lantern's public API
+        //  Build — Obsidian kit chrome, code-built uGUI (no UXML)
+        // =====================================================================
+
+        private void BuildKitHud()
+        {
+            if (_canvasGo != null) return;   // idempotent across enable cycles
+
+            _canvasGo = new GameObject("DungeonHud_Kit");
+            _canvasGo.transform.SetParent(transform, false);
+
+            var canvas = _canvasGo.AddComponent<Canvas>();
+            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            canvas.sortingOrder = SortingOrder;
+
+            var scaler = _canvasGo.AddComponent<CanvasScaler>();
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.referenceResolution = new Vector2(1080f, 1920f);
+            scaler.matchWidthOrHeight = 0.5f;
+
+            // Passive display: never swallow gameplay / interact input. No
+            // GraphicRaycaster on purpose — nothing here is tappable.
+            var group = _canvasGo.AddComponent<CanvasGroup>();
+            group.interactable = false;
+            group.blocksRaycasts = false;
+
+            // ── The oil card: obsidian near-black rounded fill + soft gold rim
+            //    (the ToastCard/ObsidianFill chrome), seated top-left. ──────────
+            var card = ElarionUiKit.AddImage(_canvasGo.transform, "OilCard",
+                Vector2.zero, Vector2.zero, ElarionUiKit.ObsidianFill, rounded: true);
+            ElarionUiKit.AddInnerRim(card, ElarionUiKit.ObsidianTrim);
+            var crt = (RectTransform)card.transform;
+            crt.anchorMin = new Vector2(0f, 1f);
+            crt.anchorMax = new Vector2(0f, 1f);
+            crt.pivot = new Vector2(0f, 1f);
+            crt.anchoredPosition = new Vector2(24f, -24f);
+            crt.sizeDelta = new Vector2(460f, 180f);
+            var cardImg = card.GetComponent<Image>();
+            if (cardImg != null) cardImg.raycastTarget = false;
+
+            // Caption — gold, small caps feel via spacing (kit Label primitive).
+            ElarionUiKit.Label(card.transform, "LANTERN", 0.66f, 0.97f,
+                ElarionUi.Gold, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.MidlineLeft,
+                x0: 0.06f, x1: 0.94f, spacing: 6f, bold: true);
+
+            // THE bar (kit section 1.1) — Energy kind: the gold-amber fill reads as
+            // lamp oil and matches the HUD bar family art.
+            _oilBar = ElarionUiKit.BuildObsidianBar(card.transform,
+                ElarionUiKit.ObsidianBarKind.Energy,
+                new Vector2(0.06f, 0.36f), new Vector2(0.94f, 0.64f),
+                withValue: false, framed: true);
+            _fillNormal = _oilBar != null && _oilBar.fill != null ? _oilBar.fill.color : Color.white;
+            // A coloured pack fill stays white on purpose (kit rule) — only a
+            // tintable (non-white) fill takes the amber/red band reinforcement.
+            _fillTintable = _fillNormal != Color.white;
+
+            // Burn-time copy ("Light: 1m 12s") — parchment body text.
+            _timeLabel = ElarionUiKit.Label(card.transform, DungeonHudVM.FormatBurnTime(float.PositiveInfinity),
+                0.04f, 0.34f, ElarionUi.Parchment, ElarionUi.FontLabel,
+                TMPro.TextAlignmentOptions.MidlineLeft, x0: 0.06f, x1: 0.94f);
+
+            // ── Low-oil pill: the ONE shared obsidian toast chrome, Danger tone —
+            //    the WORDS carry the state (colourblind law), the accent reinforces. ──
+            var pill = ElarionUiKit.ToastCard(_canvasGo.transform, ElarionUiKit.ToastTone.Danger,
+                                              accentLeft: true, align: TextAnchor.MiddleLeft);
+            _lowPill = pill.card;
+            var prt = (RectTransform)pill.card.transform;
+            prt.anchorMin = new Vector2(0f, 1f);
+            prt.anchorMax = new Vector2(0f, 1f);
+            prt.pivot = new Vector2(0f, 1f);
+            prt.anchoredPosition = new Vector2(24f, -216f);
+            prt.sizeDelta = new Vector2(460f, 64f);
+            if (pill.label != null) pill.label.text = "LOW OIL - find an oil stone";
+            _lowPill.SetActive(false);
+
+            FlowTrace.Step(Sys,
+                "kit oil HUD built (WO-1005): obsidian card 460x180 top-left @ (24,-24), " +
+                $"ObsidianBar kind=Energy fillTintable={_fillTintable}, low pill=ToastCard(Danger) " +
+                $"sortingOrder={SortingOrder} raycast=OFF (code-built uGUI, no UXML)");
+        }
+
+        /// <summary>
+        /// Hide ONLY the legacy UXML HUD sub-tree ("dungeon-hud-root") so a scene
+        /// still carrying DungeonHud.uxml never double-draws the meter — while the
+        /// crafting panel, which may share this UIDocument, keeps its own sub-tree.
+        /// </summary>
+        private void HideLegacyUxmlHud()
+        {
+            if (_legacyHidden) return;
+            var root = _document != null ? _document.rootVisualElement : null;
+            if (root == null)
+            {
+                // Expected on a code-built seat with no UIDocument: nothing to hide.
+                FlowTrace.Step(Sys, "no legacy UIDocument root - kit HUD is the only oil meter");
+                _legacyHidden = true;
+                return;
+            }
+            var legacy = root.Q<VisualElement>("dungeon-hud-root");
+            if (legacy != null)
+            {
+                legacy.style.display = DisplayStyle.None;
+                FlowTrace.Step(Sys, "legacy UXML 'dungeon-hud-root' sub-tree HIDDEN " +
+                    "(kit HUD replaces it; crafting sub-tree untouched)");
+            }
+            _legacyHidden = true;
+        }
+
+        // =====================================================================
+        //  Per-frame — paint from the VM only (no game-state read)
         // =====================================================================
 
         private void Update()
         {
-            if (!_bound) BindElements();
-            RenderOil();
-        }
+            if (_vm == null || _canvasGo == null) return;
 
-        /// <summary>
-        /// Repaints the oil meter from the VM ONLY (no game-state read). The bar
-        /// fill is the VM's oil fraction; the bar tints amber in the low band and
-        /// red when critically low; the time label shows the VM's burn-time copy;
-        /// the warning pill shows while the VM reads low oil.
-        /// </summary>
-        private void RenderOil()
-        {
-            if (_vm == null) return;
+            if (_oilBar != null)
+                _oilBar.SetImmediate(_vm.BarFraction, 1f);   // per-frame sweep: no easing
 
-            SetBarFraction(_vm.BarFraction);
-            SetBarState(_vm.IsWarning, _vm.IsCritical);
-            ShowLowWarning(_vm.ShowLowWarning);
+            // Band transitions (change-only: tint reinforcement + trace).
+            bool critical = _vm.IsCritical;
+            bool low = _vm.ShowLowWarning;
+            if (critical != _lastCritical || low != _lastLow)
+            {
+                _lastCritical = critical;
+                _lastLow = low;
+                if (_fillTintable && _oilBar != null && _oilBar.fill != null)
+                {
+                    _oilBar.fill.color = critical ? ElarionUi.Danger
+                        : _vm.IsWarning ? new Color(1f, 0.65f, 0.18f, 1f)   // amber low band
+                        : _fillNormal;
+                }
+                if (_lowPill != null) _lowPill.SetActive(low);
+                FlowTrace.Step(Sys,
+                    $"oil band -> {(critical ? "CRITICAL" : low ? "LOW" : "ok")} " +
+                    $"(fraction={_vm.BarFraction:F2}, pill={(low ? "shown" : "hidden")})");
+            }
 
-            if (_oilTimeLabel != null)
-                _oilTimeLabel.text = _vm.TimeLabel;
-        }
-
-        // =====================================================================
-        //  Render helpers
-        // =====================================================================
-
-        /// <summary>Sets the oil bar fill width as a 0..1 fraction of its track.</summary>
-        private void SetBarFraction(float fraction)
-        {
-            if (_oilBarFill == null) return;
-            _oilBarFill.style.width = Length.Percent(Mathf.Clamp01(fraction) * 100f);
-        }
-
-        /// <summary>Applies the amber (low) / red (critical) oil-bar tint.</summary>
-        private void SetBarState(bool warning, bool critical)
-        {
-            if (_oilBarFill == null) return;
-            _oilBarFill.EnableInClassList(OilFillWarningClass, warning);
-            _oilBarFill.EnableInClassList(OilFillEmptyClass, critical);
-        }
-
-        /// <summary>Shows / hides the low-oil warning pill.</summary>
-        private void ShowLowWarning(bool show)
-        {
-            if (_oilLowWarning == null) return;
-            _oilLowWarning.EnableInClassList(OilLowWarningShownClass, show);
+            // Burn-time copy (change-only — the VM string only shifts once a second).
+            string time = _vm.TimeLabel;
+            if (_timeLabel != null && !ReferenceEquals(time, _lastTimeText) && time != _lastTimeText)
+            {
+                _lastTimeText = time;
+                _timeLabel.text = time;
+                _timeLabel.color = critical ? ElarionUi.Danger : ElarionUi.Parchment;
+            }
         }
     }
 }
