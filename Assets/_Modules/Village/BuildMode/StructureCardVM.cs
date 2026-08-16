@@ -145,7 +145,10 @@ namespace DeNelle.Village
             TargetingTag = TargetingTagFor(entry);
             TargetingLine = TargetingLineFor(entry);
 
-            MaxLevel = repo == null ? 1 : Mathf.Clamp(repo.maxLevel, 1, 3);
+            // Same ceiling BuildModeController.MaxLevelFor clamps to -- read off the ONE named
+            // constant, never a literal, or the shop card advertises "Lv 1 / 3" for a container
+            // the upgrade verb will happily take to 6 (WO-966).
+            MaxLevel = repo == null ? 1 : Mathf.Clamp(repo.maxLevel, 1, DeNelle.Core.Catalog.RepoProps.MaxStructureLevel);
             TierBadge = MaxLevel > 1 ? "Lv 1 / " + MaxLevel : "Lv 1";
             Description = DescriptionFor(entry);
 

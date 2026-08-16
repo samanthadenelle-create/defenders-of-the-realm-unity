@@ -307,7 +307,8 @@ namespace DeNelle.Editor
         }
 
         /// <summary>repo.maxLevel for mine_crystal, straight out of structures-catalog.json,
-        /// clamped the way BuildModeController.MaxLevelFor clamps it (1..3). 0 = not authored.</summary>
+        /// clamped the way BuildModeController.MaxLevelFor clamps it (1..RepoProps.MaxStructureLevel;
+        /// that ceiling was a hardcoded 3 until WO-966 raised it to 6). 0 = not authored.</summary>
         private static int ReadCatalogMaxLevel()
         {
             try
@@ -325,7 +326,7 @@ namespace DeNelle.Editor
                     if (!(tok is JObject o) || (string)o["id"] != MineCatalogId) continue;
                     var repo = o["repo"] as JObject;
                     var ml = repo != null ? repo["maxLevel"] : null;
-                    return ml == null ? 0 : Mathf.Clamp((int)ml, 1, 3);
+                    return ml == null ? 0 : Mathf.Clamp((int)ml, 1, DeNelle.Core.Catalog.RepoProps.MaxStructureLevel);
                 }
             }
             catch { /* reported by the caller's rung/maxLevel mismatch, never silently swallowed */ }

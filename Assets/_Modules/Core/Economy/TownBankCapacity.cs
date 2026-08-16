@@ -64,12 +64,23 @@
 //   not two rules: it holds precisely when the PALLETS ARE THE SMALLER CONTAINERS.
 //
 //   THE DATA DEPENDENCY THAT MAKES THE OWNER'S OUTCOME TRUE. The pallets stay visibly
-//   stocked while the abstract base store churns ONLY while every container's capacity at
-//   its MAX level stays BELOW baseCap. Today: baseCap 2000 vs containers 500 x [1,2,3] =
-//   500/1000/1500. Raising structures-catalog storageCapacity above baseCap would silently
-//   invert the look -- the pallets would start draining first. TownBankCapRegression case
-//   [order-intent-pallets-last] FAILS if that inversion is ever authored, so the flip can
-//   never ship as a visible bug the owner has to spot on the props.
+//   stocked while the abstract base store churns ONLY while a container's capacity stays
+//   BELOW baseCap.
+//
+//   ** STATE AS OF WO-966 (owner ruling 2026-08-15) -- READ THIS, IT CHANGED. ** The owner
+//   ruled the containers UPGRADABLE over SIX levels on a DOUBLING ladder: storageCapacity
+//   1000 x levelCapacityMultipliers [1,2,4,8,16,32] = 1000/2000/4000/8000/16000/32000,
+//   against an unchanged baseCap of 2000. So the "capacity below baseCap" dependency now
+//   holds ONLY at container level 1 (1000 < 2000); from level 2 up the container equals and
+//   then dwarfs the base store, and under the capacity-ascending law it therefore DRAINS
+//   FIRST -- the inverse of the 2026-08-04 look. This is a KNOWN, FLAGGED consequence of the
+//   newer ruling, not an accident: restoring the old look would require baseCap > 32000,
+//   which would make the containers pointless. If the owner wants the look back, the fix is
+//   a PRESENTATION ordering rule (base store fills last regardless of capacity), never a
+//   capacity change -- and that is a design decision, not a bug fix.
+//   TownBankCapRegression case [order-intent-pallets-last] still HARD-FAILS a level-1
+//   inversion (a container that outgrows the base store on the day it is built) and reports
+//   the level-2+ inversion as an explicit note naming the ruling.
 //
 //   ** THIS IS NOT A PER-CONTAINER WALLET. ** GameState.Resources / GameState.Wood /
 //   GameState.Iron remain the SINGLE authority (WO-842 unified them after two authorities

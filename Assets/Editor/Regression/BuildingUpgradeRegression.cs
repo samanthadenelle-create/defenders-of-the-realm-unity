@@ -40,7 +40,8 @@
 // [upgrader-reaches-receiver] and born of the same lesson:
 //   10. [yield-reachable-at-founding] For EVERY catalog row authoring a per-wave /
 //      per-tick yield curve: the FIRST rung must be > 0 (no structure may deliver
-//      nothing at its founding level), Clamp(repo.maxLevel,1,3) must cover the whole
+//      nothing at its founding level), Clamp(repo.maxLevel,1,RepoProps.MaxStructureLevel)
+//      must cover the whole
 //      curve (no rungs the upgrade verb cannot reach), and a multi-rung curve must
 //      have some way up (repo.upgradeCost, or a BuildingTierCatalog /
 //      ResourceBuildingProgression ladder). The Crystal Mine failed all three at once
@@ -361,9 +362,10 @@ namespace DeNelle.Editor
         //
         //    1. The FIRST rung must be > 0. No structure may deliver nothing at its
         //       founding level - the player buys it before any upgrade exists.
-        //    2. Clamp(repo.maxLevel, 1, 3) >= curve.Length. No structure may author
-        //       rungs it cannot reach (BuildModeController.MaxLevelFor clamps to 3;
-        //       a 4th rung is decoration).
+        //    2. Clamp(repo.maxLevel, 1, RepoProps.MaxStructureLevel) >= curve.Length. No
+        //       structure may author rungs it cannot reach (BuildModeController.MaxLevelFor
+        //       clamps to that same named ceiling -- 6 since WO-966, was a hardcoded 3;
+        //       a rung above it is decoration).
         //    3. A multi-rung curve needs SOME upgrade path: repo.upgradeCost with
         //       curve.Length - 1 entries, or membership in BuildingTierCatalog /
         //       ResourceBuildingProgression. A ladder with no way up is the same bug
@@ -444,13 +446,14 @@ namespace DeNelle.Editor
 
                         // LAW 2 - never author rungs the upgrade verb cannot reach.
                         var maxTok = repo["maxLevel"];
-                        int maxLevel = Mathf.Clamp(maxTok != null ? (int)maxTok : 1, 1, 3);
+                        int ceiling = DeNelle.Core.Catalog.RepoProps.MaxStructureLevel;
+                        int maxLevel = Mathf.Clamp(maxTok != null ? (int)maxTok : 1, 1, ceiling);
                         if (maxLevel < curve.Length)
                         {
                             failures.Add(
                                 $"[yield-reachable-at-founding] [{tag}] '{id}' authors {curve.Length} {key} rungs but " +
                                 $"'{shownId}' reaches level {maxLevel} (repo.maxLevel " +
-                                $"{(maxTok == null ? "not authored, defaults to 1" : maxTok.ToString())}, clamped 1..3 by " +
+                                $"{(maxTok == null ? "not authored, defaults to 1" : maxTok.ToString())}, clamped 1..{ceiling} by " +
                                 "BuildModeController.MaxLevelFor). Rungs above the ceiling are yields no player can " +
                                 "ever collect - and a maxLevel of 1 makes the upgrade verb answer 'Max tier reached.' " +
                                 "on a freshly-built structure.");

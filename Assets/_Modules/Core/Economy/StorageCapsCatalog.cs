@@ -46,10 +46,14 @@ namespace DeNelle.Core.Economy
         /// <summary>
         /// Container capacity multiplier by level: index 0 = level 1, index 1 = level 2, ...
         /// A level beyond the array clamps to the LAST entry (never 0 -- a missing row must not
-        /// silently delete a built container's capacity). Default [1, 2, 3] = a level-3 pallet
-        /// holds 3x a level-1 pallet, matching the maxLevel:3 the three container rows author.
+        /// silently delete a built container's capacity). Default [1, 2, 4, 8, 16, 32] = the WO-966
+        /// DOUBLING ladder (owner ruling 2026-08-15: "6 levels and each level adds 1k then next add
+        /// 2k next 4k next 8k 16k 32k"), matching the maxLevel:6 the three container rows author on
+        /// an authored storageCapacity of 1000 -- so capacity AT level N reads 1000/2000/4000/8000/
+        /// 16000/32000. This default must track storage-caps.json: it is what a deleted or corrupt
+        /// file falls back to, and a stale [1,2,3] here would silently cap every container at 3x.
         /// </summary>
-        [JsonProperty("levelCapacityMultipliers")] public List<float> LevelCapacityMultipliers = new List<float> { 1f, 2f, 3f };
+        [JsonProperty("levelCapacityMultipliers")] public List<float> LevelCapacityMultipliers = new List<float> { 1f, 2f, 4f, 8f, 16f, 32f };
 
         /// <summary>Seconds between player-facing overflow warnings for the SAME resource. The
         /// FlowTrace warn is never throttled (Sec.12 -- the data line must always exist); only the
@@ -127,8 +131,8 @@ namespace DeNelle.Core.Economy
                 if (d.BaseCap == null) d.BaseCap = new Dictionary<string, int>();
                 if (d.LevelCapacityMultipliers == null || d.LevelCapacityMultipliers.Count == 0)
                 {
-                    FlowTrace.Warn("Bank", "storage-caps.json authored no levelCapacityMultipliers -- defaulting to [1,2,3].");
-                    d.LevelCapacityMultipliers = new List<float> { 1f, 2f, 3f };
+                    FlowTrace.Warn("Bank", "storage-caps.json authored no levelCapacityMultipliers -- defaulting to the WO-966 ladder [1,2,4,8,16,32].");
+                    d.LevelCapacityMultipliers = new List<float> { 1f, 2f, 4f, 8f, 16f, 32f };
                 }
                 FlowTrace.Step("Bank", $"StorageCapsCatalog loaded (version {d.Version}, {d.BaseCap.Count} baseCap rows, {d.LevelCapacityMultipliers.Count} level multipliers).");
                 return d;

@@ -107,8 +107,13 @@ namespace DeNelle.Tests.EditMode
         {
             Assert.That(new StructureCardVM(Tower(maxLevel: 1), new FakeEconomy(), false).TierBadge, Is.EqualTo("Lv 1"));
             Assert.That(new StructureCardVM(Tower(maxLevel: 2), new FakeEconomy(), false).TierBadge, Is.EqualTo("Lv 1 / 2"));
-            // maxLevel is clamped to 1..3.
-            Assert.That(new StructureCardVM(Tower(maxLevel: 9), new FakeEconomy(), false).MaxLevel, Is.EqualTo(3));
+            // maxLevel is clamped to 1..RepoProps.MaxStructureLevel (6 since WO-966, was 3).
+            // Asserted against the CONSTANT, not a literal, so the clamp stays pinned while the
+            // ceiling stays tunable in exactly one place.
+            Assert.That(new StructureCardVM(Tower(maxLevel: 99), new FakeEconomy(), false).MaxLevel,
+                        Is.EqualTo(DeNelle.Core.Catalog.RepoProps.MaxStructureLevel));
+            Assert.That(new StructureCardVM(Tower(maxLevel: 6), new FakeEconomy(), false).TierBadge,
+                        Is.EqualTo("Lv 1 / 6"));
         }
 
         [Test]

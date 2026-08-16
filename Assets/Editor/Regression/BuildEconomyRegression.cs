@@ -258,7 +258,7 @@ namespace DeNelle.Editor
         //     non-zero cost via the REAL UpgradeCostFor, step totals never
         //     DECREASE (the CoC sink escalates), the authored tier-visual ladder
         //     fits maxLevel and every tier prefab Resources-loads, maxLevel stays
-        //     within the StructureTierVisual 1..3 ceiling, and the tower tier
+        //     within the RepoProps.MaxStructureLevel ceiling, and the tower tier
         //     stat multiplier table is strictly increasing (tier-monotonic).
         // =====================================================================
         private static void CheckUpgradeLadder(List<CatalogEntry> entries, List<string> failures, StringBuilder log)
@@ -266,10 +266,15 @@ namespace DeNelle.Editor
             foreach (var e in entries)
             {
                 if (e == null || e.repo == null) continue;
-                int maxLevel = Mathf.Clamp(e.repo.maxLevel, 1, 3);   // mirrors BuildModeController.MaxLevelFor
+                // Mirrors BuildModeController.MaxLevelFor -- and now reads the SAME named constant
+                // it clamps to, so raising the ceiling can never leave this oracle asserting the
+                // old number (a hardcoded 3 in four files is what made WO-966's levels 4-6 fail
+                // here while the controller happily refused them anyway).
+                int ceiling = DeNelle.Core.Catalog.RepoProps.MaxStructureLevel;
+                int maxLevel = Mathf.Clamp(e.repo.maxLevel, 1, ceiling);
 
-                if (e.repo.maxLevel > 3)
-                    failures.Add($"'{e.id}' authors maxLevel {e.repo.maxLevel} — above the StructureTierVisual ceiling (3); levels 4+ are unreachable dead data");
+                if (e.repo.maxLevel > ceiling)
+                    failures.Add($"'{e.id}' authors maxLevel {e.repo.maxLevel} — above the RepoProps.MaxStructureLevel ceiling ({ceiling}); levels {ceiling + 1}+ are unreachable dead data (BuildModeController.MaxLevelFor clamps there)");
 
                 var ladder = e.repo.upgradeVisualPath;
                 if (ladder != null && ladder.Length > 0)
@@ -561,7 +566,8 @@ namespace DeNelle.Editor
                     failures.Add($"replay record '{rec.itemId}' yawOffset {rec.yawOffset} outside [0,90) — double-counts a quarter step");
 
                 // Level within the entry's catalog ceiling.
-                int maxLevel = entry.repo != null ? Mathf.Clamp(entry.repo.maxLevel, 1, 3) : 1;
+                int maxLevel = entry.repo != null
+                    ? Mathf.Clamp(entry.repo.maxLevel, 1, DeNelle.Core.Catalog.RepoProps.MaxStructureLevel) : 1;
                 if (rec.level < 1 || rec.level > maxLevel)
                     failures.Add($"replay record '{rec.itemId}' level {rec.level} outside 1..{maxLevel}");
             }

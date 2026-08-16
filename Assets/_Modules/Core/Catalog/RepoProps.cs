@@ -54,10 +54,26 @@ namespace DeNelle.Core.Catalog
         public ResourceCost cost = new ResourceCost();
 
         /// <summary>
+        /// THE ceiling on any placed structure's upgrade level -- the ONE number
+        /// BuildModeController.MaxLevelFor clamps to and every regression that mirrors that clamp
+        /// reads. Named here (Core.Catalog, beside the field it bounds) so the ceiling cannot be
+        /// raised in the controller and left stale in three oracles, which is exactly what a
+        /// hardcoded literal 3 in four files produced.
+        /// <para>WAS 3, tied to StructureTierVisual's 1..3 accent ladder. RAISED TO 6 by WO-966
+        /// (owner ruling 2026-08-15: the storage containers get SIX levels). The visual ladder is
+        /// deliberately NOT extended: StructureTierVisual.Apply already clamps 1..3 internally, so
+        /// levels 4-6 simply keep the gold T3 accent -- a look that tops out is a cosmetic gap, a
+        /// level the player cannot buy is dead data. Raising this ceiling does not make anything
+        /// upgradeable on its own: a row still opts in with its own repo.maxLevel.</para>
+        /// </summary>
+        public const int MaxStructureLevel = 6;
+
+        /// <summary>
         /// S5 — the highest upgrade level this structure can reach (the CoC sink). 1 means
         /// "not upgradeable"; 3 is the canon wood→stone→reinforced / tower L1..L3 ceiling
-        /// (matches StructureTierVisual's 1..3 tier clamp). Default 1 so a row that omits it
-        /// stays a single-tier structure.
+        /// (matches StructureTierVisual's 1..3 tier clamp); the storage containers
+        /// (lumberyard/foundry/silo) author 6 under WO-966. Bounded by
+        /// <see cref="MaxStructureLevel"/>. Default 1 so a row that omits it stays single-tier.
         /// </summary>
         public int maxLevel = 1;
 

@@ -1,12 +1,13 @@
 {
   "version": 1,
   "_note": "WO-857 / WO-901 Phase F -- the TOWN BANK cap. baseCap is the non-building BASE STORE every save holds before any storage container exists; a built lumberyard/foundry/silo adds its structures-catalog storageCapacity on top, scaled by levelCapacityMultipliers[level-1]. CRYSTALS AND COINS ARE UNCAPPED BY DESIGN (owner ruling 2026-08-04, CoC gems precedent) -- that exemption lives in C# (TownBankCapacity.UncappableResources) and a crystals/coins key here is IGNORED with a warn, never honoured.",
-  "_orderNote": "ORDERING LAW (owner 2026-08-04): 'By capacity. Fill smallest first, so pallets drain last.' Occupancy is a pure function of the one wallet total: containers sort by CAPACITY ASCENDING and fill in that order, so the SMALLEST container fills first and is therefore the LAST to drain. For the owner's stated outcome -- the pallets stay visibly stocked while the base store churns -- the pallets must be the SMALLER containers, i.e. every container's capacity at its MAX level must stay BELOW baseCap. That is why baseCap is 2000 and the containers are 500 x [1,2,3] = 500/1000/1500. Raising storageCapacity above baseCap would silently invert the look (pallets would drain first). Pinned by TownBankCapRegression case [order-intent-pallets-last].",
+  "_orderNote": "ORDERING LAW (owner 2026-08-04): 'By capacity. Fill smallest first, so pallets drain last.' Occupancy is a pure function of the one wallet total: containers sort by CAPACITY ASCENDING and fill in that order, so the SMALLEST container fills first and is therefore the LAST to drain. The owner's stated LOOK (pallets stay visibly stocked while the base store churns) holds only while a container's capacity stays BELOW baseCap -- true at container level 1 (1000 < 2000) and NO LONGER TRUE from level 2 up under the WO-966 ladder below. See _ladderNote.",
+  "_ladderNote": "WO-966 STORAGE LADDER (owner ruling 2026-08-15, verbatim: 'we need to make the storage containers upgradable, set 6 levels and each level adds 1k then next add 2k next 4k next 8k 16k 32k'). Capacity AT level N = 1000/2000/4000/8000/16000/32000 -- i.e. structures-catalog storageCapacity 1000 x these multipliers, maxLevel 6 on lumberyard/foundry/silo. CONSEQUENCE THE OWNER SHOULD KNOW: from container level 2 (2000) the container matches and then dwarfs the 2000 baseCap, so under the capacity-ascending law the CONTAINER now drains BEFORE the abstract base store -- the inverse of the 2026-08-04 pallets-drain-last look. The ladder is the newer ruling and wins; the look is flagged, not silently dropped. To restore the old look the base store would have to exceed 32000, which would make containers pointless -- so the real fix, if the owner wants it, is a presentation-order rule (base store always fills last), NOT a capacity change. TownBankCapRegression [order-intent-pallets-last] still HARD-FAILS a level-1 inversion and NOTES the level-2+ one.",
   "baseCap": {
     "wood": 2000,
     "iron": 2000,
     "food": 2000
   },
-  "levelCapacityMultipliers": [1.0, 2.0, 3.0],
+  "levelCapacityMultipliers": [1.0, 2.0, 4.0, 8.0, 16.0, 32.0],
   "overflowWarnCooldownSeconds": 8.0
 }

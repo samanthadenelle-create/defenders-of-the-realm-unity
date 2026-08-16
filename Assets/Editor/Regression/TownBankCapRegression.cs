@@ -28,11 +28,20 @@
 //                                 between the player and silently vaporised resources. Asserts
 //                                 the warn PATH FIRES, not merely that the clamp happened.
 //   [capacity-scales-with-level]  lumberyard/foundry/silo are progression buildings (WO-837).
+//   [storage-ladder-6]            WO-966: the owner's SIX-level ladder stated as numbers --
+//                                 1000/2000/4000/8000/16000/32000 held at levels 1..6, the ladder
+//                                 reachable (maxLevel 6, inside RepoProps.MaxStructureLevel, every
+//                                 rung priced), and every rung priced in the WO-947 regular-structure
+//                                 basket (wood+iron, never crystals).
 //   [order-ascending-capacity]    Deterministic order; ties never shuffle (the props would flicker).
 //   [fill-smallest-first]         FAILS if the fill order ever flips to largest-first.
 //   [largest-drains-first]        The drain-order invariant, swept over every total.
 //   [order-intent-pallets-last]   The owner's OUTCOME ("pallets drain last") holds only while the
-//                                 containers are SMALLER than baseCap. Fails if data inverts it.
+//                                 containers are SMALLER than baseCap. HARD-FAILS if a container
+//                                 outgrows baseCap at LEVEL 1 (an inversion the player sees on the
+//                                 day they build it); NOTES the level-2+ inversion, which WO-966's
+//                                 six-level ladder makes true BY OWNER RULING -- see the case body
+//                                 for why that half is a note and not a failure.
 //   [over-cap-save-not-drained]   A live save already holding more than the new cap is
 //                                 GRANDFATHERED. Retroactively deleting a player's resources on
 //                                 load is not a cap, it is a bug.
@@ -71,6 +80,7 @@ namespace DeNelle.Editor.Regression
             CheckPurchasedGrantNeverClamped(failures, notes);
             CheckClampedGrantWarns(failures, notes);
             CheckCapacityScalesWithLevel(failures, notes);
+            CheckStorageLadderSixLevels(failures, notes);
             CheckOrderingAndFill(failures, notes);
             CheckOrderIntentPalletsLast(failures, notes);
             CheckOverCapSaveNotDrained(failures, notes);
@@ -452,7 +462,7 @@ namespace DeNelle.Editor.Regression
         // =====================================================================
         private static void CheckCapacityScalesWithLevel(List<string> failures, List<string> notes)
         {
-            const int authored = 500;
+            const int authored = 1000;
             int l1 = TownBankCapacity.CapacityAtLevel(authored, 1);
             int l2 = TownBankCapacity.CapacityAtLevel(authored, 2);
             int l3 = TownBankCapacity.CapacityAtLevel(authored, 3);
@@ -469,6 +479,106 @@ namespace DeNelle.Editor.Regression
                 failures.Add("[capacity-scales-with-level] level 0 did not clamp to level 1");
             if (TownBankCapacity.CapacityAtLevel(authored, 99) < l3)
                 failures.Add("[capacity-scales-with-level] a level past the multiplier table SHRANK the container");
+        }
+
+        // =====================================================================
+        //  [storage-ladder-6] -- the OWNER'S NUMBERS, stated as numbers (WO-966)
+        // ---------------------------------------------------------------------
+        //  Owner ruling 2026-08-15, verbatim: "we need to make the storage containers
+        //  upgradable, set 6 levels and each level adds 1k then next add 2k next 4k next 8k
+        //  16k 32k" -- i.e. capacity AT level N = 1000/2000/4000/8000/16000/32000.
+        //
+        //  This case pins the RULING, not the mechanism: it drives the real CapacityAtLevel
+        //  against the real catalog rows, so a tweak to storageCapacity, to
+        //  levelCapacityMultipliers, or to maxLevel that breaks the stated curve fails the
+        //  build with the owner's own numbers in the message. It also pins the reachability
+        //  half -- a six-level ladder the upgrade verb refuses at level 3, or one whose steps
+        //  have no authored price, is the exact "I tried, there is no way to upgrade them"
+        //  the owner reported.
+        // =====================================================================
+        private static void CheckStorageLadderSixLevels(List<string> failures, List<string> notes)
+        {
+            // The owner's ladder, written as the owner wrote it.
+            int[] expected = { 1000, 2000, 4000, 8000, 16000, 32000 };
+            const int expectedMaxLevel = 6;
+
+            var mults = StorageCapsCatalog.Data.LevelCapacityMultipliers;
+            if (mults == null || mults.Count < expectedMaxLevel)
+                failures.Add($"[storage-ladder-6] storage-caps.json authors {(mults == null ? 0 : mults.Count)} level multiplier(s) "
+                           + $"but the owner ruled {expectedMaxLevel} container levels -- levels past the table all collapse onto the LAST "
+                           + "multiplier, so the top rungs would cost real resources and grant no capacity.");
+
+            if (!TryReadCatalogCosts(out var rows, out string err))
+            {
+                failures.Add("[storage-ladder-6] structures-catalog.json unreadable (" + err + ") -- the ladder cannot be verified at all");
+                return;
+            }
+
+            foreach (var id in ContainerIds)
+            {
+                var row = rows.Find(x => string.Equals(x.Id, id, StringComparison.OrdinalIgnoreCase));
+                if (row == null) { failures.Add($"[storage-ladder-6] no catalog row for container '{id}'"); continue; }
+
+                if (row.MaxLevel != expectedMaxLevel)
+                    failures.Add($"[storage-ladder-6] '{id}' authors maxLevel {row.MaxLevel}, expected {expectedMaxLevel} (owner ruling 2026-08-15)");
+
+                if (row.MaxLevel > DeNelle.Core.Catalog.RepoProps.MaxStructureLevel)
+                    failures.Add($"[storage-ladder-6] '{id}' authors maxLevel {row.MaxLevel} above RepoProps.MaxStructureLevel "
+                               + $"{DeNelle.Core.Catalog.RepoProps.MaxStructureLevel} -- BuildModeController.MaxLevelFor clamps there, so the top "
+                               + "levels are dead data and the Upgrade button reads 'Max Tier' early.");
+
+                // THE CURVE, level by level, through the REAL reader.
+                for (int lvl = 1; lvl <= expectedMaxLevel; lvl++)
+                {
+                    int got = TownBankCapacity.CapacityAtLevel(row.StorageCapacity, lvl);
+                    if (got != expected[lvl - 1])
+                        failures.Add($"[storage-ladder-6] '{id}' holds {got} at level {lvl}; the owner's ladder says {expected[lvl - 1]} "
+                                   + $"(authored storageCapacity {row.StorageCapacity} x levelCapacityMultipliers[{lvl - 1}]). "
+                                   + "The ruling is 1000/2000/4000/8000/16000/32000.");
+                }
+
+                // THE HEADLINE TOTAL: one maxed container of a resource + the base store.
+                if (TownBankCapacity.TryParseResource(row.StorageResource, out var res))
+                {
+                    int maxed = TownBankCapacity.BaseCapOf(res) + TownBankCapacity.CapacityAtLevel(row.StorageCapacity, expectedMaxLevel);
+                    int want = TownBankCapacity.BaseCapOf(res) + expected[expectedMaxLevel - 1];
+                    if (maxed != want)
+                        failures.Add($"[storage-ladder-6] a single maxed '{id}' tops the town out at {maxed} {row.StorageResource}, expected {want} "
+                                   + $"(baseCap {TownBankCapacity.BaseCapOf(res)} + {expected[expectedMaxLevel - 1]}).");
+                }
+
+                // REACHABILITY: every rung above level 1 must have an authored price, and the
+                // ladder must escalate. Without this a "6-level" container silently falls back to
+                // the build-cost scaler (50 wood for +16000 capacity at the top rung).
+                if (row.UpgradeCost == null || row.UpgradeCost.Count < expectedMaxLevel - 1)
+                    failures.Add($"[storage-ladder-6] '{id}' authors {(row.UpgradeCost == null ? 0 : row.UpgradeCost.Count)} upgradeCost row(s) "
+                               + $"but needs {expectedMaxLevel - 1} (L1->L2 .. L5->L6). A missing row falls back to the build cost x the level being "
+                               + "left, which prices +16000 capacity at a founding-shed price.");
+                else
+                {
+                    int prev = -1;
+                    for (int i = 0; i < expectedMaxLevel - 1; i++)
+                    {
+                        var step = row.UpgradeCost[i];
+                        int total = step.Wood + step.Iron + step.Food + step.Crystals;
+                        if (total <= 0)
+                            failures.Add($"[storage-ladder-6] '{id}' upgrade step L{i + 1}->L{i + 2} is FREE -- a capacity doubling with no sink");
+                        if (total < prev)
+                            failures.Add($"[storage-ladder-6] '{id}' upgrade step L{i + 1}->L{i + 2} ({total}) costs LESS than the previous step ({prev}) "
+                                       + "-- each step doubles the capacity granted, so the price may never fall");
+                        prev = total;
+
+                        // WO-947 COST-BASKET RULING: a storage container is a REGULAR structure --
+                        // wood + iron only. Crystals are the magical basket and must never appear here.
+                        if (step.Crystals > 0)
+                            failures.Add($"[storage-ladder-6] '{id}' upgrade step L{i + 1}->L{i + 2} charges {step.Crystals} CRYSTALS -- "
+                                       + "WO-947: regular structures are priced in wood+iron; crystals are the magical basket");
+                        if (step.Food > 0)
+                            failures.Add($"[storage-ladder-6] '{id}' upgrade step L{i + 1}->L{i + 2} charges {step.Food} food -- "
+                                       + "WO-947 keeps the regular-structure basket to wood+iron");
+                    }
+                }
+            }
         }
 
         // =====================================================================
@@ -583,7 +693,23 @@ namespace DeNelle.Editor.Regression
                 return;
             }
 
-            int maxLevelMultiplierIndex = Mathf.Max(1, StorageCapsCatalog.Data.LevelCapacityMultipliers.Count);
+            // ⚠ SCOPE CHANGED BY WO-966 (2026-08-15) -- READ THIS BEFORE "RESTORING" IT.
+            //
+            // This case used to HARD-FAIL whenever a container's capacity AT ITS MAX LEVEL reached
+            // baseCap. The owner then ruled the containers up a six-level DOUBLING ladder topping out
+            // at 32000 against a 2000 baseCap, so that condition is now true BY RULING, from container
+            // level 2 up. Two owner rulings genuinely conflict and the NEWER one wins on capacity.
+            //
+            // The assertion is therefore SPLIT rather than deleted or softened:
+            //   HARD FAIL at LEVEL 1 -- a container that outgrows the base store on the day it is
+            //     BUILT inverts the look for every player immediately, which is a data mistake in any
+            //     reading of either ruling.
+            //   EXPLICIT NOTE for the level-2+ inversion -- the known, ruled consequence, reported on
+            //     every run with the level it flips at so it can never quietly become folklore.
+            // Restoring the old max-level failure would fail the build on the owner's own numbers.
+            // If she wants the pallets-drain-last LOOK back at high levels, the fix is a presentation
+            // ordering rule (base store fills last regardless of capacity) -- not a capacity change,
+            // which would have to put baseCap above 32000 and make containers pointless.
             foreach (var row in rows)
             {
                 if (row.StorageCapacity <= 0) continue;
@@ -592,12 +718,25 @@ namespace DeNelle.Editor.Regression
                     failures.Add($"[order-intent-pallets-last] container '{row.Id}' authors storageCapacity {row.StorageCapacity} but storageResource '{row.StorageResource}' does not parse -- its capacity would be invisible to the bank");
                     continue;
                 }
-                int capAtMax = TownBankCapacity.CapacityAtLevel(row.StorageCapacity, Mathf.Max(row.MaxLevel, maxLevelMultiplierIndex));
+
                 int baseCap = TownBankCapacity.BaseCapOf(res);
-                if (capAtMax >= baseCap)
-                    failures.Add($"[order-intent-pallets-last] '{row.Id}' holds {capAtMax} at max level, which is >= the {TownBankCapacity.WordOf(res)} baseCap {baseCap}. "
-                               + "Under the capacity-ascending fill law that makes the PALLET the last to fill and the FIRST to drain -- the inverse of the owner's ruling "
-                               + "('fill smallest first, so pallets drain last'). Either lower storageCapacity or raise baseCap in storage-caps.json.");
+
+                int capAtL1 = TownBankCapacity.CapacityAtLevel(row.StorageCapacity, 1);
+                if (capAtL1 >= baseCap)
+                    failures.Add($"[order-intent-pallets-last] '{row.Id}' holds {capAtL1} THE DAY IT IS BUILT (level 1), which is >= the "
+                               + $"{TownBankCapacity.WordOf(res)} baseCap {baseCap}. Under the capacity-ascending fill law that makes the PALLET the "
+                               + "last to fill and the FIRST to drain from the very first build -- the inverse of the owner's 2026-08-04 ruling "
+                               + "('fill smallest first, so pallets drain last') with no upgrade even involved. Lower storageCapacity or raise baseCap.");
+
+                // Where the ruled ladder crosses the base store -- reported, never silent.
+                int levels = Mathf.Max(1, Mathf.Max(row.MaxLevel, StorageCapsCatalog.Data.LevelCapacityMultipliers.Count));
+                int flipLevel = 0;
+                for (int lvl = 1; lvl <= levels; lvl++)
+                    if (TownBankCapacity.CapacityAtLevel(row.StorageCapacity, lvl) >= baseCap) { flipLevel = lvl; break; }
+                if (flipLevel > 1)
+                    notes.Add($"[order-intent-pallets-last] '{row.Id}' passes the {TownBankCapacity.WordOf(res)} baseCap {baseCap} at LEVEL {flipLevel} "
+                            + $"(holds {TownBankCapacity.CapacityAtLevel(row.StorageCapacity, levels)} at level {levels}), so from that level the container "
+                            + "drains BEFORE the base store -- the KNOWN, RULED consequence of the WO-966 six-level ladder, not a regression");
             }
         }
 
@@ -742,6 +881,9 @@ namespace DeNelle.Editor.Regression
             public int StorageCapacity;
             public string StorageResource;
             public int MaxLevel = 1;
+            /// <summary>repo.upgradeCost, index 0 = L1-&gt;L2. Null when the row authors none (the
+            /// build-cost scaler then prices every step -- see [storage-ladder-6]).</summary>
+            public List<CatalogCostRow> UpgradeCost;
         }
 
         private static List<CatalogCostRow> _cachedRows;
@@ -779,6 +921,25 @@ namespace DeNelle.Editor.Regression
                     StorageResource = repo["storageResource"]?.ToString(),
                     MaxLevel = repo["maxLevel"] != null ? repo["maxLevel"].Value<int>() : 1,
                 };
+
+                if (repo["upgradeCost"] is JArray steps)
+                {
+                    row.UpgradeCost = new List<CatalogCostRow>(steps.Count);
+                    foreach (var stepTok in steps)
+                    {
+                        var s = stepTok as JObject;
+                        if (s == null) continue;
+                        row.UpgradeCost.Add(new CatalogCostRow
+                        {
+                            Id = row.Id,
+                            Wood = s["wood"] != null ? s["wood"].Value<int>() : 0,
+                            Iron = s["iron"] != null ? s["iron"].Value<int>() : 0,
+                            Food = s["food"] != null ? s["food"].Value<int>() : 0,
+                            Crystals = s["crystals"] != null ? s["crystals"].Value<int>() : 0,
+                        });
+                    }
+                }
+
                 if (!string.IsNullOrEmpty(row.Id)) rows.Add(row);
             }
 

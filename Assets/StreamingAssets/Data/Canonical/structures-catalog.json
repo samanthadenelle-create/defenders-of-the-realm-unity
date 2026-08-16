@@ -1,9 +1,9 @@
 {
-  "version": 21,
+  "version": 22,
   "_costBasketRule": "WO-947 — OWNER ECONOMY RULING 2026-08-10, BINDING, and the four classification pins ANSWERED by the owner 2026-08-14: cost baskets separate by the structure's NATURE. REGULAR structures cost wood + iron (± food where already used) and NEVER crystals. MAGICAL / ETHEREAL structures are CRYSTALS + IRON (owner 2026-08-14 pin 1 verbatim: \"Crystals and Iron\") — never wood. INVARIANT: no row's build cost or upgrade step ever contains wood AND iron AND crystals together. Enforced headlessly by DeNelle.Editor.Regression.CostBasketSeparationRegression [cost-basket] — any NEW row that violates the invariant FAILS the gate. FULLY APPLIED as of v18: v17 converted 'tower_siege_tower'; v18 converts the five rows that were waiting on the pins — MAGICAL (crystals + iron, wood folded 1:1 into CRYSTALS so basket totals are unchanged): 'tower_arcane_spire', 'healing_caravan' (pin 2 verbatim: \"yes AoE healing\" — healing IS magical); REGULAR (crystals folded 1:1 into IRON, totals unchanged): 'jeweler' (pin 3 verbatim: \"Crafting (can enbue preciouus sstones future release)\" — crafting, therefore regular today; a FUTURE release may let it imbue precious stones, which would be a RE-classification then, not now) and 'tower_wall_wizard' (pin 4 verbatim: \"thats a baliista mechanical\" — the DATA reading wins over the id; displayName 'Ballista', element None, projectileStyle 'bolt' per the owner rename ruling 2026-07-08). The regression's pending-pin exemption list is now EMPTY. (v18 populated MagicalIds; v19 added 'arcane-tower'; v20 removed the retired Healer Tower row -- see the retirement note at the end.) THE LAST PIN IS SPENT (OWNER 2026-08-14, verbatim: \"cathedral of magic is where all magic upgrades anre and can unlock new teirs of spells\"): 'arcane-tower' ('Cathedral of Magic') is MAGICAL. v19 converts it — wood:60 folded 1:1 into CRYSTALS, so the basket is crystals:60 + iron:60 and the total (120) is unchanged, the same discipline used for the three v18 magical rows. This OVERRIDES the earlier agent reading that called it REGULAR by the jeweler analogy (\"a shop that DEALS IN magic is still a shop\"), which cited behaviorId 'GameplayBuilding' and the row's _heightNote (\"despite the id this is not a tower — it is the town's one civic landmark\"). THE OWNER'S DISTINCTION, recorded so nobody re-litigates it: the jeweler SELLS things that happen to be precious; the Cathedral is WHERE MAGIC UPGRADES LIVE AND WHERE NEW SPELL TIERS UNLOCK — it is the ENGINE of magical progression, not a vendor that deals in it. 'behaviorId: GameplayBuilding' describes its BEHAVIOUR (it is not a firing tower), NOT its cost class. The surface evidence genuinely points both ways, so the ruling is the tiebreak — do not re-classify it off the id, the behaviorId or the _heightNote. WO-947 IS NOW FULLY APPLIED: every classification question is closed, the regression's pending-pin exemption list is EMPTY and stays empty. v20 RETIRES the never-buildable Healer Tower row entirely (WO-990, OWNER RULING 2026-08-14, verbatim: \"i do not know what the town healer is\" -> \"retire\"). She did not recognise it because it appeared in NO build category in build-categories.json, so no player could ever build it and it had no early-economy consequence; the WO-947 pin-2 conversion had been applied to a dead row. Its BEHAVIOUR is deliberately KEPT (StructureFactory case \"HealerTower\") as the WO-891 support-FIELD pattern reference; 'healing_caravan' is the row's design successor and inherits the concept. Do not resurrect the row. MagicalIds therefore holds THREE ids at v20: 'tower_arcane_spire', 'healing_caravan', 'arcane-tower'.",
   "_displayOrder": "WO-963 (owner ask 2026-08-10, F8 seq 2302, verbatim: 'Can we order the carousel in order of how the tutorial presents them?'). 'displayOrder' is an OPTIONAL per-entry integer that sorts the build palette carousel. LOWER FIRST; ABSENT / 0 = UNAUTHORED and sorts AFTER every authored row, keeping its current relative position (the sort is STABLE on the catalog's row order, so an unauthored row never jumps). The palette is the only consumer (BuildPaletteVM.SortForDisplay); it changes NO gating, no group split and no cost. SEEDED TO THE TEACHING ORDER: 10 collector_lumbermill (tutorial step order 20, 'Place your Lumbermill'), 20 workshop (contextual nudge 1050, the weapons roof), 30 forge/'Armorer' (contextual nudge 1060). Gaps of 10 are deliberate so the owner can slot a row between two without renumbering. NO TOWER ROW IS AUTHORED ON PURPOSE: the tutorial's defense beat (step order 30) names a TAB ('build.tab_defenses'), not a tower id, and tower_ground_archer is already the first Tower row in this file, so the Defense group teaches the archer tower first with no key. It also keeps the three CatalogBootstrap.RegisterFallback tower rows field-equal to their catalog rows (BuildEconomyRegression gate 12 [fallback-parity] deep-compares EVERY public CatalogEntry/RepoProps field, so authoring a tower here would demand a mirrored edit there). The tutorial is NEVER read at runtime by the palette - the catalog carries the order and BuildCarouselTutorialOrderRegression is what keeps the two agreeing.",
   "_heightCadence": "OWNER RULING 2026-08-05 (verbatim): 'take whatever the y height that we use across the board, we're gonna take that as y and make this maybe one point five or one point two higher. It's only gonna be half as wide as the diameter of any of the houses. I want all of the other structures to stay within that cadence. I want all of them to be relatively the same size. Wide heights, all of that should be similar. Doesn't have to be exact, but it must be similar, all scaled to the same point.' ONE FAMILY, NOT ONE NUMBER. The dial is repo.heightMul against StructureFactory.YHeightVariable (4 m base). The fit is a UNIFORM scale, so heightMul moves HEIGHT AND FOOTPRINT TOGETHER: BuildModeController claims grid cells from StructureFactory.MeasureUprightFootprintMetres (the height-fitted model's XZ bounds), never from placement.footprint, which is only the prefab-missing fallback. There is no width dial and none is needed. GROUPS: (1) BUILDING BASE 1.0 = 4.0 m: houses, production, vendors, storage containers, collectors, civic. This is the WIDTH REFERENCE the ruling measures against; House_Medieval_Medium fits to 5.562 m across = a 2x2 claim at the 3 m cell. (2) TOWER 1.2 = 4.8 m: reads 20 percent taller than a house and 2.778 m across = 49.9 percent of a house diameter, exactly the ruling's 'half as wide', and a 1x1 claim. 1.2 is the OWNER-RULED anchor from commit 0ac59581 (archer tower); on 2026-08-05 the rest of the tower class came off the old WO-764 1.25 onto it, so no tower is an outlier against the anchor any more. (3) SIEGE ENGINE 0.75 = 3.0 m: tower_catapult and tower_siege_tower. Machines, not architecture, so they sit deliberately UNDER the house line and read as equipment; it also keeps the wall-walk Sky Ballista from out-topping the towers once stacked on a wall. (4) LANDMARK 1.25 = 5.0 m: arcane-tower (Cathedral of Magic) ONLY. The single apex of the town, which the ruling's 'relatively the same size, doesn't have to be exact' allows for one building. (5) DECORATION, well under the family: deco_torch 0.35 = 1.4 m. EXCEPTION, NOT A CADENCE VALUE: collector_farm 1.4. heightMul fits BOUNDS, so a spindly silhouette reads smaller than a boxy one at the same number; the farm's windmill blades inflate its Y bounds and 1.4 is the owner felt-report compensation from commit 31b41d19 that makes its BODY read at the 4 m base. Do NOT normalize it to 1.0 - that re-ships the shrunk farm the owner already reported. DELIBERATELY LEFT UNAUTHORED: wall_wood, wall_stone and gate_stone stay on the 1.0 base. See their per-row _heightNote - lowering a wall narrows it by the same factor and opens pathable GAPS in already-saved wall runs, which is a save-compat break rather than a visual tweak. TIERS 2 AND 3 NEED NO KEYS: ReskinForLevel re-fits every tier model through the same OptsFor/EffectiveVisualHeight call, so an upgrade inherits its row's heightMul automatically; there are no per-level height fields anywhere in RepoProps.",
-  "notes": "Build-mode structure catalog — DATA-DRIVEN. Add a row here (+ keep the Resources/Data/Canonical copy byte-equal) and it flows into CatalogRegistry at startup via CatalogBootstrap. 'type' / 'mustSitOn' / 'navSurface' / 'element' are enum NAMES (StringEnumConverter). 'visualPrefabPath' is a Resources-relative path (LogWarning-safe on miss per CLAUDE.md §4). 'behaviorId' is resolved to a Village component by StructureFactory.AttachBehavior — only DefenseTower / WallSegment / CrystalMine / Gate are wired; null = inert decoration. S4: 'repo.cost' is the multi-resource build cost (wood/food/iron/crystals); it is charged + refunded through the persisted ResourceLedger (EconomyService). When 'cost' is omitted / all-zero, placement falls back to charging 'buildCost' Crystals (back-compat). S5 (the CoC upgrade sink): 'repo.maxLevel' (default 1 = not upgradeable; ceiling 3 = the StructureTierVisual tier cap) is the highest level the UPGRADE verb can reach; 'repo.upgradeCost' is an optional per-step multi-resource table indexed by the level being upgraded TO minus 2 (entry [0] = L1->L2, [1] = L2->L3). When 'upgradeCost' is omitted, the upgrade cost falls back to the build 'cost' scaled by the level being left (L1->L2 = 1x, L2->L3 = 2x). StructureTierVisual steps the look (scale + bronze/silver/gold accent); DefenseTower range/damage and WallSegment toughness step the stats. v5 (StructureSingleton v2, owner only-ever-one ruling): 'repo.bakedTwins' lists the legacy baked scene-root GameObject names that REPRESENT a singleton row (twin standdown/resurface + IsBuilt, enforced generically by StructureSingleton with zero per-row code); null/absent = none; only meaningful with 'repo.singleton': true.",
+  "notes": "Build-mode structure catalog — DATA-DRIVEN. Add a row here (+ keep the Resources/Data/Canonical copy byte-equal) and it flows into CatalogRegistry at startup via CatalogBootstrap. 'type' / 'mustSitOn' / 'navSurface' / 'element' are enum NAMES (StringEnumConverter). 'visualPrefabPath' is a Resources-relative path (LogWarning-safe on miss per CLAUDE.md §4). 'behaviorId' is resolved to a Village component by StructureFactory.AttachBehavior — only DefenseTower / WallSegment / CrystalMine / Gate are wired; null = inert decoration. S4: 'repo.cost' is the multi-resource build cost (wood/food/iron/crystals); it is charged + refunded through the persisted ResourceLedger (EconomyService). When 'cost' is omitted / all-zero, placement falls back to charging 'buildCost' Crystals (back-compat). S5 (the CoC upgrade sink): 'repo.maxLevel' (default 1 = not upgradeable; ceiling = RepoProps.MaxStructureLevel, raised 3 -> 6 by WO-966 for the storage containers; the StructureTierVisual accent ladder still tops out at 3, which is cosmetic only) is the highest level the UPGRADE verb can reach; 'repo.upgradeCost' is an optional per-step multi-resource table indexed by the level being upgraded TO minus 2 (entry [0] = L1->L2, [1] = L2->L3, ... [4] = L5->L6). When 'upgradeCost' is omitted, the upgrade cost falls back to the build 'cost' scaled by the level being left (L1->L2 = 1x, L2->L3 = 2x) -- a fallback that goes badly wrong on a long ladder, which is why the six-level containers author the table explicitly. StructureTierVisual steps the look (scale + bronze/silver/gold accent); DefenseTower range/damage and WallSegment toughness step the stats. v5 (StructureSingleton v2, owner only-ever-one ruling): 'repo.bakedTwins' lists the legacy baked scene-root GameObject names that REPRESENT a singleton row (twin standdown/resurface + IsBuilt, enforced generically by StructureSingleton with zero per-row code); null/absent = none; only meaningful with 'repo.singleton': true.",
   "entries": [
     {
       "id": "tower_ground_archer",
@@ -1182,11 +1182,11 @@
       "displayName": "Lumberyard",
       "type": "Resource",
       "kind": "Cell",
-      "_note": "WO-707 storage container (owner taxonomy 2026-07-13): stores Wood. Trade buildings are pure vendor/upgrade shops; the three containers (lumberyard/foundry/silo) hold the stock and are the ONLY enemy-raid targets. storageCapacity is stubbed data for the WO-672 damage-to-stores loop; CoC-style visible fill is a later pass. Placeholder art: Stables_Medieval reads as an open wood yard/shed. | WO-707: shared GenericContainer holder body (owner 2026-07-13, Tripo import); resource identity = tile word + fill stacks (pass 2)",
+      "_note": "WO-707 storage container (owner taxonomy 2026-07-13): stores Wood. | WO-966 (owner ruling 2026-08-15): SIX levels -- storageCapacity 1000 x storage-caps levelCapacityMultipliers [1,2,4,8,16,32] = 1000/2000/4000/8000/16000/32000 held. The per-step upgradeCost table below is wood+iron ONLY (WO-947 regular-structure basket; containers are NOT magical). Upgrade DURATION is not authored here and must not be: BuildTimerService.StartUpgrade derives the tier as (targetLevel - 2) off BuildTimerConfig, giving 40s / 2m / 6m / 18m / 55m for L2..L6. Trade buildings are pure vendor/upgrade shops; the three containers (lumberyard/foundry/silo) hold the stock and are the ONLY enemy-raid targets. storageCapacity is stubbed data for the WO-672 damage-to-stores loop; CoC-style visible fill is a later pass. Placeholder art: Stables_Medieval reads as an open wood yard/shed. | WO-707: shared GenericContainer holder body (owner 2026-07-13, Tripo import); resource identity = tile word + fill stacks (pass 2)",
       "visualPrefabPath": "Structures/GenericContainer",
       "repo": {
         "behaviorId": "GameplayBuilding",
-        "storageCapacity": 500,
+        "storageCapacity": 1000,
         "storageResource": "wood",
         "buildCost": 80,
         "cost": {
@@ -1195,7 +1195,14 @@
           "iron": 20,
           "crystals": 0
         },
-        "maxLevel": 3,
+        "maxLevel": 6,
+        "upgradeCost": [
+          { "wood": 150,  "food": 0, "iron": 60,  "crystals": 0 },
+          { "wood": 300,  "food": 0, "iron": 120, "crystals": 0 },
+          { "wood": 600,  "food": 0, "iron": 240, "crystals": 0 },
+          { "wood": 1200, "food": 0, "iron": 480, "crystals": 0 },
+          { "wood": 2400, "food": 0, "iron": 960, "crystals": 0 }
+        ],
         "navSurface": "Blocker",
         "placement": {
           "mustSitOn": "Ground",
@@ -1226,11 +1233,11 @@
       "displayName": "Foundry",
       "type": "Resource",
       "kind": "Cell",
-      "_note": "WO-707 storage container: stores Iron. Placeholder art: House_Medieval_Small (not any surviving tile's visual; the Forge/Armorer tiles use House_Medieval_Medium). | WO-707: shared GenericContainer holder body (owner 2026-07-13, Tripo import); resource identity = tile word + fill stacks (pass 2)",
+      "_note": "WO-707 storage container: stores Iron. | WO-966 (owner ruling 2026-08-15): SIX levels -- 1000/2000/4000/8000/16000/32000 iron held; upgradeCost below is wood+iron only (WO-947); duration derived from (targetLevel - 2), never authored. Placeholder art: House_Medieval_Small (not any surviving tile's visual; the Forge/Armorer tiles use House_Medieval_Medium). | WO-707: shared GenericContainer holder body (owner 2026-07-13, Tripo import); resource identity = tile word + fill stacks (pass 2)",
       "visualPrefabPath": "Structures/GenericContainer",
       "repo": {
         "behaviorId": "GameplayBuilding",
-        "storageCapacity": 500,
+        "storageCapacity": 1000,
         "storageResource": "iron",
         "buildCost": 100,
         "cost": {
@@ -1239,7 +1246,14 @@
           "iron": 30,
           "crystals": 0
         },
-        "maxLevel": 3,
+        "maxLevel": 6,
+        "upgradeCost": [
+          { "wood": 180,  "food": 0, "iron": 90,   "crystals": 0 },
+          { "wood": 360,  "food": 0, "iron": 180,  "crystals": 0 },
+          { "wood": 720,  "food": 0, "iron": 360,  "crystals": 0 },
+          { "wood": 1440, "food": 0, "iron": 720,  "crystals": 0 },
+          { "wood": 2880, "food": 0, "iron": 1440, "crystals": 0 }
+        ],
         "navSurface": "Blocker",
         "placement": {
           "mustSitOn": "Ground",
@@ -1270,11 +1284,11 @@
       "displayName": "Silo",
       "type": "Resource",
       "kind": "Cell",
-      "_note": "WO-707 storage container: stores Grain/food. Placeholder art: Windmill_Medieval reads agrarian (the mill tile that used it retires from the palette). | WO-707: shared GenericContainer holder body (owner 2026-07-13, Tripo import); resource identity = tile word + fill stacks (pass 2)",
+      "_note": "WO-707 storage container: stores Grain/food. | WO-966 (owner ruling 2026-08-15): SIX levels -- 1000/2000/4000/8000/16000/32000 food held; upgradeCost below is wood+iron only (WO-947); duration derived from (targetLevel - 2), never authored. Placeholder art: Windmill_Medieval reads agrarian (the mill tile that used it retires from the palette). | WO-707: shared GenericContainer holder body (owner 2026-07-13, Tripo import); resource identity = tile word + fill stacks (pass 2)",
       "visualPrefabPath": "Structures/GenericContainer",
       "repo": {
         "behaviorId": "GameplayBuilding",
-        "storageCapacity": 500,
+        "storageCapacity": 1000,
         "storageResource": "food",
         "buildCost": 80,
         "cost": {
@@ -1283,7 +1297,14 @@
           "iron": 15,
           "crystals": 0
         },
-        "maxLevel": 3,
+        "maxLevel": 6,
+        "upgradeCost": [
+          { "wood": 180,  "food": 0, "iron": 45,  "crystals": 0 },
+          { "wood": 360,  "food": 0, "iron": 90,  "crystals": 0 },
+          { "wood": 720,  "food": 0, "iron": 180, "crystals": 0 },
+          { "wood": 1440, "food": 0, "iron": 360, "crystals": 0 },
+          { "wood": 2880, "food": 0, "iron": 720, "crystals": 0 }
+        ],
         "navSurface": "Blocker",
         "placement": {
           "mustSitOn": "Ground",
