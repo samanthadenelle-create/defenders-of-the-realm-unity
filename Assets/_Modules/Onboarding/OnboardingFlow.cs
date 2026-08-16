@@ -64,6 +64,7 @@
 using System;
 using System.Threading;
 using Cysharp.Threading.Tasks;
+using DeNelle.Core;
 using DeNelle.Core.Diagnostics;
 using DeNelle.Core.State;
 using DeNelle.Core.UI;
@@ -372,8 +373,13 @@ namespace DeNelle.Onboarding
 
             if (!ShouldRun)
             {
-                // Returning player — nothing to teach. Signal closed so the
-                // integrator's "tutorial done" continuation still fires.
+                // Returning player, OR Tutorial V2 owns the FTUE (one-guide lock) —
+                // signal closed so the integrator's "tutorial done" continuation
+                // still fires and never waits on a coach-mark that will not show.
+                if (FeatureFlags.TutorialV2 && !_forceRun)
+                    FlowTrace.Step("Onboarding",
+                        "TryRun: STAND DOWN — ff.tutorialv2 ON; TutorialFlow + wolf {guide} owns the FTUE " +
+                        "(OnboardingFlow coach-marks idle).");
                 HasFinished = true;
                 TutorialClosed?.Invoke();
                 return false;
@@ -393,6 +399,13 @@ namespace DeNelle.Onboarding
         {
             get
             {
+                // ONE-GUIDE LOCK (WO-971 / owner 2026-08-10 "should only be the wolf"):
+                // Tutorial V2 (TutorialFlow + pet-Echo {guide}) is the sole FTUE when
+                // ff.tutorialv2 is ON. This legacy coach-mark flow stands down so the
+                // player never gets two concurrent tutorials fighting for the screen.
+                // Force-run still works for editor testing of this component alone.
+                if (!_forceRun && FeatureFlags.TutorialV2)
+                    return false;
                 if (_forceRun) return true;
                 var svc = GameStateService.Instance;
                 // No service yet (Core not bootstrapped) — treat as first launch

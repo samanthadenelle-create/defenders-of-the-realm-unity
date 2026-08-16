@@ -485,15 +485,15 @@ namespace DeNelle.Core
         /// exactly. PlayerPrefs "ff.combatfeel" = 0 to disable.</summary>
         public static bool CombatFeel => Get("combatfeel", defaultOn: true);
 
-        /// <summary>WO-T1 (Tutorial V2, docs/TUTORIAL_V2_SPEC_2026-07-02.md) — when ON, the data-driven
-        /// tutorial runs: <c>tutorial-steps.json</c> walked by the thin <c>DeNelle.Village.TutorialFlow</c>
-        /// interpreter (7 mandatory steps + the contextual one-shot registry), Sylas speaking through the
-        /// standard dialogue template, completion signals via <c>TutorialSignals</c>, tutorial_* telemetry
-        /// through EventTracker. The legacy <c>TutorialDirector</c> FTUE stands down while this is ON
-        /// (it is deleted only in WO-T5, after the flip is fleet-verified + owner felt-verified).
-        /// Default ON since 2026-07-03: the WO-T3/T4 self-driving fixes landed (prepaid-tower grant,
-        /// scripted town wave, staged world rep, contextual triggers) — V2 is now the runnable FTUE.
-        /// PlayerPrefs "ff.tutorialv2" = 0 to force the legacy director.</summary>
+        /// <summary>WO-T1 (Tutorial V2) — when ON, the SOLE first-run tutorial is the data-driven
+        /// founding arc: <c>tutorial-steps.json</c> walked by <c>DeNelle.Village.TutorialFlow</c>,
+        /// spoken only by the pet-Echo <c>{guide}</c> token (the ice-wolf / founding Echo —
+        /// TutorialGuideIdentityInstaller). Completion via <c>TutorialSignals</c>.
+        /// ONE-GUIDE LOCK (WO-971 / owner 2026-08-10): while this flag is ON, legacy
+        /// <c>OnboardingFlow</c> coach-marks and auto-hosted CompanionMeeting Yarn STAND DOWN
+        /// so two tutorials cannot fight. The deleted <c>TutorialDirector</c> / Sylas tut_* arc
+        /// stay dead (TutorialGuideIdentityRegression). PlayerPrefs "ff.tutorialv2" = 0 only for
+        /// emergency legacy coach-mark re-arm (not a second narrator).</summary>
         public static bool TutorialV2 => Get("tutorialv2", defaultOn: true);
 
         /// <summary>Hero package pipeline (owner ruling 2026-07-03: the PALADIN is the new Knight body) —

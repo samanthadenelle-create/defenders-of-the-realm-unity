@@ -112,6 +112,26 @@ namespace DeNelle.Village
             // replay for testing — dev builds no longer auto-replay every entry.
             bool always = HasAlwaysFlag();
 
+            // ONE-GUIDE LOCK (WO-971 / owner "should only be the wolf"): when Tutorial V2
+            // is ON, the founding arc + pet-Echo {guide} is the sole FTUE narrator. Do NOT
+            // auto-host CompanionMeeting (Sylas / human recruit yarn) — that was the second
+            // tutorial fighting the wolf. -yarnAlways still forces for test harnesses.
+            if (!always && FeatureFlags.TutorialV2)
+            {
+                FlowTrace.Step("Roster",
+                    "CompanionMeetingTrigger: STAND DOWN — ff.tutorialv2 ON; wolf TutorialFlow owns FTUE " +
+                    "(no CompanionMeeting Yarn auto-host).");
+                return;
+            }
+
+            // SINGLE-HERO pivot: no companion recruit bodies / intro while single-hero is ON.
+            if (!always && FeatureFlags.SingleHero)
+            {
+                FlowTrace.Step("Roster",
+                    "CompanionMeetingTrigger: STAND DOWN — ff.singlehero ON; no companion intro/recruit.");
+                return;
+            }
+
             // SINGLE-TRIGGER (owner 2026-06-12): the walk-up companion-introducer NPC is
             // now the SOLE companion intro+recruit trigger (CastleCompanionIntroducerInjector).
             // When it's active, do NOT auto-host the full Yarn CompanionMeeting on entry —
@@ -127,12 +147,12 @@ namespace DeNelle.Village
             // FAST PATH (default "Start New") — owner: fast into battle. The full Yarn
             // CompanionMeeting is the deep, blocking FTUE; it must ONLY play when the
             // player opted into the full tutorial ("Play Intro"). On the fast path the
-            // brief hook lives in TutorialDirector.RunFastPath instead, so we DON'T host
-            // the meeting here. The -yarnAlways dev flag still forces it for testing.
+            // brief hook is retired (TutorialDirector deleted; V2 owns full tutorial).
+            // The -yarnAlways dev flag still forces it for testing.
             if (!always && OnboardingMode.FastPath)
             {
                 Debug.Log("[CompanionMeetingTrigger] Fast-path onboarding — skipping the full " +
-                          "CompanionMeeting Yarn FTUE (the brief hook runs in TutorialDirector).");
+                          "CompanionMeeting Yarn FTUE.");
                 return;
             }
 
