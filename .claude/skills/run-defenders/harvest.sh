@@ -9,7 +9,9 @@
 # This is the packaged form of the harvest one-liner used across the 2026-06-20
 # overnight loop (OVERNIGHT_AUTOPILOT_LOG.md). break-log.jsonl captures ONLY
 # error-level lines (FlowTrace.Fail / exceptions / softlocks / owner F8 flags);
-# Step/Warn go to Player.log (overwritten per fleet — not reliable for fleets).
+# Step/Warn land in each instance's PER-RUN player.log next to its break-log
+# (autopilot-runs/<i>/player.log, WO-1102 2026-08-16 — the fleet passes -logFile
+# per instance; before that the shared root Player.log lost the trace on fleets).
 
 set -u
 # persistentDataPath = LocalLow/<companyName>/<productName>; productName became "Echoes of
@@ -51,6 +53,16 @@ for l in sys.stdin:
 hits=c.most_common(15)
 print('\n'.join(f'  x{n}: {m}' for m,n in hits) if hits else '  (none — clean)')
 "
+echo "=== per-instance player.log (Step-level FlowTrace, WO-1102) ==="
+found_pl=0
+for f in "$RUNDIR"/*/player.log; do
+  [ -f "$f" ] || continue
+  found_pl=1
+  bytes=$(wc -c < "$f" | tr -d ' ')
+  flow=$(grep -c '\[Flow:' "$f" 2>/dev/null || true)
+  echo "  $f  (${bytes} bytes, ${flow} [Flow:*] lines)"
+done
+[ "$found_pl" -eq 1 ] || echo "  (none - pre-WO-1102 fleet, or instances never wrote a log)"
 echo "=== ranked ticket file (emitter output, written by the fleet) ==="
 # Repo root is machine-dependent (C:\eoa / D:\eoa) — resolve it from this script's own
 # location: .claude/skills/run-defenders/harvest.sh -> three dirs up is the root.

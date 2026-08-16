@@ -96,8 +96,12 @@ Useless on a headless box; this is the only path that renders. Boot a single sce
 - **break-log captures ERROR-LEVEL ONLY.** `FlowTrace.Step`/`Warn` (Debug.Log/LogWarning) do
   **not** land in `break-log.jsonl` — only `FlowTrace.Fail`/exceptions/softlocks/F8 flags. To
   assert a non-error signal headless, make the oracle emit `FlowTrace.Fail` on violation (that's
-  how `AssertVendorTalkRoute` works). `Player.log` holds Step lines but is **overwritten per
-  fleet instance** → unreliable for fleets.
+  how `AssertVendorTalkRoute` works). **Step lines now land PER INSTANCE** (WO-1102, 2026-08-16):
+  the fleet passes `-logFile` so each instance writes `autopilot-runs/<i>/player.log` next to its
+  break-log — read THAT for Step-level trace; the fleet prints `FLEET_PLAYERLOG_MISSING run=<i>`
+  if one is missing/empty. *(History: before WO-1102 no `-logFile` was passed, every instance
+  contended on the ONE root `Player.log`, and Step evidence was destroyed → the old gotcha
+  "Player.log is overwritten per fleet instance → unreliable for fleets".)*
 - **License "505 / LICENSE ERROR" line is transient.** Judge success by the marker
   (`COMPILE_GATE_OK` / `REGRESSION_OK <n>/<n> suites` / `[build] SUCCESS`), not the wrapper exit line. Re-run if
   a batchmode call reports a license error at *shutdown* but produced its marker. Do NOT kill processes.

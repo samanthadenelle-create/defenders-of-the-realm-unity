@@ -124,6 +124,18 @@ for ($i = 0; $i -lt $Count; $i++) {
     $h = if ($Graphics) { if ($Height -gt 0) { "$Height" } else { '1200' } } else { '600' }
     $args += @('-screen-width', $w, '-screen-height', $h, '--autopilot', "--run=$i", "--seed=$seed")
     if ($Phases -ne '') { $args += "--phases=$Phases" }
+    # PER-INSTANCE -logFile (WO-1102): with no -logFile every instance targets the ONE default
+    # LocalLow Player.log; N>1 contend and Step-level FlowTrace evidence is destroyed (proven
+    # 2026-08-16: root Player.log mtime never moved even for -Count 1 mid-diagnosis). Redirect
+    # each instance's full log NEXT TO its break-log, using the SAME <i> namespacing the
+    # BreakCaptureHarness uses for --run=<i> (persistentDataPath\autopilot-runs\<i>). The
+    # harness creates that folder at startup, but -logFile is consumed by the player BEFORE
+    # the harness runs — so create the folder here first or Unity may drop the redirect.
+    $runDir = Join-Path $runsDir "$i"
+    New-Item -ItemType Directory -Force -Path $runDir | Out-Null
+    # Explicit quotes: PS 5.1 Start-Process joins -ArgumentList with spaces WITHOUT quoting,
+    # and this path contains spaces ("Echoes of Elarion").
+    $args += @('-logFile', ('"' + (Join-Path $runDir 'player.log') + '"'))
     $p = Start-Process -FilePath $ExePath -ArgumentList $args -PassThru
     $procs += $p
     Write-Host "[fleet] launched run=$i seed=$seed pid=$($p.Id)"
@@ -148,6 +160,28 @@ while ($true) {
         break
     }
     Start-Sleep -Seconds 5
+}
+
+# --- assert per-instance player.log landed (WO-1102) ---------------------------
+# A missing/empty player.log means that instance's Step-level FlowTrace evidence is
+# GONE — the exact silent loss this WO fixed. Warn LOUDLY by name; never silent.
+$plMissing = 0
+for ($i = 0; $i -lt $Count; $i++) {
+    $pl = Join-Path (Join-Path $runsDir "$i") 'player.log'
+    $ok = $false
+    if (Test-Path $pl) {
+        $item = Get-Item $pl -ErrorAction SilentlyContinue
+        if ($item -and $item.Length -gt 0) { $ok = $true }
+    }
+    if (-not $ok) {
+        Write-Host "FLEET_PLAYERLOG_MISSING run=$i (expected non-empty '$pl' - Step-level trace lost for this instance)"
+        $plMissing++
+    }
+}
+if ($plMissing -eq 0) {
+    Write-Host "[fleet] FLEET_PLAYERLOG_OK $Count/$Count per-instance player.log present and non-empty."
+} else {
+    Write-Host "[fleet] WARNING: $plMissing/$Count instance(s) missing a usable player.log (see FLEET_PLAYERLOG_MISSING lines above)."
 }
 
 # --- aggregate every run's breaks into one ranked ticket list -----------------
