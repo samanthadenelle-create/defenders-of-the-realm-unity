@@ -82,6 +82,29 @@ namespace DeNelle.Village
         [JsonProperty("name")] public string Name;
         /// <summary>HUD glyph.</summary>
         [JsonProperty("icon")] public string Icon;
+
+        /// <summary>
+        /// OPTIONAL player-facing VERB for this ability when it is the class's PRIMARY attack —
+        /// the one word the big attack control wears ("Shoot" for the ranger's bow, "Cast" for the
+        /// mage's fireball). ASCII only.
+        /// <para>
+        /// WO-1105, owner felt-test 2026-08-16, verbatim: "with [Sylas], instead of it being a
+        /// sword, it should be a picture of a bow and arrow. It should be the word shoot." This is a
+        /// DATA field precisely so no C# ever branches on class to answer it: the HUD producer asks
+        /// HeroAbilities.TryGetRangedPrimary which def is the primary and reads THAT def's verb, so
+        /// the Knight keeps his melee verb and the Mage gets his own with no switch statement. The
+        /// hardcoded per-class table is the defect class this project has been bitten by repeatedly
+        /// (IsLoop, HeroTalentNodeDef.Hidden, the town that laid itself on its side), and
+        /// HudModelProducers already records the exact prior incident of it here: "The owner,
+        /// playing a MAGE, got Sword Heroic / Shield Charge".
+        /// </para>
+        /// <para>
+        /// Absent/empty on an ability that is not a class primary — nothing reads it there. The
+        /// melee sweep is class-agnostic and has no def, so its verb is the one universal fallback
+        /// in the producer, not an entry here.
+        /// </para>
+        /// </summary>
+        [JsonProperty("verb")] public string Verb;
         /// <summary>Accent / VFX colour as a hex string (e.g. "#b388ff").</summary>
         [JsonProperty("color")] public string Color;
         /// <summary>The gameplay effect — strike / snare / aoe / cleave / heal / meteor.</summary>

@@ -138,6 +138,25 @@ Derivation, in order:
 3. Cast **perpendicular (90 degrees) from that midpoint** toward the curved edge. Where it meets the
    curve is the **grip**, and that point seats in the hand.
 
+⭐ **R4-CORRECTION (owner, 2026-08-16, SUPERSEDES how step 3 was first implemented).** Verbatim:
+*"You're seating the bow on the correct axis in the right spot. However, you're doing it on the
+perpendicular from the midpoint of the y axis. You wanna follow that perpendicular from the y axis
+over to the rounded hilt. The round part of the bow is where the grip is. That's where you handle.
+Still, once again, y is up down is the longest percentage or longest piece of the mesh. and the most
+narrow is gonna be the x. The z is gonna be the depth, the rounded part of the bow that raises out.
+You want the mid of the rounded or the perpendicular from the longest side, the y axis, where it
+intersects with the rounded edge."*
+
+- **CONFIRMED CORRECT and not to be changed:** the axis assignment (Y = longest/vertical, X =
+  narrowest, Z = depth where the bow bulges out) and the **mid-Y start point**.
+- **WRONG, and now fixed:** the TERMINATION. Step 3's "where it meets the curve" was implemented as
+  the FIRST surface the perpendicular encounters behind the string. It must instead run all the way
+  to the **ROUNDED EDGE — the Z-EXTREME of the mid-Y cross-section on the curved side**, i.e. the
+  apex of the riser's bulge. Implemented as a MAX over the whole mid-Y band (not a ray sample), so a
+  sparse mesh cannot miss it. `WeaponBoundsOrient.TryDeriveBowGrip`; pinned by
+  `RangedPrimaryRegression` case `bow-grip-apex` against a synthetic bow whose apex is known in
+  closed form (the two answers are 0.30 m apart on a 1 m bow, so the old rule cannot pass it).
+
 ⚠ **WHY THIS IS A FIX, NOT A RESTATEMENT:** `WeaponBoundsOrient`'s existing seat mode is documented
 as *"Bounds centre at the parent origin (bow centre-grip, shield strap)"* — but the bounding-box
 centre of a bow lies in the **HOLLOW between the string and the belly**, i.e. in empty air beside the

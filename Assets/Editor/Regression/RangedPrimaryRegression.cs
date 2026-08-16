@@ -6,9 +6,9 @@
 //
 // WHY: WO-1105 made the PRIMARY attack input resolve through the class's ranged
 // basic (the locked Q def) for any class whose basic is a ranged one, and seats a
-// bow's grip on the stave SURFACE (GripAnchor.BowGrip) instead of the bounds
-// centre. Both rest on DATA that a catalog regeneration can silently rewrite.
-// This suite pins that data:
+// bow's grip on the ROUNDED EDGE - the apex of the riser's bulge in Z at mid-Y
+// (GripAnchor.BowGrip) - instead of the bounds centre. Both rest on DATA that a
+// catalog regeneration can silently rewrite. This suite pins that data:
 //
 //   Case 1 — CROSSBOW EXCLUSION (owner ruling R4a, the load-bearing guard).
 //            The RUNTIME weapons catalog (the Resources copy, the one that WINS at
@@ -28,6 +28,18 @@
 //            must be effect 'strike' with range > 0 and a cooldown > 0 (R3: "an
 //            archer is not a click-spam weapon" — the bow primary's cooldown is read
 //            from THIS number, never a literal in code).
+//
+//   Case 4 — the BOW GRIP lands on the ROUNDED EDGE (owner correction 2026-08-16).
+//            Built against a SYNTHETIC bow whose apex is known in closed form, so
+//            the assertion is arithmetic, not art: a 1.0 m Y-long stave, 0.02 m
+//            thick on X, with a dead-straight string edge at z=0 and a limb/riser
+//            curve z(y) = D*(1-(2y)^2), D = 0.30 m, apex exactly at mid-Y. The
+//            derived grip must be (0, 0, +D) - the apex - NOT (0, 0, 0), which is
+//            what the FIRST-SURFACE rule this morning returned (it stopped on the
+//            straight edge / string) and what the owner rejected: "You wanna follow
+//            that perpendicular from the y axis over to the rounded hilt. The round
+//            part of the bow is where the grip is." The two answers are 0.30 m
+//            apart on a 1 m bow, so this case cannot pass under the old rule.
 //
 //   Case 3 — the ranged-primary DISCRIMINATOR still separates the classes it must.
 //            HeroAbilities.TryGetRangedPrimary accepts a basic whose effect is
@@ -94,13 +106,16 @@ namespace DeNelle.Editor.Regression
                 Case(failures, "discriminator", () => Case3_DiscriminatorStillSeparates(abilities, failures, notes));
             }
 
+            Case(failures, "bow-grip-apex", () => Case4_BowGripSeatsOnRoundedEdge(failures, notes));
+
             string noteStr = notes.Count > 0 ? " [notes: " + string.Join("; ", notes) + "]" : "";
             if (failures.Count == 0)
             {
-                reason = "RANGED PRIMARY OK - 3/3 cases pass (no crossbow can reach the runtime weapons " +
+                reason = "RANGED PRIMARY OK - 4/4 cases pass (no crossbow can reach the runtime weapons " +
                          "catalog while the R4a exclusion stands, the ranger basic is still a costed-" +
-                         "cooldown ranged strike, and the ranged-primary discriminator still admits the " +
-                         "ranger while rejecting the knight)" + noteStr;
+                         "cooldown ranged strike, the ranged-primary discriminator still admits the " +
+                         "ranger while rejecting the knight, and the bow grip still seats on the ROUNDED " +
+                         "EDGE apex rather than the straight/string edge)" + noteStr;
                 return true;
             }
             reason = "RANGED PRIMARY FAIL x" + failures.Count + ": " + string.Join(" | ", failures) + noteStr;
@@ -165,6 +180,24 @@ namespace DeNelle.Editor.Regression
             notes.Add("weapons(runtime)=" + weapons.Count + " rows, 0 crossbows");
         }
 
+        private const string ConceptIconsResourcesPath = "Assets/Resources/Data/Canonical/concept-icons.json";
+
+        /// <summary>True when the RUNTIME concept-icon map binds <paramref name="conceptId"/>.</summary>
+        private static bool ConceptIconMapHas(string conceptId)
+        {
+            string json = ReadText(ConceptIconsResourcesPath);
+            if (json == null) return false;
+            try { return JObject.Parse(json)["map"]?[conceptId] != null; }
+            catch { return false; }
+        }
+
+        /// <summary>ASCII-only guard (CLAUDE.md string rule) for player-facing authored text.</summary>
+        private static bool IsAscii(string s)
+        {
+            for (int i = 0; i < s.Length; i++) if (s[i] > 0x7E || s[i] < 0x20) return false;
+            return true;
+        }
+
         private static bool Contains(string s)
             => !string.IsNullOrEmpty(s) &&
                s.IndexOf(ExcludedWeaponToken, StringComparison.OrdinalIgnoreCase) >= 0;
@@ -201,8 +234,28 @@ namespace DeNelle.Editor.Regression
                              "ruling R3: the bow primary carries a REAL cooldown (an archer is not a " +
                              "click-spam weapon), and the offhand dagger is what covers while it cools.");
 
+            // The primary attack FACE is derived from this def, so its two presentation fields are
+            // data and are pinned here. Losing either sends the archer back to a generic face -
+            // the owner's "the action bars seem to reflect something more generic" - and no C#
+            // change would be needed to cause it, which is precisely why it needs a guard.
+            string verb = ((string)q["verb"] ?? string.Empty).Trim();
+            if (verb.Length == 0)
+                failures.Add("[ranger-basic-ranged] ranger.q has no 'verb' - the primary attack control " +
+                             "reads its word from THIS field (owner 2026-08-16: 'It should be the word " +
+                             "shoot'). With it absent the control falls back to the ability NAME and the " +
+                             "archer's button reads 'Quick Shot' instead of the verb.");
+            else if (!IsAscii(verb))
+                failures.Add("[ranger-basic-ranged] ranger.q verb '" + verb + "' is not ASCII.");
+
+            if (!ConceptIconMapHas("ranger.q"))
+                failures.Add("[ranger-basic-ranged] concept-icons.json has no 'ranger.q' entry - the " +
+                             "primary attack face resolves its icon through the SAME concept map the " +
+                             "medallions use, and with no entry it falls through to 'strike' -> " +
+                             "abilities/attack_sword. That is literally the reported defect: the archer " +
+                             "showing a SWORD. Bind it to a bow silhouette (today: spellicons/Hunter12).");
+
             notes.Add("ranger.q=" + id + " effect=" + effect + " range=" + range.ToString("0.##") +
-                      "m cd=" + cooldown.ToString("0.##") + "s");
+                      "m cd=" + cooldown.ToString("0.##") + "s verb='" + verb + "'");
         }
 
         // =====================================================================
@@ -246,6 +299,122 @@ namespace DeNelle.Editor.Regression
             why = "effect='" + effect + "' range " + range.ToString("0.##") + "m > " +
                   threshold.ToString("0.##") + "m threshold";
             return true;
+        }
+
+        // =====================================================================
+        //  CASE 4 — the bow grip seats on the ROUNDED EDGE, not the straight one
+        // =====================================================================
+
+        /// <summary>Synthetic bow dimensions (metres). Chosen so every expected number is exact.</summary>
+        private const float SynthBowLength = 1.00f;   // Y span  - the LONGEST axis (R4 premise)
+        private const float SynthBowThick  = 0.02f;   // X span  - the NARROWEST axis
+        private const float SynthBowBulge  = 0.30f;   // Z apex  - the DEPTH the rounded edge raises out
+        /// <summary>Tolerance on the derived seat. 1 mm on a 1 m bow; the WRONG answer (the straight
+        /// edge) is 0.30 m away, so this can never pass by luck.</summary>
+        private const float SynthBowTolerance = 0.001f;
+
+        private static void Case4_BowGripSeatsOnRoundedEdge(List<string> failures, List<string> notes)
+        {
+            GameObject rig = null;
+            try
+            {
+                // A parent to measure in, and a prop the solver owns.
+                rig = new GameObject("BowGripProbe");
+                var parent = new GameObject("Anchor").transform;
+                parent.SetParent(rig.transform, false);
+
+                var prop = new GameObject("SynthBow", typeof(MeshFilter), typeof(MeshRenderer));
+                prop.GetComponent<MeshFilter>().sharedMesh = BuildSyntheticBowMesh();
+                if (!prop.GetComponent<MeshFilter>().sharedMesh.isReadable)
+                {
+                    notes.Add("bow-grip-apex SKIPPED: procedural mesh reported not readable");
+                    return;
+                }
+
+                DeNelle.Core.Geometry.WeaponBoundsOrient.NormalizeInto(
+                    prop, parent, SynthBowLength,
+                    DeNelle.Core.Geometry.WeaponBoundsOrient.GripAnchor.BowGrip,
+                    resolveBladeUpFromHilt: false);
+
+                // NormalizeInto subtracts the derived grip from the prop's local position, so the
+                // grip point lands ON the anchor origin. Read the seat back off the transform: the
+                // prop must have been pushed -Z by the full bulge. The straight-edge answer (the
+                // pre-correction first-surface rule) would leave z at ~0.
+                Vector3 seat = prop.transform.localPosition;
+                float expectedZ = -SynthBowBulge;
+                float err = Mathf.Abs(seat.z - expectedZ);
+
+                notes.Add("bow-grip-apex: seat=(" + seat.x.ToString("0.####") + "," +
+                          seat.y.ToString("0.####") + "," + seat.z.ToString("0.####") +
+                          ") expectedZ=" + expectedZ.ToString("0.####") + " err=" + err.ToString("0.#####") + "m");
+
+                if (err > SynthBowTolerance)
+                    failures.Add("[bow-grip-apex] the derived grip seated at z=" + seat.z.ToString("0.####") +
+                                 "m, expected " + expectedZ.ToString("0.####") + "m (the apex of the rounded " +
+                                 "edge). z near 0 means the solve stopped on the STRAIGHT/string edge - that " +
+                                 "is the exact seat the owner rejected on 2026-08-16: 'You wanna follow that " +
+                                 "perpendicular from the y axis over to the rounded hilt. The round part of " +
+                                 "the bow is where the grip is.'");
+
+                if (Mathf.Abs(seat.y) > SynthBowTolerance)
+                    failures.Add("[bow-grip-apex] the grip left mid-Y (y=" + seat.y.ToString("0.####") +
+                                 "m, expected 0) - the mid-Y start point is CONFIRMED CORRECT by the owner " +
+                                 "and must not move; only the termination was ever wrong.");
+                if (Mathf.Abs(seat.x) > SynthBowTolerance)
+                    failures.Add("[bow-grip-apex] the grip left the X centre-line (x=" + seat.x.ToString("0.####") +
+                                 "m, expected 0) - X is the NARROW axis; the hand closes around the stave, " +
+                                 "not on one of its faces.");
+            }
+            finally
+            {
+                if (rig != null) UnityEngine.Object.DestroyImmediate(rig);
+            }
+        }
+
+        /// <summary>
+        /// A bow with a known closed-form apex: Y-long over <see cref="SynthBowLength"/>, X-thin,
+        /// a dead-straight edge at z=0 (the string) and a limb curve z(y) = D*(1-(2y/L)^2) whose
+        /// maximum D sits EXACTLY at mid-Y (Rows is ODD so a vertex row lands there). Real
+        /// triangles are emitted, not a bare point cloud, so the MeshRenderer reports a valid
+        /// submesh and Renderer.bounds - which is what WeaponBoundsOrient.TryLocalBounds measures.
+        /// </summary>
+        private static Mesh BuildSyntheticBowMesh()
+        {
+            const int Rows = 41;                       // odd => a vertex row lands exactly on mid-Y
+            float halfX = SynthBowThick * 0.5f;
+            var verts = new List<Vector3>(Rows * 4);
+            for (int i = 0; i < Rows; i++)
+            {
+                float t = i / (float)(Rows - 1);                       // 0..1
+                float y = (t - 0.5f) * SynthBowLength;                 // -L/2 .. +L/2
+                float u = 2f * y / SynthBowLength;                     // -1..1
+                float z = SynthBowBulge * (1f - u * u);                // apex D at y=0
+                verts.Add(new Vector3(-halfX, y, 0f));                 // 0: straight (string) edge
+                verts.Add(new Vector3(+halfX, y, 0f));                 // 1
+                verts.Add(new Vector3(-halfX, y, z));                  // 2: rounded (riser) edge
+                verts.Add(new Vector3(+halfX, y, z));                  // 3
+            }
+
+            var tris = new List<int>((Rows - 1) * 12);
+            for (int i = 0; i + 1 < Rows; i++)
+            {
+                int a = i * 4, c = (i + 1) * 4;
+                Quad(tris, a + 0, a + 1, c + 1, c + 0);   // string face
+                Quad(tris, a + 2, a + 3, c + 3, c + 2);   // rounded face
+                Quad(tris, a + 0, a + 2, c + 2, c + 0);   // -X side
+            }
+
+            var mesh = new Mesh { name = "SynthBow" };
+            mesh.SetVertices(verts);
+            mesh.SetTriangles(tris, 0);
+            mesh.RecalculateBounds();
+            return mesh;
+        }
+
+        private static void Quad(List<int> tris, int a, int b, int c, int d)
+        {
+            tris.Add(a); tris.Add(b); tris.Add(c);
+            tris.Add(a); tris.Add(c); tris.Add(d);
         }
 
         // ── plumbing ─────────────────────────────────────────────────────────

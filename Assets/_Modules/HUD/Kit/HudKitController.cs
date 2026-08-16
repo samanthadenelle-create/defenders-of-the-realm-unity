@@ -1614,7 +1614,9 @@ namespace DeNelle.HUD.Kit
         private void OnAbilities()
         {
             var a = _models != null ? _models.Abilities : null;
-            if (a == null || _abilitySlots == null) return;
+            if (a == null) return;
+            DrivePrimaryFace(a);
+            if (_abilitySlots == null) return;
             for (int i = 0; i < _abilitySlots.Length; i++)
             {
                 var h = _abilitySlots[i];
@@ -1690,6 +1692,46 @@ namespace DeNelle.HUD.Kit
                 if (!medallion && h.button != null && s.Equipped)
                     h.button.interactable = !cooling && s.Affordable;
             }
+        }
+
+        /// <summary>
+        /// WO-1105 (owner felt-test 2026-08-16) — drives the big PRIMARY ATTACK control from the
+        /// model, which nothing did before: `_attackSlot` was written ONCE at build time with a
+        /// literal sword sprite and never touched again, so it was class-blind AND cooldown-blind.
+        /// <para>
+        /// (2) "if there is a cool down timer, it needs to show that there's a cool down timer
+        /// between button clicks." — driven through <see cref="ElarionUiKit.ActionSlotHandle
+        /// .SetCooldown"/>, the SAME call every non-medallion cooldown in this file already uses
+        /// (assignable skills, both potions, status instances). One cooldown presentation in the
+        /// game: the radial-360 sweep + the integer seconds + the interactable gate. No second
+        /// visual was invented.
+        /// </para>
+        /// <para>
+        /// (3) "instead of it being a sword, it should be a picture of a bow and arrow. It should
+        /// be the word shoot." — icon AND word, both read off the model (which read them off the
+        /// class's AUTHORED basic). The view holds no class knowledge whatsoever; it cannot, since
+        /// DeNelle.HUD may not reference DeNelle.Village.
+        /// </para>
+        /// </summary>
+        private void DrivePrimaryFace(DeNelle.Core.HudModel.AbilityLoadoutModel a)
+        {
+            if (_attackSlot == null) return;
+
+            // Icon first, caption second: SetIcon re-enables the sprite face, and the caption is a
+            // separate bottom strip that rides WITH it (unlike SetLabel, which replaces the face).
+            if (!string.IsNullOrEmpty(a.PrimaryIconKey))
+                _attackSlot.SetIcon(UiStyle.Icon(a.PrimaryIconKey));
+            _attackSlot.SetCaption(a.PrimaryLabel);
+            _attackSlot.SetCooldown(a.PrimaryCooldownRemaining, a.PrimaryCooldownTotal);
+
+            // ⚠ THE ONE DEVIATION, AND IT IS A GAMEPLAY RULE, NOT A STYLE CHOICE: SetCooldown also
+            // gates `button.interactable`, which is right for an ABILITY (a cooling ability does
+            // nothing) and WRONG here. Owner ruling R3: while the bow cools, the primary input is
+            // the OFFHAND DAGGER — PlayerAttackController.TriggerBasicAttack deliberately falls
+            // THROUGH a cooling bow to the melee swing so "the player is never left inputless".
+            // Letting the sweep disable the button would delete that verb and leave an archer
+            // standing there unable to act. The SWEEP is the feedback; the control stays live.
+            if (_attackSlot.button != null) _attackSlot.button.interactable = true;
         }
 
         // WO-611: present an UNASSIGNED combat medallion — dimmed face, no icon, no tap, no stale

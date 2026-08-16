@@ -31,10 +31,23 @@ namespace DeNelle.Core.Geometry
             /// WHY THIS IS NOT <see cref="Centre"/>: a bow's bounding-box centre lies in the HOLLOW
             /// between the string and the belly — empty air BESIDE the wood — so seating the hand at
             /// bounds-centre floats the grip off the mesh. This anchor keeps the SAME midpoint on the
-            /// long axis and projects it PERPENDICULAR, out to the first real surface, which is where
-            /// a hand can close. Derived from measured geometry every time — never a per-weapon
-            /// dialed offset. Owner-tuned manual=true entries in attachment-offsets.json are applied
-            /// by the equip path AFTER this and are never overwritten here.
+            /// long axis and projects it PERPENDICULAR, out to the ROUNDED EDGE, which is where a hand
+            /// can close. Derived from measured geometry every time — never a per-weapon dialed
+            /// offset. Owner-tuned manual=true entries in attachment-offsets.json are applied by the
+            /// equip path AFTER this and are never overwritten here.
+            /// </para>
+            /// <para>
+            /// ⚠ OWNER CORRECTION 2026-08-16 (the reason this is not the first-surface cast it was
+            /// this morning), verbatim: "You're seating the bow on the correct axis in the right spot.
+            /// However, you're doing it on the perpendicular from the midpoint of the y axis. You
+            /// wanna follow that perpendicular from the y axis over to the rounded hilt. The round
+            /// part of the bow is where the grip is. That's where you handle... You want the mid of
+            /// the rounded or the perpendicular from the longest side, the y axis, where it intersects
+            /// with the rounded edge." The AXIS assignment and the mid-Y start were CONFIRMED
+            /// CORRECT; only the TERMINATION was wrong. The perpendicular must run all the way to the
+            /// APEX of the bulge in Z at mid-Y — the riser's outermost point — not stop at the first
+            /// surface it meets behind the string. Stopping early seats the hand on the string side of
+            /// the riser (or on the string itself), which is why the bow still read wrong in hand.
             /// </para>
             /// <para>
             /// CROSSBOWS ARE EXCLUDED (R4a): a crossbow is widest on X / narrowest on Y and is held
@@ -57,9 +70,6 @@ namespace DeNelle.Core.Geometry
         /// <summary>Half-height of the cross-section sampled at the midpoint, as a fraction of the
         /// Y span (~3% = a ~3 cm slice on a 0.92 m bow).</summary>
         private const float SectionHalfBand = 0.03f;
-        /// <summary>A Z gap wider than this fraction of the section depth separates the STRING
-        /// cluster from the stave, so the perpendicular cast passes through the string.</summary>
-        private const float StringGapFraction = 0.15f;
 
         /// <summary>
         /// Parents <paramref name="prop"/> under <paramref name="parent"/>, seats Y-long / X-narrow /
@@ -111,10 +121,11 @@ namespace DeNelle.Core.Geometry
             }
             else if (grip == GripAnchor.BowGrip)
             {
-                // WO-1105 R4: seat the hand on the SURFACE the perpendicular from the straight
-                // edge's midpoint meets — not the hollow at the bounds centre. Falls back to the
-                // bounds centre (the pre-R4 seat) only when the mesh cannot be measured, and says
-                // so out loud (Section 12: no silent failures).
+                // WO-1105 R4 (+ the 2026-08-16 owner correction): seat the hand on the ROUNDED EDGE
+                // the perpendicular from the straight edge's midpoint runs out to — not the hollow
+                // at the bounds centre, and not the first surface behind the string. Falls back to
+                // the bounds centre (the pre-R4 seat) only when the mesh cannot be measured, and
+                // says so out loud (Section 12: no silent failures).
                 if (TryDeriveBowGrip(prop, parent, b2, out Vector3 gripLocal))
                     prop.transform.localPosition -= gripLocal;
                 else
@@ -135,12 +146,16 @@ namespace DeNelle.Core.Geometry
         /// <item>bin the mesh by Y and record the two long EDGES of the silhouette (min/max local Z);</item>
         /// <item>over the middle <see cref="StraightJudgeBand"/> of the Y span, the edge whose Z
         ///       varies LEAST is the STRAIGHT edge (a bow's string side) — the other bows away;</item>
-        /// <item>take that straight edge's MIDPOINT (mid-Y) and cast PERPENDICULAR to it (along Z,
+        /// <item>take that straight edge's MIDPOINT (mid-Y) and run PERPENDICULAR to it (along Z,
         ///       90 degrees from the long axis) toward the curved side;</item>
-        /// <item>the grip is the FIRST mesh surface that cast meets. When the section shows a thin
-        ///       isolated cluster followed by a gap (the string), the cast passes through it and
-        ///       lands on the stave behind; with no string, the first surface IS the stave.</item>
+        /// <item>the grip is where that perpendicular reaches the ROUNDED EDGE — the Z-EXTREME of the
+        ///       mid-Y cross-section on the curved side, i.e. the APEX of the riser's bulge. Owner
+        ///       correction 2026-08-16: this is deliberately NOT a first-hit sample. A first hit
+        ///       stops on the string, or on the string-facing back of the riser; the round part that
+        ///       raises out in Z is the part the hand closes on.</item>
         /// </list>
+        /// The apex is a MAX over the whole band (not a single ray), so a sparse or triangulated
+        /// mesh cannot miss it the way a ray between two verts can.
         /// Returns false (grip unchanged) when no readable mesh vertices exist.
         /// </summary>
         private static bool TryDeriveBowGrip(GameObject prop, Transform parent, Bounds b, out Vector3 gripLocal)
@@ -203,8 +218,8 @@ namespace DeNelle.Core.Geometry
             float zStraight = straightIsLow ? zLo[midBin] : zHi[midBin];
             float dir = straightIsLow ? 1f : -1f;   // perpendicular cast direction, toward the curve
 
-            // (4) Where the perpendicular meets the surface. Sample the cross-section at the
-            //     midpoint and walk the hit distances outward from the straight edge.
+            // (4) Where the perpendicular reaches the ROUNDED EDGE. Sample the cross-section at the
+            //     midpoint and take its Z-EXTREME on the curved side — the apex of the bulge.
             var band = new List<Vector3>();
             CollectBandVerts(prop, parent, midY, length * SectionHalfBand, band);
             if (band.Count == 0)
@@ -215,45 +230,40 @@ namespace DeNelle.Core.Geometry
                 return false;
             }
 
-            var dists = new List<float>(band.Count);
+            // Walk the whole section once: the APEX is the vertex furthest along the perpendicular
+            // (max signed distance from the straight edge, in the cast direction). Because the seat
+            // is a max over every vertex in the band rather than a first-hit, the string — which
+            // lives AT the straight edge, at distance ~0 — can never win, and neither can the
+            // riser's string-facing back face. Nearest/furthest are both tracked so the trace can
+            // state the section's real depth (the "was there a string in front of it" evidence).
+            float apexDist = float.MinValue, nearDist = float.MaxValue;
             float xMin = float.MaxValue, xMax = float.MinValue;
             for (int i = 0; i < band.Count; i++)
             {
                 float d = (band[i].z - zStraight) * dir;
-                if (d < 0f) d = 0f;             // anything behind the straight edge sits ON it
-                dists.Add(d);
+                if (d > apexDist) apexDist = d;
+                if (d < nearDist) nearDist = d;
                 if (band[i].x < xMin) xMin = band[i].x;
                 if (band[i].x > xMax) xMax = band[i].x;
             }
-            dists.Sort();
-            float depth = dists[dists.Count - 1] - dists[0];
-            float gapLimit = Mathf.Max(depth * StringGapFraction, 1e-5f);
+            float depth = apexDist - nearDist;
 
-            // The string (when the mesh has one) is a THIN cluster at the straight edge followed by
-            // a clear gap. Pass through it; otherwise the first surface is already the stave.
-            float chosen = dists[0];
-            string how = "first surface (no separated string cluster)";
-            for (int i = 1; i < dists.Count; i++)
-            {
-                if (dists[i] - dists[i - 1] <= gapLimit) continue;
-                if (dists[i - 1] - dists[0] <= gapLimit)   // the cluster we just left was thin => string
-                {
-                    chosen = dists[i];
-                    how = "stave behind the string cluster";
-                }
-                break;
-            }
-
-            gripLocal = new Vector3(0.5f * (xMin + xMax), midY, zStraight + dir * chosen);
+            // Mid-X of the band (the prop is X-narrow, so this is the thickness centre-line — the
+            // hand closes AROUND the stave, not on one of its faces), mid-Y as ruled, apex Z.
+            gripLocal = new Vector3(0.5f * (xMin + xMax), midY, zStraight + dir * apexDist);
 
             // Section 12: every number here is MEASURED off this prop's mesh this attach — a future
             // capture can re-derive the seat from this one line without re-running the solve.
+            // `apexOverNearest` is the discriminator the owner correction turns on: when it is large,
+            // the old first-surface rule was seating the hand that far off the rounded edge.
             DeNelle.Core.Diagnostics.FlowTrace.Step("Equip",
                 $"BowGrip '{prop.name}': ySpan={length:0.####}m midY={midY:0.####} " +
                 $"edgeWander(-Z)={loSpan:0.####} (+Z)={hiSpan:0.####} -> straightEdge=" +
-                (straightIsLow ? "-Z" : "+Z") + $" zStraight={zStraight:0.####} castDir=" +
-                (dir > 0f ? "+Z" : "-Z") + $" sectionVerts={band.Count} sectionDepth={depth:0.####} " +
-                $"gapLimit={gapLimit:0.####} hitAt={chosen:0.####} ({how}) -> grip=" +
+                (straightIsLow ? "-Z" : "+Z") + $" curvedSide=" + (straightIsLow ? "+Z" : "-Z") +
+                $" zStraight={zStraight:0.####} castDir=" + (dir > 0f ? "+Z" : "-Z") +
+                $" sectionVerts={band.Count} sectionDepth={depth:0.####} " +
+                $"nearest={nearDist:0.####} APEX={apexDist:0.####} apexZ={gripLocal.z:0.####} " +
+                $"apexOverNearest={(apexDist - nearDist):0.####} -> grip=" +
                 $"({gripLocal.x:0.####},{gripLocal.y:0.####},{gripLocal.z:0.####}) " +
                 $"vs boundsCentre=({b.center.x:0.####},{b.center.y:0.####},{b.center.z:0.####}) " +
                 $"offMesh={(gripLocal - b.center).magnitude:0.####}m");

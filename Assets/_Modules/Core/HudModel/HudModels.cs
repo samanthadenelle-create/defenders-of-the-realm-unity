@@ -349,14 +349,70 @@ namespace DeNelle.Core.HudModel
 
     // ── AbilityLoadout ────────────────────────────────────────────────────────
 
-    /// <summary>The hero's 4 ability slots + their cooldowns.</summary>
+    /// <summary>The hero's 4 ability slots + their cooldowns, plus the PRIMARY attack face.</summary>
     public sealed class AbilityLoadoutModel
     {
         /// <summary>The current ability slots (4 expected; never null).</summary>
         public IReadOnlyList<AbilitySlotRecord> Slots { get; private set; } = Array.Empty<AbilitySlotRecord>();
 
-        /// <summary>Raised after the slots or a cooldown changes.</summary>
+        // ── The PRIMARY attack face (WO-1105, owner felt-test 2026-08-16) ─────────────────────
+        // WHY THESE LIVE ON THE MODEL AND NOT IN THE VIEW: DeNelle.HUD may never reference
+        // DeNelle.Village (CLAUDE.md section 5, the one enforced invariant), so the view cannot ask
+        // the hero what verb it swings or how long its cooldown is. The producer measures it and
+        // publishes it here; the view only renders. That is also what keeps the answer DERIVED —
+        // the producer reads the class's AUTHORED basic, so there is no per-class table anywhere.
+
+        /// <summary>Seconds of cooldown remaining on the primary attack (0 = ready).</summary>
+        public float PrimaryCooldownRemaining { get; private set; }
+        /// <summary>Total cooldown duration of the primary attack, in seconds (0 = no cooldown).</summary>
+        public float PrimaryCooldownTotal { get; private set; }
+        /// <summary>
+        /// Player-facing VERB for the primary attack, read from the class's authored basic
+        /// ("Shoot" for the ranger's bow, "Attack" for the knight's swing). ASCII only.
+        /// </summary>
+        public string PrimaryLabel { get; private set; } = "";
+        /// <summary>Icon lookup key for the primary attack face, read from the authored basic.</summary>
+        public string PrimaryIconKey { get; private set; } = "";
+
+        /// <summary>Raised after the slots, a cooldown, or the primary face changes.</summary>
         public event Action Changed;
+
+        /// <summary>
+        /// Producer-only mutator: publish the primary attack face (verb + icon + cooldown). Fires
+        /// Changed only when something the player can SEE actually moved — the cooldown ticks every
+        /// frame, so an unconditional fire would rebuild the whole bar 60x a second; the visible
+        /// seconds numeral is integer, so the numeral's granularity is the correct change threshold
+        /// and the sweep is re-driven on any remaining-value change.
+        /// </summary>
+        public void SetPrimary(float remaining, float total, string label, string iconKey)
+        {
+            label = label ?? "";
+            iconKey = iconKey ?? "";
+            // Plain epsilon compare, not Mathf: this file is engine-free (no using UnityEngine)
+            // so the model layer stays a pure data type.
+            const float Eps = 0.0001f;
+            bool moved = Math.Abs(remaining - PrimaryCooldownRemaining) > Eps
+                      || Math.Abs(total - PrimaryCooldownTotal) > Eps
+                      || label != PrimaryLabel || iconKey != PrimaryIconKey;
+            bool faceChanged = label != PrimaryLabel || iconKey != PrimaryIconKey;
+
+            PrimaryCooldownRemaining = remaining;
+            PrimaryCooldownTotal = total;
+            PrimaryLabel = label;
+            PrimaryIconKey = iconKey;
+
+            if (!moved) return;
+            Changed?.Invoke();
+            if (faceChanged)
+                // Not throttled: the FACE changes only on class/loadout swap, and this is the line
+                // that proves the ranger got "Shoot"+bow rather than the knight's sword — the exact
+                // defect HudModelProducers already records once ("the owner, playing a MAGE, got
+                // Sword Heroic / Shield Charge"). It must never be lost in a throttle window.
+                FlowTrace.Step("HUD", $"primary face set: label='{label}' icon='{iconKey}' " +
+                                      $"cd={remaining:F1}/{total:F1}");
+            else
+                FlowTrace.Throttle("HUD", "primarycd", 1f, $"primary cd {remaining:F1}/{total:F1}");
+        }
 
         /// <summary>Producer-only mutator: replace all slots, fire Changed, trace.</summary>
         public void SetSlots(IReadOnlyList<AbilitySlotRecord> slots)

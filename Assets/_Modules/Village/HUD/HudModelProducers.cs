@@ -632,6 +632,12 @@ namespace DeNelle.Village.Hud
                   .Append('@').Append(manaCost.ToString("0.#")).Append(affordable ? "" : "!").Append('|');
             }
 
+            // ── WO-1105: the PRIMARY ATTACK face (verb + icon + cooldown) ───────────────────────
+            // Published BEFORE the signature early-return below, because a cooldown TICKS: gating
+            // it on the loadout signature would publish the sweep once and then freeze it, which is
+            // the same shape of bug as the pill that was set once at build time and never updated.
+            PublishPrimaryFace();
+
             // Include live mana bucket so unaffordable faces flip when regen crosses a threshold.
             float manaBucket = _abilities != null ? Mathf.Floor(_abilities.Mana * 2f) * 0.5f : -1f;
             string sig = sb.ToString() + "|m=" + manaBucket.ToString("0.0");
@@ -665,6 +671,78 @@ namespace DeNelle.Village.Hud
                         "ability icon unmapped — placeholder shown for " + unmapped[i] +
                         "; add a concept-icons.json entry to bind real art");
             Model.Abilities.SetSlots(slots);
+        }
+
+        // ── WO-1105: the primary attack face ──────────────────────────────────────────────────
+        //
+        // OWNER, felt-test 2026-08-16, TWO defects on ONE control:
+        //   (2) "if there is a cool down timer, it needs to show that there's a cool down timer
+        //        between button clicks."
+        //   (3) "with [Sylas], instead of it being a sword, it should be a picture of a bow and
+        //        arrow. It should be the word shoot."
+        // Both are answered from the SAME derivation, so they are produced together.
+        //
+        // ⚠ HOW THIS AVOIDS A PER-CLASS TABLE — the thing WO-1105 section 3(c) bans and this very
+        // file already records an incident of ("The owner, playing a MAGE, got Sword Heroic /
+        // Shield Charge"): there is no `if (cls == "ranger")` anywhere on this path. The hero's own
+        // PlayerAttackController answers WHICH def its primary input fires (ResolvePrimaryFace ->
+        // HeroAbilities.TryGetRangedPrimary, a derived capability test), and the VERB and the ICON
+        // are then read off THAT def's authored data — `verb` from abilities.json, the icon concept
+        // from the def's own id/effect through the same concept-icons.json map the medallions use.
+        // Add a class tomorrow and its face is right with no edit here.
+        //
+        // The MELEE fallback below is not a class table either: the melee sweep is one
+        // class-agnostic verb shared by every class that has no ranged primary, so it has exactly
+        // one label and one concept, and no def to read them from.
+
+        /// <summary>The universal melee-sweep verb — the primary face for any class with no ranged
+        /// primary. ASCII, one word, matches the swing's own vocabulary.</summary>
+        private const string MeleePrimaryVerb = "Attack";
+        /// <summary>Concept key for the melee sweep face (the pre-WO-1105 hardcoded pill icon,
+        /// now reached as DATA through concept-icons.json like every other face).</summary>
+        private const string MeleePrimaryConcept = "attack";
+
+        // Cached like _abilities above: Poll runs 5x/s and a scene search per poll is waste. The
+        // `!_attack` unity-null test re-finds it across a scene load / hero respawn.
+        private PlayerAttackController _attack;
+
+        private void PublishPrimaryFace()
+        {
+            if (_attack == null || !_attack) _attack = Object.FindAnyObjectByType<PlayerAttackController>();
+            var atk = _attack;
+            if (atk == null)
+            {
+                // No hero attack controller in this scene (town shell, dungeon composite, menus).
+                // Publish a NEUTRAL ready face rather than leaving a stale sweep frozen on screen.
+                Model.Abilities.SetPrimary(0f, 0f, MeleePrimaryVerb, MeleePrimaryConcept);
+                return;
+            }
+
+            AbilityDef primary = atk.ResolvePrimaryFace(out float remaining, out float total);
+
+            string verb = MeleePrimaryVerb;
+            string concept = MeleePrimaryConcept;
+            if (primary != null)
+            {
+                // The authored verb wins; the ability's NAME is the graceful stand-in when a def
+                // has not been given one yet, so an unversed ability can never blank the control.
+                verb = !string.IsNullOrEmpty(primary.Verb) ? primary.Verb
+                     : (!string.IsNullOrEmpty(primary.Name) ? primary.Name : MeleePrimaryVerb);
+                // SAME resolver the ability medallions use (id first, then effect) — one icon
+                // vocabulary, so binding art is a concept-icons.json edit and never a C# edit.
+                // (ranger.q -> spellicons/Hunter12, the bow-with-nocked-arrow silhouette, is
+                // exactly such an entry: the archer's bow icon cost zero lines of C#.)
+                string resolved = ConceptIconResolver.ResolveKey(primary.Id, primary.Effect);
+                concept = resolved ?? primary.Effect ?? primary.Id ?? MeleePrimaryConcept;
+
+                if (resolved == null)
+                    // No silent placeholder (CLAUDE.md section 12). Throttled: Poll runs 5x/s.
+                    DeNelle.Core.Diagnostics.FlowTrace.Throttle("HudModel", "primary-icon-unmapped", 30f,
+                        $"primary attack icon UNMAPPED for '{primary.Id}' (effect='{primary.Effect}') - " +
+                        "the control is showing placeholder art; add a concept-icons.json entry to bind it.");
+            }
+
+            Model.Abilities.SetPrimary(remaining, total, verb, concept);
         }
 
         private static AbilityDef ResolveSlotDef(AbilitySlot slot, string cls, HeroAbilities abilities)

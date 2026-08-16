@@ -514,6 +514,49 @@ namespace DeNelle.Village
         }
 
         /// <summary>
+        /// WO-1105 (owner felt-test 2026-08-16, verbatim: "if there is a cool down timer, it needs
+        /// to show that there's a cool down timer between button clicks") — the READ-ONLY truth the
+        /// HUD needs to draw a cooldown on the primary attack control.
+        /// <para>
+        /// Returns the <see cref="AbilityDef"/> the primary input actually fires, or NULL when the
+        /// primary verb is the melee sweep, and reports that verb's cooldown either way. It is ONE
+        /// call, not three properties, because the branch it answers (does this class have a ranged
+        /// primary?) is the same derivation <see cref="FireRangedPrimary"/> runs — computing it
+        /// once here keeps the HUD and the trigger from ever disagreeing about which verb is live.
+        /// </para>
+        /// <para>
+        /// ⚠ NO PER-CLASS TABLE: the branch is <see cref="HeroAbilities.TryGetRangedPrimary"/>, a
+        /// DERIVED capability test (effect is a projectile shape AND range outreaches melee by more
+        /// than the factor), so a class added tomorrow gets the right face with no edit here.
+        /// </para>
+        /// <para>
+        /// The ranged total is the SCALED cooldown (talent multiplier applied) — the same number
+        /// <see cref="HeroAbilities.TryCast"/> actually charges. Reporting the raw def.Cooldown
+        /// would make the sweep finish early or late for any hero carrying a cooldown talent.
+        /// </para>
+        /// </summary>
+        public AbilityDef ResolvePrimaryFace(out float remaining, out float total)
+        {
+            if (_abilities == null) _abilities = GetComponent<HeroAbilities>();
+            if (_abilities != null && _abilities.TryGetRangedPrimary(EffectiveRange(), out var def) && def != null)
+            {
+                remaining = _abilities.CooldownRemaining(AbilitySlot.Q);
+                total = def.Cooldown *
+                        DeNelle.Village.Talents.HeroTalentModifiers.CooldownMultiplier(_abilities.HeroClass);
+                if (total < 0f) total = 0f;
+                if (remaining < 0f) remaining = 0f;
+                return def;
+            }
+
+            // Melee sweep: the gate is _nextAttackTime, and the window is the serialized swing
+            // cooldown. Same shape (remaining/total seconds), so the HUD draws ONE cooldown
+            // presentation for both verbs and never needs to know which one it is looking at.
+            remaining = Mathf.Max(0f, _nextAttackTime - Time.time);
+            total = _attackCooldown;
+            return null;
+        }
+
+        /// <summary>
         /// The foe the bow would shoot: the reticle's current target when it is inside
         /// <paramref name="range"/> (auto-acquired or tap-locked — HeroTargetIndicator owns that
         /// choice, WO-1105 R1), else the nearest LoS-clear hostile inside it. Null = nothing to

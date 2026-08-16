@@ -964,6 +964,57 @@ namespace DeNelle.Core.UI
                 if (icon != null) icon.enabled = false;         // words replace the sprite face
             }
 
+            /// <summary>Optional VERB strip along the bottom of the face (lazy — built on first
+            /// <see cref="SetCaption"/>); null on every slot that never asks for one.</summary>
+            public TMP_Text caption;
+            private string _shownCaption;
+
+            /// <summary>
+            /// CAPTION mode — a short word along the BOTTOM of the slot that sits WITH the icon
+            /// rather than replacing it (the difference from <see cref="SetLabel"/>, which is a
+            /// text FACE and hides the sprite).
+            /// <para>
+            /// WO-1105, owner felt-test 2026-08-16, verbatim: "with [Sylas], instead of it being a
+            /// sword, it should be a picture of a bow and arrow. It should be the word shoot." She
+            /// asked for BOTH — the picture and the word — and SetLabel can only give one, so the
+            /// caption is the surface that satisfies the sentence as written.
+            /// </para>
+            /// <para>
+            /// The word is also what makes the control readable without colour, which is binding
+            /// here (owner is red/green colourblind — meaning never rides on hue). Pass null/empty
+            /// to drop the strip.
+            /// </para>
+            /// </summary>
+            public void SetCaption(string text)
+            {
+                bool has = !string.IsNullOrEmpty(text);
+                if (!has)
+                {
+                    if (caption != null && caption.gameObject.activeSelf) caption.gameObject.SetActive(false);
+                    _shownCaption = null;
+                    return;
+                }
+                if (caption == null)
+                {
+                    // Bottom strip, inset from the rim so the round pill does not clip the word.
+                    // Label(parent, text, y0, y1, color, size, align, x0, x1, spacing, bold).
+                    caption = Label(root.transform, "", 0.02f, 0.26f, ElarionUi.Parchment,
+                                    ElarionUi.FontMicro, TextAlignmentOptions.Center, 0.06f, 0.94f,
+                                    bold: true);
+                    caption.raycastTarget = false;
+                    EnsureFont(caption, FontRole.Body);
+                    caption.enableAutoSizing = true;
+                    caption.fontSizeMax = ElarionUi.FontMicro;
+                    caption.fontSizeMin = 6f;
+                    // Above the icon, BELOW the cooldown seconds — a live sweep count still wins
+                    // the face, exactly as it does for the text-label mode.
+                    if (cdText != null)
+                        caption.transform.SetSiblingIndex(cdText.transform.GetSiblingIndex());
+                }
+                caption.gameObject.SetActive(true);
+                if (_shownCaption != text) { _shownCaption = text; caption.text = text; }
+            }
+
             /// <summary>Drive the sweep: fillAmount = remaining/total (the only mutation), seconds
             /// label rebuilt only when the visible integer changes (mobile lens).</summary>
             public void SetCooldown(float remaining, float total)
