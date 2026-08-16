@@ -20,7 +20,7 @@ MonoBehaviour:
     MinQuality: 0
     LifetimeOverride: 0
   - Type: 3
-    Prefab: {fileID: 1320848605815502591, guid: 261eb9072f04721f8c173b555ffde263, type: 3}
+    Prefab: {fileID: 1121192042590650, guid: b6c1d911bb5ed8643b204f96eef95ae5, type: 3}
     PoolSize: 4
     IsLoop: 0
     MinQuality: 0

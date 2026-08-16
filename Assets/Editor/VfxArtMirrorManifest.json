@@ -2,6 +2,134 @@
     "note": "source->mirror map for VfxResourceArtMirror. REUSING a mirror is what preserves its GUID across runs; do not delete entries by hand.",
     "entries": [
         {
+            "source": "Assets/Hovl Studio/HSFiles/Materials/Circle38cg.mat",
+            "mirror": "Assets/Resources/VFX/_Shared/Materials/Circle38cg.mat"
+        },
+        {
+            "source": "Assets/Hovl Studio/HSFiles/Materials/Distortion.mat",
+            "mirror": "Assets/Resources/VFX/_Shared/Materials/Distortion.mat"
+        },
+        {
+            "source": "Assets/Hovl Studio/HSFiles/Materials/Fire3bcg.mat",
+            "mirror": "Assets/Resources/VFX/_Shared/Materials/Fire3bcg.mat"
+        },
+        {
+            "source": "Assets/Hovl Studio/HSFiles/Materials/Flare4cg.mat",
+            "mirror": "Assets/Resources/VFX/_Shared/Materials/Flare4cg.mat"
+        },
+        {
+            "source": "Assets/Hovl Studio/HSFiles/Materials/Flash7bcg.mat",
+            "mirror": "Assets/Resources/VFX/_Shared/Materials/Flash7bcg.mat"
+        },
+        {
+            "source": "Assets/Hovl Studio/HSFiles/Materials/MagicCircle28bcg.mat",
+            "mirror": "Assets/Resources/VFX/_Shared/Materials/MagicCircle28bcg.mat"
+        },
+        {
+            "source": "Assets/Hovl Studio/HSFiles/Materials/MarkersAtlas1bcg.mat",
+            "mirror": "Assets/Resources/VFX/_Shared/Materials/MarkersAtlas1bcg.mat"
+        },
+        {
+            "source": "Assets/Hovl Studio/HSFiles/Materials/Point12cg.mat",
+            "mirror": "Assets/Resources/VFX/_Shared/Materials/Point12cg.mat"
+        },
+        {
+            "source": "Assets/Hovl Studio/HSFiles/Materials/Semicircle3cg.mat",
+            "mirror": "Assets/Resources/VFX/_Shared/Materials/Semicircle3cg.mat"
+        },
+        {
+            "source": "Assets/Hovl Studio/HSFiles/Materials/SunShinesCG.mat",
+            "mirror": "Assets/Resources/VFX/_Shared/Materials/SunShinesCG.mat"
+        },
+        {
+            "source": "Assets/Hovl Studio/HSFiles/Materials/Trail13cg.mat",
+            "mirror": "Assets/Resources/VFX/_Shared/Materials/Trail13cg.mat"
+        },
+        {
+            "source": "Assets/Hovl Studio/HSFiles/Materials/Trail26bcg.mat",
+            "mirror": "Assets/Resources/VFX/_Shared/Materials/Trail26bcg.mat"
+        },
+        {
+            "source": "Assets/Hovl Studio/HSFiles/Materials/Trail36bcg.mat",
+            "mirror": "Assets/Resources/VFX/_Shared/Materials/Trail36bcg.mat"
+        },
+        {
+            "source": "Assets/Hovl Studio/HSFiles/Models/CenterPlate.fbx",
+            "mirror": "Assets/Resources/VFX/_Shared/Models/CenterPlate.fbx"
+        },
+        {
+            "source": "Assets/Hovl Studio/HSFiles/Shaders/HS_Blend_CG.shadergraph",
+            "mirror": "Assets/Resources/VFX/_Shared/Shaders/HS_Blend_CG.shadergraph"
+        },
+        {
+            "source": "Assets/Hovl Studio/HSFiles/Shaders/HS_Distortion.shadergraph",
+            "mirror": "Assets/Resources/VFX/_Shared/Shaders/HS_Distortion.shadergraph"
+        },
+        {
+            "source": "Assets/Hovl Studio/HSFiles/Textures/Circle38.png",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/Circle38.png"
+        },
+        {
+            "source": "Assets/Hovl Studio/HSFiles/Textures/CircleBigMask.png",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/CircleBigMask.png"
+        },
+        {
+            "source": "Assets/Hovl Studio/HSFiles/Textures/Fire3.png",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/Fire3.png"
+        },
+        {
+            "source": "Assets/Hovl Studio/HSFiles/Textures/Flare4.png",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/Flare4.png"
+        },
+        {
+            "source": "Assets/Hovl Studio/HSFiles/Textures/Flash7.png",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/Flash7.png"
+        },
+        {
+            "source": "Assets/Hovl Studio/HSFiles/Textures/MagicCircle28.5.png",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/MagicCircle28.5.png"
+        },
+        {
+            "source": "Assets/Hovl Studio/HSFiles/Textures/MarkersAtlas1.png",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/MarkersAtlas1.png"
+        },
+        {
+            "source": "Assets/Hovl Studio/HSFiles/Textures/Noise29.png",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/Noise29.png"
+        },
+        {
+            "source": "Assets/Hovl Studio/HSFiles/Textures/Noise34.png",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/Noise34.png"
+        },
+        {
+            "source": "Assets/Hovl Studio/HSFiles/Textures/NormalMap8.png",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/NormalMap8.png"
+        },
+        {
+            "source": "Assets/Hovl Studio/HSFiles/Textures/Point12.png",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/Point12.png"
+        },
+        {
+            "source": "Assets/Hovl Studio/HSFiles/Textures/Semicircle3.png",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/Semicircle3.png"
+        },
+        {
+            "source": "Assets/Hovl Studio/HSFiles/Textures/SunShines.png",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/SunShines.png"
+        },
+        {
+            "source": "Assets/Hovl Studio/HSFiles/Textures/Trail25.png",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/Trail25.png"
+        },
+        {
+            "source": "Assets/Hovl Studio/HSFiles/Textures/Trail36.png",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/Trail36.png"
+        },
+        {
+            "source": "Assets/Hovl Studio/HSFiles/Textures/Trail6.png",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/Trail6.png"
+        },
+        {
             "source": "Assets/Spells Pack/Particles/Animations/Spell_Fire_6.anim",
             "mirror": "Assets/Resources/VFX/_Shared/Animation/Spell_Fire_6.anim"
         },
@@ -32,6 +160,14 @@
         {
             "source": "Assets/Spells Pack/Particles/Materials/Lava.mat",
             "mirror": "Assets/Resources/VFX/_Shared/Materials/Lava.mat"
+        },
+        {
+            "source": "Assets/Spells Pack/Particles/Materials/Light Shield Effect.mat",
+            "mirror": "Assets/Resources/VFX/_Shared/Materials/Light Shield Effect.mat"
+        },
+        {
+            "source": "Assets/Spells Pack/Particles/Materials/Light Shield.mat",
+            "mirror": "Assets/Resources/VFX/_Shared/Materials/Light Shield.mat"
         },
         {
             "source": "Assets/Spells Pack/Particles/Materials/Orb 2.mat",
@@ -66,6 +202,10 @@
             "mirror": "Assets/Resources/VFX/_Shared/Materials/Spell 4.mat"
         },
         {
+            "source": "Assets/Spells Pack/Particles/Materials/Spell 5.mat",
+            "mirror": "Assets/Resources/VFX/_Shared/Materials/Spell 5.mat"
+        },
+        {
             "source": "Assets/Spells Pack/Particles/Materials/Thunder 3.mat",
             "mirror": "Assets/Resources/VFX/_Shared/Materials/Thunder 3.mat"
         },
@@ -98,6 +238,14 @@
             "mirror": "Assets/Resources/VFX/_Shared/Textures/Lava_Normal.png"
         },
         {
+            "source": "Assets/Spells Pack/Particles/Textures/Light Shield Effect.png",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/Light Shield Effect.png"
+        },
+        {
+            "source": "Assets/Spells Pack/Particles/Textures/Light Shield.png",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/Light Shield.png"
+        },
+        {
             "source": "Assets/Spells Pack/Particles/Textures/Orb.png",
             "mirror": "Assets/Resources/VFX/_Shared/Textures/Orb.png"
         },
@@ -124,6 +272,10 @@
         {
             "source": "Assets/Spells Pack/Particles/Textures/Spell 4.png",
             "mirror": "Assets/Resources/VFX/_Shared/Textures/Spell 4.png"
+        },
+        {
+            "source": "Assets/Spells Pack/Particles/Textures/Spell 5.png",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/Spell 5.png"
         },
         {
             "source": "Assets/Spells Pack/Particles/Textures/Thunder 3.png",

@@ -13,15 +13,8 @@ MonoBehaviour:
   m_Name: HovlVfxCatalog
   m_EditorClassIdentifier: DeNelle.Village::DeNelle.Village.HovlVfxCatalog
   Rows:
-  - Key: Arcane_Aura
-    Prefab: {fileID: 1228060220772394, guid: 70b62e0f3bbfee4409228673d6c15926, type: 3}
-    PoolSize: 3
-    DefaultScale: 1
-    DefaultLifetime: 0
-    Recolorable: 1
-    IsLoop: 0
   - Key: Dungeon_Portal_Gate
-    Prefab: {fileID: 1228060220772394, guid: 70b62e0f3bbfee4409228673d6c15926, type: 3}
+    Prefab: {fileID: 1550070467213342, guid: 2a2353cfb2e46494d9fdf34eb5129445, type: 3}
     PoolSize: 3
     DefaultScale: 1
     DefaultLifetime: 0
@@ -126,12 +119,12 @@ MonoBehaviour:
     Recolorable: 1
     IsLoop: 0
   - Key: Poi_NodeAura
-    Prefab: {fileID: 1228060220772394, guid: 70b62e0f3bbfee4409228673d6c15926, type: 3}
+    Prefab: {fileID: 1775406099119076, guid: ccb3b5173665bf141a761f43a8d92d65, type: 3}
     PoolSize: 6
     DefaultScale: 1
     DefaultLifetime: 0
     Recolorable: 0
-    IsLoop: 0
+    IsLoop: 1
   - Key: Poi_Landmark
     Prefab: {fileID: 1973120614565466, guid: bb1e5545f071a4d4082042807f8ccc85, type: 3}
     PoolSize: 3
@@ -293,6 +286,13 @@ MonoBehaviour:
     DefaultLifetime: 0
     Recolorable: 1
     IsLoop: 0
+  - Key: EndGameCAstingAnimation_Impact
+    Prefab: {fileID: 31835927839385643, guid: 82430a8cbe341974ca88fc0319c48f72, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 0
   - Key: EnemyCast_Cast
     Prefab: {fileID: 5577821093500930883, guid: 79c9c45636ccd6f40b9c09d8abc5e9c3, type: 3}
     PoolSize: 6
@@ -302,6 +302,13 @@ MonoBehaviour:
     IsLoop: 0
   - Key: EnhamcingBuff_Cast
     Prefab: {fileID: 7696109100825703556, guid: 746fc902fec4dd44baa460e185c0c442, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 0
+  - Key: Explosion_Impact
+    Prefab: {fileID: 1121192042590650, guid: e1b08032bec16ba4eb1ae23cbd572664, type: 3}
     PoolSize: 6
     DefaultScale: 1
     DefaultLifetime: 0
@@ -398,6 +405,13 @@ MonoBehaviour:
     DefaultLifetime: 0
     Recolorable: 1
     IsLoop: 0
+  - Key: Haste_Cast
+    Prefab: {fileID: 5697101180579792178, guid: b29f0c49a2e6a91449d422216bc66ff5, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 0
   - Key: Heal_Aura
     Prefab: {fileID: 1315764361558410, guid: f99c3ed97779c5b4eb026cb91d4e4933, type: 3}
     PoolSize: 6
@@ -419,6 +433,20 @@ MonoBehaviour:
     DefaultLifetime: 0
     Recolorable: 1
     IsLoop: 1
+  - Key: Holy_Aura
+    Prefab: {fileID: 1550070467213342, guid: 2a2353cfb2e46494d9fdf34eb5129445, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 0
+  - Key: Holy_Impact
+    Prefab: {fileID: 31835927839385643, guid: 82430a8cbe341974ca88fc0319c48f72, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 0
   - Key: IceWeaponAura_Aura
     Prefab: {fileID: 4336402204210802743, guid: b213d6706c0e4a128d993b723343993a, type: 3}
     PoolSize: 6
@@ -475,6 +503,13 @@ MonoBehaviour:
     DefaultLifetime: 0
     Recolorable: 1
     IsLoop: 0
+  - Key: Node_Aura
+    Prefab: {fileID: 1775406099119076, guid: ccb3b5173665bf141a761f43a8d92d65, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
   - Key: NoneMageHealingCast_Cast
     Prefab: {fileID: 1918476138427834, guid: 3e4e9c6a4ac7e10418454a21dd359975, type: 3}
     PoolSize: 6
@@ -895,6 +930,13 @@ MonoBehaviour:
     DefaultLifetime: 0
     Recolorable: 1
     IsLoop: 0
+  - Key: ShieldBuff_Cast
+    Prefab: {fileID: 13531440185366499, guid: 19be04178a7a6d542b5543b52eaacea4, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 0
   - Key: SimpleCast_Cast
     Prefab: {fileID: 1673707391571236, guid: f326479f7cef0794d95f29731f4bbdb3, type: 3}
     PoolSize: 6
@@ -909,8 +951,22 @@ MonoBehaviour:
     DefaultLifetime: 0
     Recolorable: 1
     IsLoop: 0
+  - Key: Sleep_Impact
+    Prefab: {fileID: 7153383227937534157, guid: dd670123dd7a0f240ac5b45abe1562e2, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
   - Key: Spear_Projectile
     Prefab: {fileID: 1261555563981962, guid: ca5824498d345274c9b259632f7755f0, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 0
+  - Key: SpecialAbilityMage_Cast
+    Prefab: {fileID: 5637757207944978291, guid: 69c722eb56ec8ec4fb2ef127643e7ad7, type: 3}
     PoolSize: 6
     DefaultScale: 1
     DefaultLifetime: 0
@@ -993,6 +1049,13 @@ MonoBehaviour:
     DefaultLifetime: 0
     Recolorable: 1
     IsLoop: 0
+  - Key: portal(rotate)_Aura
+    Prefab: {fileID: 1550070467213342, guid: 2a2353cfb2e46494d9fdf34eb5129445, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 0
   - Key: softhealingaura_Aura
     Prefab: {fileID: 1315764361558410, guid: f99c3ed97779c5b4eb026cb91d4e4933, type: 3}
     PoolSize: 6
@@ -1002,6 +1065,13 @@ MonoBehaviour:
     IsLoop: 0
   - Key: subtleHealinginarea(EnemySkill-Mage)_Cast
     Prefab: {fileID: 1612411718768874, guid: 4ef343c2fedb6884aac07e8610d65212, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 0
+  - Key: targetforSpell_Impact
+    Prefab: {fileID: 1091141867756082, guid: 004ba69fc2c82284aafd4f2534f8ad9e, type: 3}
     PoolSize: 6
     DefaultScale: 1
     DefaultLifetime: 0
