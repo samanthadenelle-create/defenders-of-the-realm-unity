@@ -1049,6 +1049,34 @@
 > doc"* — and the copy was **inside the numbering authority itself**. A duplicate cannot be kept honest
 > by discipline; it can only be removed. **The header is the sole source. Do not restore numbers here.**
 >
+> *(UI-seat bumped 1023 -> 1024 in the SAME edit as the WO-1023 mint — talent icon map AUDITED 2026-08-15
+> and it is GOOD: 83/83 coverage, 0 orphans, 0 iconPath mismatches, 0 missing sprites, both canonical
+> copies byte-identical. Three real findings: (1) **two pairs of talents render the IDENTICAL icon** —
+> `Rogue7` claimed by knight.t2n6 Venombrand + ranger.t2n2 Venomcraft, and `Arcanist1` by mage.t1n1
+> Arcane Focus + shared.n9 Arcane Bolt; (2) **NO regression pins any of it** — `grep talent-icon-map`
+> over `Assets/Editor/` returns ZERO, i.e. the exact WO-996 armor.json shape (two copies, no oracle,
+> Resources wins at runtime so the Editor looks fine); (3) `emblem/` (25 class crests) and `classslot/`
+> (25 themed plates) are ALREADY COMMITTED and UNUSED — free per-tree visual identity. Archetype
+> coherence: mage strongest (19/20 Elementalist), ranger strong (13/20 Assassin), knight widest spread
+> across 14 folders **and correct** — its economy/fortification nodes have no Warrior equivalent, so do
+> NOT narrow it. Governing rule confirmed: match the SKILL's meaning, not the tree's class. READY.)*
+>
+> *(UI-seat bumped 1022 -> 1023 in the SAME edit as the WO-1022 mint — `Main_Castle_Overworld.unity`
+> carries **56 references to three DELETED prefab GUIDs** (StorefrontCrate / CourtyardFloor / StorefrontVine).
+> `cc122e844` (WO-608 seam cleanup, 2026-07-04) removed the assets; the scene's pointers survived because
+> no gate reads scene GUID refs. Throws on EVERY scene open — ~48 of the 60 F8 captures queued 2026-08-15,
+> which is what buried two real tutorial STEP-STUCK signals. Decide DELETE-REFS vs RESTORE-PREFABS first;
+> never hand-edit the .unity. READY.)*
+>
+> *(UI-seat bumped 1021 -> 1022 in the SAME edit as the WO-1021 mint — talent tree, the last four gaps to
+> the Obsidian demo AFTER `61a2a701c` closed sizing/connectors/frontier: (1) the lattice is still FIXED
+> px `GraphUnitWpx/Hpx = 1180x780` against a ~1695x493 body well, so the graph hugs the upper-left and
+> leaves a dead black third; (2) the viewport paints an OPAQUE slab over `frame_talent` — the named
+> Grok-02 §6 failure mode — while mirrored `panel_talent` + `deco_talent_1/2` sit unused; (3) the Wisdom
+> chip ellipsizes to "WIS..." over the board, breaking the no-ellipsis wallet law; (4) locked skill art
+> reads too dark. Plus one anomaly to INSTRUMENT not guess: a bare "1"/"0" cost pip where the data has no
+> zero-cost node. Multi-rank (`3/3`) is OUT — explicit V1 non-goal. READY.)*
+>
 > *(UI-seat bumped 1020 -> 1021 in the SAME edit as the WO-1020 mint — WALLS CANNOT BE PLACED
 > ADJACENT to each other (owner F8 seq=2327). Trace shows ghostValid=True while a neighbouring
 > 'wall_wood@16_17' is still BUILDING (remaining=8s) — suspect the in-progress build job's cell
