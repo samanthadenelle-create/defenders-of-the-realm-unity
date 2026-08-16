@@ -127,6 +127,46 @@ collectors/pallets, and gear summary.
 | `silo` | pallet food | `bag-icon + food` |
 | `jeweler` | shop only | `currency_crystal / ing_ember_crystal` |
 
+### Collector stack props (3D) — OWNER SELECTION, stated 2026-08-16
+
+**Provenance:** owner selection, stated verbatim 2026-08-16 — *"log sack of flour and iron bar"*.
+Resolved to on-disk paths and committed the same day. **This table is the record** — before it
+existed there was no committed trace of these picks anywhere in the repo, and they were nearly
+re-sourced from scratch.
+
+These are the diegetic props `CollectorStackView` stacks as a collector fills (20 steps, 4-column
+brick grid). They live in the catalog asset at
+`Assets/Resources/Collectors/CollectorStackPropCatalog.asset`, created/wired by
+`Defenders > Art > Build Collector Stack Prop Catalog`
+(`DeNelle.Editor.CollectorStackPropCatalogBuilder.Build`) and gated by
+`CollectorStackPropCatalogRegression` (marker `COLLECTOR_PROPS_OK`).
+
+| Resource | Owner's words | Prop asset | Path |
+|---|---|---|---|
+| Wood | "log" | `Wood_Log_A.fbx` | `Assets/Models/KayKit/KayKit Resource Bits 1.0/Assets/fbx(unity)/Wood_Log_A.fbx` |
+| Food | "sack of flour" | `Food_Flour.fbx` | `Assets/Models/KayKit/KayKit Resource Bits 1.0/Assets/fbx(unity)/Food_Flour.fbx` |
+| Iron | "iron bar" | `Iron_Bar.fbx` | `Assets/Models/KayKit/KayKit Resource Bits 1.0/Assets/fbx(unity)/Iron_Bar.fbx` |
+| Crystals | *(not named)* | **unwired on purpose** | candidates awaiting her word: `Gem_Medium.fbx`, `Gems_Pile_Small.fbx` (same pack) |
+
+Alternates in the same pack if a pick ever needs more visual mass: `Wood_Log_B`, `Wood_Log_Stack`,
+`Iron_Bars`, `Iron_Bars_Stack_Small/Medium/Large`. `Pallet_Wood.fbx` is the natural base for the
+WO-903 storage pallets (separate lane — not this catalog).
+
+**Why the picks are recorded as GUIDs even though the pack is gitignored** (`.gitignore:106`
+`/Assets/Models/*`): on a machine without KayKit imported the GUIDs resolve to null,
+`CollectorStackPropCatalog.TryGet` returns false on its `entry.Prop != null` line, and the view
+takes its abstract fill-bar fallback — the same path every collector took before this catalog
+existed. No throw, no broken render. Copying the FBX into `Resources/` to load them by path
+instead would import gitignored pack art into git, against the standing big-art-out-of-git policy
+(owner ruling 2026-07-15). Note this does **not** trip
+`VfxResourceSelfContainmentRegression` — that oracle is scoped to `Assets/Resources/VFX/**`, and
+`Assets/Models/` is not among its `GitignoredArtRoots`.
+
+**Scale is measured, not hand-picked.** `CollectorStackPropCatalogBuilder.FitScale` fits each model
+to one cell of the view's grid (`SlotSize.x/4` wide, `SlotSize.y/5` tall) from its own mesh bounds —
+the fit-to-height rule from DEF-208 / WO-751. A log, a flour sack and an iron bar have wildly
+different native sizes; one constant cannot suit all three.
+
 ---
 
 ## Suggested fills for GAPS (existing sprites only)
