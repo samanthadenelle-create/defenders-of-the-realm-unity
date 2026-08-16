@@ -12,7 +12,8 @@
 # after each fire to cover the whole test session.
 #
 # Fires ONLY on real captures (F8 "flagged" / error / exception / softlock); ignores
-# session_start + scene_loaded startup noise. Re-baselines on a fresh Play session
+# session_start + scene_loaded startup noise and "note" (FlowTrace.Capture: expected
+# lifecycle state dumps that must not wake a triage seat). Re-baselines on a fresh Play session
 # (break-log shrinks) so the next capture is still caught.
 #
 # Usage: bash .claude/skills/run-defenders/f8-watch.sh [windowMinutes]   (default 60)
@@ -54,7 +55,7 @@ for ((i=0; i<ITERS; i++)); do
   if [ "$cur" -lt "$base" ]; then base=$cur; fi        # new Play session wiped it -> re-baseline
   if [ "$cur" -gt "$base" ]; then
     new=$(tail -n +$((base+1)) "$BL")
-    meaningful=$(echo "$new" | grep -vE '"kind":"(session_start|scene_loaded)"')
+    meaningful=$(echo "$new" | grep -vE '"kind":"(session_start|scene_loaded|note)"')
     if [ -n "$meaningful" ]; then
       echo "=== NEW break-log capture(s) — TRIAGE NOW ==="
       echo "$meaningful"

@@ -728,8 +728,15 @@ namespace DeNelle.Editor
             // NOTE: this oracle declares `namespace DeNelle.Editor` (not .Regression) -- cite it as
             // written rather than "correcting" the file to match its neighbours mid-wave.
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "spire-celebration suite", () => { if (!DeNelle.Editor.SpirePlansCelebrationRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[spire-celebration] " + r); });
-            // --- Owner VFX bans (2026-08-16): Spell_Fire_6 + 'Magic circle sun loop' stay dead -
-            //     source lint + baked-catalog GUID scan (both VFXCatalog and HovlVfxCatalog). ---
+            // --- Owner VFX bans (2026-08-16: "Spell_Fire_6 - Do Not use anywhere"): Spell_Fire_6 +
+            //     'Magic circle sun loop' stay dead - source lint over all runtime+editor code plus a
+            //     baked-catalog GUID scan (both VFXCatalog.asset and HovlVfxCatalog.asset). Colour
+            //     Variants are deliberately NOT banned (scope note in the suite header). Replacement
+            //     pick = BigExplosion (owner-tagged the same day).
+            //     ⚠ THE ONLY REGISTRATION OF THIS SUITE (audit 2026-08-15). It was registered TWICE
+            //     here, so every run emitted two [banned-vfx] lines and inflated the suite count; the
+            //     duplicate is now pinned by BannedVfxRegression's own single-registration case, which
+            //     FAILS if a second call site reappears in this file.
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "banned-vfx suite", () => { if (!DeNelle.Editor.Regression.BannedVfxRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[banned-vfx] " + r); });
             // --- WO-997 class resource economy: every playable class authors a valid resource block,
             //     every cost fits its owning class's pool, at least one costed non-ultimate per kit
@@ -767,11 +774,24 @@ namespace DeNelle.Editor
             // duplicate-icon defect cannot return.
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "talent-icons suite", () => { if (!DeNelle.Editor.Regression.TalentIconMapRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[talent-icons] " + r); });
 
-            // --- BANNED VFX (owner ban 2026-08-16: "Spell_Fire_6 - Do Not use anywhere"):
-            // source-lints all runtime+editor code and the baked VFXCatalog.asset (live-resolved
-            // GUID) for the banned prefab; color Variants deliberately NOT banned (scope note in
-            // the suite header). Replacement pick = BigExplosion (owner-tagged same day).
-            DeNelle.Core.Diagnostics.Guard.Try("Regression", "banned-vfx suite", () => { if (!DeNelle.Editor.Regression.BannedVfxRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[banned-vfx] " + r); });
+            // (BANNED VFX used to be registered a SECOND time here - removed 2026-08-15. The suite
+            //  is registered ONCE, above with the other VFX oracles; two call sites emitted two
+            //  [banned-vfx] lines per run and inflated the suite count. Do not re-add.)
+
+            // --- HERO DEATH SEVERITY (audit 2026-08-15): a NORMAL hero death must not raise an F8
+            // ERROR. HeroHealth's death-freeze state dump was a FlowTrace.Fail because break-log was
+            // errors-only on device, so the most common event in the game woke a live triage seat
+            // every time the owner died. Pins the new FlowTrace.Capture channel (INFO severity +
+            // kind:"note" straight into break-log.jsonl) and the F8 daemon's skip of note rows --
+            // two-sided, so DELETING the dump fails just as loudly as restoring the Fail.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "hero-death-severity suite", () => { if (!DeNelle.Editor.Regression.HeroDeathSeverityRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[hero-death-severity] " + r); });
+
+            // --- DEV GRANT UNCAPPED (audit 2026-08-15): the dev resource grants resolved
+            // GetMethod("GrantSpendable") BY STRING -- the TownBankCapacity-clamped path -- so a
+            // 50,000 wood dev grant into a 2,500 bank silently lost ~95% of itself. Reflection by
+            // string is invisible to the compiler and to ordinary source lint, so this oracle reads
+            // the literal method-name strings the dev surfaces pass to GetMethod.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "dev-grant-uncapped suite", () => { if (!DeNelle.Editor.Regression.DevGrantUncappedRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[dev-grant-uncapped] " + r); });
 
             // --- ECHO ENGAGE DIALOGUE (WO-1030, 2026-08-16): options were clipped by a
             // text+options sum clamp (48px rows under the touch floor, fraction overlay) and

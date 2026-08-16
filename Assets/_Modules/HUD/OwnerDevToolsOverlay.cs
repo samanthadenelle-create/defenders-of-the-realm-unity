@@ -290,12 +290,20 @@ namespace DeNelle.HUD
             var eco = ResolveVillageSingleton("DeNelle.Village.EconomyService", out var ecoType);
             if (eco == null) { SetStatus("Resources: EconomyService not alive yet."); return; }
 
-            // GrantSpendable(int wood=0, int food=0, int iron=0, int crystals=0) — mirrors
+            // GrantSpendableUncapped(int wood=0, int food=0, int iron=0, int crystals=0) — mirrors
             // Wood/Iron into GameState so the upgrade flow can spend them too.
-            var grant = ecoType.GetMethod("GrantSpendable",
+            //
+            // ⚠ UNCAPPED, DELIBERATELY (audit 2026-08-15). This used to resolve "GrantSpendable",
+            // which routes through the TownBankCapacity clamp — so a 50,000 wood dev grant into a
+            // 2,500 bank silently vaporised ~95% of itself, with a throttled toast as the only tell.
+            // A dev tool that does not give you what it says it gives you is worse than no dev tool.
+            // GrantSpendableUncapped is the DevHarness path that exists for exactly this.
+            // The lookup is reflection-BY-STRING, so no compiler or source lint can see it if it
+            // drifts back — DevGrantUncappedRegression pins both dev surfaces to this method name.
+            var grant = ecoType.GetMethod("GrantSpendableUncapped",
                 BindingFlags.Public | BindingFlags.Instance, null,
                 new[] { typeof(int), typeof(int), typeof(int), typeof(int) }, null);
-            if (grant == null) { SetStatus("Resources: GrantSpendable(int,int,int,int) not found."); return; }
+            if (grant == null) { SetStatus("Resources: GrantSpendableUncapped(int,int,int,int) not found."); return; }
             grant.Invoke(eco, new object[] { 50000, 25000, 50000, 25000 }); // wood, food, iron, crystals
 
             // AddCoins(int) tops up the shop/sell gold wallet (GrantSpendable has no coins arg).

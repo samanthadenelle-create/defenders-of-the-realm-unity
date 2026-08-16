@@ -583,7 +583,7 @@ namespace DeNelle.HUD
 
         /// <summary>
         /// Grants the AdminOverlay full-resource bundle (wood/food/iron/crystals + coins)
-        /// through EconomyService.GrantSpendable — which writes Wood/Iron into BOTH
+        /// through EconomyService.GrantSpendableUncapped — which writes Wood/Iron into BOTH
         /// wallets (in-session pool + GameState) so shop AND upgrade flows can spend it.
         /// HUD can't reference DeNelle.Village, so reached by reflection — the exact
         /// AdminOverlay.OnLoadResources idiom (the documented HUD→Village seam).
@@ -596,10 +596,15 @@ namespace DeNelle.HUD
             var eco = instProp?.GetValue(null);
             if (eco == null) { ShowToast("Grant failed - economy not alive yet."); return; }
 
-            var grant = ecoType.GetMethod("GrantSpendable",
+            // ⚠ UNCAPPED, DELIBERATELY (audit 2026-08-15) — same fix as AdminOverlay /
+            // OwnerDevToolsOverlay, which this method's idiom is copied from. "GrantSpendable"
+            // routes through the TownBankCapacity clamp, so this 50,000 wood grant landed ~2,500
+            // and the toast below still announced 50k. The lookup is reflection-BY-STRING, so
+            // nothing but DevGrantUncappedRegression can see it if it drifts back.
+            var grant = ecoType.GetMethod("GrantSpendableUncapped",
                 System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance, null,
                 new[] { typeof(int), typeof(int), typeof(int), typeof(int) }, null);
-            if (grant == null) { ShowToast("Grant failed - GrantSpendable not found."); return; }
+            if (grant == null) { ShowToast("Grant failed - GrantSpendableUncapped not found."); return; }
             grant.Invoke(eco, new object[] { 50000, 25000, 50000, 25000 }); // wood, food, iron, crystals
 
             var addCoins = ecoType.GetMethod("AddCoins",

@@ -856,6 +856,31 @@ namespace DeNelle.Core.Diagnostics
             try { Debug.LogWarning("[BreakCapture] report-capture internal: " + e.Message); } catch { }
         }
 
+        /// <summary>
+        /// Record a NON-ERROR, capture-worthy state dump (kind <c>"note"</c>) — the durable half of
+        /// <see cref="FlowTrace.Capture"/>. Lands in break-log.jsonl for post-hoc reading WITHOUT
+        /// presenting as an error anywhere: it never goes through the Unity log listener (so it is
+        /// not an Error/Exception/Assert), it takes no screenshot, and the F8 watch daemon skips
+        /// <c>note</c> rows alongside session_start / scene_loaded.
+        /// <para/>
+        /// ⚠ NOT a general logging entry point. This exists so an EXPECTED lifecycle event (hero
+        /// death) stops raising a permanent error in the owner's triage stream. If something is
+        /// actually wrong, it is an error — use <see cref="FlowTrace.Fail"/>.
+        /// <para/>
+        /// No-op when no harness is alive (headless, pre-boot); the caller's [Flow:*] log line is
+        /// then the whole record. Never throws at the caller.
+        /// </summary>
+        public static void RecordNote(string system, string message)
+        {
+            try
+            {
+                var inst = Instance;
+                if (inst == null) return;
+                inst.Record("note", "[" + (system ?? "?") + "] " + (message ?? ""), null, screenshot: false);
+            }
+            catch { /* a diagnostic must never break its caller */ }
+        }
+
         // ---- the one place a break is recorded --------------------------------
         void Record(string kind, string message, string stack, bool screenshot)
         {
@@ -877,7 +902,10 @@ namespace DeNelle.Core.Diagnostics
 
             // 2) console line (only retrievable channel in WebGL) - guard reentry
             bool prev = _inHandler; _inHandler = true;
-            try { if (kind != "session_start" && kind != "scene_loaded") Debug.LogWarning($"[BREAK] {kind}: {message}"); }
+            // "note" (FlowTrace.Capture) is excluded alongside the startup kinds: the caller already
+            // emitted its own [Flow:*] INFO line, so echoing a second "[BREAK] ..." warning would
+            // re-introduce exactly the alarming-looking line this channel exists to remove.
+            try { if (kind != "session_start" && kind != "scene_loaded" && kind != "note") Debug.LogWarning($"[BREAK] {kind}: {message}"); }
             catch { }
             finally { _inHandler = prev; }
 

@@ -747,7 +747,7 @@ namespace DeNelle.HUD
         }
 
         /// <summary>
-        /// Grants a full base of SPENDABLE resources through EconomyService.GrantSpendable —
+        /// Grants a full base of SPENDABLE resources through EconomyService.GrantSpendableUncapped —
         /// which lands Wood/Iron in BOTH wallets the game keeps: the in-session pool the shop +
         /// HUD bar read AND GameState.Wood/Iron the structure-upgrade flow (ResourceLedger)
         /// spends. Plain Grant only filled the in-session pool, so dev-granted Wood/Iron was
@@ -761,12 +761,19 @@ namespace DeNelle.HUD
             var eco = instProp?.GetValue(null);
             if (eco == null) { SetStatus("Resources: EconomyService not alive yet."); return; }
 
-            // GrantSpendable(int wood = 0, int food = 0, int iron = 0, int crystals = 0) —
+            // GrantSpendableUncapped(int wood = 0, int food = 0, int iron = 0, int crystals = 0) —
             // mirrors Wood/Iron into GameState so the upgrade flow can spend them too.
-            var grant = ecoType.GetMethod("GrantSpendable",
+            //
+            // ⚠ UNCAPPED, DELIBERATELY (audit 2026-08-15). This used to resolve "GrantSpendable",
+            // which routes through the TownBankCapacity clamp — so a 50,000 wood dev grant into a
+            // 2,500 bank silently vaporised ~95% of itself, with a throttled toast as the only tell.
+            // GrantSpendableUncapped is the DevHarness path that exists for exactly this.
+            // The lookup is reflection-BY-STRING, so no compiler or source lint can see it if it
+            // drifts back — DevGrantUncappedRegression pins both dev surfaces to this method name.
+            var grant = ecoType.GetMethod("GrantSpendableUncapped",
                 BindingFlags.Public | BindingFlags.Instance, null,
                 new[] { typeof(int), typeof(int), typeof(int), typeof(int) }, null);
-            if (grant == null) { SetStatus("Resources: EconomyService.GrantSpendable(int,int,int,int) not found."); return; }
+            if (grant == null) { SetStatus("Resources: EconomyService.GrantSpendableUncapped(int,int,int,int) not found."); return; }
 
             grant.Invoke(eco, new object[] { 50000, 25000, 50000, 25000 }); // wood, food, iron, crystals
 

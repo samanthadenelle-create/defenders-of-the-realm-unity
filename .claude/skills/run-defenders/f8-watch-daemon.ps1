@@ -146,7 +146,11 @@ foreach ($p in @($EditorLog, $PlayerLog)) {
 }
 
 $seenKeys = @{}
-$kindSkip = 'session_start|scene_loaded'
+# "note" = FlowTrace.Capture (audit 2026-08-15): an EXPECTED lifecycle state dump (hero death,
+# scene handoff) that must land in break-log.jsonl for post-hoc reading but must NEVER wake a
+# triage seat. Before this channel existed, those dumps were written as FlowTrace.Fail - the only
+# severity that survived to device - so every hero death raised an F8 error capture.
+$kindSkip = 'session_start|scene_loaded|note'
 
 Write-Host ('[f8-daemon] armed pid={0} poll={1}s' -f $myPid, $PollSeconds)
 Write-Host ('[f8-daemon] break-log: {0}' -f $BreakLog)

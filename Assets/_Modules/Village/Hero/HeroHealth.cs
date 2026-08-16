@@ -1128,9 +1128,17 @@ namespace DeNelle.Village
             _deathPinActive       = true;
             _deathPinResidualLogs = 0;
 
-            // Decisive, pullable line (break-log is errors-only on device — use Fail): captures the
-            // freeze state so the next capture proves the agent was frozen and the pin armed.
-            DeNelle.Core.Diagnostics.FlowTrace.Fail("HeroDeath",
+            // Decisive, pullable line: captures the freeze state so a later capture proves the agent
+            // was frozen and the pin armed.
+            //
+            // ⚠ USE Capture, NEVER Fail (audit 2026-08-15). This used to be a FlowTrace.Fail, with the
+            // comment "break-log is errors-only on device — use Fail" — true at the time, and the cost
+            // was that the MOST COMMON EVENT IN THE GAME raised a permanent, expected F8 ERROR. The
+            // owner's triage stream filled with her own deaths and seats learned to ignore Hero
+            // failures. FlowTrace.Capture is the severity that was missing: the dump still lands in
+            // break-log.jsonl (kind "note") for post-hoc reading, but nothing reads it as a failure
+            // and the F8 daemon does not wake on it. Dying is not a bug.
+            DeNelle.Core.Diagnostics.FlowTrace.Capture("HeroDeath",
                 "death freeze armed: agent=" + (agent != null ? "present" : "none") +
                 " isOnNavMesh=" + (agent != null && agent.isOnNavMesh) +
                 " updatePosition=" + (agent != null ? agent.updatePosition.ToString() : "n/a") +

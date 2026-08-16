@@ -508,9 +508,16 @@ namespace DeNelle.Village
         /// <summary>
         /// <see cref="GrantSpendable"/> that BYPASSES the town bank cap — DEV / AutoPilot only.
         /// See <see cref="GrantUncapped"/> for why this exists and why no player-facing income path
-        /// may call it. Kept as a separate NAME (not a defaulted parameter) so the existing reflected
-        /// <c>GetMethod("GrantSpendable", int,int,int,int)</c> lookups in AdminOverlay /
-        /// OwnerDevToolsOverlay keep resolving to the capped method unchanged.
+        /// may call it. Kept as a separate NAME (not a defaulted parameter) so the choice of capped
+        /// vs. uncapped is explicit at every call site.
+        /// <para/>
+        /// ⚠ THE DEV OVERLAYS RESOLVE **THIS** METHOD (fixed 2026-08-15). The retired note here said
+        /// the separate name existed so the reflected lookups in AdminOverlay / OwnerDevToolsOverlay
+        /// "keep resolving to the capped method unchanged" — that was the DEFECT, not the design: a
+        /// 50,000 wood dev grant into a 2,500 TownBankCapacity silently lost ~95% of itself, and
+        /// because both lookups are reflection-BY-STRING no compile error or source lint could show
+        /// it. Both overlays now resolve <c>GrantSpendableUncapped</c>, and
+        /// DevGrantUncappedRegression FAILS if a dev surface is re-bound to the capped grant.
         /// </summary>
         public void GrantSpendableUncapped(int wood = 0, int food = 0, int iron = 0, int crystals = 0)
         {

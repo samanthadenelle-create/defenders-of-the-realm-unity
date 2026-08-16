@@ -171,6 +171,36 @@ namespace DeNelle.Core.Diagnostics
             if (Allowed(system)) Sink.Error($"[Flow:{system}] {Pad()}{message}");
         }
 
+        /// <summary>
+        /// CAPTURE-WORTHY BUT NOT A FAILURE (audit 2026-08-15). A state dump for an EXPECTED,
+        /// normal-lifecycle event that must still reach <c>break-log.jsonl</c> for post-hoc reading
+        /// — a hero death, a scene handoff, a queue drain.
+        /// <para/>
+        /// ⚠ WHY THIS EXISTS: <c>break-log</c>'s log-listener records only Error/Exception/Assert,
+        /// so call sites that wanted a durable state dump reached for <see cref="Fail"/> — the only
+        /// severity that survived to device. The result was a PERMANENT, EXPECTED error on the most
+        /// common event in the game: the owner's F8 triage stream filled with her own deaths, and
+        /// seats learned to ignore Hero failures. That degrades the instrument the whole
+        /// instrument-first directive depends on. The fix is a THIRD severity, not a deleted trace.
+        /// <para/>
+        /// Behaviour: emits at INFO severity (so no listener, gate or daemon reads it as an error)
+        /// AND records a <c>kind:"note"</c> row directly into break-log.jsonl via
+        /// <see cref="BreakCaptureHarness.RecordNote"/>, bypassing the log sink entirely. The F8
+        /// watch daemon skips <c>note</c> rows, so a normal-lifecycle capture never wakes a triage
+        /// seat while the dump still lands in the file for anyone reading after the fact.
+        /// <para/>
+        /// Use <see cref="Fail"/> when something is actually WRONG. Use this when the event is
+        /// expected and you want the state anyway.
+        /// </summary>
+        public static void Capture(string system, string message)
+        {
+            if (!Allowed(system)) return;
+            Sink.Info($"[Flow:{system}] NOTE {Pad()}{message}");
+            // Durable row in break-log.jsonl at a non-error kind. Best-effort: no harness (headless,
+            // pre-boot, editor tooling) simply means the line above is the whole record.
+            try { BreakCaptureHarness.RecordNote(system, message); } catch { /* a diagnostic never throws at its caller */ }
+        }
+
         // --- throttled logging (for per-frame / per-spawn hot paths) ---
         private static readonly Dictionary<string, float> s_nextAt = new Dictionary<string, float>();
 

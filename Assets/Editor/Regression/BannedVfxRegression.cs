@@ -112,6 +112,7 @@ namespace DeNelle.Editor.Regression
             {
                 Case(failures, "source-lint", () => Case1_SourceLint(failures, notes));
                 Case(failures, "catalog-asset", () => Case2_CatalogAsset(failures, notes));
+                Case(failures, "single-registration", () => Case3_SingleRegistration(failures, notes));
             }
             catch (Exception ex)
             {
@@ -295,6 +296,67 @@ namespace DeNelle.Editor.Regression
                 return m.Success ? m.Groups[1].Value : null;
             }
             catch { return null; }
+        }
+
+        // =====================================================================
+        //  CASE 3 - SELF-PIN: this suite is registered EXACTLY ONCE
+        // ---------------------------------------------------------------------
+        //  Found by the regression-coverage audit 2026-08-15: BannedVfxRegression
+        //  was wired into DataRegression.RunAll TWICE (two Guard.Try lines with the
+        //  same "banned-vfx suite" label), so every full run executed it twice,
+        //  printed two [banned-vfx] lines and inflated the reported suite count by
+        //  one. Nothing caught it because a duplicated PASS looks exactly like a
+        //  pass, and a suite cannot see its own call sites from the inside - unless
+        //  it goes and reads the orchestrator, which is what this case does.
+        //  Comments are stripped first so the "do not re-add" prose left at the
+        //  removed site (and this very header, once quoted) cannot be miscounted.
+        // =====================================================================
+        private const string OrchestratorFile = "Assets/Editor/Regression/DataRegression.cs";
+        private const string RegistrationToken = "BannedVfxRegression.Run(";
+
+        private static void Case3_SingleRegistration(List<string> failures, List<string> notes)
+        {
+            if (!File.Exists(OrchestratorFile))
+            {
+                failures.Add("[single-registration] orchestrator missing: " + OrchestratorFile +
+                             " - the tree moved; re-point this case (do NOT delete it)");
+                return;
+            }
+
+            string[] lines;
+            try { lines = File.ReadAllLines(OrchestratorFile); }
+            catch (Exception ex)
+            {
+                failures.Add("[single-registration] could not read " + OrchestratorFile + ": " + ex.GetType().Name);
+                return;
+            }
+
+            int count = 0;
+            var where = new List<string>();
+            bool inBlock = false;
+            for (int i = 0; i < lines.Length; i++)
+            {
+                string code = StripCommentsInLine(lines[i], ref inBlock);
+                if (string.IsNullOrEmpty(code)) continue;
+                int at = 0;
+                while ((at = code.IndexOf(RegistrationToken, at, StringComparison.Ordinal)) >= 0)
+                {
+                    count++;
+                    where.Add("line " + (i + 1));
+                    at += RegistrationToken.Length;
+                }
+            }
+
+            if (count == 1) { notes.Add("registered once (DataRegression.cs " + where[0] + ")"); return; }
+            if (count == 0)
+            {
+                failures.Add("[single-registration] this suite is NOT registered in DataRegression.RunAll - " +
+                             "a banned-VFX reference would now ship unnoticed; re-add exactly ONE Guard.Try line");
+                return;
+            }
+            failures.Add("[single-registration] registered " + count + " times in DataRegression.RunAll (" +
+                         string.Join(", ", where) + ") - duplicate registrations run the suite twice, emit " +
+                         "duplicate [banned-vfx] lines and inflate the suite count; keep exactly ONE");
         }
 
         private static string Norm(string path)
