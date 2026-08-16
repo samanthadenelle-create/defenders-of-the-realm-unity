@@ -270,6 +270,112 @@ namespace DeNelle.Core.Geometry
             return true;
         }
 
+        // =====================================================================
+        //  BOW HELD ORIENTATION (owner ruling 2026-08-16 — "the bow must stand UPRIGHT")
+        // =====================================================================
+        //
+        // WHY THIS EXISTS — the defect it fixes, stated as the seam it closes.
+        // ---------------------------------------------------------------------
+        // NormalizeInto + BowGrip solve the bow in the GRIP ROOT's OWN frame: long axis on +Y,
+        // narrow on +X, grip seated on the riser apex. That solve is correct and is pinned
+        // (RangedPrimaryRegression 'bow-grip-apex'). What it CANNOT know is anything about the
+        // hand it is about to be parented to — the grip root's frame is not the bone's frame.
+        //
+        // HeroBowAttachment used to parent the solved bow to the LeftHand bone with an IDENTITY
+        // local rotation (GripLocalEuler == 0), which maps prop-local +Y onto the HAND BONE's
+        // local +Y. On this rig that axis is the "points out of the fist" direction — which is
+        // exactly right for a SWORD (a blade continues the fist) and wrong by ~90 degrees for a
+        // BOW (the hand closes AROUND the riser, so the limb span runs PERPENDICULAR to the fist,
+        // not along it). That is the owner's report verbatim: the bow "lying horizontally across
+        // his body ... rotated roughly 90 degrees about the grip point".
+        //
+        // The same class of defect is already documented in this repo for the melee families —
+        // EquipmentController._staffGripEuler's RC5 note (2026-07-04): "these were ZERO, so an
+        // un-corrected staff/wand/axe/mace inherited the bone's raw local axes and read SIDEWAYS
+        // across the torso". The bow is the ONE long-axis-on-+Y family that never got a
+        // correction, because ComputeMeleeGripRotation is gated on melee `kind` and the hero's bow
+        // does not go through EquipmentController at all (it is deferred to HeroBowAttachment).
+        //
+        // WHY DERIVED, NOT A NUDGE EULER: the melee families settled this with a hand-typed
+        // per-archetype nudge, which is a tuned constant that only holds for one rig. This solves
+        // it the way ComputeSheathRotation already does (EquipmentController :2274) — build the
+        // target in WORLD from the BODY's own axes, then express it in the bone's LOCAL frame so
+        // it follows that bone through animation. No magic euler, no sign to guess, and it holds
+        // on any rig whose body has an up and a forward. Per that precedent the result is used
+        // WITHOUT ApplyGlobalWeaponYaw: the 180-degree yaw exists to correct grips that INHERITED
+        // the raw bone axes, and composing it onto a fully-derived world target would spin the
+        // belly to face backwards.
+
+        /// <summary>
+        /// The rotation, expressed in <paramref name="hand"/>'s LOCAL frame, that stands a
+        /// BowGrip-seated bow UPRIGHT in the hand. Maps prop-local +Y — the limb-to-limb span
+        /// that <see cref="AlignAxesYLongXNarrowZWide"/> puts there — onto the body's UP, and
+        /// prop-local +Z — the riser's belly, the side the grip apex sits on, i.e. the face AWAY
+        /// from the string — onto the body's FORWARD, so the curved limbs open away from what the
+        /// archer is aiming at.
+        /// <para>
+        /// Owner rule (binding, applies to EVERY bow): "for a bow the LONGEST axis is Y (the
+        /// limb-to-limb span), the grip is at mid-Y on the rounded side, and the hand grips
+        /// perpendicular to that Y axis." CROSSBOWS ARE EXCLUDED — a crossbow IS held across the
+        /// body and is widest on X, so this solve is wrong for it by construction;
+        /// RangedPrimaryRegression case 1 pins that no crossbow can reach the runtime catalog.
+        /// </para>
+        /// Returns identity (and says so out loud) when either transform is missing — Section 12:
+        /// no silent failures.
+        /// </summary>
+        public static Quaternion ComputeBowHeldRotation(Transform hand, Transform body)
+        {
+            if (hand == null || body == null)
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("Equip",
+                    "BowOrient: hand or body transform is NULL - falling back to an IDENTITY hand-local " +
+                    "rotation, which is the pre-fix seat that lays the bow across the body. The bow will " +
+                    "render horizontal; this line is the reason.");
+                return Quaternion.identity;
+            }
+
+            // The two world directions the bow must answer to, read off the BODY (not the wrist,
+            // which the animation owns): limbs stand along the body's up, belly faces its forward.
+            Vector3 limb = body.up.normalized;
+            Vector3 belly = body.forward;
+
+            // Orthonormalize belly against limb so LookRotation can never be degenerate even on a
+            // body whose forward has been tipped (ragdoll, slope-aligned root, editor fixture).
+            belly -= Vector3.Dot(belly, limb) * limb;
+            if (belly.sqrMagnitude < 1e-6f)
+            {
+                belly = Mathf.Abs(limb.z) < 0.9f ? Vector3.forward : Vector3.right;
+                belly -= Vector3.Dot(belly, limb) * limb;
+            }
+            belly.Normalize();
+
+            // LookRotation(forward, upwards): +Z -> forward, +Y -> upwards. We want prop +Z on the
+            // belly and prop +Y on the limb span, so feed forward=belly, upwards=limb — the SAME
+            // construction ComputeSheathRotation uses, for the same reason.
+            Quaternion worldTarget = Quaternion.LookRotation(belly, limb);
+            Quaternion handLocal = Quaternion.Inverse(hand.rotation) * worldTarget;
+
+            // ── §12 PROVING LINE ──────────────────────────────────────────────────────────────
+            // Re-composes the answer and MEASURES it, so the next capture proves the fix instead of
+            // asserting it. `limbTiltFromVertical` is the number the owner's defect IS: it must read
+            // ~0 deg (bow upright). `identityTilt` is what the SAME bow would have read under the
+            // pre-fix identity seat — when that prints ~90 deg it is the captured evidence that the
+            // hand bone's +Y is the fist axis and that an identity seat lays the bow horizontal.
+            Quaternion composed = hand.rotation * handLocal;
+            Vector3 limbWorld = composed * Vector3.up;
+            Vector3 bellyWorld = composed * Vector3.forward;
+            float limbTilt = Vector3.Angle(limbWorld, limb);
+            float bellyOff = Vector3.Angle(bellyWorld, belly);
+            float identityTilt = Vector3.Angle(hand.rotation * Vector3.up, limb);
+            DeNelle.Core.Diagnostics.FlowTrace.Step("Equip",
+                $"BowOrient hand='{hand.name}': bodyUp={limb:0.##} bodyFwd={belly:0.##} " +
+                $"handLocalEuler={handLocal.eulerAngles:0.#} -> limbAxisWorld={limbWorld:0.##} " +
+                $"bellyAxisWorld={bellyWorld:0.##} limbTiltFromVertical={limbTilt:0.#}deg " +
+                $"bellyOffAim={bellyOff:0.#}deg | identitySeatWouldTilt={identityTilt:0.#}deg " +
+                "(that is the pre-fix seat: ~90deg = the bow lying across the body)");
+            return handLocal;
+        }
+
         /// <summary>Nearest populated bin to <paramref name="start"/> (the midpoint bin can be empty
         /// on a sparse mesh); -1 when the profile is empty.</summary>
         private static int NearestHitBin(bool[] hit, int start)

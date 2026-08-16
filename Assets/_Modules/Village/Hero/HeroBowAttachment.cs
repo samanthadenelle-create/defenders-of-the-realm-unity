@@ -50,10 +50,19 @@ namespace DeNelle.Village
         // is the hollow between string and belly), scaled to BowHeldLength. Because it does that
         // deterministic bounds-based fit (longest/limbs -> +Y, narrowest -> +X, grip derived,
         // scaled to target) independent of the FBX's own pivot/orient/scale, the bow arrives in the
-        // hand ALREADY oriented to spec — so GripLocalEuler stays ZERO. A previous +91 Z
-        // tweak rotated that correct bow ~90 deg sideways, tipping the long axis off +Y —
-        // that was the "bow is turned" bug, removed. If a small hand-fit nudge is ever
-        // needed, tune these against a screenshot rather than guessing.
+        // GRIP ROOT'S OWN FRAME already oriented to spec.
+        //
+        // ⚠ CORRECTED 2026-08-16. This block used to continue "...the bow arrives in the hand
+        // ALREADY oriented to spec — so GripLocalEuler stays ZERO", and that premise was FALSE and
+        // was the bug. NormalizeInto solves in the GRIP ROOT's frame and has no knowledge of the
+        // BONE the root is about to be parented to, so a ZERO euler maps the limb span onto the
+        // hand bone's raw +Y — the fist axis — and the bow lay HORIZONTALLY across the body
+        // ("rotated roughly 90 degrees about the grip point", owner). The hand-local seat is now
+        // DERIVED from the rig by WeaponBoundsOrient.ComputeBowHeldRotation (see TryAttach), and
+        // GripLocalEuler survives as what it was always described to be: a felt-tune nudge ON TOP,
+        // still zero. A previous +91 Z tweak was a guess at this same symptom and stays removed —
+        // the answer is a derivation, not a dialed constant. If a small hand-fit nudge is ever
+        // needed, tune GripLocalEuler against a screenshot rather than guessing.
         private static readonly Vector3 GripLocalPosition = new Vector3(0f, 0f, 0f);
         private static readonly Vector3 GripLocalEuler    = new Vector3(0f, 0f, 0f);
         // Target held length of the longest (limb) axis, in metres.
@@ -229,7 +238,50 @@ namespace DeNelle.Village
 
             bowRoot.transform.SetParent(leftHand, false);
             bowRoot.transform.localPosition = GripLocalPosition;
-            bowRoot.transform.localRotation = EquipmentController.ApplyGlobalWeaponYaw(Quaternion.Euler(GripLocalEuler));
+
+            // ================================================================
+            // THE BOW STANDS UPRIGHT (owner defect 2026-08-16: the bow lay HORIZONTALLY across
+            // Sylas' body, "rotated roughly 90 degrees about the grip point").
+            // ----------------------------------------------------------------
+            // THIS IS NOT THE GRIP-POSITION BUG. The grip POINT is correct and measured
+            // (RangedPrimaryRegression 'bow-grip-apex': seat=(0,0,-0.3) err=0m, commit 14a2c66e).
+            // What was wrong is the ORIENTATION ONCE SEATED, and the cause was THIS LINE, which
+            // used to read:
+            //     localRotation = EquipmentController.ApplyGlobalWeaponYaw(Quaternion.Euler(GripLocalEuler));
+            // With GripLocalEuler == (0,0,0) that is an IDENTITY hand-local seat, which maps the
+            // bow's prop-local +Y (the limb span, put there by NormalizeInto) straight onto the
+            // LeftHand bone's OWN local +Y. On this rig that bone axis is the "points out of the
+            // fist" direction — correct for a SWORD, which continues the fist, and wrong by ~90
+            // degrees for a BOW, whose hand closes AROUND the riser so the limbs run PERPENDICULAR
+            // to the fist. Same defect class EquipmentController._staffGripEuler's RC5 note already
+            // records for the melee families ("inherited the bone's raw local axes and read
+            // SIDEWAYS across the torso"); the bow is the one long-axis family that never got a
+            // correction, because ComputeMeleeGripRotation is gated on melee `kind` and the hero's
+            // bow never goes through EquipmentController at all.
+            //
+            // The header above ("the bow arrives in the hand ALREADY oriented to spec — so
+            // GripLocalEuler stays ZERO") was the false premise. NormalizeInto orients the bow in
+            // the GRIP ROOT's frame; it has no knowledge of the bone. Identity is only right if the
+            // bone's +Y happens to be the limb line, which is exactly the assumption
+            // ComputeMeleeGripRotation was written to reject.
+            //
+            // DERIVED, not nudged: ComputeBowHeldRotation builds the target in WORLD from the
+            // BODY's own axes (limbs -> body.up, belly -> body.forward) and expresses it in the
+            // bone's LOCAL frame — the identical construction ComputeSheathRotation uses, and for
+            // the identical reason. GripLocalEuler is KEPT as the felt-tune nudge on top (still
+            // zero; tune it against a screenshot, never guess).
+            //
+            // ApplyGlobalWeaponYaw is DELIBERATELY NOT composed here. That 180-degree yaw exists to
+            // correct grips that INHERITED the raw bone axes; a fully-derived world target already
+            // points where it should, and yawing it would swing the belly to face BACKWARD, away
+            // from the aim. Precedent: ComputeSheathRotation's derived result is likewise used
+            // without the yaw (EquipmentController :2029, :2699), while the raw-euler seats beside
+            // it (:2694) still take it.
+            // ================================================================
+            bowRoot.transform.localRotation =
+                DeNelle.Core.Geometry.WeaponBoundsOrient.ComputeBowHeldRotation(
+                    leftHand, _animator != null ? _animator.transform : transform)
+                * Quaternion.Euler(GripLocalEuler);
 
             // ================================================================
             // THE FIX THAT NEVER REACHED THIS FILE (owner, 2026-08-06: "We had this
@@ -285,8 +337,18 @@ namespace DeNelle.Village
             }
 
             _bow = bowRoot;
+            // §12: report the RESOLVED seat, not the authored constants. `nudge` is still the
+            // authored GripLocalEuler, but `localEuler` is what the bow actually got — and
+            // `limbTiltFromVertical` is the defect number itself, re-measured on the FINAL
+            // transform after parenting + scale compensation, so nothing downstream of the solve
+            // can quietly re-tip it. Upright reads ~0 deg; the pre-fix horizontal seat read ~90.
+            Vector3 limbWorld = bowRoot.transform.rotation * Vector3.up;
+            Transform bodyT = _animator != null ? _animator.transform : transform;
             FlowTrace.Step("Equip", $"bow ATTACHED + auto-oriented to LeftHand '{leftHand.name}' " +
-                $"(pos={GripLocalPosition} euler={GripLocalEuler}, " +
+                $"(pos={GripLocalPosition} nudge={GripLocalEuler} " +
+                $"localEuler={bowRoot.transform.localRotation.eulerAngles:0.#}, " +
+                $"limbAxisWorld={limbWorld:0.##} " +
+                $"limbTiltFromVertical={Vector3.Angle(limbWorld, bodyT.up):0.#}deg, " +
                 $"parentLossy={leftHand.lossyScale.y:0.###} divided out -> localScale={bowRoot.transform.localScale.y:0.###})");
             enabled = false;
         }

@@ -80,6 +80,29 @@
 //            every other ability; the justification for the exception (a cooling bow
 //            leaving the ranger with no input) died with the dagger primary.
 //
+//   Case 7 — the LONGEST axis still seats on +Y. Case 4's synthetic bow is authored
+//            Y-long, so it cannot exercise the axis solve; this one hands the solver
+//            the same mesh rotated 90 deg about X (longest extent arriving on the
+//            prop's Z) and requires it to come back onto +Y. Guards WO-970, where the
+//            align could only YAW and any mesh not already Y-long "stayed lying flat".
+//
+//   Case 8 — the HELD bow STANDS UPRIGHT (owner defect 2026-08-16: "the bow LYING
+//            HORIZONTALLY across his body ... it must stand UPRIGHT ... rotated roughly
+//            90 degrees about the grip point"). HeroBowAttachment parented the correctly
+//            seated bow to the LeftHand bone with an IDENTITY hand-local rotation, which
+//            maps the bow's +Y onto the BONE's +Y - the "out of the fist" axis, right for
+//            a sword and 90 deg wrong for a bow, whose hand closes AROUND the riser.
+//            Pinned against a hostile fixture (hand pitched 90 deg + rolled 53, body yawed
+//            37) and it asserts the identity seat WOULD have failed, so it cannot pass
+//            vacuously.
+//
+// ⚠ CASES 4 / 7 / 8 ARE THREE DIFFERENT FAILURES AND MUST STAY SEPARATE. Case 4 is the
+// grip POSITION (where on the bow the hand sits), Case 7 is the seated AXIS, Case 8 is
+// the ORIENTATION ONCE IN HAND. On 2026-08-16 the grip position measured exactly right
+// (bow-grip-apex err=0m, commit 14a2c66e) while the bow still lay horizontal - so a suite
+// that measured only the grip called the defect green. Never merge them, never relax one
+// to make another pass, and never "fix" an orientation failure by moving the grip.
+//
 // Parsed straight from the JSON (never through a live catalog), so a copy that
 // parses but was only half-regenerated is still caught.
 // =============================================================================
@@ -139,17 +162,22 @@ namespace DeNelle.Editor.Regression
 
             Case(failures, "bow-grip-apex", () => Case4_BowGripSeatsOnRoundedEdge(failures, notes));
             Case(failures, "cooldown-greys-out", () => Case6_NoCooldownSpecialCase(failures, notes));
+            Case(failures, "bow-long-axis-y", () => Case7_LongAxisSeatsOnY(failures, notes));
+            Case(failures, "bow-upright-in-hand", () => Case8_BowStandsUprightInHand(failures, notes));
 
             string noteStr = notes.Count > 0 ? " [notes: " + string.Join("; ", notes) + "]" : "";
             if (failures.Count == 0)
             {
-                reason = "RANGED PRIMARY OK - 6/6 cases pass (no crossbow can reach the runtime weapons " +
+                reason = "RANGED PRIMARY OK - 8/8 cases pass (no crossbow can reach the runtime weapons " +
                          "catalog while the R4a exclusion stands, the ranger basic is still a costed-" +
                          "cooldown ranged strike carrying its verb + bow icon, the ranged-basic " +
                          "discriminator still admits the ranger while rejecting the knight, the bow grip " +
                          "still seats on the ROUNDED EDGE apex rather than the straight/string edge, the " +
                          "BOW is an ACTION-BAR ability while the PRIMARY attack is the melee/dagger " +
-                         "sweep, and the bow slot greys out under its cooldown with no special case)" + noteStr;
+                         "sweep, the bow slot greys out under its cooldown with no special case, the " +
+                         "LONGEST axis still seats on +Y whatever axis the source mesh authored it on, " +
+                         "and the held bow still stands UPRIGHT in a hand whose bone axes are nowhere " +
+                         "near vertical)" + noteStr;
                 return true;
             }
             reason = "RANGED PRIMARY FAIL x" + failures.Count + ": " + string.Join(" | ", failures) + noteStr;
@@ -510,6 +538,167 @@ namespace DeNelle.Editor.Regression
                     failures.Add("[bow-grip-apex] the grip left the X centre-line (x=" + seat.x.ToString("0.####") +
                                  "m, expected 0) - X is the NARROW axis; the hand closes around the stave, " +
                                  "not on one of its faces.");
+            }
+            finally
+            {
+                if (rig != null) UnityEngine.Object.DestroyImmediate(rig);
+            }
+        }
+
+        // =====================================================================
+        //  CASE 7 — the LONGEST axis seats on +Y (the premise the whole bow rule stands on)
+        // =====================================================================
+        //
+        // DISTINCT FROM CASE 4 ON PURPOSE. Case 4 pins WHERE ON the bow the hand sits (the grip
+        // POSITION — the riser apex, not the string edge). This case pins WHICH WAY the bow is
+        // seated (the ORIENTATION — long axis on +Y). They are different failures with different
+        // fixes and they must not be able to regress into one another: on 2026-08-16 the grip
+        // position measured perfect (err=0m) while the bow still lay HORIZONTALLY in hand, and a
+        // suite that only measured the grip called that state green.
+        //
+        // Case 4's synthetic bow is authored Y-long already, so it cannot test the axis solve —
+        // AlignAxesYLongXNarrowZWide is near-identity for it. This case therefore hands the solver
+        // the same mesh rotated 90 degrees about X inside the prop, so its longest extent arrives
+        // on the prop's Z. The solver MUST rotate it back onto +Y. WO-970 records the exact
+        // regression this guards: the align could only ever YAW, so every prop whose source mesh
+        // was not already Y-long "stayed lying flat" — a Z-long mesh reading horizontal is that
+        // bug, and it is one line of geometry away from the owner's reported defect.
+        private const float AxisDotTolerance = 0.999f;   // ~2.6 deg off +Y
+
+        private static void Case7_LongAxisSeatsOnY(List<string> failures, List<string> notes)
+        {
+            GameObject rig = null;
+            try
+            {
+                rig = new GameObject("BowAxisProbe");
+                var parent = new GameObject("Anchor").transform;
+                parent.SetParent(rig.transform, false);
+
+                // prop (empty) -> child (mesh, pre-rotated 90 about X). The child rotation makes the
+                // mesh's own long axis land on the PROP's Z, so "longest -> +Y" has real work to do.
+                var prop = new GameObject("SynthBowRoot");
+                var child = new GameObject("SynthBowMesh", typeof(MeshFilter), typeof(MeshRenderer));
+                child.transform.SetParent(prop.transform, false);
+                child.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+                var mesh = BuildSyntheticBowMesh();
+                child.GetComponent<MeshFilter>().sharedMesh = mesh;
+                if (!mesh.isReadable)
+                {
+                    notes.Add("bow-long-axis-y SKIPPED: procedural mesh reported not readable");
+                    return;
+                }
+
+                DeNelle.Core.Geometry.WeaponBoundsOrient.NormalizeInto(
+                    prop, parent, SynthBowLength,
+                    DeNelle.Core.Geometry.WeaponBoundsOrient.GripAnchor.BowGrip,
+                    resolveBladeUpFromHilt: false);
+
+                // The mesh's long axis is its own +Y; carry it up through the child and the prop to
+                // read where the solver actually put it, in the anchor's frame.
+                Vector3 longAxis = prop.transform.localRotation * child.transform.localRotation * Vector3.up;
+                float dotY = Mathf.Abs(Vector3.Dot(longAxis.normalized, Vector3.up));
+
+                notes.Add("bow-long-axis-y: longAxis=(" + longAxis.x.ToString("0.###") + "," +
+                          longAxis.y.ToString("0.###") + "," + longAxis.z.ToString("0.###") +
+                          ") |dot(+Y)|=" + dotY.ToString("0.####"));
+
+                if (dotY < AxisDotTolerance)
+                    failures.Add("[bow-long-axis-y] after NormalizeInto the mesh's LONGEST axis points " +
+                                 longAxis.ToString("0.###") + " in the grip root's frame, |dot(+Y)|=" +
+                                 dotY.ToString("0.####") + " (needs >= " + AxisDotTolerance.ToString("0.###") +
+                                 "). The owner's rule is binding for EVERY bow: 'the longest piece is gonna " +
+                                 "be the y axis'. A long axis on X or Z is the bow lying HORIZONTALLY - the " +
+                                 "2026-08-16 defect - and it is a DIFFERENT failure from the grip POSITION " +
+                                 "that Case 4 measures, which is why it is pinned separately. See WO-970: " +
+                                 "the align could once only YAW, so a mesh not already Y-long stayed flat.");
+            }
+            finally
+            {
+                if (rig != null) UnityEngine.Object.DestroyImmediate(rig);
+            }
+        }
+
+        // =====================================================================
+        //  CASE 8 — the held bow STANDS UPRIGHT in a hand whose bone axes are not vertical
+        // =====================================================================
+        //
+        // ROOT CAUSE THIS PINS (owner defect 2026-08-16, "the bow lies horizontally across his
+        // body ... rotated roughly 90 degrees about the grip point"): HeroBowAttachment parented
+        // the correctly-seated bow to the LeftHand bone with an IDENTITY hand-local rotation
+        // (GripLocalEuler == 0), mapping the bow's prop-local +Y onto the BONE's own +Y. On this
+        // rig that axis is "points out of the fist" - right for a sword, which continues the fist,
+        // and wrong by ~90 degrees for a bow, whose hand closes AROUND the riser so the limbs run
+        // PERPENDICULAR to the fist. WeaponBoundsOrient.ComputeBowHeldRotation now derives the seat
+        // from the BODY's axes instead (limbs -> body.up, belly -> body.forward), the same
+        // construction EquipmentController.ComputeSheathRotation uses.
+        //
+        // The fixture is deliberately HOSTILE: the hand bone is pitched 90 degrees (so its own +Y
+        // lies along the body's forward - exactly the real defect's shape) plus a 53-degree roll,
+        // and the body is yawed 37 degrees off world forward so nothing can pass by accidentally
+        // agreeing with a world axis. Assertion 3 proves the fixture is doing work: the identity
+        // seat MUST be badly tilted here, so this case can never pass vacuously and can never
+        // quietly become a restatement of Case 4's grip-position measurement.
+        private const float UprightToleranceDeg = 0.5f;
+        /// <summary>The identity seat must be at least this far off vertical, or the fixture is
+        /// not exercising the bug and the case would prove nothing.</summary>
+        private const float FixtureMinIdentityTiltDeg = 45f;
+
+        private static void Case8_BowStandsUprightInHand(List<string> failures, List<string> notes)
+        {
+            GameObject rig = null;
+            try
+            {
+                rig = new GameObject("BowUprightProbe");
+                var body = new GameObject("Body").transform;
+                body.SetParent(rig.transform, false);
+                body.localRotation = Quaternion.Euler(0f, 37f, 0f);      // hero facing, upright
+
+                var hand = new GameObject("LeftHand").transform;
+                hand.SetParent(body, false);
+                hand.localRotation = Quaternion.Euler(90f, 0f, 53f);     // bone +Y along forward, rolled
+
+                Quaternion handLocal =
+                    DeNelle.Core.Geometry.WeaponBoundsOrient.ComputeBowHeldRotation(hand, body);
+
+                Quaternion composed = hand.rotation * handLocal;
+                Vector3 limbWorld  = composed * Vector3.up;        // prop +Y = the limb-to-limb span
+                Vector3 bellyWorld = composed * Vector3.forward;   // prop +Z = the riser belly / aim
+
+                float limbTilt     = Vector3.Angle(limbWorld, body.up);
+                float bellyOff     = Vector3.Angle(bellyWorld, body.forward);
+                float identityTilt = Vector3.Angle(hand.rotation * Vector3.up, body.up);
+
+                notes.Add("bow-upright-in-hand: limbTiltFromVertical=" + limbTilt.ToString("0.##") +
+                          "deg bellyOffAim=" + bellyOff.ToString("0.##") +
+                          "deg identitySeatWouldTilt=" + identityTilt.ToString("0.##") + "deg");
+
+                if (identityTilt < FixtureMinIdentityTiltDeg)
+                    failures.Add("[bow-upright-in-hand] FIXTURE BROKEN: the identity seat is only " +
+                                 identityTilt.ToString("0.##") + "deg off vertical (needs >= " +
+                                 FixtureMinIdentityTiltDeg.ToString("0.#") + "deg). The hand bone must be " +
+                                 "pitched away from vertical or this case passes without exercising the " +
+                                 "bug, and it would silently degrade into a restatement of Case 4.");
+
+                if (limbTilt > UprightToleranceDeg)
+                    failures.Add("[bow-upright-in-hand] the held bow's LONG axis sits " +
+                                 limbTilt.ToString("0.##") + "deg off the body's vertical (allowed " +
+                                 UprightToleranceDeg.ToString("0.##") + "deg). That is the owner's " +
+                                 "2026-08-16 defect: 'the bow LYING HORIZONTALLY across his body ... it " +
+                                 "must stand UPRIGHT'. ~" + identityTilt.ToString("0.#") + "deg means the " +
+                                 "hand-local seat went back to IDENTITY, which maps the limb span onto the " +
+                                 "hand BONE's +Y (the fist axis - correct for a sword, 90deg wrong for a " +
+                                 "bow). This is NOT the grip-position bug; do not 'fix' it by moving the " +
+                                 "grip, and do not weaken Case 4's bow-grip-apex to compensate.");
+
+                if (bellyOff > UprightToleranceDeg)
+                    failures.Add("[bow-upright-in-hand] the bow's BELLY (prop +Z, the riser face the grip " +
+                                 "apex sits on - the side AWAY from the string) points " +
+                                 bellyOff.ToString("0.##") + "deg off the body's forward (allowed " +
+                                 UprightToleranceDeg.ToString("0.##") + "deg). The curved limbs must open " +
+                                 "AWAY from the target, so the belly faces the aim. ~180deg here means a " +
+                                 "global yaw was composed onto the derived seat - ApplyGlobalWeaponYaw " +
+                                 "corrects grips that INHERITED raw bone axes and must NOT be applied on " +
+                                 "top of this derivation.");
             }
             finally
             {
