@@ -1297,7 +1297,8 @@
           "description": "All spells +25% damage and effect.",
           "effect": {
             "type": "damageBonus",
-            "value": 0.25
+            "value": 0.25,
+            "note": "(V2)"
           },
           "prerequisites": [
             "mage.t3n2"
@@ -1314,7 +1315,8 @@
           "description": "Permanent +40% spell power and +40% mana regen.",
           "effect": {
             "type": "damageBonus",
-            "value": 0.4
+            "value": 0.4,
+            "note": "+40% mana regen (V2)"
           },
           "prerequisites": [
             "mage.t3n3"

@@ -22,11 +22,23 @@ namespace DeNelle.Village
 
         private static readonly Dictionary<int, Entry> s_marks = new Dictionary<int, Entry>(32);
 
+        /// <summary>
+        /// ONE key per marked creature: the host GAMEOBJECT's instance id, never the
+        /// component's. Marks are applied through the IDamageable adapter (EnemyDamageable)
+        /// but read back in Enemy.TakeDamageFrom via the Enemy component — two different
+        /// components on the same GameObject, whose component ids never matched, so the
+        /// read side was dead code and towers/pets/DoTs got no amplification
+        /// (review fba0b1079..0e4690036 finding #3). Keying by the GameObject makes every
+        /// component on the creature resolve to the same mark.
+        /// </summary>
+        private static int KeyOf(Object target)
+            => target is Component c ? c.gameObject.GetInstanceID() : target.GetInstanceID();
+
         /// <summary>Mark a Unity object (Enemy / IDamageable host) to take more damage.</summary>
         public static void Apply(Object target, float durationSeconds, float damageMult)
         {
             if (target == null) return;
-            int id = target.GetInstanceID();
+            int id = KeyOf(target);
             float until = Time.time + Mathf.Max(0.1f, durationSeconds);
             float mult = Mathf.Clamp(damageMult, 1f, 2.5f);
             s_marks[id] = new Entry { Until = until, Mult = mult };
@@ -44,7 +56,7 @@ namespace DeNelle.Village
         public static float DamageTakenMultiplier(Object target)
         {
             if (target == null) return 1f;
-            int id = target.GetInstanceID();
+            int id = KeyOf(target);
             if (!s_marks.TryGetValue(id, out var e)) return 1f;
             if (Time.time > e.Until)
             {

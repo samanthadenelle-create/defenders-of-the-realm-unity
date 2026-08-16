@@ -340,7 +340,11 @@ namespace DeNelle.Village.Talents
             var m = ActiveMageMods(heroClass);
             float cathedral = m == null ? 1f : Mult(m.MageManaCostMult, MinMageManaCost, MaxMageManaCost);
             float talentCut = Mathf.Clamp(StatSum(heroClass, "manaCostReduction"), 0f, 0.5f);
-            return Mathf.Clamp(cathedral * (1f - talentCut), MinMageManaCost, 1f);
+            // Upper bound is MaxMageManaCost, NOT 1f: the documented band is [0.25 .. 2.0]
+            // (see the consts above — "a 'penalty' tier can never double past 2x"). A 1f cap
+            // silently flattened any future cost-PENALTY state to baseline while the comment
+            // still promised the penalty tier (review fba0b1079..0e4690036 finding #7).
+            return Mathf.Clamp(cathedral * (1f - talentCut), MinMageManaCost, MaxMageManaCost);
         }
 
         /// <summary>1 + Σ(range). Melee/ability reach scale (WO-910).</summary>

@@ -105,8 +105,37 @@ namespace DeNelle.Editor
             if (!src.Contains("ScaleDamage") || !src.Contains("Apply"))
                 failures.Add("CombatMark must expose Apply + ScaleDamage");
 
-            // Pure logic: unmarked = 1×
-            // Can't call runtime Time.time easily offline; assert API exists via source only.
+            // BEHAVIORAL round-trip (2026-08-15 review finding #6 — the old source-grep
+            // passed while the mark was dead code): Apply on ONE component of a GameObject
+            // must be readable through a DIFFERENT component of the same GameObject. That is
+            // exactly the Apply(EnemyDamageable) → ScaleDamage(Enemy) seam that was broken by
+            // per-component instance-id keying (finding #3).
+            GameObject probe = null;
+            try
+            {
+                probe = new GameObject("CombatMarkProbe");
+                var compA = probe.AddComponent<BoxCollider>();     // stand-in for EnemyDamageable
+                var compB = probe.AddComponent<SphereCollider>();  // stand-in for Enemy
+                CombatMark.Apply(compA, 5f, 1.3f);
+                float viaOther = CombatMark.DamageTakenMultiplier((UnityEngine.Object)compB);
+                if (Mathf.Abs(viaOther - 1.3f) > 0.001f)
+                    failures.Add($"mark applied via one component must read 1.3x via a sibling component of the same GameObject (got {viaOther:F3}) — per-GameObject keying broken");
+                float scaled = CombatMark.ScaleDamage((UnityEngine.Object)compB, 100f);
+                if (Mathf.Abs(scaled - 130f) > 0.1f)
+                    failures.Add($"ScaleDamage(100) on a 1.3x-marked foe must be 130 (got {scaled:F1})");
+                var unmarked = new GameObject("CombatMarkUnmarked");
+                try
+                {
+                    float baseline = CombatMark.DamageTakenMultiplier((UnityEngine.Object)unmarked.transform);
+                    if (Mathf.Abs(baseline - 1f) > 0.001f)
+                        failures.Add($"unmarked foe must read 1.0x (got {baseline:F3})");
+                }
+                finally { UnityEngine.Object.DestroyImmediate(unmarked); }
+            }
+            finally
+            {
+                if (probe != null) UnityEngine.Object.DestroyImmediate(probe);
+            }
 
             string enemy = File.ReadAllText("Assets/_Modules/Village/Enemies/Enemy.cs");
             if (!enemy.Contains("CombatMark.ScaleDamage"))
@@ -115,6 +144,22 @@ namespace DeNelle.Editor
             string ab = File.ReadAllText("Assets/_Modules/Village/Hero/HeroAbilities.cs");
             if (!ab.Contains("CombatMark.Apply") || !ab.Contains("IsHuntersMark"))
                 failures.Add("HeroAbilities must apply Hunter's Mark via CombatMark");
+
+            // SINGLE-APPLICATION LAW (2026-08-15 review): Enemy.TakeDamageFrom is the ONE
+            // place mark scaling happens. A caller-side CombatMark.ScaleDamage on a path that
+            // funnels into it double-applies (1.2 × 1.2) now that keys resolve per-GameObject.
+            foreach (var callerPath in new[]
+            {
+                "Assets/_Modules/Village/Hero/HeroAbilities.cs",
+                "Assets/_Modules/Village/Enemies/PlayerAttackController.cs",
+                "Assets/_Modules/Village/Troops/TroopController.cs",
+            })
+            {
+                string caller = File.ReadAllText(callerPath);
+                // Comments explaining the law are fine; a CALL is the violation.
+                if (Regex.IsMatch(caller, @"^(?!\s*//).*CombatMark\.ScaleDamage\s*\(", RegexOptions.Multiline))
+                    failures.Add(Path.GetFileName(callerPath) + " re-applies CombatMark.ScaleDamage caller-side — double-apply with Enemy.TakeDamageFrom (single-application law)");
+            }
         }
 
         private static void GateShieldPort(List<string> failures)

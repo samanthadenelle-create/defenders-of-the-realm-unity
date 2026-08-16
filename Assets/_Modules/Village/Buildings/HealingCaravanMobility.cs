@@ -29,6 +29,7 @@ namespace DeNelle.Village
         private bool _dead;
         private bool _moving;
         private float _nextHeroResolve;
+        private Vector3 _lastDestination = new Vector3(float.MinValue, 0f, float.MinValue);
 
         public bool IsAlive => !_dead && _hp > 0f;
         public float CurrentHp => _hp;
@@ -52,10 +53,29 @@ namespace DeNelle.Village
             _agent.radius = 0.6f;
         }
 
+        private void Start()
+        {
+            // DEFENSE-IN-DEPTH (2026-08-15 review finding #1): the footprint pipeline adds a
+            // carving NavMeshObstacle AFTER Awake (same frame, after StructureFactory.Create
+            // returns). BaseLayoutLoader now skips it for mobile structures, but if any other
+            // path ever re-adds one, an agent + carving obstacle on one root means the agent
+            // carves its own mesh away and never moves — remove it loudly instead.
+            var obstacle = GetComponent<NavMeshObstacle>();
+            if (obstacle != null)
+            {
+                FlowTrace.Warn("Caravan",
+                    "NavMeshObstacle found on the caravan root — a carving obstacle kills the agent's own navmesh. Removing it (mobile unit must not carve).");
+                Destroy(obstacle);
+            }
+        }
+
         private void Update()
         {
             if (_dead) return;
-            if (Time.time >= _nextHeroResolve)
+            // Re-resolve ONLY while unresolved (hero destroyed/respawned resets via the null
+            // check) — the fallback FindFirstObjectByType is a whole-scene scan and must not
+            // run twice a second forever on untagged rigs (2026-08-15 review, efficiency).
+            if (_hero == null && Time.time >= _nextHeroResolve)
             {
                 _nextHeroResolve = Time.time + 0.5f;
                 ResolveHero();
@@ -83,7 +103,14 @@ namespace DeNelle.Village
             if (_moving && _agent.isOnNavMesh)
             {
                 _agent.speed = FollowSpeed;
-                _agent.SetDestination(_hero.position);
+                // Re-path only when the hero has actually moved (>0.5m) from the last
+                // requested destination — a 1.05 m/s crawler does not need 60 fresh
+                // NavMesh path requests per second (2026-08-15 review, efficiency).
+                if ((_hero.position - _lastDestination).sqrMagnitude > 0.25f)
+                {
+                    _lastDestination = _hero.position;
+                    _agent.SetDestination(_lastDestination);
+                }
             }
         }
 

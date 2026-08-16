@@ -754,8 +754,15 @@ namespace DeNelle.Village.World
             // ~141 m, where the exit portal's 2.7 m (1.5x hero) would be a speck. PortalHeight is
             // the existing, owner-tuned landmark height and stays the single source for it.
             var swap = await PortalStructure.SwapInAsync(p.Root, PortalHeight, "Portal_Owner");
-            if (!swap.Ok || p.Root == null) return;   // Warn already emitted by PortalStructure
+            // STORE the swap BEFORE the Ok gate: SwapInAsync creates its Addressables handle
+            // before awaiting, so the result can carry a VALID handle even when Ok is false
+            // (load failed / host died mid-await). Returning first stranded that handle where
+            // the teardown loop's PortalStructure.Release(ref p.Swap) could never release it —
+            // one leaked handle per failed swap, portal bundle resident all session
+            // (review fba0b1079..0e4690036 finding #5; DungeonExitInteractable already
+            // assigns-then-checks, this mirrors it).
             p.Swap = swap;
+            if (!swap.Ok || p.Root == null) return;   // Warn already emitted by PortalStructure
             p.ArtStanding = true;
 
             // Retire the placeholder cubes now that real art stands in their place.

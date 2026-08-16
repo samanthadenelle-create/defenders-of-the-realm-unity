@@ -239,7 +239,13 @@ namespace DeNelle.Editor
         private static readonly HashSet<string> KnownDeadNodeBaseline = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             // pruned 2026-08-15 cluster 1+2: attackSpeed, moveSpeed, critChance, dodge,
-            // manaCostReduction, range; damageBonus notes cleared on mage.t4n2/t4n3
+            // manaCostReduction, range.
+            // ⚠ mage.t4n2/t4n3 were WRONGLY pruned in cluster 2 by CLEARING their stub notes
+            // with no consumer wired (2026-08-15 review finding #4): the descriptions still
+            // promise "+25% effect" / "+40% mana regen" that nothing implements, and IsStubNote
+            // is the only signal G3 has. Notes restored in hero-talents.json (both copies),
+            // ids restored below. The ratchet only shrinks by WIRING, never by deleting the
+            // evidence.
             "ranger.t2n4",  // Deep Freeze           modifyAbility:slow
             "ranger.t2n5",  // Shadow Veil           stealth
             "ranger.t3n2",  // Emberhead             modifyAbility:burn
@@ -261,6 +267,8 @@ namespace DeNelle.Editor
             "mage.t2n4",    // Flame Mastery         modifyAbility: "(V2)"
             "mage.t3n1",    // Cataclysm Prep        modifyAbility: "(V2)"
             "mage.t3n2",    // Spell Echo            proc "duplicate (V2)"
+            "mage.t4n2",    // Aetherweaver Ascension damageBonus "(V2)" — "+25% effect" half unwired
+            "mage.t4n3",    // Eternal Arcana        damageBonus "+40% mana regen (V2)" — regen half unwired
             "mage.t3n5",    // Void Rift             unlockAbility "(NEW ability - stub)"
             "mage.t4n1",    // Cataclysm             unlockAbility "(NEW ability - stub)"
             "mage.t4n5",    // Elarion's Legacy      proc "duplicate (V2)"

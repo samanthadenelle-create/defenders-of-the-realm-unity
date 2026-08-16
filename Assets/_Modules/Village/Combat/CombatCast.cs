@@ -39,10 +39,17 @@ namespace DeNelle.Village
             if (actor != null) actor.PlayCast();
             else
             {
-                // Troop/enemy may only have raw Animator with Cast trigger.
+                // Troop/enemy may only have raw Animator with Cast trigger. GUARD the
+                // parameter like ActorAnimator.PlayCast does (Has(CastHash)) and keep the
+                // Attack-trigger fallback the old TroopController chain had — a controller
+                // without Cast otherwise logs "Parameter does not exist" per swing and plays
+                // nothing (2026-08-15 review finding #8).
                 var anim = caster.GetComponentInChildren<Animator>(true);
                 if (anim != null && anim.runtimeAnimatorController != null)
-                    anim.SetTrigger(AnimParams.CastHash);
+                {
+                    if (HasParam(anim, AnimParams.CastHash))        anim.SetTrigger(AnimParams.CastHash);
+                    else if (HasParam(anim, AnimParams.AttackHash)) anim.SetTrigger(AnimParams.AttackHash);
+                }
             }
 
             Vector3 origin = caster.position + Vector3.up * 1.2f;
@@ -73,6 +80,16 @@ namespace DeNelle.Village
                 $"Play spell='{id}' caster='{caster.name}' target='{(target != null ? target.name : "<none>")}'");
 
             onResolve?.Invoke();
+        }
+
+        /// <summary>Parameter-existence check for RAW Animators (ActorAnimator has its own Has()).
+        /// Linear scan is fine at cast cadence (~1/s per caster), never per-frame.</summary>
+        private static bool HasParam(Animator anim, int hash)
+        {
+            var ps = anim.parameters;
+            for (int i = 0; i < ps.Length; i++)
+                if (ps[i].nameHash == hash) return true;
+            return false;
         }
     }
 }

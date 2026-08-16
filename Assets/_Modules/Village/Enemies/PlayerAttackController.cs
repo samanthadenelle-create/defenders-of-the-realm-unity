@@ -663,7 +663,8 @@ namespace DeNelle.Village
                 float damage = _baseDamage * weaponMult;
                 if (isPerfect) damage *= _perfectHitMultiplier;
                 if (riposte)   damage *= RiposteMultiplier;   // parry counter — big hit on the tank
-                damage = CombatMark.ScaleDamage(damageable, damage);
+                // Hunter's Mark is applied ONCE inside Enemy.TakeDamageFrom (2026-08-15 review,
+                // CombatMark GameObject-key fix) — scaling here too would double-apply.
 
                 // WO-910: critChance talent roll (additive). Distinct from perfect-hit timing.
                 string critClass = _abilities != null ? _abilities.HeroClass : null;
@@ -740,6 +741,14 @@ namespace DeNelle.Village
                 FlowTrace.Throttle("Combat", "melee-whiff", 1f,
                     $"hero MELEE swing FIRED but hit nothing (candidates={hits.Length}, reach={EffectiveRange():F1}m) " +
                     "— in battle, but no hostile IDamageable in reach/LoS.");
+
+            // WO-997: ranger Focus on-hit restore — a landed basic attack refunds resource
+            // through the SINGLE pool on HeroAbilities (RestoreMana, clamped there). Gated on
+            // the class resource block's onHitRestore > 0, so knight/mage are provably
+            // untouched. Once per CONNECTED SWING (not per enemy caught in the sweep), so a
+            // crowd cannot multi-refund one attack.
+            if (anyHit && _abilities != null && _abilities.OnHitRestore > 0f)
+                _abilities.RestoreMana(_abilities.OnHitRestore);
 
             // Impact audio — the meaty "connect" the swing was missing. Melee classes get a
             // weapon clash; casters get a spell-hit zap. (TakeDamageFrom already plays the

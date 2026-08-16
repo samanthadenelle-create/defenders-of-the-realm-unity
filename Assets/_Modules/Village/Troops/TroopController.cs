@@ -573,17 +573,21 @@ namespace DeNelle.Village
             }
             // WO-935: mage strike uses unified CombatCast (anim + VFX) then damage.
             Transform foeTf = (foe as Component) != null ? (foe as Component).transform : null;
+            // NOTE (2026-08-15 review): Hunter's Mark scaling now lives in ONE place —
+            // Enemy.TakeDamageFrom (CombatMark GameObject-key fix). Scaling here too would
+            // double-apply. The cast spell id also follows the troop's element instead of
+            // hardcoding Fireball, so a Holy caster no longer plays Fire VFX.
             if (_useCastStrike)
             {
-                CombatCast.Play(CombatCast.Fireball, transform, foeTf, () =>
+                CombatCast.Play(CastSpellIdFor(_element), transform, foeTf, () =>
                 {
                     if (foe != null && foe.IsAlive)
-                        foe.TakeDamage(CombatMark.ScaleDamage(foe, dmg), _element);
+                        foe.TakeDamage(dmg, _element);
                 });
             }
             else
             {
-                foe.TakeDamage(CombatMark.ScaleDamage(foe, dmg), _element);
+                foe.TakeDamage(dmg, _element);
                 if (_animator != null)
                 {
                     if (_hasAttack)
@@ -591,6 +595,21 @@ namespace DeNelle.Village
                     else if (_hasCast)
                         _animator.SetTrigger(AnimCast);
                 }
+            }
+        }
+
+        /// <summary>Cast presentation id for the troop's damage element. None keeps the
+        /// owner-observed Fireball look (the only shipped cast-strike troop, SC_Mage, is
+        /// element None — do not change its felt visual); Aether/Ice read as Arcane until
+        /// dedicated casts exist.</summary>
+        private static string CastSpellIdFor(DamageElement element)
+        {
+            switch (element)
+            {
+                case DamageElement.Flame: return CombatCast.Fireball;
+                case DamageElement.Aether:
+                case DamageElement.Ice:   return CombatCast.Arcane;
+                default:                  return CombatCast.Fireball;
             }
         }
 

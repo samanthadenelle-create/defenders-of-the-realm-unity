@@ -285,7 +285,17 @@ namespace DeNelle.Village
             float d = Mathf.Max(0.01f, footprintMetres.y);
             float yawMod = Mathf.Abs(Mathf.DeltaAngle(0f, yawDegrees)) % 90f;
             bool cardinal = yawMod < 0.01f || yawMod > 89.99f;
-            if (cardinal) return FootprintCells(new Vector2(w, d));
+            if (cardinal)
+            {
+                // At 90°/270° the rectangle's world AABB SWAPS axes: a 6×2 prop rotated a
+                // quarter turn covers 2 m of world X and 6 m of world Z. Returning (w,d)
+                // here transposed the claim (review fba0b1079..0e4690036 finding #2) —
+                // the mesh covered free cells while blocking cells it never touched, and
+                // the wrong claim replayed from the save. The general |c|·w+|s|·d branch
+                // below already yields the swap at exact cardinals; mirror it here.
+                bool quarterTurn = Mathf.RoundToInt(Mathf.Abs(Mathf.DeltaAngle(0f, yawDegrees)) / 90f) % 2 == 1;
+                return FootprintCells(quarterTurn ? new Vector2(d, w) : new Vector2(w, d));
+            }
 
             float rad = yawDegrees * Mathf.Deg2Rad;
             float absC = Mathf.Abs(Mathf.Cos(rad));

@@ -327,7 +327,17 @@ namespace DeNelle.Village
             Vector2Int blockerFootprint = grid.FootprintCells(claimXz);
             Vector2Int footprint = grid.FootprintCells(claimXz, yawDeg);
 
-            AddFootprintBlocker(go, blockerFootprint, grid.cellSize);
+            // MOBILE structures (WO-991 healing caravan) must NOT carve the navmesh: the
+            // carving NavMeshObstacle on the same root as the caravan's NavMeshAgent carved
+            // the mesh out from under its own agent — isOnNavMesh false forever, follow dead
+            // on arrival (2026-08-15 review finding #1). They KEEP the box collider (tap-select
+            // + contact damage collider-of-record) and the visual-collider strip; only the
+            // static carve is skipped, and it travels with none.
+            bool mobile = go.GetComponent<HealingCaravanMobility>() != null;
+            AddFootprintBlocker(go, blockerFootprint, grid.cellSize, carveNavMesh: !mobile);
+            if (mobile)
+                FlowTrace.Step("BaseLayout",
+                    $"'{go.name}' is MOBILE (HealingCaravanMobility) — NavMesh carve skipped so the agent keeps its mesh.");
 
             // "towers shoot through walls" fix (owner 2026-07): a build-mode WALL or GATE must sit on
             // the "Structure" physics layer so the towers' line-of-sight linecast (masked to
@@ -428,7 +438,8 @@ namespace DeNelle.Village
         /// The gate-clearance rule (PlacementGrid / BuildModeController) keeps a
         /// spawn→Heart lane open, so carving never fully walls off the enemy path.
         /// </summary>
-        private static void AddFootprintBlocker(GameObject go, Vector2Int footprintCells, float cellSize)
+        private static void AddFootprintBlocker(GameObject go, Vector2Int footprintCells, float cellSize,
+                                                bool carveNavMesh = true)
         {
             float w = Mathf.Max(1, footprintCells.x) * cellSize;
             float d = Mathf.Max(1, footprintCells.y) * cellSize;
@@ -495,12 +506,17 @@ namespace DeNelle.Village
             box.size = new Vector3(w, 4f, d);
             box.center = new Vector3(0f, 2f, 0f);
 
-            var obstacle = go.GetComponent<NavMeshObstacle>();
-            if (obstacle == null) obstacle = go.AddComponent<NavMeshObstacle>();
-            obstacle.shape = NavMeshObstacleShape.Box;
-            obstacle.size = new Vector3(w, 4f, d);
-            obstacle.center = new Vector3(0f, 2f, 0f);
-            obstacle.carving = true;   // carve the baked mesh, no full rebake
+            // MOBILE structures skip the carve (see the Spawn call site): a carving obstacle
+            // on the same root as a NavMeshAgent removes the mesh under its own agent.
+            if (carveNavMesh)
+            {
+                var obstacle = go.GetComponent<NavMeshObstacle>();
+                if (obstacle == null) obstacle = go.AddComponent<NavMeshObstacle>();
+                obstacle.shape = NavMeshObstacleShape.Box;
+                obstacle.size = new Vector3(w, 4f, d);
+                obstacle.center = new Vector3(0f, 2f, 0f);
+                obstacle.carving = true;   // carve the baked mesh, no full rebake
+            }
 
             // F8-19 (invisible blocker) — the footprint box above is the ONE collider of
             // record for a placed structure. SkinOptions.Structure does NOT strip the source
