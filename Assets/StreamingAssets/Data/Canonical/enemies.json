@@ -19,7 +19,8 @@
     "contactDamage": "Damage one melee hit deals to a building / wall / gate (or the hero in the overworld).",
     "attackInterval": "Seconds between melee hits while in contact.",
     "height": "Approximate mesh height (world units) - sizes the NavMeshAgent capsule + the floating HP bar offset.",
-    "boss": "true for a faction wave-boss (the Necromancer of the Wound). Orc 'elite' camp-bosses are role='elite', not boss=true (they lead a camp, not a village wave)."
+    "boss": "true for a faction wave-boss (the Necromancer of the Wound). Orc 'elite' camp-bosses are role='elite', not boss=true (they lead a camp, not a village wave).",
+    "rewardVariance": "WO-1103 - bounded kill-reward variance as a fraction (0.15 = +/-15%). At grant time xp/gold roll value * (1 + Random.Range(-v, +v)), rounded (EnemyDef.RollReward - the one authority). Absent = 0 = deterministic. Seeded 0.15 for regular enemies / 0.10 for bosses as an opening balance - a TUNABLE the owner re-balances per row, never a lock."
   },
   "version": 5,
   "enemies": [
@@ -40,6 +41,7 @@
       "boss": false,
       "xpReward": 10,
       "coinReward": 4,
+      "rewardVariance": 0.15,
       "flavor": "A risen villager of the Hollow Ones - slow, certain, and without memory of the home it marches on."
     },
     {
@@ -59,6 +61,7 @@
       "boss": false,
       "xpReward": 24,
       "coinReward": 10,
+      "rewardVariance": 0.15,
       "flavor": "Armored bone in a weighted march — a wall of the dead that does not hurry and does not break."
     },
     {
@@ -78,6 +81,7 @@
       "boss": false,
       "xpReward": 14,
       "coinReward": 6,
+      "rewardVariance": 0.15,
       "flavor": "Quick and low to the ground - it slips the line and goes for the weakest ward."
     },
     {
@@ -97,6 +101,7 @@
       "boss": false,
       "xpReward": 18,
       "coinReward": 8,
+      "rewardVariance": 0.15,
       "flavor": "A robed thing that hums the dirge of the Wound — it mends the bone of its kin faster than you can break it. Cut it down first."
     },
     {
@@ -116,6 +121,7 @@
       "boss": false,
       "xpReward": 18,
       "coinReward": 8,
+      "rewardVariance": 0.15,
       "flavor": "A staff-bearing skeleton wreathed in Withering violet — it looses bolts of grief from the back of the march."
     },
     {
@@ -135,6 +141,7 @@
       "boss": false,
       "xpReward": 55,
       "coinReward": 28,
+      "rewardVariance": 0.15,
       "flavor": "A tall, dark-tinted Warrior with the scythe — the Hollow Ones' executioner. When it wades in, the line is in trouble."
     },
     {
@@ -154,6 +161,7 @@
       "boss": false,
       "xpReward": 120,
       "coinReward": 60,
+      "rewardVariance": 0.15,
       "flavor": "Many of the Hollowed fused into one bone-construct, an oversized axe in its grip. Slow, but it charges the Heart and ignores what is in its way."
     },
     {
@@ -173,6 +181,7 @@
       "boss": false,
       "xpReward": 8,
       "coinReward": 3,
+      "rewardVariance": 0.15,
       "flavor": "A villager who fled to the cellar long ago and was taken by the Withering where it hid. It kneels and rocks rather than wanders. They are grief, not menace."
     },
     {
@@ -192,6 +201,7 @@
       "boss": false,
       "xpReward": 150,
       "coinReward": 80,
+      "rewardVariance": 0.15,
       "flavor": "A skeleton in a stained healer's apron, a glass vial clutched in one hand. It still performs the motions of healing — it does not know it is dead."
     },
     {
@@ -211,6 +221,7 @@
       "boss": true,
       "xpReward": 220,
       "coinReward": 120,
+      "rewardVariance": 0.10,
       "flavor": "A hand of Alduin the Mournful. Where it walks, the Hollowed rise to walk beside it."
     },
     {
@@ -230,6 +241,7 @@
       "boss": false,
       "xpReward": 22,
       "coinReward": 10,
+      "rewardVariance": 0.15,
       "flavor": "The Warband's front line - no patience, all axe. It hits the wall it sees, not the one that's weakest."
     },
     {
@@ -249,6 +261,7 @@
       "boss": false,
       "xpReward": 16,
       "coinReward": 7,
+      "rewardVariance": 0.15,
       "flavor": "Keeps to the back of the camp and mends what the Berserkers break. Drop it first."
     },
     {
@@ -268,6 +281,7 @@
       "boss": false,
       "xpReward": 90,
       "coinReward": 50,
+      "rewardVariance": 0.15,
       "flavor": "The elite that holds a Warband camp. Clear it and the node it squats on is yours to reclaim."
     },
     {
@@ -287,6 +301,7 @@
       "boss": false,
       "xpReward": 24,
       "coinReward": 11,
+      "rewardVariance": 0.15,
       "flavor": "The Warband's roving muscle - a greenskin raider who hunts the open Wildlands and garrisons the reclaimable camps. SINGLE-SOURCE stat block: whether it roams, guards an outpost, mounts a camp counterattack, or staffs a garrison, it reads these exact base stats (each spawner still scales by its own context)."
     },
     {
@@ -306,6 +321,7 @@
       "boss": false,
       "xpReward": 46,
       "coinReward": 24,
+      "rewardVariance": 0.15,
       "flavor": "A lumbering brute of the deep places - slow, but each blow lands like a falling oak."
     },
     {
@@ -325,6 +341,7 @@
       "boss": false,
       "xpReward": 38,
       "coinReward": 18,
+      "rewardVariance": 0.15,
       "flavor": "Hurls the mountain at you a piece at a time. Slower to swing than its kin, and it never needs to."
     },
     {
@@ -344,6 +361,7 @@
       "boss": false,
       "xpReward": 46,
       "coinReward": 22,
+      "rewardVariance": 0.15,
       "flavor": "It does not fight you. It sings the wounds back out of the ones who do - faster than you can put them in."
     },
     {
@@ -363,6 +381,7 @@
       "boss": true,
       "xpReward": 180,
       "coinReward": 100,
+      "rewardVariance": 0.10,
       "flavor": "The one the others follow down. It does not charge - it arrives, and the ground gives it room."
     },
     {
@@ -382,6 +401,7 @@
       "boss": false,
       "xpReward": 42,
       "coinReward": 22,
+      "rewardVariance": 0.15,
       "flavor": "A hulking ogre dragged up from the warrens - it swings a whole tree and calls it a club."
     }
   ]

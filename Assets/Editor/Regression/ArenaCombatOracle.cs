@@ -167,6 +167,45 @@ namespace DeNelle.Editor
                     log.AppendLine("  [exec] WIN -> FlowTrace 'SUMMARY xp=...' CAPTURED (totals captured for the summary view)");
 
                 // -----------------------------------------------------------------
+                //  PART 1b -- WO-1103: KILLS (not roster) drive the battle payout,
+                //  and the SUMMARY reports the TOTAL banked (battle slice + the
+                //  per-enemy stream Enemy.Die banked during the fight).
+                //  We resolve the SAME 3-body roster with kills=2 (the capped-spawn
+                //  case: fewer bodies fought than rostered) + a seeded stream, and
+                //  assert the EXACT SUMMARY number. If the payout still read the
+                //  roster (3) -- or dropped the stream -- the number cannot match.
+                //  A kills=5 resolve (roster + bonus boss + extras) then proves the
+                //  payout scales UP with kills (4 kills visibly > 1 kill).
+                // -----------------------------------------------------------------
+                {
+                    const int cappedKills = 2, seededStreamXp = 37, seededStreamGold = 12;
+                    int battleSlice2 = Mathf.RoundToInt((20 + 8 * cappedKills + 4 * winParams.Threat) * expectedMult);
+                    int expectedTotal2 = battleSlice2 + seededStreamXp;
+
+                    BattleArena.Instance.ResolveForTest(winParams, won: true, durationSeconds: winDuration,
+                                                        kills: cappedKills, streamXp: seededStreamXp, streamGold: seededStreamGold);
+
+                    string killsNeedle = $"SUMMARY xp={expectedTotal2} ";
+                    if (!sink.Has(killsNeedle))
+                        failures.Add($"WO-1103: missing FlowTrace '{killsNeedle.Trim()}' -- battle payout did not pay " +
+                                     $"kills={cappedKills} + stream={seededStreamXp} on a roster of {winParams.EnemyIds.Length} " +
+                                     "(payout reads the roster, or the per-enemy stream was dropped from the SUMMARY)");
+                    else
+                        log.AppendLine($"  [exec] WO-1103 -> SUMMARY total {expectedTotal2} = battle slice {battleSlice2} (kills={cappedKills}, NOT roster {winParams.EnemyIds.Length}) + stream {seededStreamXp} CAPTURED");
+
+                    const int bossKills = 5;   // roster 3 + bonus boss + capped-lift extras
+                    int battleSlice5 = Mathf.RoundToInt((20 + 8 * bossKills + 4 * winParams.Threat) * expectedMult);
+                    BattleArena.Instance.ResolveForTest(winParams, won: true, durationSeconds: winDuration,
+                                                        kills: bossKills, streamXp: 0, streamGold: 0);
+                    if (!sink.Has($"SUMMARY xp={battleSlice5} "))
+                        failures.Add($"WO-1103: missing 'SUMMARY xp={battleSlice5}' for kills={bossKills} -- extra kills (incl. the bonus boss) do not raise the payout");
+                    else if (battleSlice5 <= battleSlice2)
+                        failures.Add("WO-1103: kills=5 payout is not above kills=2 payout (kill scaling inverted)");
+                    else
+                        log.AppendLine($"  [exec] WO-1103 -> kills=5 pays {battleSlice5} > kills=2 slice {battleSlice2} CAPTURED (more kills, more payout)");
+                }
+
+                // -----------------------------------------------------------------
                 //  PART 2 -- LOSS resolve: defeat audio fires, no reward.
                 // -----------------------------------------------------------------
                 audio.Tracks.Clear();

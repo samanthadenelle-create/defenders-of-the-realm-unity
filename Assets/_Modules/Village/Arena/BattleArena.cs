@@ -250,6 +250,11 @@ namespace DeNelle.Village.Arena
         private readonly List<Enemy> _liveEnemies = new List<Enemy>();
         private EncounterParams _current;
         private bool _resolved;
+        // WO-1103: kills (not roster) drive the battle payout; the stream is the summed
+        // ROLLED per-enemy grants Enemy.Die banked during THIS fight (fed to the SUMMARY).
+        private int _killCount;
+        private int _killStreamXp;
+        private int _killStreamGold;
         private BattleArenaHud _hud;
         private FamilyLeader _familyLeader;   // WO-146 MonsterFamily — the orc pack's leader
         private bool _familyEngaged;          // disbanded-on-arrival latch (formation -> real 1vN)
@@ -397,6 +402,11 @@ namespace DeNelle.Village.Arena
             _climaxBody = null;
             _returnWarpCancelled = false;   // F8 seq512: fresh fight, the return warp is live again
             _battleStartTime = Time.time;   // WO-505: start the star-rating clock.
+            // WO-1103: fresh fight -> zero the kill counter + the per-enemy reward stream
+            // (kills, not roster, drive the battle payout; the stream feeds the SUMMARY total).
+            _killCount = 0;
+            _killStreamXp = 0;
+            _killStreamGold = 0;
             BattleInProgress = true;
 
             DeNelle.Village.GameSfx.PlayWeaponDraw(); // #51: hero unsheathes as the fight begins
@@ -1594,13 +1604,79 @@ namespace DeNelle.Village.Arena
             else if (s.Contains("warrior")) { display = "Orcish Warrior"; hp = 78;  dmg = 16; spd = 3.2f; atk = 1.2f; height = 2.0f; }
             else                            { display = "Orcish Raider";  hp = 65;  dmg = 10; spd = 3.0f; atk = 1.2f; height = 1.9f; }
 
+            // WO-1103 item 2: REWARDS now read the CANONICAL CATALOG (the follow-up the
+            // 2026-07-01 note above promised) — base xp/coin/glimmer + rewardVariance come
+            // from the enemies.json row for this id, threat-scaled by the same t multiplier
+            // the stats use. Ids with no catalog row (the arena-only orc-warrior/tank/mage/
+            // warlord synthetics) keep the legacy synthesized values plus a code-default
+            // variance so they stay range-bound too. Combat stats stay synthesized either
+            // way (this WO touches rewards only).
+            int xpBase, glimmerBase, coinBase; float variance;
+            EnemyDef row = CatalogRow(id);
+            if (row != null)
+            {
+                xpBase      = Mathf.RoundToInt(row.XpReward * t);
+                glimmerBase = Mathf.RoundToInt(row.GlimmerReward * t);
+                coinBase    = row.CoinReward > 0 ? Mathf.RoundToInt(row.CoinReward * t) : 0;
+                variance    = row.RewardVariance;
+                FlowTrace.Step("BattleArena",
+                    $"REWARD DEF id={id} source=catalog baseXp={row.XpReward} baseCoin={row.CoinReward} " +
+                    $"var={variance:0.00} threatScale={t:0.00} -> xp={xpBase} coin={coinBase} glimmer={glimmerBase}");
+            }
+            else
+            {
+                xpBase      = Mathf.RoundToInt(14 * t);
+                glimmerBase = Mathf.RoundToInt(3 * t);
+                coinBase    = 0;   // Enemy.Die's XP-derived gold fallback keeps the kill paying
+                variance    = FallbackRewardVariance;
+                FlowTrace.Warn("BattleArena",
+                    $"REWARD DEF id={id} source=synthesized (no enemies.json row) baseXp={xpBase} " +
+                    $"var={variance:0.00} threatScale={t:0.00} — add a catalog row to data-tune this id.");
+            }
+
             return new EnemyDef
             {
                 Id = id, Name = display, DisplayName = display, Ai = "walker",
                 Hp = hp * t, MoveSpeed = spd, ContactDamage = dmg * t, AttackInterval = atk,
                 Height = height, AggroRadius = 18f,
-                XpReward = Mathf.RoundToInt(14 * t), GlimmerReward = Mathf.RoundToInt(3 * t),
+                XpReward = xpBase, GlimmerReward = glimmerBase, CoinReward = coinBase,
+                RewardVariance = variance,
             };
+        }
+
+        // WO-1103: code-default variance for arena ids that have NO enemies.json row
+        // (orc-warrior/tank/mage/warlord synthetics). TUNABLE, mirrors the regular-enemy
+        // data seed (0.15); catalog rows always win when present.
+        private const float FallbackRewardVariance = 0.15f;
+
+        // WO-1103: canonical enemies.json catalog, read ONCE per session through the same
+        // CanonicalJson bytes the wave loader uses (the WildlandsRoster pattern). Null when
+        // the catalog is missing/malformed — callers fall back to synthesized rewards.
+        private static EnemyCatalog _rewardCatalog;
+        private static bool _rewardCatalogLoaded;
+
+        private static EnemyDef CatalogRow(string id)
+        {
+            if (string.IsNullOrEmpty(id)) return null;
+            if (!_rewardCatalogLoaded)
+            {
+                _rewardCatalogLoaded = true;   // one attempt per session; a failed read stays on fallback
+                try
+                {
+                    string json = DeNelle.Core.CanonicalJson.Read(WaveDataLoader.EnemiesRelativePath);
+                    if (!string.IsNullOrEmpty(json))
+                        _rewardCatalog = Newtonsoft.Json.JsonConvert.DeserializeObject<EnemyCatalog>(json);
+                    if (_rewardCatalog == null)
+                        FlowTrace.Warn("BattleArena", "CatalogRow: enemies.json unreadable/empty — arena rewards stay synthesized this session.");
+                }
+                catch (Exception ex)
+                {
+                    FlowTrace.Warn("BattleArena",
+                        $"CatalogRow: enemies.json parse failed ({ex.GetType().Name}: {ex.Message}) — arena rewards stay synthesized this session.");
+                    _rewardCatalog = null;
+                }
+            }
+            return _rewardCatalog != null ? _rewardCatalog.Find(id) : null;
         }
 
         // Warp the hero (by "Player" tag) to a stance. Reuses HeroLocomotion.WarpTo via
@@ -1863,11 +1939,31 @@ namespace DeNelle.Village.Arena
         private void HandleEnemyDied(Enemy e)
         {
             _liveEnemies.Remove(e);
+            // WO-1103 item 3 (fixes B-1 + B-2): count ACTUAL kills. The battle payout is
+            // paid from this counter, not p.EnemyIds.Length — so a low-level CAPPED spawn
+            // pays only what was fought, and the 5% bonus boss (spawned into the family)
+            // pays exactly like any other body it added.
+            _killCount++;
             // WO-493 #4: remember the BATTLE-WINNING body so the death-cam lingers on the
             // climactic kill (only when this death empties the family). Reserved for the
             // last death -- not every kill.
             if (_liveEnemies.Count == 0 && e != null) _climaxBody = e.transform;
-            FlowTrace.Step("BattleArena", $"enemy down; {_liveEnemies.Count} remain.");
+            FlowTrace.Step("BattleArena", $"enemy down; kills={_killCount}, {_liveEnemies.Count} remain.");
+        }
+
+        /// <summary>
+        /// WO-1103: bank one arena kill's ROLLED per-enemy grant (already paid to the hero
+        /// by Enemy.Die) into this battle's stream, so the victory SUMMARY can report the
+        /// TOTAL actually banked (battle slice + per-enemy stream) instead of under-
+        /// reporting. Called by Enemy.Die for kills inside a live staged arena only.
+        /// </summary>
+        public void ReportArenaKillGrant(int xp, int gold)
+        {
+            if (!BattleInProgress) return;
+            _killStreamXp   += Mathf.Max(0, xp);
+            _killStreamGold += Mathf.Max(0, gold);
+            FlowTrace.Step("BattleArena",
+                $"KILL STREAM banked +{xp} XP +{gold} gold (stream total {_killStreamXp} XP / {_killStreamGold} gold).");
         }
 
         private IEnumerator WatchToResolution()
@@ -2194,12 +2290,23 @@ namespace DeNelle.Village.Arena
         //  only pre-seeds the fields BeginEncounter would have set. Editor/QA seam
         //  only — never called by gameplay. duration lets the oracle pin a star tier.
         // ---------------------------------------------------------------------
-        public void ResolveForTest(EncounterParams p, bool won, float durationSeconds)
+        /// <remarks>
+        /// WO-1103: <paramref name="kills"/> pre-seeds the kill counter the payout reads
+        /// (default -1 = "clean sweep": every roster body killed). <paramref name="streamXp"/>/
+        /// <paramref name="streamGold"/> pre-seed the per-enemy banked stream so the oracle can
+        /// assert the SUMMARY total = battle slice + stream. This mirrors what HandleEnemyDied +
+        /// ReportArenaKillGrant would have set — zero behaviour fork.
+        /// </remarks>
+        public void ResolveForTest(EncounterParams p, bool won, float durationSeconds,
+                                   int kills = -1, int streamXp = 0, int streamGold = 0)
         {
             _current = p;
             _resolved = false;
             _climaxBody = null;
             _battleStartTime = Time.time - Mathf.Max(0f, durationSeconds);
+            _killCount = kills >= 0 ? kills : (p != null && p.EnemyIds != null ? p.EnemyIds.Length : 0);
+            _killStreamXp = Mathf.Max(0, streamXp);
+            _killStreamGold = Mathf.Max(0, streamGold);
             BattleInProgress = true;
             Resolve(won);
         }
@@ -2241,7 +2348,8 @@ namespace DeNelle.Village.Arena
             // the gear-drop odds (ITEM 4). Defaults to zero on a loss (no reward).
             BattleRewardSummary totals = default;
             if (won) Guard.Try("BattleArena", "grant win reward",
-                () => totals = GrantWinReward(_current, rewardMult, stars));
+                () => totals = GrantWinReward(_current, rewardMult, stars,
+                                              _killCount, _killStreamXp, _killStreamGold));
             // WO-556 ITEM 1 ORACLE FIRE-POINT (permanent): the captured totals the summary reads,
             // so the headless ArenaCombatOracle PROVES the reward totals were captured + available
             // to the view (not inferred from code-reading). gear='-' when nothing dropped.
@@ -2731,11 +2839,17 @@ namespace DeNelle.Village.Arena
         // are Unity-fake-null-guarded (explicit != null, not ?.) per the lint.
         // WO-556 ITEM 1: returns the itemized totals it granted so the victory summary can list
         // them. WO-556 ITEM 4: stars feed the gear-drop odds. rewardMult is the star multiplier.
-        private static BattleRewardSummary GrantWinReward(EncounterParams p, float rewardMult, int stars)
+        // WO-1103 item 3: the battle payout scales on KILLS (the actual bodies downed, incl. the
+        // bonus boss; fixes B-1 capped-spawn overpay + B-2 uncounted boss), never the roster.
+        // streamXp/streamGold are the per-enemy ROLLED grants Enemy.Die already banked during
+        // the fight — folded into the returned summary so the victory screen reports the TOTAL
+        // actually banked (they are NOT granted again here).
+        private static BattleRewardSummary GrantWinReward(EncounterParams p, float rewardMult, int stars,
+                                                          int kills, int streamXp, int streamGold)
         {
             var summary = new BattleRewardSummary();
             if (p == null) return summary;
-            int family = Mathf.Max(0, p.EnemyIds != null ? p.EnemyIds.Length : 0);
+            int paidKills = Mathf.Max(0, kills);
             int threat = Mathf.Max(0, p.Threat);
 
             // WO-505: the star rating scales the FELT payout (1x / 1.25x / 1.5x). Applied to
@@ -2743,16 +2857,21 @@ namespace DeNelle.Village.Arena
             // pays more. Guarded to a sane floor so a bad value never zeroes the reward.
             float mult = Mathf.Max(1f, rewardMult);
 
-            // 1) XP — unchanged path (HeroProgression via reflection).
-            int xp = Mathf.RoundToInt((20 + 8 * family + 4 * threat) * mult);
+            // 1) XP — unchanged grant path (HeroProgression via reflection); the count term is
+            // now KILLS. §12 trace prints base/mult/final so the formula change is provable.
+            int xpBase = 20 + 8 * paidKills + 4 * threat;
+            int xp = Mathf.RoundToInt(xpBase * mult);
             var prog = GameObject.FindAnyObjectByType(Type.GetType("DeNelle.Village.HeroProgression, DeNelle.Village")) as MonoBehaviour;
             if (prog != null)
             {
                 var add = prog.GetType().GetMethod("AddXp", new[] { typeof(float) });
                 add?.Invoke(prog, new object[] { (float)xp });
             }
-            summary.Xp = xp;
-            FlowTrace.Step("BattleArena", $"GrantWinReward: +{xp} XP (family={family} threat={threat}).");
+            summary.Xp = xp + Mathf.Max(0, streamXp);
+            FlowTrace.Step("BattleArena",
+                $"GrantWinReward: battle slice +{xp} XP (kills={paidKills} threat={threat} base={xpBase} mult={mult:0.00}); " +
+                $"per-enemy stream +{Mathf.Max(0, streamXp)} XP / +{Mathf.Max(0, streamGold)} gold already banked " +
+                $"-> summary total {summary.Xp} XP.");
 
             // 2) SKILL POINTS (Wisdom) — WO-763 (owner 2026-07-25): arena wins NO LONGER
             // grant Wisdom DIRECTLY. Wisdom is minted only at LEVEL-UP (+ level-gated tier

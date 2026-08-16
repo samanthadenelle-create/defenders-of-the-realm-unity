@@ -133,6 +133,45 @@ namespace DeNelle.Village
         /// <summary>WO-432/433 — GOLD (economy Coins) dropped on kill, the source that funds building
         /// research. 0 = use the XP-derived fallback in Enemy's death reward (so every enemy still pays).</summary>
         [JsonProperty("coinReward")]    public int CoinReward    = 0;
+        /// <summary>
+        /// WO-1103 — bounded kill-reward VARIANCE as a fraction (0.15 = +/-15%). At grant
+        /// time the reward is rolled through <see cref="RollReward"/>:
+        /// <c>value * (1 + Random.Range(-v, +v))</c>, rounded. Absent in JSON =&gt; 0 =
+        /// deterministic (exact base value, no behavior change for un-migrated rows).
+        /// TUNABLE, never a lock: the seeded 0.15 (regular) / 0.10 (boss) values in
+        /// enemies.json are an opening balance the owner re-tunes per row in data.
+        /// </summary>
+        [JsonProperty("rewardVariance")] public float RewardVariance = 0f;
+
+        /// <summary>
+        /// WO-1103 RUNTIME-ONLY (never serialized): how many pack bodies this def's kill
+        /// reward CARRIES. 1 for a normal enemy. The overworld hook leader carries the
+        /// whole family's payout (followers pay 0 — owner ruling WO-1103 item 5, leader-
+        /// carry KEPT), so its field-kill toast reads "Pack bounty" instead of a plain
+        /// earned line. Set by OverworldEncounterSpawner.BuildOverworldHookDef.
+        /// </summary>
+        [JsonIgnore] public int PackBodies = 1;
+
+        /// <summary>
+        /// WO-1103 — the ONE reward-roll authority (single home for the base+variance
+        /// formula; every grant site calls this, never re-implements it).
+        /// Rolls <c>baseValue * (1 + Random.Range(-v, +v))</c> and rounds.
+        /// <list type="bullet">
+        /// <item><c>baseValue &lt;= 0</c> returns 0 (a non-paying def stays non-paying —
+        /// variance can never mint a reward from nothing).</item>
+        /// <item><c>variance &lt;= 0</c> returns the exact base (deterministic legacy path).</item>
+        /// <item>Variance is clamped to [0, 0.9] so a bad data row can never zero or
+        /// double a reward; a positive base never rolls below 1.</item>
+        /// </list>
+        /// </summary>
+        public static int RollReward(int baseValue, float variance)
+        {
+            if (baseValue <= 0) return 0;
+            float v = Mathf.Clamp(variance, 0f, 0.9f);
+            if (v <= 0f) return baseValue;
+            float rolled = baseValue * (1f + UnityEngine.Random.Range(-v, v));
+            return Mathf.Max(1, Mathf.RoundToInt(rolled));
+        }
 
         /// <summary>
         /// True when this enemy flies (<see cref="Movement"/> == "flying", case-

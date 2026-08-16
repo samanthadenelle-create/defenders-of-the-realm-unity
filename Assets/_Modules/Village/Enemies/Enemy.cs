@@ -1807,6 +1807,24 @@ namespace DeNelle.Village
             // the WindUp pose reads as a deliberate, reactable channel before the strike.
             windUp = Mathf.Max(windUp, 1.0f);
 
+            // Owner ruling 2026-08-16: the school-matched Spells Pack Casting_* loop plays ON
+            // the caster during the wind-up, replacing the HUD cast bar as the telegraph.
+            // School comes from the same VFX key the release will fire (the strongest element
+            // signal - e.g. the default Fire_Cast => Casting_Fire); ability name is the tiebreak.
+            // Spawn BEFORE CastStarted so the CastProducer sees IsTelegraphed and suppresses
+            // the bar for this cast; a failed spawn (missing mirror) leaves the bar showing.
+            string windupSchool = CastingTelegraphVfx.ResolveSchool(
+                _enemyId,
+                RootedCastAbilityName,
+                (_typeVfxSet != null && !string.IsNullOrEmpty(_typeVfxSet.CastVfxKey)) ? _typeVfxSet.CastVfxKey : DefaultCastVfxKey);
+            GameObject windupTelegraph = CastingTelegraphVfx.TryBegin(this, windupSchool, RootedCastAbilityName, windUp);
+
+            // Second owner pick 2026-08-16: the Marker 2 Pointer Loop hovers on the CAST'S
+            // TARGET (the hero/structure this cast will strike) for the wind-up window -
+            // parented, so a target that dies tears it down; additive presentation only.
+            GameObject windupTargetMarker = CastingTelegraphVfx.TryBeginTargetMarker(
+                this, target, null, RootedCastAbilityName, windUp);
+
             // P4 cast seam — announce the telegraph so the HUD cast bar can track it.
             CastStarted?.Invoke(this, RootedCastAbilityName, windUp);
 
@@ -1906,6 +1924,12 @@ namespace DeNelle.Village
             DeNelle.Core.Diagnostics.FlowTrace.Step("EnemyCast",
                 $"{_enemyId}: CAST-END resumedByCast={casterResumed} " +
                 $"finalIsStopped={((_agent != null && _agent.isOnNavMesh) ? _agent.isStopped.ToString() : "n/a")}");
+
+            // 2026-08-16: tear down the Casting_* wind-up loop + the target marker (a caster
+            // destroyed mid-cast needs no call - the loop is parented and dies with the
+            // hierarchy, and the marker carries a windup+1s auto-destroy safety net).
+            CastingTelegraphVfx.End(this, windupTelegraph, "cast-released");
+            CastingTelegraphVfx.EndTargetMarker(windupTargetMarker, "cast-released");
 
             // P4 cast seam — the wind-up is complete (orb released / damage committed).
             CastEnded?.Invoke(this);
@@ -2734,25 +2758,63 @@ namespace DeNelle.Village
             if (killed) DeNelle.Village.Progression.ProgressionManager.ReportKill(this);
             else DeNelle.Core.Combat.DamageAttribution.Forget(this);
 
-            // DEF-88: grant the flat per-enemy XP reward directly to the hero.
-            if (killed && _def != null && HeroProgression.Instance != null)
-                HeroProgression.Instance.AddXp(_def.XpReward);
-
-            // DEF-32: grant Glimmer (cosmetic currency) on kill. Resolved via
-            // reflection — GlimmerCurrencyService lives in DeNelle.Cosmetics,
-            // which DeNelle.Village does not reference (asmdef stays decoupled,
-            // mirroring PetDeployer's bridge).
-            if (killed && _def != null && _def.GlimmerReward > 0)
-                TryAwardGlimmer(_def.GlimmerReward);
-
-            // WO-432/433: grant GOLD (Coins) on kill so the Gold-cost building research has a kill-driven
-            // source. Data-driven (EnemyDef.CoinReward) with an XP-derived fallback so EVERY enemy pays out
-            // (~6-20 early game; tougher enemies have more XP -> more gold). EconomyService.AddCoins is the
-            // single Coins grant + HUD/save path.
+            // WO-1103: per-enemy BASE + bounded VARIANCE kill grants (owner directive
+            // 2026-08-16 "each enemy should have a base value with some random on it").
+            // DEF-88 XP + WO-432/433 GOLD both roll through the ONE authority
+            // (EnemyDef.RollReward); variance is the def's data-driven rewardVariance
+            // (0 when absent -> exact legacy values). Glimmer stays FLAT (cosmetic
+            // trickle, not part of the combat-economy variance surface).
             if (killed && _def != null)
             {
-                int gold = _def.CoinReward > 0 ? _def.CoinReward : Mathf.Max(4, Mathf.RoundToInt(_def.XpReward * 0.4f));
-                if (gold > 0) EconomyService.Instance?.AddCoins(gold);
+                float variance = _def.RewardVariance;
+
+                // DEF-88: per-enemy XP directly to the hero, now variance-rolled.
+                int rolledXp = 0;
+                if (HeroProgression.Instance != null)
+                {
+                    rolledXp = EnemyDef.RollReward(_def.XpReward, variance);
+                    if (rolledXp > 0) HeroProgression.Instance.AddXp(rolledXp);
+                }
+
+                // DEF-32: grant Glimmer (cosmetic currency) on kill. Resolved via
+                // reflection — GlimmerCurrencyService lives in DeNelle.Cosmetics,
+                // which DeNelle.Village does not reference (asmdef stays decoupled,
+                // mirroring PetDeployer's bridge).
+                if (_def.GlimmerReward > 0)
+                    TryAwardGlimmer(_def.GlimmerReward);
+
+                // WO-432/433: GOLD (Coins) on kill so the Gold-cost building research has a
+                // kill-driven source. Data-driven (EnemyDef.CoinReward) with the XP-derived
+                // fallback so EVERY enemy pays out; the resolved base is variance-rolled.
+                // EconomyService.AddCoins is the single Coins grant + HUD/save path.
+                int goldBase = _def.CoinReward > 0
+                    ? _def.CoinReward
+                    : Mathf.Max(4, Mathf.RoundToInt(_def.XpReward * 0.4f));
+                int rolledGold = EnemyDef.RollReward(goldBase, variance);
+                if (rolledGold > 0) EconomyService.Instance?.AddCoins(rolledGold);
+
+                // §12 permanent trace: base/variance/rolled/final per grant (kills are
+                // cold-path — one line per kill is cheap and makes the roll provable).
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Reward",
+                    $"KILL GRANT id={_def.Id} baseXp={_def.XpReward} baseGold={goldBase} " +
+                    $"var={variance:0.00} rolledXp={rolledXp} rolledGold={rolledGold} " +
+                    $"finalXp={rolledXp} finalGold={rolledGold} packBodies={_def.PackBodies}");
+
+                // WO-1103 item 3+4 routing on the ROLLED amounts:
+                //  - kill INSIDE a live staged arena -> bank into the battle's per-enemy
+                //    stream so the victory SUMMARY reports the TOTAL actually banked.
+                //  - kill OUTSIDE the arena (field kill — ranged pick-off, wave, camp) ->
+                //    ONE aggregate earned label at the corpse (a pack leader carries the
+                //    whole family payout, so this is one toast per pack, never per body).
+                if (rolledXp > 0 || rolledGold > 0)
+                {
+                    bool arenaKill = DeNelle.Village.Arena.BattleArena.AnyBattleInProgress
+                                     && DeNelle.Village.Arena.BattleArena.IsArenaPosition(transform.position);
+                    if (arenaKill)
+                        DeNelle.Village.Arena.BattleArena.Instance?.ReportArenaKillGrant(rolledXp, rolledGold);
+                    else
+                        ShowFieldKillReward(rolledXp, rolledGold);
+                }
             }
 
             // Play the death (collapse) animation, then RETURN TO THE POOL (no longer
@@ -2803,6 +2865,39 @@ namespace DeNelle.Village
         // ---------------------------------------------------------------------
         // Helpers
         // ---------------------------------------------------------------------
+
+        // WO-1103 field-kill toast tint: warm gold so the earned line reads as loot, and
+        // it survives a greyscale check (bright vs the white damage numbers) — owner is
+        // colourblind, so contrast (not hue) is the carrier.
+        private static readonly Color FieldKillRewardColor = new Color(1f, 0.82f, 0.30f, 1f);
+
+        /// <summary>
+        /// WO-1103 item 4 (B2): ONE aggregate earned-rewards label for an out-of-arena
+        /// kill ("+N XP  +M gold" at the corpse — the LEVEL UP precedent, reusing
+        /// <see cref="DamageNumberSpawner.SpawnLabel"/>; NO new notification system).
+        /// A pack-carrying leader (def.PackBodies &gt; 1 — leader-carry payout KEPT,
+        /// owner default) is worded "Pack bounty" so the oversized grant reads as the
+        /// whole family's payout, not a bug. Followers pay 0 and never reach here, so
+        /// a pack is one toast, never per-body spam. Camera-null-safe via SpawnLabel.
+        /// </summary>
+        private void ShowFieldKillReward(int xp, int gold)
+        {
+            var sb = new System.Text.StringBuilder(32);
+            if (_def != null && _def.PackBodies > 1) sb.Append("Pack bounty  ");
+            if (xp > 0) sb.Append("+").Append(xp).Append(" XP");
+            if (gold > 0)
+            {
+                if (xp > 0) sb.Append("  ");
+                sb.Append("+").Append(gold).Append(" gold");
+            }
+            string label = sb.ToString();
+            DamageNumberSpawner.SpawnLabel(label, transform.position + Vector3.up * 1.6f,
+                                           FieldKillRewardColor, 1.15f);
+            // §12 permanent trace: the notification call-site fires provably (B2 was
+            // "no call site at all" — this line is the captured evidence it now exists).
+            DeNelle.Core.Diagnostics.FlowTrace.Step("Reward",
+                $"FIELD KILL TOAST '{label}' id={(_def != null ? _def.Id : "?")} at {transform.position}");
+        }
 
         /// <summary>
         /// WO-84: Small secondary impact burst 0.28 s after the primary death VFX —

@@ -906,6 +906,10 @@ namespace DeNelle.Village
             return pool[fallback];
         }
 
+        // WO-1103: bounded variance on the leader-carried pack bounty (fraction, +/-15%).
+        // TUNABLE opening balance, never a lock — mirrors the enemies.json regular seed.
+        private const float PackBountyRewardVariance = 0.15f;
+
         /// <summary>Hook-only overworld body: leader carries family payout; followers are visual.</summary>
         private static EnemyDef BuildOverworldHookDef(string id, int threat, bool isLeader, int packSize = 1)
         {
@@ -916,6 +920,12 @@ namespace DeNelle.Village
 
             if (isLeader)
             {
+                // WO-1103 item 5 (owner default): LEADER-CARRY KEPT — the leader's reward is
+                // the whole pack's payout (followers pay 0 below). PackBodies > 1 flags the
+                // def as a pack carrier so Enemy.Die's field-kill toast words the grant
+                // "Pack bounty +N XP +M gold" instead of reading like a single-kill overpay.
+                // RewardVariance makes the field bounty range-bound like every other kill
+                // (TUNABLE — mirrors the regular-enemy 0.15 data seed).
                 return new EnemyDef
                 {
                     Id = leadId,
@@ -928,6 +938,8 @@ namespace DeNelle.Village
                     AttackInterval = 1.5f, Height = 2.0f, AggroRadius = 8f,
                     XpReward = Mathf.RoundToInt(14 * bodies * levelScale),
                     GlimmerReward = Mathf.RoundToInt(3 * bodies * levelScale),
+                    RewardVariance = PackBountyRewardVariance,
+                    PackBodies = bodies,
                 };
             }
 

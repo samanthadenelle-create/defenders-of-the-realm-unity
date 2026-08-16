@@ -126,6 +126,7 @@ namespace DeNelle.Village
                 AggroRadius    = s.AggroRadius,
                 XpReward       = s.XpReward,
                 GlimmerReward  = s.GlimmerReward,
+                RewardVariance = s.RewardVariance,   // WO-1103: variance travels with the base
             };
         }
 
@@ -154,6 +155,7 @@ namespace DeNelle.Village
                         AggroRadius    = 14f,
                         XpReward       = 22,
                         GlimmerReward  = 3,
+                        RewardVariance = 0.15f,   // WO-1103: matches the enemies.json seed
                     };
             }
         }
