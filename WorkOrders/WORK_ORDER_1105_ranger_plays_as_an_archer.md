@@ -93,7 +93,90 @@ derived defect class as `IsLoop`, `Hidden`, and the town that laid itself on its
 - Knight is unaffected: melee reach, Emberbrand/on-hit procs and reward crediting unchanged.
 - Ranger Focus still refunds on a landed basic (WO-997 rule: armed for the class basic, paid on hit).
 
-## 5. ⚠ ONE OWNER RULING NEEDED
+## 4b. ⭐ OWNER RULINGS 2026-08-16 — all four, verbatim-sourced
+
+**R1 — AUTO-TARGET, WITH TAP TO OVERRIDE.** *"I agree that the auto target's a good idea. The user
+should have the ability, though, to override — say they automatically select the first one, which
+maybe is a tank, and they're trying to take care of a major DPS or a healer. They should have the
+ability to override that. So on tap would override."*
+=> Auto-acquire the default target; a tap on any valid enemy REBINDS the lock to that enemy and the
+marker follows it. The override must survive until that target dies, leaves range, or another tap
+moves it — never silently snap back to the auto pick mid-fight (that is the failure her example
+describes). This closes §5 below.
+
+**R2 — RANGE MUST BE LEGIBLE.** *"either we add a distance ring for archer range, or only after we
+get within range does it auto target."*
+=> Two acceptable shapes, owner's choice at implementation; the SECOND is cheaper and needs no new
+art: auto-target engages ONLY once the foe is inside the ability's authored range (Quick Shot 15 m),
+so "it locked on" IS the range feedback. If the ring is chosen instead, derive its radius from
+`AbilityDef.Range` — never a hardcoded metre value (the WO-1035 units bug is the cautionary case).
+
+**R3 — RANGED ATTACKS NEED A COOLDOWN, AND THE RANGER NEEDS AN OFFHAND DAGGER.** *"being that we're
+talking about a ranged attack, we need to make sure that there's some kind of a cooldown. I think
+the ranger should have an offhand weapon of maybe a dagger because if they do need to spam attacks
+and they can't get their ranged archery attacks to go fast enough, they do need something for a
+melee attack like a dagger offhand."*
+=> The bow primary carries a real cooldown (an archer is not a click-spam weapon). The answer to
+"what do I do while it is cooling" is a DAGGER in the offhand — so the melee sweep is not deleted for
+the ranger, it becomes the OFFHAND verb. ⚠ This also resolves the §3(a) worry about breaking the
+melee path: both verbs stay live for the ranger, bow primary + dagger offhand, and WO-997's Focus
+on-hit restore must be decided for each (recommend: the class BASIC is the bow, so Focus rides the
+arrow; the dagger is the gap-filler and does not refund).
+
+**R4 — ⭐ THE BOW GRIP RULE (generalises to every weapon, and explains why bows look wrong).**
+*"the bow and arrow, as we've discussed many times, when you're looking at the mesh, the longest
+piece is gonna be the y axis. You find the straight edge of the y axis, and you go down halfway. And
+that's gonna meet on the edge of a curve. The edge of the curve or the ninety degree from the
+midpoint is where the hand is gonna hold with the y axis up and down longest piece."*
+
+Derivation, in order:
+1. Orient so the **longest measured axis is vertical (+Y)** — `WeaponBoundsOrient` already does this
+   (`longest -> +Y, narrowest -> +X`), and already scales by the longest MEASURED axis rather than
+   blindly by Y (the 2026-07-06 shield RCA).
+2. Take the **straight edge** running along that axis (a bow's string side is straight; the limb/
+   riser side curves) and find its **midpoint** — halfway down the Y span.
+3. Cast **perpendicular (90 degrees) from that midpoint** toward the curved edge. Where it meets the
+   curve is the **grip**, and that point seats in the hand.
+
+⚠ **WHY THIS IS A FIX, NOT A RESTATEMENT:** `WeaponBoundsOrient`'s existing seat mode is documented
+as *"Bounds centre at the parent origin (bow centre-grip, shield strap)"* — but the bounding-box
+centre of a bow lies in the **HOLLOW between the string and the belly**, i.e. in empty air beside the
+wood. Seating the hand at bounds-centre therefore floats the grip off the mesh. R4 keeps the same
+midpoint on the long axis and projects it **out to the actual surface**, which is where a hand can
+close. Implement as a surface projection from the measured bounds (raycast/nearest-point against the
+mesh along the perpendicular), never as a per-weapon dialed offset.
+⚠ Owner-tuned `manual=true` offsets in `attachment-offsets.json` remain canon and are NEVER
+overwritten by the derived pass (ARCHITECTURE_PRINCIPLES section 4).
+
+**R4a — CROSSBOWS ARE THE ONE EXCEPTION, AND ARE EXCLUDED FOR NOW.** Owner verbatim: *"that rule
+will apply to every bow. The only one where that would be incorrect would be a crossbow. If the word
+crossbow is in it, the widest part is on the x axis. The narrowest part would be the y axis, and the
+other one would be depth or the z axis. But for simplicity, let's not include any crossbows until we
+have verified that we can do that one successfully."*
+
+- The bow rule (R4) applies to **every bow**. A crossbow inverts it: **widest -> X, narrowest -> Y,
+  medium -> Z (depth)** — it is held across the body, not upright, so the "longest -> +Y" default is
+  wrong for it by construction. Keyed on the NAME token `crossbow` (case-insensitive), which is the
+  sanctioned discriminator (canon derives from bounds **+ asset name**).
+- **Until the plain-bow path is proven on device, crossbows stay OUT.** Do not author, grant, or
+  shelve one; do not implement the inverted mapping speculatively.
+
+⚠ **MEASURED STATE 2026-08-16 — this is already true at runtime, and there is exactly one way to
+break it:**
+- `Assets/Resources/Data/Canonical/weapons.json` (the copy that **WINS** at runtime): **0 crossbows**.
+- `Assets/StreamingAssets/Data/Canonical/weapons.json` (the stale 431-row side, kept by the
+  deliberate owner gear ruling): **125 crossbow hits**.
+- **68 crossbow meshes/prefabs exist on disk.**
+
+So crossbows are already unreachable in the shipped game — the exclusion costs nothing today. **The
+hazard is the editor menu `Defenders/Catalog/Generate Gear Catalog`**, which the weapons deep-dive
+records as re-inflating Resources from 96 rows to 431 and writing BOTH copies. Running it would pull
+all 125 crossbow rows into the live catalog at once, every one of them seating wrong under R4.
+**Acceptance for this WO therefore includes a guard**: a regression asserting the runtime weapons
+catalog contains no `crossbow` id while the exclusion stands, so the re-inflation cannot ship the
+failure silently.
+
+## 5. ~~ONE OWNER RULING NEEDED~~ — ✅ ANSWERED BY R1 ABOVE (auto-target + tap override)
 
 Is the ranged primary **auto-targeting** (fires at the nearest/locked foe in reach, mobile-friendly,
 matches how the abilities already resolve) or **strictly tap-to-select first** (no target, no shot)?

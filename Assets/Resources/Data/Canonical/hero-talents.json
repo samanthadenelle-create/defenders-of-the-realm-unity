@@ -1377,9 +1377,9 @@
         "type": "maxHpPct",
         "value": 0.25
       },
-      "x": 0.08,
-      "y": 0.88,
-      "prerequisites": []
+      "x": 0.38,
+      "y": 0.87,
+      "prerequisites": ["shared.n10"]
     },
     {
       "id": "shared.n2",
@@ -1394,9 +1394,9 @@
         "type": "damageReduction",
         "value": 0.2
       },
-      "x": 0.2,
-      "y": 1.09,
-      "prerequisites": []
+      "x": 0.85,
+      "y": 0.87,
+      "prerequisites": ["shared.n11"]
     },
     {
       "id": "shared.n3",
@@ -1413,9 +1413,9 @@
         "value": 1,
         "note": "hidden until a per-level wisdom grant path exists \u2014 G3 wire-or-hide"
       },
-      "x": 0.33,
-      "y": 0.88,
-      "prerequisites": []
+      "x": 0.85,
+      "y": 0.76,
+      "prerequisites": ["shared.n2"]
     },
     {
       "id": "shared.n4",
@@ -1432,9 +1432,9 @@
         "value": 0.15,
         "note": "hidden until a crit mechanic exists \u2014 G3 wire-or-hide"
       },
-      "x": 0.45,
-      "y": 1.09,
-      "prerequisites": []
+      "x": 0.15,
+      "y": 0.76,
+      "prerequisites": ["shared.n5"]
     },
     {
       "id": "shared.n5",
@@ -1449,9 +1449,9 @@
         "type": "manaRegen",
         "value": 0.2
       },
-      "x": 0.57,
-      "y": 0.88,
-      "prerequisites": []
+      "x": 0.15,
+      "y": 0.87,
+      "prerequisites": ["shared.n9"]
     },
     {
       "id": "shared.n6",
@@ -1467,9 +1467,9 @@
         "value": 0.4,
         "note": "(revive \u2014 wired WO-566)"
       },
-      "x": 0.69,
-      "y": 1.09,
-      "prerequisites": []
+      "x": 0.38,
+      "y": 0.76,
+      "prerequisites": ["shared.n1"]
     },
     {
       "id": "shared.n7",
@@ -1485,9 +1485,9 @@
         "value": 0.5,
         "note": "out of combat"
       },
-      "x": 0.82,
-      "y": 0.88,
-      "prerequisites": []
+      "x": 0.62,
+      "y": 0.87,
+      "prerequisites": ["shared.n10"]
     },
     {
       "id": "shared.n8",
@@ -1502,9 +1502,9 @@
         "type": "allStatsPct",
         "value": 0.1
       },
-      "x": 0.94,
-      "y": 1.09,
-      "prerequisites": []
+      "x": 0.62,
+      "y": 0.76,
+      "prerequisites": ["shared.n7"]
     },
     {
       "id": "shared.n9",
@@ -1520,8 +1520,8 @@
         "type": "unlockAbility",
         "ability": "universal.arcane-bolt"
       },
-      "x": 0.2,
-      "y": 1.3,
+      "x": 0.25,
+      "y": 0.98,
       "prerequisites": []
     },
     {
@@ -1539,7 +1539,7 @@
         "ability": "universal.mend"
       },
       "x": 0.5,
-      "y": 1.3,
+      "y": 0.98,
       "prerequisites": []
     },
     {
@@ -1556,8 +1556,8 @@
         "type": "unlockAbility",
         "ability": "universal.dash"
       },
-      "x": 0.8,
-      "y": 1.3,
+      "x": 0.75,
+      "y": 0.98,
       "prerequisites": []
     }
   ],
