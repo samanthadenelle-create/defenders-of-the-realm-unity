@@ -1147,6 +1147,22 @@
 > ⚠ §2.1b and §2.1d are INDEPENDENT and BOTH required — spacing alone still leaves 10 huge plates;
 > focus alone still leaves overlap. Owner has said "messy" TWICE; half a fix earns a third report.)*
 >
+> *(UI-seat bumped 1042 -> 1043 in the SAME edit as the WO-1042 mint — owner design 2026-08-16: the
+> **ROUGH STONE -> JEWELER POLISH -> refined gem** link. She named a REAL gap WO-1041 left open:
+> `jeweler-recipes.json` demands SPECIFIC gems (`ing_ember_crystal` etc.) in exact counts, so a direct
+> finished-gem drop must "know" what the player needs and resolves all anticipation instantly. A rough
+> unidentified stone with flavour text fixes both and gives the run GRADE a second expressive landing
+> spot. ⛔ **THE POLISH TIMER MUST BE AN OBSIDIAN QUEUE JOB** — canon §8: that queue is the SINGLE HOME
+> for ALL timed work; it inherits persistence, offline accrual, the v37 paid-basket cancel refund and
+> the depth cap of 5/line for free. A bespoke timer is a second authority. ⚠ **RULING NEEDED on
+> RUSH-FOR-CURRENCY: a paid instant-resolve of a RANDOM outcome is mechanically a LOOT BOX** and is
+> regulated in several jurisdictions we ship to — recommend NO rush on a random job (rushing a
+> DETERMINISTIC job is fine). ⚠ Also flagged: grade should shape ODDS only, not odds+tier+time (all
+> three trivialises it). ★ **The two directions are NOT the same size:** ring/amulet crafting is
+> NEARLY FREE (recipes + chain + panel all shipped) while **socketing armor/weapons is PILLAR-SCALE and
+> NOT BUILT** — only `slot_socket.png` art exists. **Do the ring path; file socketing separately** or a
+> shipped free loop sits behind a months-long system. READY.)*
+>
 > *(UI-seat bumped 1040 -> 1042 in the SAME edit as the WO-1040 + WO-1041 mints, owner 2026-08-16
 > *"Finishing a dungeon feels lackluster"*. **1040** = the TREASURE FOUND panel overlaps 3 text blocks
 > (`DungeonTreasurePanel.cs:128-141` — `EnsureBand` GROWS the payout with line count while its
