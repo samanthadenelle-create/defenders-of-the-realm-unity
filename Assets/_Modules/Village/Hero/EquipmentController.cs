@@ -526,6 +526,13 @@ namespace DeNelle.Village
                 $"body='{(bodyChild != null ? bodyChild.name : "<none>")}' " +
                 $"animator={(_animator != null ? (_animator.isHuman ? "human" : "generic") : "<null>")}");
             // Full re-equip so NormalizeInto + fullOverride seat against the NEW height/scale.
+            // WO-994 (trace-proven 2026-08-16): the idempotent early-outs no-op EquipBestForHero
+            // for props that SURVIVED the load (skip lines captured at frames 3354/5659), so a
+            // surviving prop kept its old seat against the new body. Clear the shown-ids so this
+            // re-equip is a REAL re-attach (fresh NormalizeInto + registry seat at the new
+            // height) - the same path the trace proved healthy on every fresh boot.
+            _currentWeaponId = null;
+            _currentOffHandId = null;
             EquipBestForHero();
             ApplyHoldPose();
             FlowTrace.Step("Equip",

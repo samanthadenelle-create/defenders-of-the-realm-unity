@@ -268,3 +268,40 @@ numbers. Landed (working tree, FlowTrace/regression only - still no seat numbers
 Brace + NUL gate green on all files. The tripwire makes the answer readable from ONE
 ported run: the last `seatWrite` line before the break vs the first line after names the
 exact step (or the SEAT DRIFT Fail names the unlogged writer).
+
+### TRACE RESULTS 2026-08-16 - first instrumented dungeon->town run (desktop exe, autopilot
+DungeonLoop, explicit -logFile `Builds/wo994-dungeonloop-trace.log`, 31MB, 07:43)
+
+Three full segments captured (boot -> dungeon entry -> return-to-hub). Findings, all from
+captured lines:
+
+1. **CANDIDATE A ELIMINATED.** `registryProbe path=START rows=18` with the full correct
+   `shield_A` / `shield_A@sheathed` values at EVERY probe, all segments.
+2. **THE 2026-08-15 SCENE-LOAD RE-SEAT IS DEAD CODE - proven.** Across two real scene
+   transitions there is NOT ONE `reapplyCtx` / `registryProbe path=SCENELOAD` /
+   `shieldPose` / `seatVerify` line. Mechanism at source: `OnDisable` (`:610`) unsubscribes
+   `sceneLoaded` as the old controller dies with its scene; the NEW controller (hero is
+   REBUILT per scene - each segment opens with a fresh `path=START` and
+   `prev writer=<none>`) subscribes only AFTER the load completed. The callback can never
+   fire on a live instance on this path. The shipped fix never executed even once.
+3. **THE REBUILD PATH IS HEALTHY.** Every seat write in all three segments is
+   byte-identical and correct: sheathed `pos=(0.00,0.09,-0.15) rot=(358.04,89.58,114.01)
+   parent='SheatheSocket_Back' parentLossy=1.67`, drawn `pos=(0.07,-0.01,0.00)
+   rot=(20,180,264) parent='CC_Base_L_Hand'`. Fresh attach = correct seat, including
+   after the port.
+4. **THE IDEMPOTENT SKIP FIRES FOR REAL** (`off-hand idempotent skip ... frame=2/3354/5659`)
+   - benign same-frame double-equips here, but it proves candidate C's mechanism is live:
+   any path where the prop survives into a re-equip re-seats NOTHING.
+5. **Remaining unknown = the OWNER's port path.** If her hero SURVIVES the port (live
+   controller), the sceneLoaded re-seat runs but was no-op'd by the skip (C). Her next exe
+   session answers it - the tripwire is permanent and prints every write.
+
+### FIX LANDED (data-justified): in `CoReapplyGearAfterSceneLoad`, `_currentWeaponId` and
+`_currentOffHandId` are CLEARED before `EquipBestForHero()`, so when the re-seat runs it is
+a REAL re-attach (fresh NormalizeInto + registry seat at the new height) - the exact path
+the trace proved healthy - instead of an idempotent no-op. Rebuild path unaffected (the
+coroutine never runs there). Awaiting: gate + rebuild + owner exe felt-verify with the
+tripwire live.
+
+### HARNESS DEBT SPUN OFF: WO-1102 (fleet passes no per-instance `-logFile`; two DungeonLoop
+runs' Step-level traces were destroyed before this run captured them directly).
