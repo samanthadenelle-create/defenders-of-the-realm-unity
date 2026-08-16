@@ -547,13 +547,20 @@ namespace DeNelle.Village
                 "more exist than fit the cap (itself an anomaly worth reading).");
         }
 
+        /// <summary>Shader property id for the guarded mainTexture reads below.</summary>
+        private static readonly int MainTexId = Shader.PropertyToID("_MainTex");
+
         /// <summary>Measured particle state: playing/count/emission plus the LIVE renderer material,
         /// shader and main texture -- what is actually on screen, not what was authored.</summary>
         private static string DescribeParticle(ParticleSystem ps)
         {
             var psr = ps.GetComponent<ParticleSystemRenderer>();
             var mat = psr != null ? psr.sharedMaterial : null;
-            var tex = mat != null ? mat.mainTexture : null;
+            // HasProperty guard (F8 seq 2428-2431, 2026-08-16): Material.mainTexture LOGS AN ERROR
+            // on any shader without _MainTex - Shader Graph materials (HS_Distortion) have none. An
+            // AUDIT that spams the break-log with its own errors poisons the channel it exists to
+            // read, so the probe reports the absence instead of provoking it.
+            var tex = mat != null && mat.HasProperty(MainTexId) ? mat.mainTexture : null;
             return $"playing={ps.isPlaying}, particles={ps.particleCount}, " +
                    $"emissionEnabled={ps.emission.enabled}, rendererEnabled={(psr != null && psr.enabled)}, " +
                    $"mat='{(mat != null ? mat.name : "none")}', " +
@@ -567,7 +574,7 @@ namespace DeNelle.Village
         private static string DescribeRenderer(Renderer r)
         {
             var mat = r.sharedMaterial;
-            var tex = mat != null ? mat.mainTexture : null;
+            var tex = mat != null && mat.HasProperty(MainTexId) ? mat.mainTexture : null;   // see DescribeParticle
             return $"enabled={r.enabled}, mat='{(mat != null ? mat.name : "none")}', " +
                    $"shader='{(mat != null && mat.shader != null ? mat.shader.name : "none")}', " +
                    $"mainTex='{(tex != null ? tex.name : "none")}', boundsSize={r.bounds.size:F2}";
