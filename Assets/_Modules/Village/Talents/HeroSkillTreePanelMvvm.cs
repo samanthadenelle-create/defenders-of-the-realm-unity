@@ -8,7 +8,16 @@
 // the Obsidian kit Talent Tree demo (Screenshot 2026-08-15 175853.png):
 //   * Few LARGE nodes, lots of dark empty space
 //   * Gold connectors along prerequisites (diagonal OK)
-//   * One thick gold FOCUS plate for the selected / next node
+//   * EXACTLY ONE thick gold FOCUS plate, and it is the BOARD-LEVEL SELECTION.
+//     CORRECTED 2026-08-16 (WO-1021 sec 2.1d): this line used to read "the selected /
+//     NEXT node", and that premise was VIOLATED BY CONSTRUCTION. HeroSkillTreeVM.
+//     ResolveStates resets its nextTaken flag PER TRACK, so the board carries ONE
+//     SkillNodeState.Next PER ORDERED TRACK - the view consumed a per-track signal as
+//     if it were board-level and grew one oversized gold plate per track (~10 of them
+//     at WIS 252, the owner's "still messy"). The VM is CORRECT and untouched. Size is
+//     the scarce channel and SELECTION owns it: ResolveFocusNodeId returns AT MOST ONE
+//     id, and per-track Next is carried by a same-size, shape+position badge
+//     (BuildNextTrackMarker) that survives greyscale.
 //   * Rank pip on the plate ("1/1" owned, "0/1" locked)
 //   * Calm chrome — FrameTalent + crest title "TALENT TREE"
 //   * Owner 2026-08-15 (Screenshot 190301): graph ONLY. No detail column, no loadout
@@ -16,8 +25,9 @@
 //     popup (name + desc + "Spend N Wisdom for X?" + Confirm/Cancel). Scrim dismisses.
 //
 // COLOURBLIND LAW (owner is red/green colourblind): every state is separable with
-// colour stripped. Owned = filled plate + rank 1/1; Next/Selected = oversized +
-// thick gold outer frame; Locked = dim + padlock; Inert = slash + "!". Connectors
+// colour stripped. Owned = filled plate + rank 1/1; SELECTED = oversized + thick gold
+// outer frame (at most one); NEXT = a bottom-left chevron badge at NORMAL size; Locked =
+// dim + padlock; Inert = slash + "!". Connectors
 // differ by THICKNESS (solid 8 / solid 4 / dashed 3), never by hue.
 //
 // WO-865 FIXED-PIXEL BANDS still own the outer chrome (action / ability / detail).
@@ -173,8 +183,33 @@ namespace DeNelle.Village.Talents
         // plate (SkillsPanelLayoutRegression [grid] pins this). Unset nodes auto-layout
         // from tier/column without packing into a dense grid.
 
-        /// <summary>FOCUS plate (selected OR next) — oversized gold frame, demo/RPG feel.</summary>
+        /// <summary>FOCUS plate — the BOARD-LEVEL SELECTION only (never "next"; see the header
+        /// correction). Oversized gold frame, demo/RPG feel. At most ONE plate on the board is
+        /// ever built at this size; TalentFocusSingletonRegression pins that.</summary>
         public const float NodeFocusPx = 168f;
+
+        // ── WO-1021 sec 2.1b — PITCH + SEPARATION LAW (owner 2026-08-15/16: "needs better
+        // spacing logic", measured plate overlaps + cost pips landing on the NEIGHBOURING
+        // plate in the 2026-08-16 Seeker captures). Clearance is computed from the FOCUS
+        // size, never from NodeSizePx: a focused plate grows about its own centre, so a
+        // 136-based clearance lets it grow straight into its neighbour.
+
+        /// <summary>Minimum centre-to-centre pitch (Chebyshev: max(|dx|,|dy|)) between ANY two
+        /// plates, in ref px. Chebyshev >= P implies Euclidean >= P, so this is the STRONGER
+        /// reading of "centre-to-centre pitch" and can never certify a touching pair.</summary>
+        public const float MinNodePitchPx = NodeFocusPx * 1.35f;      // 226.8
+        /// <summary>How far the solver may stretch pitch to fill a tall/wide well before it
+        /// stops. Past this a node's nearest neighbour reads as STRANDED (WO-1021 sec 2.1b
+        /// "no stranded nodes" — the bottom-centre orphan in the owner's capture).</summary>
+        public const float MaxPitchSpreadMul = 1.9f;
+        /// <summary>Lattice floor: a box that can always seat two plates at the minimum pitch,
+        /// so a well that has not been laid out yet still produces a legal (scrolling) board
+        /// instead of crushing every plate onto one point.</summary>
+        public const float MinLatticeWpx = NodeFocusPx + MinNodePitchPx;
+        public const float MinLatticeHpx = NodeFocusPx + MinNodePitchPx;
+        /// <summary>Authored/auto Y values within this band collapse to ONE ROW. Authored y is
+        /// an ORDERING HINT consumed by the solver, not final geometry (WO-1021 sec 2.1b).</summary>
+        public const float RowClusterNorm = 0.055f;
 
         /// <summary>Earned path (both ends owned/planned) — solid gold, demo-thick.</summary>
         public const float ConnectorThickPx = 10f;
@@ -437,20 +472,49 @@ namespace DeNelle.Village.Talents
             var norm = new Dictionary<string, Vector2>(seats.Count);
             ResolveGraphNorms(seats, norm);
 
+            // WO-1021 sec 2.1b — POSITION IS SOLVED IN ONE PLACE. The lattice box is derived
+            // from the MEASURED well (GraphUnitWpx/Hpx remain the documented fallback for the
+            // first frame, before the rect has been laid out); SolveGraphLatticePx then owns
+            // pitch, separation, row spread and centring. RebuildGraph does NO geometry of its
+            // own past this point — splitting placement across two methods is what let the
+            // authored and fallback paths drift into two visual languages.
+            var wellRt = _graphContent.parent as RectTransform;
+            float wellW = wellRt != null ? wellRt.rect.width : 0f;
+            float wellH = wellRt != null ? wellRt.rect.height : 0f;
+            float boxW = wellW > 1f ? Mathf.Max(wellW - GraphPadPx * 2f, MinLatticeWpx) : GraphUnitWpx;
+            float boxH = wellH > 1f ? Mathf.Max(wellH - GraphPadPx * 2f - RankBandPx, MinLatticeHpx) : GraphUnitHpx;
+            if (wellW <= 1f || wellH <= 1f)
+                FlowTrace.Warn("SkillTree", "graph well not laid out yet (" + wellW.ToString("F0") + "x" +
+                                            wellH.ToString("F0") + ") - solving on the fallback lattice " +
+                                            GraphUnitWpx + "x" + GraphUnitHpx + "; the next rebuild re-solves " +
+                                            "against the measured rect");
+
+            var orderIds = new List<string>(seats.Count);
+            var flatNorm = new float[seats.Count * 2];
+            for (int i = 0; i < seats.Count; i++)
+            {
+                string sid = seats[i].Node.Id;
+                orderIds.Add(sid);
+                Vector2 nv = norm.TryGetValue(sid, out var nvv) ? nvv : Vector2.zero;
+                flatNorm[i * 2] = nv.x;
+                flatNorm[i * 2 + 1] = nv.y;
+            }
+            float[] solved = SolveGraphLatticePx(flatNorm, boxW, boxH);
+
             float pad = GraphPadPx;
             float maxX = 0f, maxY = 0f;
-            var centers = new Dictionary<string, Vector2>(seats.Count);
-            foreach (var kv in norm)
+            var centers = new Dictionary<string, Vector2>(orderIds.Count);
+            for (int i = 0; i < orderIds.Count; i++)
             {
-                float cx = pad + kv.Value.x * GraphUnitWpx;
-                float cyDown = pad + kv.Value.y * GraphUnitHpx; // px DOWN from content top
-                centers[kv.Key] = new Vector2(cx, cyDown);
+                float cx = solved[i * 2];
+                float cyDown = solved[i * 2 + 1];   // px DOWN from content top
+                centers[orderIds[i]] = new Vector2(cx, cyDown);
                 if (cx > maxX) maxX = cx;
                 if (cyDown > maxY) maxY = cyDown;
             }
 
-            float contentW = maxX + pad + NodeFocusPx;
-            float contentH = maxY + pad + NodeFocusPx + RankBandPx;
+            float contentW = maxX + NodeFocusPx * 0.5f + pad;
+            float contentH = maxY + NodeFocusPx * 0.5f + pad + RankBandPx;
             _graphContent.sizeDelta = new Vector2(contentW, contentH);
 
             // Connectors FIRST so opaque plates draw over their ends.
@@ -470,16 +534,26 @@ namespace DeNelle.Village.Talents
                 }
             }
 
-            string selectedId = _vm.SelectedNodeId ?? "";
+            // WO-1021 sec 2.1d — the focus plate is a BOARD-LEVEL SINGLETON. It is resolved
+            // ONCE, for the whole board, by ResolveFocusNodeId; a seat is focus iff it IS that
+            // id. Never `seat.State == SkillNodeState.Next` here: Next is a PER-TRACK signal
+            // (HeroSkillTreeVM.ResolveStates resets nextTaken per track) and consuming it as a
+            // board-level one grew one oversized gold plate per track.
+            var focusStates = new List<SkillNodeState>(seats.Count);
+            for (int i = 0; i < seats.Count; i++) focusStates.Add(seats[i].State);
+            string focusId = ResolveFocusNodeId(orderIds, focusStates, _vm.SelectedNodeId);
+
             var focusIds = new List<string>(2);
             int auraCount = 0;
+            int nextCueCount = 0;
             for (int i = 0; i < seats.Count; i++)
             {
                 var seat = seats[i];
                 if (!centers.TryGetValue(seat.Node.Id, out var c)) continue;
-                bool focus = seat.State == SkillNodeState.Next
-                          || (!string.IsNullOrEmpty(selectedId) && selectedId == seat.Node.Id);
+                bool focus = !string.IsNullOrEmpty(focusId)
+                          && string.Equals(focusId, seat.Node.Id, StringComparison.Ordinal);
                 if (focus) focusIds.Add(seat.Node.Id);
+                if (seat.State == SkillNodeState.Next) nextCueCount++;
                 if (IsAuraNode(seat.State)) auraCount++;
                 Guard.Try("SkillTree", "build graph node '" + seat.Node.Id + "'",
                     () => BuildGraphNode(seat, c.x, c.y, focus));
@@ -494,6 +568,15 @@ namespace DeNelle.Village.Talents
                                              "(default target = OWNED, owner-flippable) rig=" +
                                              (_auraVfx != null && _auraVfx.IsValid ? "vfx" : "art-only"));
             }
+
+            // WO-1021 sec 2.1d ASSERT (sec.12 instrumentation, permanent): the oversized plate
+            // is a board-level singleton. Unreachable by construction — logged, never silent,
+            // so a future edit that re-conflates Next with focus is named by the trace and not
+            // by the owner's third "messy" report.
+            if (focusIds.Count > 1)
+                FlowTrace.Fail("SkillTree", "FOCUS SINGLETON VIOLATED: " + focusIds.Count +
+                                            " oversized plate(s) [" + string.Join(",", focusIds.ToArray()) +
+                                            "] - NodeFocusPx may apply to at most ONE plate on the board");
 
             // Owner pick 2026-08-16: change-gated follow line - one Step per focus CHANGE,
             // never one per Render (Render fires on every selection tap).
@@ -510,22 +593,23 @@ namespace DeNelle.Village.Talents
             }
 
             // Keep scroll place; rest = flush top-left so the first nodes are whole.
-            var well = _graphContent.parent as RectTransform;
-            float wellW = well != null ? well.rect.width : 0f;
-            float wellH = well != null ? well.rect.height : 0f;
+            // (wellW / wellH were measured above, before the lattice was solved against them.)
             float maxDown = wellH > 1f ? Mathf.Max(0f, contentH - wellH) : 0f;
             float maxRight = wellW > 1f ? Mathf.Max(0f, contentW - wellW) : 0f;
             _graphContent.anchoredPosition = new Vector2(
                 Mathf.Clamp(keptScroll.x, -maxRight, 0f),
                 Mathf.Clamp(keptScroll.y, 0f, maxDown));
 
-            string sig = seats.Count + "/" + allSeats.Count + "/" + contentW.ToString("F0") + "x" + contentH.ToString("F0");
+            string sig = seats.Count + "/" + allSeats.Count + "/" + contentW.ToString("F0") + "x" +
+                         contentH.ToString("F0") + "/f" + focusIds.Count + "/n" + nextCueCount;
             if (sig != _lastLayoutSig)
             {
                 _lastLayoutSig = sig;
                 FlowTrace.Step("SkillTree", "sparse graph drawn: " + seats.Count + " visible of " +
                                             allSeats.Count + " node(s), content " +
-                                            contentW.ToString("F0") + "x" + contentH.ToString("F0") + " px");
+                                            contentW.ToString("F0") + "x" + contentH.ToString("F0") + " px, " +
+                                            focusIds.Count + " oversized focus plate(s) [law: <=1] and " +
+                                            nextCueCount + " per-track NEXT badge(s) at normal size");
 
                 // Spacing probe (2026-08-16, change-gated by the same sig so it never spams):
                 // min pairwise centre gap + overlap counts at the CURRENT plate sizes, over the
@@ -550,12 +634,15 @@ namespace DeNelle.Village.Talents
                         else if (dx < halfSumFocus && dy < halfSumFocus) overlapFocus++;
                     }
                 }
-                if (centers.Count < 2) minGapPx = 0f;
+                if (centers.Count < 2) minGapPx = MinNodePitchPx;
+                bool pitchBroken = minGapPx < MinNodePitchPx - 0.5f;
                 string spacing = "graph spacing: minCentreGap=" + minGapPx.ToString("F0") +
+                                 "px vs pitch law " + MinNodePitchPx.ToString("F0") +
                                  "px (tightest " + worstPair + "), overlaps normal(" + NodeSizePx +
                                  ")=" + overlapNormal + " focus(" + NodeFocusPx + ")=" + overlapFocus +
+                                 ", box " + boxW.ToString("F0") + "x" + boxH.ToString("F0") +
                                  ", content " + contentW.ToString("F0") + "x" + contentH.ToString("F0") + " px";
-                if (overlapNormal > 0 || overlapFocus > 0) FlowTrace.Warn("SkillTree", spacing);
+                if (overlapNormal > 0 || overlapFocus > 0 || pitchBroken) FlowTrace.Warn("SkillTree", spacing);
                 else FlowTrace.Step("SkillTree", spacing);
             }
         }
@@ -699,6 +786,140 @@ namespace DeNelle.Village.Talents
             }
         }
 
+        /// <summary>
+        /// WO-1021 sec 2.1b — THE ONE PLACE POSITION IS SOLVED. Pure, deterministic, and
+        /// callable from a headless oracle (primitives in, primitives out, no Unity objects):
+        /// SkillsPanelLayoutRegression [grid] runs THIS and measures ITS output, because the
+        /// authored x/y are an ORDERING HINT now, not shipped geometry.
+        ///
+        /// Contract — all four hold BY CONSTRUCTION, so there is no iteration cap to overrun:
+        ///   * PITCH: every pair clears MinNodePitchPx in Chebyshev distance, so no two plates
+        ///     can touch and no corner pip can land on a neighbouring plate, at any state.
+        ///     Clearance comes from the FOCUS size, never NodeSizePx.
+        ///   * ORDER: rows follow the authored y order, columns the authored x order inside a
+        ///     row. A solve can never reshuffle the authored knight lattice.
+        ///   * SPREAD: rows/columns stretch to fill the box (capped at MaxPitchSpreadMul) and
+        ///     the block is CENTRED on both axes, so no dead bottom third and no dead left
+        ///     column; the first/last row are inset by a FOCUS half-plate, so neither can be
+        ///     clipped by the mask edge even when that plate is the oversized one.
+        ///   * ATTACHMENT: the stretch cap means no node's nearest neighbour is ever further
+        ///     than MaxPitchSpreadMul pitches away — nothing can strand.
+        /// </summary>
+        /// <param name="normXY">Flattened authored/auto norms [x0,y0,x1,y1,...].</param>
+        /// <param name="boxW">Usable lattice width in ref px (measured well, floored).</param>
+        /// <param name="boxH">Usable lattice height in ref px.</param>
+        /// <returns>Flattened plate centres [x0,yDown0,...] in content-local ref px.</returns>
+        public static float[] SolveGraphLatticePx(float[] normXY, float boxW, float boxH)
+        {
+            int n = normXY == null ? 0 : normXY.Length / 2;
+            var outXY = new float[n * 2];
+            if (n == 0) return outXY;
+
+            float half = NodeFocusPx * 0.5f;
+            boxW = Mathf.Max(boxW, MinLatticeWpx);
+            boxH = Mathf.Max(boxH, MinLatticeHpx);
+
+            // Stable order: authored y, then authored x, then input index — ties never depend
+            // on dictionary iteration order, so the same board always solves identically.
+            var order = new int[n];
+            for (int i = 0; i < n; i++) order[i] = i;
+            Array.Sort(order, (a, b) =>
+            {
+                int c = normXY[a * 2 + 1].CompareTo(normXY[b * 2 + 1]);
+                if (c != 0) return c;
+                c = normXY[a * 2].CompareTo(normXY[b * 2]);
+                return c != 0 ? c : a.CompareTo(b);
+            });
+
+            // Cluster into ROWS on the authored-y ordering hint.
+            var rows = new List<List<int>>();
+            var current = new List<int>();
+            float anchorY = normXY[order[0] * 2 + 1];
+            for (int k = 0; k < n; k++)
+            {
+                int idx = order[k];
+                float y = normXY[idx * 2 + 1];
+                if (current.Count > 0 && y - anchorY > RowClusterNorm)
+                {
+                    rows.Add(current);
+                    current = new List<int>();
+                    anchorY = y;
+                }
+                current.Add(idx);
+            }
+            if (current.Count > 0) rows.Add(current);
+
+            for (int r = 0; r < rows.Count; r++)
+            {
+                var row = rows[r];
+                row.Sort((a, b) =>
+                {
+                    int c = normXY[a * 2].CompareTo(normXY[b * 2]);
+                    return c != 0 ? c : a.CompareTo(b);
+                });
+            }
+
+            int rowCount = rows.Count;
+            float rowPitch = 0f;
+            if (rowCount > 1)
+                rowPitch = Mathf.Clamp((boxH - NodeFocusPx) / (rowCount - 1),
+                                       MinNodePitchPx, MinNodePitchPx * MaxPitchSpreadMul);
+            float blockH = rowPitch * (rowCount - 1);
+            float yTop = half + Mathf.Max(0f, (boxH - NodeFocusPx - blockH) * 0.5f);
+
+            for (int r = 0; r < rowCount; r++)
+            {
+                var row = rows[r];
+                int k = row.Count;
+                float colPitch = 0f;
+                if (k > 1)
+                    colPitch = Mathf.Clamp((boxW - NodeFocusPx) / (k - 1),
+                                           MinNodePitchPx, MinNodePitchPx * MaxPitchSpreadMul);
+                float blockW = colPitch * (k - 1);
+                float xLeft = half + Mathf.Max(0f, (boxW - NodeFocusPx - blockW) * 0.5f);
+                float cy = yTop + rowPitch * r;
+                for (int c = 0; c < k; c++)
+                {
+                    int idx = row[c];
+                    outXY[idx * 2] = xLeft + colPitch * c;
+                    outXY[idx * 2 + 1] = cy;
+                }
+            }
+            return outXY;
+        }
+
+        /// <summary>
+        /// WO-1021 sec 2.1d — THE BOARD-LEVEL FOCUS, resolved ONCE for the whole board.
+        /// SELECTION owns the scarce size channel, so this returns AT MOST ONE id:
+        ///   1. the node the player tapped, when it is on the board;
+        ///   2. else the FIRST per-track Next in board order, so an untouched board still has
+        ///      one entry read (and the pointer VFX still has exactly one node to sit on);
+        ///   3. else "" — no oversized plate at all.
+        /// It NEVER returns a set. The per-track Next signal is presented by
+        /// BuildNextTrackMarker at NORMAL size instead. TalentFocusSingletonRegression pins it.
+        /// </summary>
+        public static string ResolveFocusNodeId(IList<string> ids, IList<SkillNodeState> states,
+                                                string selectedId)
+        {
+            if (ids == null || states == null) return "";
+            int n = Mathf.Min(ids.Count, states.Count);
+            if (!string.IsNullOrEmpty(selectedId))
+            {
+                for (int i = 0; i < n; i++)
+                    if (string.Equals(ids[i], selectedId, StringComparison.Ordinal)) return selectedId;
+            }
+            for (int i = 0; i < n; i++)
+                if (states[i] == SkillNodeState.Next && !string.IsNullOrEmpty(ids[i])) return ids[i];
+            return "";
+        }
+
+        /// <summary>Plate edge in ref px. It depends on FOCUS AND NOTHING ELSE — no state may
+        /// ever buy itself size (WO-1021 sec 2.1d). Pinned by TalentFocusSingletonRegression.</summary>
+        public static float NodePlateSizePx(bool focus)
+        {
+            return focus ? NodeFocusPx : NodeSizePx;
+        }
+
         // Gold progression line between plate centres (RPG talent-tree standard:
         // structure is ALWAYS visible; state is carried by thickness + alpha, never by hiding the line).
         private static void BuildGraphConnector(Transform host, Vector2 fromDown, Vector2 toDown,
@@ -759,7 +980,7 @@ namespace DeNelle.Village.Talents
             if (string.IsNullOrEmpty(node.Id)) return;
             var state = seat.State;
 
-            float size = focus ? NodeFocusPx : NodeSizePx;
+            float size = NodePlateSizePx(focus);
 
             var go = new GameObject("Node_" + node.Id, typeof(Image), typeof(Button));
             go.transform.SetParent(_graphContent, false);
@@ -888,6 +1109,12 @@ namespace DeNelle.Village.Talents
                     BuildQuietCornerPip(go.transform, "-" + node.WisdomCost, ElarionUi.Affordable);
                     break;
                 case SkillNodeState.Next:
+                    // WO-1021 sec 2.1d: per-track NEXT is carried by a QUIET badge at NORMAL
+                    // size — shape (chevron) + position (bottom-left, where nothing else lives),
+                    // never by growing the plate. Size belongs to the board-level SELECTION.
+                    BuildNextTrackMarker(go.transform);
+                    BuildQuietCornerPip(go.transform, node.WisdomCost.ToString(), ElarionUi.Parchment);
+                    break;
                 case SkillNodeState.Available:
                     BuildQuietCornerPip(go.transform, node.WisdomCost.ToString(), ElarionUi.Parchment);
                     break;
@@ -1011,6 +1238,60 @@ namespace DeNelle.Village.Talents
                 lbl.raycastTarget = false;
                 ElarionUiKit.FitSingleLine(lbl);
             }
+        }
+
+        /// <summary>Per-track NEXT badge ink / disc (WO-1021 sec 2.1d). PUBLIC so the oracle can
+        /// read them and PROVE the cue survives greyscale: a near-white chevron on a near-black
+        /// disc is a Rec.709 luma gap of ~0.9, so the badge reads with hue stripped entirely and
+        /// is never a hue-only signal. The cue is also SHAPE-carried (a chevron, not a tint) and
+        /// POSITION-carried (bottom-left, where no other plate element lives), at NORMAL size.</summary>
+        public static readonly Color NextMarkerInk = new Color(0.98f, 0.96f, 0.90f, 0.95f);
+        /// <summary>Backing disc for the NEXT badge — near-black so the chevron reads on any art.</summary>
+        public static readonly Color NextMarkerDisc = new Color(0.05f, 0.045f, 0.06f, 0.92f);
+
+        /// <summary>The per-track NEXT cue: a small upward chevron badge in the plate's BOTTOM-LEFT
+        /// corner. Built from bars, not a font glyph (the TMP font has no chevron), and it never
+        /// changes the plate's size — that channel belongs to the board-level selection.</summary>
+        private static void BuildNextTrackMarker(Transform nodeRoot)
+        {
+            var host = new GameObject("NextMarker", typeof(RectTransform));
+            host.transform.SetParent(nodeRoot, false);
+            var hr = (RectTransform)host.transform;
+            // BOTTOM-LEFT: the only quadrant no other plate element claims. The rank pip owns
+            // the top band (y 0.72-0.96), the cost pip and the padlock own bottom-RIGHT
+            // (x 0.68-0.98), and the art well is 0.14-0.86. Position is half the cue.
+            hr.anchorMin = new Vector2(0.03f, 0.03f);
+            hr.anchorMax = new Vector2(0.29f, 0.29f);
+            hr.offsetMin = Vector2.zero; hr.offsetMax = Vector2.zero;
+
+            var disc = new GameObject("Disc", typeof(Image));
+            disc.transform.SetParent(host.transform, false);
+            var dr = (RectTransform)disc.transform;
+            dr.anchorMin = Vector2.zero; dr.anchorMax = Vector2.one;
+            dr.offsetMin = Vector2.zero; dr.offsetMax = Vector2.zero;
+            var dImg = disc.GetComponent<Image>();
+            ElarionUiKit.ApplyRounded(dImg);
+            dImg.color = NextMarkerDisc;
+            dImg.raycastTarget = false;
+
+            MarkerBar(host.transform, new Vector2(0.38f, 0.46f), new Vector2(15f, 4f), 48f, NextMarkerInk);
+            MarkerBar(host.transform, new Vector2(0.62f, 0.46f), new Vector2(15f, 4f), -48f, NextMarkerInk);
+        }
+
+        /// <summary>One rotated bar of a badge glyph (shape primitive, font-free).</summary>
+        private static void MarkerBar(Transform parent, Vector2 anchor, Vector2 size, float rotZ, Color ink)
+        {
+            var go = new GameObject("MarkerBar", typeof(Image));
+            go.transform.SetParent(parent, false);
+            var rt = (RectTransform)go.transform;
+            rt.anchorMin = rt.anchorMax = anchor;
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.anchoredPosition = Vector2.zero;
+            rt.sizeDelta = size;
+            rt.localRotation = Quaternion.Euler(0f, 0f, rotZ);
+            var img = go.GetComponent<Image>();
+            img.color = ink;
+            img.raycastTarget = false;
         }
 
         /// <summary>Tiny padlock in the corner — locked is "dim art + small glyph", not a wall of UI.</summary>

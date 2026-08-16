@@ -112,6 +112,63 @@ distinct spacing defects that a uniform scale will not fix:
 both is what let the authored and fallback paths drift into two different visual languages — the
 "3 above / 5 below" split in the first capture.
 
+#### 2.1d ★ FOCUS INFLATION — the "one gold focus plate" premise does not survive multiple tracks
+
+**Owner 2026-08-16, screenshot at WIS 252: *"Still Messy."*** With Wisdom spent-able, the board fills
+with **~10 oversized gold plates overlapping each other** and occluding neighbours' art and pips.
+
+**This is a SECOND defect, not just the §2.1b spacing gap.** Traced at source:
+
+`HeroSkillTreeVM.ResolveStates` (`:839-856`) — `nextTaken` is a **local reset on every call**, and the
+method is invoked **per track**:
+
+```csharp
+bool nextTaken = false;                                   // reset PER TRACK
+...
+else if (ordered && !nextTaken) { state = SkillNodeState.Next; nextTaken = true; }
+```
+
+Its own comment is precise and correct: *"On an ORDERED track **exactly ONE** node may be Next."*
+**Per track.** So the number of `Next` nodes on the board equals **the number of ordered tracks.**
+
+The view then does (`HeroSkillTreePanelMvvm.cs:451-452`):
+
+```csharp
+bool focus = seat.State == SkillNodeState.Next || (selectedId == seat.Node.Id);
+```
+
+…and every `focus` plate renders at `NodeFocusPx` (**168** vs 136) with a thick gold outer ring. **So
+the board grows one oversized gold plate per track**, and the file's own header premise —
+
+> *"**One** thick gold FOCUS plate for the selected / next node"*
+
+— is violated by construction the moment there is more than one track. At WIS 252 with everything
+affordable, that is the whole board shouting at once, which is why it reads messier *with* currency
+than without.
+
+**⚠ The VM is NOT wrong. Do not "fix" `ResolveStates`.** Per-track `Next` is the correct model — each
+track legitimately has a next step, and WO-910's Inert rule depends on that loop. **The view is
+over-consuming a per-track signal as a board-level one.**
+
+**Required — separate the two ideas the view currently conflates:**
+
+| concept | meaning | treatment |
+|---|---|---|
+| **SELECTED** | the one node the player tapped — a **board-level singleton** | the big gold focus plate. **At most ONE, ever** |
+| **NEXT** (per track) | this track's next step | a **quiet** marker — a rim, a pip, a subtle tint. **Same size as every other plate** |
+
+- ⛔ **`NodeFocusPx` may apply to AT MOST ONE plate on screen.** Assert it.
+- The per-track `Next` cue must be **shape/position-carried, not size-carried** — size is the scarce
+  channel and selection owns it. (It must also survive greyscale: colourblind law.)
+- ⚠ **This interacts with §2.1b's pitch rule.** Once at most one plate is focus-sized, the
+  `NodeFocusPx * 1.35` clearance is needed for **that one plate's neighbourhood**, not globally — but
+  the rule stays as written, because the focus can move to any node.
+
+**Sequencing note:** §2.1b (pitch + separation) and this are independent and both required. Fixing
+spacing alone still leaves ten oversized plates crowding a board sized for them; fixing focus alone
+still leaves plates overlapping. ⚠ The owner has now reported "messy" **twice**; landing only one half
+will produce a third report.
+
 ⚠ **Do NOT delete `GraphUnitWpx` / `GraphUnitHpx`.** `SkillsPanelLayoutRegression [grid]` pins them
 against the authored JSON — **by reflection** (`ConstFloat(view, "GraphUnitWpx"...)` at :192-193), so a
 RENAME breaks the suite silently too. Leave them as the documented fallback + the regression's anchor.

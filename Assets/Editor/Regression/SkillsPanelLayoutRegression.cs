@@ -43,12 +43,14 @@
 //                   graph well, a >= 2-line description, and a tile whose two line
 //                   boxes fit inside the ability band.
 //   3 [grid]        the graph content can never exceed / be sliced by its container:
-//                   the pad is at least half a node plate, and a FULL PAIRWISE AABB
-//                   sweep over every authored x/y pair in hero-talents.json proves no
-//                   two plates overlap at NodeSizePx or NodeFocusPx-vs-neighbour
-//                   (read from the canonical json, not assumed; corrected 2026-08-16 -
-//                   the old SectionBandY row-pair exclusion assumed a push-apart that
-//                   WO-896 deleted, which let 5 real overlaps read green).
+//                   the pad is at least half a node plate; the authored json holds its
+//                   presence / uniqueness / 0..1 contract; and a FULL PAIRWISE sweep
+//                   over the RESOLVED positions - the view's own SolveGraphLatticePx,
+//                   run headlessly at the reference well - proves every pair clears
+//                   MinNodePitchPx and that no plate sits inside the focus half-plate
+//                   inset (WO-1021 sec 2.1b; before this the case read authored x/y
+//                   only and skipped every auto-placed node, so it certified a lattice
+//                   that does not ship).
 //   4 [truncation]  at the reference resolution no label is forced to ellipsize: the
 //                   longest UNBREAKABLE word in abilities.json fits an ability tile
 //                   at the kit FontFloor, and the longest name in hero-talents.json
@@ -297,12 +299,21 @@ namespace DeNelle.Editor.Regression
         }
 
         // =====================================================================
-        //  CASE 3 - the grid can never exceed / be sliced by its container, and
-        //  no two authored plates can overlap (FULL PAIRWISE AABB, 2026-08-16).
-        //  The old shape excluded the row pair straddling SectionBandY on the
-        //  premise that RebuildGraph pushed that pair apart - WO-896 DELETED the
-        //  push-apart, so the exclusion made real overlaps read green (5 hard
-        //  overlapping pairs + 26 focus-size overlaps measured 2026-08-16).
+        //  CASE 3 - the grid can never exceed / be sliced by its container, and no
+        //  two plates can overlap - MEASURED ON THE POSITIONS THAT SHIP.
+        //
+        //  MOVED 2026-08-16 (WO-1021 sec 2.1b/2.1c item 5): every earlier shape of
+        //  this case measured AUTHORED json x/y through the FALLBACK constants
+        //  (1180x780) and `continue`d past every auto-placed node, so it certified a
+        //  lattice the runtime no longer draws - which is how the suite stayed GREEN
+        //  over the row overlaps measured on device in s3.png. It also demanded the
+        //  geometrically impossible (7 rows x 136 px = 952 px of plates inside a
+        //  780 px authored lattice), making its own advice line unfollowable.
+        //  The pitch assertion now runs the view's OWN SolveGraphLatticePx and
+        //  measures ITS output; the authored data is still checked for exactly what
+        //  it promises - presence, uniqueness and the 0..1 contract. Nothing was
+        //  weakened: the resolved check is STRICTER (Chebyshev pitch >= 226.8 px,
+        //  i.e. focus-based clearance, vs the old 136 px NodeSize basis).
         // =====================================================================
         private static void Case3_GridContainment(List<string> failures, List<string> notes)
         {
@@ -320,60 +331,110 @@ namespace DeNelle.Editor.Regression
                              $"({L.NodeSize * 0.5f}) - the first and last authored rows/columns extend past the " +
                              "scroll content and are cut mid-plate at the mask edge");
 
-            // Every authored node pair, on the REAL lattice (GraphUnitWpx/Hpx). Two square plates
-            // overlap iff their centre deltas are under the half-size sum on BOTH axes. Checked at
-            // BOTH plate sizes: normal vs normal (NodeSizePx) and focus vs normal (NodeFocusPx vs
-            // NodeSizePx - any node can be the oversized selected/Next plate).
             var pts = ParseAuthoredNodes(failures);
             if (pts == null) return;
 
-            float halfSumNormal = L.NodeSize;                       // 68 + 68
-            float halfSumFocus = (nodeFocus + L.NodeSize) * 0.5f;   // 84 + 68
-            int overlapNormal = 0, overlapFocus = 0;
-            float minClearFocusPx = float.MaxValue;                 // worst pair's clear air at focus size
-            string worstPair = "";
-
+            // ── (a) WHAT THE AUTHORED DATA ACTUALLY PROMISES ─────────────────────────
+            // Presence, uniqueness and the 0..1 contract. NOT pixel geometry: since
+            // WO-1021 sec 2.1b the authored x/y are an ORDERING HINT consumed by
+            // SolveGraphLatticePx, not shipped coordinates. Measuring them in plate
+            // pixels measured a lattice that does not ship - and demanded the impossible:
+            // 7 rows x 136 px = 952 px of plates inside a 780 px authored lattice, with
+            // only 1.95 rows of room below class tier-1. That is why the advice line
+            // "re-author x/y" was unfollowable. The assertion MOVED to the resolved
+            // positions below; it was never weakened.
+            var seenIds = new HashSet<string>(StringComparer.Ordinal);
+            int outOfRange = 0, duplicateIds = 0;
             for (int i = 0; i < pts.Count; i++)
             {
+                if (pts[i].X > 1.0001f || pts[i].Y > 1.0001f)
+                {
+                    outOfRange++;
+                    if (outOfRange <= 3)
+                        failures.Add($"[grid] authored node '{pts[i].Id}' sits at ({pts[i].X:F3},{pts[i].Y:F3}) - " +
+                                     "outside the 0..1 authoring contract the solver normalises from");
+                }
+                if (!seenIds.Add(pts[i].Id))
+                {
+                    duplicateIds++;
+                    if (duplicateIds <= 3)
+                        failures.Add($"[grid] authored id '{pts[i].Id}' carries more than one x/y pair - " +
+                                     "the ordering hint is ambiguous");
+                }
+            }
+
+            // ── (b) THE POSITIONS THAT ACTUALLY SHIP ─────────────────────────────────
+            // Run the view's OWN solver headlessly and measure ITS output. Before this,
+            // every [grid] check read authored json only (and `continue`d past every
+            // auto-placed node), which is how the suite stayed green over the overlapping
+            // rows measured on device in s3.png 2026-08-16.
+            float minPitch = ConstFloat(FindType(ViewType), "MinNodePitchPx", failures, "[grid]");
+            float rankBand = ConstFloat(FindType(ViewType), "RankBandPx", failures, "[grid]");
+            if (minPitch <= 0f) return;
+
+            var solver = FindType(ViewType).GetMethod("SolveGraphLatticePx",
+                BindingFlags.Public | BindingFlags.Static);
+            if (solver == null)
+            {
+                failures.Add("[grid] HeroSkillTreePanelMvvm.SolveGraphLatticePx is gone - position solving has " +
+                             "been split back across methods and this oracle can no longer see what ships; " +
+                             "re-point it rather than deleting the guard");
+                return;
+            }
+
+            var flat = new float[pts.Count * 2];
+            for (int i = 0; i < pts.Count; i++) { flat[i * 2] = pts[i].X; flat[i * 2 + 1] = pts[i].Y; }
+
+            float boxW = RefBodyWidthPx - L.GraphPad * 2f;
+            float boxH = RefBodyHeightPx - L.GraphPad * 2f - rankBand;
+            float[] px;
+            try { px = (float[])solver.Invoke(null, new object[] { flat, boxW, boxH }); }
+            catch (Exception ex)
+            {
+                failures.Add("[grid] SolveGraphLatticePx THREW " + ex.GetType().Name + ": " + ex.Message);
+                return;
+            }
+            if (px == null || px.Length != flat.Length)
+            {
+                failures.Add("[grid] SolveGraphLatticePx returned " + (px == null ? "null" : px.Length.ToString()) +
+                             " values for " + pts.Count + " nodes");
+                return;
+            }
+
+            float half = nodeFocus * 0.5f;
+            int overlaps = 0;
+            float minPairGapPx = float.MaxValue;
+            string worstPair = "";
+            for (int i = 0; i < pts.Count; i++)
+            {
+                if (px[i * 2] < half - 0.5f || px[i * 2 + 1] < half - 0.5f)
+                    failures.Add($"[grid] resolved plate '{pts[i].Id}' sits at ({px[i * 2]:F0},{px[i * 2 + 1]:F0}), " +
+                                 $"inside the FOCUS half-plate inset ({half:F0} px) - it is clipped mid-plate at " +
+                                 "the mask edge the moment it is the oversized selected plate (the s2.png top clip)");
                 for (int j = i + 1; j < pts.Count; j++)
                 {
-                    float dx = Mathf.Abs(pts[i].X - pts[j].X) * L.UnitW;
-                    float dy = Mathf.Abs(pts[i].Y - pts[j].Y) * L.UnitH;
-                    float sep = Mathf.Max(dx, dy);   // an AABB pair is clear once EITHER axis clears
-                    float clearFocus = sep - halfSumFocus;
-                    if (clearFocus < minClearFocusPx)
+                    float dx = Mathf.Abs(px[i * 2] - px[j * 2]);
+                    float dy = Mathf.Abs(px[i * 2 + 1] - px[j * 2 + 1]);
+                    float sep = Mathf.Max(dx, dy);   // Chebyshev: an AABB pair is clear once EITHER axis clears
+                    if (sep < minPairGapPx) { minPairGapPx = sep; worstPair = pts[i].Id + "/" + pts[j].Id; }
+                    if (sep < minPitch - 0.5f)
                     {
-                        minClearFocusPx = clearFocus;
-                        worstPair = pts[i].Id + "/" + pts[j].Id;
-                    }
-                    if (dx < halfSumNormal && dy < halfSumNormal)
-                    {
-                        overlapNormal++;
-                        if (overlapNormal <= 3)
-                            failures.Add($"[grid] authored plates OVERLAP at normal size ({L.NodeSize}px): " +
-                                         $"{pts[i].Id} vs {pts[j].Id} (dx={dx:F0}px dy={dy:F0}px < {halfSumNormal:F0}px) - " +
-                                         "re-author x/y in hero-talents.json, never the plate consts");
-                    }
-                    else if (dx < halfSumFocus && dy < halfSumFocus)
-                    {
-                        overlapFocus++;
-                        if (overlapFocus <= 3)
-                            failures.Add($"[grid] a FOCUS plate ({nodeFocus}px, selected/Next) overlaps its neighbour: " +
-                                         $"{pts[i].Id} vs {pts[j].Id} (dx={dx:F0}px dy={dy:F0}px < {halfSumFocus:F0}px) - " +
-                                         "re-author x/y in hero-talents.json, never the plate consts");
+                        overlaps++;
+                        if (overlaps <= 3)
+                            failures.Add($"[grid] RESOLVED plates break the pitch law: {pts[i].Id} vs {pts[j].Id} " +
+                                         $"clear only {sep:F0} px against MinNodePitchPx {minPitch:F0} px " +
+                                         $"(dx={dx:F0} dy={dy:F0}) - the plates touch and a corner cost pip lands " +
+                                         "on the NEIGHBOURING plate. Fix the solver, never the plate consts");
                     }
                 }
             }
-            int overlaps = overlapNormal + overlapFocus;
-            if (overlapNormal > 3)
-                failures.Add($"[grid] ...plus {overlapNormal - 3} more normal-size overlap pair(s)");
-            if (overlapFocus > 3)
-                failures.Add($"[grid] ...plus {overlapFocus - 3} more focus-size overlap pair(s)");
+            if (overlaps > 3)
+                failures.Add($"[grid] ...plus {overlaps - 3} more resolved pitch violation(s)");
 
             // The measured record prints on EVERY gate run, pass or fail, so drift is visible.
-            notes.Add($"minPairGapPx={minClearFocusPx:F1} overlaps={overlaps} " +
-                      $"(pairwise over {pts.Count} authored nodes at {L.NodeSize}/{nodeFocus}px; " +
-                      $"tightest pair {worstPair})");
+            notes.Add($"resolved minPairGapPx={minPairGapPx:F1} vs law {minPitch:F1}, violations={overlaps} " +
+                      $"(solver output over {pts.Count} authored nodes in a {boxW:F0}x{boxH:F0} box; " +
+                      $"tightest pair {worstPair}); authored contract: outOfRange={outOfRange} dupIds={duplicateIds}");
         }
 
         private sealed class AuthoredNode
@@ -385,8 +446,16 @@ namespace DeNelle.Editor.Regression
         /// <summary>Every authored (id, x, y) triple in the canonical json, in file order. The
         /// id/x/y walk pairs each x/y with the most recent "id" so overlap failures can NAME the
         /// colliding nodes. Parsed straight out of the json so the oracle tracks the data, not a
-        /// snapshot of it. Nodes without x/y (ranger/mage, knight branches) auto-layout at runtime
-        /// and are out of this oracle's scope - the view's [Flow:SkillTree] probe reports those.</summary>
+        /// snapshot of it.
+        ///
+        /// 2026-08-16 (talent shape law): EVERY node in all three trees and the shared pool now
+        /// carries an authored x/y, so nothing is skipped here any more - the old note claiming
+        /// "ranger/mage and the knight branches auto-layout and are out of scope" is retired.
+        /// One consequence to read the [grid] note with: this parses the file as ONE flat list,
+        /// so nodes from different trees that share a y land in the same solved row. That is
+        /// harmless for what this case asserts (pitch + inset hold by construction at any row
+        /// width) but it is NOT a per-tree row census - TalentTreeShapeRegression owns the
+        /// per-tree shape law (bottom row <= 3, branching wider) and reports that census.</summary>
         private static List<AuthoredNode> ParseAuthoredNodes(List<string> failures)
         {
             string src = ReadText(TalentsJson, failures, "[grid]");
