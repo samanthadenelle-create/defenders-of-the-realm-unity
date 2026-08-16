@@ -359,12 +359,110 @@ namespace DeNelle.Village
             }
             var go = Instantiate(prefab, _poolRoot);
             go.name = $"[Hovl_{key}]";
+            NormalizeVendorContainerRenderers(go, key);
             // NOTE: no URP-proof pass here — Hovl packs ship URP-clean HS_* shader graphs
             // (Docs/VFX/HovlStudio_Inventory.md §2.2 GREEN, no magenta). The VFXType path's
             // ProofUrpParticleShaders is only for the legacy-built Lana/Spells prefabs.
             _hovlKeyOf[go] = key;
             go.SetActive(false);
             return go;
+        }
+
+        // =====================================================================
+        // WO-1100 - vendor "container" renderer normalization (MagentaProbe M2
+        // false-positive killer).
+        // ---------------------------------------------------------------------
+        // PROVEN AT SOURCE (2026-08-16): the Mirza Beig Ultimate VFX prefab behind
+        // 'Portal_Threshold_Aura' (pf_vfx-ult_demo_psys_loop_portalBlue) carries TWO
+        // ParticleSystemRenderers - the prefab ROOT (fileID 1641099969701414) and one
+        // child (1590112034912844) - that are authored m_Enabled: 0 with m_Materials
+        // = [null, null]. That is the vendor CONTAINER pattern: the system exists only
+        // to parent/drive its children and its renderer is switched off, so nothing is
+        // ever drawn from it and NO art is missing (every material the ENABLED
+        // renderers reference was verified present on disk). A byte-scan of the packs
+        // found 339 renderers of this exact shape - it is pervasive vendor authoring,
+        // not a defect.
+        //
+        // MagentaGuard.SweepRenderers, however, treats an ALL-null-slot
+        // ParticleSystemRenderer as a genuine "nothing to draw" defect and probes it
+        // at FAIL severity (class M2) - correctly refusing to repaint it (URP/Lit into
+        // a particle slot is the 2026-08-05 white-blob regression). Result: 12
+        // identical owner F8 captures per session, one per spawned portal
+        // ([Flow:MagentaProbe] FAIL ... obj='...[Hovl_Portal_Threshold_Aura]' slot=0
+        // material='NULL' class=M2), for an effect that renders perfectly.
+        //
+        // THE FIX LIVES HERE, NOT IN MAGENTAGUARD (WO-1100 section 4 forbids touching
+        // the guard - it is the net, never strip it): at instance creation, fill slot 0
+        // of every DISABLED all-null ParticleSystemRenderer with a donor material
+        // borrowed from elsewhere in the same instance. The renderer STAYS DISABLED,
+        // so the donor is never drawn - the slot is simply no longer NULL when the
+        // guard sweeps the subtree, and the remaining null slot(s) then match the
+        // guard's own vendor trail-slot whitelist (IsVendorParticleNullSlot: any
+        // non-null sibling slot legitimises the empty ones).
+        //
+        // DELIBERATELY NARROW: an ENABLED renderer with all-null slots is left alone.
+        // That IS a real defect (it draws the engine-default magenta) and must stay
+        // visible to MagentaGuard - see the [vfx-null-slot] regression, which ratchets
+        // the five known pack offenders (PP_Goop*/PP_EarthShatter/
+        // PP_LightnigStormCloud) and fails on any new one.
+        // =====================================================================
+        private static void NormalizeVendorContainerRenderers(GameObject go, string key)
+        {
+            if (go == null) return;
+            var renderers = go.GetComponentsInChildren<ParticleSystemRenderer>(true);
+            if (renderers == null || renderers.Length == 0) return;
+
+            // Donor: the first real material anywhere in this instance. It is only ever
+            // assigned into DISABLED renderers, so it is never drawn - it exists purely
+            // so the slot is not NULL when MagentaGuard probes the subtree.
+            Material donor = null;
+            for (int i = 0; i < renderers.Length && donor == null; i++)
+            {
+                var candidate = renderers[i] != null ? renderers[i].sharedMaterials : null;
+                if (candidate == null) continue;
+                for (int m = 0; m < candidate.Length; m++)
+                {
+                    if (candidate[m] != null) { donor = candidate[m]; break; }
+                }
+            }
+
+            int normalized = 0;
+            for (int i = 0; i < renderers.Length; i++)
+            {
+                var r = renderers[i];
+                // ENABLED all-null is a REAL defect - leave it for MagentaGuard to report.
+                if (r == null || r.enabled) continue;
+
+                var mats = r.sharedMaterials;   // copy - assigned back below
+                if (mats == null || mats.Length == 0) continue;
+                bool allNull = true;
+                for (int m = 0; m < mats.Length; m++)
+                {
+                    if (mats[m] != null) { allNull = false; break; }
+                }
+                if (!allNull) continue;
+
+                if (donor == null)
+                {
+                    // A whole instance with zero materials anywhere has nothing to lend.
+                    // Say so once and let the guard's probe stand - that case IS reportable.
+                    FlowTrace.Once("VFXManager", $"hovl-container-nodonor:{key}",
+                        $"CreateHovlInstance('{key}'): disabled all-null-slot renderer '{r.gameObject.name}' " +
+                        "has NO donor material anywhere in the instance - left as-is, MagentaProbe will " +
+                        "report it (WO-1100).");
+                    continue;
+                }
+
+                mats[0] = donor;
+                r.sharedMaterials = mats;   // assignment is what sticks on the instance
+                normalized++;
+            }
+
+            if (normalized > 0)
+                FlowTrace.Once("VFXManager", $"hovl-container-normalized:{key}",
+                    $"CreateHovlInstance('{key}'): filled slot 0 on {normalized} DISABLED all-null vendor " +
+                    $"container renderer(s) with donor material '{donor.name}' - never drawn (renderer stays " +
+                    "disabled); silences the MagentaProbe M2 false positive on this pooled instance (WO-1100).");
         }
 
         /// <summary>
