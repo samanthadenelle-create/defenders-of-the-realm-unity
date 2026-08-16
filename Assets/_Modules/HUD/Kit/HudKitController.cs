@@ -1653,15 +1653,15 @@ namespace DeNelle.HUD.Kit
                 // Dim face when unaffordable (not on cooldown-only) — luminance, not hue.
                 if (h.frame != null && s.Equipped)
                 {
-                    float a = s.Affordable ? 1f : 0.42f;
+                    float frameAlpha = s.Affordable ? 1f : 0.42f;
                     var c = h.frame.color;
-                    h.frame.color = new Color(c.r, c.g, c.b, a);
+                    h.frame.color = new Color(c.r, c.g, c.b, frameAlpha);
                 }
                 if (h.icon != null && s.Equipped && h.icon.enabled)
                 {
-                    float a = s.Affordable ? 1f : 0.45f;
+                    float iconAlpha = s.Affordable ? 1f : 0.45f;
                     var c = h.icon.color;
-                    h.icon.color = new Color(c.r, c.g, c.b, a);
+                    h.icon.color = new Color(c.r, c.g, c.b, iconAlpha);
                 }
                 if (!medallion && h.button != null && s.Equipped)
                     h.button.interactable = !cooling && s.Affordable;

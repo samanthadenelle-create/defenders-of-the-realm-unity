@@ -1,5 +1,14 @@
 # WORK ORDER 999 — Class resource economy: make it *feel* like magic (and lock owner rulings)
 
+**Gate findings on `3b7a5d77` — FIXED 2026-08-16 overnight (CLI), from the review seat's three
+proven findings:** (1) Focus restored on CAST COMMIT (`HeroAbilities.cs` post-`ResolveEffect`) —
+whiffs refueled; (2) the `cost <= 0 && !heal` gate made free universals a second Focus engine
+(`universal.arcane-bolt` = +0.75/s vs the authored 0.8/s passive); (3) two live restore sites.
+**Fix = ONE earn rule:** the restore arms only for the class's designated basic (`IsClassBasic`,
+the locked-Q identity test) and is consumed in the strike's ARRIVAL closure when damage lands
+(`_pendingTimingBonus` pattern; cleared after `ResolveEffect` so no stale arm survives). The melee
+path keeps its own `anyHit` gate — different input, same per-hit rule, no shared-input double.
+
 **Status:** DONE (implementation) — owner felt-close still open  
 **RESULT:** `WorkOrders/WORK_ORDER_999_class_resource_feel_and_owner_rulings.RESULT.md`  
 **Design:** `docs/design/MOBILE_CLASS_RESOURCE_ECONOMY.md`  

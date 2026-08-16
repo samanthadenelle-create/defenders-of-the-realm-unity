@@ -795,13 +795,39 @@ namespace DeNelle.Village
                 ? CastVariantKeyword[castVariant] : null;
             PlayCastVfxKey(def, origin, castVariant);
 
+            // WO-999 gate findings (review of 3b7a5d77, 2026-08-15): the resource restore
+            // arms ONLY for the class's designated basic (the locked Q def) and is consumed
+            // by the strike's ARRIVAL closure when damage actually lands — never on cast
+            // commit. A whiffed Quick Shot refuels nothing, and free universals are free to
+            // CAST, not a second Focus engine (arcane-bolt at 0 cost / 2s cd was granting
+            // +0.75/s, nearly doubling the ranger's authored 0.8/s passive). One earn rule,
+            // shared with the melee path's anyHit gate. Pattern: _pendingTimingBonus.
+            _pendingOnHitRestore = _onHitRestore > 0f && IsClassBasic(def) ? _onHitRestore : 0f;
+
             ResolveEffect(def, origin);
 
-            // WO-999 (mobile WC/SC): free basics restore class resource on cast commit
-            // (ranger Focus via Quick Shot). Paid skills never restore — spend is spend.
-            // Melee path still uses PlayerAttackController for non-cast basics.
-            if (_onHitRestore > 0f && ManaCostOf(def) <= 0f && !isHealCast)
-                RestoreMana(_onHitRestore);
+            // Strike-like effects captured the pending restore into their arrival closure and
+            // zeroed it; for every non-strike effect this clears the arm so a later paid cast
+            // can never consume a stale restore.
+            _pendingOnHitRestore = 0f;
+        }
+
+        /// <summary>
+        /// True when <paramref name="def"/> IS the class's designated basic attack — the def
+        /// the locked Q slot resolves to (see <see cref="Resolve"/>: "Q always resolves to
+        /// the class def"). The generalised form of <see cref="IsArrowRiderEligible"/>'s
+        /// identity test, without the ranger gate: on-hit resource restore is class-agnostic
+        /// data (`onHitRestore` in the class resource block), so the eligibility test must
+        /// be too.
+        /// </summary>
+        private bool IsClassBasic(AbilityDef def)
+        {
+            if (def == null) return false;
+            var q = AbilityCatalog.Find(_heroClass, AbilitySlot.Q);
+            if (q == null) return false;
+            if (ReferenceEquals(q, def)) return true;
+            return !string.IsNullOrEmpty(def.Id) &&
+                   string.Equals(def.Id, q.Id, System.StringComparison.OrdinalIgnoreCase);
         }
 
         // =====================================================================
@@ -827,6 +853,10 @@ namespace DeNelle.Village
         // DEF-47: timing bonus captured by TryCast() from AttackTimingBonus,
         // consumed by the next ResolveEffect() damage call, then reset to 1.
         private float _pendingTimingBonus = 1f;
+
+        // WO-999 gate fix: armed by TryCast for the class basic only, captured into the
+        // strike's arrival closure (hit-confirm), zeroed after ResolveEffect either way.
+        private float _pendingOnHitRestore;
 
         // ── Defend-the-Tower aim overrides (null in village → behaviour unchanged) ──
         /// <summary>When set, offensive abilities resolve from this world point (the
@@ -1140,6 +1170,11 @@ namespace DeNelle.Village
                         float ammoDps = 0f, ammoSecs = 0f, ammoSlowPct = 0f;
                         bool arrowRider = IsArrowRiderEligible(def)
                             && TryResolveAmmoRider(out ammoFx, out ammoDps, out ammoSecs, out ammoSlowPct);
+                        // WO-999 gate fix: consume the pending on-hit restore NOW (synchronously,
+                        // so a later cast cannot inherit it) and pay it only when this projectile
+                        // ARRIVES on a live foe — the hit confirm, mirroring the melee anyHit gate.
+                        float focusOnHit = _pendingOnHitRestore;
+                        _pendingOnHitRestore = 0f;
                         LaunchProjectile(foe.WorldPosition, () =>
                         {
                             if (hitFoe == null || !hitFoe.IsAlive) return;
@@ -1163,6 +1198,8 @@ namespace DeNelle.Village
                             // WO-861 A4: the equipped arrow's on-hit rider (Ranger basic only).
                             if (arrowRider) ApplyAmmoRider(hitFoe, ammoFx, ammoDps, ammoSecs, ammoSlowPct);
                             ReportRumble(hitDmg);   // WO-497: rumble on the projectile CONNECTING
+                            // WO-999: the class basic's resource restore lands WITH the hit.
+                            if (focusOnHit > 0f) RestoreMana(focusOnHit);
                             // WO-VFX-003: Hovl impact key at the connection point (element-tinted).
                             PlayImpactVfxKey(hitDef, hitFoe.WorldPosition);
                             onDealt?.Invoke(dealt);   // WO-861 drainshot: heal == damage DEALT
