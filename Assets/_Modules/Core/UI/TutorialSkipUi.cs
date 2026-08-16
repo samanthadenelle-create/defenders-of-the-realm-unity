@@ -8,29 +8,39 @@
 // is saved (SeenTutorials persists per step, so a declined skip resumes from
 // the same beat on the next launch).
 //
-// Placement: right screen edge in the FREE band between the ActionRail top
-// (y 0.420) and the QueueStatus bottom (y 0.530) — the only unregistered
-// right-edge band in HudAreasHost — so it collides with NOTHING: not the
-// system/settings corner, not the build HUD's compact Done (the WO-1010 D10
-// collision that killed the old (1,1) corner button), and not the F8/dev
-// overlays (top edge).
+// Placement (WO-1033, owner 2026-08-16 "move to top middle"): TOP-CENTRE,
+// horizontally centred, hung from the Status crown's LOWER edge (HudAreasHost
+// Status = x 0.340-0.660, y 0.845-0.990) so it clears the compass/waveBlock
+// that own the very top band in calm(town)/calm(explore) — the same rule that
+// fixed the 2026-07-16 "instruction strip sits ON the compass" complaint.
+// It is DISJOINT from everything that broke the old right-edge anchor: the
+// build mode confirm/rotate/cancel ActionRail (x >= 0.780) and the right-rail
+// Echoes/Builders/Resources chips (also x >= 0.780). It sits ABOVE the
+// DialogueView safe-area ceiling (y 0.660) at every supported aspect, and the
+// TargetInfo band it hangs into carries NO widget row in calm(town), build or
+// calm(explore) (hud-areas.json). SAFETY: top-centre is the furthest reachable
+// point from the build-mode Confirm glyph — an accidental skip is unrecoverable
+// -feeling, so distance from Confirm is a requirement, not a preference.
 //
-// MinTouchPx law: the visible face stays small; an INVISIBLE hit pad carries
-// the full touch floor (the padding-never-growth rule). The confirm sheet is
-// the kit's shared ConfirmModal, with a post-layout touch-floor pass on its
-// two buttons. MVVM: this control owns the chrome + confirm; the caller
-// (TutorialFlow.SkipAll) owns what skip MEANS. [Flow:Tutorial] throughout.
+// Chrome: the COMMON kit button — ElarionUiKit.BuildObsidianButton(Style1,
+// Gray), the quiet grey face (never the gold/primary face; Skip is an escape
+// hatch). Nothing here is hand-rolled: a fixed-PIXEL mount band + the kit
+// button stretched into it, the same idiom as HudKitController.BuildRailChip.
+// The kit supplies the frame, the 3-state feedback and the MinTouchPx floor.
+// The confirm sheet is the kit's shared ConfirmModal, with a post-layout
+// touch-floor pass on its two buttons. MVVM: this control owns the chrome +
+// confirm; the caller (TutorialFlow.SkipAll) owns what skip MEANS.
+// [Flow:Tutorial] throughout.
 // =============================================================================
 
 using System;
-using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
 namespace DeNelle.Core.UI
 {
     /// <summary>
-    /// Static single-skip corner control for the FTUE. <see cref="Show"/> arms it
+    /// Static single-skip TOP-MIDDLE control for the FTUE. <see cref="Show"/> arms it
     /// with the caller's confirmed-skip intent; <see cref="Hide"/> removes it
     /// (flow finished/torn down). One confirm sheet, never an instant skip.
     /// </summary>
@@ -38,16 +48,27 @@ namespace DeNelle.Core.UI
     {
         private const float FadeSeconds = 0.2f;
         private const int CanvasSortOrder = 4310;   // above mask/pointer, beside the strip band
-        // The free right-edge band: ActionRail tops at 0.420, QueueStatus bottoms at
-        // 0.530 (HudAreasHost) — anchor the pad's TOP at 0.530 and hang it downward.
-        private static readonly Vector2 AnchorFraction = new Vector2(1f, 0.530f);
-        private const float FaceWidth = 96f;
-        private const float FaceHeight = 30f;
+
+        // ── TOP-MIDDLE anchor (WO-1033) ───────────────────────────────────────
+        // ANCHORS, never corner offsets: the mount's anchor is the screen FRACTION
+        // (0.5, 0.845) with a (0.5, 1) pivot, so the button stays horizontally
+        // centred and the same distance under the Status crown at 2670x1200, at
+        // 2340x1080 and at every aspect between. Only the mount's SIZE is fixed
+        // pixels (WO-841: a fraction band can resolve under MinTouchPx, and the
+        // touch-floor guard then grows it about its centre into its neighbours).
+        /// <summary>Screen-fraction Y the mount hangs from — the HudAreasHost Status
+        /// crown's LOWER edge, so the compass/waveBlock band above stays clear.</summary>
+        private const float StatusCrownBottomFraction = 0.845f;
+        /// <summary>Gap in reference px between the crown edge and the button's top.</summary>
+        private const float CrownGapPx = 10f;
+        /// <summary>Button width in reference px (fits "Skip Tutorial" above the kit's legibility floor).</summary>
+        private const float SkipWidthPx = 300f;
 
         private static TutorialSkipUi _instance;
 
         private CanvasGroup _group;
-        private GameObject _padHost;
+        private RectTransform _mount;
+        private Button _button;
         private Action _onConfirmedSkipAll;
         private ElarionUiKit.ConfirmModal _confirm;   // live confirm sheet (null when closed)
         private bool _confirmTouchFloorApplied;
@@ -56,7 +77,7 @@ namespace DeNelle.Core.UI
 
         // ── Public API ────────────────────────────────────────────────────────
 
-        /// <summary>Show the corner Skip, armed with the caller's confirmed skip-all
+        /// <summary>Show the top-middle Skip, armed with the caller's confirmed skip-all
         /// intent (invoked ONLY after the confirm sheet's Skip).</summary>
         public static void Show(Action onConfirmedSkipAll)
         {
@@ -65,7 +86,7 @@ namespace DeNelle.Core.UI
             if (!s._visible)
             {
                 s._visible = true;
-                Diagnostics.FlowTrace.Step("Tutorial", "SkipControl SHOW (the ONE corner skip, WO-1012)");
+                Diagnostics.FlowTrace.Step("Tutorial", "SkipControl SHOW (the ONE skip, top-middle, WO-1033)");
             }
         }
 
@@ -96,74 +117,56 @@ namespace DeNelle.Core.UI
             var canvas = gameObject.AddComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
             canvas.sortingOrder = CanvasSortOrder;
-            gameObject.AddComponent<CanvasScaler>().uiScaleMode = CanvasScaler.ScaleMode.ConstantPixelSize;
-            gameObject.AddComponent<GraphicRaycaster>();   // only the pad raycasts
+            // Same scaler contract as HudAreasHost, so "reference px" means the same
+            // thing here as it does for every other kit widget (MinTouchPx included).
+            var scaler = gameObject.AddComponent<CanvasScaler>();
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.referenceResolution = new Vector2(1080f, 1920f);
+            scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
+            scaler.matchWidthOrHeight = 0.5f;
+            gameObject.AddComponent<GraphicRaycaster>();   // only the kit button raycasts
             _group = gameObject.AddComponent<CanvasGroup>();
             _group.alpha = 0f;
             _group.blocksRaycasts = false;
             _group.interactable = false;
 
-            // Invisible MinTouchPx hit pad (padding-never-growth rule) with the small
-            // visible face centred inside it.
-            _padHost = new GameObject("SkipPad", typeof(RectTransform), typeof(Image), typeof(Button));
-            _padHost.transform.SetParent(transform, false);
-            var prt = (RectTransform)_padHost.transform;
-            prt.anchorMin = prt.anchorMax = AnchorFraction;
-            prt.pivot = new Vector2(1f, 1f);
-            prt.anchoredPosition = new Vector2(-6f, -2f);
-            prt.sizeDelta = new Vector2(ElarionUiKit.MinTouchPx, ElarionUiKit.MinTouchPx);
-            var padImg = _padHost.GetComponent<Image>();
-            padImg.color = new Color(0f, 0f, 0f, 0f);   // invisible, still raycastable
-            var btn = _padHost.GetComponent<Button>();
-            btn.targetGraphic = padImg;
-            btn.onClick.AddListener(OnSkipTapped);
+            // Fixed-PIXEL mount band, anchored TOP-CENTRE by fraction (see header).
+            var mountGo = new GameObject("SkipMount", typeof(RectTransform));
+            mountGo.transform.SetParent(transform, false);
+            _mount = (RectTransform)mountGo.transform;
+            _mount.anchorMin = _mount.anchorMax = new Vector2(0.5f, StatusCrownBottomFraction);
+            _mount.pivot = new Vector2(0.5f, 1f);
+            _mount.sizeDelta = new Vector2(SkipWidthPx, ElarionUiKit.MinTouchPx);
+            _mount.anchoredPosition = new Vector2(0f, -CrownGapPx);
 
-            // The quiet visible face — obsidian plate, thin gold edge, "Skip" label.
-            var face = new GameObject("Face", typeof(RectTransform), typeof(Image));
-            face.transform.SetParent(prt, false);
-            var frt = (RectTransform)face.transform;
-            frt.anchorMin = frt.anchorMax = new Vector2(0.5f, 0.5f);
-            frt.pivot = new Vector2(0.5f, 0.5f);
-            frt.sizeDelta = new Vector2(FaceWidth, FaceHeight);
-            var faceImg = face.GetComponent<Image>();
-            faceImg.color = new Color(ElarionUiKit.ObsidianFill.r, ElarionUiKit.ObsidianFill.g,
-                                      ElarionUiKit.ObsidianFill.b, 0.80f);
-            faceImg.raycastTarget = false;
-
-            var edge = new GameObject("Edge", typeof(RectTransform), typeof(Image));
-            edge.transform.SetParent(frt, false);
-            var ert = (RectTransform)edge.transform;
-            ert.anchorMin = new Vector2(0f, 0f);
-            ert.anchorMax = new Vector2(1f, 0f);
-            ert.pivot = new Vector2(0.5f, 0f);
-            ert.sizeDelta = new Vector2(0f, 2f);
-            var eimg = edge.GetComponent<Image>();
-            eimg.color = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.55f);
-            eimg.raycastTarget = false;
-
-            var labelGo = new GameObject("Label", typeof(RectTransform));
-            labelGo.transform.SetParent(frt, false);
-            var lrt = (RectTransform)labelGo.transform;
-            lrt.anchorMin = Vector2.zero;
-            lrt.anchorMax = Vector2.one;
-            lrt.offsetMin = Vector2.zero;
-            lrt.offsetMax = Vector2.zero;
-            var label = labelGo.AddComponent<TextMeshProUGUI>();
-            ElarionUiKit.EnsureFont(label);
-            label.fontSize = 14f;
-            label.color = ElarionUi.ParchmentDim;
-            label.alignment = TextAlignmentOptions.Center;
-            label.text = "Skip";   // ASCII only
-            label.raycastTarget = false;
+            // THE common Obsidian button — quiet grey face, never the gold/primary face
+            // (WO-1033 §2: a loud Skip invites accidental tutorial loss). Emphasis is
+            // carried by the frame + the position, never by hue (colourblind law).
+            _button = ElarionUiKit.BuildObsidianButton(_mount, "Skip Tutorial",
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
+                Vector2.zero, Vector2.one, OnSkipTapped);
+            if (_button == null)
+            {
+                Diagnostics.FlowTrace.Fail("Tutorial",
+                    "SkipControl BUILD FAILED - ElarionUiKit.BuildObsidianButton returned no button; " +
+                    "the FTUE has no skip affordance this session");
+                return;
+            }
+            _button.gameObject.name = "SkipTutorialButton";
+            Diagnostics.FlowTrace.Step("Tutorial",
+                "SkipControl BUILT (WO-1033) kit=BuildObsidianButton(Style1,Gray) anchor=top-middle " +
+                "fracXY=(0.500," + StatusCrownBottomFraction.ToString("0.000") + ") size=" +
+                SkipWidthPx.ToString("0") + "x" + ElarionUiKit.MinTouchPx.ToString("0") + "px");
         }
 
-        /// <summary>The corner control's tap: raise the ONE confirm sheet. Never skips
+        /// <summary>The top-middle control's tap: raise the ONE confirm sheet. Never skips
         /// on the bare tap; a second tap while the sheet is open is a no-op.</summary>
         private void OnSkipTapped()
         {
             if (_onConfirmedSkipAll == null) return;
             if (_confirm != null && _confirm.canvas != null) return;   // sheet already up
-            Diagnostics.FlowTrace.Step("Tutorial", "SkipControl tapped — raising the confirm sheet");
+            Diagnostics.FlowTrace.Step("Tutorial",
+                "SkipControl TAPPED (top-middle kit button) - raising the confirm sheet");
             _confirmTouchFloorApplied = false;
             _confirm = ElarionUiKit.BuildConfirmModal(
                 "SkipTutorialConfirm",
@@ -173,14 +176,14 @@ namespace DeNelle.Core.UI
                 "Keep Playing",
                 onConfirm: () =>
                 {
-                    Diagnostics.FlowTrace.Step("Tutorial", "SkipControl CONFIRMED — invoking skip-all");
+                    Diagnostics.FlowTrace.Step("Tutorial", "SkipControl CONFIRMED - invoking skip-all");
                     var act = _onConfirmedSkipAll;
                     CloseConfirm();
                     act?.Invoke();
                 },
                 onCancel: () =>
                 {
-                    Diagnostics.FlowTrace.Step("Tutorial", "SkipControl declined — resuming the walkthrough");
+                    Diagnostics.FlowTrace.Step("Tutorial", "SkipControl declined - resuming the walkthrough");
                     CloseConfirm();
                 });
         }
