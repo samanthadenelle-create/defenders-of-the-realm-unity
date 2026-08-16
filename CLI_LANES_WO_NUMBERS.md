@@ -1054,6 +1054,19 @@
 > doc"* — and the copy was **inside the numbering authority itself**. A duplicate cannot be kept honest
 > by discipline; it can only be removed. **The header is the sole source. Do not restore numbers here.**
 >
+> *(UI-seat bumped 1026 -> 1030 in the SAME edit as the WO-1026/1027/1028/1029 mints — the owner's
+> **CoC + WC3 design review**, full analysis in `docs/DESIGN_REVIEW_COC_WC3_LENS_2026-08-15.md`.
+> VERDICT: both engines are BUILT and NEITHER CLOSES ITS LOOP. **1026** = the base is never attacked, so
+> player-authored layout has ZERO consequence (grep: `RaidDefen*`/`DefenseReport`/`Revenge`/`Trophy` = 0
+> hits) — highest leverage, needs an owner ruling on PvE-siege vs async-PvP vs ghost-PvP first ·
+> **1027** = the queue is mechanically better than CoC's but has no IDLE-BUILDER ACHE and no session
+> shape; surfacing only, cheapest item · **1028** = 4 dungeons are `PathComplete` + torch/oil/darkness
+> ~90% built and there is NO reason to descend and NO payoff that feeds town — largest built-but-parked
+> value in the tree · **1029** = `ClanService` is a self-declared PlayerPrefs stub, `Donat*` = 0 hits;
+> ship DONATIONS not wars, sequenced LAST and BLOCKED on `api/` being PREVIEW-only.
+> ⚠ **WO-910 (31 of 40 dead Ranger/Mage talent nodes) OUTRANKS ALL FOUR and is already open — do NOT
+> re-mint it.** It is the WC3 pillar broken on the very screen WO-1021 is polishing. READY.)*
+>
 > *(UI-seat bumped 1025 -> 1026 in the SAME edit as the WO-1025 mint — owner 2026-08-15: *"these graphics
 > on tree look amatuerish"* (Heart of Elarion, hub centre). ⚠ **THE OBVIOUS DIAGNOSIS IS WRONG:** F8
 > seq=2398 harvest proves BOTH authored loops are WITHHELD at this tree —
