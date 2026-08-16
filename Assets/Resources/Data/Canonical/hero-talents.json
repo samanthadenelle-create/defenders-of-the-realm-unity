@@ -28,8 +28,8 @@
             "type": "damageReduction",
             "value": 0.18
           },
-          "x": 0.12,
-          "y": 0.67,
+          "x": 0.2,
+          "y": 0.68,
           "prerequisites": []
         },
         {
@@ -46,9 +46,11 @@
             "type": "unlockAbility",
             "ability": "knight.thunderbolt"
           },
-          "x": 0.31,
-          "y": 0.67,
-          "prerequisites": []
+          "x": 0.06,
+          "y": 0.52,
+          "prerequisites": [
+            "knight.t1n1"
+          ]
         },
         {
           "id": "knight.t1n3",
@@ -63,9 +65,11 @@
             "type": "blockChance",
             "value": 0.25
           },
-          "x": 0.5,
-          "y": 0.67,
-          "prerequisites": []
+          "x": 0.18,
+          "y": 0.52,
+          "prerequisites": [
+            "knight.t1n1"
+          ]
         },
         {
           "id": "knight.t1n4",
@@ -81,9 +85,11 @@
             "type": "unlockAbility",
             "ability": "knight.mending-salve"
           },
-          "x": 0.69,
-          "y": 0.67,
-          "prerequisites": []
+          "x": 0.3,
+          "y": 0.52,
+          "prerequisites": [
+            "knight.t1n1"
+          ]
         },
         {
           "id": "knight.t1n5",
@@ -99,9 +105,11 @@
             "type": "unlockAbility",
             "ability": "knight.ranged-poke"
           },
-          "x": 0.88,
-          "y": 0.67,
-          "prerequisites": []
+          "x": 0.42,
+          "y": 0.52,
+          "prerequisites": [
+            "knight.t1n1"
+          ]
         },
         {
           "id": "knight.t2n1",
@@ -117,10 +125,10 @@
             "type": "unlockAbility",
             "ability": "knight.shield-bash"
           },
-          "x": 0.12,
-          "y": 0.46,
+          "x": 0.27,
+          "y": 0.36,
           "prerequisites": [
-            "knight.t1n1"
+            "knight.t1n3"
           ]
         },
         {
@@ -137,8 +145,8 @@
             "type": "unlockAbility",
             "ability": "knight.emberbrand-throw"
           },
-          "x": 0.31,
-          "y": 0.46,
+          "x": 0.05,
+          "y": 0.36,
           "prerequisites": [
             "knight.t1n2"
           ]
@@ -157,8 +165,8 @@
             "type": "unlockAbility",
             "ability": "knight.wardens-roar"
           },
-          "x": 0.5,
-          "y": 0.46,
+          "x": 0.38,
+          "y": 0.36,
           "prerequisites": [
             "knight.t1n3"
           ]
@@ -177,10 +185,10 @@
             "type": "unlockAbility",
             "ability": "knight.snare-arrow"
           },
-          "x": 0.69,
-          "y": 0.46,
+          "x": 0.6,
+          "y": 0.36,
           "prerequisites": [
-            "knight.t1n4"
+            "knight.t1n5"
           ]
         },
         {
@@ -196,10 +204,10 @@
             "type": "defense",
             "value": 0.3
           },
-          "x": 0.88,
-          "y": 0.46,
+          "x": 0.49,
+          "y": 0.36,
           "prerequisites": [
-            "knight.t1n5"
+            "knight.t1n3"
           ]
         },
         {
@@ -216,10 +224,10 @@
             "type": "unlockAbility",
             "ability": "knight.suppressing-volley"
           },
-          "x": 0.12,
-          "y": 0.25,
+          "x": 0.06,
+          "y": 0.2,
           "prerequisites": [
-            "knight.t2n1"
+            "knight.t2n2"
           ]
         },
         {
@@ -236,10 +244,10 @@
             "type": "unlockAbility",
             "ability": "knight.oathmend"
           },
-          "x": 0.31,
-          "y": 0.25,
+          "x": 0.19,
+          "y": 0.2,
           "prerequisites": [
-            "knight.t2n2"
+            "knight.t1n4"
           ]
         },
         {
@@ -255,10 +263,10 @@
             "type": "defense",
             "value": 0.35
           },
-          "x": 0.5,
-          "y": 0.25,
+          "x": 0.32,
+          "y": 0.2,
           "prerequisites": [
-            "knight.t2n3"
+            "knight.t2n5"
           ]
         },
         {
@@ -275,10 +283,10 @@
             "value": 0.3,
             "note": "(reflect \u2014 wired WO-566; re-described WO-676 strategic wording)"
           },
-          "x": 0.69,
-          "y": 0.25,
+          "x": 0.45,
+          "y": 0.2,
           "prerequisites": [
-            "knight.t2n4"
+            "knight.t2n3"
           ]
         },
         {
@@ -295,10 +303,10 @@
             "type": "unlockAbility",
             "ability": "knight.sweeping-cut"
           },
-          "x": 0.88,
-          "y": 0.25,
+          "x": 0.58,
+          "y": 0.2,
           "prerequisites": [
-            "knight.t2n5"
+            "knight.t2n4"
           ]
         },
         {
@@ -315,10 +323,10 @@
             "type": "unlockAbility",
             "ability": "knight.eternal-aegis"
           },
-          "x": 0.12,
+          "x": 0.06,
           "y": 0.04,
           "prerequisites": [
-            "knight.t3n1"
+            "knight.t3n3"
           ]
         },
         {
@@ -335,7 +343,7 @@
             "type": "unlockAbility",
             "ability": "knight.second-wind"
           },
-          "x": 0.31,
+          "x": 0.19,
           "y": 0.04,
           "prerequisites": [
             "knight.t3n2"
@@ -359,10 +367,10 @@
             "cooldown": 120,
             "note": "(laststand low-HP \u2014 wired WO-566)"
           },
-          "x": 0.5,
+          "x": 0.32,
           "y": 0.04,
           "prerequisites": [
-            "knight.t3n3"
+            "knight.t3n4"
           ]
         },
         {
@@ -381,7 +389,7 @@
             "duration": 4,
             "note": "(taunt-burn \u2014 WIRED WO-676: HeroAbilities.ResolveTaunt applies Burn + BurnDoT per held foe)"
           },
-          "x": 0.69,
+          "x": 0.45,
           "y": 0.04,
           "prerequisites": [
             "knight.t3n4"
@@ -401,7 +409,7 @@
             "type": "unlockAbility",
             "ability": "knight.champions-combo"
           },
-          "x": 0.88,
+          "x": 0.58,
           "y": 0.04,
           "prerequisites": [
             "knight.t3n5"
@@ -426,6 +434,8 @@
             "targets": 2,
             "note": "(poison rider \u2014 wired WO-676; VFX follow-up: distinct green DRIP trail + drip icon, never color-only)"
           },
+          "x": 0.16,
+          "y": 0.36,
           "prerequisites": [
             "knight.t1n2"
           ]
@@ -444,6 +454,8 @@
             "type": "harvestRate",
             "value": 0.15
           },
+          "x": 0.5,
+          "y": 0.68,
           "prerequisites": []
         },
         {
@@ -460,7 +472,11 @@
             "type": "collectorCap",
             "value": 0.5
           },
-          "prerequisites": []
+          "x": 0.56,
+          "y": 0.52,
+          "prerequisites": [
+            "knight.s1n1"
+          ]
         },
         {
           "id": "knight.s2n1",
@@ -476,8 +492,10 @@
             "type": "repairCost",
             "value": 0.25
           },
+          "x": 0.74,
+          "y": 0.36,
           "prerequisites": [
-            "knight.s1n1"
+            "knight.s1n2"
           ]
         },
         {
@@ -494,6 +512,8 @@
             "type": "buildTime",
             "value": 0.2
           },
+          "x": 0.86,
+          "y": 0.36,
           "prerequisites": [
             "knight.s1n2"
           ]
@@ -512,6 +532,8 @@
             "type": "salvage",
             "value": 0.15
           },
+          "x": 0.74,
+          "y": 0.2,
           "prerequisites": [
             "knight.s2n1"
           ]
@@ -530,6 +552,8 @@
             "type": "waveReward",
             "value": 0.2
           },
+          "x": 0.74,
+          "y": 0.04,
           "prerequisites": [
             "knight.s3n1"
           ]
@@ -548,6 +572,8 @@
             "type": "towerDamage",
             "value": 0.15
           },
+          "x": 0.8,
+          "y": 0.68,
           "prerequisites": []
         },
         {
@@ -565,6 +591,8 @@
             "value": 2,
             "note": "additive METERS, not a fraction"
           },
+          "x": 0.72,
+          "y": 0.52,
           "prerequisites": [
             "knight.b1n1"
           ]
@@ -583,6 +611,8 @@
             "type": "structureToughness",
             "value": 0.2
           },
+          "x": 0.86,
+          "y": 0.52,
           "prerequisites": [
             "knight.b1n1"
           ]
@@ -601,6 +631,8 @@
             "type": "towerAttackSpeed",
             "value": 0.12
           },
+          "x": 0.88,
+          "y": 0.2,
           "prerequisites": [
             "knight.b2n1"
           ]
@@ -620,8 +652,10 @@
             "value": 0.25,
             "note": "(owner pin 4: DEFEND-scoped -25% \u2014 consumer adds this only while WaveManager reports a live wave)"
           },
+          "x": 0.88,
+          "y": 0.04,
           "prerequisites": [
-            "knight.b2n2"
+            "knight.b3n1"
           ]
         }
       ]
@@ -645,6 +679,8 @@
             "type": "attackSpeed",
             "value": 0.25
           },
+          "x": 0.2,
+          "y": 0.64,
           "prerequisites": []
         },
         {
@@ -661,7 +697,11 @@
             "type": "unlockAbility",
             "ability": "ranger.hunters-mark"
           },
-          "prerequisites": []
+          "x": 0.1,
+          "y": 0.44,
+          "prerequisites": [
+            "ranger.t1n1"
+          ]
         },
         {
           "id": "ranger.t1n3",
@@ -678,6 +718,8 @@
             "ability": "ranger.tumble-step",
             "note": "(NEW ability \u2014 stub)"
           },
+          "x": 0.8,
+          "y": 0.64,
           "prerequisites": []
         },
         {
@@ -693,6 +735,8 @@
             "type": "healthRegen",
             "value": 0.2
           },
+          "x": 0.5,
+          "y": 0.64,
           "prerequisites": []
         },
         {
@@ -710,7 +754,11 @@
             "ability": "ranger.multishot",
             "note": "(NEW ability \u2014 stub)"
           },
-          "prerequisites": []
+          "x": 0.26,
+          "y": 0.44,
+          "prerequisites": [
+            "ranger.t1n1"
+          ]
         },
         {
           "id": "ranger.t2n1",
@@ -725,8 +773,10 @@
             "type": "moveSpeed",
             "value": 0.3
           },
+          "x": 0.66,
+          "y": 0.44,
           "prerequisites": [
-            "ranger.t1n1"
+            "ranger.t1n3"
           ]
         },
         {
@@ -747,6 +797,8 @@
             "targets": 2,
             "note": "buffs the ranger_arrow_poison ammoEffect rider (base 5 dps / 6s / x2)"
           },
+          "x": 0.08,
+          "y": 0.24,
           "prerequisites": [
             "ranger.t1n2"
           ]
@@ -764,8 +816,10 @@
             "type": "critChance",
             "value": 0.15
           },
+          "x": 0.42,
+          "y": 0.44,
           "prerequisites": [
-            "ranger.t1n3"
+            "ranger.t1n1"
           ]
         },
         {
@@ -785,8 +839,10 @@
             "duration": 4,
             "note": "buffs the ranger_arrow_frost ammoEffect rider (base -35% / 2.5s); NO rider consumer for a slow yet"
           },
+          "x": 0.22,
+          "y": 0.24,
           "prerequisites": [
-            "ranger.t1n4"
+            "ranger.t1n5"
           ]
         },
         {
@@ -803,8 +859,10 @@
             "duration": 2,
             "note": "(V2)"
           },
+          "x": 0.84,
+          "y": 0.44,
           "prerequisites": [
-            "ranger.t1n5"
+            "ranger.t1n3"
           ]
         },
         {
@@ -823,8 +881,10 @@
             "value": 0.3,
             "note": "read by HeroTalentModifiers.HealAmountMultiplier (stat==heal)"
           },
+          "x": 0.52,
+          "y": 0.24,
           "prerequisites": [
-            "ranger.t2n1"
+            "ranger.t1n4"
           ]
         },
         {
@@ -844,6 +904,8 @@
             "duration": 6,
             "note": "buffs the ranger_arrow_fire ammoEffect rider (base 6 dps / 4s)"
           },
+          "x": 0.08,
+          "y": 0.04,
           "prerequisites": [
             "ranger.t2n2"
           ]
@@ -862,8 +924,10 @@
             "value": 0.35,
             "duration": 3
           },
+          "x": 0.84,
+          "y": 0.24,
           "prerequisites": [
-            "ranger.t2n3"
+            "ranger.t2n1"
           ]
         },
         {
@@ -881,8 +945,10 @@
             "cooldown": 60,
             "note": "(summon \u2014 V2)"
           },
+          "x": 0.66,
+          "y": 0.24,
           "prerequisites": [
-            "ranger.t2n4"
+            "ranger.t1n4"
           ]
         },
         {
@@ -900,8 +966,10 @@
             "ability": "ranger.precision-strike",
             "note": "(NEW ability \u2014 stub)"
           },
+          "x": 0.36,
+          "y": 0.24,
           "prerequisites": [
-            "ranger.t2n5"
+            "ranger.t2n3"
           ]
         },
         {
@@ -919,8 +987,10 @@
             "ability": "ranger.storm-of-arrows",
             "note": "(NEW ability \u2014 stub)"
           },
+          "x": 0.36,
+          "y": 0.04,
           "prerequisites": [
-            "ranger.t3n1"
+            "ranger.t3n5"
           ]
         },
         {
@@ -936,8 +1006,10 @@
             "type": "moveSpeed",
             "value": 0.45
           },
+          "x": 0.7,
+          "y": 0.04,
           "prerequisites": [
-            "ranger.t3n2"
+            "ranger.t3n3"
           ]
         },
         {
@@ -954,8 +1026,10 @@
             "value": 0.5,
             "note": "(proc \u2014 V2)"
           },
+          "x": 0.86,
+          "y": 0.04,
           "prerequisites": [
-            "ranger.t3n3"
+            "ranger.t2n5"
           ]
         },
         {
@@ -973,6 +1047,8 @@
             "duration": 5,
             "note": "(dot \u2014 V2)"
           },
+          "x": 0.52,
+          "y": 0.04,
           "prerequisites": [
             "ranger.t3n4"
           ]
@@ -990,8 +1066,10 @@
             "type": "modifyAbility",
             "note": "pierce/chain (V2)"
           },
+          "x": 0.22,
+          "y": 0.04,
           "prerequisites": [
-            "ranger.t3n5"
+            "ranger.t2n4"
           ]
         }
       ]
@@ -1015,6 +1093,8 @@
             "type": "damageBonus",
             "value": 0.2
           },
+          "x": 0.2,
+          "y": 0.64,
           "prerequisites": []
         },
         {
@@ -1030,6 +1110,8 @@
             "type": "manaRegen",
             "value": 0.25
           },
+          "x": 0.5,
+          "y": 0.64,
           "prerequisites": []
         },
         {
@@ -1045,6 +1127,8 @@
             "type": "maxHpPct",
             "value": 0.2
           },
+          "x": 0.8,
+          "y": 0.64,
           "prerequisites": []
         },
         {
@@ -1060,7 +1144,11 @@
             "type": "cdReduction",
             "value": 0.15
           },
-          "prerequisites": []
+          "x": 0.06,
+          "y": 0.44,
+          "prerequisites": [
+            "mage.t1n1"
+          ]
         },
         {
           "id": "mage.t1n5",
@@ -1076,7 +1164,11 @@
             "ability": "mage.arcane-bolt",
             "note": "chain (V2)"
           },
-          "prerequisites": []
+          "x": 0.18,
+          "y": 0.44,
+          "prerequisites": [
+            "mage.t1n1"
+          ]
         },
         {
           "id": "mage.t2n1",
@@ -1092,8 +1184,10 @@
             "value": 3,
             "note": "onKill mana (V2)"
           },
+          "x": 0.48,
+          "y": 0.44,
           "prerequisites": [
-            "mage.t1n1"
+            "mage.t1n2"
           ]
         },
         {
@@ -1111,6 +1205,8 @@
             "ability": "mage.manaweave",
             "note": "A1 mana-recovery active; also granted by Cathedral of Magic tier 3"
           },
+          "x": 0.62,
+          "y": 0.44,
           "prerequisites": [
             "mage.t1n2"
           ]
@@ -1131,6 +1227,8 @@
             "duration": 2,
             "note": "no shieldStrength consumer yet (V2)"
           },
+          "x": 0.84,
+          "y": 0.44,
           "prerequisites": [
             "mage.t1n3"
           ]
@@ -1150,8 +1248,10 @@
             "value": 0.35,
             "note": "(V2)"
           },
+          "x": 0.3,
+          "y": 0.44,
           "prerequisites": [
-            "mage.t1n4"
+            "mage.t1n1"
           ]
         },
         {
@@ -1170,8 +1270,10 @@
             "ability": "mage.blink",
             "note": "unlock rides kind=skill+abilityId; the effect payload carries the A1 +15% HP"
           },
+          "x": 0.84,
+          "y": 0.24,
           "prerequisites": [
-            "mage.t1n5"
+            "mage.t2n3"
           ]
         },
         {
@@ -1189,8 +1291,10 @@
             "value": 0.6,
             "note": "(V2)"
           },
+          "x": 0.06,
+          "y": 0.24,
           "prerequisites": [
-            "mage.t2n1"
+            "mage.t2n4"
           ]
         },
         {
@@ -1207,6 +1311,8 @@
             "chance": 0.25,
             "note": "duplicate (V2)"
           },
+          "x": 0.64,
+          "y": 0.24,
           "prerequisites": [
             "mage.t2n2"
           ]
@@ -1224,8 +1330,10 @@
             "type": "manaCostReduction",
             "value": 0.3
           },
+          "x": 0.5,
+          "y": 0.24,
           "prerequisites": [
-            "mage.t2n3"
+            "mage.t2n1"
           ]
         },
         {
@@ -1244,8 +1352,10 @@
             "cooldown": 45,
             "note": "temp buff (V2)"
           },
+          "x": 0.2,
+          "y": 0.24,
           "prerequisites": [
-            "mage.t2n4"
+            "mage.t1n4"
           ]
         },
         {
@@ -1263,8 +1373,10 @@
             "ability": "mage.void-rift",
             "note": "(NEW ability \u2014 stub)"
           },
+          "x": 0.34,
+          "y": 0.24,
           "prerequisites": [
-            "mage.t2n5"
+            "mage.t1n5"
           ]
         },
         {
@@ -1282,6 +1394,8 @@
             "ability": "mage.cataclysm",
             "note": "(NEW ability \u2014 stub)"
           },
+          "x": 0.08,
+          "y": 0.04,
           "prerequisites": [
             "mage.t3n1"
           ]
@@ -1300,8 +1414,10 @@
             "value": 0.25,
             "note": "(V2)"
           },
+          "x": 0.24,
+          "y": 0.04,
           "prerequisites": [
-            "mage.t3n2"
+            "mage.t3n4"
           ]
         },
         {
@@ -1318,6 +1434,8 @@
             "value": 0.4,
             "note": "+40% mana regen (V2)"
           },
+          "x": 0.56,
+          "y": 0.04,
           "prerequisites": [
             "mage.t3n3"
           ]
@@ -1338,8 +1456,10 @@
             "cooldown": 40,
             "note": "dot zone (V2)"
           },
+          "x": 0.4,
+          "y": 0.04,
           "prerequisites": [
-            "mage.t3n4"
+            "mage.t3n5"
           ]
         },
         {
@@ -1356,8 +1476,10 @@
             "chance": 0.2,
             "note": "duplicate (V2)"
           },
+          "x": 0.72,
+          "y": 0.04,
           "prerequisites": [
-            "mage.t3n5"
+            "mage.t3n2"
           ]
         }
       ]
@@ -1379,7 +1501,9 @@
       },
       "x": 0.38,
       "y": 0.87,
-      "prerequisites": ["shared.n10"]
+      "prerequisites": [
+        "shared.n10"
+      ]
     },
     {
       "id": "shared.n2",
@@ -1396,7 +1520,9 @@
       },
       "x": 0.85,
       "y": 0.87,
-      "prerequisites": ["shared.n11"]
+      "prerequisites": [
+        "shared.n11"
+      ]
     },
     {
       "id": "shared.n3",
@@ -1415,7 +1541,9 @@
       },
       "x": 0.85,
       "y": 0.76,
-      "prerequisites": ["shared.n2"]
+      "prerequisites": [
+        "shared.n2"
+      ]
     },
     {
       "id": "shared.n4",
@@ -1434,7 +1562,9 @@
       },
       "x": 0.15,
       "y": 0.76,
-      "prerequisites": ["shared.n5"]
+      "prerequisites": [
+        "shared.n5"
+      ]
     },
     {
       "id": "shared.n5",
@@ -1451,7 +1581,9 @@
       },
       "x": 0.15,
       "y": 0.87,
-      "prerequisites": ["shared.n9"]
+      "prerequisites": [
+        "shared.n9"
+      ]
     },
     {
       "id": "shared.n6",
@@ -1469,7 +1601,9 @@
       },
       "x": 0.38,
       "y": 0.76,
-      "prerequisites": ["shared.n1"]
+      "prerequisites": [
+        "shared.n1"
+      ]
     },
     {
       "id": "shared.n7",
@@ -1487,7 +1621,9 @@
       },
       "x": 0.62,
       "y": 0.87,
-      "prerequisites": ["shared.n10"]
+      "prerequisites": [
+        "shared.n10"
+      ]
     },
     {
       "id": "shared.n8",
@@ -1504,7 +1640,9 @@
       },
       "x": 0.62,
       "y": 0.76,
-      "prerequisites": ["shared.n7"]
+      "prerequisites": [
+        "shared.n7"
+      ]
     },
     {
       "id": "shared.n9",
@@ -1561,5 +1699,5 @@
       "prerequisites": []
     }
   ],
-  "notes": "v2 + WO-676 \u2014 83 nodes (knight 32 = WAR 21 + STEWARD 6 + BULWARK 5; ranger/mage 20 each; shared 11). Tier costs 1/2/3/5 Wisdom; shared nodes 2 each (skill trio 1). Prereq = same-slot tier below / same-branch chain. V1 wires KNIGHT effects only (HeroTalentModifiers); mage/ranger stored as data+icons. NOTE: tier4 capstone exclusivity (one per hero) now spans branches \u2014 Bountiful Banners / Warden of Elarion compete with the five WAR capstones, which IS the strategic 'what kind of lord am I' choice (WO-676 law 2). Owner-open: Wisdom curve, shared-pool cap \u2014 see TALENT_ICON_ATLAS_SPEC_2026-06-27 \u00a77."
+  "notes": "v2 + WO-676 + 2026-08-16 SHAPE LAW (owner ruling): every tree starts from AT MOST THREE simple bases on the bottom row and branches WIDER as it rises - simple at the base, the path fork in the middle, specialised leaves on top. 83 nodes (knight 32 = WAR 21 + STEWARD 6 + BULWARK 5, five rows 3/7/8/7/7; ranger 20 and mage 20, four rows each - ranger 3/5/6/6, mage 3/6/6/5; shared 11 in three rows 3/4/4). Node ids, names, tiers, slots, costs, icons and effects are UNCHANGED - the reshape moved x/y and re-pointed prerequisites ONLY, so no save-side unlock is orphaned. x/y are an ORDERING HINT consumed by HeroSkillTreePanelMvvm.SolveGraphLatticePx, not shipped geometry; y ascends downward, so a prerequisite ALWAYS carries a LARGER y than its child. Tier costs 1/2/3/5 Wisdom; shared nodes 2 each (skill trio 1). V1 wires KNIGHT effects only (HeroTalentModifiers); mage/ranger stored as data+icons. Tier4 capstone exclusivity (one per hero) spans branches - Bountiful Banners / Warden of Elarion compete with the five WAR capstones (WO-676 law 2). Owner-open: Wisdom curve, shared-pool cap - see TALENT_ICON_ATLAS_SPEC_2026-06-27 sec.7."
 }
