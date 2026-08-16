@@ -1,0 +1,589 @@
+{
+  "version": 1,
+  "sourceRoot": "Assets/Blink/Art/Icons",
+  "destRoot": "Assets/Resources/Talents",
+  "note": "iconPath in hero-talents.json stays Talents/<folder>/<file> (no .png). Re-run tools/apply_talent_icon_map.py after remapping.",
+  "skills": [
+    {
+      "id": "knight.t1n1",
+      "name": "Iron Resolve",
+      "iconPath": "Talents/knight/knight_01",
+      "blinkSource": "Classes/Warrior/Guardian/Guardian1.png",
+      "why": "armored shield stance \u2014 passive DR"
+    },
+    {
+      "id": "knight.t1n2",
+      "name": "Thunderbolt",
+      "iconPath": "Talents/knight/knight_02",
+      "blinkSource": "Classes/Elementalist/Electromancer/Electromancer1.png",
+      "why": "lightning bolt ranged"
+    },
+    {
+      "id": "knight.t1n3",
+      "name": "Guardian Stance",
+      "iconPath": "Talents/knight/knight_03",
+      "blinkSource": "Classes/Warrior/Guardian/Guardian6.png",
+      "why": "shield emblem \u2014 block chance"
+    },
+    {
+      "id": "knight.t1n4",
+      "name": "Mending Salve",
+      "iconPath": "Talents/knight/knight_04",
+      "blinkSource": "Classes/HolyDarkness/Priest/Priest4.png",
+      "why": "holy tablet / heal ritual"
+    },
+    {
+      "id": "knight.t1n5",
+      "name": "Throwing Spear",
+      "iconPath": "Talents/knight/knight_05",
+      "blinkSource": "Classes/Assassin/Ranger/Ranger8.png",
+      "why": "flying projectile spear/arrow"
+    },
+    {
+      "id": "knight.t2n1",
+      "name": "Shield Slam",
+      "iconPath": "Talents/knight/knight_06",
+      "blinkSource": "Classes/Warrior/Guardian/Guardian2.png",
+      "why": "spiked shield bash"
+    },
+    {
+      "id": "knight.t2n2",
+      "name": "Emberbrand Throw",
+      "iconPath": "Talents/knight/knight_07",
+      "blinkSource": "Classes/Elementalist/Pyromancer/Pyromancer1.png",
+      "why": "fire throw / burn"
+    },
+    {
+      "id": "knight.t2n3",
+      "name": "Warden's Roar",
+      "iconPath": "Talents/knight/knight_08",
+      "blinkSource": "Classes/Warrior/Barbarian/Barbarian3.png",
+      "why": "war cry / taunt energy"
+    },
+    {
+      "id": "knight.t2n4",
+      "name": "Pinning Spear",
+      "iconPath": "Talents/knight/knight_09",
+      "blinkSource": "Classes/Assassin/Hunter/Hunter8.png",
+      "why": "hunting spear / pin"
+    },
+    {
+      "id": "knight.t2n5",
+      "name": "Bulwark",
+      "iconPath": "Talents/knight/knight_10",
+      "blinkSource": "Classes/Warrior/Guardian/Guardian10.png",
+      "why": "heavy defense plate"
+    },
+    {
+      "id": "knight.t3n1",
+      "name": "Suppressing Volley",
+      "iconPath": "Talents/knight/knight_11",
+      "blinkSource": "Classes/Warrior/Guardian/Guardian5.png",
+      "why": "shield bristling with projectiles"
+    },
+    {
+      "id": "knight.t3n2",
+      "name": "Oathmend",
+      "iconPath": "Talents/knight/knight_12",
+      "blinkSource": "Classes/HolyDarkness/Priest/Priest2.png",
+      "why": "holy mend over time"
+    },
+    {
+      "id": "knight.t3n3",
+      "name": "Legendary Vanguard",
+      "iconPath": "Talents/knight/knight_13",
+      "blinkSource": "Classes/HolyDarkness/Paladin/Paladin2.png",
+      "why": "gold-lit knight helm \u2014 elite tank"
+    },
+    {
+      "id": "knight.t3n4",
+      "name": "Retaliation Surge",
+      "iconPath": "Talents/knight/knight_14",
+      "blinkSource": "Classes/Warrior/Guardian/Guardian8.png",
+      "why": "broken shield rebound / reflect"
+    },
+    {
+      "id": "knight.t3n5",
+      "name": "Sweeping Cut",
+      "iconPath": "Talents/knight/knight_15",
+      "blinkSource": "Classes/Warrior/Barbarian/Barbarian1.png",
+      "why": "wide melee arc"
+    },
+    {
+      "id": "knight.t4n1",
+      "name": "Eternal Aegis",
+      "iconPath": "Talents/knight/knight_16",
+      "blinkSource": "Classes/Warrior/Guardian/Guardian4.png",
+      "why": "party bubble / full invuln"
+    },
+    {
+      "id": "knight.t4n2",
+      "name": "Second Wind",
+      "iconPath": "Talents/knight/knight_17",
+      "blinkSource": "Classes/HolyDarkness/Priest/Priest1.png",
+      "why": "self restore"
+    },
+    {
+      "id": "knight.t4n3",
+      "name": "Last Stand",
+      "iconPath": "Talents/knight/knight_18",
+      "blinkSource": "Classes/Warrior/Guardian/Guardian7.png",
+      "why": "kneeling last stand silhouette"
+    },
+    {
+      "id": "knight.t4n4",
+      "name": "Holy Retribution",
+      "iconPath": "Talents/knight/knight_19",
+      "blinkSource": "Classes/HolyDarkness/Paladin/Paladin5.png",
+      "why": "holy fire retribution"
+    },
+    {
+      "id": "knight.t4n5",
+      "name": "Champion's Combo",
+      "iconPath": "Talents/knight/knight_20",
+      "blinkSource": "Classes/Warrior/Berserker/Berserker4.png",
+      "why": "flurry / multi-hit"
+    },
+    {
+      "id": "knight.t2n6",
+      "name": "Venombrand",
+      "iconPath": "Talents/knight/knight_21",
+      "blinkSource": "Classes/Assassin/Rogue/Rogue7.png",
+      "why": "venom / poison on weapons"
+    },
+    {
+      "id": "knight.s1n1",
+      "name": "Provider's Bond",
+      "iconPath": "Talents/knight/knight_22",
+      "blinkSource": "Classes/Symbiose/Druid/Druid3.png",
+      "why": "growth / harvest bond"
+    },
+    {
+      "id": "knight.s1n2",
+      "name": "Deep Reserves",
+      "iconPath": "Talents/knight/knight_23",
+      "blinkSource": "Classes/Symbiose/Enchanter/Enchanter5.png",
+      "why": "stockpile / capacity"
+    },
+    {
+      "id": "knight.s2n1",
+      "name": "Master Mason",
+      "iconPath": "Talents/knight/knight_24",
+      "blinkSource": "Classes/Elementalist/Geomancer/Geomancer2.png",
+      "why": "stone / repair craft"
+    },
+    {
+      "id": "knight.s2n2",
+      "name": "Foreman's Pace",
+      "iconPath": "Talents/knight/knight_25",
+      "blinkSource": "Classes/Symbiose/Enchanter/Enchanter2.png",
+      "why": "speed craft / haste work"
+    },
+    {
+      "id": "knight.s3n1",
+      "name": "Salvager",
+      "iconPath": "Talents/knight/knight_26",
+      "blinkSource": "Classes/Symbiose/Enchanter/Enchanter8.png",
+      "why": "reclaim / salvage materials"
+    },
+    {
+      "id": "knight.s4n1",
+      "name": "Bountiful Banners",
+      "iconPath": "Talents/knight/knight_27",
+      "blinkSource": "Classes/HolyDarkness/Paladin/Paladin8.png",
+      "why": "banner / wave bounty"
+    },
+    {
+      "id": "knight.b1n1",
+      "name": "Keen Ballistics",
+      "iconPath": "Talents/knight/knight_28",
+      "blinkSource": "Classes/Assassin/Hunter/Hunter2.png",
+      "why": "aimed projectile damage"
+    },
+    {
+      "id": "knight.b2n1",
+      "name": "Farsight Emplacements",
+      "iconPath": "Talents/knight/knight_29",
+      "blinkSource": "Classes/Assassin/Hunter/Hunter5.png",
+      "why": "range / sight"
+    },
+    {
+      "id": "knight.b2n2",
+      "name": "Hardened Ramparts",
+      "iconPath": "Talents/knight/knight_30",
+      "blinkSource": "Classes/Warrior/Guardian/Guardian12.png",
+      "why": "wall fortification"
+    },
+    {
+      "id": "knight.b3n1",
+      "name": "Standing Orders",
+      "iconPath": "Talents/knight/knight_31",
+      "blinkSource": "Classes/Warrior/Dragonknight/Dragonknight3.png",
+      "why": "command / fire rate"
+    },
+    {
+      "id": "knight.b4n1",
+      "name": "Warden of Elarion",
+      "iconPath": "Talents/knight/knight_32",
+      "blinkSource": "Classes/HolyDarkness/Paladin/Paladin10.png",
+      "why": "village-wide defense aura"
+    },
+    {
+      "id": "ranger.t1n1",
+      "name": "Quick Draw",
+      "iconPath": "Talents/ranger/ranger_01",
+      "blinkSource": "Classes/Assassin/Ranger/Ranger4.png",
+      "why": "drawn bow \u2014 attack speed"
+    },
+    {
+      "id": "ranger.t1n2",
+      "name": "Hunter's Mark",
+      "iconPath": "Talents/ranger/ranger_02",
+      "blinkSource": "Classes/Assassin/Hunter/Hunter1.png",
+      "why": "hunter mark / prey tag"
+    },
+    {
+      "id": "ranger.t1n3",
+      "name": "Tumble Step",
+      "iconPath": "Talents/ranger/ranger_03",
+      "blinkSource": "Classes/Assassin/Ranger/Ranger3.png",
+      "why": "diving dodge / tumble"
+    },
+    {
+      "id": "ranger.t1n4",
+      "name": "Nature's Gift",
+      "iconPath": "Talents/ranger/ranger_04",
+      "blinkSource": "Classes/Symbiose/Druid/Druid1.png",
+      "why": "nature regen"
+    },
+    {
+      "id": "ranger.t1n5",
+      "name": "Arrow Storm Prep",
+      "iconPath": "Talents/ranger/ranger_05",
+      "blinkSource": "Classes/Assassin/Ranger/Ranger2.png",
+      "why": "quiver / multishot prep"
+    },
+    {
+      "id": "ranger.t2n1",
+      "name": "Windstrider Boots",
+      "iconPath": "Talents/ranger/ranger_06",
+      "blinkSource": "Classes/Assassin/Rogue/Rogue3.png",
+      "why": "swift feet / move speed"
+    },
+    {
+      "id": "ranger.t2n2",
+      "name": "Venomcraft",
+      "iconPath": "Talents/ranger/ranger_07",
+      "blinkSource": "Classes/Assassin/Rogue/Rogue7.png",
+      "why": "poison craft"
+    },
+    {
+      "id": "ranger.t2n3",
+      "name": "Eagle Vision",
+      "iconPath": "Talents/ranger/ranger_08",
+      "blinkSource": "Classes/Assassin/Hunter/Hunter4.png",
+      "why": "sight / crit range"
+    },
+    {
+      "id": "ranger.t2n4",
+      "name": "Deep Freeze",
+      "iconPath": "Talents/ranger/ranger_09",
+      "blinkSource": "Classes/Elementalist/Cryomancer/Cryomancer2.png",
+      "why": "ice slow arrows"
+    },
+    {
+      "id": "ranger.t2n5",
+      "name": "Shadow Veil",
+      "iconPath": "Talents/ranger/ranger_10",
+      "blinkSource": "Classes/Assassin/Rogue/Rogue1.png",
+      "why": "stealth cloak"
+    },
+    {
+      "id": "ranger.t3n1",
+      "name": "Bloodbound Draw",
+      "iconPath": "Talents/ranger/ranger_11",
+      "blinkSource": "Classes/HolyDarkness/Priest/Priest6.png",
+      "why": "life return / lifesteal heal"
+    },
+    {
+      "id": "ranger.t3n2",
+      "name": "Emberhead",
+      "iconPath": "Talents/ranger/ranger_12",
+      "blinkSource": "Classes/Elementalist/Pyromancer/Pyromancer4.png",
+      "why": "burning arrows"
+    },
+    {
+      "id": "ranger.t3n3",
+      "name": "Leafcloak",
+      "iconPath": "Talents/ranger/ranger_13",
+      "blinkSource": "Classes/Symbiose/Druid/Druid5.png",
+      "why": "leaf / nature dodge"
+    },
+    {
+      "id": "ranger.t3n4",
+      "name": "Beast Companion",
+      "iconPath": "Talents/ranger/ranger_14",
+      "blinkSource": "Classes/Symbiose/Beastmaster/BeastMaster1.png",
+      "why": "summon wolf companion"
+    },
+    {
+      "id": "ranger.t3n5",
+      "name": "Precision Strike",
+      "iconPath": "Talents/ranger/ranger_15",
+      "blinkSource": "Classes/Assassin/Ranger/Ranger1.png",
+      "why": "deadly precision blade/shot"
+    },
+    {
+      "id": "ranger.t4n1",
+      "name": "Storm of Arrows",
+      "iconPath": "Talents/ranger/ranger_16",
+      "blinkSource": "Classes/Assassin/Ranger/Ranger10.png",
+      "why": "arrow rain ult"
+    },
+    {
+      "id": "ranger.t4n2",
+      "name": "Windstrider Legend",
+      "iconPath": "Talents/ranger/ranger_17",
+      "blinkSource": "Classes/Assassin/Ranger/Ranger12.png",
+      "why": "legendary mobility"
+    },
+    {
+      "id": "ranger.t4n3",
+      "name": "Phantom Hunter",
+      "iconPath": "Talents/ranger/ranger_18",
+      "blinkSource": "Classes/Assassin/Ranger/Ranger5.png",
+      "why": "hooded phantom archer"
+    },
+    {
+      "id": "ranger.t4n4",
+      "name": "Nature's Fury",
+      "iconPath": "Talents/ranger/ranger_19",
+      "blinkSource": "Classes/Symbiose/Druid/Druid8.png",
+      "why": "nature DoT fury"
+    },
+    {
+      "id": "ranger.t4n5",
+      "name": "Elarion's Arrow",
+      "iconPath": "Talents/ranger/ranger_20",
+      "blinkSource": "Classes/Assassin/Ranger/Ranger15.png",
+      "why": "pierce / chain arrow"
+    },
+    {
+      "id": "mage.t1n1",
+      "name": "Arcane Focus",
+      "iconPath": "Talents/wizard/wizard_01",
+      "blinkSource": "Classes/Elementalist/Arcanist/Arcanist1.png",
+      "why": "arcane bolt focus"
+    },
+    {
+      "id": "mage.t1n2",
+      "name": "Mana Flow",
+      "iconPath": "Talents/wizard/wizard_02",
+      "blinkSource": "Classes/Elementalist/Arcanist/Arcanist5.png",
+      "why": "mana veins / flow"
+    },
+    {
+      "id": "mage.t1n3",
+      "name": "Warded Flesh",
+      "iconPath": "Talents/wizard/wizard_03",
+      "blinkSource": "Classes/Elementalist/Arcanist/Arcanist3.png",
+      "why": "arcane ward body"
+    },
+    {
+      "id": "mage.t1n4",
+      "name": "Spellweaver",
+      "iconPath": "Talents/wizard/wizard_04",
+      "blinkSource": "Classes/Elementalist/Arcanist/Arcanist2.png",
+      "why": "spell weave / CDR"
+    },
+    {
+      "id": "mage.t1n5",
+      "name": "Rune Binding",
+      "iconPath": "Talents/wizard/wizard_05",
+      "blinkSource": "Classes/Elementalist/Arcanist/Arcanist8.png",
+      "why": "rune chain"
+    },
+    {
+      "id": "mage.t2n1",
+      "name": "Aether Surge",
+      "iconPath": "Talents/wizard/wizard_06",
+      "blinkSource": "Classes/Elementalist/Electromancer/Electromancer4.png",
+      "why": "surge on kill"
+    },
+    {
+      "id": "mage.t2n2",
+      "name": "Manaweave",
+      "iconPath": "Talents/wizard/wizard_07",
+      "blinkSource": "Classes/Elementalist/Arcanist/Arcanist6.png",
+      "why": "draw mana back"
+    },
+    {
+      "id": "mage.t2n3",
+      "name": "Arcane Shield",
+      "iconPath": "Talents/wizard/wizard_08",
+      "blinkSource": "Classes/Elementalist/Arcanist/Arcanist4.png",
+      "why": "arcane shell"
+    },
+    {
+      "id": "mage.t2n4",
+      "name": "Flame Mastery",
+      "iconPath": "Talents/wizard/wizard_09",
+      "blinkSource": "Classes/Elementalist/Pyromancer/Pyromancer3.png",
+      "why": "fire mastery core"
+    },
+    {
+      "id": "mage.t2n5",
+      "name": "Blink Mastery",
+      "iconPath": "Talents/wizard/wizard_10",
+      "blinkSource": "Classes/Elementalist/Arcanist/Arcanist10.png",
+      "why": "blink / teleport weave"
+    },
+    {
+      "id": "mage.t3n1",
+      "name": "Cataclysm Prep",
+      "iconPath": "Talents/wizard/wizard_11",
+      "blinkSource": "Classes/Elementalist/Pyromancer/Pyromancer8.png",
+      "why": "meteor prep radius"
+    },
+    {
+      "id": "mage.t3n2",
+      "name": "Spell Echo",
+      "iconPath": "Talents/wizard/wizard_12",
+      "blinkSource": "Classes/Elementalist/Arcanist/Arcanist12.png",
+      "why": "double cast echo"
+    },
+    {
+      "id": "mage.t3n3",
+      "name": "Aether Form",
+      "iconPath": "Talents/wizard/wizard_13",
+      "blinkSource": "Classes/Elementalist/Arcanist/Arcanist9.png",
+      "why": "aether body / cost cut"
+    },
+    {
+      "id": "mage.t3n4",
+      "name": "Runic Overload",
+      "iconPath": "Talents/wizard/wizard_14",
+      "blinkSource": "Classes/Elementalist/Electromancer/Electromancer8.png",
+      "why": "power overload buff"
+    },
+    {
+      "id": "mage.t3n5",
+      "name": "Void Rift",
+      "iconPath": "Talents/wizard/wizard_15",
+      "blinkSource": "Classes/HolyDarkness/Cultist/Cultist6.png",
+      "why": "void stun zone"
+    },
+    {
+      "id": "mage.t4n1",
+      "name": "Cataclysm",
+      "iconPath": "Talents/wizard/wizard_16",
+      "blinkSource": "Classes/Elementalist/Pyromancer/Pyromancer12.png",
+      "why": "ultimate blast"
+    },
+    {
+      "id": "mage.t4n2",
+      "name": "Aetherweaver Ascension",
+      "iconPath": "Talents/wizard/wizard_17",
+      "blinkSource": "Classes/Elementalist/Arcanist/Arcanist15.png",
+      "why": "ascension spell power"
+    },
+    {
+      "id": "mage.t4n3",
+      "name": "Eternal Arcana",
+      "iconPath": "Talents/wizard/wizard_18",
+      "blinkSource": "Classes/Elementalist/Arcanist/Arcanist18.png",
+      "why": "permanent arcana"
+    },
+    {
+      "id": "mage.t4n4",
+      "name": "Reality Rift",
+      "iconPath": "Talents/wizard/wizard_19",
+      "blinkSource": "Classes/HolyDarkness/Cultist/Cultist10.png",
+      "why": "DoT zone rift"
+    },
+    {
+      "id": "mage.t4n5",
+      "name": "Elarion's Legacy",
+      "iconPath": "Talents/wizard/wizard_20",
+      "blinkSource": "Classes/Elementalist/Arcanist/Arcanist20.png",
+      "why": "legacy auto-recast"
+    },
+    {
+      "id": "shared.n1",
+      "name": "Vitality",
+      "iconPath": "Talents/shared/shared_01",
+      "blinkSource": "Classes/HolyDarkness/Priest/Priest3.png",
+      "why": "max HP vitality"
+    },
+    {
+      "id": "shared.n2",
+      "name": "Resilience",
+      "iconPath": "Talents/shared/shared_02",
+      "blinkSource": "Classes/Warrior/Guardian/Guardian9.png",
+      "why": "damage reduction"
+    },
+    {
+      "id": "shared.n3",
+      "name": "Wisdom Surge",
+      "iconPath": "Talents/shared/shared_03",
+      "blinkSource": "Classes/Elementalist/Arcanist/Arcanist7.png",
+      "why": "wisdom / knowledge surge"
+    },
+    {
+      "id": "shared.n4",
+      "name": "Battle Instinct",
+      "iconPath": "Talents/shared/shared_04",
+      "blinkSource": "Classes/Warrior/Berserker/Berserker2.png",
+      "why": "crit instinct"
+    },
+    {
+      "id": "shared.n5",
+      "name": "Aether Bond",
+      "iconPath": "Talents/shared/shared_05",
+      "blinkSource": "Classes/Elementalist/Arcanist/Arcanist11.png",
+      "why": "mana bond regen"
+    },
+    {
+      "id": "shared.n6",
+      "name": "Legendary Resolve",
+      "iconPath": "Talents/shared/shared_06",
+      "blinkSource": "Classes/HolyDarkness/Paladin/Paladin12.png",
+      "why": "revive / resolve"
+    },
+    {
+      "id": "shared.n7",
+      "name": "Swift Recovery",
+      "iconPath": "Talents/shared/shared_07",
+      "blinkSource": "Classes/HolyDarkness/Priest/Priest8.png",
+      "why": "OOC regen"
+    },
+    {
+      "id": "shared.n8",
+      "name": "Elarion's Blessing",
+      "iconPath": "Talents/shared/shared_08",
+      "blinkSource": "Classes/HolyDarkness/Paladin/Paladin1.png",
+      "why": "all-stats blessing"
+    },
+    {
+      "id": "shared.n9",
+      "name": "Arcane Bolt",
+      "iconPath": "Talents/shared/shared_09",
+      "blinkSource": "Classes/Elementalist/Arcanist/Arcanist1.png",
+      "why": "ranged magic dart"
+    },
+    {
+      "id": "shared.n10",
+      "name": "Mend",
+      "iconPath": "Talents/shared/shared_10",
+      "blinkSource": "Classes/HolyDarkness/Priest/Priest5.png",
+      "why": "self heal skill"
+    },
+    {
+      "id": "shared.n11",
+      "name": "Dash",
+      "iconPath": "Talents/shared/shared_11",
+      "blinkSource": "Classes/Assassin/Rogue/Rogue4.png",
+      "why": "blink dodge dash"
+    }
+  ]
+}

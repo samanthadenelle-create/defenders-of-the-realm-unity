@@ -8,7 +8,7 @@
     "tier3": 3,
     "tier4": 5
   },
-  "_comment": "v2 canonical talent design (TALENT_ICON_ATLAS_SPEC_2026-06-27) + WO-676 strategic branches: knight = 32 nodes across three branches — WAR (hero combat; the legacy 20 + Venombrand, branch key absent = war), STEWARD (economy, 6 nodes, ids knight.s*), BULWARK (defensive structures, 5 nodes, ids knight.b*) — plus 8+3 Shared Universal. Node id = <hero>.t<tier>n<slot> (branch nodes: s/b prefix); iconPath = Talents/<hero>/<hero>_NN (NN 21-32 = WO-676 art follow-up, sprites pending). Prereq = same-slot tier below / same-branch chain. ALL THREE heroes stored (canonical); only KNIGHT effects are wired for V1 (solo Knight north star) — mage/ranger load as data+icons, effects no-op until V2. Ally-dependent Knight effects are no-op in solo V1 (any self-portion applies) and tagged '(allies — V2)'; '(... — V-later)' marks a behavioural handler not yet built. STEWARD/BULWARK effect types are summed by HeroTalentModifiers (HeroTalentEffectTypes consts); their consumer reads land in lanes A1/A2 (WO-676 §A).",
+  "_comment": "v2 canonical talent design (TALENT_ICON_ATLAS_SPEC_2026-06-27) + WO-676 strategic branches: knight = 32 nodes across three branches \u2014 WAR (hero combat; the legacy 20 + Venombrand, branch key absent = war), STEWARD (economy, 6 nodes, ids knight.s*), BULWARK (defensive structures, 5 nodes, ids knight.b*) \u2014 plus 8+3 Shared Universal. Node id = <hero>.t<tier>n<slot> (branch nodes: s/b prefix); iconPath = Talents/<hero>/<hero>_NN (NN 21-32 = WO-676 art follow-up, sprites pending). Prereq = same-slot tier below / same-branch chain. ALL THREE heroes stored (canonical); only KNIGHT effects are wired for V1 (solo Knight north star) \u2014 mage/ranger load as data+icons, effects no-op until V2. Ally-dependent Knight effects are no-op in solo V1 (any self-portion applies) and tagged '(allies \u2014 V2)'; '(... \u2014 V-later)' marks a behavioural handler not yet built. STEWARD/BULWARK effect types are summed by HeroTalentModifiers (HeroTalentEffectTypes consts); their consumer reads land in lanes A1/A2 (WO-676 \u00a7A).",
   "trees": {
     "knight": {
       "heroSlug": "knight",
@@ -41,7 +41,7 @@
           "kind": "skill",
           "iconPath": "Talents/knight/knight_02",
           "abilityId": "knight.thunderbolt",
-          "description": "Unlocks Thunderbolt — a ranged bolt (30 dmg @ 16m, 3s cd).",
+          "description": "Unlocks Thunderbolt \u2014 a ranged bolt (30 dmg @ 16m, 3s cd).",
           "effect": {
             "type": "unlockAbility",
             "ability": "knight.thunderbolt"
@@ -76,7 +76,7 @@
           "kind": "skill",
           "iconPath": "Talents/knight/knight_04",
           "abilityId": "knight.mending-salve",
-          "description": "Unlocks Mending Salve — heals 42 in a 5m ring (16s cd).",
+          "description": "Unlocks Mending Salve \u2014 heals 42 in a 5m ring (16s cd).",
           "effect": {
             "type": "unlockAbility",
             "ability": "knight.mending-salve"
@@ -94,7 +94,7 @@
           "kind": "skill",
           "iconPath": "Talents/knight/knight_05",
           "abilityId": "knight.ranged-poke",
-          "description": "Unlocks Throwing Spear — a ranged poke (28 dmg @ 16m, 1.2s cd).",
+          "description": "Unlocks Throwing Spear \u2014 a ranged poke (28 dmg @ 16m, 1.2s cd).",
           "effect": {
             "type": "unlockAbility",
             "ability": "knight.ranged-poke"
@@ -112,7 +112,7 @@
           "kind": "skill",
           "iconPath": "Talents/knight/knight_06",
           "abilityId": "knight.shield-bash",
-          "description": "Unlocks Shield Slam — 22 dmg + a 2.5s slow up close (8s cd).",
+          "description": "Unlocks Shield Slam \u2014 22 dmg + a 2.5s slow up close (8s cd).",
           "effect": {
             "type": "unlockAbility",
             "ability": "knight.shield-bash"
@@ -132,7 +132,7 @@
           "kind": "skill",
           "iconPath": "Talents/knight/knight_07",
           "abilityId": "knight.emberbrand-throw",
-          "description": "Unlocks Emberbrand Throw — 12 dmg + 8 dps burn for 4s @ 14m (10s cd).",
+          "description": "Unlocks Emberbrand Throw \u2014 12 dmg + 8 dps burn for 4s @ 14m (10s cd).",
           "effect": {
             "type": "unlockAbility",
             "ability": "knight.emberbrand-throw"
@@ -152,7 +152,7 @@
           "kind": "skill",
           "iconPath": "Talents/knight/knight_08",
           "abilityId": "knight.wardens-roar",
-          "description": "Unlocks Warden's Roar — taunts foes within 6m + 10 dmg (14s cd).",
+          "description": "Unlocks Warden's Roar \u2014 taunts foes within 6m + 10 dmg (14s cd).",
           "effect": {
             "type": "unlockAbility",
             "ability": "knight.wardens-roar"
@@ -172,7 +172,7 @@
           "kind": "skill",
           "iconPath": "Talents/knight/knight_09",
           "abilityId": "knight.snare-arrow",
-          "description": "Unlocks Pinning Spear — 18 dmg + a 2.5s slow @ 14m (11s cd).",
+          "description": "Unlocks Pinning Spear \u2014 18 dmg + a 2.5s slow @ 14m (11s cd).",
           "effect": {
             "type": "unlockAbility",
             "ability": "knight.snare-arrow"
@@ -211,7 +211,7 @@
           "kind": "skill",
           "iconPath": "Talents/knight/knight_11",
           "abilityId": "knight.suppressing-volley",
-          "description": "Unlocks Suppressing Volley — 36 dmg to all foes in a 6m arc (20s cd).",
+          "description": "Unlocks Suppressing Volley \u2014 36 dmg to all foes in a 6m arc (20s cd).",
           "effect": {
             "type": "unlockAbility",
             "ability": "knight.suppressing-volley"
@@ -231,7 +231,7 @@
           "kind": "skill",
           "iconPath": "Talents/knight/knight_12",
           "abilityId": "knight.oathmend",
-          "description": "Unlocks Oathmend — heals 10 HP/s for 5s (50 total, 20s cd).",
+          "description": "Unlocks Oathmend \u2014 heals 10 HP/s for 5s (50 total, 20s cd).",
           "effect": {
             "type": "unlockAbility",
             "ability": "knight.oathmend"
@@ -269,11 +269,11 @@
           "cost": 3,
           "kind": "passive",
           "iconPath": "Talents/knight/knight_14",
-          "description": "Attackers hurt themselves on your armor — 30% of every melee hit rebounds onto the striker.",
+          "description": "Attackers hurt themselves on your armor \u2014 30% of every melee hit rebounds onto the striker.",
           "effect": {
             "type": "reflect",
             "value": 0.3,
-            "note": "(reflect — wired WO-566; re-described WO-676 strategic wording)"
+            "note": "(reflect \u2014 wired WO-566; re-described WO-676 strategic wording)"
           },
           "x": 0.69,
           "y": 0.3,
@@ -290,7 +290,7 @@
           "kind": "skill",
           "iconPath": "Talents/knight/knight_15",
           "abilityId": "knight.sweeping-cut",
-          "description": "Unlocks Sweeping Cut — 30 dmg to all foes in a 5m arc (12s cd).",
+          "description": "Unlocks Sweeping Cut \u2014 30 dmg to all foes in a 5m arc (12s cd).",
           "effect": {
             "type": "unlockAbility",
             "ability": "knight.sweeping-cut"
@@ -310,7 +310,7 @@
           "kind": "skill",
           "iconPath": "Talents/knight/knight_16",
           "abilityId": "knight.eternal-aegis",
-          "description": "Unlocks Eternal Aegis — cast 8s of full invulnerability (90s cd).",
+          "description": "Unlocks Eternal Aegis \u2014 cast 8s of full invulnerability (90s cd).",
           "effect": {
             "type": "unlockAbility",
             "ability": "knight.eternal-aegis"
@@ -330,7 +330,7 @@
           "kind": "skill",
           "iconPath": "Talents/knight/knight_17",
           "abilityId": "knight.second-wind",
-          "description": "Unlocks Second Wind — heals 35 HP (45s cd).",
+          "description": "Unlocks Second Wind \u2014 heals 35 HP (45s cd).",
           "effect": {
             "type": "unlockAbility",
             "ability": "knight.second-wind"
@@ -357,7 +357,7 @@
             "threshold": 0.2,
             "duration": 5,
             "cooldown": 120,
-            "note": "(laststand low-HP — wired WO-566)"
+            "note": "(laststand low-HP \u2014 wired WO-566)"
           },
           "x": 0.5,
           "y": 0.12,
@@ -373,13 +373,13 @@
           "cost": 5,
           "kind": "passive",
           "iconPath": "Talents/knight/knight_19",
-          "description": "Foes you taunt with Warden's Roar catch holy fire — 12 dps for 4s while they are held on you.",
+          "description": "Foes you taunt with Warden's Roar catch holy fire \u2014 12 dps for 4s while they are held on you.",
           "effect": {
             "type": "modifyAbility",
             "ability": "knight.wardens-roar",
             "value": 12,
             "duration": 4,
-            "note": "(taunt-burn — WIRED WO-676: HeroAbilities.ResolveTaunt applies Burn + BurnDoT per held foe)"
+            "note": "(taunt-burn \u2014 WIRED WO-676: HeroAbilities.ResolveTaunt applies Burn + BurnDoT per held foe)"
           },
           "x": 0.69,
           "y": 0.12,
@@ -396,7 +396,7 @@
           "kind": "skill",
           "iconPath": "Talents/knight/knight_20",
           "abilityId": "knight.champions-combo",
-          "description": "Unlocks Champion's Combo — a 3x40 (120) dmg flurry to foes in front (30s cd).",
+          "description": "Unlocks Champion's Combo \u2014 a 3x40 (120) dmg flurry to foes in front (30s cd).",
           "effect": {
             "type": "unlockAbility",
             "ability": "knight.champions-combo"
@@ -416,7 +416,7 @@
           "kind": "passive",
           "branch": "war",
           "iconPath": "Talents/knight/knight_21",
-          "description": "Your Thunderbolt and Throwing Spear leave venom in the wound — 5 dps for 6s, stacking twice on a foe you keep hitting.",
+          "description": "Your Thunderbolt and Throwing Spear leave venom in the wound \u2014 5 dps for 6s, stacking twice on a foe you keep hitting.",
           "effect": {
             "type": "modifyAbility",
             "stat": "poison",
@@ -424,7 +424,7 @@
             "value": 5,
             "duration": 6,
             "targets": 2,
-            "note": "(poison rider — wired WO-676; VFX follow-up: distinct green DRIP trail + drip icon, never color-only)"
+            "note": "(poison rider \u2014 wired WO-676; VFX follow-up: distinct green DRIP trail + drip icon, never color-only)"
           },
           "prerequisites": [
             "knight.t1n2"
@@ -439,7 +439,7 @@
           "kind": "stat",
           "branch": "steward",
           "iconPath": "Talents/knight/knight_22",
-          "description": "Your echoes and collectors work 15% faster — the stockpile grows even while you fight.",
+          "description": "Your echoes and collectors work 15% faster \u2014 the stockpile grows even while you fight.",
           "effect": {
             "type": "harvestRate",
             "value": 0.15
@@ -455,7 +455,7 @@
           "kind": "stat",
           "branch": "steward",
           "iconPath": "Talents/knight/knight_23",
-          "description": "Collectors hold 50% more before filling up — less harvest sits at risk while you are away.",
+          "description": "Collectors hold 50% more before filling up \u2014 less harvest sits at risk while you are away.",
           "effect": {
             "type": "collectorCap",
             "value": 0.5
@@ -471,7 +471,7 @@
           "kind": "stat",
           "branch": "steward",
           "iconPath": "Talents/knight/knight_24",
-          "description": "Repairs cost 25% less — patching walls after a raid stops draining the treasury.",
+          "description": "Repairs cost 25% less \u2014 patching walls after a raid stops draining the treasury.",
           "effect": {
             "type": "repairCost",
             "value": 0.25
@@ -489,7 +489,7 @@
           "kind": "stat",
           "branch": "steward",
           "iconPath": "Talents/knight/knight_25",
-          "description": "Building and upgrading finishes 20% sooner — your defenses stand ready before the next wave.",
+          "description": "Building and upgrading finishes 20% sooner \u2014 your defenses stand ready before the next wave.",
           "effect": {
             "type": "buildTime",
             "value": 0.2
@@ -507,7 +507,7 @@
           "kind": "stat",
           "branch": "steward",
           "iconPath": "Talents/knight/knight_26",
-          "description": "Selling or losing a structure returns 15% more of its cost — rebuilding after a bad night hurts less.",
+          "description": "Selling or losing a structure returns 15% more of its cost \u2014 rebuilding after a bad night hurts less.",
           "effect": {
             "type": "salvage",
             "value": 0.15
@@ -525,7 +525,7 @@
           "kind": "stat",
           "branch": "steward",
           "iconPath": "Talents/knight/knight_27",
-          "description": "Every wave you survive pays 20% more — the longer Elarion holds, the richer it grows.",
+          "description": "Every wave you survive pays 20% more \u2014 the longer Elarion holds, the richer it grows.",
           "effect": {
             "type": "waveReward",
             "value": 0.2
@@ -543,7 +543,7 @@
           "kind": "stat",
           "branch": "bulwark",
           "iconPath": "Talents/knight/knight_28",
-          "description": "Your towers hit 15% harder — every emplacement you build pulls more weight.",
+          "description": "Your towers hit 15% harder \u2014 every emplacement you build pulls more weight.",
           "effect": {
             "type": "towerDamage",
             "value": 0.15
@@ -559,7 +559,7 @@
           "kind": "stat",
           "branch": "bulwark",
           "iconPath": "Talents/knight/knight_29",
-          "description": "Towers see 2m farther — raiders come under fire before they ever reach your walls.",
+          "description": "Towers see 2m farther \u2014 raiders come under fire before they ever reach your walls.",
           "effect": {
             "type": "towerRange",
             "value": 2,
@@ -578,7 +578,7 @@
           "kind": "stat",
           "branch": "bulwark",
           "iconPath": "Talents/knight/knight_30",
-          "description": "Walls and gates take 20% less damage — your perimeter holds longer without you.",
+          "description": "Walls and gates take 20% less damage \u2014 your perimeter holds longer without you.",
           "effect": {
             "type": "structureToughness",
             "value": 0.2
@@ -596,7 +596,7 @@
           "kind": "stat",
           "branch": "bulwark",
           "iconPath": "Talents/knight/knight_31",
-          "description": "Towers fire 12% faster — sustained fire that thins a raid before it lands.",
+          "description": "Towers fire 12% faster \u2014 sustained fire that thins a raid before it lands.",
           "effect": {
             "type": "towerAttackSpeed",
             "value": 0.12
@@ -614,11 +614,11 @@
           "kind": "stat",
           "branch": "bulwark",
           "iconPath": "Talents/knight/knight_32",
-          "description": "While a wave is live, every defense takes 25% less damage — the whole village digs in when the horns sound.",
+          "description": "While a wave is live, every defense takes 25% less damage \u2014 the whole village digs in when the horns sound.",
           "effect": {
             "type": "structureToughnessWave",
             "value": 0.25,
-            "note": "(owner pin 4: DEFEND-scoped -25% — consumer adds this only while WaveManager reports a live wave)"
+            "note": "(owner pin 4: DEFEND-scoped -25% \u2014 consumer adds this only while WaveManager reports a live wave)"
           },
           "prerequisites": [
             "knight.b2n2"
@@ -630,7 +630,7 @@
       "heroSlug": "ranger",
       "displayName": "Sylas (Ranger)",
       "_title": "Windstrider",
-      "_comment": "WO-861 A2 (owner-approved 2026-08-02) — Sylas, the archer. Four branches: SUSTAIN (Nature's Gift, Bloodbound Draw) — ARROW MASTERY (Emberhead / Venomcraft / Deep Freeze buff the matching weapons.json ammoEffect rider on ranger.q, via the existing modifyAbility+stat rider contract HeroTalentModifiers.TryGetAbilityDotRider already reads) — RANGED DPS (Quick Draw, Eagle Vision, Precision Strike, Multishot, pierce/chain) — MOBILITY/EVASION (Tumble Step, move speed, stealth). Node ids, tiers, slots, costs, icons and the prerequisite graph are UNCHANGED so no save-side unlock is orphaned; only the retuned nodes' name/description/effect changed.",
+      "_comment": "WO-861 A2 (owner-approved 2026-08-02) \u2014 Sylas, the archer. Four branches: SUSTAIN (Nature's Gift, Bloodbound Draw) \u2014 ARROW MASTERY (Emberhead / Venomcraft / Deep Freeze buff the matching weapons.json ammoEffect rider on ranger.q, via the existing modifyAbility+stat rider contract HeroTalentModifiers.TryGetAbilityDotRider already reads) \u2014 RANGED DPS (Quick Draw, Eagle Vision, Precision Strike, Multishot, pierce/chain) \u2014 MOBILITY/EVASION (Tumble Step, move speed, stealth). Node ids, tiers, slots, costs, icons and the prerequisite graph are UNCHANGED so no save-side unlock is orphaned; only the retuned nodes' name/description/effect changed.",
       "nodes": [
         {
           "id": "ranger.t1n1",
@@ -676,7 +676,7 @@
           "effect": {
             "type": "unlockAbility",
             "ability": "ranger.tumble-step",
-            "note": "(NEW ability — stub)"
+            "note": "(NEW ability \u2014 stub)"
           },
           "prerequisites": []
         },
@@ -704,11 +704,11 @@
           "kind": "skill",
           "iconPath": "Talents/ranger/ranger_05",
           "abilityId": "ranger.multishot",
-          "description": "Unlocks Multishot — 3 arrows, 18 dmg each (9s cd).",
+          "description": "Unlocks Multishot \u2014 3 arrows, 18 dmg each (9s cd).",
           "effect": {
             "type": "unlockAbility",
             "ability": "ranger.multishot",
-            "note": "(NEW ability — stub)"
+            "note": "(NEW ability \u2014 stub)"
           },
           "prerequisites": []
         },
@@ -737,7 +737,7 @@
           "cost": 2,
           "kind": "passive",
           "iconPath": "Talents/ranger/ranger_07",
-          "description": "Venomtip arrows bite deeper — 8 dps poison for 8s, stacking twice.",
+          "description": "Venomtip arrows bite deeper \u2014 8 dps poison for 8s, stacking twice.",
           "effect": {
             "type": "modifyAbility",
             "ability": "ranger.q",
@@ -776,7 +776,7 @@
           "cost": 2,
           "kind": "passive",
           "iconPath": "Talents/ranger/ranger_09",
-          "description": "Rimeshot arrows bite colder — the slow deepens to 50% and holds 4s.",
+          "description": "Rimeshot arrows bite colder \u2014 the slow deepens to 50% and holds 4s.",
           "effect": {
             "type": "modifyAbility",
             "ability": "ranger.q",
@@ -835,7 +835,7 @@
           "cost": 3,
           "kind": "passive",
           "iconPath": "Talents/ranger/ranger_12",
-          "description": "Emberhead arrows burn hotter — 9 dps for 6s.",
+          "description": "Emberhead arrows burn hotter \u2014 9 dps for 6s.",
           "effect": {
             "type": "modifyAbility",
             "ability": "ranger.q",
@@ -879,7 +879,7 @@
             "type": "summon",
             "duration": 20,
             "cooldown": 60,
-            "note": "(summon — V2)"
+            "note": "(summon \u2014 V2)"
           },
           "prerequisites": [
             "ranger.t2n4"
@@ -898,7 +898,7 @@
           "effect": {
             "type": "unlockAbility",
             "ability": "ranger.precision-strike",
-            "note": "(NEW ability — stub)"
+            "note": "(NEW ability \u2014 stub)"
           },
           "prerequisites": [
             "ranger.t2n5"
@@ -917,7 +917,7 @@
           "effect": {
             "type": "unlockAbility",
             "ability": "ranger.storm-of-arrows",
-            "note": "(NEW ability — stub)"
+            "note": "(NEW ability \u2014 stub)"
           },
           "prerequisites": [
             "ranger.t3n1"
@@ -952,7 +952,7 @@
           "effect": {
             "type": "stealth",
             "value": 0.5,
-            "note": "(proc — V2)"
+            "note": "(proc \u2014 V2)"
           },
           "prerequisites": [
             "ranger.t3n3"
@@ -971,7 +971,7 @@
             "type": "onEvent",
             "value": 14,
             "duration": 5,
-            "note": "(dot — V2)"
+            "note": "(dot \u2014 V2)"
           },
           "prerequisites": [
             "ranger.t3n4"
@@ -1000,7 +1000,7 @@
       "heroSlug": "mage",
       "displayName": "Thrain (Mage)",
       "_title": "Aetherweaver",
-      "_comment": "WO-861 A1 (owner-approved 2026-08-02) — Thrain, the ranged glass cannon. Four branches: MANA CONSERVATION + RECOVERY (Mana Flow, Aether Surge, Manaweave, Aether Form, Eternal Arcana — mana IS the survival mechanic) — SPELL POWER (Arcane Focus, Flame Mastery, Runic Overload, Aetherweaver Ascension) — SURVIVABILITY (Warded Flesh +20% HP, Blink Mastery +15% HP, Arcane Shield strengthens the Shell) — LEARNABLE SPELLS (mage.void-rift, mage.cataclysm, mage.blink, mage.manaweave; mage.frost-nova + mage.arcane-bolt are unlocked by the Cathedral of Magic instead, per A3). Node ids, tiers, slots, costs, icons and the prerequisite graph are UNCHANGED so no save-side unlock is orphaned. Slug stays 'mage'; art sheet = Wizard.",
+      "_comment": "WO-861 A1 (owner-approved 2026-08-02) \u2014 Thrain, the ranged glass cannon. Four branches: MANA CONSERVATION + RECOVERY (Mana Flow, Aether Surge, Manaweave, Aether Form, Eternal Arcana \u2014 mana IS the survival mechanic) \u2014 SPELL POWER (Arcane Focus, Flame Mastery, Runic Overload, Aetherweaver Ascension) \u2014 SURVIVABILITY (Warded Flesh +20% HP, Blink Mastery +15% HP, Arcane Shield strengthens the Shell) \u2014 LEARNABLE SPELLS (mage.void-rift, mage.cataclysm, mage.blink, mage.manaweave; mage.frost-nova + mage.arcane-bolt are unlocked by the Cathedral of Magic instead, per A3). Node ids, tiers, slots, costs, icons and the prerequisite graph are UNCHANGED so no save-side unlock is orphaned. Slug stays 'mage'; art sheet = Wizard.",
       "nodes": [
         {
           "id": "mage.t1n1",
@@ -1105,7 +1105,7 @@
           "kind": "skill",
           "iconPath": "Talents/wizard/wizard_07",
           "abilityId": "mage.manaweave",
-          "description": "Learn Manaweave — draw 5 mana back over 3s (30s cd).",
+          "description": "Learn Manaweave \u2014 draw 5 mana back over 3s (30s cd).",
           "effect": {
             "type": "unlockAbility",
             "ability": "mage.manaweave",
@@ -1163,7 +1163,7 @@
           "kind": "skill",
           "iconPath": "Talents/wizard/wizard_10",
           "abilityId": "mage.blink",
-          "description": "Learn Blink — a 6m step through the weave (8s cd); +15% max health.",
+          "description": "Learn Blink \u2014 a 6m step through the weave (8s cd); +15% max health.",
           "effect": {
             "type": "maxHpPct",
             "value": 0.15,
@@ -1261,7 +1261,7 @@
           "effect": {
             "type": "unlockAbility",
             "ability": "mage.void-rift",
-            "note": "(NEW ability — stub)"
+            "note": "(NEW ability \u2014 stub)"
           },
           "prerequisites": [
             "mage.t2n5"
@@ -1280,7 +1280,7 @@
           "effect": {
             "type": "unlockAbility",
             "ability": "mage.cataclysm",
-            "note": "(NEW ability — stub)"
+            "note": "(NEW ability \u2014 stub)"
           },
           "prerequisites": [
             "mage.t3n1"
@@ -1409,7 +1409,7 @@
       "effect": {
         "type": "wisdomPerLevel",
         "value": 1,
-        "note": "hidden until a per-level wisdom grant path exists — G3 wire-or-hide"
+        "note": "hidden until a per-level wisdom grant path exists \u2014 G3 wire-or-hide"
       },
       "x": 0.33,
       "y": 0.88,
@@ -1428,7 +1428,7 @@
       "effect": {
         "type": "critChance",
         "value": 0.15,
-        "note": "hidden until a crit mechanic exists — G3 wire-or-hide"
+        "note": "hidden until a crit mechanic exists \u2014 G3 wire-or-hide"
       },
       "x": 0.45,
       "y": 0.88,
@@ -1463,7 +1463,7 @@
       "effect": {
         "type": "revive",
         "value": 0.4,
-        "note": "(revive — wired WO-566)"
+        "note": "(revive \u2014 wired WO-566)"
       },
       "x": 0.69,
       "y": 0.88,
@@ -1511,9 +1511,9 @@
       "slot": 9,
       "cost": 1,
       "kind": "skill",
-      "iconPath": "Talents/shared/shared_05",
+      "iconPath": "Talents/shared/shared_09",
       "abilityId": "universal.arcane-bolt",
-      "description": "Unlocks Arcane Bolt — a learnable ranged magic dart (22 dmg @ 14m, 2s cd). Assignable to the hot-swap bar.",
+      "description": "Unlocks Arcane Bolt \u2014 a learnable ranged magic dart (22 dmg @ 14m, 2s cd). Assignable to the hot-swap bar.",
       "effect": {
         "type": "unlockAbility",
         "ability": "universal.arcane-bolt"
@@ -1529,9 +1529,9 @@
       "slot": 10,
       "cost": 1,
       "kind": "skill",
-      "iconPath": "Talents/shared/shared_07",
+      "iconPath": "Talents/shared/shared_10",
       "abilityId": "universal.mend",
-      "description": "Unlocks Mend — a small self-heal (25 HP, 12s cd). Assignable to the hot-swap bar.",
+      "description": "Unlocks Mend \u2014 a small self-heal (25 HP, 12s cd). Assignable to the hot-swap bar.",
       "effect": {
         "type": "unlockAbility",
         "ability": "universal.mend"
@@ -1547,9 +1547,9 @@
       "slot": 11,
       "cost": 1,
       "kind": "skill",
-      "iconPath": "Talents/shared/shared_04",
+      "iconPath": "Talents/shared/shared_11",
       "abilityId": "universal.dash",
-      "description": "Unlocks Dash — a 6m blink dodge (8s cd, cooldown-gated). Assignable to the hot-swap bar.",
+      "description": "Unlocks Dash \u2014 a 6m blink dodge (8s cd, cooldown-gated). Assignable to the hot-swap bar.",
       "effect": {
         "type": "unlockAbility",
         "ability": "universal.dash"
@@ -1559,5 +1559,5 @@
       "prerequisites": []
     }
   ],
-  "notes": "v2 + WO-676 — 83 nodes (knight 32 = WAR 21 + STEWARD 6 + BULWARK 5; ranger/mage 20 each; shared 11). Tier costs 1/2/3/5 Wisdom; shared nodes 2 each (skill trio 1). Prereq = same-slot tier below / same-branch chain. V1 wires KNIGHT effects only (HeroTalentModifiers); mage/ranger stored as data+icons. NOTE: tier4 capstone exclusivity (one per hero) now spans branches — Bountiful Banners / Warden of Elarion compete with the five WAR capstones, which IS the strategic 'what kind of lord am I' choice (WO-676 law 2). Owner-open: Wisdom curve, shared-pool cap — see TALENT_ICON_ATLAS_SPEC_2026-06-27 §7."
+  "notes": "v2 + WO-676 \u2014 83 nodes (knight 32 = WAR 21 + STEWARD 6 + BULWARK 5; ranger/mage 20 each; shared 11). Tier costs 1/2/3/5 Wisdom; shared nodes 2 each (skill trio 1). Prereq = same-slot tier below / same-branch chain. V1 wires KNIGHT effects only (HeroTalentModifiers); mage/ranger stored as data+icons. NOTE: tier4 capstone exclusivity (one per hero) now spans branches \u2014 Bountiful Banners / Warden of Elarion compete with the five WAR capstones, which IS the strategic 'what kind of lord am I' choice (WO-676 law 2). Owner-open: Wisdom curve, shared-pool cap \u2014 see TALENT_ICON_ATLAS_SPEC_2026-06-27 \u00a77."
 }
