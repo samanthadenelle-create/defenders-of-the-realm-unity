@@ -29,7 +29,7 @@
             "value": 0.18
           },
           "x": 0.12,
-          "y": 0.66,
+          "y": 0.67,
           "prerequisites": []
         },
         {
@@ -47,7 +47,7 @@
             "ability": "knight.thunderbolt"
           },
           "x": 0.31,
-          "y": 0.66,
+          "y": 0.67,
           "prerequisites": []
         },
         {
@@ -64,7 +64,7 @@
             "value": 0.25
           },
           "x": 0.5,
-          "y": 0.66,
+          "y": 0.67,
           "prerequisites": []
         },
         {
@@ -82,7 +82,7 @@
             "ability": "knight.mending-salve"
           },
           "x": 0.69,
-          "y": 0.66,
+          "y": 0.67,
           "prerequisites": []
         },
         {
@@ -100,7 +100,7 @@
             "ability": "knight.ranged-poke"
           },
           "x": 0.88,
-          "y": 0.66,
+          "y": 0.67,
           "prerequisites": []
         },
         {
@@ -118,7 +118,7 @@
             "ability": "knight.shield-bash"
           },
           "x": 0.12,
-          "y": 0.48,
+          "y": 0.46,
           "prerequisites": [
             "knight.t1n1"
           ]
@@ -138,7 +138,7 @@
             "ability": "knight.emberbrand-throw"
           },
           "x": 0.31,
-          "y": 0.48,
+          "y": 0.46,
           "prerequisites": [
             "knight.t1n2"
           ]
@@ -158,7 +158,7 @@
             "ability": "knight.wardens-roar"
           },
           "x": 0.5,
-          "y": 0.48,
+          "y": 0.46,
           "prerequisites": [
             "knight.t1n3"
           ]
@@ -178,7 +178,7 @@
             "ability": "knight.snare-arrow"
           },
           "x": 0.69,
-          "y": 0.48,
+          "y": 0.46,
           "prerequisites": [
             "knight.t1n4"
           ]
@@ -197,7 +197,7 @@
             "value": 0.3
           },
           "x": 0.88,
-          "y": 0.48,
+          "y": 0.46,
           "prerequisites": [
             "knight.t1n5"
           ]
@@ -217,7 +217,7 @@
             "ability": "knight.suppressing-volley"
           },
           "x": 0.12,
-          "y": 0.3,
+          "y": 0.25,
           "prerequisites": [
             "knight.t2n1"
           ]
@@ -237,7 +237,7 @@
             "ability": "knight.oathmend"
           },
           "x": 0.31,
-          "y": 0.3,
+          "y": 0.25,
           "prerequisites": [
             "knight.t2n2"
           ]
@@ -256,7 +256,7 @@
             "value": 0.35
           },
           "x": 0.5,
-          "y": 0.3,
+          "y": 0.25,
           "prerequisites": [
             "knight.t2n3"
           ]
@@ -276,7 +276,7 @@
             "note": "(reflect \u2014 wired WO-566; re-described WO-676 strategic wording)"
           },
           "x": 0.69,
-          "y": 0.3,
+          "y": 0.25,
           "prerequisites": [
             "knight.t2n4"
           ]
@@ -296,7 +296,7 @@
             "ability": "knight.sweeping-cut"
           },
           "x": 0.88,
-          "y": 0.3,
+          "y": 0.25,
           "prerequisites": [
             "knight.t2n5"
           ]
@@ -316,7 +316,7 @@
             "ability": "knight.eternal-aegis"
           },
           "x": 0.12,
-          "y": 0.12,
+          "y": 0.04,
           "prerequisites": [
             "knight.t3n1"
           ]
@@ -336,7 +336,7 @@
             "ability": "knight.second-wind"
           },
           "x": 0.31,
-          "y": 0.12,
+          "y": 0.04,
           "prerequisites": [
             "knight.t3n2"
           ]
@@ -360,7 +360,7 @@
             "note": "(laststand low-HP \u2014 wired WO-566)"
           },
           "x": 0.5,
-          "y": 0.12,
+          "y": 0.04,
           "prerequisites": [
             "knight.t3n3"
           ]
@@ -382,7 +382,7 @@
             "note": "(taunt-burn \u2014 WIRED WO-676: HeroAbilities.ResolveTaunt applies Burn + BurnDoT per held foe)"
           },
           "x": 0.69,
-          "y": 0.12,
+          "y": 0.04,
           "prerequisites": [
             "knight.t3n4"
           ]
@@ -402,7 +402,7 @@
             "ability": "knight.champions-combo"
           },
           "x": 0.88,
-          "y": 0.12,
+          "y": 0.04,
           "prerequisites": [
             "knight.t3n5"
           ]
@@ -1395,7 +1395,7 @@
         "value": 0.2
       },
       "x": 0.2,
-      "y": 0.88,
+      "y": 1.09,
       "prerequisites": []
     },
     {
@@ -1433,7 +1433,7 @@
         "note": "hidden until a crit mechanic exists \u2014 G3 wire-or-hide"
       },
       "x": 0.45,
-      "y": 0.88,
+      "y": 1.09,
       "prerequisites": []
     },
     {
@@ -1468,7 +1468,7 @@
         "note": "(revive \u2014 wired WO-566)"
       },
       "x": 0.69,
-      "y": 0.88,
+      "y": 1.09,
       "prerequisites": []
     },
     {
@@ -1503,7 +1503,7 @@
         "value": 0.1
       },
       "x": 0.94,
-      "y": 0.88,
+      "y": 1.09,
       "prerequisites": []
     },
     {
@@ -1521,7 +1521,7 @@
         "ability": "universal.arcane-bolt"
       },
       "x": 0.2,
-      "y": 0.98,
+      "y": 1.3,
       "prerequisites": []
     },
     {
@@ -1539,7 +1539,7 @@
         "ability": "universal.mend"
       },
       "x": 0.5,
-      "y": 0.98,
+      "y": 1.3,
       "prerequisites": []
     },
     {
@@ -1557,7 +1557,7 @@
         "ability": "universal.dash"
       },
       "x": 0.8,
-      "y": 0.98,
+      "y": 1.3,
       "prerequisites": []
     }
   ],

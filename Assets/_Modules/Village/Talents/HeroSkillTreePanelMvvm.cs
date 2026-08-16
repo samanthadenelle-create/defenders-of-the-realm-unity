@@ -60,6 +60,24 @@ namespace DeNelle.Village.Talents
 
         private PanelHandle _panelHandle;
 
+        // -- OWNER VFX PICKS 2026-08-16 (both mapped verbatim, both ADDITIVE) --------
+        //   POINTER (Hovl "Marker 2 Pointer Loop") -> the single FOCUS (next/selected)
+        //     node, behind the code-built gold focus ring.
+        //   AURA (Aura_PetLevel2, tracked under Resources/VFX/Aura) -> node AURAS.
+        //     DEFAULT (NOT A LOCK): the aura lights OWNED/learned nodes - the prestige
+        //     read on talents already taken. One owner word flips it to available-to-buy
+        //     nodes: change IsAuraNode below.
+        // Each pick = one shared off-screen rig (TalentNodeVfxRig: one instance + one
+        // RenderTexture, rendered once per frame); every node patch is a RawImage
+        // SAMPLING the shared texture, so 10+ owned nodes cost 10 quads, not 10 systems.
+        // A missing asset Warns once; the code-built node art stands alone either way.
+        private TalentNodeVfxRig _pointerVfx;
+        private TalentNodeVfxRig _auraVfx;
+        private bool _pointerVfxUnavailable;      // Begin failed once - do not retry per repaint
+        private bool _auraVfxUnavailable;
+        private string _lastPointerSig;           // change-gated follow trace (sec.12: no per-Render spam)
+        private int _lastAuraCount = -1;          // change-gated aura attach-count trace
+
         // =====================================================================
         // WO-865 FIXED-PIXEL BAND GEOMETRY (reference px on the 1080x1920 modal
         // canvas). NEVER a fraction of the parent -- that is the documented root
@@ -127,20 +145,26 @@ namespace DeNelle.Village.Talents
         /// clamped to in RebuildTracks, so a row can never squeeze its plate against its name.</summary>
         public const float SectionClearPx = NodeSizePx + SectionGapPx * 2f + SectionBandPx;
 
-        // ── RETIRED LATTICE (WO-896) — the authored x/y node GRAPH no longer drives layout.
-        // These four constants stayed because they are still TRUE of the authored data in
-        // hero-talents.json (which keeps its x/y/section authoring) and because
-        // SkillsPanelLayoutRegression [grid] pins them against that data. Re-pointing that
-        // oracle at the track layout is its own ticket — deleting the constants here would
-        // simply blind it. NOTHING in this file positions a node from them any more.
+        // -- GRAPH LATTICE -- LIVE (CORRECTED 2026-08-16; do not trust the old note). The
+        // banner that stood here since WO-896 called these four constants a "RETIRED LATTICE"
+        // and claimed "NOTHING in this file positions a node from them any more". That was
+        // FALSE of the code as shipped: RebuildGraph places every plate centre at
+        // GraphPadPx + norm * GraphUnitWpx/Hpx (the centres loop below, and the empty-tree
+        // sizing), so GraphUnitWpx / GraphUnitHpx / GraphPadPx ARE the px-per-unit lattice the
+        // authored hero-talents.json x/y map through. Trusting the retired-lattice claim is
+        // exactly how the 2026-08-16 node-overlap defects were mis-read as authoring-only.
+        // SkillsPanelLayoutRegression [grid] pins these against the canonical json (full
+        // pairwise AABB since 2026-08-16).
 
-        /// <summary>Retired lattice: reference px per 1.0 of authored node X (see the note above).</summary>
+        /// <summary>Live lattice: reference px per 1.0 of authored node X (see the note above).</summary>
         public const float GraphUnitWpx = 1180f;
-        /// <summary>Retired lattice: reference px per 1.0 of authored node Y.</summary>
+        /// <summary>Live lattice: reference px per 1.0 of authored node Y.</summary>
         public const float GraphUnitHpx = 780f;
-        /// <summary>Retired lattice: content padding of half a node plate plus air.</summary>
+        /// <summary>Live lattice: content padding of half a node plate plus air.</summary>
         public const float GraphPadPx = NodeSizePx * 0.5f + 16f;
-        /// <summary>Retired lattice: authored Y the "Universal - any class" band divided the graph at.</summary>
+        /// <summary>History: authored Y the "Universal - any class" band divided the graph at.
+        /// The WO-896 push-apart that consumed it is deleted; kept only as a stable const for
+        /// any downstream reader — no layout or oracle math reads it since 2026-08-16.</summary>
         public const float SectionBandY = 0.965f;
 
         // ── WO-896 SPARSE GRAPH LATTICE (Obsidian demo north star) ─────────────────
@@ -267,6 +291,8 @@ namespace DeNelle.Village.Talents
         {
             Unbind();
             if (_vm != null) { _vm.Dispose(); _vm = null; }
+            if (_pointerVfx != null) { _pointerVfx.Dispose(); _pointerVfx = null; }
+            if (_auraVfx != null) { _auraVfx.Dispose(); _auraVfx = null; }
             if (_ui != null) Destroy(_ui);
             _ui = null;
             PanelRouter.Unregister(PanelId.HeroSkillTree, Open);
@@ -445,14 +471,42 @@ namespace DeNelle.Village.Talents
             }
 
             string selectedId = _vm.SelectedNodeId ?? "";
+            var focusIds = new List<string>(2);
+            int auraCount = 0;
             for (int i = 0; i < seats.Count; i++)
             {
                 var seat = seats[i];
                 if (!centers.TryGetValue(seat.Node.Id, out var c)) continue;
                 bool focus = seat.State == SkillNodeState.Next
                           || (!string.IsNullOrEmpty(selectedId) && selectedId == seat.Node.Id);
+                if (focus) focusIds.Add(seat.Node.Id);
+                if (IsAuraNode(seat.State)) auraCount++;
                 Guard.Try("SkillTree", "build graph node '" + seat.Node.Id + "'",
                     () => BuildGraphNode(seat, c.x, c.y, focus));
+            }
+
+            // Owner aura pick: change-gated attach-count line - one Step per COUNT change,
+            // never one per Render.
+            if (auraCount != _lastAuraCount)
+            {
+                _lastAuraCount = auraCount;
+                FlowTrace.Step("TalentAura", "attach: aura on " + auraCount + " owned node(s) " +
+                                             "(default target = OWNED, owner-flippable) rig=" +
+                                             (_auraVfx != null && _auraVfx.IsValid ? "vfx" : "art-only"));
+            }
+
+            // Owner pick 2026-08-16: change-gated follow line - one Step per focus CHANGE,
+            // never one per Render (Render fires on every selection tap).
+            string pointerSig = string.Join(",", focusIds.ToArray());
+            if (pointerSig != _lastPointerSig)
+            {
+                _lastPointerSig = pointerSig;
+                if (focusIds.Count > 0)
+                    FlowTrace.Step("TalentPointer", "follow: pointer on node(s) [" + pointerSig +
+                                                    "] rig=" + (_pointerVfx != null && _pointerVfx.IsValid
+                                                        ? "vfx+ring" : "ring-only"));
+                else
+                    FlowTrace.Step("TalentPointer", "follow: no focus node this rebuild - pointer idle");
             }
 
             // Keep scroll place; rest = flush top-left so the first nodes are whole.
@@ -472,6 +526,37 @@ namespace DeNelle.Village.Talents
                 FlowTrace.Step("SkillTree", "sparse graph drawn: " + seats.Count + " visible of " +
                                             allSeats.Count + " node(s), content " +
                                             contentW.ToString("F0") + "x" + contentH.ToString("F0") + " px");
+
+                // Spacing probe (2026-08-16, change-gated by the same sig so it never spams):
+                // min pairwise centre gap + overlap counts at the CURRENT plate sizes, over the
+                // plates actually placed this rebuild (authored AND auto-laid). Two square plates
+                // overlap iff both axis deltas are under the half-size sum; clearance for a pair
+                // is therefore max(|dx|,|dy|) minus that sum.
+                float minGapPx = float.MaxValue;
+                int overlapNormal = 0, overlapFocus = 0;
+                float halfSumNormal = NodeSizePx;                        // 68 + 68
+                float halfSumFocus = (NodeFocusPx + NodeSizePx) * 0.5f;  // 84 + 68
+                string worstPair = "-";
+                foreach (var a in centers)
+                {
+                    foreach (var b in centers)
+                    {
+                        if (string.CompareOrdinal(a.Key, b.Key) >= 0) continue;
+                        float dx = Mathf.Abs(a.Value.x - b.Value.x);
+                        float dy = Mathf.Abs(a.Value.y - b.Value.y);
+                        float sep = Mathf.Max(dx, dy);
+                        if (sep < minGapPx) { minGapPx = sep; worstPair = a.Key + "/" + b.Key; }
+                        if (dx < halfSumNormal && dy < halfSumNormal) overlapNormal++;
+                        else if (dx < halfSumFocus && dy < halfSumFocus) overlapFocus++;
+                    }
+                }
+                if (centers.Count < 2) minGapPx = 0f;
+                string spacing = "graph spacing: minCentreGap=" + minGapPx.ToString("F0") +
+                                 "px (tightest " + worstPair + "), overlaps normal(" + NodeSizePx +
+                                 ")=" + overlapNormal + " focus(" + NodeFocusPx + ")=" + overlapFocus +
+                                 ", content " + contentW.ToString("F0") + "x" + contentH.ToString("F0") + " px";
+                if (overlapNormal > 0 || overlapFocus > 0) FlowTrace.Warn("SkillTree", spacing);
+                else FlowTrace.Step("SkillTree", spacing);
             }
         }
 
@@ -731,6 +816,15 @@ namespace DeNelle.Village.Talents
                 BuildOuterRing(go.transform, 0.045f,
                     new Color(ElarionUi.Affordable.r, ElarionUi.Affordable.g, ElarionUi.Affordable.b, 0.85f));
 
+            // Owner picks 2026-08-16 - attached AFTER every ring so each patch's
+            // SetAsFirstSibling lands BEHIND the rings (the patches are opaque well-ink
+            // RT quads; a ring first-sibling'd after a patch would draw behind it and
+            // vanish). ADDITIVE presentation: nothing above is removed or replaced.
+            //   POINTER -> the focus plate.  AURA -> owned plates (DEFAULT, not a lock
+            //   - see IsAuraNode; one owner word flips the target state).
+            if (focus) AttachPointerVfx(go.transform);
+            if (IsAuraNode(state)) AttachAuraVfx(go.transform);
+
             var btn = go.GetComponent<Button>();
             btn.targetGraphic = img;
             ElarionUiKit.StyleButtonColors(btn);
@@ -805,6 +899,96 @@ namespace DeNelle.Village.Talents
                     BuildQuietLockCorner(go.transform);
                     break;
             }
+        }
+
+        // -- Owner picks 2026-08-16: node VFX patches ------------------------------
+        // One shared off-screen rig PER PICK (lazy, panel-lifetime); each target plate
+        // gets a RawImage SAMPLING the rig's RenderTexture, seated FIRST-SIBLING so the
+        // gold rings, plate, art and pips all draw over it. Patches die with the node on
+        // every rebuild (ClearContent); the rigs persist until Close() disposes them.
+
+        /// <summary>AURA TARGET STATE - DEFAULT, NOT A LOCK (owner 2026-08-16 pick,
+        /// "Node Auras"). Default = OWNED/learned nodes (the lit prestige read on talents
+        /// the player has taken). The owner can flip it to available-to-buy nodes in one
+        /// word: change this to (state == Next || state == Available).</summary>
+        private static bool IsAuraNode(SkillNodeState state)
+        {
+            return state == SkillNodeState.Owned;
+        }
+
+        private void AttachPointerVfx(Transform nodeRoot)
+        {
+            if (_pointerVfxUnavailable) return;   // Begin already Warned once this open
+            if (_pointerVfx == null)
+            {
+                _pointerVfx = TalentNodeVfxRig.CreatePointer();
+                if (!_pointerVfx.Begin())
+                {
+                    // Begin logged the Warn (missing mirror / RT failure). Keep the
+                    // code-built focus ring as the sole pointer; never retry per repaint.
+                    _pointerVfx.Dispose();
+                    _pointerVfx = null;
+                    _pointerVfxUnavailable = true;
+                    return;
+                }
+                FlowTrace.Step("TalentPointer", "attach: rig live - pointer loop presents on the focus node " +
+                                                "(additive to the gold ring)");
+            }
+            if (!_pointerVfx.IsValid) return;
+            // Peeks well past the plate so the loop reads as a marker OVER the node,
+            // not a texture trapped inside it.
+            BuildVfxPatch(nodeRoot, "PointerVfx", _pointerVfx.Texture, 0.35f);
+        }
+
+        private void AttachAuraVfx(Transform nodeRoot)
+        {
+            if (_auraVfxUnavailable) return;
+            if (_auraVfx == null)
+            {
+                _auraVfx = TalentNodeVfxRig.CreateAura();
+                if (!_auraVfx.Begin())
+                {
+                    // Begin logged the Warn. Owned plates keep their code-built gold
+                    // border + rank 1/1 prestige read; never retry per repaint.
+                    _auraVfx.Dispose();
+                    _auraVfx = null;
+                    _auraVfxUnavailable = true;
+                    return;
+                }
+                FlowTrace.Step("TalentAura", "attach: rig live - aura presents on owned nodes " +
+                                             "(one shared instance sampled per node patch)");
+            }
+            if (!_auraVfx.IsValid) return;
+            // Tighter halo than the pointer - an aura hugs its plate; the pointer floats.
+            BuildVfxPatch(nodeRoot, "AuraVfx", _auraVfx.Texture, 0.25f);
+        }
+
+        /// <summary>One RT-sampling RawImage patch behind a node plate. Opaque well-ink
+        /// quad, so it must be first-sibling'd AFTER every ring on the node is built.</summary>
+        private static void BuildVfxPatch(Transform nodeRoot, string name,
+                                          RenderTexture texture, float peek)
+        {
+            var patch = new GameObject(name, typeof(RawImage));
+            patch.transform.SetParent(nodeRoot, false);
+            var pr = (RectTransform)patch.transform;
+            pr.anchorMin = new Vector2(-peek, -peek);
+            pr.anchorMax = new Vector2(1f + peek, 1f + peek);
+            pr.offsetMin = Vector2.zero; pr.offsetMax = Vector2.zero;
+            var raw = patch.GetComponent<RawImage>();
+            raw.texture = texture;
+            raw.color = Color.white;
+            raw.raycastTarget = false;
+            patch.transform.SetAsFirstSibling();  // behind rings/plate/art - never occludes them
+        }
+
+        private void Update()
+        {
+            // URP never auto-renders the rigs' off-screen cameras; drive them while the
+            // panel is open so the loops actually animate. One Render per rig per frame,
+            // shared by every patch sampling that rig's texture. No-op otherwise.
+            if (_ui == null) return;
+            if (_pointerVfx != null) _pointerVfx.RenderTick();
+            if (_auraVfx != null) _auraVfx.RenderTick();
         }
 
         /// <summary>Small bottom-right cost/state pip — never covers the skill art centre.</summary>
@@ -1353,6 +1537,14 @@ namespace DeNelle.Village.Talents
             _popupConfirmLabel = null;
             _popupCancelBtn = null;
             _lastLayoutSig = null;
+            // Owner picks 2026-08-16: both rigs despawn WITH the panel; the patch
+            // RawImages are children of _ui and die in the Destroy below.
+            if (_pointerVfx != null) { _pointerVfx.Dispose(); _pointerVfx = null; }
+            if (_auraVfx != null) { _auraVfx.Dispose(); _auraVfx = null; }
+            _pointerVfxUnavailable = false;   // a later open may retry (fresh session state)
+            _auraVfxUnavailable = false;
+            _lastPointerSig = null;
+            _lastAuraCount = -1;
             if (_ui != null) Destroy(_ui);
             _ui = null;
             _graphContent = null;

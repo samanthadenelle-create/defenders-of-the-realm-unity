@@ -43,10 +43,12 @@
 //                   graph well, a >= 2-line description, and a tile whose two line
 //                   boxes fit inside the ability band.
 //   3 [grid]        the graph content can never exceed / be sliced by its container:
-//                   the pad is at least half a node plate, the section band owns a
-//                   whole reserved row, and the fixed px-per-unit lattice keeps the
-//                   TIGHTEST authored column/row gap in hero-talents.json clear of a
-//                   node plate (read from the canonical json, not assumed).
+//                   the pad is at least half a node plate, and a FULL PAIRWISE AABB
+//                   sweep over every authored x/y pair in hero-talents.json proves no
+//                   two plates overlap at NodeSizePx or NodeFocusPx-vs-neighbour
+//                   (read from the canonical json, not assumed; corrected 2026-08-16 -
+//                   the old SectionBandY row-pair exclusion assumed a push-apart that
+//                   WO-896 deleted, which let 5 real overlaps read green).
 //   4 [truncation]  at the reference resolution no label is forced to ellipsize: the
 //                   longest UNBREAKABLE word in abilities.json fits an ability tile
 //                   at the kit FontFloor, and the longest name in hero-talents.json
@@ -295,12 +297,20 @@ namespace DeNelle.Editor.Regression
         }
 
         // =====================================================================
-        //  CASE 3 - the grid can never exceed / be sliced by its container
+        //  CASE 3 - the grid can never exceed / be sliced by its container, and
+        //  no two authored plates can overlap (FULL PAIRWISE AABB, 2026-08-16).
+        //  The old shape excluded the row pair straddling SectionBandY on the
+        //  premise that RebuildGraph pushed that pair apart - WO-896 DELETED the
+        //  push-apart, so the exclusion made real overlaps read green (5 hard
+        //  overlapping pairs + 26 focus-size overlaps measured 2026-08-16).
         // =====================================================================
         private static void Case3_GridContainment(List<string> failures, List<string> notes)
         {
             var L = ReadLayout(failures, "[grid]");
             if (!L.Ok) return;
+
+            float nodeFocus = ConstFloat(FindType(ViewType), "NodeFocusPx", failures, "[grid]");
+            if (nodeFocus <= 0f) return;
 
             // The content rect must pad by at least HALF A NODE PLATE, or the extreme authored
             // rows/columns hang outside the content and get sliced mid-plate at the mask edge -
@@ -310,88 +320,96 @@ namespace DeNelle.Editor.Regression
                              $"({L.NodeSize * 0.5f}) - the first and last authored rows/columns extend past the " +
                              "scroll content and are cut mid-plate at the mask edge");
 
-            // Node-to-node clearance on the REAL authored lattice. Read the tightest gap that
-            // actually exists in hero-talents.json rather than trusting a hand-picked scale.
-            float gapX, gapY;
-            int rows;
-            float bandY = ConstFloat(FindType(ViewType), "SectionBandY", failures, "[grid]");
-            if (!TightestAuthoredGaps(failures, bandY, out gapX, out gapY, out rows)) return;
+            // Every authored node pair, on the REAL lattice (GraphUnitWpx/Hpx). Two square plates
+            // overlap iff their centre deltas are under the half-size sum on BOTH axes. Checked at
+            // BOTH plate sizes: normal vs normal (NodeSizePx) and focus vs normal (NodeFocusPx vs
+            // NodeSizePx - any node can be the oversized selected/Next plate).
+            var pts = ParseAuthoredNodes(failures);
+            if (pts == null) return;
 
-            float pitchX = gapX * L.UnitW;
-            if (pitchX < L.NodeSize)
-                failures.Add($"[grid] the tightest authored COLUMN gap in hero-talents.json ({gapX:F3}) resolves " +
-                             $"to {pitchX:F0} px at GraphUnitWpx={L.UnitW}, under a {L.NodeSize} px node plate - " +
-                             "adjacent nodes would overlap each other inside the scroll content");
+            float halfSumNormal = L.NodeSize;                       // 68 + 68
+            float halfSumFocus = (nodeFocus + L.NodeSize) * 0.5f;   // 84 + 68
+            int overlapNormal = 0, overlapFocus = 0;
+            float minClearFocusPx = float.MaxValue;                 // worst pair's clear air at focus size
+            string worstPair = "";
 
-            // gapY excludes the ONE row pair that straddles the section band: RebuildGraph pushes
-            // that pair apart to SectionClearPx (case 1 pins that floor). Every other row pair has
-            // to clear a node plate on the raw lattice.
-            float pitchY = gapY * L.UnitH;
-            if (pitchY < L.NodeSize)
-                failures.Add($"[grid] the tightest non-band authored ROW gap ({gapY:F3}) resolves to " +
-                             $"{pitchY:F0} px at GraphUnitHpx={L.UnitH}, under a {L.NodeSize} px node plate - " +
-                             "stacked node rows would overlap inside the scroll content");
+            for (int i = 0; i < pts.Count; i++)
+            {
+                for (int j = i + 1; j < pts.Count; j++)
+                {
+                    float dx = Mathf.Abs(pts[i].X - pts[j].X) * L.UnitW;
+                    float dy = Mathf.Abs(pts[i].Y - pts[j].Y) * L.UnitH;
+                    float sep = Mathf.Max(dx, dy);   // an AABB pair is clear once EITHER axis clears
+                    float clearFocus = sep - halfSumFocus;
+                    if (clearFocus < minClearFocusPx)
+                    {
+                        minClearFocusPx = clearFocus;
+                        worstPair = pts[i].Id + "/" + pts[j].Id;
+                    }
+                    if (dx < halfSumNormal && dy < halfSumNormal)
+                    {
+                        overlapNormal++;
+                        if (overlapNormal <= 3)
+                            failures.Add($"[grid] authored plates OVERLAP at normal size ({L.NodeSize}px): " +
+                                         $"{pts[i].Id} vs {pts[j].Id} (dx={dx:F0}px dy={dy:F0}px < {halfSumNormal:F0}px) - " +
+                                         "re-author x/y in hero-talents.json, never the plate consts");
+                    }
+                    else if (dx < halfSumFocus && dy < halfSumFocus)
+                    {
+                        overlapFocus++;
+                        if (overlapFocus <= 3)
+                            failures.Add($"[grid] a FOCUS plate ({nodeFocus}px, selected/Next) overlaps its neighbour: " +
+                                         $"{pts[i].Id} vs {pts[j].Id} (dx={dx:F0}px dy={dy:F0}px < {halfSumFocus:F0}px) - " +
+                                         "re-author x/y in hero-talents.json, never the plate consts");
+                    }
+                }
+            }
+            int overlaps = overlapNormal + overlapFocus;
+            if (overlapNormal > 3)
+                failures.Add($"[grid] ...plus {overlapNormal - 3} more normal-size overlap pair(s)");
+            if (overlapFocus > 3)
+                failures.Add($"[grid] ...plus {overlapFocus - 3} more focus-size overlap pair(s)");
 
-            notes.Add($"lattice: tightest authored gaps x={gapX:F3} ({pitchX:F0}px), y={gapY:F3} ({pitchY:F0}px) " +
-                      $"over {rows} authored rows");
+            // The measured record prints on EVERY gate run, pass or fail, so drift is visible.
+            notes.Add($"minPairGapPx={minClearFocusPx:F1} overlaps={overlaps} " +
+                      $"(pairwise over {pts.Count} authored nodes at {L.NodeSize}/{nodeFocus}px; " +
+                      $"tightest pair {worstPair})");
         }
 
-        /// <summary>Smallest gap between two DISTINCT authored x values that share a row, and the
-        /// smallest gap between two distinct authored y values THAT DO NOT STRADDLE the section
-        /// band (that pair is rescued by the reserved row). Parsed straight out of the canonical
-        /// json so the oracle tracks the data, not a snapshot of it.</summary>
-        private static bool TightestAuthoredGaps(List<string> failures, float bandY,
-                                                 out float gapX, out float gapY, out int rowCount)
+        private sealed class AuthoredNode
         {
-            gapX = 1f; gapY = 1f; rowCount = 0;
-            string src = ReadText(TalentsJson, failures, "[grid]");
-            if (src == null) return false;
+            public string Id;
+            public float X, Y;
+        }
 
-            // Node objects carry "x": <f>, "y": <f> (in either order in the authored file).
-            var rowsByY = new Dictionary<string, List<float>>();
-            var ys = new List<float>();
-            var mx = Regex.Matches(src, "\"x\"\\s*:\\s*(-?[0-9.]+)\\s*,\\s*\"y\"\\s*:\\s*(-?[0-9.]+)");
-            if (mx.Count == 0)
-                mx = Regex.Matches(src, "\"y\"\\s*:\\s*(-?[0-9.]+)\\s*,\\s*\"x\"\\s*:\\s*(-?[0-9.]+)");
-            if (mx.Count == 0)
+        /// <summary>Every authored (id, x, y) triple in the canonical json, in file order. The
+        /// id/x/y walk pairs each x/y with the most recent "id" so overlap failures can NAME the
+        /// colliding nodes. Parsed straight out of the json so the oracle tracks the data, not a
+        /// snapshot of it. Nodes without x/y (ranger/mage, knight branches) auto-layout at runtime
+        /// and are out of this oracle's scope - the view's [Flow:SkillTree] probe reports those.</summary>
+        private static List<AuthoredNode> ParseAuthoredNodes(List<string> failures)
+        {
+            string src = ReadText(TalentsJson, failures, "[grid]");
+            if (src == null) return null;
+
+            var result = new List<AuthoredNode>();
+            string lastId = "?";
+            var mx = Regex.Matches(src,
+                "\"id\"\\s*:\\s*\"([^\"]+)\"|\"x\"\\s*:\\s*(-?[0-9.]+)\\s*,\\s*\"y\"\\s*:\\s*(-?[0-9.]+)");
+            foreach (Match m in mx)
+            {
+                if (m.Groups[1].Success) { lastId = m.Groups[1].Value; continue; }
+                float x = ParseF(m.Groups[2].Value), y = ParseF(m.Groups[3].Value);
+                if (x < 0f || y < 0f) continue;   // -1 = unset/auto
+                result.Add(new AuthoredNode { Id = lastId, X = x, Y = y });
+            }
+            if (result.Count == 0)
             {
                 failures.Add("[grid] no authored x/y pairs found in " + TalentsJson + " - the node lattice " +
                              "cannot be checked; the authoring shape changed and this oracle is now blind");
-                return false;
+                return null;
             }
-            foreach (Match m in mx)
-            {
-                float a = ParseF(m.Groups[1].Value), b = ParseF(m.Groups[2].Value);
-                float x = a, y = b;
-                if (x < 0f || y < 0f) continue;   // -1 = unset/auto, laid out at the centre
-                string key = y.ToString("F4");
-                if (!rowsByY.TryGetValue(key, out var list)) { list = new List<float>(); rowsByY[key] = list; ys.Add(y); }
-                list.Add(x);
-            }
-            rowCount = rowsByY.Count;
-            if (rowCount == 0) { failures.Add("[grid] every authored node is unset (-1) - nothing to check"); return false; }
-
-            foreach (var kv in rowsByY)
-            {
-                var xs = kv.Value;
-                xs.Sort();
-                for (int i = 1; i < xs.Count; i++)
-                {
-                    float d = xs[i] - xs[i - 1];
-                    if (d > 0.0001f && d < gapX) gapX = d;
-                }
-            }
-            ys.Sort();
-            for (int i = 1; i < ys.Count; i++)
-            {
-                float lo = ys[i - 1], hi = ys[i];
-                if (lo <= bandY && hi > bandY) continue;   // the pair the reserved band row splits
-                float d = hi - lo;
-                if (d > 0.0001f && d < gapY) gapY = d;
-            }
-            if (gapX >= 1f) gapX = 1f;   // single-column tree: no constraint
-            if (gapY >= 1f) gapY = 1f;
-            return true;
+            return result;
         }
 
         // =====================================================================
