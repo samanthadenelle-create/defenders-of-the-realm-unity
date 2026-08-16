@@ -404,6 +404,7 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "wall-mitigation suite", () => { if (!WallHeartMitigationRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[wall-mitigation] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "pack-grant suite", () => { if (!PackGrantRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[pack-grant] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "upgrade-authority suite", () => { if (!BuildingUpgradeAuthorityRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[upgrade-authority] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "upgrade-family suite", () => { if (!UpgradeFamilyPrecedenceRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[upgrade-family] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "crystal-production suite", () => { if (!CrystalProductionRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[crystal-production] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "sfx-resolve suite", () => { if (!SfxResolveRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[sfx-resolve] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "dungeon-exit suite", () => { if (!DungeonExitRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[dungeon-exit] " + r); });
@@ -506,6 +507,10 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "hero-death-pin suite", () => { if (!DeNelle.Editor.Regression.HeroDeathPinRebaseRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[hero-death-pin] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "wall-build-l1 suite", () => { if (!DeNelle.Editor.Regression.WallBuildL1Regression.Run(out var r)) failures.Add(r); else log.AppendLine("[wall-build-l1] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "castle-plans suite", () => { if (!DeNelle.Editor.CastlePlansUnlockRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[castle-plans] " + r); });
+            // WO-1105: the SEAT half (where the drop stands), sister to the unlock half above.
+            // Distinct marker CASTLE_PLANS_SEAT_OK -- a shared marker is how a 22-case pass once
+            // read as the full suite's pass (canon sec 8).
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "castle-plans-seat suite", () => { if (!DeNelle.Editor.CastlePlansSeatRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[castle-plans-seat] " + r); });
 
             // --- WO-853 structures are targetable: Faction derived (never serialized) on every
             // IDamageable, walls stay on layer Structure (towers must not shoot through them),
@@ -565,6 +570,25 @@ namespace DeNelle.Editor
             // word/name fits at the FontFloor; and the source laws (RectMask2D, top-left pivot,
             // band pins, reserved section row, no 1/n slicing, no green ButtonConfirm overlay) ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "skills-panel-layout suite", () => { if (!DeNelle.Editor.Regression.SkillsPanelLayoutRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[skills-panel-layout] " + r); });
+
+            // --- TALENT FOCUS SINGLETON (WO-1021 sec 2.1d, owner "Still Messy" at WIS 252):
+            // SkillNodeState.Next is a PER-TRACK signal, so a view that renders it oversized
+            // grows one shouting gold plate per track. Pins: at most ONE plate above NodeSizePx
+            // on a multi-track board, a per-track NEXT cue that is normal-size and separable in
+            // GREYSCALE, and the sec.2.1b lattice solver holding the minimum pitch ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "talent-focus suite", () => { if (!DeNelle.Editor.Regression.TalentFocusSingletonRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[talent-focus] " + r); });
+
+            // --- TALENT TREE SHAPE (owner ruling 2026-08-16): "start with three and they can
+            // branch wider", "common or specialty should still start from a few simple then
+            // really refine to the playstyle of the user". The shared pool was reshaped to
+            // 3/4/4 while the three CLASS trees still fanned five-to-eight flat across the
+            // bottom rank, and ranger/mage carried no authored position at all -- so the
+            // runtime auto-placer, not the designer, decided the tree the player looked at.
+            // Pins: at most THREE root, cheapest-cost nodes on every bottom row (classes AND
+            // the common pool), a strictly wider row above it and no funnel above that, every
+            // node positioned inside 0..1, no orphan / cycle / unreachable node, and no
+            // visible node stranded behind a hidden prerequisite ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "talent-tree-shape suite", () => { if (!DeNelle.Editor.Regression.TalentTreeShapeRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[talent-tree-shape] " + r); });
 
             // --- NUMERAL LEGIBILITY (owner defect 2026-08-05, QueueCardRail_2670x1200.png):
             // no typographic role may render its numeral 1 as a bare vertical stroke. The chip
@@ -773,6 +797,22 @@ namespace DeNelle.Editor
             // BEFORE it builds the HUD (an unguarded presentation throw was the raid's only
             // exitless state), and the four named raid catches must not swallow silently again.
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "raid-exit-parity suite", () => { if (!DeNelle.Editor.Regression.RaidExitParityRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[raid-exit-parity] " + r); });
+
+            // --- COLLECTOR STACK PROPS (2026-08-16): CollectorStackPropCatalog.cs told
+            // everyone to "place the asset at Assets/Resources/Collectors/..." and nobody
+            // ever did - the folder did not exist and git history shows the asset was
+            // never added on any branch. So EnsureCatalog() resolved null on every run and
+            // every farm/lumbermill/forge silently drew the abstract fill bar instead of
+            // its diegetic prop pile, for months, with nothing red. A graceful degradation
+            // with no gate over it is indistinguishable from working software. Pins BOTH
+            // branches: the asset exists with the owner's 2026-08-16 picks committed as
+            // GUIDs (a TEXT assertion - the KayKit pack is gitignored, so a loaded-
+            // reference check would go red on a pack-less machine for a non-defect), AND
+            // TryGet still reports null-prop / unmapped rows as NOT FOUND so that machine
+            // keeps the fill bar rather than reaching Instantiate(null).
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "collector-props suite", () => { if (!DeNelle.Editor.Regression.CollectorStackPropCatalogRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[collector-props] " + r); });
+
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "placed-upgrade-page suite", () => { if (!DeNelle.Editor.PlacedUpgradePageTruthRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[placed-upgrade-page] " + r); });
 
             // --- THE ORACLE THAT GUARDS THIS FILE: distinct markers, no unregistered
             // oracle, no gate script grepping a marker nobody emits. Registered LAST so

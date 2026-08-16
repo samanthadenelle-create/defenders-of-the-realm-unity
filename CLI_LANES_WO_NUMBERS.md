@@ -1133,6 +1133,39 @@
 > doc"* — and the copy was **inside the numbering authority itself**. A duplicate cannot be kept honest
 > by discipline; it can only be removed. **The header is the sole source. Do not restore numbers here.**
 >
+> *(WO-1021 AMENDED 2026-08-16 - no new number. Owner screenshot at WIS 252: *"Still Messy."* ★ NEW
+> §2.1d **FOCUS INFLATION — a SECOND defect on top of the §2.1b spacing gap.**
+> `HeroSkillTreeVM.ResolveStates:839-856` resets `nextTaken` **PER TRACK** (its comment is correct:
+> *"on an ORDERED track exactly ONE node may be Next"*), so the board carries **one `Next` per track**.
+> The view at `HeroSkillTreePanelMvvm.cs:451-452` then renders EVERY `Next` at `NodeFocusPx` (168 vs
+> 136) with a thick gold ring — so the file's own header premise, *"ONE thick gold FOCUS plate"*, is
+> violated by construction the moment there is >1 track. At WIS 252 that is ~10 oversized gold plates
+> overlapping. ⛔ **The VM is NOT wrong — do NOT "fix" `ResolveStates`** (WO-910's Inert rule depends on
+> that loop). **The VIEW is over-consuming a per-track signal as a board-level one.** Fix = split
+> SELECTED (board-level singleton, owns the big plate, **at most ONE ever — assert it**) from NEXT
+> (per-track, quiet rim/pip, **same size**, shape-carried not size-carried, greyscale-safe).
+> ⚠ §2.1b and §2.1d are INDEPENDENT and BOTH required — spacing alone still leaves 10 huge plates;
+> focus alone still leaves overlap. Owner has said "messy" TWICE; half a fix earns a third report.)*
+>
+> *(UI-seat bumped 1040 -> 1042 in the SAME edit as the WO-1040 + WO-1041 mints, owner 2026-08-16
+> *"Finishing a dungeon feels lackluster"*. **1040** = the TREASURE FOUND panel overlaps 3 text blocks
+> (`DungeonTreasurePanel.cs:128-141` — `EnsureBand` GROWS the payout with line count while its
+> neighbours sit at FIXED fractional anchors = the documented WO-865 class, same as WO-1030) + the
+> payout is ALL dungeon consumables so the loop is CLOSED; owner ruled **GRADED RUNS** (capture kills /
+> potions / deaths / time -> rate the run -> reward tier). ⚠ 3 rubric traps written up: speed-weighting
+> punishes EXPLORATION; potions+deaths DOUBLE-punish a hard fight; a completed run must ALWAYS pay.
+> **1041** = ★ **THE STONE LOOP IS ALREADY BUILT — it is missing ONE thing, a SOURCE.** I first scoped
+> this pillar-sized; that was WRONG. Measured: gems EXIST (`ing_ember_crystal`/`ing_aether_shard`/
+> `ing_heartstone_crystal`), the **Jeweler is BUILT** (`PanelId.JewelerCrafting=10`, `JewelerPanelMvvm`,
+> `BuildingKind.JewelersBench=9`, **43 files**, WO-553), `jeweler-recipes.json` has **6 recipes**
+> (base accessory + gems -> higher tier), and the ring chain `ring_iron->steadfast->embercoil->heartward`
+> is authored (WO-543). ⛔ **DO NOT build a socketing system / stone catalog / new screen — all shipped.**
+> The whole ask is a DROP TABLE. Owner ruled **WEIGHTED ODDS, not a no-deaths gate** — a flawless-run
+> gate locks the median player out of the very reward that justifies the dungeon, and locks out the
+> players who most need the power. Odds come from 1040's grade (ONE rubric). ⚠ Size rates against the
+> REAL gem counts in the recipes. ⚠ **Gems must NEVER become purchasable** (WO-1037 just added impulse
+> packs) or the pillar's justification is void. READY.)*
+>
 > *(UI-seat bumped 1039 -> 1040 in the SAME edit as the WO-1039 mint — owner 2026-08-16: build mode
 > *"looks good but disjoined"*. ★ **THIS IS ALREADY HER RULING AND IT WAS HALF-BUILT.**
 > `docs/UI/OBSIDIAN_UI_DESIGN_skilltree_inventory.md` **§6** records verbatim: *"make a styling-type
