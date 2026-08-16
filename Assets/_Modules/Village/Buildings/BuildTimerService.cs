@@ -89,6 +89,20 @@ namespace DeNelle.Village
         /// <summary>Raised when a job's remaining time changes via a skip (ad / instant). Arg = the updated job.</summary>
         public event Action<BuildJobData> JobSkipped;
 
+        /// <summary>
+        /// WO-1042 — raised when a job is REMOVED without completing, from the one cancel choke point
+        /// (<see cref="CancelChannelJob"/>, which <see cref="CancelChannelJobWithRefund"/> delegates to).
+        /// <para>
+        /// WHY THIS EXISTS: the v37 paid basket refunds RESOURCES, and it is the right contract for
+        /// every job that spends resources. A jewel-polish job spends an ITEM (the rough stone), and
+        /// JobCost has no item lane — so without this hook, cancelling a polish would silently eat the
+        /// player's stone. The alternative, not consuming the stone until completion, would let one
+        /// stone back five queued jobs. A cancel signal is the small, correct seam; it is NOT a second
+        /// timer system and it changes no existing behaviour (nothing else subscribes).
+        /// </para>
+        /// </summary>
+        public event Action<BuildJobData> JobCancelled;
+
         /// <summary>WO-773 — raised whenever ANY channel's active/pending set changes (for the queue HUD).</summary>
         public event Action QueueChanged;
 
@@ -794,6 +808,17 @@ namespace DeNelle.Village
         {
             var job = FindInChannel(GetChannel(channel), structureId, out bool _);
             if (!job.HasValue) return 0;
+
+            // WO-1042 / owner ruling 2026-08-16 — a RANDOM-outcome job is never priced for a paid
+            // finish. Returning 0 here is the AFFORDANCE half of the exclusion: both queue UIs
+            // (ManageScreenPanel's Finish CTA and ObsidianQueueHud's rush row) build their button
+            // only when price > 0, so the button cannot be rendered for a polish job by any list
+            // that prices its rows through this method — including a future generic one. The ACT
+            // half is refused independently in TryInstantFinish, so this is defence in depth and
+            // not the only gate. See JobRushPolicy for why (it is a loot-box question, not a
+            // balance one).
+            if (!JobRushPolicy.AllowsPaidInstantFinish(job.Value.JobKind)) return 0;
+
             return Config.InstantFinishPrice(RemainingSeconds(channel, structureId));
         }
 
@@ -821,6 +846,12 @@ namespace DeNelle.Village
 
             var job = FindInChannel(GetChannel(channel), structureId, out bool isActive);
             if (!job.HasValue || !isActive || job.Value.StartMs <= 0) return false;
+
+            // ⚠ NO POLICY GATE HERE, AND THAT IS DELIBERATE (owner ruling 2026-08-16).
+            // Ad-skip is ALLOWED on a random-outcome job. The doctrine is SELL THE WAIT, NEVER THE
+            // ROLL: an ad shortens a countdown the player would have reached anyway and involves no
+            // purchase, so it is not the regulated shape. Only the CASH/crystal instant-finish is
+            // excluded — see JobRushPolicy and InstantFinishPrice. Do not "tidy" a gate in here.
             if (UnderDailyAdCap() == false) return false;
             var mgr = RewardedAdManager.Instance;
             return mgr != null && mgr.IsAdReady;
@@ -879,6 +910,26 @@ namespace DeNelle.Village
         public bool TryInstantFinish(ChannelId channel, string structureId, out string failure)
         {
             failure = null;
+
+            // ⛔ THE RULING GATE (owner 2026-08-16) — checked FIRST, before price, wallet or state,
+            // so the refusal is unambiguous and can never be mistaken for "you are broke" or "there
+            // is no job". A paid instant resolve of a RANDOM outcome is mechanically a loot box and
+            // is regulated in several jurisdictions in the shipping plan; a re-polish can even trade
+            // DOWN, so a purchase could buy a strictly worse item. Waiting and ad-skip stay open.
+            // InstantFinishPrice also returns 0 for these kinds (which hides the button) — this is
+            // the ACT half, defence in depth, because a gap in a list UI must hit a wall, not silence.
+            // See JobRushPolicy.
+            {
+                var gated = FindInChannel(GetChannel(channel), structureId, out bool _);
+                if (gated.HasValue &&
+                    JobRushPolicy.RefusePaidFinish(gated.Value.JobKind, "TryInstantFinish",
+                                                   structureId, out string ruled))
+                {
+                    failure = ruled;
+                    return false;
+                }
+            }
+
             int price = InstantFinishPrice(channel, structureId);
             if (price <= 0)
             {
@@ -991,6 +1042,26 @@ namespace DeNelle.Village
             var ch = GetChannel(channel);
             if (ch == null) return;
 
+            // ⛔ THE BYPASS WALL (owner ruling 2026-08-16). This method is the paid verb's executor —
+            // TryInstantFinish charges crystals and then calls exactly this. It is PUBLIC, so a future
+            // seat could write `AddCrystals(-p); CompleteAnyJob(...)` and route around the gate in
+            // TryInstantFinish entirely. That would be a GAP; the owner asked for a WALL. Refusing
+            // here means the bypass fails loudly instead of quietly reinstating the loot box.
+            //
+            // ⚠ WHY CompleteChannelJob IS DELIBERATELY *NOT* GATED THE SAME WAY: it is the executor
+            // for the AD-SKIP path (ApplySkipSeconds completes through it) and for the offline sweep,
+            // and ad-skip on a random outcome is ALLOWED by the same ruling. Gating it would break a
+            // sanctioned path. The asymmetry is intentional, not an oversight.
+            {
+                var gated = FindInChannel(ch, structureId, out bool _);
+                if (gated.HasValue &&
+                    JobRushPolicy.RefusePaidFinish(gated.Value.JobKind, "CompleteAnyJob",
+                                                   structureId, out string _ruled))
+                {
+                    return;
+                }
+            }
+
             if (ActiveIndexInChannel(ch, structureId) >= 0)
             {
                 CompleteChannelJob(channel, structureId);
@@ -1080,21 +1151,37 @@ namespace DeNelle.Village
             int a = ActiveIndexInChannel(ch, structureId);
             if (a >= 0)
             {
+                var cancelled = ch.ActiveJobs[a];      // read BEFORE removal — the cancel destroys it
                 ch.ActiveJobs.RemoveAt(a);
                 ObsidianQueueEngine.PullIntoFreeSlots(ch, SlotCount(channel), TimeSource.NowUnixMs());
                 Persist();
                 RaiseQueueChanged();
+                RaiseJobCancelled(cancelled);
                 return true;
             }
             int p = PendingIndexInChannel(ch, structureId);
             if (p >= 0)
             {
+                var cancelled = ch.PendingQueue[p];
                 ch.PendingQueue.RemoveAt(p);
                 Persist();
                 RaiseQueueChanged();
+                RaiseJobCancelled(cancelled);
                 return true;
             }
             return false;
+        }
+
+        /// <summary>
+        /// Fire <see cref="JobCancelled"/>, Guard-wrapped (§12) so a misbehaving subscriber logs via
+        /// FlowTrace.Fail and can never leave the queue half-cancelled. Raised AFTER the removal is
+        /// persisted, so a subscriber that grants an item back sees a consistent queue.
+        /// </summary>
+        private void RaiseJobCancelled(BuildJobData job)
+        {
+            DeNelle.Core.Diagnostics.Guard.Try("Obsidian",
+                $"raise JobCancelled '{job.StructureId}' ({job.JobKind})",
+                () => JobCancelled?.Invoke(job));
         }
 
         // =====================================================================

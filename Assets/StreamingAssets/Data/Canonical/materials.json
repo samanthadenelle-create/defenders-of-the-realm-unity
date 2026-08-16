@@ -251,6 +251,17 @@
       "glyph": "*",
       "iconPath": "",
       "price": 5
+    },
+    {
+      "_comment": "WO-1042 - the ROUGH STONE a dungeon run pays out. Unidentified on purpose: the player leaves it with the Jeweler, who POLISHES it (an Obsidian Research-channel job) into one of the three refined gems jeweler-recipes.json consumes. 'flavor' is the owner's verbatim framing and is NARRATIVE CANON - it hints that the stone is worth something WITHOUT naming the outcome, because the unresolved state IS the mechanic (a stone labelled 'will become an Ember Crystal' is just a gem with extra steps). price 0 and DungeonExclusiveItems membership keep it off every shelf: it is earned underground or not at all.",
+      "id": "ing_rough_stone",
+      "displayName": "Rough Stone",
+      "kind": "material",
+      "category": "stone",
+      "glyph": "@",
+      "iconPath": "",
+      "price": 0,
+      "flavor": "There is something special about this one. It seems worth checking out."
     }
   ]
 }

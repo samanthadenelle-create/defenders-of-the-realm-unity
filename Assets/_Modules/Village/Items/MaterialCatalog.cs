@@ -48,6 +48,11 @@ namespace DeNelle.Village.Items
         // WO-598: authored gold BUY price at goods/jeweler vendors (Market materials,
         // Jeweler gems). 0/absent = VendorStockResolver.PriceFor's default.
         [JsonProperty("price")] public int Price;
+        // WO-1042: one line of NARRATIVE flavour, authored in materials.json — never at the call
+        // site. The rough stone is "an object of curiosity, not a line item" (§3), and its copy is
+        // canon, so it lives in the data file exactly like every other authored string. Empty for
+        // the ordinary mats, which need no story.
+        [JsonProperty("flavor")] public string Flavor;
     }
 
     [Serializable]
@@ -88,6 +93,16 @@ namespace DeNelle.Village.Items
         {
             var m = Find(id);
             return m != null ? m.IconPath : null;
+        }
+
+        /// <summary>
+        /// WO-1042 — the authored one-line flavour for a material id, or "" when it has none.
+        /// Sourced from materials.json so narrative copy is never hand-authored in code (§3).
+        /// </summary>
+        public static string Flavor(string id)
+        {
+            var m = Find(id);
+            return m != null && !string.IsNullOrEmpty(m.Flavor) ? m.Flavor : "";
         }
 
         private static void EnsureLoaded()

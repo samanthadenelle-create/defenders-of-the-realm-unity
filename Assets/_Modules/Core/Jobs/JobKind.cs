@@ -69,6 +69,23 @@ namespace DeNelle.Core.Jobs
         /// </para>
         /// </summary>
         BuildingResearch = 11,
+
+        /// <summary>
+        /// Polish ONE rough stone recovered from a dungeon into a refined gem (Research channel,
+        /// WO-1042). Job id: <c>JewelPolishService.PolishJobPrefix + &lt;stoneInstanceId&gt;</c>.
+        /// <para>
+        /// ⚠ THE ONLY <b>RANDOM-OUTCOME</b> JOB KIND. The refined gem's tier is rolled when the job
+        /// LANDS (odds shaped by the WO-1040 run grade), not chosen at enqueue. That makes it the one
+        /// kind <see cref="JobRushPolicy"/> excludes from the paid instant-finish verb: paying crystals
+        /// to resolve an unknown outcome is mechanically a loot box (owner ruling 2026-08-16). Every
+        /// other kind above is deterministic and keeps its rush untouched.
+        /// </para>
+        /// <para>
+        /// APPEND-ONLY (12), like <see cref="BuildingResearch"/>: <see cref="BuildJobData.Kind"/>
+        /// persists as an int, so no saved job is renumbered and no migration is needed.
+        /// </para>
+        /// </summary>
+        JewelPolish = 12,
     }
 
     /// <summary>
@@ -104,6 +121,7 @@ namespace DeNelle.Core.Jobs
                 case JobKind.LearnMagic:
                 case JobKind.TroopUpgrade:      // WO-771.9 — per-troop upgrade track runs on the research/lab queue
                 case JobKind.BuildingResearch:  // 2026-08-07 — WC3 timed building-perk research, same lab queue
+                case JobKind.JewelPolish:       // WO-1042 — the Jeweler's bench polishes a rough stone on the lab queue
                     return ChannelId.Research;
                 default:                         // Build/Repair/Upgrade/Tower*/Wall*/BarracksUpgrade → Builder
                     return ChannelId.Builder;

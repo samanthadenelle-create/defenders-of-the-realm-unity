@@ -26,6 +26,7 @@
 using System.Collections.Generic;
 using Cysharp.Threading.Tasks;
 using DeNelle.Core;
+using DeNelle.Core.Catalog;
 using DeNelle.Core.Diagnostics;
 using Unity.Cinemachine;
 using UnityEngine;
@@ -468,6 +469,12 @@ namespace DeNelle.Dungeons
             // and restore the shared GroundSnap/scripted-move statics so the village hero is never left frozen.
             RestoreInjectedHeroMover();
 
+            // WO-1041 / WO-1042 — THE DUNGEON'S EXCLUSIVE PAYOUT, granted BEFORE EndRun() wipes the
+            // run record. This is the one link WO-1041 §2 measured as missing: everything downstream
+            // (the rough stone item, the polish job, jeweler-recipes.json, the ring chain, the equip
+            // and stat pipeline) was already built and had no source.
+            GrantRunPayout();
+
             if (_runtimeState != null && _runtimeState.RunActive)
                 _runtimeState.EndRun();
             // The crafting inventory is per-run — bank the gathered scatter to the
@@ -484,6 +491,79 @@ namespace DeNelle.Dungeons
             // merged overworld hub (SceneRouter.Castle -> Main_Castle_Overworld), not the
             // ABANDONED legacy Village scene this predated (canon: Village.unity retired).
             return SceneRouter.LoadSceneWithFade(SceneRouter.Castle);
+        }
+
+        // ── WO-1041/1042: the run payout ─────────────────────────────────────
+
+        /// <summary>
+        /// Pay a COMPLETED run its rough stone, and record the grade that will shape the polish.
+        /// <para>
+        /// ⛔ EVERY COMPLETED RUN PAYS — the stone is GUARANTEED, not a chance (WO-1041 §3, WO-1040
+        /// §3b trap 3). A no-deaths or boss-only gate would mean the median player never once sees
+        /// the reward that justifies the dungeon, and would lock out precisely the players who are
+        /// dying and most need the power. Mastery moves the ODDS of what the stone becomes; it is
+        /// never the only door.
+        /// </para>
+        /// <para>
+        /// ⚠ "COMPLETED" IS NOT "ENTERED". A player who walks in and straight back out has not run a
+        /// dungeon, and paying that would make the stone a free tap-farm rather than a reward for
+        /// risk. The bar is deliberately LOW — one encounter, one chest, or the boss — so it excludes
+        /// only the no-op round trip, never a real if unsuccessful delve.
+        /// </para>
+        /// </summary>
+        private void GrantRunPayout()
+        {
+            DeNelle.Core.Diagnostics.Guard.Try("JewelPolish", "grant dungeon run payout", () =>
+            {
+                var st = _runtimeState;
+                if (st == null)
+                {
+                    DeNelle.Core.Diagnostics.FlowTrace.Warn("JewelPolish",
+                        "run payout skipped - no DungeonRuntimeState to judge completion from.");
+                    return;
+                }
+
+                int chests = st.ChestsOpened != null ? st.ChestsOpened.Count : 0;
+                int secrets = st.SecretRoomsFound != null ? st.SecretRoomsFound.Count : 0;
+                bool engaged = st.BossDefeated || st.RandomEncounterCount > 0 || chests > 0 || secrets > 0;
+                if (!engaged)
+                {
+                    DeNelle.Core.Diagnostics.FlowTrace.Step("JewelPolish",
+                        "run payout withheld - the player entered and left without an encounter, chest " +
+                        "or secret. Not a completed run; not a bug.");
+                    return;
+                }
+
+                // ONE RUBRIC (WO-1041 §3 / WO-1042 §5(2)): the grade comes from DungeonRunGrade and
+                // nowhere else. ⚠ WO-1040 is NOT implemented, so the tree carries no kill/death/potion/
+                // elapsed record yet; the fields below are what genuinely exists today and the rest
+                // stay at their defaults. When WO-1040 lands it fills DungeonRunStats at the source
+                // and THIS call site does not change.
+                var stats = new DeNelle.Core.Catalog.DungeonRunStats
+                {
+                    BossDefeated = st.BossDefeated,
+                    EnemiesKilled = st.RandomEncounterCount,
+                    DeepestFloor = chests + secrets,     // provisional depth proxy - WO-1040 replaces
+                };
+                int score = DeNelle.Core.Catalog.DungeonRunGrade.PolishScore(stats);
+
+                var inv = DeNelle.Village.Crafting.VillageInventory.Instance;
+                if (inv == null)
+                {
+                    DeNelle.Core.Diagnostics.FlowTrace.Fail("JewelPolish",
+                        "run payout LOST - no VillageInventory to bank the rough stone into.");
+                    return;
+                }
+
+                string stoneId = DeNelle.Core.Catalog.DungeonExclusiveItems.RoughStoneId;
+                inv.Add(stoneId, 1);
+                DungeonRunPayout.LastPolishScore = score;
+
+                DeNelle.Core.Diagnostics.FlowTrace.Step("JewelPolish",
+                    $"run payout: 1x '{stoneId}' granted (polish score {score}; boss={st.BossDefeated}, " +
+                    $"encounters={st.RandomEncounterCount}, chests={chests}, secrets={secrets}). " +
+                    "Take it to the Jeweler.");
+            });
         }
 
         // ── Per-frame: room tracking + encounter clock ───────────────────────

@@ -56,6 +56,14 @@ namespace DeNelle.Dungeons
         private const float LinePx = 60f;
         private const float HeadingPx = 66f;
 
+        // WO-1041 flow layout (see StackDown). The body hangs from the content rect's TOP edge:
+        // StackTopPx is the first element's inset, StackGapPx the breathing room between elements,
+        // and CtaReserveFraction the bottom strip the "Take" button owns (its rect is 0.05-0.245 of
+        // content, so ~0.28 keeps a margin above it).
+        private const float StackTopPx = 24f;
+        private const float StackGapPx = 14f;
+        private const float CtaReserveFraction = 0.28f;
+
         private static GameObject s_canvas;
         private static PanelHandle s_handle;
 
@@ -101,10 +109,26 @@ namespace DeNelle.Dungeons
             if (modal.chrome.close != null) modal.chrome.close.gameObject.SetActive(false);
 
             // -- body: one ASCII line per material, top-down, fixed-pixel bands ----
+            // !! WO-1041 / WO-1040 section 2 FIX - THE WO-865 CLASS (a variable-height element among fixed
+            // fractional neighbours). Until 2026-08-16 all three text blocks were placed with
+            // EnsureBand, which COLLAPSES a label's vertical anchor pair to the midpoint of its
+            // authored fraction and then pins +/- half its pixel height around that FROZEN centre.
+            // The heading sat at 0.74, the payout at 0.53 and the first-clear line at 0.34 - three
+            // fixed centres that never reflow. The payout's half-height is 30px PER LINE, so at two
+            // lines everything cleared (which is how it shipped) and from four or five it grew
+            // straight through the first-clear line below it and then the heading above it.
+            //
+            // The fix is FLOW, not smaller text (WO-1040 section 4 forbids shrinking the font): the block
+            // is laid out top-down from a single fixed top edge, each element pinned in PIXELS below
+            // the previous one, so a taller payout PUSHES what follows instead of overlapping it.
+            // Same shape as LoreReadingModal's measured hint band. Fixed-pixel bands are preserved
+            // (the header's law) - what changed is that the CURSOR moves.
+            float cursor = StackTopPx;
+
             var heading = ElarionUiKit.Label(content, "The cache holds:", 0.70f, 0.78f,
                 ElarionUi.ParchmentDim, ElarionUi.FontBody, TextAlignmentOptions.Center,
                 0.08f, 0.92f);
-            EnsureBand(heading, HeadingPx);
+            StackDown(heading, HeadingPx, ref cursor);
             ElarionUiKit.FitSingleLine(heading);
 
             var lines = new List<string>();
@@ -129,7 +153,9 @@ namespace DeNelle.Dungeons
             var payout = ElarionUiKit.Label(content, sb.ToString(), 0.40f, 0.66f,
                 ElarionUi.Parchment, ElarionUi.FontBody, TextAlignmentOptions.Center,
                 0.08f, 0.92f, bold: true);
-            EnsureBand(payout, LinePx * Mathf.Max(1, lines.Count));
+            // The one variable-height element. It now advances the cursor by its FULL height, so
+            // whatever follows starts below it no matter how many lines the bundle carries.
+            StackDown(payout, LinePx * Mathf.Max(1, lines.Count), ref cursor);
 
             if (firstClear)
             {
@@ -137,9 +163,15 @@ namespace DeNelle.Dungeons
                     "First clear -- a new recipe is remembered.", 0.30f, 0.38f,
                     ElarionUi.Gilt, ElarionUi.FontBody, TextAlignmentOptions.Center,
                     0.06f, 0.94f);
-                EnsureBand(unlock, HeadingPx);
+                StackDown(unlock, HeadingPx, ref cursor);
                 ElarionUiKit.FitSingleLine(unlock);
             }
+
+            // NO SILENT CLIPPING (CLAUDE.md section 12.2). The flow above cannot overlap any more, but a bundle far
+            // larger than anything authored today could still run past the CTA. Say so loudly rather
+            // than letting a future 12-line payout quietly disappear behind the button - that is
+            // precisely how the original defect stayed invisible at two lines.
+            WarnIfStackOverflows(content as RectTransform, cursor, lines.Count);
 
             // -- the ONE CTA (same bottom-row budget as the Echo beat) -------------
             ElarionUiKit.Button(content, "Take", ElarionUiKit.ButtonKind.Confirm,
@@ -203,17 +235,57 @@ namespace DeNelle.Dungeons
             return string.IsNullOrEmpty(name) ? id : name;
         }
 
-        /// <summary>Force a fixed-PIXEL height on a label's rect (see header: fractional
-        /// bands cull glyphs). Anchors stay centred on their existing midpoint.</summary>
-        private static void EnsureBand(TMP_Text label, float pixels)
+        /// <summary>
+        /// Place <paramref name="label"/> as the next element in a top-down PIXEL flow, then advance
+        /// <paramref name="cursor"/> past it.
+        /// <para>
+        /// !! THIS REPLACES EnsureBand, AND THE DIFFERENCE IS THE WHOLE BUG FIX. EnsureBand pinned a
+        /// fixed-pixel band around each label's OWN authored fractional midpoint, so three siblings
+        /// held three frozen centres and a block that grew with its line count expanded straight
+        /// through its neighbours (WO-865 class; WO-1040 2 documents it; WO-1030's clipped dialogue
+        /// is the same shape). Here every element hangs from the SAME top edge and each one's
+        /// position depends on the measured height of everything above it, so growth PUSHES rather
+        /// than OVERLAPS. Fixed-pixel heights are kept exactly as the file header requires - a
+        /// fractional band culls glyphs - only the vertical ORIGIN changed, from per-element and
+        /// frozen to shared and flowing.
+        /// </para>
+        /// <para>
+        /// The x anchors the kit authored are preserved untouched, so horizontal layout is unchanged.
+        /// </para>
+        /// </summary>
+        private static void StackDown(TMP_Text label, float pixels, ref float cursor)
         {
             if (label == null) return;
             var rt = label.rectTransform;
-            float mid = (rt.anchorMin.y + rt.anchorMax.y) * 0.5f;
-            rt.anchorMin = new Vector2(rt.anchorMin.x, mid);
-            rt.anchorMax = new Vector2(rt.anchorMax.x, mid);
-            rt.offsetMin = new Vector2(0f, -pixels * 0.5f);
-            rt.offsetMax = new Vector2(0f, pixels * 0.5f);
+
+            // Hang from the parent's TOP edge (y anchors both at 1) and express the band purely in
+            // pixels below it. offsetMax.y is the band's top, offsetMin.y its bottom; both negative
+            // because they run downward from the top edge.
+            rt.anchorMin = new Vector2(rt.anchorMin.x, 1f);
+            rt.anchorMax = new Vector2(rt.anchorMax.x, 1f);
+            rt.offsetMax = new Vector2(0f, -cursor);
+            rt.offsetMin = new Vector2(0f, -(cursor + pixels));
+
+            cursor += pixels + StackGapPx;
+        }
+
+        /// <summary>
+        /// Trace a warning when the stacked body would run into the CTA's reserved strip. The flow
+        /// itself cannot overlap, but the panel is not scrollable, so an unexpectedly large bundle
+        /// still deserves a loud line rather than silence (CLAUDE.md section 12.2). Pre-layout (height 0) the check
+        /// is skipped - the stacking is correct either way.
+        /// </summary>
+        private static void WarnIfStackOverflows(RectTransform content, float usedPx, int lineCount)
+        {
+            if (content == null) return;
+            float h = content.rect.height;
+            if (h <= 1f) return;                       // not laid out yet; nothing meaningful to test
+            float available = h * (1f - CtaReserveFraction);
+            if (usedPx <= available) return;
+            FlowTrace.Warn(Sys,
+                $"treasure body needs {usedPx:0}px but only {available:0}px clears the Take button " +
+                $"({lineCount} payout line(s), content {h:0}px). Nothing overlaps, but the tail may sit " +
+                "under the CTA - the bundle has outgrown this modal and it needs a scroll region.");
         }
     }
 }

@@ -1,0 +1,66 @@
+{
+  "_comment": "WO-1042 - the Jeweler's POLISH tuning: how long a rough stone sits on the bench, and what it can become. Loaded by JewelPolishCatalog via DeNelle.Core.CanonicalJson (Resources first, StreamingAssets fallback). Keep this copy BYTE-IDENTICAL to Assets/StreamingAssets/Data/Canonical/jewel-polish.json. This file is TUNING, not code: retune the odds here, never at the roll site.",
+
+  "_schemaNotes": {
+    "polishSeconds": "Duration of a FIRST polish (a rough stone from a dungeon). CONSTANT across every run grade - WO-1042 section 5(2): the grade shapes the ODDS and nothing else, so the player can always plan the wait. Never scale this by grade.",
+    "rePolishSeconds": "Duration of a RE-polish (feeding an already-refined gem back in for another roll). Owner ruling 2026-08-16: 'repolish should maybe have a shortened time.' Set to HALF of polishSeconds - the stone is already cut and identified, so the jeweler is refining known work rather than assessing a raw find; and a brisk tempo keeps the re-roll a live CHOICE rather than a chore, while still costing real time so a trade-down actually stings. Authored here as data, not as a magic constant at the call site.",
+    "rePolishScore": "Which outcomes row a RE-polish rolls on. A re-polish has NO dungeon run behind it, so it cannot inherit a run grade; it rolls on the bench-baseline row instead. Row 2 is deliberate: from a common ember stone a re-polish is an attractive gamble (46 percent hold, 50 percent trade UP), while from a heartstone it is a bad one (90 percent trade DOWN). That asymmetry is the SELF-BALANCING the owner described - the player with everything to lose declines, the player with nothing to lose plays.",
+    "rePolishShatterChance": "Chance a RE-polish DESTROYS the stone outright, paying nothing. Applies to re-polish ONLY - a first polish of a rough stone can never shatter, because that stone is the run's guaranteed payout and destroying it would break 'every completed run pays'. THIS IS THE ANTI-PAY-TO-WIN MECHANISM, NOT FLAVOUR (owner ruling 2026-08-16): re-rolling costs no material, so unlimited attempts would converge on the top tier with CERTAINTY - trade-down does not prevent that, the player simply stops when satisfied. Shatter re-ties attempts to earned material: a destroyed stone means another dungeon run. Do not remove or soften it without understanding that it is what keeps money buying CHANCES rather than OUTCOMES.",
+    "_futureModifiers": "Time-of-year / day-night / environmental odds modifiers were named by the owner as a FUTURE angle and are deliberately NOT built (ruling 2026-08-16: 'for right now, I think it's simple, and it works, and it's good for mobile'). The shape here supports layering one later WITHOUT a schema change - a modifier would scale the weights of a chosen row at read time - so nothing needs redesigning when that day comes. Ship ONE flat table.",
+    "outcomes": "One row per POLISH SCORE (DungeonRunGrade.PolishScore, 0..3 = run stars plus the deep-delve bonus, clamped). Each row's weights are the relative odds of each refined gem. EVERY ROW PAYS: no row contains a 'nothing' outcome, so a completed run ALWAYS yields a real gem (WO-1041 section 3 / WO-1040 section 3b trap 3). The three gem ids are exactly the ids jeweler-recipes.json consumes - verified at source 2026-08-16; if you rename one, this file and that one must move together or the loop dead-ends one step from the finish.",
+    "weights": "Relative, not percentages - the roller normalises. They are authored to sum to 1.000 anyway so the table can be read as probabilities at a glance."
+  },
+
+  "_tuning": {
+    "sizedAgainst": "jeweler-recipes.json, read at source. The RING chain ring_iron -> ring_steadfast -> ring_embercoil -> ring_heartward consumes, in total: ember x4, aether x3, heartstone x1 (8 gems). Per step: steadfast = ember x2; embercoil = ember x2 + aether x1; heartward = aether x2 + heartstone x1.",
+    "dropModel": "ONE rough stone per COMPLETED run, guaranteed; one gem per polished stone. So runs = gems, and the arithmetic below is exact.",
+    "fairness": "THE PER-ROLL TABLE IS IDENTICAL ON EVERY PATH - free, ad-funded and paid alike (owner ruling 2026-08-16). Money buys ATTEMPTS, never better odds. There is no paid-only tier and no purchaser-weighted table, and JewelPolishRegression FAILS if a second table ever appears. This is the fairness property the whole design rests on.",
+    "runsForTheFirstUpgrade": "ember x2 / P(ember): score 0 = 2/0.70 = 2.9 -> 3 runs; score 3 = 2/0.46 = 4.3 -> 5 runs. The first ring upgrade lands in 3-5 runs at ANY grade, which is the answer to 'is this worth going down for?'",
+    "runsForTheWholeRingChain": "binding gem = max(need/rate) across the three: score 0 = 25 runs (heartstone-bound); score 1 = 14.3; score 2 = 10.0; score 3 = 8.7 (ember-bound). Mastery is ~2.8x faster than a sloppy run, and NOBODY is locked out - the worst grade still finishes the full chain in 25 runs, not the 40+ that WO-1041 section 3 calls 'no reward at all'.",
+    "whyEmberNeverCollapses": "A higher score moves mass UP the tiers, which would starve the ember-hungry early steps if ember were allowed to fall away. Ember is held at or above 0.46 in every row so a strong player never gets WORSE at the upgrade they are actually working on; surplus low gems are never wasted, they are the next step's input."
+  },
+
+  "version": 1,
+
+  "polishSeconds": 1800,
+  "rePolishSeconds": 900,
+  "rePolishScore": 2,
+  "rePolishShatterChance": 0.15,
+
+  "outcomes": [
+    {
+      "score": 0,
+      "_note": "A completed run that earned no stars and stayed shallow. Still pays a real gem - this row is the floor, and the floor is not empty.",
+      "weights": [
+        { "id": "ing_ember_crystal", "weight": 0.70 },
+        { "id": "ing_aether_shard", "weight": 0.26 },
+        { "id": "ing_heartstone_crystal", "weight": 0.04 }
+      ]
+    },
+    {
+      "score": 1,
+      "weights": [
+        { "id": "ing_ember_crystal", "weight": 0.62 },
+        { "id": "ing_aether_shard", "weight": 0.31 },
+        { "id": "ing_heartstone_crystal", "weight": 0.07 }
+      ]
+    },
+    {
+      "score": 2,
+      "weights": [
+        { "id": "ing_ember_crystal", "weight": 0.54 },
+        { "id": "ing_aether_shard", "weight": 0.36 },
+        { "id": "ing_heartstone_crystal", "weight": 0.10 }
+      ]
+    },
+    {
+      "score": 3,
+      "_note": "A flawless deep delve. Heartstone odds are 3.5x the floor row - mastery pays hard without ever becoming the only door.",
+      "weights": [
+        { "id": "ing_ember_crystal", "weight": 0.46 },
+        { "id": "ing_aether_shard", "weight": 0.40 },
+        { "id": "ing_heartstone_crystal", "weight": 0.14 }
+      ]
+    }
+  ]
+}

@@ -666,6 +666,23 @@ namespace DeNelle.Core
         /// site so a UI capture shows WHY the tab is missing instead of reading as a vanished tab.</summary>
         public static bool MapTab => Get("maptab", defaultOn: false);
 
+        /// <summary>
+        /// WO-1042 (owner ruling 2026-08-16) — gates the STAKING bonus hook on the Jeweler's polish
+        /// economy. What it grants is ATTEMPTS ONLY: +1 free re-roll per week for a native SKR staker,
+        /// and +1 to the per-stone roll cap at 10k+ SKR. It NEVER touches a probability — a staker's
+        /// roll is exactly as likely as a free player's, which is the fairness property the whole
+        /// polish design rests on (see IPolishBonusProvider).
+        /// <para>
+        /// ⚠ DEFAULT OFF ON PURPOSE, AND THIS IS A COMPLIANCE DEFAULT, NOT A READINESS ONE. Apple and
+        /// Google both restrict gating gameplay functionality on token holdings and have been actively
+        /// enforcing; a Play-store build must therefore ship with the seam returning ZERO for everyone.
+        /// A Seeker / dApp-store build can flip it on. Reading the flag HERE — once, inside
+        /// PolishBonuses — is what keeps a platform check out of every call site.
+        /// </para>
+        /// Flip via PlayerPrefs "ff.stakingpolishbonus" = 1.
+        /// </summary>
+        public static bool StakingPolishBonus => Get("stakingpolishbonus", defaultOn: false);
+
         /// <summary>WO-991 (owner ruling 2026-08-15) — KILL SWITCH for the Healing Caravan's mobile
         /// shell (HealingCaravanMobility: slow follow-the-hero crawl + glass HP + the status chip).
         /// Default ON: the shell SHIPPED 2026-08-15 and this flag exists so a felt-test regression

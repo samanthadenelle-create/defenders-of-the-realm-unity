@@ -365,6 +365,11 @@ namespace DeNelle.Village.Hero
                         {
                             if (m == null || string.IsNullOrEmpty(m.Id)) return;
                             if (IsGem(m)) return;   // gems are the Jeweler's band, not the Market's
+                            // WO-1041 — the rough stone is category "stone" and so is NOT caught by
+                            // IsGem; without this it would sit on the Market's ordinary-materials
+                            // shelf and be buyable for gold, which is exactly the leak this ticket
+                            // exists to close.
+                            if (DeNelle.Core.Catalog.DungeonExclusiveItems.Contains(m.Id)) return;
                             result.Add(new VendorWare(VendorWareKind.Material, m.Id));
                         });
                         break;
@@ -375,6 +380,23 @@ namespace DeNelle.Village.Hero
                         {
                             if (m == null || string.IsNullOrEmpty(m.Id)) return;
                             if (!IsGem(m)) return;
+                            // ⛔ WO-1041 — THE PRE-EXISTING EXCLUSIVITY LEAK, CLOSED HERE.
+                            // Until 2026-08-16 this band stocked EVERY crystal-category material, so
+                            // the `jeweler` vendor (vendors.json categories: ring/amulet/gem) sold
+                            // ing_ember_crystal + ing_aether_shard for 20 gold and
+                            // ing_heartstone_crystal for 18 — the exact three gems jeweler-recipes.json
+                            // consumes. A player could therefore buy the entire ring chain over the
+                            // counter and never descend, which voids the dungeon pillar's whole
+                            // justification. The band survives (a future NON-exclusive gem may still
+                            // be shelved); the dungeon-exclusive ids are filtered out of it.
+                            // Pinned by DungeonGemExclusivityRegression.
+                            if (DeNelle.Core.Catalog.DungeonExclusiveItems.Contains(m.Id))
+                            {
+                                DeNelle.Core.Diagnostics.FlowTrace.Once("Vendor", "gem-exclusive-" + m.Id,
+                                    $"gem '{m.Id}' withheld from vendor shelf - dungeon-exclusive (WO-1041). " +
+                                    "Not a missing shelf row: it is earned underground or not at all.");
+                                return;
+                            }
                             result.Add(new VendorWare(VendorWareKind.Gem, m.Id));
                         });
                         break;
