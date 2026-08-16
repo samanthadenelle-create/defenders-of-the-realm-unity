@@ -119,6 +119,27 @@ are out of scope and never counted, which is what makes the number honest enough
 A plain run is **report-only** and always exits 0 — adding the flag to a gate is a deliberate act, and
 no one's build should start failing because a WO file is sloppy.
 
+**Wired into the check-in gate (WO-937 C, 2026-08-16):** `tools/regression/checkin_gate.ps1` runs
+`board_build.py --check` as stage 1b (right after the static gate, ~1 s, no Unity). Unlabeled hit 0
+first, so the gate enforces the vocabulary without failing anyone retroactively. A board-check FAIL
+fails the gate summary but does not short-circuit the code stages — it is a docs defect, not a
+compile one.
+
+Both runs also print a report-only `DUPLICATE_WO_NUMBERS` block — WO numbers claimed by more than one
+file (56 known legacy collisions). Duplicates are **flagged, never silently renumbered** (a collision
+is its own finding; resolve first-on-disk-and-referenced-wins). They do not affect the exit code.
+
+### Created date + "opened within" (WO-940)
+
+Every row's date column is the ticket's **CREATED date, never last-modified** — an edit must not
+reset a ticket's apparent age (`SUNDAY_HOUSEKEEPING.md` §4 makes age the primary validity evidence).
+Resolution order: `**Minted:** YYYY-MM-DD` from the WO body → git first-add date (one repo-wide git
+call) → mtime as a last resort, visibly marked `~` as an estimate. The cell renders
+`YYYY-MM-DD · <age>d`; rows older than 7 days carry a literal `7d+` badge (word + colour, never
+colour alone — the owner is red/green colourblind). "opened within" buttons (7d / 30d / 90d / all)
+compose with the bucket chips and the search box. Age is **derived at generation time, never typed
+into a WO file**.
+
 ---
 
 ## 6. Priority when tickets conflict (owner 2026-08-15)

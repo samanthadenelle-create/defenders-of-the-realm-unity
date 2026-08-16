@@ -149,6 +149,21 @@ if (-not $python) {
 
 $staticOk = ($results | Where-Object { $_.Stage -eq 'Static gate' }).Status -eq 'PASS'
 
+# --- 1b) board check (WO-937 C) ----------------------------------------------
+# python tools/board_build.py --check regenerates BOARD.html and exits 1 if any real
+# work order is Unlabeled (its **Status:** line carries no canonical keyword - see
+# docs/BOARD.md section 5). Wired here once Unlabeled hit 0 so the status vocabulary
+# is ENFORCED and cannot regress. ~1 second, no Unity. A FAIL fails the gate summary
+# but does not short-circuit the code stages - it is a docs defect, not a compile one.
+if ($python) {
+    Write-Host "`n[gate] board check (board_build.py --check)..."
+    & $python.Source (Join-Path $proj 'tools\board_build.py') --check
+    if ($LASTEXITCODE -eq 0) { Add-Result 'Board check' 'PASS' 'BOARD_CHECK_OK 0 unlabeled' }
+    else { Add-Result 'Board check' 'FAIL' "board_build.py --check exit $LASTEXITCODE (Unlabeled WOs listed above)" }
+} else {
+    Add-Result 'Board check' 'FAIL' 'no python on PATH'
+}
+
 # --- 2) compile gate ---------------------------------------------------------
 $compileOk = $false
 if ($staticOk) {

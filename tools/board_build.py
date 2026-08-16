@@ -11,7 +11,7 @@ Reads:  WorkOrders/*.md  (status line, title, RESULT markers)
         CLI_LANES_WO_NUMBERS.md  (next-free mint numbers per seat)
 Writes: BOARD.html (repo root) - open in any browser; links open the md files.
 """
-import os, re, glob, html, time, datetime, sys
+import os, re, glob, html, time, datetime, sys, subprocess
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WO_DIR = os.path.join(ROOT, "WorkOrders")
@@ -77,8 +77,52 @@ def parse_banner():
         pass
     return main, ui
 
+# ── CREATED date, never modified date (WO-940) ────────────────────────────────
+# The board's date column used to be os.path.getmtime - LAST MODIFIED. Any edit (a status
+# fix, a banner sweep) reset a ticket's apparent age, inverting the exact signal the owner
+# wants ("opened within"). The date shown is the CREATED date, resolved in priority order:
+#   1. **Minted:** YYYY-MM-DD parsed from the WO body  - authored by a human, most trustworthy
+#   2. git first-add date of the file                  - ONE git call for all ~950 files
+#   3. mtime                                           - last resort, visibly marked '~' (estimate)
+# Age is DERIVED at generation time, never typed into the WO files (a stored age is stale the
+# next morning - the disease this exists to cure).
+_MINTED = re.compile(r"^\*\*Minted:?\*\*:?[^\n]*?(\d{4}-\d{2}-\d{2})", re.MULTILINE)
+
+def git_added_dates():
+    """Map basename -> YYYY-MM-DD of the commit that first ADDED the file.
+    ONE git call over WorkOrders/ (a per-file loop over ~950 files would kill the
+    2-second build). --no-renames so a file moved into WorkOrders/ still registers
+    an Add there (rename detection would filter it to R and lose the date)."""
+    dates = {}
+    try:
+        out = subprocess.run(
+            ["git", "log", "--reverse", "--no-renames", "--diff-filter=A",
+             "--date=short", "--format=%x01%ad", "--name-only", "--", "WorkOrders/"],
+            cwd=ROOT, capture_output=True, text=True, timeout=120)
+        cur = None
+        for line in out.stdout.splitlines():
+            if line.startswith("\x01"):
+                cur = line[1:].strip()
+            elif line.strip() and cur:
+                # --reverse walks oldest-first; setdefault keeps the FIRST add.
+                dates.setdefault(os.path.basename(line.strip()), cur)
+    except Exception:
+        pass  # no git / not a repo: every row falls back to the marked mtime estimate
+    return dates
+
+def resolve_created(text, base, mtime, added_dates):
+    """(YYYY-MM-DD, is_estimate) per the priority order above."""
+    m = _MINTED.search(text)
+    if m:
+        return m.group(1), False
+    if base in added_dates:
+        return added_dates[base], False
+    return datetime.datetime.fromtimestamp(mtime).strftime("%Y-%m-%d"), True
+
 def parse_wos():
     rows = []
+    added_dates = git_added_dates()
+    today = datetime.date.today()
     results = {os.path.basename(p).replace(".RESULT.md", ".md")
                for p in glob.glob(os.path.join(WO_DIR, "*.RESULT.md"))}
     for path in sorted(glob.glob(os.path.join(WO_DIR, "*.md"))):
@@ -98,10 +142,17 @@ def parse_wos():
         status = re.sub(r"[*`]", "", status_m.group(1)).strip() if status_m else ""
         has_result = base in results
         is_wo = is_work_order(base)
+        mtime = os.path.getmtime(path)
+        created, created_est = resolve_created(text, base, mtime, added_dates)
+        try:
+            age_days = (today - datetime.date(*map(int, created.split("-")))).days
+        except ValueError:
+            age_days = 0
         rows.append({
             "num": num, "file": base, "title": title, "status": status,
             "bucket": bucket_of(status, has_result, is_wo), "result": has_result,
-            "is_wo": is_wo, "mtime": os.path.getmtime(path),
+            "is_wo": is_wo, "mtime": mtime,
+            "created": created, "created_est": created_est, "age_days": max(0, age_days),
         })
     return rows
 
@@ -113,26 +164,42 @@ def build_html(rows):
 
     def row_html(r):
         num = f"WO-{r['num']}" if r["num"] is not None else ("DOC" if not r["is_wo"] else "WO-?")
-        age = datetime.datetime.fromtimestamp(r["mtime"]).strftime("%Y-%m-%d")
+        # CREATED date + age in days (WO-940) - never mtime. '~' marks an mtime-estimated
+        # date so nobody mistakes a guess for a creation date.
+        est = "~" if r["created_est"] else ""
+        days = r["age_days"]
+        # Older than 7 days (SUNDAY_HOUSEKEEPING threshold): word/symbol PLUS colour -
+        # the owner is red/green colourblind, a hue alone is invisible to her.
+        old = ' <span class="oldm">7d+</span>' if days > 7 else ""
         color = BUCKET_COLOR[r["bucket"]]
         res = ' <span class="res">RESULT</span>' if r["result"] else ""
         # filename is in the search text so companion docs stay FINDABLE by name - that
         # discoverability is the whole reason they are bucketed rather than dropped (WO-937 A).
         search = " ".join((num, r["file"], r["title"], r["status"])).lower()
-        return (f'<tr class="row" data-bucket="{r["bucket"]}" '
+        return (f'<tr class="row" data-bucket="{r["bucket"]}" data-age-days="{days}" '
                 f'data-text="{html.escape(search)}">'
                 f'<td class="num"><a href="WorkOrders/{html.escape(r["file"])}">{num}</a></td>'
                 f'<td class="title">{html.escape(r["title"][:110])}{res}</td>'
                 f'<td><span class="badge" style="border-color:{color};color:{color}">'
                 f'{r["bucket"]}</span></td>'
                 f'<td class="status">{html.escape(r["status"][:80])}</td>'
-                f'<td class="age">{age}</td></tr>')
+                f'<td class="age">{est}{r["created"]} &middot; {days}d{old}</td></tr>')
 
     rows_sorted = sorted(rows, key=lambda r: (BUCKET_ORDER.index(r["bucket"]), -(r["num"] or 0)))
     body_rows = "\n".join(row_html(r) for r in rows_sorted)
     filters = "".join(
         f'<button class="fbtn" data-f="{b}" style="border-color:{BUCKET_COLOR[b]}">'
         f'{b} <span class="cnt">{counts[b]}</span></button>' for b in BUCKET_ORDER)
+
+    # "Opened within" filter (WO-940): by CREATED age in days, composing with the
+    # bucket chips and the search box (AND), never replacing them.
+    def _within(d): return sum(1 for r in rows if r["age_days"] <= d)
+    age_filters = (
+        '<span class="agef">opened within: '
+        + "".join(f'<button class="abtn" data-a="{d}">{d}d '
+                  f'<span class="cnt">{_within(d)}</span></button>' for d in (7, 30, 90))
+        + f'<button class="abtn on" data-a="all">all <span class="cnt">{len(rows)}</span></button>'
+        '</span>')
 
     canon_links = "".join(
         f'<a href="{p}">{n}</a>' for n, p in [
@@ -159,25 +226,35 @@ def build_html(rows):
  .badge{{border:1px solid;border-radius:10px;padding:1px 9px;font-size:12px;white-space:nowrap}}
  .status{{color:#999;font-size:12px}} .age{{color:#666;font-size:12px;white-space:nowrap}}
  .res{{background:#2c4a2c;color:#9c9;font-size:10px;padding:1px 6px;border-radius:8px;margin-left:6px}}
+ .oldm{{border:1px solid #b08030;color:#d0a050;font-size:10px;padding:0 5px;border-radius:8px;margin-left:5px}}
+ .agef{{margin-left:18px;color:#888;font-size:13px}}
+ .abtn{{background:#1e2027;border:1px solid #555;color:#ccc;padding:6px 12px;margin-left:6px;
+        border-radius:14px;cursor:pointer;opacity:.35}} .abtn.on{{opacity:1;border-color:#e0b341}}
 </style></head><body>
 <h1>Echoes of Elarion — Work Order Board</h1>
 <div class="sub">Generated <b>{stamp}</b> from the repo (WorkOrders/*.md) — the repo is the source of
  truth, this page is a view. Regenerate: <b>python tools/board_build.py</b>
  &nbsp;|&nbsp; Next mint — CLI: <b>{main_next or "?"}</b>, UI seat: <b>{ui_next or "?"}</b></div>
 <div class="canon">{canon_links}</div>
-<input id="q" placeholder="Search number / title / status...">{filters}
+<input id="q" placeholder="Search number / title / status...">{filters}{age_filters}
 <table><tbody id="tb">
 {body_rows}
 </tbody></table>
 <script>
 const q=document.getElementById('q'), rows=[...document.querySelectorAll('.row')];
 const active=new Set({BUCKET_ORDER!r});
+let ageMax=Infinity; // "opened within" (WO-940): ANDs with buckets + search
 function apply(){{const t=q.value.toLowerCase();
- rows.forEach(r=>{{r.style.display=(active.has(r.dataset.bucket)&&r.dataset.text.includes(t))?'':'none'}})}}
+ rows.forEach(r=>{{r.style.display=(active.has(r.dataset.bucket)&&r.dataset.text.includes(t)
+  &&(+r.dataset.ageDays<=ageMax))?'':'none'}})}}
 q.addEventListener('input',apply);
 document.querySelectorAll('.fbtn').forEach(b=>b.addEventListener('click',()=>{{
  const f=b.dataset.f; if(active.has(f)){{active.delete(f);b.classList.add('off')}}
  else{{active.add(f);b.classList.remove('off')}} apply()}}));
+document.querySelectorAll('.abtn').forEach(b=>b.addEventListener('click',()=>{{
+ ageMax=(b.dataset.a==='all')?Infinity:+b.dataset.a;
+ document.querySelectorAll('.abtn').forEach(x=>x.classList.remove('on'));
+ b.classList.add('on'); apply()}}));
 </script></body></html>"""
 
 def main():
@@ -209,6 +286,19 @@ def main():
             print(f"    WO-{r.get('num','?')}  {r.get('file','?')}  status={r.get('status','') !r}")
         if len(unlabeled) > 40:
             print(f"    ... and {len(unlabeled) - 40} more")
+
+    # WO-937: duplicate WO numbers are REPORTED, never silently renumbered - a collision
+    # is its own finding. Report-only: it does not change the --check exit contract.
+    by_num = {}
+    for r in rows:
+        if r["num"] is not None:
+            by_num.setdefault(r["num"], []).append(r["file"])
+    dupes = {n: fs for n, fs in by_num.items() if len(fs) > 1}
+    if dupes:
+        print(f"DUPLICATE_WO_NUMBERS {len(dupes)} number(s) claimed by more than one file "
+              f"(flagged, not renumbered - resolve first-on-disk-and-referenced-wins):")
+        for n in sorted(dupes):
+            print(f"    WO-{n}: " + " | ".join(sorted(dupes[n])))
     if check:
         if unlabeled:
             print(f"BOARD_CHECK_FAIL {len(unlabeled)} unlabeled")

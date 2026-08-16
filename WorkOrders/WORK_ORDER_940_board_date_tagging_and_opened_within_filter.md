@@ -1,6 +1,6 @@
 # WORK ORDER 940 — Board: CREATED-date tag on every ticket + an "opened within" filter
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — created-date column (Minted > git first-add > ~mtime), age-in-days, 7d+ badge, opened-within filter; 2026-08-16, see RESULT
 **Minted:** 2026-08-09 (number from the `CLI_LANES_WO_NUMBERS.md` banner; banner bumped 940 → 941 in the SAME edit as this mint)
 **Lane:** Tooling / board. **Touches exactly one file: `tools/board_build.py`.** No game code, no Unity, no scene, no UI.
 **Owner ruling 2026-08-09 (verbatim):** *"i want aged tagged to every ticket"* · *"date tagged"* ·

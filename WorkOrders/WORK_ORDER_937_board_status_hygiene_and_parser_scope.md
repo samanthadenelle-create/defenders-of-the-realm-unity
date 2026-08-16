@@ -1,6 +1,6 @@
 # WORK ORDER 937 — Board status-line hygiene + parser scope
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — A+B were already in-tree (Doc bucket + Unlabeled 0); C (gate wiring) + duplicate-number reporting landed 2026-08-16; see RESULT
 **Minted:** 2026-08-09 (CLI seat) — number from the `CLI_LANES_WO_NUMBERS.md` banner (bumped 937 → 938 in the same edit)
 **Lane:** Board / docs hygiene. **No game code.**
 **Parent:** WO-1011 (board workflow). This is the Unlabeled half; WO-1011 Phase 2 owns the ~516 stale *Ready* claims.
