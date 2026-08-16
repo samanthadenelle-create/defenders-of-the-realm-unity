@@ -684,6 +684,12 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "town-movement-floor suite", () => { if (!DeNelle.Editor.Regression.TownMovementFloorRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[town-movement-floor] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "one-guide-body suite", () => { if (!DeNelle.Editor.Regression.OneGuideBodyRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[one-guide-body] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "wall-adjacency suite", () => { if (!DeNelle.Editor.Regression.WallAdjacencyRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[wall-adjacency] " + r); });
+            // --- WO-1104: the spire-plans moment subscribes to the PlansCollected seam, plays ONCE
+            //     ever, registers with the arbiter, never touches roster/unlock state, and reads its
+            //     speaker from EchoRosterCatalog rather than a name literal. ---
+            // NOTE: this oracle declares `namespace DeNelle.Editor` (not .Regression) -- cite it as
+            // written rather than "correcting" the file to match its neighbours mid-wave.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "spire-celebration suite", () => { if (!DeNelle.Editor.SpirePlansCelebrationRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[spire-celebration] " + r); });
             // --- Owner VFX bans (2026-08-16): Spell_Fire_6 + 'Magic circle sun loop' stay dead -
             //     source lint + baked-catalog GUID scan (both VFXCatalog and HovlVfxCatalog). ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "banned-vfx suite", () => { if (!DeNelle.Editor.Regression.BannedVfxRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[banned-vfx] " + r); });

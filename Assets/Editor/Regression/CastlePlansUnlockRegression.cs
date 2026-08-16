@@ -162,18 +162,23 @@ namespace DeNelle.Editor
             }
 
             // ---- 3: the spawn rule truth table (pure) ----
-            if (CastleDefensePlansService.ShouldSpawnDrop(1, false, false))
-                failures.Add("[castle-plans] drop would spawn after only 1 wave survived");
-            if (!CastleDefensePlansService.ShouldSpawnDrop(2, false, false))
-                failures.Add("[castle-plans] drop does NOT spawn after wave 2 survived");
-            if (!CastleDefensePlansService.ShouldSpawnDrop(7, false, false))
-                failures.Add("[castle-plans] uncollected drop stopped spawning at wave 7 -- it must persist until collected");
-            if (CastleDefensePlansService.ShouldSpawnDrop(2, false, true))
+            // OWNER RULING 2026-08-16 ("it should be given after wave 3"): the threshold moved
+            // 2 -> 3, so this table is written against RequiredWavesSurvived rather than a
+            // hardcoded 2 -- the ruling and its guard move together, and the NEXT retune cannot
+            // leave the oracle asserting a rule the game no longer has (WO-1104 SS2).
+            int req = CastleDefensePlansService.RequiredWavesSurvived;
+            if (CastleDefensePlansService.ShouldSpawnDrop(req - 1, false, false))
+                failures.Add($"[castle-plans] drop would spawn after only {req - 1} wave(s) survived (threshold is {req})");
+            if (!CastleDefensePlansService.ShouldSpawnDrop(req, false, false))
+                failures.Add($"[castle-plans] drop does NOT spawn after wave {req} survived (the owner-ruled threshold)");
+            if (!CastleDefensePlansService.ShouldSpawnDrop(req + 4, false, false))
+                failures.Add($"[castle-plans] uncollected drop stopped spawning at wave {req + 4} -- it must persist until collected");
+            if (CastleDefensePlansService.ShouldSpawnDrop(req, false, true))
                 failures.Add("[castle-plans] a second prop would spawn while one is standing");
-            if (CastleDefensePlansService.ShouldSpawnDrop(3, true, false)
+            if (CastleDefensePlansService.ShouldSpawnDrop(req, true, false)
                 || CastleDefensePlansService.ShouldSpawnDrop(99, true, false))
-                failures.Add("[castle-plans] wave 3+ would spawn a scripted drop AFTER collection -- the once-ever guardrail is broken");
-            log.AppendLine("  ShouldSpawnDrop truth table OK (>=2 uncollected spawns; collected never again)");
+                failures.Add("[castle-plans] a scripted drop would spawn AFTER collection -- the once-ever guardrail is broken");
+            log.AppendLine($"  ShouldSpawnDrop truth table OK (>={req} uncollected spawns; collected never again)");
 
             // ---- 2 + 4 (grant half): collect once, ever, funding == catalog row ----
             bool hadSave = PlayerPrefs.HasKey(SaveKey);

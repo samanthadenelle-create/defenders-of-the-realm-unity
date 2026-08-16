@@ -55,8 +55,10 @@ namespace DeNelle.Village
     [DisallowMultipleComponent]
     public sealed class CastleDefensePlansService : MonoBehaviour
     {
-        /// <summary>Waves the player must have SURVIVED before the plans drop (WO-1013 SS1).</summary>
-        public const int RequiredWavesSurvived = 2;
+        /// <summary>Waves the player must have SURVIVED before the plans drop (WO-1013 SS1).
+        /// OWNER RULING 2026-08-16, verbatim: "it should be given after wave 3" -- was 2.
+        /// The celebration screen + the Echo FTUE beat that ride this same moment are WO-1104.</summary>
+        public const int RequiredWavesSurvived = 3;
 
         public static CastleDefensePlansService Instance { get; private set; }
 
@@ -180,10 +182,20 @@ namespace DeNelle.Village
             }
             else
             {
-                var spawns = GameObject.FindGameObjectsWithTag("SpawnPoint");
+                // WO-1038 (owner report 2026-08-16 "when do i get the arcane spire plans?", F8 seq
+                // 2434-2442): this read GameObject.FindGameObjectsWithTag("SpawnPoint") and the tag
+                // IS NOT DECLARED in TagManager.asset -- FindGameObjectsWithTag THROWS on an
+                // undeclared tag, so every scan died here, the fallback seat below was unreachable,
+                // and the drop never spawned. The merged hub has no Gate objects, so this branch is
+                // the live path, not the rare one. Resolve by COMPONENT, the way the gate branch
+                // above already does: WaveSpawnPoint is what CastleHubBuilder.PlaceCastleSpawnPoints
+                // actually seats (canon SS7, 12 m outside each gate), and a component lookup cannot
+                // throw on missing project settings. CastleHubBuilder.cs:2415 already noted that
+                // EnemyBrain guards undefined tags -- this site was the one that did not.
+                var spawns = FindObjectsByType<WaveSpawnPoint>(FindObjectsSortMode.None);
                 if (spawns != null && spawns.Length > 0)
                 {
-                    GameObject nearest = spawns[0];
+                    WaveSpawnPoint nearest = spawns[0];
                     float best = float.MaxValue;
                     for (int i = 0; i < spawns.Length; i++)
                     {

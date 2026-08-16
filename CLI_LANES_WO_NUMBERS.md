@@ -1,6 +1,23 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ RECONCILED 2026-08-16 (CLI): main line next free = **1104**.
+> ## ⚠ RECONCILED 2026-08-16 (CLI): main line next free = **1106**.
+> *(CLI minted **WO-1105** and bumped 1105 -> 1106 in this SAME edit. **1105** = the Ranger plays like
+> a swordsman. MEASURED: his authored kit is fully ranged (Q 15 m / W 12 m / E 15 m / R aoe), so the
+> defect is the PRIMARY ATTACK — `PlayerAttackController._attackRange = 3.2f` is a class-agnostic
+> melee sweep, and that file's own comment asserts ranged classes' "real attacks route through
+> AbilityDef.Range", which is false for the spammable primary. Build: ranged primary on the bow anim +
+> projectile path, tap-to-select with the ALREADY-SHIPPED Marker 2 Pointer Loop target marker, and
+> bow iconography/names on the action bar (HeroCatalog authors knight names — the same defect that hit
+> the owner as a MAGE, recorded at HudModelProducers.cs:65). ⚠ One owner ruling open: auto-target vs
+> strict tap-to-select. ⚠ Do NOT flip ff.lockon — that is a parked camera risk, not target selection.)*
+> *(CLI minted **WO-1104** and bumped 1104 -> 1105 in this SAME edit. **1104** = the Arcane Spire
+> plans MOMENT — owner asked "when do i get the arcane spire plans?" mid-playtest and the answer was
+> NEVER: F8 seq 2434-2442 caught `CastleDefensePlansService` throwing on the UNDECLARED `SpawnPoint`
+> tag every 3 s scan, which also made its own fallback seat unreachable. Every earn-gate had already
+> passed. Fix = resolve by `WaveSpawnPoint` COMPONENT (landed); threshold moved 2 -> 3 per her ruling
+> "it should be given after wave 3"; the celebration screen + the Aldwin FTUE call-to-arms are new
+> build in that WO. ⚠ It COLLIDES with WO-1031's guide despawn — after wave 3 the Echo body may
+> already be gone, so whichever lands second verifies the other.)*
 > *(CLI minted **WO-1103** and bumped 1103 -> 1104 in this SAME edit. **1103** = kill rewards:
 > per-enemy base value + bounded variance + kill-count scaling in the arena, and the overworld
 > ranged-kill earned-rewards notification — full source-cited audit 2026-08-16 embedded in the WO;
@@ -1083,6 +1100,39 @@
 > That is the exact failure this file's own rule warns about — *"never a number copied into any other
 > doc"* — and the copy was **inside the numbering authority itself**. A duplicate cannot be kept honest
 > by discipline; it can only be removed. **The header is the sole source. Do not restore numbers here.**
+>
+> *(UI-seat bumped 1038 -> 1039 in the SAME edit as the WO-1038 mint — **FIVE UNDECLARED TAGS ARE USED
+> IN CODE; every one THROWS.** F8 seq 2434/2435 live: `UnityException: Tag: SpawnPoint is not defined`
+> at `CastleDefensePlansService.ResolveGateSeat:183` -> a progression reward silently never places.
+> ★ AUDIT: `TagManager.asset` declares **exactly FOUR** tags (Tower/Building/HeartTarget/Player), but
+> code uses `HeroTarget` **x13**, `SpawnPoint`, `ScreenFlash`, `Pet`, `Enemy` — all UNDECLARED.
+> `FindWithTag`/`FindGameObjectsWithTag`/**`CompareTag` THROW** on an undeclared tag (they do not return
+> null/false), so each is a latent crash; only `Guard.Try` coverage is hiding them. ⚠ `Enemy` is a
+> **LAYER**, not a tag — tag/layer confusion. `HeartTarget` is declared but has **ZERO** uses.
+> ⛔ **CLAUDE.md §7 IS FALSE**: it asserts "Enemy spawn tags: `SpawnPoint`" — the tag does not exist, and
+> §7 ALREADY records that `HeroTarget` "was never declared" **while 13 call sites still use it**. The
+> lesson was written down and the code was never swept. ⚠ **NO GATE CAN CATCH THIS** — tag names are
+> runtime strings, so it compiles clean; that is how HeroTarget survived from a canon ruling to 13 live
+> sites. Fix = per-tag DECLARE-or-REPLACE (prefer component lookups; a GameObject has ONE tag) + a
+> regression asserting every tag literal is declared + correct §7 in the same commit (§15). HIGH.)*
+>
+> *(UI-seat bumped 1037 -> 1038 in the SAME edit as the WO-1037 mint — **shortfall = the offer moment.**
+> Owner 2026-08-16: suggest a pack when an upgrade is short ("900 Wood - need 880 more"). RULINGS IN:
+> build it **STUBBED + a flag that BLOCKS THE PROD PUSH** until monetization activates; and **option (b)
+> — SINGLE-RESOURCE IMPULSE PACKS, small/medium/large, per resource type** ("small wood only / medium /
+> large / same with all types"). ★ THE FINDING THAT FORCED THE RULING: measured `packs.json` — all 13
+> packs carry ONLY `coins/crystals/food/glimmer`, **wood=False iron=False**, so NO pack could fulfil a
+> wood shortfall at all. ⚠ **THIS AMENDS WO-947** (regular basket = wood+iron was written assuming the
+> regular basket is EARNED, not bought) — annotate WO-947 + the anchor or canon self-contradicts (§15).
+> ⚠ Stockpile caps interact — decide overflow behaviour before selling a resource the player cannot
+> receive. ⛔ **ALL OF IT IS DISPLAY-ONLY until WO-931's 3 preconditions** — `StubWalletProvider` still
+> grants packs for ZERO payment in every player; adding purchasable-looking SKUs now is the WO-931
+> defect at greater volume. A default-off flag is NOT enough — WO-931 shipped because the stub had no
+> BUILD-CONFIG guard. ★ Rewarded-ad idea ("watch an ad for free 500 wood") = **WO-912, DO NOT RE-MINT**:
+> the ad seam ALREADY SHIPPED (`IAdService.cs`, `AD_SEAM_OK`, `AD_COVENANT_OK`), provider RULED (Unity
+> LevelPlay), **D3 is the sole blocker — no LevelPlay SDK under `Assets/`**. ⛔ LEGAL: the LIVE privacy
+> policy claims NO ADS (`PRIVACY_POLICY.md:87-89`) — owner/attorney must update the published page
+> BEFORE any ad ships; live legal copy is not a seat's to edit. READY.)*
 >
 > *(UI-seat bumped 1036 -> 1037 in the SAME edit as the WO-1036 mint — **`founding_walk` STEP-STUCK
 > RECURS AFTER WO-962 SHIPPED.** F8 seq 2433 (125s) + seq 2343 (241s), two sessions a day apart, same

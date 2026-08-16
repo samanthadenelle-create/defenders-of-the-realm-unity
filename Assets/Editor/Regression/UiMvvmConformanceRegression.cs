@@ -99,6 +99,12 @@ namespace DeNelle.Editor
             { "BugReportView.cs",         "VM-bound (BugReportVM); residual FindAnyObjectByType is EventSystem/scene infra" },
             { "HeroSelectController.cs",  "onboarding/menu FLOW controller, not a modal panel View" },
             { "StoryIntroController.cs",  "onboarding flow controller, not a modal panel View" },
+            // WO-1104: the spire-plans moment is the SAME SHAPE as StoryIntroController above -- a
+            // one-shot cinematic flow controller built on the cold-open idiom (owner ruling
+            // 2026-08-16: "can be a dialogue screen right like the introduction screen"). Its only
+            // state reads are the once-ever SeenTutorials flag (read + mark); it binds no live game
+            // data and has no refresh loop, so a ViewModel would be ceremony around one bool.
+            { "SpirePlansCelebration.cs", "one-shot cinematic flow controller (cold-open idiom), not a modal panel View; reads only its own seen-flag" },
             { "TitleController.cs",       "title/menu flow controller, not a modal panel View" },
             { "PauseHudBootstrap.cs",     "scene bootstrap wiring (finds controllers), not a panel View" },
             { "HudKitController.cs",      "HUD kit wiring; FindAnyObjectByType feeds compass providers (Transform positions), not game state" },
