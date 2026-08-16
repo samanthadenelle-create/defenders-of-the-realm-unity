@@ -240,9 +240,25 @@ hardcoded repo root (§0). **Do not restore a hand-maintained dependency table h
     rail). Its old **double-tap door is retired**, so the bar face is the single entry.
 - **Echo harvest affinity is a MATCH BONUS, NEVER a lock** (owner ruling WO-830, 2026-08-02): each of the
   six Echoes carries a unique affinity, but **the player picks each Echo's harvest resource** from a
-  picker — matching that Echo's affinity **doubles** the yield. Never gate an Echo to one resource.
+  picker — matching that Echo's affinity pays an **ADDITIVE MATCH BONUS**. Never gate an Echo to one
+  resource.
+  **⚠ "DOUBLES the yield" WAS FALSE AND IS RETIRED (corrected 2026-08-16, WO-1108 §2).** The bonus is an
+  additive term inside a spec-SUM, not a multiplier: `LaneContribution = baseContributionPerEcho +
+  (match ? preferredLaneMatchBonus : 0) + perLevelBonus*(level-1)`
+  (`EchoBonusCalculator.LaneContribution`). Live values in `echoes-balance.json`: base **0.02**, match
+  **+0.03**, perLevel 0.01 — so a matched Lv1 Echo reads **+5% vs +2%** (2.5x the per-echo TERM, ~+3%
+  absolute on the aggregate), which is the owner's own "+5% not 55%" ruling recorded in that file's
+  `_authoringNotes`. A seat implementing the retired sentence literally would have shipped a ~20x buff.
   **Maren harvests Crystals, not Repairs.** Persisted token grammar = **`<resource>:<level>`**
   (e.g. `harvest:3` → `wood:3`); read-migrated, no schema bump.
+- **Echo REPAIR is PASSIVE and COUNT-DRIVEN — never an assignment** (owner ruling WO-1108, 2026-08-16:
+  *"the number of pets that we have just passively takes towards healing"*). The WO-811 "Repair
+  structures" picker chip is **RETIRED**; `EchoBonusCalculator.RepairFractionsPerSecond()` sums **every
+  OWNED Echo** (count x level), so adding an Echo raises the mend rate with no assignment change. A
+  stored `repair:N` token **read-migrates to that Echo's affinity harvest resource** — never to `idle`,
+  which would silently zero its yield. No schema bump. The pace knob `repairFractionPerHour` now lives
+  in `echoes-balance.json` (0.35, re-tuned down from the old code-only 2.0 so a full roster lands near
+  the old single-Echo rate instead of 6x-ing it).
 
 ---
 

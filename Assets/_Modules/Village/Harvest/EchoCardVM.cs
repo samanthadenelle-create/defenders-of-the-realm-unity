@@ -21,16 +21,18 @@
 // The dead Crafting chip is REMOVED (Sec.3e default); Defense/Exploration stay
 // hidden (owner ruling 2026-07-24).
 //
-// WO-811 (2026-08-10): the picker gains a SIXTH row -- the "Repair structures" TASK
-// chip (RepairTaskChip / TaskChips; AssignRepair verb -> the "repair:<level>" token).
-// Repair has NO affinity cue ("Repairs" was removed as an affinity, WO-830) and its
-// status line is HONEST: "nothing to repair" when the town is pristine, "waiting for
-// materials" when the wallet can't cover the spend (EchoRepairService.Status).
+// WO-1108 (2026-08-16): the WO-811 SIXTH row -- the "Repair structures" TASK chip --
+// is RETIRED. Repair is PASSIVE now: every owned Echo mends, driven by roster COUNT
+// (EchoBonusCalculator.RepairFractionsPerSecond), so there is no task to pick and no
+// per-Echo repair status line. TaskChips() == ResourceChips() (five rows); the
+// RepairTaskChip/AssignRepair members are GONE and re-adding either fails the picker
+// oracle. Stored "repair:N" tokens read-migrate to Harvest at the Echo's affinity.
 //
 // STATE line semantics: live from the shared EchoBonusCalculator --
 //   harvesting  -> "Gathering Wood - Lv 3 - +65% (best -- this Echo's calling)"
-//   repairing   -> "Repairing structures - Lv 2" (or the honest empty/broke tail)
 //   idle        -> "Idle - waiting for your word."
+//   (WO-1108: there is no "repairing" state line any more -- repair is passive across
+//    the whole roster, so it is not a per-Echo assignment and never a card state.)
 // Identity (name / element / flavor / portrait) is read from EchoRosterCatalog.ByIndex
 // (the six named spirits), NOT hardcoded. ASCII-only separators ('-' not the
 // middle-dot) -- glyph-safe on the shipped TMP font; states + resource identity read
@@ -140,20 +142,10 @@ namespace DeNelle.Village
                 var ro = EchoBonusCalculator.ReadoutFor(EchoIndex);
                 if (ro.Lane == LaneType.Idle)
                     return "Idle - waiting for your word.";
-                if (ro.Lane == LaneType.Repair)
-                {
-                    // WO-811: HONEST repair status. The tail states are read from the live
-                    // consumer (EchoRepairService); with no service (headless/editmode) the
-                    // plain assigned line is still true. TEXT only, ASCII only.
-                    var rs = EchoRepairService.Instance;
-                    string baseLine = $"Repairing structures - Lv {ro.Level}";
-                    if (rs == null) return baseLine;
-                    if (rs.Status == EchoRepairStatus.NothingToRepair || !rs.HasRepairTargets)
-                        return $"Repair - Lv {ro.Level} - nothing to repair right now";
-                    if (rs.Status == EchoRepairStatus.WaitingMaterials)
-                        return $"Repair - Lv {ro.Level} - waiting for materials";
-                    return baseLine;
-                }
+                // WO-1108: the LaneType.Repair branch is GONE. Repair stopped being an
+                // assignment (every owned Echo mends passively), so ro.Lane can never read
+                // Repair -- a stored "repair:N" read-migrates to Harvest at the Echo's
+                // affinity. The repair STATUS is no longer a per-Echo state line.
                 string what;
                 if (ro.Lane == LaneType.Harvest)
                 {
@@ -270,27 +262,14 @@ namespace DeNelle.Village
             return chips;
         }
 
-        /// <summary>WO-811: the "Repair structures" TASK chip -- the sixth picker row beside
-        /// the five WO-830 resource chips. Selected state carried in TEXT (" (now)") like every
-        /// other chip; NEVER Preferred / never a "best" cue (Repairs was removed as an affinity,
-        /// WO-830 ruling 2026-08-02 -- repair earns no match bonus and must not claim one).</summary>
-        public ResourceChip RepairTaskChip()
-        {
-            bool sel = EchoAssignments.LaneOf(EchoIndex) == EchoAssignments.LaneRepair;
-            string label = "Repair structures" + (sel ? " (now)" : "");
-            return new ResourceChip(EchoAssignments.LaneRepair, label, "", sel, preferred: false);
-        }
-
-        /// <summary>WO-811: the full task-picker row set the View renders -- the five WO-830
-        /// resource chips (unchanged order) plus the repair task chip LAST. ResourceChips()
-        /// keeps its 5-length WO-830 contract for existing consumers/oracles.</summary>
+        /// <summary>The full task-picker row set the View renders. WO-1108: this is now EXACTLY
+        /// <see cref="ResourceChips"/> -- the WO-811 "Repair structures" chip is RETIRED because
+        /// repair is passive across every owned Echo (there is nothing to pick), so the card
+        /// offers five resources and no sixth row. Kept as a distinct method (rather than folded
+        /// into ResourceChips) so the View's binding seam and the picker oracle are unchanged.</summary>
         public ResourceChip[] TaskChips()
         {
-            var res = ResourceChips();
-            var all = new ResourceChip[res.Length + 1];
-            Array.Copy(res, all, res.Length);
-            all[res.Length] = RepairTaskChip();
-            return all;
+            return ResourceChips();
         }
 
         // ── The assign verb (the ONLY mutation this card performs) ─────────────
@@ -301,14 +280,6 @@ namespace DeNelle.Village
         {
             FlowTrace.Step("Echo", $"Card: harvest-resource requested echo={EchoIndex} resource='{resourceToken}'.");
             EchoAssignments.AssignHarvest(EchoIndex, resourceToken);
-        }
-
-        /// <summary>WO-811: assign this Echo to the REPAIR task (the "Repair structures" chip's
-        /// verb). EchoAssignments traces + persists ("repair:&lt;level&gt;") + raises Changed.</summary>
-        public void AssignRepair()
-        {
-            FlowTrace.Step("Echo", $"Card: repair task requested echo={EchoIndex}.");
-            EchoAssignments.AssignRepair(EchoIndex);
         }
 
         // =====================================================================

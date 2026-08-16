@@ -65,13 +65,19 @@ namespace DeNelle.Village
         /// ALL pair-synergies run at once. NEVER disclosed player-facing -- applied path only.</summary>
         [JsonProperty("hiddenTriSynergyBonus")] public float HiddenTriSynergyBonus = 0.25f;
 
-        /// <summary>WO-811: structure-FRACTIONS of repair work ONE repair-assigned Echo advances
+        /// <summary>WO-811 / WO-1108: structure-FRACTIONS of repair work ONE OWNED Echo advances
         /// per hour at level 1, BEFORE the shared contribution terms (EchoBonusCalculator.
         /// RepairFractionsPerSecond folds BaseContributionPerEcho + PerLevelBonus on top).
-        /// 2.0 = a fresh Echo fully mends one half-damaged structure in ~15 min. ADDITIVE
-        /// knob: absent in an older echoes-balance.json, Newtonsoft leaves this default --
-        /// no version bump, same additive law as every field here.</summary>
-        [JsonProperty("repairFractionPerHour")] public float RepairFractionPerHour = 2f;
+        ///
+        /// WO-1108 D3: repair went PASSIVE (summed over the WHOLE roster instead of the echoes
+        /// assigned to a repair task), which multiplies the aggregate by roster size. The knob
+        /// was therefore MOVED INTO echoes-balance.json (it was a code-only default before) and
+        /// re-tuned 2.0 -> 0.35 so a FULL 6-Echo roster lands at ~2.14 fractions/h -- within
+        /// ~5% of the old ONE-assigned-Echo felt rate of 2.04 -- instead of 6x-ing it.
+        /// This default now MIRRORS the authored json value; keep them in step so an absent
+        /// file cannot silently reintroduce the 6x. ADDITIVE knob: absent in an older
+        /// echoes-balance.json, Newtonsoft leaves this default -- no version bump.</summary>
+        [JsonProperty("repairFractionPerHour")] public float RepairFractionPerHour = 0.35f;
     }
 
     /// <summary>Static surface over echoes-balance.json -- load + cache + typed getters (WO-738).</summary>

@@ -12,17 +12,19 @@
 // documented in SaveSchema.cs too):
 //   idle                       -> Idle (carries no level, no resource)
 //   <lane>:<level>             -> functional lane token harvest/crafting/defense/
-//                                 exploration/repair (repair = WO-811: the Echo
-//                                 advances real structure repair -- EchoRepairService).
-//                                 For "harvest" the RESOURCE defaults
+//                                 exploration. For "harvest" the RESOURCE defaults
 //                                 on read to the echo's AFFINITY (EchoRosterCatalog).
 //   <resource>:<level>         -> the WO-830 primary form: a HARVEST assignment with
 //                                 an explicit resource -- wood/iron/food/gold/crystals.
 //                                 Lane reads as Harvest; the resource is preserved.
 //   any bare token (no :level) -> level 1 (default-on-read).
-// WO-811 BACK-COMPAT NOTE: an OLDER build reading a save carrying "repair:N" walks the
-// same NormalizeToken default every unknown token walks -> Idle. No crash, no
-// corruption; the assignment simply reads Idle until the newer build reloads it.
+// WO-1108 REPAIR READ-MIGRATION: "repair" was an assignable task (WO-811) and is not any
+// more -- repair is now PASSIVE across every owned Echo. A stored "repair:N" is therefore
+// READ-MIGRATED to the HARVEST lane (level preserved), where the resource resolves to that
+// Echo's AFFINITY. It must never fall to the unknown-token Idle default: idle would silently
+// zero that Echo's yield. Still NO schema bump -- grammar-only, the v33/WO-830 precedent.
+// (An OLDER build meeting "repair:N" still reads Idle via its own unknown-token default --
+// no crash, no corruption; the newer build migrates it on the next load.)
 // BACKWARD-COMPATIBLE READ (additive, default-on-read, NO migrator):
 //   - pre-v33 legacy "wood"/"iron"/"food" -> Harvest at that resource, level 1
 //     (the pre-733 resource vocabulary is now FIRST-CLASS again -- WO-830 note:
@@ -55,8 +57,10 @@ namespace DeNelle.Village
         public const string LaneCrafting    = "crafting";
         public const string LaneDefense     = "defense";
         public const string LaneExploration = "exploration";
-        /// <summary>WO-811: the REPAIR task token ("repair:&lt;level&gt;"). Additive grammar --
-        /// an older build reads it as Idle (NormalizeToken unknown-token default), never a crash.</summary>
+        /// <summary>WO-811 legacy: the REPAIR task token ("repair:&lt;level&gt;"). RETIRED as an
+        /// ASSIGNMENT by WO-1108 (repair is passive across the whole roster) -- the constant
+        /// survives ONLY so stored saves keep read-migrating (NormalizeToken maps it to the
+        /// Harvest lane, where the resource resolves to the Echo's affinity). Never write it.</summary>
         public const string LaneRepair      = "repair";
 
         // ── Harvest RESOURCE tokens (WO-830 -- first-class again). wood/iron/food
@@ -75,8 +79,9 @@ namespace DeNelle.Village
         public const string LaneFood = ResFood;
 
         /// <summary>The assignable functional lanes, in display order (Idle is a state, not a pick).
-        /// WO-811 appended Repair (the second real V1 task next to Harvest).</summary>
-        public static readonly string[] Lanes = { LaneHarvest, LaneCrafting, LaneDefense, LaneExploration, LaneRepair };
+        /// WO-1108 REMOVED Repair (added by WO-811): it is no longer a task an Echo can be put
+        /// on -- every owned Echo mends passively.</summary>
+        public static readonly string[] Lanes = { LaneHarvest, LaneCrafting, LaneDefense, LaneExploration };
 
         /// <summary>The lanes the picker actually OFFERS: HARVEST ONLY (WO-830 ruling --
         /// the card is a per-Echo RESOURCE picker; the dead Crafting chip is removed
@@ -84,10 +89,9 @@ namespace DeNelle.Village
         /// in <see cref="Lanes"/> (constants + LabelFor + normalization intact) so any
         /// already-stored token still reads back, but none of the three is offered
         /// (unlock undesigned -- owner ruling 2026-07-24; no stub/teaser rows).
-        /// WO-811 NOTE: the REPAIR task is deliberately NOT routed through this list --
-        /// the card offers it as its own dedicated "Repair structures" chip
-        /// (EchoCardVM.RepairTaskChip) beside the five resource chips, so this list
-        /// stays the WO-830 resource-picker contract unchanged.</summary>
+        /// WO-1108 NOTE: the WO-811 "Repair structures" chip that used to ride beside the five
+        /// resource chips is GONE -- repair is passive across the whole roster, so there is
+        /// nothing to pick. This list stays the WO-830 resource-picker contract unchanged.</summary>
         public static readonly string[] PickableLanes = { LaneHarvest };
 
         /// <summary>The five harvest resources the card's RESOURCE PICKER offers (WO-830),
@@ -203,17 +207,20 @@ namespace DeNelle.Village
         }
 
         /// <summary>
-        /// WO-811: assign the Echo at <paramref name="echoIndex"/> to the REPAIR task
-        /// (the card's "Repair structures" chip). Writes the additive
-        /// <c>repair:&lt;level&gt;</c> token -- the same grammar family WO-830 extended
-        /// (NO schema bump; grammar-only, the v33 precedent). PRESERVES the echo's level.
-        /// The consumer is EchoRepairService (real repair through the WallRepairController
-        /// backend); repair earns NO affinity match bonus (Repairs was removed as an
-        /// affinity -- WO-830 ruling 2026-08-02).
+        /// RETIRED by WO-1108 -- repair is no longer an assignable task. Every owned Echo
+        /// mends PASSIVELY (EchoBonusCalculator.RepairFractionsPerSecond sums the whole
+        /// roster), so there is nothing left to assign. Kept as a LOUD refusal rather than
+        /// deleted so any surviving caller (or a re-added picker chip) fails visibly instead
+        /// of silently writing a token the read path now migrates away: ALWAYS returns false
+        /// and NEVER mutates state. Stored <c>repair:N</c> tokens still read (see
+        /// <c>NormalizeToken</c> -- they migrate to the Echo's affinity harvest resource).
         /// </summary>
         public static bool AssignRepair(int echoIndex)
         {
-            return Assign(echoIndex, LaneRepair);
+            FlowTrace.Warn("Echo",
+                $"AssignRepair(echo={echoIndex}) -- RETIRED (WO-1108): repair is passive across every " +
+                "owned Echo and is not assignable. Ignored; assignment unchanged.");
+            return false;
         }
 
         /// <summary>
@@ -264,7 +271,8 @@ namespace DeNelle.Village
                 case LaneCrafting:    return "Crafting";
                 case LaneDefense:     return "Defense";
                 case LaneExploration: return "Exploration";
-                case LaneRepair:      return "Repair";
+                // WO-1108: "Repair" is unreachable here -- LabelFor normalizes first, and
+                // NormalizeToken migrates "repair" to the Harvest lane. Repair is passive now.
                 default:              return "Idle";
             }
         }
@@ -375,7 +383,14 @@ namespace DeNelle.Village
                 case LaneCrafting:    return LaneCrafting;
                 case LaneDefense:     return LaneDefense;
                 case LaneExploration: return LaneExploration;
-                case LaneRepair:      return LaneRepair;   // WO-811 (additive; old builds read it Idle)
+                // WO-1108 READ-MIGRATION: repair stopped being an assignable task (it is now
+                // PASSIVE across the whole roster -- EchoBonusCalculator.RepairFractionsPerSecond).
+                // A stored "repair:N" therefore migrates to the HARVEST lane, where
+                // ResourceTokenOf() resolves it to that Echo's AFFINITY resource. It must NEVER
+                // fall through to the unknown-token default: idle would silently ZERO that
+                // Echo's yield, which is the exact silent-loss WO-830's read-migration law
+                // forbids. No schema bump -- grammar-only, the v33 precedent.
+                case LaneRepair:      return LaneHarvest;
                 case ResWood:         return ResWood;
                 case ResIron:         return ResIron;
                 case ResFood:         return ResFood;
@@ -401,8 +416,7 @@ namespace DeNelle.Village
                 case LaneCrafting:
                 case LaneDefense:
                 case LaneExploration:
-                case LaneRepair:
-                    return part;
+                    return part;   // WO-1108: no LaneRepair case -- NormalizeToken migrated it to Harvest
                 default:
                     return LaneIdle;
             }

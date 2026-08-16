@@ -8,9 +8,9 @@
 // FrameCore -- UI_BLINK_TEMPLATE_CANON SS2, ONE shared Close) that introduces an
 // Echo (real name/element/flavor/portrait from EchoRosterCatalog) and hosts the
 // WO-830 RESOURCE PICKER: five chips (Wood/Iron/Food/Gold/Crystals --
-// EchoAssignments.PickableResources) plus, since WO-811, a SIXTH task row --
-// "Repair structures" (EchoCardVM.RepairTaskChip -> AssignRepair; same fixed-pixel
-// row law, no affinity cue). The dead Crafting chip is REMOVED and
+// EchoAssignments.PickableResources). WO-1108 RETIRED the WO-811 sixth
+// "Repair structures" row -- repair is passive across the whole roster, so the
+// picker is five rows again. The dead Crafting chip is REMOVED and
 // Defense/Exploration stay hidden (owner rulings 2026-07-24 + 2026-08-02). The
 // card also shows the DISCLOSED pair-synergy status line (SynergyText); nothing
 // on this card ever discloses the hidden tri-synergy (WO-830 Sec.3d). The View
@@ -385,9 +385,9 @@ namespace DeNelle.Village
         {
             if (_chipRow == null) return;
 
-            // WO-811: five WO-830 resource rows + the "Repair structures" task row LAST.
-            // Same fixed-pixel row law for all six; the WO-852 scroll well already handles
-            // the overflow (it was built because five rows never fit at rest).
+            // WO-1108: five WO-830 resource rows (the WO-811 repair row is retired -- repair
+            // is passive). Same fixed-pixel row law for all five; the WO-852 scroll well
+            // already handles the overflow (it was built because five rows never fit at rest).
             var chips = _vm.TaskChips();
 
             // WO-852 CHURN GATE (a hard prerequisite for the scroll well, not an
@@ -483,10 +483,10 @@ namespace DeNelle.Village
         private void OnChipTapped(string resourceId)
         {
             FlowTrace.Step("Echo", $"Card: task chip tapped '{resourceId}'.");
-            // WO-811: the repair chip routes to the repair verb; everything else stays the
-            // WO-830 resource verb (AssignHarvest validates the token).
-            if (resourceId == EchoAssignments.LaneRepair) _vm?.AssignRepair();
-            else _vm?.AssignResource(resourceId);
+            // WO-1108: the WO-811 repair-chip route is GONE (repair is passive across the
+            // whole roster -- nothing to assign). Every chip is a WO-830 resource verb;
+            // AssignHarvest validates the token and logs a no-op on anything else.
+            _vm?.AssignResource(resourceId);
             // VM raises Changed via the seam -> Refresh re-binds STATE + selected chip.
         }
     }

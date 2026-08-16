@@ -283,22 +283,35 @@ namespace DeNelle.Village
         // =====================================================================
 
         /// <summary>
-        /// WO-811: structure-FRACTIONS of repair work per second across every Echo assigned
-        /// to the REPAIR task (the value EchoRepairService accrues its work budget at --
-        /// this method is the ONE home of the repair rate math, per the single-math-source
-        /// law this file exists for).
+        /// WO-811 rate, WO-1108 PASSIVE: structure-FRACTIONS of repair work per second across
+        /// EVERY OWNED Echo (the value EchoRepairService accrues its work budget at -- this
+        /// method is the ONE home of the repair rate math, per the single-math-source law
+        /// this file exists for).
         ///
-        /// Per repair-assigned echo:
+        /// WO-1108 (owner: "the number of pets that we have just passively takes towards
+        /// healing"): repair is NO LONGER an assignable lane. The lane filter is GONE -- the
+        /// roster COUNT drives mending, so an Echo repairs and harvests at the same time and
+        /// no assignment can turn repair off. A stored legacy "repair:N" token read-migrates
+        /// to the Echo's affinity harvest resource (EchoAssignments.NormalizeToken), so it
+        /// neither disappears from this sum nor zeroes that Echo's yield.
+        ///
+        /// Per OWNED echo:
         ///   EchoBalanceCatalog.RepairFractionPerHour x (1 + LaneContribution)
         /// where LaneContribution is the SAME shared term every lane uses --
         /// BaseContributionPerEcho + PerLevelBonus x (level - 1). Level scaling therefore
-        /// rides the one owner-tuned curve, and there is deliberately NO affinity match
-        /// term: "Repairs" was REMOVED as an affinity (WO-830 owner ruling 2026-08-02 --
-        /// Maren harvests Crystals), no roster entry prefers the Repair lane, so
-        /// PreferredMatches can never fire here and no match bonus is reintroduced.
+        /// rides the one owner-tuned curve (WO-1108 D2 default: count x LEVEL, not count
+        /// alone -- count-only would make Echo levels worthless for repair), and there is
+        /// deliberately NO affinity match term: "Repairs" was REMOVED as an affinity
+        /// (WO-830 owner ruling 2026-08-02 -- Maren harvests Crystals), no roster entry
+        /// prefers the Repair lane, so PreferredMatches can never fire here.
         ///
-        /// 0 when no echo is on the job / no GameState (=> the consumer accrues nothing --
-        /// the honest zero, never fake work).
+        /// WO-1108 D3: because this now sums the WHOLE roster, `repairFractionPerHour` was
+        /// re-tuned DOWN (2.0 -> 0.35) and MOVED INTO echoes-balance.json so the aggregate at
+        /// a full 6-Echo roster lands near the old single-assigned-Echo felt rate instead of
+        /// 6x-ing it. See the json _authoringNotes for the arithmetic.
+        ///
+        /// 0 when no Echo is owned / no GameState (=> the consumer accrues nothing -- the
+        /// honest zero, never fake work).
         /// </summary>
         public static float RepairFractionsPerSecond()
         {
@@ -308,7 +321,6 @@ namespace DeNelle.Village
             float perHour = 0f;
             for (int i = 0; i < count; i++)
             {
-                if (LaneTypeOf(EchoAssignments.LaneOf(i)) != LaneType.Repair) continue;
                 perHour += Mathf.Max(0f, EchoBalanceCatalog.RepairFractionPerHour)
                          * (1f + LaneContribution(i, LaneType.Repair));
             }
@@ -468,7 +480,8 @@ namespace DeNelle.Village
                 case EchoAssignments.LaneCrafting:    return LaneType.Crafting;
                 case EchoAssignments.LaneDefense:     return LaneType.Defense;
                 case EchoAssignments.LaneExploration: return LaneType.Exploration;
-                case EchoAssignments.LaneRepair:      return LaneType.Repair;   // WO-811
+                // WO-1108: "repair" is NO LONGER a storable lane -- NormalizeToken
+                // read-migrates it to the Harvest lane, so no case can appear here.
                 default:                              return LaneType.Idle;
             }
         }

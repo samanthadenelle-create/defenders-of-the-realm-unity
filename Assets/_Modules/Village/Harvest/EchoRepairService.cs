@@ -3,17 +3,25 @@
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.Village   Namespace: DeNelle.Village
 //
-// WHAT IT IS: while one or more Echoes are assigned to the REPAIR task
-// (EchoAssignments "repair:<level>" tokens), this service advances REAL repair on
+// WO-1108: repair is PASSIVE. It is no longer an assignable task -- the roster COUNT
+// drives it (EchoBonusCalculator.RepairFractionsPerSecond sums EVERY owned Echo), so
+// this service needed no change here beyond honest wording: its ONE rate input already
+// came from that method.
+//
+// WHAT IT IS: while one or more Echoes are OWNED, this service advances REAL repair on
 // damaged structures through the EXISTING repair authority -- WallRepairController
-// (TryPeekWorstDamaged / TryRepairWorst) -- exactly the way PetTaskController's
-// repair task drives RepairAll. It NEVER invents a parallel HP or wallet system.
+// (TryPeekWorstDamaged / TryRepairWorst). It NEVER invents a parallel HP or wallet system.
+// WO-1108: this is now the SOLE repair loop. PetTaskController's rival RepairAll loop --
+// a second, uncoordinated repairer racing this one over the same walls and the same
+// construction wallet on its own cadence -- was retired with it.
 //
 // THE WORK MODEL (mirrors how harvest is modeled -- abstract + rate-based, no
 // locomotion; Echoes are portrait-card spirits and NEVER fight or path as units):
-//   - Echoes accrue a WORK BUDGET in structure-damage FRACTIONS at
+//   - The ROSTER accrues a WORK BUDGET in structure-damage FRACTIONS at
 //     EchoBonusCalculator.RepairFractionsPerSecond() -- the ONE math source
-//     (base knob EchoBalanceCatalog.RepairFractionPerHour, level-scaled by the
+//     (base knob EchoBalanceCatalog.RepairFractionPerHour, now authored in
+//     echoes-balance.json and re-tuned 2.0 -> 0.35 by WO-1108 D3 because the sum
+//     spans the whole roster instead of one assigned Echo; level-scaled by the
 //     shared LaneContribution terms; NO affinity bonus -- Repairs was removed as
 //     an affinity, WO-830 ruling 2026-08-02).
 //   - Work accrues ONLY while a damaged, non-destroyed structure exists. ZERO
@@ -46,8 +54,9 @@
 // every RepairAll caller holds); battle time accrues no work.
 //
 // Installed by EchoWorkforceBootstrap on the persistent EchoService host (DDOL,
-// no scene authoring). The card VM reads Status / HasRepairTargets for the honest
-// status line ("nothing to repair" / "waiting for materials").
+// no scene authoring). WO-1108: the Echo CARD no longer renders a per-Echo repair
+// status line (repair is not an assignment), so Status / HasRepairTargets are now a
+// diagnostic + trace surface ("nothing to repair" / "waiting for materials").
 // =============================================================================
 using System;
 using UnityEngine;
@@ -61,11 +70,14 @@ namespace DeNelle.Village
     /// never hue -- colorblind law).</summary>
     public enum EchoRepairStatus
     {
-        /// <summary>No Echo is assigned to the repair task.</summary>
-        NoneAssigned = 0,
-        /// <summary>Echo(es) assigned, but nothing is damaged -- zero progress, honestly.</summary>
+        /// <summary>WO-1108: no Echo is OWNED (or no GameState yet) -- nobody can mend, so the
+        /// rate is the honest zero. This replaced <c>NoneAssigned</c>: repair stopped being an
+        /// assignment (every owned Echo mends passively), so "none assigned" became a state the
+        /// code can no longer produce and was deleted rather than left as a lie.</summary>
+        NoEchoes = 0,
+        /// <summary>Echo(es) owned, but nothing is damaged -- zero progress, honestly.</summary>
         NothingToRepair = 1,
-        /// <summary>Echo(es) assigned and accruing work toward the worst damaged structure.</summary>
+        /// <summary>Echo(es) owned and accruing work toward the worst damaged structure.</summary>
         Working = 2,
         /// <summary>Work is ready but the wallet cannot cover the repair cost (repair SPENDS).</summary>
         WaitingMaterials = 3,
@@ -82,8 +94,8 @@ namespace DeNelle.Village
     {
         public static EchoRepairService Instance { get; private set; }
 
-        // Mirror of PetTaskController.RepairScanInterval -- the shared cadence for
-        // driving the repair backend from a task loop.
+        // Cadence for driving the repair backend. (Was described as mirroring
+        // PetTaskController.RepairScanInterval; that rival loop is gone as of WO-1108.)
         private const float ScanInterval = 1.5f;
         // Numeric slack for the budget-vs-fraction comparison.
         private const float BudgetEps = 0.0001f;
@@ -100,7 +112,7 @@ namespace DeNelle.Village
         [Min(0f)] public float OfflineCapHours = 4f;
 
         /// <summary>The task's current honest state (the card status line reads this).</summary>
-        public EchoRepairStatus Status { get; private set; } = EchoRepairStatus.NoneAssigned;
+        public EchoRepairStatus Status { get; private set; } = EchoRepairStatus.NoEchoes;
 
         /// <summary>True when the last scan found at least one damaged, non-destroyed structure.</summary>
         public bool HasRepairTargets { get; private set; }
@@ -181,7 +193,7 @@ namespace DeNelle.Village
             float rate = EchoBonusCalculator.RepairFractionsPerSecond();
             if (rate <= 0f)
             {
-                FlowTrace.Step("Echo", "RepairClaimOffline: no Echo assigned to repair -- nothing accrues.");
+                FlowTrace.Step("Echo", "RepairClaimOffline: no owned Echo -- nothing accrues.");
                 return;
             }
 
@@ -267,17 +279,18 @@ namespace DeNelle.Village
             _lastWorkTime = now;
 
             var s = GameStateService.Instance != null ? GameStateService.Instance.State : null;
-            if (s == null) { SetStatus(EchoRepairStatus.NoneAssigned, HasRepairTargets); return; }
+            if (s == null) { SetStatus(EchoRepairStatus.NoEchoes, HasRepairTargets); return; }
 
             float rate = EchoBonusCalculator.RepairFractionsPerSecond();
             if (rate <= 0f)
             {
-                // No Echo on the job -> no banked work either (honest: the budget is the
-                // assigned Echoes' labor, not a free-floating pool).
+                // WO-1108: no OWNED Echo -> no banked work either (honest: the budget is the
+                // roster's labor, not a free-floating pool). With repair passive this is
+                // reachable only at zero Echoes (or before GameState lands).
                 if (_workBudget > 0f)
-                    FlowTrace.Step("Echo", $"Echo repair: last repair Echo unassigned -- dropping {_workBudget:0.###} banked work.");
+                    FlowTrace.Step("Echo", $"Echo repair: no owned Echo -- dropping {_workBudget:0.###} banked work.");
                 _workBudget = 0f;
-                SetStatus(EchoRepairStatus.NoneAssigned, HasRepairTargets);
+                SetStatus(EchoRepairStatus.NoEchoes, HasRepairTargets);
                 return;
             }
 
@@ -344,8 +357,8 @@ namespace DeNelle.Village
         /// Resolves the shared repair backend: reuses an existing
         /// <see cref="WallRepairController"/> (a wave scene / HubRepairAffordance installs
         /// one) or creates a LOGIC-ONLY, disabled controller purely to price + apply
-        /// repairs -- never a second repair system (mirrors PetTaskController.EnsureRepair
-        /// / HubRepairAffordance.EnsureRepair verbatim).
+        /// repairs -- never a second repair system (mirrors HubRepairAffordance.EnsureRepair
+        /// verbatim; the PetTaskController.EnsureRepair it also copied is gone, WO-1108).
         /// </summary>
         private WallRepairController EnsureRepair()
         {
