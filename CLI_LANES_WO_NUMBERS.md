@@ -1,6 +1,18 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ RECONCILED 2026-08-14 (CLI): main line next free = **997**. **782–859 + 900–996 CONSUMED.**
+> ## ⚠ RECONCILED 2026-08-15 (CLI): main line next free = **999**. **782–859 + 900–998 CONSUMED.**
+> *(CLI bumped 997 -> 999 in the SAME edit as the 997 + 998 mints, 2026-08-15 late. **997** = class
+> resource/mana system — SPEC, ready for owner review (per-class pool/regen/cost identities on the ONE
+> existing pool + `ManaCostOf` reader; includes the mana-BAR legibility fix — the bar exists and is
+> live, `RoundToInt` + 5 Hz polling just make it unreadable; owner picks in its §5). **998** = NO
+> repair surface in the merged hub while structures burn — F8 seq 2397+2398 proving lines from
+> `RepairAvailabilityProbe`, `WallRepairController=ABSENT HubRepairAffordance=ABSENT` in both
+> Countdown and Active; fix at the owning layer + register the orphan `RepairProbeRegression`.
+> ⚠ **998 is CLOSED — SUPERSEDED by the UI seat's WO-1024** (same defect, minted by both seats within
+> minutes of each other off the same F8 burst; 1024 carries the source-verified root cause — the
+> `HubRepairAffordance` one-shot install gate runs before the town exists. The number stays consumed).
+> ⚠ 997 was FIRST minted as "1024" — the UI seat's block — by this seat; caught and renumbered before
+> any reference existed. The blocks are disjoint for a reason; mint from YOUR OWN row.)*
 > *(⚠ 994 and 995 were minted as FILES without bumping this banner — the exact mint-without-bump that
 > §2 names as the collision cause, committed by the seat that spent the day enforcing it against others.
 > Caught and reconciled 2026-08-14 while minting 996. No collision occurred; both files are on disk and
@@ -1048,6 +1060,26 @@
 > That is the exact failure this file's own rule warns about — *"never a number copied into any other
 > doc"* — and the copy was **inside the numbering authority itself**. A duplicate cannot be kept honest
 > by discipline; it can only be removed. **The header is the sole source. Do not restore numbers here.**
+>
+> *(UI-seat bumped 1025 -> 1026 in the SAME edit as the WO-1025 mint — owner 2026-08-15: *"these graphics
+> on tree look amatuerish"* (Heart of Elarion, hub centre). ⚠ **THE OBVIOUS DIAGNOSIS IS WRONG:** F8
+> seq=2398 harvest proves BOTH authored loops are WITHHELD at this tree —
+> `whiteSwirlSuppressed=True treeAuraSuppressed=True treeHandle=none` — so the yellow cone + white
+> starburst on screen are **NOT** `Aura_HeartPulse` / `TreeofLifeAura_Aura`. Do NOT re-tag those and do
+> NOT flip the suppression flags (they are deliberate, WO-1002 + the owner's "stray heal VFX be gone").
+> The emitter is UNIDENTIFIED — step 1 is INSTRUMENT the tree's child hierarchy per §12, likely particle
+> children baked into the prefab (which would render regardless of the controller's flags, explaining the
+> contradiction). Separate contributor: the tree model has ONE texture
+> (`enchantedtree3dmodel_basecolor.JPEG`, no normal/roughness/AO) so it renders flat under URP. READY.)*
+>
+> *(UI-seat bumped 1024 -> 1025 in the SAME edit as the WO-1024 mint — **STRUCTURES BURN WITH NO REPAIR
+> SURFACE AT ALL.** Owner F8 seq=2398/2342: `WallRepairController=ABSENT HubRepairAffordance=ABSENT
+> WaveManager=Active` in `Main_Castle_Overworld`. Root cause PROVEN and the code predicted it in its own
+> bail-path comment (`HubRepairAffordance.cs:111-116`): the installer is a ONE-SHOT on `sceneLoaded` and
+> `SceneHasRepairables()` runs while the player-built town is still EMPTY — placement restores AFTER
+> scene load, the gate bails, and it NEVER retries. `StructureDamageVisuals` installs unconditionally, so
+> fire renders with no repair option. ⚠ NOT a coverage bug — do NOT widen `SceneHasRepairables()` again
+> (already widened once); **the bug is the TIMING, not the set.** READY.)*
 >
 > *(UI-seat bumped 1023 -> 1024 in the SAME edit as the WO-1023 mint — talent icon map AUDITED 2026-08-15
 > and it is GOOD: 83/83 coverage, 0 orphans, 0 iconPath mismatches, 0 missing sprites, both canonical

@@ -72,9 +72,56 @@ unitH = Mathf.Max(wellH - GraphPadPx * 2f - NodeFocusPx - RankBandPx, MinLattice
 Guard `wellW/wellH <= 1f` (rect not yet laid out on the first frame) by deferring one frame or falling
 back to the current constants — **must not divide by zero or lay out against a zero rect**.
 
+#### 2.1b SPACING LOGIC — owner 2026-08-15: *"needs better spacing logic"* (screenshot 214846)
+
+Scaling the lattice is necessary but **NOT sufficient**. The post-`61a2a701c` capture shows three
+distinct spacing defects that a uniform scale will not fix:
+
+1. **Plates OVERLAP.** In the right-hand cluster, adjacent plates touch, and the corner cost pips
+   (`1`, `0`) render **on top of the neighbouring plate**. A pip belonging to node A sitting on node B
+   is a misread waiting to happen.
+2. **A stranded orphan.** One plate sits alone at bottom-centre, below and outside the tree body,
+   connected to nothing the eye can follow.
+3. **Dead bottom third.** All content occupies the upper ~60% of the well; the lower ~40% is empty
+   black while the upper half is crowded.
+
+**Required, and each is testable:**
+
+- **Minimum centre-to-centre pitch** between ANY two plates: `NodeFocusPx * 1.35` (≈227 ref px at the
+  current 168). The multiplier exists so the FOCUS size plus its corner pip still clears a neighbour —
+  computing clearance from `NodeSizePx` (136) is what allows a focused plate to grow into its
+  neighbour. **No two plates may ever visually touch, at any state, at any aspect ratio.**
+- **Collision resolution for auto-placed nodes.** `ResolveGraphNorms` currently offsets unauthored
+  children by `fan = ((autoIdx++ % 5) - 2) * 0.06f` and `pp.y + 0.16f`
+  (`HeroSkillTreePanelMvvm.cs:589-592` — cite corrected 2026-08-15, verified at source: :581-584 are
+  only the prereq guard + loop header; the formulas are verbatim at :589-592) — an arbitrary spread with
+  **no collision test of any kind** (placement only `Clamp01`s x and caps y at 1.15),
+  which is why plates land on each other. Add a separation pass after placement: while any pair is
+  closer than the minimum pitch, push both apart along the axis of least overlap; cap the iterations
+  (~8) so it always terminates. Authored positions may be nudged but must keep their **relative order**
+  — never let a separation pass reshuffle the authored 5×4 knight lattice.
+- **Distribute rows over the FULL well height.** When only two tier rows are visible (the current
+  roots + one-child frontier), spread those rows across the available height rather than packing them
+  at the authored `y` and leaving the bottom empty. Normalise the *visible* y-range to the well, don't
+  map the authored 0..1 range through a fixed unit.
+- **No stranded nodes.** Any node whose nearest neighbour is further than ~2× the pitch should be pulled
+  toward its prerequisite's column. A node with a visible parent must read as attached to it.
+
+**Do the layout in ONE place.** Position solving belongs in `ResolveGraphNorms` (+ the separation pass);
+`RebuildTracks` should consume final positions and do no geometry of its own. Splitting placement across
+both is what let the authored and fallback paths drift into two different visual languages — the
+"3 above / 5 below" split in the first capture.
+
 ⚠ **Do NOT delete `GraphUnitWpx` / `GraphUnitHpx`.** `SkillsPanelLayoutRegression [grid]` pins them
-against the authored JSON. Leave them as the documented fallback + the regression's anchor; re-pointing
-that oracle is its own ticket.
+against the authored JSON — **by reflection** (`ConstFloat(view, "GraphUnitWpx"...)` at :192-193), so a
+RENAME breaks the suite silently too. Leave them as the documented fallback + the regression's anchor.
+
+⚠ **ORACLE GAP — must close IN THE SAME CHANGE as the pitch fix (added 2026-08-15, verified at
+source):** the existing `[grid]` oracle measures authored pitch against `L.NodeSize` (136) —
+`SkillsPanelLayoutRegression.cs:322-332` — i.e. exactly the NodeSizePx-based clearance this WO
+condemns. If only the view changes, `[grid]` keeps GREEN-lighting the defective layout. Move the
+pitch basis to the focus-based clearance (`NodeFocusPx * 1.35`) or add a sub-check asserting it;
+a view fix without the oracle move ships the same false green this WO exists to kill.
 
 **Architecture note (canon):** per `docs/UI_BLINK_TEMPLATE_CANON.md` §3, frame geometry is tuned in
 `ZonesFor` and nowhere else. Per-screen absolute pixel lattices are the thing that rule exists to stop.

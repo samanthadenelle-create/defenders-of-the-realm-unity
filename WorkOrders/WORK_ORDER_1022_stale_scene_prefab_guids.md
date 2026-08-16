@@ -1,6 +1,11 @@
 # WORK ORDER 1022 — `Main_Castle_Overworld` carries 56 refs to three DELETED prefab GUIDs
 
 **Status:** READY TO IMPLEMENT
+**Symptom widened 2026-08-15 late (CLI):** the same load event also fires a Unity-internal
+`Assertion failed on expression: 't.GetParent() == nullptr'` (F8 seq 2399, t=0.03s, same second as
+the GUID errors — the engine re-parenting the orphaned prefab-instance transforms). Count it as this
+defect's symptom, not a separate ticket. Cluster re-confirmed firing on every editor scene-open:
+seq 2389-2392, 2393-2396, 2399-2403.
 **Minted:** 2026-08-15 (UI seat) — provenance stack bumped 1022 → 1023 in the same edit
 **Lane:** Scene integrity / world. ⚠ Serialization-sensitive — see §4.
 **Provenance:** F8 inbox, ~48 of the 60 captures queued 2026-08-15 21:01–21:15
