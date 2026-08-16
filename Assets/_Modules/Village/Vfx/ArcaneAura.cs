@@ -266,6 +266,13 @@ namespace DeNelle.Village
 
             RestartPulse(tier);
 
+            // OWNER VFX PICK 2026-08-16 (verbatim: top_down_bomb_rainbow "used as aura on max
+            // level Arcane Towers!"): every arcane-family level change flows through this seam
+            // (placement / upgrade / load-from-save replay all reach ApplyLevel via EscalateTo),
+            // so this one call is the whole max-level-crown lifecycle - acquire at L3, release
+            // below. Self-contained + null-safe in ArcaneCrownAura; missing prefab warns once.
+            ArcaneCrownAura.Sync(gameObject, _level);
+
             FlowTrace.Step("TowerVfx",
                 $"'{name}' idle aura level={_level} aura='{_auraKey}' scale={_scale:0.0} " +
                 $"pulse={(tier.PulseInterval > 0f && !string.IsNullOrEmpty(tier.PulseKey) ? $"'{tier.PulseKey}'@{tier.PulseInterval:0.0}s" : "none")}");
@@ -326,6 +333,10 @@ namespace DeNelle.Village
         public void StopAndDisable()
         {
             StopAura(immediate: true);
+            // The max-level crown aura (owner pick 2026-08-16) must die with the tower too:
+            // a broken-to-shell tower fires no lifecycle event, which is this method's whole
+            // reason for existing - so the same external teardown releases the crown.
+            GetComponent<ArcaneCrownAura>()?.Release("tower broken (StopAndDisable)");
             enabled = false;
         }
 
