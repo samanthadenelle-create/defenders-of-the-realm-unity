@@ -1,6 +1,6 @@
 # WORK ORDER 936 — Catalog gating + progression truth pass
 
-**Status:** PARTIAL - remaining: Finding A only (Finding B struck as a false alarm)
+**Status:** READY — PARTIAL - remaining: Finding A only (Finding B struck as a false alarm)
 
 > **PARTIAL - re-scoped 2026-08-14 (phantom sweep).** Remaining work: Finding A is UNTOUCHED (BuildPaletteVM.cs:183). Finding B is struck as a false alarm.
 > Everything else in this WO is present in HEAD. The named remainder IS the ticket now - do not

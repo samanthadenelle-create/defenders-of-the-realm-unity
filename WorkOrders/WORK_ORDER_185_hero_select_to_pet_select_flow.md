@@ -1,6 +1,6 @@
 # WORK ORDER 185 — Hero Select Skips Pet Select (drops straight into village)
 
-**Status:** PARTIAL - remaining: it is flag-gated OFF at FeatureFlags.cs:181
+**Status:** READY — PARTIAL - remaining: it is flag-gated OFF at FeatureFlags.cs:181
 
 > **PARTIAL - re-scoped 2026-08-14 (phantom sweep).** Remaining work: shipped but FLAG-GATED OFF at FeatureFlags.cs:181.
 > Everything else in this WO is present in HEAD. The named remainder IS the ticket now - do not

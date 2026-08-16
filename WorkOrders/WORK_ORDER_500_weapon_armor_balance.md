@@ -1,6 +1,6 @@
 # WORK ORDER 500 — Weapon & Armor Balance Pass (Knight-first, Elarion)
 
-**Status:** ✅ APPROVED — OWNER RATIFIED 2026-08-14. Being applied to the 65 `blink_*` rows.
+**Status:** READY — ✅ APPROVED — OWNER RATIFIED 2026-08-14. Being applied to the 65 `blink_*` rows.
 
 > ## ✅ RATIFIED — owner, 2026-08-14: *"approve WO-500 curve and finish the 65"*
 > This stops being a proposal. **The curve below is now the authority** the generated rows are graded

@@ -1,6 +1,6 @@
 # WORK_ORDER_482 (Arena refinement) — BattleArena as a BOUNDED JSON MODULE + SceneDirector lifecycle
 
-**Status:** PARTIAL - remainder named by the 2026-08-14 phantom sweep
+**Status:** READY — PARTIAL - remainder named by the 2026-08-14 phantom sweep
 
 > **PARTIAL - re-scoped 2026-08-14 (phantom sweep).** Most of this WO is present in HEAD; a named
 > remainder is outstanding. No per-WO path:line was recorded here: see the 2026-08-14 phantom sweep for the

@@ -1,6 +1,6 @@
 # WORK ORDER 337 — Echo Hollow: Dialogue Text Overlaps Choice Options
 
-**Status:** UNVERIFIED - needs a playtest
+**Status:** SPEC — UNVERIFIED - needs a playtest
 
 > **UNVERIFIED - 2026-08-14 (phantom sweep).** The commit that cited this WO is a MISCITE. The layout
 > appears to have been fixed incidentally by an unrelated DialogueView rewrite, which cannot be

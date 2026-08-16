@@ -65,7 +65,8 @@ Most of the Ready pile outside 915+ is backlog / partially shipped / superseded 
 | **984** | Gate wrapper log-text | **DONE** |
 | **974** | Addressables content seam | **DONE** — EnsureBuilt + abort on fail |
 | **975** | Gear / Blink | **PARTIAL** — no full Blink; **armor = stats+2D**; **weapons = placed 3D items** (shippable mesh path) |
-| **910** | Ranger/Mage talents | **B partial** — stats LIVE; unlockAbility/summon/onEvent remain |
+| **896** | Skill tree UI | **P0** — owner 2026-08-15: **Obsidian demo Talent Tree** is the always-wanted look (sparse graph, gold lines, calm) |
+| **910** | Ranger/Mage talents | **B partial** — real content after 896 is readable; stats + Mark live |
 | **986** | Thin footprints | **IMPLEMENTED** CoC XZ |
 | **989** | Ballista id | **IMPLEMENTED** `tower_ballista` + alias |
 | **991** | Healing caravan | **RULED** follow-hero slow crawl, glass HP, siege support unit |

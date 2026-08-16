@@ -1,6 +1,6 @@
 # WORK ORDER 282 — HELD (not shipped overnight)
 
-**Status:** HELD for a daytime, play-verified session. **Not** started.
+**Status:** BLOCKED — HELD for a daytime, play-verified session. **Not** started.
 **Date:** 2026-06-06 (overnight run)
 **Decision by:** CLI — flagged per owner's best-practice-pushback standing instruction.
 

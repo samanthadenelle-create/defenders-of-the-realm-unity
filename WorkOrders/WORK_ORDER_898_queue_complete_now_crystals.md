@@ -4,7 +4,7 @@
 
 # WORK ORDER 898 — Queue: progress bars + "Complete now" with crystals (any item, any channel)
 
-**Status:** PARTIAL - remaining: the crystal-finish pricing (crystalsPerBracket has zero hits)
+**Status:** READY — PARTIAL - remaining: the crystal-finish pricing (crystalsPerBracket has zero hits)
 
 > **PARTIAL - re-scoped 2026-08-14 (phantom sweep).** Remaining work: the data-driven crystal-finish pricing — `crystalsPerBracket` has ZERO code hits repo-wide. Only the progress bars shipped.
 > Everything else in this WO is present in HEAD. The named remainder IS the ticket now - do not
