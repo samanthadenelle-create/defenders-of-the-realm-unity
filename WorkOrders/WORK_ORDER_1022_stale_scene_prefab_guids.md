@@ -1,6 +1,14 @@
 # WORK ORDER 1022 — `Main_Castle_Overworld` carries 56 refs to three DELETED prefab GUIDs
 
-**Status:** READY TO IMPLEMENT
+**Status:** IMPLEMENTED — 2026-08-16 overnight (CLI). Ruling resolved as STRIP: missing-prefab
+instances render NOTHING in game, so removal changes zero pixels and is git-reversible; RESTORE
+would mean authoring art that never existed in git (not an overnight call — the owner can still
+commission the storefront props as new content later). Executed via
+`DeNelle.Editor.SceneMaintenance.HubSceneMaintenance.StripMissingPrefabInstances` (marker
+`SCENE_STRIP_OK <n> removed`). ⚠ §4 deviation, deliberate: run in the MAIN tree, not an isolated
+worktree — the scene was committed clean so git is the restore path, the save is post-verified
+(size + marker + a clean re-open), and a worktree would cost a full cold-Library reimport. PO
+felt-verify: the hub loads without the error burst; F8 stays quiet on scene open.
 **Symptom widened 2026-08-15 late (CLI):** the same load event also fires a Unity-internal
 `Assertion failed on expression: 't.GetParent() == nullptr'` (F8 seq 2399, t=0.03s, same second as
 the GUID errors — the engine re-parenting the orphaned prefab-instance transforms). Count it as this

@@ -64,7 +64,7 @@ built.**
 | thing | measured state |
 |---|---|
 | Clans | `ClanService.cs` is a **local PlayerPrefs stub** — its own header says so. No network, **no donations**, no wars |
-| Ranger / Mage talents | **31 of 40 player-reachable nodes are dead** — Ranger 1 usable of 20, Mage 5 of 20 (**WO-910, open**) |
+| Ranger / Mage talents | **24 of 40 player-reachable nodes are dead** — Mage 13 of 20 (tier 4 dead IN FULL, all five) + Ranger 11 of 20 (t4: 4 of 5 dead). *(Corrected 2026-08-16 from a stale "31" — counted from the shrink-only `KnownDeadNodeBaseline`, `TalentStrategyRegression.cs:239/:299`, the live truth. Mage is now the LARGER debt — path-B wiring shrank ranger's.)* (**WO-910, open**) |
 | Raid defense | **zero** hits for `RaidDefen*` / `DefenseReport` / `Revenge` / `Trophy` across `_Modules` |
 | Dungeons | 4 layouts PathComplete, **parked warm** behind the demo |
 | Boss difficulty | 3 of 5 multipliers computed with **zero gameplay consumers** — boss waves ignore the curve |
@@ -91,7 +91,7 @@ player, and the whole CoC substrate is decorative.
 ⚠ **Do not mint a new ticket for this.** `WO-910` is READY FOR OWNER RULING and has been since
 2026-08-06. In WC3 terms this is the pillar: the hero *is* the story. A Ranger player reaches the talent
 screen — the screen we have spent this entire session polishing — and finds **one** usable node in
-twenty. **Polishing that screen while 31 of its nodes are dead is optimising the frame around an empty
+twenty. **Polishing that screen while 24 of its nodes are dead is optimising the frame around an empty
 canvas.** This review's recommendation: WO-910 outranks WO-1021.
 
 ### ⓷ The creeping ground is built and parked *(WC3 pillar, latent)* → **WO-1028**
@@ -146,5 +146,5 @@ lost.
 5. **WO-1029** (donations) — retention, once there is something worth returning to
 
 ⚠ **The talent-tree presentation work (WO-1021) is deliberately NOT in this list.** It is correct work
-and it should ship — but it is polish on a surface whose *content* is 31/40 dead. Sequence WO-910 first
+and it should ship — but it is polish on a surface whose *content* is 24/40 dead. Sequence WO-910 first
 or the polish lands on an empty screen.
