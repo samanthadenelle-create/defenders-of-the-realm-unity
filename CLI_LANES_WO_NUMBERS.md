@@ -1084,6 +1084,44 @@
 > doc"* — and the copy was **inside the numbering authority itself**. A duplicate cannot be kept honest
 > by discipline; it can only be removed. **The header is the sole source. Do not restore numbers here.**
 >
+> *(UI-seat bumped 1036 -> 1037 in the SAME edit as the WO-1036 mint — **`founding_walk` STEP-STUCK
+> RECURS AFTER WO-962 SHIPPED.** F8 seq 2433 (125s) + seq 2343 (241s), two sessions a day apart, same
+> missing `hero.reached:guide_gate`. ⚠ WO-962 is DONE (`e2759f1e9`, the guide_gate LATCH) and was filed
+> against this exact symptom — **do NOT re-implement it**; read it, confirm the latch holds at runtime,
+> then look DOWNSTREAM. Three causes needing opposite fixes: latch regressed / event never fires with a
+> good anchor / hero never arrives. ★ CHECK FIRST: the 08-15 harvest carried `[Flow:HeroOwner]
+> timeScale=0.00 WORLD CLOCK FROZEN` — that alone would explain both captures. ⚠ COORDINATE WITH
+> WO-1031: its guide-despawn ruling can turn this INTERMITTENT stall into a DETERMINISTIC hard block on
+> the first minute if the wolf despawns before the gate event. HIGH — it blocks the FTUE. READY.)*
+>
+> *(Also folded into WO-1025 from F8 seq 2428-2431: **the Heart audit is BOTH a lead and a noise source.**
+> `AuditHeartPresentation` found a live non-suppressed emitter at the Heart with material `Distortion`
+> / shader `Shader Graphs/HS_Distortion` (**HS_ = Hovl Studio**) — start the emitter hunt there. AND
+> `DescribeParticle:556` reads `mat.mainTexture` UNGUARDED, which Unity logs as an ERROR when the shader
+> has no `_MainTex` — so the diagnostic floods F8 four times per scene load. **Guard with
+> `HasProperty("_MainTex")`, do NOT delete the audit** (§12). Same class as the WO-1022 §6 MagentaGuard
+> noise: a diagnostic succeeding while logging at a severity that costs the owner triage attention.)*
+>
+> *(UI-seat bumped 1031 -> 1036 in the SAME edit as the WO-1031/1032/1033/1034/1035 mints, owner asks
+> 2026-08-16. **⛔ 1031 CARRIES A TRAP — READ IT BEFORE ANY "REMOVE FROST" WORK: "Frost" IS the FTUE
+> GUIDE WOLF.** `PetTaskController.SpeakerName()` maps `ice-wolf -> "Frost"`, and `ice-wolf` is the
+> guide body (`OneGuideBodyRegression:13` "guide BODY summoned ('ice-wolf')",
+> `FoundingGuideWolfBodyRegression:69-74`). A grep-and-delete of "Frost" DELETES THE FTUE GUIDE the owner
+> confirmed is correct. Remove the ENGAGE PROMPT (the `proximity` auto-fire at
+> `PetTaskController.cs:137-145` is why it keeps popping), never the wolf. ★ **And "Frost" is a CANON
+> VIOLATION**: the Echo's real name is **Aldwin** (`EchoRosterCatalog.cs:18`, `TutorialGuide.cs:20/61-65`,
+> objective strip "Follow Aldwin to the gate") — `SpeakerName()` is an invented naming scheme bypassing
+> the name authority. ⚠ Alduin (necromancer) != Aldwin (Ice Echo), one letter apart, pinned by
+> `DungeonLoreReadableRegression:74-91` — do NOT "correct" one into the other ·
+> **1032** wolf runs sideways: `PetDeployer.cs:442` `PetForwardYaw = -90f` was authored for the RETIRED
+> Tripo fox (`ice-wolf-fox-legacy.fbx`) and is still applied to the NEW wolf.fbx — ⚠ fix by DERIVING the
+> yaw, not by changing the constant, and CHECK flame-pup/aether-sprite don't break ·
+> **1033** Skip button -> `BuildObsidianButton` + top-middle (currently unstyled, overlaps the build rail
+> AND the Echoes chip) · **1034** build tooltip "tap to place, then rotate if needed" ·
+> **1035** portal VFX seated INSIDE the mesh (1/3 height, bounds-centred, DERIVED from renderer bounds) —
+> ⚠ also check the live `[Flow:MagentaProbe] FAIL ... BuildPortal` (F8 2404-2415) FIRST, the "blobs" may
+> be magenta fallback geometry. **1032 + 1035 are both the canon hand-authored-vs-DERIVED pattern.** READY.)*
+>
 > *(UI-seat bumped 1030 -> 1031 in the SAME edit as the WO-1030 mint — owner screenshot 2026-08-16:
 > the **Echo task dialogue ("Frost") CLIPS ITS OPTION LIST**. Chain traced:
 > `PetTaskController.BuildEngageDef():168-212` -> `DialogueService.PlayDef` -> `DialogueView`.

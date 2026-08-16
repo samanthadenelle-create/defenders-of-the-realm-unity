@@ -87,6 +87,57 @@ cannot render a hard-edged cone mesh or a polygonal starburst sprite, so it is n
 "Poi_NodeAura"/"Poi_Landmark" spawns uncovered by AmbientAuraPolicy's single-key gate); this WO keeps
 the white starburst hunt + the tree material.
 
+## 2c. ★ F8 seq 2428-2431 (2026-08-16) — THE AUDIT ALREADY FOUND AN EMITTER, and it errors doing so
+
+Four captures, same line:
+
+```
+Material 'Distortion' with Shader 'Shader Graphs/HS_Distortion' doesn't have a texture property '_MainTex'
+  HeartAuraController.DescribeParticle  :556
+  <AuditHeartPresentation>b__0          :490
+  AuditHeartPresentation                :436
+  BuildAura                             :296
+  Start                                 :192
+```
+
+**Two findings, and they matter in opposite directions.**
+
+### (a) EVIDENCE for the §3 hunt — a named emitter at the Heart
+
+`AuditHeartPresentation` walks the Heart's particle systems, and it is describing one whose material is
+**`Distortion`** on shader **`Shader Graphs/HS_Distortion`**. **`HS_` = Hovl Studio** — the combat VFX
+pack (`docs/vfx/Grok-01-VFX-guidance.md`).
+
+So there **is** a live particle system at the Heart carrying a Hovl distortion material, and it is
+neither of the two suppressed authored loops. ⚠ **Do not conclude it is the cone/starburst** — a
+distortion shader warps what is behind it and would not itself draw a white polygonal star. But it is a
+confirmed, named, non-suppressed emitter at the exact object, which is more than §3 had. **Start the
+§3 hierarchy dump from this one**: find what owns it and what else is parented alongside.
+
+### (b) DEFECT — the instrument is generating the error noise
+
+`DescribeParticle:554-556` reads the material's texture unguarded:
+
+```csharp
+var mat = psr != null ? psr.sharedMaterial : null;
+var tex = mat != null ? mat.mainTexture : null;      // ← errors when the shader has no _MainTex
+```
+
+`Material.mainTexture` logs a Unity **error** when the shader lacks `_MainTex`. Shader Graph materials
+routinely do. So the diagnostic added to investigate this tree is **itself** producing error-severity
+log spam — which F8 captures, which floods the owner's triage queue, four per scene load.
+
+**Fix: guard it —** `mat != null && mat.HasProperty("_MainTex") ? mat.mainTexture : null`, and report
+`"n/a (no _MainTex)"` rather than dropping the field.
+
+⚠ **Do NOT delete `DescribeParticle` or the audit** — §12, instrumentation is permanent, and per (a) it
+is the most useful thing pointed at this problem. **Guard it, don't remove it.** An instrument that
+cannot be left switched on is an instrument that will be switched off.
+
+⚠ **This is the same class as the MagentaGuard noise in WO-1022 §6** — a diagnostic succeeding at its
+job while logging at a severity that costs the owner triage attention. Worth checking whether other
+`Describe*` helpers read material properties unguarded.
+
 ## 3. STEP 1 — INSTRUMENT. Do not edit until the trace names the emitter (CLAUDE.md §12)
 
 The emitter is **unidentified**. Static reading located candidates and did not conclude, which is

@@ -1,6 +1,6 @@
 # WORK ORDER 994 - The shield's authored seat is stranded against a base WO-970 moved
 
-**Status:** REOPENED 2026-08-16 — INSTRUMENTATION LANDED in working tree (owner proactive directive 2026-08-16 lifted the wait-for-go); pending CLI batch-gate + commit, then ONE device dungeon->town run names the mechanism. No seat numbers changed.
+**Status:** IMPLEMENTED 2026-08-16 (2nd pass) - trace-proven diagnosis; A eliminated; dead re-seat fixed + survive-path hardening + seat-drift tripwire + [attachment-offset] suite; committed; PO felt-verify = dungeon->town port on the new exe
 **Minted:** 2026-08-14 (CLI)
 **Silo:** Gear / equip seating
 **Source:** OWNER REPORT - *"still same problem when porting from dungeon with Shield position"*

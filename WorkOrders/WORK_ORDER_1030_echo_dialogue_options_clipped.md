@@ -1,6 +1,6 @@
 # WORK ORDER 1030 — Echo task dialogue: the choice list is clipped, and the portrait is a placeholder
 
-**Status:** READY TO IMPLEMENT
+**Status:** IMPLEMENTED 2026-08-16 - pending PO felt-verify (commit `323f3c97f`); see RESULT
 **Minted:** 2026-08-16 (UI seat) — provenance stack bumped 1030 → 1031 in the same edit
 **Lane:** HUD `DialogueView` presentation + Echo portrait art. Disjoint from every gameplay lane.
 **Provenance:** owner screenshot 2026-08-16 — the "Frost" Echo task prompt in `Main_Castle_Overworld`,

@@ -1,6 +1,6 @@
 # WORK ORDER 1100 — Dungeon-portal threshold aura renders with a NULL material (MagentaProbe M2)
 
-**Status:** READY TO IMPLEMENT (triage step first — see §3)
+**Status:** IMPLEMENTED 2026-08-16 - theory DISPROVED (MagentaGuard false-positives on authored-disabled renderers); normalizer + [vfx-null-slot] suite landed (commit `bb9844a97`); OWNER RULING OPEN on 5 genuine null-slot ParticlePack prefabs - see RESULT
 **Minted:** 2026-08-16 (CLI seat) — banner bumped 1100 -> 1101 in the same edit; ⚠ this is the FIRST
 mint of the new CLI block (the main line jumped 1000→1100 over the UI seat's 1000–1099 — C-1 went
 live; owner ratification of the block ranges pending).

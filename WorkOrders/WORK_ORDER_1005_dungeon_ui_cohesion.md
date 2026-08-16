@@ -6,7 +6,20 @@
 
 # WORK ORDER 1005 — Dungeon UI cohesion: Descend button + EXIT label to the Obsidian kit
 
-**Status:** READY TO IMPLEMENT - NOT STARTED (verified accurate 2026-08-08) · **Silo:** Dungeons/UI · **For:** CLAUDE CLI · **Date:** 2026-08-07
+**Status:** IMPLEMENTED - PENDING GATE (2026-08-16; fixes 1+2 had already landed via other WOs, fix 3's last live gap - the UXML oil HUD - rebuilt on the Obsidian kit this pass; crafting panel UXML rebuild remains as follow-up) · **Silo:** Dungeons/UI · **For:** CLAUDE CLI · **Date:** 2026-08-07
+
+> ## RECONCILED 2026-08-16 - state of the three breaks at implementation time
+> 1. **Descend purple panel: ALREADY FIXED** by commit 16cefd72c ("the purple interact plate goes -
+>    Obsidian kit, town and dungeon alike") - the Descend prompt IS the shared MobileInteractButton
+>    (DungeonPortLink routes through it), which now wears the Obsidian kit face.
+> 2. **Mirrored EXIT: MOOT + FIXED** - the "EXIT" word was REMOVED entirely (owner ruling 2026-08-14,
+>    commit 64ebf6658 "unlabelled"); the surviving world labels (WO-957 leave pads, WandererBubble)
+>    billboard with the correct handedness (`LookRotation(pos - cam.pos)`, forward away from camera).
+> 3. **One Obsidian theme: the last off-kit player-facing surface was the UXML lantern-oil HUD**
+>    (DungeonHudController + DungeonHud.uxml - also blank in player builds, the sec.8 UXML landmine).
+>    Rebuilt 2026-08-16 as code-built kit uGUI (obsidian card + ObsidianBar + ToastCard low-oil pill).
+>    The WandererBubble parchment speech bubble matches the house TownsfolkBubble idiom - cohesive as-is.
+>    REMAINS: CraftingPanelController is still UXML (cottage-only crafting modal) - follow-up slice.
 **PO:** Samantha (owner) · **Author:** UI seat · **UI-seat block:** 1000–1099
 **Owner (felt-test 2026-08-07):** "needs cohesion." The composed dungeon's UI/labels don't match the game's obsidian+gold theme — they read as placeholders.
 **Complements:** WO-1004 (dungeon art/materials/enclose), WO-899 (HUD), WO-1001 (descent mechanic).
