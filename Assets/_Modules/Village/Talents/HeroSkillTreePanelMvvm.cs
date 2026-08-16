@@ -47,7 +47,9 @@ namespace DeNelle.Village.Talents
         private ElarionUiKit.CurrencyChipHandle _wisdomChip;   // Wisdom chip, top-right of the graph
 
         // Spend popup (owner 2026-08-15): shown on node tap; Confirm spends, Cancel dismisses.
+        // Chrome is BuildObsidianPanel (common kit frame + gold border) — never a bare plate.
         private GameObject _popupRoot;
+        private GameObject _popupConfirmRing;
         private TMPro.TextMeshProUGUI _popupName;
         private TMPro.TextMeshProUGUI _popupDesc;
         private TMPro.TextMeshProUGUI _popupPrompt;
@@ -331,14 +333,15 @@ namespace DeNelle.Village.Talents
             bool canSpend = _vm.CanSpendSelected;
             if (_popupConfirmBtn != null)
             {
-                _popupConfirmBtn.gameObject.SetActive(canSpend);
+                // Keep the button present so layout stays stable; dim when unaffordable.
+                _popupConfirmBtn.gameObject.SetActive(true);
                 _popupConfirmBtn.interactable = canSpend;
-                SetButtonAlpha(_popupConfirmBtn, canSpend ? 1f : 0.4f);
+                SetButtonAlpha(_popupConfirmBtn, canSpend ? 1f : 0.35f);
             }
+            if (_popupConfirmRing != null)
+                _popupConfirmRing.SetActive(canSpend);
             if (_popupConfirmLabel != null)
-                _popupConfirmLabel.text = canSpend
-                    ? "CONFIRM"
-                    : "CONFIRM";
+                _popupConfirmLabel.text = "CONFIRM";
             // Cancel is always the dismiss path (owned / locked / buyable).
             if (_popupCancelBtn != null)
             {
@@ -1062,14 +1065,14 @@ namespace DeNelle.Village.Talents
         }
 
         /// <summary>
-        /// Center card over the graph: talent name + description + spend prompt +
-        /// Cancel / Confirm. Only Confirm spends; Cancel clears selection.
-        /// Kept as BuildActionRow-adjacent name for the source-law regression token via
-        /// BuildSpendPopup (updated oracle).
+        /// Centered spend popup over the graph. INHERITS the common kit chrome
+        /// (<see cref="ElarionUiKit.BuildObsidianPanel"/> + FrameCore): ornate frame, gold
+        /// border, title band, body well, footer action strip. Never a bare plate (owner
+        /// 2026-08-15 Screenshot 191356). Confirm spends; Cancel / dim / Close dismiss.
         /// </summary>
         private void BuildSpendPopup(Transform panel)
         {
-            // Full-rect blocker so taps don't hit nodes under the card.
+            // Full-rect dim so taps don't hit nodes under the card.
             _popupRoot = new GameObject("SpendPopup", typeof(RectTransform), typeof(Image), typeof(Button));
             _popupRoot.transform.SetParent(panel, false);
             var rootRt = (RectTransform)_popupRoot.transform;
@@ -1078,73 +1081,88 @@ namespace DeNelle.Village.Talents
             var dim = _popupRoot.GetComponent<Image>();
             dim.color = new Color(0.02f, 0.02f, 0.03f, 0.72f);
             dim.raycastTarget = true;
-            // Tapping the dim dismisses (same as Cancel).
             var dimBtn = _popupRoot.GetComponent<Button>();
             dimBtn.targetGraphic = dim;
             dimBtn.onClick.AddListener(() => { if (_vm != null) _vm.ClearSelection(); });
             _popupRoot.SetActive(false);
 
-            // Card — centered, fixed-ish fraction of body.
-            var cardGo = new GameObject("Card", typeof(Image));
-            cardGo.transform.SetParent(_popupRoot.transform, false);
-            var cardRt = (RectTransform)cardGo.transform;
-            cardRt.anchorMin = new Vector2(0.18f, 0.18f);
-            cardRt.anchorMax = new Vector2(0.82f, 0.82f);
-            cardRt.offsetMin = Vector2.zero; cardRt.offsetMax = Vector2.zero;
-            var cardImg = cardGo.GetComponent<Image>();
-            Sprite plate = RpgUiCatalog.Get(RpgUiCatalog.RoleFrame, RpgUiCatalog.FrameElement);
-            if (plate == null) plate = RpgUiCatalog.Get(RpgUiCatalog.RolePanel, RpgUiCatalog.PanelGrid);
-            if (plate == null) plate = RpgUiCatalog.Get("slot", "slot_talent");
-            if (plate != null) { cardImg.sprite = plate; cardImg.type = Image.Type.Sliced; }
-            else ElarionUiKit.ApplyRounded(cardImg);
-            cardImg.color = new Color(0.08f, 0.07f, 0.10f, 0.98f);
-            // Swallow clicks so dim-dismiss doesn't fire when tapping the card body.
-            cardImg.raycastTarget = true;
-            var cardBlock = cardGo.AddComponent<Button>();
-            cardBlock.targetGraphic = cardImg;
-            cardBlock.transition = Selectable.Transition.None;
+            // ── Common kit frame (same factory every other panel uses) ─────────────
+            // withBackdrop:false — the dim above is the modal veil; FrameCore supplies
+            // the gold-bordered plate. Title is re-written on each selection with the
+            // talent name so the header band stays the single title surface.
+            var chrome = ElarionUiKit.BuildObsidianPanel(
+                _popupRoot.transform,
+                "Talent",
+                new Vector2(0.20f, 0.12f), new Vector2(0.80f, 0.88f),
+                () => { if (_vm != null) _vm.ClearSelection(); },
+                headerX0: 0.14f, headerX1: 0.86f,
+                withBackdrop: false,
+                frameName: RpgUiCatalog.FrameCore,
+                medallionIcon: "talent");
+            // Nested popup: Cancel is the labeled dismiss; hide the shared bottom Close
+            // so we don't stack two "leave" affordances under the buttons.
+            if (chrome.close != null) chrome.close.gameObject.SetActive(false);
 
-            const float pad = 0.06f;
-            _popupName = ElarionUiKit.Label(cardGo.transform, "", 0.78f, 0.96f, ElarionUi.Gilt,
-                ElarionUi.FontTitle, TMPro.TextAlignmentOptions.Center, pad, 1f - pad, bold: true);
-            ElarionUiKit.FitSingleLine(_popupName);
+            _popupName = chrome.title;
+            if (_popupName != null)
+            {
+                _popupName.color = ElarionUi.Gilt;
+                _popupName.fontStyle = TMPro.FontStyles.Bold;
+            }
 
-            _popupDesc = ElarionUiKit.Label(cardGo.transform, "", 0.42f, 0.76f, ElarionUi.Parchment,
-                ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Top, pad, 1f - pad);
+            var body = (chrome.layout != null && chrome.layout.body != null)
+                ? chrome.layout.body
+                : (RectTransform)chrome.content.transform;
+            var footer = (chrome.layout != null) ? chrome.layout.footer : null;
+
+            // Body: description + spend prompt (chrome-less labels into the frame well).
+            const float tx0 = 0.06f, tx1 = 0.94f;
+            _popupDesc = ElarionUiKit.Label(body, "", 0.42f, 0.96f, ElarionUi.Parchment,
+                ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Top, tx0, tx1);
             ElarionUiKit.FitBlock(_popupDesc);
 
-            _popupPrompt = ElarionUiKit.Label(cardGo.transform, "", 0.28f, 0.40f, ElarionUi.Affordable,
-                ElarionUi.FontBody, TMPro.TextAlignmentOptions.Center, pad, 1f - pad, bold: true);
+            _popupPrompt = ElarionUiKit.Label(body, "", 0.06f, 0.36f, ElarionUi.Affordable,
+                ElarionUi.FontBody, TMPro.TextAlignmentOptions.Center, tx0, tx1, bold: true);
             ElarionUiKit.FitBlock(_popupPrompt);
 
-            // Button row — Cancel | Confirm, kit touch floor height via anchors on a band.
-            var btnBand = BandHost(cardGo.transform, "PopupActions", pad, 1f - pad);
-            PinBandFromBottom(btnBand, 18f, ActionRowPx);
+            // Footer (or body floor fallback): Cancel | CONFIRM — kit ButtonPack + touch floor.
+            RectTransform btnHost;
+            if (footer != null)
+            {
+                btnHost = footer;
+            }
+            else
+            {
+                btnHost = BandHost(body, "PopupActions", 0f, 1f);
+                PinBandFromBottom(btnHost, 4f, ActionRowPx);
+            }
 
-            _popupCancelBtn = ElarionUiKit.ButtonPack(btnBand, "Cancel", ElarionUiKit.ButtonKind.Quiet,
-                new Vector2(0.02f, 0f), new Vector2(0.46f, 1f),
+            _popupCancelBtn = ElarionUiKit.ButtonPack(btnHost, "Cancel", ElarionUiKit.ButtonKind.Quiet,
+                new Vector2(0.04f, 0.08f), new Vector2(0.46f, 0.92f),
                 () => { if (_vm != null) _vm.ClearSelection(); },
                 packSpriteName: RpgUiCatalog.ButtonFrame);
             StyleActionLabel(_popupCancelBtn, ElarionUi.Parchment);
 
-            // Emphasis ring under Confirm (shape, not hue — colourblind law).
+            // Emphasis ring — child of the Confirm button so it never outlives it
+            // (Screenshot 191356: orphan yellow square when CONFIRM was hidden).
+            _popupConfirmBtn = ElarionUiKit.ButtonPack(btnHost, "CONFIRM", ElarionUiKit.ButtonKind.Quiet,
+                new Vector2(0.54f, 0.08f), new Vector2(0.96f, 0.92f),
+                () => { if (_vm != null) _vm.SpendSelected(); },
+                packSpriteName: RpgUiCatalog.ButtonFrame);
+            _popupConfirmLabel = StyleActionLabel(_popupConfirmBtn, ElarionUi.Gilt);
+
             var ring = new GameObject("ConfirmRing", typeof(Image));
-            ring.transform.SetParent(btnBand, false);
+            ring.transform.SetParent(_popupConfirmBtn.transform, false);
+            ring.transform.SetAsFirstSibling();
             var ringRt = (RectTransform)ring.transform;
-            ringRt.anchorMin = new Vector2(0.52f, 0f);
-            ringRt.anchorMax = new Vector2(0.98f, 1f);
-            ringRt.offsetMin = new Vector2(-4f, -4f);
-            ringRt.offsetMax = new Vector2(4f, 4f);
+            ringRt.anchorMin = Vector2.zero; ringRt.anchorMax = Vector2.one;
+            ringRt.offsetMin = new Vector2(-5f, -5f);
+            ringRt.offsetMax = new Vector2(5f, 5f);
             var ringImg = ring.GetComponent<Image>();
             ElarionUiKit.ApplyRounded(ringImg);
             ringImg.color = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.80f);
             ringImg.raycastTarget = false;
-
-            _popupConfirmBtn = ElarionUiKit.ButtonPack(btnBand, "CONFIRM", ElarionUiKit.ButtonKind.Quiet,
-                new Vector2(0.52f, 0f), new Vector2(0.98f, 1f),
-                () => { if (_vm != null) _vm.SpendSelected(); },
-                packSpriteName: RpgUiCatalog.ButtonFrame);
-            _popupConfirmLabel = StyleActionLabel(_popupConfirmBtn, ElarionUi.Gilt);
+            _popupConfirmRing = ring;
         }
 
         // Retired name kept so SkillsPanelLayoutRegression [source] still finds the token.
@@ -1286,6 +1304,7 @@ namespace DeNelle.Village.Talents
             _headerLabel = null;
             _wisdomChip = null;
             _popupRoot = null;
+            _popupConfirmRing = null;
             _popupName = null;
             _popupDesc = null;
             _popupPrompt = null;
