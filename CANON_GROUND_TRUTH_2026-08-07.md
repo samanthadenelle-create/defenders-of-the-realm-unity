@@ -1,6 +1,11 @@
+> ## ⚠ SUPERSEDED 2026-08-16 — the live anchor is `CANON_GROUND_TRUTH_2026-08-16.md`. Frozen ledger.
+> This was the only non-live anchor still claiming to be live (the "THE single live anchor" line
+> immediately below). It was superseded by the 08-08 anchor the next day and never bannered.
+
 # CANON GROUND TRUTH — 2026-08-07 (02:2x, overnight run)
 
-> **THE single live anchor (CLAUDE.md §15).** Supersedes `CANON_GROUND_TRUTH_2026-08-06.md`.
+> **~~THE single live anchor (CLAUDE.md §15).~~ (Was true on 2026-08-07 only — see the banner above.)**
+> Supersedes `CANON_GROUND_TRUTH_2026-08-06.md`.
 > Every session and agent checks docs against THIS file. Sourced from HEAD commits, the working
 > tree, and captured device/EXE data — never assumption.
 

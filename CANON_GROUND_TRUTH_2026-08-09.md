@@ -1,3 +1,6 @@
+> ## ⚠ SUPERSEDED 2026-08-16 — the live anchor is `CANON_GROUND_TRUTH_2026-08-16.md`. Frozen ledger.
+> Read for history only. Its save-schema, HEAD, gate-count and WO-910 lines are all overtaken.
+
 # CANON GROUND TRUTH — 2026-08-09
 
 **Supersedes `CANON_GROUND_TRUTH_2026-08-08.md`.** Per CLAUDE.md §15 this is the single live anchor:

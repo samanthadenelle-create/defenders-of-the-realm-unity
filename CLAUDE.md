@@ -259,6 +259,17 @@ hardcoded repo root (§0). **Do not restore a hand-maintained dependency table h
   which would silently zero its yield. No schema bump. The pace knob `repairFractionPerHour` now lives
   in `echoes-balance.json` (0.35, re-tuned down from the old code-only 2.0 so a full roster lands near
   the old single-Echo rate instead of 6x-ing it).
+- **The Echo has exactly ONE appearance owner: `EchoWorldPresence`** (WO-1108 Lane B, 2026-08-16). It
+  escorts the player to the gate, vanishes, and returns **once** after the battle — one owner, one
+  lifecycle, no second spawner. `PetDeployer.DespawnEcho` (`Assets/_Modules/Pets/PetDeployer.cs:442`)
+  is the **FIRST despawn path in the game**: nothing had ever removed a deployed pet before, so treat
+  it as the seam, not as one of several. Pinned by `Editor/Regression/EchoWorldPresenceRegression.cs`.
+- **Ranger: the BOW is an ACTION-BAR ability (slot Q); the PRIMARY attack is the melee/dagger sweep**
+  (owner ruling WO-1105 R5, 2026-08-16). `ranger.q` (Quick Shot) has **always** been slot Q, and Q is
+  the class's LOCKED basic — only W/E/R are loadout-swappable. The path that also fired the shot from
+  the PRIMARY input is deleted (`FirePrimary` / `FireRangedPrimary` / `ResolveRangedTarget` /
+  `ResolvePrimaryFace`), so **the phone's one attack button never spends an arrow**. Primary is the
+  melee sweep for every class.
 
 ---
 
@@ -267,8 +278,10 @@ hardcoded repo root (§0). **Do not restore a hand-maintained dependency table h
 See `KEY_FACTS.md` + the newest `CANON_GROUND_TRUTH_<date>.md` for full detail (PIPELINE_STATE.md lags). Key facts *(refreshed 2026-08-02)*:
 - Defend-the-Tower (PatriciaLight): **REMOVED (2026-06-09)** — module + scene gone; only `Resources/PatriciaLight/tower2` kept
 - Home hub: **`Main_Castle_Overworld`** (merged world, one navmesh); **Village2** = raid target; `Village.unity`/`OuterWorld.unity` DELETED
+- **⛔ `RaidHeroSpawner` NEVER EXISTED — do not go looking for it** (WO-1109, 2026-08-16). The raid scenes never had a hero spawner class; the **emergency pill-hero was the NORMAL path**, not a fallback, and it carried **no abilities at all**. Raids now carry the real hero across. `git log -S"RaidHeroSpawner"` returns only the commits saying it never existed — a session that hunts for it loses a morning to a class that has never been in the repo.
+- **Storage containers climb to SIX levels** (WO-1108b, 2026-08-16): capacity at level = 1k/2k/4k/8k/16k/32k, so a maxed container takes that resource's store from **2000 base → 34000**. Costs double per step; wood+iron only (WO-947 — containers are regular structures); upgrade TIME is deliberately not authored (`StartUpgrade` derives tier as `targetLevel-2` and the existing curve yields 40s/2m/6m/18m/55m). ⛔ **`RepoProps.MaxStructureLevel = 6` (`Assets/_Modules/Core/Catalog/RepoProps.cs:69`) is the SINGLE ceiling** — it replaced **eight hardcoded 3s** (BuildModeController, StructureCardVM, three suites, an EditMode test, StorageCapsCatalog's fallback array). **Never re-hardcode a level ceiling.**
 - Village wave loop: WIRED — **`waves.json` `enemies[]` batches are INERT** (`_smartComposition:1` → WaveManager generates rosters). **The WO-783 D1 ruling is CLOSED** (owner, 2026-07-30): both `WaveDataTest` cases were rewritten to assert the batches are EMPTY, so a re-add now FAILS. Any doc calling this "open" is stale.
-- Save schema **v37** (v35 = WO-773 Obsidian queue; v36 = WO-834 `everBuiltStructureIds`, the blank-town baked standdown; **v37 = WO-911 the per-job PAID BASKET** — `paidWood/paidFood/paidIron/paidCrystals/paidMagic` on `BuildJobData`, the precondition for cancel refunding **100% of what was paid, flat** (ruling Q1); a pre-v37 job refunds ZERO and says so); the **Obsidian multi-channel queue** (Builder/Train/Research) is the single home for ALL timed work, now with a **DEPTH cap of 5 PER LINE** (`BuildTimerConfig.queueDepthPerLine` — a different axis from `freeBuildSlots`, which stays 2; **never** implement the cap by raising concurrency) and an **Echo-gated, crystal-priced extra slot** (`BuildTimerService.TryBuySlot`, ruling Q6: each Echo above 2 unlocks the RIGHT to buy, crystals complete it); Realm Map (WO-826) shipped
+- Save schema **v38** — read it off `SaveSchema.CurrentVersion` (`Assets/_Modules/Core/State/SaveSchema.cs:41`), never off a doc (v35 = WO-773 Obsidian queue; v36 = WO-834 `everBuiltStructureIds`, the blank-town baked standdown; v37 = WO-911 the per-job PAID BASKET — `paidWood/paidFood/paidIron/paidCrystals/paidMagic` on `BuildJobData`, the precondition for cancel refunding **100% of what was paid, flat** (ruling Q1), a pre-v37 job refunds ZERO and says so; **v38 = WO-934 the ARMY LOADOUT BANK** — `ArmyStorage.loadouts` (3 named composition presets) + `activeLoadout`, additive on the nested Army JSON, `MigrateToV38` runs `EnsureLoadouts` for empty slots); the **Obsidian multi-channel queue** (Builder/Train/Research) is the single home for ALL timed work, now with a **DEPTH cap of 5 PER LINE** (`BuildTimerConfig.queueDepthPerLine` — a different axis from `freeBuildSlots`, which stays 2; **never** implement the cap by raising concurrency) and an **Echo-gated, crystal-priced extra slot** (`BuildTimerService.TryBuySlot`, ruling Q6: each Echo above 2 unlocks the RIGHT to buy, crystals complete it); Realm Map (WO-826) shipped
 - Store / monetization: the live model = **player-built town** (strategic placement ALWAYS ON — the flag was removed; movable functional storefronts + vendor NPCs). PackStore/packs.json exist — do NOT greenfield — but the old Village.unity store scene-wiring is a dead path
 - Pre-ship gates = `COMPILE_GATE_OK` + `REGRESSION_OK <n>/<n> suites` + `UI_CAPTURE_OK` (open the PNGs).
   **The markers are now DISTINCT per entry point (2026-08-02)** — `DataRegression.RunAll` emits

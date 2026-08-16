@@ -1,8 +1,13 @@
-> ## ⚠ STALE as of 2026-08-07 02:30 — read `CANON_GROUND_TRUTH_2026-08-07.md` FIRST
+> ## ⚠ STALE — read `CANON_GROUND_TRUTH_2026-08-16.md` FIRST (re-flagged 2026-08-16)
 >
-> This file was last refreshed 2026-08-06 ~10:50, BEFORE the overnight run. It does not know about:
+> **The live save schema is `v38`** (`SaveSchema.CurrentVersion`, `SaveSchema.cs:41`). ⚠ **This file
+> states the schema in four places and every one of them is frozen history** — v37 in this banner,
+> v36 in the 08-06 and 08-02 blocks and in the Economy line, v35/v30/v29/v28 in older blocks. They are
+> kept as dated ledger entries; **none of them is the current value. Read the const.**
+>
+> This file was last refreshed 2026-08-06 ~10:50, BEFORE the 08-07 overnight run. It does not know about:
 > the wallet main-thread fix, the arena stranding fix, the Manage/Queues screen (bottom bar is now
-> **6 faces**, Upgrade re-pointed, Map moved into Bag and flag-gated off), **save schema v37**, the
+> **6 faces**, Upgrade re-pointed, Map moved into Bag and flag-gated off), the 08-07-era **save schema v37**, the
 > rewarded-ad gate, town suspension while in a dungeon, the barracks adoption, the F8 harness
 > un-blinding, or the UI seat moving to the **1000-block**.
 >
@@ -29,7 +34,7 @@ PM catalog. Status legend: **BUILT** (works) · **WIRED** (in-scene/connected) �
   - **Gates:** `COMPILE_GATE_OK` + **`REGRESSION_OK 120/120 suites`** + `VFX_LOOPFLAG_OK` +
     `VFX_ART_MIRROR_OK` + `PARTICLE_PACK_VFX_BUILD_OK` + `BOSS_FIREBREATH_BUILD_OK`.
     ⚠ The count moved **117 → 118 → 119 → 120** in eight hours — **read it off the marker, never a doc.**
-    Save **v36**, unchanged. ⚠ Working tree NOT clean, **and SHARED** (`ProjectSettings.asset` APK stamp
+    Save **v36**, unchanged *(as of 2026-08-06; live is v38)*. ⚠ Working tree NOT clean, **and SHARED** (`ProjectSettings.asset` APK stamp
     `312459`; `WorkOrders/WORK_ORDER_885`–`894` untracked; **plus a concurrent lane of ~32 modified `.cs`
     files and the dual-copy `structures-catalog.json` / `damage-states.json`** — WO-889–893 in flight).
     **Reconcile by explicit path; one committer; never `git add -A`.**
@@ -54,8 +59,10 @@ PM catalog. Status legend: **BUILT** (works) · **WIRED** (in-scene/connected) �
     tutorial wave stand-down + its watchdog cancellation · one **structure height cadence** (catalog **v8**).
   - **IN FLIGHT (specs on disk, untracked, NOT implemented):** **WO-889/890/891/892/893** (combat auras
     nearest-N · harvest economy · structures/healer · building damage state · portals/spawn/dissolve).
-    **WO-884/885** READY. **WO-910 READY FOR OWNER RULING** (Ranger/Mage talent trees are effectively empty
-    — 31 dead nodes; Ranger 1 usable of 20, Mage 5 of 20, both tier-4 capstone rows dead).
+    **WO-884/885** READY. **✅ WO-910 RESOLVED 2026-08-16** — all three talent trees re-authored to
+    **3 bases branching wider** (knight 3/7/8/7/7 · ranger 3/5/6/6 · mage 3/6/6/5), one focus plate per
+    BOARD (was one per track). ⚠ Ranger and mage had had **no authored x/y at all**, so the old
+    "31 dead nodes / Ranger 1 usable of 20" line described a missing layout, not a design deficit.
   - **Hero:** `ff.knightonly` defaults **OFF** — roster Knight/Ranger/Mage via `PlayableHeroes`
     (**Cleric deliberately out**). A **latent invisible-hero P0** is closed (Ranger/Mage had no FBX and fell
     to a gitignored Blink body that instantiated nothing on a fresh clone; now a tracked KayKit body).
@@ -71,7 +78,7 @@ PM catalog. Status legend: **BUILT** (works) · **WIRED** (in-scene/connected) �
   - **Gates:** `COMPILE_GATE_OK` + `REGRESSION_OK` + **EditMode 884/884, zero reds** + **`UI_CAPTURE_OK 28`**.
     **Ten new oracles** today: raid-deploy-ui, wallet-provider, hud-actionbar, echo-picker,
     dungeon-room-ownership, realm-map, dungeon-treasure, echo-card-layout, starter-loadout, shield-defense.
-  - **Save schema = `v36`** (WO-834 `everBuiltStructureIds`, the blank-town baked standdown). Echo lane
+  - **Save schema = `v36`** *(frozen history — the value ON 2026-08-02; live is v38)* (WO-834 `everBuiltStructureIds`, the blank-town baked standdown). Echo lane
     tokens moved to a `<resource>:<level>` grammar and are **read-migrated — no further bump.**
   - **SHIPPED:** WO-830/831 Echo harvest program (**affinity = a MATCH BONUS, never a lock** — the player
     picks each Echo's resource, a match doubles yield; **Maren harvests Crystals, not Repairs**) ·
@@ -176,7 +183,7 @@ PM catalog. Status legend: **BUILT** (works) · **WIRED** (in-scene/connected) �
   (Blink = UI re-skin only). Roster = Tripo only; V1 = Knight + ORCS.
 - **World:** home hub **`Main_Castle_Overworld`** (merged world, one navmesh); `Village2` = raid target;
   `Village.unity` + `OuterWorld.unity` DELETED from the tree.
-- **Economy:** Echo workforce wired (offline real-clock, save **v36**); village-tier upgrade
+- **Economy:** Echo workforce wired (offline real-clock, landed at save **v36**; live schema is **v38**); village-tier upgrade
   unlocks the WO-432 building-upgrade tree; store redesign (WO-501) + gear balance (WO-500).
   **Echo harvest affinity is a MATCH BONUS, never a lock** (WO-830, 2026-08-02): the player picks each
   Echo's harvest resource; matching its affinity doubles the yield. Token grammar `<resource>:<level>`.

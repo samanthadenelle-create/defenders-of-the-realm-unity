@@ -1,9 +1,11 @@
 # MASTER CATALOG — Project Index
 
-> # ▶ DELTA 2026-08-09 — read this before the banners below
-> **Live anchor = `../CANON_GROUND_TRUTH_2026-08-09.md`** (every "live anchor" reference further down this
-> file naming 08-02, 08-03 or 08-06 is stale). **HEAD `c8320434`, PUSHED — local == origin, 0/0.**
-> Save schema **v37** (`SaveSchema.cs:36`). ⚠ **Read every gate count off the marker file, never off this
+> # ▶ DELTA 2026-08-16 — read this before the banners below
+> **Live anchor = `../CANON_GROUND_TRUTH_2026-08-16.md`** (every "live anchor" reference further down this
+> file naming 08-02, 08-03, 08-06 or 08-09 is stale). **Read HEAD and push state off `git`, never off a
+> hash copied into a doc.**
+> Save schema **v38** (`SaveSchema.cs:41` — the const is the authority; v38 = WO-934 the army loadout
+> bank). ⚠ **Read every gate count off the marker file, never off this
 > doc** — the three entry points emit DISTINCT markers (`REGRESSION_OK` / `CHECKIN_SUITE_OK` /
 > `SESSION_GUARDS_OK`), and the newest run's markers are named in the anchor's gate block.
 >
@@ -30,8 +32,12 @@
 >   dropped by the next regenerate. See `resources-art.md`.
 > - **Hero:** `ff.knightonly` defaults **OFF** — roster Knight/Ranger/Mage. Any area file still saying
 >   "dormant under knight-only" is stale. A **latent invisible-hero P0** is closed (Ranger/Mage had no FBX,
->   fell to a **gitignored** Blink body, and instantiated **nothing** on a fresh clone). **WO-910: their
->   talent trees are effectively empty — 31 dead nodes; READY FOR OWNER RULING.** See `village-hero.md`.
+>   fell to a **gitignored** Blink body, and instantiated **nothing** on a fresh clone). **✅ WO-910 is
+>   RESOLVED (2026-08-16)** — all three trees re-authored to **3 bases branching wider**: knight
+>   3/7/8/7/7 (32 nodes) · ranger 3/5/6/6 (20) · mage 3/6/6/5 (20), verified in `hero-talents.json`.
+>   ⚠ Ranger and mage previously had **no authored x/y at all**, so "31 dead nodes" described a missing
+>   layout, not a design deficit. **One focus plate per BOARD** (was one per track). Any line still
+>   calling WO-910 open is stale. See `village-hero.md`.
 > - **Structures:** one owner-ruled **height cadence** — 1.25 landmark / **1.2 towers** / 1.0 base / 0.75
 >   siege / 0.35 decoration, recorded in the data as `_heightCadence`, **catalog v8** (6→7 archer, 7→8 cadence). **Walls deliberately
 >   excluded** (narrowing opens pathable gaps in saved wall runs). Any "towers 1.25" line is stale.
@@ -46,7 +52,7 @@
 > body.** §1–§3 below are ~2026-07 fiction and contradict both the section files and the live anchor:
 > Village-Hero "Blaise + class bodies" · NPCs "party-of-4" · Enemies/World "OuterWorld streaming"
 > (that scene is DELETED) · Dialogue "64 `.yarn` nodes + vendored Yarn" (Yarn is FULLY REMOVED, WO-557)
-> · `SaveSchema CurrentVersion=30` (it is **36**) · "next free WO = 412" (**never trust a copied number — read the
+> · `SaveSchema CurrentVersion=30` (it is **38**) · "next free WO = 412" (**never trust a copied number — read the
 > `CLI_LANES_WO_NUMBERS.md` banner; corrected 2026-08-06, the 853/863 figures previously printed here
 > were themselves stale**) · EconomyService "4-resource wallet" (5 with Coins) · `ZoneManager` village ±42/±33 (actual
 > **52/52** — the 42/33 figure mis-classifies the courtyard and IS the 07-26 "enemies inside the castle" bug).
@@ -120,10 +126,10 @@ Current branch = **`wip/village2-and-f8-tickets`**.
 - `RaidDeployController` + `TroopDeployer.SpawnFromArmy(...)` + `TroopController` (`Assets/_Modules/Village/Troops/`) — tap-deploy tray + spawn + auto-fight.
 - `RaidScoring` + `RaidHudController` (`Assets/_Modules/Village/Troops/`; oracle `Assets/Editor/Regression/RaidScoringRegression.cs`) — 180s clock, stars, loot.
 
-**Core/Jobs — multi-channel "Obsidian" work queue — SHIPPED (WO-773, landed at save schema v35; live schema is now **v36**).** `Assets/_Modules/Core/Jobs/`:
+**Core/Jobs — multi-channel "Obsidian" work queue — SHIPPED (WO-773, landed at save schema v35; live schema is now **v38**).** `Assets/_Modules/Core/Jobs/`:
 - `JobKind.cs` (Build/Upgrade/TowerBuild/TrainTroop/Research/…), `IJobEffect.cs` (per-job apply hook),
   `ObsidianQueueState.cs` (Builder/Train/Research channels + `ChannelId`), `ObsidianQueueEngine.cs` (offline-fair resolve).
-- Persistence: `SaveSchema.CurrentVersion = 35`; `SaveMigrator.MigrateToV35` appends `ObsidianQueue` and folds
+- Persistence landed at schema **v35** (live schema is now v38): `SaveMigrator.MigrateToV35` appends `ObsidianQueue` and folds
   legacy `BuildJobs`/`PendingBuilds`/`BuildingCooldowns` into the Builder channel (idempotent, no-loss).
 - Surfaced by `Village/BuildMode/ObsidianQueueHud.cs` + `Village/Buildings/BuildTimerService.cs` (now the
   common multi-channel queue front). Player copy = "Builders"/"Training"/"Research", never "Obsidian queue".
@@ -132,7 +138,28 @@ Current branch = **`wip/village2-and-f8-tickets`**.
 `TroopStatResolver` (`Assets/_Modules/Village/Troops/TroopStatResolver.cs`); data `Assets/Resources/Data/Canonical/barracks.json`,
 `troop-upgrades.json`, `troops.json` (dual-copied to `StreamingAssets/Data/Canonical/`).
 
-**IN FLIGHT (present, do NOT assert done):** `EnemyResolver` (`Assets/_Modules/Core/Enemies/EnemyResolver.cs`,
+**Buildings/Progression — the upgrade + collector spine (2026-08-16).** `Assets/_Modules/Village/Buildings/Progression/`:
+- `UpgradeFamilyResolver.cs` — the **ONE** decider of a structure's upgrade family. A bare catalog id
+  resolving to `UpgradeFamily.None` is what made Manage tell the player a level-1 tower was "fully enhanced".
+- `PlacedStructureUpgradeService.cs` — the **SINGLE** start path for placed-structure upgrades. Many
+  doorways, one destination page (3D preview, truthful tiers, every `maxLevel > 1` structure).
+- **`CollectorStackPropCatalog.cs` EXISTS** — log / flour sack / iron bar. Collectors no longer fall
+  back to an abstract bar; do not re-add a generic fallback prop.
+
+**Pets/Echoes — WO-993 retired the PHYSICAL pet stack (2026-08-16, commit `b63bc7190`).**
+- **DELETED:** `Village/Pets/AuraController.cs` · `Pets/PetProgression.cs` · `Harvest/EchoSpiritPresentation.cs`.
+- ⚠ **`PetTaskController` is NOT deleted — it is RETIRED IN PLACE** as a task-state holder, kept
+  because `EchoEngageDialogueRegression` pins its shape by reflection. Its `Update` loop, `TickRepair`
+  and `PetTaskInstaller` are gone, and **`SetTask(Repair)` now REFUSES LOUDLY**
+  (`Assets/_Modules/Village/Pets/PetTaskController.cs:97`) — repair is passive and count-driven via
+  `EchoRepairService`. Writing "PetTaskController deleted" would be a fresh falsehood.
+- **`PetHeroLeash` STAYS** — it is what makes the wolf guide move.
+- Appearance has ONE owner: **`EchoWorldPresence`** (escort → vanish → return once after battle), and
+  `PetDeployer.DespawnEcho` (`Assets/_Modules/Pets/PetDeployer.cs:442`) is the **FIRST despawn path in
+  the game**.
+
+**IN FLIGHT *as of 2026-08-06* (present then, do NOT assert done — ⚠ dated snapshot, re-verify against
+the board and the tree before acting):** `EnemyResolver` (`Assets/_Modules/Core/Enemies/EnemyResolver.cs`,
 + `Editor/Regression/EnemyResolverRegression.cs`, `Tests/PlayMode/EnemyResolverSpawnTests.cs`); the
 barracks-catalog-structure (Barracks as an upgradable placeable building, PAIN_POINTS §3.3); the WO-774
 raid-UX polish (loadout handoff / naming split / deploy ring / "Defenders %" copy / Train-queue UI).
@@ -298,7 +325,7 @@ Breach (from Village2 / dungeon) ─► GoBattle(BattleParams) ─► ATBBattle 
   is a separate singleton to verify-or-retire; `GameState.AetherCrystals` is DEPRECATED (folded
   into Resources.Crystals at save v18). Persistence spine: `GameState` (SO, 41 partialize fields)
   + `GameStateService` (Load/Save via PlayerPrefs `dotr-save` → migrate → validate → apply) +
-  `SaveSchema` (CurrentVersion=30) + `SaveMigrator` (v1→v20). Resource model (memory): Wood/Iron/
+  `SaveSchema` (**CurrentVersion=38**, `SaveSchema.cs:41`) + `SaveMigrator` (v1→v38). Resource model (memory): Wood/Iron/
   Food build structures; Crystals = special arc (unlock spells → jewelry → armor).
 
 - **Companion / FTUE / introducer — `DeNelle.Village` StoryCompanion + `DeNelle.Onboarding`.**

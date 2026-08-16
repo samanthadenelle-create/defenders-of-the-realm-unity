@@ -8,7 +8,9 @@
 # DeNelle Studios — Project Canon Loader
 
 > ## ▶ LIVE THREAD (2026-08-09) — READ BEFORE WORKING *(header re-anchored 2026-08-10 morning)*
-> **Reality anchor = `CANON_GROUND_TRUTH_2026-08-09.md`** (supersedes 08-08, bannered). Branch
+> **Reality anchor = `CANON_GROUND_TRUTH_2026-08-16.md`** (minted 2026-08-16; 08-09 and 08-07 are now
+> bannered/frozen). ⚠ The HEAD/gate/tree lines in the rest of THIS block are the 08-09/08-10 snapshot —
+> read the 08-16 anchor and `git status` for current state. Branch
 > `wip/village2-and-f8-tickets`, **HEAD `07b756b6` (2026-08-09 23:00), PUSHED 2026-08-10 ~10:12 —
 > local == origin** (the 68-commit 08-09 wave). ⚠ The tree carries the 2026-08-10 morning fix wave
 > UNCOMMITTED while it gates: WO-931 wallet refusal · hero death-pin rebase · battle-music countdown
@@ -18,7 +20,7 @@
 > Gates last emitted, **read off the marker files**: `Builds/gate-ship3.log` → `COMPILE_GATE_OK` ·
 > `Builds/regression-ship3.log` → `REGRESSION_OK 130/130 suites` · `Builds/ui-capture-ship.log` →
 > `UI_CAPTURE_OK 44`. ⚠ `Builds/test-results-EditMode.xml` is 930/930 green but **stamped 2026-08-04 —
-> five days stale; not current evidence.** Save schema **v37** (`SaveSchema.cs:36`).
+> five days stale; not current evidence.**
 > **Never restate a suite count from a doc.** The three entry points emit DISTINCT markers
 > (`REGRESSION_OK` / `CHECKIN_SUITE_OK` / `SESSION_GUARDS_OK`).
 >
@@ -109,8 +111,10 @@
 > 40/40** — different pool, different reclaim path, **NOT closed** by the 08-06 loop-cap fix · the
 > **absence** of `SKIPPED - active loops 20/20` across a full wave has **never been proven** (owed a fleet
 > run) · **`VFXType` serialises by ORDINAL — appends only**, and `Build()` does
-> `entries.arraySize = rows.Count` so a builder-only row is silently dropped · **WO-910 READY FOR OWNER
-> RULING** (31 dead nodes of 40 player-reachable Ranger/Mage talents) · **hero select SELF-SKIPS** when the
+> `entries.arraySize = rows.Count` so a builder-only row is silently dropped · **✅ WO-910 RESOLVED
+> 2026-08-16** (trees re-authored to 3 bases branching wider — knight 3/7/8/7/7, ranger 3/5/6/6, mage
+> 3/6/6/5; ranger and mage had had **no authored x/y at all**, so the old "31 dead nodes" line described
+> a missing layout) · **hero select SELF-SKIPS** when the
 > save records a class — use New Game / Play Intro, never Continue · **`api/` is PREVIEW-only** and prod's
 > nonce endpoint has **no CORS** · still colour-only and OPEN: the build placement ghost + the hero health
 > bar · height cadence 1.25/1.2/1.0/0.75/0.35 with **walls DELIBERATELY excluded** (a uniform fit narrows a
@@ -127,7 +131,9 @@
 > ⚠ Working tree NOT clean, **and it is a SHARED tree (CLAUDE.md §11)**: `ProjectSettings.asset` carries a
 > newer APK stamp (`312459` vs the committed `312348`); `WorkOrders/WORK_ORDER_885`–`894` are untracked;
 > and **a concurrent implementation lane of ~32 modified `.cs` files + the dual-copy
-> `structures-catalog.json` / `damage-states.json`** is in the tree (consistent with WO-889–893 in flight).
+> `structures-catalog.json` / `damage-states.json`** was in the tree **as measured 2026-08-05**
+> (consistent with WO-889–893 in flight *at that date*). ⚠ This is a dated snapshot of a working tree,
+> not a standing fact — **run `git status` for the current tree**; do not act on it.
 > **One committer, staged by explicit path, never `git add -A`.**
 > Gates last emitted: `COMPILE_GATE_OK` + **`REGRESSION_OK 120/120 suites`** + `VFX_LOOPFLAG_OK` +
 > `VFX_ART_MIRROR_OK` + `PARTICLE_PACK_VFX_BUILD_OK` + `BOSS_FIREBREATH_BUILD_OK`. Save **v36** unchanged.
@@ -151,9 +157,13 @@
 > ⚠ **A SECOND signature, NOT closed by this fix: the ONESHOT pool saturates 40/40** in three captures.
 >
 > **⚠ RANGER + MAGE ARE UNLOCKED** (`ff.knightonly` defaults OFF; roster Knight/Ranger/Mage via
-> `PlayableHeroes`; **Cleric deliberately out** — no authored kit). **WO-910: their talent trees are
-> effectively EMPTY — Ranger has ONE usable node of 20, Mage five, both tier-4 capstone rows dead
-> (31 dead nodes total). READY FOR OWNER RULING.** ⚠ **Hero select SELF-SKIPS when the save already
+> `PlayableHeroes`; **Cleric deliberately out** — no authored kit). **✅ WO-910 IS RESOLVED (2026-08-16)
+> — the "trees are empty / READY FOR OWNER RULING" framing is HISTORY.** All three trees were
+> re-authored to **3 bases branching wider**: knight **3/7/8/7/7** (32 nodes) · ranger **3/5/6/6** (20)
+> · mage **3/6/6/5** (20), verified in `hero-talents.json`. ⚠ Ranger and mage previously had **no
+> authored x/y at all**, so the "31 dead nodes" figure described a missing layout, not a design
+> deficit. Also fixed: **one focus plate per BOARD** (was one per track — the view read
+> `HeroSkillTreeVM`'s per-TRACK `nextTaken` as board-level). ⚠ **Hero select SELF-SKIPS when the save already
 > records a class** (`HeroSelectController.OnEnable` → `SceneRouter.GoCastle()`), so **testing a class
 > change requires New Game / Play Intro**, not Continue.
 >
@@ -375,7 +385,8 @@ binding depth lives in `CLAUDE.md`, `docs/ARCHITECTURE_PRINCIPLES.md`, `docs/HAN
   Build → Town/Defenses/Walls tabs, movable functional storefronts and the 260w/210i core-kit seed are
   the unconditional path; New Game = the BLANK template (+ one FTUE grace-default Forge record);
   existing saves migrate once via the v30 one-shot writer.
-- **Branch:** `wip/village2-and-f8-tickets` (NOT `feat/tower-core-loop` — stale). **HEAD = `e60b19e5` (the 2026-08-02 marathon-day-2 arc: Echo program + tester wallet + dungeon/gear evening), pushed, local==origin.** Save schema **v36**. Fresh headless gates = `COMPILE_GATE_OK` + DataRegression **`REGRESSION_OK` — 0 reds** (all 5 long-standing baseline reds fixed 2026-07-19: arena texture, dual-wallet, pet-slot persist, Tribes/Wards/Arena persist, orc-raider SSOT) + the `[ui-mvvm]`/`[room-forge]` ratchets at 0 NEW.
+- **Branch:** `wip/village2-and-f8-tickets` (NOT `feat/tower-core-loop` — stale). **HEAD = `e60b19e5` (the 2026-08-02 marathon-day-2 arc: Echo program + tester wallet + dungeon/gear evening), pushed, local==origin.** Save schema **v36** *(FROZEN HISTORY — true on 2026-08-02 only; the live schema is
+  **v38**, read `SaveSchema.CurrentVersion` at `SaveSchema.cs:41`)*. Fresh headless gates = `COMPILE_GATE_OK` + DataRegression **`REGRESSION_OK` — 0 reds** (all 5 long-standing baseline reds fixed 2026-07-19: arena texture, dual-wallet, pet-slot persist, Tribes/Wards/Arena persist, orc-raider SSOT) + the `[ui-mvvm]`/`[room-forge]` ratchets at 0 NEW.
 - **Pi Hackathon WON (2026-07-17)** — the "July-31 deadline / build mode IS the demo" framing is **RETIRED**; there is NO upcoming demo and the roadmap is OPEN. The quality bar (feel-arc/F8, ten-year-old test) still governs. **Prod untouched** (promotion stays the owner's separate call at `defenders-of-the-realm-v2.vercel.app`). **Highest-leverage open lane = the CoC offense loop (WO-724→726, Path A convergence)** now the MVVM + Room Forge foundations have landed; WO-739 generic upgrade panel is the parallel-safe start.
 - **Title:** **"Echoes of Elarion"** (chapter) within the **"Defenders of the Realm"** series; tagline **"Echoes of a Forgotten Civilization"** (owner 2026-07-24; "Hold the last light" retired).
 - **Combat space:** WO-584 consolidation (READY) — one warp-in space primitive, 3 skins (dungeon/outpost/arena), ownership flip; replaces flat ATB dungeon.

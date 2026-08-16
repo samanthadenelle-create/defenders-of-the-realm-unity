@@ -1,23 +1,26 @@
 # PROJECT_INDEX — Root File Map
 
-How to navigate the **100** markdown files at project root without reading them all.
+How to navigate the markdown files at project root without reading them all
+(**114 as counted 2026-08-16** — the number drifts every week; count it, do not quote it).
 Code map: `Assets/_Modules/README.md`. Assets map: `Assets/README.md`.
 Docs index: `docs/README.md`.
 
-> **Branch = `wip/village2-and-f8-tickets`.** The single live anchor of current reality is
-> `CANON_GROUND_TRUTH_2026-08-06.md` (a delta over 08-05 → 08-03 → 08-02 → 08-01 → 07-26 → the deep
-> `CANON_GROUND_TRUTH_2026-07-22.md` module anchor) — **read it first; if any file below contradicts
-> it, the anchor wins.** Every earlier dated anchor (08-05/08-03/08-02/08-01/07-26/07-22/07-19/07-18/
-> 07-13/07-12/07-08 and older) is superseded/frozen.
-> **HEAD `1534dffb`; local is 43 commits AHEAD of origin — NOT PUSHED.** Gates last emitted
+> **Branch = `wip/village2-and-f8-tickets`** *(as of 2026-08-16)*. The single live anchor of current
+> reality is **`CANON_GROUND_TRUTH_2026-08-16.md`** — **read it first; if any file below contradicts
+> it, the anchor wins.** Every earlier dated anchor (08-09/08-08/08-07/08-06/08-05/08-03/08-02/08-01/
+> 07-26/07-22/07-19/07-18/07-13/07-12/07-08 and older) is superseded/frozen.
+> **HEAD as of 2026-08-16; read `git status` for push state — never trust a copied hash.**
+> Gates last emitted
 > `COMPILE_GATE_OK` + `REGRESSION_OK 120/120 suites` (⚠ read the count off the marker, never off a doc —
 > it moved 117 → 120 in eight hours on 2026-08-05).
 > **WO next-free: read the `CLI_LANES_WO_NUMBERS.md` banner — never a number copied here.** TWO
 > disjoint blocks are in use as of 2026-08-02: **main line (CLI)** and **860–899 reserved (UI seat)**;
 > each seat bumps its own banner row in the same edit as the mint.
 > Dungeons are a functional end-to-end loop; the raid loop is locked to the
-> COC Teleport/Deploy model; **save schema `v36`** (v35 = WO-773 Obsidian queue; v36 = WO-834
-> `everBuiltStructureIds`). Files this
+> COC Teleport/Deploy model; **save schema `v38`** (v35 = WO-773 Obsidian queue; v36 = WO-834
+> `everBuiltStructureIds`; v37 = WO-911 the per-job paid basket; v38 = WO-934 the army loadout bank).
+> **Read it off `SaveSchema.CurrentVersion` (`Assets/_Modules/Core/State/SaveSchema.cs:41`)**, never
+> off this line. Files this
 > index historically called "living" that read as pre-pivot (tower-defense + Solana + party-of-4 +
 > Blink hero rig) are STALE — corrected per `docs/_archive/root/CANON_READINESS_LEDGER_2026-06-26.md`.
 
@@ -63,8 +66,10 @@ Docs index: `docs/README.md`.
 > element routing / colourblind low-health tell) **SHIPPED** · **894** victory screen SHIPPED (with a
 > documented deviation from its own wireframe) · **908** side-menu gear icons SHIPPED · **909** Mage/Ranger
 > activation SHIPPED (**its premise — a parked `.tripo-extracted` FBX — was REFUTED**) · **884/885** READY ·
-> **889/890/891/892/893** IN FLIGHT (specs on disk, untracked, not implemented) · **910 READY FOR OWNER
-> RULING** (Ranger/Mage talent trees effectively empty) · **848 OPEN** (restore Android stripping Medium) ·
+> **889/890/891/892/893** IN FLIGHT *as of 2026-08-06* (specs on disk, untracked, not implemented —
+> ⚠ dated snapshot, re-read the board before acting) · **910 RESOLVED 2026-08-16** (all three talent
+> trees re-authored to 3 bases branching wider — knight 3/7/8/7/7, ranger 3/5/6/6, mage 3/6/6/5;
+> ranger and mage had had **no authored x/y at all**) · **848 OPEN** (restore Android stripping Medium) ·
 > 904/905/906/907 SPEC. Earlier: WO-818 KayKit NPC bodies, 826 Realm Map, 830/831 Echo program, 836 catalog
 > SME refresh — all SHIPPED. Some historical numbers were reused/collided
 > (e.g. 677/678); a `.RESULT.md` beside a spec means it is done.

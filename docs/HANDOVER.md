@@ -42,13 +42,16 @@
 
 ## ★★ SESSION HANDOVER — 2026-08-09 (the 08-08 ship day: machine unblocked, stairs SOLVED, store re-gated) ★★
 
-**Anchor:** `../CANON_GROUND_TRUTH_2026-08-09.md` (NEW — supersedes 08-08, which is bannered and is
-**INVERTED** on both its headline sections). Branch `wip/village2-and-f8-tickets`, **HEAD `c8320434`,
+**Anchor:** **`../CANON_GROUND_TRUTH_2026-08-16.md`** (minted 2026-08-16; 08-09 and 08-07 are now
+bannered/frozen). ⚠ The HEAD / push-state / gate lines in the rest of this block are the **08-09
+snapshot** — read the 08-16 anchor and `git status` for current state. Branch `wip/village2-and-f8-tickets`, **HEAD `c8320434`,
 PUSHED — local == origin, 0 ahead / 0 behind** (push landed 2026-08-08 19:52:45). **30 commits landed
 2026-08-08** (counted from `git log`; the 08-08 anchor's last edit `07d2c6f8` sits **exactly 21 commits**
-behind HEAD). Save schema **v37** (`SaveSchema.cs:36` — WO-911 M2, the per-job PAID BASKET
-`paidWood/paidFood/paidIron/paidCrystals/paidMagic` on `BuildJobData`; cancel refunds **100% of what was
-paid, flat**, and **a pre-v37 job refunds ZERO and says so**).
+behind HEAD). Save schema **v38** (`SaveSchema.cs:41` — the const is the authority). **v38 = WO-934 the
+ARMY LOADOUT BANK**: `ArmyStorage.loadouts` (3 named composition presets) + `activeLoadout`, additive on
+the nested Army JSON, `MigrateToV38` runs `EnsureLoadouts` for empty slots. (v37 = WO-911 M2, the per-job
+PAID BASKET `paidWood/paidFood/paidIron/paidCrystals/paidMagic` on `BuildJobData`; cancel refunds
+**100% of what was paid, flat**, and **a pre-v37 job refunds ZERO and says so**.)
 
 ⚠ **Working tree NOT clean, and it is a SHARED tree (CLAUDE.md §11):** `ProjectSettings.asset` (diff is
 **exactly two auto-stamped keys** — `bundleVersion`/`AndroidBundleVersionCode` 316839 → 316856, written by
@@ -239,9 +242,10 @@ off the file.
 NOT closed** by the 08-06 loop-cap fix) · the **absence** of `SKIPPED - active loops 20/20` across a full
 wave has **never been proven** and is owed a fleet run · **`VFXType` serialises by ORDINAL, not name —
 appends only**, and `Build()` does `entries.arraySize = rows.Count` so a row written only by a builder is
-silently dropped by the next regenerate · **WO-910 is READY FOR OWNER RULING** (31 dead nodes across 40
-player-reachable Ranger/Mage talents — Ranger 1 usable of 20, Mage 5, both tier-4 capstone rows dead; a
-design call, not an implementation ticket) · **hero select SELF-SKIPS** when the save already records a
+silently dropped by the next regenerate · **✅ WO-910 is RESOLVED (2026-08-16)** — all three talent trees
+re-authored to **3 bases branching wider** (knight 3/7/8/7/7, ranger 3/5/6/6, mage 3/6/6/5); ⚠ ranger and
+mage had had **no authored x/y at all**, so the old "31 dead nodes" line described a missing layout, not a
+design deficit; **one focus plate per BOARD** (was one per track) · **hero select SELF-SKIPS** when the save already records a
 class, so testing a class change needs **New Game / Play Intro**, never Continue · height cadence **1.25**
 landmark / **1.2** towers / **1.0** building base / **0.75** siege / **0.35** decoration with **WALLS
 DELIBERATELY EXCLUDED** (a uniform fit narrows a wall, which **opens PATHABLE GAPS in saved wall runs**;
@@ -343,14 +347,16 @@ longer spawns a projectile.** ⚠ The mirror **only converged on a first run** u
 from everything already mirrored — six prefabs read as self-contained while their art was one hop away.
 **Lana Studio is NOT gitignored** (only its URP upgrade subfolder is), contrary to standing assumption.
 
-**⚠ RANGER AND MAGE ARE UNLOCKED — AND THEIR TREES ARE EMPTY.** `ff.knightonly` defaults OFF; roster is
-Knight/Ranger/Mage through the single `PlayableHeroes` registry (**Cleric deliberately out — no authored
-kit**). Emptying `TalentStrategyRegression`'s hardcoded `HiddenTrees` surfaced **31 real, pre-existing dead
-nodes across 40 player-reachable talents: Ranger has ONE usable talent of 20, Mage five, and BOTH lose their
-entire tier-4 capstone row.** Knight's 32 and the 9 shared are green. **`hero-talents.json` is UNTOUCHED**
-(md5 unchanged); the 31 are a dated, ratcheted, WO-910-numbered baseline where a baseline id that stops
-reporting dead **also** fails. **WO-910 is READY FOR OWNER RULING — a design call, not an implementation
-ticket.** ⚠ **Hero select SELF-SKIPS when the save already records a class** — testing a class change needs
+**⚠ RANGER AND MAGE ARE UNLOCKED — AND ✅ THEIR TREES ARE NOW AUTHORED (WO-910 RESOLVED 2026-08-16).**
+`ff.knightonly` defaults OFF; roster is Knight/Ranger/Mage through the single `PlayableHeroes` registry
+(**Cleric deliberately out — no authored kit**). All three trees were **re-authored to 3 bases branching
+wider**, verified in `Assets/StreamingAssets/Data/Canonical/hero-talents.json`: knight **3/7/8/7/7**
+(32 nodes) · ranger **3/5/6/6** (20) · mage **3/6/6/5** (20). ⚠ **Ranger and mage previously had NO
+authored x/y at all** — the old "31 dead nodes / Ranger 1 usable of 20 / Mage 5 / tier-4 capstone rows
+dead" framing (surfaced by emptying `TalentStrategyRegression`'s `HiddenTrees`) described a **missing
+layout**, not a design deficit, and is now history. Also fixed: **one focus plate per BOARD** — the view
+had been consuming `HeroSkillTreeVM`'s per-TRACK `nextTaken` signal as board-level and drawing a plate on
+every track. ⚠ **Hero select SELF-SKIPS when the save already records a class** — testing a class change needs
 **New Game / Play Intro**, never Continue.
 
 **⚠ A LATENT INVISIBLE-HERO P0, FIXED.** Ranger and Mage have **no FBX at all** and fell through to a Blink
