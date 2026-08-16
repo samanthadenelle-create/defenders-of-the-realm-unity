@@ -200,6 +200,12 @@ namespace DeNelle.Village.World
             // an orphaned looping portal aura with no portal under it is the exact bug that
             // rule exists to prevent.
             public VFXHandle ThresholdVfx;
+            // Owner VFX pick 2026-08-16 ("Magic circle dark star ... use this rotated for the
+            // portals"): the mirrored Hovl circle standing VERTICAL in the arch opening. A plain
+            // instantiated child of Root (NOT pooled - loaded from the tracked mirror, so it
+            // costs no VFXManager loop slot); held so the teardown loop and the art-swap
+            // re-seat can destroy/re-attach it explicitly.
+            public GameObject CircleVfx;
             // Owner 2026-08-14 ("all of the portals should be this"): the shared PortalStructure
             // art, swapped in over the code-built cube arch. Held so the Addressables handle is
             // released on teardown and so the discovery dim can retarget onto the real renderers.
@@ -432,7 +438,7 @@ namespace DeNelle.Village.World
             // gets its arcane rune-ring immediately so it reads as an active gateway on
             // load; a fresh (undiscovered) portal blooms it on when the hero finds it
             // (Discover()), preserving the fog-of-war reveal.
-            if (entry.Discovered) { AttachGateVfx(entry); AttachThresholdAura(entry); }
+            if (entry.Discovered) { AttachGateVfx(entry); AttachThresholdAura(entry); AttachPortalCircle(entry); }
 
             // Owner 2026-08-14: wear the SAME structure as the dungeon exit. Kicked async and
             // deliberately AFTER the cube arch is already standing, so the portal is never
@@ -629,6 +635,9 @@ namespace DeNelle.Village.World
                     // torn-down portal never leaves an orphaned looping effect behind.
                     p?.GateVfx?.Stop(true);
                     p?.ThresholdVfx?.Stop(true);   // WO-753: no aura outlives its portal
+                    // The circle is a plain child of Root, so it normally dies with it - this
+                    // Destroy only matters if Root was cleared without a destroy. Same WO-753 rule.
+                    if (p != null && p.CircleVfx != null) Destroy(p.CircleVfx);
                     // Release the shared-structure bundle too, or it stays resident for the
                     // whole session once a portal is torn down.
                     if (p != null) PortalStructure.Release(ref p.Swap);
@@ -664,6 +673,7 @@ namespace DeNelle.Village.World
             // as the gateway "activating" (owner felt-test: make the entrance magical).
             AttachGateVfx(p);
             AttachThresholdAura(p);
+            AttachPortalCircle(p);
             Debug.Log($"[DungeonWorldPortals] Hero discovered a hidden dungeon portal (key {p.Key}).");
         }
 
@@ -787,6 +797,10 @@ namespace DeNelle.Village.World
             // loaded art's bounds are the only honest reference for where the threshold IS.
             if (p.ThresholdVfx != null) { p.ThresholdVfx.Stop(); p.ThresholdVfx = null; }
             if (p.Discovered) AttachThresholdAura(p);
+            // Re-seat the owner's dark-star circle the same way: it was centred + scaled on the
+            // cube arch, and the loaded art's measured bounds are the only honest reference.
+            if (p.CircleVfx != null) { Destroy(p.CircleVfx); p.CircleVfx = null; }
+            if (p.Discovered) AttachPortalCircle(p);
 
             FlowTrace.Step("Portal",
                 $"overworld gate now wears the shared portal structure at {PortalHeight:0.#}m - " +
@@ -830,6 +844,81 @@ namespace DeNelle.Village.World
                 "'pf_vfx-ult_demo_psys_loop_portalBlue', so the live causes are: the Hovl catalog has not been " +
                 "regenerated since the tag (Defenders/VFX/Generate Hovl VFX Catalog), or the global loop cap is " +
                 "hit. The arch + PP_GroundFog mist carry the read meanwhile.");
+        }
+
+        // =====================================================================
+        // OWNER VFX PICK 2026-08-16 (verbatim): "Assets\Hovl Studio\Magic circles\Prefabs\
+        // Magic circle dark star.prefab" - "use this rotated for the portals".
+        // ---------------------------------------------------------------------
+        // The pick is mapped VERBATIM (memory: vfx-map-owner-tags-no-creative-pick). The
+        // Hovl pack is GITIGNORED, so runtime loads the TRACKED MIRROR written by
+        // DeNelle.Editor.PortalCircleVfxMirror.Run (markers PORTAL_CIRCLE_VFX_OK/FAIL)
+        // to Assets/Resources/VFX/Portal/PortalCircleDarkStar.prefab - keep the two
+        // paths in lockstep. Mirror absent = warn-once + the portal renders exactly as
+        // before (never an error; a fresh clone must not go red on art).
+        //
+        // "ROTATED" is the owner's key word: the prefab is authored as a FLAT GROUND
+        // circle (face up, +Y normal). For the portals it STANDS VERTICAL in the arch
+        // opening: root.rotation * Euler(+90, 0, 0) maps the circle's +Y face-normal
+        // onto the portal's forward, and Root already carries the authored FacingYawDeg
+        // (BuildPortal), so the circle reads as the portal SURFACE facing the approach.
+        //
+        // ADDITIVE to the existing threshold aura (portalBlue vortex) + PP_GroundFog
+        // mist, per the routing note: the owner said "use this for the portals", which
+        // reads as the face presentation - whether the vortex stands down is the
+        // OWNER's call after seeing them stacked, not ours.
+        //
+        // Deliberately NOT routed through VFXManager.PlayKey: the mirror is a plain
+        // tracked prefab (no catalog row), a direct child instance costs no global
+        // loop slot (the 20-slot cap starvation class), and teardown is free - the
+        // instance dies with its portal Root.
+        // =====================================================================
+        private const string CirclePrefabResourcePath = "VFX/Portal/PortalCircleDarkStar";
+
+        // Load-once cache; _circleLooked distinguishes "never tried" from "tried, absent"
+        // so a missing mirror costs one Resources.Load per session, not one per portal.
+        private static GameObject _circlePrefab;
+        private static bool _circleLooked;
+
+        private void AttachPortalCircle(Portal p)
+        {
+            if (p == null || p.Root == null) return;
+            if (p.CircleVfx != null) return;   // idempotent
+
+            if (!_circleLooked)
+            {
+                _circleLooked = true;
+                _circlePrefab = Resources.Load<GameObject>(CirclePrefabResourcePath);
+            }
+            if (_circlePrefab == null)
+            {
+                FlowTrace.Once("Portal", "portal-circle-missing",
+                    $"AttachPortalCircle: Resources '{CirclePrefabResourcePath}' did not load - the " +
+                    "owner-picked 'Magic circle dark star' mirror is not on this machine yet (run " +
+                    "DeNelle.Editor.PortalCircleVfxMirror.Run, marker PORTAL_CIRCLE_VFX_OK). " +
+                    "Portal renders as before - deliberate fallback, never an error.");
+                return;
+            }
+
+            // Same honest references the threshold aura uses: measured art bounds once the
+            // real structure stands, cube-arch geometry while the swap is in flight.
+            Vector3 centre = p.ArtStanding
+                ? OpeningCentre(p)
+                : p.Root.position + p.Root.up * (PortalHeight * 0.5f);
+            float scale = p.ArtStanding ? OpeningScale(p) : ThresholdAuraScale;
+
+            Quaternion rot = p.Root.rotation * Quaternion.Euler(90f, 0f, 0f);
+
+            var go = Instantiate(_circlePrefab, centre, rot, p.Root);
+            go.name = "[PortalCircle_DarkStar]";
+            go.transform.localScale = Vector3.one * scale;
+            p.CircleVfx = go;
+
+            FlowTrace.Step("Portal",
+                $"AttachPortalCircle: '{CirclePrefabResourcePath}' stood vertical for portal '{p.Key}' at " +
+                $"({centre.x:F1}, {centre.y:F1}, {centre.z:F1}) rot=+90X over facingYaw " +
+                $"{p.Root.eulerAngles.y:F0} scale={scale:0.0} " +
+                "(owner pick 2026-08-16: Magic circle dark star as the portal face).");
         }
 
         /// <summary>Centre of the real opening, measured from the loaded structure's own bounds.
