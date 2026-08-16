@@ -971,9 +971,35 @@ namespace DeNelle.Dungeons
                 _onLeave.Invoke();
                 return;
             }
+            // ── WO-1112: PAY THE COMPOSED RUN BEFORE LEAVING ────────────────────────────
+            // THE DEFECT: DungeonController.GrantRunPayout - whose own doc says "EVERY COMPLETED
+            // RUN PAYS" - had exactly ONE caller, inside the cottage-pipeline ExitToVillage. A
+            // composed exit fell straight through to the Castle load below and paid NOTHING. And
+            // because DungeonRunPayout.LastPolishScore is written nowhere else, JewelPolishService
+            // scored EVERY composed run 0, so the whole rough-stone / polish economy was inert in
+            // exactly the dungeons that actually get played.
+            //
+            // ONE AUTHORITY, NOT A COPY: this calls the SAME static GrantRunPayout the cottage
+            // uses, handing it the composed run state that ComposedDungeonHost owns. The two exits
+            // must never grow separate payout logic - the "engaged" bar, the grade rubric and the
+            // stone id all live in that one method. The comment that used to sit here ("a composed
+            // scene has no DungeonRuntimeState") was TRUE ONLY BY ACCIDENT: the bootstrap did
+            // create one, then dropped it on the floor in a local variable.
+            var host = ComposedDungeonHost.Current;
+            if (host == null)
+            {
+                FlowTrace.Warn(Sys, "composed exit: no ComposedDungeonHost - this run CANNOT be paid out " +
+                                    "(no run state to judge). The player leaves with nothing; that is a defect, not a design.");
+            }
+            else
+            {
+                DungeonController.GrantRunPayout(host.RunState, "composed exit");
+                host.EndRun();
+            }
+
             // Route HOME exactly like DungeonController.ExitToVillage - the merged
-            // overworld hub (SceneRouter.Castle). A composed scene has no DungeonRuntimeState
-            // / crafting inventory to bank, so this is the whole exit.
+            // overworld hub (SceneRouter.Castle). A composed scene has no crafting
+            // inventory to bank, so the payout above plus this load is the whole exit.
             FlowTrace.Step(Sys, $"taking RETURN exit -> SceneRouter.Castle ('{SceneRouter.Castle}')");
             SceneRouter.LoadSceneWithFade(SceneRouter.Castle).Forget();
         }

@@ -227,11 +227,21 @@ namespace DeNelle.Village
             try
             {
                 _portalVfx?.OnHeroEnter();
-                SceneRouter.LoadSceneWithFade(sceneName).Forget();
+                // WO-1112: route through GoDungeonScene, NOT the bare LoadSceneWithFade. It is
+                // the same fade/save/gate path (it calls LoadSceneWithFade), plus the one thing
+                // this call site was missing: for a COMPOSED (dg_*) destination it arms the
+                // WO-1109 hero carry as the pre-load hook, so the dungeon hero is the real town
+                // hero WITH its abilities instead of the baker's bare rig (which carries no
+                // HeroAbilities, so Q/W/E/R were dead in every composed dungeon, silently).
+                // Hand-built Dungeon_* destinations are passed through uncarried — see
+                // GoDungeonScene's remarks for why widening that gate would break them.
+                // sceneName is still passed VERBATIM (already resolved above incl. the
+                // "Dungeon_" prefix fallback) — NOT via GoDungeon(dungeonId), which re-prefixes.
+                SceneRouter.GoDungeonScene(sceneName);
             }
             catch (System.Exception ex)
             {
-                DeNelle.Core.Diagnostics.FlowTrace.Fail("DungeonPortal", "LoadSceneWithFade threw: " + ex);
+                DeNelle.Core.Diagnostics.FlowTrace.Fail("DungeonPortal", "GoDungeonScene threw: " + ex);
                 _loading = false;
             }
         }

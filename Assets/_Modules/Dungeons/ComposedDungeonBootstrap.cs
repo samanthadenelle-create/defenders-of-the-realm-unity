@@ -7,10 +7,18 @@
 //   • Lantern on the Player (oil drain + oil-stone refill)
 // Mirrors DungeonExitSpawner: sceneLoaded hook, idempotent, no re-bake required
 // for already-baked scenes that carry ComposedOilStone markers.
+//
+// WO-1112 — THE SPLIT: this file is now the INSTALLER only. Everything with a
+// lifetime (the run state, the lantern, the oil HUD, the ambush director) moved to
+// ComposedDungeonHost, the MonoBehaviour it attaches. Two reasons, both defects that
+// were shipping: (1) the DungeonRuntimeState lived in a LOCAL VARIABLE here and fell
+// out of scope, so the composed exit had no run to pay out and every composed run
+// scored 0 on the rough-stone economy; (2) the hero pillars were armed on the load
+// frame, which is now ambiguous — SceneRouter.GoDungeonScene carries the town hero
+// in and the baked one is destroyed at end of frame, so both answer the Player tag.
 // =============================================================================
 
 using System;
-using System.Collections.Generic;
 using DeNelle.Core.Diagnostics;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -78,8 +86,8 @@ namespace DeNelle.Dungeons
             // from "the dungeon just has no pillars".
             using var _scope = FlowTrace.Enter(Sys, $"arm '{scene.name}'");
 
-            var host = new GameObject("ComposedDungeonHost");
-            host.transform.SetParent(composeRoot, false);
+            var hostGo = new GameObject("ComposedDungeonHost");
+            hostGo.transform.SetParent(composeRoot, false);
 
             // Runtime-only SO — not an asset on disk (cottage uses a shared inspector asset).
             var state = ScriptableObject.CreateInstance<DungeonRuntimeState>();
@@ -91,62 +99,14 @@ namespace DeNelle.Dungeons
             state.StartRun(dungeonId, "entry", heroPos, Environment.TickCount);
             FlowTrace.Step(Sys, $"StartRun id='{dungeonId}' hero={heroPos} scene='{scene.name}'");
 
-            if (heroGo == null)
-            {
-                FlowTrace.Warn(Sys, "no Player-tagged hero — lantern not armed");
-                return;
-            }
-
-            // Collect baked oil stones (planar refill, same contract as cottage).
-            var markers = composeRoot.GetComponentsInChildren<ComposedOilStone>(true);
-            var stones = new List<DungeonOilStone>(markers.Length);
-            for (int i = 0; i < markers.Length; i++)
-            {
-                var m = markers[i];
-                if (m == null) continue;
-                Vector3 p = m.transform.position;
-                stones.Add(new DungeonOilStone
-                {
-                    id = m.Id,
-                    roomId = "",
-                    position = new DungeonPoint { x = p.x, y = p.y, z = p.z },
-                    radius = m.Radius,
-                });
-            }
-
-            // Ensure a lantern light follows the Keeper.
-            var lantern = heroGo.GetComponentInChildren<Lantern>(true);
-            if (lantern == null)
-            {
-                var lightGo = new GameObject("Lantern");
-                lightGo.transform.SetParent(heroGo.transform, false);
-                lightGo.transform.localPosition = new Vector3(0f, 1.4f, 0f);
-                lightGo.AddComponent<Light>();
-                lantern = lightGo.AddComponent<Lantern>();
-                FlowTrace.Step(Sys, "created Lantern under Player (composed bake had none)");
-            }
-
-            lantern.ConfigureStandalone(stones, heroGo.transform);
-            FlowTrace.Step(Sys,
-                $"lantern armed standalone: stones={stones.Count} hero='{heroGo.name}' " +
-                $"(WO-1001 slice 5 oil drain active)");
-
-            // WO-1001 slice 6: darkness ambush director (higher odds when oil critical).
-            ComposedKeyBag.Clear();
-            var ambush = host.AddComponent<ComposedAmbushDirector>();
-            ambush.Configure(lantern, heroGo.transform, state, tier: 1);
-            FlowTrace.Step(Sys, "ComposedAmbushDirector armed (slice 6 darkness ambush)");
-
-            // WO-1001 1b/7: count what the bake actually left in the scene. These are the pillars
-            // whose bake-time Configure used to be discarded by SaveScene, so a zero here on a
-            // dungeon that authored them is the exact signature of that class of defect returning.
-            int ports = composeRoot.GetComponentsInChildren<DungeonPortLink>(true).Length;
-            int locks = composeRoot.GetComponentsInChildren<ComposedLockedPort>(true).Length;
-            int keys = composeRoot.GetComponentsInChildren<ComposedKeyPickup>(true).Length;
-            int traps = composeRoot.GetComponentsInChildren<ComposedTrapHazard>(true).Length;
-            FlowTrace.Step(Sys,
-                $"pillars present in '{scene.name}': stairPorts={ports} lockedPorts={locks} " +
-                $"keys={keys} traps={traps} oilStones={stones.Count}");
+            // WO-1112: the run state is HANDED TO A LIVE OWNER instead of dying with this local
+            // scope. That is what makes a composed exit payable — DungeonExitInteractable reads
+            // ComposedDungeonHost.Current.RunState to judge the run and grant the rough stone.
+            // The host also arms the lantern/HUD/ambush ONE FRAME LATE on purpose; see its header
+            // (the carried hero and the baked hero both answer the Player tag on the load frame).
+            var host = hostGo.AddComponent<ComposedDungeonHost>();
+            host.Install(composeRoot, state);
+            FlowTrace.Step(Sys, "ComposedDungeonHost installed (owns the run state; hero pillars arm next frame)");
         }
     }
 }

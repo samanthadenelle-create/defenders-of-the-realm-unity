@@ -473,7 +473,7 @@ namespace DeNelle.Dungeons
             // run record. This is the one link WO-1041 §2 measured as missing: everything downstream
             // (the rough stone item, the polish job, jeweler-recipes.json, the ring chain, the equip
             // and stat pipeline) was already built and had no source.
-            GrantRunPayout();
+            GrantRunPayout(_runtimeState, "DungeonController.ExitToVillage");
 
             if (_runtimeState != null && _runtimeState.RunActive)
                 _runtimeState.EndRun();
@@ -510,16 +510,29 @@ namespace DeNelle.Dungeons
         /// risk. The bar is deliberately LOW — one encounter, one chest, or the boss — so it excludes
         /// only the no-op round trip, never a real if unsuccessful delve.
         /// </para>
+        /// <para>
+        /// ⚠ WO-1112 — THIS IS THE PROJECT'S ONE PAYOUT AUTHORITY, WHICH IS WHY IT IS STATIC.
+        /// It used to be a private instance method reachable only from
+        /// <see cref="ExitToVillage"/>, i.e. only from the COTTAGE pipeline — and
+        /// DungeonController is in no dg_* scene at all. So a cleared COMPOSED dungeon paid
+        /// nothing, and because <c>DungeonRunPayout.LastPolishScore</c> is written nowhere else,
+        /// JewelPolishService scored EVERY composed run 0: the whole rough-stone economy was
+        /// inert in exactly the dungeons that get played. Taking the run state as a PARAMETER
+        /// (rather than reading the instance field) is what lets the composed exit reach the
+        /// same authority. DO NOT copy this body anywhere — a second payout site would be a
+        /// duplicate-authority bug, and four of those surfaced in one day.
+        /// </para>
         /// </summary>
-        private void GrantRunPayout()
+        /// <param name="st">The run to judge and pay. Null is handled and traced, never thrown.</param>
+        /// <param name="via">Call-site label for the trace, so a capture says WHICH exit paid.</param>
+        public static void GrantRunPayout(DungeonRuntimeState st, string via)
         {
-            DeNelle.Core.Diagnostics.Guard.Try("JewelPolish", "grant dungeon run payout", () =>
+            DeNelle.Core.Diagnostics.Guard.Try("JewelPolish", $"grant dungeon run payout ({via})", () =>
             {
-                var st = _runtimeState;
                 if (st == null)
                 {
                     DeNelle.Core.Diagnostics.FlowTrace.Warn("JewelPolish",
-                        "run payout skipped - no DungeonRuntimeState to judge completion from.");
+                        $"run payout skipped ({via}) - no DungeonRuntimeState to judge completion from.");
                     return;
                 }
 
@@ -529,7 +542,7 @@ namespace DeNelle.Dungeons
                 if (!engaged)
                 {
                     DeNelle.Core.Diagnostics.FlowTrace.Step("JewelPolish",
-                        "run payout withheld - the player entered and left without an encounter, chest " +
+                        $"run payout withheld ({via}) - the player entered and left without an encounter, chest " +
                         "or secret. Not a completed run; not a bug.");
                     return;
                 }
@@ -551,7 +564,7 @@ namespace DeNelle.Dungeons
                 if (inv == null)
                 {
                     DeNelle.Core.Diagnostics.FlowTrace.Fail("JewelPolish",
-                        "run payout LOST - no VillageInventory to bank the rough stone into.");
+                        $"run payout LOST ({via}) - no VillageInventory to bank the rough stone into.");
                     return;
                 }
 
@@ -560,7 +573,7 @@ namespace DeNelle.Dungeons
                 DungeonRunPayout.LastPolishScore = score;
 
                 DeNelle.Core.Diagnostics.FlowTrace.Step("JewelPolish",
-                    $"run payout: 1x '{stoneId}' granted (polish score {score}; boss={st.BossDefeated}, " +
+                    $"run payout ({via}): 1x '{stoneId}' granted (polish score {score}; boss={st.BossDefeated}, " +
                     $"encounters={st.RandomEncounterCount}, chests={chests}, secrets={secrets}). " +
                     "Take it to the Jeweler.");
             });

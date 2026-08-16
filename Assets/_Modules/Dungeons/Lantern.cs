@@ -172,6 +172,7 @@ namespace DeNelle.Dungeons
 
         private void Awake()
         {
+            ApplyBalanceData();
             _light = GetComponent<Light>();
             _light.type = LightType.Point;
             _light.color = _lanternColor;
@@ -180,6 +181,36 @@ namespace DeNelle.Dungeons
             _oil = _maxOil;
             _liveRange = FullRange;
             _light.range = _liveRange;
+        }
+
+        /// <summary>
+        /// WO-1112 (owner ruling 2026-08-16: "we should make the lanterns last triple that at
+        /// minimum"): the oil tuning comes from DATA, not from these serialized defaults.
+        /// <para>
+        /// ⚠ THIS DELIBERATELY OVERRIDES THE SERIALIZED FIELDS, IN BOTH PIPELINES. The
+        /// hand-built Dungeon_HealersCottage scene serialized _maxOil 100 / _oilDrainPerSec 1.6
+        /// — byte-identical to the code defaults, i.e. it was never separately tuned and had the
+        /// same 62.5s burn. Letting the scene's copy win would mean tuning the composed dungeons
+        /// while the cottage silently kept the old number, which is exactly the drift that made
+        /// this a hidden knob in the first place. ONE authority: dungeon-balance.json.
+        /// </para>
+        /// Guarded and self-reporting: an unreadable file falls back to the catalog's built-in
+        /// defaults (which mirror the authored json), never to a hard failure.
+        /// </summary>
+        private void ApplyBalanceData()
+        {
+            float priorMax = _maxOil;
+            float priorDrain = _oilDrainPerSec;
+            Guard.Try("Dungeon", "apply lantern balance data", () =>
+            {
+                _maxOil = DungeonLanternBalance.MaxOil;
+                _oilDrainPerSec = DungeonLanternBalance.OilDrainPerSec;
+            });
+            FlowTrace.Step("Dungeon",
+                $"Lantern balance applied on '{name}': maxOil {priorMax:F0}->{_maxOil:F0} " +
+                $"drain {priorDrain:F2}->{_oilDrainPerSec:F2}/s = " +
+                $"{(_oilDrainPerSec > 0f ? _maxOil / _oilDrainPerSec : 0f):F0}s to empty, " +
+                $"~{(_oilDrainPerSec > 0f ? (1f - Mathf.Min(_lowOilFraction, 0.12f)) * (_maxOil / _oilDrainPerSec) : 0f):F0}s to the darkness latch.");
         }
 
         /// <summary>

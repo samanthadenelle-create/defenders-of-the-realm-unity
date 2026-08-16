@@ -56,6 +56,12 @@ namespace DeNelle.Dungeons
             _radius = Mathf.Max(0.5f, radius);
         }
 
+        // WO-1112: same defect as ComposedKeyPickup — DungeonBaker.PlaceComposeLocks bakes this
+        // as a bare GameObject with no Renderer, so the barrier the player is meant to READ as
+        // "you need a key" was invisible; all they got was a floating prompt with no object.
+        // The plate is yawed to the serialized _faceY so it stands across the way it leads.
+        private void Start() => ComposedPropVisuals.BuildLock(gameObject, _faceY);
+
         /// <summary>Rebind ONCE off the Player tag if the serialized hero is missing, and say so.</summary>
         private bool TryRebindHero()
         {

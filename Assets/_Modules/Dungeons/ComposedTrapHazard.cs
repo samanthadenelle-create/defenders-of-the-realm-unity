@@ -41,6 +41,15 @@ namespace DeNelle.Dungeons
 
         private void Awake() => EnsureCollider();
 
+        // WO-1112: the header above has always promised "an optional particle telegraph", and
+        // the ONLY thing this component ever drew was the OnDrawGizmos below — inside
+        // #if UNITY_EDITOR, so it renders in the editor and NOWHERE in a player build. The trap
+        // was invisible in the shipped game and its damage read as unexplained. The runtime pad
+        // is deliberately dull and flat (owner: "the dungeons should be confusing", "im not
+        // trying to make them easy") — it rewards looking rather than handing traps away.
+        private void Start() => ComposedPropVisuals.BuildTrapPad(gameObject, _radius,
+            _kind != null && _kind.IndexOf("grate", System.StringComparison.OrdinalIgnoreCase) >= 0);
+
         private void EnsureCollider()
         {
             if (_col == null) _col = gameObject.GetComponent<SphereCollider>();

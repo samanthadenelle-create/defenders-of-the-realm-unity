@@ -109,27 +109,42 @@ namespace DeNelle.Village
         // FIRST, so without this both persist. Keep ONE (prefer the carried DDOL instance = player
         // continuity; else the first) and destroy the extra root(s). Ensure() re-applies tag/components/
         // loadout to the kept hero, so keeping either is functionally safe. Runs on every sceneLoaded.
-        private static void DedupeHeroes()
+        //
+        // WO-1112 — RETURNS THE DISPLACED SEAT. When this destroys an IN-SCENE hero in favour
+        // of a carried one, the position it destroyed is the only record of where THAT SCENE
+        // wanted a hero to stand, and the carried hero still holds its TOWN world pose. A
+        // composed dungeon bakes NO HeroStartPoint_PlayerSpawn marker (DungeonBaker seats its
+        // rig directly at the entry room), so without this the carried hero would arrive at
+        // its town coordinates inside the dungeon — outside the shell, in the dark, with the
+        // exit unreachable. Returns null when nothing was displaced (the overwhelmingly common
+        // case), which leaves every existing caller's behaviour byte-for-byte unchanged.
+        private static Vector3? DedupeHeroes()
         {
             var heroes = FindObjectsByType<HeroLocomotion>(FindObjectsInactive.Include, FindObjectsSortMode.None);
-            if (heroes == null || heroes.Length <= 1) return;
+            if (heroes == null || heroes.Length <= 1) return null;
 
             HeroLocomotion keep = null;
             foreach (var h in heroes)
                 if (h != null && h.gameObject.scene.name == "DontDestroyOnLoad") { keep = h; break; }
             if (keep == null) keep = heroes[0];
-            if (keep == null) return;
+            if (keep == null) return null;
 
+            Vector3? displacedSeat = null;
             var keepRoot = keep.transform.root.gameObject;
             foreach (var h in heroes)
             {
                 if (h == null) continue;
                 var root = h.transform.root.gameObject;
                 if (root == keepRoot) continue;
+                // Record the seat of the FIRST destroyed in-scene hero (a DDOL duplicate has no
+                // scene seat to donate) before the object goes away.
+                if (displacedSeat == null && root.scene.name != "DontDestroyOnLoad")
+                    displacedSeat = root.transform.position;
                 DeNelle.Core.Diagnostics.FlowTrace.Warn("Hero",
                     $"Duplicate hero removed — destroying '{root.name}' (scene={h.gameObject.scene.name}); kept '{keepRoot.name}'.");
                 Destroy(root);
             }
+            return displacedSeat;
         }
 
         // A1 (recover, don't fabricate): re-home a REAL hero that survived a Single-scene load parked
@@ -140,7 +155,13 @@ namespace DeNelle.Village
         // combat reuses the real hero instead of a stand-in pill. Returns the recovered root, or null when
         // there is genuinely nothing carried to recover (the caller then spawns the emergency hero). Fail-safe:
         // every risky op is guarded so a bad object logs + is skipped, never NREs.
-        private GameObject TryRecoverCarriedHero(string activeSceneName)
+        //
+        // WO-1112: <paramref name="fallbackSeat"/> is the seat DedupeHeroes just freed by
+        // destroying this scene's own baked hero in favour of the carried one. It is used ONLY
+        // when the scene bakes no hero-start marker — which is every composed (dg_*) dungeon,
+        // where the baked rig's own position IS the entry seat. Without it the carried hero
+        // keeps its TOWN world pose and arrives outside the dungeon shell.
+        private GameObject TryRecoverCarriedHero(string activeSceneName, Vector3? fallbackSeat = null)
         {
             GameObject carried = null;
 
@@ -185,7 +206,7 @@ namespace DeNelle.Village
             // Seat it at the scene's hero-start marker when present (Village2/raid seat the entry away from
             // the carry pose); else leave its carried world pose. Prefer the teleport-aware WarpTo so the
             // NavMeshAgent re-warps onto the destination navmesh instead of fighting a hard transform set.
-            var marker = FindSpawnMarkerPosition();
+            var marker = FindSpawnMarkerPosition() ?? fallbackSeat;
             if (marker.HasValue)
             {
                 var loco = carried.GetComponentInChildren<HeroLocomotion>(true);
@@ -198,7 +219,12 @@ namespace DeNelle.Village
             }
 
             DeNelle.Core.Diagnostics.FlowTrace.Step("Hero",
-                $"recover: re-homed carried hero '{carried.name}' into active scene '{activeSceneName}' at {carried.transform.position}.");
+                $"recover: re-homed carried hero '{carried.name}' into active scene '{activeSceneName}' at {carried.transform.position} " +
+                $"(seat={(FindSpawnMarkerPosition().HasValue ? "baked marker" : fallbackSeat.HasValue ? "displaced baked-hero seat" : "carried pose - NO seat found")}).");
+            if (!FindSpawnMarkerPosition().HasValue && !fallbackSeat.HasValue)
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("Hero",
+                    $"recover: '{activeSceneName}' offered NO seat (no HeroStartPoint_PlayerSpawn marker and nothing displaced) - " +
+                    "the carried hero keeps its ORIGIN-SCENE world pose, which in an enclosed scene means arriving outside the shell.");
             return carried;
         }
 
@@ -206,7 +232,10 @@ namespace DeNelle.Village
         {
             string scene = SceneManager.GetActiveScene().name;
             DeNelle.Core.Diagnostics.FlowTrace.Step("Hero", $"Ensure begin scene='{scene}' isVillage={IsVillageScene(scene)}");
-            DedupeHeroes();
+            // WO-1112: the seat a destroyed in-scene hero was standing on, if the dedupe just
+            // kept a carried hero over this scene's own baked one. It is the composed dungeon's
+            // only entry seat (no HeroStartPoint_PlayerSpawn is baked there).
+            Vector3? displacedSeat = DedupeHeroes();
             var loco = FindLoco();
             GameObject hero = loco != null ? loco.gameObject : FindHeroByName();
 
@@ -227,12 +256,24 @@ namespace DeNelle.Village
             // own re-home step inside RepositionPlayerAfterLoad; re-homing those from here too
             // would race a warp this file does not own. Idempotent — a hero already living in
             // the active scene fails the DDOL test and this is a no-op.
-            if (hero != null && DeNelle.Core.HubScenes.IsRaid(scene)
+            //
+            // WO-1112 — THE SAME RECEIVING HALF NOW SERVES COMPOSED (dg_*) DUNGEONS, because
+            // SceneRouter.GoDungeonScene arms the SAME carry for them. It is deliberately
+            // IsComposedDungeon and NOT IsDungeon: a hand-built Dungeon_* scene is crossed with
+            // no carry at all (its DungeonController owns the baked hero through serialized
+            // refs), so widening this test would be re-homing a hero nothing ever carried.
+            // In a composed scene the carried hero also has to WIN over the baker's own bare
+            // rig — DedupeHeroes above already resolves that in the carried hero's favour (it
+            // keeps the DontDestroyOnLoad instance), which is exactly what we want here: the
+            // baked composed Keeper has no HeroAbilities, the carried town hero does.
+            bool carriedSeam = DeNelle.Core.HubScenes.IsRaid(scene)
+                            || DeNelle.Core.HubScenes.IsComposedDungeon(scene);
+            if (hero != null && carriedSeam
                 && hero.transform.root.gameObject.scene.name == "DontDestroyOnLoad")
             {
                 DeNelle.Core.Diagnostics.FlowTrace.Step("Hero",
-                    $"Ensure: carried hero '{hero.name}' is still parked in the DontDestroyOnLoad scene on raid entry '{scene}' — re-homing + seating it.");
-                var rehomed = TryRecoverCarriedHero(scene);
+                    $"Ensure: carried hero '{hero.name}' is still parked in the DontDestroyOnLoad scene on entry to '{scene}' — re-homing + seating it.");
+                var rehomed = TryRecoverCarriedHero(scene, displacedSeat);
                 if (rehomed != null) hero = rehomed;
                 else
                     DeNelle.Core.Diagnostics.FlowTrace.Warn("Hero",

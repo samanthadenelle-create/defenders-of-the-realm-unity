@@ -27,6 +27,14 @@ namespace DeNelle.Dungeons
         /// <summary>Bake-time wiring. <c>_keyId</c> is [SerializeField] so it survives SaveScene.</summary>
         public void Configure(string keyId) => _keyId = string.IsNullOrEmpty(keyId) ? "key" : keyId;
 
+        // WO-1112: THE BAKE GIVES THIS OBJECT NO RENDERER AT ALL. DungeonBaker.PlaceComposeKeys
+        // creates a bare GameObject + a trigger SphereCollider + this component, so the key was
+        // fully functional and completely INVISIBLE in a player build — and a floor is gated
+        // behind it, so a run could hard-stall with nothing on screen to explain it. Built at
+        // runtime (not at bake) so every dg_* scene already on disk is covered with NO re-bake;
+        // ComposedPropVisuals no-ops if a Renderer is ever baked in, so a future art pass wins.
+        private void Start() => ComposedPropVisuals.BuildKey(gameObject);
+
         private void OnTriggerEnter(Collider other)
         {
             if (_taken) return;
