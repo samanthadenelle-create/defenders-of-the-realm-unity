@@ -1,6 +1,22 @@
 # Lanes — Work-Order Numbers Only (for CLI)  ·  reconciled 2026-06-12 (nightly refill)
 
-> ## ⚠ RECONCILED 2026-08-16 (CLI): main line next free = **1108**.
+> ## ⚠ RECONCILED 2026-08-16 (CLI): main line next free = **1112**.
+> **1109 / 1110 / 1111** = the RAID READINESS SET, from the SME audit run against the owner's
+> *"can i finally test raids fully?"* (2026-08-16). The loop IS closed and there is NO UXML in the raid
+> path — but: **1109** every raid spawns the EMERGENCY pill-hero because `RaidHeroSpawner` DOES NOT
+> EXIST (only a comment claims it does), dropping a `FlowTrace.Fail` into F8 on every entry and
+> training everyone to ignore Hero Fails; **1110** the one softlock hatch (`BuildHud()` unguarded, and
+> it gates the clock-expiry subscriber, so a throw = no tray, no Retreat, no timeout), four silent
+> catches incl. a reward multiplier that silently pays x1 instead of x2.2, and a death exit that
+> forfeits loot retreat pays; **1111** NO harness has ever loaded a raid scene — 1109 would have been
+> caught by one headless raid load.
+> **1108** = ECHO SIMPLIFICATION (owner-approved 2026-08-16, "Get it done. Do it that way" +
+> "exactly now finish it"): Echoes auto-harvest with a player-picked resource (⚠ ALREADY BUILT —
+> do not greenfield), Echo COUNT drives repair passively (the repair chip retires; stored `repair:N`
+> read-migrates, no schema bump), and the Echo escorts to the gate then VANISHES, reappearing once
+> after the first battle (⚠ no despawn path for a pet exists anywhere today). Also carries a CANON
+> CORRECTION: CLAUDE.md §7's "affinity DOUBLES the yield" is FALSE against live tuning — the match
+> bonus is additive (+0.03 on a +0.02 base), ~+3% absolute, per the owner's own "+5% not 55%" ruling.
 > *(⚠ **1106 WAS MINTED AS A FILE WITHOUT BUMPING THIS BANNER** — by this seat, hours after writing
 > the note below that names mint-without-bump as THE collision cause. No collision resulted (single
 > seat today), but the rule is the rule: the bump rides the SAME edit as the mint. Reconciled here.

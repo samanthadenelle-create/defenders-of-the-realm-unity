@@ -75,6 +75,10 @@ namespace DeNelle.Editor.Regression
         private const string PetDeployerSrc = "Assets/_Modules/Pets/PetDeployer.cs";
         private const string TutorialFlowSrc = "Assets/_Modules/Village/Tutorial/V2/TutorialFlow.cs";
         private const string AnchorsSrc      = "Assets/_Modules/Village/Tutorial/V2/TutorialWorldAnchors.cs";
+        // WO-1108 Lane B: the SINGLE owner of the Echo's appear/vanish/reappear transitions.
+        // TutorialFlow no longer calls PetDeployer.SummonAt itself; it asks this owner, which
+        // reaches the same SummonAt through the same EnsurePetDeployer self-heal.
+        private const string PresenceSrc     = "Assets/_Modules/Village/World/Camps/EchoAutoDeployTrigger.cs";
 
         // The two clips the guide actually needs: idle at rest, run while leading.
         private const string IdleClip = "wolf_rig|idle2";
@@ -374,10 +378,18 @@ namespace DeNelle.Editor.Regression
         // that body over the Sylas steward, the floating-spirit layer stays retired, and the data
         // grant the 07-17 ruling protects is still the untouched path it always was. The body
         // actually APPEARING is the owner's felt-verify.
+        //
+        // WO-1108 Lane B (2026-08-16) moved the SITE, not the invariants: the summon is now one hop
+        // away, through the single appearance owner EchoWorldPresence.SummonEscortBody, which reaches
+        // the same PetDeployer.SummonAt. Case (b) below follows that hop and asserts the SAME two
+        // things at the new site -- the body is summoned, and the spawn is Guard-isolated so a
+        // cosmetic failure can never take the roster grant down with it.
         private static void Case5_GuideBodyNotStewardFallback(List<string> failures)
         {
-            string flow    = StripComments(File.ReadAllText(TutorialFlowSrc));
-            string anchors = StripComments(File.ReadAllText(AnchorsSrc));
+            string flow     = StripComments(File.ReadAllText(TutorialFlowSrc));
+            string anchors  = StripComments(File.ReadAllText(AnchorsSrc));
+            string presence = File.Exists(PresenceSrc)
+                ? StripComments(File.ReadAllText(PresenceSrc)) : null;
 
             // -- (a) the species constant IS the body this ticket ships -------------------
             // The two halves of WO-961 are wired by a bare string on each side; nothing but this
@@ -393,16 +405,48 @@ namespace DeNelle.Editor.Regression
                              "the exact defect WO-961 fixes.");
 
             // -- (b) the body is actually summoned, guarded, before the roster grant ------
-            int summonAt = flow.IndexOf("SummonAt(", StringComparison.Ordinal);
+            //
+            // RE-POINTED 2026-08-16 (WO-1108 Lane B), NOT relaxed. Both invariants below were
+            // earned from owner F8 seq 2304 and BOTH still hold; only the SITE moved. Lane B made
+            // EchoWorldPresence the single owner of the Echo's appear/vanish/reappear transitions,
+            // so the grant now asks that owner (SummonEscortBody) instead of calling
+            // PetDeployer.SummonAt inline. This case therefore follows the call one hop: the grant
+            // must summon, the owner must actually reach SummonAt, and the spawn must still be
+            // failure-isolated -- at whichever site now performs it.
+            int summonAt = flow.IndexOf("EchoWorldPresence.SummonEscortBody(", StringComparison.Ordinal);
             if (summonAt < 0)
-                failures.Add("[guide-body] " + TutorialFlowSrc + " no longer calls PetDeployer.SummonAt - the " +
-                             "founding guide has NO world body, so TutorialWorldAnchors falls through to the " +
-                             "Sylas steward NPC and the beat tells the player to follow an unrelated townsperson " +
-                             "(owner F8 seq 2304, message \"npc\").");
-            if (!Regex.IsMatch(flow, @"Guard\.Try\s*(<[^>]*>)?\s*\(\s*""Tutorial""[^;]*SummonAt", RegexOptions.Singleline))
-                failures.Add("[guide-body] the SummonAt call is not Guard-wrapped - a failed visual spawn would " +
-                             "throw out of the grant and take the roster entry down with it. The body is " +
-                             "cosmetic; the data grant is not.");
+                failures.Add("[guide-body] " + TutorialFlowSrc + " no longer summons the guide's body " +
+                             "(EchoWorldPresence.SummonEscortBody, the WO-1108 Lane B route to " +
+                             "PetDeployer.SummonAt) - the founding guide has NO world body, so " +
+                             "TutorialWorldAnchors falls through to the Sylas steward NPC and the beat tells " +
+                             "the player to follow an unrelated townsperson (owner F8 seq 2304, message \"npc\").");
+
+            if (presence == null)
+                failures.Add("[guide-body] the appearance owner " + PresenceSrc + " is missing - the grant's " +
+                             "SummonEscortBody call has nothing to reach and the guide gets no body.");
+            else
+            {
+                // The one hop: the owner must really put a body in the world, not just exist.
+                if (presence.IndexOf(".SummonAt(", StringComparison.Ordinal) < 0)
+                    failures.Add("[guide-body] " + PresenceSrc + " no longer calls PetDeployer.SummonAt - " +
+                                 "SummonEscortBody would return without a body and the beat would again point " +
+                                 "at the steward stand-in (owner F8 seq 2304, message \"npc\").");
+
+                // EVERY spawn site must be failure-isolated, not merely one of them: a failed visual
+                // spawn must never throw out of the caller. In the grant's case that caller is the
+                // roster grant itself - the body is cosmetic, the data grant is not.
+                foreach (var statement in presence.Split(';'))
+                {
+                    if (statement.IndexOf(".SummonAt(", StringComparison.Ordinal) < 0) continue;
+                    if (Regex.IsMatch(statement, @"Guard\.Try\s*(<[^>]*>)?\s*\(", RegexOptions.Singleline)) continue;
+                    failures.Add("[guide-body] a PetDeployer.SummonAt call in " + PresenceSrc + " is not " +
+                                 "Guard-wrapped - a failed visual spawn would throw out of the appearance " +
+                                 "owner and, through SummonEscortBody, out of the starter-pet grant, taking " +
+                                 "the roster entry down with it. The body is cosmetic; the data grant is not. " +
+                                 "Offending statement: " +
+                                 Regex.Replace(statement.Trim(), @"\s+", " "));
+                }
+            }
 
             // -- (c) the ROSTER DATA GRANT is untouched, and still runs AFTER the summon --
             if (!flow.Contains("state.StarterPetId ="))
@@ -416,9 +460,10 @@ namespace DeNelle.Editor.Regression
                              "PetAcquisitionService.Acquire - the roster grant (the half the 2026-07-17 " +
                              "portrait-card ruling protects) is gone.");
             else if (summonAt >= 0 && summonAt > acquire)
-                failures.Add("[guide-body] SummonAt now runs AFTER petSvc.Acquire. The documented order is " +
-                             "StarterPetId -> SummonAt -> Acquire, so the slot redeploy sees the already-born " +
-                             "body and never double-spawns the guide.");
+                failures.Add("[guide-body] the guide's body summon (EchoWorldPresence.SummonEscortBody) now " +
+                             "runs AFTER petSvc.Acquire. The documented order is StarterPetId -> summon -> " +
+                             "Acquire, so the slot redeploy sees the already-born body and never double-spawns " +
+                             "the guide.");
 
             // -- (d) the floating-spirit layer stays retired on a quadruped ---------------
             if (flow.Contains("EchoSpiritPresentation"))

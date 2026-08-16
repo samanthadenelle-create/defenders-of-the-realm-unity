@@ -333,6 +333,12 @@ namespace DeNelle.Editor
             if (!EconomyMetaCatalogRegression.Run(out var econMetaReason)) failures.Add(econMetaReason); else log.AppendLine("[econ-meta] " + econMetaReason);
             if (!GlimmerEconomyRegression.Run(out var glimmerReason)) failures.Add(glimmerReason); else log.AppendLine("[glimmer] " + glimmerReason);
             if (!SceneRoutingRegression.Run(out var sceneRouteReason)) failures.Add(sceneRouteReason); else log.AppendLine("[scene-route] " + sceneRouteReason);
+            // --- WO-1109: the raid hero is the CARRIED town hero, not the emergency fallback.
+            //     Every raid entry used to land an "EMERGENCY pill spawned" FlowTrace.Fail in the
+            //     break-log (SceneRouter.GoRaid carried nothing), which trained every seat to
+            //     ignore Hero Fails. Pins the carry, the DDOL re-home (leak guard), and — just as
+            //     hard — that the Fail alarm and its fallback both SURVIVED the fix. ---
+            if (!RaidHeroCarryRegression.Run(out var raidHeroCarryReason)) failures.Add(raidHeroCarryReason); else log.AppendLine("[raid-hero-carry] " + raidHeroCarryReason);
             if (!ArtResourceRegression.Run(out var artResReason)) failures.Add(artResReason); else log.AppendLine("[art-resource] " + artResReason);
             // --- WO-682: Sfx WebGL import invariant (no divergent WebGL overrides -> no FSB decode failures) ---
             if (!SfxWebglAudioRegression.Run(out var sfxWebglReason)) failures.Add(sfxWebglReason); else log.AppendLine("[sfx-webgl] " + sfxWebglReason);
@@ -752,6 +758,21 @@ namespace DeNelle.Editor
             // mirror unparseable) with every marker green. Pins the shield_A rows through
             // the real Resources-first read path + the WO-994 seat-drift tripwire wiring.
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "attachment-offset suite", () => { if (!DeNelle.Editor.Regression.AttachmentOffsetRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[attachment-offset] " + r); });
+
+            // --- ECHO WORLD PRESENCE (WO-1108 Lane B, 2026-08-16): the owner's rule is
+            // "it takes you to the gate, gives you your dialogue, then it disappears... The
+            // only time it reappears is after your battle." Until this WO there was NO
+            // despawn path for a pet anywhere, and TWO independent appearance owners. Drives
+            // the real state machine (body present during the escort -> gone on completion ->
+            // back exactly once after a battle) and pins the single-owner rule by scanning
+            // every runtime file for a second PetDeployer.SummonAt caller.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "echo-world-presence suite", () => { if (!DeNelle.Editor.Regression.EchoWorldPresenceRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[echo-world-presence] " + r); });
+
+            // WO-1110: the raid's three non-victory exits must PAY THE SAME (death used to
+            // forfeit razing credit that retreat paid), Start must bind the clock-expiry exit
+            // BEFORE it builds the HUD (an unguarded presentation throw was the raid's only
+            // exitless state), and the four named raid catches must not swallow silently again.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "raid-exit-parity suite", () => { if (!DeNelle.Editor.Regression.RaidExitParityRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[raid-exit-parity] " + r); });
 
             // --- THE ORACLE THAT GUARDS THIS FILE: distinct markers, no unregistered
             // oracle, no gate script grepping a marker nobody emits. Registered LAST so
