@@ -831,19 +831,30 @@ namespace DeNelle.Village.Hud
         public override void Dispose() => Unbind();
     }
 
-    // ── Cast (enemy telegraph) ────────────────────────────────────────────────
+    // ── Cast (wind-up telegraph FALLBACK bar) ─────────────────────────────────
 
     /// <summary>
-    /// Fills <see cref="CastModel"/> from the Enemy rooted-cast seam (P4, HUD_OBSIDIAN
-    /// §3.4): subscribes Enemy.CastStarted/CastEnded (push) and interpolates Progress01
+    /// Fills <see cref="CastModel"/> from the cast wind-up seams (P4, HUD_OBSIDIAN
+    /// §3.4): subscribes Enemy.CastStarted/CastEnded AND (2026-08-16) the hero's
+    /// HeroAbilities.CastWindupStarted/Ended (push) and interpolates Progress01
     /// on its own fast poll, change-gated to 2% buckets so the model never fires on an
     /// unchanged value. One cast bar (V1): the LATEST cast wins; an ended earlier cast is
     /// ignored once superseded. SELF-EXPIRES on (start + windUp) or a dead/destroyed
     /// caster — a caster destroyed mid-cast kills its coroutine before CastEnded fires.
+    ///
+    /// OWNER RULING 2026-08-16: the Spells Pack Casting_* loop on the caster is the
+    /// wind-up telegraph INSTEAD of this bar. When <see cref="CastingTelegraphVfx"/>
+    /// reports a LIVE spawned telegraph for the caster, the bar is suppressed for that
+    /// cast; when the VFX did not spawn (missing mirror / CastingTelegraphVfx.
+    /// UseVfxTelegraph=false) the bar shows exactly as before — the player always
+    /// sees wind-up feedback. Flipping UseVfxTelegraph=false restores the bar-only
+    /// behaviour with no other change.
     /// </summary>
     internal sealed class CastProducer : HudProducer
     {
-        private Enemy _caster;
+        private Component _caster;     // Enemy OR HeroAbilities
+        private Enemy _casterEnemy;    // non-null when the caster is an enemy (dead-check)
+        private string _casterName;
         private string _ability;
         private float _start = -1f, _duration = 1f;
         private int _lastBucket = -1;
@@ -851,14 +862,43 @@ namespace DeNelle.Village.Hud
 
         public CastProducer(IHudModel m) : base(m, 0.10f)
         {
-            Enemy.CastStarted += OnCastStarted;
-            Enemy.CastEnded += OnCastEnded;
+            Enemy.CastStarted += OnEnemyCastStarted;
+            Enemy.CastEnded += OnEnemyCastEnded;
+            HeroAbilities.CastWindupStarted += OnHeroCastStarted;
+            HeroAbilities.CastWindupEnded += OnHeroCastEnded;
         }
 
-        private void OnCastStarted(Enemy caster, string ability, float windUpSeconds)
+        private void OnEnemyCastStarted(Enemy caster, string ability, float windUpSeconds)
         {
             if (caster == null) return;
+            if (Suppressed(caster, ability)) return;
+            Begin(caster, caster, FriendlyName(caster, RoleOf(caster)), ability, windUpSeconds);
+        }
+
+        // 2026-08-16: hero wind-ups join the same single bar, FALLBACK-ONLY — the
+        // Casting_* VFX on the hero is the primary telegraph; the bar shows a hero
+        // cast only when that VFX failed to spawn (never a silent no-telegraph).
+        private void OnHeroCastStarted(HeroAbilities caster, string ability, float windUpSeconds)
+        {
+            if (caster == null) return;
+            if (Suppressed(caster, ability)) return;
+            DeNelle.Core.Diagnostics.FlowTrace.Step("HUD", $"cast bar FALLBACK for hero wind-up '{ability}' (no Casting_* VFX spawned)");
+            Begin(caster, null, "You", ability, windUpSeconds);
+        }
+
+        // Owner ruling 2026-08-16: a LIVE spawned Casting_* telegraph replaces the bar.
+        private bool Suppressed(Component caster, string ability)
+        {
+            if (!CastingTelegraphVfx.IsTelegraphed(caster)) return false;
+            DeNelle.Core.Diagnostics.FlowTrace.Step("HUD", $"cast bar SUPPRESSED (Casting_* wind-up telegraph live) caster={caster.name} ability='{ability}'");
+            return true;
+        }
+
+        private void Begin(Component caster, Enemy enemy, string casterName, string ability, float windUpSeconds)
+        {
             _caster = caster;
+            _casterEnemy = enemy;
+            _casterName = casterName;
             _ability = ability;
             _duration = Mathf.Max(0.05f, windUpSeconds);
             _start = Time.time;
@@ -866,10 +906,16 @@ namespace DeNelle.Village.Hud
             Push(0f);
         }
 
-        private void OnCastEnded(Enemy caster)
+        private void OnEnemyCastEnded(Enemy caster)
         {
             // Only the cast we are tracking may clear the bar (a superseded cast's
             // end event must not kill the newer cast's bar).
+            if (!ReferenceEquals(caster, _caster)) return;
+            Hide();
+        }
+
+        private void OnHeroCastEnded(HeroAbilities caster)
+        {
             if (!ReferenceEquals(caster, _caster)) return;
             Hide();
         }
@@ -878,7 +924,7 @@ namespace DeNelle.Village.Hud
         {
             if (_start < 0f) return;   // no live cast
             // Self-expiry: destroyed/dead casters end the coroutine without CastEnded.
-            if (_caster == null || !_caster || _caster.IsDead) { Hide(); return; }
+            if (_caster == null || !_caster || (_casterEnemy != null && _casterEnemy.IsDead)) { Hide(); return; }
             float t = Mathf.Clamp01((Time.time - _start) / _duration);
             if (t >= 1f) { Hide(); return; }
             Push(t);
@@ -891,13 +937,14 @@ namespace DeNelle.Village.Hud
             if (_visible && bucket == _lastBucket) return;
             _visible = true;
             _lastBucket = bucket;
-            Model.Cast.Set(FriendlyName(_caster, RoleOf(_caster)), _ability, t01);
+            Model.Cast.Set(_casterName, _ability, t01);
         }
 
         private void Hide()
         {
             _start = -1f;
             _caster = null;
+            _casterEnemy = null;
             if (!_visible) return;     // change gate: never clear an already-clear model
             _visible = false;
             _lastBucket = -1;
@@ -906,8 +953,10 @@ namespace DeNelle.Village.Hud
 
         public override void Dispose()
         {
-            Enemy.CastStarted -= OnCastStarted;
-            Enemy.CastEnded -= OnCastEnded;
+            Enemy.CastStarted -= OnEnemyCastStarted;
+            Enemy.CastEnded -= OnEnemyCastEnded;
+            HeroAbilities.CastWindupStarted -= OnHeroCastStarted;
+            HeroAbilities.CastWindupEnded -= OnHeroCastEnded;
         }
     }
 

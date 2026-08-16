@@ -124,6 +124,109 @@ namespace DeNelle.Village
         private float _castLockoutUntil;
         private const float CastCancelLockout = 0.2f;
 
+        // ── Owner ruling 2026-08-16: Casting_* VFX telegraph the wind-up ───────────
+        // The school-matched Spells Pack Casting_* loop plays ON the hero during the
+        // wind-up (CastingTelegraphVfx), replacing the HUD cast bar as the telegraph.
+        // Presentation only - the CastRoutine timing/interrupt/refund logic above is
+        // untouched. _windupTelegraphVfx is the live loop instance; null when the
+        // spawn fell back (missing mirror / flag off), in which case the HUD bar
+        // shows for that cast (CastProducer checks CastingTelegraphVfx.IsTelegraphed).
+        private GameObject _windupTelegraphVfx;
+
+        // Second owner pick 2026-08-16: "Marker 2 Pointer Loop" -> Target of Casting
+        // spell. The wind-up ALSO marks the spell's TARGET (pointer hovering on the
+        // targeted unit, or standing on the blast centre for area casts). Additive
+        // presentation only; untargeted/self casts get no marker (traced branch).
+        private GameObject _windupTargetMarkerVfx;
+
+        /// <summary>Raised when a hero cast wind-up begins: (caster, abilityName, windupSeconds).
+        /// Consumed by the HUD CastProducer, which shows the cast BAR only when the
+        /// VFX telegraph did not spawn (the load-bearing fallback rule).</summary>
+        public static event System.Action<HeroAbilities, string, float> CastWindupStarted;
+
+        /// <summary>Raised when that wind-up completes, is interrupted, or is cancelled.</summary>
+        public static event System.Action<HeroAbilities> CastWindupEnded;
+
+        /// <summary>Spawn the school-matched Casting_* wind-up loop + the target-of-cast
+        /// pointer marker, then announce the wind-up.</summary>
+        private void BeginWindupTelegraph(AbilityDef def)
+        {
+            string school = CastingTelegraphVfx.ResolveSchool(def.Id, def.Name, def.VfxCast);
+            _windupTelegraphVfx = CastingTelegraphVfx.TryBegin(this, school, def.Name, def.CastSeconds);
+            BeginWindupTargetMarker(def);
+            CastWindupStarted?.Invoke(this, def.Name, def.CastSeconds);
+        }
+
+        /// <summary>
+        /// Second owner pick 2026-08-16: point the Marker 2 Pointer Loop at the spell's
+        /// TARGET for the wind-up. Target resolution MIRRORS FaceCastTarget/ResolveEffect
+        /// (the same point the committed effect will use): self/untargeted casts are
+        /// skipped (traced inside TryBeginTargetMarker); blast shapes mark the blast
+        /// CENTRE ground point; strike-likes mark the reticle-locked foe in reach, else
+        /// the nearest hostile, else the live boss. Presentation only - no mechanics.
+        /// </summary>
+        private void BeginWindupTargetMarker(AbilityDef def)
+        {
+            // Self / untargeted shapes - no marker (same list FaceCastTarget skips, plus
+            // the movement/self raw effects that never aim at a foe).
+            string fx = (def.Effect ?? string.Empty).Trim().ToLowerInvariant();
+            bool selfCast = def.EffectEnum == AbilityEffect.Heal ||
+                            fx == "gracebuff" || fx == "shield" || fx == "manaweave" ||
+                            fx == "healovertime" || fx == "invuln" ||
+                            fx == "dash" || fx == "blink" || fx == "taunt";
+            if (selfCast)
+            {
+                _windupTargetMarkerVfx = CastingTelegraphVfx.TryBeginTargetMarker(
+                    this, null, null, def.Name, def.CastSeconds);   // traces the skip branch
+                return;
+            }
+
+            Vector3 origin = transform.position;
+            Vector3 atk = AimPointOverride ?? origin;
+            Transform unit = null;
+            Vector3? point = null;
+            switch (def.EffectEnum)
+            {
+                case AbilityEffect.Aoe:
+                case AbilityEffect.Cleave:
+                case AbilityEffect.Meteor:
+                    point = ResolveBlastCentre(atk, origin);
+                    break;
+                default:   // Strike / Snare - single-target reach gate (mirrors FaceCastTarget)
+                {
+                    float maxR = def.Range + _enemyHitRadius;
+                    var foe = InReach(LockedTarget, origin, maxR) ? LockedTarget : NearestHostile(origin, maxR);
+                    if (foe == null) foe = LiveBoss();
+                    if (foe != null)
+                    {
+                        unit = (foe as Component) != null ? ((Component)foe).transform : null;
+                        if (unit == null) point = foe.WorldPosition;
+                    }
+                    break;
+                }
+            }
+            _windupTargetMarkerVfx = CastingTelegraphVfx.TryBeginTargetMarker(
+                this, unit, point, def.Name, def.CastSeconds);
+        }
+
+        /// <summary>Despawn the wind-up loop + target marker, announce the end
+        /// (commit/interrupt/cancel).</summary>
+        private void EndWindupTelegraph(string reason)
+        {
+            CastingTelegraphVfx.End(this, _windupTelegraphVfx, reason);
+            _windupTelegraphVfx = null;
+            CastingTelegraphVfx.EndTargetMarker(_windupTargetMarkerVfx, reason);
+            _windupTargetMarkerVfx = null;
+            CastWindupEnded?.Invoke(this);
+        }
+
+        // Safety net: a disabled/destroyed hero mid-wind-up must not leave the HUD
+        // producer tracking a live cast (the parented VFX dies with the hierarchy).
+        private void OnDisable()
+        {
+            if (_casting) EndWindupTelegraph("caster-disabled");
+        }
+
         // ── Animation ─────────────────────────────────────────────────────────
         // The hero rig's Animator (Hero.controller, built by the AnimatorSetup
         // editor script; assigned to the hero prefab by the integrator — see
@@ -585,6 +688,7 @@ namespace DeNelle.Village
                 _casting = true;
                 FlowTrace.Step("HeroAbility",
                     $"cast-start slot={slot} '{def.Name}' windup={def.CastSeconds:0.00}s (interruptible).");
+                BeginWindupTelegraph(def);   // 2026-08-16: Casting_* VFX replaces the HUD bar
                 _castRoutine = StartCoroutine(CastRoutine(def, (int)slot + 1, (int)slot, null, scaledCooldown, manaCost));
             }
             else
@@ -633,6 +737,7 @@ namespace DeNelle.Village
                 _casting = true;
                 DeNelle.Core.Diagnostics.FlowTrace.Step("HeroAbility",
                     $"cast-start extra '{abilityId}' windup={def.CastSeconds:0.00}s variant={extraVariant} (interruptible).");
+                BeginWindupTelegraph(def);   // 2026-08-16: Casting_* VFX replaces the HUD bar
                 _castRoutine = StartCoroutine(CastRoutine(def, extraVariant, -1, abilityId, scaledCooldown, manaCost));
             }
             else
@@ -672,6 +777,7 @@ namespace DeNelle.Village
                     _casting = false;
                     _castRoutine = null;
                     _castLockoutUntil = Time.time + CastCancelLockout;
+                    EndWindupTelegraph("move-interrupt");   // 2026-08-16: tear down the Casting_* loop
                     FlowTrace.Step("HeroAbility",
                         $"cast-interrupted '{def.Name}' at {elapsed:0.00}/{def.CastSeconds:0.00}s (moved) — mana+cd refunded.");
                     yield break;
@@ -683,6 +789,7 @@ namespace DeNelle.Village
             // Wind-up completed — commit the effect through the UNCHANGED cast core.
             _casting = false;
             _castRoutine = null;
+            EndWindupTelegraph("cast-committed");   // 2026-08-16: tear down the Casting_* loop
             FlowTrace.Step("HeroAbility", $"cast-committed '{def.Name}' after {def.CastSeconds:0.00}s wind-up.");
             CastResolved(def, castVariant);
         }
@@ -699,6 +806,7 @@ namespace DeNelle.Village
             _castRoutine = null;
             _casting = false;
             _castLockoutUntil = Time.time + CastCancelLockout;
+            EndWindupTelegraph("external-interrupt");   // 2026-08-16: tear down the Casting_* loop
             FlowTrace.Step("HeroAbility", "cast-cancelled (external interrupt) — no refund.");
         }
 
@@ -1062,6 +1170,20 @@ namespace DeNelle.Village
                     // WO-398 follow-up: when no foe is in reach, fall back to the reach-capped
                     // centre (self for melee, the in-reach aim for ranged) — never the raw 45m aim.
                     Vector3 target = foe != null ? foe.WorldPosition : ResolveBlastCentre(atk, origin);
+                    // OWNER-PICKED cast key on a TARGETED special (mage.cataclysm ->
+                    // 'SpecialAbilityMage_Cast', top_down_starfall_line_blue): the pick is a
+                    // top-down line effect, so its authored shape reads on the BLAST AREA the
+                    // cast is aimed at, not on the caster. PlayCastVfxKey deferred meteor-shaped
+                    // owner picks to exactly here (single play per cast). Oneshot; missing
+                    // catalog row / prefab no-ops with VFXManager's throttled warn and the
+                    // ability proceeds unchanged.
+                    if (IsOwnerPickedVfxKey(def.VfxCast))
+                    {
+                        DeNelle.Core.Diagnostics.FlowTrace.Step("Vfx",
+                            $"owner-picked cast vfx '{def.VfxCast}' for '{def.Id}' anchored at the " +
+                            $"blast area ({target.x:0.#},{target.y:0.#},{target.z:0.#}).");
+                        VFXManager.PlayKey(def.VfxCast, target, Quaternion.identity, null, def.UnityColor);
+                    }
                     // DEF (combat feel): hurl a visible orb to the target, then EXPLODE on arrival
                     // (blast + impact VFX), so the ultimate reads as a meteor streaking in and
                     // landing rather than an instant area-pop. Same proven projectile pattern as
@@ -2005,6 +2127,43 @@ namespace DeNelle.Village
         // flip this const to false to restore the data-driven defaults.
         private const bool RegistryOnlyMotionVfx = true;
 
+        // -- OWNER-PICKED ability VFX keys (2026-08-16 tagging session) ---------------
+        // RegistryOnlyMotionVfx suppresses the abilities.json Vfx* DEFAULTS "till i
+        // select individually" (owner directive 2026-07-12, above). The keys below ride
+        // those individual selections, mapped through VfxManualPicks.json manual:true
+        // rows (the Posion_Cast idiom), so they pass the gate while every untagged
+        // default stays suppressed.
+        //
+        // PROVENANCE - two distinct parts, do not conflate (each key = one owner tag
+        // plus one routed interpretation):
+        //  (a) EFFECT MAPPING, owner-verbatim 2026-08-16: "Buff_Light.prefab ->
+        //      Knight Shield Buff or something" and "top_down_starfall_line_blue.prefab
+        //      -> Special Ability Mage cast". Only the prefab->hook pairs are her words.
+        //  (b) ABILITY-ID SELECTION, orchestrator-routed interpretation same day -
+        //      owner confirmed proceed-with-defaults 2026-08-16 (a plan-level "yes"
+        //      to the presented default bindings - not a per-ability verbatim tag).
+        //      The ids are NOT her tag:
+        //      KnightShieldBuff_Aura -> knight.eternal-aegis (under her explicit
+        //        latitude "or something"; it is the existing DefenseUp/Aegis defensive
+        //        shield-buff surface). Residual ward on the knight for def.seconds.
+        //      SpecialAbilityMage_Cast -> mage.cataclysm (capstone ultimate whose vfx
+        //        fields were deliberately held empty pending an owner tag). Cast beat
+        //        anchored on the blast area (top-down line effect).
+        // Add a key here ONLY on an owner tag - never a CLI creative pick. If the owner
+        // re-binds either pick to a different ability, move the KEY in abilities.json;
+        // this set and the picks row stay as-is.
+        private static readonly HashSet<string> OwnerPickedVfxKeys
+            = new HashSet<string>(System.StringComparer.Ordinal)
+        {
+            "KnightShieldBuff_Aura",
+            "SpecialAbilityMage_Cast",
+        };
+
+        /// <summary>True when <paramref name="key"/> is an owner-tagged ability VFX pick -
+        /// exempt from the RegistryOnlyMotionVfx default-suppression gate.</summary>
+        private static bool IsOwnerPickedVfxKey(string key)
+            => !string.IsNullOrEmpty(key) && OwnerPickedVfxKeys.Contains(key);
+
         // Cast variant -> registry keyword. MUST mirror HeroAnimatorFactory.ResolveSpellCastClips
         // ([1] q → skill1, [2] w → skill2, [3] e → castHeal; [4] r has no registry keyword yet —
         // null = silent until the vocabulary grows a row for it). Variant 0 = generic cast.
@@ -2120,6 +2279,22 @@ namespace DeNelle.Village
         /// </summary>
         private void PlayCastVfxKey(AbilityDef def, Vector3 origin, int castVariant)
         {
+            // OWNER-PICKED cast key (see OwnerPickedVfxKeys): an individually owner-tagged
+            // ability cast passes the registry-only gate and fires its abilities.json key.
+            // Meteor-shaped abilities are DEFERRED to the Meteor resolver, which anchors the
+            // pick on the BLAST AREA (the target the cast is about) instead of the caster -
+            // playing here too would double-fire the same key per cast.
+            if (def != null && IsOwnerPickedVfxKey(def.VfxCast))
+            {
+                string fx = (def.Effect ?? string.Empty).Trim().ToLowerInvariant();
+                if (fx == "meteor") return;   // played at the blast centre by ResolveEffect
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Vfx",
+                    $"owner-picked cast vfx '{def.VfxCast}' for '{def.Id}' at the caster " +
+                    "(RegistryOnlyMotionVfx exemption: individually owner-tagged key).");
+                VFXManager.PlayKey(def.VfxCast, origin + Vector3.up * 1.2f,
+                    transform.rotation, null, def.UnityColor);
+                return;
+            }
             if (RegistryOnlyMotionVfx)
             {
                 string keyword = castVariant >= 0 && castVariant < CastVariantKeyword.Length
@@ -2205,9 +2380,17 @@ namespace DeNelle.Village
         /// </summary>
         private void PlayResidualLoop(AbilityDef def, Transform target, float seconds, Vector3 fallbackPos)
         {
-            if (RegistryOnlyMotionVfx) return;   // owner directive 2026-07-12: defaults off
+            // Owner directive 2026-07-12: defaults off - EXCEPT an individually owner-tagged
+            // key (OwnerPickedVfxKeys), which is exactly the selection the gate waits for.
+            bool ownerPicked = def != null && IsOwnerPickedVfxKey(def.VfxResidual);
+            if (RegistryOnlyMotionVfx && !ownerPicked) return;
             if (def == null || string.IsNullOrEmpty(def.VfxResidual)) return;
             Vector3 pos = target != null ? target.position : fallbackPos;
+            if (ownerPicked)
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Vfx",
+                    $"owner-picked residual vfx '{def.VfxResidual}' for '{def.Id}' on " +
+                    $"'{(target != null ? target.name : "<pos>")}' for {seconds:0.#}s " +
+                    "(RegistryOnlyMotionVfx exemption; loop stops with the buff, oneshot plays once).");
             var h = VFXManager.PlayKey(def.VfxResidual, pos, Quaternion.identity, target, def.UnityColor);
             if (h != null && seconds > 0f) StartCoroutine(StopHandleAfter(h, seconds));
         }

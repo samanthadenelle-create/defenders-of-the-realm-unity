@@ -155,6 +155,13 @@
             "manual": true
         },
         {
+            "key": "EndGameCAstingAnimation_Impact",
+            "prefabPath": "Assets/Lana Studio/Casual RPG VFX/Prefabs/Range_attack/Hit_light.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
             "key": "EnemyCast_Cast",
             "prefabPath": "Assets/Spells Pack/Particles/Prefabs/Projectiles/Casting/Casting_Dark_3.prefab",
             "isLoop": false,
@@ -164,6 +171,13 @@
         {
             "key": "EnhamcingBuff_Cast",
             "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectile VFX loop/Projectile dragon punch.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "Explosion_Impact",
+            "prefabPath": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire & Explosion Effects/Prefabs/BigExplosion.prefab",
             "isLoop": false,
             "scale": 1.0,
             "manual": true
@@ -260,6 +274,13 @@
             "manual": true
         },
         {
+            "key": "Haste_Cast",
+            "prefabPath": "Assets/Lana Studio/Casual RPG VFX/Prefabs/States/Aura_acceleration.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
             "key": "Heal_Aura",
             "prefabPath": "Assets/Hovl Studio/RPG VFX Bundle/Random effect prefabs/Buff palladin.prefab",
             "isLoop": false,
@@ -281,6 +302,20 @@
             "manual": true
         },
         {
+            "key": "Holy_Aura",
+            "prefabPath": "Assets/Hovl Studio/Magic circles/Prefabs/Magic circle dark star.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "Holy_Impact",
+            "prefabPath": "Assets/Lana Studio/Casual RPG VFX/Prefabs/Range_attack/Hit_light.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
             "key": "IceWeaponAura_Aura",
             "prefabPath": "Assets/Resources/VFX/Projectiles/Explosion_Ice.prefab",
             "isLoop": false,
@@ -290,6 +325,13 @@
         {
             "key": "Junk-DoNotuse_Cast",
             "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectile VFX loop/Projectile 16 fire.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "KnightShieldBuff_Aura",
+            "prefabPath": "Assets/Resources/VFX/Projectiles/Buff_Light.prefab",
             "isLoop": false,
             "scale": 1.0,
             "manual": true
@@ -333,6 +375,13 @@
             "key": "Melee_Slash",
             "prefabPath": "Assets/Hovl Studio/RPG VFX Bundle/Random effect prefabs/Dragon punch.prefab",
             "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "Node_Aura",
+            "prefabPath": "Assets/Resources/VFX/Aura/Aura_PetLevel2.prefab",
+            "isLoop": true,
             "scale": 1.0,
             "manual": true
         },
@@ -757,6 +806,13 @@
             "manual": true
         },
         {
+            "key": "ShieldBuff_Cast",
+            "prefabPath": "Assets/Spells Pack/Particles/Prefabs/Projectiles/Casting/Casting_Arcane.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
             "key": "SimpleCast_Cast",
             "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Flash and hits/Flash 16 fire.prefab",
             "isLoop": false,
@@ -771,8 +827,22 @@
             "manual": true
         },
         {
+            "key": "Sleep_Impact",
+            "prefabPath": "Assets/Lana Studio/Casual RPG VFX/Prefabs/States/Character_status_sleep.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
             "key": "Spear_Projectile",
             "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectiles 2D/2D Projectile 1 nature arrow.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "SpecialAbilityMage_Cast",
+            "prefabPath": "Assets/Lana Studio/Casual RPG VFX/Prefabs/Top_down_attack/top_down_starfall_line_blue.prefab",
             "isLoop": false,
             "scale": 1.0,
             "manual": true
@@ -855,6 +925,13 @@
             "manual": true
         },
         {
+            "key": "portal(rotate)_Aura",
+            "prefabPath": "Assets/Hovl Studio/Magic circles/Prefabs/Magic circle dark star.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
             "key": "softhealingaura_Aura",
             "prefabPath": "Assets/Hovl Studio/RPG VFX Bundle/Random effect prefabs/Buff palladin.prefab",
             "isLoop": false,
@@ -864,6 +941,13 @@
         {
             "key": "subtleHealinginarea(EnemySkill-Mage)_Cast",
             "prefabPath": "Assets/Hovl Studio/RPG VFX Bundle/Random effect prefabs/Buff orange circle.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "targetforSpell_Impact",
+            "prefabPath": "Assets/Hovl Studio/Map track markers VFX/Prefabs/Marker 2 Pointer Loop.prefab",
             "isLoop": false,
             "scale": 1.0,
             "manual": true

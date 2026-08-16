@@ -437,7 +437,7 @@
           "range": 0,
           "seconds": 8,
           "vfxCast": "DefenseUp-Offhand(Shield)_Aura",
-          "vfxResidual": "Aegis_Shield"
+          "vfxResidual": "KnightShieldBuff_Aura"
         },
         "second-wind": {
           "id": "knight.second-wind",
@@ -574,7 +574,8 @@
           "cooldown": 50,
           "manaCost": 8,
           "damage": 600,
-          "range": 9
+          "range": 9,
+          "vfxCast": "SpecialAbilityMage_Cast"
         },
         "thunder": {
           "id": "mage.thunder",
