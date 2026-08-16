@@ -46,7 +46,27 @@ namespace DeNelle.Dungeons.RoomForge
         [JsonProperty("keys")] public List<ComposeKey> keys = new List<ComposeKey>();
         /// <summary>WO-1001 slice 7: locked ports (need keyId to pass).</summary>
         [JsonProperty("locks")] public List<ComposeLock> locks = new List<ComposeLock>();
-        /// <summary>WO-1001 slice 8: extra extract/exit points (per-floor bank-and-leave).</summary>
+        /// <summary>
+        /// WO-1001 slice 8: authored egress pads, in ADDITION to the injected true exit.
+        /// <para>
+        /// ⚠ A CONTENT dungeon authors AT MOST ONE (owner ruling, F8 seq 2508, 2026-08-15:
+        /// "Should be single entry point in maybe 2 total out" / "generally 1 after the
+        /// treaure room that exists to back of dungeon"). That one entry is the BACK exit,
+        /// seated in the deepest room — the same room DungeonTreasureCache seats the reward
+        /// in — and offset toward the wall opposite that room's door. Front exit (this
+        /// layout's <see cref="exitRoomId"/>) + back exit = two, and that is the ceiling.
+        /// </para>
+        /// <para>
+        /// This used to be one pad PER STAIRWELL (13 across the three content dungeons),
+        /// which made every landing an opt-out and flattened the descent. The pads were
+        /// never anti-stranding insurance: dungeon scenes are absent from scene-configs.json,
+        /// so death respawns the hero in place and there is no softlock to escape.
+        /// </para>
+        /// <para>
+        /// The count is pinned by DungeonEgressRegression [dungeon-egress]. The A/B control
+        /// group (dg_stair_rig, dg_descent_probe — WO-930 fixtures) is exempt by name there.
+        /// </para>
+        /// </summary>
         [JsonProperty("extracts")] public List<ComposeExtract> extracts = new List<ComposeExtract>();
     }
 

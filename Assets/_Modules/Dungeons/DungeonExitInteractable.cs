@@ -687,6 +687,26 @@ namespace DeNelle.Dungeons
             tm.anchor = TextAnchor.MiddleCenter;
             tm.alignment = TextAlignment.Center;
             tm.color = color ?? new Color(0.75f, 1f, 0.75f, 1f);
+            // ⚠ KNOWN DEFECT, DELIBERATELY NOT FIXED IN THIS LANE — owner F8 seq 2508
+            // (2026-08-15): "see all the leave signs that leak through everything".
+            // A built-in font's shared material runs Unity's "GUI/Text Shader", which is
+            // declared ZTest Always, so the WORD draws on top of every wall between it and
+            // the camera. The pad DISC (an ordinary lit primitive) occludes correctly —
+            // that asymmetry IS the reported defect: discs behave, words do not.
+            //
+            // The egress trim cut the dungeon label count from 13 to 3 (one back exit per
+            // content dungeon; the beacon's own label was already removed 2026-08-14), so
+            // the symptom is now rare rather than pervasive. The remaining fix is a
+            // MATERIAL change that needs screenshot verification (a font atlas keeps its
+            // glyph in the ALPHA channel, so naively re-hosting it on Unlit/Transparent can
+            // render black or blank), and this lane is edit-only with no capture. Left as a
+            // flagged, sourced defect rather than an unverified visual guess.
+            //
+            // THE SAME font.material LINE EXISTS TOWN-SIDE and leaks identically:
+            //   Assets/_Modules/Village/Buildings/BuildingSign.cs:155
+            //   Assets/_Modules/Village/Buildings/StructureAttackAlert.cs:184
+            //   Assets/_Modules/Village/Vfx/StructureDamageVisuals.cs:903
+            // Fix all four together, with a capture, or none.
             var tr = labelGo.GetComponent<MeshRenderer>();
             if (tr != null && font.material != null) tr.sharedMaterial = font.material;
             return labelGo.transform;

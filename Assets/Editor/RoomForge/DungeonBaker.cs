@@ -166,6 +166,62 @@ namespace DeNelle.Editor.RoomForge
             EditorApplication.Exit(0);
         }
 
+        /// <summary>
+        /// Batchmode entry for ONE NAMED layout:
+        ///   -executeMethod DeNelle.Editor.RoomForge.DungeonBaker.BakeLayoutBatch -dungeon dg_ember_deep
+        /// Repeat the run once per dungeon (a bake replaces the open scene, so they do not batch
+        /// into one invocation safely).
+        /// <para>
+        /// WHY THIS EXISTS: <see cref="BakeDefaultBatch"/> bakes ONLY <see cref="DefaultLayout"/>,
+        /// and the only other entry points are MenuItems that need a JSON asset SELECTED in the
+        /// editor. So re-baking a content dungeon after a layout edit had no headless path at all —
+        /// it required a human with the editor open, which is the opposite of how every other bake
+        /// in this project is run. A JSON-only change is invisible in game until the scene is
+        /// re-baked, so an un-runnable bake means the edit silently does nothing.
+        /// </para>
+        /// <para>
+        /// ⚠ Exits NON-ZERO on a missing/unknown -dungeon rather than baking the default. Silently
+        /// baking the wrong dungeon and exiting 0 is how a gate reports success without proving it.
+        /// </para>
+        /// </summary>
+        public static void BakeLayoutBatch()
+        {
+            string id = null;
+            // Fully qualified: this file has no `using System;` (see the using block at the top).
+            string[] args = System.Environment.GetCommandLineArgs();
+            for (int i = 0; i < args.Length - 1; i++)
+            {
+                if (string.Equals(args[i], "-dungeon", System.StringComparison.OrdinalIgnoreCase))
+                {
+                    id = args[i + 1];
+                    break;
+                }
+            }
+
+            if (string.IsNullOrEmpty(id))
+            {
+                FlowTrace.Fail(Sys, "BakeLayoutBatch: no -dungeon <id> argument - refusing to bake " +
+                                    "(baking the default spine instead would silently re-bake the wrong scene)");
+                EditorApplication.Exit(2);
+                return;
+            }
+
+            if (id.EndsWith(".json", System.StringComparison.OrdinalIgnoreCase))
+                id = id.Substring(0, id.Length - ".json".Length);
+
+            string path = Path.Combine(LayoutsFolder, id + ".json");
+            if (!File.Exists(ToFilesystemPath(path)))
+            {
+                FlowTrace.Fail(Sys, $"BakeLayoutBatch: layout '{id}' not found at '{path}'");
+                EditorApplication.Exit(3);
+                return;
+            }
+
+            FlowTrace.Step(Sys, $"BakeLayoutBatch: baking '{id}' from {path}");
+            BakeFromFile(path);
+            EditorApplication.Exit(0);
+        }
+
         // Convert a project-relative "Assets/..." path to an absolute filesystem path.
         // Only the LEADING "Assets/" is the project marker (Application.dataPath already ends in
         // "/Assets"); a naive Replace("Assets/", ...) ALSO mangles the "Assets/" inside
@@ -1680,7 +1736,44 @@ namespace DeNelle.Editor.RoomForge
             return n;
         }
 
-        /// <summary>WO-1001 slice 8: per-floor extract pads (bank-and-leave via DungeonExitInteractable.Spawn).</summary>
+        // ── EGRESS SHAPE — owner ruling, F8 seq 2508 (2026-08-15), verbatim ──────────
+        //   "why can we leave the dungeon in the middle of stairs. Should be single entry
+        //    point in maybe 2 total out" / "the dungeons should be confusing" /
+        //    "im not trying to make them easy" / "generally 1 after the treaure room that
+        //    exists to back of dungeon".
+        //
+        // A CONTENT dungeon now has EXACTLY TWO ways out and no more:
+        //   1. THE FRONT — the runtime-injected true exit at layout.exitRoomId (the room
+        //      you walked in through). Placed by DungeonExitSpawner.TryInject, NOT here.
+        //   2. THE BACK — ONE authored extract, seated in the DEEPEST room (which is where
+        //      DungeonTreasureCache.ResolveDeepestRoomId puts the reward), offset toward
+        //      the wall OPPOSITE that room's only door. You reach it by clearing the
+        //      dungeon, not by bailing out halfway.
+        //
+        // WHAT WAS HERE BEFORE AND WHY IT WAS WRONG: every StairwellRoom authored its own
+        // pad (5 in dg_ember_deep, 4 each in dg_bonecrypt / dg_sunken_vault, 13 total). Six
+        // egress points per dungeon deleted the descent entirely — every landing was an
+        // opt-out, so no floor could ever feel deep or confusing. The pads were added as
+        // anti-stranding insurance that was never needed: dungeon scenes are absent from
+        // scene-configs.json, so SceneOwnership.IsEnemyOwned is FALSE and death respawns the
+        // hero IN PLACE — there is no softlock to insure against.
+        //
+        // ⚠ THE PAD IS STILL NAMED "Extract_<id>". That name is the discriminator
+        // DungeonExitSpawner.TryInject uses to tell a baked pad from an injected return
+        // exit; rename it and the FRONT exit stops being injected at all (this file is
+        // pinned by DungeonComposedPillarsRegression:387 for exactly that reason).
+        //
+        // ⚠ THE BACK EXIT IS THE ZONE-SEAM CANDIDATE, AND THE SEAM IS DELIBERATELY UNBUILT.
+        // Owner: "i was thinking we could have two exits, if it seams to a new zone". Realm
+        // travel is still the WO-827 stub, so today the back exit routes home like the
+        // front one. WHEN a zone seam lands, it attaches HERE and nowhere else: pass a
+        // non-null onLeave to Spawn (arg 2, currently null) — or, for in-world traversal,
+        // author the destination the way DungeonController.DressTraversalLinks() already
+        // does with DungeonPortLink (interact-to-port, authored at RUNTIME, never
+        // hand-placed in a scene). Do NOT add a second egress to reach a new zone; re-point
+        // this one.
+        /// <summary>WO-1001 slice 8 / WO-957 egress trim: the ONE authored back exit
+        /// (bank-and-leave via DungeonExitInteractable.Spawn), seated past the treasure room.</summary>
         private static int PlaceComposeExtracts(Transform root, Dictionary<string, GameObject> instances,
                                                DungeonComposeLayout layout)
         {

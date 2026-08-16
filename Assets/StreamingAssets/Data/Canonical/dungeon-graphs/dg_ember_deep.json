@@ -246,52 +246,12 @@
   ],
   "extracts": [
     {
-      "id": "ed-extract-l1",
-      "roomId": "stairwell_0",
+      "id": "ed-extract-back",
+      "roomId": "warlord_keep",
       "offset": [
-        1.6,
-        0,
-        0
-      ],
-      "label": "Leave"
-    },
-    {
-      "id": "ed-extract-l2",
-      "roomId": "stairwell_1",
-      "offset": [
-        1.6,
-        0,
-        0
-      ],
-      "label": "Leave"
-    },
-    {
-      "id": "ed-extract-l3",
-      "roomId": "stairwell_2",
-      "offset": [
-        1.6,
-        0,
-        0
-      ],
-      "label": "Leave"
-    },
-    {
-      "id": "ed-extract-l4",
-      "roomId": "stairwell_3",
-      "offset": [
-        1.6,
-        0,
-        0
-      ],
-      "label": "Leave"
-    },
-    {
-      "id": "ed-extract-l5",
-      "roomId": "stairwell_4",
-      "offset": [
-        1.6,
-        0,
-        0
+        7.0,
+        0.0,
+        0.0
       ],
       "label": "Leave"
     }

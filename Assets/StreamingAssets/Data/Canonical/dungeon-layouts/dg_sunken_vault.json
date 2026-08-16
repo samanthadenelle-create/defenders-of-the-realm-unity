@@ -496,40 +496,10 @@
   ],
   "extracts": [
     {
-      "id": "sv-extract-entry",
-      "roomId": "entry",
+      "id": "sv-extract-back",
+      "roomId": "warden",
       "offset": [
-        0.0,
-        0.0,
-        -2.5
-      ],
-      "label": "Leave"
-    },
-    {
-      "id": "sv-extract-l1",
-      "roomId": "stairwell_0",
-      "offset": [
-        1.6,
-        0.0,
-        0.0
-      ],
-      "label": "Leave"
-    },
-    {
-      "id": "sv-extract-l2",
-      "roomId": "stairwell_1",
-      "offset": [
-        1.6,
-        0.0,
-        0.0
-      ],
-      "label": "Leave"
-    },
-    {
-      "id": "sv-extract-l3",
-      "roomId": "stairwell_2",
-      "offset": [
-        1.6,
+        7.0,
         0.0,
         0.0
       ],
