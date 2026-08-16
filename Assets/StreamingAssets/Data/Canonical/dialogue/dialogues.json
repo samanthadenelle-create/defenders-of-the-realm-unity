@@ -87,6 +87,27 @@
    "name": "Fenn Wildmane",
    "affiliation": "Echo Hollow",
    "portrait": "Portraits/pet-house"
+  },
+  {
+   "name": "Frost",
+   "affiliation": "Echo of Elarion",
+   "portrait": "PetPortraits/pet-ice-wolf",
+   "_note": "WO-1030: the pet_engage prompt speaks as the Echo's DISPLAY name (PetTaskController.SpeakerName), but no speaker record carried these names, so the resolver fell through to the silhouette. Portraits are the Echoes' own rendered PetPortraits sprites - the same art the deployed billboard shows, not a creative substitution."
+  },
+  {
+   "name": "Ember",
+   "affiliation": "Echo of Elarion",
+   "portrait": "PetPortraits/pet-flame-pup"
+  },
+  {
+   "name": "Aether",
+   "affiliation": "Echo of Elarion",
+   "portrait": "PetPortraits/pet-aether-sprite"
+  },
+  {
+   "name": "Your Echo",
+   "affiliation": "Echo of Elarion",
+   "portrait": "Portraits/pet-house"
   }
  ],
  "dialogues": [

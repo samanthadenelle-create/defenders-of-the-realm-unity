@@ -157,16 +157,23 @@ namespace DeNelle.Village
                 $"engage ({trigger}) pet '{_pet.PetId}' -> opening Harvest/Repair prompt (current task {_task}).");
 
             s_engaging = this;
-            DeNelle.Core.Dialogue.DialogueService.PlayDef(BuildEngageDef());
+            DeNelle.Core.Dialogue.DialogueService.PlayDef(BuildEngageDef(_pet != null ? _pet.Species : null));
         }
 
         // =====================================================================
         //  The code-built two-choice dialogue (no catalog id, no UXML, no Yarn)
         // =====================================================================
 
-        private DialogueDef BuildEngageDef()
+        /// <summary>
+        /// The code-built Harvest/Repair engagement prompt for an Echo of the given species.
+        /// STATIC + PUBLIC (WO-1030) so the UI capture harness shoots the EXACT def the game
+        /// plays -- one builder, no drifting fixture copy. Speaker resolves via SpeakerName
+        /// (species -> "Frost"/"Ember"/"Aether"), which the dialogues.json speakers block now
+        /// carries records for (portrait + affiliation).
+        /// </summary>
+        public static DialogueDef BuildEngageDef(string species)
         {
-            string speaker = SpeakerName(_pet != null ? _pet.Species : null);
+            string speaker = SpeakerName(species);
             var def = new DialogueDef { Id = "pet_engage", StartNode = "root" };
 
             def.Nodes.Add(new DialogueNode

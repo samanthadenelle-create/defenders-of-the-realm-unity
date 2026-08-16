@@ -524,6 +524,7 @@ namespace DeNelle.Editor
                 count += CaptureBuildGhostChips();   // WO-1010 P1: chips on the ghost
                 count += CapturePaletteCollapsed();  // WO-1010 P2: dock open + collapsed w/ restore tab
                 count += CaptureEndStateWaveClear(); // WO-952: the wave-clear banner's fit, MEASURED
+                count += CapturePetEngageDialogue(); // WO-1030: DialogueView options state (2-opt real + 4-opt worst case)
 
                 Debug.Log("[UICap-HL] done -> " + Path.GetFullPath(OutDir));
             }
@@ -847,6 +848,149 @@ namespace DeNelle.Editor
                 if (tempEventSystem != null) UnityEngine.Object.DestroyImmediate(tempEventSystem);
             }
 
+            return saved;
+        }
+
+        // ---------------------------------------------------------------------
+        //  Panel: the Echo (pet) engagement dialogue -- DialogueView rendering the
+        //  code-built pet_engage prompt in its OPTIONS state (WO-1030: 'Repair
+        //  structures' was sliced by the panel edge in landscape; the option band is
+        //  now reserved FIRST and the text well scrolls). Shot at every landscape
+        //  target (including the Seeker's real 2670x1200) in two flavors:
+        //    * the REAL 2-option def via PetTaskController.BuildEngageDef("ice-wolf")
+        //      (speaker "Frost", so the speakers-block portrait resolve is exercised);
+        //    * a synthetic 4-option node -- the many-option worst case that must
+        //      scroll with a visible affordance, never silently clip.
+        //  DialogueView lives in DeNelle.HUD, which DeNelle.Editor does NOT
+        //  reference, so the view is resolved by reflection (like PauseController).
+        //  Its OnEnable/OnDisable are invoked explicitly: edit mode never calls
+        //  MonoBehaviour lifecycle on AddComponent, and the Opened subscription is
+        //  how the view builds its panel when DialogueService.PlayDef fires.
+        // ---------------------------------------------------------------------
+        private static int CapturePetEngageDialogue()
+        {
+            return ForEachTarget("PetEngageDialogue", CapturePetEngageDialogueOnce);
+        }
+
+        private static int CapturePetEngageDialogueOnce(CaptureTarget target)
+        {
+            int saved = 0;
+            saved += CaptureDialogueDefOnce(target,
+                DeNelle.Village.PetTaskController.BuildEngageDef("ice-wolf"),
+                "PetEngageDialogue_2opt");
+            saved += CaptureDialogueDefOnce(target, BuildFourOptionProbeDef(),
+                "PetEngageDialogue_4opt");
+            return saved;
+        }
+
+        /// <summary>The many-option WORST CASE (WO-1030 acceptance: a 4-option node either
+        /// fits or scrolls with a visible affordance). Same speaker as the real prompt so
+        /// the two shots differ ONLY by option count.</summary>
+        private static DeNelle.Core.Dialogue.DialogueDef BuildFourOptionProbeDef()
+        {
+            var def = new DeNelle.Core.Dialogue.DialogueDef { Id = "uicap_dialogue_4opt", StartNode = "root" };
+            def.Nodes.Add(new DeNelle.Core.Dialogue.DialogueNode
+            {
+                Id = "root",
+                Lines = new List<DeNelle.Core.Dialogue.DialogueLine>
+                {
+                    new DeNelle.Core.Dialogue.DialogueLine
+                    {
+                        Speaker = "Frost",
+                        Text = "Keeper, the many-option worst case: every choice below must stay reachable.",
+                    },
+                },
+                Options = new List<DeNelle.Core.Dialogue.DialogueOption>
+                {
+                    new DeNelle.Core.Dialogue.DialogueOption { Text = "Gather resources", Goto = "" },
+                    new DeNelle.Core.Dialogue.DialogueOption { Text = "Repair structures", Goto = "" },
+                    new DeNelle.Core.Dialogue.DialogueOption { Text = "Stand watch at the gate", Goto = "" },
+                    new DeNelle.Core.Dialogue.DialogueOption { Text = "Rest by the Heart of Elarion", Goto = "" },
+                },
+            });
+            return def;
+        }
+
+        private static int CaptureDialogueDefOnce(CaptureTarget target,
+            DeNelle.Core.Dialogue.DialogueDef def, string shotName)
+        {
+            int saved = 0;
+            GameObject tempEventSystem = null;
+            GameObject viewGo = null;
+            GameObject uiGo = null;
+            Component view = null;
+            try
+            {
+                Type viewType = ResolveType("DeNelle.HUD.DialogueView");
+                if (viewType == null)
+                {
+                    Debug.LogWarning("[UICap-HL] DeNelle.HUD.DialogueView type not found -- " +
+                                     shotName + " skipped.");
+                    return 0;
+                }
+                if (UnityEngine.Object.FindAnyObjectByType<UnityEngine.EventSystems.EventSystem>() == null)
+                {
+                    tempEventSystem = new GameObject("~UICapEventSystem");
+                    tempEventSystem.AddComponent<UnityEngine.EventSystems.EventSystem>();
+                }
+
+                viewGo = new GameObject("~UICapDialogueView");
+                view = viewGo.AddComponent(viewType);
+                // Edit mode calls NO lifecycle on AddComponent -- wire the Opened subscription
+                // the way play mode would, so PlayDef below reaches this view.
+                InvokePrivate(view, "OnEnable");
+
+                if (!DeNelle.Core.Dialogue.DialogueService.PlayDef(def))
+                {
+                    Debug.LogWarning("[UICap-HL] DialogueService.PlayDef refused the def -- " +
+                                     shotName + " skipped.");
+                    return 0;
+                }
+
+                // The prompt is line -> OPTIONS; advance once so the CHOICE LIST (the WO-1030
+                // defect surface) is the state in the png.
+                var vm = DeNelle.Core.Dialogue.DialogueService.ActiveVm;
+                if (vm != null && !vm.ShowingOptions) vm.Advance();
+                if (vm == null || !vm.ShowingOptions)
+                {
+                    Debug.LogWarning("[UICap-HL] dialogue VM never reached ShowingOptions -- " +
+                                     shotName + " captures the non-options state instead.");
+                }
+
+                uiGo = GetPrivateGameObject(view, "_ui");
+                if (uiGo == null)
+                {
+                    Debug.LogWarning("[UICap-HL] DialogueView._ui was null -- panel did not build; " +
+                                     shotName + " skipped.");
+                    return saved;
+                }
+                if (RenderCanvasToPng(uiGo, OutDir + shotName + "_" + target.Tag + ".png",
+                                      target.W, target.H)) saved++;
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("[UICap-HL] " + shotName + " capture threw: " + e);
+            }
+            finally
+            {
+                // Teardown WITHOUT the view's runtime Destroy path (Destroy errors in edit
+                // mode): null the private _ui first so the view's close handler skips it, close
+                // the VM (unbinds handlers + releases the panel arbiter via NotifyClosed), then
+                // detach the static Opened subscription and DestroyImmediate the orphans.
+                try
+                {
+                    if (view != null) SetPrivateField(view, "_ui", null);
+                    DeNelle.Core.Dialogue.DialogueService.Stop();
+                    if (view != null) InvokePrivate(view, "OnDisable");
+                }
+                catch (Exception e)
+                {
+                    Debug.LogWarning("[UICap-HL] dialogue capture teardown: " + e.Message);
+                }
+                if (uiGo != null) UnityEngine.Object.DestroyImmediate(uiGo);
+                if (viewGo != null) UnityEngine.Object.DestroyImmediate(viewGo);
+                if (tempEventSystem != null) UnityEngine.Object.DestroyImmediate(tempEventSystem);
+            }
             return saved;
         }
 

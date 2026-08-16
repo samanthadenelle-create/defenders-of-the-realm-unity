@@ -44,6 +44,8 @@ namespace DeNelle.HUD
         private TMPro.TextMeshProUGUI _body;
         private RectTransform _box;       // the dialogue box (tap to advance)
         private RectTransform _optionsCol;
+        private RectTransform _bodyWell;    // WO-1030: scrollable TEXT well host (ends above the option band)
+        private RectTransform _optionsHost; // WO-1030: fixed-pixel OPTION band at the body zone bottom edge
         private GameObject _tapHint;
         private Button _close;            // the factory's shared Close — arbitrated per Repaint (F8-22)
         private string _lastActionArb;    // one FlowTrace arbitration line per state change, not per repaint
@@ -61,6 +63,13 @@ namespace DeNelle.HUD
         private bool _pixelBandsApplied;
         private float _maxBodyPx = 460f;   // recomputed from the original rect height on first paint
         private float _lastPanelH = -1f;
+
+        // -- WO-1030 option-band metrics (owner screenshot 2026-08-16: 'Repair structures'
+        // sliced by the panel edge). Options are NOT OPTIONAL -- an unreachable choice is a
+        // dead end, so ResizeToContent reserves the option band FIRST and the text scrolls.
+        private const float OptionRowGapPx = 8f;   // spacing between option rows (kit scroll column)
+        private const float OptionsPadPx = 6f;     // MakeScrollZone padding (top+bottom each)
+        private const float OptionsGapPx = 12f;    // gap between the text well and the option band
         private bool _reserveCloseBand;    // set per-Repaint: true only when the shared Close is visible
 
         // F8 2026-07-06 (t=328): the dialogue now routes through the modal arbiter
@@ -316,6 +325,7 @@ namespace DeNelle.HUD
             // has its own band between the body and the Close).
             wellRt.anchorMin = Vector2.zero; wellRt.anchorMax = Vector2.one;
             wellRt.offsetMin = Vector2.zero; wellRt.offsetMax = Vector2.zero;
+            _bodyWell = wellRt;   // WO-1030: ResizeToContent ends this well above the option band
             var scrollZone = ElarionUiKit.MakeScrollZone(wellGo.transform, spacing: 0f, padding: 8);
 
             _body = MakeLabel(scrollZone.content, "Body", Vector2.zero, Vector2.one,
@@ -367,20 +377,28 @@ namespace DeNelle.HUD
             // HUD/battle portraits keep theirs). The portrait reads plain on the plate.
             if (_portrait != null && _portrait.ring != null) _portrait.ring.gameObject.SetActive(false);
 
-            // Options column — INSIDE the kit BODY zone (the protected class: the factory
+            // Options band -- INSIDE the kit BODY zone (the protected class: the factory
             // reservation already ends this zone above the Close band, so option plates can
-            // never collide with the shared Close). Spans the body's lower half, growing UP
-            // (built on demand; the Continue chip hides while options show).
-            var col = new GameObject("Options");
-            col.transform.SetParent(bodyZone, false);
-            _optionsCol = col.AddComponent<RectTransform>();
-            _optionsCol.anchorMin = new Vector2(0.05f, 0f);
-            _optionsCol.anchorMax = new Vector2(0.95f, 0.60f);
-            _optionsCol.offsetMin = Vector2.zero; _optionsCol.offsetMax = Vector2.zero;
-            var vlg = col.AddComponent<VerticalLayoutGroup>();
-            vlg.spacing = 8; vlg.childControlHeight = true; vlg.childControlWidth = true;
-            vlg.childForceExpandHeight = false; vlg.childForceExpandWidth = true;
-            vlg.childAlignment = TextAnchor.LowerCenter;
+            // never collide with the shared Close).
+            // WO-1030 (owner screenshot 2026-08-16: 'Repair structures' sliced by the panel
+            // edge): the column is no longer a FRACTION overlay of the body zone's lower 0.60
+            // -- that both painted over the text and let the content-fit ceiling push the
+            // bottom rows off the panel. It is now a FIXED-PIXEL BAND hugging the body zone's
+            // bottom edge whose height ResizeToContent reserves FIRST (the TEXT scrolls;
+            // choices never do). The band hosts a kit scroll zone (kit 1.14) so a many-option
+            // node scrolls WITH the kit's visible scrollbar instead of silently clipping, and
+            // every row seats at ElarionUiKit.MinTouchPx -- a real touch target on a phone.
+            var optHost = new GameObject("Options", typeof(RectTransform));
+            optHost.transform.SetParent(bodyZone, false);
+            _optionsHost = (RectTransform)optHost.transform;
+            _optionsHost.anchorMin = new Vector2(0.05f, 0f);
+            _optionsHost.anchorMax = new Vector2(0.95f, 0f);
+            _optionsHost.offsetMin = Vector2.zero;
+            _optionsHost.offsetMax = Vector2.zero;   // height driven per-paint by ResizeToContent
+            var optZone = ElarionUiKit.MakeScrollZone(optHost.transform,
+                spacing: OptionRowGapPx, padding: (int)OptionsPadPx);
+            _optionsCol = optZone.content;
+            _optionsHost.gameObject.SetActive(false);   // shown only while a choice is up
 
             // F8-1/F8-5 instrumentation (kept per the RCA): log the REAL post-layout geometry
             // of the new kit zones — panel / body / footer / close / continue — once per build.
@@ -733,11 +751,20 @@ namespace DeNelle.HUD
             if (w < 1f) w = 380f;
             float textPx = _body.GetPreferredValues(_body.text ?? "", w, 0f).y;
             float textWellPx = textPx > 0f ? textPx + BodyWellPadPx : 0f;
+
+            // WO-1030: the option band's height is MEASURED from the built rows (kit scroll
+            // column: padding + fixed MinTouchPx rows + spacing), with the derived arithmetic
+            // as a floor so a not-yet-settled layout pass can never under-reserve the band.
+            int optCount = (_vm != null && _vm.ShowingOptions && _vm.OptionLabels != null)
+                ? _vm.OptionLabels.Count : 0;
             float optionsPx = 0f;
-            if (_vm != null && _vm.ShowingOptions && _optionsCol != null)
-                optionsPx = LayoutUtility.GetPreferredHeight(_optionsCol);
-            float contentPx = textWellPx + (optionsPx > 0f ? optionsPx + 12f : 0f);
-            float bodyPx = Mathf.Clamp(contentPx, MinBodyPx, _maxBodyPx);
+            if (optCount > 0 && _optionsCol != null)
+            {
+                float derived = optCount * ElarionUiKit.MinTouchPx
+                    + (optCount - 1) * OptionRowGapPx + 2f * OptionsPadPx;
+                optionsPx = Mathf.Max(LayoutUtility.GetPreferredHeight(_optionsCol), derived);
+            }
+            float contentPx = textWellPx + (optionsPx > 0f ? optionsPx + OptionsGapPx : 0f);
 
             // Bottom band: reserve the tall Close band ONLY when the Close is shown; a normal passage
             // collapses it to a thin margin so the box hugs the text (no empty void). Re-pin the body
@@ -745,6 +772,60 @@ namespace DeNelle.HUD
             float band = _reserveCloseBand ? BottomBandPx : BottomMarginPx;
             if (_bodyZone != null && Mathf.Abs(_bodyZone.offsetMin.y - band) > 0.5f)
                 _bodyZone.offsetMin = new Vector2(_bodyZone.offsetMin.x, band);
+
+            // WO-1030 DEFECT A: `Mathf.Clamp(contentPx, MinBodyPx, _maxBodyPx)` capped TEXT+OPTIONS
+            // as ONE sum, so on a short landscape canvas the ceiling sliced the BOTTOM OF THE
+            // OPTION LIST off the panel (the owner's screenshot: 'Repair structures' cut by the
+            // panel edge). Options are NOT optional:
+            //   * the option band's FULL measured height is reserved FIRST;
+            //   * the TEXT gets only the remainder and scrolls (it already has a scroll well);
+            //   * only when the options ALONE exceed the ceiling does the option band itself
+            //     scroll, with the kit scrollbar as the visible affordance -- never a silent clip.
+            // The ceiling for an options paint also reclaims the collapsed Close band: _maxBodyPx
+            // was derived against the tall BottomBandPx worst case, but options hide the Close
+            // (action arb), so the difference is real content room INSIDE the same HUD-safe max
+            // panel height (the clamp itself and the HUD-safe band are untouched -- WO-1030 4).
+            // The no-options path is byte-identical to the old clamp (reference-impl guard).
+            float bodyPx;
+            float optionsBandPx = 0f;
+            bool optionsScroll = false;
+            if (optionsPx > 0f)
+            {
+                float maxBodyNow = _maxBodyPx + (BottomBandPx - band);
+                float gap = textWellPx > 0f ? OptionsGapPx : 0f;
+                float optionsCapPx = maxBodyNow - (textWellPx > 0f ? MinBodyPx + gap : 0f);
+                // Even in a degenerate sliver the band keeps one full touch row visible.
+                optionsCapPx = Mathf.Max(optionsCapPx, ElarionUiKit.MinTouchPx + 2f * OptionsPadPx);
+                optionsScroll = optionsPx > optionsCapPx + 0.5f;
+                optionsBandPx = Mathf.Min(optionsPx, optionsCapPx);
+                float textBudgetPx = Mathf.Max(0f, maxBodyNow - optionsBandPx - gap);
+                bodyPx = Mathf.Max(MinBodyPx,
+                    Mathf.Min(textWellPx, textBudgetPx) + gap + optionsBandPx);
+            }
+            else
+            {
+                bodyPx = Mathf.Clamp(contentPx, MinBodyPx, _maxBodyPx);
+            }
+
+            // WO-1030 geometry: the reserve is a REAL RECT, not just arithmetic. Pin the option
+            // band to its height at the body zone's bottom edge and end the text well just above
+            // it (the old fraction overlay let option plates paint over the text and off the
+            // panel). No options -> the band deactivates and the well takes the whole zone back.
+            if (_optionsHost != null)
+            {
+                bool showBand = optionsBandPx > 0f;
+                if (_optionsHost.gameObject.activeSelf != showBand)
+                    _optionsHost.gameObject.SetActive(showBand);
+                if (showBand && Mathf.Abs(_optionsHost.offsetMax.y - optionsBandPx) > 0.5f)
+                    _optionsHost.offsetMax = new Vector2(_optionsHost.offsetMax.x, optionsBandPx);
+            }
+            if (_bodyWell != null)
+            {
+                float wellBottom = optionsBandPx > 0f ? optionsBandPx + OptionsGapPx : 0f;
+                if (Mathf.Abs(_bodyWell.offsetMin.y - wellBottom) > 0.5f)
+                    _bodyWell.offsetMin = new Vector2(_bodyWell.offsetMin.x, wellBottom);
+            }
+
             float panelH = TopPad + HeaderPx + Gap + bodyPx + band;
 
             if (Mathf.Abs(panelH - _lastPanelH) > 0.5f)
@@ -753,10 +834,63 @@ namespace DeNelle.HUD
                 _box.anchoredPosition = new Vector2(_box.anchoredPosition.x, 0f);
                 _lastPanelH = panelH;
                 DeNelle.Core.Diagnostics.FlowTrace.Step("Dialogue", string.Format(
-                    "resize contentH={0:F0} (text={1:F0} well={2:F0} opts={3:F0}) -> panelH={4:F0} band={5:F0} (min {6:F0}/max {7:F0})",
-                    contentPx, textPx, textWellPx, optionsPx, panelH, band,
+                    "resize contentH={0:F0} (text={1:F0} well={2:F0} opts={3:F0} optsBand={4:F0} optsScroll={5}) -> panelH={6:F0} band={7:F0} (min {8:F0}/max {9:F0})",
+                    contentPx, textPx, textWellPx, optionsPx, optionsBandPx, optionsScroll, panelH, band,
                     TopPad + HeaderPx + Gap + MinBodyPx + BottomMarginPx,
                     TopPad + HeaderPx + Gap + _maxBodyPx + BottomBandPx));
+            }
+
+            // WO-1030 measured-outcome verify (INSTRUMENTATION_STANDARD 1.4b): assert what the
+            // player actually gets, from resolved post-settle rects -- never the authored values.
+            if (optCount > 0) VerifyOptionsFit(optionsScroll, optionsBandPx);
+        }
+
+        // -- WO-1030 measured-outcome verify (INSTRUMENTATION_STANDARD 1.4b) -----------------
+        // Uses the SHARED DeNelle.Core.Diagnostics.UiSurfaceProbe rect arithmetic (never a
+        // re-derived copy) on rects read AFTER ForceUpdateCanvases: the option band must sit
+        // inside the panel AND the viewport, and the LAST option row must be reachable (inside
+        // the band when not scrolling; a scrolling band declares itself instead). A clipped
+        // option list fires FlowTrace.Fail -- the falsifiable line the WO-1030 screenshot had
+        // to substitute for. Unmeasurable environments (batchmode) emit a NAMED skip, never a
+        // silent pass.
+        private void VerifyOptionsFit(bool optionsScroll, float optionsBandPx)
+        {
+            if (_vm == null || !_vm.ShowingOptions || _optionsHost == null || _box == null || _ui == null) return;
+            if (DeNelle.Core.Diagnostics.UiSurfaceProbe.IsUnmeasurableEnvironment(out string skip))
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("Dialogue",
+                    "options fit verify SKIPPED -- " + skip + ". Named skip, not a pass.");
+                return;
+            }
+            Canvas.ForceUpdateCanvases();
+            var rootCanvas = _ui.GetComponent<Canvas>();
+            Rect panel = DeNelle.Core.Diagnostics.UiSurfaceProbe.ScreenRectOf(_box, rootCanvas);
+            Rect bandR = DeNelle.Core.Diagnostics.UiSurfaceProbe.ScreenRectOf(_optionsHost, rootCanvas);
+            int rows = _optionsCol != null ? _optionsCol.childCount : 0;
+            var lastRt = rows > 0 ? _optionsCol.GetChild(rows - 1) as RectTransform : null;
+            Rect lastR = lastRt != null
+                ? DeNelle.Core.Diagnostics.UiSurfaceProbe.ScreenRectOf(lastRt, rootCanvas)
+                : new Rect(0f, 0f, 0f, 0f);
+            const float eps = 1.5f;   // sub-2px rasterization slack, not a licence for a clipped row
+            bool bandInPanel = bandR.yMin >= panel.yMin - eps && bandR.yMax <= panel.yMax + eps;
+            bool bandOnScreen = bandR.yMin >= -eps && bandR.yMax <= Screen.height + eps;
+            bool lastReachable = optionsScroll
+                || (lastRt != null && lastR.yMin >= bandR.yMin - eps && lastR.yMax <= bandR.yMax + eps);
+            string measured = string.Format(
+                "options fit MEASURED: rows={0} bandPx={1:F0} band y {2:F0}..{3:F0} panel y {4:F0}..{5:F0} " +
+                "lastRow y {6:F0}..{7:F0} (screen {8}x{9}, scroll={10})",
+                rows, optionsBandPx, bandR.yMin, bandR.yMax, panel.yMin, panel.yMax,
+                lastR.yMin, lastR.yMax, Screen.width, Screen.height, optionsScroll);
+            if (bandInPanel && bandOnScreen && lastReachable)
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Dialogue", measured);
+            }
+            else
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Fail("Dialogue",
+                    "OPTIONS CLIPPED -- " + measured + " bandInPanel=" + bandInPanel +
+                    " bandOnScreen=" + bandOnScreen + " lastRowReachable=" + lastReachable +
+                    " -- an unreachable choice is a dead end (WO-1030).");
             }
         }
 
@@ -776,8 +910,13 @@ namespace DeNelle.HUD
         private float CanvasLocalHeight()
         {
             var scaler = _ui != null ? _ui.GetComponent<CanvasScaler>() : null;
-            float screenH = Mathf.Max(1f, (float)Screen.height);
-            float screenW = Mathf.Max(1f, (float)Screen.width);
+            // WO-1030: read the kit's injectable surface, not Screen.* directly -- identical on
+            // device and in play mode (the surface defaults to Screen.*), but it lets the UI
+            // capture harness build THIS panel's clamp geometry at the target resolution
+            // (2670x1200 etc.) instead of the editor's screen. A direct Screen read here is
+            // exactly the harness's named "resolution in the filename is a LABEL" residual.
+            float screenH = Mathf.Max(1f, (float)ElarionUiKit.SurfaceHeight);
+            float screenW = Mathf.Max(1f, (float)ElarionUiKit.SurfaceWidth);
             if (scaler != null && scaler.uiScaleMode == CanvasScaler.ScaleMode.ScaleWithScreenSize)
             {
                 float refW = Mathf.Max(1f, scaler.referenceResolution.x);
@@ -801,14 +940,21 @@ namespace DeNelle.HUD
                 int idx = i;
                 var go = new GameObject("Opt" + i, typeof(Image), typeof(Button), typeof(LayoutElement));
                 go.transform.SetParent(_optionsCol, false);
-                go.GetComponent<LayoutElement>().minHeight = 48;
+                // WO-1030 touch floor: rows seat at the kit MinTouchPx (was 48 -- under the
+                // mobile touch-target standard). The kit scroll column controls WIDTH but not
+                // HEIGHT (childControlHeight off, kit 1.14), so the row carries its own explicit
+                // rect height; the LayoutElement keeps the same floor for any height-controlling
+                // parent this row might ever be re-hosted under.
+                var ort = (RectTransform)go.transform;
+                ort.sizeDelta = new Vector2(0f, ElarionUiKit.MinTouchPx);
+                go.GetComponent<LayoutElement>().minHeight = ElarionUiKit.MinTouchPx;
                 var b = ElarionUi.PanelStone;
                 go.GetComponent<Image>().color = new Color(b.r, b.g, b.b, 0.96f);
                 go.GetComponent<Button>().onClick.AddListener(() => _vm?.Choose(idx));
 
                 // Mobile-readable option text (was 15 — sub-legible; F8 2026-07-08). The row's
-                // 48px minHeight seats a 26px line; FitBlock wraps + the guard's readable floor
-                // keeps a long option legible rather than shrinking it into the plate.
+                // MinTouchPx height seats a 26px line with room; FitBlock wraps + the guard's
+                // readable floor keeps a long option legible rather than shrinking it into the plate.
                 var lbl = MakeLabel(go.transform, "L", new Vector2(0.04f, 0f), new Vector2(0.96f, 1f),
                     26, ElarionUi.Parchment, TMPro.FontStyles.Normal, TMPro.TextAlignmentOptions.Left);
                 lbl.text = labels[i];
