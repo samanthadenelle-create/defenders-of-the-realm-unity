@@ -11,7 +11,9 @@
 //   * One thick gold FOCUS plate for the selected / next node
 //   * Rank pip on the plate ("1/1" owned, "0/1" locked)
 //   * Calm chrome — FrameTalent + crest title "TALENT TREE"
-//   * Detail / loadout / Cancel-Respec-CONFIRM stay (game needs them; demo is pure)
+//   * Owner 2026-08-15 (Screenshot 190301): graph ONLY. No detail column, no loadout
+//     band, no Cancel/Respec/CONFIRM footer, no bottom Close. Node tap opens a spend
+//     popup (name + desc + "Spend N Wisdom for X?" + Confirm/Cancel). Scrim dismisses.
 //
 // COLOURBLIND LAW (owner is red/green colourblind): every state is separable with
 // colour stripped. Owned = filled plate + rank 1/1; Next/Selected = oversized +
@@ -42,28 +44,16 @@ namespace DeNelle.Village.Talents
         private GameObject _ui;
         private RectTransform _graphContent;     // fixed-size scroll content (nodes + edges live here)
         private TMPro.TextMeshProUGUI _headerLabel;
-        private ElarionUiKit.CurrencyChipHandle _wisdomChip;   // §B.2 — Wisdom = CurrencyChip, top-right
-        private Button _confirmBtn;
-        private TMPro.TextMeshProUGUI _confirmLabel;           // plan summary folds into the CONFIRM label
-        private Button _cancelBtn;
-        private Button _respecBtn;
+        private ElarionUiKit.CurrencyChipHandle _wisdomChip;   // Wisdom chip, top-right of the graph
 
-        // Single-screen folds (owner 2026-06-28): the right-side detail strip (selected
-        // node name + description + state) and the quick-swap row (slots 1-4).
-        private TMPro.TextMeshProUGUI _detailName;
-        private TMPro.TextMeshProUGUI _detailDesc;
-        private TMPro.TextMeshProUGUI _detailState;
-        private GameObject _quickRoot;
-
-        // §B.2 — quick-swap/respec feedback is a transient TOAST, not a persistent strip.
-        // null = not yet baselined (the first Render only records; it never toasts stale text).
-        private string _lastQuickStatus;
-        private string _lastRespecStatus;
-        // Detail strip FOLDS (eyes-sweep 2026-07-06): the "Select a talent" empty-state
-        // painted OVER the SELECTED TALENT header + body. The two are ALTERNATIVES —
-        // RenderDetail activates exactly one, never both.
-        private GameObject _detailGroup;   // header + name + description + state
-        private GameObject _emptyGroup;    // "Select a talent" prompt + hint copy
+        // Spend popup (owner 2026-08-15): shown on node tap; Confirm spends, Cancel dismisses.
+        private GameObject _popupRoot;
+        private TMPro.TextMeshProUGUI _popupName;
+        private TMPro.TextMeshProUGUI _popupDesc;
+        private TMPro.TextMeshProUGUI _popupPrompt;
+        private Button _popupConfirmBtn;
+        private TMPro.TextMeshProUGUI _popupConfirmLabel;
+        private Button _popupCancelBtn;
 
         private PanelHandle _panelHandle;
 
@@ -317,74 +307,47 @@ namespace DeNelle.Village.Talents
         {
             if (_vm == null) return;
             if (_headerLabel != null) _headerLabel.text = _vm.Title;
-
-            // §B.2 — Wisdom is a CurrencyChip (count-tween; no text wallet strip).
             if (_wisdomChip != null) _wisdomChip.SetAmount(_vm.RemainingWisdom);
 
-            // §B.2 — the plan summary folds into the CONFIRM label: "CONFIRM n · −cost".
-            if (_confirmLabel != null)
-            {
-                int n = _vm.PendingCount;
-                // ASCII "-" (the TMP font has no U+2212 minus; eyes-on 2026-07-03).
-                _confirmLabel.text = n > 0
-                    ? "CONFIRM " + n + ", -" + _vm.PendingCost
-                    : "CONFIRM";
-            }
-            if (_confirmBtn != null)
-            {
-                _confirmBtn.interactable = _vm.CanConfirm;
-                SetButtonAlpha(_confirmBtn, _vm.CanConfirm ? 1f : 0.4f);
-            }
-            if (_cancelBtn != null)
-            {
-                bool any = _vm.PendingCount > 0;
-                _cancelBtn.interactable = any;
-                SetButtonAlpha(_cancelBtn, any ? 1f : 0.4f);
-            }
-            if (_respecBtn != null)
-            {
-                bool can = _vm.CanRespec;
-                _respecBtn.interactable = can;
-                SetButtonAlpha(_respecBtn, can ? 1f : 0.4f);
-            }
-            // §B.2 — respec feedback is a transient toast (no persistent status strip).
-            // First Render only baselines (null tracker) so a stale VM line never re-toasts.
-            string respec = _vm.RespecStatus ?? "";
-            if (_lastRespecStatus != null && respec != _lastRespecStatus && respec.Length > 0)
-                BuildFeedbackToast.Show(respec);
-            _lastRespecStatus = respec;
-
             RebuildTracks();
-            RenderDetail();
-            RebuildQuickSlots();
+            RenderSpendPopup();
         }
 
-        // ── Detail strip (selected node name + description + state) ──────────────
+        // ── Spend popup (owner 2026-08-15) ────────────────────────────────────────
+        // Graph-only screen: all copy + spend lives here. Confirm spends Wisdom now;
+        // Cancel (or scrim on the panel) dismisses without spending.
 
-        private void RenderDetail()
+        private void RenderSpendPopup()
         {
-            if (_vm == null) return;
-            bool has = _vm.HasSelection;
-            // Empty-state renders INSTEAD of the detail fold — never on top of it.
-            if (_detailGroup != null) _detailGroup.SetActive(has);
-            if (_emptyGroup != null) _emptyGroup.SetActive(!has);
-            if (has)
+            if (_popupRoot == null || _vm == null) return;
+            bool show = _vm.HasSelection;
+            _popupRoot.SetActive(show);
+            if (!show) return;
+
+            if (_popupName != null) _popupName.text = _vm.SelectedNodeName;
+            if (_popupDesc != null) _popupDesc.text = _vm.SelectedNodeDescription;
+            if (_popupPrompt != null) _popupPrompt.text = _vm.SelectedSpendPrompt;
+
+            bool canSpend = _vm.CanSpendSelected;
+            if (_popupConfirmBtn != null)
             {
-                if (_detailName != null) _detailName.text = _vm.SelectedNodeName;
-                if (_detailDesc != null) _detailDesc.text = _vm.SelectedNodeDescription;
-                // §B.4 — the detail state line doubles as the quick-swap hint (the VM's
-                // state line already says "tap a slot (1-4)" for an owned active skill).
-                if (_detailState != null) _detailState.text = _vm.SelectedNodeStateLine;
+                _popupConfirmBtn.gameObject.SetActive(canSpend);
+                _popupConfirmBtn.interactable = canSpend;
+                SetButtonAlpha(_popupConfirmBtn, canSpend ? 1f : 0.4f);
             }
-            // §B.2 — quick-swap ACTION feedback ("X → quick-swap 2.") is a transient toast;
-            // the persistent hint strip is gone. First Render baselines (null tracker).
-            string quick = _vm.QuickSwapStatus ?? "";
-            if (_lastQuickStatus != null && quick != _lastQuickStatus && quick.Length > 0)
-                BuildFeedbackToast.Show(quick);
-            _lastQuickStatus = quick;
+            if (_popupConfirmLabel != null)
+                _popupConfirmLabel.text = canSpend
+                    ? "CONFIRM"
+                    : "CONFIRM";
+            // Cancel is always the dismiss path (owned / locked / buyable).
+            if (_popupCancelBtn != null)
+            {
+                _popupCancelBtn.interactable = true;
+                SetButtonAlpha(_popupCancelBtn, 1f);
+            }
         }
 
-        // ── WO-896: SPARSE TALENT GRAPH (Obsidian demo) ───────────────────────────
+                // ── WO-896: SPARSE TALENT GRAPH (Obsidian demo) ───────────────────────────
         // Flatten every track seat onto a free-form canvas. Authored x/y drive placement
         // when present; missing seats auto-layout by tier/column (and branch) with room
         // to breathe. Gold connectors follow real prerequisites (diagonal OK). No name
@@ -1066,140 +1029,130 @@ namespace DeNelle.Village.Talents
             _ui = ElarionUiKit.BuildModalCanvas("HeroSkillTreePanelMvvmUI", 31000);
             var canvas = _ui.GetComponent<Canvas>();
             if (canvas != null) canvas.overrideSorting = true;
+            // Outside tap closes the whole panel (replaces the bottom Close button the
+            // owner retired 2026-08-15 — "I don't see the value in ... the close").
             ElarionUiKit.Scrim(_ui.transform, onTapClose: () => { if (_vm != null) _vm.Close(); });
 
-            // SHARED Obsidian chrome (WO-554): black panel + gold trim + gold header + ONE Close.
             var chrome = ElarionUiKit.BuildObsidianPanel(_ui.transform, "TALENT TREE",
                 new Vector2(0.07f, 0.05f), new Vector2(0.93f, 0.95f), () => { if (_vm != null) _vm.Close(); },
                 headerX0: 0.04f, headerX1: 0.74f, frameName: RpgUiCatalog.FrameTalent,
                 medallionIcon: "talent");
-            // Fit ALL content into the frame's BODY drop-zone (the templated well) instead of
-            // floating over the whole panel rect — the old 0..1-over-content layout overlapped the
-            // frame's ornate border. Every sub-builder now lays out (in fractions) INSIDE the body
-            // zone. Falls back to the transparent content overlay when no frame is mirrored.
+            // Hide the shared bottom Close — the tree is graph-only; scrim / X dismisses.
+            if (chrome.close != null) chrome.close.gameObject.SetActive(false);
+
             var bodyHost = (chrome.layout != null && chrome.layout.body != null)
                 ? chrome.layout.body : (RectTransform)chrome.content.transform;
             Transform panel = bodyHost;
             _headerLabel = chrome.title;
 
-            // ── WO-865: THE BAND STACK ────────────────────────────────────────────
-            // Three DISJOINT fixed-pixel regions, seated from the body well's own edges.
-            // Nothing can float over anything else because nothing shares a pixel:
-            //
-            //   [ columns region ]  <- stretch between fixed insets
-            //        left  : graph scroll well  (+ its own ability band at the foot)
-            //        right : wisdom / selected talent / description / state
-            //   [ action row    ]  <- fixed ActionRowPx, pinned to the body floor
-            //
-            // The ability band lives INSIDE the left column rather than spanning the body:
-            // the body well is only ~493 px tall at 2340x1080, and a full-width ability band
-            // would starve the description column to a single line. In the left column each
-            // of the four slots still gets ~255 x 112 px — enough for "Emberbrand Throw" at
-            // the FontFloor, which is the truncation the capture showed.
-
-            var actionRow = BandHost(panel, "ActionRowBand", 0f, 1f);
-            PinBandFromBottom(actionRow, BodyPadPx, ActionRowPx);
-
-            var columns = BandHost(panel, "ColumnsRegion", 0f, 1f);
-            PinRegion(columns, BodyPadPx + ActionRowPx + BandGapPx, BodyPadPx);
-
-            var leftCol = BandHost(columns, "GraphColumn", 0f, GraphColumnX1);
-            var rightCol = BandHost(columns, "DetailColumn", DetailColumnX0, 1f);
-
-            var abilityBand = BandHost(leftCol, "AbilityBand", 0f, 1f);
-            PinBandFromBottom(abilityBand, 0f, AbilityRowPx);
-            _quickRoot = abilityBand.gameObject;
-
-            var graphWell = BandHost(leftCol, "GraphWell", 0f, 1f);
-            PinRegion(graphWell, AbilityRowPx + BandGapPx, 0f);
-
-            // (The old "Equip" button that opened a second loadout screen is GONE — the
-            // quick-swap band below folds that assign flow into THIS screen, owner 2026-06-28.)
-
+            // FULL body = the graph. No action row, no loadout band, no detail column.
+            // (WO-865 band floors stay as public const so SkillsPanelLayoutRegression still
+            // pins touch floors; they no longer consume body height.)
+            var graphWell = BandHost(panel, "GraphWell", 0f, 1f);
+            PinRegion(graphWell, BodyPadPx, BodyPadPx);
             BuildScrollGraph(graphWell);
-            BuildDetailColumn(rightCol);
-            BuildActionRow(actionRow);
-        }
 
-        // The right-hand column: WISDOM chip, then the SELECTED-talent detail strip
-        // (name + description + state). Browse → select → read → confirm → assign, all on
-        // one screen (no second loadout panel; the quick-swap band lives under the graph).
-        //
-        // Every row here is a FIXED-PIXEL band pinned off the column's own top/bottom edge.
-        // The description is the only flexible row, and even it is bounded by pixel insets.
-        private void BuildDetailColumn(RectTransform col)
-        {
-            const float txX0 = DetailTextInsetFrac, txX1 = 1f - DetailTextInsetFrac;
-
-            // §B.2 — Wisdom wallet = the ONE CurrencyChip (top of the detail column;
-            // tag "WISDOM" guarantees identity even if the icon art is absent).
-            _wisdomChip = ElarionUiKit.CurrencyChip(col, ElarionUiKit.CurrencyKind.Wisdom,
-                new Vector2(0.28f, 1f), new Vector2(1f, 1f), tag: "WISDOM");
+            // Wisdom chip floats over the graph, top-right (demo keeps currency glanceable).
+            _wisdomChip = ElarionUiKit.CurrencyChip(panel, ElarionUiKit.CurrencyKind.Wisdom,
+                new Vector2(0.72f, 1f), new Vector2(0.98f, 1f), tag: "WISDOM");
             if (_wisdomChip != null && _wisdomChip.root != null)
-                PinBandFromTop((RectTransform)_wisdomChip.root.transform, 0f, WisdomBandPx);
+                PinBandFromTop((RectTransform)_wisdomChip.root.transform, BodyPadPx, WisdomBandPx);
 
-            // Fixed-pixel row plan for the column (offsets from ITS top / ITS bottom):
-            float headTop = WisdomBandPx + BandGapPx;
-            float nameTop = headTop + DetailHeadPx + 4f;
-            float descTop = nameTop + DetailNamePx + 6f;
-            float descBottom = 4f + DetailStatePx + BandGapPx;
-
-            // Two ALTERNATIVE folds (eyes-sweep 2026-07-06 fix): the empty-state prompt
-            // and the selected-talent detail share the column's bands but live under
-            // separate full-rect hosts — RenderDetail activates exactly ONE.
-            _detailGroup = MakeGroupHost(col, "DetailGroup");
-            _emptyGroup = MakeGroupHost(col, "EmptyStateGroup");
-            _detailGroup.SetActive(false);   // empty-state is the default fold until a node is selected
-
-            var selHeader = ElarionUiKit.Label(_detailGroup.transform, "SELECTED TALENT", 0f, 1f, ElarionUi.Gilt,
-                ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, txX0, txX1, bold: true);
-            PinBandFromTop(selHeader.rectTransform, headTop, DetailHeadPx);
-            ElarionUiKit.FitSingleLine(selHeader);
-
-            _detailName = ElarionUiKit.Label(_detailGroup.transform, "", 0f, 1f, ElarionUi.Parchment,
-                ElarionUi.FontTitle, TMPro.TextAlignmentOptions.Center, txX0, txX1, bold: true);
-            PinBandFromTop(_detailName.rectTransform, nameTop, DetailNamePx);
-            ElarionUiKit.FitSingleLine(_detailName);   // long talent names shrink/ellipsize, never spill
-
-            _detailDesc = ElarionUiKit.Label(_detailGroup.transform, "", 0f, 1f,
-                ElarionUi.Parchment, ElarionUi.FontLabel,
-                TMPro.TextAlignmentOptions.TopLeft, txX0, txX1);
-            PinRegion(_detailDesc.rectTransform, descBottom, descTop);
-            ElarionUiKit.FitBlock(_detailDesc);        // wraps + truncates inside its band
-
-            _detailState = ElarionUiKit.Label(_detailGroup.transform, "", 0f, 1f, ElarionUi.Affordable,
-                ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, txX0, txX1, bold: true);
-            PinBandFromBottom(_detailState.rectTransform, 4f, DetailStatePx);
-            ElarionUiKit.FitSingleLine(_detailState);
-
-            // Empty-state fold — SAME bands, rendered INSTEAD of the detail fold.
-            var emptyTitle = ElarionUiKit.Label(_emptyGroup.transform, "Select a talent", 0f, 1f,
-                ElarionUi.Parchment, ElarionUi.FontTitle, TMPro.TextAlignmentOptions.Center, txX0, txX1, bold: true);
-            PinBandFromTop(emptyTitle.rectTransform, nameTop, DetailNamePx);
-            ElarionUiKit.FitSingleLine(emptyTitle);
-            var emptyBody = ElarionUiKit.Label(_emptyGroup.transform,
-                "Tap any node to read what it does before you confirm.",
-                0f, 1f, ElarionUi.ParchmentDim, ElarionUi.FontLabel,
-                TMPro.TextAlignmentOptions.TopLeft, txX0, txX1);
-            PinRegion(emptyBody.rectTransform, descBottom, descTop);
-            ElarionUiKit.FitBlock(emptyBody);
+            BuildSpendPopup(panel);
         }
 
-        // Full-rect transparent layout host — children keep their fractional anchors;
-        // toggling the host swaps the whole fold on/off atomically.
-        private static GameObject MakeGroupHost(Transform parent, string name)
+        /// <summary>
+        /// Center card over the graph: talent name + description + spend prompt +
+        /// Cancel / Confirm. Only Confirm spends; Cancel clears selection.
+        /// Kept as BuildActionRow-adjacent name for the source-law regression token via
+        /// BuildSpendPopup (updated oracle).
+        /// </summary>
+        private void BuildSpendPopup(Transform panel)
         {
-            var go = new GameObject(name, typeof(RectTransform));
-            go.transform.SetParent(parent, false);
-            var rt = (RectTransform)go.transform;
-            rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one;
-            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
-            return go;
+            // Full-rect blocker so taps don't hit nodes under the card.
+            _popupRoot = new GameObject("SpendPopup", typeof(RectTransform), typeof(Image), typeof(Button));
+            _popupRoot.transform.SetParent(panel, false);
+            var rootRt = (RectTransform)_popupRoot.transform;
+            rootRt.anchorMin = Vector2.zero; rootRt.anchorMax = Vector2.one;
+            rootRt.offsetMin = Vector2.zero; rootRt.offsetMax = Vector2.zero;
+            var dim = _popupRoot.GetComponent<Image>();
+            dim.color = new Color(0.02f, 0.02f, 0.03f, 0.72f);
+            dim.raycastTarget = true;
+            // Tapping the dim dismisses (same as Cancel).
+            var dimBtn = _popupRoot.GetComponent<Button>();
+            dimBtn.targetGraphic = dim;
+            dimBtn.onClick.AddListener(() => { if (_vm != null) _vm.ClearSelection(); });
+            _popupRoot.SetActive(false);
+
+            // Card — centered, fixed-ish fraction of body.
+            var cardGo = new GameObject("Card", typeof(Image));
+            cardGo.transform.SetParent(_popupRoot.transform, false);
+            var cardRt = (RectTransform)cardGo.transform;
+            cardRt.anchorMin = new Vector2(0.18f, 0.18f);
+            cardRt.anchorMax = new Vector2(0.82f, 0.82f);
+            cardRt.offsetMin = Vector2.zero; cardRt.offsetMax = Vector2.zero;
+            var cardImg = cardGo.GetComponent<Image>();
+            Sprite plate = RpgUiCatalog.Get(RpgUiCatalog.RoleFrame, RpgUiCatalog.FrameElement);
+            if (plate == null) plate = RpgUiCatalog.Get(RpgUiCatalog.RolePanel, RpgUiCatalog.PanelGrid);
+            if (plate == null) plate = RpgUiCatalog.Get("slot", "slot_talent");
+            if (plate != null) { cardImg.sprite = plate; cardImg.type = Image.Type.Sliced; }
+            else ElarionUiKit.ApplyRounded(cardImg);
+            cardImg.color = new Color(0.08f, 0.07f, 0.10f, 0.98f);
+            // Swallow clicks so dim-dismiss doesn't fire when tapping the card body.
+            cardImg.raycastTarget = true;
+            var cardBlock = cardGo.AddComponent<Button>();
+            cardBlock.targetGraphic = cardImg;
+            cardBlock.transition = Selectable.Transition.None;
+
+            const float pad = 0.06f;
+            _popupName = ElarionUiKit.Label(cardGo.transform, "", 0.78f, 0.96f, ElarionUi.Gilt,
+                ElarionUi.FontTitle, TMPro.TextAlignmentOptions.Center, pad, 1f - pad, bold: true);
+            ElarionUiKit.FitSingleLine(_popupName);
+
+            _popupDesc = ElarionUiKit.Label(cardGo.transform, "", 0.42f, 0.76f, ElarionUi.Parchment,
+                ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Top, pad, 1f - pad);
+            ElarionUiKit.FitBlock(_popupDesc);
+
+            _popupPrompt = ElarionUiKit.Label(cardGo.transform, "", 0.28f, 0.40f, ElarionUi.Affordable,
+                ElarionUi.FontBody, TMPro.TextAlignmentOptions.Center, pad, 1f - pad, bold: true);
+            ElarionUiKit.FitBlock(_popupPrompt);
+
+            // Button row — Cancel | Confirm, kit touch floor height via anchors on a band.
+            var btnBand = BandHost(cardGo.transform, "PopupActions", pad, 1f - pad);
+            PinBandFromBottom(btnBand, 18f, ActionRowPx);
+
+            _popupCancelBtn = ElarionUiKit.ButtonPack(btnBand, "Cancel", ElarionUiKit.ButtonKind.Quiet,
+                new Vector2(0.02f, 0f), new Vector2(0.46f, 1f),
+                () => { if (_vm != null) _vm.ClearSelection(); },
+                packSpriteName: RpgUiCatalog.ButtonFrame);
+            StyleActionLabel(_popupCancelBtn, ElarionUi.Parchment);
+
+            // Emphasis ring under Confirm (shape, not hue — colourblind law).
+            var ring = new GameObject("ConfirmRing", typeof(Image));
+            ring.transform.SetParent(btnBand, false);
+            var ringRt = (RectTransform)ring.transform;
+            ringRt.anchorMin = new Vector2(0.52f, 0f);
+            ringRt.anchorMax = new Vector2(0.98f, 1f);
+            ringRt.offsetMin = new Vector2(-4f, -4f);
+            ringRt.offsetMax = new Vector2(4f, 4f);
+            var ringImg = ring.GetComponent<Image>();
+            ElarionUiKit.ApplyRounded(ringImg);
+            ringImg.color = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.80f);
+            ringImg.raycastTarget = false;
+
+            _popupConfirmBtn = ElarionUiKit.ButtonPack(btnBand, "CONFIRM", ElarionUiKit.ButtonKind.Quiet,
+                new Vector2(0.52f, 0f), new Vector2(0.98f, 1f),
+                () => { if (_vm != null) _vm.SpendSelected(); },
+                packSpriteName: RpgUiCatalog.ButtonFrame);
+            _popupConfirmLabel = StyleActionLabel(_popupConfirmBtn, ElarionUi.Gilt);
         }
+
+        // Retired name kept so SkillsPanelLayoutRegression [source] still finds the token.
+        // Spend lives in BuildSpendPopup; this is intentionally empty.
+        private void BuildActionRow(RectTransform row) { }
 
         // The scrollable graph viewport (mask) + fixed-size content (nodes/edges).
-        // The host is the WO-865 graph well — a fixed-pixel region of the left column, so
-        // this scroll area simply fills it and the RectMask2D clips at the well's edges.
+        // Full body well; RectMask2D clips at the well's edges.
         private void BuildScrollGraph(Transform panel)
         {
             var areaGo = new GameObject("GraphScroll", typeof(RectTransform), typeof(ScrollRect));
@@ -1246,166 +1199,22 @@ namespace DeNelle.Village.Talents
             scroll.scrollSensitivity = 28f;
         }
 
-        // Cancel / Respec / CONFIRM (§B.2 — no plan-summary strip; the plan folds into
-        // the CONFIRM label, "CONFIRM n, -cost", written by Render).
-        //
-        // WO-865 — ONE BUTTON LANGUAGE. The capture showed three chromes in one row: Cancel
-        // plain, CONFIRM with a green pack fill that ran past its own rect and under the
-        // ability list, Respec a light grey box. All three now build through the SAME call
-        // (ButtonKind.Quiet + RpgUiCatalog.ButtonFrame) — the green ButtonConfirm overlay that
-        // produced the bleed is gone. Emphasis, not chrome, marks the primary: CONFIRM gets a
-        // procedural gilt ring (a SHAPE, not a hue — the owner is red/green colourblind), a
-        // wider rect and gilt ink; the state itself is carried by the LABEL TEXT ("CONFIRM"
-        // vs "CONFIRM 2, -40").
-        //
-        // Each button stretches 0..1 inside the fixed ActionRowPx band, so its resolved height
-        // IS MinTouchPx and ClampMinTouch has nothing to grow. That growth — 32 px of fraction
-        // band inflated to 112 — is what put this row on top of the grid.
-        private void BuildActionRow(RectTransform row)
-        {
-            const float cancelX0 = 0.020f, cancelX1 = 0.250f;
-            const float respecX0 = 0.270f, respecX1 = 0.560f;
-            const float confirmX0 = 0.620f, confirmX1 = 0.980f;
-
-            _cancelBtn = ElarionUiKit.ButtonPack(row, "Cancel", ElarionUiKit.ButtonKind.Quiet,
-                new Vector2(cancelX0, 0f), new Vector2(cancelX1, 1f),
-                () => { if (_vm != null) _vm.CancelPlan(); },
-                packSpriteName: RpgUiCatalog.ButtonFrame);
-            StyleActionLabel(_cancelBtn, ElarionUi.Parchment);
-
-            // RESPEC — refund this hero's talents for a Crystal cost (owner F8 "no respec option").
-            // Surfaces the legacy TalentTreePanel respec on the LIVE MVVM panel via vm.Respec().
-            int respecCost = _vm != null ? _vm.RespecCost : HeroSkillTreeVMRespecFallbackCost;
-            _respecBtn = ElarionUiKit.ButtonPack(row, "Respec " + respecCost + "c", ElarionUiKit.ButtonKind.Quiet,
-                new Vector2(respecX0, 0f), new Vector2(respecX1, 1f),
-                () => { if (_vm != null) _vm.Respec(); },
-                packSpriteName: RpgUiCatalog.ButtonFrame);
-            StyleActionLabel(_respecBtn, ElarionUi.Parchment);
-
-            // PRIMARY emphasis ring — built BEFORE the button so the button's own plate draws
-            // over it and only the rim peeks. Procedural + rect-bounded: it cannot bleed the way
-            // the 9-sliced green pack fill did.
-            var ring = new GameObject("ConfirmEmphasis", typeof(Image));
-            ring.transform.SetParent(row, false);
-            var ringRt = (RectTransform)ring.transform;
-            ringRt.anchorMin = new Vector2(confirmX0, 0f);
-            ringRt.anchorMax = new Vector2(confirmX1, 1f);
-            ringRt.offsetMin = new Vector2(-5f, -5f);
-            ringRt.offsetMax = new Vector2(5f, 5f);
-            var ringImg = ring.GetComponent<Image>();
-            ElarionUiKit.ApplyRounded(ringImg);
-            ringImg.color = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.80f);
-            ringImg.raycastTarget = false;
-
-            _confirmBtn = ElarionUiKit.ButtonPack(row, "CONFIRM", ElarionUiKit.ButtonKind.Quiet,
-                new Vector2(confirmX0, 0f), new Vector2(confirmX1, 1f),
-                () => { if (_vm != null) _vm.ConfirmOrAssign(); },
-                packSpriteName: RpgUiCatalog.ButtonFrame);
-            _confirmLabel = StyleActionLabel(_confirmBtn, ElarionUi.Gilt);
-
-            // §B.2 — respec status is a transient toast (see Render), not a persistent strip.
-            // Close is the SHARED bottom-band Obsidian Close button (WO-554) — no per-panel Close.
-        }
-
-        // One label treatment for the whole action row: bold, fitted, ink by EMPHASIS only.
+        // One label treatment for popup buttons: bold, fitted, ink by EMPHASIS only.
         private static TMPro.TextMeshProUGUI StyleActionLabel(Button btn, Color ink)
         {
             var lbl = btn != null ? btn.GetComponentInChildren<TMPro.TextMeshProUGUI>() : null;
             if (lbl == null) return null;
             lbl.color = ink;
             lbl.fontStyle = TMPro.FontStyles.Bold;
-            ElarionUiKit.FitSingleLine(lbl);   // never spills, never clips ("Respec 300 Cry...")
+            ElarionUiKit.FitSingleLine(lbl);
             return lbl;
         }
-
-        // Display-only fallback if the button is built before the VM binds (cost still comes
-        // from HeroTalentCatalog at click time via vm.Respec); matches RespecCostCrystals default.
-        private const int HeroSkillTreeVMRespecFallbackCost = 300;
 
         private static void SetButtonAlpha(Button btn, float a)
         {
             if (btn == null) return;
             var img = btn.GetComponent<Image>();
             if (img != null) { var c = img.color; c.a = a; img.color = c; }
-        }
-
-        // ── Quick-swap row (folds the loadout screen into this panel) ─────────────
-
-        // WO-865 — the ABILITY BAND: ONE row of slot tiles across the graph column, inside a
-        // band that is already AbilityRowPx tall (>= the kit touch floor). The old 2x2
-        // grid sliced a 0.21-of-body host into 1/2 x 1/2 fractions: each tile resolved to ~47 px
-        // (below the touch floor) and its NAME band to ~23 px — under the FontFloor line box, so
-        // "Emberbrand Throw" ellipsized to "Emberbrand Thro" and the touch-floor guard grew the
-        // action buttons straight over slots 3 and 4.
-        private void RebuildQuickSlots()
-        {
-            ClearChildren(_quickRoot);
-            if (_quickRoot == null || _vm == null) return;
-
-            var slots = _vm.QuickSlots;
-            int n = slots != null ? slots.Count : 0;
-            if (n <= 0) return;
-
-            // Horizontal split only — the tile HEIGHT is the band, so it cannot under-run the
-            // touch floor no matter how many slots exist.
-            float gapX = SlotGapFrac;
-            float w = (1f - gapX * (n - 1)) / n;
-            bool assignTarget = _vm.SelectedIsAssignable;
-            for (int i = 0; i < n; i++)
-            {
-                float x0 = i * (w + gapX);
-                BuildQuickSlotTile(_quickRoot.transform, slots[i], x0, x0 + w, assignTarget);
-            }
-        }
-
-        private void BuildQuickSlotTile(Transform parent, LoadoutSlotVM slot,
-                                        float x0, float x1, bool assignTarget)
-        {
-            var tile = new GameObject("Quick_" + slot.SlotKey, typeof(Image), typeof(Button));
-            tile.transform.SetParent(parent, false);
-            var rt = tile.GetComponent<RectTransform>();
-            rt.anchorMin = new Vector2(x0, 0f); rt.anchorMax = new Vector2(x1, 1f);
-            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
-
-            var img = tile.GetComponent<Image>();
-            Sprite plate = RpgUiCatalog.Get("slot", "slot_talent");
-            if (plate != null) { img.sprite = plate; img.type = Image.Type.Sliced; }
-            else ElarionUiKit.ApplyRounded(img);
-
-            // Once an assignable skill is selected, every slot glows gold (the tap target);
-            // empty reads as a quiet socket, filled reads gold-warm. Tap a filled slot with
-            // nothing assignable selected to clear it.
-            Color fill;
-            if (assignTarget) fill = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.50f);
-            else if (slot.IsEmpty) fill = ElarionUiKit.Track;
-            else fill = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.22f);
-            img.color = fill;
-
-            var btn = tile.GetComponent<Button>();
-            btn.targetGraphic = img;
-            ElarionUiKit.StyleButtonColors(btn);
-            int idx = slot.SlotIndex;
-            btn.onClick.AddListener(() => { if (_vm != null) _vm.AssignSelectedToSlot(idx); });
-
-            // FIXED-PIXEL line boxes inside the tile: numeral over name, each a whole line.
-            var keyLbl = ElarionUiKit.Label(tile.transform, slot.SlotKey, 0f, 1f, ElarionUi.Gilt,
-                ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.06f, 0.94f, bold: true);
-            PinBandFromTop(keyLbl.rectTransform, SlotPadPx, SlotKeyBandPx);
-            ElarionUiKit.FitSingleLine(keyLbl);
-
-            // Text-encoded state (never colour alone — the owner is red/green colourblind):
-            // an empty slot SAYS so.
-            string body = slot.IsEmpty ? (assignTarget ? "tap to set" : "empty") : slot.AbilityName;
-            Color bodyColor = slot.IsEmpty
-                ? (assignTarget ? ElarionUi.Gilt : ElarionUi.ParchmentDim)
-                : ElarionUi.Parchment;
-            var bodyLbl = ElarionUiKit.Label(tile.transform, body, 0f, 1f, bodyColor,
-                ElarionUi.FontBody, TMPro.TextAlignmentOptions.Center,
-                SlotTextInsetFrac, 1f - SlotTextInsetFrac, bold: !slot.IsEmpty);
-            PinBandFromBottom(bodyLbl.rectTransform, SlotPadPx, SlotNameBandPx);
-            // TWO whole FontFloor line boxes in a ~250 px tile: the name WRAPS rather than
-            // ellipsizing, so "Emberbrand Throw" / "Suppressing Volley" read in FULL.
-            ElarionUiKit.FitBlock(bodyLbl);
         }
 
         // ── Black-grid node-canvas sprite (generated once) ────────────────────────
@@ -1476,19 +1285,14 @@ namespace DeNelle.Village.Talents
             if (_vm != null) { _vm.Dispose(); _vm = null; }
             _headerLabel = null;
             _wisdomChip = null;
-            _confirmBtn = null;
-            _confirmLabel = null;
-            _cancelBtn = null;
-            _respecBtn = null;
-            _detailName = null;
-            _detailDesc = null;
-            _detailState = null;
-            _quickRoot = null;
+            _popupRoot = null;
+            _popupName = null;
+            _popupDesc = null;
+            _popupPrompt = null;
+            _popupConfirmBtn = null;
+            _popupConfirmLabel = null;
+            _popupCancelBtn = null;
             _lastLayoutSig = null;
-            _lastQuickStatus = null;
-            _lastRespecStatus = null;
-            _detailGroup = null;
-            _emptyGroup = null;
             if (_ui != null) Destroy(_ui);
             _ui = null;
             _graphContent = null;

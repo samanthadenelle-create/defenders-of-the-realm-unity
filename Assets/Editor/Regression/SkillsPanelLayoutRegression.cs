@@ -120,11 +120,10 @@ namespace DeNelle.Editor.Regression
             string noteStr = notes.Count > 0 ? " [notes: " + string.Join("; ", notes) + "]" : "";
             if (failures.Count == 0)
             {
-                reason = "SKILLS PANEL LAYOUT OK - the body is three disjoint fixed-pixel bands " +
-                         "(columns / ability / action), every tappable band clears the kit touch floor, " +
-                         "every text band seats a whole line box, the node graph is padded + clipped on a " +
-                         "fixed-pixel lattice with a reserved section-band row, and no catalog label is " +
-                         "forced to ellipsize at 2340x1080" + noteStr;
+                reason = "SKILLS PANEL LAYOUT OK - full-bleed graph body (owner 2026-08-15), " +
+                         "spend-popup action band clears the kit touch floor, text floors hold a line box, " +
+                         "the node graph is padded + clipped on a fixed-pixel lattice, and no catalog " +
+                         "label is forced to ellipsize at 2340x1080" + noteStr;
                 return true;
             }
             reason = "skills-panel-layout FAIL x" + failures.Count + ": " + string.Join(" | ", failures) + noteStr;
@@ -270,60 +269,29 @@ namespace DeNelle.Editor.Regression
             var L = ReadLayout(failures, "[bands]");
             if (!L.Ok) return;
 
-            // Replay the view's own arithmetic (BuildChrome / BuildDetailColumn) at the
-            // reference body rect. Every number below is a FIXED pixel offset from an edge,
-            // which is the whole point: the stack is disjoint by construction, and the only
-            // way it can break is by a band growing until the flexible middle goes negative.
-            float actionTop = L.BodyPad + L.ActionRow;                  // top of the action band
-            float columnsBottom = actionTop + L.BandGap;                // floor of the columns region
-            float columnsH = RefBodyHeightPx - columnsBottom - L.BodyPad;
-
-            if (columnsBottom < actionTop)
-                failures.Add($"[bands] the columns region floor ({columnsBottom}) is BELOW the action row top " +
-                             $"({actionTop}) - the action row would paint over the content, which is the " +
-                             "2026-08-04 capture verbatim");
-
-            if (columnsH <= 0f)
-            {
-                failures.Add($"[bands] the columns region collapses at the reference body ({RefBodyHeightPx} px): " +
-                             $"{RefBodyHeightPx} - {columnsBottom} - {L.BodyPad} = {columnsH} px. The fixed bands " +
-                             "have grown past the body well; shrink a band or scroll, never overlap");
-                return;
-            }
-
-            // LEFT column: graph well stacked over the ability band.
-            float graphWellH = columnsH - L.AbilityRow - L.BandGap;
-            if (graphWellH < L.NodeSize)
+            // Owner 2026-08-15: the body is FULL-BLEED GRAPH only (no action/ability/detail
+            // bands consuming height). ActionRowPx / AbilityRowPx remain kit-floor constants
+            // for the spend popup's button band, but they no longer stack into the body.
+            float graphWellH = RefBodyHeightPx - L.BodyPad * 2f;
+            if (graphWellH < L.NodeSize * 2f)
                 failures.Add($"[bands] the graph well resolves to {graphWellH:F0} px at the reference body - " +
-                             $"less than ONE node plate ({L.NodeSize}). The ability band + action row have eaten " +
-                             "the graph; the player cannot see a single talent row");
+                             $"less than TWO node plates ({L.NodeSize * 2f}). Body padding has eaten the tree");
 
-            // The ability tile's own two line boxes must fit INSIDE the ability band.
-            float tileNeeded = L.SlotPad * 2f + L.SlotKey + L.SlotName;
-            if (tileNeeded > L.AbilityRow)
-                failures.Add($"[bands] an ability tile needs {tileNeeded} px (pad + numeral {L.SlotKey} + name " +
-                             $"{L.SlotName} + pad) but AbilityRowPx={L.AbilityRow} - the numeral and the name " +
-                             "would overlap inside the tile");
+            // Spend-popup Confirm/Cancel still need the kit touch floor (ActionRowPx).
+            if (L.ActionRow < L.MinTouch)
+                failures.Add($"[bands] ActionRowPx={L.ActionRow} is below MinTouchPx={L.MinTouch} - the " +
+                             "spend-popup Confirm/Cancel band would be grown by ClampMinTouch");
 
-            // RIGHT column: wisdom / caption / name / description / state, top-and-bottom pinned.
-            float headTop = L.Wisdom + L.BandGap;
-            float nameTop = headTop + L.DetailHead + 4f;
-            float descTop = nameTop + L.DetailName + 6f;
-            float descBottom = 4f + L.DetailState + L.BandGap;
-            float descH = columnsH - descTop - descBottom;
-            if (descH < L.LineBox * 2f)
-                failures.Add($"[bands] the selected-talent description resolves to {descH:F0} px at the reference " +
-                             $"body - under two line boxes ({L.LineBox * 2f:F0}). \"Below 20% HP: -60% damage taken " +
-                             "+ reflect 50% for 5s\" would truncate to a single line");
+            // Popup prompt/description text floors (detail constants reused as popup copy floors).
+            if (L.DetailName < L.LineBox)
+                failures.Add($"[bands] DetailNamePx={L.DetailName} is shorter than one line box - the " +
+                             "spend-popup talent name would cull");
+            if (L.DetailState < L.LineBox)
+                failures.Add($"[bands] DetailStatePx={L.DetailState} is shorter than one line box - the " +
+                             "spend-popup cost/lock line would cull");
 
-            // The two columns must not touch.
-            if (L.DetailX0 <= L.ColX1)
-                failures.Add($"[bands] the detail column starts at {L.DetailX0} but the graph column ends at " +
-                             $"{L.ColX1} - the columns overlap horizontally, which is how CONFIRM's fill ended up " +
-                             "under the ability list in the capture");
-
-            notes.Add($"@{RefBodyWidthPx}x{RefBodyHeightPx}: columns={columnsH:F0}, graphWell={graphWellH:F0}, " +
-                      $"desc={descH:F0}, tile={tileNeeded:F0}/{L.AbilityRow}");
+            notes.Add($"@{RefBodyWidthPx}x{RefBodyHeightPx}: full-bleed graphWell={graphWellH:F0}, " +
+                      $"popupActionFloor={L.ActionRow}, wisdomChip={L.Wisdom}");
         }
 
         // =====================================================================
@@ -511,9 +479,12 @@ namespace DeNelle.Editor.Regression
             Law(failures, code, "SectionClearPx",
                 "the section band's reserved row is gone - a node plate can paint over the " +
                 "\"Universal - any class\" label again");
+            Law(failures, code, "BuildSpendPopup",
+                "the spend popup builder is gone - owner 2026-08-15: node tap must open name/desc/spend " +
+                "Confirm without a permanent footer action row");
             Law(failures, code, "BuildActionRow",
-                "the action row builder is gone; if it went back to a fraction-anchored footer the " +
-                "touch floor will grow the buttons over the grid again");
+                "BuildActionRow token missing (retired stub still required so the source-law oracle " +
+                "keeps a stable anchor while the spend popup owns the buttons)");
 
             // The content rect must be TOP-LEFT pivoted. Centre-pivoting a content rect wider
             // than its mask is what sliced a node off BOTH frame edges.

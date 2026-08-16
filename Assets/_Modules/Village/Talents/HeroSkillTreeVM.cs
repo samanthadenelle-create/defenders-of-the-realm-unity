@@ -1098,16 +1098,79 @@ namespace DeNelle.Village.Talents
         // toggle in here (stage/unstage), so one tap both reads AND plans it; a locked
         // node just updates the detail so the player can read why it's gated.
 
-        /// <summary>Select a node (updates the detail strip) and, if it's actionable, stage/unstage it.</summary>
+        /// <summary>
+        /// Select a node for the spend popup (name / desc / cost). Does NOT stage or spend —
+        /// owner 2026-08-15: the tree is graph-only; spend happens only from the popup Confirm.
+        /// </summary>
         public void Select(string nodeId)
         {
             _selectedId = nodeId ?? "";
-            FlowTrace.Step("SkillTree", "select node " + _selectedId);
-            if (string.IsNullOrEmpty(_selectedId)) { Raise(); return; }
-            if (_pending.Contains(_selectedId)) { Unstage(_selectedId); return; }  // Unstage raises (selection kept)
-            int before = _pending.Count;
-            Stage(_selectedId);                                                     // Stage raises if it took
-            if (_pending.Count == before) Raise();                                  // locked/owned — refresh detail only
+            FlowTrace.Step("SkillTree", "select node " + _selectedId + " (popup, no stage)");
+            Raise();
+        }
+
+        /// <summary>Dismiss the spend popup without spending.</summary>
+        public void ClearSelection()
+        {
+            if (string.IsNullOrEmpty(_selectedId)) return;
+            FlowTrace.Step("SkillTree", "clear selection (popup dismiss)");
+            _selectedId = "";
+            Raise();
+        }
+
+        /// <summary>True when the selected node can be bought with current Wisdom right now.</summary>
+        public bool CanSpendSelected
+        {
+            get
+            {
+                var n = HeroTalentCatalog.FindNode(_selectedId);
+                if (n == null) return false;
+                var svc = WisdomCurrencyService.Instance;
+                var owned = BuildUnlockedSet(svc);
+                if (owned.Contains(n.Id)) return false;
+                int wisdom = svc != null ? svc.Wisdom : 0;
+                return HeroTalentCatalog.CanUnlock(n.Id, wisdom, owned) && n.Cost <= wisdom;
+            }
+        }
+
+        /// <summary>Wisdom cost of the selected node (0 when none).</summary>
+        public int SelectedWisdomCost
+        {
+            get
+            {
+                var n = HeroTalentCatalog.FindNode(_selectedId);
+                return n != null ? n.Cost : 0;
+            }
+        }
+
+        /// <summary>
+        /// Popup prompt line. Buyable: "Spend N Wisdom for &lt;name&gt;?".
+        /// Owned / locked: the honest state line (no fake spend affordance).
+        /// </summary>
+        public string SelectedSpendPrompt
+        {
+            get
+            {
+                if (!HasSelection) return "";
+                if (CanSpendSelected)
+                    return "Spend " + SelectedWisdomCost + " Wisdom for " + SelectedNodeName + "?";
+                return SelectedNodeStateLine;
+            }
+        }
+
+        /// <summary>Popup Confirm: spend Wisdom on the selected node immediately, then dismiss.</summary>
+        public void SpendSelected()
+        {
+            if (!CanSpendSelected)
+            {
+                FlowTrace.Warn("SkillTree", "SpendSelected rejected for '" + _selectedId + "'");
+                return;
+            }
+            string id = _selectedId;
+            FlowTrace.Step("SkillTree", "popup spend '" + id + "' cost=" + SelectedWisdomCost);
+            Unlock(id);
+            _selectedId = "";
+            Raise();
         }
 
         /// <summary>True when a real node is selected (the detail strip has content).</summary>
@@ -1152,23 +1215,16 @@ namespace DeNelle.Village.Talents
                     return "NO EFFECT YET - " + deadWhy + ". Costs " + n.Cost + " Wisdom.";
                 if (owned.Contains(n.Id))
                 {
-                    // Owner 2026-06-28: make an owned node EXPLAIN itself so the screen isn't
-                    // a wall of dead "Owned". An ACTIVE skill is slottable on the quick-swap
-                    // bar; everything else is a PASSIVE talent that's always on (no slot).
+                    // Owner 2026-08-15: loadout left this screen; owned just explains itself.
                     if (SelectedIsAssignable)
-                    {
-                        int at = AssignableSkillBarAccess.SlotOf(SelectedAssignAbilityId);
-                        return at >= 0
-                            ? "Owned - Active - equipped in quick-swap " + (at + 1) + " (tap a slot to move)"
-                            : "Owned - Active - tap a slot (1-4) to equip";
-                    }
-                    return "Owned - Passive - always active (no slot needed)";
+                        return "Owned - Active skill";
+                    return "Owned - Passive - always active";
                 }
                 if (_pending.Contains(n.Id)) return "Planned  -  -" + n.Cost + " Wisdom";
                 int budget = (svc != null ? svc.Wisdom : 0) - PendingCost;
                 var effective = Effective(owned);
                 if (HeroTalentCatalog.CanUnlock(n.Id, budget, effective) && n.Cost <= budget)
-                    return "Costs " + n.Cost + " Wisdom  -  tap the node to plan it";
+                    return "Costs " + n.Cost + " Wisdom";
                 return LockReasonFor(n, budget, effective);
             }
         }
