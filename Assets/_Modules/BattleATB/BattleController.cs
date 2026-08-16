@@ -99,6 +99,12 @@ namespace DeNelle.BattleATB
         // for all past hits). Reset to 0 on battle start. (Replaces the old BattleVfx log-diff cursor.)
         private int _lastProcessedLogIndex;
 
+        /// <summary>Owner-picked status auras (Haste/Slow) + heal-impact one-shots on
+        /// the 3D anchors. Fed the same new-entries log window as the anim/damage
+        /// drivers each TurnResolved; cleared on battle start/end. (Owner VFX picks
+        /// 2026-08-16 - see AtbStatusVfx.cs header for the verbatim mappings.)</summary>
+        private readonly AtbStatusVfx _statusVfx = new AtbStatusVfx();
+
         /// <summary>Where this battle came from — a village tree-breach "Last Stand"
         /// (Village) vs a dungeon encounter (Dungeon). Gates Flee: you cannot flee
         /// the Last Stand (owner). Defaults to Dungeon so the dev/direct-play path
@@ -123,6 +129,7 @@ namespace DeNelle.BattleATB
             // WO-93: drop the idle-timeout listener so a re-entered scene doesn't double-wire.
             var mgr = ATBCombatManager.Instance;
             if (mgr != null) mgr.onEnemyAutoAttack.RemoveListener(HandleIdleTimeout);
+            _statusVfx.Clear(); // scene teardown - drop any live status aura instances
             _subscribed = false;
         }
 
@@ -139,6 +146,7 @@ namespace DeNelle.BattleATB
             }
             _returnScheduled = false;
             _lastProcessedLogIndex = 0;   // fresh battle — start the log cursor at the top
+            _statusVfx.Clear();           // no aura loops survive into a fresh battle
 
             BattleSetup setup = BuildSetup();
             // Tag the source from the handoff: Wave > 0 is a village tree-breach
@@ -602,6 +610,11 @@ namespace DeNelle.BattleATB
             // Uses the same capsules the swapper populated. Keeps the central arena clean.
             SpawnFloatingDamage(state, from);
 
+            // Owner-picked status/impact VFX (Haste/Slow auras live for the state's
+            // duration via StatusApply/StatusExpire log entries; heal-impact one-shots
+            // on ability heals). Same cursor window - no replay of past entries.
+            _statusVfx.ProcessLog(state, from, ResolveUnitAnchor);
+
             // Advance the cursor past everything we just processed.
             _lastProcessedLogIndex = state.Log?.Count ?? _lastProcessedLogIndex;
         }
@@ -623,6 +636,7 @@ namespace DeNelle.BattleATB
                     ? BattleResultKind.Victory
                     : BattleResultKind.Defeat;
 
+            _statusVfx.Clear(); // battle over - status aura loops end with it
             ATBCombatManager.Instance?.StopCombat(); // WO-68: halt the turn timer
             ReturnAfterResult(result).Forget();
         }
@@ -866,6 +880,15 @@ namespace DeNelle.BattleATB
                     actor.PlayHit(dir);
                 }
             }
+        }
+
+        /// <summary>3D anchor for a battle unit - the same hero/enemy capsule mapping
+        /// the hit/death anim + floating-damage drivers use (party units share the
+        /// hero capsule, enemies the enemy capsule, until per-unit visuals land).</summary>
+        private Transform ResolveUnitAnchor(BattleUnit unit)
+        {
+            if (unit == null) return null;
+            return unit.Side == Side.Party ? _heroCapsule : _enemyCapsule;
         }
 
         private static ActorAnimator GetActorOnCapsule(Transform capsule)
