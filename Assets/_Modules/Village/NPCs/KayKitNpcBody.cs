@@ -26,8 +26,26 @@ namespace DeNelle.Village
     /// <summary>WO-818 — resolves a structure's data-driven KayKit NPC body (repo.npcModel).</summary>
     internal static class KayKitNpcBody
     {
+        /// <summary>
+        /// Resources root ALL NPC body packs live under. Named rather than inlined so a
+        /// folder-qualified npcModel ("CraftPixPeople/NPC_Peasant_1") and the legacy bare slug
+        /// build their path from the SAME constant — two string literals for one concept is how
+        /// they drift apart.
+        /// </summary>
+        internal const string NpcResourcesRoot = "NPCs/";
+
+        /// <summary>
+        /// The pack a BARE slug resolves against — the KayKit stage, which is where every
+        /// pre-PROD-002 row points. It is the BACK-COMPAT DEFAULT, not the preferred pack: the
+        /// owner-purchased CraftPix bodies are replacing these (PROD-002), and rows migrate by
+        /// retagging npcModel to "CraftPixPeople/&lt;name&gt;". Kept as a named constant so the
+        /// default can be moved in ONE place once every row has migrated, instead of hunting a
+        /// literal through the resolver.
+        /// </summary>
+        internal const string DefaultPackFolder = "KayKit/";
+
         /// <summary>Resources folder the staged KayKit bodies live under (tracked, WO-818 phase 1).</summary>
-        internal const string ResourcesRoot = "NPCs/KayKit/";
+        internal const string ResourcesRoot = NpcResourcesRoot + DefaultPackFolder;
 
         /// <summary>Resources path (no extension) of the WO-833 shared idle controller
         /// (built by DeNelle.Editor.KayKitNpcAnimatorSetup.Build).</summary>
@@ -54,7 +72,16 @@ namespace DeNelle.Village
             });
             if (string.IsNullOrWhiteSpace(slug)) return null;   // not authored -> People chain, no warn
 
-            string res = ResourcesRoot + slug;
+            // PROD-002 (owner 2026-08-17: "swap out the kaykat" / "replace the placeholder kay kat
+            // with the people i purchased"): a slug may now name its FOLDER.
+            //   bare slug          -> "NPCs/KayKit/<slug>"          — every pre-existing row, unchanged
+            //   contains a '/'     -> "NPCs/<slug>"                 — e.g. "CraftPixPeople/NPC_Peasant_1"
+            // Chosen over adding a second field or a second resolver because the catalog's own
+            // contract for npcModel is "a swap is a ONE-WORD JSON RETAG, never a code pick"
+            // (RepoProps.npcModel). Making the slug folder-qualified keeps that promise intact for
+            // the purchased bodies; a parallel npcModelPack field would have made every future swap
+            // a two-field edit and given the same fact two homes to disagree from.
+            string res = slug.Contains("/") ? NpcResourcesRoot + slug : ResourcesRoot + slug;
             GameObject body = null;
             Guard.Try(system, $"load KayKit npc body '{res}'", () =>
             {
@@ -118,6 +145,25 @@ namespace DeNelle.Village
                 }
 
                 var animator = bodyInstance.GetComponentInChildren<Animator>(true);
+
+                // ⛔ A BODY THAT SHIPS ITS OWN CONTROLLER KEEPS IT. The CraftPix prefabs
+                // (NPCs/CraftPixPeople/*, PROD-002) are built with AC_CraftPixTownsfolk already
+                // BOUND — verified in the prefab YAML, not assumed. Assigning the KayKit idle over
+                // that would replace a working, purpose-built controller with a generic one and
+                // look exactly like a regression: the vendor animates, just wrongly. The KayKit
+                // staged FBXs are the opposite case — Humanoid import gives them an Animator with a
+                // NULL controller, which is why this method exists (WO-833 "NPC Stuck in T Pose").
+                // Distinguishing them by what is actually bound handles both without either caller
+                // needing to know which pack it got.
+                if (animator != null && animator.runtimeAnimatorController != null)
+                {
+                    FlowTrace.Once(system, "npc-body-keeps-own-controller-" + bodyInstance.name,
+                        $"NPC body '{bodyInstance.name}' already carries controller " +
+                        $"'{animator.runtimeAnimatorController.name}' — leaving it alone rather than " +
+                        $"overwriting with '{controllerRes}'.");
+                    return;
+                }
+
                 if (animator == null)
                 {
                     // NOT the verified import case (Humanoid model prefabs carry an

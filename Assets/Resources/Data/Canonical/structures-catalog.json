@@ -483,7 +483,7 @@
       "visualPrefabPath": "Structures/Well",
       "repo": {
         "behaviorId": "HealingFountain",
-        "npcModel": "Cleric",
+        "npcModel": "CraftPixPeople/NPC_Peasant_5",
         "buildCost": 150,
         "_costBasketNote": "WO-947 pin 2, OWNER 2026-08-14 verbatim: \"yes AoE healing\" — healing IS magical (the ruling covered this row together with the Healer Tower row that v20 RETIRED as never-buildable -- WO-990; this row is its successor). MAGICAL basket = CRYSTALS + IRON (pin 1: \"Crystals and Iron\"), + the FOOD this row already used. WOOD REMOVED. The former wood (150) was folded 1:1 into CRYSTALS so the basket TOTAL is unchanged (350); only the composition moved. Numbers stay owner-tunable.",
         "cost": {
@@ -573,7 +573,7 @@
       "visualPrefabPath": "Structures/PetHouse2",
       "repo": {
         "behaviorId": "GameplayBuilding",
-        "npcModel": "Druid",
+        "npcModel": "CraftPixPeople/NPC_Peasant_6",
         "singleton": true,
         "bakedTwins": [
           "EchoHollow_Pets_RoamingArea"
@@ -620,7 +620,7 @@
       "visualPrefabPath": "Structures/ShopAndCrafting",
       "repo": {
         "behaviorId": "GameplayBuilding",
-        "npcModel": "Engineer",
+        "npcModel": "CraftPixPeople/NPC_RichCitizen_2",
         "buildCost": 100,
         "cost": {
           "wood": 60,
@@ -665,7 +665,7 @@
       "visualPrefabPath": "Structures/store",
       "repo": {
         "behaviorId": "GameplayBuilding",
-        "npcModel": "Hoarder",
+        "npcModel": "CraftPixPeople/NPC_Peasant_1",
         "buildCost": 110,
         "cost": {
           "wood": 70,
@@ -710,7 +710,7 @@
       "visualPrefabPath": "Structures/Windmill_Medieval",
       "repo": {
         "behaviorId": "GameplayBuilding",
-        "npcModel": "Farmer_B",
+        "npcModel": "CraftPixPeople/NPC_Peasant_2",
         "singleton": true,
         "buildCost": 100,
         "cost": {
@@ -794,7 +794,7 @@
       "visualPrefabPath": "Structures/Forge",
       "repo": {
         "behaviorId": "GameplayBuilding",
-        "npcModel": "Barbarian",
+        "npcModel": "CraftPixPeople/NPC_CityDweller_1",
         "singleton": true,
         "bakedTwins": [
           "Forge_Armor_Storefront"
@@ -836,11 +836,11 @@
       "displayName": "Blacksmith",
       "type": "Resource",
       "kind": "Cell",
-      "_artNote2026_08_17": "THIS ROW SELLS ARMOUR AND NOW SHOWS THE ARMOURER. It pointed at 'Structures/House_Medieval_Medium' - a generic Polyperfect house shared with collector_forge - so the armour vendor was visually indistinguishable from ordinary housing. Repointed to Structures/armorer (the owner-purchased Armourer model) per the same 2026-08-17 ruling that fixed the forge row. ⚠ ORIENTATION: this is the ONE row of the set changing art FAMILY - Polyperfect prefabs are authored Y-up, Tripo FBXs are Z-up, so this row's orientation (currently manual:false, euler 0,0,0) is now wrong where forge/jeweler/tower_ballista already carry manual:true euler -90,0,0. LEFT UNCHANGED ON PURPOSE: the owner is setting these live in Offset Forge, and authoring -90 in both places composes to 180 - upside down, not merely sideways, which is the exact WO-928 failure recorded on the archer tower row. One system owns the correction; it is not this one.",
+      "_artNote2026_08_17": "THIS ROW SELLS ARMOUR AND NOW SHOWS THE ARMOURER. It pointed at 'Structures/House_Medieval_Medium' - a generic Polyperfect house shared with collector_forge - so the armour vendor was visually indistinguishable from ordinary housing. Repointed to Structures/armorer (the owner-purchased Armourer model) per the same 2026-08-17 ruling that fixed the forge row. ⚠ ORIENTATION: this is the ONE row of the set changing art FAMILY - Polyperfect prefabs are authored Y-up, Tripo FBXs are Z-up, so this row's orientation (currently manual:false, euler 0,0,0) is now wrong where forge/jeweler/tower_ballista already carry manual:true euler -90,0,0. LEFT UNCHANGED ON PURPOSE: the owner is setting these live in Offset Forge, and authoring -90 in both places WOULD compose to 180 - upside down, not merely sideways, which is the exact WO-928 failure recorded on the archer tower row. RESOLVED 2026-08-17 BY OBSERVATION, NOT BY READING CODE (owner, on a live Play session: 'they match' / 'look good too'): with -90 authored in BOTH systems for forge/jeweler/tower_ballista, every model stands upright - so the two DO NOT COMPOSE, one wins, and the duplicate value is harmless. This row's manual:false is therefore fine as it stands: it takes its correction from Offset Forge, which is the system that is demonstrably in effect. Recorded so nobody 'fixes' the asymmetry later and reintroduces the double-apply the warning was guarding against.",
       "visualPrefabPath": "Structures/armorer",
       "repo": {
         "behaviorId": "GameplayBuilding",
-        "npcModel": "BlackKnight",
+        "npcModel": "CraftPixPeople/NPC_CityDweller_2",
         "singleton": true,
         "buildCost": 130,
         "cost": {
@@ -882,7 +882,7 @@
       "visualPrefabPath": "Structures/jeweler",
       "repo": {
         "behaviorId": "GameplayBuilding",
-        "npcModel": "Tiefling",
+        "npcModel": "CraftPixPeople/NPC_RichCitizen_1",
         "singleton": true,
         "bakedTwins": [
           "Jeweler_Gems_Storefront"
@@ -931,7 +931,7 @@
       "visualTexturePath": "Structures/ArcaneTower_Albedo",
       "repo": {
         "behaviorId": "GameplayBuilding",
-        "npcModel": "Mage",
+        "npcModel": "CraftPixPeople/NPC_RichCitizen_3",
         "singleton": true,
         "bakedTwins": [
           "ArcaneTower_MagicUpgrades"
@@ -1055,7 +1055,7 @@
       "visualPrefabPath": "Structures/farm",
       "repo": {
         "behaviorId": "ResourceCollector",
-        "npcModel": "Farmer_A",
+        "npcModel": "CraftPixPeople/NPC_Peasant_3",
         "collectorBuildingId": "farm",
         "heightMul": 1.4,
         "capacity": 7500,
@@ -1104,7 +1104,7 @@
       "visualPrefabPath": "Structures/lumbermill",
       "repo": {
         "behaviorId": "ResourceCollector",
-        "npcModel": "Ranger",
+        "npcModel": "CraftPixPeople/NPC_Peasant_4",
         "collectorBuildingId": "lumbermill",
         "capacity": 5760,
         "buildCost": 90,
@@ -1346,7 +1346,7 @@
       "visualPrefabPath": "Structures/barracks",
       "repo": {
         "behaviorId": "GameplayBuilding",
-        "npcModel": "Paladin_with_Helmet",
+        "npcModel": "CraftPixPeople/NPC_RichCitizen_4",
         "buildCost": 120,
         "cost": {
           "wood": 150,

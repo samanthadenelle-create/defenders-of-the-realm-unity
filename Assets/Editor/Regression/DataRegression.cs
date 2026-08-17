@@ -2002,7 +2002,14 @@ namespace DeNelle.Editor
             // (a) dual-copy parity + (b) every authored slug resolves to a staged FBX
             //     under the TRACKED Resources/NPCs/KayKit (a typo'd slug would warn +
             //     People-fallback on every load - catch it at the gate instead).
-            string kayKitDir = System.IO.Path.Combine(Application.dataPath, "Resources/NPCs/KayKit");
+            // PROD-002: npcModel may now be FOLDER-QUALIFIED ("CraftPixPeople/NPC_Peasant_1") or a
+            // bare legacy slug ("Ranger" -> the KayKit stage). This check MIRRORS
+            // KayKitNpcBody.Load's rule deliberately: if the gate resolved paths differently from
+            // the runtime, it would pass on bodies the game cannot load, which is worse than having
+            // no gate. It also accepts .prefab OR .fbx — KayKit bodies are staged as raw FBXs,
+            // the purchased CraftPix bodies are built prefabs, and both are legitimate answers to
+            // "does Resources.Load<GameObject> find a body here".
+            string npcRootDir = System.IO.Path.Combine(Application.dataPath, "Resources/NPCs");
             int authored = 0;
             var srcModelById = new Dictionary<string, string>();
             foreach (var e in src.Entries)
@@ -2016,31 +2023,52 @@ namespace DeNelle.Editor
                                  $"(StreamingAssets='{a ?? "<null>"}', Resources='{b ?? "<null>"}')");
                 if (string.IsNullOrEmpty(a)) continue;
                 authored++;
-                string fbx = System.IO.Path.Combine(kayKitDir, a + ".fbx");
-                if (!System.IO.File.Exists(fbx))
-                    failures.Add($"[npcModel] '{e.id}' npcModel '{a}' has NO staged body at '{fbx}' " +
+                // Same rule as KayKitNpcBody.Load: a '/' means the slug names its own pack folder.
+                string rel  = a.Contains("/") ? a : "KayKit/" + a;
+                string stem = System.IO.Path.Combine(npcRootDir, rel.Replace('/', System.IO.Path.DirectorySeparatorChar));
+                string found = null;
+                foreach (var ext in new[] { ".prefab", ".fbx" })
+                    if (System.IO.File.Exists(stem + ext)) { found = stem + ext; break; }
+
+                if (found == null)
+                    failures.Add($"[npcModel] '{e.id}' npcModel '{a}' has NO body at '{stem}.prefab' or '{stem}.fbx' " +
                                  "(the injector would warn + fall back to the People chain every load)");
                 else
-                    log.AppendLine($"  NM {e.id} -> '{a}' | staged FBX OK");
+                    log.AppendLine($"  NM {e.id} -> '{a}' | body OK ({System.IO.Path.GetExtension(found)})");
             }
 
             // (c) the 12 owner-approved rows (WO-818 mapping table, VERBATIM - a change
             //     here is an owner retag applied to BOTH this table and the catalog,
             //     never a code-side pick).
+            // PROD-002 (2026-08-17) — RETAGGED FROM KAYKIT PLACEHOLDERS TO THE OWNER-PURCHASED
+            // CraftPix bodies. Owner: "can we replace the placeholder kay kat with the people i
+            // purchased?" and, on the casting itself, "so you can pick". The picks below read
+            // STATUS against what each post sells or does, which is why they are legible rather
+            // than arbitrary: the two skilled trades that sell gear are CityDwellers, the
+            // high-value/high-status posts are RichCitizens, and everyone working the land or a
+            // production building is a Peasant.
+            //   ⛔ NPC_King and NPC_Queen are DELIBERATELY UNCAST. They are the two most
+            //      distinctive bodies in the set and would read as absurd behind a shop counter;
+            //      holding them back keeps royalty available for a throne-room or quest beat
+            //      instead of spending it on a vendor.
+            // 12 rows, 12 non-royal bodies, strict 1:1 — no body appears twice, which matters
+            // because a duplicated body reads to the player as the same person working two jobs.
+            // This table stays VERBATIM-pinned: a change is a retag applied to BOTH this table and
+            // the catalog, never a code-side pick.
             var expected = new Dictionary<string, string>
             {
-                { "barracks",             "Paladin_with_Helmet" },
-                { "workshop",             "Engineer" },
-                { "forge",                "Barbarian" },
-                { "armorer",              "BlackKnight" },
-                { "jeweler",              "Tiefling" },
-                { "market",               "Hoarder" },
-                { "arcane-tower",         "Mage" },
-                { "pet-house",            "Druid" },
-                { "collector_farm",       "Farmer_A" },
-                { "mill",                 "Farmer_B" },
-                { "collector_lumbermill", "Ranger" },
-                { "healing_caravan",     "Cleric" },
+                { "barracks",             "CraftPixPeople/NPC_RichCitizen_4" },  // officer
+                { "workshop",             "CraftPixPeople/NPC_RichCitizen_2" },  // master artisan
+                { "forge",                "CraftPixPeople/NPC_CityDweller_1" },  // SELLS WEAPONS
+                { "armorer",              "CraftPixPeople/NPC_CityDweller_2" },  // SELLS ARMOUR
+                { "jeweler",              "CraftPixPeople/NPC_RichCitizen_1" },  // rings/gems - highest value
+                { "market",               "CraftPixPeople/NPC_Peasant_1" },      // Coppin, produce
+                { "arcane-tower",         "CraftPixPeople/NPC_RichCitizen_3" },  // scholar
+                { "pet-house",            "CraftPixPeople/NPC_Peasant_6" },      // Echo keeper
+                { "collector_farm",       "CraftPixPeople/NPC_Peasant_3" },
+                { "mill",                 "CraftPixPeople/NPC_Peasant_2" },
+                { "collector_lumbermill", "CraftPixPeople/NPC_Peasant_4" },
+                { "healing_caravan",      "CraftPixPeople/NPC_Peasant_5" },
             };
             foreach (var kv in expected)
             {
@@ -2053,11 +2081,17 @@ namespace DeNelle.Editor
                 failures.Add($"[npcModel] {authored} row(s) author npcModel but the WO-818 owner table maps exactly {expected.Count} " +
                              "- an extra/missing binding is not an owner-approved pick");
 
-            // (d) WO-833: the shared idle controller the runtime arms on every staged
-            //     KayKit body (KayKitNpcBody.ArmIdle) must EXIST under Resources and
-            //     reference >=1 clip - a missing/empty controller means all 12 NPCs
-            //     render the FBX bind pose (owner F8 "NPC Stuck in T Pose"). Catch it
-            //     at the gate, not the felt-test.
+            // (d) WO-833: the shared idle controller KayKitNpcBody.ArmIdle arms on a body that
+            //     arrives with NO controller must EXIST under Resources and reference >=1 clip -
+            //     an empty/missing controller renders the FBX bind pose (owner F8 "NPC Stuck in
+            //     T Pose"). Catch it at the gate, not the felt-test.
+            //     ⚠ SCOPE NARROWED BY PROD-002, and the check is kept anyway. It no longer covers
+            //     "all 12 structure NPCs": those now resolve to CraftPix prefabs that ship
+            //     AC_CraftPixTownsfolk already bound, and ArmController leaves a bound controller
+            //     alone rather than overwriting it. This controller still drives every KayKit body
+            //     that remains live (the hero body-swap set, the construction worker), so deleting
+            //     the check would drop cover on a T-pose bug that is still reachable - it simply
+            //     protects fewer NPCs than the original comment claimed.
             const string idleCtrlPath = "Assets/Resources/NPCs/KayKit/KayKitNpcIdle.controller";
             var idleCtrl = UnityEditor.AssetDatabase.LoadAssetAtPath<RuntimeAnimatorController>(idleCtrlPath);
             if (idleCtrl == null)

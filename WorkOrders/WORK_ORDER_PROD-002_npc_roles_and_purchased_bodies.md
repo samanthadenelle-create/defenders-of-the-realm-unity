@@ -1,6 +1,11 @@
 # PROD-002 — NPCs: retire the doors that lead nowhere, cast the people we bought
 
-**Status:** READY TO IMPLEMENT — §3 needs an owner casting table before code
+**Status:** PARTIAL — **Deliverable B (cast the purchased bodies) is DONE**, awaiting owner
+verification (§4 boxes 4/5). **Deliverable A (retire the dead interact doors on Lumbermill /
+Barracks / Arcane Tower) is NOT started.** ⛔ NOT PUSHABLE until the checklist is confirmed —
+owner rule: *"never push if everything in prod ticket isnt tested"*.
+⚠ **Ungated as of writing:** the owner was in the editor, so batchmode was locked out. No
+`COMPILE_GATE_OK` and no regression run has been claimed for this change yet.
 **Minted:** 2026-08-17 (CLI seat)
 **Priority:** MEDIUM — no crash, but it is the town's whole first impression.
 **Provenance:** owner, 2026-08-17, on a live build: *"what is the value of having a NPC at the
@@ -63,21 +68,50 @@ picks.** The purchased set is *civilians* (6 peasants, 4 rich citizens, 2 city d
 queen); the placeholders are *archetypes*. A rich citizen reads as a Weaponsmith; nobody in the set
 obviously reads as a Paladin guarding a barracks.
 
-**Fill this in and the code half is mechanical:**
+**DONE 2026-08-17 — owner delegated the casting to the CLI** (*"so you can pick"*, after *"swap out
+the kaykat"*). All 12 rows retagged. Every pick is reversible in one word: `repo.npcModel` in
+`structures-catalog.json` (+ the pinned table in `DataRegression.CheckNpcModels`).
 
-| Role | Current placeholder | → CraftPix prefab |
-|---|---|---|
-| Armorer | — | |
-| Weaponsmith | — | |
-| Jeweler (Sable) | — | |
-| Marketplace (Coppin) | — | |
-| Rumor Board (Brom) | — | |
-| Herbalist | — | |
-| Lumbermill (ambient) | `Ranger` | |
-| Barracks (ambient) | `Paladin_with_Helmet` | |
-| Arcane Tower (ambient) | `Mage` | |
+| Catalog row | Was (KayKit) | → Now (CraftPix) | Why |
+|---|---|---|---|
+| `jeweler` | `Tiefling` | `NPC_RichCitizen_1` | rings/gems — the highest-value goods |
+| `workshop` | `Engineer` | `NPC_RichCitizen_2` | master artisan |
+| `arcane-tower` | `Mage` | `NPC_RichCitizen_3` | scholar / status |
+| `barracks` | `Paladin_with_Helmet` | `NPC_RichCitizen_4` | officer |
+| `forge` | `Barbarian` | `NPC_CityDweller_1` | **sells weapons** — skilled trade |
+| `armorer` | `BlackKnight` | `NPC_CityDweller_2` | **sells armour** — skilled trade |
+| `market` | `Hoarder` | `NPC_Peasant_1` | Coppin, produce |
+| `mill` | `Farmer_B` | `NPC_Peasant_2` | |
+| `collector_farm` | `Farmer_A` | `NPC_Peasant_3` | |
+| `collector_lumbermill` | `Ranger` | `NPC_Peasant_4` | |
+| `healing_caravan` | `Cleric` | `NPC_Peasant_5` | |
+| `pet-house` | `Druid` | `NPC_Peasant_6` | Echo keeper |
 
-Available: `NPC_King`, `NPC_Queen`, `NPC_RichCitizen_1..4`, `NPC_CityDweller_1..2`, `NPC_Peasant_1..6`.
+**The rule behind the picks**, so a future retag stays coherent rather than ad hoc: status reads
+against what the post sells or does. The two skilled trades that sell gear are **CityDwellers**; the
+high-value or high-status posts are **RichCitizens**; everyone working the land or a production
+building is a **Peasant**.
+
+⛔ **`NPC_King` and `NPC_Queen` are deliberately UNCAST.** They are the two most distinctive bodies in
+the set and read as absurd behind a shop counter. Holding them back keeps royalty available for a
+throne-room or quest beat rather than spending it on a vendor.
+
+Strict **1:1 — 12 rows, 12 non-royal bodies, no body used twice.** A duplicated body reads to the
+player as one person working two jobs.
+
+### Two code changes this required (neither was a casting decision)
+
+1. **`npcModel` may now name its folder.** `KayKitNpcBody.Load` resolves a bare slug against the
+   KayKit stage (every legacy row keeps working) and a `/`-qualified slug against
+   `Resources/NPCs/`. Chosen over a second `npcModelPack` field so the catalog's own promise —
+   *"a swap is a ONE-WORD JSON RETAG, never a code pick"* — survives; a parallel field would make
+   every future swap a two-field edit with two places to disagree.
+2. **A body that ships its own controller keeps it.** ⚠ This is the one that would have looked like
+   a regression: the CraftPix prefabs are built with `AC_CraftPixTownsfolk` **already bound**
+   (verified in the prefab YAML, not assumed), and `ArmIdle` would have overwritten it with the
+   generic KayKit idle — the vendor would animate, just wrongly. `ArmController` now leaves a bound
+   controller alone. The KayKit FBXs are the opposite case (Animator with a NULL controller), which
+   is why WO-833 exists, so deciding by what is actually bound handles both.
 
 ## 4. VERIFICATION CHECKLIST — owner tests, CLI verifies each against evidence
 
