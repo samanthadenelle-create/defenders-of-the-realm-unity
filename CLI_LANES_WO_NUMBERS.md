@@ -10,7 +10,7 @@
 > never as BUILD STATUS** -- "under construction"/"coming soon"/"dev"/"WIP" are BANNED player-facing
 > strings and get a REGRESSION ORACLE, not a comment, because that is the rule most likely to rot.
 > Status READY TO IMPLEMENT, 3 open rulings. No code yet.)*
-> ## âš  RECONCILED 2026-08-17 (UI seat block): next free = **1049**.
+> ## âš  RECONCILED 2026-08-17 (UI seat): UI seat next free = **1050**.
 > *(⚠ THE ROW ABOVE WAS STALE. It read "next free = 1045" while WORK_ORDER_1045_* AND
 > WORK_ORDER_1046_* both existed on disk — the 1046 mint wrote its bump into the PROSE below and
 > never updated THE ROW. That is §2 in its quietest form: the banner was wrong in exactly the way
