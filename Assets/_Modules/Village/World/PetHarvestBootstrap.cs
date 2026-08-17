@@ -22,6 +22,8 @@ using System;
 using UnityEngine;
 using UnityEngine.AI;
 using UnityEngine.SceneManagement;
+using DeNelle.Core.Diagnostics;   // FlowTrace — §12: this seam was silently dead, it stays instrumented
+using DeNelle.Pets;               // PetDeployer/Pet — DeNelle.Village.asmdef already references DeNelle.Pets
 using DeNelle.Village;
 using DeNelle.Village.World;
 
@@ -38,6 +40,13 @@ namespace DeNelle.Village
         // inside the pet detect radius. Combat priority in PetHarvester still yields
         // to enemies. EconomyService.Grant is the faucet (nodes now route through it).
         private const string TargetScene = "Village2";
+
+        /// <summary>FlowTrace system tag for this bootstrap (§12 — permanent instrumentation).</summary>
+        private const string FlowSys = "PetHarvest";
+
+        /// <summary>Cap on Echoes auto-assigned to harvest sites in one pass. Was an inline `4`
+        /// with a "limit for demo" comment; named so the bound is visible rather than magic.</summary>
+        private const int MaxAutoAssignedPets = 4;
         private bool _built;
 
         // DEF-258: these MineNodes are unstyled PLACEHOLDERS — tinted primitive cubes
@@ -196,52 +205,67 @@ namespace DeNelle.Village
 
         private static void AutoAssignDeployedPetsToSites()
         {
-            // Find deployed pets (PetDeployer populates them). We use a loose
-            // tag / component search to stay decoupled from Pets asmdef.
-            var petObjects = GameObject.FindGameObjectsWithTag("Pet");
-            if (petObjects.Length == 0)
+            // ⛔ THIS METHOD HAD NEVER COMPLETED A SINGLE TIME BEFORE 2026-08-17 (WO-1038).
+            //
+            // Its first line was `GameObject.FindGameObjectsWithTag("Pet")`, and **"Pet" is not a
+            // declared tag** — ProjectSettings/TagManager.asset declares exactly four:
+            // Tower, Building, HeartTarget, Player. FindGameObjectsWithTag THROWS UnityException on
+            // an undeclared tag, so this method threw on ENTRY every single call, and the "fallback"
+            // beneath it was unreachable dead code. Echo → harvest-site auto-assignment has therefore
+            // never worked in any build that ever shipped. Same shape as the RaidHeroSpawner case:
+            // a safety net that the throw above it guaranteed could never be reached. A tag typo is
+            // not a soft failure in Unity — it is an exception, and an exception in a bootstrap is
+            // silent because nothing downstream expects a return value.
+            //
+            // ⚠ THE FIX IS NOT TO DECLARE A "Pet" TAG. `PetDeployer` ALREADY owns the authoritative
+            // registry of deployed pets — `PetDeployer.DeployedPets`, populated at PetDeployer.cs:179 —
+            // and `DeNelle.Village.asmdef` ALREADY references `DeNelle.Pets`. The old comment here
+            // claiming we must "stay decoupled from Pets asmdef" was STALE, and it is precisely what
+            // pushed this code onto (1) a string tag, (2) a FindObjectsByType<GameObject>() scan of the
+            // ENTIRE scene as a fallback, and (3) GetComponent("Pet") / SendMessage string reflection.
+            // Asking the owner that already knows removes all four problems at once. Declaring the tag
+            // would have fixed only the throw and left a second, parallel authority over "which pets
+            // are deployed" — the duplicate-authority bug class this project keeps paying for.
+            var deployer = FindFirstObjectByType<PetDeployer>(FindObjectsInactive.Exclude);
+            if (deployer == null)
             {
-                // Fallback: any object with a component whose name contains "Pet"
-                petObjects = FindObjectsByType<GameObject>(FindObjectsInactive.Exclude);
-                // (In real code a proper Pet registry or event would be better.)
+                FlowTrace.Step(FlowSys, "no PetDeployer in scene — nothing deployed, no harvest assignment.");
+                return;
             }
 
+            var pets = deployer.DeployedPets;
             var sites = FindObjectsByType<HarvestSite>(FindObjectsInactive.Exclude);
-            if (sites.Length == 0 || petObjects.Length == 0) return;
+            if (pets == null || pets.Count == 0 || sites.Length == 0)
+            {
+                FlowTrace.Step(FlowSys,
+                    $"nothing to assign (deployed pets={pets?.Count ?? 0}, harvest sites={sites.Length}).");
+                return;
+            }
 
             int assigned = 0;
             foreach (var site in sites)
             {
-                foreach (var po in petObjects)
+                foreach (var pet in pets)
                 {
-                    if (po == null) continue;
-                    // Only assign if it looks like a real pet (has Pet or PetHarvester or is named like one).
-                    bool looksLikePet = po.name.IndexOf("Pet", System.StringComparison.OrdinalIgnoreCase) >= 0 ||
-                                        po.GetComponent("Pet") != null ||
-                                        po.GetComponent("PetHarvester") != null;
-                    if (!looksLikePet) continue;
+                    if (pet == null) continue;          // a despawned Echo (PetDeployer.DespawnEcho) leaves a null slot
 
-                    if (site.AssignPet(po.transform))
+                    if (site.AssignPet(pet.transform))
                     {
                         assigned++;
-                        // Steer the pet toward the site (Pet.SetHomePost if the method exists via reflection or direct).
-                        // For now we just set a simple target position the existing leash/harvester can respect.
-                        // A full assignment manager would live in the Pets module.
-                        if (site.transform != null)
+                        // Steer the Echo at its site. Direct typed call — Pet.SetHomePost is public
+                        // (Pet.cs:238) and the PetHarvester already respects HomePost when active.
+                        if (site.transform != null) pet.SetHomePost(site.transform.position);
+
+                        if (assigned >= MaxAutoAssignedPets)
                         {
-                            // Best-effort: many pet movement systems look at "home" or a target.
-                            // The PetHarvester already respects HomePost when active.
-                            var petComp = po.GetComponent("Pet");
-                            if (petComp != null)
-                            {
-                                // Use SendMessage to avoid hard asmdef reference.
-                                petComp.SendMessage("SetHomePost", site.transform.position, SendMessageOptions.DontRequireReceiver);
-                            }
+                            FlowTrace.Step(FlowSys, $"auto-assigned {assigned} Echo(es) to harvest sites (cap reached).");
+                            return;
                         }
-                        if (assigned >= 4) return; // limit for demo
                     }
                 }
             }
+
+            FlowTrace.Step(FlowSys, $"auto-assigned {assigned} Echo(es) across {sites.Length} harvest site(s).");
         }
     }
 }

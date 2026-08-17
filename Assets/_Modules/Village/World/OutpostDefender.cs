@@ -161,9 +161,21 @@ namespace DeNelle.Village.World
         {
             if (t == null) return false;
             // The scan is masked to the Enemy layer, so a hit on that layer already qualifies.
-            // Keep tag + raider-name as fallbacks (drops the slow string-based GetComponent).
+            // Keep the raider-name check as a fallback (drops the slow string-based GetComponent).
             if (((1 << t.gameObject.layer) & _enemyMask) != 0) return true;
-            if (t.CompareTag("Enemy")) return true;
+
+            // ⛔ REMOVED 2026-08-17 (WO-1038): `if (t.CompareTag("Enemy")) return true;`
+            // "Enemy" is a LAYER in this project, NOT a tag — ProjectSettings/TagManager.asset
+            // declares exactly four tags (Tower, Building, HeartTarget, Player). CompareTag THROWS
+            // UnityException on an undeclared tag, so that line threw on every call that reached it.
+            // It was also DEAD: the line directly above already returns true for anything on the
+            // Enemy layer, which is the same set it was trying to match. A throwing line that could
+            // only ever duplicate the check above it.
+            //
+            // ⚠ Do NOT "fix" this by declaring an Enemy TAG. Enemy is a layer by design (the mask
+            // above is the intended mechanism); adding a same-named tag creates two authorities over
+            // "is this thing hostile" and they will drift. If a non-layer hostile ever needs matching,
+            // give it the layer.
             if (t.name.Contains("Raider") || t.name.Contains("HarvestRaider")) return true;
             return false;
         }
