@@ -93,7 +93,9 @@ namespace DeNelle.Village.Buildings.Progression
                 return false;
             }
 
-            prefab = Resources.Load<GameObject>(path);
+            // Addressables-first via StructureAssetLoader (2026-08-17); identical behaviour while
+            // the art remains in Resources, and the precondition for moving it out of the build.
+            prefab = DeNelle.Core.StructureAssetLoader.LoadStructurePrefab(path);
             if (prefab == null)
             {
                 FlowTrace.Throttle("UpgradeUI", "preview-load-null-" + path, 30f,

@@ -1368,9 +1368,11 @@ namespace DeNelle.Village
 
             EnsureRotateMenu();
 
-            GameObject prefab = !string.IsNullOrEmpty(_armed.visualPrefabPath)
-                ? Resources.Load<GameObject>(_armed.visualPrefabPath)
-                : null;
+            // Addressables-first via the StructureAssetLoader seam (2026-08-17). Behaviour is
+            // IDENTICAL while the art still sits in Resources — the loader falls back to exactly
+            // this Resources.Load — so pointing the call sites here is a no-op today and the
+            // precondition for moving the 62.5 MB force-included folder out of the build.
+            GameObject prefab = DeNelle.Core.StructureAssetLoader.LoadStructurePrefab(_armed.visualPrefabPath);
             string name = !string.IsNullOrEmpty(_armed.displayName) ? _armed.displayName : _armed.id;
             double costSkr = EffectiveCostFor(_armed).crystals;   // freebie-aware (0 while the first-build is live)
 
@@ -3865,9 +3867,8 @@ namespace DeNelle.Village
                 return;
             }
 
-            GameObject prefab = !string.IsNullOrEmpty(entry.visualPrefabPath)
-                ? Resources.Load<GameObject>(entry.visualPrefabPath)
-                : null;
+            // Addressables-first via StructureAssetLoader — see the note at the armed-preview site.
+            GameObject prefab = DeNelle.Core.StructureAssetLoader.LoadStructurePrefab(entry.visualPrefabPath);
             if (prefab == null)
             {
                 Debug.LogWarning($"[BuildMode] Orient: '{entry.id}' has no loadable visual prefab ('{entry.visualPrefabPath}').");

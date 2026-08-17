@@ -240,7 +240,10 @@ namespace DeNelle.Village
         private static void ApplyForcedTexture(GameObject visual, string texPath, string id)
         {
             if (visual == null || string.IsNullOrEmpty(texPath)) return;
-            var tex = Resources.Load<Texture2D>(texPath);
+            // Addressables-first via StructureAssetLoader — upgradeTexturePath keys live in the same
+            // "Structures/..." address space as the prefabs, so they migrate together or the tier
+            // reskin would keep a Resources dependency alive and defeat the whole migration.
+            var tex = DeNelle.Core.StructureAssetLoader.LoadStructureAsset<Texture2D>(texPath);
             if (tex == null)
             {
                 FlowTrace.Warn("Structure",
