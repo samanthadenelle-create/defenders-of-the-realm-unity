@@ -6,16 +6,16 @@ TerrainLayer:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_Name: Exterior_Snow
-  m_DiffuseTexture: {fileID: 1693742357855526487, guid: 71af267a01f8af14e851d47985fb6877, type: 2}
-  m_NormalMapTexture: {fileID: 0}
+  m_Name: Goldfields_Field
+  m_DiffuseTexture: {fileID: 2800000, guid: 29040bc5ef75f97459bcf3c0030b9954, type: 3}
+  m_NormalMapTexture: {fileID: 2800000, guid: 7acf64784b53b254caad7cd94da41f29, type: 3}
   m_MaskMapTexture: {fileID: 0}
-  m_TileSize: {x: 16, y: 16}
+  m_TileSize: {x: 15, y: 15}
   m_TileOffset: {x: 0, y: 0}
-  m_Specular: {r: 0, g: 0, b: 0, a: 0}
+  m_Specular: {r: 0.05, g: 0.05, b: 0.05, a: 1}
   m_Metallic: 0
-  m_Smoothness: 0
-  m_NormalScale: 1
+  m_Smoothness: 0.05
+  m_NormalScale: 0.45
   m_DiffuseRemapMin: {x: 0, y: 0, z: 0, w: 0}
   m_DiffuseRemapMax: {x: 1, y: 1, z: 1, w: 1}
   m_MaskMapRemapMin: {x: 0, y: 0, z: 0, w: 0}

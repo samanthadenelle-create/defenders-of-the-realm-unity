@@ -6,15 +6,15 @@ TerrainLayer:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_Name: Exterior_Mud
-  m_DiffuseTexture: {fileID: 6987325705955701032, guid: 71af267a01f8af14e851d47985fb6877, type: 2}
-  m_NormalMapTexture: {fileID: 0}
+  m_Name: Mirewood_Mire
+  m_DiffuseTexture: {fileID: 2800000, guid: 4daf4c8d8c6722f41962fdf2228949b4, type: 3}
+  m_NormalMapTexture: {fileID: 2800000, guid: e04a5000b88787d4c8aa40ea9b92f097, type: 3}
   m_MaskMapTexture: {fileID: 0}
   m_TileSize: {x: 6, y: 6}
   m_TileOffset: {x: 0, y: 0}
-  m_Specular: {r: 0, g: 0, b: 0, a: 0}
+  m_Specular: {r: 0.05, g: 0.05, b: 0.05, a: 1}
   m_Metallic: 0
-  m_Smoothness: 0
+  m_Smoothness: 0.55
   m_NormalScale: 1
   m_DiffuseRemapMin: {x: 0, y: 0, z: 0, w: 0}
   m_DiffuseRemapMax: {x: 1, y: 1, z: 1, w: 1}

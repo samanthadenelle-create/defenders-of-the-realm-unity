@@ -50,6 +50,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using DeNelle.Core.Diagnostics;
+using DeNelle.Core.World;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -250,12 +251,26 @@ namespace DeNelle.Editor
         private const float HorizonKeepChance = 0.8f;
 
         // ── Splat layer indices ──────────────────────────────────────────────
-        private const int LayerGrass = 0;
-        private const int LayerStone = 1;
-        private const int LayerMud = 2;
-        private const int LayerSnow = 3;
-        private const int LayerDead = 4;
-        private const int LayerCount = 5;
+        // ⛔ WO-1101: these are NO LONGER declared here. They used to be six private
+        // consts in this file while WorldSceneLoader.cs (DeNelle.Village, the DEF-108
+        // runtime repaint) hardcoded the SAME indices as bare literals 0/1/2/4. The
+        // runtime repaint is the only splat the player sees on device, so growing the
+        // layer set here alone mispaints the ground on device and NOWHERE ELSE — a
+        // defect no editor gate can see. The single authority is now
+        // DeNelle.Core.World.TerrainLayerSet, which Editor, Village and
+        // EditorRegression all reference. Do not reintroduce a local table.
+        //
+        // Local aliases only — they resolve to the shared authority, they do not
+        // restate it. TerrainLayerSet.Count is the array bound everywhere.
+        private const int LayerMeadow = TerrainLayerSet.Meadow;
+        private const int LayerGoldfields = TerrainLayerSet.GoldfieldsField;
+        private const int LayerStone = TerrainLayerSet.StonebackRock;
+        private const int LayerSnow = TerrainLayerSet.StonebackSnow;
+        private const int LayerMire = TerrainLayerSet.MirewoodMire;
+        private const int LayerMireRoots = TerrainLayerSet.MirewoodRoots;
+        private const int LayerAsh = TerrainLayerSet.AshwoodAsh;
+        private const int LayerPath = TerrainLayerSet.PathDirt;
+        private const int LayerCount = TerrainLayerSet.Count;
 
         // Deterministic RNG so re-runs are reproducible.
         private static System.Random _rng;
@@ -265,6 +280,8 @@ namespace DeNelle.Editor
         private static int _rockCount;
         private static int _pondCount;
         private static int _treePrototypeCount;
+        private static int _detailPrototypeCount;
+        private static int _detailPatchCount;
         private static readonly List<string> _notes = new List<string>();
 
         // =====================================================================
@@ -285,6 +302,8 @@ namespace DeNelle.Editor
             _rockCount = 0;
             _pondCount = 0;
             _treePrototypeCount = 0;
+            _detailPrototypeCount = 0;
+            _detailPatchCount = 0;
             _notes.Clear();
 
             EnsureFolder(TerrainAssetDir);
@@ -330,6 +349,10 @@ namespace DeNelle.Editor
             terrain.treeBillboardDistance = 110f;
             terrain.treeCrossFadeLength = 12f;
             terrain.treeMaximumFullLODCount = TreeTargetCount;
+            // WO-1101 ground cover: details are GPU-instanced and hard distance-culled, so a
+            // modest draw distance keeps them free on mobile while the near ground reads rich.
+            terrain.detailObjectDistance = 90f;
+            terrain.detailObjectDensity = 0.75f;
 
             // WO-173/DEF-108: assign a URP TerrainLit material so the terrain SURFACE
             // renders. With no explicit URP terrain material the Terrain falls back to a
@@ -349,6 +372,10 @@ namespace DeNelle.Editor
             // ── Trees -- biome-distributed instanced painter (§9.6) ──────────
             PaintTrees(terrainData);
 
+            // ── Ground cover -- detail grass/bush clutter (WO-1101 "simple aesthetics") ──
+            // MUST run after PaintSplatmaps: the detail density is driven by the splat.
+            PaintDetailGroundCover(terrainData);
+
             // ── Micro props: boulders / cliff rocks + ponds (§9.3) ───────────
             ScatterRocks(root.transform, terrainData);
             PlacePonds(root.transform);
@@ -367,7 +394,9 @@ namespace DeNelle.Editor
             Debug.Log($"[ExteriorTerrainBuilder] BuildExterior complete -- " +
                       $"terrain {TerrainSizeXZ:0}x{TerrainSizeXZ:0}u, " +
                       $"{_treePrototypeCount} tree prototype(s), {_treeCount} tree instances, " +
-                      $"{_rockCount} rock props, {_pondCount} ponds, 5 biome splat layers, " +
+                      $"{_rockCount} rock props, {_pondCount} ponds, " +
+                      $"{TerrainLayerSet.Count} textured biome splat layers, " +
+                      $"{_detailPrototypeCount} detail prototype(s) / {_detailPatchCount} clutter cells, " +
                       $"5 natural paths, dawn skybox + fog. " +
                       (_notes.Count > 0 ? "Notes: " + string.Join("; ", _notes) : "No fallbacks used."));
         }
@@ -687,30 +716,56 @@ namespace DeNelle.Editor
         }
 
         // =====================================================================
-        //  Splatmaps -- 5 biome textures (§9.3)
+        //  Splatmaps -- the per-march ground (§9.3, rebuilt by WO-1101)
         // =====================================================================
 
         /// <summary>
-        /// Assigns 5 terrain layers (grass / exposed stone / mud path / snow /
-        /// dark dead ground) and paints the alphamaps from slope + elevation +
-        /// biome rules. Blend zones are soft. The mud layer is left near-zero
-        /// here; <see cref="PaintNaturalPaths"/> writes the paths into it.
+        /// Assigns the terrain layers declared by
+        /// <see cref="DeNelle.Core.World.TerrainLayerSet"/> — real curated art, two layers
+        /// per march — and paints the alphamaps from quadrant + slope + elevation.
+        /// <para>
+        /// The four marches are separated by VALUE, TEXTURE and LIGHT, never hue (the owner
+        /// is red/green colourblind; WO-1044 §1 is canon and TerrainLayerRegression asserts
+        /// the ΔL). The path layer is left near-zero here;
+        /// <see cref="PaintNaturalPaths"/> stamps roads into it afterwards.
+        /// </para>
         /// </summary>
         private static void PaintSplatmaps(TerrainData td)
         {
-            td.terrainLayers = new[]
+            // ── Layers come from the ONE authority (WO-1101) ─────────────────
+            // Every layer is now real curated art (BaseColor + Normal, 1024, tracked under
+            // Assets/Generated/Terrain/Layers/) instead of a 64x64 procedural swatch.
+            // MakeLayer falls back to MakeSolidTexture + a WARNING if a PNG is missing so a
+            // fresh clone still bakes (CLAUDE.md §4: missing art warns, never errors).
+            // Idempotency: drop the pre-WO-1101 layer assets (Exterior_Grass/Stone/Mud/Snow/Dead).
+            // They are superseded by the named layers below; left on disk they are dead assets that
+            // still LOOK like the ground contract to the next reader.
+            foreach (var legacy in new[] { "Exterior_Grass", "Exterior_Stone", "Exterior_Mud", "Exterior_Snow", "Exterior_Dead" })
             {
-                // Greener grass (owner 2026-08-07: wants grass that reads as grass, not grey-green).
-                MakeLayer("Exterior_Grass", new Color(0.28f, 0.52f, 0.22f), 12f),  // lively meadow green
-                MakeLayer("Exterior_Stone", new Color(0.55f, 0.52f, 0.45f), 11f),  // warm tan-grey
-                // Darker packed dirt for roads — must contrast hard against grass.
-                MakeLayer("Exterior_Mud",   new Color(0.36f, 0.26f, 0.16f), 6f),   // road dirt
-                MakeLayer("Exterior_Snow",  new Color(0.90f, 0.92f, 0.96f), 16f),  // snow
-                MakeLayer("Exterior_Dead",  new Color(0.20f, 0.17f, 0.16f), 12f),  // dark dead ground
-            };
+                string legacyPath = TerrainAssetDir + "/" + legacy + ".terrainlayer";
+                if (File.Exists(legacyPath))
+                {
+                    AssetDatabase.DeleteAsset(legacyPath);
+                    _notes.Add("removed legacy layer asset " + legacy);
+                }
+            }
+
+            var layers = new TerrainLayer[LayerCount];
+            for (int i = 0; i < LayerCount; i++) layers[i] = MakeLayer(i);
+            td.terrainLayers = layers;
+
+            // Layer manifest — a capture/log diff proves WHICH contract a bake ran with
+            // (CLAUDE.md §12). Without this a stale bake and a fresh one read identically.
+            Debug.Log("[ExteriorTerrainBuilder] SPLAT MANIFEST (bake authority) " +
+                      TerrainLayerSet.Manifest());
+            FlowTrace.Step("World", "ExteriorTerrainBuilder.PaintSplatmaps — " + TerrainLayerSet.Manifest());
 
             int res = td.alphamapResolution;
             var splat = new float[res, res, LayerCount];
+            var coverage = new double[LayerCount];
+            // Hoisted scratch — res is 1024, so a per-cell allocation here would be a
+            // million array allocations per bake.
+            var w = new float[LayerCount];
 
             for (int z = 0; z < res; z++)
             {
@@ -727,48 +782,134 @@ namespace DeNelle.Editor
                     float y = WorldHeightAt(worldX, worldZ);
                     float slope = SteepnessAt(worldX, worldZ);   // 0..1
 
-                    float wGrass = 1f;
-                    float wStone = 0f;
-                    float wSnow = 0f;
-                    float wDead = 0f;
+                    // ── Quadrant weights — the SAME derivation the runtime repaint uses
+                    //    (WorldSceneLoader.BuildQuadrantWeights). Bake and runtime must
+                    //    agree or the ground changes the moment the player is on device.
+                    float qGold, qStone, qMire, qAsh;
+                    TerrainLayerSet_QuadrantWeights(worldX, cz, out qGold, out qStone, out qMire, out qAsh);
 
-                    // Exposed stone only on steeper slopes (was 0.30 — too much grey lawn).
-                    wStone = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.42f, 0.72f, slope));
+                    // Low-frequency mottle -> each march blends 2 layers instead of reading
+                    // as one flat sheet. This is the "texture" axis of the colourblind gate:
+                    // biomes differ by GRAIN as well as by value.
+                    float mottle = Mathf.PerlinNoise(worldX * 0.012f + 91f, worldZ * 0.012f + 47f);
 
-                    // Snow above Y+20 in the north only (§9.3).
-                    if (cz > 0f && y > 14f)
-                        wSnow = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(14f, 24f, y));
+                    System.Array.Clear(w, 0, LayerCount);
 
-                    // Dark dead ground below Y-8 in the south only (§9.3).
-                    if (cz < 0f && y < -6f)
-                        wDead = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(-6f, -11f, y));
+                    // Hub / centre meadow — whatever no march claims.
+                    float centre = Mathf.Clamp01(1f - (qGold + qStone + qMire + qAsh));
+                    w[LayerMeadow] = centre;
 
-                    // Light meadow mottling only — keep grass dominant so the world reads green.
-                    // Roads/paths stamp mud later (PaintNaturalPaths). Do NOT spray mud everywhere.
-                    float wMud = 0f;
-                    if (wSnow < 0.4f && wDead < 0.4f && slope < 0.35f)
+                    // GOLDFIELDS (E) — pale dry field, lowest internal contrast. A little
+                    // meadow bleeds in near the hub so the seam is not a line.
+                    w[LayerGoldfields] += qGold * (0.82f + 0.18f * mottle);
+                    w[LayerMeadow] += qGold * (0.18f - 0.18f * mottle);
+
+                    // STONEBACK (W) — faceted rock; snow ONLY here and only high (canon:
+                    // snow patches are Stoneback's only true whites).
+                    float snowHere = (y > 14f) ? Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(14f, 26f, y)) : 0f;
+                    w[LayerStone] += qStone * (1f - snowHere) * (0.85f + 0.15f * (1f - mottle));
+                    w[LayerSnow] += qStone * snowHere;
+                    w[LayerMeadow] += qStone * (1f - snowHere) * (0.15f * mottle);
+
+                    // MIREWOOD (S) — two layers in the SAME value band. Canon gives Mirewood
+                    // the narrowest value range in the game, so its variety is texture-only:
+                    // mire vs root-tangle, never a lighter/darker patch.
+                    w[LayerMire] += qMire * (0.55f + 0.45f * mottle);
+                    w[LayerMireRoots] += qMire * (0.45f - 0.45f * mottle);
+
+                    // ASHWOOD (N) — PALE powdery ash (WO-1044 §1 "ink on ash"). See the
+                    // inversion note in TerrainLayerSet: the shipped Exterior_Dead ground was
+                    // L=0.176, the OPPOSITE of ratified canon. The darkness lives in the
+                    // trunks, not the floor. Do not "restore" the dark ground.
+                    w[LayerAsh] += qAsh * (0.88f + 0.12f * mottle);
+                    w[LayerStone] += qAsh * (0.12f - 0.12f * mottle);   // grit/debris, not a second value
+
+                    // Exposed rock on steep ground, in every march (was 0.42..0.72).
+                    float rocky = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.42f, 0.72f, slope));
+                    if (rocky > 0f)
                     {
-                        float dry = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.72f, 0.90f,
-                            Mathf.PerlinNoise(worldX * 0.016f + 91f, worldZ * 0.016f + 47f))) * 0.12f;
-                        wStone = Mathf.Max(wStone, dry);
+                        for (int k = 0; k < LayerCount; k++) w[k] *= (1f - rocky);
+                        w[LayerStone] += rocky;
                     }
 
-                    // Grass is whatever the other layers don't claim — bias toward green.
-                    wGrass = Mathf.Max(0f, 1f - wStone - wSnow - wDead - wMud);
-                    if (slope < 0.28f && wSnow < 0.2f && wDead < 0.2f)
-                        wGrass = Mathf.Max(wGrass, 0.55f); // gentle ground stays grassy
+                    float total = 0f;
+                    for (int k = 0; k < LayerCount; k++) { if (w[k] < 0f) w[k] = 0f; total += w[k]; }
+                    if (total < 0.0001f) { w[LayerMeadow] = 1f; total = 1f; }
 
-                    float total = wGrass + wStone + wSnow + wDead + wMud;
-                    if (total < 0.0001f) { wGrass = 1f; total = 1f; }
-
-                    splat[z, x, LayerGrass] = wGrass / total;
-                    splat[z, x, LayerStone] = wStone / total;
-                    splat[z, x, LayerMud] = wMud / total;
-                    splat[z, x, LayerSnow] = wSnow / total;
-                    splat[z, x, LayerDead] = wDead / total;
+                    for (int k = 0; k < LayerCount; k++)
+                    {
+                        float n = w[k] / total;
+                        splat[z, x, k] = n;
+                        coverage[k] += n;
+                    }
                 }
             }
             td.SetAlphamaps(0, 0, splat);
+
+            // Per-layer coverage % — the proving line. A layer at 0.0% is an authored layer
+            // that never reaches the player, which is exactly the silent defect §12 exists for.
+            double cells = (double)res * res;
+            var cov = new System.Text.StringBuilder("[ExteriorTerrainBuilder] SPLAT COVERAGE ");
+            for (int k = 0; k < LayerCount; k++)
+                cov.Append(TerrainLayerSet.Layers[k].Name).Append('=')
+                   .Append((coverage[k] / cells * 100.0).ToString("0.0")).Append("%  ");
+            Debug.Log(cov.ToString());
+            for (int k = 0; k < LayerCount; k++)
+            {
+                // ⚠ SKIP Path_Dirt HERE, AND THIS IS NOT THE GUARD GOING SOFT.
+                // This coverage is measured INSIDE PaintSplatmaps, which BuildExterior calls at the
+                // biome-splat step — and PaintNaturalPaths stamps the roads on the NEXT line, after
+                // us. So the road layer is legitimately 0.0% at this instant and warning about it is
+                // measuring the wrong moment, not finding a defect. The first bake after the WO-1101
+                // curation duly printed "Path_Dirt covers <0.05% — authored but effectively
+                // invisible" and cost a real investigation to dismiss.
+                //
+                // A guard that cries wolf every single run is WORSE than no guard: the next reader
+                // either burns an hour re-deriving that it is benign, or learns to ignore this
+                // warning — and then misses the real one. The road layer's true coverage is asserted
+                // after PaintNaturalPaths instead (see the road-coverage check there), which is the
+                // only place the number means anything.
+                if (k == TerrainLayerSet.PathDirt) continue;
+
+                if (coverage[k] / cells < 0.0005)
+                    Debug.LogWarning("[ExteriorTerrainBuilder] layer '" + TerrainLayerSet.Layers[k].Name +
+                                     "' covers <0.05% of the terrain — authored but effectively invisible.");
+            }
+        }
+
+        /// <summary>
+        /// Quadrant membership weights (Goldfields E / Stoneback W / Mirewood S / Ashwood N)
+        /// for a terrain-centred position. Normalised, so the four sum to ~1 away from the
+        /// hub and fade to 0 at the centre.
+        /// <para>
+        /// ⚠ This derivation is MIRRORED in
+        /// <c>DeNelle.Village.WorldSceneLoader.BuildQuadrantWeights</c>, which is the splat
+        /// the player actually sees on device (DEF-108). The two must stay identical; the
+        /// layer INDICES they write are already shared via
+        /// <see cref="DeNelle.Core.World.TerrainLayerSet"/>. Changing the shape here without
+        /// changing it there produces a ground that differs between editor and device.
+        /// </para>
+        /// </summary>
+        private static void TerrainLayerSet_QuadrantWeights(
+            float worldX, float centredZ, out float gold, out float stone, out float mire, out float ash)
+        {
+            float half = TerrainSizeXZ * 0.5f;
+            // Hub hold-out: inside this radius the marches yield to the centre meadow so the
+            // town is not painted as a biome.
+            float hub = Mathf.Clamp01(Mathf.InverseLerp(70f, 190f,
+                Mathf.Sqrt(worldX * worldX + centredZ * centredZ)));
+
+            gold  = Mathf.Max(0f, worldX) / half;
+            stone = Mathf.Max(0f, -worldX) / half;
+            ash   = Mathf.Max(0f, centredZ) / half;
+            mire  = Mathf.Max(0f, -centredZ) / half;
+
+            float sum = gold + stone + ash + mire;
+            if (sum < 0.0001f) { gold = stone = ash = mire = 0f; return; }
+            gold  = gold / sum * hub;
+            stone = stone / sum * hub;
+            ash   = ash / sum * hub;
+            mire  = mire / sum * hub;
         }
 
         /// <summary>
@@ -789,23 +930,75 @@ namespace DeNelle.Editor
             return Mathf.Clamp01(grad);
         }
 
-        /// <summary>Creates a flat-colour terrain layer (no texture asset needed -- diffuse tint).</summary>
-        private static TerrainLayer MakeLayer(string name, Color tint, float tileSize)
+        /// <summary>
+        /// Builds one terrain layer from the CURATED art named by
+        /// <see cref="DeNelle.Core.World.TerrainLayerSet"/> (WO-1101).
+        /// <para>
+        /// Before this change every layer's diffuse was <see cref="MakeSolidTexture"/> — a
+        /// 64x64 solid colour with a Perlin mottle, embedded in ExteriorTerrainData.asset,
+        /// with <c>normalMapTexture</c> left NULL on all five layers. Five 64-pixel swatches
+        /// and zero normal maps is the whole reason the ground read flat: the world had no
+        /// ground texture art at all, not bad art.
+        /// </para>
+        /// <para>
+        /// FALLBACK, not a path we want: if a curated PNG is missing (fresh clone with LFS
+        /// not fetched, or someone deleted the folder) the layer degrades to the old solid
+        /// tint and WARNS. Never an error — a missing art asset must not stop a bake
+        /// (CLAUDE.md §4).
+        /// </para>
+        /// </summary>
+        private static TerrainLayer MakeLayer(int index)
         {
+            var def = TerrainLayerSet.Layers[index];
+            string basePath = TerrainLayerSet.BaseColorPath(index);
+            string normPath = TerrainLayerSet.NormalPath(index);
+
+            var baseTex = AssetDatabase.LoadAssetAtPath<Texture2D>(basePath);
+            var normTex = AssetDatabase.LoadAssetAtPath<Texture2D>(normPath);
+
+            if (baseTex == null)
+            {
+                _notes.Add("curated basecolor missing for '" + def.Name + "' -> solid-tint fallback");
+                Debug.LogWarning("[ExteriorTerrainBuilder] curated ground texture NOT FOUND at '" + basePath +
+                                 "' — layer '" + def.Name + "' falls back to a flat tint. The terrain will " +
+                                 "bake, but this biome loses its texture and its measured value. " +
+                                 "(Check git-lfs has been fetched for Assets/Generated/Terrain/Layers/.)");
+                FlowTrace.Warn("World", "MakeLayer fallback: '" + def.Name + "' has no curated BaseColor at " + basePath);
+                baseTex = MakeSolidTexture(def.FallbackTint);
+            }
+            if (normTex == null && baseTex != null)
+            {
+                _notes.Add("curated normal missing for '" + def.Name + "'");
+                Debug.LogWarning("[ExteriorTerrainBuilder] curated NORMAL map NOT FOUND at '" + normPath +
+                                 "' — layer '" + def.Name + "' will render without relief.");
+                FlowTrace.Warn("World", "MakeLayer: '" + def.Name + "' has no curated Normal at " + normPath);
+            }
+
             var layer = new TerrainLayer
             {
-                name = name,
-                diffuseTexture = MakeSolidTexture(tint),
-                tileSize = new Vector2(tileSize, tileSize),
+                name = def.Name,
+                diffuseTexture = baseTex,
+                normalMapTexture = normTex,
+                normalScale = def.NormalScale,
+                smoothness = def.Smoothness,
+                metallic = 0f,
+                specular = new Color(0.05f, 0.05f, 0.05f, 1f),
+                tileSize = new Vector2(def.TileSize, def.TileSize),
                 tileOffset = Vector2.zero,
             };
-            string path = TerrainAssetDir + "/" + name + ".terrainlayer";
+
+            string path = TerrainLayerSet.TerrainLayerPath(index);
             if (File.Exists(path)) AssetDatabase.DeleteAsset(path);
             AssetDatabase.CreateAsset(layer, path);
             return layer;
         }
 
-        /// <summary>Builds a small solid-colour texture asset (terrain layers need a diffuse texture).</summary>
+        /// <summary>
+        /// LAST-RESORT ONLY (WO-1101): a small solid-colour texture for a layer whose curated
+        /// PNG is missing. This used to be how EVERY layer got its diffuse; it is now the
+        /// warn-and-continue path so a clone without the art still produces a valid terrain
+        /// instead of a null-diffuse (colourless/pink) one.
+        /// </summary>
         private static Texture2D MakeSolidTexture(Color c)
         {
             // WORLDFEEL 2026-07-02: was a 32x32 pixel-noise tint (±0.06) that still read
@@ -917,8 +1110,28 @@ namespace DeNelle.Editor
             }, CavePathHalfWidth);
 
             td.SetAlphamaps(0, 0, splat);
+
+            // ROAD COVERAGE — asserted HERE, because here is the only place the number means
+            // anything. PaintSplatmaps measures per-layer coverage before this method runs, so the
+            // road layer is necessarily 0.0% at that point; its check deliberately skips PathDirt
+            // and defers to this one. If the roads ever stop reaching the alphamap, THIS is the line
+            // that says so — and unlike the earlier check, a warning from it is always real.
+            double roadCells = 0.0, totalCells = (double)res * res;
+            for (int z = 0; z < res; z++)
+                for (int x = 0; x < res; x++)
+                    roadCells += splat[z, x, TerrainLayerSet.PathDirt];
+
+            double roadPct = roadCells / totalCells * 100.0;
             FlowTrace.Step("Exterior",
-                "PaintNaturalPaths: gate roads to 3 portals + ring road + footpaths + cave corridor");
+                $"PaintNaturalPaths: gate roads to 3 portals + ring road + footpaths + cave corridor " +
+                $"— Path_Dirt now covers {roadPct:0.00}% of the terrain.");
+            Debug.Log($"[ExteriorTerrainBuilder] ROAD COVERAGE Path_Dirt={roadPct:0.00}% (post-stamp; " +
+                      "the SPLAT COVERAGE line above is measured pre-stamp and reads 0.0% by design).");
+
+            if (roadPct < 0.05)
+                Debug.LogWarning("[ExteriorTerrainBuilder] Path_Dirt covers <0.05% AFTER the road stamp — " +
+                                 "the 5 natural paths were generated but are not reaching the alphamap. " +
+                                 "This one IS a defect: the roads are invisible to the player.");
         }
 
         /// <summary>Dirt ring road around the castle (outside moat clear zone).</summary>
@@ -998,15 +1211,23 @@ namespace DeNelle.Editor
                     float w = t * t;
                     // Boost centre so roads punch through grass (owner: want visible paths).
                     if (t > 0.55f) w = Mathf.Min(1f, w * 1.35f);
-                    float mud = Mathf.Max(splat[z, x, LayerMud], w);
-                    // Renormalise: mud takes from grass first, then stone.
-                    float take = mud - splat[z, x, LayerMud];
-                    splat[z, x, LayerMud] = mud;
-                    float fromGrass = Mathf.Min(splat[z, x, LayerGrass], take);
-                    splat[z, x, LayerGrass] -= fromGrass;
-                    take -= fromGrass;
-                    if (take > 0f)
-                        splat[z, x, LayerStone] = Mathf.Max(0f, splat[z, x, LayerStone] - take);
+                    // WO-1101: the road stamps into Path_Dirt and takes its weight from
+                    // EVERY other layer PROPORTIONALLY. The old code took from grass then
+                    // stone by name, which silently stopped renormalising the moment the
+                    // layer set grew past those two — the alphamap would no longer sum to 1
+                    // and the road would read as a translucent smear over the new biomes.
+                    float road = Mathf.Max(splat[z, x, LayerPath], w);
+                    float take = road - splat[z, x, LayerPath];
+                    if (take <= 0f) continue;
+                    splat[z, x, LayerPath] = road;
+
+                    float rest = 0f;
+                    for (int k = 0; k < LayerCount; k++)
+                        if (k != LayerPath) rest += splat[z, x, k];
+                    if (rest <= 0.0001f) continue;
+                    float keep = Mathf.Max(0f, 1f - road) / rest;
+                    for (int k = 0; k < LayerCount; k++)
+                        if (k != LayerPath) splat[z, x, k] *= keep;
                 }
             }
         }
@@ -1183,6 +1404,157 @@ namespace DeNelle.Editor
 
             td.SetTreeInstances(instances.ToArray(), true);
             _treeCount = instances.Count;
+        }
+
+        // =====================================================================
+        //  Ground cover -- detail grass + bush clutter (WO-1101)
+        // =====================================================================
+
+        /// <summary>
+        /// Registers Unity Terrain DETAIL prototypes and paints per-biome clutter density.
+        /// <para>
+        /// This is the owner's literal ask ("grass and simple aesthetics") and it was
+        /// entirely unbuilt: <c>CreateTerrainData</c> has always called
+        /// <c>SetDetailResolution(512, 16)</c> and then never registered a single
+        /// <see cref="DetailPrototype"/> — there was no grass clutter anywhere in the world.
+        /// Terrain details are GPU-instanced and distance-culled, so this is the cheapest
+        /// high-impact art in the pass.
+        /// </para>
+        /// <para>
+        /// ⚠ PREFAB NAMES ARE VERIFIED AGAINST DISK, not against
+        /// <c>docs/WORLD_BIOME_SCATTER_DIRECTION.md</c>. That doc carries two verified errors
+        /// that resolve to NULL prefabs (its polyperfect base path is one folder short for
+        /// every Nature name, and <c>Stones_Small</c> does not exist — the real prefab is
+        /// <c>Stone_Small</c>). It also prescribes differentiating biomes by TINT, which
+        /// WO-1044 retires: hue-only differentiation is unusable to a red/green colourblind
+        /// owner and fails the greyscale gate. We use KayKit because it is GIT-TRACKED;
+        /// polyperfect and Blink are gitignored.
+        /// </para>
+        /// Densities follow WO-1044 §1: Goldfields dense and moving, Stoneback near-bare
+        /// scrub, Mirewood dense understory, Ashwood BARE (silhouette does the work there —
+        /// clutter would soften the one biome whose identity is emptiness).
+        /// </summary>
+        private static void PaintDetailGroundCover(TerrainData td)
+        {
+            // Single-sided grass cards are the cheap ones; the KayKit pack ships them
+            // explicitly for this use. Verified present under ForestPackColor1.
+            var protoNames = new[]
+            {
+                "Grass_1_A_Singlesided",   // 0 — fine field grass (Goldfields / meadow hero)
+                "Grass_2_B_Singlesided",   // 1 — coarser tuft, breaks the repeat
+                "Bush_1_A",                // 2 — Mirewood understory
+                "Bush_4_A",                // 3 — Stoneback scrub, sparse
+            };
+
+            var protos = new List<DetailPrototype>();
+            var resolved = new List<int>();       // index into protoNames, parallel to protos
+            for (int i = 0; i < protoNames.Length; i++)
+            {
+                string path = ForestPackColor1 + protoNames[i] + "_Color1.fbx";
+                var go = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+                if (go == null)
+                {
+                    _notes.Add("detail prefab missing: " + protoNames[i]);
+                    Debug.LogWarning("[ExteriorTerrainBuilder] ground-cover mesh not found at '" + path +
+                                     "' — skipping that detail prototype (terrain still valid).");
+                    continue;
+                }
+                if (go.GetComponentInChildren<MeshRenderer>(true) == null)
+                {
+                    _notes.Add("detail prefab has no MeshRenderer: " + protoNames[i]);
+                    Debug.LogWarning("[ExteriorTerrainBuilder] '" + path + "' has no MeshRenderer — " +
+                                     "cannot be a mesh detail prototype. Skipped.");
+                    continue;
+                }
+                protos.Add(new DetailPrototype
+                {
+                    prototype = go,
+                    usePrototypeMesh = true,
+                    renderMode = DetailRenderMode.VertexLit,   // required for mesh prototypes
+                    useInstancing = true,                      // GPU instanced — mobile-cheap
+                    minWidth = 0.7f, maxWidth = 1.25f,
+                    minHeight = 0.7f, maxHeight = 1.35f,
+                    noiseSeed = 20261101 + i,
+                    noiseSpread = 0.35f,
+                    healthyColor = Color.white,
+                    dryColor = Color.white,   // ⚠ no hue tinting — WO-1044 retires tint-as-differentiator
+                });
+                resolved.Add(i);
+            }
+
+            if (protos.Count == 0)
+            {
+                Debug.LogWarning("[ExteriorTerrainBuilder] NO ground-cover prototypes resolved — " +
+                                 "detail pass skipped (terrain still valid).");
+                FlowTrace.Warn("World", "PaintDetailGroundCover: zero prototypes resolved from " + ForestPackColor1);
+                return;
+            }
+
+            td.detailPrototypes = protos.ToArray();
+            _detailPrototypeCount = protos.Count;
+
+            int dw = td.detailWidth, dh = td.detailHeight;
+            var maps = new int[protos.Count][,];
+            for (int p = 0; p < protos.Count; p++) maps[p] = new int[dh, dw];
+
+            int painted = 0;
+            for (int dz = 0; dz < dh; dz++)
+            {
+                float v = dz / (float)(dh - 1);
+                float worldZ = (v - 0.5f) * TerrainSizeXZ + TerrainCenterZ;
+                float cz = worldZ - TerrainCenterZ;
+                for (int dx = 0; dx < dw; dx++)
+                {
+                    float u = dx / (float)(dw - 1);
+                    float worldX = (u - 0.5f) * TerrainSizeXZ;
+
+                    // Steep ground and the cave road stay clear.
+                    if (SteepnessAt(worldX, worldZ) > 0.45f) continue;
+                    if (DistanceToCavePath(worldX, worldZ) < CavePathFlattenHalf + 2f) continue;
+
+                    float qGold, qStone, qMire, qAsh;
+                    TerrainLayerSet_QuadrantWeights(worldX, cz, out qGold, out qStone, out qMire, out qAsh);
+                    float centre = Mathf.Clamp01(1f - (qGold + qStone + qMire + qAsh));
+
+                    // Patchiness so clutter reads as clumps, not a carpet.
+                    float patch = Mathf.PerlinNoise(worldX * 0.03f + 13f, worldZ * 0.03f + 71f);
+
+                    // Per-biome grass / bush density (0..1), WO-1044 §1.
+                    //   Goldfields: dense fine grass — the field is the biome.
+                    //   Meadow (hub): dense.
+                    //   Stoneback:  near-bare, occasional scrub.
+                    //   Mirewood:   dense understory bush.
+                    //   Ashwood:    BARE — deliberately zero. Emptiness IS the identity.
+                    float grass = (qGold * 1.0f + centre * 0.85f + qStone * 0.10f + qMire * 0.35f) * patch;
+                    float bushMire = qMire * 0.9f * patch;
+                    float bushRock = qStone * 0.18f * patch;
+
+                    WriteDetail(maps, resolved, 0, dz, dx, grass * 7f);
+                    WriteDetail(maps, resolved, 1, dz, dx, grass * 4f);
+                    WriteDetail(maps, resolved, 2, dz, dx, bushMire * 3f);
+                    WriteDetail(maps, resolved, 3, dz, dx, bushRock * 2f);
+                    if (grass + bushMire + bushRock > 0.05f) painted++;
+                }
+            }
+
+            for (int p = 0; p < protos.Count; p++) td.SetDetailLayer(0, 0, p, maps[p]);
+            _detailPatchCount = painted;
+
+            Debug.Log("[ExteriorTerrainBuilder] GROUND COVER " + protos.Count + " prototype(s) [" +
+                      string.Join(", ", protos.ConvertAll(p => p.prototype != null ? p.prototype.name : "NULL")) +
+                      "] over " + painted + "/" + (dw * dh) + " detail cells " +
+                      "(Ashwood intentionally bare — WO-1044 §1).");
+            FlowTrace.Step("World", "PaintDetailGroundCover: " + protos.Count + " prototypes, " +
+                           painted + " populated detail cells.");
+        }
+
+        /// <summary>Writes one detail cell if that prototype resolved (indices shift when art is missing).</summary>
+        private static void WriteDetail(int[][,] maps, List<int> resolved, int wantedName, int z, int x, float density)
+        {
+            int slot = resolved.IndexOf(wantedName);
+            if (slot < 0) return;                       // that prefab was missing — warned already
+            int d = Mathf.RoundToInt(Mathf.Clamp(density, 0f, 12f));
+            if (d > 0) maps[slot][z, x] = d;
         }
 
         /// <summary>Loads a model and appends it to a list if the asset resolves.</summary>
