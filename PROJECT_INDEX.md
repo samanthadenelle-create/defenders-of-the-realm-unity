@@ -1,7 +1,7 @@
 # PROJECT_INDEX — Root File Map
 
 How to navigate the markdown files at project root without reading them all
-(**114 as counted 2026-08-16** — the number drifts every week; count it, do not quote it).
+(**118 as counted 2026-08-16 evening** — the number drifts every week; count it, do not quote it).
 Code map: `Assets/_Modules/README.md`. Assets map: `Assets/README.md`.
 Docs index: `docs/README.md`.
 
@@ -29,7 +29,7 @@ Docs index: `docs/README.md`.
 | File | Purpose |
 |---|---|
 | `HOME.html` | **Generated wiki-style home page over the doc lake** (`python tools/home_build.py`) — one click to rules / architecture / north star / board / catalogs / the VFX+sound organization registries; derived view, never hand-edit, dead links fail the generator (WO-943) |
-| `CANON_GROUND_TRUTH_2026-08-06.md` | **The single live anchor of current reality — read FIRST** (delta over 08-05 → 08-03 → 08-02 → 08-01 → 07-26 → the deep `CANON_GROUND_TRUTH_2026-07-22.md` module anchor; all earlier anchors frozen/bannered) |
+| `CANON_GROUND_TRUTH_2026-08-16.md` | **The single live anchor of current reality — read FIRST** (delta over 08-06 → 08-05 → 08-03 → 08-02 → 08-01 → 07-26 → the deep `CANON_GROUND_TRUTH_2026-07-22.md` module anchor; all earlier anchors frozen/bannered). ⚠ This row named the **08-06** anchor until 2026-08-16 while the banner at the top of this same file already said 08-16 — one file, two answers. There is exactly ONE live anchor: the newest dated `CANON_GROUND_TRUTH_*.md`. If this row and the banner ever disagree again, trust neither and `ls CANON_GROUND_TRUTH_*.md` |
 | `docs/reference/SESSION_INDEX_2026-08-06.md` | The 2026-08-05/06 session as a **known dictionary** — every defect with its proving line, every **REFUTED** belief with the evidence that killed it, the owner rulings, the open items |
 | `docs/reference/DEFECT_INDEX_2026-08-05.md` | Same, for the earlier half of 2026-08-05 (dungeon P0, wallet, catalog fallback drift). **Frozen ledger** |
 | `KEY_FACTS.md` | The living fact sheet + ⭐ NORTH STAR state — always current, updated in place |
