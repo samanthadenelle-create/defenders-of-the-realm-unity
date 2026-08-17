@@ -1,6 +1,20 @@
 # WORK ORDER 1037 — Turn "Missing resources" into a pack offer (STUBBED, flag-gated off prod)
 
-**Status:** SPEC — needs owner ruling on §3 (⛔ no pack can currently fulfil this offer)
+**Status:** READY TO IMPLEMENT — §3 RULED (owner, 2026-08-16: **OPTION (b)**, single-resource impulse packs)
+
+> ⚠ THE OLD STATUS LINE WAS STALE BY A DAY. It read *"needs owner ruling on §3 (no pack can currently
+> fulfil this offer)"* — but §3 already carries `⛔ RULED 2026-08-16 — OPTION (b)` with the owner's
+> verbatim words (*"we should have small instant packs"* · *"small wood only"*). The blocker it named
+> was spent; the ticket has been implementable since. Caught in the 2026-08-17 staleness sweep.
+>
+> This is the §2 failure mode in its purest form: the ruling was written INTO the body and the STATUS
+> LINE was never flipped — and the board is DERIVED from the status line, so the whole project read
+> this as blocked-on-the-owner for a day while it was actually ready to build.
+>
+> **Remaining dependency (not a blocker on this WO):** option (b) means real money now buys the
+> REGULAR basket (wood/iron), which WO-947 was written on the assumption it never would. That needs the
+> **WO-947 §12 amendment** (drafted 2026-08-17) — see `WORK_ORDER_947_cost_basket_separation_regular_vs_arcane.md`.
+> The amendment does NOT change any structure's cost basket and does not reopen WO-947.
 **Minted:** 2026-08-16 (UI seat) — provenance stack bumped 1037 → 1038 in the same edit
 **Lane:** Building upgrade panel + PackStore surface. ⚠ Monetization-adjacent — read §2 before coding.
 **Provenance:** owner 2026-08-16 — *"could we use this opportunity to suggest a pack that would allow

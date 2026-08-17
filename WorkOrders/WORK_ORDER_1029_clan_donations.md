@@ -1,6 +1,23 @@
 # WORK ORDER 1029 — Clans are a PlayerPrefs stub: ship donations, not wars
 
-**Status:** SPEC — **sequenced LAST** of the review set; needs backend decision (§4)
+**Status:** BLOCKED ON BACKEND READINESS — ★ §4 RULED 2026-08-17: **BLOCK; do not bundle the `api/` promotion**
+
+> Owner ruling 2026-08-17 (*"open ones follow your recommendations"*): this WO does **NOT** promote `api/`
+> to production. It waits for a separate backend-readiness ticket that owns the promotion and the CORS fix.
+>
+> ⚠ WHY BLOCK RATHER THAN BUNDLE: promoting a backend inside a gameplay feature is precisely the
+> structural-refactor smuggling `docs/ARCHITECTURE_PRINCIPLES.md` forbids — player-facing work must not
+> carry infrastructure change in its pocket. It also hides the risk: if the promotion breaks auth, it
+> surfaces as *"clan donations are broken"* rather than as what it actually is. `api/` is PREVIEW-only
+> today and prod's nonce endpoint has no CORS.
+>
+> ### Second ruling — the free-text path is CLOSED
+> Donations ship with **preset messages only**; no player-authored free text. Free text is a moderation
+> surface, and per §4 it must not reach a networked build without an explicit ruling — this is that
+> ruling, and it is **closed, not deferred**. Reopening it means owning moderation, reporting and a
+> takedown path: a product decision, not a feature detail.
+>
+> Everything else in §5 stays as specced and is implementable the moment the backend ticket lands.
 **Minted:** 2026-08-15 (UI seat) — provenance stack bumped 1029 → 1030 in the same edit
 **Lane:** Social / backend. ⚠ Depends on `api/`, which is **PREVIEW-only** today.
 **Provenance:** `docs/DESIGN_REVIEW_COC_WC3_LENS_2026-08-15.md` §3 ⓹.

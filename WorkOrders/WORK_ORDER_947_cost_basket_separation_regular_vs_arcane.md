@@ -1,6 +1,6 @@
 # WORK ORDER 947 — Cost-basket separation: regular structures = wood+iron; magical/ethereal = crystal-based; never all three
 
-**Status:** DONE — **FULLY APPLIED, NO OPEN PINS** (catalog v19, 2026-08-14). All four §4 pins + the §6 pin landed in v18 (6 rows); the **final** §9 pin — `arcane-tower` / "Cathedral of Magic" — was ruled MAGICAL by the owner and applied in **v19** (§11). The gate's exemption list is EMPTY and stays empty; `MagicalIds` holds **four** ids.
+**Status:** DONE — **FULLY APPLIED, NO OPEN PINS** (catalog v19, 2026-08-14) · **+ §12 AMENDMENT 2026-08-17** (the PURCHASE boundary; changes no cost row, no catalog bump, exemption list still empty). All four §4 pins + the §6 pin landed in v18 (6 rows); the **final** §9 pin — `arcane-tower` / "Cathedral of Magic" — was ruled MAGICAL by the owner and applied in **v19** (§11). The gate's exemption list is EMPTY and stays empty; `MagicalIds` holds **four** ids.
 **Minted:** 2026-08-10 (CLI seat, main line — banner bumped 947 → 948 in the same edit)
 **Silo:** Data (structures-catalog.json dual-copy) + one regression gate — no code-lane conflicts
 **Type:** owner ECONOMY RULING, applied to data + enforced by a gate
@@ -239,3 +239,70 @@ Both copies re-parsed after the edit:
 
 - Affinity/harvest math, Echo systems (WO-811 lane is live), the crystal SINKS (instant-finish,
   queue-slot pricing — WO-911 rulings), Gold/Coins, pack pricing.
+
+---
+
+## 12. ★ AMENDMENT 2026-08-17 — the purchase boundary is NOT the cost boundary
+
+**Trigger:** WO-1037 §3 was ruled **OPTION (b)** by the owner on 2026-08-16 — *"we should have small
+instant packs"* · *"small wood only"* · single-resource impulse packs for **Wood, Iron, Food, Crystals**,
+small/medium/large, exactly one economy key per SKU, $2/$5 tiers with $5 the ceiling. WO-1037 flagged
+that this "needs a WO-947 amendment" because **real money can now buy the REGULAR basket**, which this
+WO was written on the assumption it never would.
+
+### 12a. What this amendment does NOT change — read this before touching anything
+
+**The §2 invariant stands, untouched and still gate-enforced:**
+
+> **No structure's cost basket contains wood AND iron AND crystals.**
+> Regular structures cost **wood + iron**. Magical/ethereal structures are **crystal-based**.
+
+- **No structure's cost basket changes.** Not one row.
+- **`MagicalIds` still holds four ids.** The gate's exemption list is **still EMPTY and stays empty**.
+- **Catalog stays at v19.** This amendment authors no data and requires no catalog bump.
+- Nothing in §1–§11 is reopened. WO-947 remains **DONE**.
+
+### 12b. What it establishes — a second, orthogonal axis
+
+WO-947 separated **what a structure COSTS**. It never spoke to **what real money may BUY**, and the two
+were silently conflated when WO-1037 called this a conflict. They are different boundaries:
+
+| axis | question | ruled by |
+|---|---|---|
+| **COST boundary** (WO-947 §2) | which resources does this structure charge? | WO-947 — unchanged |
+| **PURCHASE boundary** (this amendment) | which resources can real money grant? | WO-1037 §3, option (b) |
+
+**The ruling:** real money may grant **any single harvestable resource** — wood, iron, food or crystals —
+as a one-key impulse pack. Buying wood does not make a Lumber Mill cost crystals, and does not make
+crystals a regular resource. The separation was always about **charging**, never about **granting**.
+
+### 12c. Guardrails carried over (these are the load-bearing half)
+
+1. **Exactly ONE economy key per SKU.** A wood pack grants wood and nothing else. A multi-resource
+   bundle would re-mix the baskets through the back door and IS forbidden — that would be a genuine
+   §2 violation dressed as a store item.
+2. **$5 ceiling, $2 and $5 tiers** (standing owner pricing ruling, memory
+   `solana-store-early-access-pack-pricing`). Small must feel impulse-priced.
+3. **Packs grant resources, never structures, never levels, never queue completions** that the basket
+   rules would otherwise price in crystals. Money buys the input, never the outcome.
+4. **The offer only appears against a real shortfall** (WO-1037's whole premise) — it is a shortfall
+   remedy, not a storefront.
+
+### 12d. Why this is genre-normal and not a character change
+
+The concern WO-1037 raised — *"money now buys the regular basket — a real change to the game's economic
+character"* — is worth stating and then answering plainly: this is the standard CoC model (gems buy
+resources), the ceiling is $5, and **crystals were already purchasable**, so money already reached the
+economy. What (b) changes is only *which* resource the player may spend that money on — and letting them
+pick the one they actually lack is strictly friendlier than forcing a crystal detour.
+
+⚠ **The line that would change the character, and is therefore NOT ruled here:** selling *time* or
+*outcomes* directly — instant structure completion for cash, or a pack that grants a finished upgrade.
+Those touch the crystal SINKS (WO-911 rulings) and §10 keeps them out of scope. If that is ever wanted
+it is a **new** owner ruling with a new date, not an extension of this amendment.
+
+### 12e. Acceptance
+
+- [ ] The §2 gate still passes with an **empty** exemption list (this amendment must not require one).
+- [ ] Every pack SKU grants exactly one economy key — assert it, do not trust authoring.
+- [ ] No structure cost row differs from v19.

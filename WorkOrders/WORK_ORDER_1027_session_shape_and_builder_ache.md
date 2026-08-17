@@ -1,6 +1,17 @@
 # WORK ORDER 1027 — The ratchet has no ache: give the session a shape
 
-**Status:** SPEC — small, but needs an owner call on §4 tone
+**Status:** READY TO IMPLEMENT — ★ §4 RULED 2026-08-17: **(b) empty-slot silhouette + (a) count glance**
+
+> Owner ruling 2026-08-17 (*"open ones follow your recommendations"*): the peek rail shows a visibly
+> **empty socket** as the resting state, with the **"2 of 3 lines idle" numeral** alongside it.
+> **(c) the active nudge toast is REJECTED** — it was the strongest pull and the most annoying, and the
+> ache is meant to inform, not nag.
+>
+> ⚠ WHY THIS PAIR AND NOT A BADGE: the message is carried by **shape and number**, so it satisfies the
+> colourblind law **by construction rather than by mitigation** — there is no hue to get wrong. CoC's red
+> badge is banned here outright (the owner is red/green colourblind, and this repo already carries two
+> open colour-only defects: build placement ghost, hero health bar). Do not add a colour accent "to help";
+> if the silhouette and the numeral do not read on their own, the fix is a clearer SHAPE, never a hue.
 **Minted:** 2026-08-15 (UI seat) — provenance stack bumped 1027 → 1028 in the same edit
 **Lane:** HUD / town flow. No new systems — surfacing only.
 **Provenance:** `docs/DESIGN_REVIEW_COC_WC3_LENS_2026-08-15.md` §3 ⓸.

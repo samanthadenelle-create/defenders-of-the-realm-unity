@@ -1,6 +1,21 @@
 # WORK ORDER 1028 — Wire the creeping loop: the dungeons are built and have no reason to exist
 
-**Status:** SPEC — needs owner ruling on §3 (the reward currency)
+**Status:** BLOCKED ON WO-910 — ★ §3 RULED 2026-08-17: **(b) Wisdom primary + (c) gear as the deep-run bonus**
+
+> Owner ruling 2026-08-17 (*"open ones follow your recommendations"*): creeping pays **Wisdom** as its
+> primary currency, with **gear** as the deep-run bonus. Dungeons become the hero-power faucet — which is
+> exactly creeping's role in WC3 — and the talent screen finally has a reason to be visited.
+>
+> **(a) resources REJECTED**: it would collide with the storage-cap progression and force a WO-947 basket
+> decision the dungeon has no business making. **(d) Echo shards REJECTED**: Echo pacing is already ruled
+> and this must not disturb it.
+>
+> ### ⛔ SEQUENCING IS PART OF THE RULING — this is BLOCKED, not READY.
+> Wisdom is **worthless until the talent trees are alive**. A Ranger with one usable node has nothing to
+> spend it on, so shipping this before **WO-910** produces a reward the player cannot use — which reads
+> as a broken dungeon, not a deferred one, and would actively confirm the "lackluster" verdict this WO
+> exists to fix. **Do not start implementation until WO-910 lands.** The design review's ordering
+> (WO-910 above this) is upheld by the same ruling that chose the currency.
 **Minted:** 2026-08-15 (UI seat) — provenance stack bumped 1028 → 1029 in the same edit
 **Lane:** Dungeon ↔ town economy. Connective work; the dungeon tech is done.
 **Provenance:** `docs/DESIGN_REVIEW_COC_WC3_LENS_2026-08-15.md` §3 ⓷.

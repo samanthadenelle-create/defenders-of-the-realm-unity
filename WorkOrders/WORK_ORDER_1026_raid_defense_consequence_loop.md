@@ -1,6 +1,23 @@
 # WORK ORDER 1026 — The base is never attacked: close the CoC consequence loop
 
-**Status:** SPEC — needs owner ruling on §3 before implementation
+**Status:** READY TO IMPLEMENT — ★ §3 RULED 2026-08-17: **(a) PvE siege**, built so (c) ghost-PvP drops in later
+
+> Owner ruling 2026-08-17 (*"open ones follow your recommendations"*): **model (a)** — scripted/generated
+> attackers assault the base on a cadence, reusing `WaveManager`, no backend.
+>
+> ⚠ THE STRUCTURAL CONDITION IS THE RULING, not a nice-to-have. (a) was chosen **specifically because it
+> can become (c)**, so the attack REPORT / REPLAY ARTIFACT must be designed as DATA from the first line —
+> a serialisable record of "who attacked, with what, where they broke through, what was lost". Build it
+> that way and ghost-PvP later is a SOURCE SWAP (generated attacker -> snapshotted real layout). Build it
+> as immediate UI state instead and (c) is a rebuild, which is exactly the cost this ruling exists to avoid.
+> Do not hardcode "the attacker is generated" anywhere the report can see.
+>
+> ### ⛔ STILL OPEN — the stakes. I made no recommendation here and am not inventing one.
+> §3's second question — **what does a loss actually cost the player?** — remains unruled. The CoC answer
+> is stockpiled resources, but that collides with the storage-cap progression (memory
+> `stockpiles-cap-capacity`) and the WO-947 basket ruling, and this WO explicitly forbids inventing an
+> economy rule. Implementation may proceed on everything EXCEPT the loss consequence; that needs the owner.
+> A safe interim: attacks resolve and REPORT, but take nothing, until stakes are ruled.
 **Minted:** 2026-08-15 (UI seat) — provenance stack bumped 1026 → 1027 in the same edit
 **Lane:** Raid / village defense. Design-led.
 **Provenance:** owner ask 2026-08-15 — *"a full review from the lens of what makes COC fun and warcraft 3
