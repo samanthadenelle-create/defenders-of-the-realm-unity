@@ -1,3 +1,7 @@
+<!-- era-sweep-2026-08-17 -->
+> ### ⚠ AGED 2026-08-17 — still READY, but unverified since 2026-06-22
+> The 2026-08-17 era sweep found **no evidence** that this WO's subject was deleted or superseded, so its **Status stays READY** and nothing else was changed. It is simply OLD (git first-add 2026-06-22) and has not been re-verified against current canon (`CANON_GROUND_TRUTH_*.md`, CLAUDE.md §7). **Re-verify before pulling it.**
+
 > ⚠ **UNRESOLVED NUMBER COLLISION — WO-438 is claimed by more than one file and OWNERSHIP IS NOT DECIDED.**
 > Co-claimants: `WORK_ORDER_438_global_tech_skin_rollout.md` (06-13, first-on-disk), `WORK_ORDER_438_base_loop_rca_fixes.md` (06-17), `WORK_ORDER_438_compass_minimap_widget.md` (07-04)
 > **This is one of a four-number group (WO-437 / 438 / 439 / 440) that collided the same way.** The June

@@ -1,3 +1,7 @@
+<!-- era-sweep-2026-08-17 -->
+> ### ⚠ AGED 2026-08-17 — still READY, but unverified since 2026-06-22
+> The 2026-08-17 era sweep found **no evidence** that this WO's subject was deleted or superseded, so its **Status stays READY** and nothing else was changed. It is simply OLD (git first-add 2026-06-22) and has not been re-verified against current canon (`CANON_GROUND_TRUTH_*.md`, CLAUDE.md §7). **Re-verify before pulling it.**
+
 # WORK ORDER 190 — Import + optimize the Orc Necromancer as an enemy (OVERNIGHT)
 
 **Status:** READY TO IMPLEMENT (reconciled 2026-08-09 from the tree - the source FBX was never imported: no orc-necromancer asset exists under `Assets/` (the only Necromancer hits are Blink spell-icon art under `Assets/Blink/Art/`), and no commit references WO-190. Prior line: QUEUED for overnight, 2026-05-31)

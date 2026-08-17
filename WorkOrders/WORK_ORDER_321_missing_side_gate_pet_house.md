@@ -1,6 +1,13 @@
+<!-- era-sweep-2026-08-17 -->
+> ### ⛔ ERA SWEEP 2026-08-17 — CLOSED as OBSOLETE (deleted system)
+> **Dead thing:** Village.unity. **Git first-add:** 2026-06-22.
+> **Evidence:** `Assets/Scenes/Village.unity` is absent from disk and from `git ls-files`; scope is a missing gatehouse in the Village.unity wall build.
+> Only the `**Status:**` line was rewritten. The body below is UNTOUCHED — CLAUDE.md §15, *"frozen, never rewrite"*.
+> **TO REVIVE:** nothing was deleted and not one line of the body below was changed. If this work is still wanted, re-date the WO (add a `**Minted:** <today>` line), re-point it at the live scene/system, and set `**Status:** READY TO IMPLEMENT`.
+
 # WORK_ORDER_321 — Missing gate on the side exit (near Pet House)
 
-**Status: READY TO IMPLEMENT**
+**Status:** CLOSED — OBSOLETE: Village.unity no longer exists (era sweep 2026-08-17)
 **Branch:** feat/tower-core-loop · **Lane:** 1 (World/Env — VillageSceneBuilder, SINGLE-WRITER)
 **Origin:** owner playtest 2026-06-06 (screenshot) · **Reconcile with:** `VillageSceneBuilder` wall/gate build (BuildGates/Walls), canon §7 (exactly 4 cardinal gates)
 

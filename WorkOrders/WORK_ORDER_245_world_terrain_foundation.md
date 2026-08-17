@@ -1,5 +1,12 @@
+<!-- era-sweep-2026-08-17 -->
+> ### ⛔ ERA SWEEP 2026-08-17 — CLOSED as OBSOLETE (deleted system)
+> **Dead thing:** OuterWorld.unity. **Git first-add:** 2026-06-22.
+> **Evidence:** `Assets/Scenes/OuterWorld.unity` is absent from disk and from `git ls-files`; the WO's own lane line is "OuterWorld files only, not Village.unity" and DEF-61 is "create a Unity Terrain object in OuterWorld scene".
+> Only the `**Status:**` line was rewritten. The body below is UNTOUCHED — CLAUDE.md §15, *"frozen, never rewrite"*.
+> **TO REVIVE:** nothing was deleted and not one line of the body below was changed. If this work is still wanted, re-date the WO (add a `**Minted:** <today>` line), re-point it at the live scene/system, and set `**Status:** READY TO IMPLEMENT`.
+
 # WORK ORDER 245 — World Terrain Foundation + Nature Population + POIs
-**Status: READY TO IMPLEMENT**
+**Status:** CLOSED — OBSOLETE: OuterWorld.unity no longer exists (era sweep 2026-08-17)
 **WO:** 245 | **Lane:** WORLD (parallel safe — OuterWorld files only, not Village.unity)
 **Closes:** DEF-61, DEF-62, DEF-63
 

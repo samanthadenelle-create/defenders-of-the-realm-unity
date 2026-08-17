@@ -1,3 +1,7 @@
+<!-- era-sweep-2026-08-17 -->
+> ### ⚠ AGED 2026-08-17 — still READY, but unverified since 2026-06-22
+> The 2026-08-17 era sweep found **no evidence** that this WO's subject was deleted or superseded, so its **Status stays READY** and nothing else was changed. It is simply OLD (git first-add 2026-06-22) and has not been re-verified against current canon (`CANON_GROUND_TRUTH_*.md`, CLAUDE.md §7). **Re-verify before pulling it.**
+
 > ⚠ **NUMBER COLLISION — this document does not own WO-152; `WORK_ORDER_152_full_city_redesign_component_catalog.md` does.**
 > Referred to hereafter as **WO-152-B (city UI information architecture)**.
 > Flagged by the 2026-08-16 Sunday board-grooming pass (`python tools/board_build.py` → `DUPLICATE_WO_NUMBERS`);

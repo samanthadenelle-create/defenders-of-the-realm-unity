@@ -1,5 +1,12 @@
+<!-- era-sweep-2026-08-17 -->
+> ### ⛔ ERA SWEEP 2026-08-17 — CLOSED as OBSOLETE (deleted system)
+> **Dead thing:** Village.unity + OuterWorld.unity. **Git first-add:** 2026-06-22.
+> **Evidence:** `Assets/Scenes/Village.unity` is absent from disk and from `git ls-files` and `Assets/Scenes/OuterWorld.unity` is absent from disk and from `git ls-files`; both halves (DEF-96 tree in the Village bake, DEF-126 Village↔OuterWorld terrain seam) target deleted scenes.
+> Only the `**Status:**` line was rewritten. The body below is UNTOUCHED — CLAUDE.md §15, *"frozen, never rewrite"*.
+> **TO REVIVE:** nothing was deleted and not one line of the body below was changed. If this work is still wanted, re-date the WO (add a `**Minted:** <today>` line), re-point it at the live scene/system, and set `**Status:** READY TO IMPLEMENT`.
+
 # WORK ORDER 247 — Village Scene Cleanup: Upside-Down Tree + Terrain Seam
-**Status: READY TO IMPLEMENT**
+**Status:** CLOSED — OBSOLETE: Village.unity + OuterWorld.unity no longer exists (era sweep 2026-08-17)
 **WO:** 247 | **Lane:** VILLAGE (serial — one rebake covers both)
 **Closes:** DEF-96, DEF-126
 

@@ -1,6 +1,13 @@
+<!-- era-sweep-2026-08-17 -->
+> ### ⛔ ERA SWEEP 2026-08-17 — CLOSED as OBSOLETE (deleted system)
+> **Dead thing:** Village.unity. **Git first-add:** 2026-06-22.
+> **Evidence:** `Assets/Scenes/Village.unity` is absent from disk and from `git ls-files`; scope is explicitly "via VillageSceneBuilder only — never hand-edit Village.unity". The RULE it enforces is not lost: CLAUDE.md §7 already canonises the Heart of Elarion at scene centre (0,0,0).
+> Only the `**Status:**` line was rewritten. The body below is UNTOUCHED — CLAUDE.md §15, *"frozen, never rewrite"*.
+> **TO REVIVE:** nothing was deleted and not one line of the body below was changed. If this work is still wanted, re-date the WO (add a `**Minted:** <today>` line), re-point it at the live scene/system, and set `**Status:** READY TO IMPLEMENT`.
+
 # WORK_ORDER_311 — Tree of Life canonical placement (Heart of Elarion at 0,0,0)
 
-**Status: READY TO IMPLEMENT**
+**Status:** CLOSED — OBSOLETE: Village.unity no longer exists (era sweep 2026-08-17)
 **Branch:** feat/tower-core-loop · **Lane:** 1 (World/Env — VillageSceneBuilder, SINGLE-WRITER)
 **Origin:** owner playtest 2026-06-06 · **Reconcile with:** WO-240 (heartwood living tree asset), CLAUDE.md §7 canon
 

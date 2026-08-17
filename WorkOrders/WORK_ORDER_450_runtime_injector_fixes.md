@@ -1,6 +1,13 @@
+<!-- era-sweep-2026-08-17 -->
+> ### ⛔ ERA SWEEP 2026-08-17 — CLOSED as OBSOLETE (deleted system)
+> **Dead thing:** OuterWorld.unity. **Git first-add:** 2026-06-22.
+> **Evidence:** `Assets/Scenes/OuterWorld.unity` is absent from disk and from `git ls-files`; 450a is the hub floor z-fight against OuterWorld terrain and 450b injects an `OuterWorldBoundaryInjector` on OuterWorld scene load.
+> Only the `**Status:**` line was rewritten. The body below is UNTOUCHED — CLAUDE.md §15, *"frozen, never rewrite"*.
+> **TO REVIVE:** nothing was deleted and not one line of the body below was changed. If this work is still wanted, re-date the WO (add a `**Minted:** <today>` line), re-point it at the live scene/system, and set `**Status:** READY TO IMPLEMENT`.
+
 # WORK ORDER 450 — Runtime injector fixes (NO bake): hub z-fight + OuterWorld edge boundary
 
-**Status: READY TO IMPLEMENT.** RCA-verified 2026-06-17. Lane: Core injectors. **No bake, no scene edit** —
+**Status:** CLOSED — OBSOLETE: OuterWorld.unity no longer exists (era sweep 2026-08-17)
 pure runtime, low-risk, parallel-safe. These are the two "no-bake" bugs from the overnight tally.
 
 ## Why runtime injectors (per RCA + CLAUDE.md §3)

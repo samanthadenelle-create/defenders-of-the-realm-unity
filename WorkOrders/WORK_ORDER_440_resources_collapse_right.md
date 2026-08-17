@@ -1,3 +1,7 @@
+<!-- era-sweep-2026-08-17 -->
+> ### ⚠ AGED 2026-08-17 — still READY, but unverified since 2026-07-04
+> The 2026-08-17 era sweep found **no evidence** that this WO's subject was deleted or superseded, so its **Status stays READY** and nothing else was changed. It is simply OLD (git first-add 2026-07-04) and has not been re-verified against current canon (`CANON_GROUND_TRUTH_*.md`, CLAUDE.md §7). **Re-verify before pulling it.**
+
 > ⚠ **UNRESOLVED NUMBER COLLISION — WO-440 is claimed by more than one file and OWNERSHIP IS NOT DECIDED.**
 > Co-claimants: `WORK_ORDER_440_atb_wiring.md` (06-17, first-on-disk), `WORK_ORDER_440_resources_collapse_right.md` (07-04)
 > **This is one of a four-number group (WO-437 / 438 / 439 / 440) that collided the same way.** The June

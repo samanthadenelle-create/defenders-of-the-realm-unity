@@ -1,3 +1,7 @@
+<!-- era-sweep-2026-08-17 -->
+> ### ⚠ AGED 2026-08-17 — still READY, but unverified since 2026-06-29
+> The 2026-08-17 era sweep found **no evidence** that this WO's subject was deleted or superseded, so its **Status stays READY** and nothing else was changed. It is simply OLD (git first-add 2026-06-29) and has not been re-verified against current canon (`CANON_GROUND_TRUTH_*.md`, CLAUDE.md §7). **Re-verify before pulling it.**
+
 > ⚠ **UNRESOLVED NUMBER COLLISION — WO-586 is claimed by more than one file and OWNERSHIP IS NOT DECIDED.**
 > Co-claimants: `WORK_ORDER_586_fleet_save_probe_isolation.md`, `WORK_ORDER_586_battle_animation_posture_directional_death.md`
 > The two tests **disagree**: `WORK_ORDER_586_fleet_save_probe_isolation.md` is first-on-disk (2026-06-29 00:20 vs 2026-07-05 15:25), but the *shipped* reference belongs to the other file — commit `38c7fd4b9` reads "WO-586: battle posture, directional death, orc cadence". First-on-disk-**and**-referenced is satisfied by neither.

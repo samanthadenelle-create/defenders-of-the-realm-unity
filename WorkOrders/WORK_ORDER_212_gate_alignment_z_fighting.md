@@ -1,6 +1,13 @@
+<!-- era-sweep-2026-08-17 -->
+> ### ⛔ ERA SWEEP 2026-08-17 — CLOSED as OBSOLETE (deleted system)
+> **Dead thing:** Village.unity. **Git first-add:** 2026-06-22.
+> **Evidence:** `Assets/Scenes/Village.unity` is absent from disk and from `git ls-files`; the WO names `Assets/Scenes/Village.unity` as the file to verify.
+> Only the `**Status:**` line was rewritten. The body below is UNTOUCHED — CLAUDE.md §15, *"frozen, never rewrite"*.
+> **TO REVIVE:** nothing was deleted and not one line of the body below was changed. If this work is still wanted, re-date the WO (add a `**Minted:** <today>` line), re-point it at the live scene/system, and set `**Status:** READY TO IMPLEMENT`.
+
 # WO-212: Fix Gate Z-Fighting with Ground Plane
 
-**Status: READY TO IMPLEMENT**
+**Status:** CLOSED — OBSOLETE: Village.unity no longer exists (era sweep 2026-08-17)
 
 **Date:** 2026-06-01  
 **Priority:** 🟠 MEDIUM (visual polish, scene glitch)  

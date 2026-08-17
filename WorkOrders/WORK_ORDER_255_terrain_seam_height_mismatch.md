@@ -1,3 +1,10 @@
+<!-- era-sweep-2026-08-17 -->
+> ### ⛔ ERA SWEEP 2026-08-17 — CLOSED as OBSOLETE (deleted system)
+> **Dead thing:** the Village.unity/OuterWorld.unity seam. **Git first-add:** 2026-06-22.
+> **Evidence:** `Assets/Scenes/Village.unity` is absent from disk and from `git ls-files` and `Assets/Scenes/OuterWorld.unity` is absent from disk and from `git ls-files`; the entire WO is the height ledge at that boundary. (This file is also one of two co-claimants of WO-255 — closing it does NOT touch `WORK_ORDER_255_hero_backwards_walk.md`, which stays READY.)
+> Only the `**Status:**` line was rewritten. The body below is UNTOUCHED — CLAUDE.md §15, *"frozen, never rewrite"*.
+> **TO REVIVE:** nothing was deleted and not one line of the body below was changed. If this work is still wanted, re-date the WO (add a `**Minted:** <today>` line), re-point it at the live scene/system, and set `**Status:** READY TO IMPLEMENT`.
+
 > ⚠ **UNRESOLVED NUMBER COLLISION — WO-255 is claimed by more than one file and OWNERSHIP IS NOT DECIDED.**
 > Co-claimants: `WORK_ORDER_255_hero_backwards_walk.md`, `WORK_ORDER_255_terrain_seam_height_mismatch.md`
 > Both files were added in the SAME commit (first-on-disk is a dead tie) and neither is cited by any other doc, RESULT file, or commit message — there is no evidence on either side. Both are also still READY.
@@ -8,7 +15,7 @@
 # WO-255: World-map lip — Village/OuterWorld terrain seam height mismatch
 **Linear:** [DEF-126](https://linear.app/defenders-of-the-realm/issue/DEF-126/world-map-lip-village-outerworld-terrain-seam-height-mismatch-ledge)
 **Lane:** World/Environment
-**Status:** READY TO IMPLEMENT
+**Status:** CLOSED — OBSOLETE: the Village.unity/OuterWorld.unity seam no longer exists (era sweep 2026-08-17)
 **Priority:** Medium
 
 ## Acceptance Criteria

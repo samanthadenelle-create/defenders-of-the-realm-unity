@@ -1,3 +1,7 @@
+<!-- era-sweep-2026-08-17 -->
+> ### ⚠ AGED 2026-08-17 — still READY, but unverified since 2026-06-28
+> The 2026-08-17 era sweep found **no evidence** that this WO's subject was deleted or superseded, so its **Status stays READY** and nothing else was changed. It is simply OLD (git first-add 2026-06-28) and has not been re-verified against current canon (`CANON_GROUND_TRUTH_*.md`, CLAUDE.md §7). **Re-verify before pulling it.**
+
 > ⚠ **NUMBER COLLISION (letter sub-number) — this document is WO-584b, NOT WO-584. `WORK_ORDER_584_dungeon_outpost_arena_consolidation.md` owns WO-584.**
 > Referred to hereafter as **WO-584b**. The clash is a *parser* artefact: `tools/board_build.py` strips the
 > trailing letter, so WO-584b reads as a second claim on WO-584 on `BOARD.html`. The letter suffix was and

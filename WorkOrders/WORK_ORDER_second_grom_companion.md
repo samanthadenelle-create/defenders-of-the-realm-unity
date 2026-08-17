@@ -1,3 +1,7 @@
+<!-- era-sweep-2026-08-17 -->
+> ### ⚠ AGED 2026-08-17 — still READY, but unverified since 2026-06-22
+> The 2026-08-17 era sweep found **no evidence** that this WO's subject was deleted or superseded, so its **Status stays READY** and nothing else was changed. It is simply OLD (git first-add 2026-06-22) and has not been re-verified against current canon (`CANON_GROUND_TRUTH_*.md`, CLAUDE.md §7). **Re-verify before pulling it.**
+
 # WORK ORDER — Duplicate "Grom" companion (second body in MainCastle_Hall)
 
 **Status:** READY TO IMPLEMENT (reconciled 2026-08-09 - this file records DIAGNOSED-PARTIAL with the root cause NOT proven and one probe still un-run; three candidate causes are ruled out with trace evidence, but no fix was written and no commit references it. Its branch context (feat/tower-core-loop, `adf1f2d9`) predates the current tree - re-confirm the symptom before working it)

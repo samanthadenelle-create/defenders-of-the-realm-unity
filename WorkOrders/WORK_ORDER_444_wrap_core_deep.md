@@ -1,3 +1,7 @@
+<!-- era-sweep-2026-08-17 -->
+> ### ⚠ AGED 2026-08-17 — still READY, but unverified since 2026-06-22
+> The 2026-08-17 era sweep found **no evidence** that this WO's subject was deleted or superseded, so its **Status stays READY** and nothing else was changed. It is simply OLD (git first-add 2026-06-22) and has not been re-verified against current canon (`CANON_GROUND_TRUTH_*.md`, CLAUDE.md §7). **Re-verify before pulling it.**
+
 # WORK ORDER 444 — Wrap the core DEEP: instrument + guard + watchdog every critical flow
 
 **Status:** READY TO IMPLEMENT (reconciled 2026-08-09 - a standing standard plus a phased coverage pass; no `.RESULT.md` and no commit references WO-444, so the phased coverage is unproven. Prior line: STANDING STANDARD + phased coverage pass)

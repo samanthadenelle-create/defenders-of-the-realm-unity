@@ -1,6 +1,13 @@
+<!-- era-sweep-2026-08-17 -->
+> ### ⛔ ERA SWEEP 2026-08-17 — CLOSED as OBSOLETE (deleted system)
+> **Dead thing:** OuterWorld.unity. **Git first-add:** 2026-06-22.
+> **Evidence:** `Assets/Scenes/OuterWorld.unity` is absent from disk and from `git ls-files`; the WO is a new `OuterWorldBuilder` pass and states "no new scenes — all in `Village.unity`'s exterior", so BOTH of its target scenes are gone.
+> Only the `**Status:**` line was rewritten. The body below is UNTOUCHED — CLAUDE.md §15, *"frozen, never rewrite"*.
+> **TO REVIVE:** nothing was deleted and not one line of the body below was changed. If this work is still wanted, re-date the WO (add a `**Minted:** <today>` line), re-point it at the live scene/system, and set `**Status:** READY TO IMPLEMENT`.
+
 # WORK ORDER 142 — The Outer World: A Lived-In Realm Beyond the Walls
 
-**Status:** READY TO IMPLEMENT
+**Status:** CLOSED — OBSOLETE: OuterWorld.unity no longer exists (era sweep 2026-08-17)
 **Date:** 2026-05-30
 **Priority:** High — world feel / "lived-in" pass; the visible payoff of Rung 3 (Defend + Explore)
 **Lane:** World/Environment (architect lane) — serialization-sensitive, single-toucher

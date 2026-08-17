@@ -1,3 +1,7 @@
+<!-- era-sweep-2026-08-17 -->
+> ### ⚠ AGED 2026-08-17 — still READY, but unverified since 2026-07-05
+> The 2026-08-17 era sweep found **no evidence** that this WO's subject was deleted or superseded, so its **Status stays READY** and nothing else was changed. It is simply OLD (git first-add 2026-07-05) and has not been re-verified against current canon (`CANON_GROUND_TRUTH_*.md`, CLAUDE.md §7). **Re-verify before pulling it.**
+
 ﻿# WORK ORDER 610 — Combat Camera: Tighter Cinematic Side / Angled Third-Person + Slower Battle Pacing
 
 **Status:** READY TO IMPLEMENT — **owner-ratified 2026-07-05** (extend-SMC · 3/4-angled start · pacing default-ON ~0.8). **WO number 610 is PROVISIONAL** (authority is `MASTER_PIPELINES_BACKLOG`, not the filesystem; confirm on mint).

@@ -1,6 +1,13 @@
+<!-- era-sweep-2026-08-17 -->
+> ### ⛔ ERA SWEEP 2026-08-17 — CLOSED as OBSOLETE (deleted system)
+> **Dead thing:** OuterWorld.unity. **Git first-add:** 2026-06-22.
+> **Evidence:** `Assets/Scenes/OuterWorld.unity` is absent from disk and from `git ls-files`; the flow is castle exit → OuterWorld (≥4× larger) → portal, i.e. a redesign of a scene-to-scene crossing that the merged world removed.
+> Only the `**Status:**` line was rewritten. The body below is UNTOUCHED — CLAUDE.md §15, *"frozen, never rewrite"*.
+> **TO REVIVE:** nothing was deleted and not one line of the body below was changed. If this work is still wanted, re-date the WO (add a `**Minted:** <today>` line), re-point it at the live scene/system, and set `**Status:** READY TO IMPLEMENT`.
+
 # WORK ORDER 468 — Castle → OuterWorld → Outpost redesign (DOR-LVL-012)
 
-**Status: READY TO IMPLEMENT (SME investigation in progress)**
+**Status:** CLOSED — OBSOLETE: OuterWorld.unity no longer exists (era sweep 2026-08-17)
 **Priority: CRITICAL (blocker)** · **Owner: Samantha** · **Date: 2026-06-19**
 **Supersedes:** the `AddCastleBridgeSeam` bridge visual (the "single misplaced bridge tile on grass") and
 folds the crossing into the RegionGate primitive (memory `region-gate-crossing-primitive`): the CAVE is

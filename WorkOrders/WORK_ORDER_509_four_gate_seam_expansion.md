@@ -1,6 +1,13 @@
+<!-- era-sweep-2026-08-17 -->
+> ### ⛔ ERA SWEEP 2026-08-17 — CLOSED as OBSOLETE (deleted system)
+> **Dead thing:** OuterWorld.unity. **Git first-add:** 2026-06-24.
+> **Evidence:** `Assets/Scenes/OuterWorld.unity` is absent from disk and from `git ls-files`; scope is extending the castle↔OuterWorld scene seam to all four OuterWorld edges.
+> Only the `**Status:**` line was rewritten. The body below is UNTOUCHED — CLAUDE.md §15, *"frozen, never rewrite"*.
+> **TO REVIVE:** nothing was deleted and not one line of the body below was changed. If this work is still wanted, re-date the WO (add a `**Minted:** <today>` line), re-point it at the live scene/system, and set `**Status:** READY TO IMPLEMENT`.
+
 # WORK_ORDER_509 — four-gate seam expansion (OuterWorld N/S/E/W, natural styling)
 
-**Status:** READY TO IMPLEMENT (player crossing) · World/Seam lane · 2026-06-24
+**Status:** CLOSED — OBSOLETE: OuterWorld.unity no longer exists (era sweep 2026-08-17)
 **Depends on:** WO-492 / the V2 enemy-seam-navmesh work for the ENEMY-crossing half (see Section 3 flag).
 **Origin:** owner spec (Grok-drafted), synthesized against the real RuntimeRegionGate system.
 

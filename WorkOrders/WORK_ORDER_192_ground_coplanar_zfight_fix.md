@@ -1,6 +1,13 @@
+<!-- era-sweep-2026-08-17 -->
+> ### ⛔ ERA SWEEP 2026-08-17 — CLOSED as OBSOLETE (deleted system)
+> **Dead thing:** Village.unity + OuterWorld.unity. **Git first-add:** 2026-06-22.
+> **Evidence:** `Assets/Scenes/Village.unity` is absent from disk and from `git ls-files` and `Assets/Scenes/OuterWorld.unity` is absent from disk and from `git ls-files`; the bug IS the coplanarity between the two now-merged scenes' floors.
+> Only the `**Status:**` line was rewritten. The body below is UNTOUCHED — CLAUDE.md §15, *"frozen, never rewrite"*.
+> **TO REVIVE:** nothing was deleted and not one line of the body below was changed. If this work is still wanted, re-date the WO (add a `**Minted:** <today>` line), re-point it at the live scene/system, and set `**Status:** READY TO IMPLEMENT`.
+
 # WORK ORDER 192 — Ground Z-Fighting (village floor vs world terrain coplanar)
 
-**Status:** READY TO IMPLEMENT
+**Status:** CLOSED — OBSOLETE: Village.unity + OuterWorld.unity no longer exists (era sweep 2026-08-17)
 **Lane:** A (Village Scene — SERIAL, `VillageSceneBuilder` + `ExteriorTerrainBuilder` + NavMesh bake)
 **Source:** owner playtest — dark diamond holes in interior grass. Architect-assessed 2026-05-31.
 **Priority:** P1 (visible interior rendering bug)

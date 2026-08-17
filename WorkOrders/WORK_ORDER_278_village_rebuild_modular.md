@@ -1,7 +1,14 @@
+<!-- era-sweep-2026-08-17 -->
+> ### ⛔ ERA SWEEP 2026-08-17 — STALE (undated current-state assertion, CLAUDE.md §15)
+> **Git first-add:** 2026-06-22 (the WO itself carries no date at all).
+> **Evidence:** undated, and claims "THIS IS THE #1 PRIORITY. Nothing else ships until the village looks right." Its complete spec is delegated to "DEF-242 in Linear" — and Linear is RETIRED (CLAUDE.md §2/§13), so the spec it points at is unreachable.
+> Only the `**Status:**` line was rewritten. The body below is UNTOUCHED — CLAUDE.md §15, *"frozen, never rewrite"*. This is a DATING problem, not a verdict on the design — the content may well still be wanted.
+> **TO REVIVE:** nothing was deleted and not one line of the body below was changed. If this work is still wanted, re-date the WO (add a `**Minted:** <today>` line), re-point it at the live scene/system, and set `**Status:** READY TO IMPLEMENT`.
+
 # WO-278: Full Village Rebuild — Modular Medieval Village Pieces
 **Linear:** [DEF-242](https://linear.app/defenders-of-the-realm/issue/DEF-242/p0-full-village-rebuild-modular-medieval-village-pieces-exact)
 **Lane:** World/Environment
-**Status:** READY TO IMPLEMENT
+**Status:** CLOSED — STALE: undated current-state assertion, needs re-dating (era sweep 2026-08-17)
 **Priority:** HIGHEST — P0
 
 ## THIS IS THE #1 PRIORITY. Nothing else ships until the village looks right.

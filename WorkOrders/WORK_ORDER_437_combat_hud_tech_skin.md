@@ -1,3 +1,7 @@
+<!-- era-sweep-2026-08-17 -->
+> ### ⚠ AGED 2026-08-17 — still READY, but unverified since 2026-06-22
+> The 2026-08-17 era sweep found **no evidence** that this WO's subject was deleted or superseded, so its **Status stays READY** and nothing else was changed. It is simply OLD (git first-add 2026-06-22) and has not been re-verified against current canon (`CANON_GROUND_TRUTH_*.md`, CLAUDE.md §7). **Re-verify before pulling it.**
+
 > ⚠ **UNRESOLVED NUMBER COLLISION — WO-437 is claimed by more than one file and OWNERSHIP IS NOT DECIDED.**
 > Co-claimants: `WORK_ORDER_437_combat_hud_tech_skin.md` (06-13, first-on-disk), `WORK_ORDER_437_input_state_gate.md` (06-17, marked DONE), `WORK_ORDER_437_bar_overflow_rectmask.md` (07-04)
 > **This is one of a four-number group (WO-437 / 438 / 439 / 440) that collided the same way.** The June

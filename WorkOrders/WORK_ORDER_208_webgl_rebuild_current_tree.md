@@ -1,6 +1,13 @@
+<!-- era-sweep-2026-08-17 -->
+> ### ⛔ ERA SWEEP 2026-08-17 — STALE (undated current-state assertion, CLAUDE.md §15)
+> **Git first-add:** 2026-06-22 (the WO itself carries no date at all).
+> **Evidence:** undated, and asserts a state that has expired twice over: `**Branch:** feat/tower-core-loop` (live branch is `wip/village2-and-f8-tickets`) plus "the CURRENT green tree" — a build order against a tree from June.
+> Only the `**Status:**` line was rewritten. The body below is UNTOUCHED — CLAUDE.md §15, *"frozen, never rewrite"*. This is a DATING problem, not a verdict on the design — the content may well still be wanted.
+> **TO REVIVE:** nothing was deleted and not one line of the body below was changed. If this work is still wanted, re-date the WO (add a `**Minted:** <today>` line), re-point it at the live scene/system, and set `**Status:** READY TO IMPLEMENT`.
+
 # WORK ORDER 190 — Fresh WebGL Build on Current Green Tree
 
-**Status:** READY TO IMPLEMENT
+**Status:** CLOSED — STALE: undated current-state assertion, needs re-dating (era sweep 2026-08-17)
 **Lane:** Build/Infra — CLI, batchmode (editor CLOSED). No gameplay code change.
 **Source:** owner — wants a shareable web link; existing `Builds/WebGL/` is ~1 day stale (predates the WO-173 world fix).
 **Priority:** P1 — unblocks the itch.io deploy (see `DEPLOY_WEBGL_ITCH_GUIDE.md`).

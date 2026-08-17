@@ -1,6 +1,13 @@
+<!-- era-sweep-2026-08-17 -->
+> ### ⛔ ERA SWEEP 2026-08-17 — SUPERSEDED
+> **Superseded by:** WO-608 (world merge) + the shipped RuntimeRegionGate. **Git first-add:** 2026-06-22.
+> **Evidence:** the WO's stated premise is "scenes baked at the same origin cannot share one navmesh, so a crossing is ALWAYS a masked transition" — CLAUDE.md §7 records the opposite as current: `Main_Castle_Overworld`, MergedWorld ON, ONE navmesh. Its first recipe row is `castle_to_outerworld` (from `MainCastle_Hall` to `OuterWorld`), and `Assets/Scenes/OuterWorld.unity` is absent from disk and from `git ls-files`. The primitive itself already exists as `RuntimeRegionGate` + `Assets/Resources/Data/region-gates.json` (cited as working in WO-509).
+> Only the `**Status:**` line was rewritten. The body below is UNTOUCHED — CLAUDE.md §15, *"frozen, never rewrite"*.
+> **TO REVIVE:** nothing was deleted and not one line of the body below was changed. If this work is still wanted, re-date the WO (add a `**Minted:** <today>` line), re-point it at the live scene/system, and set `**Status:** READY TO IMPLEMENT`.
+
 # WORK ORDER 467 — RegionGate: one recipe-driven crossing primitive for all region boundaries
 
-**Status: READY TO IMPLEMENT**
+**Status:** SUPERSEDED by WO-608 (world merge) + the shipped RuntimeRegionGate (era sweep 2026-08-17)
 **Lane:** World/Environment (architect lane — touches a builder, not gameplay)
 **Owner-endorsed:** 2026-06-19 ("wow thats smart … makes the testing a simple repeatable process")
 **Numbering:** 467 (filesystem max was 466; reconcile against `MASTER_PIPELINES_BACKLOG` on next groom).

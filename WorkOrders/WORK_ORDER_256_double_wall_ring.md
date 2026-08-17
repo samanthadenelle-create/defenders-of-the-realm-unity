@@ -1,3 +1,10 @@
+<!-- era-sweep-2026-08-17 -->
+> ### ⛔ ERA SWEEP 2026-08-17 — CLOSED as OBSOLETE (deleted system)
+> **Dead thing:** Village.unity. **Git first-add:** 2026-06-22.
+> **Evidence:** `Assets/Scenes/Village.unity` is absent from disk and from `git ls-files`; acceptance is a `VillageSceneBuilder` wall-ring change landed by rebaking that scene.
+> Only the `**Status:**` line was rewritten. The body below is UNTOUCHED — CLAUDE.md §15, *"frozen, never rewrite"*.
+> **TO REVIVE:** nothing was deleted and not one line of the body below was changed. If this work is still wanted, re-date the WO (add a `**Minted:** <today>` line), re-point it at the live scene/system, and set `**Status:** READY TO IMPLEMENT`.
+
 > ⚠ **UNRESOLVED NUMBER COLLISION — WO-256 is claimed by more than one file and OWNERSHIP IS NOT DECIDED.**
 > Co-claimants: `WORK_ORDER_256_blue_ring_removal.md`, `WORK_ORDER_256_double_wall_ring.md`
 > Both files were added in the SAME commit (first-on-disk is a dead tie) and neither is cited by any other doc, RESULT file, or commit message — there is no evidence on either side. Both are also still READY.
@@ -8,7 +15,7 @@
 # WO-256: Double wall ring — remove BuildWallRing, keep BuildWallPerimeter only
 **Linear:** [DEF-106](https://linear.app/defenders-of-the-realm/issue/DEF-106/double-wall-ring-buildwallring-buildwallperimeter-both-active-causing)
 **Lane:** World/Environment
-**Status:** READY TO IMPLEMENT
+**Status:** CLOSED — OBSOLETE: Village.unity no longer exists (era sweep 2026-08-17)
 **Priority:** Medium
 
 ## Acceptance Criteria

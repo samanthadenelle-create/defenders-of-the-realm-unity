@@ -1,3 +1,7 @@
+<!-- era-sweep-2026-08-17 -->
+> ### ⚠ AGED 2026-08-17 — still READY, but unverified since 2026-06-24
+> The 2026-08-17 era sweep found **no evidence** that this WO's subject was deleted or superseded, so its **Status stays READY** and nothing else was changed. It is simply OLD (git first-add 2026-06-24) and has not been re-verified against current canon (`CANON_GROUND_TRUTH_*.md`, CLAUDE.md §7). **Re-verify before pulling it.**
+
 # WORK_ORDER_510 — instantiation-time attachment override (JSON-driven, rig-agnostic)
 
 **Status:** READY TO IMPLEMENT (owner greenlit 2026-06-24) · Hero/Equip lane · feeds WO-490 (Offset Forge product)

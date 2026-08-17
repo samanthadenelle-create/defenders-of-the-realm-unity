@@ -1,3 +1,7 @@
+<!-- era-sweep-2026-08-17 -->
+> ### ⚠ AGED 2026-08-17 — still READY, but unverified since 2026-07-13
+> The 2026-08-17 era sweep found **no evidence** that this WO's subject was deleted or superseded, so its **Status stays READY** and nothing else was changed. It is simply OLD (git first-add 2026-07-13) and has not been re-verified against current canon (`CANON_GROUND_TRUTH_*.md`, CLAUDE.md §7). **Re-verify before pulling it.**
+
 # WORK ORDER 701 — Mending Echoes: perk-gated passive structure repair while offline *(renumbered from a colliding fresh 686 mint, 2026-07-13 — 686 is webtrace ingestion hardening)*
 
 **Status: SPEC — needs owner number pins, then READY** (owner idea 2026-07-12: "an ability or

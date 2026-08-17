@@ -1,6 +1,13 @@
+<!-- era-sweep-2026-08-17 -->
+> ### ⛔ ERA SWEEP 2026-08-17 — CLOSED as OBSOLETE (deleted system)
+> **Dead thing:** OuterWorld.unity. **Git first-add:** 2026-06-22.
+> **Evidence:** `Assets/Scenes/OuterWorld.unity` is absent from disk and from `git ls-files`; both root causes are cross-scene (the hub→OuterWorld auto-cross seam, and the castle plaza z-fighting against `OuterWorld.unity`'s terrain). CLAUDE.md §7: one merged scene, one navmesh — there is no seam left to cross.
+> Only the `**Status:**` line was rewritten. The body below is UNTOUCHED — CLAUDE.md §15, *"frozen, never rewrite"*.
+> **TO REVIVE:** nothing was deleted and not one line of the body below was changed. If this work is still wanted, re-date the WO (add a `**Minted:** <today>` line), re-point it at the live scene/system, and set `**Status:** READY TO IMPLEMENT`.
+
 # WORK ORDER 448 — Hub→OuterWorld seam: natural transition + kill the castle-floor z-fight
 
-**Status: READY TO IMPLEMENT.** Owner-reported + agent-RCA'd 2026-06-17. Lane: World/seam (CastleHubBuilder,
+**Status:** CLOSED — OBSOLETE: OuterWorld.unity no longer exists (era sweep 2026-08-17)
 SceneTransitionTrigger, GroundZFightFixer). Requires a **hub rebuild** for CastleHubBuilder changes (bake → CLI,
 editor closed).
 

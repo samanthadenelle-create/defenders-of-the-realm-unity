@@ -1,3 +1,7 @@
+<!-- era-sweep-2026-08-17 -->
+> ### ⚠ AGED 2026-08-17 — still READY, but unverified since 2026-07-30
+> The 2026-08-17 era sweep found **no evidence** that this WO's subject was deleted or superseded, so its **Status stays READY** and nothing else was changed. It is simply OLD (git first-add 2026-07-30) and has not been re-verified against current canon (`CANON_GROUND_TRUTH_*.md`, CLAUDE.md §7). **Re-verify before pulling it.**
+
 # WO-809 — War Readiness / army power score (Raids screen)
 
 > ⚠ 2026-08-01: build ATOP `Assets/_Modules/Village/Troops/ArmyReadiness.cs` (WO-823 phase A) — the single readiness truth. This WO is a presentation layer over ArmyReadiness.Compute, NEVER a second readiness engine.

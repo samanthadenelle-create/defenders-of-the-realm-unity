@@ -1,3 +1,10 @@
+<!-- era-sweep-2026-08-17 -->
+> ### ⛔ ERA SWEEP 2026-08-17 — CLOSED as OBSOLETE (deleted system)
+> **Dead thing:** OuterWorld.unity. **Git first-add:** 2026-06-22.
+> **Evidence:** `Assets/Scenes/OuterWorld.unity` is absent from disk and from `git ls-files`; the vision is "make OuterWorld much larger" by extending that scene's terrain.
+> Only the `**Status:**` line was rewritten. The body below is UNTOUCHED — CLAUDE.md §15, *"frozen, never rewrite"*.
+> **TO REVIVE:** nothing was deleted and not one line of the body below was changed. If this work is still wanted, re-date the WO (add a `**Minted:** <today>` line), re-point it at the live scene/system, and set `**Status:** READY TO IMPLEMENT`.
+
 > ⚠ **NUMBER COLLISION — this document does not own WO-453; `WORK_ORDER_453_dev_capture_toolkit.md` does.**
 > Referred to hereafter as **WO-453-C (OuterWorld gated regions)**.
 > Flagged by the 2026-08-16 Sunday board-grooming pass (`python tools/board_build.py` → `DUPLICATE_WO_NUMBERS`);
@@ -7,7 +14,7 @@
 
 # WORK_ORDER_453 — OuterWorld expansion: gated regions, walled edges, navlink path-cuts, leashed monster families
 
-**Status: READY TO IMPLEMENT (Region 1 first — prove ONE, then replicate)**
+**Status:** CLOSED — OBSOLETE: OuterWorld.unity no longer exists (era sweep 2026-08-17)
 **Owner directive 2026-06-21.** Builds on the PROVEN seam (`ISSUE_navlink_seamless_walk.md`) + memories
 `world-architecture-gated-regions-playable-connectors`, `region-gate-crossing-primitive`,
 `autopilot-chaos-not-one-scripted-path`. Reconciles with WO-467 (RegionGate recipe) + WO-468

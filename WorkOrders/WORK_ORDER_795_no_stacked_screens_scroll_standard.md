@@ -1,3 +1,7 @@
+<!-- era-sweep-2026-08-17 -->
+> ### ⚠ AGED 2026-08-17 — still READY, but unverified since 2026-07-30
+> The 2026-08-17 era sweep found **no evidence** that this WO's subject was deleted or superseded, so its **Status stays READY** and nothing else was changed. It is simply OLD (git first-add 2026-07-30) and has not been re-verified against current canon (`CANON_GROUND_TRUTH_*.md`, CLAUDE.md §7). **Re-verify before pulling it.**
+
 # WORK ORDER 795 — UI standard: screens never stack; scroll when content exceeds
 
 **Status: PARTIALLY SHIPPED — wave 1 (4461f9ee), wave 2 (583bc0ac), modal truce (8ba7154a), capture coverage (749914b1). Remaining panels of the 16-panel audit READY.**

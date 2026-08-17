@@ -1,6 +1,13 @@
+<!-- era-sweep-2026-08-17 -->
+> ### ⛔ ERA SWEEP 2026-08-17 — CLOSED as OBSOLETE (deleted system)
+> **Dead thing:** Village.unity. **Git first-add:** 2026-06-22.
+> **Evidence:** `Assets/Scenes/Village.unity` is absent from disk and from `git ls-files`; scope is stripping crystal-vein decoration from the Village bake.
+> Only the `**Status:**` line was rewritten. The body below is UNTOUCHED — CLAUDE.md §15, *"frozen, never rewrite"*.
+> **TO REVIVE:** nothing was deleted and not one line of the body below was changed. If this work is still wanted, re-date the WO (add a `**Minted:** <today>` line), re-point it at the live scene/system, and set `**Status:** READY TO IMPLEMENT`.
+
 # WORK ORDER 157 — Strip Crystal Veins from the Village (deleted content, magenta)
 
-**Status: READY TO IMPLEMENT**
+**Status:** CLOSED — OBSOLETE: Village.unity no longer exists (era sweep 2026-08-17)
 **Priority:** Medium — visible magenta shards in the village; deleted content re-spawned
 **Date:** 2026-05-30
 **Lane:** Architect / World — `Assets/Editor/VillageSceneBuilder.cs` (single-writer) + rebake. CLI implements; UI spec only.

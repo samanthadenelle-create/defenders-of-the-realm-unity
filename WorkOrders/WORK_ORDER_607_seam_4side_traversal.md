@@ -1,6 +1,13 @@
+<!-- era-sweep-2026-08-17 -->
+> ### ⛔ ERA SWEEP 2026-08-17 — SUPERSEDED
+> **Superseded by:** WO-608 (world merge to one scene). **Git first-add:** 2026-07-04.
+> **Evidence:** scope is 4-side walk-traversability ACROSS the castle/OuterWorld scene cut, and its work products are re-bakes of `MainCastle_Hall.unity` + `OuterWorld.unity`. `Assets/Scenes/OuterWorld.unity` is absent from disk and from `git ls-files`.
+> Only the `**Status:**` line was rewritten. The body below is UNTOUCHED — CLAUDE.md §15, *"frozen, never rewrite"*.
+> **TO REVIVE:** nothing was deleted and not one line of the body below was changed. If this work is still wanted, re-date the WO (add a `**Minted:** <today>` line), re-point it at the live scene/system, and set `**Status:** READY TO IMPLEMENT`.
+
 # WORK ORDER 607 — Castle-moat seam: 4-side walk-traversability (mirror South → W/N/E)
 
-**Status: READY TO IMPLEMENT (with owner felt-verify gate).** Provisional number — slot into
+**Status:** SUPERSEDED by WO-608 (world merge to one scene) (era sweep 2026-08-17)
 `CLI_LANES_WO_NUMBERS.md` / the master backlog (numbering authority is the master doc, not the FS max).
 
 **Origin:** owner directive 2026-07-04 "mirror south to other three sides and bake again." The bridges,

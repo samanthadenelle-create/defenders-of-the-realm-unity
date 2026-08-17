@@ -1,7 +1,14 @@
+<!-- era-sweep-2026-08-17 -->
+> ### ⛔ ERA SWEEP 2026-08-17 — CLOSED as OBSOLETE (deleted system)
+> **Dead thing:** Village.unity. **Git first-add:** 2026-06-22.
+> **Evidence:** `Assets/Scenes/Village.unity` is absent from disk and from `git ls-files`; acceptance is "absent from Village scene hierarchy after rebake".
+> Only the `**Status:**` line was rewritten. The body below is UNTOUCHED — CLAUDE.md §15, *"frozen, never rewrite"*.
+> **TO REVIVE:** nothing was deleted and not one line of the body below was changed. If this work is still wanted, re-date the WO (add a `**Minted:** <today>` line), re-point it at the live scene/system, and set `**Status:** READY TO IMPLEMENT`.
+
 # WO-263: Upside-down tree asset reappeared in scene
 **Linear:** [DEF-96](https://linear.app/defenders-of-the-realm/issue/DEF-96/upside-down-tree-asset-reappeared-in-scene)
 **Lane:** World/Environment
-**Status:** READY TO IMPLEMENT
+**Status:** CLOSED — OBSOLETE: Village.unity no longer exists (era sweep 2026-08-17)
 **Priority:** High
 
 ## Acceptance Criteria

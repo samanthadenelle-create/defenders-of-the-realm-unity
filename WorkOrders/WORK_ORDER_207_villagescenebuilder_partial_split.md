@@ -1,6 +1,13 @@
+<!-- era-sweep-2026-08-17 -->
+> ### ⛔ ERA SWEEP 2026-08-17 — SUPERSEDED
+> **Superseded by:** work that has already shipped. **Git first-add:** 2026-06-22.
+> **Evidence:** duplicate of the same request; the partial-class files listed above are in tree.
+> Only the `**Status:**` line was rewritten. The body below is UNTOUCHED — CLAUDE.md §15, *"frozen, never rewrite"*.
+> **TO REVIVE:** nothing was deleted and not one line of the body below was changed. If this work is still wanted, re-date the WO (add a `**Minted:** <today>` line), re-point it at the live scene/system, and set `**Status:** READY TO IMPLEMENT`.
+
 # WORK ORDER 181 — Split VillageSceneBuilder.cs into partial-class files (<800 lines)
 
-**Status: READY TO IMPLEMENT** (run AFTER the current playtest build ships)
+**Status:** SUPERSEDED by work that has already shipped (era sweep 2026-08-17)
 **Priority:** Medium — maintainability / collision-risk reduction, not a gameplay bug.
 **Date:** 2026-05-31
 **Lane:** Architect / World — `Assets/Editor/VillageSceneBuilder.cs` (single-writer) + green-rebake equivalence gate. CLI implements.

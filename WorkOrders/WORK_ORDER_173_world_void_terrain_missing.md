@@ -1,6 +1,13 @@
+<!-- era-sweep-2026-08-17 -->
+> ### ⛔ ERA SWEEP 2026-08-17 — CLOSED as OBSOLETE (deleted system)
+> **Dead thing:** the Village.unity/OuterWorld.unity scene split. **Git first-add:** 2026-06-22.
+> **Evidence:** the WO's root cause is literally "the two-scene split (Village.unity + OuterWorld.unity) created a terrain orphan". `Assets/Scenes/Village.unity` is absent from disk and from `git ls-files` and `Assets/Scenes/OuterWorld.unity` is absent from disk and from `git ls-files` — the split it repairs no longer exists (CLAUDE.md §7: hub = Main_Castle_Overworld, MergedWorld ON, one navmesh). Its ⛔ P0 banner is a P0 against a scene arrangement that was dissolved.
+> Only the `**Status:**` line was rewritten. The body below is UNTOUCHED — CLAUDE.md §15, *"frozen, never rewrite"*.
+> **TO REVIVE:** nothing was deleted and not one line of the body below was changed. If this work is still wanted, re-date the WO (add a `**Minted:** <today>` line), re-point it at the live scene/system, and set `**Status:** READY TO IMPLEMENT`.
+
 # WORK ORDER 173 — The World is a black void: exterior terrain missing / scene-split orphan
 
-**Status: READY TO IMPLEMENT — ⛔ P0 BLOCKER (owner-flagged 2026-05-31)**
+**Status:** CLOSED — OBSOLETE: the Village.unity/OuterWorld.unity scene split no longer exists (era sweep 2026-08-17)
 **Priority:** ⛔ **P0 — TOP OF THE QUEUE.** The game looks broken: owner *"where is world?"* — village on a
 tiny lit grass patch in black void; the entire outer world (terrain, regions, mine nodes) is absent. This
 is the most visible "the build is broken" issue — **fix before all other castle/world work.**

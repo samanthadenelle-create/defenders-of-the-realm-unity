@@ -1,3 +1,7 @@
+<!-- era-sweep-2026-08-17 -->
+> ### ⚠ AGED 2026-08-17 — still READY, but unverified since 2026-07-19
+> The 2026-08-17 era sweep found **no evidence** that this WO's subject was deleted or superseded, so its **Status stays READY** and nothing else was changed. It is simply OLD (git first-add 2026-07-19) and has not been re-verified against current canon (`CANON_GROUND_TRUTH_*.md`, CLAUDE.md §7). **Re-verify before pulling it.**
+
 # WORK ORDER 750 — Right ActionBar naming + ability ids + Warden's Grace redesign + R clip rebind
 
 **Status:** SPEC — READY TO IMPLEMENT (owner rulings 2026-07-19). Awaiting owner go (needs 2 clip IDs confirmed).

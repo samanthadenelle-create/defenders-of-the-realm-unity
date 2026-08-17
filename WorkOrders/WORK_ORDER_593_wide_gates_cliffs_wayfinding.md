@@ -1,6 +1,13 @@
+<!-- era-sweep-2026-08-17 -->
+> ### ⛔ ERA SWEEP 2026-08-17 — SUPERSEDED
+> **Superseded by:** WO-608 (world merge to one scene). **Git first-add:** 2026-07-03.
+> **Evidence:** the WO is a Castle→OuterWorld crossing-wayfinding MVP whose whole problem statement is "new players can't tell they must cross at a seam". `Assets/Scenes/OuterWorld.unity` is absent from disk and from `git ls-files` and CLAUDE.md §7 puts the castle and the overworld in ONE scene on ONE navmesh — there is no seam to sign-post.
+> Only the `**Status:**` line was rewritten. The body below is UNTOUCHED — CLAUDE.md §15, *"frozen, never rewrite"*.
+> **TO REVIVE:** nothing was deleted and not one line of the body below was changed. If this work is still wanted, re-date the WO (add a `**Minted:** <today>` line), re-point it at the live scene/system, and set `**Status:** READY TO IMPLEMENT`.
+
 # WORK ORDER 593 — Wide Downward Bridge Exit (Castle → OuterWorld wayfinding MVP)
 
-**Status:** READY TO IMPLEMENT
+**Status:** SUPERSEDED by WO-608 (world merge to one scene) (era sweep 2026-08-17)
 **Date:** 2026-07-01
 **Priority:** P1 (new players can't tell they must cross at a seam)
 **Owner:** Samantha (PO) · **Author:** CLI (architect synthesis) · **Implements:** CLI
