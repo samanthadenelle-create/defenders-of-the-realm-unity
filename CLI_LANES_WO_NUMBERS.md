@@ -1,6 +1,6 @@
 ﻿# Lanes â€” Work-Order Numbers Only (for CLI)  Â·  reconciled 2026-06-12 (nightly refill)
 
-> ## âš  RECONCILED 2026-08-17 (CLI): main line next free = **1114**.
+> ## âš  RECONCILED 2026-08-17 (CLI): main line next free = **1115**.
 > *(CLI seat minted **WO-1113** and bumped 1113 -> 1114 in this SAME edit. **1113** = DUNGEON STATUS,
 > a remotely-flippable in-world door state (owner ruling 2026-08-17: flip a dungeon open/closed with
 > NO store build, "so we can make all dungeons feel like the two real ones with depth"; follow-up
@@ -1873,4 +1873,5 @@ the old 414 file is marked SUPERSEDED. Notion's 414 stands.
 **Hard rules:** ONE agent in Lane 1. `GameState.cs`/`SaveSchema` field-adds (Lanes 5/6/7/11/301/339) additive,
 one-at-a-time. **Do early:** 164 (zone), wallet/economy merge, 290 (QuestService), 339 (SaveSchema anchor) â€” many lanes depend on them.
 Overlaps: 108 (5/11), 282 (10/11), 80 (7/8), 111 (0/9), 295 (3/6), 340 (7/301).
+
 

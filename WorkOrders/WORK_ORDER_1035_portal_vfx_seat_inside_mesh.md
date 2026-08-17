@@ -1,6 +1,17 @@
 # WORK ORDER 1035 — Portal VFX is huge and free-floating: seat it INSIDE the portal mesh, derived from bounds
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE (shipped 2026-08-16; status flipped 2026-08-17 by the READY-staleness audit)
+
+> Shipped in **68082bf6b** — *"fix(vfx): WO-1035 - portal effects sit INSIDE the arch (units bug, not art)"*.
+> Live at `Assets/_Modules/Village/World/DungeonWorldPortalSpawner.cs:866, 968, 1057, 1082` — a MEASURED
+> seat and a MEASURED size, not authored constants, which is why it holds across portal variants.
+> Pinned by `RangedFacingLockRegression.cs:335`.
+>
+> ⚠ Worth remembering from the diagnosis: this was a **units bug, not an art bug**. The effect was
+> authored correctly and placed wrongly. A seat that "fixes" this class by editing the VFX prefab makes
+> it worse and hides the real cause.
+>
+> The status line sat at READY for a day after the work landed (CLAUDE.md §2 — flip it in the same commit).
 **Minted:** 2026-08-16 (UI seat) — provenance stack bumped 1035 → 1036 in the same edit
 **Lane:** World VFX seating. Disjoint from WO-1025 (Heart tree VFX) — different emitter, same class.
 **Provenance:** owner 2026-08-16, verbatim: *"portal vfx need inside the interior of the portal.fbx not

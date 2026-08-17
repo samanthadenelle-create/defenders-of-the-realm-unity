@@ -1,6 +1,15 @@
 # WORK ORDER 1031 — Remove the "Frost" task prompt from town (⚠ NOT the wolf — they are the SAME OBJECT)
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE (shipped 2026-08-16; status flipped 2026-08-17 by the READY-staleness audit)
+
+> Shipped in **6c880ea1b** — *"fix(dialogue): WO-1031 - delete the 'Frost' engage prompt; the wolf is Aldwin"*.
+> `PetTaskController.BuildEngageDef` is **gone**, and its absence is PINNED by a dedicated oracle
+> (`Assets/Editor/Regression/EchoEngageDialogueRegression.cs:120,143`), so the prompt cannot return
+> unnoticed. `Assets/Editor/UICaptureLaunch.cs:871` was re-pointed off the deleted `pet_engage` builder
+> in the same change.
+>
+> The status line sat at READY for a day after the work landed — the board is derived from this line, so
+> it read as outstanding. Flip the status in the SAME commit as the work (CLAUDE.md §2).
 **Minted:** 2026-08-16 (UI seat) — provenance stack bumped 1031 → 1032 in the same edit
 **Lane:** Village / Pets engagement surface. ⚠ Touches the FTUE guide's object — read §2 before editing.
 **Supersedes:** **WO-1030** on its player-facing goal (see §6). WO-1030 made the panel *render
