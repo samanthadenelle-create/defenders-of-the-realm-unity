@@ -418,6 +418,7 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "wall-mitigation suite", () => { if (!WallHeartMitigationRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[wall-mitigation] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "pack-grant suite", () => { if (!PackGrantRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[pack-grant] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "upgrade-authority suite", () => { if (!BuildingUpgradeAuthorityRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[upgrade-authority] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "queue-full-surface suite", () => { if (!UpgradeQueueFullSurfaceRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[queue-full-surface] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "upgrade-family suite", () => { if (!UpgradeFamilyPrecedenceRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[upgrade-family] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "dualfamily-level-reset suite", () => { if (!DualFamilyLevelResetRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[dualfamily-level-reset] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "crystal-production suite", () => { if (!CrystalProductionRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[crystal-production] " + r); });
@@ -741,6 +742,7 @@ namespace DeNelle.Editor
             // Same fencing reason as the block above: each lane authored its oracle, the
             // committer registers it. ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "tutorial-anchor-latch suite", () => { if (!DeNelle.Editor.Regression.TutorialAnchorLatchRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[tutorial-anchor-latch] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "tutorial-watchdog-bound suite", () => { if (!DeNelle.Editor.Regression.TutorialWatchdogBoundRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[tutorial-watchdog-bound] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "build-carousel-order suite", () => { if (!DeNelle.Editor.Regression.BuildCarouselTutorialOrderRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[build-carousel-order] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "founding-guide-wolf suite", () => { if (!DeNelle.Editor.Regression.FoundingGuideWolfBodyRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[founding-guide-wolf] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "hub-tree-aura suite", () => { if (!DeNelle.Editor.Regression.HubTreeAuraWithholdRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[hub-tree-aura] " + r); });

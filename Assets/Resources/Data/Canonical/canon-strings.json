@@ -101,6 +101,12 @@
   "market": "Store",
   "jeweler": "Jeweler",
 
+  "_upgradeQueueNote": "WO-1045. The building upgrade button's QUEUE-FULL face. ASCII only (TMP renders non-ASCII as tofu). These are the only NEW words that WO authored: the refusal SENTENCES it shows come live from BuildTimerService.LineFullMessage / TryBuySlot and are deliberately NOT duplicated here — two copies of a refusal is the drift bug the WO closes. upgradeQueueFullDetail's {0}/{1} are DEPTH (items lined up, queueDepthPerLine=5); upgradeQueueCrews' {0}/{1} are CONCURRENCY (jobs running at once, freeBuildSlots=2). Never swap those: exhausted concurrency QUEUES, only exhausted depth REFUSES, and the remedies differ.",
+  "upgradeQueueFull": "Queue full",
+  "upgradeQueueFullDetail": "Queue full - {0} of {1} lined up",
+  "upgradeQueueSlotOffer": "Buy a builder slot - {0} Crystals",
+  "upgradeQueueCrews": "{0} of {1} crews working",
+
   "zoneHearth": "The Hearth",
   "zoneWintermere": "Wintermere",
   "zoneEmberfall": "The Emberfall",

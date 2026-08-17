@@ -309,9 +309,7 @@ namespace DeNelle.Village
             if (bought >= entitled)
             {
                 // STEP ONE failed. Say WHAT unlocks it — an unexplained locked button is the bug.
-                failure = entitled <= 0
-                    ? "Locked. Awaken a 3rd Echo to unlock extra queue slots."
-                    : $"Locked. You have used all {entitled} slot(s) your Echoes unlock - awaken another Echo.";
+                failure = EchoGateRefusal(entitled);
                 DeNelle.Core.Diagnostics.FlowTrace.Step("Obsidian",
                     $"slot buy on {id} refused — Echo gate ({bought} bought / {entitled} entitled).");
                 return false;
@@ -337,6 +335,47 @@ namespace DeNelle.Village
             DeNelle.Core.Diagnostics.FlowTrace.Step("Obsidian",
                 $"extra slot bought on {id} for {price} crystals (now {SlotCount(id)} slots, " +
                 $"line depth {QueueDepthLimit(id)}).");
+            return true;
+        }
+
+        /// <summary>
+        /// WO-911 STEP ONE's refusal text, factored out of <see cref="TryBuySlot"/> so the pre-tap
+        /// PROBE (<see cref="CanBuySlot"/>) and the act itself quote ONE sentence and can never drift.
+        /// </summary>
+        private static string EchoGateRefusal(int entitled)
+            => entitled <= 0
+                ? "Locked. Awaken a 3rd Echo to unlock extra queue slots."
+                : $"Locked. You have used all {entitled} slot(s) your Echoes unlock - awaken another Echo.";
+
+        /// <summary>
+        /// WO-1045 — the PRE-TAP probe for <see cref="TryBuySlot"/>: may the player be OFFERED an
+        /// extra slot on <paramref name="id"/> right now?
+        /// <para>
+        /// True => render the offer; <paramref name="reason"/> is null and
+        /// <see cref="NextSlotPrice"/> is the ask. False => do NOT render a buy CTA;
+        /// <paramref name="reason"/> is the same player-readable ASCII sentence
+        /// <see cref="TryBuySlot"/> would have returned, so the UI states the unlock condition
+        /// instead of showing a wall.
+        /// </para>
+        /// </summary>
+        /// <remarks>
+        /// ⚠ Deliberately does NOT test the crystal balance. Owner's rule (mirrored at
+        /// <see cref="TryInstantFinish(ChannelId,string,out string)"/>): the button STAYS VISIBLE when
+        /// broke and routes to the faucet — <see cref="TryBuySlot"/> returns the
+        /// <see cref="InsufficientCrystalsPrefix"/> failure for that. Hiding the offer from a broke
+        /// player would be the unexplained-locked-button bug in a new place.
+        /// </remarks>
+        public bool CanBuySlot(ChannelId id, out string reason)
+        {
+            reason = null;
+            var ch = GetChannel(id);
+            if (ch == null) { reason = "Save not loaded."; return false; }
+
+            int entitled = EchoEntitledSlots();
+            int bought = Mathf.Max(0, ch.BoughtSlots);
+            if (bought >= entitled) { reason = EchoGateRefusal(entitled); return false; }
+
+            if (NextSlotPrice(id) <= 0) { reason = "Extra slots are not for sale right now."; return false; }
             return true;
         }
 
@@ -533,7 +572,7 @@ namespace DeNelle.Village
             {
                 // WO-911 (Q4) — the line is at its DEPTH cap. Refuse LOUDLY: the caller has usually
                 // already charged, so a silent null here would eat the player's resources.
-                _lastEnqueueFailure = DepthRefusalMessage(ChannelId.Builder);
+                _lastEnqueueFailure = LineFullMessage(ChannelId.Builder);
                 DeNelle.Core.Diagnostics.FlowTrace.Warn("BuildTimer",
                     $"StartBuilderJob REFUSED for '{structureId}' — {_lastEnqueueFailure} " +
                     "(caller must refund whatever it charged).");
@@ -614,7 +653,7 @@ namespace DeNelle.Village
                                                        QueueDepthLimit(channel), out bool accepted);
             if (!accepted)
             {
-                _lastEnqueueFailure = DepthRefusalMessage(channel);
+                _lastEnqueueFailure = LineFullMessage(channel);
                 DeNelle.Core.Diagnostics.FlowTrace.Warn("Obsidian",
                     $"job '{kind}' -> '{targetId}' REFUSED on {channel} — {_lastEnqueueFailure} " +
                     "(caller must refund whatever it charged).");
@@ -675,8 +714,22 @@ namespace DeNelle.Village
         /// <summary>
         /// WO-911 — the ASCII, colour-independent reason a line refused work. State is carried by
         /// TEXT because the owner is red/green colourblind; never encode "full" by tint alone.
+        /// <para>
+        /// ⚠ WO-1045 — PUBLIC on purpose. This sentence used to be reachable only AFTER a refusal
+        /// (via <see cref="LastEnqueueFailure"/>), so every pre-tap surface that wanted to say "the
+        /// line is full" had to re-compose it — and one already did, verbatim, in
+        /// <c>PlacedStructureUpgradeService.TryStart</c>. Two copies of a player-facing sentence is
+        /// the drift bug in miniature. A button now quotes THIS before the tap, so what the player
+        /// reads on a greyed-out button is byte-identical to what the service would have refused with.
+        /// </para>
+        /// <para>
+        /// ⚠ It names the DEPTH axis (<see cref="QueueDepthLimit"/>, how many may be LINED UP) and
+        /// never the CONCURRENCY axis (<see cref="BuildTimerConfig.freeBuildSlots"/>, how many run at
+        /// once). Exhausted concurrency does NOT refuse — it QUEUES. Never re-word this into "all
+        /// builders are busy": that is a different, non-blocking condition with a different remedy.
+        /// </para>
         /// </summary>
-        private string DepthRefusalMessage(ChannelId id)
+        public string LineFullMessage(ChannelId id)
             => $"{ChannelWord(id)} queue is full ({QueueDepth(id)}/{QueueDepthLimit(id)}). Cancel or finish an item first.";
 
         // =====================================================================

@@ -343,6 +343,21 @@ namespace DeNelle.Village.Buildings.Progression
         /// removed (the owner is red/green colourblind).
         /// </summary>
         public static string FormatActionLabel(UpgradeActionState state, int seconds, string nextName)
+            => FormatActionLabel(state, seconds, nextName, 0, 0);
+
+        /// <summary>
+        /// WO-1045 — <see cref="FormatActionLabel(UpgradeActionState,int,string)"/> plus the queue
+        /// DEPTH readout the <see cref="UpgradeActionState.QueueFull"/> face carries
+        /// ("Queue full - 5 of 5 lined up").
+        /// <para>
+        /// ⚠ The numbers are DEPTH (how many may be LINED UP), never CREWS (how many run at once).
+        /// Those are different axes with different remedies, and a face that showed "2 of 2" here
+        /// would send the player to buy parallelism for a problem parallelism alone does not name.
+        /// Pass 0/0 to get the bare word — that is what the ASCII/uniqueness oracle exercises.
+        /// </para>
+        /// </summary>
+        public static string FormatActionLabel(UpgradeActionState state, int seconds, string nextName,
+                                               int queueDepth, int queueLimit)
         {
             switch (state)
             {
@@ -353,8 +368,41 @@ namespace DeNelle.Village.Buildings.Progression
                 case UpgradeActionState.InProgress:       return "In progress - " + FormatMinutesSeconds(seconds);
                 case UpgradeActionState.VillageGated:     return "Raise Village Tier";
                 case UpgradeActionState.Maxed:            return "Fully enhanced";
+                case UpgradeActionState.QueueFull:
+                    return queueLimit > 0
+                        ? string.Format(Copy(CopyKeyQueueFullDetail, "Queue full - {0} of {1} lined up"),
+                                        queueDepth, queueLimit)
+                        : Copy(CopyKeyQueueFull, "Queue full");
                 default:                                  return "No upgrades here";
             }
+        }
+
+        // ── WO-1045 player-facing copy (CLAUDE.md §7 — never a literal in the View) ──
+        // Authored in canon-strings.json so the wording can be re-pointed without a code change.
+        // The fallbacks below are NOT a second authority: they are the crash-mat for a missing key
+        // (VillageStrings would otherwise render a literal "[[missing:key]]" onto the button, which
+        // is a worse failure than the sentence it replaced). A fallback that fires is LOGGED.
+        //
+        // ⛔ The REFUSAL sentences are NOT here and must never be copied here — they come live from
+        // BuildTimerService.LineFullMessage / TryBuySlot via the VM. Two copies of a refusal is the
+        // drift bug this WO exists to close.
+        public const string CopyKeyQueueFull       = "upgradeQueueFull";
+        public const string CopyKeyQueueFullDetail = "upgradeQueueFullDetail";
+        public const string CopyKeyQueueSlotOffer  = "upgradeQueueSlotOffer";
+        public const string CopyKeyQueueCrews      = "upgradeQueueCrews";
+
+        /// <summary>Canon-strings lookup with a logged fallback (never renders "[[missing:...]]").</summary>
+        internal static string Copy(string key, string fallback)
+        {
+            string s = DeNelle.Village.VillageStrings.Canon(key);
+            if (string.IsNullOrEmpty(s) || s.StartsWith("[[missing:", System.StringComparison.Ordinal))
+            {
+                FlowTrace.Warn("UpgradeUI", "canon-strings key '" + key
+                    + "' is missing - rendering the built-in fallback '" + fallback
+                    + "'. Add the key to canon-strings.json (Resources AND StreamingAssets).");
+                return fallback;
+            }
+            return s;
         }
 
         // ── Render: repaint from vm.* ONLY ────────────────────────────────────────
@@ -408,7 +456,16 @@ namespace DeNelle.Village.Buildings.Progression
               .Append(_vm.CurrentTier).Append('/').Append(_vm.MaxTier).Append('|')
               .Append((int)_vm.ActionState).Append('|')
               .Append(_vm.NextTierName).Append('|')
-              .Append(_vm.NextAffordable ? '1' : '0');
+              .Append(_vm.NextAffordable ? '1' : '0')
+              // WO-1045 — the queue readout is part of the rendered content, so the DEPTH counter
+              // and the slot price repaint as the line drains. Without these the band would freeze
+              // at "5 of 5" while items completed, because ActionState alone does not move until
+              // the LAST one clears. Cheap: four ints on a signature already built per publish.
+              // (The auto RE-ENABLE itself is not new plumbing — Update() polls the published
+              // ObsidianQueueGate.Status.Version at ~1 Hz, so a freed slot repaints with no reopen.)
+              .Append('|').Append(_vm.BuilderQueueDepth).Append('/').Append(_vm.BuilderQueueLimit)
+              .Append('|').Append(_vm.BuilderCrewsBusy).Append('/').Append(_vm.BuilderCrewSlots)
+              .Append('|').Append(_vm.CanBuyQueueSlot ? '1' : '0').Append(_vm.QueueSlotPrice);
             foreach (var b in _vm.NextBonuses) sb.Append('~').Append(b);
             foreach (var c in _vm.NextCostLines)
                 sb.Append('$').Append(c.Label).Append(':').Append(c.Amount)
@@ -1106,10 +1163,14 @@ namespace DeNelle.Village.Buildings.Progression
         {
             var state = _vm.ActionState;
             int sec = _vm.ActionRemainingSeconds;
-            string label = FormatActionLabel(state, sec, _vm.NextTierName);
+            string label = FormatActionLabel(state, sec, _vm.NextTierName,
+                                             _vm.BuilderQueueDepth, _vm.BuilderQueueLimit);
             const float x0 = 0.03f, x1 = 0.97f;
 
             TraceActionState(state);
+
+            // WO-1045 — QUEUE FULL: grey out, explain, offer (the owner's own order).
+            if (state == UpgradeActionState.QueueFull) { BuildQueueFullBand(card, label, x0, x1); return; }
 
             if (state == UpgradeActionState.Ready)
             {
@@ -1164,6 +1225,97 @@ namespace DeNelle.Village.Buildings.Progression
             }
         }
 
+        // ── WO-1045 — the QUEUE-FULL action band: GREY OUT, EXPLAIN, OFFER ────────
+        //
+        // THE DEFECT THIS RETIRES (owner, 2026-08-17): with 49k wood against a 108 cost the player
+        // tapped "Upgrade to Level 2" and NOTHING happened. Not a disabled button, not a message —
+        // a bright plate over a guaranteed refusal. Affordable-but-blocked was invisible, which is
+        // the worst outcome available: the player cannot tell a broken game from a rule they have
+        // not been told.
+        //
+        // LAYOUT: the band is ONE fixed CTA height. Splitting it VERTICALLY would halve two
+        // controls below the touch minimum, so it splits HORIZONTALLY and reads left-to-right in
+        // the owner's own order — the dead state on the left, the live remedy on the right. With no
+        // remedy to offer, the dead state takes the full width and the explanation grows into it.
+        //
+        // COLOURBLIND LAW: the disabled half carries a WORD ("Queue full"), a NUMBER ("5 of 5"),
+        // the service's own sentence, and a distinct GLYPH SHAPE. No hue is load-bearing, and no
+        // colour accent is added "to help" — the greyscale read is the gate.
+        private void BuildQueueFullBand(RectTransform card, string label, float x0, float x1)
+        {
+            string reason = _vm.ActionBlockedReason;
+            bool canBuy = _vm.CanBuyQueueSlot;
+            int price = _vm.QueueSlotPrice;
+            bool offering = canBuy && price > 0;
+
+            // The CREW line makes the two axes visibly different NUMBERS on one screen: crews are
+            // how many run AT ONCE, the queue count is how many may be LINED UP. Without it a
+            // player reading "5 of 5" has no way to know a slot purchase is about a different dial.
+            string crews = string.Format(Copy(CopyKeyQueueCrews, "{0} of {1} crews working"),
+                                         _vm.BuilderCrewsBusy, _vm.BuilderCrewSlots);
+
+            // -- LEFT (or full width): the DEAD state, visibly disabled + explained -------
+            // Composed in FULL before the button is built: BuildLockButton runs FitBlock, which
+            // sizes the text to the string it is given, so assigning .text afterwards would leave
+            // the fit stale and could clip the very explanation this band exists to show.
+            float deadX1 = offering ? x0 + (x1 - x0) * 0.56f : x1;
+            string dead = label;
+            if (!string.IsNullOrEmpty(reason)) dead += "\n" + reason;
+            dead += "\n" + crews;
+
+            // With no purchasable remedy, say what WOULD unlock one — the service's Echo-gate
+            // sentence ("Awaken a 3rd Echo...") is a real goal, so it goes on screen rather than
+            // leaving the player at a wall with nothing to aim at.
+            string why = offering ? "" : _vm.QueueSlotLockReason;
+            if (!string.IsNullOrEmpty(why)) dead += "\n" + why;
+
+            // onClick: null => Button.interactable stays FALSE. The plate is the dim lock plate,
+            // never the gold CTA — the button cannot be mistaken for tappable, and cannot BE tapped.
+            var lockLbl = BuildLockButton(card, dead, x0, deadX1, 0f, 1f, null,
+                                          RpgUiCatalog.ElementCross);
+            PinActionBand((RectTransform)lockLbl.transform.parent);
+
+            if (!offering)
+            {
+                FlowTrace.Step("UpgradeUI", "queue-full band on '" + _vm.Title + "': no slot offer ("
+                    + (string.IsNullOrEmpty(why) ? "no reason given" : why) + "); depth "
+                    + _vm.BuilderQueueDepth + "/" + _vm.BuilderQueueLimit + " (DEPTH cap), crews "
+                    + _vm.BuilderCrewsBusy + "/" + _vm.BuilderCrewSlots + " (concurrency, not the blocker).");
+                return;
+            }
+
+            // -- RIGHT: the OFFER. Buying a slot raises the DEPTH limit as well as the crew
+            //    count (QueueDepthLimit = authored + bought), so it genuinely unblocks THIS
+            //    refusal — it is not an upsell aimed at the wrong axis.
+            string offer = string.Format(Copy(CopyKeyQueueSlotOffer, "Buy a builder slot - {0} Crystals"),
+                                         ElarionUi.CompactNumber(price));
+            var offerRoot = BuildGoldButton(card, offer, true, deadX1 + 0.015f, x1, 0f, 1f,
+                                            OnBuyQueueSlotTapped);
+            AddStateGlyph(offerRoot, RpgUiCatalog.ElementArrowBoxOn, ElarionUi.Ink);
+            PinActionBand(offerRoot);
+
+            FlowTrace.Step("UpgradeUI", "queue-full band on '" + _vm.Title + "': depth "
+                + _vm.BuilderQueueDepth + "/" + _vm.BuilderQueueLimit + " (DEPTH cap), crews "
+                + _vm.BuilderCrewsBusy + "/" + _vm.BuilderCrewSlots + " (concurrency, not the blocker); "
+                + "slot offer shown at " + price + " crystals.");
+        }
+
+        // The OFFER tap. Goes through the VM -> BuildTimerService.TryBuySlot, which applies the Echo
+        // gate AND the crystal charge. Never GrantSlot/BuySlot (the [Obsolete] free grant).
+        private void OnBuyQueueSlotTapped()
+        {
+            if (_vm == null) return;
+            FlowTrace.Step("UpgradeUI", "SLOT-BUY TAP on '" + _vm.Title + "' (depth "
+                + _vm.BuilderQueueDepth + "/" + _vm.BuilderQueueLimit + ", ask "
+                + _vm.QueueSlotPrice + " crystals)");
+
+            // The VM sets Status either way; Render() toasts a CHANGED status, so a refusal is
+            // spoken aloud and can never be a silent no-op (§12). A success widens the depth limit,
+            // which flips ActionState off QueueFull -> the signature changes -> this band is
+            // replaced by the live Upgrade CTA in the same frame.
+            Guard.Try("UpgradeUI", "buy builder slot from the upgrade panel", () => _vm.TryBuyQueueSlot());
+        }
+
         // The tap. The button flips IMMEDIATELY because the VM raises Changed -> Render ->
         // the signature (which includes ActionState) changes -> this button is rebuilt in the
         // new state. No dead click, no reopen needed (WO-895 §1b).
@@ -1201,10 +1353,15 @@ namespace DeNelle.Village.Buildings.Progression
             string why = "affordable=" + _vm.NextAffordable
                        + " villageGate=" + _vm.NextRequiresVillageTier + "/" + _vm.VillageTierNow
                        + " remainSec=" + _vm.ActionRemainingSeconds
-                       + " progress=" + _vm.ActionProgress.ToString("0.00");
+                       + " progress=" + _vm.ActionProgress.ToString("0.00")
+                       // WO-1045 — BOTH axes on every transition line, always labelled, so a capture
+                       // can never leave "which limit did we hit?" to be re-theorised from code.
+                       + " queueDepth=" + _vm.BuilderQueueDepth + "/" + _vm.BuilderQueueLimit
+                       + " crews=" + _vm.BuilderCrewsBusy + "/" + _vm.BuilderCrewSlots;
             string line = "button '" + _vm.Title + "' " + (_hasRenderedAction ? _lastActionState.ToString() : "<open>")
                         + " -> " + state + " (" + why + ")";
-            if (state == UpgradeActionState.MissingResources || state == UpgradeActionState.VillageGated)
+            if (state == UpgradeActionState.MissingResources || state == UpgradeActionState.VillageGated
+                || state == UpgradeActionState.QueueFull)
                 FlowTrace.Warn("UpgradeUI", line);
             else
                 FlowTrace.Step("UpgradeUI", line);

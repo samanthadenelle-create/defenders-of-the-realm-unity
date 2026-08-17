@@ -219,10 +219,11 @@ namespace DeNelle.Village.Buildings.Progression
                 if (timerSvc.IsLineFull(DeNelle.Core.Jobs.ChannelId.Builder))
                 {
                     result.Outcome = PlacedUpgradeOutcome.LineFull;
-                    result.Message = "Builders queue is full ("
-                        + timerSvc.QueueDepth(DeNelle.Core.Jobs.ChannelId.Builder) + "/"
-                        + timerSvc.QueueDepthLimit(DeNelle.Core.Jobs.ChannelId.Builder)
-                        + "). Cancel or finish an item first.";
+                    // WO-1045: quote the service's ONE sentence rather than re-composing it. This
+                    // used to be a verbatim second copy; the panel's pre-tap greyed button now shows
+                    // the SAME string, so what the player reads before the tap and what a refusal
+                    // says after it cannot diverge.
+                    result.Message = timerSvc.LineFullMessage(DeNelle.Core.Jobs.ChannelId.Builder);
                     FlowTrace.Warn("BuildUpgrade", "upgrade '" + jobKey + "' REFUSED - " + result.Message);
                     return result;
                 }
