@@ -585,8 +585,32 @@ namespace DeNelle.Pets
                     // identity rotation the mesh's authored +X faced 90° off the travel
                     // direction, reading as "moves/faces the wrong way" (DEF-95). Apply
                     // the same single, consistent -90° yaw so visual forward == travel.
-                    const float PetForwardYaw = -90f;  // +X (authored forward) → +Z (root forward)
-                    visual.transform.localRotation = Quaternion.Euler(0f, PetForwardYaw, 0f);
+                    // ⚠ DERIVED PER BODY 2026-08-17 (WO-1032). This was
+                    //       const float PetForwardYaw = -90f;
+                    // applied UNCONDITIONALLY to every pet. Owner report: "the wolf still walks
+                    // north facing left."
+                    //
+                    // THE CONSTANT WAS CORRECT WHEN WRITTEN, AND THAT IS THE PROBLEM. The comment
+                    // above records why: the ORIGINAL pet mesh authored forward along +X, so -90°
+                    // mapped +X → +Z (the root's travel direction — Pet.FaceToward uses
+                    // LookRotation). Then the guide's body was REPLACED with the walking ice wolf
+                    // (WO-961). If the new mesh already authors forward as +Z, the -90° corrects
+                    // nothing — it INTRODUCES the 90° error. Same line, same value, opposite
+                    // effect, because the asset underneath it changed.
+                    //
+                    // ⛔ THE FIX IS NOT A DIFFERENT CONSTANT. Re-authoring -90 → 0 fixes the wolf
+                    // and breaks every pet still on an +X-forward mesh, and the next body swap
+                    // re-opens it a third time. One global number cannot be right for a set of
+                    // independently-authored meshes. Measure each body instead.
+                    //
+                    // ⚠ THE ASSUMPTION, STATED SO IT CAN BE FALSIFIED: a quadruped is longer along
+                    // its travel axis than across it, so the longer horizontal extent IS the
+                    // authored forward. True for every pet body we ship. A body WIDER than it is
+                    // long would be read backwards — which is why the trace prints the measurement
+                    // AND the choice, so a wrong call shows up in one log line instead of being
+                    // re-litigated from a screenshot months later.
+                    float petForwardYaw = DerivePetForwardYaw(visual, def?.Species);
+                    visual.transform.localRotation = Quaternion.Euler(0f, petForwardYaw, 0f);
                     NormalizePetHeight(visual, 1.1f);
                     StripPetColliders(visual);
                     // Tripo FBXs embed a CAMERA node (and sometimes an
@@ -980,6 +1004,82 @@ namespace DeNelle.Pets
             float feetOffset = b2.min.y - go.transform.position.y;
             if (feetOffset < 0f)
                 go.transform.localPosition -= new Vector3(0f, feetOffset, 0f);
+        }
+
+        /// <summary>
+        /// The yaw that turns THIS body's authored forward into the root's +Z travel direction,
+        /// measured from the mesh rather than assumed (WO-1032).
+        /// </summary>
+        /// <remarks>
+        /// Replaces a hardcoded <c>-90f</c> that was correct for the ORIGINAL +X-forward pet mesh
+        /// and wrong for the ice wolf that replaced it — owner report 2026-08-17: "the wolf still
+        /// walks north facing left". A single global yaw cannot be right for independently-authored
+        /// meshes; the next body swap would break it a third time.
+        ///
+        /// METHOD: a pet body is longer along its travel axis than across it, so the longer
+        /// horizontal extent IS the authored forward. X longer → the mesh faces +X → yaw -90 to
+        /// bring it to +Z. Z longer → already forward → yaw 0.
+        ///
+        /// ⚠ Bounds here are WORLD-space (Renderer.bounds) and this runs BEFORE any rotation is
+        /// applied, while the visual still sits at identity under a fresh root — so world extents
+        /// equal local extents at this instant. Do not move this call after the rotation or after
+        /// NormalizePetHeight's scaling without re-checking that.
+        ///
+        /// Ambiguity is REPORTED, not silently resolved: a body within 15% of square cannot be
+        /// judged by this rule, so it keeps the legacy -90 and says so. That is the case a future
+        /// per-body override would serve, and the trace is how anyone would know it had arrived.
+        /// </remarks>
+        private static float DerivePetForwardYaw(GameObject visual, string species)
+        {
+            const float LegacyPlusXForwardYaw = -90f;
+            const float AlreadyForwardYaw     = 0f;
+            const float SquareTolerance       = 0.15f;   // within 15% => too square to call
+
+            float yaw = LegacyPlusXForwardYaw;
+            Guard.Try("Pets", $"derive forward yaw for '{species}'", () =>
+            {
+                var renderers = visual != null ? visual.GetComponentsInChildren<Renderer>() : null;
+                if (renderers == null || renderers.Length == 0)
+                {
+                    FlowTrace.Warn("Pets",
+                        $"forward-yaw: '{species}' has NO renderers to measure — keeping the legacy " +
+                        $"{LegacyPlusXForwardYaw}° (+X-forward assumption). If this body faces wrong, " +
+                        "that assumption is why.");
+                    return;
+                }
+
+                Bounds b = renderers[0].bounds;
+                for (int i = 1; i < renderers.Length; i++) b.Encapsulate(renderers[i].bounds);
+
+                float x = Mathf.Abs(b.size.x);
+                float z = Mathf.Abs(b.size.z);
+                float longer = Mathf.Max(x, z);
+                if (longer <= 0.0001f)
+                {
+                    FlowTrace.Warn("Pets",
+                        $"forward-yaw: '{species}' measured a degenerate footprint (x={x:0.000} " +
+                        $"z={z:0.000}) — keeping the legacy {LegacyPlusXForwardYaw}°.");
+                    return;
+                }
+
+                float ratio = Mathf.Abs(x - z) / longer;
+                if (ratio < SquareTolerance)
+                {
+                    FlowTrace.Warn("Pets",
+                        $"forward-yaw: '{species}' is too SQUARE to judge (x={x:0.000} z={z:0.000}, " +
+                        $"{ratio:P0} apart, need {SquareTolerance:P0}) — keeping the legacy " +
+                        $"{LegacyPlusXForwardYaw}°. If this body faces wrong it needs a per-body " +
+                        "override, not a change to this rule.");
+                    return;
+                }
+
+                yaw = x > z ? LegacyPlusXForwardYaw : AlreadyForwardYaw;
+                FlowTrace.Step("Pets",
+                    $"forward-yaw: '{species}' measured x={x:0.000} z={z:0.000} -> authored forward " +
+                    $"is {(x > z ? "+X" : "+Z")}, applying {yaw}° so visual forward == travel.");
+            });
+
+            return yaw;
         }
 
         private static void StripPetColliders(GameObject go)

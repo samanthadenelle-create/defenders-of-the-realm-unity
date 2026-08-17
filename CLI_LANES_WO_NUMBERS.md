@@ -1,6 +1,26 @@
 # Lanes â€” Work-Order Numbers Only (for CLI)  Â·  reconciled 2026-06-12 (nightly refill)
 
-> ## âš  RECONCILED 2026-08-17 (CLI): main line next free = **1116**.
+> ## âš  RECONCILED 2026-08-17 (CLI): main line next free = **1117**.
+> *(CLI seat minted **WO-1117** and bumped 1117 -> 1118 in this SAME edit. **1117** = the Realm Store
+> gets its own PERMANENT STOREFRONT. Owner ruling 2026-08-17: "can we give monetization its own
+> Storefront?" -> "something with a static location not destructible". Today the ONLY monetization
+> surface in the game is the THIRD dialogue option on Coppin, a produce vendor, BELOW A SCROLL FOLD.
+> Interim fix applied the same day: that option is now FIRST. The real fix is a baked, fixed-location
+> storefront with its own NPC, ABSENT from the build catalog and NOT an IDamageableStructure -- a
+> DELIBERATE exception to the player-built-town model (CLAUDE.md sec.8) because sellable / movable /
+> destructible each mean the store can go OFFLINE: a raid would turn revenue into a function of
+> whether the last wave happened to reach one building. 1 open ruling: WHERE it stands, which is
+> expensive to change once baked.)*
+> *(CLI seat minted **WO-1116** and bumped 1116 -> 1117 in this SAME edit. **1116** = the OPERATOR /
+> LIVE-OPS DASHBOARD. **Phase 1 is BUILT**: `api/admin/stats.js` (read-only aggregate endpoint --
+> overview / retention / funnel / economy / players, reusing db.js's constant-time X-Admin-Key auth
+> VERBATIM, every query a LIMITed parameterised SELECT, player ids masked first4...last4) plus
+> `site/admin.html` (unlisted, noindex, key-held-in-MEMORY-ONLY page -- site/ is a PUBLIC deployment).
+> **Phase 2 is SPEC ONLY**: issuing grants from the panel is a WRITE surface on a published,
+> payments-adjacent game, so the WO specifies it as a BOUND promo code (promo_codes.bound_wallet,
+> already enforced at api/promo/redeem.js:172) with a mandatory audit row per write, and explicitly
+> REFUSES the direct-write-to-player_data route. 4 open rulings. Pairs with WO-1115, which owns the
+> PLAYER-facing half of the same rail.)*
 > *(CLI seat minted **WO-1115** and bumped 1115 -> 1116 in this SAME edit. **1115** = REDEEM CODES —
 > player promotions ("50% off") AND a dev grant that works on a RELEASE APK, which is the point:
 > DeNelle.DevTools is stripped on the APK (asmdef: UNITY_EDITOR || DEVELOPMENT_BUILD) so there is no

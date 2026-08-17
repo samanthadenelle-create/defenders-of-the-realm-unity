@@ -175,8 +175,29 @@ def parse_wos():
             text = open(path, encoding="utf-8", errors="replace").read(20000)
         except OSError:
             continue
-        num_m = re.match(r"WORK_ORDER_(\d+)", base)
-        num = int(num_m.group(1)) if num_m else None
+        # ── TWO NUMBER NAMESPACES (owner ruling 2026-08-17, "PROD WO 001") ──────────
+        # Echoes of Elarion is LIVE on the Solana dApp Store. Numbering restarts at
+        # PROD-001 to draw a hard line at that date: everything before it was
+        # pre-launch, everything after it ships to real players.
+        #
+        # LEGACY WO-#### IS FROZEN AND NEVER RENAMED. 1,154 files carry those numbers,
+        # and so do code comments, commit messages, regression-suite headers and every
+        # canon doc. Renaming would break far more than it tidies — the point is a
+        # clean START, not a rewritten history.
+        #
+        # ⚠ WHY THIS PARSE EXISTS AT ALL: `is_work_order` matches any "WORK_ORDER_"
+        # prefix, so a PROD file was already RECOGNISED — but the old
+        # `WORK_ORDER_(\d+)` could not read "PROD-001", so every PROD ticket would have
+        # silently joined the 18 legacy UNNUMBERED files: no sort order and, worse, no
+        # duplicate detection. The collision guard would have been off for exactly the
+        # tickets that matter most, and nothing would have said so.
+        #
+        # `prod` is carried alongside `num` (never merged into it) so PROD-001 can
+        # never collide with legacy WO-1 in any downstream count or dedup.
+        prod_m = re.match(r"WORK_ORDER_PROD-(\d+)", base, re.IGNORECASE)
+        num_m  = re.match(r"WORK_ORDER_(\d+)", base)
+        prod   = int(prod_m.group(1)) if prod_m else None
+        num    = int(num_m.group(1)) if (num_m and not prod_m) else None
         title_m = re.search(r"^#\s+(.+)$", text, re.MULTILINE)
         title = title_m.group(1).strip() if title_m else base
         title = re.sub(r"[*`]", "", title)
@@ -191,7 +212,7 @@ def parse_wos():
         except ValueError:
             age_days = 0
         rows.append({
-            "num": num, "file": base, "title": title, "status": status,
+            "num": num, "prod": prod, "file": base, "title": title, "status": status,
             "bucket": bucket_of(status, has_result, is_wo), "result": has_result,
             "is_wo": is_wo, "mtime": mtime,
             "created": created, "created_est": created_est, "age_days": max(0, age_days),
@@ -205,7 +226,15 @@ def build_html(rows):
     stamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
 
     def row_html(r):
-        num = f"WO-{r['num']}" if r["num"] is not None else ("DOC" if not r["is_wo"] else "WO-?")
+        # PROD tickets render as PROD-001 (post-launch, zero-padded so they sort as text
+        # too); legacy pre-launch tickets keep WO-####. The two are deliberately visually
+        # distinct on the board — at a glance you can see whether a row predates going live.
+        if r.get("prod") is not None:
+            num = f"PROD-{r['prod']:03d}"
+        elif r["num"] is not None:
+            num = f"WO-{r['num']}"
+        else:
+            num = "DOC" if not r["is_wo"] else "WO-?"
         # CREATED date + age in days (WO-940) - never mtime. '~' marks an mtime-estimated
         # date so nobody mistakes a guess for a creation date.
         est = "~" if r["created_est"] else ""
@@ -227,7 +256,15 @@ def build_html(rows):
                 f'<td class="status">{html.escape(r["status"][:80])}</td>'
                 f'<td class="age">{est}{r["created"]} &middot; {days}d{old}</td></tr>')
 
-    rows_sorted = sorted(rows, key=lambda r: (BUCKET_ORDER.index(r["bucket"]), -(r["num"] or 0)))
+    # Within a bucket: PROD tickets FIRST (newest first), then legacy WO (newest first).
+    # Post-launch work outranks pre-launch work on sight — that is the whole point of the
+    # namespace split, and a board that interleaved them would bury PROD-001 among 1,154
+    # legacy rows.
+    rows_sorted = sorted(rows, key=lambda r: (
+        BUCKET_ORDER.index(r["bucket"]),
+        0 if r.get("prod") is not None else 1,
+        -(r.get("prod") or 0),
+        -(r["num"] or 0)))
     body_rows = "\n".join(row_html(r) for r in rows_sorted)
     filters = "".join(
         f'<button class="fbtn" data-f="{b}" style="border-color:{BUCKET_COLOR[b]}">'
