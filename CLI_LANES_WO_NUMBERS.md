@@ -11,6 +11,36 @@
 > strings and get a REGRESSION ORACLE, not a comment, because that is the rule most likely to rot.
 > Status READY TO IMPLEMENT, 3 open rulings. No code yet.)*
 > ## âš  RECONCILED 2026-08-16 (UI seat): UI seat next free = **1045**.
+> *(UI seat minted **WO-1046** and bumped 1046 -> 1047 in this SAME edit. **1046** = owner asked what an
+> Archer Tower upgrade actually changes (panel says only *"Stronger Archer Tower at Level 3"* for
+> 225 wood + 100 iron). ★ **THE ANSWER LOOKS LIKE: NOTHING BUT THE MODEL AND THE PROJECTILE ART.**
+> The **Arcane Spire HAS** an authored ladder (`towers.json levels`: range 14/17/21, damage 12/22/40,
+> cooldown 1.1/0.9/0.7, and a NAME per tier — Arcane/Runed/Warded Spire). The **Archer Tower has NO
+> per-level stat data**: `structures-catalog tower_ground_archer` carries `maxLevel:3` + `upgradeCost[]`
+> + `canHitAir:false` and no range/damage/cooldown ladder; `DefenseTower.cs` level references are only
+> `upgradeVisualPath` (_L2/_L3 model) and `ArcherTowerLevel1/2_Projectile` (VFX); the only
+> `LevelMultiplier` in the tree is `StorageCapsCatalog`'s (unrelated). ⚠ **If confirmed this is a
+> BALANCE defect and a FALSE CLAIM, not a copy nit** — the player pays for a reskin. ⛔ §12: static
+> reading LOCATED this, it does not CONCLUDE it — **measure effective range/damage/cooldown/HP at L1/L2/L3
+> first**, then it is either a UI ticket (show the deltas) or an owner escalation (author the ladder).
+> ★ Owner's splash / better-targeting / dual-targeting ask = NEW MECHANICS, and they are the **WC3
+> "Counters" pillar the design review lists as MISSING**. `tower-perks.json` already has a `tiers`
+> structure (the WC3-style perk tree) — **check it before designing anything new.** READY.)*
+>
+> *(UI seat minted **WO-1045** and bumped 1045 -> 1046 in this SAME edit. **1045** = the upgrade button
+> is ENABLED-AND-INERT when the builder queue is at capacity (owner 2026-08-17). ★ The codebase already
+> names this: `BuildTimerService.TryBuySlot:301-315` — *"STEP ONE failed. Say WHAT unlocks it - an
+> unexplained locked button is the bug"* — and already returns player-readable ASCII reasons, already
+> carries state BY TEXT for colourblindness, and already exposes `InsufficientCrystalsPrefix` for store
+> routing. The button consumes NONE of it; do not write new copy. ⚠ Name WHICH limit was hit:
+> `freeBuildSlots`=2 (concurrency) vs `queueDepthPerLine`=5 (depth) — different remedies, and the config
+> FORBIDS implementing depth by raising concurrency. ⚠ Player-facing buys go through `TryBuySlot`, never
+> the `[Obsolete]` `GrantSlot`. ⚠ Sequence with WO-1027 (the IDLE face of the same question).
+> ⛔ **COLLISION NOTE:** this was minted as 1043 from a STALE banner read while this sweep had already
+> consumed 1043 + 1044; theirs were first-on-disk-and-referenced so they won per §2, and this renumbered
+> to 1045. The lesson is the rule itself — **re-read the banner AT MINT TIME, never carry a private
+> running counter across a long session.**)*
+>
 > *(UI seat minted **WO-1044** and bumped 1044 -> 1045 in this SAME edit. **1044** = BIOME + TUNNEL
 > IDENTITY -- the creative half of tonight's portal/tunnel spoke. The four biomes turned out to be
 > ALREADY authored in depth (`docs/ECHOES_OF_ELARION_NARRATIVE.md` sec.3-5b,

@@ -1,9 +1,14 @@
-# WORK ORDER 1036 — `founding_walk` STEP-STUCK recurs AFTER WO-962 shipped: the FTUE hard-blocks
+# WORK ORDER 1036 — `founding_walk` STEP-STUCK recurs AFTER WO-962 shipped: a 245s dead wait, then a silently skipped beat
+
+> ⚠ **Title corrected 2026-08-17.** It read *"the FTUE hard-blocks"* — that was written from a
+> TRUNCATED capture and is **FALSE**: a watchdog rescues the step (§1b). Left visible rather than
+> silently reworded, because the wrong title is what a skimming seat would have scheduled off.
 
 **Status:** READY TO IMPLEMENT
 **Minted:** 2026-08-16 (UI seat) — provenance stack bumped 1036 → 1037 in the same edit
 **Lane:** Tutorial V2 / guide gate. ⚠ Interacts with WO-1031's guide despawn — see §4.
-**Priority:** **HIGH.** This is the second beat of the FTUE. A player who hits it cannot start the game.
+**Priority:** **MEDIUM** (was HIGH — corrected 2026-08-17, see §1b: a watchdog RESCUES the step, so
+this is a ~245s dead wait + a silently skipped story beat, **not** a stranding block).
 **Provenance:** F8 **seq=2433** (2026-08-16, 125s) and **seq=2343** (2026-08-15, 241s).
 
 ---
@@ -16,6 +21,51 @@
 ```
 
 Same step, same missing event, two separate sessions a day apart. **Not a one-off.**
+
+## 1b. ★ FULLER CAPTURE 2026-08-17 (seq 2513) — corrects this WO's severity, and adds a finding
+
+The earlier captures were **truncated**. The full line:
+
+```
+no 'hero.reached:guide_gate' after 245s in-step (bound 120s, builder time excluded; ff.tutorialv2 on;
+builderOpenedThisStep=False, coachBeats=2); RESCUED via watchdog and recorded as SKIPPED - the step was
+NOT completed, its outro is suppressed (no fiction narrated), grants still applied so the player is
+never half-granted.
+```
+
+### ⚠ CORRECTION — this is NOT a hard block. My HIGH severity was overstated.
+
+**A watchdog rescues the step.** `TutorialFlow.TickWatchdog:1797` marks it **SKIPPED**, suppresses the
+outro so no fiction is narrated over a step that did not happen, and **still applies the grants so the
+player is never half-granted.** That is careful, deliberate design and it is working.
+
+**Re-rate:** not a hard block — a **245-second dead wait followed by a silent skip**. Still bad, and
+still worth fixing: the player stands around for four minutes, then quietly loses a story beat of the
+FTUE. But it does not strand them, and this WO's header claim that it *"hard-blocks the FTUE"* was
+based on the truncated text. ⚠ **Do not schedule this as a P0 stranding bug.**
+
+⚠ **It also changes the WO-1031 interaction (§4):** a guide despawn firing mid-step would still be
+wrong, but the watchdog would rescue it too. Bad, not catastrophic.
+
+### ★ NEW FINDING — the watchdog fired at 245s against a stated bound of 120s
+
+`bound 120s` and `builderOpenedThisStep=False`, so **there was no builder time to exclude** — yet the
+rescue landed at **245s, roughly 2x the bound**. The two earlier captures (241s, 125s) fit the same
+picture: one near the bound, two near double it.
+
+**Investigate as part of this ticket:**
+
+- Is the watchdog's clock counting something other than what `bound` describes?
+- Is `TickWatchdog` gated behind a condition that delays its first evaluation?
+- Or does `in-step` time start earlier than the watchdog's own timer?
+
+⚠ **This matters beyond one step.** If the bound is systematically ~2x its stated value, **every**
+watchdog-protected tutorial step strands the player for twice as long as designed — a global FTUE
+patience cost hiding behind a single symptom. Check whether the bound is honoured on other steps.
+
+**Keep the diagnostic fields.** `bound` / `builderOpenedThisStep` / `coachBeats` in that line are what
+made this analysis possible; the truncated captures were unactionable by comparison. §12 — this is
+instrumentation earning its keep.
 
 ## 2. ⚠ WHY THIS IS NOT WO-962 — check before re-treading it
 
@@ -55,8 +105,9 @@ and they need opposite fixes. Split it with data before editing:
 
 WO-1031 §4 (owner ruling 2026-08-16) despawns the guide wolf when the tutorial ends **or a defensive
 structure is placed**. If the despawn can fire while `founding_walk` is still waiting, the hero is asked
-to follow a guide that no longer exists — converting this **intermittent** stall into a **deterministic
-hard block on the first minute of the game**.
+to follow a guide that no longer exists — making the hero follow a guide that no longer exists.
+⚠ **Severity corrected per §1b:** the watchdog would rescue this too, so it is a worse dead wait and a
+lost beat — **not** the deterministic hard block this section originally claimed.
 
 **Whichever ticket lands second must verify the other.** Required either way: the guide survives until
 `hero.reached:guide_gate` fires.
