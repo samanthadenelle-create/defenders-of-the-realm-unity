@@ -257,6 +257,23 @@ Thumbs.db
 !/Assets/Resources/Structures/Wagon.mat
 !/Assets/Resources/Structures/Wagon.mat.meta
 
+# ShopAndCrafting — the LAST of the 2026-08-17 owner-purchased set, and the one that
+# MERGES TWO BUILDINGS. Owner: "Can we have the crafting station also sell the potions so
+# we dont need a store that only sells potions?" — so this single body is meant to serve
+# the crafting station AND the misc/potion shop, retiring a building whose whole reason to
+# exist was one item category. Which catalog row(s) it binds to is an OPEN OWNER RULING;
+# the art is tracked now regardless, because the ruling does not change the fact that this
+# file is purchased and not re-derivable from any pack.
+!/Assets/Resources/Structures/ShopAndCrafting.fbx
+!/Assets/Resources/Structures/ShopAndCrafting.fbx.meta
+!/Assets/Resources/Structures/ShopAndCrafting.fbm/
+!/Assets/Resources/Structures/ShopAndCrafting.fbm.meta
+!/Assets/Resources/Structures/ShopAndCrafting.fbm/**
+!/Assets/Resources/Structures/ShopAndCrafting.prefab
+!/Assets/Resources/Structures/ShopAndCrafting.prefab.meta
+!/Assets/Resources/Structures/ShopAndCrafting.mat
+!/Assets/Resources/Structures/ShopAndCrafting.mat.meta
+
 !/Assets/Resources/Structures/Tower_Wooden_Watchtower.fbx
 !/Assets/Resources/Structures/Tower_Wooden_Watchtower.fbx.meta
 !/Assets/Resources/Structures/Tower_Wooden_Watchtower_Tex/

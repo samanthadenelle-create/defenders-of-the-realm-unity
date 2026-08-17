@@ -246,7 +246,9 @@ namespace DeNelle.Village
                 displayName = "Ballista",
                 type        = CatalogType.Tower,
                 kind        = EntryKind.Cell,
-                visualPrefabPath = "Structures/WizardTower_1",
+                // 2026-08-17: was "Structures/WizardTower_1" -- a borrowed wizard tower that shipped
+                // to players as the Ballista. Now the owner-purchased Ballista_L1/L2/L3 set.
+                visualPrefabPath = "Structures/Ballista_L1",
                 repo = new RepoProps
                 {
                     behaviorId = "DefenseTower",
@@ -264,6 +266,15 @@ namespace DeNelle.Village
                     {
                         new DeNelle.Core.Catalog.ResourceCost { wood =  72, food = 0, iron = 120, crystals = 0 },   // L1â†’L2
                         new DeNelle.Core.Catalog.ResourceCost { wood = 150, food = 0, iron = 250, crystals = 0 },   // L2â†’L3
+                    },
+                    // The ladder was REAL in cost and stats (maxLevel 3 + the table above) and
+                    // INVISIBLE to the player: with no upgradeVisualPath every level rendered the
+                    // same borrowed model. Paid for, never seen. Mirrors the catalog row; gate 12
+                    // [fallback-parity] caught the drift the moment the JSON moved without this.
+                    upgradeVisualPath = new[]
+                    {
+                        "Structures/Ballista_L2",
+                        "Structures/Ballista_L3",
                     },
                     navSurface = NavSurfaceKind.Blocker,
                     // 2026-08-05 cadence pass (owner ruling: every structure on ONE cadence,

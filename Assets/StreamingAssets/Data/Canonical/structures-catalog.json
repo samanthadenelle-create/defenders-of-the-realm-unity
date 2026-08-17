@@ -86,7 +86,7 @@
       "displayName": "Ballista",
       "type": "Tower",
       "kind": "Cell",
-      "visualPrefabPath": "Structures/WizardTower_1",
+      "visualPrefabPath": "Structures/Ballista_L1",
       "repo": {
         "behaviorId": "DefenseTower",
         "buildCost": 150,
@@ -112,6 +112,11 @@
             "crystals": 0
           }
         ],
+        "upgradeVisualPath": [
+          "Structures/Ballista_L2",
+          "Structures/Ballista_L3"
+        ],
+        "_upgradeVisualNote": "WO-1046 asked whether the tower upgrade is 'just a reskin'; for this row it was not even that - maxLevel was already 3 with a two-step upgradeCost table, but there was NO upgradeVisualPath at all, so all three levels rendered the SAME borrowed wizard tower. The ladder was real in cost and stats and invisible to the player, which is the worst of both: paid for, never seen. Owner ruling 2026-08-17: 'i want it like Archer Tower - Lv2 -Lv3'. Wired to the owner-purchased Ballista_L1/L2/L3 set, mirroring tower_archer's authoring exactly. NO upgradeTexturePath: unlike the archer L3 (WO-928 defect B) each Ballista level is a SEPARATE model carrying its own basecolor, so there is no scraped-material problem to correct and a forced albedo would only override art that is already right.",
         "navSurface": "Blocker",
         "heightMul": 1.2,
         "range": 22,
@@ -145,7 +150,7 @@
       },
       "canHitAir": true,
       "note": "WO-989: id renamed tower_wall_wizard->tower_ballista; alias on CatalogRegistry.Get.",
-      "_artNote": "WO-989: visual path still Structures/WizardTower_1 (GUID-stable); art rename deferred."
+      "_artNote": "SUPERSEDED 2026-08-17. Read as: 'the Ballista renders as WizardTower_1 because renaming the art was deferred.' That deferral lasted long enough that a row named Ballista, costing wood+iron, firing bolts, shipped to players showing a WIZARD TOWER - and the note describing the placeholder made it look accounted-for rather than broken. Resolved by owner-purchased art, not a rename: visualPrefabPath is now Structures/Ballista_L1 with a real L2/L3 ladder above it. Kept, not deleted, so nobody re-derives the WizardTower_1 path as current. HISTORY: WO-989 noted the path was GUID-stable and deferred the art."
     },
     {
       "id": "tower_siege_tower",
@@ -607,11 +612,12 @@
     },
     {
       "id": "workshop",
+      "_artNote2026_08_17": "THE CRAFTING STATION, and the home of the owner's LAST purchased model. Two things converged here. (1) COLLISION: this row and 'forge' both pointed at Structures/Forge the moment forge was repointed to the WeaponSmith model, so two different buildings would have worn one body. (2) IDENTITY: this row is displayed 'Weaponsmith' but it is NOT a vendor - vendors.json holds exactly four (market, forge=weapon, armorer=armor, jeweler) and this is not one of them. It is a type=Resource crafting building wearing a shop's name, which is why the whole forge/armorer/workshop cluster reads as interchangeable. Repointed to Structures/ShopAndCrafting per the owner's brief for that model - 'the crafting and store misc' + 'Can we have the crafting station also sell the potions so we dont need a store that only sells potions?' - which retires the potions-only storefront by merging it here. ⛔ 'market' was deliberately NOT given this model: market IS a vendor (consumable+material) and is Coppin's marketplace, the one that carried the hidden third Realm Store option. THE displayName IS STILL 'Weaponsmith' AND IS STILL WRONG - it needs an owner ruling, not a silent rename, exactly like forge='Armorer' and armorer='Blacksmith'. Three crossed display names in one cluster is a data defect with one cause, and it should be fixed in one ruling rather than three guesses.",
       "displayName": "Weaponsmith",
       "type": "Resource",
       "kind": "Cell",
       "displayOrder": 20,
-      "visualPrefabPath": "Structures/Forge",
+      "visualPrefabPath": "Structures/ShopAndCrafting",
       "repo": {
         "behaviorId": "GameplayBuilding",
         "npcModel": "Engineer",
@@ -784,7 +790,8 @@
       "type": "Resource",
       "kind": "Cell",
       "displayOrder": 30,
-      "visualPrefabPath": "Structures/armorer",
+      "_artNote2026_08_17": "THIS ROW SELLS WEAPONS AND NOW SHOWS THE WEAPONSMITH. It pointed at 'Structures/armorer' - the ARMOURER building - while vendors.json gives this id categories=[weapon]. The displayName ('Armorer') agreed with the wrong art and disagreed with the function, so every signal except the data itself pointed the same wrong way. OWNER RULING 2026-08-17, verbatim: 'which sells weapons, that is the weaponsmith use the JSON data'. FUNCTION IS THE AUTHORITY. Repointed to Structures/Forge, the owner-purchased WeaponSmith model. The displayName is still 'Armorer' and is a SEPARATE, UNFIXED defect - renaming it here without an owner ruling would just move the confusion.",
+      "visualPrefabPath": "Structures/Forge",
       "repo": {
         "behaviorId": "GameplayBuilding",
         "npcModel": "Barbarian",
@@ -829,7 +836,8 @@
       "displayName": "Blacksmith",
       "type": "Resource",
       "kind": "Cell",
-      "visualPrefabPath": "Structures/House_Medieval_Medium",
+      "_artNote2026_08_17": "THIS ROW SELLS ARMOUR AND NOW SHOWS THE ARMOURER. It pointed at 'Structures/House_Medieval_Medium' - a generic Polyperfect house shared with collector_forge - so the armour vendor was visually indistinguishable from ordinary housing. Repointed to Structures/armorer (the owner-purchased Armourer model) per the same 2026-08-17 ruling that fixed the forge row. ⚠ ORIENTATION: this is the ONE row of the set changing art FAMILY - Polyperfect prefabs are authored Y-up, Tripo FBXs are Z-up, so this row's orientation (currently manual:false, euler 0,0,0) is now wrong where forge/jeweler/tower_ballista already carry manual:true euler -90,0,0. LEFT UNCHANGED ON PURPOSE: the owner is setting these live in Offset Forge, and authoring -90 in both places composes to 180 - upside down, not merely sideways, which is the exact WO-928 failure recorded on the archer tower row. One system owns the correction; it is not this one.",
+      "visualPrefabPath": "Structures/armorer",
       "repo": {
         "behaviorId": "GameplayBuilding",
         "npcModel": "BlackKnight",
