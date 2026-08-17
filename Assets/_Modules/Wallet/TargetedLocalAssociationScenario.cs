@@ -237,6 +237,44 @@ namespace DeNelle.Wallet
         }
 
         /// <summary>
+        /// Runs an association and issues an MWA <c>reauthorize</c> against a grant
+        /// from a PREVIOUS session, so a returning player is reconnected without an
+        /// approval sheet. Returns the wallet's <see cref="AuthorizationResult"/>,
+        /// or throws when the wallet declines (revoked/expired token) - which the
+        /// caller treats as an ordinary "authorize fresh instead", never a dead end.
+        /// <para>
+        /// The <paramref name="authToken"/> is a CAPABILITY GRANT and is never
+        /// logged: <see cref="LogIdentity"/> prints only the method label and the
+        /// dapp identity triplet. See MwaSessionStore for the storage rationale.
+        /// </para>
+        /// </summary>
+        public async Task<AuthorizationResult> Reauthorize(
+            string identityUri, string iconUri, string identityName, string authToken)
+        {
+            if (string.IsNullOrEmpty(authToken))
+                throw new ArgumentException("reauthorize needs a stored auth token", nameof(authToken));
+
+            LogIdentity("reauthorize", identityUri, iconUri, identityName);
+
+            var client = await StartAssociation();
+            try
+            {
+                FlowTrace.Step("Wallet", "MWA client ready - sending REAUTHORIZE request (silent resume).");
+                var result = await client.Reauthorize(
+                    new Uri(identityUri),
+                    new Uri(iconUri, UriKind.Relative),
+                    identityName,
+                    authToken);
+                FlowTrace.Step("Wallet", "MWA reauthorize response received from wallet.");
+                return result;
+            }
+            finally
+            {
+                await CloseAssociation();
+            }
+        }
+
+        /// <summary>
         /// Runs a full association, (re)authorizes, then asks the wallet to sign
         /// <paramref name="message"/> for <paramref name="addressBytes"/>.
         /// Used when <c>Web3.Wallet</c> is absent because we authorized through

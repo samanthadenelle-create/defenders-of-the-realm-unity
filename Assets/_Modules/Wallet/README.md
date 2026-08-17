@@ -8,6 +8,10 @@ CLAUDE.md §8). Store scene-wiring currently DISABLED pending own PanelSettings.
 - `PackStore`, `PackCatalog` — the existing store implementation
 - `WalletService`, `WalletRegistry`, `WalletEndpoints` — wallet abstraction
 - `SolanaWalletProvider`, `StubWalletProvider` — providers (stub for dev/tests)
+- `MwaSessionStore` — the MWA `auth_token` sealed under an AndroidKeyStore AES-GCM key and bound to
+  the wallet it was issued for, so a relaunch reauthorizes SILENTLY instead of re-prompting
+  (owner-reproduced on a Seeker, 2026-08-17). Fails closed off-device — never a plaintext fallback —
+  cleared on explicit disconnect, and never logged. Pinned by `[wallet-session]`.
 - `CryptoPaymentManager`, `WalletConnectDialog`
 - `Tests/` — wallet service/registry/stub provider tests
 
