@@ -31,11 +31,15 @@ namespace DeNelle.Data.Tests
         public void packs_json_loads_the_full_pack_catalog()
         {
             // The catalogue intentionally grew past the original five-tier ladder: the 5 core tiers
-            // (Hearth Spark -> Founder's Vow) plus the added seasonal/bundle offers = 13 today. The
-            // tier ladder sub-tests below still pin tiers 1-5. Update this count if the set changes.
+            // (Hearth Spark -> Founder's Vow), the 8 seasonal/bundle offers (tiers 6-13), and the 12
+            // WO-1037 single-resource impulse packs (tiers 14-25: wood/iron/food/crystals x
+            // small/medium/large) = 25 today. The tier ladder sub-tests below still pin tiers 1-5,
+            // and the impulse family has its own oracle (ImpulsePackRegression [impulse-pack]) which
+            // owns the one-economy-key + $5-ceiling + resources-only rules. Update this count if the
+            // set changes.
             Assert.That(PackCatalog.Packs, Is.Not.Null);
-            Assert.That(PackCatalog.Packs.Count, Is.EqualTo(13),
-                "packs.json must hydrate the full pack catalogue (5-tier ladder + bundle offers).");
+            Assert.That(PackCatalog.Packs.Count, Is.EqualTo(25),
+                "packs.json must hydrate the full pack catalogue (5-tier ladder + bundle offers + impulse packs).");
         }
 
         [Test]

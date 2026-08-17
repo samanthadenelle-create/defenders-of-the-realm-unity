@@ -1,6 +1,15 @@
 # Lanes â€” Work-Order Numbers Only (for CLI)  Â·  reconciled 2026-06-12 (nightly refill)
 
-> ## âš  RECONCILED 2026-08-17 (CLI): main line next free = **1115**.
+> ## âš  RECONCILED 2026-08-17 (CLI): main line next free = **1116**.
+> *(CLI seat minted **WO-1115** and bumped 1115 -> 1116 in this SAME edit. **1115** = REDEEM CODES —
+> player promotions ("50% off") AND a dev grant that works on a RELEASE APK, which is the point:
+> DeNelle.DevTools is stripped on the APK (asmdef: UNITY_EDITOR || DEVELOPMENT_BUILD) so there is no
+> in-game grant surface on a shipped build, and a development APK would test a binary nobody
+> downloads. ⛔ THE ARCHITECTURE IS DECIDED BY ONE FACT: the game is PUBLISHED, so anything the
+> CLIENT can decide an attacker can decide — codes are SERVER-VALIDATED over the wallet-signed
+> request rail the owner proved working today, and there is NO offline fallback (that fallback IS the
+> exploit: "turn on airplane mode"). A leaked dev code is harmless because the server binds it to her
+> wallet. 5 open rulings. No code yet.)*
 > *(CLI seat minted **WO-1113** and bumped 1113 -> 1114 in this SAME edit. **1113** = DUNGEON STATUS,
 > a remotely-flippable in-world door state (owner ruling 2026-08-17: flip a dungeon open/closed with
 > NO store build, "so we can make all dungeons feel like the two real ones with depth"; follow-up

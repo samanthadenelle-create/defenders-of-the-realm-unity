@@ -21,6 +21,27 @@
 //
 // INSPECTOR SETUP: none — add to a persistent scene GO or bootstrap via
 //   PromoCodeService.EnsureExists() from GameStateService.Awake().
+//
+// ── UI DOOR (promo-redeem door WO) ───────────────────────────────────────────
+//   The player-facing entry is RedeemCodePanel (Assets/_Modules/Wallet/
+//   RedeemCodePanel.cs), opened from the Realm Store. It is a code-built Obsidian
+//   uGUI panel and it drives THIS service — it never speaks HTTP itself.
+//   ⛔ PromoCodeUI.cs (same folder) is a UIDocument panel and is DEAD — UXML does
+//   not render in player builds (CLAUDE.md §8). Do not wire it.
+//
+// ── THREE RULES THIS FILE NOW KEEPS (promo-redeem door WO) ───────────────────
+//   1. ⛔ THE CODE STRING IS NEVER LOGGED. Not Debug.Log, not FlowTrace, not
+//      analytics. F8 captures get shared; a live promo code inside one is a leak
+//      anybody who reads the capture can spend. Trace the OUTCOME, never the input.
+//   2. Every player-facing sentence comes from canon-strings.json via PromoStrings
+//      (CLAUDE.md §7) — no sentence is typed inline here, and each documented
+//      failure has its own, so a redeem screen never says a bare "invalid code".
+//   3. The reward lands through the SAME seam a purchased pack uses —
+//      EconomyService.GrantSpendablePurchased / AddCoins (BankGrantKind.
+//      PurchasedOrPromised), which is deliberately NEVER clamped by the town bank
+//      cap (WO-857 Phase F: a pack once advertised 5,000 food and delivered 1,920).
+//      A promo grant must land in full for exactly the same reason. There is no
+//      second grant path — see ApplyReward.
 // =============================================================================
 
 using System;
@@ -28,6 +49,7 @@ using System.Collections.Generic;
 using System.Text;
 using Cysharp.Threading.Tasks;
 using DeNelle.Core.Analytics;
+using DeNelle.Core.Diagnostics;
 using DeNelle.Core.State;
 using DeNelle.Core.Web3;
 using Newtonsoft.Json;
@@ -94,16 +116,18 @@ namespace DeNelle.Core.Promo
         /// </summary>
         public async UniTask RedeemAsync(string code)
         {
+            // Uppercased here so the whole pipeline (local dedup set, request body, server
+            // compare) agrees on one casing — the endpoint stores and compares uppercase.
             code = code?.Trim().ToUpperInvariant() ?? string.Empty;
             if (string.IsNullOrEmpty(code))
             {
-                OnRedeemFailed?.Invoke("Please enter a code.");
+                Refuse("empty-input", PromoStrings.KeyErrEmpty);
                 return;
             }
 
             if (_redeemedLocally.Contains(code))
             {
-                OnRedeemFailed?.Invoke("You've already redeemed that code.");
+                Refuse("already-redeemed (local dedup)", PromoStrings.KeyErrAlreadyUsed);
                 return;
             }
 
@@ -114,7 +138,7 @@ namespace DeNelle.Core.Promo
             var playerId = BackendRequestSigner.CurrentPlayerId();
             if (string.IsNullOrEmpty(playerId))
             {
-                OnRedeemFailed?.Invoke("Sign in before redeeming a code.");
+                Refuse("no-identity", PromoStrings.KeyErrSignIn);
                 return;
             }
 
@@ -130,7 +154,7 @@ namespace DeNelle.Core.Promo
             // abort rather than send a request the server will (rightly) 401.
             if (!await BackendRequestSigner.TryAttachAsync(req, playerId, bodyRaw))
             {
-                OnRedeemFailed?.Invoke("Could not verify your account. Try again later.");
+                Refuse("identity-proof-refused (signer)", PromoStrings.KeyErrIdentity);
                 return;
             }
 
@@ -140,7 +164,8 @@ namespace DeNelle.Core.Promo
             }
             catch (Exception ex)
             {
-                OnRedeemFailed?.Invoke($"Network error: {ex.Message}");
+                // The exception TEXT is diagnostics, the code is not — trace one, never the other.
+                Refuse($"network-exception {ex.GetType().Name}: {ex.Message}", PromoStrings.KeyErrOffline);
                 return;
             }
 
@@ -148,9 +173,9 @@ namespace DeNelle.Core.Promo
             {
                 // The route is identity-gated now, so a refusal is a distinct case
                 // from an unreachable server - say which so nobody hunts the wrong bug.
-                OnRedeemFailed?.Invoke(req.responseCode == 401 || req.responseCode == 400
-                    ? "Could not verify your account. Try again later."
-                    : "Could not reach server. Try again later.");
+                bool refused = req.responseCode == 401 || req.responseCode == 400;
+                Refuse($"transport http {req.responseCode} ({req.result})",
+                    refused ? PromoStrings.KeyErrIdentity : PromoStrings.KeyErrOffline);
                 return;
             }
 
@@ -159,16 +184,18 @@ namespace DeNelle.Core.Promo
             {
                 resp = JsonConvert.DeserializeObject<RedeemResponse>(req.downloadHandler.text);
             }
-            catch
+            catch (Exception ex)
             {
-                OnRedeemFailed?.Invoke("Unexpected server response.");
+                // No silent catch (§12) — and the body is NOT echoed: it is the server's reply to a
+                // request that carried the code, so quoting it risks quoting the code back into a log.
+                Refuse($"unparseable-response {ex.GetType().Name}", PromoStrings.KeyErrUnknown);
                 return;
             }
 
             if (resp == null || !resp.Success)
             {
-                string reason = MapError(resp?.Error);
-                OnRedeemFailed?.Invoke(reason);
+                string errorCode = resp?.Error;
+                Refuse($"server {errorCode ?? "<no error field>"}", MapErrorKey(errorCode));
                 return;
             }
 
@@ -181,49 +208,119 @@ namespace DeNelle.Core.Promo
             PersistRedeemedSet();
 
             // ── Analytics ─────────────────────────────────────────────────────
+            // ⛔ The code string is NOT in this payload and must never be added back. Analytics
+            // events land in logs and captures; the server already knows which code it burned.
             EventTracker.Track("promo_redeemed", new
             {
-                code,
                 crystals = reward.Crystals,
                 coins    = reward.Coins,
-                message  = resp.Message,
             });
 
-            Debug.Log($"[PromoCodeService] Code '{code}' redeemed — crystals:{reward.Crystals} coins:{reward.Coins}");
+            FlowTrace.Step("Promo", $"redeem OUTCOME=redeemed — crystals:{reward.Crystals} coins:{reward.Coins} (entry withheld by design).");
             OnRedeemed?.Invoke(reward);
+        }
+
+        /// <summary>
+        /// The single refusal exit: traces the OUTCOME (never the code) and raises
+        /// <see cref="OnRedeemFailed"/> with the canon sentence for that cause.
+        /// </summary>
+        private void Refuse(string outcome, string canonKey)
+        {
+            FlowTrace.Warn("Promo", $"redeem OUTCOME=refused [{outcome}] (entry withheld by design).");
+            OnRedeemFailed?.Invoke(PromoStrings.Get(canonKey));
         }
 
         // ── Reward application ────────────────────────────────────────────────
 
+        /// <summary>
+        /// Lands the reward through the SAME seam a purchased pack uses:
+        /// <c>EconomyService.GrantSpendablePurchased(wood,food,iron,crystals)</c> for crystals and
+        /// <c>EconomyService.AddCoins(int)</c> for coins — the <c>BankGrantKind.PurchasedOrPromised</c>
+        /// path that is deliberately NOT clamped by the town bank cap (WO-857 Phase F). A promised
+        /// quantity must arrive in full, and a promo code promises exactly as loudly as a pack card.
+        /// <para>⛔ Do NOT "simplify" this back to writing <c>state.Resources</c> directly (what it did
+        /// before the promo-redeem door WO). That bypassed the cap logic, the persist and the HUD
+        /// refresh alike — it happened to add the numbers, but it was a SECOND grant path, and the
+        /// pack seam is the one the regressions pin.</para>
+        /// <para>EconomyService lives in DeNelle.Village, which DeNelle.Core may not reference (read
+        /// the .asmdef — CLAUDE.md §5), so it is resolved by reflection exactly the way PackStoreVM
+        /// resolves it for the paid path. Reflection here is EVIDENCE of the assembly rule, not a
+        /// violation of it. Every failure is FAIL-level: the server has already burned the code, so a
+        /// lost grant means the player spent a one-time code for nothing.</para>
+        /// </summary>
         private static void ApplyReward(PromoReward reward)
         {
-            var state = GameStateService.Instance?.State;
-            if (state == null) return;
-
-            // Crystals + Coins both live on Resources (the single wallet). Crystals were
-            // unified onto Resources.Crystals (save v18); ResourceBalance is a struct, so
-            // read-modify-write-assign-back. CrystalEconomy lives in DeNelle.Village which
-            // Core cannot reference, so we award via shared GameState here (Core-internal).
-            if (reward.Crystals > 0 || reward.Coins > 0)
+            int crystals = Mathf.Max(0, reward != null ? reward.Crystals : 0);
+            int coins    = Mathf.Max(0, reward != null ? reward.Coins    : 0);
+            if (crystals <= 0 && coins <= 0)
             {
-                var r = state.Resources;
-                if (reward.Crystals > 0) r.Crystals += reward.Crystals;
-                if (reward.Coins > 0)    r.Coins    += reward.Coins;
-                state.Resources = r;
-                GameStateService.Instance.Save();
-                GameStateService.Instance.ResourcesChanged?.Invoke();
+                FlowTrace.Warn("Promo", "reward carried no crystals and no coins — nothing to grant.");
+                return;
             }
+
+            var econ = ResolveEconomyService(out var type);
+            if (econ == null || type == null)
+            {
+                FlowTrace.Fail("Promo",
+                    $"grant (crystals {crystals} / coins {coins}) FAILED: EconomyService not resolvable — " +
+                    "the redemption is ALREADY BURNED server-side, so this reward is LOST.");
+                return;
+            }
+
+            if (crystals > 0)
+            {
+                // Signature order is (wood, food, iron, crystals) — see EconomyService.
+                var m = type.GetMethod("GrantSpendablePurchased",
+                    new[] { typeof(int), typeof(int), typeof(int), typeof(int) });
+                if (m == null)
+                    FlowTrace.Fail("Promo",
+                        "grant crystals FAILED: GrantSpendablePurchased(int,int,int,int) not found. " +
+                        "NOT falling back to the CAPPED GrantSpendable — a promised promo reward that " +
+                        "silently under-delivers is the WO-857 Phase F defect. Reward LOST, redemption already burned.");
+                else
+                    try { m.Invoke(econ, new object[] { 0, 0, 0, crystals }); }
+                    catch (Exception ex) { FlowTrace.Fail("Promo", $"grant crystals THREW: {ex.GetType().Name}: {ex.Message} — reward LOST, redemption already burned."); }
+            }
+
+            if (coins > 0)
+            {
+                var m = type.GetMethod("AddCoins", new[] { typeof(int) });
+                if (m == null)
+                    FlowTrace.Fail("Promo", "grant coins FAILED: AddCoins(int) not found — reward LOST, redemption already burned.");
+                else
+                    try { m.Invoke(econ, new object[] { coins }); }
+                    catch (Exception ex) { FlowTrace.Fail("Promo", $"grant coins THREW: {ex.GetType().Name}: {ex.Message} — reward LOST, redemption already burned."); }
+            }
+        }
+
+        /// <summary>Mirrors PackStoreVM.ResolveServiceInstance — the Village service seen from Core.</summary>
+        private static object ResolveEconomyService(out Type type)
+        {
+            type = null;
+            foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                type = asm.GetType("DeNelle.Village.EconomyService");
+                if (type != null) break;
+            }
+            if (type == null) return null;
+            return type.GetProperty("Instance",
+                System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Public)?.GetValue(null);
         }
 
         // ── Error mapping ─────────────────────────────────────────────────────
 
-        private static string MapError(string errorCode) => errorCode switch
+        /// <summary>
+        /// Maps a documented backend error to its OWN canon key. Every branch is distinct on purpose:
+        /// a redeem screen that answers every failure with one vague line reads as a scam, and the
+        /// player cannot tell a typo from a spent code from an outage.
+        /// </summary>
+        private static string MapErrorKey(string errorCode) => errorCode switch
         {
-            "INVALID_CODE"        => "That code doesn't exist.",
-            "ALREADY_REDEEMED"    => "This code has already been used.",
-            "EXPIRED"             => "That code has expired.",
-            "PLAYER_LIMIT_REACHED"=> "You've already redeemed the maximum number of promo codes.",
-            _                     => "Redemption failed. Please try again.",
+            "INVALID_CODE"         => PromoStrings.KeyErrInvalid,
+            "ALREADY_REDEEMED"     => PromoStrings.KeyErrAlreadyUsed,
+            "EXPIRED"              => PromoStrings.KeyErrExpired,
+            "PLAYER_LIMIT_REACHED" => PromoStrings.KeyErrPlayerLimit,
+            _                      => PromoStrings.KeyErrUnknown,
         };
 
         // ── PlayerPrefs persistence ───────────────────────────────────────────

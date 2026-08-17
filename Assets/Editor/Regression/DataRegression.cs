@@ -451,6 +451,8 @@ namespace DeNelle.Editor
             // --- WO-808 Option A: gear power-level ladder data integrity ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "gear-levels suite", () => { if (!GearLevelsRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[gear-levels] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "pack-cosmetic-integrity suite", () => { if (!PackCosmeticIntegrityRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[pack-cosmetic-integrity] " + r); });
+            // --- WO-1037 single-resource impulse packs (legalised by the WO-947 §12 amendment): exactly ONE economy key per SKU, $5 ceiling, resources-only, smallest-sufficient resolver, no grant route ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "impulse-pack suite", () => { if (!DeNelle.Editor.Regression.ImpulsePackRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[impulse-pack] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "tower-wall-los suite", () => { if (!TowerWallLosRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[tower-wall-los] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "vfx-aura-diff suite", () => { if (!VfxAuraDifferentiationRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[vfx-aura-diff] " + r); });
             // --- owner VfxManualPicks per-tier tower projectiles: archer tier ladder + arcane base/upgraded wired + every key catalogued ---
@@ -463,6 +465,10 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "raid-deploy-ui suite", () => { if (!RaidDeployUiRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[raid-deploy-ui] " + r); });
             // --- WO-766 wallet provider: Android-only SOLANA_SDK define + real-provider selection + transfer confinement ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "wallet-provider suite", () => { if (!WalletProviderSelectionRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[wallet-provider] " + r); });
+            // --- wallet session (2026-08-17): the MWA grant survives a relaunch (she force-quit and was asked to connect again), is SEALED not plaintext, is BOUND to its wallet, is cleared on disconnect, and is never logged ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "wallet-session suite", () => { if (!DeNelle.Editor.Regression.WalletSessionPersistenceRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[wallet-session] " + r); });
+            // --- promo redeem door: the Realm Store's ungated Redeem-a-Code entry routes through PromoCodeService, never logs the code, gives every failure its own canon sentence in both copies, and grants on the uncapped pack seam ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "promo-redeem-entry suite", () => { if (!PromoRedeemEntryRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[promo-redeem-entry] " + r); });
             // --- WO-835 action bar: Core applicability model invariants + View purity ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "hud-actionbar suite", () => { if (!HudActionBarRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[hud-actionbar] " + r); });
             // --- WO-1008 raids discoverability: a built Barracks ALWAYS shows the Raids face. She played a save with a Barracks and an empty army, the face was absent entirely, and she reported "I do not see a way to start a raid" - a feature that hides itself is indistinguishable from a broken one. Zero troops is now a greyed face with a WORDED reason (she is red/green colourblind, so hue carries nothing), and the full-army gate underneath is untouched. ---

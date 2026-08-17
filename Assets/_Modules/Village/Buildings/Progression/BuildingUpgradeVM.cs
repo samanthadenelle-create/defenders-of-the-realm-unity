@@ -387,6 +387,78 @@ namespace DeNelle.Village.Buildings.Progression
         /// <summary>True when the whole next-upgrade cost is affordable from the wallet the tap charges.</summary>
         public bool NextAffordable => _nextAffordable;
 
+        // ── WO-1037 — the shortfall offer (READ-ONLY; no money path touched) ──────
+        //
+        // Composed HERE rather than in the View for the usual reason (View stays a dumb skin), and
+        // resolved through DeNelle.Wallet.ShortfallPackOffer — a legal reference, because
+        // DeNelle.Village.asmdef lists DeNelle.Wallet (the ban runs the other way: Wallet may not
+        // name Village, which is why PackStoreVM reaches EconomyService by reflection).
+        //
+        // ⛔ THIS RESOLVES A PackDef AND STOPS. There is no grant, no charge, no route into
+        // ApplyPackContents from this property or from anything that reads it (WO-1037 §2 / WO-931).
+        //
+        // WHICH resource, when several are short: the LARGEST shortfall — the dominant blocker, the
+        // one the player is furthest from clearing. WO-1037 §1 allows exactly ONE offer, so a choice
+        // has to be made, and "the biggest gap" is the only one that is not arbitrary. Ties break to
+        // the first cost line, which is the panel's own left-to-right order.
+
+        /// <summary>
+        /// The single relevant impulse-pack offer for this upgrade's shortfall, or an offer with
+        /// <c>HasOffer == false</c> when the upgrade is affordable / the short resource has no pack
+        /// family. Never surfaces on an affordable upgrade — <see cref="NextAffordable"/> short-
+        /// circuits it, and ShortfallPackOffer.Resolve refuses a non-positive ask a second time.
+        /// </summary>
+        public DeNelle.Wallet.ShortfallOffer ShortfallOffer
+        {
+            get
+            {
+                if (_nextAffordable) return default;
+
+                string label = null;
+                int worst = 0;
+                for (int i = 0; i < _nextCostLines.Count; i++)
+                {
+                    var line = _nextCostLines[i];
+                    if (!line.Short) continue;
+                    if (line.Missing > worst) { worst = line.Missing; label = line.Label; }
+                }
+                if (worst <= 0 || string.IsNullOrEmpty(label)) return default;
+
+                return DeNelle.Wallet.ShortfallPackOffer.Resolve(label, worst);
+            }
+        }
+
+        /// <summary>The resource word the player is furthest short of ("" when nothing is short).
+        /// The panel names it in words — the shortfall is never signalled by colour alone.</summary>
+        public string WorstShortLabel
+        {
+            get
+            {
+                string label = ""; int worst = 0;
+                for (int i = 0; i < _nextCostLines.Count; i++)
+                {
+                    var line = _nextCostLines[i];
+                    if (line.Short && line.Missing > worst) { worst = line.Missing; label = line.Label; }
+                }
+                return label;
+            }
+        }
+
+        /// <summary>How many units of <see cref="WorstShortLabel"/> are still needed (0 when none).</summary>
+        public int WorstShortMissing
+        {
+            get
+            {
+                int worst = 0;
+                for (int i = 0; i < _nextCostLines.Count; i++)
+                {
+                    var line = _nextCostLines[i];
+                    if (line.Short && line.Missing > worst) worst = line.Missing;
+                }
+                return worst;
+            }
+        }
+
         /// <summary>Village Tier required by the next tier (0 = ungated).</summary>
         public int NextRequiresVillageTier => _nextRequiresVillageTier;
 

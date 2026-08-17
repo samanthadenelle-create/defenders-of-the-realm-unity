@@ -106,6 +106,43 @@ namespace DeNelle.Wallet
         /// <summary>The single cosmetic SKU exclusive to this pack (§5.1).</summary>
         [JsonProperty("packExclusiveCosmetic")] public string PackExclusiveCosmetic;
 
+        // ── WO-1037 single-resource impulse family (additive; absent = false/null) ──
+        // These three fields are the MACHINE-READABLE family tag ShortfallPackOffer resolves on.
+        // They are deliberately data, not a name-prefix convention: matching on "impulse-" in the
+        // SKU string would silently mis-classify the day someone renames a SKU, and the shortfall
+        // surface would then offer a 4-key bundle against a one-resource gap. Older packs omit all
+        // three (JSON absent -> false/null), so nothing migrates.
+
+        /// <summary>True for a WO-1037 single-resource impulse SKU (exactly ONE economy key).</summary>
+        [JsonProperty("impulse")] public bool Impulse;
+        /// <summary>The ONE economy key this impulse pack grants: "wood" / "iron" / "food" / "crystals".</summary>
+        [JsonProperty("impulseResource")] public string ImpulseResource;
+        /// <summary>"small" / "medium" / "large" — the size rung inside its resource family.</summary>
+        [JsonProperty("impulseSize")] public string ImpulseSize;
+
+        /// <summary>
+        /// How much of <see cref="ImpulseResource"/> this pack grants (0 when it is not an impulse
+        /// pack, or when the tagged resource key carries no amount). Read straight off the contents
+        /// bag rather than from a second authored number, so the advertised figure and the granted
+        /// figure cannot drift apart.
+        /// </summary>
+        public int ImpulseAmount
+        {
+            get
+            {
+                var e = Contents != null ? Contents.Economy : null;
+                if (e == null || string.IsNullOrEmpty(ImpulseResource)) return 0;
+                switch (ImpulseResource.Trim().ToLowerInvariant())
+                {
+                    case "wood":     return e.Wood;
+                    case "iron":     return e.Iron;
+                    case "food":     return e.Food;
+                    case "crystals": return e.Crystals;
+                    default:         return 0;
+                }
+            }
+        }
+
         /// <summary>The native amount payable in the given currency rail.</summary>
         public double AmountFor(CurrencyKind currency)
         {

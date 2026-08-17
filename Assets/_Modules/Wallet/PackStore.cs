@@ -38,6 +38,7 @@ using UnityEngine.UI;
 using DeNelle.Core.State;
 using DeNelle.Core.UI;
 using DeNelle.Core.Diagnostics;
+using DeNelle.Core.Promo;
 
 namespace DeNelle.Wallet
 {
@@ -71,6 +72,10 @@ namespace DeNelle.Wallet
         private TextMeshProUGUI _statusBanner;          // purchase status surface
         private TextMeshProUGUI _treasuryLabel;         // rewards-distributor transparency line
         private TextMeshProUGUI _disclaimerLabel;       // PackCatalog.CurrencyDisclaimer
+
+        // The promo-code door (promo-redeem door WO). A CHILD overlay on this store's own canvas —
+        // built lazily by RedeemCodePanel on first open, so it costs nothing until tapped.
+        private RedeemCodePanel _redeem;
 
         // Per-pack currency selection (SKU → chosen rail).
         private readonly Dictionary<string, CurrencyKind> _selectedCurrency = new Dictionary<string, CurrencyKind>();
@@ -117,6 +122,9 @@ namespace DeNelle.Wallet
         private void OnDisable()
         {
             // MarketplaceInteractor closes by SetActive(false) — hide the canvas.
+            // Close the redeem overlay FIRST: it hides with the canvas either way, but its service
+            // subscriptions must be dropped or a closed panel keeps handling redeem callbacks.
+            if (_redeem != null) _redeem.Close();
             if (_modal != null && _modal.canvas != null)
                 _modal.canvas.SetActive(false);
 
@@ -183,8 +191,33 @@ namespace DeNelle.Wallet
             // Scrollable pack-card list (inline ScrollRect column). Mobile-first (owner rule):
             // a compact CENTERED band (0.09–0.91), not full-bleed edge-to-edge cards — the pack
             // plates read as centered cards with thumb-zone side margins on a phone.
-            var scrollHost = ZoneRect(body, "PackScroll", new Vector2(0.09f, 0.02f), new Vector2(0.91f, 0.86f));
+            // (The list floor is 0.19, not 0.02, to leave the Redeem-a-Code band below it.)
+            var scrollHost = ZoneRect(body, "PackScroll", new Vector2(0.09f, 0.19f), new Vector2(0.91f, 0.86f));
             _listContent = BuildScrollColumn(scrollHost);
+
+            // ── REDEEM A CODE (promo-redeem door WO) ──────────────────────────────────
+            // The entry point for the promo system, which shipped fully built with no door on it.
+            // ⚠ DELIBERATELY NOT GATED ON FeatureFlags.RealmStorePurchase. That flag gates BUYING
+            // (the per-card Buy CTA above, and the Purchase() entry) — redeeming spends no money,
+            // touches no wallet rail and must work TODAY with purchases still disabled. Building it
+            // here, OUTSIDE the pack-card loop, is what makes that structural rather than a promise:
+            // there is no branch it can fall out of. Do not move it inside the flag test.
+            // Authored above the MinTouchPx(112) floor (0.15 of the body band) so ClampMinTouch is a
+            // no-op and it cannot inflate into the card list above it.
+            var redeemBtn = ElarionUiKit.BuildObsidianButton(body,
+                PromoStrings.Get(PromoStrings.KeyEntry),
+                ElarionUiKit.ObsidianButtonStyle.Style1,
+                ElarionUiKit.ObsidianButtonColor.Yellow,
+                new Vector2(0.28f, 0.02f), new Vector2(0.72f, 0.17f),
+                OpenRedeemPanel);
+            if (redeemBtn == null)
+                FlowTrace.Fail("Store", "EnsureBuilt: Redeem-a-Code button failed to build — the promo system has NO player entry point again.");
+            else
+            {
+                var redeemLabel = redeemBtn.GetComponentInChildren<TMP_Text>(true);
+                if (redeemLabel != null) ElarionUiKit.FitSingleLine(redeemLabel, 20f, 26f);
+                FlowTrace.Step("Store", "EnsureBuilt: Redeem-a-Code entry built (ungated by design — the purchase flag gates BUYING only).");
+            }
 
             // Footer zone: currency disclaimer + the cozy-covenant line.
             var footHost = layout != null && layout.footer != null ? (Transform)layout.footer : null;
@@ -219,6 +252,21 @@ namespace DeNelle.Wallet
                 FlowTrace.Warn("Store", "EnsureBuilt: _statusBanner is null after build — purchase status/errors will have no on-screen surface.");
             else
                 FlowTrace.Step("Store", "EnsureBuilt: kit modal built — pack list + status banner ready.");
+        }
+
+        /// <summary>
+        /// Opens the Redeem-a-Code overlay on THIS store's canvas (a child overlay, not a second
+        /// top-band modal — see RedeemCodePanel's header for why the arbiter is not involved).
+        /// </summary>
+        private void OpenRedeemPanel()
+        {
+            if (_modal == null || _modal.canvas == null)
+            {
+                FlowTrace.Fail("Store", "Redeem tapped but the store modal is gone — cannot host the redeem overlay.");
+                return;
+            }
+            if (_redeem == null) _redeem = new RedeemCodePanel(_modal.canvas.transform);
+            _redeem.Open();
         }
 
         /// <summary>
@@ -274,6 +322,16 @@ namespace DeNelle.Wallet
             foreach (var pack in PackCatalog.Packs)
             {
                 if (pack == null) continue;
+
+                // WO-1037 / WO-947 §12c.4 — the single-resource impulse SKUs are a SHORTFALL REMEDY,
+                // NOT a storefront row. They exist to answer "I am 880 wood short" at the moment the
+                // player is blocked; on a browsable shelf, out of that context, the same twelve SKUs
+                // are a wall of resource-for-cash listings, which is the storefront the ruling
+                // explicitly is not. They are reachable ONLY through ShortfallPackOffer.
+                // ⚠ Do NOT "fix" this by showing them here because the shelf looks thin — that is the
+                // whole guardrail, and it is why the tiers 1-13 ladder is unchanged above.
+                if (pack.Impulse) continue;
+
                 var card = BuildPackCard(pack);
                 if (card == null)
                 {

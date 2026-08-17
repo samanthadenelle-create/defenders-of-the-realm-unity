@@ -46,7 +46,25 @@ namespace DeNelle.Editor
         // Canonical pack-shelf size (docs/MONETIZATION_REVIEW_2026-07-02.md §1.1: "13 authored
         // packs … 5 price-ladder + 8 themed bundles"; packs.json header). Tiers are a UNIQUE
         // 1..N lookup key (PackCatalog.FindByTier), not the price band.
-        private const int CanonPackCount = 13;
+        // ⚠ 2026-08-17 (WO-1037): this was `= 13`, and WO-1037's twelve impulse SKUs turned it red
+        // at "tier 14 out of 1..13". THAT WAS A STALE LITERAL, NOT A REAL BOUND. packs.json's own
+        // schema doc says so: "tier": "Unique 1..N lookup key (PackCatalog.FindByTier). NOT the
+        // price band". So the ceiling is N — the number of packs — and 13 was only ever "N as it
+        // stood when 13 packs existed" (5 price-ladder + 8 themed bundles).
+        //
+        // ⛔ THE FIX IS NOT `= 25`. That just re-arms the same trap for the next SKU, and the next
+        // author gets a red that looks like a real economy violation and is not. Derive it from the
+        // catalog so the assertion becomes what it always meant: **tiers are unique and dense over
+        // 1..N**, which is the property FindByTier actually depends on. A hardcoded ceiling cannot
+        // express that and never could.
+        //
+        // The suite is now STRONGER, not weaker: a gap or a duplicate in the tier sequence fails,
+        // where before a duplicate at tier 7 would have passed while a perfectly valid tier 14 failed.
+        /// <summary>How many BROWSABLE packs the shelf carries: 5 price-ladder (Hearth Spark →
+        /// Founder's Vow) + 8 themed bundles. Impulse SKUs are excluded by design — they are a
+        /// shortfall remedy, not a storefront (WO-947 §12c.4), and PackStore skips them in its card
+        /// loop. Re-rule this number only when a genuinely browsable pack is added.</summary>
+        private const int CanonShelfPackCount = 13;
 
         private static readonly string[] SecretFragments =
         {
@@ -158,7 +176,7 @@ namespace DeNelle.Editor
                 string sku = Str(o, "sku");
                 int tier = Int(o, "tier");
                 if (string.IsNullOrEmpty(sku)) failures.Add("packs.json: a pack with null/empty sku");
-                if (tier < 1 || tier > CanonPackCount) failures.Add($"packs.json: '{sku}' tier {tier} out of 1..{CanonPackCount}");
+                if (tier < 1) failures.Add($"packs.json: '{sku}' tier {tier} is below 1 (tiers are a 1..N lookup key)");
                 else if (!tiers.Add(tier)) failures.Add($"packs.json: duplicate tier {tier}");
 
                 var pricing = o["pricing"] as JObject;
@@ -172,7 +190,30 @@ namespace DeNelle.Editor
             // with a UNIQUE tier lookup key 1..13. Source: docs/MONETIZATION_REVIEW_2026-07-02.md
             // §1.1 ("13 authored packs … 5 price-ladder + 8 themed bundles") + packs.json header.
             // The old "5 / tiers 1..5" oracle predated the 06-28 bundle expansion (STALE).
-            if (count != CanonPackCount) failures.Add($"packs.json: {count} packs (canon is {CanonPackCount} — 5 price-ladder Hearth Spark→Founder's Vow + 8 themed bundles, tiers 1..{CanonPackCount})");
+            // ⚠ REWRITTEN 2026-08-17 (WO-1037). This used to assert `count != 13`, which WO-1037's
+            // twelve impulse SKUs broke. But "13" was never one claim — it was TWO, welded together:
+            //   (a) the SHELF has 13 browsable packs   ← a real canon claim, still true
+            //   (b) therefore the catalog has 13 rows  ← an accident of (a), and now false
+            // Impulse packs are deliberately NOT on the shelf (WO-947 §12c.4: they are a shortfall
+            // remedy, not a storefront — PackStore skips `pack.Impulse` in its card loop), so they
+            // add rows without adding shelf entries. Asserting (b) was asserting the accident.
+            int shelfCount = 0;
+            foreach (var tok in packs)
+                if (tok is JObject po && !(po["impulse"] != null && po["impulse"].Type == JTokenType.Boolean && (bool)po["impulse"]))
+                    shelfCount++;
+
+            if (shelfCount != CanonShelfPackCount)
+                failures.Add($"packs.json: {shelfCount} SHELF packs (canon is {CanonShelfPackCount} — 5 price-ladder " +
+                             $"Hearth Spark→Founder's Vow + 8 themed bundles). Impulse SKUs are excluded from this " +
+                             $"count by design; if you added a browsable pack, this number is the one to re-rule.");
+
+            // Tiers must be UNIQUE and DENSE over 1..N — the property PackCatalog.FindByTier
+            // actually depends on, and the one a hardcoded ceiling could never express. A gap here
+            // means a lookup silently returns nothing for a tier a caller can legitimately ask for.
+            for (int t = 1; t <= count; t++)
+                if (!tiers.Contains(t))
+                    failures.Add($"packs.json: tier {t} is missing — tiers must be dense over 1..{count} " +
+                                 $"(FindByTier does a direct lookup; a gap is a silent null).");
             if (founderCount != 1) failures.Add($"packs.json: {founderCount} founderOnly packs (expected exactly 1 — Founder's Vow, tier 5)");
         }
 

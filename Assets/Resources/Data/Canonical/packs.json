@@ -12,9 +12,10 @@
     "tier": "Unique 1..N lookup key (PackCatalog.FindByTier). NOT the price band — multiple bundles share a price point but each has a unique tier.",
     "convenience": "TIME-SAVING only, never combat-power (the bent covenant, §5.3). instant-build / instant-repair / harvest-auto-collect / xp-weekend. No permanent passives.",
     "economy": "In-game currency top-ups (§5.2). GameState applies crystals/food/coins; glimmer is carried for catalogue completeness (not yet applied at runtime per the audit).",
+    "impulsePacks": "Packs 14-25 (tiers 14-25) are the WO-1037 SINGLE-RESOURCE IMPULSE PACKS, authored 2026-08-17 under the owner ruling of 2026-08-16 (option (b), verbatim: \"we should have small instant packs\" / \"small wood only\") and legalised by the WO-947 s12 amendment (the PURCHASE boundary is not the COST boundary). ONE family per harvestable resource (wood, iron, food, crystals) x small/medium/large. THE LOAD-BEARING RULE: each of these SKUs carries EXACTLY ONE economy key and an EMPTY cosmetics + convenience list. A multi-resource impulse bundle would re-mix the WO-947 cost baskets through the back door and is FORBIDDEN (WO-947 s12c guardrail 1) - asserted headlessly by DeNelle.Editor.Regression.ImpulsePackRegression [impulse-pack], which also pins the $5 PRICE CEILING (owner standing ruling, memory solana-store-early-access-pack-pricing) and the no-structures/no-levels/no-queue-completions rule. AMOUNTS ARE PENDING OWNER RATIFICATION - they were sized against the REAL demand curve read out of building-tiers.json (tier costWood 500..16000, costFood 300..13000, costCrystal 100..4800) and structures-catalog.json (repo.upgradeCost iron 20..1440): small closes the cheapest tier upgrade (the Lumber Mill T1 900-wood shortfall in the screenshot that prompted this WO), medium closes a mid-ladder step, large closes a late step but deliberately NOT the Barracks T6 16000-wood ceiling, so the top pack does not trivialise the game. The optional impulse/impulseResource/impulseSize fields are the machine-readable family tag ShortfallPackOffer resolves on; older packs omit them (absent = false/null, no migration break).",
     "cosmeticGrant": "Every cosmetics[] SKU is recorded into OwnedItemIds on grant and MUST exist in cosmetics.json (id == the SKU) or it is unredeemable. Starter-bundle cosmetics live in cosmetics.json with unlockMethod 'achievement' + glimmerCost 0 (owned via entitlement, equippable, not glimmer-buyable)."
   },
-  "version": 4,
+  "version": 5,
   "currencyDisclaimer": "Token price moves with the market.",
   "packs": [
     {
@@ -533,6 +534,294 @@
         ]
       },
       "packExclusiveCosmetic": "cosmetic.builders-cache.exclusive"
+    },
+    {
+      "sku": "impulse-wood-small",
+      "tier": 14,
+      "name": "Cord of Timber",
+      "tagline": "A cord of seasoned timber, cut and stacked - enough to finish what you started.",
+      "theme": "Small single-resource impulse pack (WO-1037, owner ruling 2026-08-16 option (b); WO-947 s12c guardrail 1). Grants wood and NOTHING else - exactly ONE economy key. No cosmetics, no convenience, no structures, no levels, no queue completions. Surfaced ONLY against a real shortfall, never as a storefront row.",
+      "founderOnly": false,
+      "impulse": true,
+      "impulseResource": "wood",
+      "impulseSize": "small",
+      "pricing": {
+        "usd": 1.99,
+        "usdc": 1.99,
+        "sol": 0.018,
+        "skr": 25
+      },
+      "contents": {
+        "cosmetics": [],
+        "economy": {
+          "wood": 1000
+        },
+        "convenience": []
+      }
+    },
+    {
+      "sku": "impulse-wood-medium",
+      "tier": 15,
+      "name": "Timber Wagon",
+      "tagline": "A wagon of milled timber rolls in through the gate.",
+      "theme": "Medium single-resource impulse pack (WO-1037, owner ruling 2026-08-16 option (b); WO-947 s12c guardrail 1). Grants wood and NOTHING else - exactly ONE economy key. No cosmetics, no convenience, no structures, no levels, no queue completions. Surfaced ONLY against a real shortfall, never as a storefront row.",
+      "founderOnly": false,
+      "impulse": true,
+      "impulseResource": "wood",
+      "impulseSize": "medium",
+      "pricing": {
+        "usd": 2.99,
+        "usdc": 2.99,
+        "sol": 0.027,
+        "skr": 36
+      },
+      "contents": {
+        "cosmetics": [],
+        "economy": {
+          "wood": 3500
+        },
+        "convenience": []
+      }
+    },
+    {
+      "sku": "impulse-wood-large",
+      "tier": 16,
+      "name": "Timber Barge",
+      "tagline": "A barge of timber puts in at the landing, decks stacked to the rail.",
+      "theme": "Large single-resource impulse pack (WO-1037, owner ruling 2026-08-16 option (b); WO-947 s12c guardrail 1). Grants wood and NOTHING else - exactly ONE economy key. No cosmetics, no convenience, no structures, no levels, no queue completions. Surfaced ONLY against a real shortfall, never as a storefront row.",
+      "founderOnly": false,
+      "impulse": true,
+      "impulseResource": "wood",
+      "impulseSize": "large",
+      "pricing": {
+        "usd": 4.99,
+        "usdc": 4.99,
+        "sol": 0.045,
+        "skr": 60
+      },
+      "contents": {
+        "cosmetics": [],
+        "economy": {
+          "wood": 8000
+        },
+        "convenience": []
+      }
+    },
+    {
+      "sku": "impulse-iron-small",
+      "tier": 17,
+      "name": "Pouch of Ingots",
+      "tagline": "A pouch of cold-hammered ingots from the foundry floor.",
+      "theme": "Small single-resource impulse pack (WO-1037, owner ruling 2026-08-16 option (b); WO-947 s12c guardrail 1). Grants iron and NOTHING else - exactly ONE economy key. No cosmetics, no convenience, no structures, no levels, no queue completions. Surfaced ONLY against a real shortfall, never as a storefront row.",
+      "founderOnly": false,
+      "impulse": true,
+      "impulseResource": "iron",
+      "impulseSize": "small",
+      "pricing": {
+        "usd": 1.99,
+        "usdc": 1.99,
+        "sol": 0.018,
+        "skr": 25
+      },
+      "contents": {
+        "cosmetics": [],
+        "economy": {
+          "iron": 400
+        },
+        "convenience": []
+      }
+    },
+    {
+      "sku": "impulse-iron-medium",
+      "tier": 18,
+      "name": "Ingot Crate",
+      "tagline": "A crate of ingots, banded and stamped, straight off the anvil.",
+      "theme": "Medium single-resource impulse pack (WO-1037, owner ruling 2026-08-16 option (b); WO-947 s12c guardrail 1). Grants iron and NOTHING else - exactly ONE economy key. No cosmetics, no convenience, no structures, no levels, no queue completions. Surfaced ONLY against a real shortfall, never as a storefront row.",
+      "founderOnly": false,
+      "impulse": true,
+      "impulseResource": "iron",
+      "impulseSize": "medium",
+      "pricing": {
+        "usd": 2.99,
+        "usdc": 2.99,
+        "sol": 0.027,
+        "skr": 36
+      },
+      "contents": {
+        "cosmetics": [],
+        "economy": {
+          "iron": 1200
+        },
+        "convenience": []
+      }
+    },
+    {
+      "sku": "impulse-iron-large",
+      "tier": 19,
+      "name": "Foundry Load",
+      "tagline": "A full foundry load - the forge runs hot for a week on this.",
+      "theme": "Large single-resource impulse pack (WO-1037, owner ruling 2026-08-16 option (b); WO-947 s12c guardrail 1). Grants iron and NOTHING else - exactly ONE economy key. No cosmetics, no convenience, no structures, no levels, no queue completions. Surfaced ONLY against a real shortfall, never as a storefront row.",
+      "founderOnly": false,
+      "impulse": true,
+      "impulseResource": "iron",
+      "impulseSize": "large",
+      "pricing": {
+        "usd": 4.99,
+        "usdc": 4.99,
+        "sol": 0.045,
+        "skr": 60
+      },
+      "contents": {
+        "cosmetics": [],
+        "economy": {
+          "iron": 3000
+        },
+        "convenience": []
+      }
+    },
+    {
+      "sku": "impulse-food-small",
+      "tier": 20,
+      "name": "Basket of Grain",
+      "tagline": "A basket of clean grain from the mill - the Folk eat tonight.",
+      "theme": "Small single-resource impulse pack (WO-1037, owner ruling 2026-08-16 option (b); WO-947 s12c guardrail 1). Grants food and NOTHING else - exactly ONE economy key. No cosmetics, no convenience, no structures, no levels, no queue completions. Surfaced ONLY against a real shortfall, never as a storefront row.",
+      "founderOnly": false,
+      "impulse": true,
+      "impulseResource": "food",
+      "impulseSize": "small",
+      "pricing": {
+        "usd": 1.99,
+        "usdc": 1.99,
+        "sol": 0.018,
+        "skr": 25
+      },
+      "contents": {
+        "cosmetics": [],
+        "economy": {
+          "food": 1000
+        },
+        "convenience": []
+      }
+    },
+    {
+      "sku": "impulse-food-medium",
+      "tier": 21,
+      "name": "Grain Cart",
+      "tagline": "A cart of grain and salted stores, hauled up from the fields.",
+      "theme": "Medium single-resource impulse pack (WO-1037, owner ruling 2026-08-16 option (b); WO-947 s12c guardrail 1). Grants food and NOTHING else - exactly ONE economy key. No cosmetics, no convenience, no structures, no levels, no queue completions. Surfaced ONLY against a real shortfall, never as a storefront row.",
+      "founderOnly": false,
+      "impulse": true,
+      "impulseResource": "food",
+      "impulseSize": "medium",
+      "pricing": {
+        "usd": 2.99,
+        "usdc": 2.99,
+        "sol": 0.027,
+        "skr": 36
+      },
+      "contents": {
+        "cosmetics": [],
+        "economy": {
+          "food": 3500
+        },
+        "convenience": []
+      }
+    },
+    {
+      "sku": "impulse-food-large",
+      "tier": 22,
+      "name": "Harvest Wagon",
+      "tagline": "A harvest wagon at full weight, the season's yield in one load.",
+      "theme": "Large single-resource impulse pack (WO-1037, owner ruling 2026-08-16 option (b); WO-947 s12c guardrail 1). Grants food and NOTHING else - exactly ONE economy key. No cosmetics, no convenience, no structures, no levels, no queue completions. Surfaced ONLY against a real shortfall, never as a storefront row.",
+      "founderOnly": false,
+      "impulse": true,
+      "impulseResource": "food",
+      "impulseSize": "large",
+      "pricing": {
+        "usd": 4.99,
+        "usdc": 4.99,
+        "sol": 0.045,
+        "skr": 60
+      },
+      "contents": {
+        "cosmetics": [],
+        "economy": {
+          "food": 8000
+        },
+        "convenience": []
+      }
+    },
+    {
+      "sku": "impulse-crystals-small",
+      "tier": 23,
+      "name": "Crystal Shard",
+      "tagline": "A single shard of aether crystal, still humming faintly.",
+      "theme": "Small single-resource impulse pack (WO-1037, owner ruling 2026-08-16 option (b); WO-947 s12c guardrail 1). Grants crystals and NOTHING else - exactly ONE economy key. No cosmetics, no convenience, no structures, no levels, no queue completions. Surfaced ONLY against a real shortfall, never as a storefront row.",
+      "founderOnly": false,
+      "impulse": true,
+      "impulseResource": "crystals",
+      "impulseSize": "small",
+      "pricing": {
+        "usd": 1.99,
+        "usdc": 1.99,
+        "sol": 0.018,
+        "skr": 25
+      },
+      "contents": {
+        "cosmetics": [],
+        "economy": {
+          "crystals": 250
+        },
+        "convenience": []
+      }
+    },
+    {
+      "sku": "impulse-crystals-medium",
+      "tier": 24,
+      "name": "Crystal Cluster",
+      "tagline": "A clustered growth of aether crystal, cut from the deep seam.",
+      "theme": "Medium single-resource impulse pack (WO-1037, owner ruling 2026-08-16 option (b); WO-947 s12c guardrail 1). Grants crystals and NOTHING else - exactly ONE economy key. No cosmetics, no convenience, no structures, no levels, no queue completions. Surfaced ONLY against a real shortfall, never as a storefront row.",
+      "founderOnly": false,
+      "impulse": true,
+      "impulseResource": "crystals",
+      "impulseSize": "medium",
+      "pricing": {
+        "usd": 2.99,
+        "usdc": 2.99,
+        "sol": 0.027,
+        "skr": 36
+      },
+      "contents": {
+        "cosmetics": [],
+        "economy": {
+          "crystals": 700
+        },
+        "convenience": []
+      }
+    },
+    {
+      "sku": "impulse-crystals-large",
+      "tier": 25,
+      "name": "Crystal Vein",
+      "tagline": "A whole vein of aether crystal, drawn out of the dark intact.",
+      "theme": "Large single-resource impulse pack (WO-1037, owner ruling 2026-08-16 option (b); WO-947 s12c guardrail 1). Grants crystals and NOTHING else - exactly ONE economy key. No cosmetics, no convenience, no structures, no levels, no queue completions. Surfaced ONLY against a real shortfall, never as a storefront row.",
+      "founderOnly": false,
+      "impulse": true,
+      "impulseResource": "crystals",
+      "impulseSize": "large",
+      "pricing": {
+        "usd": 4.99,
+        "usdc": 4.99,
+        "sol": 0.045,
+        "skr": 60
+      },
+      "contents": {
+        "cosmetics": [],
+        "economy": {
+          "crystals": 1600
+        },
+        "convenience": []
+      }
     }
   ]
 }

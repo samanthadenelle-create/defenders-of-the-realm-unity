@@ -302,7 +302,22 @@ namespace DeNelle.Editor
                 var gss = gssGo.AddComponent<GameStateService>();
                 if (!InstallState(gss, throwaway))
                 {
-                    log.AppendLine("  (skipped live-service checks: GameStateService state seam not reflectable)");
+                    // ⚠ THIS USED TO `return;` WITH A "(skipped)" NOTE, AND THE [regression-marker]
+                    // ratchet caught it as a HOLLOW PASS — correctly. Returning here means the whole
+                    // live section (fill the line, assert the refusal, assert the Echo gate leaks no
+                    // slot, assert the broke-but-entitled offer) never runs, and the suite still
+                    // reports OK. A suite that green-passes on a null singleton asserts NOTHING, and
+                    // it does so most eagerly on exactly the day the seam breaks — the day you most
+                    // need it to speak.
+                    //
+                    // It is a FAILURE, not a skip. The state seam being unreflectable is itself a
+                    // real defect (the oracle can no longer reach the thing it exists to test), so
+                    // it should red and be fixed, not narrated past. If a legitimate skip is ever
+                    // wanted here it needs an owner ruling and a 'hollow-pass-ok' marker — not a
+                    // silent early return.
+                    failures.Add("[queue-full-surface] GameStateService state seam is not reflectable, so the " +
+                                 "live checks (line-full refusal, Echo gate, broke-but-entitled offer) could not " +
+                                 "run. This is a FAIL, not a skip: the suite cannot assert what it exists to assert.");
                     return;
                 }
 

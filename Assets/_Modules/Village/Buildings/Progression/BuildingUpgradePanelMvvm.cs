@@ -391,6 +391,16 @@ namespace DeNelle.Village.Buildings.Progression
         public const string CopyKeyQueueSlotOffer  = "upgradeQueueSlotOffer";
         public const string CopyKeyQueueCrews      = "upgradeQueueCrews";
 
+        // ── WO-1037 shortfall-offer copy (same canon-strings discipline) ──────────
+        // ⚠ THE HARVEST LINE IS DELIBERATELY FIRST AND ON THE WIDER HALF (WO-1037 §1: "the existing
+        // path stays first-class and visible; the pack is an ALTERNATIVE, never the recommended
+        // route"). If a future edit ever makes the offer the primary plate, that guardrail is broken
+        // — the layout IS the guardrail here, not a comment about it.
+        public const string CopyKeyShortDetail     = "upgradeShortDetail";
+        public const string CopyKeyShortHarvest    = "upgradeShortHarvest";
+        public const string CopyKeyShortPackOffer  = "upgradeShortPackOffer";
+        public const string CopyKeyShortPackSoon   = "upgradeShortPackSoon";
+
         /// <summary>Canon-strings lookup with a logged fallback (never renders "[[missing:...]]").</summary>
         internal static string Copy(string key, string fallback)
         {
@@ -465,7 +475,12 @@ namespace DeNelle.Village.Buildings.Progression
               // ObsidianQueueGate.Status.Version at ~1 Hz, so a freed slot repaints with no reopen.)
               .Append('|').Append(_vm.BuilderQueueDepth).Append('/').Append(_vm.BuilderQueueLimit)
               .Append('|').Append(_vm.BuilderCrewsBusy).Append('/').Append(_vm.BuilderCrewSlots)
-              .Append('|').Append(_vm.CanBuyQueueSlot ? '1' : '0').Append(_vm.QueueSlotPrice);
+              .Append('|').Append(_vm.CanBuyQueueSlot ? '1' : '0').Append(_vm.QueueSlotPrice)
+              // WO-1037 — the shortfall offer's DISMISSED state is rendered content: without it a
+              // dismiss tap would mutate the set and repaint nothing, because ActionState and the
+              // cost lines are both unchanged by a dismissal. (The offer's IDENTITY needs no entry:
+              // it is a pure function of the cost lines, which are already hashed below.)
+              .Append('|').Append(IsOfferDismissed() ? '1' : '0');
             foreach (var b in _vm.NextBonuses) sb.Append('~').Append(b);
             foreach (var c in _vm.NextCostLines)
                 sb.Append('$').Append(c.Label).Append(':').Append(c.Amount)
@@ -1172,6 +1187,9 @@ namespace DeNelle.Village.Buildings.Progression
             // WO-1045 — QUEUE FULL: grey out, explain, offer (the owner's own order).
             if (state == UpgradeActionState.QueueFull) { BuildQueueFullBand(card, label, x0, x1); return; }
 
+            // WO-1037 — MISSING RESOURCES: same shape, same order (dead state, then remedy).
+            if (state == UpgradeActionState.MissingResources) { BuildShortfallBand(card, label, x0, x1); return; }
+
             if (state == UpgradeActionState.Ready)
             {
                 // The ONE bright plate on the panel (WO-832) — and the ONLY interactable state.
@@ -1314,6 +1332,111 @@ namespace DeNelle.Village.Buildings.Progression
             // which flips ActionState off QueueFull -> the signature changes -> this band is
             // replaced by the live Upgrade CTA in the same frame.
             Guard.Try("UpgradeUI", "buy builder slot from the upgrade panel", () => _vm.TryBuyQueueSlot());
+        }
+
+        // ── WO-1037 — the SHORTFALL action band: grey out, explain, offer ─────────
+        //
+        // The player opened an upgrade, read the perks, decided they want it, and hit a wall. That
+        // is the highest-intent moment the economy produces, and this band answers the question they
+        // are already asking ("how do I get past this?") instead of injecting a new one.
+        //
+        // THE GUARDRAILS ARE THE LAYOUT, not a comment about the layout (WO-1037 §1):
+        //   * The HARVEST path takes the WIDER half and reads first. The pack is the alternative.
+        //   * ONE offer, the SMALLEST SUFFICIENT size — chosen by ShortfallPackOffer, never here.
+        //     No upsell rail, no "or go bigger" second plate.
+        //   * It states exactly what it closes, in words and numbers ("Short 880 Wood").
+        //   * DISMISSIBLE, and it stays dismissed for that building for the session.
+        //
+        // ⛔ THE OFFER PLATE IS INERT AND CANNOT PURCHASE — deliberately (WO-1037 §2 / WO-931).
+        //    It is built with BuildLockButton, never BuildGoldButton: the dim lock plate cannot be
+        //    mistaken for the gold CTA, and its only action is DISMISS. There is no call to
+        //    PackStore.Purchase, no call to ApplyPackContents, and no path from this band to either.
+        //    That is not a stub waiting to be finished by wiring the tap up — WO-931 shipped a
+        //    tappable Buy over a free-granting stub wallet, and the fix is that the surface has no
+        //    purchase route AT ALL until the owner opens FeatureFlags.RealmStorePurchase after a
+        //    device wallet test. When that day comes, the routing is a NEW, gated change.
+        private void BuildShortfallBand(RectTransform card, string label, float x0, float x1)
+        {
+            string worstLabel = _vm.WorstShortLabel;
+            int worstMissing = _vm.WorstShortMissing;
+            var offer = _vm.ShortfallOffer;
+            bool dismissed = IsOfferDismissed();
+            bool offering = offer.HasOffer && !dismissed;
+
+            // -- LEFT (or full width): the DEAD state + the SHORTFALL IN WORDS + the harvest path.
+            // Composed in FULL before the button is built: BuildLockButton runs FitBlock, which
+            // sizes to the string it is handed, so a later .text assignment would leave a stale fit.
+            float deadX1 = offering ? x0 + (x1 - x0) * 0.60f : x1;
+            string dead = label;
+            if (worstMissing > 0 && !string.IsNullOrEmpty(worstLabel))
+            {
+                dead += "\n" + string.Format(Copy(CopyKeyShortDetail, "Short {0} {1}"),
+                                             ElarionUi.CompactNumber(worstMissing), worstLabel);
+                dead += "\n" + string.Format(Copy(CopyKeyShortHarvest, "Harvest more {0}, or set an Echo to gather it."),
+                                             worstLabel.ToLowerInvariant());
+            }
+
+            // onClick null => interactable false. The dead half is never tappable.
+            var lockLbl = BuildLockButton(card, dead, x0, deadX1, 0f, 1f, null,
+                                          RpgUiCatalog.ElementToggleBoxOff);
+            PinActionBand((RectTransform)lockLbl.transform.parent);
+
+            if (!offering)
+            {
+                FlowTrace.Step("UpgradeUI", "shortfall band on '" + _vm.Title + "': short "
+                    + worstMissing + " " + worstLabel + "; no offer surfaced ("
+                    + (dismissed ? "DISMISSED for this building this session"
+                                 : "no impulse-pack family covers this resource") + ").");
+                return;
+            }
+
+            // -- RIGHT: the OFFER. Information, not a transaction. It names the pack, the amount it
+            //    grants and the price, so the player can judge it — and tapping it DISMISSES.
+            string offerText = string.Format(
+                Copy(CopyKeyShortPackOffer, "{0}\n{1} {2} - {3}"),
+                offer.Pack.Name,
+                ElarionUi.CompactNumber(offer.Amount),
+                worstLabel,
+                offer.PriceLabel);
+            offerText += "\n" + Copy(CopyKeyShortPackSoon, "Coming soon - tap to dismiss");
+
+            var offerLbl = BuildLockButton(card, offerText, deadX1 + 0.015f, x1, 0f, 1f,
+                                           OnDismissShortfallOffer, RpgUiCatalog.ElementArrowBox);
+            PinActionBand((RectTransform)offerLbl.transform.parent);
+
+            FlowTrace.Step("UpgradeUI", "shortfall band on '" + _vm.Title + "': short " + worstMissing
+                + " " + worstLabel + " -> offering '" + offer.Pack.Sku + "' (" + offer.Amount + " "
+                + offer.ResourceKey + ", " + offer.PriceLabel + ", covers=" + offer.CoversShortfall
+                + "). Plate is INERT: purchase rail "
+                + (offer.Purchasable ? "OPEN but this surface still has NO purchase route (WO-1037 §2)"
+                                     : "CLOSED (FeatureFlags.RealmStorePurchase off)") + ".");
+        }
+
+        // ── Session-scoped dismissal (WO-1037 §5: "stays dismissed for that upgrade that session") ──
+        // Static so it survives the panel being closed and reopened on the same building, which is
+        // what "that session" means to a player. Cleared only by a domain reload / a new run — it is
+        // deliberately NOT persisted: a dismissal is a mood, not a setting, and burning it into the
+        // save would silently hide the feature forever after one tap.
+        private static readonly HashSet<string> _dismissedOffers = new HashSet<string>();
+
+        private string OfferDismissKey() => _vm != null ? (_vm.Title ?? "") + "|" + _vm.NextTier : "";
+
+        private bool IsOfferDismissed()
+        {
+            string k = OfferDismissKey();
+            return !string.IsNullOrEmpty(k) && _dismissedOffers.Contains(k);
+        }
+
+        private void OnDismissShortfallOffer()
+        {
+            string k = OfferDismissKey();
+            if (string.IsNullOrEmpty(k)) return;
+            _dismissedOffers.Add(k);
+            FlowTrace.Step("UpgradeUI", "shortfall offer DISMISSED for '" + k
+                + "' - it will not resurface for this upgrade this session.");
+            // The dismissal is part of the rendered content (ContentSignature reads it), so the
+            // next Render tears the band down and rebuilds it full-width. No manual teardown.
+            Render();
         }
 
         // The tap. The button flips IMMEDIATELY because the VM raises Changed -> Render ->

@@ -690,7 +690,36 @@ namespace DeNelle.Core
         /// </para>
         /// Flip via PlayerPrefs "ff.stakingpolishbonus" = 1.
         /// </summary>
+        // ── 2026-08-17: ON BY DEFAULT **ONLY** ON A dApp-STORE BUILD ────────────────────────
+        // The owner asked to turn the staking bonus on now that Echoes of Elarion is published on
+        // the Solana dApp Store. The comment above is explicit that a Seeker / dApp-store build MAY
+        // flip it on — but ALSO that the OFF default is a COMPLIANCE default: Apple and Google both
+        // restrict gating gameplay on token holdings and have been actively enforcing.
+        //
+        // ⛔ SO THIS IS NOT `defaultOn: true`. A blanket flip would make it true for a future
+        // Play-store build from these same ProjectSettings, which is precisely what the compliance
+        // note forbids — and it would do so silently, months later, in a build nobody re-read this
+        // comment for. The compliance property has to survive a build target we have not made yet.
+        //
+        // ⚠ AND IT IS NOT GATED ON `SOLANA_SDK` EITHER, though that was the tempting shortcut:
+        // SOLANA_SDK is set per-PLATFORM (Android) in ProjectSettings, so a Play-store Android
+        // build would carry it too. It marks "this build can talk to a wallet", NOT "this build is
+        // distributed somewhere that permits token-gated gameplay". Those are different questions
+        // and conflating them is how a compliance default rots into a violation.
+        //
+        // `DAPP_STORE` is a DISTRIBUTION define: it says where the binary is going, which is the
+        // only thing that actually answers the compliance question. It must be REMOVED from the
+        // Android define list before any Play-store build. Pinned by StakingComplianceRegression.
+        //
+        // What it grants stays ATTEMPTS-ONLY (+1 weekly re-roll, +1 roll cap at 10k+ SKR) and never
+        // touches a probability — a staker's roll is exactly as likely as a free player's. That
+        // fairness property is the whole reason this is defensible at all; do not "improve" it into
+        // better odds.
+#if DAPP_STORE
+        public static bool StakingPolishBonus => Get("stakingpolishbonus", defaultOn: true);
+#else
         public static bool StakingPolishBonus => Get("stakingpolishbonus", defaultOn: false);
+#endif
 
         /// <summary>WO-991 (owner ruling 2026-08-15) — KILL SWITCH for the Healing Caravan's mobile
         /// shell (HealingCaravanMobility: slow follow-the-hero crawl + glass HP + the status chip).

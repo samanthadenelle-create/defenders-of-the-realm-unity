@@ -1,4 +1,18 @@
 // =============================================================================
+// ⛔⛔ DEAD PANEL — DO NOT WIRE THIS. THE LIVE REDEEM SCREEN IS:
+//        Assets/_Modules/Wallet/RedeemCodePanel.cs  (opened from the Realm Store)
+// -----------------------------------------------------------------------------
+// TWO reasons, either one fatal (promo-redeem door WO):
+//   1. It needs a UIDocument ([SerializeField] UIDocument _document / GetComponent
+//      <UIDocument>()). UXML DOES NOT RENDER IN PLAYER BUILDS — CLAUDE.md §8, learned
+//      the hard way when a blank BattleHUD UIDocument shipped to players (removed
+//      2026-08-16). "No UXML dependency" below refers to the .uxml FILE; the UIToolkit
+//      runtime document is still required, and that is the part that fails on device.
+//   2. Nothing ever instantiates it, so PromoCodeUI.Instance is permanently null —
+//      every "open the promo panel" call through it has always been a no-op.
+// It is left on disk deliberately (deleting it is a separate call). The service it
+// drives, PromoCodeService, IS live and is what RedeemCodePanel uses.
+// =============================================================================
 // PromoCodeUI — WO5: Promo Code Entry Panel (UIElements).
 // -----------------------------------------------------------------------------
 // Procedural UIElements panel — no UXML dependency.
