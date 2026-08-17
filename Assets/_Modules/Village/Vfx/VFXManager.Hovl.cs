@@ -89,6 +89,20 @@ namespace DeNelle.Village
                  "Defenders/VFX/Generate Hovl VFX Catalog.")]
         [SerializeField] private HovlVfxCatalog _hovlCatalog;
 
+        [Tooltip("DIAGNOSTIC / ROLLBACK ONLY. ON = pre-warm EVERY catalog key's pool at boot, " +
+                 "the pre-WO-1113 behaviour. Leave OFF: warming is demand-driven (a key's pool " +
+                 "is built the first time that key is actually played).")]
+        [SerializeField] private bool _eagerWarmAllVfxKeys = false;
+
+        // WO-1113 (mobile perf): keys whose pool has already been demand-warmed, so the
+        // one-time warm happens exactly once per key even for keys that never fill up.
+        private readonly HashSet<string> _hovlWarmedKeys = new HashSet<string>();
+
+        // Instrumentation for the demand-warm (§12): how many pooled bodies this session
+        // actually cost us, and across how many keys. Reported in the warm trace so a
+        // capture can compare against the catalog's full pre-warm bill.
+        private int _hovlWarmedInstances;
+
         // Per-key queue of dormant instances ready to reuse (mirrors _pools).
         private readonly Dictionary<string, Queue<GameObject>> _hovlPools
             = new Dictionary<string, Queue<GameObject>>();
@@ -152,11 +166,50 @@ namespace DeNelle.Village
                     $"EnsureHovlCatalog: loaded HovlVfxCatalog ({_hovlCatalog.Rows?.Length ?? 0} rows).");
         }
 
+        /// <summary>
+        /// WO-1113 (mobile perf, Seeker): the pre-warm is now DEMAND-DRIVEN. This method only
+        /// builds the key lookup; NOT ONE GameObject is instantiated at boot.
+        ///
+        /// THE DEFECT it closes: this used to instantiate <c>PoolSize</c> bodies for EVERY row in
+        /// the catalog at Awake — 887 pooled GameObjects for the 152 baked rows. The VFX catalog
+        /// audit (docs/reference/VFX_CATALOG.md, 2026-08-16) found 76 of those keys have NO
+        /// consumer anywhere in the tree, 45 of them the PP_* palette, so roughly a third of that
+        /// boot cost was memory + boot time spent on effects nothing in the game can ever play.
+        /// On a phone that is real RAM and real time before the first frame.
+        ///
+        /// It is a WARM change, NOT a content change: no key is removed, no prefab is touched, no
+        /// row is edited (an untagged key today may be owner-tagged tomorrow — deleting art is
+        /// never a CLI decision). A key that IS played warms its authored PoolSize on its FIRST
+        /// play, so from the second play onward the pool behaves exactly as before.
+        /// Set <see cref="_eagerWarmAllVfxKeys"/> to restore the old boot-warm for A/B.
+        /// </summary>
         private void InitialiseHovlPools()
         {
             if (_hovlCatalog == null) return;
             _hovlCatalog.BuildLookup();
 
+            if (!_eagerWarmAllVfxKeys)
+            {
+                int rows = 0, wouldWarm = 0;
+                var all = _hovlCatalog.Rows;
+                if (all != null)
+                {
+                    for (int i = 0; i < all.Length; i++)
+                    {
+                        var r = all[i];
+                        if (string.IsNullOrEmpty(r.Key) || r.Prefab == null || r.PoolSize <= 0) continue;
+                        rows++;
+                        wouldWarm += r.PoolSize;
+                    }
+                }
+                FlowTrace.Step("VFXManager",
+                    $"InitialiseHovlPools: DEMAND-WARM (WO-1113) — 0 instances built at boot " +
+                    $"(eager warm would have built {wouldWarm} across {rows} keys). Each key warms " +
+                    "its PoolSize on its first play; unplayed keys cost nothing.");
+                return;
+            }
+
+            int warmed = 0;
             foreach (var row in _hovlCatalog.Rows)
             {
                 if (string.IsNullOrEmpty(row.Key) || row.Prefab == null || row.PoolSize <= 0) continue;
@@ -166,10 +219,59 @@ namespace DeNelle.Village
                 for (int i = 0; i < row.PoolSize; i++)
                 {
                     var go = CreateHovlInstance(row.Prefab, row.Key);
-                    if (go != null) _hovlPools[row.Key].Enqueue(go);
+                    if (go != null) { _hovlPools[row.Key].Enqueue(go); warmed++; }
                 }
+                _hovlWarmedKeys.Add(row.Key);
             }
+            _hovlWarmedInstances = warmed;
+            FlowTrace.Warn("VFXManager",
+                $"InitialiseHovlPools: EAGER warm is ON (_eagerWarmAllVfxKeys) — built {warmed} pooled " +
+                "instances at boot, including keys with no consumer. This is the diagnostic/rollback " +
+                "path; the shipping default is demand-warm.");
         }
+
+        /// <summary>
+        /// WO-1113: builds a key's pool the FIRST time that key is actually played, so the
+        /// authored PoolSize depth still exists for every consumed key — it is just paid for on
+        /// use instead of at boot, and never paid at all for a key with no consumer.
+        /// Guarded (§12): a bad row degrades to acquire-on-demand, it never throws into the
+        /// caller's play path.
+        /// </summary>
+        private void EnsureHovlKeyWarm(string key, in HovlVfxCatalog.Row row)
+        {
+            if (string.IsNullOrEmpty(key) || row.Prefab == null || row.PoolSize <= 0) return;
+            if (!_hovlWarmedKeys.Add(key)) return;   // already warmed (or eager-warmed) — one time only
+
+            GameObject prefab = row.Prefab;
+            int size = row.PoolSize;
+            Guard.Try("VFXManager", $"demand-warm hovl key '{key}'", () =>
+            {
+                if (!_hovlPools.TryGetValue(key, out var q))
+                {
+                    q = new Queue<GameObject>();
+                    _hovlPools[key] = q;
+                }
+                int built = 0;
+                for (int i = q.Count; i < size; i++)
+                {
+                    var go = CreateHovlInstance(prefab, key);
+                    if (go == null) break;
+                    q.Enqueue(go);
+                    built++;
+                }
+                _hovlWarmedInstances += built;
+                FlowTrace.Step("VFXManager",
+                    $"demand-warm '{key}': built {built} pooled instance(s) on first play " +
+                    $"(session total {_hovlWarmedInstances} across {_hovlWarmedKeys.Count} key(s)).");
+            });
+        }
+
+        /// <summary>Pooled Hovl instances built so far this session (WO-1113 regression hook).
+        /// 0 immediately after boot when the warm is demand-driven.</summary>
+        public int HovlWarmedInstanceCount => _hovlWarmedInstances;
+
+        /// <summary>Distinct Hovl keys warmed so far this session (WO-1113 regression hook).</summary>
+        public int HovlWarmedKeyCount => _hovlWarmedKeys.Count;
 
         // ── Public API ────────────────────────────────────────────────────────────
 
@@ -248,6 +350,11 @@ namespace DeNelle.Village
                     return null;
                 }
             }
+
+            // WO-1113: this key has a real consumer (we are in its play path RIGHT NOW), so it
+            // earns its pool depth here — once — instead of at boot alongside 76 keys that never
+            // play. Cheap no-op on every play after the first.
+            EnsureHovlKeyWarm(key, row);
 
             var go = AcquireHovl(key, row);
             if (go == null)

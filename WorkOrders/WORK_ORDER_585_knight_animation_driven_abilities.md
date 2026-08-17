@@ -1,3 +1,9 @@
+> ⚠ **NUMBER COLLISION — this document does not own WO-585; `WORK_ORDER_585_inventory_equip_feedback.md` does.**
+> Referred to hereafter as **WO-585-B (knight animation-driven abilities)**.
+> Flagged by the 2026-08-16 Sunday board-grooming pass (`python tools/board_build.py` → `DUPLICATE_WO_NUMBERS`);
+> ownership decided by **first-on-disk** (`git log --follow --diff-filter=A`): the winner's file was created first.
+> Banner only — nothing was renumbered or deleted.
+
 # WORK ORDER 585 — Knight Animation-Driven Ability Set + Skill-Tree Actives
 
 **Status:** DESIGN — owner review pending (drafted 2026-07-04)

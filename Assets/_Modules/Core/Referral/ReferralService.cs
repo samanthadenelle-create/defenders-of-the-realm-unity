@@ -16,7 +16,8 @@
 //   • Referrer reward cap: backend caps referral rewards per referrer per period.
 //   • Local guard: claimed code stored in PlayerPrefs to prevent double-submit.
 //
-// BACKEND CONTRACT:
+// BACKEND CONTRACT (both routes are IDENTITY-GATED — see BackendRequestSigner;
+// headers are X-Guest-Id, or X-Wallet + X-Nonce + X-Signature):
 //   POST api/referral/generate
 //     Body:    { playerId }
 //     Success: { success: true, code, referralUrl }
@@ -34,6 +35,7 @@ using Cysharp.Threading.Tasks;
 using DeNelle.Core.Analytics;
 using DeNelle.Core.Diagnostics;
 using DeNelle.Core.State;
+using DeNelle.Core.Web3;
 using Newtonsoft.Json;
 using UnityEngine;
 using UnityEngine.Networking;
@@ -109,7 +111,14 @@ namespace DeNelle.Core.Referral
                 return;
             }
 
-            var playerId = GameStateService.Instance?.State?.BoundWallet ?? "anonymous";
+            // Identity-gated: the code minted here belongs to this player, so the
+            // server must be able to PROVE who asked. No identity => no request.
+            var playerId = BackendRequestSigner.CurrentPlayerId();
+            if (string.IsNullOrEmpty(playerId))
+            {
+                Debug.LogWarning("[ReferralService] No player identity - skipping code generation.");
+                return;
+            }
             var payload  = JsonConvert.SerializeObject(new { playerId });
             var bodyRaw  = Encoding.UTF8.GetBytes(payload);
 
@@ -117,6 +126,12 @@ namespace DeNelle.Core.Referral
             req.uploadHandler   = new UploadHandlerRaw(bodyRaw);
             req.downloadHandler = new DownloadHandlerBuffer();
             req.SetRequestHeader("Content-Type", "application/json");
+
+            if (!await BackendRequestSigner.TryAttachAsync(req, playerId, bodyRaw))
+            {
+                Debug.LogWarning("[ReferralService] Could not authenticate the generate request - aborting.");
+                return;
+            }
 
             try { await req.SendWebRequest(); }
             catch (Exception ex)
@@ -193,7 +208,14 @@ namespace DeNelle.Core.Referral
                 return;
             }
 
-            var playerId = GameStateService.Instance?.State?.BoundWallet ?? "anonymous";
+            // A claim permanently consumes this player's ONE claim (UNIQUE(claimer_id)),
+            // so the server must prove the claimer is who the body says.
+            var playerId = BackendRequestSigner.CurrentPlayerId();
+            if (string.IsNullOrEmpty(playerId))
+            {
+                OnClaimFailed?.Invoke("Sign in before claiming a referral code.");
+                return;
+            }
             var payload  = JsonConvert.SerializeObject(new { playerId, code });
             var bodyRaw  = Encoding.UTF8.GetBytes(payload);
 
@@ -201,6 +223,12 @@ namespace DeNelle.Core.Referral
             req.uploadHandler   = new UploadHandlerRaw(bodyRaw);
             req.downloadHandler = new DownloadHandlerBuffer();
             req.SetRequestHeader("Content-Type", "application/json");
+
+            if (!await BackendRequestSigner.TryAttachAsync(req, playerId, bodyRaw))
+            {
+                OnClaimFailed?.Invoke("Could not verify your account. Try again later.");
+                return;
+            }
 
             try { await req.SendWebRequest(); }
             catch (Exception ex)
@@ -211,7 +239,9 @@ namespace DeNelle.Core.Referral
 
             if (req.result != UnityWebRequest.Result.Success)
             {
-                OnClaimFailed?.Invoke("Could not reach server. Try again later.");
+                OnClaimFailed?.Invoke(req.responseCode == 401 || req.responseCode == 400
+                    ? "Could not verify your account. Try again later."
+                    : "Could not reach server. Try again later.");
                 return;
             }
 

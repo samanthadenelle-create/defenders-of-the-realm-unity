@@ -66,7 +66,10 @@ namespace DeNelle.Editor
                 gssGo = new GameObject("GSS (founding-reach oracle)");
                 var gss = gssGo.AddComponent<GameStateService>();
                 if (!InstallState(gss, throwaway))
-                { reason = "FOUNDING REACH skipped: GameStateService state seam not reflectable (needs fleet)"; return true; }
+                {
+                    return DeNelle.Editor.Regression.RegressionOutcome.Skip(out reason,
+                        "FOUNDING REACH", "GameStateService state seam not reflectable (needs fleet)");
+                }
 
                 // FRESH: not onboarded, nothing founded -> offer the founding choice.
                 throwaway.Onboarded = false;

@@ -298,7 +298,8 @@ namespace DeNelle.Core.Geometry
         //
         // WHY DERIVED, NOT A NUDGE EULER: the melee families settled this with a hand-typed
         // per-archetype nudge, which is a tuned constant that only holds for one rig. This solves
-        // it the way ComputeSheathRotation already does (EquipmentController :2274) — build the
+        // it the way ComputeSheathRotation already does (EquipmentController, named by FUNCTION —
+        // the line number that used to sit here went stale when the file moved) — build the
         // target in WORLD from the BODY's own axes, then express it in the bone's LOCAL frame so
         // it follows that bone through animation. No magic euler, no sign to guess, and it holds
         // on any rig whose body has an up and a forward. Per that precedent the result is used
@@ -314,11 +315,46 @@ namespace DeNelle.Core.Geometry
         /// from the string — onto the body's FORWARD, so the curved limbs open away from what the
         /// archer is aiming at.
         /// <para>
-        /// Owner rule (binding, applies to EVERY bow): "for a bow the LONGEST axis is Y (the
-        /// limb-to-limb span), the grip is at mid-Y on the rounded side, and the hand grips
-        /// perpendicular to that Y axis." CROSSBOWS ARE EXCLUDED — a crossbow IS held across the
-        /// body and is widest on X, so this solve is wrong for it by construction;
-        /// RangedPrimaryRegression case 1 pins that no crossbow can reach the runtime catalog.
+        /// ★ THE OWNER'S CANONICAL BOW RULE — HER EXACT WORDS, 2026-08-16, BINDING FOR EVERY BOW.
+        /// Quoted verbatim, not paraphrased, because this file has twice been "fixed" by a reader
+        /// who had the conclusion without the reasoning (a dialed +91 Z, reverted; then a confident
+        /// comment that preserved the wrong conclusion for months). Her words ARE the reasoning:
+        /// <code>
+        /// "For bows, the rule would always be y is the longest distance on any two points of a
+        ///  mesh bow. the straight edge runs parallel to the person holding it with the arm
+        ///  crossing that straight line perpendicular, landing with the hand clasping on the
+        ///  curved edge furthest from the person."
+        /// </code>
+        /// The four clauses, and who answers each — no clause is optional, and clauses 2 and 4
+        /// together ARE the belly axis:
+        /// <list type="number">
+        /// <item>Y IS THE LONGEST DISTANCE BETWEEN ANY TWO POINTS. Established, never assumed:
+        ///       <see cref="AlignAxesYLongXNarrowZWide"/> reads the MEASURED bounds permutation and
+        ///       rotates the mesh's own longest axis onto +Y whatever axis the FBX authored it on.
+        ///       Pinned by RangedPrimaryRegression 'bow-long-axis-y', which feeds it a bow rotated
+        ///       90 deg so a solver that trusted the import would fail.</item>
+        /// <item>THE STRAIGHT EDGE RUNS PARALLEL TO THE PERSON. The string plane lies along the
+        ///       archer's body — string side toward the archer. THIS method answers it, by putting
+        ///       prop +Z (the belly, opposite the string) on body.forward. This is the clause a
+        ///       single Z-roll constant leaves free, and getting it wrong points the STRING
+        ///       downrange with the curve at the archer: upright, and still wrong.</item>
+        /// <item>THE ARM CROSSES THAT LINE PERPENDICULAR, at the midpoint of the long axis. That is
+        ///       why <see cref="TryDeriveBowGrip"/> searches along the perpendicular from mid-Y of
+        ///       the straight edge, and never along the string.</item>
+        /// <item>THE HAND CLASPS THE CURVED EDGE FURTHEST FROM THE PERSON. Of the two surfaces on
+        ///       that perpendicular the hand takes the one at MAXIMUM depth (the riser apex), never
+        ///       the near one (the string, at ~zero depth) — which is exactly why that seat is a
+        ///       max-over-vertices and not a first-surface ray. Pinned by 'bow-grip-apex'.</item>
+        /// </list>
+        /// A fix satisfying 1 and 3 but not 2 and 4 stands the bow upright with the curve facing
+        /// BACKWARD. It photographs as nearly right. RangedPrimaryRegression 'companion-bow-derived'
+        /// measures all four off the mesh and proves the axes are independent, so that pose cannot
+        /// pass as correct again.
+        /// </para>
+        /// <para>
+        /// CROSSBOWS ARE EXCLUDED — a crossbow IS held across the body and is widest on X, so this
+        /// solve is wrong for it by construction; RangedPrimaryRegression case 1 pins that no
+        /// crossbow can reach the runtime catalog.
         /// </para>
         /// Returns identity (and says so out loud) when either transform is missing — Section 12:
         /// no silent failures.

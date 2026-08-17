@@ -289,6 +289,7 @@ namespace DeNelle.Editor
             // A line added below the end fence still RUNS but is not COUNTED.
             // =====================================================================
             int suiteTagLinesBefore = CountOracleTagLines(log);
+            int suiteSkipLinesBefore = CollectSkippedSuiteTags(log).Count;
             int suiteFailuresBefore = failures.Count;
 
             // --- monetization covenant gate (LB-5) + tower upgrade perks (overnight silos C/E) ---
@@ -308,6 +309,7 @@ namespace DeNelle.Editor
             if (!AegisSetReachabilityRegression.Run(out var aegisReason)) failures.Add(aegisReason); else log.AppendLine("[aegis] " + aegisReason);
             if (!BuildingUpgradeRegression.Run(out var buildUpgReason)) failures.Add(buildUpgReason); else log.AppendLine("[build-upgrade] " + buildUpgReason);
             if (!OfflineHarvestRegression.Run(out var offlineReason)) failures.Add(offlineReason); else log.AppendLine("[offline-harvest] " + offlineReason);
+            if (!OfflineClaimFanOutRegression.Run(out var offlineFanOutReason)) failures.Add(offlineFanOutReason); else log.AppendLine("[offline-fanout] " + offlineFanOutReason);
             // --- Dev queue time-skip (owner 2026-08-04): the skip is exact/additive/resettable,
             //     isolated from the WO-120 ServerOffsetMs lane, forward-only, release-stripped —
             //     and, the load-bearing one, COMBAT STILL READS NO TimeSource (so it can never
@@ -452,6 +454,8 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "wallet-provider suite", () => { if (!WalletProviderSelectionRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[wallet-provider] " + r); });
             // --- WO-835 action bar: Core applicability model invariants + View purity ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "hud-actionbar suite", () => { if (!HudActionBarRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[hud-actionbar] " + r); });
+            // --- WO-1008 raids discoverability: a built Barracks ALWAYS shows the Raids face. She played a save with a Barracks and an empty army, the face was absent entirely, and she reported "I do not see a way to start a raid" - a feature that hides itself is indistinguishable from a broken one. Zero troops is now a greyed face with a WORDED reason (she is red/green colourblind, so hue carries nothing), and the full-army gate underneath is untouched. ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "raids-discoverability suite", () => { if (!RaidsDiscoverabilityRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[raids-discoverability] " + r); });
             // --- WO-830 echo resource picker: picker/token/affinity contract (sibling to the echo-spec suite) ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "echo-picker suite", () => { if (!EchoResourcePickerRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[echo-picker] " + r); });
             // --- WO-797 dungeon room ownership: encounter schema + wake/confine math + exit beacon (F8 seq 622) ---
@@ -464,6 +468,7 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "dungeon-multilevel suite", () => { if (!DeNelle.Editor.Regression.DungeonMultiLevelRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[dungeon-multilevel] " + r); });
             // --- WO-957 egress trim (owner F8 seq 2508: "Should be single entry point in maybe 2 total out"): a CONTENT dungeon authors AT MOST ONE extract - the BACK exit, seated in the room DungeonTreasureCache resolves as deepest - plus the one injected front exit. Nothing asserted the count before, which is how 13 per-stairwell pads accreted and gave dg_ember_deep SIX ways out. Also pins the WO-930 control-group exemption and the Resources/StreamingAssets dual-copy hash. ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "dungeon-egress suite", () => { if (!DeNelle.Editor.Regression.DungeonEgressRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[dungeon-egress] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "biome-roads suite", () => { if (!DeNelle.Editor.Regression.BiomeRoadsRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[biome-roads] " + r); });
             // --- WO-850 dungeon treasure cache: fixed-bundle validity against materials.json, deepest-room BFS (undirected + ordinal tie-break), per-dungeon first-clear one-shot, panel single-exit ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "dungeon-treasure suite", () => { if (!DeNelle.Editor.Regression.DungeonTreasureRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[dungeon-treasure] " + r); });
             // --- WO-852 Echo card layout: chip rows at/above MinTouchPx, fixed-pixel bands (no 1f/n fraction slicing), scroll well, per-frame rebuild guard ---
@@ -480,6 +485,8 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "starter-loadout suite", () => { if (!DeNelle.Editor.Regression.StarterLoadoutRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[starter-loadout] " + r); });
             // --- shields: every shield carries a real defense value, the ladder climbs with req.level, and GearLoadout actually SUMS the off-hand (all three were missing - shields were pure decoration) ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "shield-defense suite", () => { if (!DeNelle.Editor.Regression.ShieldDefenseRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[shield-defense] " + r); });
+            // --- tower empowerment reachability: Tower.TryEmpower (tower-perks tier 4 + TowerCombat's GlacialCore/TrueAim/ManaSurge/EternalEmber) is gated by ONE affordance. This suite resolves the path outward from the gate - callers, then their referrers, then scene/prefab placements - and declares whether any of it is anchored in shipping code. It PINS today's orphan state, so wiring the affordance fails the suite until the expectation flag is flipped (which is what forces the owner's felt-verify of the new power). ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "tower-empower-reach suite", () => { if (!DeNelle.Editor.Regression.TowerEmpowermentReachabilityRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[tower-empower-reach] " + r); });
 
             // --- 2026-08-02 oracle wave: suites written by the parallel lanes tonight.
             // Each class was VERIFIED to exist on disk with a public static bool Run(out string)
@@ -556,6 +563,17 @@ namespace DeNelle.Editor
             // between the player and vaporised resources), capacity scales with container level,
             // fill/drain is ONE pure capacity-ascending function, and an over-cap save is grandfathered ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "town-bank-cap suite", () => { if (!DeNelle.Editor.Regression.TownBankCapRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[town-bank-cap] " + r); });
+
+            // --- ECON-SWEEP 2026-08-16: the four economy-silo defects from the cross-silo sweep ---
+            // (1) no spend/grant may move the UNSAVED _wood/_iron pool during play without a hard,
+            // F8-visible FlowTrace.Fail; (2) a bank-cap-clamped grant logs and pops the APPLIED amount,
+            // never the request (the Echo silo dump popped pre-clamp numbers for resources the player
+            // never got); (3) a cancel notice never says "Nothing to refund." when a currency outside
+            // the refundable basket WAS taken (research is gold-priced and JobCost has no coins lane —
+            // the MESSAGE was the defect, the refund policy is the owner's call); (4) the Echo "Lv N"
+            // readout stays off the card/roster while EchoAssignments.SetLevel has no production
+            // caller, with the level DATA axis untouched ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "econ-sweep suite", () => { if (!DeNelle.Editor.Regression.EconomySweepRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[econ-sweep] " + r); });
 
             // --- THE EMPTY UI REVIEW (owner, 2026-08-04): INDEX.html showed "mostly just the
             // blank templates and nothing else". Not an un-fed review -- a POISONED one. The exe
@@ -702,6 +720,7 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "echo-hollow-route suite", () => { if (!DeNelle.Editor.EchoHollowRouteRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[echo-hollow-route] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "harvest-drip suite", () => { if (!DeNelle.Editor.HarvestDripRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[harvest-drip] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "hostile-green suite", () => { if (!DeNelle.Editor.HostileGreenCueRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[hostile-green] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "aggro-leash suite", () => { if (!DeNelle.Editor.AggroLeashRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[aggro-leash] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "dungeon-cam-958 suite", () => { if (!DeNelle.Editor.DungeonCameraTightRoomRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[dungeon-cam-958] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "gear-aura-carry suite", () => { if (!DeNelle.Editor.Regression.GearAuraCarryGateRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[gear-aura-carry] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "armor-store-window suite", () => { if (!DeNelle.Editor.Regression.ArmorStoreLockedWindowRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[armor-store-window] " + r); });
@@ -730,6 +749,11 @@ namespace DeNelle.Editor
             //     cooldown'd ranged strike; and the runtime weapons catalog carries NO crossbow
             //     while the R4a exclusion stands (the Generate Gear Catalog menu would import 125). ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "ranged-primary suite", () => { if (!DeNelle.Editor.Regression.RangedPrimaryRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[ranged-primary] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "ranged-facing suite", () => { if (!DeNelle.Editor.Regression.RangedFacingLockRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[ranged-facing] " + r); });
+            // --- ICON_CATALOG 2026-08-16: no MAGE ability may paint KNIGHT art. Resolves every mage
+            //     ability through the real ResolveKey(id, effect) -> Resolve -> DefaultSprite chain and
+            //     compares the resulting Sprite REFERENCE to attack_sword / icon_shield / icon_combat. ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "mage-ability-icons suite", () => { if (!DeNelle.Editor.Regression.MageAbilityIconRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[mage-ability-icons] " + r); });
             // --- WO-1104: the spire-plans moment subscribes to the PlansCollected seam, plays ONCE
             //     ever, registers with the arbiter, never touches roster/unlock state, and reads its
             //     speaker from EchoRosterCatalog rather than a name literal. ---
@@ -853,6 +877,22 @@ namespace DeNelle.Editor
             // odds table with DISCLOSED percentages derived from it.
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "dungeon-gem-exclusivity suite", () => { if (!DeNelle.Editor.DungeonGemExclusivityRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[dungeon-gem-exclusivity] " + r); });
 
+            // 2026-08-16 combat silo: every enemy must RESOLVE a non-null type-VFX set (the
+            // per-prefab assignment never landed, so every telegraph/sound/hit cue was dead);
+            // exactly ONE authority may field a wave's heavy (wave 5 fielded an authored 1050 HP
+            // troll AND a generated elite); and a boss spawn id must resolve to a real marker or
+            // fail LOUDLY (the hardcoded "spawn-0" could never match, so the boss entered from an
+            // arbitrary gate behind a Debug.LogWarning F8 never saw).
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "combat-cue-authority suite", () => { if (!DeNelle.Editor.Regression.CombatCueAuthorityRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[combat-cue-authority] " + r); });
+
+            // 2026-08-16: the ranger's Attack/Cast/CastUpper all bound Ranger_Aim_Idle (a static pose) so every shot froze the hero mid-aim; pins the real bow clip in the BUILT controller AND its generator.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "ranger-bow-fire suite", () => { if (!DeNelle.Editor.Regression.RangerBowFireRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[ranger-bow-fire] " + r); });
+
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "raid-repeat-clear suite", () => { if (!DeNelle.Editor.Regression.RaidRepeatClearRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[raid-repeat-clear] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "spawn-budget-vfx-warm suite", () => { if (!DeNelle.Editor.Regression.SpawnBudgetAndVfxWarmRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[spawn-budget-vfx-warm] " + r); });
+
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "forge-shelf-kind suite", () => { if (!DeNelle.Editor.Regression.ForgeShelfClassKindRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[forge-shelf-kind] " + r); });
+
             // --- THE ORACLE THAT GUARDS THIS FILE: distinct markers, no unregistered
             // oracle, no gate script grepping a marker nobody emits. Registered LAST so
             // it sees the fully-built registry above it (it reads SOURCE, not runtime
@@ -862,9 +902,24 @@ namespace DeNelle.Editor
             // =====================================================================
             //  >>> REGISTERED ORACLE SUITES — END FENCE <<<  (new lines go ABOVE)
             // =====================================================================
-            int suitesGreen = CountOracleTagLines(log) - suiteTagLinesBefore;
+            // --- SKIPPED IS A THIRD STATE, NOT A PASS (2026-08-16 coverage audit) ---
+            // A suite that stands down (GameStateService will not install headless, a
+            // data file is absent) reports TRUE so a harness limitation is not read as a
+            // product defect -- but the bool is the caller's only channel, so until now
+            // that stand-down landed in the GREEN column. In an environment where the
+            // state seam does not install, six economy oracles asserted NOTHING and this
+            // marker still read full green. Those suites now stamp RegressionOutcome.
+            // SkipToken into their reason, and the tally subtracts them here. The
+            // denominator (suitesTotal) is unchanged on purpose: the suite was registered
+            // and it DID run, so it must stay in the denominator -- what changed is that
+            // it no longer counts as evidence in the numerator.
+            int suiteTagLines = CountOracleTagLines(log) - suiteTagLinesBefore;
+            var skippedTags   = CollectSkippedSuiteTags(log);
+            int suitesSkipped = skippedTags.Count - suiteSkipLinesBefore;
+            if (suitesSkipped < 0) suitesSkipped = 0;
+            int suitesGreen = suiteTagLines - suitesSkipped;
             int suitesRed   = failures.Count - suiteFailuresBefore;
-            int suitesTotal = suitesGreen + suitesRed;
+            int suitesTotal = suiteTagLines + suitesRed;
 
             // --- G1: the denominator must be PINNED, not self-reported -------------
             // suitesTotal is derived from what the run PRODUCED (tag lines + failures).
@@ -917,15 +972,21 @@ namespace DeNelle.Editor
             // pass. Consumers grep the shaped form  REGRESSION_OK <n>/<n> suites  — see
             // tools/regression/checkin_gate.ps1 and RegressionMarkerRegression.
             log.AppendLine("=== verdict ===");
-            log.AppendLine($"registered oracle suites: {suitesTotal} ({suitesGreen} green, {suitesRed} red)");
+            log.AppendLine($"registered oracle suites: {suitesTotal} ({suitesGreen} green, {suitesRed} red, {suitesSkipped} skipped)");
+            if (suitesSkipped > 0)
+            {
+                // Named, not just counted: "7 skipped" is only actionable if the log says WHICH.
+                log.AppendLine("SKIPPED SUITES (asserted nothing this run): " +
+                               string.Join(", ", skippedTags.GetRange(suiteSkipLinesBefore, suitesSkipped).ToArray()));
+            }
             if (failures.Count == 0)
             {
-                log.AppendLine($"REGRESSION_OK {suitesGreen}/{suitesTotal} suites");
+                log.AppendLine($"REGRESSION_OK {suitesGreen}/{suitesTotal} suites -- {suitesGreen} green, {suitesRed} red, {suitesSkipped} skipped");
                 Debug.Log(log.ToString());
             }
             else
             {
-                log.AppendLine($"REGRESSION_FAIL: {failures.Count} failure(s) ({suitesGreen}/{suitesTotal} registered suites green):");
+                log.AppendLine($"REGRESSION_FAIL: {failures.Count} failure(s) ({suitesGreen}/{suitesTotal} registered suites green, {suitesSkipped} skipped):");
                 foreach (var f in failures) log.AppendLine("  - " + f);
                 // LogError so it also lands in break-log.jsonl and fails loudly in the log scan.
                 Debug.LogError(log.ToString());
@@ -948,6 +1009,29 @@ namespace DeNelle.Editor
             for (int i = 0; i + 1 < s.Length; i++)
                 if (s[i] == '\n' && s[i + 1] == '[') n++;
             return n;
+        }
+
+        // =====================================================================
+        //  Skipped-suite collector (the THIRD state)
+        // =====================================================================
+        // A stand-down rides in the reason string as RegressionOutcome.SkipToken, so a
+        // suite reporting it still appends its "[tag] " line (it did not fail) but is
+        // subtracted from the green numerator and NAMED in the verdict. Returns the tags
+        // rather than a bare count so the log can say WHICH suites asserted nothing --
+        // "7 skipped" with no names is the same unactionable number the old "125/125" was.
+        private static List<string> CollectSkippedSuiteTags(StringBuilder log)
+        {
+            var tags = new List<string>();
+            if (log == null) return tags;
+            foreach (var line in log.ToString().Replace("\r\n", "\n").Split('\n'))
+            {
+                if (line.Length == 0 || line[0] != '[') continue;
+                if (line.IndexOf(DeNelle.Editor.Regression.RegressionOutcome.SkipToken,
+                                 System.StringComparison.Ordinal) < 0) continue;
+                int close = line.IndexOf(']');
+                tags.Add(close > 1 ? line.Substring(1, close - 1) : "unnamed-suite");
+            }
+            return tags;
         }
 
         // =====================================================================
@@ -2515,7 +2599,8 @@ namespace DeNelle.Editor
             // ── HARD simulated craft (atomic consume->grant + no-funds rollback) ──
             if (simRecipe == null)
             {
-                log.AppendLine("[jeweler] SOFT: no iron/wood-only recipe to simulate without GameState — sim skipped");
+                log.AppendLine("[jeweler] SOFT: " + DeNelle.Editor.Regression.RegressionOutcome.PartialSkip(
+                    "simulated craft", "no iron/wood-only recipe to simulate without GameState"));
                 return;
             }
 

@@ -89,17 +89,40 @@ namespace DeNelle.Village.Hero
             var st = DeNelle.Core.State.GameStateService.Instance != null
                 ? DeNelle.Core.State.GameStateService.Instance.State : null;
             var readiness = ArmyReadiness.Compute(st);
-            if (!readiness.Ready)
+            // TEST BYPASS (owner ask 2026-08-16: "i need flagged on to test"). The full-army gate is
+            // CORRECT product behaviour and stays the default — but it means ~10 training jobs before
+            // the raid grid opens at all, which makes the whole raid pillar untestable in one sitting.
+            // ff.raidtest=1 opens the grid regardless. Default OFF, so shipping behaviour is unchanged.
+            // Loud on purpose: a bypassed gate must never be mistaken for a passed one in a capture.
+            if (!readiness.Ready && DeNelle.Core.FeatureFlags.RaidTestBypassArmyGate)
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("Raid",
+                    "ARMY GATE BYPASSED by ff.raidtest — opening raids with " +
+                    readiness.DeployableSlots + " deployable + " + readiness.QueuedSlots +
+                    " queued of cap " + readiness.CapSlots + ". This is a TEST path; " +
+                    "shipping players still fill every slot first.");
+            }
+            else if (!readiness.Ready)
             {
                 // WO-932: concrete fill numbers so the gate never feels like a silent softlock.
+                // WO-1008: TWO DISTINCT REFUSALS, never one generic line. Post-WO-1008 the Raids
+                // face is VISIBLE-and-greyed the moment a Barracks exists (it used to vanish), so
+                // this refusal is now also reached with a completely EMPTY army — and "Army 0/5,
+                // fill every slot" reads as a maths puzzle when the real instruction is "you have
+                // no troops at all, go train some". The dim reason on the face
+                // (HudActionBarModel.RaidDimReason) and this copy tell the SAME two stories.
                 int have = readiness.DeployableSlots + readiness.QueuedSlots;
                 int cap = Mathf.Max(1, readiness.CapSlots);
+                bool noTroopsAtAll = have <= 0;
                 DeNelle.Core.Diagnostics.FlowTrace.Step("Raid",
-                    "full-army redirect: raids opened with " + readiness.DeployableSlots +
+                    (noTroopsAtAll ? "NO-TROOPS redirect: " : "full-army redirect: ") +
+                    "raids opened with " + readiness.DeployableSlots +
                     " deployable + " + readiness.QueuedSlots + " queued of cap " +
                     readiness.CapSlots + " -> drillmaster training panel.");
                 ElarionUiKit.ShowToast(
-                    "Army " + have + "/" + cap + " — fill every slot at the Barracks, then open Raids.",
+                    noTroopsAtAll
+                        ? "No troops yet - train troops at the Barracks, then open Raids."
+                        : "Army " + have + "/" + cap + " - fill every slot at the Barracks, then open Raids.",
                     ElarionUiKit.ToastTone.Info);
                 TroopDialogueCommands.ShowTrainingUI();
                 return;

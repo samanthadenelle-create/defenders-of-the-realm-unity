@@ -124,7 +124,15 @@ namespace DeNelle.Tests.EditMode
             public event Action<ResourceSnapshot> OnChanged;
             public bool CanAfford(ResourceCost cost) => Coins >= cost.Coins;
             public bool TrySpend(ResourceCost cost) { if (!CanAfford(cost)) return false; Coins -= cost.Coins; OnChanged?.Invoke(new ResourceSnapshot(Wood, Food, Iron, Crystals)); return true; }
-            public void Grant(ResourceCost amount) { Coins += amount.Coins; OnChanged?.Invoke(new ResourceSnapshot(Wood, Food, Iron, Crystals)); }
+            // Coins-only fake: it credits ONLY amount.Coins, so the applied basket it returns must
+            // carry only those coins. Returning the full request would make the fake lie about
+            // wood/food/iron/crystals it never banked.
+            public ResourceCost Grant(ResourceCost amount)
+            {
+                Coins += amount.Coins;
+                OnChanged?.Invoke(new ResourceSnapshot(Wood, Food, Iron, Crystals));
+                return new ResourceCost(coins: amount.Coins);
+            }
         }
 
         private static FakeStore SeedStore()

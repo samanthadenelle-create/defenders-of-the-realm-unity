@@ -1,3 +1,9 @@
+> ⚠ **NUMBER COLLISION — this document does not own WO-282; `WORK_ORDER_282_BuildPreviewModal_Premium_Rotation.md` does.**
+> Referred to hereafter as **WO-282-C (heroes to Addressables, HOLD copy)**.
+> Flagged by the 2026-08-16 Sunday board-grooming pass (`python tools/board_build.py` → `DUPLICATE_WO_NUMBERS`);
+> the two files were added in the **same commit**, so first-on-disk is a tie; ownership decided on **cross-references** (the winner is the file the rest of the corpus cites).
+> Banner only — nothing was renumbered or deleted.
+
 # WORK ORDER 282 — HELD (not shipped overnight)
 
 **Status:** BLOCKED — HELD for a daytime, play-verified session. **Not** started.

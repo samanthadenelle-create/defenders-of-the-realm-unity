@@ -19,12 +19,13 @@ waves, buildings, outer world. References **Core only** — never HUD directly
 | `Audio/` | Wave music, tower audio/voice, heartwood ambience, GameSfx |
 | `BuildMode/` | Player build mode: controller, palette UI, placement grid, ghost preview, desktop + LeanTouch input; **new modal preview window** (neutral plane + 3D object, 90°/free rotate buttons + drag, save yaw offset, place with it for wow UX). |
 | `Buildings/` (47) | `Building`, `Tower`/`TowerCombat`/`DefenseTower`, `BuildingCatalog`, `BuildTimerService`, upgrade panel, CrystalMine, doors/drawbridge, DungeonPortal, TechTree, projectile pool |
+| `Buildings/Progression/` | The placed-structure upgrade spine: `UpgradeFamilyResolver`, `PlacedStructureUpgradeService`, `PlacedUpgradeKey`, `StructurePreviewSource`, `DualFamilyLevelResetMigration`, `CompletedUpgradeApplier`, `BuildingUpgradeService`/`BuildingUpgradeVM`/`BuildingUpgradePanelMvvm`, `BuildingPerkService`. Plus the resource-collector stack: `ResourceCollector*`/`AutoHarvestService`/`ResourceBuilding*`, and `CollectorStackPropCatalog`/`CollectorStackView` (data asset at `Assets/Resources/Collectors/CollectorStackPropCatalog.asset`) |
 | `Camera/` | `CinemachineCameraController` |
 | `Campaign/` | `CampaignManager` |
 | `Catalog/` | `StructureFactory`, `CatalogBootstrap` |
 | `Cinematics/` | `DragonCinematicFlyby` |
 | `Combat/` | `FloatingHealthBar`, `ThreatSkullPlate` |
-| `Crafting/` | Village crafting panel, recipes, `VillageInventory` (WO-109: equipment recipes now consume via EconomyService, produce equippables for hero). Gear shop (ShopPanel) also feeds owned pieces into the same larder for equip. |
+| `Crafting/` | Village crafting panel, recipes, `VillageInventory` (WO-109: equipment recipes now consume via EconomyService, produce equippables for hero). Gear shop (ShopPanel) also feeds owned pieces into the same larder for equip. Gear tier/recipe split: `GearCraftingService`/`GearCraftingRecipeCatalog`/`GearTier`, `RecipeUnlocks`, `WorkshopCraftVM`. **Jeweler line:** `JewelerCraftingService` + `JewelerRecipeCatalog`, and the polish surface `JewelPolishService` + `JewelPolishConfirmPanel` (data: `Data/Canonical/jewel-polish.json`, dual-copied; bonus lookup lives in `Core/Catalog/PolishBonusProvider`). |
 | `Dungeon/` + `Dungeons/` | Portal VFX, scene bootstrap; `DungeonDef`, `DungeonEntrance` |
 | `Enemies/` (19) | `Enemy`, `EnemyBrain`, `EnemyBehaviorTree`, `EnemyFactory`, `DragonBoss`, `TargetManager`, `NavPathCoordinator`, hit reactions, damage numbers; **grouped by family (e.g. Orc Warband, Skeleton Legion, Troll) with Tank/DPS/Healer variety** + basic strategy (DPS focus-fire healers, Tank protect, etc.) via Brain + ActorAnimator for anims. |
 | `Families/` | Monster family formations: `FamilyLeader`/`Member`, `FormationController` |

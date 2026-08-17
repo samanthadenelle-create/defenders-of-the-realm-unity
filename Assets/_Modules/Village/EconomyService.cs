@@ -332,7 +332,16 @@ namespace DeNelle.Village
                 {
                     _wood -= cost.Wood;
                     _iron -= cost.Iron;
-                    DeNelle.Core.Diagnostics.FlowTrace.Warn("Eco",
+                    // ── ECON-SWEEP 2026-08-16 (defect 1) ──────────────────────────────────
+                    // The header calls this the "EditMode / headless boot" path, but NOTHING
+                    // enforced that: it is a plain runtime null check, so in a real play session
+                    // a missing GameStateService silently moved the UNSAVED _wood/_iron fields
+                    // while the wallet the HUD and ResourceLedger read stayed untouched. At Warn
+                    // it never reached the F8 break-log either. IN PLAY THIS IS A HARD FAILURE —
+                    // the charge is not persisted and does not match what the player is shown —
+                    // so it is FlowTrace.Fail. Outside play (EditMode fixtures, editor tooling)
+                    // the fallback pool IS the intended wallet, so it stays a Warn there.
+                    ReportFallbackPoolMutation(
                         $"TrySpend debited FALLBACK pool (no GameState) -W{cost.Wood} -I{cost.Iron} -> W{_wood} I{_iron}");
                 }
             }
@@ -360,7 +369,7 @@ namespace DeNelle.Village
         /// COINS ARE NEVER CLAMPED — premium currency is uncapped by design. This is the single
         /// choke every income source in the game flows through; use <see cref="GrantUncapped"/>
         /// for dev/AutoPilot funding that must not be storage-gated.</para></summary>
-        public void Grant(ResourceCost amount)
+        public ResourceCost Grant(ResourceCost amount)
             => GrantInternal(amount, DeNelle.Core.Economy.BankGrantKind.EarnedIncome);
 
         /// <summary>
@@ -373,7 +382,7 @@ namespace DeNelle.Village
         /// The owner's clamp-and-warn ruling (WO-901 §5) governs what the player EARNS; storage
         /// pressure must never become a mechanism that under-delivers a purchase.</para>
         /// </summary>
-        public void GrantPurchased(ResourceCost amount)
+        public ResourceCost GrantPurchased(ResourceCost amount)
             => GrantInternal(amount, DeNelle.Core.Economy.BankGrantKind.PurchasedOrPromised);
 
         /// <summary>
@@ -387,10 +396,18 @@ namespace DeNelle.Village
         /// <see cref="GrantPurchased"/> — the intent is different and it is named separately so a
         /// reader can tell a purchase from a cheat.</para>
         /// </summary>
-        public void GrantUncapped(ResourceCost amount)
+        public ResourceCost GrantUncapped(ResourceCost amount)
             => GrantInternal(amount, DeNelle.Core.Economy.BankGrantKind.DevHarness);
 
-        private void GrantInternal(ResourceCost amount, DeNelle.Core.Economy.BankGrantKind kind)
+        /// <summary>
+        /// ECON-SWEEP 2026-08-16 (defect 2) — the grant path now RETURNS THE APPLIED BASKET, i.e.
+        /// what actually landed in the wallet after <see cref="DeNelle.Core.Economy.TownBankCapacity"/>
+        /// clamping, not what was requested. Callers that LOG or POP a "+N" for the player must read
+        /// this, never their own request locals: with a full store the two differ, and a readout of
+        /// the pre-clamp number is how a silent loss hides (the pattern OfflineHarvestService already
+        /// documents). Crystals and Coins are never clamped, so they always come back unchanged.
+        /// </summary>
+        private ResourceCost GrantInternal(ResourceCost amount, DeNelle.Core.Economy.BankGrantKind kind)
         {
             // ONE place decides whether the cap applies at all (Law 5).
             bool applyBankCap = DeNelle.Core.Economy.TownBankCapacity.IsClampable(kind);
@@ -431,7 +448,10 @@ namespace DeNelle.Village
                     }
                     _wood += wood;
                     _iron += iron;
-                    DeNelle.Core.Diagnostics.FlowTrace.Warn("Eco",
+                    // ECON-SWEEP 2026-08-16 (defect 1) — same ruling as TrySpend above: income that
+                    // lands in the unsaved fallback pool DURING PLAY is money the player never keeps
+                    // and never sees, so it Fails (F8-visible). See ReportFallbackPoolMutation.
+                    ReportFallbackPoolMutation(
                         $"Grant(+W{wood} +I{iron}) landed in the FALLBACK pool (no GameState) -> W{_wood} I{_iron}");
                 }
             }
@@ -458,6 +478,33 @@ namespace DeNelle.Village
             if (coins > 0)
                 AddCoins(coins);                                    // GOLD — GameState.Resources.Coins (sell refunds)
             NotifyChanged();
+            // ECON-SWEEP 2026-08-16 (defect 2) — every local above is POST-clamp, so this is the
+            // APPLIED basket. Return it so a caller can log/pop what actually landed.
+            return new ResourceCost(wood, food, iron, crystals, coins);
+        }
+
+        /// <summary>
+        /// ECON-SWEEP 2026-08-16 (defect 1) — the ONE reporter for a mutation that landed in the
+        /// unsaved in-session <c>_wood</c>/<c>_iron</c> fallback pool.
+        /// <para>
+        /// The fallback exists for EditMode fixtures and editor tooling, where no GameStateService
+        /// is installed and the pool IS the wallet — legitimate, so it logs at Warn there. IN PLAY
+        /// it is a HARD FAILURE and is logged with <c>FlowTrace.Fail</c>: the resources moved into
+        /// a field that is never persisted and that neither the HUD nor ResourceLedger reads, so a
+        /// wave reward / harvest banking / build charge is silently wrong and lost on reload. Fail
+        /// is also the severity the F8 BreakCaptureHarness surfaces; the old Warn was invisible to
+        /// it, which is why this ran unnoticed. Never downgrade it back to Warn.
+        /// </para>
+        /// </summary>
+        private static void ReportFallbackPoolMutation(string detail)
+        {
+            if (Application.isPlaying)
+                DeNelle.Core.Diagnostics.FlowTrace.Fail("Eco",
+                    detail + " -- IN PLAY: no GameStateService, so this mutation is NOT PERSISTED and " +
+                    "is invisible to the HUD/ResourceLedger wallet. The economy is diverging.");
+            else
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("Eco",
+                    detail + " (edit mode / no play session -- the fallback pool is the intended wallet here).");
         }
 
         /// <summary>Convenience overload — specify only the resources you want to grant.</summary>
@@ -478,15 +525,23 @@ namespace DeNelle.Village
         /// refreshes at once.
         /// </para>
         /// </summary>
-        public void GrantSpendable(int wood = 0, int food = 0, int iron = 0, int crystals = 0)
+        /// <remarks>
+        /// ECON-SWEEP 2026-08-16 (defect 2) — RETURNS THE APPLIED BASKET (post town-bank-cap), not
+        /// the request. Any caller that shows the player a number for this grant (a log line, a
+        /// "+N" pop, a toast) MUST read the return value: with a full store the applied wood/iron/
+        /// food are smaller than asked, and popping the requested figure tells her she received
+        /// resources she did not get. Statement-style calls that ignore the value still compile.
+        /// </remarks>
+        public ResourceCost GrantSpendable(int wood = 0, int food = 0, int iron = 0, int crystals = 0)
         {
-            Grant(new ResourceCost(wood, food, iron, crystals));
+            var applied = Grant(new ResourceCost(wood, food, iron, crystals));
             var gs = GameStateService.Instance;
             if (gs != null && gs.State != null && (wood > 0 || iron > 0))
             {
                 gs.Save();
                 gs.ResourcesChanged.Invoke();
             }
+            return applied;
         }
 
         /// <summary>
@@ -494,15 +549,16 @@ namespace DeNelle.Village
         /// path (PackStoreVM.ApplyPackContents resolves THIS method by name). Never clamped by the
         /// town bank cap: what the player bought lands in full. See <see cref="GrantPurchased"/>.
         /// </summary>
-        public void GrantSpendablePurchased(int wood = 0, int food = 0, int iron = 0, int crystals = 0)
+        public ResourceCost GrantSpendablePurchased(int wood = 0, int food = 0, int iron = 0, int crystals = 0)
         {
-            GrantPurchased(new ResourceCost(wood, food, iron, crystals));
+            var applied = GrantPurchased(new ResourceCost(wood, food, iron, crystals));
             var gs = GameStateService.Instance;
             if (gs != null && gs.State != null && (wood > 0 || iron > 0))
             {
                 gs.Save();
                 gs.ResourcesChanged.Invoke();
             }
+            return applied;
         }
 
         /// <summary>
@@ -519,15 +575,16 @@ namespace DeNelle.Village
         /// it. Both overlays now resolve <c>GrantSpendableUncapped</c>, and
         /// DevGrantUncappedRegression FAILS if a dev surface is re-bound to the capped grant.
         /// </summary>
-        public void GrantSpendableUncapped(int wood = 0, int food = 0, int iron = 0, int crystals = 0)
+        public ResourceCost GrantSpendableUncapped(int wood = 0, int food = 0, int iron = 0, int crystals = 0)
         {
-            GrantUncapped(new ResourceCost(wood, food, iron, crystals));
+            var applied = GrantUncapped(new ResourceCost(wood, food, iron, crystals));
             var gs = GameStateService.Instance;
             if (gs != null && gs.State != null && (wood > 0 || iron > 0))
             {
                 gs.Save();
                 gs.ResourcesChanged.Invoke();
             }
+            return applied;
         }
 
         // ── Unified resource income API (WO-106 continuation) ─────────────────

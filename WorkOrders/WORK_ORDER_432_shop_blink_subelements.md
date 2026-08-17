@@ -1,3 +1,9 @@
+> ⚠ **NUMBER COLLISION — this document does not own WO-432; `WORK_ORDER_432_building_perk_research_techtree.md` does.**
+> Referred to hereafter as **WO-432-B (shop Blink sub-elements)**.
+> Flagged by the 2026-08-16 Sunday board-grooming pass (`python tools/board_build.py` → `DUPLICATE_WO_NUMBERS`);
+> ownership decided by **first-on-disk** (`git log --follow --diff-filter=A`): the winner's file was created first.
+> Banner only — nothing was renumbered or deleted.
+
 # WORK ORDER 432 — Dress the Shop's structural sub-elements with Blink sprites
 
 **Status:** READY TO IMPLEMENT

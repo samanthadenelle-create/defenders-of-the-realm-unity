@@ -318,7 +318,8 @@ namespace DeNelle.Editor.Regression
             public int Crystals => 999999;
             public bool CanAfford(ResourceCost cost) => true;
             public bool TrySpend(ResourceCost cost) { SpendCalls++; return true; }
-            public void Grant(ResourceCost amount) { }
+            // Fixed-balance fake: it banks NOTHING, so the applied basket is empty, not the request.
+            public ResourceCost Grant(ResourceCost amount) { return default(ResourceCost); }
             public event Action<ResourceSnapshot> OnChanged { add { } remove { } }
         }
 

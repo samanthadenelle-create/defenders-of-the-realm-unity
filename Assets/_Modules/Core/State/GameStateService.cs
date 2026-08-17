@@ -1237,8 +1237,14 @@ namespace DeNelle.Core.State
             if (!_warnedGuestAccount)
             {
                 _warnedGuestAccount = true;
+                // REDACTED (security audit 2026-08-15): the guest id is that save's SOLE
+                // credential — whoever presents it gets the row (see wallet-auth.verifyGuest).
+                // WebTrace subscribes to Application.logMessageReceived and POSTs captured log
+                // lines to /api/trace, so printing it in full wrote a live credential into the
+                // analytics pipe. A short prefix still identifies the id in a trace without
+                // being usable as one.
                 Debug.LogWarning($"[Persistence] No account connected — assigned LOCAL guest wallet " +
-                                 $"'{_state.BoundWallet}' so {op} can run (offline-first). Connect a real wallet to sync to cloud.");
+                                 $"'{RedactIdentity(_state.BoundWallet)}' so {op} can run (offline-first). Connect a real wallet to sync to cloud.");
             }
         }
 
@@ -1630,6 +1636,24 @@ namespace DeNelle.Core.State
         private const string GuestIdSalt = "dotr-guest-id:v1:9f3c7a";
         private static string HashDeviceId(string deviceId)
             => Sha256Hex(Encoding.UTF8.GetBytes((deviceId ?? string.Empty) + GuestIdSalt));
+
+        /// <summary>
+        /// Log-safe form of a player identity: keep the prefix (which names the RAIL —
+        /// "guest-local-" vs a base58 wallet) plus 8 characters, then elide. Enough to
+        /// correlate two log lines; not enough to present as the credential.
+        /// </summary>
+        private static string RedactIdentity(string id)
+        {
+            if (string.IsNullOrEmpty(id)) return "(none)";
+            const int Keep = 8;
+            if (id.StartsWith(GuestWalletPrefix, StringComparison.Ordinal))
+            {
+                int avail = id.Length - GuestWalletPrefix.Length;
+                if (avail <= Keep) return id;
+                return GuestWalletPrefix + id.Substring(GuestWalletPrefix.Length, Keep) + "...";
+            }
+            return id.Length <= Keep ? id : id.Substring(0, Keep) + "...";
+        }
 
         /// <summary>Lowercase hex SHA-256 of the raw bytes — matches Node's crypto sha256 hex digest.</summary>
         private static string Sha256Hex(byte[] bytes)

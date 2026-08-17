@@ -25,8 +25,12 @@
 // never legacy Input.*), with an optional Lean.Touch tap mirrored in for mobile.
 //
 // SCOPE (first playable): win/stars are OUT — only the loss/RETREAT exit is wired.
-// Deploy anywhere on the NavMesh (no zone gating). Tunables are [SerializeField] so
-// the owner can tune by feel later.
+// Deploy ANYWHERE ON THE NAVMESH (no zone gating) — and that is now ENFORCED, not just
+// asserted: HandleDeployTap refuses a tap with no baked NavMesh within
+// TroopFactory.NavSampleRadius. It used to be a claim only. RaycastGround falls back to
+// ALL layers, so a tap on scenery/rooftop/out-of-bounds terrain resolved a hit and
+// spawned an INERT troop that counted as a survivor at reconcile — free 3-star clears
+// (defect sweep 2026-08-15). Tunables are [SerializeField] so the owner can tune by feel.
 // =============================================================================
 
 using System.Collections;
@@ -301,6 +305,34 @@ namespace DeNelle.Village
                 return;
             }
 
+            // THE NAVMESH GATE (defect sweep 2026-08-15). RaycastGround falls back to ~0 - ALL
+            // layers - so a tap on a rooftop, a cliff face, a decorative mesh or the skirt
+            // terrain outside the base resolves a perfectly good RaycastHit that is nowhere
+            // near walkable ground. Nothing tested that, so the drop went through to
+            // TroopFactory, whose SamplePosition then failed and SPAWNED ANYWAY behind a
+            // Debug.LogWarning F8 never saw. The result was an INERT troop: no path, no
+            // fight, no death - and at reconcile it is alive, so it counts as a SURVIVOR,
+            // lifting RaidScoring.SurvivalPct past the 70% high-survival axis. Deploying
+            // troops onto scenery literally BOUGHT 3-star clears (and, since victory pays
+            // veterancy at 3 stars, promoted the whole warband with it).
+            //
+            // Fixed at the INPUT, not in the scoring math: the tap is REFUSED, with a
+            // player-visible tell, and the army is untouched - no troop is consumed, the tile
+            // stays armed, the player just taps somewhere valid. Same radius the factory would
+            // have snapped within, so this refuses exactly the taps it could not have placed.
+            if (!UnityEngine.AI.NavMesh.SamplePosition(hit.point, out UnityEngine.AI.NavMeshHit navHit,
+                                                       TroopFactory.NavSampleRadius, UnityEngine.AI.NavMesh.AllAreas))
+            {
+                SetStatus("Can't deploy there - tap open ground inside the base.");
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("Raid",
+                    $"DEPLOY REFUSED - tap resolved to {hit.point} on '{(hit.collider != null ? hit.collider.name : "?")}', " +
+                    $"which has no baked NavMesh within {TroopFactory.NavSampleRadius}m. Spawning here would " +
+                    "produce an inert troop that never fights and still counts as a survivor at reconcile " +
+                    $"(inflating SurvivalPct past the {RaidScoring.HighSurvivalPct * 100f:0}% 3-star axis). " +
+                    "No troop consumed; the tile stays armed.");
+                return;
+            }
+
             var army = Army();
             if (army == null) { SetStatus("No army to deploy."); return; }
 
@@ -314,9 +346,13 @@ namespace DeNelle.Village
                 return;
             }
 
-            // Spread repeated drops of the same tap-target out around a small ring.
+            // Spread repeated drops of the same tap-target out around a small ring. The drop
+            // uses the SNAPPED point (navHit.position), not the raw raycast hit: the gate above
+            // proved walkable mesh within reach, so this places the body ON it rather than
+            // relying on a second snap downstream.
+            Vector3 deployPoint = navHit.position;
             int stackIndex = CountDeployedOfType(_armedDefId);
-            var troop = TroopDeployer.SpawnFromArmy(next, hit.point, stackIndex, _deploySpread);
+            var troop = TroopDeployer.SpawnFromArmy(next, deployPoint, stackIndex, _deploySpread);
             if (troop == null)
             {
                 SetStatus($"Couldn't deploy {DisplayName(_armedDefId)}.");
@@ -325,7 +361,7 @@ namespace DeNelle.Village
 
             _deployed.Add(new Deployed { Controller = troop, OwnedId = next.Id });
             // Feed the scorer (WO-771.6): count the deploy + log it for re-watch. Null-safe.
-            RaidScoring.Instance?.RecordDeploy(_armedDefId, hit.point);
+            RaidScoring.Instance?.RecordDeploy(_armedDefId, deployPoint);
             SetStatus($"Deployed {DisplayName(_armedDefId)}. Tap again to deploy more.");
             RefreshTiles();
         }

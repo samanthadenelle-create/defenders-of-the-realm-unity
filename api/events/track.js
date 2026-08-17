@@ -19,6 +19,11 @@
 
 const { neon } = require('@neondatabase/serverless');
 
+// Hard ceiling on one POST. The client batches a handful of events; anything past
+// this is either a bug or an attempt to make one request do unbounded DB work.
+// Surplus events are DROPPED and the count is reported, never silently eaten.
+const MAX_EVENTS_PER_BATCH = 100;
+
 module.exports = async (req, res) => {
     // CORS: the published app runs under <app>.pinet.com and POSTs events cross-origin.
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -51,8 +56,15 @@ module.exports = async (req, res) => {
     try {
         const sql = neon(process.env.DATABASE_URL);
 
-        let inserted = 0;
-        for (const ev of events) {
+        // ── Build ONE multi-row insert (security audit 2026-08-15) ──────────
+        // Was: uncapped array, one AWAITED round-trip per element. A single POST
+        // could therefore hold a function open for thousands of sequential
+        // queries. Now the batch is capped and lands in one statement.
+        const batch = events.slice(0, MAX_EVENTS_PER_BATCH);
+
+        const values = [];
+        const params = [];
+        for (const ev of batch) {
             if (!ev) continue;
 
             const playerId  = ev.playerId  != null ? String(ev.playerId)  : 'anonymous';
@@ -75,19 +87,27 @@ module.exports = async (req, res) => {
 
             // The ::jsonb cast is required because the Neon HTTP driver sends
             // parameters as strings (same pattern as game/save.js).
-            await sql`
-                INSERT INTO analytics_events (player_id, event_name, properties, client_ts)
-                VALUES (
-                    ${playerId},
-                    ${eventName},
-                    ${JSON.stringify(propsObj)}::jsonb,
-                    ${Number.isFinite(clientTs) ? clientTs : null}
-                )
-            `;
-            inserted++;
+            const i = params.length;
+            values.push(`($${i + 1}, $${i + 2}, $${i + 3}::jsonb, $${i + 4})`);
+            params.push(
+                playerId,
+                eventName,
+                JSON.stringify(propsObj),
+                Number.isFinite(clientTs) ? clientTs : null,
+            );
         }
 
-        return res.status(200).json({ success: true, inserted });
+        if (values.length === 0) {
+            return res.status(200).json({ success: true, inserted: 0 });
+        }
+
+        await sql(
+            'INSERT INTO analytics_events (player_id, event_name, properties, client_ts) VALUES ' +
+            values.join(', '),
+            params,
+        );
+
+        return res.status(200).json({ success: true, inserted: values.length, dropped: events.length - batch.length });
     } catch (err) {
         console.error('[events/track] DB error:', err);
         return res.status(500).json({ error: 'Internal server error' });

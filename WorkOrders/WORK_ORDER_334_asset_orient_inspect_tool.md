@@ -1,3 +1,9 @@
+> ⚠ **NUMBER COLLISION — this document does not own WO-334; `WORK_ORDER_334_tower_placement_rotate_menu.md` does.**
+> Referred to hereafter as **WO-334-B (asset orient/inspect tool)**.
+> Flagged by the 2026-08-16 Sunday board-grooming pass (`python tools/board_build.py` → `DUPLICATE_WO_NUMBERS`);
+> ownership decided by **first-on-disk** (`git log --follow --diff-filter=A`): the winner's file was created first.
+> Banner only — nothing was renumbered or deleted.
+
 # WORK ORDER 334 — Reusable Asset Orient/Inspect tool (preview + save-recipe + report-back + color-error tag)
 
 > Renumbered 332→**334** (owner 2026-06-07) — 332 belongs to DTT aim sensitivity. This is the full

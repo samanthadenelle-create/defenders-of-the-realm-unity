@@ -73,6 +73,10 @@ module.exports = async (req, res) => {
         // trust boundary — it only returns what Pi itself confirmed.)
         res.status(200).json({ success: true, uid: me.uid, username: me.username || null });
     } catch (e) {
-        res.status(500).json({ success: false, error: String(e && e.message ? e.message : e) });
+        // House pattern (security audit 2026-08-15): the raw exception message
+        // used to be returned to the caller — every other route in api/ answers a
+        // generic string and keeps the detail server-side. Match it.
+        console.error('[pi/verify] error:', e);
+        res.status(500).json({ success: false, error: 'Internal server error' });
     }
 };

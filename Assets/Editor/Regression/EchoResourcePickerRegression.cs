@@ -344,8 +344,13 @@ namespace DeNelle.Editor
             string stateText = vm.StateText;
             if (stateText.IndexOf("Repair", StringComparison.OrdinalIgnoreCase) >= 0)
                 Fail($"StateText '{stateText}' still reads as a repair status — repair is passive and is not a per-Echo state (WO-1108)");
-            if (!stateText.Contains("Lv 2"))
-                Fail($"StateText '{stateText}' lost the level (expected 'Lv 2')");
+            // ECON-SWEEP 2026-08-16 (defect 4) — INVERTED. This used to require "Lv 2" on the state
+            // line. EchoAssignments.SetLevel has NO production caller (only this harness calls it),
+            // so a shipped Echo is Lv 1 forever and the chip advertised progression the game does
+            // not have. The level-up feed source is an unruled owner pin (WORK_ORDER_738). The chip
+            // is removed until that ruling; this now fails if it comes back.
+            if (stateText.IndexOf("Lv ", StringComparison.Ordinal) >= 0)
+                Fail($"StateText '{stateText}' shows a level chip -- Echo levels have no production raise path (SetLevel is uncalled), so a 'Lv N' readout is dead data. See WORK_ORDER_738 owner pin 2.");
             if (!IsAscii(stateText))
                 Fail($"StateText '{stateText}' contains non-ASCII characters");
 

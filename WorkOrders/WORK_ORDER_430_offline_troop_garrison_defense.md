@@ -1,3 +1,9 @@
+> ⚠ **NUMBER COLLISION — this document does not own WO-430; `WORK_ORDER_430_Handover_Triage_Detailed_Work_Orders.md` does.**
+> Referred to hereafter as **WO-430-F (offline troop garrison defense)**.
+> Flagged by the 2026-08-16 Sunday board-grooming pass (`python tools/board_build.py` → `DUPLICATE_WO_NUMBERS`);
+> ownership decided by **first-on-disk** (`git log --follow --diff-filter=A`): the winner's file was created first.
+> Banner only — nothing was renumbered or deleted.
+
 # WORK ORDER 430 — Offline Troop Garrison Defense (RECONCILED)
 
 **Status:** SPEC - queued post-V1 (reconciled 2026-08-09 - restates this file's own SPEC - queued (post V1 / post Pi-loop) line in the canonical vocabulary; no commit references WO-430. DUPLICATE NUMBER: six files claim 430)

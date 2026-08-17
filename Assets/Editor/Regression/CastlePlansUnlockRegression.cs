@@ -197,7 +197,10 @@ namespace DeNelle.Editor
                 gssGo = new GameObject("GSS (castle-plans oracle)");
                 var gss = gssGo.AddComponent<GameStateService>();
                 if (!InstallState(gss, throwaway))
-                { reason = "CASTLE PLANS skipped: GameStateService state seam not reflectable (needs fleet)"; return true; }
+                {
+                    return DeNelle.Editor.Regression.RegressionOutcome.Skip(out reason,
+                        "CASTLE PLANS", "GameStateService state seam not reflectable (needs fleet)");
+                }
 
                 econGo = new GameObject("EconomyService (castle-plans oracle)");
                 var econ = econGo.AddComponent<EconomyService>();

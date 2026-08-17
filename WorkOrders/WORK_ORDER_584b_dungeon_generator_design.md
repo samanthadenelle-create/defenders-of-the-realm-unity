@@ -1,3 +1,9 @@
+> ⚠ **NUMBER COLLISION (letter sub-number) — this document is WO-584b, NOT WO-584. `WORK_ORDER_584_dungeon_outpost_arena_consolidation.md` owns WO-584.**
+> Referred to hereafter as **WO-584b**. The clash is a *parser* artefact: `tools/board_build.py` strips the
+> trailing letter, so WO-584b reads as a second claim on WO-584 on `BOARD.html`. The letter suffix was and
+> remains deliberate — this is a sibling spec of WO-584, not a duplicate mint.
+> Flagged by the 2026-08-16 Sunday board-grooming pass. Banner only — nothing renumbered or deleted.
+
 # WORK ORDER 584b — Dungeon MAP GENERATOR (modular-grid: rooms → connectors → reachability)
 
 **Status:** READY TO IMPLEMENT (design only — this WO writes NO `.cs`; implementation is the gated follow-up 584c)

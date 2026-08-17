@@ -399,11 +399,13 @@ namespace DeNelle.Editor.Regression
                 return true;
             }
 
-            public void Grant(DeNelle.Village.ResourceCost amount)
+            public DeNelle.Village.ResourceCost Grant(DeNelle.Village.ResourceCost amount)
             {
                 Wood += amount.Wood; Food += amount.Food; Iron += amount.Iron;
                 Crystals += amount.Crystals; Coins += amount.Coins;
                 OnChanged?.Invoke(new ResourceSnapshot(Wood, Food, Iron, Crystals));
+                // Uncapped fake ledger: every requested unit lands, so applied == requested.
+                return amount;
             }
         }
 

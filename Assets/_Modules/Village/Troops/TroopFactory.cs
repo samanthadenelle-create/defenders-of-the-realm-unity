@@ -34,6 +34,15 @@ namespace DeNelle.Village
     public static class TroopFactory
     {
         /// <summary>
+        /// How far (m) a requested spawn point may be from baked NavMesh and still be snapped
+        /// onto it. Beyond this the spawn is OFF-MESH: the agent can never path and the body
+        /// stands where it was dropped. Public + shared so the DEPLOY TAP gate
+        /// (RaidDeployController.HandleDeployTap) refuses exactly the taps this factory would
+        /// have had to strand - one number, one meaning, no drift between the check and the snap.
+        /// </summary>
+        public const float NavSampleRadius = 6f;
+
+        /// <summary>
         /// Builds a skinned, damageable troop at <paramref name="pos"/> and returns its
         /// <see cref="TroopController"/> (already carrying a non-trigger collider + a
         /// NavMeshAgent on a probe-visible layer). The caller calls SetEnemyMask().
@@ -43,15 +52,27 @@ namespace DeNelle.Village
             // Snap the spawn to the nearest navmesh point BEFORE adding the agent so it
             // always lands on a valid surface (mirrors EnemyFactory — a NavMeshAgent
             // AddComponent'd off-mesh never paths). A far miss is logged once.
-            if (NavMesh.SamplePosition(pos, out NavMeshHit navHit, 6f, NavMesh.AllAreas))
+            if (NavMesh.SamplePosition(pos, out NavMeshHit navHit, NavSampleRadius, NavMesh.AllAreas))
             {
                 pos = navHit.position;
             }
             else
             {
-                Debug.LogWarning($"[TroopFactory] No baked NavMesh within 6m of spawn {pos} " +
-                                 $"for '{(def != null ? def.Id : "troop")}' — agent will hold position. " +
-                                 "Check the spawn point / bake.");
+                // WAS A BARE Debug.LogWarning (defect sweep 2026-08-15). This branch builds an
+                // INERT troop - no agent path, so it never fights, never dies, and then counts
+                // as a SURVIVOR at raid reconcile, inflating SurvivalPct and buying 3-star
+                // clears. A Debug.LogWarning is invisible to the F8 break-capture harness, so
+                // the single most consequential spawn failure in the raid loop produced no
+                // evidence at all. FlowTrace.Fail so a capture SHOWS it. The spawn is still
+                // completed on purpose: non-tap spawners (garrison/scripted musters) must not
+                // lose a body over a thin bake, and the DEPLOY TAP - the path the player drives
+                // - is now refused UPSTREAM in RaidDeployController.HandleDeployTap, so a
+                // player action can no longer reach this branch at all.
+                FlowTrace.Fail("TroopVisual",
+                    $"OFF-MESH SPAWN: no baked NavMesh within {NavSampleRadius}m of {pos} for " +
+                    $"'{(def != null ? def.Id : "troop")}'. The agent cannot path - this body will hold " +
+                    "position, take no part in the fight, and still count as a survivor at reconcile. " +
+                    "Check the spawn point / the bake.");
             }
 
             var go = new GameObject(def != null ? $"Troop ({def.Id})" : "Troop");

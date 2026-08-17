@@ -82,18 +82,37 @@ namespace DeNelle.Village
         // caster with no per-type override still reads as an arcane orb. A fire/ice enemy
         // type overrides these to Fireball_*/Frost_* (+ a matching tint).
 
+        // DEFAULTS ARE THE OWNER-TAGGED ONES (2026-08-16). These four initializers used
+        // to read Arcane_* / violet while Enemy.cs's own no-set fallback read the
+        // owner-tagged Fire_Cast / PP_FireBall / FireballImpact_Impact / fire orange.
+        // That divergence was harmless only while NO enemy ever had a set; the moment
+        // EnemyTypeVfxLibrary started resolving one for every enemy, an un-authored set
+        // would have silently RE-SKINNED every caster from fire to arcane - a creative
+        // substitution no owner tagged. The two are now one value, declared here and
+        // consumed by Enemy.cs's fallback constants, so they cannot drift again.
+
+        /// <summary>Owner-tagged default HovlVfxCatalog key for the ranged cast flash.</summary>
+        public const string DefaultCastVfxKey = "Fire_Cast";
+        /// <summary>Owner-tagged default HovlVfxCatalog LOOP key for the travelling projectile.</summary>
+        public const string DefaultProjectileVfxKey = "PP_FireBall";
+        /// <summary>Owner-tagged default HovlVfxCatalog key for the ranged impact burst.</summary>
+        public const string DefaultImpactVfxKey = "FireballImpact_Impact";
+
+        /// <summary>Owner-tagged default HDR recolour for the ranged-cast FX (fire orange).</summary>
+        public static readonly Color DefaultRangedVfxTint = new Color(1f, 0.55f, 0.15f, 1f);
+
         [Header("Ranged cast Hovl VFX (WO-VFX-RANGED)")]
         [Tooltip("HovlVfxCatalog key for the muzzle/cast flash at the caster's hands.")]
-        [SerializeField] private string _castVfxKey = "Arcane_Cast";
+        [SerializeField] private string _castVfxKey = DefaultCastVfxKey;
 
         [Tooltip("HovlVfxCatalog LOOP key for the travelling projectile.")]
-        [SerializeField] private string _projectileVfxKey = "Arcane_Projectile";
+        [SerializeField] private string _projectileVfxKey = DefaultProjectileVfxKey;
 
         [Tooltip("HovlVfxCatalog key for the impact burst where the orb lands.")]
-        [SerializeField] private string _impactVfxKey = "Arcane_Impact";
+        [SerializeField] private string _impactVfxKey = DefaultImpactVfxKey;
 
         [Tooltip("HDR recolour applied to the ranged-cast Hovl FX (colourblind: reads by motion/shape).")]
-        [SerializeField] private Color _rangedVfxTint = new Color(0.6f, 0.4f, 1f, 1f); // arcane violet
+        [SerializeField] private Color _rangedVfxTint = new Color(1f, 0.55f, 0.15f, 1f); // fire orange
 
         // ── API ───────────────────────────────────────────────────────────────
 

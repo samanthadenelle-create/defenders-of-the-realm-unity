@@ -235,7 +235,8 @@ namespace DeNelle.Editor.Regression
 
             if (!TryReadCatalogCosts(out var rows, out string err))
             {
-                notes.Add("[fresh-save-founding] structures-catalog.json unreadable (" + err + ") -- affordability check skipped");
+                notes.Add(DeNelle.Editor.Regression.RegressionOutcome.PartialSkip(
+                    "[fresh-save-founding] affordability check", "structures-catalog.json unreadable (" + err + ")"));
                 return;
             }
 
@@ -689,7 +690,8 @@ namespace DeNelle.Editor.Regression
             // instead of shipping it as a visible bug.
             if (!TryReadCatalogCosts(out var rows, out string err))
             {
-                notes.Add("[order-intent-pallets-last] structures-catalog.json unreadable (" + err + ") -- intent check skipped");
+                notes.Add(DeNelle.Editor.Regression.RegressionOutcome.PartialSkip(
+                    "[order-intent-pallets-last] intent check", "structures-catalog.json unreadable (" + err + ")"));
                 return;
             }
 

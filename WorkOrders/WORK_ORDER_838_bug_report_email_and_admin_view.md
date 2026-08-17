@@ -1,3 +1,9 @@
+> ⚠ **NUMBER COLLISION — this document does not own WO-838; `WORK_ORDER_838_raidbase_material_survivability.md` does.**
+> Referred to hereafter as **WO-838-B (bug-report email + admin view)**.
+> Flagged by the 2026-08-16 Sunday board-grooming pass (`python tools/board_build.py` → `DUPLICATE_WO_NUMBERS`);
+> ownership decided by **first-on-disk** (`git log --follow --diff-filter=A`): the winner's file was created first.
+> Banner only — nothing was renumbered or deleted.
+
 > ## COLLIDED NUMBER (4th two-seat collision, 2026-08-02) + SUPERSEDED
 > The number 838 belongs to WORK_ORDER_838_raidbase_material_survivability.md (committed). This spec is
 > SUPERSEDED by WO-846 (bug-report attribution + f8-inbox watcher, IMPLEMENTED) per its own 08-02 note. Do not implement.

@@ -343,7 +343,8 @@ namespace DeNelle.Editor.Regression
                 setter.Invoke(null, new object[] { true });
                 if (!SceneOwnership.IsEnemyOwned)
                 {
-                    notes.Add("SceneOwnership.SetEnemyOwned(true) did not take effect - flip check skipped");
+                    notes.Add(DeNelle.Editor.Regression.RegressionOutcome.PartialSkip(
+                        "flip check", "SceneOwnership.SetEnemyOwned(true) did not take effect"));
                     return;
                 }
 

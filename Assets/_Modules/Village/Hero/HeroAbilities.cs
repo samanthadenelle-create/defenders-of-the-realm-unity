@@ -404,6 +404,16 @@ namespace DeNelle.Village
         private const float RangedPrimaryReachFactor = 2f;
 
         /// <summary>
+        /// WO-1105 R4 — the resolution-time range gate's grace multiplier. A shot that was fair when
+        /// it left the bow should not fizzle because the foe drifted a few centimetres during the
+        /// flight, so the ESCAPE radius is a little wider than the FIRE radius: the target has to
+        /// visibly break away, not merely jitter. Dimensionless and applied to the same measured
+        /// maxR the fire-time test used, so no metre literal enters the path (the WO-1035 units bug
+        /// is the cautionary case). 1.0 would make escaping trivially twitchy; this is the one knob.
+        /// </summary>
+        private const float ShotEscapeRangeGrace = 1.25f;
+
+        /// <summary>
         /// True when this hero's class basic is a RANGED basic — with <paramref name="def"/> set to
         /// the exact def the primary attack should cast (the locked Q def; Q is never loadout-
         /// swappable, see <see cref="Resolve"/>). <paramref name="meleeReach"/> is the caller's own
@@ -833,6 +843,14 @@ namespace DeNelle.Village
                     EndWindupTelegraph("move-interrupt");   // 2026-08-16: tear down the Casting_* loop
                     FlowTrace.Step("HeroAbility",
                         $"cast-interrupted '{def.Name}' at {elapsed:0.00}/{def.CastSeconds:0.00}s (moved) — mana+cd refunded.");
+
+                    // ⭐ NO SILENT REFUSAL (owner ruling 2026-08-16, and she has hit the invisible-
+                    // refusal pattern three times in one day). Losing a shot to your own movement is
+                    // a RULE, not a bug, and the player can only learn a rule she is TOLD. The
+                    // wind-up VFX vanishing is not a message; this is. ASCII only.
+                    DeNelle.Core.UI.ElarionUiKit.ShowToast(
+                        def.Name + " cancelled - you moved. Stand still to shoot.",
+                        DeNelle.Core.UI.ElarionUiKit.ToastTone.Danger, 1.6f);
                     yield break;
                 }
                 elapsed += Time.deltaTime;
@@ -1350,9 +1368,41 @@ namespace DeNelle.Village
                         // ARRIVES on a live foe — the hit confirm, mirroring the melee anyHit gate.
                         float focusOnHit = _pendingOnHitRestore;
                         _pendingOnHitRestore = 0f;
+                        float escapeR = maxR * ShotEscapeRangeGrace;   // captured for the arrival gate
+                        // Capture the hero Transform rather than touching `transform` inside the
+                        // closure: the arrival fires from ProjectileMover on a SEPARATE GameObject,
+                        // which can outlive the hero (scene change / death cleanup), and a bare
+                        // `transform` there would throw MissingReferenceException on a destroyed rig.
+                        Transform heroTf = transform;
                         LaunchProjectile(foe.WorldPosition, () =>
                         {
                             if (hitFoe == null || !hitFoe.IsAlive) return;
+
+                            // ⭐ WO-1105 R4 (owner ruling 2026-08-16, verbatim): "can a person or enemy
+                            // or hero move out of range during a bow shot or mage attack? Should be
+                            // able to."
+                            //
+                            // RANGE IS EVALUATED AT RESOLUTION, NOT ONLY AT INITIATION. Until now the
+                            // entire arrival gate was the IsAlive test on the line above: the closure
+                            // holds a live REFERENCE to the foe, so the damage connected wherever it
+                            // now stood, however far it had run, while the arrow's visual landed at
+                            // the frozen point captured at fire (LaunchProjectile takes a Vector3, and
+                            // ProjectileMover just lerps to it -- it never tracks or collides). A
+                            // target walking out of a shot was therefore IMPOSSIBLE BY CONSTRUCTION,
+                            // and the visual already disagreed with the outcome.
+                            //
+                            // Measured from the hero's CURRENT position, not the captured fire-time
+                            // origin: both parties may have moved during the flight, and what the
+                            // player judges is the gap she can see at impact.
+                            if (heroTf != null && !InReach(hitFoe, heroTf.position, escapeR))
+                            {
+                                DeNelle.Core.Diagnostics.FlowTrace.Step("HeroAbility",
+                                    $"shot ESCAPED: '{(hitFoe as MonoBehaviour)?.name}' left range during flight " +
+                                    $"(dist={(hitFoe.WorldPosition - heroTf.position).magnitude:F1}m > {escapeR:F1}m) " +
+                                    $"-- '{hitDef?.Name}' misses, 0 damage.");
+                                return;
+                            }
+
                             // Ticket #61: hero-dealt -> combo/streak/RAMPAGE eligible.
                             (hitFoe as DeNelle.Core.Combat.IHeroDamageMarkable)?.MarkNextHitFromHero();
                             // §12: PROVE the ability lands as a hero-dealt hit (dealtByHero=True).

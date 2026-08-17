@@ -1,0 +1,105 @@
+{
+  "version": 1,
+  "graphId": "dg_hollow_roads",
+  "entry": "entry",
+  "exitRoomId": "entry",
+  "_comment": "THE HOLLOW ROADS -- the simple tunnel system between the castle hub and the four cardinal biomes (owner 2026-08-16: 'place a portal to simple tunnel system that will drop into the new biomes'). SIMPLE IS THE SPEC, NOT A HEDGE: nine rooms, no encounters, no traps, no keys, no locks, no oil stones, no chests. It is a CROSSROADS, not a dungeon -- the player walks in, picks a direction, and leaves. WHY TWO INTERSECTIONS AND NOT ONE: per Assets/Dungeon/Rooms/DEFAULT_ROOMS.md the kit's only 4-way is Intersection (N,E,S,W) and Straight carries S,N ONLY -- so a single Intersection entered from the south has just three free sockets and can carry three arms, not four. The second Intersection is the geometry's answer, not a flourish. ARM IDS ARE REGION NAMES, NOT COMPASS NAMES, on purpose: the tunnel's interior layout has no reason to agree with the world compass, and naming an arm 'arm_s' while it hangs off an east socket would be a comment that lies -- which is the exact failure CLAUDE.md's catalog rule exists for. The ids are the contract with DeNelle.Core.World.BiomeRoads.ArmRoomIdFor; renaming one here without renaming it there leaves a tunnel arm with no destination, and BiomeRoads fails loudly if that happens. Each arm's far end carries a BIOME DROP placed at runtime by HollowRoadsDropInjector, routing back out to Main_Castle_Overworld at a position DERIVED from measured terrain bounds. EGRESS: extracts is deliberately EMPTY. The four arms are OUTBOUND drops to the overworld, not extraction pads, and DungeonExitSpawner still injects exactly one front exit at exitRoomId ('entry' -- deliberately named 'entry' rather than 'mouth' so that the spawner's LAYOUT-LESS FALLBACK, which looks for a child literally named 'entry', lands on the right room even if the emitted layout JSON has not been mirrored into Resources yet) so the beacon count stays 1 and the way home is never in doubt. This graph id is NOT in DungeonEgressRegression.ContentLayouts or ControlGroupLayouts, so the [dungeon-egress] one-back-exit trim is neither tripped nor weakened -- a tunnel is a different KIND of space and is exempt by not being content, not by an assertion being loosened.",
+  "nodes": [
+    {
+      "id": "entry",
+      "prefab": "EntryHall"
+    },
+    {
+      "id": "approach",
+      "prefab": "Straight"
+    },
+    {
+      "id": "cross_near",
+      "prefab": "Intersection"
+    },
+    {
+      "id": "link",
+      "prefab": "Straight"
+    },
+    {
+      "id": "cross_far",
+      "prefab": "Intersection"
+    },
+    {
+      "id": "arm_goldfields",
+      "prefab": "Straight"
+    },
+    {
+      "id": "arm_stoneback",
+      "prefab": "Straight"
+    },
+    {
+      "id": "arm_ashwood",
+      "prefab": "Straight"
+    },
+    {
+      "id": "arm_mirewood",
+      "prefab": "Straight"
+    }
+  ],
+  "edges": [
+    {
+      "from": "entry",
+      "fromSocket": "n_door_01",
+      "to": "approach",
+      "toSocket": "s_door_01"
+    },
+    {
+      "from": "approach",
+      "fromSocket": "n_door_01",
+      "to": "cross_near",
+      "toSocket": "s_door_01"
+    },
+    {
+      "from": "cross_near",
+      "fromSocket": "e_door_01",
+      "to": "arm_goldfields",
+      "toSocket": "s_door_01"
+    },
+    {
+      "from": "cross_near",
+      "fromSocket": "w_door_01",
+      "to": "arm_stoneback",
+      "toSocket": "s_door_01"
+    },
+    {
+      "from": "cross_near",
+      "fromSocket": "n_door_01",
+      "to": "link",
+      "toSocket": "s_door_01"
+    },
+    {
+      "from": "link",
+      "fromSocket": "n_door_01",
+      "to": "cross_far",
+      "toSocket": "s_door_01"
+    },
+    {
+      "from": "cross_far",
+      "fromSocket": "n_door_01",
+      "to": "arm_ashwood",
+      "toSocket": "s_door_01"
+    },
+    {
+      "from": "cross_far",
+      "fromSocket": "e_door_01",
+      "to": "arm_mirewood",
+      "toSocket": "s_door_01"
+    }
+  ],
+  "rules": {
+    "spineOnly": false,
+    "minShrines": 0,
+    "maxMateDistance": 1.25,
+    "sealUnmated": true,
+    "pacingCombat": 0.0,
+    "pacingLore": 0.0,
+    "pacingReward": 0.0
+  },
+  "extracts": []
+}

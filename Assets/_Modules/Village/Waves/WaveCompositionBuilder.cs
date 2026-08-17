@@ -12,7 +12,9 @@
 //     waves 1-2 : 100% weak  (grunts/skirmishers)
 //     waves 3-5 : ~60% weak + ~40% medium (brutes/casters)
 //     waves 6+  : mixed weak / medium / strong, weak enemies PERSIST
-//     every 5th : an ELITE (single, centred) is added on top
+//     every 5th : an ELITE (single, centred) is added on top - UNLESS waves.json
+//                 already authors that wave's heavy (boss / apexBoss), in which
+//                 case the authored heavy is the wave's ONE heavy (2026-08-16)
 //
 //   Total count + difficulty scale with the wave number. NO two consecutive
 //   waves are identical — the builder varies the type pick + the counts using a
@@ -158,7 +160,14 @@ namespace DeNelle.Village
         /// <paramref name="seedSalt"/> lets the caller vary the RNG (e.g. the gate
         /// index) without changing the wave-to-wave anti-repeat guarantee.
         /// </summary>
-        public static EnemyWaveComposition Build(int waveId, EnemyCatalog catalog = null, int seedSalt = 0)
+        /// <param name="waveHasAuthoredHeavy">
+        /// TRUE when waves.json already authors a heavy for this wave (a <c>boss</c> id or an
+        /// <c>apexBoss</c> block). REQUIRED, with no default, ON PURPOSE - see the elite block
+        /// below: ONE authority fields a wave's heavy, and a caller that forgets to say which
+        /// one owns this wave must not compile.
+        /// </param>
+        public static EnemyWaveComposition Build(
+            int waveId, bool waveHasAuthoredHeavy, EnemyCatalog catalog = null, int seedSalt = 0)
         {
             waveId = Mathf.Max(1, waveId);
             var comp = new EnemyWaveComposition { WaveId = waveId };
@@ -234,12 +243,28 @@ namespace DeNelle.Village
                           SpawnRole.FrontTank, EnemyRole.Tank);
 
             // ── ELITE: one, centred, every Nth wave (family-varied; on TOP) ───
-            if (waveId % EliteEveryNth == 0)
+            //
+            // ONE HEAVY AUTHORITY PER WAVE (2026-08-16). This cadence and waves.json's own
+            // "boss"/"apexBoss" fields are two independent producers of a wave's heavy, and
+            // neither knew about the other: wave 5 authors a 1050 HP Cave Troll AND hit this
+            // branch, so the owner fought TWO heavies; wave 20 authored the apex dragon and
+            // got an elite on top of it. The AUTHORED wave wins - it is an explicit designer
+            // statement with a pinned HP and a recorded ruling, while this cadence is generic
+            // filler for waves nobody authored. Waves 10 and 15 author no boss, so they keep
+            // their elite exactly as before: no count, no HP and no pool is touched here.
+            bool eliteByCadence = waveId % EliteEveryNth == 0;
+            if (eliteByCadence && !waveHasAuthoredHeavy)
             {
                 var elites = ElitePool(waveId);
                 string eliteId = elites[UnityEngine.Random.Range(0, elites.Length)];
                 AddEntry(comp, catalog, eliteId, FamilyOf(eliteId), "elite",
                          1, SpawnRole.Elite, EnemyRole.MiniBoss);
+            }
+            else if (eliteByCadence)
+            {
+                FlowTrace.Step("Enemy",
+                    $"WaveComposition wave={waveId}: elite cadence DEFERRED - waves.json already " +
+                    "authors this wave's heavy (boss/apexBoss), and exactly one authority fields it.");
             }
 
             // TRACE: the ONE place a wave's variety is decided. Weak fodder stays
@@ -248,7 +273,9 @@ namespace DeNelle.Village
             // slots dump below shows the actual ids requested for an F8 run.
             FlowTrace.Step("Enemy",
                 $"WaveComposition wave={waveId}: total={total} weak={weakN} medium={mediumN} strong={strongN} " +
-                $"elite={(waveId % EliteEveryNth == 0 ? 1 : 0)} — brute families: {string.Join("/", BrutePool(waveId))}");
+                $"elite={(eliteByCadence && !waveHasAuthoredHeavy ? 1 : 0)} " +
+                $"(cadence={(eliteByCadence ? 1 : 0)}, authoredHeavy={waveHasAuthoredHeavy}) " +
+                $"— brute families: {string.Join("/", BrutePool(waveId))}");
             var sb = new System.Text.StringBuilder();
             for (int i = 0; i < comp.Entries.Count; i++)
             {

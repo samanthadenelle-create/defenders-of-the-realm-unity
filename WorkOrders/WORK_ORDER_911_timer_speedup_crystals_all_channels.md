@@ -1,3 +1,9 @@
+> ⚠ **NUMBER COLLISION — this document does not own WO-911; `WORK_ORDER_911_unified_queue_screen.md` does.**
+> Referred to hereafter as **WO-911-B (timer speed-up, crystals, all channels)**.
+> Flagged by the 2026-08-16 Sunday board-grooming pass (`python tools/board_build.py` → `DUPLICATE_WO_NUMBERS`);
+> ownership decided by **first-on-disk** (`git log --follow --diff-filter=A`): the winner's file was created first.
+> Banner only — nothing was renumbered or deleted.
+
 > ## RECONCILED 2026-08-08 - true status is PARTIAL
 > Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: the CRYSTAL channel is DONE - `BuildTimerService.cs:732/818/856` carry a channel-aware `InstantFinishPrice` / `TryInstantFinish`. The AD channel is NOT done - there is no `TryAdSkip` in `BuildTimerService`.
 > The previous Status line read "READY TO IMPLEMENT" and was wrong.

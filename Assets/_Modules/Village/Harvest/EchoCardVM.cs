@@ -132,9 +132,20 @@ namespace DeNelle.Village
             }
         }
 
-        /// <summary>The live STATE line: gathered resource + level + current specialization bonus %
+        /// <summary>The live STATE line: gathered resource + current specialization bonus %
         /// (from the shared EchoBonusCalculator), or the idle ask. State carried in TEXT
-        /// (colorblind-safe). The % excludes pair synergy (own line) + the hidden tri (never shown).</summary>
+        /// (colorblind-safe). The % excludes pair synergy (own line) + the hidden tri (never shown).
+        /// <para>
+        /// ECON-SWEEP 2026-08-16 (defect 4) — THE "Lv N" CHIP IS GONE FROM THIS LINE. No production
+        /// code has ever raised an Echo's level: <c>EchoAssignments.SetLevel</c> has zero callers
+        /// outside the regression harness, so every Echo in a shipped build is Lv 1 forever. The
+        /// level-up feed source is still an UNANSWERED owner pin (WORK_ORDER_738, "Owner pins",
+        /// item 2: "What raises an echo's level?"), so inventing one here is a design decision that
+        /// is not mine to make. Printing a number that can never move reads as progression the game
+        /// does not have. The level DATA is untouched -- <see cref="EchoBonusCalculator"/> still
+        /// consumes it and the token still persists it -- so the day a raise path is ruled, the
+        /// readout comes back with it. Do not restore this chip before that ruling.
+        /// </para></summary>
         public string StateText
         {
             get
@@ -160,14 +171,14 @@ namespace DeNelle.Village
                     // assignment itself stays valid and starts paying when the building
                     // lands -- exactly the WO-811 honest-status pattern.
                     if (TryGetFaucetNeed(token, out string needsBuilding))
-                        return $"{what} - Lv {ro.Level} - waiting on a {needsBuilding}";
+                        return $"{what} - waiting on a {needsBuilding}";   // no "Lv N": see the summary above
                 }
                 else
                 {
                     // Legacy-stored non-harvest lane (no longer pickable) -- still honest.
                     what = EchoAssignments.LabelFor(EchoAssignments.LaneOf(EchoIndex));
                 }
-                string s = $"{what} - Lv {ro.Level} - +{Mathf.RoundToInt(ro.BonusPct)}%";
+                string s = $"{what} - +{Mathf.RoundToInt(ro.BonusPct)}%";   // no "Lv N": see the summary above
                 if (ro.PreferredMatch) s += " (best -- this Echo's calling)";
                 return s;
             }

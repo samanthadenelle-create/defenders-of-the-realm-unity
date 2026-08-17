@@ -292,8 +292,10 @@ namespace DeNelle.Village
         [SerializeField, Min(0)] private int _ironPerKill = 0;
 
         [Header("Performance budget (DEF-48)")]
-        [Tooltip("Hard cap on simultaneously live enemies. 0 = no cap. " +
-                 "SpawnBatch stalls until an enemy dies when the cap is hit. " +
+        [Tooltip("Hard cap on simultaneously live enemies. 0 = no cap. Enforced on BOTH spawn " +
+                 "paths (WO-1113): the legacy SpawnBatch stalls until an enemy dies, and the " +
+                 "live smart-composed path releases up to the cap then HOLDS the rest as " +
+                 "reinforcements (total wave count is unchanged; only the arrival schedule is). " +
                  "Recommended values: 4 (early), 6 (mid), 8 (late), 5 (boss wave).")]
         [SerializeField, Min(0)] private int _maxSimultaneousEnemies = 8;
 
@@ -361,6 +363,11 @@ namespace DeNelle.Village
         private EnemyCatalog _enemyCatalog;
         private readonly List<Enemy> _liveEnemies = new List<Enemy>();
         private readonly List<Enemy> _breachRoster = new List<Enemy>();
+
+        // WO-1113: enemies this wave's roster still owes the field, held back by the
+        // _maxSimultaneousEnemies concurrency cap and released as slots free. NON-ZERO means the
+        // wave is NOT clear even with an empty field — see the clear gate in TickActiveWave.
+        private int _heldSmartReinforcements;
 
         // Failsafe against a stuck enemy freezing the wave's clear gate (the recurring
         // "wave won't advance" bug — clear requires _liveEnemies.Count == 0). Tracks each
@@ -718,6 +725,9 @@ namespace DeNelle.Village
                 e.ReachedHeart -= HandleEnemyReachedHeart;
             }
             _liveEnemies.Clear();
+            // WO-1113: the drain UniTask outlives this disable; drop the held count so a
+            // re-enabled manager can never start with a clear gate wedged by a dead wave.
+            _heldSmartReinforcements = 0;
 
             if (_liveApexBoss != null)
             {
@@ -1530,10 +1540,14 @@ namespace DeNelle.Village
             // cadence + anti-repeat) and place each enemy by role at a ROTATING gate,
             // instead of releasing the flat waves.json batches. Falls through to the
             // legacy paths if it spawns nothing (e.g. no spawn points / catalog).
+            // WO-1113: a fresh wave owes the field nothing until its own composition defers.
+            // (A previous wave's drain, if any is still awake, bails on the phase/roster checks.)
+            _heldSmartReinforcements = 0;
+
             bool composed = false;
             if (_smartComposition)
             {
-                composed = SpawnSmartComposedWave(waveId);
+                composed = SpawnSmartComposedWave(waveId, wave);
                 if (composed) WarnAuthoredBatchesDiscarded(wave, waveId);
             }
 
@@ -1592,7 +1606,7 @@ namespace DeNelle.Village
             // self-clear on the next TickActiveWave (LiveEnemies == 0) and silently
             // advance — the timer/loop "runs" but no enemy ever appears. Surface it with
             // one clear warning so the cause (no spawn points / empty roster) is obvious.
-            bool willHaveBoss = !string.IsNullOrEmpty(wave.Boss) || wave.IsApexBossWave;
+            bool willHaveBoss = WaveHasAuthoredHeavy(wave);
             if (_liveEnemies.Count == 0 && !willHaveBoss)
             {
                 Debug.LogWarning(
@@ -1602,14 +1616,53 @@ namespace DeNelle.Village
                     "enemy roster/catalog.");
             }
 
-            // A boss, if the wave names one, releases immediately at the north spawn.
+            // A boss, if the wave names one, releases immediately.
             // WO-789: wave.BossHp > 0 pins the boss's HP to exactly that value
             // (applied in SpawnOne AFTER the WaveScalingCurve pass — see the pin there).
+            //
+            // 2026-08-16: this used to pass a hardcoded SpawnPoint = "spawn-0" while the
+            // comment claimed "at the north spawn". No live producer emits that id — the
+            // only one, CastleSpawnPointInjector, emits "spawn-castle-{dir}-{i}" — so the
+            // lookup ALWAYS missed and fell through to the first element of an UNORDERED
+            // FindObjectsByType list: the boss walked in from a random side every session,
+            // announced only by a Debug.LogWarning the F8 harness never sees. The id is now
+            // RESOLVED from the markers that actually exist, and a miss is loud.
             if (!string.IsNullOrEmpty(wave.Boss))
             {
+                WaveSpawnPoint bossSpawn = WaveSpawnResolver.ResolveBossSpawn(
+                    _spawnPoints, out string bossSpawnReason, out bool bossSpawnExact);
+
+                if (bossSpawn == null)
+                {
+                    FlowTrace.Fail("Wave",
+                        $"wave {waveId} boss '{wave.Boss}': NO spawn point resolved ({bossSpawnReason}). " +
+                        "The boss will materialise at the WaveManager transform instead of a gate — " +
+                        "place WaveSpawnPoint markers (CastleSpawnPointInjector emits " +
+                        "'spawn-castle-<dir>-<i>' in the castle hub).");
+                }
+                else if (!bossSpawnExact)
+                {
+                    FlowTrace.Warn("Wave",
+                        $"wave {waveId} boss '{wave.Boss}': {bossSpawnReason}. The boss enters from a " +
+                        "side nobody authored — expected the " +
+                        $"'{WaveSpawnResolver.PreferredBossDirection}' approach.");
+                }
+                else
+                {
+                    FlowTrace.Step("Wave",
+                        $"wave {waveId} boss '{wave.Boss}': {bossSpawnReason} " +
+                        $"(direction '{bossSpawn.Direction}', gate {bossSpawn.GateIndex}).");
+                }
+
                 SpawnBatch(new WaveBatch
                 {
-                    Type = wave.Boss, Count = 1, SpawnPoint = "spawn-0", Delay = 0f, Interval = 0f,
+                    Type = wave.Boss,
+                    Count = 1,
+                    // Empty when nothing resolved: FindSpawnPoint then takes its deterministic
+                    // fallback WITHOUT re-reporting a miss that was already Failed above.
+                    SpawnPoint = bossSpawn != null ? bossSpawn.SpawnId : string.Empty,
+                    Delay = 0f,
+                    Interval = 0f,
                 }, wave.BossHp).Forget();
             }
 
@@ -1799,7 +1852,8 @@ namespace DeNelle.Village
         /// <summary>
         /// WO-362: generates this wave's ground roster via
         /// <see cref="WaveCompositionBuilder.Build"/> (tiered weak/medium/strong mix,
-        /// an elite every 5th wave, no two consecutive waves identical, count + difficulty
+        /// an elite every 5th wave UNLESS waves.json already authors that wave's heavy
+        /// — see <see cref="WaveHasAuthoredHeavy"/> — no two consecutive waves identical, count + difficulty
         /// scaling with the wave number) and releases it through the
         /// <see cref="SmartEnemySpawner"/>, which positions each enemy by tactical role
         /// (tanks front-centre, archers backline, weak trailing) at a gate that ROTATES
@@ -1809,7 +1863,7 @@ namespace DeNelle.Village
         /// Returns true if at least one enemy spawned (caller skips the legacy paths);
         /// false when nothing resolved (caller falls back to compose / flat batches).
         /// </summary>
-        private bool SpawnSmartComposedWave(int waveId)
+        private bool SpawnSmartComposedWave(int waveId, WaveDef wave)
         {
             if (_enemyCatalog == null) return false;
 
@@ -1825,8 +1879,11 @@ namespace DeNelle.Village
                 }
             }
 
+            // ONE HEAVY AUTHORITY PER WAVE (2026-08-16): tell the builder whether waves.json
+            // already authors this wave's heavy, so its every-5th-wave elite cadence defers
+            // instead of stacking a second boss-class enemy on top of the authored one.
             EnemyWaveComposition composition =
-                WaveCompositionBuilder.Build(waveId, _enemyCatalog);
+                WaveCompositionBuilder.Build(waveId, WaveHasAuthoredHeavy(wave), _enemyCatalog);
             if (composition == null || composition.Entries.Count == 0) return false;
 
             // ENDLESS MODE: the smart path generates its roster from the TRUE wave number
@@ -1848,6 +1905,43 @@ namespace DeNelle.Village
             }
 
             Transform heartT = _heart != null ? _heart.transform : null;
+
+            // ── DEF-48 CONCURRENCY CAP, NOW ENFORCED ON THE LIVE PATH (WO-1113) ──────
+            //
+            // THE DEFECT this closes: _maxSimultaneousEnemies was read in EXACTLY ONE place —
+            // SpawnBatch, the LEGACY flat path. _smartComposition ships ON, so every wave the
+            // player actually meets came through here, where the cap did not exist: the whole
+            // composition was released in one frame, up to WaveCompositionBuilder.MaxCount = 22
+            // bodies (more in endless, where each slot is scaled up). On a phone that is the
+            // difference between a budgeted fight and a frame-rate cliff, and the serialized
+            // field promised a ceiling it could not deliver.
+            //
+            // ⚠ THE CAP HOLDS COUNT CONSTANT, IT DOES NOT THIN THE WAVE. Everything over the
+            // budget is HELD in `deferred` and released as reinforcements the moment a slot
+            // frees, so the wave's total roster — and its clear condition — are byte-identical
+            // to before. What changes is PACING: a late wave arrives as a sustained pressure
+            // front instead of one 22-body dump. That is a felt change and the owner should
+            // felt-verify it; set _maxSimultaneousEnemies = 0 to restore the old all-at-once
+            // release without touching code.
+            var deferred = new List<WaveCompositionEntry>();
+            int budget = SmartSpawnBudget();
+
+            // The field is ALREADY full (a straggler survived into this wave). BudgetFor answers
+            // 0 for "no cap" as well as for "no room", and SpawnWave reads 0 as UNLIMITED — so
+            // calling it here would dump the entire roster, i.e. the exact opposite of the cap.
+            // Hold everything and let the drain release it as slots free.
+            if (_maxSimultaneousEnemies > 0 && budget <= 0)
+            {
+                for (int i = 0; i < composition.Entries.Count; i++) deferred.Add(composition.Entries[i]);
+                _heldSmartReinforcements = CountOf(deferred);
+                FlowTrace.Warn("Wave",
+                    $"wave {waveId}: field is already at the concurrency cap " +
+                    $"({_liveEnemies.Count}/{_maxSimultaneousEnemies}) — releasing NOTHING now and " +
+                    $"holding all {_heldSmartReinforcements} for reinforcement.");
+                DrainSmartReinforcements(deferred, waveId, composition).Forget();
+                return true;   // composed: the legacy batch paths must NOT also fire
+            }
+
             List<Enemy> squad = _smartSpawner.SpawnWave(
                 composition,
                 _enemyCatalog,
@@ -1855,9 +1949,46 @@ namespace DeNelle.Village
                 heartT,
                 _enemyRoot,
                 waveId,
-                ref _spawnInstanceCounter);
+                ref _spawnInstanceCounter,
+                budget,
+                deferred);
 
-            bool spawnedAny = false;
+            bool spawnedAny = RegisterSmartSquad(squad);
+
+            if (deferred.Count > 0)
+            {
+                int heldTotal = CountOf(deferred);
+                _heldSmartReinforcements = heldTotal;
+                FlowTrace.Step("Wave",
+                    $"wave {waveId}: concurrency cap {_maxSimultaneousEnemies} released {squad.Count} now, " +
+                    $"HOLDING {heldTotal} for reinforcement (total roster unchanged at " +
+                    $"{squad.Count + heldTotal}).");
+                DrainSmartReinforcements(deferred, waveId, composition).Forget();
+            }
+
+            return spawnedAny;
+        }
+
+        /// <summary>
+        /// WO-1113: how many more bodies the live spawn path may release RIGHT NOW without
+        /// breaking <see cref="_maxSimultaneousEnemies"/>. 0 = uncapped (the field is off), which
+        /// is the same convention SpawnBatch uses, so the number is authored in exactly one place.
+        /// </summary>
+        private int SmartSpawnBudget()
+            => SmartEnemySpawner.BudgetFor(_maxSimultaneousEnemies, _liveEnemies.Count);
+
+        /// <summary>
+        /// WO-1113: applies the shared post-spawn treatment (wave scaling, dynamic difficulty,
+        /// Died / ReachedHeart hooks, live-roster add) to a squad the SmartEnemySpawner just
+        /// released. Extracted so the FIRST release and every REINFORCEMENT release go through
+        /// one implementation — a reinforcement that skipped scaling would be a free kill and a
+        /// second code path to keep in sync.
+        /// </summary>
+        private bool RegisterSmartSquad(List<Enemy> squad)
+        {
+            bool any = false;
+            if (squad == null) return false;
+
             foreach (Enemy e in squad)
             {
                 if (e == null) continue;
@@ -1879,10 +2010,135 @@ namespace DeNelle.Village
                 e.Died         += HandleEnemyDied;
                 e.ReachedHeart += HandleEnemyReachedHeart;
                 _liveEnemies.Add(e);
-                spawnedAny = true;
+                any = true;
+            }
+            return any;
+        }
+
+        /// <summary>
+        /// WO-1113: releases the slots the concurrency cap HELD back, a slot at a time, as live
+        /// enemies die — the smart-path twin of SpawnBatch's cap stall. The wave's roster is
+        /// therefore unchanged; only the arrival schedule is.
+        ///
+        /// Bails on the same three conditions SpawnBatch does: the wave is no longer Active, the
+        /// town is suspended (the player left for a dungeon/raid — a fire-and-forget UniTask
+        /// outlives component disable AND a scene change, so this MUST be checked here and not
+        /// only in Update), or the spawner/catalog went away. Every bail is traced: an abandoned
+        /// reinforcement means the wave is short bodies, and a wave that can never reach its
+        /// clear count is exactly the silent stall §12 exists to prevent.
+        /// </summary>
+        private async UniTask DrainSmartReinforcements(
+            List<WaveCompositionEntry> deferred, int waveId, EnemyWaveComposition source)
+        {
+            if (deferred == null || deferred.Count == 0) return;
+
+            int released = 0;
+            while (deferred.Count > 0)
+            {
+                // The wave moved on under this fire-and-forget task (cleared, then the NEXT wave
+                // started). Releasing here would push wave N's leftovers into wave N+1 AND
+                // clobber N+1's own held count — bail and say so.
+                if (_currentWaveId != waveId)
+                {
+                    FlowTrace.Warn("Wave",
+                        $"reinforcement drain wave {waveId}: the live wave is now {_currentWaveId} — " +
+                        $"ABANDONING {CountOf(deferred)} held enemy(s) after releasing {released} " +
+                        "(they belong to a wave that is over).");
+                    return;   // do NOT touch _heldSmartReinforcements: it belongs to the new wave
+                }
+
+                if (_phase != WavePhase.Active)
+                {
+                    FlowTrace.Warn("Wave",
+                        $"reinforcement drain wave {waveId}: phase is {_phase}, not Active — ABANDONING " +
+                        $"{CountOf(deferred)} held enemy(s) after releasing {released}.");
+                    _heldSmartReinforcements = 0;   // never wedge the clear gate on a dead drain
+                    return;
+                }
+                if (TownSuspension.SuspendedFor(this))
+                {
+                    FlowTrace.Warn("Wave",
+                        $"reinforcement drain wave {waveId}: town suspended ({TownSuspension.Reason}) — " +
+                        $"ABANDONING {CountOf(deferred)} held enemy(s) after releasing {released}.");
+                    _heldSmartReinforcements = 0;
+                    return;
+                }
+                if (_smartSpawner == null || _enemyCatalog == null)
+                {
+                    FlowTrace.Fail("Wave",
+                        $"reinforcement drain wave {waveId}: spawner/catalog gone — {CountOf(deferred)} " +
+                        "held enemy(s) can never be released; the wave will be short.");
+                    _heldSmartReinforcements = 0;
+                    return;
+                }
+
+                // The cap can be turned OFF mid-wave (_maxSimultaneousEnemies = 0). BudgetFor
+                // answers 0 for "no cap" as well as for "full", so translate the off case to
+                // "release everything now" explicitly — otherwise the drain would wait on a
+                // budget that can never arrive and the held enemies would never appear.
+                int budget = _maxSimultaneousEnemies <= 0 ? int.MaxValue : SmartSpawnBudget();
+                if (budget <= 0)
+                {
+                    // At capacity — wait for a slot (a death, a breach, or the wave ending).
+                    await UniTask.WaitUntil(
+                        () => _maxSimultaneousEnemies <= 0
+                              || SmartSpawnBudget() > 0
+                              || _phase != WavePhase.Active
+                              || TownSuspension.SuspendedFor(this));
+                    continue;
+                }
+
+                // Release the next chunk into the free slots. The spawner writes whatever it
+                // could not fit back into a fresh sink, which becomes the new held list.
+                var batch = new EnemyWaveComposition { WaveId = waveId };
+                for (int i = 0; i < deferred.Count; i++) batch.Entries.Add(deferred[i]);
+
+                var stillHeld = new List<WaveCompositionEntry>();
+                Transform heartT = _heart != null ? _heart.transform : null;
+                List<Enemy> squad = _smartSpawner.SpawnWave(
+                    batch,
+                    _enemyCatalog,
+                    _spawnPoints,
+                    heartT,
+                    _enemyRoot,
+                    waveId,
+                    ref _spawnInstanceCounter,
+                    budget,
+                    stillHeld);
+
+                RegisterSmartSquad(squad);
+                released += squad != null ? squad.Count : 0;
+
+                if (squad == null || squad.Count == 0)
+                {
+                    // Nothing came out despite a free budget — the spawner is refusing (no gate,
+                    // unknown ids, pool starved). Looping would spin forever; stop LOUD instead.
+                    FlowTrace.Fail("Wave",
+                        $"reinforcement drain wave {waveId}: budget was {budget} but the spawner released " +
+                        $"ZERO — {CountOf(deferred)} held enemy(s) dropped to avoid an infinite drain " +
+                        "(check the SmartSpawner warnings above for the gate/id that refused).");
+                    _heldSmartReinforcements = 0;
+                    return;
+                }
+
+                deferred = stillHeld;
+                _heldSmartReinforcements = CountOf(deferred);
+                await UniTask.Yield();
             }
 
-            return spawnedAny;
+            _heldSmartReinforcements = 0;
+            FlowTrace.Step("Wave",
+                $"reinforcement drain wave {waveId}: COMPLETE — all {released} held enemy(s) released " +
+                $"(source roster {source?.TotalCount ?? 0}).");
+        }
+
+        /// <summary>Total enemies across a held-slot list (WO-1113 trace helper).</summary>
+        private static int CountOf(List<WaveCompositionEntry> entries)
+        {
+            int n = 0;
+            if (entries != null)
+                for (int i = 0; i < entries.Count; i++) n += entries[i].Count;
+            return n;
         }
 
         /// <summary>
@@ -2323,6 +2579,21 @@ namespace DeNelle.Village
             // is not in _liveEnemies (it owns kinematic flight, not a NavMesh
             // agent), so its life is tracked separately via _liveApexBoss.
             bool apexBossStillUp = _liveApexBoss != null && !_liveApexBoss.IsDead;
+
+            // WO-1113: a wave whose bodies are being METERED by the concurrency cap can hit
+            // zero-on-field while reinforcements are still queued (kill the last 8 with one AoE
+            // in a single frame and the field is empty before the drain's next tick). Clearing
+            // there would hand the player a wave-clear for a roster they never fought and skip
+            // the rest of the enemies entirely — the cap would silently become a wave THINNER,
+            // which is exactly what it must not be. Held bodies keep the wave open.
+            if (_heldSmartReinforcements > 0)
+            {
+                FlowTrace.Throttle("Wave", "held-reinforcements", 2f,
+                    $"wave {_currentWaveId}: field has {_liveEnemies.Count} live, " +
+                    $"{_heldSmartReinforcements} still HELD by the concurrency cap — wave stays open.");
+                return;
+            }
+
             if (_liveEnemies.Count == 0 && !apexBossStillUp)
             {
                 CompleteWave();
@@ -2921,6 +3192,9 @@ namespace DeNelle.Village
                 if (e != null) e.Kill();
             _liveEnemies.Clear();
             _breachRoster.Clear();
+            // WO-1113: the rest of the wave is abandoned by design here, held reinforcements
+            // included — zero the count so the abandoned wave cannot hold the clear gate open.
+            _heldSmartReinforcements = 0;
 
             // If an apex wave also fielded the flying boss, it leaves the 3D
             // layer with the rest of the wave — destroy it so it does not orbit
@@ -3008,22 +3282,38 @@ namespace DeNelle.Village
         //  Helpers
         // =====================================================================
 
+        /// <summary>
+        /// TRUE when waves.json AUTHORS this wave's heavy — a named <c>boss</c> id or an
+        /// <c>apexBoss</c> block. The single predicate behind the one-heavy-authority rule
+        /// (2026-08-16): it both suppresses WaveCompositionBuilder's every-5th-wave elite
+        /// cadence and tells the zero-spawn guard a heavy is still coming. Kept as ONE
+        /// method so those two consumers can never disagree about what "has a boss" means.
+        /// </summary>
+        private static bool WaveHasAuthoredHeavy(WaveDef wave)
+            => wave != null && (!string.IsNullOrEmpty(wave.Boss) || wave.IsApexBossWave);
+
         private WaveSpawnPoint FindSpawnPoint(string spawnId)
         {
             if (_spawnPoints == null) return null;
             if (!string.IsNullOrEmpty(spawnId))
                 foreach (WaveSpawnPoint p in _spawnPoints)
                     if (p != null && p.SpawnId == spawnId) return p;
-            // Bug-fix (audit 2026-05-30): a missing named id (e.g. boss "spawn-0") used to skip the
-            // whole batch, so the boss/apex never spawned. Fall back to the first valid spawn point.
-            foreach (WaveSpawnPoint p in _spawnPoints)
-                if (p != null)
-                {
-                    if (!string.IsNullOrEmpty(spawnId))
-                        Debug.LogWarning($"[WaveManager] spawn '{spawnId}' not found — using first spawn point.");
-                    return p;
-                }
-            return null;
+
+            // Bug-fix (audit 2026-05-30): a missing named id used to skip the whole batch, so
+            // the boss/apex never spawned. Fall back to a spawn point — but 2026-08-16 made
+            // that fallback DETERMINISTIC (ordinal by SpawnId, not FindObjectsByType order)
+            // and LOUD: the old Debug.LogWarning never reached break-log.jsonl, so an id that
+            // could never match (the boss's hardcoded "spawn-0") looked like a working spawn
+            // for months while the enemy entered from an arbitrary side.
+            WaveSpawnPoint fallback = WaveSpawnResolver.FirstDeterministic(_spawnPoints);
+            if (fallback == null) return null;
+            if (!string.IsNullOrEmpty(spawnId))
+                FlowTrace.Fail("Wave",
+                    $"spawn id '{spawnId}' does not exist in this scene — the batch will release " +
+                    $"from '{fallback.SpawnId}' (direction '{fallback.Direction}') instead. Live ids " +
+                    "are produced by CastleSpawnPointInjector as 'spawn-castle-<dir>-<i>'; an " +
+                    "authored id that never matches is a wrong-gate defect, not a harmless default.");
+            return fallback;
         }
 
 #if UNITY_EDITOR

@@ -62,17 +62,27 @@ namespace DeNelle.Editor
             "_Modules/Village/Tutorial/DialogueCommandSink.cs",                  // dialogue verb
         };
 
+        /// <summary>Named stand-downs recorded by the void sections during one Run.</summary>
+        private static readonly List<string> s_partialSkips = new List<string>();
+
         public static bool Run(out string reason)
         {
             var failures = new List<string>();
             var log = new StringBuilder();
             log.AppendLine("--- UPGRADE FAMILY PRECEDENCE (start side and complete side resolve ONE ladder) ---");
 
+            // Sections that stand down (the completion-behaviour case needs a reflectable
+            // GameStateService seam) record a NAMED partial skip here, so an "OK" from this
+            // suite can never silently mean "the completion side never ran".
+            s_partialSkips.Clear();
+
             CheckRule(failures, log);
             CheckOneRuleSource(failures, log);
             CheckCompletionBehaviour(failures, log);
 
             reason = Finish(failures, log);
+            if (s_partialSkips.Count > 0)
+                reason += " -- " + string.Join("; ", s_partialSkips.ToArray());
             return failures.Count == 0;
         }
 
@@ -151,7 +161,15 @@ namespace DeNelle.Editor
                 var gss = gssGo.AddComponent<GameStateService>();
                 if (!InstallState(gss, throwaway))
                 {
-                    log.AppendLine("    SKIPPED: GameStateService state seam not reflectable (needs fleet) -- rule + one-rule checks still ran");
+                    // Bare `return;` from a void section used to be invisible twice over:
+                    // it evaded the hollow-pass ratchet (no `return true` to see) AND it
+                    // left the suite reporting an unqualified OK. Now the stand-down is
+                    // named and rides out in the reason string.
+                    string note = DeNelle.Editor.Regression.RegressionOutcome.PartialSkip(
+                        "completion-behaviour section",
+                        "GameStateService state seam not reflectable (needs fleet) -- rule + one-rule checks still ran");
+                    log.AppendLine("    " + note);
+                    s_partialSkips.Add(note);
                     return;
                 }
                 throwaway.VillageTier = 99;

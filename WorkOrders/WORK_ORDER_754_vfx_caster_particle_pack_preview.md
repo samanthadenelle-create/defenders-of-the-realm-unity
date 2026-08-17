@@ -1,3 +1,10 @@
+> ⚠ **NUMBER COLLISION — this document does not own WO-754; `WORK_ORDER_754_rewarded_ads_monetization.md` does.**
+> Referred to hereafter as **WO-754-B (VFX caster particle-pack preview)**.
+> Flagged by the 2026-08-16 Sunday board-grooming pass (`python tools/board_build.py` → `DUPLICATE_WO_NUMBERS`);
+> ownership decided by **first-on-disk** (`git log --follow --diff-filter=A`): the winner's file was created first.
+> Banner only — nothing was renumbered or deleted.
+> ⚠ **Work HAS shipped under this number** — commit messages and/or a `.RESULT.md` cite WO-754 for THIS document. It is deliberately **not renumbered**; a renumber would orphan those references. Use the alias above when you need to name it unambiguously.
+
 # WORK ORDER 754 — VFX Caster: view Particle Pack multi-layer VFX (fix)
 
 **Status:** IMPLEMENTED (CLI 2026-07-23) — owner felt-verify in Editor  

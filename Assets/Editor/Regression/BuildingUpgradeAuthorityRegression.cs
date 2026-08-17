@@ -54,7 +54,10 @@ namespace DeNelle.Editor
                 gssGo = new GameObject("GSS (upgrade-authority oracle)");
                 var gss = gssGo.AddComponent<GameStateService>();
                 if (!InstallState(gss, throwaway))
-                { reason = "UPGRADE AUTHORITY skipped: GameStateService state seam not reflectable (needs fleet)"; return true; }
+                {
+                    return DeNelle.Editor.Regression.RegressionOutcome.Skip(out reason,
+                        "UPGRADE AUTHORITY", "GameStateService state seam not reflectable (needs fleet)");
+                }
 
                 // Fund the GameState wallet generously (Wood/Iron top-level; Food/Crystals in Resources),
                 // and lift any village-tier gate so the only variable under test is the write target.

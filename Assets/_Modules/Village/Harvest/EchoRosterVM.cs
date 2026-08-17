@@ -120,7 +120,12 @@ namespace DeNelle.Village
                 ? EchoAssignments.ResourceLabelFor(EchoAssignments.ResourceTokenOf(index))
                 : EchoAssignments.LabelFor(EchoAssignments.LaneOf(index));
             if (string.IsNullOrEmpty(what)) what = "Harvest";
-            string line = what + " - Lv " + ro.Level + " - +" + Mathf.RoundToInt(ro.BonusPct) + "%";
+            // ECON-SWEEP 2026-08-16 (defect 4) — the "Lv N" chip is REMOVED here for the same reason
+            // it left EchoCardVM.StateText: EchoAssignments.SetLevel has no production caller, so
+            // this number is permanently 1 and reads as progression that does not exist. The level
+            // DATA still drives EchoBonusCalculator; only the dead readout is gone, until the
+            // WORK_ORDER_738 owner pin ("what raises an echo's level?") is ruled.
+            string line = what + " - +" + Mathf.RoundToInt(ro.BonusPct) + "%";
             if (ro.PreferredMatch) line += " (best)";
             return line;
         }

@@ -51,10 +51,12 @@ namespace DeNelle.Tests.EditMode
                 return true;
             }
 
-            public void Grant(ResourceCost a)
+            public ResourceCost Grant(ResourceCost a)
             {
                 Coins += a.Coins; Wood += a.Wood; Iron += a.Iron; Food += a.Food; Crystals += a.Crystals;
                 OnChanged?.Invoke(new ResourceSnapshot(Wood, Food, Iron, Crystals));
+                // Uncapped fake: every requested unit lands, so the applied basket IS the request.
+                return a;
             }
         }
 

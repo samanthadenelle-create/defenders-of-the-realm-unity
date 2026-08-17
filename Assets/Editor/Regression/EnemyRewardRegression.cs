@@ -193,7 +193,8 @@ namespace DeNelle.Editor
                 var gss = gssGo.AddComponent<GameStateService>();
                 if (!InstallState(gss, throwaway))
                 {
-                    log.AppendLine("  NOTE: GSS state seam not reflectable -- WO-1103 kills seam skipped");
+                    log.AppendLine("  " + DeNelle.Editor.Regression.RegressionOutcome.PartialSkip(
+                        "WO-1103 kills seam", "GSS state seam not reflectable"));
                     return;
                 }
 
@@ -300,7 +301,8 @@ namespace DeNelle.Editor
                 var gss = gssGo.AddComponent<GameStateService>();
                 if (!InstallState(gss, throwaway))
                 {
-                    log.AppendLine("  NOTE: GameStateService state seam not reflectable -- grant-seam drive skipped (data check stands)");
+                    log.AppendLine("  " + DeNelle.Editor.Regression.RegressionOutcome.PartialSkip(
+                        "grant-seam drive", "GameStateService state seam not reflectable (data check stands)"));
                     return;
                 }
 

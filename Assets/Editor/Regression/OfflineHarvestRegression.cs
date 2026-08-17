@@ -58,13 +58,16 @@ namespace DeNelle.Editor
                 {
                     // The GameStateService singleton/state seam moved — genuinely unrunnable
                     // headless. NAMED SKIP (return true), never a false FAIL (harness-integrity).
-                    reason = "OFFLINE HARVEST skipped: needs fleet — " + installErr;
-                    return true;
+                    return DeNelle.Editor.Regression.RegressionOutcome.Skip(out reason,
+                        "OFFLINE HARVEST", "needs fleet -- " + installErr);
                 }
                 installed = true;
                 var state = gss.State;   // the throwaway — never null now
                 if (state == null)
-                { reason = "OFFLINE HARVEST skipped: needs fleet — throwaway state did not install"; return true; }
+                {
+                    return DeNelle.Editor.Regression.RegressionOutcome.Skip(out reason,
+                        "OFFLINE HARVEST", "needs fleet -- throwaway state did not install");
+                }
 
                 svcGo = new GameObject("OfflineHarvestService (oracle)");
                 var svc = svcGo.AddComponent<OfflineHarvestService>();   // ClaimAccrual reads GameStateService.Instance directly (no Awake needed)

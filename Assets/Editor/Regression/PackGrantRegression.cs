@@ -78,7 +78,10 @@ namespace DeNelle.Editor
                 gssGo = new GameObject("GSS (pack-grant oracle)");
                 var gss = gssGo.AddComponent<GameStateService>();
                 if (!InstallState(gss, throwaway))
-                { reason = "PACK GRANT skipped: GameStateService state seam not reflectable (needs fleet)"; return true; }
+                {
+                    return DeNelle.Editor.Regression.RegressionOutcome.Skip(out reason,
+                        "PACK GRANT", "GameStateService state seam not reflectable (needs fleet)");
+                }
 
                 econGo = new GameObject("EconomyService (pack-grant oracle)");
                 var econ = econGo.AddComponent<EconomyService>();

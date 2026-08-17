@@ -1,3 +1,9 @@
+> ⚠ **NUMBER COLLISION — this document does not own WO-760; `WORK_ORDER_760_dragon_syndrath_fly_land_burn_tree.md` does.**
+> Referred to hereafter as **WO-760-B (VFX common attach architecture)**.
+> Flagged by the 2026-08-16 Sunday board-grooming pass (`python tools/board_build.py` → `DUPLICATE_WO_NUMBERS`);
+> ownership decided by **first-on-disk** (`git log --follow --diff-filter=A`): the winner's file was created first.
+> Banner only — nothing was renumbered or deleted.
+
 > ## RECONCILED 2026-08-08 - true status is PARTIAL
 > Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: the ADR is ratified but the three files section 8 mandates (Vfx.cs, VfxBones.cs, VfxSocket.cs) do NOT exist in the tree.
 > The previous Status line read "Status: RATIFIED (owner 2026-08-05) - ARCHITECTURE DECISION. This WO is the ADR (why + apply matrix)." and was wrong; the board overstated this.

@@ -6,8 +6,14 @@
 // code+url in PlayerPrefs and calls repeatedly). Otherwise a new unique code is
 // minted, inserted, and returned.
 //
+// IDENTITY-GATED (security audit 2026-08-15). playerId used to be taken straight
+// from the body with no proof, so anyone could mint or read back another player's
+// referral row. It now runs through the SAME rail /api/game/save uses
+// (_lib/wallet-auth.authenticate) — no new scheme, just the one that existed.
+//
 // Client : Assets/_Modules/Core/Referral/ReferralService.cs (EnsureCodeAsync)
-//   POST  application/json
+//   POST  application/json   (raw body — bodyParser disabled)
+//   Headers: X-Guest-Id, or X-Wallet + X-Nonce + X-Signature
 //   Body  : { playerId }
 //   Reply : { success: true, code, referralUrl }
 //
@@ -15,10 +21,13 @@
 // is shareable verbally and matches the client's ToUpperInvariant() comparison.
 //
 // Driver: @neondatabase/serverless
-// Status codes: 200 | 400 | 500
+// Status codes: 200 | 400 | 401 | 500
 // =============================================================================
 
 const { neon } = require('@neondatabase/serverless');
+const { AuthCode, authenticate, WALLET_MAX_BODY_BYTES, isGuestId } = require('../_lib/wallet-auth');
+const { applyCors, newRef, quietFail, readBodyExact } = require('../_lib/http');
+const { logAuthReject } = require('../_lib/audit');
 
 // Unambiguous alphabet (no 0/O/1/I) for human-readable share codes.
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -36,27 +45,76 @@ function makeCode() {
     return out;
 }
 
-module.exports = async (req, res) => {
+async function handler(req, res) {
+    if (applyCors(req, res, 'POST, OPTIONS')) return;
+
+    const ref = newRef();
+
     if (req.method !== 'POST') {
-        return res.status(400).json({ error: 'Method not allowed' });
+        return quietFail(res, 400, AuthCode.METHOD_NOT_ALLOWED, ref);
     }
 
-    let body = req.body;
+    let rawBody, exactBytes;
     try {
-        if (typeof body === 'string') body = JSON.parse(body);
+        const read = await readBodyExact(req, WALLET_MAX_BODY_BYTES);
+        rawBody = read.buffer;
+        exactBytes = read.exact;
+    } catch (err) {
+        if (err && err.code === 'BODY_TOO_LARGE') {
+            return quietFail(res, 400, AuthCode.PAYLOAD_TOO_LARGE, ref);
+        }
+        console.error('[referral/generate] Body read error:', err);
+        return quietFail(res, 500, AuthCode.SERVER_ERROR, ref);
+    }
+
+    let body;
+    try {
+        body = JSON.parse(rawBody.toString('utf8'));
     } catch (err) {
         console.error('[referral/generate] Body parse error:', err);
-        return res.status(400).json({ error: 'Invalid payload' });
+        return quietFail(res, 400, AuthCode.BAD_PAYLOAD, ref);
     }
 
-    const playerId = body && body.playerId != null ? String(body.playerId) : '';
+    const playerId = body && body.playerId != null ? String(body.playerId).trim() : '';
     if (!playerId) {
-        return res.status(400).json({ error: 'Missing playerId' });
+        return quietFail(res, 400, AuthCode.PLAYER_ID_MISSING, ref);
+    }
+
+    let sql;
+    try {
+        sql = neon(process.env.DATABASE_URL);
+    } catch (err) {
+        console.error('[referral/generate] DB init error:', err);
+        return quietFail(res, 500, AuthCode.SERVER_ERROR, ref);
+    }
+
+    if (!exactBytes && !isGuestId(playerId)) {
+        await logAuthReject(sql, req, {
+            code: AuthCode.SERVER_ERROR, ref, identity: playerId, mode: 'wallet',
+            detail: { reason: 'raw_body_unavailable_bodyparser_active' },
+        });
+        return quietFail(res, 500, AuthCode.SERVER_ERROR, ref);
+    }
+
+    // ── AUTH GATE ──────────────────────────────────────────────────────────
+    let auth;
+    try {
+        auth = await authenticate(sql, req, rawBody, playerId);
+    } catch (err) {
+        console.error('[referral/generate] Auth check error:', err);
+        return quietFail(res, 500, AuthCode.SERVER_ERROR, ref);
+    }
+    if (!auth.ok) {
+        await logAuthReject(sql, req, {
+            code: auth.code, ref, identity: auth.identity, mode: auth.mode, detail: auth.detail,
+        });
+        const status = (auth.code === AuthCode.PLAYER_ID_BAD_SHAPE ||
+                        auth.code === AuthCode.PLAYER_ID_MISSING ||
+                        auth.code === AuthCode.WALLET_MALFORMED) ? 400 : 401;
+        return quietFail(res, status, auth.code, ref);
     }
 
     try {
-        const sql = neon(process.env.DATABASE_URL);
-
         // ── Reuse: return the existing code if the player already has one ─────
         const existing = await sql`
             SELECT code, referral_url FROM referrals
@@ -124,4 +182,8 @@ module.exports = async (req, res) => {
         console.error('[referral/generate] DB error:', err);
         return res.status(500).json({ error: 'Internal server error' });
     }
-};
+}
+
+module.exports = handler;
+// MUST be assigned AFTER the handler export — see api/game/save.js:427-432.
+module.exports.config = { api: { bodyParser: false } };

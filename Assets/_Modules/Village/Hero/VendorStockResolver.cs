@@ -316,9 +316,13 @@ namespace DeNelle.Village.Hero
                             // WO-960 carves out the preview window: those rows come back LOCKED.
                             if (onlyEquippable && !(classOk && levelOk) && !previewLocked) return;
                             picked.Add(new ShelfPick(w.id, ReqLevel(w.req), w.damageMult,
-                                classOk && levelOk, LockReason(classOk, levelOk, Cap(w.job), w.req)));
+                                classOk && levelOk, LockReason(classOk, levelOk, Cap(w.job), w.req),
+                                WeaponKind(w)));
                         });
-                        cappedDrops += EmitCapped(result, VendorWareKind.Weapon, picked, perLevelCap, "weapon");
+                        // WEAPON_CATALOG.md 5.2 (2026-08-16): the shopper's OWN weapon kind gets one reserved slot per level
+                        // bucket (see ReserveKindSlot). Empty job (no shopper class) => inert.
+                        cappedDrops += EmitCapped(result, VendorWareKind.Weapon, picked, perLevelCap, "weapon",
+                                                  PrimaryWeaponKind(job));
                         break;
                     }
 
@@ -487,14 +491,22 @@ namespace DeNelle.Village.Hero
             public readonly float Power;
             public readonly bool Eligible;
             public readonly string LockReason;
+            /// <summary>
+            /// The row's weapon FAMILY, lowercased ("sword"/"bow"/"staff"/"shield"/"axe"/...),
+            /// or empty when the band has no kind axis (armor) or the row authors none.
+            /// Read by <see cref="ReserveKindSlot"/> only — it never affects power ranking.
+            /// </summary>
+            public readonly string Kind;
 
-            public ShelfPick(string id, int reqLevel, float power, bool eligible, string lockReason)
+            public ShelfPick(string id, int reqLevel, float power, bool eligible, string lockReason,
+                             string kind = null)
             {
                 Id = id;
                 ReqLevel = reqLevel;
                 Power = power;
                 Eligible = eligible;
                 LockReason = lockReason;
+                Kind = kind ?? string.Empty;
             }
         }
 
@@ -522,11 +534,29 @@ namespace DeNelle.Village.Hero
         /// Forge will usually surface two MAIN-hand weapons. That is acceptable in V1 because
         /// every class is SEEDED its starter off-hand (WO-860 A3), but if the owner wants a
         /// shield always purchasable, the fix is a per-slot bucket key here, not a sort tweak.
+        ///
+        /// 5. THE CLASS-KIND RESERVED SLOT (<see cref="ReserveKindSlot"/>, 2026-08-16), added
+        ///    because rules 2+3 alone produced a shelf with NOTHING the shopper's class wields.
+        ///    PROVEN, not theorised — simulating this comparator over the live catalog gives a
+        ///    level-1 Mage `blink_shield1h_04` + `blink_shield1h_05` (two shields, no staff) and
+        ///    a level-1 Knight `knight_flameblade` + `blink_axe1h_12`. Every job:"any" shield
+        ///    carries damageMult 1.0, ties the level-1 staves/blades and wins on id ordinal, so
+        ///    the class weapon is capped out at every tier where the ladder values tie. The
+        ///    2026-08-14 blink_ unhide commit named this exact displacement and said the fix
+        ///    "needs a PO call or a .cs tie-break" — this is that tie-break.
+        ///    ⛔ It is deliberately NOT a damageMult/rarity retune (that would move BALANCE to
+        ///    fix a SORT) and NOT a class-weighted primary key (that would rank a weak class
+        ///    weapon above a strictly stronger off-kind one everywhere, not just on ties).
+        ///    It is a QUOTA: the LAST kept slot of a bucket is reserved for the highest-ranked
+        ///    row of the shopper's own kind, and only when the kept slice contains none. Power
+        ///    still orders every other slot, and a tier whose catalog holds no class-kind row is
+        ///    left honestly as-is rather than padded.
         /// </summary>
         /// <summary>Returns the number of candidate rows the cap DROPPED (0 when uncapped or
         /// when every bucket fit) — the bit WO-860 B4's footer render is gated on.</summary>
         private static int EmitCapped(List<VendorWare> result, VendorWareKind kind,
-                                      List<ShelfPick> picked, int perLevelCap, string label)
+                                      List<ShelfPick> picked, int perLevelCap, string label,
+                                      string preferredKind = null)
         {
             if (picked == null || picked.Count == 0) return 0;
 
@@ -558,6 +588,7 @@ namespace DeNelle.Village.Hero
                 var bucket = byLevel[lvl];
                 bucket.Sort(ComparePicks);
                 int keep = Math.Min(perLevelCap, bucket.Count);
+                ReserveKindSlot(bucket, keep, preferredKind, lvl, label);
                 dropped += bucket.Count - keep;
                 for (int i = 0; i < keep; i++)
                     result.Add(new VendorWare(kind, bucket[i].Id, bucket[i].Eligible, bucket[i].LockReason));
@@ -577,6 +608,104 @@ namespace DeNelle.Village.Hero
             int byPower = b.Power.CompareTo(a.Power);          // descending
             if (byPower != 0) return byPower;
             return string.CompareOrdinal(a.Id ?? string.Empty, b.Id ?? string.Empty);
+        }
+
+        /// <summary>
+        /// Rule 5 of the documented sort: reserve the LAST kept slot of an already-ranked
+        /// bucket for the shopper's own weapon kind, and ONLY when the kept slice holds none.
+        /// No-ops when the cap is 0, when nothing is being dropped anyway, when the shelf has
+        /// no kind axis (armor / no shopper class), or when the bucket itself contains no row
+        /// of that kind — a tier the catalog never authored for this class stays honestly
+        /// empty of it instead of being padded with something else.
+        /// </summary>
+        private static void ReserveKindSlot(List<ShelfPick> bucket, int keep, string preferredKind,
+                                            int lvl, string label)
+        {
+            if (bucket == null || keep <= 0 || bucket.Count <= keep) return;
+            if (string.IsNullOrEmpty(preferredKind)) return;
+
+            for (int i = 0; i < keep; i++)
+                if (KindMatches(bucket[i].Kind, preferredKind)) return;   // already represented
+
+            int found = -1;
+            for (int i = keep; i < bucket.Count; i++)
+                if (KindMatches(bucket[i].Kind, preferredKind)) { found = i; break; }
+            if (found < 0)
+            {
+                FlowTrace.Once("Vendor", $"kindslot-none-{label}-{preferredKind}-lv{lvl}",
+                    $"{label} Lv{lvl}: no '{preferredKind}' row in this bucket at all - the shelf shows the " +
+                    "power ranking unchanged (catalog gap, not a sort defect).");
+                return;
+            }
+
+            var promoted = bucket[found];
+            var evicted = bucket[keep - 1];
+            bucket.RemoveAt(found);
+            bucket.Insert(keep - 1, promoted);
+            FlowTrace.Step("Vendor",
+                $"{label} Lv{lvl}: reserved slot {keep} for the shopper's own kind '{preferredKind}' - " +
+                $"'{promoted.Id}' promoted over '{evicted.Id}' (power ranking untouched on slots 1..{keep - 1}).");
+        }
+
+        private static bool KindMatches(string kind, string preferred) =>
+            !string.IsNullOrEmpty(kind) &&
+            kind.Equals(preferred, StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// The weapon kind a class actually WIELDS — the one the reserved slot guarantees.
+        /// Sourced from the authored starter kits + the designed ladders in weapons.json
+        /// (knight: knight_starter..aegis_emberbrand are swords; ranger: ranger_starter /
+        /// aegis_heartwood_longbow are bows; mage: mage_oak..aegis_aetherstaff are staves;
+        /// cleric: aegis_hallowed_censer is a hammer), NOT invented here. Unknown/empty job
+        /// (an unregistered shelf with no shopper) returns empty => the quota is inert.
+        /// </summary>
+        private static string PrimaryWeaponKind(string job)
+        {
+            switch ((job ?? string.Empty).Trim().ToLowerInvariant())
+            {
+                case "knight": return "sword";
+                case "ranger": return "bow";
+                case "mage":   return "staff";
+                case "cleric": return "hammer";
+                default:       return string.Empty;
+            }
+        }
+
+        /// <summary>
+        /// The row's weapon family. The authored <c>category</c> is AUTHORITATIVE; the keyword
+        /// arm below exists only for the 10 legacy designed rows that predate the field
+        /// (knight_starter/iron/oath/dawn, ranger_starter, cleric_starter, the four aegis_*,
+        /// knight_flameblade) and is deliberately narrow — it never overrides authored data, and
+        /// every uncategorised row is TRACED so the data gap is visible rather than guessed at
+        /// forever. A row it cannot place returns empty and simply never wins the reserved slot.
+        /// </summary>
+        private static string WeaponKind(WeaponDef w)
+        {
+            if (w == null) return string.Empty;
+            if (!string.IsNullOrEmpty(w.category)) return w.category.Trim().ToLowerInvariant();
+
+            string key = ((w.id ?? string.Empty) + " " + (w.name ?? string.Empty)).ToLowerInvariant();
+            string guess =
+                  HasWord(key, "bow") ? "bow"
+                : HasWord(key, "staff", "scepter", "sceptre", "rod", "wand") ? "staff"
+                : HasWord(key, "shield", "buckler", "targe", "heater") ? "shield"
+                : HasWord(key, "sword", "blade", "longsword", "greatsword", "claymore") ? "sword"
+                : HasWord(key, "axe", "hatchet") ? "axe"
+                : HasWord(key, "hammer", "maul", "mace", "censer") ? "hammer"
+                : string.Empty;
+
+            FlowTrace.Once("Vendor", "weaponkind-uncategorised-" + (w.id ?? "<null>"),
+                $"weapon '{w.id}' authors no 'category' in weapons.json -> kind inferred as " +
+                $"'{(guess.Length == 0 ? "<unknown>" : guess)}' from its name. Authoring the field on the row " +
+                "is the real fix; the shelf's class-kind slot is only as good as this data.");
+            return guess;
+        }
+
+        private static bool HasWord(string haystack, params string[] needles)
+        {
+            for (int i = 0; i < needles.Length; i++)
+                if (haystack.IndexOf(needles[i], StringComparison.Ordinal) >= 0) return true;
+            return false;
         }
 
         /// <summary>

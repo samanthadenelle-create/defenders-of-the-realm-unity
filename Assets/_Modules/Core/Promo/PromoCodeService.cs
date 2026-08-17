@@ -7,7 +7,8 @@
 //   3. On 200 OK: applies reward (crystals + coins) + fires analytics event.
 //
 // BACKEND CONTRACT:
-//   POST api/promo/redeem
+//   POST api/promo/redeem   (IDENTITY-GATED — see BackendRequestSigner)
+//   Headers: X-Guest-Id, or X-Wallet + X-Nonce + X-Signature
 //   Body:    { playerId, code }
 //   Success: { success: true, reward: { crystals, coins }, message }
 //   Failure: { success: false, error: "INVALID_CODE" | "ALREADY_REDEEMED"
@@ -28,6 +29,7 @@ using System.Text;
 using Cysharp.Threading.Tasks;
 using DeNelle.Core.Analytics;
 using DeNelle.Core.State;
+using DeNelle.Core.Web3;
 using Newtonsoft.Json;
 using UnityEngine;
 using UnityEngine.Networking;
@@ -105,7 +107,16 @@ namespace DeNelle.Core.Promo
                 return;
             }
 
-            var playerId = GameStateService.Instance?.State?.BoundWallet ?? "anonymous";
+            // The backend keys the redemption on this id and now PROVES it (see
+            // BackendRequestSigner / api/_lib/wallet-auth.js). "anonymous" is not a
+            // shape the server accepts, so a player with no identity cannot redeem
+            // — which is correct: an unproven id let anyone burn a victim's code.
+            var playerId = BackendRequestSigner.CurrentPlayerId();
+            if (string.IsNullOrEmpty(playerId))
+            {
+                OnRedeemFailed?.Invoke("Sign in before redeeming a code.");
+                return;
+            }
 
             var payload = JsonConvert.SerializeObject(new { playerId, code });
             var bodyRaw = Encoding.UTF8.GetBytes(payload);
@@ -114,6 +125,14 @@ namespace DeNelle.Core.Promo
             req.uploadHandler   = new UploadHandlerRaw(bodyRaw);
             req.downloadHandler = new DownloadHandlerBuffer();
             req.SetRequestHeader("Content-Type", "application/json");
+
+            // Identity proof over the EXACT bytes above. Fail-closed: on refusal we
+            // abort rather than send a request the server will (rightly) 401.
+            if (!await BackendRequestSigner.TryAttachAsync(req, playerId, bodyRaw))
+            {
+                OnRedeemFailed?.Invoke("Could not verify your account. Try again later.");
+                return;
+            }
 
             try
             {
@@ -127,7 +146,11 @@ namespace DeNelle.Core.Promo
 
             if (req.result != UnityWebRequest.Result.Success)
             {
-                OnRedeemFailed?.Invoke("Could not reach server. Try again later.");
+                // The route is identity-gated now, so a refusal is a distinct case
+                // from an unreachable server - say which so nobody hunts the wrong bug.
+                OnRedeemFailed?.Invoke(req.responseCode == 401 || req.responseCode == 400
+                    ? "Could not verify your account. Try again later."
+                    : "Could not reach server. Try again later.");
                 return;
             }
 

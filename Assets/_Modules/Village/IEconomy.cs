@@ -35,8 +35,14 @@ namespace DeNelle.Village
         /// <summary>Atomically spends <paramref name="cost"/> if affordable; false (no-op) when short.</summary>
         bool TrySpend(ResourceCost cost);
 
-        /// <summary>Adds resources (sell refunds, rewards). Negatives clamped to 0.</summary>
-        void Grant(ResourceCost amount);
+        /// <summary>
+        /// Adds resources (sell refunds, rewards). Negatives clamped to 0.
+        /// ⚠ RETURNS THE **APPLIED** BASKET, not the requested one — a grant is clamped by
+        /// TownBankCapacity, so requested and applied differ whenever a store is full. Callers
+        /// that LOG or POP a gain must report this value: showing the pre-clamp number is how a
+        /// silent loss hides (the Echo silo dump did exactly that until 2026-08-16).
+        /// </summary>
+        ResourceCost Grant(ResourceCost amount);
 
         /// <summary>Fires after any resource change with the new totals.</summary>
         event Action<ResourceSnapshot> OnChanged;

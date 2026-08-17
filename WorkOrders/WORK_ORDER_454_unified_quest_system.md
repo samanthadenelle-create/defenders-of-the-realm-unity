@@ -1,3 +1,9 @@
+> ⚠ **NUMBER COLLISION — this document does not own WO-454; `WORK_ORDER_454_faction_base_scene_generator.md` does.**
+> Referred to hereafter as **WO-454-B (unified quest system)**.
+> Flagged by the 2026-08-16 Sunday board-grooming pass (`python tools/board_build.py` → `DUPLICATE_WO_NUMBERS`);
+> ownership decided by **first-on-disk** (`git log --follow --diff-filter=A`): the winner's file was created first.
+> Banner only — nothing was renumbered or deleted.
+
 # WORK_ORDER_454 — Unified Quest System (board tabs + select-to-track + HUD pin)
 
 **Status: READY TO IMPLEMENT**

@@ -563,7 +563,9 @@ namespace DeNelle.HUD.Kit
             // door was the OLD VillageHudController crossed-swords icon — the kit rendered no
             // raid widget at all. Kit button -> Core RaidEntryGate -> Village RaidEntryBridge
             // -> RaidSelectionScreen (whose Open carries the WO-813 zero-troops safety net).
-            var raids = ElarionUiKit.BuildObsidianButton(pool, "Raids",
+            // Base word from the model (WO-1008) so the live label and the model's dim-state
+            // labels can never drift apart.
+            var raids = ElarionUiKit.BuildObsidianButton(pool, HudActionBarModel.RaidsBaseLabel,
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
                 slot0Min, slot0Max, () =>
                 {
@@ -1462,13 +1464,29 @@ namespace DeNelle.HUD.Kit
         // Raids dim visuals (WO-820 semantics via the model's decision): tint face +
         // label toward Disabled, restore the BUILT colours; interactable is never
         // touched, so a dimmed tap still reaches the drillmaster redirect.
+        //
+        // WO-1008 — COLOUR IS NEVER THE TELL. The owner is red/green colourblind, so a grey
+        // tint communicates NOTHING on its own; the face must SAY why it is greyed. The model
+        // owns the words (HudActionBarModel.RaidsFaceLabel: "Raids" live, "Raids 0/5" nothing
+        // trained, "Raids 3/5" army not full) — this View only paints them. Still zero
+        // predicates here: the reason is decided in Core.
         private void ApplyRaidsDim()
         {
             bool dim = _barModel != null && _barModel.RaidsDimmed;
             if (_raidsButtonImage != null)
                 _raidsButtonImage.color = dim ? ElarionUi.Disabled : _raidsImageBuiltColor;
             if (_raidsButtonLabel != null)
+            {
                 _raidsButtonLabel.color = dim ? ElarionUi.Disabled : _raidsLabelBuiltColor;
+                string face = _barModel != null ? _barModel.RaidsFaceLabel : HudActionBarModel.RaidsBaseLabel;
+                if (!string.IsNullOrEmpty(face) && !string.Equals(_raidsButtonLabel.text, face, StringComparison.Ordinal))
+                {
+                    _raidsButtonLabel.text = face;
+                    FlowTrace.Step("HudKit", "Raids face text -> '" + face + "' (dim=" + dim +
+                                   ", reason=" + (_barModel != null ? _barModel.RaidsDimReason.ToString() : "n/a") +
+                                   ") - the greyed state is carried in WORDS, never hue alone.");
+                }
+            }
         }
 
         private void Sub(HeroVitalsModel m, Action h)    { m.Changed += h; _unsubscribe.Add(() => m.Changed -= h); }

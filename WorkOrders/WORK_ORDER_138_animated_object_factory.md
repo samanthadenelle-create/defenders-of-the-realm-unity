@@ -1,3 +1,9 @@
+> ⚠ **NUMBER COLLISION — this document does not own WO-138; `WORK_ORDER_138_cc5_character_pipeline_first_hero.md` does.**
+> Referred to hereafter as **WO-138-B (animated object factory)**.
+> Flagged by the 2026-08-16 Sunday board-grooming pass (`python tools/board_build.py` → `DUPLICATE_WO_NUMBERS`);
+> the two files were added in the **same commit**, so first-on-disk is a tie; ownership decided on **cross-references** (the winner is the file the rest of the corpus cites).
+> Banner only — nothing was renumbered or deleted.
+
 # VOID — withdrawn (do not implement)
 
 **Status:** CLOSED - CANCELLED (reconciled 2026-08-09 - this file's own body reads VOID - withdrawn (do not implement): number collision with `WORK_ORDER_138_cc5_character_pipeline_first_hero.md`, a fabricated source quote, and a premise already satisfied by `VisualFactory.cs`. DUPLICATE NUMBER: two files claim 138)

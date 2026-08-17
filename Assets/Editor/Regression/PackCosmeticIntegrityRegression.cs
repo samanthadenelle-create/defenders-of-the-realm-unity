@@ -88,7 +88,10 @@ namespace DeNelle.Editor
                 gssGo = new GameObject("GSS (pack-cosmetic-integrity oracle)");
                 var gss = gssGo.AddComponent<GameStateService>();
                 if (!InstallState(gss, throwaway))
-                { reason = "PACK COSMETIC INTEGRITY skipped: GameStateService state seam not reflectable (needs fleet)"; return true; }
+                {
+                    return DeNelle.Editor.Regression.RegressionOutcome.Skip(out reason,
+                        "PACK COSMETIC INTEGRITY", "GameStateService state seam not reflectable (needs fleet)");
+                }
 
                 econGo = new GameObject("EconomyService (pack-cosmetic-integrity oracle)");
                 var econ = econGo.AddComponent<EconomyService>();

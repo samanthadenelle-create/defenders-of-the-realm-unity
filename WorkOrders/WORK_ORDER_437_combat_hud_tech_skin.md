@@ -1,3 +1,13 @@
+> ⚠ **UNRESOLVED NUMBER COLLISION — WO-437 is claimed by more than one file and OWNERSHIP IS NOT DECIDED.**
+> Co-claimants: `WORK_ORDER_437_combat_hud_tech_skin.md` (06-13, first-on-disk), `WORK_ORDER_437_input_state_gate.md` (06-17, marked DONE), `WORK_ORDER_437_bar_overflow_rectmask.md` (07-04)
+> **This is one of a four-number group (WO-437 / 438 / 439 / 440) that collided the same way.** The June
+> files are **first-on-disk**; the 2026-07-04 files are the ones **git history says shipped** — commit
+> `0b0e0915c` reads *"UI-100% wave 1 — shared-kit parchment fix, WO-437/438/439/440, per-screen match"*,
+> which names the 07-04 UI batch, and `aa931577b` separately records *"WO-437/438 landed"*. First-on-disk
+> and referenced-by-commit point at DIFFERENT files, so the project rule resolves to neither.
+> Flagged (not resolved) by the 2026-08-16 Sunday board-grooming pass — needs an **owner ruling**, ideally
+> one ruling for all four at once. Nothing renumbered or deleted. Cite by FILENAME, never by bare number.
+
 # WORK ORDER 437 — Combat HUD full restyle from "Tech hud elements" pack
 
 **Status: READY TO IMPLEMENT** · Lane 4 UI/HUD · P1 · Owner directive 2026-06-12

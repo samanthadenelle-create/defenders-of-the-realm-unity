@@ -1,3 +1,9 @@
+> ⚠ **NUMBER COLLISION — this document does not own WO-436; `WORK_ORDER_436_quest_board.md` does.**
+> Referred to hereafter as **WO-436-B (enemy green / no animation)**.
+> Flagged by the 2026-08-16 Sunday board-grooming pass (`python tools/board_build.py` → `DUPLICATE_WO_NUMBERS`);
+> ownership decided by **first-on-disk** (`git log --follow --diff-filter=A`): the winner's file was created first.
+> Banner only — nothing was renumbered or deleted.
+
 # WO-436 — P0 Bug: Enemy renders solid green + no animation (sliding)
 
 **Status:** READY TO IMPLEMENT  

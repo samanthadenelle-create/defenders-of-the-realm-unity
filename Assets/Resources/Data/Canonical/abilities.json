@@ -183,6 +183,8 @@
           "color": "#9ae6b4",
           "effect": "strike",
           "cooldown": 0.45,
+          "castSeconds": 0.45,
+          "_comment_castSeconds": "WO-1105 R3 (owner ruling 2026-08-16) - THE SHOT ROOTS THE SHOOTER. This is the PLANTED-SHOT window: HeroAbilities.CastRoutine holds the wind-up for castSeconds and HeroLocomotion.WantsToMove CANCELS the shot outright (mana+cooldown refunded, and the player is TOLD via a toast - no silent refusal). Owner rationale, recorded here so nobody 'fixes' it back to instant: free move-and-shoot trivialises melee threat entirely. This pairs with the standing decision that the DAGGER is the primary attack and the BOW is an action-bar ability - bow = committed and dangerous, dagger = mobile and safe. That is the loop. 0.45s is a SEEDED STARTING VALUE for the owner to tune (it matches this ability's own cooldown, and sits between the 0.35s utility casts and the 0.5s ultimates); it is DATA precisely so tuning it never needs a code change. Setting it to 0 restores instant fire with no root.",
           "manaCost": 0,
           "damage": 25,
           "range": 15,

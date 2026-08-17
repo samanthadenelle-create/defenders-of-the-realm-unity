@@ -1,3 +1,10 @@
+> ⚠ **UNRESOLVED NUMBER COLLISION — WO-255 is claimed by more than one file and OWNERSHIP IS NOT DECIDED.**
+> Co-claimants: `WORK_ORDER_255_hero_backwards_walk.md`, `WORK_ORDER_255_terrain_seam_height_mismatch.md`
+> Both files were added in the SAME commit (first-on-disk is a dead tie) and neither is cited by any other doc, RESULT file, or commit message — there is no evidence on either side. Both are also still READY.
+> Flagged (not resolved) by the 2026-08-16 Sunday board-grooming pass — a wrong ownership call is worse
+> than a flagged unknown, so this needs an **owner ruling**. Nothing renumbered or deleted. Until it is
+> ruled, cite this WO by FILENAME, never by bare number.
+
 # WO-255: World-map lip — Village/OuterWorld terrain seam height mismatch
 **Linear:** [DEF-126](https://linear.app/defenders-of-the-realm/issue/DEF-126/world-map-lip-village-outerworld-terrain-seam-height-mismatch-ledge)
 **Lane:** World/Environment

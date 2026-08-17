@@ -44,10 +44,18 @@ namespace DeNelle.Editor
             public bool ArmyReady = true;
             public bool Onboarded = true;
             public bool Focused;
+            // WO-1008 dim-reason inputs (default: a partially filled army, so the pre-existing
+            // "capable but not full" cases keep asserting the ArmyNotFull reason they always meant).
+            public int Deployable = 3;
+            public int Queued;
+            public int Cap = 5;
 
             public bool TalkAvailable => Talk;
             public bool RaidCapable => Capable;
             public bool RaidArmyReady => ArmyReady;
+            public int RaidDeployableSlots => Deployable;
+            public int RaidQueuedSlots => Queued;
+            public int RaidCapSlots => Cap;
             public bool MapUnlocked => Onboarded;
             public bool BuildingFocused => Focused;
         }
@@ -96,10 +104,12 @@ namespace DeNelle.Editor
             if (model.Active.Contains(ActionBarButtonId.Talk))
                 failures.Add("Talk did not repack OUT when the NPC left range (hide, not dim)");
 
-            // Raids: not capable => absent (WO-835 §3d); capable + not full => visible AND dimmed (WO-820).
+            // Raids: not capable => absent; capable + not full => visible AND dimmed (WO-820).
+            // ⚠ WO-1008: "not capable" now means NO BARRACKS (or the flag off) — an empty army is
+            // capable-and-dimmed, never absent. See RaidsDiscoverabilityRegression.
             src.Capable = false; src.ArmyReady = false; model.Tick();
             if (model.Active.Contains(ActionBarButtonId.Raids))
-                failures.Add("Raids visible while NOT capable (no building/troops) — WO-835 hide default broken");
+                failures.Add("Raids visible while NOT capable (no barracks / flag off) — hide default broken");
             if (model.RaidsDimmed)
                 failures.Add("RaidsDimmed true while the face is absent");
             src.Capable = true; model.Tick();
@@ -228,8 +238,13 @@ namespace DeNelle.Editor
             else
             {
                 string bridgeSrc = File.ReadAllText(bridgePath);
-                if (bridgeSrc.IndexOf("ArmyReadiness.Compute") < 0)
-                    failures.Add("RaidCapabilityHudBridge does not use ArmyReadiness.Compute — WO-823 single-source law (never re-roll the army math)");
+                // ⚠ WO-1008 (owner ask 2026-08-16) — the OLD assertion here demanded the bridge
+                // CALL ArmyReadiness.Compute, because the visibility predicate used to include
+                // ">=1 deployable troop". That clause was deliberately deleted: an empty army now
+                // DIMS the face instead of hiding it. The WO-823 single-source law is not lost —
+                // it moved to the surfaces that still judge readiness (RaidSelectionScreen.Open,
+                // BuildTimerService.PublishArmyStatus), and RaidsDiscoverabilityRegression pins
+                // that the troop clause never comes back here.
                 if (bridgeSrc.IndexOf("StructureSingleton.IsBuilt") < 0)
                     failures.Add("RaidCapabilityHudBridge does not check StructureSingleton.IsBuilt (the raid-building half of the predicate)");
                 if (bridgeSrc.IndexOf("SetRaidCapable") < 0)

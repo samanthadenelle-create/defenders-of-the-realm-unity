@@ -127,9 +127,21 @@ namespace DeNelle.Village.Arena
         //    unreachable (leash failed / off-mesh island / hero not truly present).
         //  • DisengageResolveSeconds — no-contact window before we break off the encounter (loss).
         //    Well under the 240s timeout so the HUD/BattleLock release promptly, not on hero death.
-        private const float LeashRadius             = 16f;
-        private const float EngageContactRadius     = 18f;
-        private const float DisengageResolveSeconds = 7f;
+        //
+        // BAIT ALLOWANCE (owner live-play 2026-08-16: "i was trying to target and bait an enemy
+        // out and i think we need to allow aggro targets to extend leash alot more"). These three
+        // moved from hardcoded consts (16 / 18 / 7) to canonical data - Data/Canonical/
+        // aggro-tuning.json via AggroTuning - and the leash opened up to cover the WHOLE arena.
+        // WHY IT HAD TO CHANGE: the arena footprint is 45 x 36 (ArenaHalfWidth/Depth below) with
+        // the enemy rear rank at Z ~ +15, so a bait that uses the arena end-to-end is ~33m. At a
+        // 16m leash EVERY staged enemy was teleported back to within 15.2m of the hero every
+        // 0.25s tick - back off to pull one orc out of the pack and the entire pack snapped along
+        // with her. Baiting was not "too short", it was structurally impossible. The fled-pack
+        // softlock this leash was written for is still fixed: an enemy that has genuinely left
+        // the fight (past the wider bound) is still pulled back, so the encounter always resolves.
+        private static float LeashRadius             => AggroTuning.ArenaChaseLeashRadius;
+        private static float EngageContactRadius     => AggroTuning.EffectiveArenaEngageContactRadius;
+        private static float DisengageResolveSeconds => AggroTuning.ArenaDisengageSeconds;
 
         // ABANDONMENT WATCHDOG grace (patch 6, F8 2026-07-30): how long the 'Player'-tagged hero may
         // read as MISSING during a live fight before we tear the encounter down as ABANDONED. Long
@@ -2120,6 +2132,10 @@ namespace DeNelle.Village.Arena
         // AI is not modified. Called only while the hero is confirmed in-arena.
         private void LeashStagedEnemies(Vector3 heroPos)
         {
+            // Read the (data-driven) bound ONCE per pass so every enemy in this tick is judged
+            // against the same number, and so the captured trace below quotes the bound that
+            // actually fired - the owner can then read a capture and retune aggro-tuning.json.
+            float leash = LeashRadius;
             for (int i = 0; i < _liveEnemies.Count; i++)
             {
                 var e = _liveEnemies[i];
@@ -2127,14 +2143,16 @@ namespace DeNelle.Village.Arena
                 Vector3 pos = e.transform.position;
                 Vector3 flat = pos - heroPos; flat.y = 0f;
                 float dist = flat.magnitude;
-                if (dist <= LeashRadius || dist < 0.001f) continue;
+                if (dist <= leash || dist < 0.001f) continue;
 
-                Vector3 clamped = heroPos + flat.normalized * (LeashRadius * 0.95f);
+                Vector3 clamped = heroPos + flat.normalized * (leash * 0.95f);
                 clamped.y = pos.y;
                 if (NavMesh.SamplePosition(clamped, out NavMeshHit hit, 4f, NavMesh.AllAreas)) clamped = hit.position;
                 e.transform.position = clamped;
                 FlowTrace.Throttle("BattleArena", "leash", 1f,
-                    $"LEASH: pulled '{e.name}' from {dist:0.0}m back to ~{LeashRadius * 0.95f:0.0}m of hero (fled-pack guard).");
+                    $"LEASH: pulled '{e.name}' from {dist:0.0}m back to ~{leash * 0.95f:0.0}m of hero " +
+                    $"(fled-pack guard; bound {leash:0.#}m from aggro-tuning.json - a BAIT inside this " +
+                    "range is never pulled).");
             }
         }
 

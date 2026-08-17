@@ -146,11 +146,13 @@ namespace DeNelle.Core.HudModel
 
         // ── Raid capability (WO-835 — the SetTalkAvailable mirror pattern) ───
         // Village-side RaidCapabilityHudBridge publishes "the player CAN raid":
-        // FeatureFlags.Raid AND barracks built AND >=1 deployable troop. The
-        // HudActionBarModel reads it to pack the Raids face in/out (hide, not
-        // dim — WO-835 §3d owner default). Distinct from RaidEntryGate.
-        // ArmyStatus.Ready (the WO-820 full-army DIM gate, which still applies
-        // to a VISIBLE Raids face).
+        // FeatureFlags.Raid AND barracks built. ⚠ WO-1008 (2026-08-16) DELETED the
+        // old third clause ">=1 deployable troop": an empty army used to HIDE the
+        // face, and the owner reported "I do not see a way to start a raid" with a
+        // Barracks standing. Troop count now picks a DIM REASON on a VISIBLE face
+        // (HudActionBarModel.RaidDimReason), alongside RaidEntryGate.ArmyStatus.Ready
+        // (the WO-820 full-army DIM gate). The only hide reasons left are "no
+        // barracks" and "flag off".
 
         /// <summary>True while the player can raid at all (Village-published).
         /// Defaults TRUE so headless / pre-publish scenes never hide the raid

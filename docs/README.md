@@ -7,9 +7,11 @@
 
 # docs/ — Index
 
-**167 files at `docs/` top level** (426 including the subfolders — `MASTER_CATALOG/`, `design/`, `qa/`,
-`_archive/`, …). Find your category, don't grep blind. Root-level project files (100 `.md`) are
-indexed separately in `../PROJECT_INDEX.md`.
+**181 files at `docs/` top level as counted 2026-08-16** (plus the subfolders — `MASTER_CATALOG/`,
+`design/`, `qa/`, `_archive/`, …). ⚠ **These counts drift weekly — count them, don't quote them**
+(`ls docs/*.md | wc -l`); they read as 167 and 100 for weeks after the tree had moved. Find your
+category, don't grep blind. Root-level project files (**118** as counted 2026-08-16) are indexed
+separately in `../PROJECT_INDEX.md`.
 
 ## Start here / canon
 
@@ -56,13 +58,20 @@ indexed separately in `../PROJECT_INDEX.md`.
   `LEGENDARY_GEAR_DESIGN.md`, `ITEM_DROPS_CONSUMABLES_DESIGN.md`,
   `SCROLL_BLUEPRINT_SYSTEM_DESIGN.md`, `BATTLE_2D_PARTY_DESIGN.md`
 - Economy: `RESOURCE_ECONOMY_DESIGN.md`, `GLIMMER_ECONOMY_OPEN_QUESTION.md`,
-  `monetization-v2-spec.md`, `anti-cheat-spec.md`
+  `monetization-v2-spec.md`, `anti-cheat-spec.md`. Jewel polishing is data-driven off
+  `jewel-polish.json` (dual-copied under `Assets/Resources/Data/Canonical/` **and**
+  `Assets/StreamingAssets/Data/Canonical/`), read by `Core/Catalog/PolishBonusProvider`; the surface is
+  `Village/Crafting/JewelPolishService` + `JewelPolishConfirmPanel`
 - World/village: `avalon-village-layout-spec.md` (historical name; village is Elarion),
   `PLAYER_BASE_DESIGN_CATALOG_ROADMAP.md`, `PROPER_VERTICALITY_PLAN.md`,
   `world-construction-plan.md`, `elemental-codex.md`
 - Dungeons: `DUNGEON_DESIGNS.md`, `dungeon-3d-healers-cottage-design.md`,
-  `dungeons-3d-unity-layout-spec.md`. **Current end-to-end state:** `qa/dungeon-raid-validation-2026-07-26.md` + `qa/dungeon-regression-2026-07-26.md` (dungeons are a functional enter → explore → fight-with-real-win/loss → settle → leave loop; code in `Assets/_Modules/Dungeons/`)
-- Raid / troops / work queue (current V1 spine — code in `Assets/_Modules/Village/Troops/` + `Assets/_Modules/Core/Jobs/`): the raid loop is LOCKED to the COC **Teleport/Deploy** model (WO-771); shared enemy classes/families + `EnemyResolver` (WO-772); the common multi-channel "Obsidian" work queue — Builder/Train/Research (WO-773, landed at save v35; live schema is now **v36**). Firmed-WO set + status: `qa/SUNDAY_STATUS_2026-07-26.md`; validation: `qa/dungeon-raid-validation-2026-07-26.md`.
+  `dungeons-3d-unity-layout-spec.md`. Run grading + payout are data-driven: `dungeon-balance.json`
+  (dual-copied under `Assets/Resources/Data/Canonical/` **and** `Assets/StreamingAssets/Data/Canonical/`),
+  read by `Core/Catalog/DungeonRunGrade`, `DungeonRunPayout` and `DungeonExclusiveItems`; the composed-
+  dungeon runtime host lives in `Assets/_Modules/Dungeons/` (`ComposedDungeonHost`, `ComposedPropVisuals`,
+  `ComposedPropSpin`, `DungeonLanternBalance`). **Current end-to-end state:** `qa/dungeon-raid-validation-2026-07-26.md` + `qa/dungeon-regression-2026-07-26.md` (dungeons are a functional enter → explore → fight-with-real-win/loss → settle → leave loop; code in `Assets/_Modules/Dungeons/`)
+- Raid / troops / work queue (current V1 spine — code in `Assets/_Modules/Village/Troops/` + `Assets/_Modules/Core/Jobs/`): the raid loop is LOCKED to the COC **Teleport/Deploy** model (WO-771); shared enemy classes/families + `EnemyResolver` (WO-772); the common multi-channel "Obsidian" work queue — Builder/Train/Research (WO-773, landed at save v35; **do not quote the live schema version here — read `Assets/_Modules/Core/State/SaveSchema.cs:CurrentVersion`.** This clause said "v36" long after the tree had moved on; a copied number always rots). Firmed-WO set + status: `qa/SUNDAY_STATUS_2026-07-26.md`; validation: `qa/dungeon-raid-validation-2026-07-26.md`.
 - Other: `CAMERA_INPUT_OVERHAUL.md`, `CHARACTER_CREATOR.md`, `CHARACTER_REFACTOR_PLAN.md`,
   `audio-mix-spec.md`
 - `TUTORIAL_V2_SPEC_2026-07-02.md` — **Tutorial V2** (7 owner-ratified steps, tutorial-steps.json + interpreter; BUILT behind `ff.tutorialv2`, default OFF)
@@ -96,6 +105,11 @@ indexed separately in `../PROJECT_INDEX.md`.
     with its disqualifying measurement, the owner rulings, and the open items
   - `reference/DEFECT_INDEX_2026-08-05.md` — the same, for the earlier half of 2026-08-05 (dungeon P0,
     wallet dossier, catalog fallback drift)
+  - `reference/ICON_CATALOG.md` — **the single icon registry** (2026-08-16): all 1 076 icon files across
+    `ItemIcons` / `RpgUi` / `Talents` / `HudIcons` / `ProjectileIcons`, every row tagged
+    Ranger / Knight / Mage / Shared / Cleric / Unassigned and cited. Records the authored-first resolution
+    order, the authored-vs-fallback health ratio, orphans, missing rows and collisions. Pairs with
+    `reference/WEAPON_CATALOG.md` (which is the authority on the gear curation pipeline).
   - `reference/REGRESSION_COVERAGE_MATRIX.md` — ⚠ **counts are stale; use its proposed assertions only**
   - `reference/HERO_ANIMATION_DICTIONARY.md` · `reference/DOTWEEN_SME.md` ·
     `reference/MASTER_BACKLOG_2026-07-19.md`

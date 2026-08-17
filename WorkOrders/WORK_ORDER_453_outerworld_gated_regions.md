@@ -1,3 +1,10 @@
+> ⚠ **NUMBER COLLISION — this document does not own WO-453; `WORK_ORDER_453_dev_capture_toolkit.md` does.**
+> Referred to hereafter as **WO-453-C (OuterWorld gated regions)**.
+> Flagged by the 2026-08-16 Sunday board-grooming pass (`python tools/board_build.py` → `DUPLICATE_WO_NUMBERS`);
+> ownership decided by **first-on-disk** (`git log --follow --diff-filter=A`): the winner's file was created first.
+> Banner only — nothing was renumbered or deleted.
+> ⚠ **Work HAS shipped under this number** — commit messages and/or a `.RESULT.md` cite WO-453 for THIS document. It is deliberately **not renumbered**; a renumber would orphan those references. Use the alias above when you need to name it unambiguously.
+
 # WORK_ORDER_453 — OuterWorld expansion: gated regions, walled edges, navlink path-cuts, leashed monster families
 
 **Status: READY TO IMPLEMENT (Region 1 first — prove ONE, then replicate)**

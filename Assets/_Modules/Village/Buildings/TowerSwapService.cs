@@ -326,7 +326,16 @@ namespace DeNelle.Village
         private async UniTaskVoid LogSwapToBackendAsync(
             string fromTower, string toTower, int waveId, string currency, string txSig)
         {
-            var playerId = GameStateService.Instance?.State?.BoundWallet ?? "anonymous";
+            // The backend now PROVES the logging identity (security audit
+            // 2026-08-15) — the row was a forgeable financial audit trail while
+            // playerId came from the body. No identity means nothing to log under.
+            var playerId = DeNelle.Core.Web3.BackendRequestSigner.CurrentPlayerId();
+            if (string.IsNullOrEmpty(playerId))
+            {
+                FlowTrace.Warn("TowerSwap", "No player identity - skipping backend swap log.");
+                return;
+            }
+
             var payload = JsonConvert.SerializeObject(new
             {
                 playerId,
@@ -344,6 +353,12 @@ namespace DeNelle.Village
             req.uploadHandler   = new UploadHandlerRaw(bodyRaw);
             req.downloadHandler = new DownloadHandlerBuffer();
             req.SetRequestHeader("Content-Type", "application/json");
+
+            if (!await DeNelle.Core.Web3.BackendRequestSigner.TryAttachAsync(req, playerId, bodyRaw))
+            {
+                FlowTrace.Warn("TowerSwap", "Could not authenticate the backend swap log - aborting the log POST.");
+                return;
+            }
 
             try { await req.SendWebRequest(); }
             catch { /* non-critical — EventTracker already captured the event */ }

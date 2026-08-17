@@ -39,6 +39,7 @@
       "onlyEquippable": true,
       "perLevelCap": 2,
       "excludeIdPrefixes": [],
+      "_excludeIdPrefixesNote": "DELIBERATELY EMPTY, and deliberately DIFFERENT from the armorer's ['blink_'] - this is a ruling, not drift. WO-860 (2026-08-02) asked for the blink_ exclusion on both shelves and only the armorer got it; the owner then RATIFIED the WO-500 damage curve on all 65 blink_ WEAPON rows and unhid them (2026-08-14, 'apply the ratified WO-500 curve to the 65 and unhide them'), which makes them shelf CONTENT rather than art-pack placeholders. The armorer keeps its exclusion for the opposite reason: blink ARMOR is junked (ff.blinkarmor OFF, pivot 2026-06-22). Pinned by ForgeShelfClassKindRegression case 3 - if this list ever changes, change this note in the SAME edit or the suite goes red.",
       "emptyLine": "Nothing on the rack fits your hand yet - come back after you level up and I'll have new stock.",
       "footerLine": "That's all I can offer at your level - come back after you level up for new stock."
     },

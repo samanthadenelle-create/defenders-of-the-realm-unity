@@ -233,6 +233,101 @@ namespace DeNelle.Village
             else           _locomotion.ClearLockFace();
         }
 
+        // ── WO-1105 R3 — RANGED CLASSES LOCK FACING TO THEIR TARGET ──────────────────────────
+        //
+        // Owner verbatim (2026-08-16): "can we add that when a ranger is targeting a enemy they
+        // lock facing the enemy". An archer who shoots sideways reads as broken.
+        //
+        // THIS IS A WIRING JOB, NOT A NEW FACING SYSTEM. The slew already exists end to end
+        // (HeroLocomotion.SetLockFace/ClearLockFace/ApplyLockFaceYaw, WO-512 slice 3) and is
+        // already the sole rotation writer for the frames it owns. Two things kept it from ever
+        // reaching the ranger, and this method fixes exactly those two:
+        //   (1) it was only ever driven from the MANUAL lock paths (EngageLock / CycleLock / tap /
+        //       ClearLock via DriveLockFace). The AUTO-acquired target -- which is what the ranger
+        //       has almost all the time -- never drove it. Driving off CurrentTarget covers BOTH,
+        //       because CurrentTarget is literally `_locked ?? NearestCandidate()` (see LateUpdate).
+        //   (2) it was gated on FeatureFlags.LockOn, DEFAULT OFF. That flag guards the lock-on
+        //       CAMERA experiment (mobile nausea); body facing is not that experiment, so this
+        //       passes force:true to honor the slew with the flag off. Flag ON is unaffected --
+        //       both paths set the same target on the same one authority.
+        //
+        // SCOPED BY THE DERIVED PREDICATE, NEVER A CLASS-NAME CHECK (WO-1105 section 3c). The test
+        // is HeroAbilities.TryGetRangedPrimary against the MEASURED melee reach -- the same single
+        // seam that already gates auto-acquire (AutoEngageRange) and the Focus refund rule. Melee
+        // classes fail it and are byte-identical to today: this method never touches their facing.
+        //
+        // POSITION IS NEVER TOUCHED. Only the rotation branch changes inside HeroLocomotion; the
+        // camera-relative MOVE vector is untouched, so strafing and backing away while facing the
+        // foe -- the whole point of an archer -- fall out for free.
+        private bool _rangedFaceEngaged;   // we (not the manual lock path) currently own the lock-face
+
+        /// <summary>
+        /// True when this hero's class has a RANGED primary, via the one derived seam
+        /// <see cref="HeroAbilities.TryGetRangedPrimary"/> and the MEASURED melee reach from
+        /// <see cref="PlayerAttackController.AttackRange"/> (never a metre literal, never a class
+        /// name). Mirrors <see cref="AutoEngageRange"/>'s resolution exactly so acquisition and
+        /// facing can never disagree about whether this hero shoots.
+        /// </summary>
+        private bool IsRangedClass()
+        {
+            if (_abilities == null) _abilities = GetComponent<HeroAbilities>();
+            if (_abilities == null) return false;
+            if (_attack == null) _attack = GetComponent<PlayerAttackController>();
+            float meleeReach = _attack != null ? _attack.AttackRange : 0f;
+            return _abilities.TryGetRangedPrimary(meleeReach, out _);
+        }
+
+        /// <summary>
+        /// WO-1105 R3 — hold the hero's facing on <see cref="CurrentTarget"/> for a ranged class.
+        /// Runs every LateUpdate AFTER CurrentTarget is resolved, so it follows the target through
+        /// auto-acquire, a sticky tap override and a cycle without caring which produced it.
+        /// Release is structural rather than a second rule: CurrentTarget goes null when the foe
+        /// dies, leaves the acquire ring, breaks line-of-sight or is cleared, and this clears with
+        /// it. The hero-death path is unaffected -- HeroHealth disables HeroLocomotion outright
+        /// (so no yaw is applied) and also calls ClearLockFace; we additionally skip a disabled or
+        /// absent locomotion here so a downed hero is never re-faced.
+        /// </summary>
+        private void DriveRangedFacing()
+        {
+            DeNelle.Core.Diagnostics.Guard.Try("Reticle", "ranged-facing", () =>
+            {
+                if (_locomotion == null) _locomotion = GetComponent<HeroLocomotion>();
+                if (_locomotion == null || !_locomotion.enabled)
+                {
+                    _rangedFaceEngaged = false;
+                    return;
+                }
+
+                if (!IsRangedClass())
+                {
+                    // Melee class: never our business. Only release a lock-face WE engaged -- a
+                    // manual WO-512 lock on a melee hero is the other path's to own.
+                    if (_rangedFaceEngaged)
+                    {
+                        _rangedFaceEngaged = false;
+                        _locomotion.ClearLockFace();
+                    }
+                    return;
+                }
+
+                Transform t = null;
+                if (CurrentTarget != null && CurrentTarget.IsAlive)
+                    t = (CurrentTarget as MonoBehaviour)?.transform;
+
+                if (t != null)
+                {
+                    // force:true -- see the block comment: body facing is not the lock-on camera flag.
+                    _locomotion.SetLockFace(t, true);
+                    _rangedFaceEngaged = true;
+                }
+                else if (_rangedFaceEngaged)
+                {
+                    _rangedFaceEngaged = false;
+                    _locomotion.ClearLockFace();
+                }
+            });
+        }
+
         private Transform _reticle;
         private Material _reticleMat;
         private Camera _cam;
@@ -473,6 +568,9 @@ namespace DeNelle.Village
             // WO-1105 R1 marker: the owner-picked Marker 2 Pointer Loop rides the CURRENT target
             // (auto or tap-locked) so "what am I about to shoot" is never colour-only.
             UpdateTargetMarker();
+
+            // WO-1105 R3: an archer faces what she is shooting (owner 2026-08-16).
+            DriveRangedFacing();
 
             if (CurrentTarget == null || !CurrentTarget.IsAlive)
             {

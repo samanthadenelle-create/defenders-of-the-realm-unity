@@ -1,3 +1,9 @@
+> ⚠ **NUMBER COLLISION — this document does not own WO-435; `WORK_ORDER_435_weapon_grip_orientation.md` does.**
+> Referred to hereafter as **WO-435-C (bridge navmesh clip)**.
+> Flagged by the 2026-08-16 Sunday board-grooming pass (`python tools/board_build.py` → `DUPLICATE_WO_NUMBERS`);
+> ownership decided by **first-on-disk** (`git log --follow --diff-filter=A`): the winner's file was created first.
+> Banner only — nothing was renumbered or deleted.
+
 # WO-435 — P1 Bug: Hero clips through/under bridge — NavMesh not covering bridge surface
 
 **Status:** READY TO IMPLEMENT  

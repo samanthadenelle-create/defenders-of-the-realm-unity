@@ -338,6 +338,14 @@ namespace DeNelle.Village
                  "Leave blank to use the built-in VfxPool fallbacks.")]
         [SerializeField] private EnemyTypeVfxSet _typeVfxSet;
 
+        /// <summary>
+        /// Latched in <see cref="Awake"/>: TRUE when a prefab actually authored
+        /// <c>_typeVfxSet</c>, so <see cref="EnsureTypeVfxSet"/> never overwrites hand-
+        /// authored art with the library floor. Pool reuse keeps the latch (Awake runs
+        /// once per instance, and the serialized value cannot change after that).
+        /// </summary>
+        private bool _typeVfxSetAuthored;
+
         // AudioSource is optional — Enemy does not require one, but needs it to
         // actually play the clip. Resolved in Awake if not set in Inspector.
         [Tooltip("AudioSource used to play hit / death / attack clips. " +
@@ -572,6 +580,12 @@ namespace DeNelle.Village
             // The component is inert (no loop, no registration) for an archetype whose
             // SpeciesAuraVfx is None, so attaching it to every enemy costs nothing.
             EnemyAuraVFX.Ensure(gameObject);
+
+            // Per-type cue set, resolved from the stat block's FAMILY. Configure is the
+            // one place every spawn path (wave / roamer / tribe / arena) sets _def, and
+            // it is also the pooled-reuse entry point, so a recycled body re-resolves
+            // exactly as a fresh one does. Non-null by contract - see EnsureTypeVfxSet.
+            EnsureTypeVfxSet(def);
 
             if (def != null)
             {
@@ -825,6 +839,11 @@ namespace DeNelle.Village
             EnsureAgent();
             EnsureAnimator();
             EnsureAudio();
+            // Per-type cue floor. Latch an AUTHORED prefab reference first (it wins
+            // forever), then resolve the library floor so even an enemy that never
+            // reaches Configure (hand-placed, family test spawner) has a telegraph.
+            _typeVfxSetAuthored = _typeVfxSet != null;
+            EnsureTypeVfxSet(null);
             EnsureHitReaction();
             EnsureHealthBar();
             // POOL-RESET AUDIT: snapshot the authored hero-aggro radius BEFORE any def
@@ -911,6 +930,47 @@ namespace DeNelle.Village
             // the integrator should configure (3D falloff, volume rolloff, etc.).
             // If null, PlayTypeSound is a no-op and the enemy runs silently until
             // an AudioSource is added to the prefab.
+        }
+
+        /// <summary>
+        /// Guarantees <c>_typeVfxSet</c> is non-null (2026-08-16 combat-cue fix).
+        ///
+        /// The per-prefab assignment this field was designed around NEVER LANDED - the
+        /// only EnemyTypeVfxSet asset's GUID appears nowhere but its own .meta, and the
+        /// live enemies are not prefab instances at all (EnemyFactory builds them with
+        /// AddComponent&lt;Enemy&gt;). Every telegraph / per-type sound / hit-VFX branch in
+        /// this file therefore took its hardcoded fallback forever: no readable wind-up.
+        ///
+        /// Resolution is ADDRESS-based (<see cref="EnemyTypeVfxLibrary"/>, a Resources
+        /// path), never a serialized edge, so it cannot silently un-assign again.
+        /// Called twice: from <see cref="Awake"/> with no def (the floor), and from
+        /// <see cref="Configure"/> once the stat block names a family (the upgrade).
+        /// An AUTHORED prefab reference is never overwritten.
+        /// </summary>
+        private void EnsureTypeVfxSet(EnemyDef def)
+        {
+            if (_typeVfxSetAuthored) return;                                   // prefab art wins
+            if (_typeVfxSet != null && !EnemyTypeVfxLibrary.IsLibrarySet(_typeVfxSet))
+            {
+                // Assigned after Awake by something other than this library - treat it
+                // as authored from here on.
+                _typeVfxSetAuthored = true;
+                return;
+            }
+
+            EnemyTypeVfxSet resolved = EnemyTypeVfxLibrary.Resolve(def);
+            if (resolved == null)
+            {
+                // EnemyTypeVfxLibrary.Resolve is contractually non-null; if that ever
+                // changes, the enemy would silently lose its telegraph again. Say so.
+                DeNelle.Core.Diagnostics.FlowTrace.Fail("EnemyVfx",
+                    $"'{_enemyId}': EnemyTypeVfxLibrary.Resolve returned NULL for family " +
+                    $"'{(def != null ? def.Family : "<no-def>")}' - this enemy has NO wind-up " +
+                    "telegraph, no per-type sound and no hit VFX.");
+                return;
+            }
+
+            _typeVfxSet = resolved;
         }
 
         /// <summary>The kind of combat beat a fallback SFX covers (WO-220).</summary>
@@ -1413,8 +1473,19 @@ namespace DeNelle.Village
                 _heroTransform.position - transform.position, Vector3.up).sqrMagnitude;
 
             // Hysteresis: enter at _heroAggroRadius, leave only past the drop margin.
+            // ⚠ THE DROP MARGIN IS THE WORLD-SIDE BAITING LEASH (owner: "we need to allow aggro
+            // targets to extend leash alot more", 2026-08-16). At the old 2.5m default a wave
+            // enemy lost interest at ~9.5m — INSIDE bow range — so a ranger could not hold aggro
+            // long enough to pull one body off a pack, and the enemy simply turned back to its
+            // Heart-march. A chase that survives 2.5m past the notice ring is not a chase.
+            // AggroTuning.WorldChaseDropMargin (aggro-tuning.json "world") raises the FLOOR to
+            // ~18m: break-off now sits just past bow range, so a shot holds aggro, and the enemy
+            // still gives up well before it reaches town. Max() so a def that authored a LARGER
+            // margin keeps it. Data, not a constant — tune without a rebuild; 0 restores stock.
             float engageR = _heroAggroRadius;
-            float dropR   = _heroAggroRadius + _heroAggroDropMargin;
+            float dropR   = _heroAggroRadius + Mathf.Max(
+                _heroAggroDropMargin,
+                DeNelle.Village.AggroTuning.WorldChaseDropMargin);
             float threshold = _heroAggroEngaged ? dropR : engageR;
             if (planarSqr > threshold * threshold) { _heroAggroEngaged = false; return false; }
 
@@ -1548,6 +1619,14 @@ namespace DeNelle.Village
         /// the rooted-cast floor (RootedCast uses 1.0s) so melee and cast read alike.
         /// </summary>
         private const float ContactTelegraphFloor = 1.0f;
+
+        /// <summary>
+        /// The ROOTED-CAST wind-up every ranged caster used before 2026-08-16 (when
+        /// <c>_typeVfxSet</c> was universally null). Kept as a FLOOR in
+        /// <see cref="RootedCast"/> so making the type set resolve can only lengthen a
+        /// tell, never shorten one - the cue fix must not quietly retune difficulty.
+        /// </summary>
+        private const float RangedCastWindUpFloor = 1.2f;
 
         /// <summary>
         /// DEF-48 / WO-560: Plays the wind-up animation + a ground-ring danger tell at
@@ -1774,10 +1853,13 @@ namespace DeNelle.Village
         // stop, pin the active-loop cap, and starve every other loop/aura. FireballImpact_Impact is a
         // full-layer explosion that is also oneshot, so it reads rich AND self-cleans. All three
         // resolve to full prefabs in HovlVfxCatalog and route through the ONE VFXManager pool (PlayKey).
-        private const string DefaultCastVfxKey       = "Fire_Cast";
-        private const string DefaultProjectileVfxKey = "PP_FireBall";
-        private const string DefaultImpactVfxKey     = "FireballImpact_Impact";
-        private static readonly Color DefaultRangedVfxTint = new Color(1f, 0.55f, 0.15f, 1f); // fire orange (recolorable rows only; shape/motion reads regardless)
+        // ONE declaration, shared with EnemyTypeVfxSet's field initializers (2026-08-16):
+        // an un-authored set now resolves for EVERY enemy, so if these constants and the
+        // SO's defaults ever disagreed the library would silently re-skin every caster.
+        private const string DefaultCastVfxKey       = EnemyTypeVfxSet.DefaultCastVfxKey;
+        private const string DefaultProjectileVfxKey = EnemyTypeVfxSet.DefaultProjectileVfxKey;
+        private const string DefaultImpactVfxKey     = EnemyTypeVfxSet.DefaultImpactVfxKey;
+        private static readonly Color DefaultRangedVfxTint = EnemyTypeVfxSet.DefaultRangedVfxTint; // fire orange (recolorable rows only; shape/motion reads regardless)
 
         // Visible-cast VFX for ranged/mage casters (owner F8: "could not tell he was casting").
         // Lazily added so the enemy fires a real arcane orb that the player SEES leave + land.
@@ -1800,8 +1882,15 @@ namespace DeNelle.Village
 
             // Telegraph window — readable wind-up before the strike. Reuse the type-set's
             // configured telegraph duration when present, else a sane default.
-            float windUp = (_typeVfxSet != null && _typeVfxSet.TelegraphDuration > 0f)
-                ? _typeVfxSet.TelegraphDuration : 1.2f;
+            // NO-SHORTENING RULE (2026-08-16): the type set may only LENGTHEN this tell.
+            // Before today _typeVfxSet was always null here, so every cast used the 1.2s
+            // default; now that the set always resolves (EnemyTypeVfxLibrary), a plain
+            // "use the set's value" read would have SILENTLY CUT the cast tell to the
+            // default asset's 0.5s -> 1.0s floor. Shortening a wind-up is a balance change
+            // and this fix is a plumbing fix, so the previous default is kept as the floor.
+            float windUp = Mathf.Max(
+                _typeVfxSet != null ? _typeVfxSet.TelegraphDuration : 0f,
+                RangedCastWindUpFloor);
             // Readable-telegraph floor (owner F8: "animations from enemy very boring, could
             // not tell he was casting"). A sub-second wind-up doesn't register; hold >=1.0s so
             // the WindUp pose reads as a deliberate, reactable channel before the strike.

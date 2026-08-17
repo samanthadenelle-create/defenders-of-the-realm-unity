@@ -1,3 +1,9 @@
+> ⚠ **NUMBER COLLISION — this document does not own WO-108; `WORK_ORDER_108_player_build_mode.md` does.**
+> Referred to hereafter as **WO-108-B (castle world overhaul)**.
+> Flagged by the 2026-08-16 Sunday board-grooming pass (`python tools/board_build.py` → `DUPLICATE_WO_NUMBERS`);
+> ownership decided by **first-on-disk** (`git log --follow --diff-filter=A`): the winner's file was created first.
+> Banner only — nothing was renumbered or deleted.
+
 # WORK_ORDER_108 — Major Village Castle Town (Last Bastion) + World/Region Extension Overhaul
 
 **Status:** CLOSED — SUPERSEDED (owner-approved sweep 2026-08-09: fixed-layout overhaul vs player-built town; sibling WO-108 player_build_mode has a RESULT)

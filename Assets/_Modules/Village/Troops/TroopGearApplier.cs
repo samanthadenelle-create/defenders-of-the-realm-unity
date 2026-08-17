@@ -114,6 +114,24 @@ namespace DeNelle.Village
 
             if (isBow)
             {
+                // ⚠ KNOWN GAP, DELIBERATELY NOT CHANGED HERE (2026-08-16). The owner's canonical bow
+                // rule is UNIVERSAL - "all players and enemies follow this rule" - and every OTHER
+                // bow path now DERIVES its seat from the rig via
+                // DeNelle.Core.Geometry.WeaponBoundsOrient.ComputeBowHeldRotation (read its header:
+                // it carries her four-clause rule verbatim). The hero + enemy archers get it through
+                // HeroBowAttachment; companions and non-ranger classes through
+                // EquipmentController.AttachLoadedProp's bow branch, drawn AND sheathed.
+                //
+                // THIS line is the last dialed constant, and the Euler below is exactly the kind of
+                // one-axis guess the rule rejects: it can only pitch the prop, so it has no answer
+                // for which way the BELLY faces (clauses 2 and 4 - string parallel to and nearest
+                // the person, hand on the curved edge furthest from the person). It is left alone
+                // tonight for a REASON, not an oversight: TroopGearApplier instantiates the troop
+                // prefab RAW - it never runs NormalizeInto - so prop-local +Y is not guaranteed to
+                // be the limb span and the derivation's premise does not hold here. Routing this
+                // through it means first normalising every troop prop, which re-sizes ALL troop
+                // gear (this method also seats spears, staves, axes, shields off the same path).
+                // That is its own lane with its own felt-check, not a rider on the bow fix.
                 t.localPosition = new Vector3(0.02f, 0.04f, 0.02f);
                 t.localRotation = Quaternion.Euler(-90f, 0f, 0f);
                 t.localScale = Vector3.one * 1.0f;

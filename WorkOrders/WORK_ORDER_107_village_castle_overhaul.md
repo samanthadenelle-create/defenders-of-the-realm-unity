@@ -1,3 +1,9 @@
+> ⚠ **NUMBER COLLISION — this document does not own WO-107; `WORK_ORDER_107_climate_regions_terrain.md` does.**
+> Referred to hereafter as **WO-107-B (village/castle overhaul)**.
+> Flagged by the 2026-08-16 Sunday board-grooming pass (`python tools/board_build.py` → `DUPLICATE_WO_NUMBERS`);
+> ownership decided by **first-on-disk** (`git log --follow --diff-filter=A`): the winner's file was created first.
+> Banner only — nothing was renumbered or deleted.
+
 # WORK_ORDER_107 — Major Village Castle Overhaul: Dream Defensible Medieval Castle Town (Elarion)
 
 **Status:** CLOSED — SUPERSEDED (owner-approved sweep 2026-08-09: dream fixed-layout castle vs player-built town)

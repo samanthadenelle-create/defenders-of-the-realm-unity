@@ -66,13 +66,16 @@ namespace DeNelle.Editor
                 {
                     // The GameStateService singleton/state seam moved — genuinely unrunnable
                     // headless. NAMED SKIP (return true), never a false FAIL (harness-integrity).
-                    reason = "VILLAGE ECONOMY skipped: needs fleet — " + installErr;
-                    return true;
+                    return DeNelle.Editor.Regression.RegressionOutcome.Skip(out reason,
+                        "VILLAGE ECONOMY", "needs fleet -- " + installErr);
                 }
                 installed = true;
                 var state = gss.State;   // the throwaway — never null now
                 if (state == null)
-                { reason = "VILLAGE ECONOMY skipped: needs fleet — throwaway state did not install"; return true; }
+                {
+                    return DeNelle.Editor.Regression.RegressionOutcome.Skip(out reason,
+                        "VILLAGE ECONOMY", "needs fleet -- throwaway state did not install");
+                }
 
                 var econ = EconomyService.Instance;
                 if (econ == null)

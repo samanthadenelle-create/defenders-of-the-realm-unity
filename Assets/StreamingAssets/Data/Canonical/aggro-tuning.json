@@ -1,0 +1,18 @@
+{
+  "version": 1,
+
+  "arena": {
+    "chaseLeashRadius": 34.0,
+    "engageContactRadius": 38.0,
+    "disengageSeconds": 10.0
+  },
+
+  "brain": {
+    "chaseLeashRadius": 30.0,
+    "engagedPursuitSlack": 14.0
+  },
+
+  "world": {
+    "chaseDropMargin": 18.0
+  }
+}

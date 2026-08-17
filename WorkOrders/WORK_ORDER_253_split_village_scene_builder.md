@@ -1,3 +1,10 @@
+> ⚠ **UNRESOLVED NUMBER COLLISION — WO-253 is claimed by more than one file and OWNERSHIP IS NOT DECIDED.**
+> Co-claimants: `WORK_ORDER_253_split_village_scene_builder.md`, `WORK_ORDER_253_tutorial_speech_bubble_overlay.md`
+> Both files were added in the SAME commit (first-on-disk is a dead tie) and neither is cited by any other doc, RESULT file, or commit message — there is no evidence on either side.
+> Flagged (not resolved) by the 2026-08-16 Sunday board-grooming pass — a wrong ownership call is worse
+> than a flagged unknown, so this needs an **owner ruling**. Nothing renumbered or deleted. Until it is
+> ruled, cite this WO by FILENAME, never by bare number.
+
 # WO-253: Split VillageSceneBuilder into partial-class files
 **Linear:** [DEF-154](https://linear.app/defenders-of-the-realm/issue/DEF-154/wo-207-split-villagescenebuilder-into-partial-class-files)
 **Lane:** World/Environment

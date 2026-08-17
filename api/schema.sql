@@ -419,25 +419,39 @@ CREATE INDEX IF NOT EXISTS idx_referral_claims_referrer
 -- =============================================================================
 -- 7. tower_swaps  — audit log of paid instant tower swaps (Solana Pay).
 -- -----------------------------------------------------------------------------
--- Endpoint : POST /api/tower-swap/log  (FUNCTION NOT YET IN api/ — client-only)
+-- Endpoint : POST /api/tower-swap/log
 -- Client   : Assets/_Modules/Village/Buildings/TowerSwapService.cs
 --
--- Fire-and-forget log POSTed after a successful on-chain payment:
+-- Log POSTed after a swap payment. WALLET-GATED (_lib/wallet-auth.authenticate),
+-- so player_id is a PROVEN identity, not a body field:
 --   { playerId, waveId, fromTower, toTower, currency, costUsdc, txSig, timestamp }
---     playerId   string — BoundWallet | "anonymous"
+--     playerId   string — the authenticated identity (must match the auth headers)
 --     waveId     int    — wave number the swap happened on
 --     fromTower  string — tower display name swapped FROM (e.g. "Arcane")
 --     toTower    string — tower display name swapped TO
---     currency   string — CurrencyKind.ToString() ("Usdc" | "Skr")
---     costUsdc   number — flat cost in USDC (currently 2.5)
---     txSig      string — Solana transaction signature (on-chain proof)
+--     currency   string — CurrencyKind.ToString() ("Usdc" | "Skr")   CLIENT-CLAIMED
+--     costUsdc   number — flat cost in USDC (currently 2.5)          CLIENT-CLAIMED
+--     txSig      string — Solana transaction signature
 --     timestamp  long   — client unix epoch SECONDS (note: SECONDS, not millis)
 --
--- This is a pure append-only audit/analytics log. tx_sig is UNIQUE so a
--- duplicate POST of the same on-chain payment can't be logged twice (the client
--- sends fire-and-forget with no dedup, so the DB guards it). tx_sig may be NULL
--- if a swap path ever logs without an on-chain signature, so the UNIQUE index
--- is partial (NULLs allowed, only non-null sigs deduped).
+-- ── HOW MUCH OF A ROW IS PROOF (corrected 2026-08-15) ────────────────────────
+-- These comments used to call tx_sig "on-chain proof" while the endpoint asked
+-- the chain NOTHING and trusted every field from the request body. Read the
+-- `verification` column before treating any row as evidence of a payment:
+--
+--   'onchain'        SOLANA_RPC_URL was configured and getTransaction confirmed
+--                    the signature exists, succeeded, and was SIGNED BY the
+--                    authenticated wallet. Even here, cost_usdc and currency are
+--                    still CLIENT-CLAIMED — recipient/amount checking needs the
+--                    treasury address + SPL mint and is not implemented yet.
+--   'client-claimed' No RPC configured (or a guest-rail row). A business record
+--                    of what the client said happened. NOT proof of payment.
+--
+-- tx_sig is UNIQUE so the same signature can't be logged twice. tx_sig may be
+-- NULL if a swap path ever logs without a signature, so the UNIQUE index is
+-- partial (NULLs allowed, only non-null sigs deduped). Note the consequence the
+-- endpoint now alarms on: a conflict against a row owned by a DIFFERENT player
+-- is signature squatting, not an honest retry.
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS tower_swaps (
     swap_id    BIGINT      GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -449,8 +463,16 @@ CREATE TABLE IF NOT EXISTS tower_swaps (
     cost_usdc  NUMERIC(12,4),                       -- "costUsdc" (flat 2.5)
     tx_sig     TEXT,                                -- "txSig" (Solana signature)
     client_ts  BIGINT,                              -- "timestamp" — client unix epoch SECONDS
-    logged_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()   -- server receive time
+    logged_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),  -- server receive time
+    -- 'onchain' | 'client-claimed' — see the header. NEVER read a row as proof of
+    -- payment without checking this.
+    verification TEXT NOT NULL DEFAULT 'client-claimed'
 );
+
+-- Existing deployments predate the column; every pre-existing row was written
+-- with NO on-chain check at all, so 'client-claimed' is the truthful backfill.
+ALTER TABLE tower_swaps
+    ADD COLUMN IF NOT EXISTS verification TEXT NOT NULL DEFAULT 'client-claimed';
 
 -- One player's swap history, newest first.
 CREATE INDEX IF NOT EXISTS idx_tower_swaps_player_time

@@ -308,7 +308,8 @@ namespace DeNelle.Editor.Regression
             var entries = LoadCatalogEntries(out string loadError);
             if (entries == null)
             {
-                notes.Add($"catalog placement pass skipped ({loadError}) -- synthetic gate proof stands.");
+                notes.Add(DeNelle.Editor.Regression.RegressionOutcome.PartialSkip(
+                    "catalog placement pass", loadError + " -- synthetic gate proof stands"));
                 return;
             }
 

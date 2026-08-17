@@ -1,3 +1,9 @@
+> ⚠ **NUMBER COLLISION — this document does not own WO-181; `WORK_ORDER_181_villagescenebuilder_partial_split.md` does.**
+> Referred to hereafter as **WO-181-B (rampart stairs / upper siege defenses)**.
+> Flagged by the 2026-08-16 Sunday board-grooming pass (`python tools/board_build.py` → `DUPLICATE_WO_NUMBERS`);
+> ownership decided by **first-on-disk** (`git log --follow --diff-filter=A`): the winner's file was created first.
+> Banner only — nothing was renumbered or deleted.
+
 # WORK ORDER 181 — Rampart Stairs + Upper-Level Siege Defenses
 
 **Status:** READY TO IMPLEMENT

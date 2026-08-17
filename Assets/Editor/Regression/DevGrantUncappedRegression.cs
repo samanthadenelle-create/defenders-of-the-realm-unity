@@ -171,7 +171,13 @@ namespace DeNelle.Editor.Regression
                 return;
             }
 
-            int at = src.IndexOf("void " + Uncapped + "(", StringComparison.Ordinal);
+            // ⚠ RETURN-TYPE AGNOSTIC ON PURPOSE. This needle used to be "void " + Uncapped + "(",
+            // and it went RED the moment WO-1147 changed the grant family to return the APPLIED
+            // basket (void -> ResourceCost) so the Echo silo could stop popping the pre-clamp
+            // amount. The method was present and correct; the ORACLE was asserting a signature it
+            // never cared about. What this case actually protects is that the method EXISTS and
+            // routes through GrantUncapped - the return type is none of its business.
+            int at = src.IndexOf(" " + Uncapped + "(", StringComparison.Ordinal);
             if (at < 0)
             {
                 failures.Add("[economy-seams] EconomyService." + Uncapped + " is GONE - the dev surfaces resolve it " +
@@ -185,7 +191,12 @@ namespace DeNelle.Editor.Regression
                                  "re-pointed at the capped seam the dev grants are clamped again under an honest-looking name");
             }
 
-            if (src.IndexOf("void " + Capped + "(", StringComparison.Ordinal) < 0)
+            // Return-type agnostic for the same reason as the Uncapped needle above: WO-1147 moved
+            // this whole family from void to ResourceCost (the APPLIED basket) and a signature-shaped
+            // needle went red on a method that was present and correct. This case protects that the
+            // capped grant still EXISTS - player income must keep flowing through the bank cap -
+            // not what it returns.
+            if (src.IndexOf(" " + Capped + "(", StringComparison.Ordinal) < 0)
                 failures.Add("[economy-seams] the CAPPED EconomyService." + Capped + " is gone - player-facing income " +
                              "(ResourceCollector, MineNode, EchoService) depends on it and the bank cap is real design " +
                              "there; only DEV surfaces were meant to move off it");

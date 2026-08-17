@@ -1,3 +1,10 @@
+> ⚠ **UNRESOLVED NUMBER COLLISION — WO-280 is claimed by more than one file and OWNERSHIP IS NOT DECIDED.**
+> Co-claimants: `WORK_ORDER_280_go_live_blockers.md`, `WORK_ORDER_280_village2_wiring_gate.md`
+> Both added in the SAME commit (first-on-disk is a dead tie) and each is cited by exactly one other doc — the cross-reference tiebreak is also a tie.
+> Flagged (not resolved) by the 2026-08-16 Sunday board-grooming pass — a wrong ownership call is worse
+> than a flagged unknown, so this needs an **owner ruling**. Nothing renumbered or deleted. Until it is
+> ruled, cite this WO by FILENAME, never by bare number.
+
 # WO-280: Go-Live Blockers — Fix ALL before pushing to itch.io
 **Status:** READY TO IMPLEMENT
 **Priority:** P0 — BLOCKS DEPLOYMENT

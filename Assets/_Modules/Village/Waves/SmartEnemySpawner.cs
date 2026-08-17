@@ -64,6 +64,18 @@ namespace DeNelle.Village
         /// <param name="enemyRoot">Parent transform for spawned enemies (may be null).</param>
         /// <param name="waveId">Wave number — drives gate rotation + instance ids.</param>
         /// <param name="instanceCounter">Shared by-ref unique-id counter.</param>
+        /// <param name="maxToSpawn">
+        /// WO-1113 — CONCURRENCY BUDGET for this call: at most this many bodies are released,
+        /// and everything past it is written to <paramref name="deferred"/> for the caller to
+        /// release later as slots free. 0 = unlimited (the pre-WO-1113 behaviour).
+        /// The cap itself lives on WaveManager (`_maxSimultaneousEnemies`); this path only ever
+        /// receives a budget, so there is exactly one place the number is authored.
+        /// </param>
+        /// <param name="deferred">
+        /// Optional sink for the slots this call did NOT release (same ids, reduced counts).
+        /// Null = drop the remainder, which would THIN the wave — callers that pass a budget
+        /// must pass a sink and drain it, or the wave is silently short.
+        /// </param>
         public List<Enemy> SpawnWave(
             EnemyWaveComposition composition,
             EnemyCatalog         catalog,
@@ -71,11 +83,20 @@ namespace DeNelle.Village
             Transform            heart,
             Transform            enemyRoot,
             int                  waveId,
-            ref int              instanceCounter)
+            ref int              instanceCounter,
+            int                  maxToSpawn = 0,
+            List<WaveCompositionEntry> deferred = null)
         {
             var spawned = new List<Enemy>();
             if (composition == null || composition.Entries.Count == 0 || catalog == null)
                 return spawned;
+
+            // Remaining release budget for THIS call. int.MaxValue == uncapped.
+            int budget = maxToSpawn > 0 ? maxToSpawn : int.MaxValue;
+            if (maxToSpawn > 0 && deferred == null)
+                FlowTrace.Warn("Enemy",
+                    $"SpawnWave: wave {waveId} got a spawn budget of {maxToSpawn} with NO deferred sink — " +
+                    "everything over the budget would be DROPPED (wave thinned). Caller must pass a sink.");
 
             // ── Gate rotation: N → E → S → W → … across waves ─────────────────
             WaveSpawnPoint gate = PickGate(spawnPoints, waveId);
@@ -121,7 +142,21 @@ namespace DeNelle.Village
                     $"SmartSpawner resolve: id='{entry.EnemyId}' family='{def.Family}' count={entry.Count} " +
                     $"-> model '{slotModel}' (pos={entry.SpawnRole} brainRole={entry.Role})");
 
-                for (int i = 0; i < entry.Count; i++)
+                // WO-1113: release only what the budget allows; the rest is HELD (not dropped) so
+                // the wave's total count — and therefore its authored difficulty — is unchanged.
+                int release = ReleaseCountFor(entry.Count, budget);
+                if (release < entry.Count)
+                {
+                    if (deferred != null)
+                        deferred.Add(new WaveCompositionEntry(
+                            entry.EnemyId, entry.Count - release, entry.SpawnRole, entry.Role));
+                    FlowTrace.Step("Enemy",
+                        $"SmartSpawner budget: wave {waveId} slot '{entry.EnemyId}' releases {release}/{entry.Count} now, " +
+                        $"{entry.Count - release} HELD for reinforcement (concurrency cap).");
+                }
+                budget -= release;
+
+                for (int i = 0; i < release; i++)
                 {
                     Vector3 offset;
                     switch (entry.SpawnRole)
@@ -150,9 +185,45 @@ namespace DeNelle.Village
                     Vector3 rawPos = origin + offset;
 
                     // Snap onto the NavMesh so agents never start off-mesh.
+                    //
+                    // WO-1113 — THE MISS IS NO LONGER SILENT. This branch used to leave `pos` at
+                    // the RAW marker position on a SamplePosition miss and say nothing, while the
+                    // legacy WaveManager.SpawnOne path (which the player does NOT meet, since
+                    // _smartComposition routes here) had already been fixed for exactly this:
+                    // WO-430 warns and ground-snaps. So the live path could strand a whole wave
+                    // off-mesh — floating/sunken enemies that never move toward the Heart — and
+                    // leave no evidence in the break-log at all. Same miss, same remedy, and via
+                    // FlowTrace so F8 can actually see it (a bare Debug.LogWarning cannot).
                     Vector3 pos = rawPos;
                     if (NavMesh.SamplePosition(rawPos, out NavMeshHit hit, NavSnap, NavMesh.AllAreas))
+                    {
                         pos = hit.position;
+                    }
+                    else
+                    {
+                        FlowTrace.Warn("Enemy",
+                            $"SmartSpawner: NavMesh.SamplePosition MISS (no mesh within {NavSnap:0} m) for def " +
+                            $"'{def.Id}' at gate '{gate.SpawnId}' wave {waveId} — attemptedPos={rawPos}. " +
+                            "Ground-snapping by raycast instead of keeping the raw Y (would float/sink).");
+
+                        // Ground/terrain/default layers only (mirrors WaveManager.SpawnOne +
+                        // Enemy.SnapBodyToGround) — excludes the enemy's own Enemy-layer collider.
+                        int groundMask = LayerMask.GetMask("Default", "Terrain", "Ground");
+                        if (groundMask == 0) groundMask = Physics.DefaultRaycastLayers;
+                        Vector3 rayOrigin = new Vector3(rawPos.x, rawPos.y + 50f, rawPos.z);
+                        if (Physics.Raycast(rayOrigin, Vector3.down, out RaycastHit groundHit, 200f,
+                                groundMask, QueryTriggerInteraction.Ignore))
+                        {
+                            pos.y = groundHit.point.y;
+                        }
+                        else
+                        {
+                            FlowTrace.Warn("Enemy",
+                                $"SmartSpawner: ground-snap raycast ALSO missed at XZ=({rawPos.x:F1},{rawPos.z:F1}) " +
+                                $"for def '{def.Id}' — using the gate marker Y {origin.y:F1} as last resort.");
+                            pos.y = origin.y;
+                        }
+                    }
 
                     Vector3 toHeartDir = heart != null ? (heart.position - pos) : heading;
                     toHeartDir.y = 0f;
@@ -180,6 +251,12 @@ namespace DeNelle.Village
                     // ROOT-CAUSE TRACE: the actual GameObject that landed, once per model.
                     FlowTrace.Once("Enemy", $"first-spawn-{slotModel}",
                         $"instantiated '{enemy.gameObject.name}' for id '{def.Id}' (family '{def.Family}', model '{slotModel}')");
+
+                    // WO-1113 — V(erify) parity with WaveManager.VerifySpawnedEnemy, which only
+                    // ever guarded the LEGACY path. An off-mesh NavMeshAgent never moves, so the
+                    // enemy is live-but-frozen and the wave stalls with nothing in the log naming
+                    // why. Warn (skip-not-abort): the body still counts toward the wave.
+                    VerifyOnNavMesh(enemy, def, pos, waveId);
 
                     if (enemy.GetComponent<EnemyDamageable>() == null)
                         enemy.gameObject.AddComponent<EnemyDamageable>();
@@ -209,12 +286,55 @@ namespace DeNelle.Village
                 }
             }
 
+            int held = 0;
+            if (deferred != null)
+                for (int d = 0; d < deferred.Count; d++) held += deferred[d].Count;
+
             Debug.Log(
                 $"[SmartEnemySpawner] Wave {waveId} — released {spawned.Count} enemies " +
                 $"from gate '{gate.SpawnId}' ({gate.Direction}), {composition.Entries.Count} " +
-                $"role slots{(composition.HasElite ? " incl. ELITE" : "")}.");
+                $"role slots{(composition.HasElite ? " incl. ELITE" : "")}" +
+                (held > 0 ? $", {held} HELD by the concurrency cap (released as reinforcements)." : "."));
+            FlowTrace.Step("Enemy",
+                $"SmartSpawner wave {waveId}: released={spawned.Count} held={held} " +
+                $"budget={(maxToSpawn > 0 ? maxToSpawn.ToString() : "uncapped")} gate='{gate.SpawnId}'");
 
             return spawned;
+        }
+
+        /// <summary>
+        /// WO-1113 — the concurrency budget, as PURE arithmetic so an oracle can drive it
+        /// without a scene. How many more bodies may be on the field right now:
+        /// <paramref name="cap"/> 0 or less means "no cap" and returns 0, which every caller
+        /// reads as UNLIMITED (the same 0-means-off convention the serialized field uses).
+        /// </summary>
+        public static int BudgetFor(int cap, int liveCount)
+            => cap <= 0 ? 0 : Mathf.Max(0, cap - Mathf.Max(0, liveCount));
+
+        /// <summary>
+        /// WO-1113 — how many of a slot's <paramref name="slotCount"/> may be released into
+        /// <paramref name="remainingBudget"/> free places. Pure; the remainder is what the
+        /// caller must HOLD (never drop, or the cap silently becomes a wave thinner).
+        /// </summary>
+        public static int ReleaseCountFor(int slotCount, int remainingBudget)
+            => Mathf.Clamp(remainingBudget, 0, Mathf.Max(0, slotCount));
+
+        /// <summary>
+        /// WO-1113: a just-released enemy whose NavMeshAgent is OFF the mesh will never move
+        /// toward the Heart — the wave then stalls with a live, frozen body. Warn via FlowTrace
+        /// (never Debug alone: the F8 break-log only captures FlowTrace) so a capture pinpoints
+        /// which def / wave / position stranded, instead of showing a wave that "just stopped".
+        /// </summary>
+        private static void VerifyOnNavMesh(Enemy enemy, EnemyDef def, Vector3 pos, int waveId)
+        {
+            if (enemy == null) return;
+
+            var agent = enemy.GetComponentInChildren<NavMeshAgent>();
+            if (agent != null && agent.enabled && !agent.isOnNavMesh)
+                FlowTrace.Warn("Enemy",
+                    $"SmartSpawner: enemy '{def?.Id ?? "<null>"}' on '{enemy.gameObject.name}' (wave {waveId}) is OFF " +
+                    $"the NavMesh at {pos} (agent.isOnNavMesh==false) — it will NOT move toward the Heart; " +
+                    "the wave can stall on it.");
         }
 
         /// <summary>

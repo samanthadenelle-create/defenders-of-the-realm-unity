@@ -67,6 +67,13 @@ namespace DeNelle.Editor
         private const string DeathClip     = "Shared_Death";
         private const string BlockClip     = "Shared_Block";
 
+        // RANGER BOW FIRE (owner defect 2026-08-16). The one real bow-loose clip in the project.
+        // Lives in the FLAT Assets/Action/ folder, which LoadClip always appends as its last
+        // search root, so the Ranger spec resolves it without adding a root. Named as a const
+        // because RangerBowFireRegression lints for it by name -- a raw literal buried in a spec
+        // is exactly how the aim-idle binding survived unnoticed for months.
+        public const string RangerBowFireClip = "Archery Shot Away";
+
         // WO-493 #5 / WO-497: HERO injured-stance locomotion. Reuses the same retargetable
         // Humanoid injured clips the ENEMY half uses (Assets/Action/Enemies/injured*.fbx) —
         // a wounded idle/limp/stagger sub-tree entered when the Injured bool is set (the
@@ -213,15 +220,31 @@ namespace DeNelle.Editor
                     "Standing 2H Magic Attack 03",          // [4] r  Meteor Strike (ult)
                 },
                 searchRoots = WizardRoots },
-            // Ranger now HAS a real aim pose (WO-283); arrows fly via the projectile
-            // system, so the aim/idle is the visible "cast" (bow gap is cosmetic-only).
-            // Ranger has no distinct per-spell clips in Action/Ranger, so all four slots
-            // share the aim pose (spellCastClips omitted → every variant falls back to the
-            // generic Cast). Distinct bow draw/loose clips can be dropped in later.
+            // RANGER FIRE CLIP (owner defect 2026-08-16): the ranger had NO firing animation.
+            // Attack, Cast and CastUpper all bound Ranger_Aim_Idle -- a STATIC aim pose -- so
+            // every shot the owner fired froze the hero mid-aim while the arrow flew. The old
+            // comment here called that "cosmetic-only"; it is not, it is the whole read of the
+            // attack. Assets/Action/Archery Shot Away.fbx (clip 'archery-shotaway', Humanoid /
+            // animationType 3, so it retargets onto the ranger avatar for free) was already
+            // imported and bound to NOTHING. It is now the ranger's fire motion.
+            //   - castClip     -> the bow shot. HeroAbilities.TryCast fires the Cast trigger and
+            //                     the ranger has no spellCastClips, so ALL FOUR ability slots
+            //                     fall back to this generic Cast state = every ranger skill now
+            //                     looses an arrow instead of holding the aim pose.
+            //   - attackClips  -> the same shot, so the basic/melee-verb path (troop archers +
+            //                     the Attack trigger) fires the bow too.
+            //   - the FALLBACK is the aim idle: if the archery FBX is ever removed we degrade to
+            //     the old (bad but non-empty) behaviour rather than building an empty state.
+            // Ranger_Aim_Idle is now bound ONLY as the fallback: it is a POSE, and a pose is an
+            // idle, never a fire. (It is not currently bound to any built Ranger state -- the
+            // ranger has no combat-stance state; giving it one is a separate ticket, not this
+            // one.) RangerBowFireRegression pins that the fire states no longer collapse onto
+            // it. A future draw/volley/rapid-fire split wants real clips
+            // (weaponskill-animations.json ranger rows still carry clipExists:false for those).
             new HeroSpec { slug = "Ranger",
                 controllerPath = "Assets/Resources/Heroes/Ranger.controller",
-                castClip = "Ranger_Aim_Idle", castClipFallback = "Shared_Combat_Idle",
-                attackClips = new[] { "Ranger_Aim_Idle" },
+                castClip = RangerBowFireClip, castClipFallback = "Ranger_Aim_Idle",
+                attackClips = new[] { RangerBowFireClip },
                 searchRoots = RangerRoots },
             // Cleric (caster) shares the Wizard set; Heal is its primary cast.
             new HeroSpec { slug = "Cleric",

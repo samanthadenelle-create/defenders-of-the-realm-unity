@@ -1,3 +1,10 @@
+> ⚠ **NUMBER COLLISION — this document does not own WO-432; `WORK_ORDER_432_building_perk_research_techtree.md` does.**
+> Referred to hereafter as **WO-432-C (shared party nameplate)**.
+> Flagged by the 2026-08-16 Sunday board-grooming pass (`python tools/board_build.py` → `DUPLICATE_WO_NUMBERS`);
+> ownership decided by **first-on-disk** (`git log --follow --diff-filter=A`): the winner's file was created first.
+> Banner only — nothing was renumbered or deleted.
+> ⚠ **Work HAS shipped under this number** — commit messages and/or a `.RESULT.md` cite WO-432 for THIS document. It is deliberately **not renumbered**; a renumber would orphan those references. Use the alias above when you need to name it unambiguously.
+
 # WO-432 — P1 UI: Shared PartyNameplate common in ElarionUiKit (HP+MP) + HUD wiring
 
 **Status:** READY TO IMPLEMENT  

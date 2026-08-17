@@ -72,6 +72,28 @@ namespace DeNelle.Village
             string key = ((w.id ?? "") + " " + (w.name ?? "")).ToLowerInvariant();
             int tier = RarityTier(w.rarity);
 
+            // SHIELDS / OFF-HANDS (2026-08-16, WEAPON_CATALOG.md 3.1). A shield is a weapons.json
+            // ROW, so it arrives here and never at ForArmor - where the only shield keywords lived.
+            // Result: `knight_shield_starter` ("Squire's Heater") fell through to the sword arm
+            // below on "heater"/no-match and the bag painted a SWORD over a shield in the hand.
+            // The shield sheet (WRdWM) was indexed the whole time; nothing pointed at it from a
+            // weapon row. Resolution is SHARED with ForArmor (ShieldSprite) so the two resolvers
+            // cannot drift apart on the same question.
+            //   The authored `category` is the authority. The keyword arm is deliberately narrow
+            // and runs ONLY when a row authors no category: "aegis"/"ward" are NOT shield words
+            // here (ForArmor may keep them) because `aegis_emberbrand` is a SWORD, and Wardstone
+            // Maul / Wardens' Edge / Wardenroot Bow are not shields either - the broad ForArmor
+            // list would mis-paint four live weapons to fix one.
+            if (w.IsOffHandItem ||
+                (string.IsNullOrEmpty(w.category) && Has(key, "shield", "buckler", "targe", "heater")))
+            {
+                var shield = ShieldSprite(key, w.rarity);
+                if (shield != null) return shield;
+                FlowTrace.Warn("ItemIcon", $"ForWeapon '{w.id}' is a shield but no shield_* sprite resolved " +
+                    "-> null (caller shows the glyph). An honest blank beats a sword over a shield.");
+                return null;   // never fall through to the sword sheet - that is the bug being fixed
+            }
+
             // Daggers have no tiered sheet -> use a crafting-sheet dagger if present.
             if (Has(key, "dagger", "knife", "dirk", "stiletto"))
                 return First("mat_dagger", "mat_dirk");
@@ -121,23 +143,9 @@ namespace DeNelle.Village
             string key = ((a.id ?? "") + " " + (a.name ?? "")).ToLowerInvariant();
 
             // Shields are tiered by named material; map keyword -> material, else by rarity.
+            // (Shared with ForWeapon via ShieldSprite - a shield row lives in weapons.json.)
             if (Has(key, "shield", "aegis", "buckler", "ward"))
-            {
-                if (Has(key, "wood"))                                return Get("shield_wooden");
-                if (Has(key, "steel", "iron", "heater"))             return Get("shield_steel");
-                if (Has(key, "rune", "enchant"))                     return Get("shield_rune");
-                if (Has(key, "dragon", "drake", "wyrm"))             return Get("shield_dragon");
-                if (Has(key, "magic", "magical", "arcane", "glow"))  return Get("shield_magical");
-                // Otherwise pick the shield material by rarity tier.
-                switch (RarityTier(a.rarity))
-                {
-                    case 1:  return Get("shield_wooden");
-                    case 2:  return Get("shield_steel");
-                    case 3:  return Get("shield_rune");
-                    case 4:  return Get("shield_dragon");
-                    default: return Get("shield_magical");
-                }
-            }
+                return ShieldSprite(key, a.rarity);
 
             // Helmets / hoods / crowns.
             if (Has(key, "helm", "helmet", "hood", "crown", "cap", "coif"))
@@ -243,6 +251,28 @@ namespace DeNelle.Village
             FlowTrace.Warn("ItemIcon", $"ForMaterial '{id}' has no authored icon and category '{category}' " +
                 "maps to no mat_* sheet -> null (caller shows the row's own glyph)");
             return null;
+        }
+
+        /// <summary>
+        /// The ONE shield-art resolution, shared by <see cref="ForWeapon"/> (weapons.json shield
+        /// rows) and <see cref="ForArmor"/>. Named material first, else the material implied by
+        /// rarity. Callers decide WHEN an item is a shield; this only decides WHICH shield.
+        /// </summary>
+        private static Sprite ShieldSprite(string key, string rarity)
+        {
+            if (Has(key, "wood"))                                return Get("shield_wooden");
+            if (Has(key, "steel", "iron", "heater"))             return Get("shield_steel");
+            if (Has(key, "rune", "enchant"))                     return Get("shield_rune");
+            if (Has(key, "dragon", "drake", "wyrm"))             return Get("shield_dragon");
+            if (Has(key, "magic", "magical", "arcane", "glow"))  return Get("shield_magical");
+            switch (RarityTier(rarity))
+            {
+                case 1:  return Get("shield_wooden");
+                case 2:  return Get("shield_steel");
+                case 3:  return Get("shield_rune");
+                case 4:  return Get("shield_dragon");
+                default: return Get("shield_magical");
+            }
         }
 
         // Resources-relative path from catalog (e.g. "ItemIcons/tripo_sword_a") — no extension.

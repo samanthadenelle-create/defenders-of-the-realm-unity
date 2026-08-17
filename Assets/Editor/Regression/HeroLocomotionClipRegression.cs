@@ -22,8 +22,10 @@ namespace DeNelle.Editor
             var failures = new List<string>();
             if (!File.Exists(RegistryPath))
             {
-                reason = "motion-castings.json missing — skip";
-                return true;
+                // THIRD STATE, not a pass: with the registry absent this oracle asserts
+                // nothing, so it must not be counted as evidence in the green column.
+                return DeNelle.Editor.Regression.RegressionOutcome.Skip(out reason,
+                    "HERO LOCOMOTION CLIPS", "motion-castings.json not found at " + RegistryPath);
             }
 
             JObject root;
@@ -40,8 +42,10 @@ namespace DeNelle.Editor
             var knight = root["targets"]?["knight"] as JObject;
             if (knight == null)
             {
-                reason = "knight locomotion clips OK (no knight target)";
-                return true;
+                // "OK (no knight target)" was the same hollow shape wearing a pass's
+                // wording: with no knight target there are zero clips to verify.
+                return DeNelle.Editor.Regression.RegressionOutcome.Skip(out reason,
+                    "HERO LOCOMOTION CLIPS", "motion-castings.json has no targets.knight block");
             }
 
             foreach (var kw in KnightLocoKeywords)

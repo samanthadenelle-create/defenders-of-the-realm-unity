@@ -1,3 +1,10 @@
+> ⚠ **NUMBER COLLISION — this document does not own WO-433; `WORK_ORDER_433_shop_blink_cohesion.md` does.**
+> Referred to hereafter as **WO-433-B (Village2 raid destination)**.
+> Flagged by the 2026-08-16 Sunday board-grooming pass (`python tools/board_build.py` → `DUPLICATE_WO_NUMBERS`);
+> ownership decided by **first-on-disk** (`git log --follow --diff-filter=A`): the winner's file was created first.
+> Banner only — nothing was renumbered or deleted.
+> ⚠ **Work HAS shipped under this number** — commit messages and/or a `.RESULT.md` cite WO-433 for THIS document. It is deliberately **not renumbered**; a renumber would orphan those references. Use the alias above when you need to name it unambiguously.
+
 # WORK ORDER 433 — Village2 Raid Destination (populate + objective + headless test)
 
 **Status: SPEC — owner design sign-off needed on 3 decisions (defaults proposed so the loop can build v1).**

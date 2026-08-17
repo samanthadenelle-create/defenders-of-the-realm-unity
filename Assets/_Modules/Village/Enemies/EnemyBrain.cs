@@ -184,6 +184,47 @@ namespace DeNelle.Village
             _wakeRadius  = Mathf.Max(0f, wakeRadius);
         }
 
+        /// <summary>
+        /// BAIT ALLOWANCE decision (PURE - unit-testable without NavMesh/Enemy scaffolding).
+        /// Separates NOTICE from CHASE: <paramref name="wantsEngage"/> is the existing wake /
+        /// anchor-leash ring (unchanged), and once <paramref name="engaged"/> is latched the
+        /// mob keeps chasing while the hero is within <paramref name="chaseLeash"/> of its
+        /// HOME. Returns true = stay engaged (chase), false = leash out (walk home).
+        ///   - <paramref name="chaseLeash"/> &lt;= 0 restores the pre-fix behaviour EXACTLY
+        ///     (notice ring == chase cap), so the fix is fully revertible from data.
+        ///   - a hero that vanishes always breaks the chase (no chasing a null).
+        ///   - the bound is never infinite: past the chase leash the mob goes home, which is
+        ///     what stops an enemy following the player across the map and into town.
+        /// </summary>
+        public static bool ShouldHoldChase(bool engaged, bool wantsEngage, bool heroPresent,
+                                           float heroDistanceFromHome, float chaseLeash)
+        {
+            if (!heroPresent) return false;            // no hero -> nothing to chase
+            if (wantsEngage) return true;              // inside the notice ring -> engaged
+            if (!engaged) return false;                // never engaged -> stay dormant
+            if (chaseLeash <= 0f) return false;        // bait allowance disabled (legacy)
+            return heroDistanceFromHome <= chaseLeash; // engaged: chase out to the bound
+        }
+
+        /// <summary>
+        /// Planar (XZ) distance from the hero to this mob's HOME - the room FOOTPRINT when
+        /// room ownership is on (inside the room counts as 0, matching <see cref="ShouldWake"/>),
+        /// else the spawn anchor. PURE; the measuring stick for <see cref="ShouldHoldChase"/>.
+        /// </summary>
+        public static float HeroDistanceFromHome(bool hasRoomArea, Bounds area, Vector3 anchor, Vector3 heroPos)
+        {
+            if (hasRoomArea)
+            {
+                Vector3 p = new Vector3(heroPos.x, area.center.y, heroPos.z);
+                Vector3 d = p - area.ClosestPoint(p);
+                d.y = 0f;
+                return d.magnitude;
+            }
+            Vector3 flat = heroPos - anchor;
+            flat.y = 0f;
+            return flat.magnitude;
+        }
+
         /// <summary>True when WO-797 room ownership is active on this brain.</summary>
         public bool HasRoomArea => _hasRoomArea;
 
@@ -240,7 +281,15 @@ namespace DeNelle.Village
         /// the entry seat is 8.1m from the junction footprint vs wake 6 (pinned in
         /// DungeonRoomOwnershipRegression case 2), so it is still out of pursuit range.
         /// </summary>
-        private float PursuitSlack => Mathf.Max(_roomSlack, _wakeRadius);
+        /// BAIT ALLOWANCE (2026-08-16): while this mob is ENGAGED the pursuit bound widens
+        /// again, by AggroTuning.BrainEngagedPursuitSlack, so a baited mob can follow the hero
+        /// well past its doorway instead of pinning on the room face. Applied ONLY while
+        /// engaged: a DORMANT mob keeps max(slack, wake) EXACTLY, which is what the WO-797
+        /// entrance camp fix rests on (that defect was dormant rooms beelining the entry - the
+        /// wake gate owns it, and an unwoken mob's bound is unchanged here).
+        private float PursuitSlack => Mathf.Max(
+            Mathf.Max(_roomSlack, _wakeRadius),
+            _chaseEngaged ? AggroTuning.BrainEngagedPursuitSlack : 0f);
 
         // Route a chase/tactical destination through the WO-797 room clamp. No-op (identity)
         // when unbound. Throttled trace on an ACTUAL snap so the confinement is a captured
@@ -534,6 +583,18 @@ namespace DeNelle.Village
         private Bounds  _roomArea;
         private float   _roomSlack;
         private float   _wakeRadius;
+
+        // BAIT ALLOWANCE (owner live-play 2026-08-16: "allow aggro targets to extend leash
+        // alot more"). Sticky chase engagement. BEFORE, the wake/leash radius doubled as the
+        // CHASE CAP: a room mob woke at _wakeRadius (6m) / an unroomed group mob at
+        // _leashRadius (10m) and went dormant + walked home the instant the hero stepped one
+        // metre past that ring - so pulling ONE enemy off a pack, the ranged player's core
+        // skill expression, was deleted by construction. NOW the wake radius is the NOTICE
+        // ring only; once engaged the mob HOLDS the chase until the hero is further than
+        // AggroTuning.BrainChaseLeashRadius from its home. Still bounded - never unleashed.
+        // Unaffected by design: a village/overworld enemy has _leashRadius == 0 and no room,
+        // so it "wants engage" every tick and this latch is inert (zero regression).
+        private bool _chaseEngaged;
 
         // WO-147: consolidated perception sensor (auto-added in Awake) + IsAlert drive.
         private AwarenessSensor _sensor;
@@ -892,9 +953,29 @@ namespace DeNelle.Village
             // (ShouldWake), not the ring-slot anchor — kills the frame-one beeline where a
             // junction slot landed inside one leash radius of the entry hero seat. Unbound
             // mobs keep the WO-770.11 anchor leash unchanged.
-            bool leashedOut = _hasRoomArea
-                ? !ShouldWake(_roomArea, _wakeRadius, heroPresent, heroPosNow)
-                : ShouldLeashOut(_homeAnchor, _leashRadius, heroPresent, heroPosNow);
+            bool wantsEngage = _hasRoomArea
+                ? ShouldWake(_roomArea, _wakeRadius, heroPresent, heroPosNow)
+                : !ShouldLeashOut(_homeAnchor, _leashRadius, heroPresent, heroPosNow);
+
+            // BAIT ALLOWANCE: the notice ring above says whether the hero is close enough to
+            // WAKE this mob; it must not also decide how far the mob may CHASE. Once engaged
+            // we hold the chase out to the (data-driven, much wider) chase leash measured
+            // from this mob's HOME - so an enemy baited off a pack actually follows.
+            float heroFromHome = HeroDistanceFromHome(_hasRoomArea, _roomArea, _homeAnchor, heroPosNow);
+            bool holdChase = ShouldHoldChase(_chaseEngaged, wantsEngage, heroPresent,
+                                             heroFromHome, AggroTuning.BrainChaseLeashRadius);
+            if (holdChase != _chaseEngaged)
+            {
+                // sec.12: the engage/break is a CAPTURED data line with the distance in it, so
+                // an F8 capture answers "did the leash break, and at what range" without a rerun.
+                DeNelle.Core.Diagnostics.FlowTrace.Step("EnemyAggro",
+                    $"{name}: chase-engaged -> {holdChase} (hero {heroFromHome:0.0}m from home, " +
+                    $"notice={(wantsEngage ? "in" : "out")}, chaseLeash {AggroTuning.BrainChaseLeashRadius:0.#}m, " +
+                    $"room='{(_hasRoomArea ? _roomId : "<none>")}' wake {_wakeRadius:0.#}m anchorLeash {_leashRadius:0.#}m)");
+            }
+            _chaseEngaged = holdChase;
+
+            bool leashedOut = !holdChase;
             if (leashedOut)
             {
                 _currentTarget = null;
@@ -1004,6 +1085,10 @@ namespace DeNelle.Village
             _roomArea    = new Bounds(Vector3.zero, Vector3.zero);
             _roomSlack   = 0f;
             _wakeRadius  = 0f;
+            // BAIT ALLOWANCE latch: a pooled body must not inherit the previous life's chase.
+            // Left set, a re-used village wave enemy would start "engaged" and (harmlessly but
+            // wrongly) carry the widened pursuit slack of a dungeon room it no longer belongs to.
+            _chaseEngaged = false;
 
             // Targeting / override state.
             _currentTarget           = null;

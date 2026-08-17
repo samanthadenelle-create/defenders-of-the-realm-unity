@@ -151,13 +151,15 @@ namespace DeNelle.Editor.Regression
                 var gss = gssGo.AddComponent<GameStateService>();
                 if (!TryInstallHeadlessState(gss, throwaway, out string installErr))
                 {
-                    notes.Add("group [lifecycle] SKIPPED (needs the headless state seam - " + installErr + ")");
+                    notes.Add(DeNelle.Editor.Regression.RegressionOutcome.PartialSkip(
+                        "group [lifecycle]", "needs the headless state seam - " + installErr));
                     return;
                 }
                 installed = true;
                 if (gss.State == null)
                 {
-                    notes.Add("group [lifecycle] SKIPPED (throwaway state did not install)");
+                    notes.Add(DeNelle.Editor.Regression.RegressionOutcome.PartialSkip(
+                        "group [lifecycle]", "throwaway state did not install"));
                     return;
                 }
 

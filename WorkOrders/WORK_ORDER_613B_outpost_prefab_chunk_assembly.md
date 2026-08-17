@@ -1,3 +1,9 @@
+> ⚠ **NUMBER COLLISION (letter sub-number) — this document is WO-613B, NOT WO-613. `WORK_ORDER_613_tower_vfx_moments.md` owns WO-613.**
+> Referred to hereafter as **WO-613B**. The clash is a *parser* artefact: `tools/board_build.py` strips the
+> trailing letter, so WO-613B reads as a second claim on WO-613 on `BOARD.html`. The letter suffix was and
+> remains deliberate — this is a sibling spec of WO-613, not a duplicate mint.
+> Flagged by the 2026-08-16 Sunday board-grooming pass. Banner only — nothing renumbered or deleted.
+
 # WORK ORDER 613B — Outpost = PREFAB CHUNK assembly (kill freeform generation)
 
 **Status:** READY TO IMPLEMENT — owner re-ruling F8-28 (2026-07-08): *"the outpost should be

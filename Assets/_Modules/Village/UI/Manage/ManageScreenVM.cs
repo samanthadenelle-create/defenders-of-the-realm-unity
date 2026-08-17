@@ -1033,8 +1033,22 @@ namespace DeNelle.Village.UI
             var svc = BuildTimerService.Instance;
             if (svc == null) return;
 
-            if (svc.CancelChannelJobWithRefund(channel, jobId, out JobCost refunded))
-                Notice = refunded.IsZero ? "Cancelled. Nothing to refund." : "Cancelled. Refunded " + refunded.Describe() + ".";
+            // ECON-SWEEP 2026-08-16 (defect 3) — NEVER claim "Nothing to refund." when a currency
+            // WAS taken. Research is priced in GOLD and JobCost has no coins lane, so its basket is
+            // all-zero and the old message reported a free cancel for a real charge. The refund
+            // POLICY is unchanged (an owner/schema call, see BuildingPerkService's header note);
+            // what changes is that the notice NAMES the money and says it is not coming back.
+            if (svc.CancelChannelJobWithRefund(channel, jobId, out JobCost refunded, out string unrefunded))
+            {
+                bool tookUnrefundable = !string.IsNullOrEmpty(unrefunded);
+                if (!refunded.IsZero)
+                    Notice = "Cancelled. Refunded " + refunded.Describe() + "."
+                           + (tookUnrefundable ? " The " + unrefunded + " spent on it is not returned." : "");
+                else if (tookUnrefundable)
+                    Notice = "Cancelled. The " + unrefunded + " spent on it is not returned.";
+                else
+                    Notice = "Cancelled. Nothing to refund.";
+            }
             else
                 Notice = "Could not cancel that.";
             NoticeIsBrokeCase = false;

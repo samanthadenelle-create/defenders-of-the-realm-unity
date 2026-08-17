@@ -1,3 +1,9 @@
+> ⚠ **NUMBER COLLISION — this document does not own WO-430; `WORK_ORDER_430_Handover_Triage_Detailed_Work_Orders.md` does.**
+> Referred to hereafter as **WO-430-C (gear catalog from DB)**.
+> Flagged by the 2026-08-16 Sunday board-grooming pass (`python tools/board_build.py` → `DUPLICATE_WO_NUMBERS`);
+> ownership decided by **first-on-disk** (`git log --follow --diff-filter=A`): the winner's file was created first.
+> Banner only — nothing was renumbered or deleted.
+
 # WORK ORDER 430 — Weapons/Armor catalog: seed JSON → DB, pull from DB (with local fallback)
 
 > STALE: 2026-08-09 — §"The architecture reality" says the `api/*.js` backend "lives in a SEPARATE repo,

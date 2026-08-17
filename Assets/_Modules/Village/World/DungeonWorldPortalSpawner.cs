@@ -331,8 +331,131 @@ namespace DeNelle.Village.World
             Debug.Log($"[DungeonWorldPortals] Placed {placed}/{defs.Count} authored dungeon portal(s) in the world.");
         }
 
+        // =====================================================================
+        //  THE HOLLOW ROADS row is DERIVED, not typed (owner 2026-08-16).
+        // ---------------------------------------------------------------------
+        //  Every row in AuthoredPortals above is a hand-typed coordinate, and that is
+        //  fine for them -- they were placed by eye and the owner has felt-tested where
+        //  they stand. The tunnel mouth is NOT allowed to be a sixth typed coordinate:
+        //  the standing rule on this lane is that a new world position comes from
+        //  MEASURED geometry, because two bugs shipped on 2026-08-15 from constants that
+        //  had quietly stopped matching the world.
+        //
+        //  So it is derived from the table ITSELF, which is the only honest measurement
+        //  available for "where do portals live in this world":
+        //    * RADIUS  = the mean distance-from-origin of the existing rows. They form a
+        //                deliberate ~141m ring class; averaging reads that class off the
+        //                data instead of restating it, so re-placing a portal carries.
+        //    * BEARING = the centre of the WIDEST ANGULAR GAP between existing rows. The
+        //                tunnel mouth lands where the compass is emptiest, which is both
+        //                the right design answer (a fifth distinct pull) and
+        //                self-maintaining: add a portal and the gap moves on its own.
+        //    * YAW     = Atan2 back toward the origin, matching every sibling row's
+        //                "arch fronts the castle" convention.
+        //  Then SeatOnGround does the real ground work on the result, exactly as it does
+        //  for the typed rows, and the derivation is TRACED so a wrong mouth shows its own
+        //  arithmetic in the capture rather than making the next seat re-derive it.
+        // =====================================================================
+        private static bool TryDeriveHollowRoadsPortal(out AuthoredPortal entry)
+        {
+            entry = default;
+
+            if (!DeNelle.Core.FeatureFlags.BiomeRoads)
+            {
+                FlowTrace.Step("DungeonPortal",
+                    "Hollow Roads portal SKIPPED - ff.biomeroads is OFF, so the tunnel mouth is not placed.");
+                return false;
+            }
+
+            // Measure the ring off the typed sibling rows.
+            float sumRadius = 0f;
+            int counted = 0;
+            var bearings = new System.Collections.Generic.List<float>(AuthoredPortals.Length);
+            for (int i = 0; i < AuthoredPortals.Length; i++)
+            {
+                Vector3 p = AuthoredPortals[i].WorldPos;
+                float r = Mathf.Sqrt(p.x * p.x + p.z * p.z);
+                if (r < 1f) continue;                      // a row at the origin carries no bearing
+                sumRadius += r;
+                counted++;
+                float deg = Mathf.Atan2(p.z, p.x) * Mathf.Rad2Deg;
+                if (deg < 0f) deg += 360f;
+                bearings.Add(deg);
+            }
+
+            if (counted == 0 || bearings.Count == 0)
+            {
+                // No siblings to measure against => derive NOTHING. There is deliberately no typed
+                // fallback: a guessed mouth is worse than an absent one, and an absent one is loud.
+                FlowTrace.Fail("DungeonPortal",
+                    "Hollow Roads portal CANNOT be derived - AuthoredPortals carries no row with a " +
+                    "non-zero radius to measure a ring or a bearing from. The tunnel mouth is NOT placed " +
+                    "(no typed fallback by design).");
+                return false;
+            }
+
+            float radius = sumRadius / counted;
+
+            // Widest angular gap on the ring. Sorting then walking the wrap-around seam is the whole
+            // algorithm; with one bearing the gap is the full circle and the answer is "opposite it".
+            bearings.Sort();
+            float bestGap = -1f, bestMid = 0f;
+            for (int i = 0; i < bearings.Count; i++)
+            {
+                float a = bearings[i];
+                float b = (i + 1 < bearings.Count) ? bearings[i + 1] : bearings[0] + 360f;
+                float gap = b - a;
+                if (gap > bestGap) { bestGap = gap; bestMid = a + gap * 0.5f; }
+            }
+            while (bestMid >= 360f) bestMid -= 360f;
+
+            float rad = bestMid * Mathf.Deg2Rad;
+            var pos = new Vector3(Mathf.Cos(rad) * radius, 0f, Mathf.Sin(rad) * radius);
+
+            // Face the castle, same convention as every sibling row.
+            float yaw = Mathf.Atan2(-pos.x, -pos.z) * Mathf.Rad2Deg;
+            if (yaw < 0f) yaw += 360f;
+
+            // Sanity-check against the MEASURED world, not against a typed extent: a mouth outside
+            // the terrain is unreachable, and it must say so rather than be placed into the void.
+            if (DeNelle.Core.World.BiomeRoads.TryMeasureWorldBounds(out Bounds worldBounds))
+            {
+                // Hand the MEASURED bounds forward to the tunnel. The tunnel scene carries no
+                // terrain, so this is the only moment the world it drops back INTO can honestly be
+                // measured; without this the drops would have to fall back to a typed extent, and
+                // "derived, never typed" would quietly become a comment rather than a property.
+                HollowRoadsDropInjector.RememberHubBounds(worldBounds);
+
+                // Compare against the bounds' OWN frame (centre +/- extent), not |world coord| vs a
+                // half-extent: those are only the same number while the terrain is centred on the
+                // origin, and this test exists precisely to catch worlds that are not what we assume.
+                if (Mathf.Abs(pos.x - worldBounds.center.x) > worldBounds.extents.x
+                    || Mathf.Abs(pos.z - worldBounds.center.z) > worldBounds.extents.z)
+                {
+                    FlowTrace.Fail("DungeonPortal",
+                        $"Hollow Roads mouth derived to {pos}, which is OUTSIDE the measured world bounds " +
+                        $"(centre {worldBounds.center}, half-extents {worldBounds.extents}). Not placed - the " +
+                        "sibling portal ring must have moved far off the terrain.");
+                    return false;
+                }
+            }
+
+            entry = new AuthoredPortal(DeNelle.Core.World.BiomeRoads.TunnelSceneId, pos, yaw);
+            FlowTrace.Step("DungeonPortal",
+                $"Hollow Roads mouth DERIVED (not typed): ring radius {radius:F1}m = mean of {counted} sibling " +
+                $"row(s); bearing {bestMid:F1}deg = centre of the widest {bestGap:F1}deg gap between them; " +
+                $"=> {pos}, yaw {yaw:F0} (faces castle). SeatOnGround will do the ground pass next.");
+            return true;
+        }
+
         private static bool TryGetAuthored(string dungeonId, out AuthoredPortal entry)
         {
+            // The Hollow Roads mouth is derived from measured geometry, so it is answered here
+            // rather than by a table row (see TryDeriveHollowRoadsPortal for why).
+            if (string.Equals(dungeonId, DeNelle.Core.World.BiomeRoads.TunnelSceneId,
+                              System.StringComparison.OrdinalIgnoreCase))
+                return TryDeriveHollowRoadsPortal(out entry);
+
             for (int i = 0; i < AuthoredPortals.Length; i++)
             {
                 if (string.Equals(AuthoredPortals[i].DungeonId, dungeonId, System.StringComparison.OrdinalIgnoreCase))
@@ -1116,6 +1239,22 @@ namespace DeNelle.Village.World
                 && !built.Exists(x => x != null && string.Equals(x.DungeonId, EmberDeep, System.StringComparison.OrdinalIgnoreCase)))
             {
                 built.Add(MakeDef(EmberDeep, EmberDeep, "The Ember Deep", new Color(0.92f, 0.55f, 0.28f)));
+            }
+
+            // THE HOLLOW ROADS (owner 2026-08-16) — the tunnel system, not a dungeon: one mouth,
+            // one crossroads, four arms that drop into the four cardinal biomes. Injected on the
+            // same pattern as its siblings above, and behind the SAME CanStreamedLevelBeLoaded
+            // test, which is what makes the whole spoke self-hiding before the graph is composed:
+            // no scene => no def => no portal, rather than a door onto a missing scene.
+            // Flag-gated too, so ff.biomeroads = 0 removes it with no rebuild.
+            string hollowRoads = DeNelle.Core.World.BiomeRoads.TunnelSceneId;
+            if (DeNelle.Core.FeatureFlags.BiomeRoads
+                && UnityEngine.Application.CanStreamedLevelBeLoaded(hollowRoads)
+                && !built.Exists(x => x != null && string.Equals(x.DungeonId, hollowRoads, System.StringComparison.OrdinalIgnoreCase)))
+            {
+                built.Add(MakeDef(hollowRoads, hollowRoads,
+                                  DeNelle.Core.World.BiomeRoads.TunnelDisplayName,
+                                  new Color(0.72f, 0.66f, 0.86f)));
             }
 
             if (built.Count > 0) return built;

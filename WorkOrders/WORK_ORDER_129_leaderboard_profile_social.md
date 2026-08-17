@@ -1,3 +1,9 @@
+> ⚠ **NUMBER COLLISION — this document does not own WO-129; `WORK_ORDER_129_pipeline_architecture_reconciliation.md` does.**
+> Referred to hereafter as **WO-129-B (leaderboard / profile / social)**.
+> Flagged by the 2026-08-16 Sunday board-grooming pass (`python tools/board_build.py` → `DUPLICATE_WO_NUMBERS`);
+> ownership decided by **first-on-disk** (`git log --follow --diff-filter=A`): the winner's file was created first.
+> Banner only — nothing was renumbered or deleted.
+
 # WORK ORDER 129 — Leaderboards, Player Profiles & Social Install Bonus
 
 **Status:** READY TO IMPLEMENT (design / user-story stage)

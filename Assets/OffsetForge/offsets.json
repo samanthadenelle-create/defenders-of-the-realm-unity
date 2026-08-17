@@ -339,6 +339,26 @@
                 "z": 0.0
             },
             "fullOverride": false
+        },
+        {
+            "id": "bow_A_withString",
+            "rot": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": -90.0
+            },
+            "pos": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0
+            },
+            "scale": 1.0,
+            "scaleXyz": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0
+            },
+            "fullOverride": false
         }
     ]
 }

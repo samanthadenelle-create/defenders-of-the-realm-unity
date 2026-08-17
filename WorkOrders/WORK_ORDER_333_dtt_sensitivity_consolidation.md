@@ -1,3 +1,9 @@
+> ⚠ **NUMBER COLLISION — this document does not own WO-333; `WORK_ORDER_333_village_death_no_dtt_atb_trigger.md` does.**
+> Referred to hereafter as **WO-333-B (DTT sensitivity consolidation)**.
+> Flagged by the 2026-08-16 Sunday board-grooming pass (`python tools/board_build.py` → `DUPLICATE_WO_NUMBERS`);
+> the two files were added in the **same commit**, so first-on-disk is a tie; ownership decided on **cross-references** (the winner is the file the rest of the corpus cites).
+> Banner only — nothing was renumbered or deleted.
+
 # WORK ORDER 333 — DTT movement/aim sensitivity: consolidate ("group those")
 
 **Status: ❌ DUPLICATE — CLOSED. Superseded by WO-332 (DTT aim sensitivity).** Kept (not deleted) to

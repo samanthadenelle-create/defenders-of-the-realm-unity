@@ -1,3 +1,9 @@
+> ⚠ **NUMBER COLLISION — this document does not own WO-152; `WORK_ORDER_152_full_city_redesign_component_catalog.md` does.**
+> Referred to hereafter as **WO-152-B (city UI information architecture)**.
+> Flagged by the 2026-08-16 Sunday board-grooming pass (`python tools/board_build.py` → `DUPLICATE_WO_NUMBERS`);
+> the two files were added in the **same commit**, so first-on-disk is a tie; ownership decided on **cross-references** (the winner is the file the rest of the corpus cites).
+> Banner only — nothing was renumbered or deleted.
+
 # WORK ORDER 152 — City UI Information Architecture (which surfaces group into which buildings)
 
 **Status:** READY TO IMPLEMENT (IA decision locked; panel wiring phased)

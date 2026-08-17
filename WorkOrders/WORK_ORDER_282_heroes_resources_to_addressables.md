@@ -1,3 +1,9 @@
+> ⚠ **NUMBER COLLISION — this document does not own WO-282; `WORK_ORDER_282_BuildPreviewModal_Premium_Rotation.md` does.**
+> Referred to hereafter as **WO-282-B (heroes Resources to Addressables)**.
+> Flagged by the 2026-08-16 Sunday board-grooming pass (`python tools/board_build.py` → `DUPLICATE_WO_NUMBERS`);
+> the two files were added in the **same commit**, so first-on-disk is a tie; ownership decided on **cross-references** (the winner is the file the rest of the corpus cites).
+> Banner only — nothing was renumbered or deleted.
+
 # WORK ORDER 282 — Hero models: Resources/Heroes → Addressables `Heroes` group
 
 **Status:** ⛔ **CLOSED — SUPERSEDED BY WO-545.** Do not implement this as written.

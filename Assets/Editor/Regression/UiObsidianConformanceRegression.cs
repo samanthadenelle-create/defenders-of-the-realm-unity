@@ -198,16 +198,16 @@ namespace DeNelle.Editor
             string projectRoot = Path.GetDirectoryName(Application.dataPath); // parent of /Assets
             if (!Directory.Exists(modulesDir))
             {
-                reason = "UI-OBSIDIAN CONFORMANCE SKIPPED — Assets/_Modules not found";
-                return true;
+                return DeNelle.Editor.Regression.RegressionOutcome.Skip(out reason,
+                    "UI-OBSIDIAN CONFORMANCE", "Assets/_Modules not found at " + modulesDir);
             }
 
             string[] files;
             try { files = Directory.GetFiles(modulesDir, "*.cs", SearchOption.AllDirectories); }
             catch (Exception ex)
             {
-                reason = "UI-OBSIDIAN CONFORMANCE SKIPPED — could not enumerate _Modules (" + ex.Message + ")";
-                return true;
+                return DeNelle.Editor.Regression.RegressionOutcome.Skip(out reason,
+                    "UI-OBSIDIAN CONFORMANCE", "could not enumerate _Modules (" + ex.Message + ")");
             }
 
             foreach (var path in files)

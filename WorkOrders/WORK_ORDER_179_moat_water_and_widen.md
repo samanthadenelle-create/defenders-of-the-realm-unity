@@ -1,3 +1,9 @@
+> ⚠ **NUMBER COLLISION — this document does not own WO-179; `WORK_ORDER_179_moat_water_material.md` does.**
+> Referred to hereafter as **WO-179-B (moat water + widen)**.
+> Flagged by the 2026-08-16 Sunday board-grooming pass (`python tools/board_build.py` → `DUPLICATE_WO_NUMBERS`);
+> ownership decided by **first-on-disk** (`git log --follow --diff-filter=A`): the winner's file was created first.
+> Banner only — nothing was renumbered or deleted.
+
 # WORK ORDER 179 — Moat: Stylized Water + Widen for Defense
 
 **Status:** READY TO IMPLEMENT

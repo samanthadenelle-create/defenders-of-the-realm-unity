@@ -22,10 +22,21 @@
 //     mirroring LastInboxSyncAt) instead of a side-band PlayerPrefs key, so it
 //     round-trips with the rest of the save and reconciles with backend sync.
 //
+// WO-1147 -- THIS SERVICE NO LONGER OWNS THE CLOCK. It is now one CONSUMER of
+// OfflineClaimCoordinator (see that file's header): the coordinator reads
+// GameState.LastHarvestClaimMs once, computes ONE elapsed window, fans it out to
+// every consumer (node harvest here, the Echo silo, Echo repair), and advances +
+// persists the clock exactly once. Before that, this service wrote the clock from
+// its own Start+1-frame coroutine while EchoService read it in the SAME frame
+// (coin-flip) and EchoRepairService read it one frame LATER (always zero -- offline
+// repair never accrued once). Do NOT re-add a write to LastHarvestClaimMs here.
+// The 10h away-cap below stays OURS: the coordinator publishes the raw window and
+// each consumer clamps with its own documented cap.
+//
 // DEDUPE vs BACKEND SAVE-SYNC (no double-grant): accrual only ever runs FORWARD
 // from LastHarvestClaimMs, and that timestamp is advanced + persisted ATOMICALLY
-// with the grant (advance-even-when-zero). A second resume can't re-accrue the
-// same window because the clock already moved past it. GameStateService's backend
+// with the grant (advance-even-when-zero) by the coordinator. A second resume can't
+// re-accrue the same window because the clock already moved past it. GameStateService's backend
 // sync ships the FULL snapshot (which will include LastHarvestClaimMs once the save
 // owner wires the field through the schema), so server "now" and the banked haul
 // stay consistent — the server sees the post-grant wallet + post-grant clock, never
@@ -48,9 +59,12 @@ namespace DeNelle.Village
     /// summary. Runs on cold load and on resume.
     /// </summary>
     [DisallowMultipleComponent]
-    public sealed class OfflineHarvestService : MonoBehaviour
+    public sealed class OfflineHarvestService : MonoBehaviour, IOfflineClaimConsumer
     {
         public static OfflineHarvestService Instance { get; private set; }
+
+        /// <summary>Trace name for this consumer's share of the shared offline window.</summary>
+        public string OfflineConsumerName => "harvest-nodes";
 
         [Header("Cap")]
         [Tooltip("Offline hours credited in one claim. The retention dial: long enough that a " +
@@ -74,49 +88,62 @@ namespace DeNelle.Village
         // double-grant). Reused (cleared) each claim; never holds across frames.
         private readonly HashSet<MineNode> _workerOwnedThisClaim = new HashSet<MineNode>();
 
+        // The result produced by the most recent ApplyOfflineWindow, so the public
+        // ClaimAccrual() verb can still return "what this consumer banked".
+        private OfflineHarvestResult _lastResult;
+
         private void Awake()
         {
             // Destroy(this) — NOT Destroy(gameObject): may share a host
             // (CLAUDE.md memory: singleton-dedup-destroys-host).
             if (Instance != null && Instance != this) { Destroy(this); return; }
             Instance = this;
+            OfflineClaimCoordinator.Register(this);
         }
 
         private void OnDestroy()
         {
+            OfflineClaimCoordinator.Unregister(this);
             if (Instance == this) Instance = null;
         }
 
         private void Start()
         {
-            // Cold-load claim. Deferred to LateClaim so MineNode/Settlement Awake/Start
-            // have run and registered (and the save has loaded in GameStateService.Awake).
-            ClaimDeferred();
+            // Cold-load claim. Deferred TWO frames so MineNode/Settlement Awake/Start have
+            // run and registered, the save has loaded (GameStateService.Awake), AND every
+            // other offline consumer (EchoService / EchoRepairService, installed by their
+            // own AfterSceneLoad bootstrap) has registered — the fan-out must reach all of
+            // them on the SAME claim. Two frames is the slowest consumer's old deferral
+            // (EchoRepairService needed scene structures present), now shared.
+            ClaimDeferred("cold-load");
         }
 
         private void OnApplicationPause(bool paused)
         {
-            // On background we do NOT need to stamp anything — the clock is whatever
-            // LastHarvestClaimMs already holds; the next ClaimAccrual() integrates from
-            // there. (Backend sync's own OnApplicationPause flush is independent.)
-            if (!paused && ClaimOnResume) ClaimDeferred();
+            // Tell the ONE authority where the background edge was, so a RESUME claim counts
+            // only the truly-away stretch. Every consumer of a resume claim has an online
+            // loop that already covered the foreground stretch (the silo tick, the repair
+            // tick, settlement/pet node extraction), so counting from the persisted clock —
+            // which is what this service used to do — paid that stretch TWICE. We do not
+            // stamp the persisted clock at pause: a hard kill while backgrounded must still
+            // leave a claimable window for the next cold load.
+            OfflineClaimCoordinator.NotePaused(paused);
+            if (!paused && ClaimOnResume) ClaimDeferred("resume");
         }
 
-        private void ClaimDeferred()
+        private void ClaimDeferred(string reason)
         {
-            // One frame of slack so registries are populated, then claim.
-            if (isActiveAndEnabled) StartCoroutine(ClaimNextFrame());
+            if (isActiveAndEnabled) StartCoroutine(ClaimAfterTwoFrames(reason));
         }
 
-        private System.Collections.IEnumerator ClaimNextFrame()
+        private System.Collections.IEnumerator ClaimAfterTwoFrames(string reason)
         {
             yield return null;
-            var result = ClaimAccrual();
-            if (result != null && result.Total > 0)
-            {
-                Claimed?.Invoke(result);
-                TryShowPopup(result);
-            }
+            yield return null;
+            // ONE claim for the whole game: the coordinator fans the window out to every
+            // consumer and advances the clock once. Our own share lands in
+            // ApplyOfflineWindow (which raises Claimed + the welcome-back popup).
+            OfflineClaimCoordinator.Claim(reason);
         }
 
         // =====================================================================
@@ -124,41 +151,48 @@ namespace DeNelle.Village
         // =====================================================================
 
         /// <summary>
-        /// Integrate every active harvest source over the away-gap, bank the capped
-        /// haul into GameState, advance + persist the claim clock, and return what was
-        /// banked. Always advances the clock to now — even when nothing accrued — so a
-        /// player who claims their first node later doesn't bank a giant retroactive haul.
+        /// Runs a FULL offline claim through the one authority
+        /// (<see cref="OfflineClaimCoordinator"/>) and returns THIS service's share of it.
+        /// The coordinator reads the clock once, fans the same window out to every
+        /// consumer, and advances + persists the clock exactly once (even on a zero haul,
+        /// so a player who claims their first node later banks no retroactive haul).
+        /// Kept as a public verb because oracles + legacy callers drive the claim by name.
         /// </summary>
         public OfflineHarvestResult ClaimAccrual()
         {
             FlowTrace.Step("Offline", "ClaimAccrual");
+            // Idempotent: editmode/headless AddComponent never runs Awake, so register here too.
+            OfflineClaimCoordinator.Register(this);
+            _lastResult = OfflineHarvestResult.None;
+            OfflineClaimCoordinator.Claim("OfflineHarvestService.ClaimAccrual");
+            return _lastResult ?? OfflineHarvestResult.None;
+        }
+
+        /// <summary>
+        /// THIS consumer's share of the shared window: integrate every active harvest
+        /// source over the window CLAMPED TO OUR OWN 10h away-cap, bank the haul, and
+        /// raise the welcome-back reveal. Never touches the clock — the coordinator owns it.
+        /// </summary>
+        public void ApplyOfflineWindow(OfflineClaimWindow window)
+        {
             var svc = GameStateService.Instance;
             var state = svc != null ? svc.State : null;
-            if (state == null) { FlowTrace.Warn("Offline", "no GameStateService — accrual skipped (None)"); return OfflineHarvestResult.None; }
-
-            double nowMs = TimeSource.NowUnixMs();
-            double lastClaimMs = state.LastHarvestClaimMs;
-
-            // Fresh save (0) → seed the clock to now, accrue nothing this launch.
-            if (lastClaimMs <= 0)
+            if (state == null)
             {
-                FlowTrace.Step("Offline", "fresh save (LastHarvestClaimMs<=0) — seed clock to now, accrue nothing");
-                state.LastHarvestClaimMs = nowMs;
-                svc.Save();
-                return OfflineHarvestResult.None;
+                FlowTrace.Warn("Offline", "no GameStateService — node accrual skipped (None)");
+                _lastResult = OfflineHarvestResult.None;
+                return;
             }
 
-            // Anti-tamper monotonic guard: a clock set BACKWARDS yields a negative
-            // delta → clamp to 0 (no accrual, no error). Never re-claim a window.
-            double elapsedSec = System.Math.Max(0.0, (nowMs - lastClaimMs) / 1000.0);
-            double cappedSec = System.Math.Min(elapsedSec, OfflineCapSeconds);
-            if (nowMs < lastClaimMs) FlowTrace.Warn("Offline", $"clock ran BACKWARDS (now={nowMs:0} < last={lastClaimMs:0}) — elapsed clamped to 0, no re-claim");
-            if (elapsedSec > OfflineCapSeconds) FlowTrace.Warn("Offline", $"away {elapsedSec:0}s exceeds cap {OfflineCapSeconds:0}s — capped");
+            double elapsedSec = window.ElapsedSeconds;
+            double cappedSec = window.CappedSeconds(OfflineCapHours);
+            bool wasCapped = window.ExceedsCap(OfflineCapHours);
+            if (wasCapped) FlowTrace.Warn("Offline", $"away {elapsedSec:0}s exceeds cap {OfflineCapSeconds:0}s — capped");
 
             var result = new OfflineHarvestResult
             {
                 AwaySeconds = elapsedSec,
-                WasCapped = elapsedSec > OfflineCapSeconds,
+                WasCapped = wasCapped,
             };
 
             if (cappedSec > 0.0)
@@ -176,11 +210,16 @@ namespace DeNelle.Village
             if (result.Total > 0) Grant(result, state);
             else FlowTrace.Step("Offline", "zero haul — clock still advances (prevents retroactive first-claim)");
 
-            // ALWAYS advance the clock — even on a zero haul (prevents a giant first
-            // claim once a node is finally placed) — and persist atomically with the grant.
-            state.LastHarvestClaimMs = nowMs;
-            svc.Save();
-            return result;
+            FlowTrace.Step("Offline",
+                $"claim #{window.Sequence}: 'harvest-nodes' share = {cappedSec:0}s of the {elapsedSec:0}s window " +
+                $"(cap {OfflineCapHours:0.##}h) -> total {result.Total}.");
+
+            _lastResult = result;
+            if (result.Total > 0)
+            {
+                Claimed?.Invoke(result);
+                TryShowPopup(result);
+            }
         }
 
         // ── Source 1: worker-collected mine nodes (WO-117 seam) ───────────────

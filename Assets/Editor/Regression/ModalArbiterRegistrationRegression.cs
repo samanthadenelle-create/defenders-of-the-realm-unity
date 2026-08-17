@@ -83,13 +83,17 @@ namespace DeNelle.Editor
             string modulesDir = Path.Combine(Application.dataPath, "_Modules");
             if (!Directory.Exists(modulesDir))
             {
-                reason = "MODAL REGISTRATION SKIPPED -- Assets/_Modules not found";
-                return true;
+                return DeNelle.Editor.Regression.RegressionOutcome.Skip(out reason,
+                    "MODAL REGISTRATION", "Assets/_Modules not found at " + modulesDir);
             }
 
             string[] files;
             try { files = Directory.GetFiles(modulesDir, "*.cs", SearchOption.AllDirectories); }
-            catch (Exception ex) { reason = "MODAL REGISTRATION SKIPPED -- enumerate failed (" + ex.Message + ")"; return true; }
+            catch (Exception ex)
+            {
+                return DeNelle.Editor.Regression.RegressionOutcome.Skip(out reason,
+                    "MODAL REGISTRATION", "could not enumerate _Modules (" + ex.Message + ")");
+            }
 
             int topBandBuilders = 0, registered = 0;
             var namedSeen = new Dictionary<string, bool>();
@@ -131,7 +135,11 @@ namespace DeNelle.Editor
             foreach (var named in NamedMustRegister)
             {
                 if (!namedSeen.TryGetValue(named, out bool ok))
-                    notes.Add(named + " not found under _Modules (named fix file missing?)");
+                    // A named fix whose FILE is absent is not verified - the assertion did
+                    // not run. Stamped as a partial stand-down so the reason names the hole
+                    // rather than folding an unchecked case into an unqualified "all OK".
+                    notes.Add(DeNelle.Editor.Regression.RegressionOutcome.PartialSkip(
+                        "named fix " + named, "not found under _Modules (renamed or deleted?) - registration UNVERIFIED"));
                 else if (!ok)
                     failures.Add($"[modal-registration] the named fix '{named}' does NOT register with PanelManager (Register + NotifyOpened + NotifyClosed)");
                 else

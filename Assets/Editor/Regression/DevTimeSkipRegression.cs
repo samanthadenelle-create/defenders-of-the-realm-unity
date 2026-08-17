@@ -67,8 +67,8 @@ namespace DeNelle.Editor
                     // editor UNITY_EDITOR is always defined, so this is a guard against
                     // a future define change, NOT an expected path. Named skip, never a
                     // false FAIL (harness-integrity rule).
-                    reason = "DEV TIME-SKIP skipped: DevClock.Available is false (dev skip not compiled in this configuration)";
-                    return true;
+                    return DeNelle.Editor.Regression.RegressionOutcome.Skip(out reason,
+                        "DEV TIME-SKIP", "DevClock.Available is false (dev skip not compiled in this configuration)");
                 }
 
                 // --- Case 1: a skip advances NowUnixMs by EXACTLY the requested amount ---

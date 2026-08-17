@@ -163,9 +163,13 @@ namespace DeNelle.Village
             // recorded here is what caused the correct fix to be reverted once already.
             //
             // NOTE: on the HERO this preset is not reached — DeferBowToBowAttachment skips bows so
-            // HeroBowAttachment owns the held bow. It still serves companions/non-rangers, which
-            // fall to `_baseGripRot = Quaternion.Euler(_baseGripEuler)` (zero). If a companion bow
-            // reads sideways, the answer is the same DERIVATION, not a dialed constant here.
+            // HeroBowAttachment owns the held bow. It still serves COMPANIONS / non-rangers, and
+            // as of 2026-08-16 that path is DERIVED too: AttachLoadedProp routes kind==Bow through
+            // WeaponBoundsOrient.ComputeBowHeldRotation and WITHHOLDS ApplyGlobalWeaponYaw from the
+            // result, so a companion archer gets the hero's seat. gripEuler below is therefore a
+            // felt-tune NUDGE composed on top of that derivation — it is NOT the seat. Leave it at
+            // zero unless a screenshot says otherwise; a dialed constant here is the failure mode
+            // this whole comment block exists to record (see RangedPrimaryRegression case 9).
             gripPos = new Vector3(0f, 0f, 0f), gripEuler = new Vector3(0f, 0f, 0f),
             heldLength = 0.92f, tint = new Color(0.36f, 0.22f, 0.10f)
         };
@@ -1047,10 +1051,17 @@ namespace DeNelle.Village
             //    others default 0 so the path generalizes WITHOUT regressing the existing look).
             //    Previously staff/wand/axe/hammer used identity gripEuler + NO rig rotation, so they
             //    inherited the bone's local axes and read sideways across the body — this is the fix.
-            //  • Bow/shield: keep the proven per-weapon gripEuler (already seated correctly by
-            //    their own NormalizeInto + preset euler).
+            //  • BOW (companions + any non-ranger body with no HeroBowAttachment): DERIVED, exactly
+            //    like the hero's — see the ComputeBowHeldRotation branch below.
+            //  • Shield: keeps its proven preset gripEuler. NOTE: a shield does NOT reach this
+            //    method at all — AttachOffHandProp owns every off-hand prop and has its own seat
+            //    and its own ApplyGlobalWeaponYaw call. Nothing below touches it.
             // WO-478: native melee keeps the prefab frame + per-archetype calibration nudge only.
             // DEPRECATED (ff.weapongripinfer): native melee uses ComputeMeleeGripRotation like Tripo FBX.
+            //
+            // `bowDerivedSeat` records that _baseGripRot came out of ComputeBowHeldRotation, so the
+            // global yaw below can be skipped for THAT ROTATION ONLY (see the guard at the yaw line).
+            bool bowDerivedSeat = false;
             if (fullOverride)
             {
                 _baseGripEuler = fo.eulerRot;
@@ -1063,6 +1074,40 @@ namespace DeNelle.Village
             }
             else if (IsMelee(vis.kind))
                 _baseGripRot = ComputeMeleeGripRotation(vis.kind);
+            // ── COMPANION / NON-RANGER BOW: DERIVED, NEVER DIALED (owner ruling 2026-08-16) ──────
+            // The hero's bow never reaches here (DeferBowToBowAttachment, :750) — a COMPANION archer
+            // has no HeroBowAttachment, so THIS is the branch its bow takes, and it used to fall to
+            // the raw `Quaternion.Euler(_baseGripEuler)` below with gripEuler == (0,0,0). That is an
+            // IDENTITY hand-local seat: it maps the bow's prop-local +Y (the limb span, put there by
+            // NormalizeInto + GripAnchor.BowGrip above) straight onto the hand BONE's own +Y, which
+            // on this rig is the "points out of the fist" axis. Right for a sword; ~90 degrees wrong
+            // for a bow, whose hand closes AROUND the riser. That is the horizontal companion bow.
+            //
+            // Fixed by DERIVATION, not a constant, and the reason is TWO AXES, not one. The owner's
+            // archer reference has the STRING as the straight edge NEAREST the body and the limbs
+            // curving AWAY toward the target. A single Z-roll constant (the tempting (0,0,-90)) can
+            // stand the bow upright while leaving the BELLY facing BACKWARD — string downrange,
+            // curve at the archer — which photographs as nearly right and is wrong. LookRotation on
+            // (belly=body.forward, limb=body.up) sets BOTH axes and cannot make that mistake.
+            //
+            // NOT applied when trustNativePivot: SeatNative preserves the prefab's authored frame
+            // instead of running NormalizeInto, so prop-local +Y is NOT guaranteed to be the limb
+            // span and the derivation's premise does not hold. No bow preset is Native() today
+            // (see the IdMap rows) — this guard is here so adding one cannot silently mis-seat.
+            else if (vis.kind == WeaponClass.Bow && !trustNativePivot)
+            {
+                bowDerivedSeat = true;
+                Transform bowBody = _animator != null ? _animator.transform : transform;
+                // Guard.Try (Section 12): a bad rig transform must log and fall back to the old raw
+                // seat, never throw out of the attach and leave a half-parented prop on the body.
+                Quaternion derived = Guard.Try("Equip",
+                    $"ComputeBowHeldRotation for '{weaponId}' on '{name}'",
+                    () => WeaponBoundsOrient.ComputeBowHeldRotation(hand, bowBody),
+                    Quaternion.identity);
+                // gripEuler stays available as a felt-tune NUDGE composed ON TOP of the derived
+                // seat (identical to HeroBowAttachment's GripLocalEuler) — never as the source.
+                _baseGripRot = derived * Quaternion.Euler(_baseGripEuler);
+            }
             else
                 _baseGripRot = Quaternion.Euler(_baseGripEuler);
 
@@ -1116,8 +1161,31 @@ namespace DeNelle.Village
                     : $"no offset stored for '{offsetKey}' — pure geometry grip kept.");
             }
 
-            _baseGripRot = ApplyGlobalWeaponYaw(_baseGripRot);
-            _baseGripEuler = _baseGripRot.eulerAngles;
+            // ── GLOBAL YAW: APPLIED TO EVERY RAW-EULER SEAT, WITHHELD FROM THE DERIVED BOW ───────
+            // WeaponGlobalYawDeg (180) exists to correct grips that INHERITED the raw bone axes —
+            // every branch above except the bow one ends in an authored/nudge euler expressed in the
+            // bone's frame, so they still take it and their felt-approved look is byte-identical.
+            // The derived bow seat is already a WORLD-built target (belly on body.forward); yawing
+            // it 180 would swing the belly to face BACKWARD — string toward the target, curve toward
+            // the archer — the exact half-right failure the derivation was chosen to prevent.
+            // Precedent, not invention: in ApplyHoldPose the DERIVED ComputeSheathRotation result is
+            // likewise consumed without the yaw, while the raw-euler off-hand sheathe seat beside it
+            // still takes it — derived/no-yaw and authored/yaw, consistently. HeroBowAttachment drops
+            // it for the same reason (see its bow-orientation block, HeroBowAttachment.cs:242-284).
+            // Deliberately named by FUNCTION, not by line number: line refs in this file have gone
+            // stale before, and a stale pointer is how the wrong conclusion got preserved last time.
+            if (!bowDerivedSeat)
+            {
+                _baseGripRot = ApplyGlobalWeaponYaw(_baseGripRot);
+                _baseGripEuler = _baseGripRot.eulerAngles;
+            }
+            else
+            {
+                FlowTrace.Step("Equip",
+                    $"bow '{weaponId}': ApplyGlobalWeaponYaw WITHHELD (derived world seat). " +
+                    $"baseEuler={_baseGripRot.eulerAngles:0.#}. If the belly ever reads ~180deg off " +
+                    "the aim, a yaw got composed back on - do not compensate with a nudge.");
+            }
 
             LogGripSeatDiagnostics(prop, gripRoot.transform, hand, weaponId,
                 trustNativePivot ? "WO-478-native" : "geometry-infer");
@@ -1144,7 +1212,91 @@ namespace DeNelle.Village
             // the back socket (sheathed) out of combat — so the hand grip only shows where it seats right.
             _weaponHand = hand;
             _weaponDrawnLocalPos = gripRoot.transform.localPosition;
+            // Set BEFORE ApplyHoldPose: the hold pose is what puts the prop on its FINAL transform,
+            // and it is the caller that emits TraceBowSeatMeasured for whichever state it lands in.
+            _bowSeatDerived = bowDerivedSeat;
+            _lastBowSeatValid = false;   // a fresh attach always re-reports, never dedupes away
             ApplyHoldPose();
+
+        }
+
+        // ── §12 PROVING LINE, COMPANION TWIN (owner defect 2026-08-16) ───────────────────────────
+        // The instrumentation twin of HeroBowAttachment.cs:345-352, with the axis the hero's line
+        // does NOT print: the BELLY. One capture must be able to separate the three outcomes without
+        // a second run or a screenshot round-trip:
+        //   limbTiltFromVertical ~0  + bellyOffAim ~0   -> correct (upright, curve downrange)
+        //   limbTiltFromVertical ~90                    -> the raw-euler seat came back (horizontal)
+        //   limbTiltFromVertical ~0  + bellyOffAim ~180 -> a yaw got composed onto the derived seat:
+        //                                                  upright but the STRING faces the target
+        //                                                  and the curve faces the archer. This is
+        //                                                  the failure a dialed (0,0,-90) cannot even
+        //                                                  detect, which is why it is printed.
+        // Measured on the FINAL transform AFTER parenting + hold pose, so nothing downstream of the
+        // solve can quietly re-tip it. `derived` and the live parent are printed so a sheathed
+        // (back-socket) reading is never mistaken for a bad hand seat.
+        //
+        // ⚠ IT PRINTS BOTH CARRY STATES, AND THAT IS THE POINT (owner ruling 2026-08-16: "both
+        // sheathed and drawn bow stay in this same pose"). On 2026-08-16 a capture showed
+        // limbTiltFromVertical=0 for the HELD bow and the diagonal BACK carry was then reported to
+        // the owner as correct - by generalising a measurement of one state to a transform it never
+        // covered. So this is driven from ApplyHoldPose as well as from attach, and it names the
+        // state in every line. Both states must now read the same angles; if they ever diverge, the
+        // divergence is in the log rather than in a screenshot two days later.
+        // DEDUPE STATE, and it is NOT optional: ApplyHoldPose re-runs EVERY FRAME through
+        // SetCombatActive's no-change path (see the WO-959 note at the end of that method), so an
+        // unguarded trace here would be a per-frame firehose — the same shape as the equip-log spam
+        // that has buried real evidence before. These are ints/bools compared BEFORE any string is
+        // built, so a steady state costs three comparisons and allocates nothing at all.
+        private int  _lastBowSeatLimbDeg  = int.MinValue;
+        private int  _lastBowSeatBellyDeg = int.MinValue;
+        private bool _lastBowSeatOnHand;
+        private bool _lastBowSeatValid;
+        /// <summary>True when the CURRENT main-hand prop's seat came out of ComputeBowHeldRotation
+        /// (so the trace can tell a derived bow from a native-pivot one it deliberately skipped).</summary>
+        private bool _bowSeatDerived;
+
+        private void TraceBowSeatMeasured(Transform seated, Transform hand, string weaponId, bool derived)
+        {
+            if (seated == null) return;
+            Transform body = _animator != null ? _animator.transform : transform;
+            if (body == null) return;
+
+            Vector3 limbWorld  = seated.rotation * Vector3.up;        // prop +Y = limb-to-limb span
+            Vector3 bellyWorld = seated.rotation * Vector3.forward;   // prop +Z = riser belly / aim
+            float limbTilt = Vector3.Angle(limbWorld, body.up);
+            float bellyOff = Vector3.Angle(bellyWorld, body.forward);
+            bool onHand = hand != null && seated.parent == hand;
+
+            // Cheap first: same carry state + same whole-degree angles = nothing new to report.
+            // Compared before any string exists, because this runs every frame (see the fields).
+            int limbDeg = Mathf.RoundToInt(limbTilt);
+            int bellyDeg = Mathf.RoundToInt(bellyOff);
+            if (_lastBowSeatValid && onHand == _lastBowSeatOnHand &&
+                limbDeg == _lastBowSeatLimbDeg && bellyDeg == _lastBowSeatBellyDeg) return;
+            _lastBowSeatValid    = true;
+            _lastBowSeatOnHand   = onHand;
+            _lastBowSeatLimbDeg  = limbDeg;
+            _lastBowSeatBellyDeg = bellyDeg;
+
+            string parentName = seated.parent != null ? seated.parent.name : "<none>";
+            string state = onHand ? "DRAWN(hand)" : "SHEATHED(back socket)";
+
+            FlowTrace.Step("Equip",
+                $"BowSeat FINAL '{weaponId}' on '{name}': state={state} derived={derived} " +
+                $"parent='{parentName}' localEuler={seated.localRotation.eulerAngles:0.#} " +
+                $"bodyUp={body.up:0.##} bodyFwd={body.forward:0.##} limbAxisWorld={limbWorld:0.##} " +
+                $"bellyAxisWorld={bellyWorld:0.##} limbTiltFromVertical={limbTilt:0.#}deg " +
+                $"bellyOffAim={bellyOff:0.#}deg (BOTH STATES must read ~0/~0 per the owner ruling; " +
+                "~90 tilt = raw-euler seat returned or the diagonal baldric carry; ~180 belly = a " +
+                "global yaw was composed onto the derived seat)");
+
+            if (derived && (limbTilt > 5f || bellyOff > 5f))
+                FlowTrace.Warn("Equip",
+                    $"BowSeat '{weaponId}' {state}: derived seat measured OFF SPEC - " +
+                    $"limbTilt={limbTilt:0.#}deg bellyOff={bellyOff:0.#}deg (both should be ~0 in " +
+                    "EITHER state). Something composed on top of ComputeBowHeldRotation - an " +
+                    "attachment-offsets nudge, a re-applied global yaw, or the shared diagonal " +
+                    "sheathe. Fix the composer; do NOT dial a constant to cancel it.");
         }
 
         // RENDER-VERIFY (synchronous, no camera/scene dependency): the attached weapon prop MUST
@@ -2042,10 +2194,50 @@ namespace DeNelle.Village
                     // own axes via the SAME LookRotation(flat, blade) construction the correct battle
                     // draw uses (ComputeMeleeGripRotation), then compose the persisted authored nudge —
                     // instead of the old hand-guessed magic euler that ignored the chest-bone axes.
-                    _gripRoot.localRotation = ComputeSheathRotation(back);
+                    // ── BOW EXCEPTION: SHEATHED AND DRAWN ARE THE SAME POSE ──────────────────
+                    // Owner ruling 2026-08-16, verbatim: "both sheathed and drawn bow stay in this
+                    // same pose". ComputeSheathRotation lays the prop DIAGONALLY up the spine with
+                    // its flat against the back — a baldric carry. That is right for a sword, axe,
+                    // hammer or staff and is felt-approved, so it is UNTOUCHED for every one of
+                    // them; the branch below is entered ONLY for WeaponClass.Bow.
+                    //
+                    // A slung bow must instead answer the SAME four clauses the held bow does, so
+                    // the same solver produces it: ComputeBowHeldRotation builds its target in
+                    // WORLD from the body's axes and expresses it in the ANCHOR's local frame, and
+                    // it reads nothing off the anchor but its rotation. Feeding it the back socket
+                    // instead of the hand therefore yields the IDENTICAL WORLD ORIENTATION — which
+                    // is the ruling stated exactly. Only the anchor changes; the pose does not.
+                    // (Position still comes from _sheatheWeaponLocalPos above: the ruling is about
+                    // the POSE. A bow on the back still sits on the back.)
+                    //
+                    // MEASURED, so the change is not asserted: ComputeSheathRotation put the bow at
+                    // limbTiltFromVertical = _sheatheBladeDiagonalDeg (28 deg, the diagonal in the
+                    // owner's photo) and bellyOffAim = 180 deg EXACTLY, because worldFlat is
+                    // -body.forward - the flat lies against the back, which for a bow means the
+                    // STRING faces downrange and the curve faces the archer. So the old sheathed
+                    // bow was wrong on BOTH axes, not just the tilt. After this line both read 0.
+                    //
+                    // _sheatheWeaponLocalEuler (the melee back-pose felt-nudge, currently zero) is
+                    // deliberately NOT composed here - it lives inside ComputeSheathRotation and
+                    // belongs to the baldric carry. The bow's nudge seam is ApplySheathedOffset,
+                    // one line below, exactly as before.
+                    //
+                    // WHY THIS WAS MISSED: a capture proved limbTiltFromVertical=0 for the HELD
+                    // seat and the diagonal back-carry was then called correct by generalising that
+                    // one measurement to both states. The sheathed transform was never in that
+                    // trace. TraceBowSeatMeasured is now driven from HERE as well as from attach,
+                    // so a capture prints both states and that generalisation cannot be made again.
+                    _gripRoot.localRotation = _currentWeaponKind == WeaponClass.Bow
+                        ? Guard.Try("Equip", "sheathed bow ComputeBowHeldRotation",
+                            () => WeaponBoundsOrient.ComputeBowHeldRotation(
+                                      back, _animator != null ? _animator.transform : transform),
+                            Quaternion.identity)
+                        : ComputeSheathRotation(back);
                     // Sheathed pose: explicit "<meshKey>@sheathed" wins; else fall back to the drawn
                     // offset ("<meshKey>") as a nudge on this built-in back pose (town carry fix).
                     ApplySheathedOffset(_gripRoot, _currentWeaponMeshKey);
+                    if (_currentWeaponKind == WeaponClass.Bow)
+                        TraceBowSeatMeasured(_gripRoot, _weaponHand, _currentWeaponId, _bowSeatDerived);
                 }
                 else if (_weaponHand != null)
                 {
@@ -2054,6 +2246,8 @@ namespace DeNelle.Village
                     if (_weaponParentCompensate) CompensateParentScale(_gripRoot, _weaponAuthoredScale);
                     _gripRoot.localPosition = _weaponDrawnLocalPos;
                     _gripRoot.localRotation = _baseGripRot;
+                    if (_currentWeaponKind == WeaponClass.Bow)
+                        TraceBowSeatMeasured(_gripRoot, _weaponHand, _currentWeaponId, _bowSeatDerived);
                 }
             }
 
@@ -2660,8 +2854,25 @@ namespace DeNelle.Village
             else
                 baseRot = Quaternion.Euler(offHand ? _currentOffHandGripEuler : _currentWeaponGripEuler);
 
+            // WYSIWYG for the DERIVED BOW seat (2026-08-16). The attach path now derives a bow's
+            // grip and withholds the global yaw; if this preview kept the raw euler + yaw it would
+            // render the horizontal bow the game no longer ships, and the owner would dial a nudge
+            // to cancel a pose that does not exist at runtime. `offHand` is excluded on purpose —
+            // the off-hand slot is the SHIELD's, previewed and attached unchanged.
+            bool bowPreview = !offHand && !fullOverride && !nativeMeleePreview && !melee &&
+                              _currentWeaponKind == WeaponClass.Bow && grt.parent != null;
+            if (bowPreview)
+            {
+                Transform previewBody = _animator != null ? _animator.transform : transform;
+                baseRot = Guard.Try("Equip", "seating-preview ComputeBowHeldRotation",
+                    () => WeaponBoundsOrient.ComputeBowHeldRotation(grt.parent, previewBody),
+                    Quaternion.identity) * baseRot;
+            }
+
             grt.localPosition = gripPos + pos;
-            grt.localRotation = ApplyGlobalWeaponYaw(baseRot * Quaternion.Euler(euler));
+            grt.localRotation = bowPreview
+                ? baseRot * Quaternion.Euler(euler)                    // derived: no global yaw
+                : ApplyGlobalWeaponYaw(baseRot * Quaternion.Euler(euler));
             // WYSIWYG break proven 2026-07-07: preview lacked compensate (hand lossy 1.666) —
             // owner-dialed 0.46 rendered 0.276 at boot. Mirror the runtime scale composition
             // EXACTLY: a compensated slot renders ParentScaleCompensation(parent) * scale —
@@ -2712,7 +2923,17 @@ namespace DeNelle.Village
             else
             {
                 basePos = _sheatheWeaponLocalPos;
-                baseRot = ComputeSheathRotation(back);
+                // BOW: sheathed and drawn are the SAME pose (owner ruling 2026-08-16), so the
+                // preview must show the derived upright carry, not the shared diagonal baldric —
+                // otherwise the owner dials a nudge against a back pose the game never renders.
+                // Bow-only; every melee family still previews ComputeSheathRotation unchanged, and
+                // the shield is the offHand branch above, untouched.
+                baseRot = _currentWeaponKind == WeaponClass.Bow
+                    ? Guard.Try("Offset", "sheathed-preview ComputeBowHeldRotation",
+                        () => WeaponBoundsOrient.ComputeBowHeldRotation(
+                                  back, _animator != null ? _animator.transform : transform),
+                        Quaternion.identity)
+                    : ComputeSheathRotation(back);
             }
 
             if (fullOverride)

@@ -11,17 +11,23 @@
 // the Core HudActionBarModel, but the FACTS are Village-side, so this bridge
 // mirrors them into Core (DeNelle.HUD references Core ONLY — CLAUDE.md §5).
 //
-// THE PREDICATE (WO-835 §3b, single-source discipline):
+// THE PREDICATE (WO-835 §3b, as AMENDED by WO-1008 2026-08-16):
 //   capable = FeatureFlags.Raid
 //          AND StructureSingleton.IsBuilt("barracks")      (the raid building)
-//          AND ArmyReadiness.Compute(st).DeployableSlots >= 1
-// Deployable count comes from ArmyReadiness.Compute — THE one army formula
-// (owner review 2026-08-01, WO-823); never re-roll the math locally.
+//
+// ⚠ THE THIRD CLAUSE IS GONE ON PURPOSE. It used to read
+//   AND ArmyReadiness.Compute(st).DeployableSlots >= 1
+// and it cost the owner a session: a built Barracks with an empty army rendered NO
+// Raids face at all, so she reported "I do not see a way to start a raid". Owner ask,
+// verbatim: "can we add a greyed out option once we have a barracks with build troops
+// to raid". Troop count is now a DIM REASON on a VISIBLE face
+// (HudActionBarModel.RaidDimReason.NoTroops), not a hide reason. Do not restore it —
+// RaidsDiscoverabilityRegression fails the build if it comes back.
 //
 // NEVER-FALSE-BLOCK (WO-813/WO-820 precedent, mirrored from ArmyReadiness):
 // a missing GameState/Army (headless, AutoPilot, pre-boot) publishes CAPABLE —
-// absent state must never hide the raid door. A real fresh save (empty army)
-// publishes NOT capable, which is exactly the owner-intended hide.
+// absent state must never hide the raid door. Post-WO-1008 a real fresh save with a
+// Barracks ALSO publishes CAPABLE (and dims); only "no Barracks" / "flag off" hide.
 //
 // Distinct from the WO-820 FULL-ARMY gate: RaidEntryGate.ArmyStatus.Ready still
 // DIMS a visible Raids face (capable but not full — tap redirects to the
@@ -117,13 +123,23 @@ namespace DeNelle.Village
                 return false;
             }
 
-            // THE one army formula (ArmyReadiness, WO-823) — >=1 deployable slot
-            // means at least one healthy troop exists.
-            if (ArmyReadiness.Compute(st).DeployableSlots < 1)
-            {
-                refuseReason = "Train at least one troop at the Barracks to unlock Raids.";
-                return false;
-            }
+            // ⚠ WO-1008 (owner ask 2026-08-16, "can we add a greyed out option once we have a
+            // barracks with build troops to raid"): the old third clause
+            //     ArmyReadiness.Compute(st).DeployableSlots >= 1
+            // is DELETED FROM VISIBILITY ON PURPOSE. Do not restore it. The owner played a save
+            // with a built Barracks and an empty army; the Raids face was completely ABSENT and
+            // she reported "I do not see a way to start a raid" — a feature that hides itself is
+            // indistinguishable from a broken one. Zero troops is now a DIMMED, WORDED state
+            // (HudActionBarModel.RaidDimReason.NoTroops -> face reads "Raids 0/N", tap toasts
+            // "train troops at the Barracks"), reusing the existing WO-820 dim mechanism rather
+            // than inventing a second one.
+            //
+            // NOTHING IS WEAKENED: RaidSelectionScreen.Open still recomputes ArmyReadiness and
+            // still refuses + redirects to the drillmaster. Only the LEGIBILITY of the rule
+            // changed, never the rule.
+            FlowTrace.Once("Raid", "wo1008-capable",
+                "capability = flag + barracks ONLY (WO-1008). Troop count is a DIM reason on a " +
+                "visible face, never a hide reason.");
             return true;
         }
     }

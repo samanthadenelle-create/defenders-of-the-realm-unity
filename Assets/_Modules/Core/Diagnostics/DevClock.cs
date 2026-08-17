@@ -38,12 +38,16 @@
 //        +1h clears the 30s/1.5m/4.5m/13.5m/40m tiers and the 2h tier's first hour.
 //  2. ObsidianQueueHud / TroopTrainingPanel    (queue readouts)
 //     -> Remaining-time strings shorten to match. Display only.
-//  3. OfflineHarvestService.ClaimAccrual       (node/settlement/pet offline haul)
-//     -> PAYS +1h of offline income on the next claim, up to OfflineCapSeconds.
-//  4. EchoService.ClaimOffline                 (the Echo silo)
+//  3. OfflineClaimCoordinator.Claim            (WO-1147: the ONE offline clock read)
+//     -> Computes +1h of elapsed window ONCE and fans it out to every consumer:
+//        OfflineHarvestService (node/settlement/pet haul, 10h cap), EchoService
+//        (the silo, 4h cap) and EchoRepairService (repair fractions, 4h cap). Each
+//        clamps the SAME window with its own cap; the clock advances exactly once.
+//  4. (was EchoService.ClaimOffline -- now EchoService.ApplyOfflineWindow, driven by 3)
 //     -> Fills the silo by +1h of harvest rate, clamped to the silo HOUR cap (4h).
 //  5. EchoService.DumpSilos                    (banking the silo)
-//     -> Re-stamps GameState.LastHarvestClaimMs to the skewed now.
+//     -> Re-stamps GameState.LastHarvestClaimMs to the skewed now, via
+//        OfflineClaimCoordinator.StampClock (the single-owner write path).
 //  6. ResourceCollector.CatchUpAway            (WO-859 collector offline accrual)
 //     -> PAYS +1h into each collector's pending pool, clamped by its capacity cap.
 //  7. TroopRecoveryService -> ArmyStorage.AdvanceRecovery

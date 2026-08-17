@@ -96,6 +96,49 @@
 //            37) and it asserts the identity seat WOULD have failed, so it cannot pass
 //            vacuously.
 //
+//   Case 9 — the COMPANION archer's bow is DERIVED TOO, on BOTH axes. Case 8 tests the
+//            SOLVER; this tests the CALLER. A companion has no HeroBowAttachment, so its
+//            bow is seated by EquipmentController.AttachLoadedProp, which fell to the raw
+//            `Quaternion.Euler(_baseGripEuler)` with the Bow preset's gripEuler == (0,0,0)
+//            - so Case 8 stayed green while the companion bow was still horizontal. Half
+//            source-lint (the branch derives; ApplyGlobalWeaponYaw is withheld from it and
+//            from nothing else), half geometry: the real composition is run on a hostile
+//            fixture and all four clauses of the owner's rule are MEASURED OFF THE MESH.
+//
+//  Case 10 — the SHEATHED bow holds the SAME POSE as the drawn one (owner ruling
+//            2026-08-16, verbatim: "both sheathed and drawn bow stay in this same
+//            pose"). Corrects a call made that same night: a capture proving the HELD
+//            seat was 0 deg off vertical was generalised to the diagonally-slung back
+//            bow, a transform it never covered. Bow-only - the baldric carry stays for
+//            swords/axes/hammers/staves and this case fails if it is removed from them.
+//
+// ★ THE OWNER'S CANONICAL BOW RULE — HER EXACT WORDS, 2026-08-16, BINDING FOR EVERY BOW.
+// Recorded verbatim (never paraphrased) because a rule without its reasoning gets "fixed"
+// by the next reader — a dialed +91 Z was shipped and reverted once, and a confident
+// comment then preserved the wrong conclusion for months:
+//
+//   "For bows, the rule would always be y is the longest distance on any two points of a
+//    mesh bow. the straight edge runs parallel to the person holding it with the arm
+//    crossing that straight line perpendicular, landing with the hand clasping on the
+//    curved edge furthest from the person."
+//
+// The four clauses, and the case that asserts each:
+//   1. Y IS THE LONGEST DISTANCE BETWEEN ANY TWO POINTS  -> Case 7 (a bow rotated 90 deg
+//      must come back onto +Y, so the align must MEASURE rather than trust the import) and
+//      Case 9's held-frame check that the greatest vertex-pair distance IS the limb span.
+//   2. THE STRAIGHT EDGE RUNS PARALLEL TO THE PERSON     -> Case 8 (belly on body.forward)
+//      and Case 9, which measures the string LINE's skew out of the archer's body plane.
+//   3. THE ARM CROSSES THAT LINE PERPENDICULAR at mid-Y  -> Case 4 (the seat is derived on
+//      the perpendicular from the straight edge's midpoint, never along the string).
+//   4. THE HAND CLASPS THE CURVED EDGE FURTHEST FROM THE PERSON -> Case 4 (apex, not the
+//      first surface) and Case 9, which requires the grip to sit a full bulge FARTHER
+//      downrange than the string.
+// Clauses 2 and 4 together ARE the belly axis. A fix that satisfies 1 and 3 but not 2 and 4
+// stands the bow upright with the curve facing BACKWARD - string at the target, curve at the
+// archer. It photographs as nearly right, which is why Case 9 ends with an independence probe
+// proving the 180-degree yaw moves the belly WITHOUT moving the limb: an upright-only
+// assertion, and any dialed Z-roll constant, cannot tell those two poses apart.
+//
 // ⚠ CASES 4 / 7 / 8 ARE THREE DIFFERENT FAILURES AND MUST STAY SEPARATE. Case 4 is the
 // grip POSITION (where on the bow the hand sits), Case 7 is the seated AXIS, Case 8 is
 // the ORIENTATION ONCE IN HAND. On 2026-08-16 the grip position measured exactly right
@@ -164,11 +207,13 @@ namespace DeNelle.Editor.Regression
             Case(failures, "cooldown-greys-out", () => Case6_NoCooldownSpecialCase(failures, notes));
             Case(failures, "bow-long-axis-y", () => Case7_LongAxisSeatsOnY(failures, notes));
             Case(failures, "bow-upright-in-hand", () => Case8_BowStandsUprightInHand(failures, notes));
+            Case(failures, "companion-bow-derived", () => Case9_CompanionBowSeatIsDerived(failures, notes));
+            Case(failures, "sheathed-bow-matches-drawn", () => Case10_SheathedBowMatchesDrawn(failures, notes));
 
             string noteStr = notes.Count > 0 ? " [notes: " + string.Join("; ", notes) + "]" : "";
             if (failures.Count == 0)
             {
-                reason = "RANGED PRIMARY OK - 8/8 cases pass (no crossbow can reach the runtime weapons " +
+                reason = "RANGED PRIMARY OK - 10/10 cases pass (no crossbow can reach the runtime weapons " +
                          "catalog while the R4a exclusion stands, the ranger basic is still a costed-" +
                          "cooldown ranged strike carrying its verb + bow icon, the ranged-basic " +
                          "discriminator still admits the ranger while rejecting the knight, the bow grip " +
@@ -176,8 +221,12 @@ namespace DeNelle.Editor.Regression
                          "BOW is an ACTION-BAR ability while the PRIMARY attack is the melee/dagger " +
                          "sweep, the bow slot greys out under its cooldown with no special case, the " +
                          "LONGEST axis still seats on +Y whatever axis the source mesh authored it on, " +
-                         "and the held bow still stands UPRIGHT in a hand whose bone axes are nowhere " +
-                         "near vertical)" + noteStr;
+                         "the held bow still stands UPRIGHT in a hand whose bone axes are nowhere " +
+                         "near vertical, and the COMPANION archer's bow is DERIVED through " +
+                         "ComputeBowHeldRotation with the global yaw withheld, satisfying all four " +
+                         "clauses of the owner's canonical bow rule measured off the mesh, and a " +
+                         "SHEATHED bow holds the same world pose as the drawn one while the melee " +
+                         "diagonal back-carry is untouched)" + noteStr;
                 return true;
             }
             reason = "RANGED PRIMARY FAIL x" + failures.Count + ": " + string.Join(" | ", failures) + noteStr;
@@ -501,7 +550,8 @@ namespace DeNelle.Editor.Regression
                 prop.GetComponent<MeshFilter>().sharedMesh = BuildSyntheticBowMesh();
                 if (!prop.GetComponent<MeshFilter>().sharedMesh.isReadable)
                 {
-                    notes.Add("bow-grip-apex SKIPPED: procedural mesh reported not readable");
+                    notes.Add(DeNelle.Editor.Regression.RegressionOutcome.PartialSkip(
+                        "bow-grip-apex", "procedural mesh reported not readable"));
                     return;
                 }
 
@@ -584,7 +634,8 @@ namespace DeNelle.Editor.Regression
                 child.GetComponent<MeshFilter>().sharedMesh = mesh;
                 if (!mesh.isReadable)
                 {
-                    notes.Add("bow-long-axis-y SKIPPED: procedural mesh reported not readable");
+                    notes.Add(DeNelle.Editor.Regression.RegressionOutcome.PartialSkip(
+                        "bow-long-axis-y", "procedural mesh reported not readable"));
                     return;
                 }
 
@@ -750,6 +801,660 @@ namespace DeNelle.Editor.Regression
         {
             tris.Add(a); tris.Add(b); tris.Add(c);
             tris.Add(a); tris.Add(c); tris.Add(d);
+        }
+
+        // =====================================================================
+        //  CASE 9 — the COMPANION bow seat is DERIVED, on BOTH axes
+        // =====================================================================
+        //
+        // WHAT THIS PINS THAT CASE 8 DOES NOT. Case 8 exercises the SOLVER
+        // (WeaponBoundsOrient.ComputeBowHeldRotation) in isolation. It stayed green all the while
+        // the COMPANION archer's bow was still horizontal, because the companion bow never goes
+        // through HeroBowAttachment: a companion has no HeroBowAttachment, so DeferBowToBowAttachment
+        // is false and its bow is seated by EquipmentController.AttachLoadedProp, which fell to the
+        // raw `Quaternion.Euler(_baseGripEuler)` with the Bow preset's gripEuler == (0,0,0). A solver
+        // that is correct and a caller that does not call it read identically in a suite that only
+        // tests the solver. This case tests the CALLER and the COMPOSITION.
+        //
+        // TWO AXES, MEASURED OFF THE MESH — not off a quaternion convention. The owner's archer
+        // reference has the STRING as the straight edge NEAREST the body and the limbs curving AWAY
+        // toward the target, so the seat owes two answers:
+        //   * the LIMB line (nock to nock) stands along the body's UP, and
+        //   * the BELLY (the bulged riser face the grip apex sits on, opposite the string) faces the
+        //     body's FORWARD.
+        // Both are read from the synthetic bow's actual vertices after the real composition: the limb
+        // line is the world segment between the two most separated vertices (which on this mesh are
+        // exactly the two nock tips), and the belly direction is the world vector from the mesh
+        // centroid to the seated grip origin, since GripAnchor.BowGrip seats the grip ON the bulge
+        // apex while the centroid sits between apex and string. Neither number can be satisfied by
+        // agreeing with an axis naming convention.
+        //
+        // WHY BOTH, STATED AS THE FAILURE IT CATCHES: a dialed Z-roll constant - the tempting
+        // (0,0,-90) that was weighed and rejected - stands the bow upright while leaving the belly
+        // free to face BACKWARD (string downrange, curve at the archer). That reads as nearly right
+        // in a screenshot. Assertion (d) below PROVES the axes are independent by composing the
+        // 180-degree global yaw onto the derived seat and requiring that it leaves the limb axis
+        // untouched while flipping the belly - i.e. a limb-only assertion would have passed the
+        // broken pose. That is also why ApplyGlobalWeaponYaw must NOT be composed on this path, and
+        // assertion (b) pins the code that withholds it.
+        private const string EquipmentControllerPath =
+            "Assets/_Modules/Village/Hero/EquipmentController.cs";
+
+        /// <summary>Angular tolerance (deg) on the measured axes. The wrong answers are 90 deg
+        /// (horizontal) and 180 deg (belly reversed) away, so this can never pass by luck.
+        /// <para>
+        /// ⛔ DO NOT WIDEN THIS. It has been attacked once already and the bound was NOT the problem.
+        /// On its first gate run this case failed at 1.15 deg against this 1.0, and 1.15 is not a
+        /// near-miss that wants slack - it is exactly atan(SynthBowThick / SynthBowLength), the tilt
+        /// of the corner-to-corner vertex pair the old estimator was picking as the limb line. The
+        /// ESTIMATOR was fixed (see DominantAxis); the bound stayed. If this case goes
+        /// red again, the residual is telling you something true - measure it, do not raise this.
+        /// </para></summary>
+        private const float CompanionBowToleranceDeg = 1.0f;
+
+        /// <summary>The yaw-composed belly must be at least this far off the aim, or assertion (d)
+        /// is not proving that the two axes are independent.</summary>
+        private const float YawFlipsBellyMinDeg = 150f;
+
+        private static void Case9_CompanionBowSeatIsDerived(List<string> failures, List<string> notes)
+        {
+            // ── (a)+(b) SOURCE: the caller derives, and withholds the global yaw ─────────────────
+            string raw = ReadText(EquipmentControllerPath);
+            if (raw == null)
+            {
+                failures.Add("[companion-bow-derived] cannot read " + EquipmentControllerPath +
+                             " - the companion bow's seat is composed there, so without it this case " +
+                             "cannot prove the path derives rather than falling back to a raw euler.");
+                return;
+            }
+            // Strip comments AND string literals first: this file DOCUMENTS the defect at length, so
+            // an unstripped match would be satisfied by prose describing the bug it is meant to catch.
+            string src = StripCommentsAndStrings(raw);
+
+            if (src.IndexOf("ComputeBowHeldRotation", StringComparison.Ordinal) < 0)
+                failures.Add("[companion-bow-derived] EquipmentController contains no live call to " +
+                             "ComputeBowHeldRotation (comments and string literals stripped). The " +
+                             "companion/non-ranger bow branch has reverted to a raw euler seat - the " +
+                             "2026-08-16 defect, where gripEuler (0,0,0) maps the limb span onto the " +
+                             "hand BONE's +Y (the fist axis) and the bow lies HORIZONTALLY across the " +
+                             "body. The fix is the DERIVATION, never a dialed constant: a constant can " +
+                             "stand the bow up while leaving the belly facing backwards, which this " +
+                             "suite's assertion (c) exists to reject.");
+
+            if (src.IndexOf("WeaponClass.Bow", StringComparison.Ordinal) < 0)
+                failures.Add("[companion-bow-derived] EquipmentController no longer branches on " +
+                             "WeaponClass.Bow. The bow seat must be scoped to BOWS - the shield and " +
+                             "every melee family keep their own felt-approved seats untouched.");
+
+            int yawIdx = src.IndexOf("ApplyGlobalWeaponYaw(_baseGripRot)", StringComparison.Ordinal);
+            if (yawIdx < 0)
+                failures.Add("[companion-bow-derived] the main-hand global-yaw line " +
+                             "(ApplyGlobalWeaponYaw(_baseGripRot)) is gone entirely. It must SURVIVE " +
+                             "for every raw-euler seat - removing it changes every melee family's " +
+                             "look - and be withheld ONLY from the derived bow.");
+            else
+            {
+                // The guard must sit immediately before the yaw, so the yaw is skipped for the
+                // derived bow and applied to everything else.
+                int from = Math.Max(0, yawIdx - 160);
+                string window = src.Substring(from, yawIdx - from);
+                if (window.IndexOf("bowDerivedSeat", StringComparison.Ordinal) < 0)
+                    failures.Add("[companion-bow-derived] ApplyGlobalWeaponYaw(_baseGripRot) is not " +
+                                 "guarded by bowDerivedSeat. The 180-degree yaw corrects grips that " +
+                                 "INHERITED the raw bone axes; composed onto a world-derived bow seat " +
+                                 "it swings the BELLY to face backward - string toward the target, " +
+                                 "curve toward the archer - which is upright and still wrong. Precedent: " +
+                                 "the derived ComputeSheathRotation result is likewise consumed without " +
+                                 "the yaw, and HeroBowAttachment drops it for this same reason.");
+            }
+
+            // ── (c)+(d) GEOMETRY: run the real composition and measure the mesh ─────────────────
+            GameObject rig = null;
+            try
+            {
+                rig = new GameObject("CompanionBowProbe");
+                var body = new GameObject("Body").transform;
+                body.SetParent(rig.transform, false);
+                body.localRotation = Quaternion.Euler(0f, 37f, 0f);      // companion facing, upright
+
+                var hand = new GameObject("LeftHand").transform;
+                hand.SetParent(body, false);
+                hand.localRotation = Quaternion.Euler(90f, 0f, 53f);     // bone +Y along forward, rolled
+
+                // ORDER MATTERS AND IT MIRRORS THE RUNTIME. AttachLoadedProp creates the grip root
+                // UNPARENTED, runs NormalizeInto on it, and only then SetParent(hand, false) -
+                // HeroBowAttachment does the same. That is not incidental: TryLocalBounds measures
+                // Renderer.bounds, a WORLD AABB, so normalizing under an already-rotated bone would
+                // hand the axis solve an inflated box and could pick the wrong longest axis. A
+                // fixture that parented first would be testing a path the game does not run.
+                var mesh = BuildSyntheticBowMesh();
+                if (!mesh.isReadable)
+                {
+                    notes.Add(DeNelle.Editor.Regression.RegressionOutcome.PartialSkip(
+                        "companion-bow-derived (geometry half)", "procedural mesh not readable"));
+                    return;
+                }
+
+                // Created UNDER the probe root so nothing leaks into the scene if an assert throws;
+                // NormalizeInto is still fed an unrotated parent, which is what the ordering above
+                // is about (the probe root itself carries no rotation).
+                var gripRoot = new GameObject("WeaponProp").transform;
+                gripRoot.SetParent(rig.transform, false);
+
+                var prop = new GameObject("SynthBow", typeof(MeshFilter), typeof(MeshRenderer));
+                prop.GetComponent<MeshFilter>().sharedMesh = mesh;
+
+                DeNelle.Core.Geometry.WeaponBoundsOrient.NormalizeInto(
+                    prop, gripRoot, SynthBowLength,
+                    DeNelle.Core.Geometry.WeaponBoundsOrient.GripAnchor.BowGrip,
+                    resolveBladeUpFromHilt: false);
+
+                gripRoot.SetParent(hand, false);   // ...and only now onto the bone, as the game does.
+
+                // THE COMPOSITION UNDER TEST - byte-for-byte what AttachLoadedProp's bow branch does:
+                // derived hand-local seat, then the authored gripEuler as a NUDGE on top, and NO
+                // global yaw. The Bow preset's gripEuler is (0,0,0); it is written out rather than
+                // dropped so that dialing it would move this measurement too.
+                Vector3 presetGripEuler = Vector3.zero;
+                Quaternion derived =
+                    DeNelle.Core.Geometry.WeaponBoundsOrient.ComputeBowHeldRotation(hand, body);
+                gripRoot.localPosition = Vector3.zero;
+                gripRoot.localRotation = derived * Quaternion.Euler(presetGripEuler);
+
+                // ── LIMB LINE, measured off the mesh ────────────────────────────────────────────
+                // ⚠ THE ESTIMATOR IS THE SUBTLE PART. READ THIS BEFORE TOUCHING THE TOLERANCE.
+                // The first version of this case took the single most-separated VERTEX PAIR as the
+                // limb line. That is biased, and provably so: the two nock tips are 1.0 m apart on Y
+                // but the stave is SynthBowThick (0.02 m) wide on X, so the winning pair is the
+                // CORNER-TO-CORNER diagonal (-halfX,-L/2) -> (+halfX,+L/2), not the two tip centres.
+                // Its tilt off true +Y is a closed form:
+                //     atan(SynthBowThick / SynthBowLength) = atan(0.02 / 1.0) = 1.1458 deg
+                // and the case duly failed at "1.15deg off vertical" against a 1.0 deg bound. That
+                // 1.15 was the FIXTURE'S OWN MEASUREMENT ERROR, not the seat's: the residual is a
+                // property of which two vertices get picked, it is invariant under any rigid rotation
+                // of the rig, and it would not shrink by one thousandth of a degree if the derivation
+                // were made perfect. Widening the bound to 2 deg would have "fixed" it by hiding a
+                // real 1.15 deg of blindness in the very assertion that guards the owner's rule.
+                //
+                // So the ESTIMATOR is fixed instead, not the bound. The extreme pair is kept only as
+                // a SEED; the limb line is then the cloud's PRINCIPAL AXIS (see DominantAxis), which
+                // weighs every vertex correctly and returns the true axis - exactly (0,1,0) in the
+                // prop frame - for any stave thickness. The tolerance stays at 1 deg.
+                Vector3[] verts = mesh.vertices;
+                var world = new Vector3[verts.Length];
+                Vector3 centroid = Vector3.zero;
+                for (int i = 0; i < verts.Length; i++)
+                {
+                    world[i] = prop.transform.TransformPoint(verts[i]);
+                    centroid += world[i];
+                }
+                centroid /= Mathf.Max(1, verts.Length);
+
+                float best = -1f; int ia = 0, ib = 0;
+                for (int i = 0; i < world.Length; i++)
+                    for (int j = i + 1; j < world.Length; j++)
+                    {
+                        float d = (world[i] - world[j]).sqrMagnitude;
+                        if (d > best) { best = d; ia = i; ib = j; }
+                    }
+                Vector3 limbSeed  = (world[ib] - world[ia]).normalized;   // biased by ~1.15 deg
+                Vector3 limbWorld = DominantAxis(world, limbSeed);        // unbiased
+
+                // BELLY, measured off the mesh: GripAnchor.BowGrip seats the grip ON the bulge apex
+                // while the centroid lies between apex and string, so centroid -> grip points along
+                // the belly. Projected perpendicular to the limb line so a residual along-limb
+                // component cannot flatter the angle.
+                Vector3 bellyWorld = gripRoot.position - centroid;
+                bellyWorld -= Vector3.Dot(bellyWorld, limbWorld) * limbWorld;
+                float bellyLen = bellyWorld.magnitude;
+                bellyWorld = bellyWorld.normalized;
+
+                // The limb LINE is undirected (either nock may be "first"), so fold the angle.
+                float limbTilt = Vector3.Angle(limbWorld, body.up);
+                if (limbTilt > 90f) limbTilt = 180f - limbTilt;
+                float bellyOff = Vector3.Angle(bellyWorld, body.forward);
+                float identityTilt = Vector3.Angle(hand.rotation * Vector3.up, body.up);
+
+                // The seed's own tilt, reported so the estimator PROVES it is doing work rather than
+                // being trusted. Expected ~1.15 deg = atan(SynthBowThick / SynthBowLength). If this
+                // ever prints ~0 the fixture stopped having a cross-section and the fit is no longer
+                // being exercised; if the fitted limbTilt ever creeps toward this value, the fit has
+                // been removed and the bound must NOT be widened to accommodate it.
+                float seedTilt = Vector3.Angle(limbSeed, body.up);
+                if (seedTilt > 90f) seedTilt = 180f - seedTilt;
+                float seedBiasClosedForm =
+                    Mathf.Atan2(SynthBowThick, SynthBowLength) * Mathf.Rad2Deg;
+
+                // ── CLAUSE 1, in the HELD pose: "y is the longest distance on any two points of a
+                // mesh bow". `best` IS that greatest-distance-between-any-two-points, measured over
+                // the vertices after the solve - the owner's definition applied literally, not the
+                // AABB extent the solver reads. It must equal the authored limb span AND it must be
+                // the axis that ended up vertical (asserted just below), which is the two halves of
+                // her first clause: Y is the longest distance, and that is the axis that stands up.
+                float longestSpan = Mathf.Sqrt(best);
+
+                // ── CLAUSES 2 + 4, stated the way SHE states them - as distances FROM THE PERSON.
+                // The straight (string) edge is the fixture's z==0 rows. It must end up NEARER the
+                // archer than the grip, which sits on "the curved edge furthest from the person".
+                var stringWorld = new List<Vector3>(verts.Length);
+                Vector3 stringCentroid = Vector3.zero;
+                for (int i = 0; i < verts.Length; i++)
+                    if (Mathf.Abs(verts[i].z) < 1e-5f) { stringWorld.Add(world[i]); stringCentroid += world[i]; }
+                int stringCount = stringWorld.Count;
+                float stringDepth = 0f, gripDepth = 0f, straightEdgeSkew = 0f;
+                if (stringCount > 0)
+                {
+                    stringCentroid /= stringCount;
+                    // Depth = distance from the person, measured along the body's forward.
+                    stringDepth = Vector3.Dot(stringCentroid - body.position, body.forward);
+                    gripDepth = Vector3.Dot(gripRoot.position - body.position, body.forward);
+                    // "the straight edge runs parallel to the person holding it": the string LINE
+                    // must lie in the archer's body plane, i.e. carry no component along forward.
+                    // Same principal-axis estimator as the limb line, for the same reason - the
+                    // string edge is also SynthBowThick wide on X, so picking single extreme
+                    // vertices would tilt this line by the identical atan(0.02/1.0) = 1.15 deg.
+                    Vector3 stringLine = DominantAxis(stringWorld.ToArray(), limbWorld);
+                    straightEdgeSkew = Mathf.Abs(90f - Vector3.Angle(stringLine, body.forward));
+                }
+
+                notes.Add("companion-bow-derived: limbTiltFromVertical=" + limbTilt.ToString("0.##") +
+                          "deg bellyOffAim=" + bellyOff.ToString("0.##") + "deg bellyArm=" +
+                          bellyLen.ToString("0.###") + "m longestSpan=" + longestSpan.ToString("0.###") +
+                          "m stringDepth=" + stringDepth.ToString("0.###") + "m gripDepth=" +
+                          gripDepth.ToString("0.###") + "m straightEdgeSkew=" +
+                          straightEdgeSkew.ToString("0.##") + "deg identitySeatWouldTilt=" +
+                          identityTilt.ToString("0.##") + "deg extremePairSeedTilt=" +
+                          seedTilt.ToString("0.###") + "deg (closed form " +
+                          seedBiasClosedForm.ToString("0.###") + "deg - the fixture bias the " +
+                          "end-centroid refinement removes; NOT a seat error)");
+
+                // CLAUSE 1 - "y is the longest distance on any two points of a mesh bow".
+                if (Mathf.Abs(longestSpan - SynthBowLength) > 0.01f)
+                    failures.Add("[companion-bow-derived] clause 1 (owner, 2026-08-16: 'y is the " +
+                                 "longest distance on any two points of a mesh bow'): the greatest " +
+                                 "distance between any two vertices measured " + longestSpan.ToString("0.####") +
+                                 "m, expected the " + SynthBowLength.ToString("0.##") + "m limb span. " +
+                                 "The solve either rescaled the bow or seated the length on a different " +
+                                 "pair of points than the two nocks - see also bow-long-axis-y, which " +
+                                 "pins that the align MEASURES the longest axis rather than trusting " +
+                                 "whatever axis the FBX authored it on.");
+
+                if (stringCount == 0)
+                    failures.Add("[companion-bow-derived] FIXTURE BROKEN: no straight-edge (string) " +
+                                 "vertices found, so clauses 2 and 4 - the ones that decide which way " +
+                                 "the curve faces - cannot be measured at all.");
+                else
+                {
+                    // CLAUSE 2 - "the straight edge runs parallel to the person holding it".
+                    if (straightEdgeSkew > CompanionBowToleranceDeg)
+                        failures.Add("[companion-bow-derived] clause 2 (owner: 'the straight edge runs " +
+                                     "parallel to the person holding it'): the string line sits " +
+                                     straightEdgeSkew.ToString("0.##") + "deg out of the archer's body " +
+                                     "plane (allowed " + CompanionBowToleranceDeg.ToString("0.##") +
+                                     "deg). The string must run along the person, not out toward the " +
+                                     "target.");
+
+                    // CLAUSE 4 - "the hand clasping on the curved edge furthest from the person".
+                    // The grip must be FARTHER downrange than the string, by the full bulge depth.
+                    float clasp = gripDepth - stringDepth;
+                    if (clasp <= 0f || clasp < SynthBowBulge * 0.5f)
+                        failures.Add("[companion-bow-derived] clause 4 (owner: 'landing with the hand " +
+                                     "clasping on the curved edge furthest from the person'): the grip " +
+                                     "sits only " + clasp.ToString("0.####") + "m farther from the archer " +
+                                     "than the string (expected about the full bulge, " +
+                                     SynthBowBulge.ToString("0.##") + "m). A value at or below zero is " +
+                                     "the bow held BACKWARD - the hand on the string side, the curve " +
+                                     "toward the archer. That is the pose a dialed Z-roll constant " +
+                                     "produces while still standing the bow perfectly upright, and it is " +
+                                     "the whole reason clause 2 and clause 4 are asserted separately " +
+                                     "from the limb axis.");
+                }
+
+                if (bellyLen < 0.02f)
+                    failures.Add("[companion-bow-derived] FIXTURE BROKEN: the measured belly arm is " +
+                                 bellyLen.ToString("0.####") + "m, too short to give a meaningful " +
+                                 "direction. The grip is supposed to sit on the bulge APEX while the " +
+                                 "centroid sits between apex and string; a near-zero arm means the " +
+                                 "BowGrip seat moved (see case bow-grip-apex) and this case is no " +
+                                 "longer measuring the belly at all.");
+
+                // The refinement must be EXERCISED, not merely present: the seed it corrects has to
+                // carry the bias the closed form predicts. Tracks the fixture automatically - change
+                // SynthBowThick and both sides move together.
+                if (Mathf.Abs(seedTilt - seedBiasClosedForm) > 0.05f)
+                    failures.Add("[companion-bow-derived] FIXTURE DRIFT: the extreme-pair seed tilts " +
+                                 seedTilt.ToString("0.###") + "deg off vertical but the closed form " +
+                                 "atan(SynthBowThick/SynthBowLength) says " +
+                                 seedBiasClosedForm.ToString("0.###") + "deg. Either the synthetic bow " +
+                                 "changed shape or the seed is no longer the corner-to-corner pair, " +
+                                 "and in both cases the end-centroid refinement is no longer being " +
+                                 "exercised - so a real limb-axis error could now hide inside a " +
+                                 "measurement artefact nobody is watching.");
+
+                if (identityTilt < FixtureMinIdentityTiltDeg)
+                    failures.Add("[companion-bow-derived] FIXTURE BROKEN: the identity seat is only " +
+                                 identityTilt.ToString("0.##") + "deg off vertical. The hand bone must " +
+                                 "be pitched away from vertical or a raw-euler seat would pass this " +
+                                 "case, which is precisely the regression it exists to catch.");
+
+                if (limbTilt > CompanionBowToleranceDeg)
+                    failures.Add("[companion-bow-derived] the COMPANION's seated bow has its limb line " +
+                                 limbTilt.ToString("0.##") + "deg off the body's vertical (allowed " +
+                                 CompanionBowToleranceDeg.ToString("0.##") + "deg). ~" +
+                                 identityTilt.ToString("0.#") + "deg means EquipmentController's bow " +
+                                 "branch went back to Quaternion.Euler(_baseGripEuler) - the horizontal " +
+                                 "companion bow. Fix the branch to derive; do NOT dial gripEuler.");
+
+                if (bellyOff > CompanionBowToleranceDeg)
+                    failures.Add("[companion-bow-derived] the COMPANION's seated bow has its BELLY " +
+                                 "(the bulged riser face opposite the string) " + bellyOff.ToString("0.##") +
+                                 "deg off the body's forward (allowed " +
+                                 CompanionBowToleranceDeg.ToString("0.##") + "deg). The archer holds the " +
+                                 "STRING nearest the body with the limbs curving AWAY toward the target, " +
+                                 "so the belly faces downrange. ~180deg means a global yaw was composed " +
+                                 "onto the derived seat, which is upright and still wrong.");
+
+                // (d) PROVE THE TWO AXES ARE INDEPENDENT - and with it, that the yaw decision matters.
+                Quaternion yawed = gripRoot.localRotation * Quaternion.Euler(0f, 180f, 0f);
+                Quaternion composedYawed = hand.rotation * yawed;
+                Quaternion composedTrue  = hand.rotation * gripRoot.localRotation;
+                float yawedLimbTilt = Vector3.Angle(composedYawed * Vector3.up, body.up);
+                if (yawedLimbTilt > 90f) yawedLimbTilt = 180f - yawedLimbTilt;
+                float yawedBellyOff = Vector3.Angle(composedYawed * Vector3.forward,
+                                                    composedTrue * Vector3.forward);
+
+                notes.Add("companion-bow-derived (yaw probe): yawedLimbTilt=" +
+                          yawedLimbTilt.ToString("0.##") + "deg bellyMovedBy=" +
+                          yawedBellyOff.ToString("0.##") + "deg");
+
+                if (yawedLimbTilt > CompanionBowToleranceDeg || yawedBellyOff < YawFlipsBellyMinDeg)
+                    failures.Add("[companion-bow-derived] the independence probe did not behave: " +
+                                 "composing ApplyGlobalWeaponYaw's 180 degrees onto the derived seat " +
+                                 "moved the limb by " + yawedLimbTilt.ToString("0.##") + "deg and the " +
+                                 "belly by " + yawedBellyOff.ToString("0.##") + "deg (expected ~0 and " +
+                                 ">=" + YawFlipsBellyMinDeg.ToString("0.#") + "). This probe is what " +
+                                 "makes the two-axis requirement non-negotiable: the yaw leaves the bow " +
+                                 "UPRIGHT while reversing the belly, so an upright-only assertion (and " +
+                                 "any dialed Z-roll constant) cannot tell the correct seat from the " +
+                                 "one with the string pointed at the target.");
+            }
+            finally
+            {
+                if (rig != null) UnityEngine.Object.DestroyImmediate(rig);
+            }
+        }
+
+        /// <summary>
+        /// The UNBIASED long axis of a vertex cloud: the principal axis (dominant eigenvector of the
+        /// covariance), found by power iteration from an approximate <paramref name="seed"/>.
+        /// Direction is unsigned - callers must fold the angle.
+        /// <para>
+        /// WHY THIS EXISTS, so nobody "simplifies" it back. The first version of the companion case
+        /// took the most-separated VERTEX PAIR as the limb line. On any prop with a real
+        /// cross-section that pair is the CORNER-TO-CORNER diagonal, not the axis: on the synthetic
+        /// bow (1.0 m on Y, 0.02 m on X) it sits atan(0.02 / 1.0) = 1.1458 deg off true, and the case
+        /// duly failed its gate at "1.15deg off vertical" against a 1 deg bound. That residual was
+        /// the FIXTURE'S MEASUREMENT ERROR, not the seat's - it is a property of which two vertices
+        /// win, invariant under rigid rotation, and unchanged by a perfect derivation. Widening the
+        /// bound would have buried 1.15 deg of blindness inside the assertion guarding the rule.
+        /// </para>
+        /// <para>
+        /// The second attempt averaged the centroids of the two END BANDS. Better (~0.24 deg) but
+        /// still wrong, and instructively so: the band edge is anchored to `hi`, which is itself set
+        /// by a +X corner vertex, so a row could straddle the edge with only its +X side admitted.
+        /// It converged to a NON-ZERO fixed point rather than to the truth. A principal-axis fit has
+        /// no band, no edge and no tie to break: it uses every vertex with its correct weight, and
+        /// on a cloud symmetric about its own long axis it returns that axis exactly, for any
+        /// thickness. That is why this is the third and final estimator.
+        /// </para>
+        /// </summary>
+        private static Vector3 DominantAxis(Vector3[] world, Vector3 seed)
+        {
+            if (world == null || world.Length == 0 || seed.sqrMagnitude < 1e-12f) return seed;
+
+            Vector3 c = Vector3.zero;
+            for (int i = 0; i < world.Length; i++) c += world[i];
+            c /= world.Length;
+
+            // Symmetric covariance, six independent terms.
+            float xx = 0f, xy = 0f, xz = 0f, yy = 0f, yz = 0f, zz = 0f;
+            for (int i = 0; i < world.Length; i++)
+            {
+                Vector3 d = world[i] - c;
+                xx += d.x * d.x; xy += d.x * d.y; xz += d.x * d.z;
+                yy += d.y * d.y; yz += d.y * d.z; zz += d.z * d.z;
+            }
+
+            // Power iteration. The seed is already within ~1 deg, so this converges immediately;
+            // the loop is generous because it is a few dozen float ops on a 164-vertex fixture.
+            Vector3 v = seed.normalized;
+            for (int iter = 0; iter < 32; iter++)
+            {
+                var n = new Vector3(
+                    xx * v.x + xy * v.y + xz * v.z,
+                    xy * v.x + yy * v.y + yz * v.z,
+                    xz * v.x + yz * v.y + zz * v.z);
+                if (n.sqrMagnitude < 1e-20f) return seed;
+                v = n.normalized;
+            }
+            return v;
+        }
+
+        // =====================================================================
+        //  CASE 10 — the SHEATHED bow holds the SAME POSE as the drawn one
+        // =====================================================================
+        //
+        // THE RULING, verbatim (owner, 2026-08-16): "both sheathed and drawn bow stay in this same
+        // pose". THE MISTAKE IT CORRECTS, recorded because it is the reason this case exists: a
+        // capture showed the HELD bow at limbTiltFromVertical=0 and the hero's diagonally-slung back
+        // bow was then reported as correct - by generalising a measurement of the DRAWN transform to
+        // the SHEATHED one, which it never covered. A trace that proves one state proves one state.
+        //
+        // The sheathed seat used to be ComputeSheathRotation - a baldric carry, blade up the spine
+        // and leaning toward the off shoulder. That is right and felt-approved for swords, axes,
+        // hammers and staves, and it is DELIBERATELY LEFT ALONE for them; assertion (a) fails if it
+        // is ever removed. Only WeaponClass.Bow is diverted, and the diversion is not a second solve:
+        // ComputeBowHeldRotation builds its target in WORLD from the body's axes and merely EXPRESSES
+        // it in whatever anchor it is handed, so feeding it the back socket yields the identical world
+        // orientation the hand does. Assertion (c) measures exactly that identity, on a fixture where
+        // the socket and the hand are rotated nowhere near each other - which is the ruling itself,
+        // and the assertion that stops the two paths drifting apart again.
+        private const float SheathedDrawnAgreementDeg = 0.5f;
+        /// <summary>The socket and hand must be at least this far apart, or "they agree" is trivial.</summary>
+        private const float FixtureMinAnchorSpreadDeg = 45f;
+
+        private static void Case10_SheathedBowMatchesDrawn(List<string> failures, List<string> notes)
+        {
+            // ── (a)+(b) SOURCE: bow-scoped, socket-anchored, melee carry untouched ──────────────
+            string raw = ReadText(EquipmentControllerPath);
+            if (raw == null)
+            {
+                failures.Add("[sheathed-bow-matches-drawn] cannot read " + EquipmentControllerPath +
+                             " - the sheathed seat is composed there.");
+                return;
+            }
+            string src = StripCommentsAndStrings(raw).Replace(" ", string.Empty)
+                                                     .Replace("\t", string.Empty)
+                                                     .Replace("\r", string.Empty)
+                                                     .Replace("\n", string.Empty);
+
+            if (src.IndexOf("ComputeSheathRotation(back)", StringComparison.Ordinal) < 0)
+                failures.Add("[sheathed-bow-matches-drawn] ComputeSheathRotation(back) is gone from " +
+                             "the sheathe path. The bow ruling must NOT take the diagonal baldric " +
+                             "carry away from swords, axes, hammers and staves - their back pose is " +
+                             "felt-approved. The bow is the EXCEPTION on that expression, not a " +
+                             "replacement for it.");
+
+            if (src.IndexOf("ComputeBowHeldRotation(back,", StringComparison.Ordinal) < 0)
+                failures.Add("[sheathed-bow-matches-drawn] no live call passing the BACK SOCKET to " +
+                             "ComputeBowHeldRotation (comments and string literals stripped). The " +
+                             "sheathed bow has reverted to the shared diagonal carry, so it no longer " +
+                             "holds the same pose as the drawn bow - owner ruling 2026-08-16: 'both " +
+                             "sheathed and drawn bow stay in this same pose'. The socket is the ANCHOR " +
+                             "the world target is expressed in; passing the hand instead would seat the " +
+                             "back prop with the hand's frame, which is a different bug wearing the " +
+                             "same shape.");
+
+            if (src.IndexOf("_currentWeaponKind==WeaponClass.Bow", StringComparison.Ordinal) < 0)
+                failures.Add("[sheathed-bow-matches-drawn] the sheathe path no longer gates on " +
+                             "_currentWeaponKind == WeaponClass.Bow. Without that gate the change is " +
+                             "either dead (no bow reaches it) or it has escaped its fence and is " +
+                             "standing every melee weapon upright on the back.");
+
+            // ── (c) GEOMETRY: the two anchors must produce the SAME world pose ──────────────────
+            GameObject rig = null;
+            try
+            {
+                rig = new GameObject("SheathedBowProbe");
+                var body = new GameObject("Body").transform;
+                body.SetParent(rig.transform, false);
+                body.localRotation = Quaternion.Euler(0f, 37f, 0f);
+
+                var hand = new GameObject("LeftHand").transform;
+                hand.SetParent(body, false);
+                hand.localRotation = Quaternion.Euler(90f, 0f, 53f);
+
+                // The back socket hangs off the chest and is rotated nowhere near the hand - which
+                // is the whole point: if the derivation were anchor-dependent, these two would
+                // disagree, and assertion (d) proves they are far enough apart for that to bite.
+                var socket = new GameObject("SheatheSocket_Back").transform;
+                socket.SetParent(body, false);
+                socket.localRotation = Quaternion.Euler(-18f, 164f, 25f);
+                socket.localPosition = new Vector3(-0.10f, 0.12f, -0.15f);
+
+                Quaternion drawnLocal =
+                    DeNelle.Core.Geometry.WeaponBoundsOrient.ComputeBowHeldRotation(hand, body);
+                Quaternion sheathedLocal =
+                    DeNelle.Core.Geometry.WeaponBoundsOrient.ComputeBowHeldRotation(socket, body);
+
+                Quaternion drawnWorld    = hand.rotation * drawnLocal;
+                Quaternion sheathedWorld = socket.rotation * sheathedLocal;
+
+                float anchorSpread = Quaternion.Angle(hand.rotation, socket.rotation);
+                float disagreement = Quaternion.Angle(drawnWorld, sheathedWorld);
+
+                Vector3 limbWorld  = sheathedWorld * Vector3.up;
+                Vector3 bellyWorld = sheathedWorld * Vector3.forward;
+                float limbTilt = Vector3.Angle(limbWorld, body.up);
+                float bellyOff = Vector3.Angle(bellyWorld, body.forward);
+
+                notes.Add("sheathed-bow-matches-drawn: anchorSpread=" + anchorSpread.ToString("0.##") +
+                          "deg drawnVsSheathed=" + disagreement.ToString("0.###") +
+                          "deg sheathedLimbTilt=" + limbTilt.ToString("0.##") +
+                          "deg sheathedBellyOff=" + bellyOff.ToString("0.##") + "deg");
+
+                if (anchorSpread < FixtureMinAnchorSpreadDeg)
+                    failures.Add("[sheathed-bow-matches-drawn] FIXTURE BROKEN: the hand and the back " +
+                                 "socket are only " + anchorSpread.ToString("0.##") + "deg apart " +
+                                 "(needs >= " + FixtureMinAnchorSpreadDeg.ToString("0.#") + "deg). Two " +
+                                 "nearly-aligned anchors would agree by accident and this case would " +
+                                 "prove nothing about anchor-independence.");
+
+                // THE RULING, as one number.
+                if (disagreement > SheathedDrawnAgreementDeg)
+                    failures.Add("[sheathed-bow-matches-drawn] the sheathed bow's world orientation is " +
+                                 disagreement.ToString("0.##") + "deg away from the drawn one (allowed " +
+                                 SheathedDrawnAgreementDeg.ToString("0.##") + "deg). Owner ruling " +
+                                 "2026-08-16: 'both sheathed and drawn bow stay in this same pose'. " +
+                                 "A large value means the sheathed seat went back to the diagonal " +
+                                 "baldric carry (ComputeSheathRotation), which is correct for a sword " +
+                                 "and wrong for a bow.");
+
+                // ...and as the four clauses, so a future 'agreement' between two WRONG poses cannot
+                // pass. Both halves are required: agreeing and correct are different properties.
+                if (limbTilt > SheathedDrawnAgreementDeg)
+                    failures.Add("[sheathed-bow-matches-drawn] the SHEATHED bow's limb line sits " +
+                                 limbTilt.ToString("0.##") + "deg off the body's vertical. Clause 1 of " +
+                                 "the owner's rule applies to the slung bow exactly as it does to the " +
+                                 "held one - the two states hold the same pose.");
+
+                if (bellyOff > SheathedDrawnAgreementDeg)
+                    failures.Add("[sheathed-bow-matches-drawn] the SHEATHED bow's BELLY is " +
+                                 bellyOff.ToString("0.##") + "deg off the body's forward. Clauses 2 and " +
+                                 "4 - string parallel to the person, curve furthest from the person - " +
+                                 "govern the slung bow too. Note this case would still pass its " +
+                                 "agreement assertion if BOTH states were wrong the same way, which is " +
+                                 "why the axes are asserted as well.");
+            }
+            finally
+            {
+                if (rig != null) UnityEngine.Object.DestroyImmediate(rig);
+            }
+        }
+
+        /// <summary>
+        /// Source with // and /* */ comments AND every string literal (plain, verbatim, interpolated)
+        /// blanked out, so a source-lint match cannot be satisfied by prose or by a log message. The
+        /// files this suite lints document their own defects at length - EquipmentController names
+        /// ComputeBowHeldRotation in three separate comment blocks - so an unstripped IndexOf would
+        /// pass on the documentation of the bug rather than on the code that fixes it.
+        /// </summary>
+        private static string StripCommentsAndStrings(string src)
+        {
+            if (string.IsNullOrEmpty(src)) return string.Empty;
+            var sb = new System.Text.StringBuilder(src.Length);
+            int i = 0, n = src.Length;
+            while (i < n)
+            {
+                char c = src[i];
+
+                if (c == '/' && i + 1 < n && src[i + 1] == '/')
+                {
+                    while (i < n && src[i] != '\n') i++;
+                    continue;
+                }
+                if (c == '/' && i + 1 < n && src[i + 1] == '*')
+                {
+                    i += 2;
+                    while (i + 1 < n && !(src[i] == '*' && src[i + 1] == '/')) i++;
+                    i = Math.Min(n, i + 2);
+                    sb.Append(' ');
+                    continue;
+                }
+                if (c == '\'')
+                {
+                    i++;   // char literal - short, and never carries a token we lint for
+                    while (i < n && src[i] != '\'')
+                    {
+                        if (src[i] == '\\') i++;
+                        i++;
+                    }
+                    i = Math.Min(n, i + 1);
+                    sb.Append(' ');
+                    continue;
+                }
+                if (c == '@' && i + 1 < n && src[i + 1] == '"')
+                {
+                    i += 2;   // verbatim: "" is an escaped quote
+                    while (i < n)
+                    {
+                        if (src[i] == '"')
+                        {
+                            if (i + 1 < n && src[i + 1] == '"') { i += 2; continue; }
+                            i++; break;
+                        }
+                        i++;
+                    }
+                    sb.Append(' ');
+                    continue;
+                }
+                if (c == '"')
+                {
+                    i++;   // plain or interpolated - the braces inside are blanked with the rest,
+                    while (i < n)   // which is deliberate: an interpolated call is not the live call
+                    {               // this lint is looking for.
+                        if (src[i] == '\\') { i += 2; continue; }
+                        if (src[i] == '"') { i++; break; }
+                        i++;
+                    }
+                    sb.Append(' ');
+                    continue;
+                }
+
+                sb.Append(c);
+                i++;
+            }
+            return sb.ToString();
         }
 
         // ── plumbing ─────────────────────────────────────────────────────────

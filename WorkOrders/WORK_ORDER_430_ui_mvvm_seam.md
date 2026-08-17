@@ -1,3 +1,10 @@
+> ⚠ **NUMBER COLLISION — this document does not own WO-430; `WORK_ORDER_430_Handover_Triage_Detailed_Work_Orders.md` does.**
+> Referred to hereafter as **WO-430-D (UI MVVM seam)**.
+> Flagged by the 2026-08-16 Sunday board-grooming pass (`python tools/board_build.py` → `DUPLICATE_WO_NUMBERS`);
+> ownership decided by **first-on-disk** (`git log --follow --diff-filter=A`): the winner's file was created first.
+> Banner only — nothing was renumbered or deleted.
+> ⚠ **Work HAS shipped under this number** — commit messages and/or a `.RESULT.md` cite WO-430 for THIS document. It is deliberately **not renumbered**; a renumber would orphan those references. Use the alias above when you need to name it unambiguously.
+
 # WORK ORDER 430 — UI MVVM Seam (the binding harness)
 
 **Status: READY TO IMPLEMENT**

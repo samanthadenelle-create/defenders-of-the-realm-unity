@@ -326,6 +326,11 @@
             "iconPath": ""
         },
         {
+            "id": "tripo_bow_a",
+            "included": false,
+            "iconPath": ""
+        },
+        {
             "id": "tripo_sword_g",
             "included": false,
             "iconPath": ""

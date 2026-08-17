@@ -1,3 +1,9 @@
+> ⚠ **NUMBER COLLISION — this document does not own WO-331; `WORK_ORDER_331_inventory_character_screen.md` does.**
+> Referred to hereafter as **WO-331-B (DTT keyboard hotkeys)**.
+> Flagged by the 2026-08-16 Sunday board-grooming pass (`python tools/board_build.py` → `DUPLICATE_WO_NUMBERS`);
+> the two files were added in the **same commit**, so first-on-disk is a tie; ownership decided on **cross-references** (the winner is the file the rest of the corpus cites).
+> Banner only — nothing was renumbered or deleted.
+
 # ⚠ WORK ORDER 331 — DTT Ability Bar Keyboard Hotkeys — **SUPERSEDED 2026-07-04**
 
 > **SUPERSEDED:** The Defend-the-Tower / PatriciaLight system was removed 2026-06-09.

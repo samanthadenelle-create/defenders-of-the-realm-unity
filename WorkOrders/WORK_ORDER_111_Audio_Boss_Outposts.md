@@ -1,3 +1,9 @@
+> ⚠ **NUMBER COLLISION — this document does not own WO-111; `WORK_ORDER_111_world_resource_collection_pillar.md` does.**
+> Referred to hereafter as **WO-111-B (audio / boss outposts)**.
+> Flagged by the 2026-08-16 Sunday board-grooming pass (`python tools/board_build.py` → `DUPLICATE_WO_NUMBERS`);
+> ownership decided by **first-on-disk** (`git log --follow --diff-filter=A`): the winner's file was created first.
+> Banner only — nothing was renumbered or deleted.
+
 # WORK_ORDER_111 — Audio Depth + Epic Boss Battles + Enemy Outposts (Chunk 10)
 
 **Status: READY TO IMPLEMENT**

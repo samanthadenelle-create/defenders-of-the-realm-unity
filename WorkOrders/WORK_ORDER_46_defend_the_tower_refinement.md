@@ -1,3 +1,9 @@
+> ⚠ **NUMBER COLLISION — this document does not own WO-46; `WORK_ORDER_46_tower_combat.md` does.**
+> Referred to hereafter as **WO-46-B (defend-the-tower refinement)**.
+> Flagged by the 2026-08-16 Sunday board-grooming pass (`python tools/board_build.py` → `DUPLICATE_WO_NUMBERS`);
+> ownership decided by **first-on-disk** (`git log --follow --diff-filter=A`): the winner's file was created first.
+> Banner only — nothing was renumbered or deleted.
+
 # ⚠ WORK ORDER 46 — "Defend the Tower" Scene Refinement + Playtest Bug Sweep — **SUPERSEDED 2026-07-04**
 
 > **SUPERSEDED:** The Defend-the-Tower / PatriciaLight system was removed 2026-06-09 (see `PIPELINE_STATE.md` §2 and `CANON_GROUND_TRUTH_2026-07-03.md`). This WO is historical; the tower combat arc is no longer a pillar.

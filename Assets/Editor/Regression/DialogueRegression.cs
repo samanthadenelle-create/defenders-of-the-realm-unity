@@ -543,7 +543,8 @@ namespace DeNelle.Editor
             // and wait). 'farm' -> portrait cmd -> talk (2 lines). 'market' -> talk + options.
             if (DialogueCatalog.Find("farm") == null || DialogueCatalog.Find("market") == null)
             {
-                log.AppendLine("  re-entrancy: SKIPPED — 'farm'/'market' content ids absent (content changed).");
+                log.AppendLine("  " + DeNelle.Editor.Regression.RegressionOutcome.PartialSkip(
+                    "re-entrancy check", "'farm'/'market' content ids absent (content changed)"));
                 return;
             }
 

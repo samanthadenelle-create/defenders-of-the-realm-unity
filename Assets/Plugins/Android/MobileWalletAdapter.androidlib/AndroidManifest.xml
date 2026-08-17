@@ -16,6 +16,28 @@
 ============================================================================ -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- ⛔ DO NOT REMOVE THIS LINE. It is not boilerplate; it is the fix for a
+         publisher-blocking defect (owner email 2026-08-16, dApp store review).
+
+         WITHOUT an explicit targetSdkVersion here, this module has NO <uses-sdk>
+         and its build.gradle sets no defaultConfig minSdk/targetSdk - so the
+         Android Gradle Plugin reads its target as API 1 and applies the legacy
+         pre-Donut compatibility rule, IMPLICITLY granting the app:
+             WRITE_EXTERNAL_STORAGE + READ_PHONE_STATE  (the <4 rule)
+             READ_EXTERNAL_STORAGE                      (implied by WRITE)
+         AGP says so itself in manifest-merger-release-report.txt:
+             "IMPLIED ... reason: com.denelle.defenders.mwa has a targetSdkVersion < 4"
+         Those three arrived with this module's build.gradle (731840e78, 08-05)
+         and got the build flagged for "excessive permissions for a tower defense
+         game". NOTHING in our source ever requested them: ForceSDCardPermission
+         is 0, and every file we write (saves, logs, F8 screenshots) goes to
+         Application.persistentDataPath, which needs no storage permission at all.
+
+         ⚠ ACCEPTANCE IS THE MERGER REPORT, NOT A GREEN BUILD: after changing
+         this, rebuild and confirm the three IMPLIED lines are gone. A build that
+         merely succeeds proves nothing here. -->
+    <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="36" />
+
     <!-- Networking for Solana RPC + the MWA websocket association channel.
          Unity normally injects INTERNET when code references the network, but
          the wallet flow must never depend on that heuristic - declare it. -->

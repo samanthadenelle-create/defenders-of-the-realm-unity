@@ -223,6 +223,11 @@ namespace DeNelle.Village.World.Camps
             // Raid brass for the victory track.
             CoreServices.Audio?.PlayMusic(DeNelle.Core.Audio.MusicTrack.Victory);
 
+            // STEP 1.5 — IS THIS A REPEAT CLEAR? This read MUST happen BEFORE ClaimBase,
+            // which flips the persisted flag: query it afterwards and every clear reads as
+            // a repeat. The answer feeds the first-clear loot gate at STEP 3.5.
+            bool repeatClear = RaidClaimService.IsClaimed(configId);
+
             // STEP 2 — claim the base (persist + flip ownership PLAYER-owned).
             bool newClaim = ClaimBase(configId);
 
@@ -236,6 +241,7 @@ namespace DeNelle.Village.World.Camps
             RaidScoring scoring = RaidScoring.Instance;
             RaidResult result = scoring != null ? scoring.Finalize(true) : null;
             ResourceCost loot = scoring != null ? scoring.LootFor(result) : default(ResourceCost);
+            loot = ApplyFirstClearGate(loot, repeatClear, configId);
             GrantLoot(loot);
 
             // STEP 3.6 - SETTLE THE ARMY. A WON raid must cost troops and pay veterancy
@@ -287,6 +293,43 @@ namespace DeNelle.Village.World.Camps
         private int  _crystalsCredited;
         private int  _foodCredited;
         private bool _rewardShort;
+
+        /// <summary>
+        /// THE FIRST-CLEAR GATE (defect sweep 2026-08-15). A base pays its settled loot on
+        /// the clear that CLAIMS it; a re-clear of an already-claimed base is scaled by
+        /// <see cref="RaidClaimService.RepeatClearLootMultiplier"/> (0 by default = pays
+        /// nothing).
+        ///
+        /// <para>THE HOLE THIS CLOSES: loot was never gated on <c>newClaim</c> at all. The
+        /// claim set was written and never read, so re-entering a cleared base and razing it
+        /// again paid the FULL settled payout, every time, forever - and the raid catalog's
+        /// Extreme tier carries rewardMultiplier 2.2, making the most lucrative base in the
+        /// game an unbounded resource faucet. The companion unlock beside it was already
+        /// gated on newClaim; the resources simply were not.</para>
+        ///
+        /// <para>Reports on BOTH branches: a player who re-clears a base and receives nothing
+        /// must be able to see WHY in a capture, and a first clear must be able to prove it
+        /// paid in full. Never silent.</para>
+        /// </summary>
+        private static ResourceCost ApplyFirstClearGate(ResourceCost loot, bool repeatClear, string configId)
+        {
+            if (!repeatClear)
+            {
+                if (!loot.IsZero)
+                    FlowTrace.Step("Raid", $"FIRST-CLEAR gate: '{configId}' was unclaimed - paying the settled " +
+                                           $"loot IN FULL ({Describe(loot)}).");
+                return loot;
+            }
+
+            ResourceCost scaled = RaidClaimService.ScaleLootForClear(loot, true);
+            FlowTrace.Warn("Raid",
+                $"REPEAT CLEAR of '{configId}' (already claimed) - loot scaled by " +
+                $"x{RaidClaimService.RepeatClearLootMultiplier:0.##}: {Describe(loot)} -> {Describe(scaled)}. " +
+                "A claimed base pays its loot ONCE; farming it is not an income source. " +
+                "(What a repeat SHOULD pay, if anything, is an open owner economy ruling - " +
+                "RaidClaimService.RepeatClearLootMultiplier is the single knob.)");
+            return scaled;
+        }
 
         private void GrantLoot(ResourceCost loot)
         {

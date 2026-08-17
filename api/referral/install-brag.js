@@ -32,10 +32,8 @@
 // =============================================================================
 
 const { neon } = require('@neondatabase/serverless');
-const { verifyAndConsume } = require('../_lib/wallet-auth');
-
-// Signature is over the EXACT raw body bytes — disable the body parser (save.js).
-module.exports.config = { api: { bodyParser: false } };
+const { verifyAndConsume, WALLET_MAX_BODY_BYTES } = require('../_lib/wallet-auth');
+const { applyCors, readBodyExact } = require('../_lib/http');
 
 const ACHIEVEMENT_ID = 'install_brag';
 const FLAIR = 'founding_herald';
@@ -46,16 +44,32 @@ const INSTALL_BRAG_CRYSTALS = (() => {
     return Number.isFinite(v) && v >= 0 ? v : 50;
 })();
 
-module.exports = async (req, res) => {
+async function handler(req, res) {
+    // Without this, a cross-origin request carrying X-Wallet triggers an OPTIONS
+    // preflight this endpoint never answered — the web build could not reach it.
+    if (applyCors(req, res, 'POST, OPTIONS')) return;
+
     if (req.method !== 'POST') {
         return res.status(400).json({ error: 'Method not allowed' });
     }
 
-    let rawBody;
+    // readBodyExact enforces a hard size cap DURING the stream (the old inline
+    // readBody had none) and reports when the bytes had to be reconstructed from
+    // an already-parsed body — in which case a signature cannot be verified at all.
+    let rawBody, exactBytes;
     try {
-        rawBody = await readBody(req);
+        const read = await readBodyExact(req, WALLET_MAX_BODY_BYTES);
+        rawBody = read.buffer;
+        exactBytes = read.exact;
     } catch (err) {
+        if (err && err.code === 'BODY_TOO_LARGE') {
+            return res.status(400).json({ error: 'Invalid payload' });
+        }
         console.error('[referral/install-brag] Body read error:', err);
+        return res.status(500).json({ error: 'Internal server error' });
+    }
+    if (!exactBytes) {
+        console.error('[referral/install-brag] Raw body unavailable (bodyParser active) — cannot verify signature.');
         return res.status(500).json({ error: 'Internal server error' });
     }
 
@@ -135,14 +149,13 @@ module.exports = async (req, res) => {
         console.error('[referral/install-brag] DB error:', err);
         return res.status(500).json({ error: 'Internal server error' });
     }
-};
-
-// ── Utility: collect raw request body into a Buffer ────────────────────────
-function readBody(req) {
-    return new Promise((resolve, reject) => {
-        const chunks = [];
-        req.on('data', (chunk) => chunks.push(chunk));
-        req.on('end', () => resolve(Buffer.concat(chunks)));
-        req.on('error', (err) => reject(err));
-    });
 }
+
+module.exports = handler;
+// MUST be assigned AFTER the handler export. Assigning it FIRST (the original
+// ordering here) meant `module.exports = async (req,res) => {...}` REPLACED the
+// exports object and threw the config away, so the runtime body parser stayed ON,
+// drained the stream, and the raw-body read hung until timeout — this endpoint
+// was DEAD and the install bonus never granted. Verbatim the failure documented
+// in _lib/http.readBodyExact and fixed the same way in game/save.js:427-432.
+module.exports.config = { api: { bodyParser: false } };

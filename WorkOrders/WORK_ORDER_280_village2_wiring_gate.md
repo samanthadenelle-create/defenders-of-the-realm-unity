@@ -1,3 +1,10 @@
+> ⚠ **UNRESOLVED NUMBER COLLISION — WO-280 is claimed by more than one file and OWNERSHIP IS NOT DECIDED.**
+> Co-claimants: `WORK_ORDER_280_go_live_blockers.md`, `WORK_ORDER_280_village2_wiring_gate.md`
+> Both added in the SAME commit (first-on-disk is a dead tie) and each is cited by exactly one other doc — the cross-reference tiebreak is also a tie.
+> Flagged (not resolved) by the 2026-08-16 Sunday board-grooming pass — a wrong ownership call is worse
+> than a flagged unknown, so this needs an **owner ruling**. Nothing renumbered or deleted. Until it is
+> ruled, cite this WO by FILENAME, never by bare number.
+
 # WORK ORDER 280 — Village2 Gameplay Wiring Gate (DEF-243)
 
 **Status: READY TO IMPLEMENT — but GATED. Do not merge to feat/tower-core-loop until all 6 pass.**

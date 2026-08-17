@@ -1,3 +1,10 @@
+> ⚠ **NUMBER COLLISION — this document does not own WO-912; `WORK_ORDER_912_ad_revenue_free_path.md` does.**
+> Referred to hereafter as **WO-912-B (Unity pre-approval request)**.
+> Flagged by the 2026-08-16 Sunday board-grooming pass (`python tools/board_build.py` → `DUPLICATE_WO_NUMBERS`);
+> ownership decided by **first-on-disk** (`git log --follow --diff-filter=A`): the winner's file was created first.
+> Banner only — nothing was renumbered or deleted.
+> ⚠ **Work HAS shipped under this number** — commit messages and/or a `.RESULT.md` cite WO-912 for THIS document. It is deliberately **not renumbered**; a renumber would orphan those references. Use the alias above when you need to name it unambiguously.
+
 > ## RECONCILED 2026-08-08 - true status is READY TO SEND - NOT YET SENT
 > Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: the draft is complete in the tree, but NO artifact anywhere proves it was ever sent, and nothing downstream of it has moved. This is an OWNER action taken off-repo, so git can never confirm it - only the owner can.
 > The previous Status line read "READY TO SEND" and was wrong (it reads as an action already taken).

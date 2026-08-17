@@ -41,11 +41,21 @@
 //     IsBroken / DamageFraction >= DestroyedFraction (WO-753: destroyed = LOST,
 //     rebuild fresh at full cost -- never auto-repaired back).
 //
-// OFFLINE (single-clock canon, WO-667): on load this reads the SAME persisted
-// Unix-ms clock the harvest catch-up reads -- GameState.LastHarvestClaimMs (owned
-// and advanced by OfflineHarvestService / DumpSilos; we only READ the delta,
-// exactly like EchoService.ClaimOffline, and inherit the same semantics: the
-// window since the last claim is counted, capped at OfflineCapHours). The banked
+// OFFLINE (single-clock canon, WO-667; RE-WIRED by WO-1147): this service is a
+// CONSUMER of OfflineClaimCoordinator, which performs the ONE read of
+// GameState.LastHarvestClaimMs, computes ONE elapsed window, hands the SAME window
+// to every consumer, and advances the clock exactly once.
+//
+// WARNING -- THE BUG THAT LIVED HERE: this service used to read the clock itself from a
+// Start + TWO-frame coroutine, while OfflineHarvestService WROTE that clock from a
+// Start + ONE-frame coroutine. Our read therefore ALWAYS landed after the clock had
+// been zeroed to "now", so (now - lastClaim) was always ~0 and OFFLINE REPAIR NEVER
+// ACCRUED A SINGLE FRACTION for its entire life -- silently, because a zero window
+// is indistinguishable from "the player was not away". Never re-add a local clock
+// read here, and never "fix" ordering with an execution-order attribute or an extra
+// frame of delay: that is the duplicate-authority pattern, not a fix.
+// Our OfflineCapHours cap stays OURS (the coordinator publishes the raw window and
+// each consumer clamps it), as does the MaxBankedFractions ceiling. The banked
 // budget itself is NOT persisted -- the offline catch-up regenerates it from the
 // clock, so a quit mid-accrual loses at most the sub-cap remainder (same
 // coarse-persistence stance as the online silo tick).
@@ -90,9 +100,12 @@ namespace DeNelle.Village
     /// backend. Offline-fair via the shared harvest clock. See the file header.
     /// </summary>
     [DisallowMultipleComponent]
-    public sealed class EchoRepairService : MonoBehaviour
+    public sealed class EchoRepairService : MonoBehaviour, IOfflineClaimConsumer
     {
         public static EchoRepairService Instance { get; private set; }
+
+        /// <summary>Trace name for this consumer's share of the shared offline window.</summary>
+        public string OfflineConsumerName => "echo-repair";
 
         // Cadence for driving the repair backend. (Was described as mirroring
         // PetTaskController.RepairScanInterval; that rival loop is gone as of WO-1108.)
@@ -126,8 +139,15 @@ namespace DeNelle.Village
         private float _workBudget;
         private float _nextScan;
         private float _lastWorkTime = -1f;
-        private bool _offlineClaimedThisSession;
         private WallRepairController _repair;
+
+        /// <summary>Fractions banked by the most recent offline window (diagnostic /
+        /// regression readout -- proves the share was non-zero).</summary>
+        public float LastOfflineGain { get; private set; }
+
+        /// <summary>Seconds of the last shared window this consumer actually counted
+        /// (post-cap). Regression reads it to prove all three consumers saw one delta.</summary>
+        public double LastOfflineCountedSeconds { get; private set; }
 
         // =====================================================================
         //  Lifecycle
@@ -139,27 +159,22 @@ namespace DeNelle.Village
             // (CLAUDE.md memory: singleton-dedup-destroys-host).
             if (Instance != null && Instance != this) { Destroy(this); return; }
             Instance = this;
+            OfflineClaimCoordinator.Register(this);   // one authority fans the offline window to us
         }
 
         private void OnDestroy()
         {
+            OfflineClaimCoordinator.Unregister(this);
             if (Instance == this) Instance = null;
         }
 
         private void Start()
         {
-            // Deferred TWO frames: GameStateService (loads the save in its Awake) AND the
-            // scene's structures (the FindObjectsByType sweep needs them present) must be
-            // up before the offline pass -- one frame more than EchoService's silo claim
-            // because this one touches scene objects, not just state.
-            StartCoroutine(OfflineCatchUpDeferred());
-        }
-
-        private System.Collections.IEnumerator OfflineCatchUpDeferred()
-        {
-            yield return null;
-            yield return null;
-            ClaimOffline();
+            // WO-1147: no local offline coroutine. The two-frame deferral this used to own
+            // (structures must be present for the WallRepairController sweep) now lives on
+            // the ONE claim in OfflineHarvestService.ClaimDeferred, so every consumer is
+            // served by the same, correctly-deferred claim instead of racing it.
+            OfflineClaimCoordinator.Register(this);
         }
 
         // =====================================================================
@@ -167,48 +182,46 @@ namespace DeNelle.Village
         // =====================================================================
 
         /// <summary>
-        /// One-time-per-session offline repair: integrate the repair rate over
-        /// (now - GameState.LastHarvestClaimMs) capped at <see cref="OfflineCapHours"/>,
-        /// bank it (capped at <see cref="MaxBankedFractions"/>), then complete as many
-        /// worst-first repairs as the budget AND the wallet cover. Reads the clock only
-        /// (OfflineHarvestService / DumpSilos own advancing it) -- the exact
-        /// EchoService.ClaimOffline seam. [Flow:Echo].
+        /// THIS consumer's share of the ONE shared offline window (WO-1147): integrate the
+        /// repair rate over the window capped at <see cref="OfflineCapHours"/>, bank it
+        /// (further capped at <see cref="MaxBankedFractions"/>), then complete as many
+        /// worst-first repairs as the budget AND the wallet cover. The window arrives from
+        /// <see cref="OfflineClaimCoordinator"/>, which did the single clock read and owns
+        /// advancing it -- this method never reads or writes the clock. [Flow:Echo].
         /// </summary>
-        public void ClaimOffline()
+        public void ApplyOfflineWindow(OfflineClaimWindow window)
         {
-            if (_offlineClaimedThisSession) return;
             var s = GameStateService.Instance != null ? GameStateService.Instance.State : null;
             if (s == null) return;
-            _offlineClaimedThisSession = true;
 
-            using var _t = FlowTrace.Enter("Echo", "RepairClaimOffline");
+            using var _t = FlowTrace.Enter("Echo", "RepairApplyOfflineWindow");
 
-            double lastMs = s.LastHarvestClaimMs;
-            if (lastMs <= 0)
-            {
-                FlowTrace.Step("Echo", "RepairClaimOffline: fresh clock (LastHarvestClaimMs<=0) -- no offline repair this launch.");
-                return;
-            }
+            LastOfflineGain = 0f;
+            LastOfflineCountedSeconds = 0.0;
 
             float rate = EchoBonusCalculator.RepairFractionsPerSecond();
             if (rate <= 0f)
             {
-                FlowTrace.Step("Echo", "RepairClaimOffline: no owned Echo -- nothing accrues.");
+                FlowTrace.Step("Echo",
+                    $"claim #{window.Sequence}: 'echo-repair' share = no owned Echo -- nothing accrues " +
+                    $"(window was {window.ElapsedSeconds:F0}s).");
                 return;
             }
 
-            double elapsedSec = Math.Max(0.0, (TimeSource.NowUnixMs() - lastMs) / 1000.0);   // clock-back -> 0
-            double cappedSec = Math.Min(elapsedSec, Math.Max(0f, OfflineCapHours) * 3600.0);
+            double elapsedSec = window.ElapsedSeconds;
+            double cappedSec = window.CappedSeconds(OfflineCapHours);
             float gained = (float)(rate * cappedSec);
             _workBudget = Mathf.Min(MaxBankedFractions, _workBudget + gained);
+            LastOfflineGain = gained;
+            LastOfflineCountedSeconds = cappedSec;
             FlowTrace.Step("Echo",
-                $"RepairClaimOffline: away {elapsedSec:F0}s (counted {cappedSec:F0}s" +
-                (elapsedSec > cappedSec ? ", capped" : "") +
-                $") at {rate * 3600f:0.###} fractions/h -> banked {_workBudget:0.###}/{MaxBankedFractions:0.###}.");
+                $"claim #{window.Sequence}: 'echo-repair' share = {cappedSec:F0}s of the {elapsedSec:F0}s window" +
+                (window.ExceedsCap(OfflineCapHours) ? $" (capped at {OfflineCapHours:0.##}h)" : "") +
+                $" at {rate * 3600f:0.###} fractions/h -> gained {gained:0.###}, banked {_workBudget:0.###}/{MaxBankedFractions:0.###}.");
 
             int done = ApplyBankedWork("echo offline repair");
             FlowTrace.Step("Echo",
-                $"RepairClaimOffline: applied {done} repair(s); {_workBudget:0.###} work banked for the online loop.");
+                $"claim #{window.Sequence}: 'echo-repair' applied {done} repair(s); {_workBudget:0.###} work banked for the online loop.");
             Changed?.Invoke();
         }
 

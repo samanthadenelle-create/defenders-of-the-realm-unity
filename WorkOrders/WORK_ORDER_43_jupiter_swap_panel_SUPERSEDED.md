@@ -1,3 +1,10 @@
+> ⚠ **UNRESOLVED NUMBER COLLISION — WO-43 is claimed by more than one file and OWNERSHIP IS NOT DECIDED.**
+> Co-claimants: `WORK_ORDER_43_jupiter_swap_panel_SUPERSEDED.md`, `WORK_ORDER_43_jupiter_swap_panel_phase1.md`
+> Both added in the same commit; both are already CLOSED and both redirect to **WO-210**, so WO-43 is effectively a vacant number. Low risk either way — but the tie is real.
+> Flagged (not resolved) by the 2026-08-16 Sunday board-grooming pass — a wrong ownership call is worse
+> than a flagged unknown, so this needs an **owner ruling**. Nothing renumbered or deleted. Until it is
+> ruled, cite this WO by FILENAME, never by bare number.
+
 # WORK ORDER 43 — In-App SKR Swap (Jupiter Aggregator)
 
 **Status:** CLOSED — SUPERSEDED by WO-210 (owner-approved sweep 2026-08-09: filename already marked it; content re-minted as WO-210)

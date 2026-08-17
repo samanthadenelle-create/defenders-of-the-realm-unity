@@ -25,10 +25,18 @@ namespace DeNelle.Tests.EditMode
             public bool ArmyReady = true;
             public bool Onboarded = true;
             public bool Focused;
+            // WO-1008 dim-REASON inputs (never visibility inputs). Default = a partly filled
+            // army so the legacy "capable but not full" cases keep meaning ArmyNotFull.
+            public int Deployable = 3;
+            public int Queued;
+            public int Cap = 5;
 
             public bool TalkAvailable => Talk;
             public bool RaidCapable => Capable;
             public bool RaidArmyReady => ArmyReady;
+            public int RaidDeployableSlots => Deployable;
+            public int RaidQueuedSlots => Queued;
+            public int RaidCapSlots => Cap;
             public bool MapUnlocked => Onboarded;
             public bool BuildingFocused => Focused;
         }
@@ -87,8 +95,54 @@ namespace DeNelle.Tests.EditMode
             src.ArmyReady = false;
             model.Tick();
             CollectionAssert.DoesNotContain(Ids(model), ActionBarButtonId.Raids,
-                "no building / no troops => Raids is ABSENT (WO-835 §3d owner default), not dimmed");
+                "no barracks / raid flag off => Raids is ABSENT, not dimmed (WO-1008: an empty " +
+                "ARMY is no longer a hide reason, but a missing building still is)");
             Assert.IsFalse(model.RaidsDimmed, "an absent Raids face must not report dimmed");
+            Assert.AreEqual(HudActionBarModel.RaidDimReason.None, model.RaidsDimReason,
+                "an absent face carries no dim reason");
+        }
+
+        // ── WO-1008: the two dim reasons are DISTINCT, and both speak in words ──
+
+        [Test]
+        public void barracks_with_zero_troops_dims_with_a_no_troops_reason_not_a_hidden_face()
+        {
+            var (model, src) = TownModel();
+            src.Capable = true;        // barracks built + flag on
+            src.ArmyReady = false;
+            src.Deployable = 0; src.Queued = 0; src.Cap = 5;
+            model.Tick();
+
+            CollectionAssert.Contains(Ids(model), ActionBarButtonId.Raids,
+                "a built Barracks with ZERO troops must show a greyed Raids face, never hide it " +
+                "(owner 2026-08-16: 'I do not see a way to start a raid')");
+            Assert.IsTrue(model.RaidsDimmed, "zero troops greys the face");
+            Assert.AreEqual(HudActionBarModel.RaidDimReason.NoTroops, model.RaidsDimReason);
+            Assert.AreNotEqual(HudActionBarModel.RaidsBaseLabel, model.RaidsFaceLabel,
+                "the greyed face must differ from the live face in TEXT, not hue alone " +
+                "(the owner is red/green colourblind)");
+            StringAssert.Contains("Barracks", model.RaidsDimMessage,
+                "the no-troops reason must name the fix");
+        }
+
+        [Test]
+        public void the_two_dim_reasons_do_not_share_copy()
+        {
+            var (model, src) = TownModel();
+            src.Capable = true; src.ArmyReady = false;
+            src.Deployable = 0; src.Queued = 0; src.Cap = 5;
+            model.Tick();
+            string noTroopsLabel = model.RaidsFaceLabel;
+            string noTroopsMsg = model.RaidsDimMessage;
+
+            src.Deployable = 3;
+            model.Tick();
+            Assert.AreEqual(HudActionBarModel.RaidDimReason.ArmyNotFull, model.RaidsDimReason,
+                "some troops but under cap is the WO-820 full-army gate, a different reason");
+            Assert.AreNotEqual(noTroopsLabel, model.RaidsFaceLabel,
+                "a single generic grey tells the player nothing - the face text must differ");
+            Assert.AreNotEqual(noTroopsMsg, model.RaidsDimMessage,
+                "the two dim reasons must not share their message");
         }
 
         [Test]

@@ -1,12 +1,16 @@
 # WORK ORDER 1025 — Heart of Elarion reads amateurish: unidentified VFX + an unlit single-texture tree
 
-**Status:** STEPS 1 + 2-FIREFLIES-SLICE LANDED IN WORKING TREE 2026-08-16 (pending committer gate)
-— step 1: the §3 audit instrumentation in `HeartAuraController.cs` (WO-1025 AUDIT [EARLY/SETTLED]
-passes). Step 2 fireflies slice (orchestrator GO on the 08-16 owner rulings, §4d): the existing
-FireFlies loop re-enabled at the hub tree via a site-scoped `AmbientAuraPolicy` exemption;
-`HubTreeAuraWithholdRegression` updated to the new canon. All files brace-balanced, NUL-clean,
-uncommitted. STILL OPEN: the yellow-cone/starburst emitter hunt (gated on the captured AUDIT
-trace) + step 3 (tree material maps).
+**Status:** READY — PARTIAL (steps 1 + 2-fireflies-slice are COMMITTED; steps 2-remainder + 3 open)
+— **the "pending committer gate" clause is RETIRED as of the 2026-08-16 board-grooming pass: the work
+COMMITTED as `8a25d9e76` "feat(vfx): WO-1025 steps 1+2 — Heart audit instrumentation + fireflies
+exemption" (2026-08-16 09:03, on `wip/village2-and-f8-tickets`), touching `HeartAuraController.cs`,
+`AmbientAuraPolicy.cs`, `HubTreeAuraWithholdRegression.cs` and this file.** LANDED: step 1, the §3
+audit instrumentation in `HeartAuraController.cs` (WO-1025 AUDIT [EARLY/SETTLED] passes); step 2
+fireflies slice (orchestrator GO on the 08-16 owner rulings, §4d) — the existing FireFlies loop
+re-enabled at the hub tree via a site-scoped `AmbientAuraPolicy` exemption, with
+`HubTreeAuraWithholdRegression` updated to the new canon.
+**STILL OPEN — this is what keeps the WO READY and not DONE:** (1) the yellow-cone / white-starburst
+emitter hunt, gated on the captured AUDIT trace; (2) step 3, the tree material maps.
 **Minted:** 2026-08-15 (UI seat) — provenance stack bumped 1025 → 1026 in the same edit
 **Lane:** World art / VFX presentation. Disjoint from WO-1021 (talent UI), WO-1022 (scene GUIDs),
 WO-1024 (repair lifecycle).

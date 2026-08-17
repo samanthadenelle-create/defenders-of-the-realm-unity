@@ -434,7 +434,8 @@ namespace DeNelle.Editor.Regression
                 bool anyWalkable = NavMesh.SamplePosition(Vector3.zero, out _, 8f, NavMesh.AllAreas);
                 if (!anyWalkable)
                 {
-                    notes.Add("navmesh produced no walkable area in headless (-nographics) - path check skipped");
+                    notes.Add(DeNelle.Editor.Regression.RegressionOutcome.PartialSkip(
+                        "path check", "navmesh produced no walkable area in headless (-nographics)"));
                     return;
                 }
                 var first = instances[order[0]].transform.position;

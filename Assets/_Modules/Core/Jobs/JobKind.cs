@@ -103,6 +103,33 @@ namespace DeNelle.Core.Jobs
         Research = 2,
     }
 
+    /// <summary>
+    /// ECON-SWEEP 2026-08-16 (defect 3) — which job kinds are paid for in a currency the WO-911
+    /// refundable basket cannot carry.
+    /// <para>
+    /// <see cref="JobCost"/> has lanes for wood/food/iron/crystals/magic and NO COINS LANE, and
+    /// <c>BuildTimerService.ToJobCost(Village.ResourceCost)</c> warns as much. Research is the only
+    /// gold-priced job in the game, so cancelling one records an ALL-ZERO basket and the gold is
+    /// gone. That is the current refund POLICY and this helper does not change it -- it exists so the
+    /// player-facing cancel message can NAME the money instead of reporting "Nothing to refund.",
+    /// which is a claim that no currency was taken and is simply false. Adding a coins lane
+    /// (JobCost.Coins + BuildJobData.paidCoins, save schema v38) is the policy fix and is the
+    /// owner's call; see the note at the top of BuildingPerkService.
+    /// </para>
+    /// </summary>
+    public static class JobCurrency
+    {
+        /// <summary>
+        /// True when a job of <paramref name="kind"/> was charged in COINS (gold), which the paid
+        /// basket cannot record and a cancel therefore cannot return.
+        /// </summary>
+        public static bool SpendsUnrefundableCoins(JobKind kind) => kind == JobKind.BuildingResearch;
+
+        /// <summary>ASCII, player-readable name of that currency, for the cancel notice.</summary>
+        public static string UnrefundableCurrencyLabel(JobKind kind)
+            => SpendsUnrefundableCoins(kind) ? "gold" : "";
+    }
+
     /// <summary>Static helpers mapping a <see cref="JobKind"/> to its default <see cref="ChannelId"/>.</summary>
     public static class JobChannels
     {

@@ -1,3 +1,9 @@
+> ⚠ **NUMBER COLLISION — this document does not own WO-837; `WORK_ORDER_837_stockpiles_cap_capacity.md` does.**
+> Referred to hereafter as **WO-837-B (wallet-first identity, drop email)**.
+> Flagged by the 2026-08-16 Sunday board-grooming pass (`python tools/board_build.py` → `DUPLICATE_WO_NUMBERS`);
+> ownership decided by **first-on-disk** (`git log --follow --diff-filter=A`): the winner's file was created first.
+> Banner only — nothing was renumbered or deleted.
+
 > ## COLLIDED NUMBER (4th two-seat collision, 2026-08-02) + SUPERSEDED
 > The number 837 belongs to WORK_ORDER_837_stockpiles_cap_capacity.md (committed). This spec's content
 > is SUPERSEDED by WO-847 (wallet-first Android login, IMPLEMENTED) + WO-766 (real connect). Do not implement.

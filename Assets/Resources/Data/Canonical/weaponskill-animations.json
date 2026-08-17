@@ -3,7 +3,7 @@
   "_comment": "WeaponSkill -> animation-cycle mapping. The OWNER GOAL: animation is determined by JOB TYPE + WEAPON-SKILL, so each class skill plays its matching swing/cast instead of one generic Cast trigger. KEYS: 'class' is the abilities.json class id (mage|knight|ranger|cleric; Wizard art folder == mage, Healer art folder == cleric). 'skill' is the weaponskill name from Resources/HudIcons/<Class>/ (the per-class skill icon set the HUD shows). 'slot' (q/w/e/r) ties the skill to the abilities.json ability that fires it (this is what the runtime actually casts today — the skill name is the design label for that slot). RUNTIME CONTRACT: 'trigger' is the canonical AnimParams verb the ActorAnimator must fire (Cast|Attack|WindUp|Victory|Block). 'combo' (>=0) is the Combo int set BEFORE an Attack trigger so a multi-clip class (Knight) plays a DIFFERENT swing per skill via the Attack0/1/2 states the HeroAnimatorFactory builds. 'clip' is the Assets/Action FBX basename the factory should bind to that state. 'clipExists'=true means the FBX is present today; false means MISSING -> 'fallbackClip' (an existing clip) is used until art lands. This file is the SINGLE source the HeroAnimatorFactory reads to build per-skill states AND the runtime (HeroAbilities / BattleController) reads to pick the right trigger+combo per cast. Dual-copy: Resources copy WINS at load; keep StreamingAssets copy in sync.",
   "_notes": {
     "knight": "Knight has the RICHEST clip set (10+ melee swings) -> full per-skill coverage achievable now. Each skill maps to a distinct Attack combo index; HeroAnimatorFactory must be extended from 3 Attack states to 4 (one per skill) OR reuse 3 + 1 cast-style for Charge.",
-    "ranger": "Ranger is the BIGGEST GAP: only Ranger_Aim_Idle exists (no draw/fire/volley/trap clips). Every ranger skill falls back to the aim pose today. Needs 3-4 bow clips retargeted via HeroAnimatorFactory before per-skill coverage is real.",
+    "ranger": "2026-08-16 (owner defect: 'the ranger has no firing animation'): the ranger NO LONGER falls back to the static aim pose. 'Archery Shot Away' (Assets/Action/Archery Shot Away.fbx, clip 'archery-shotaway', Humanoid animationType 3) was already imported and bound to NOTHING; it is now the ranger's Attack + Cast + CastUpper motion in Ranger.controller, so every ranger skill (no spellCastClips -> all four slots use the generic Cast) looses an arrow. Ranger_Aim_Idle is demoted to the FALLBACK only. STILL A GAP: there is exactly ONE bow clip, so aimed-shot / rapid-fire / volley cannot be told apart yet -- those rows keep clipExists:false and now fall back to the real shot instead of the pose. Pinned by RangerBowFireRegression (RANGER_BOW_FIRE_OK).",
     "wizard": "Wizard (mage) has 12 cast clips -> easy per-skill distinct casts (1H/2H/area variants). Currently the factory only binds one (Wizard_Spell_Cast).",
     "healer": "No Healer art folder + abilities.json has NO cleric class (Cleric routes to mage loadout in code). Only Wizard_Heal exists for healing. Smite/Holy/Group_Heal reuse Wizard cast clips until a Healer set is acquired."
   },
@@ -40,26 +40,26 @@
     {
       "class": "ranger", "skill": "Ranged_Attack", "slot": "q",
       "trigger": "Cast", "combo": -1,
-      "clip": "Ranger_Fire", "clipExists": false, "fallbackClip": "Ranger_Aim_Idle",
-      "_note": "Basic shot (Quick Shot). NEEDS a bow draw+release clip; today only the aim idle exists -> falls back to the static aim pose. Ranger uses Cast trigger as the 'fire' verb (factory maps ranger cast clip = Ranger_Aim_Idle)."
+      "clip": "Archery Shot Away", "clipExists": true, "fallbackClip": "Ranger_Aim_Idle",
+      "_note": "Basic shot (Quick Shot). FIXED 2026-08-16: the real bow draw+release clip 'Archery Shot Away' is now the ranger cast clip in HeroAnimatorFactory, so this resolves to an actual shot instead of the static aim pose. Ranger uses the Cast trigger as its 'fire' verb. fallbackClip stays the aim idle purely as the degrade-path if the FBX is ever removed."
     },
     {
       "class": "ranger", "skill": "Poison_Arrow", "slot": "w",
       "trigger": "Cast", "combo": -1,
-      "clip": "Ranger_Aimed_Shot", "clipExists": false, "fallbackClip": "Ranger_Aim_Idle",
-      "_note": "Snare Trap (snare). Needs an aimed/charged shot clip; falls back to aim idle."
+      "clip": "Ranger_Aimed_Shot", "clipExists": false, "fallbackClip": "Archery Shot Away",
+      "_note": "Snare Trap (snare). Still needs a distinct aimed/charged shot clip, but the fallback is now the REAL bow shot (2026-08-16), not the static aim pose."
     },
     {
       "class": "ranger", "skill": "rapid_fire", "slot": "e",
       "trigger": "Cast", "combo": -1,
-      "clip": "Ranger_Rapid_Fire", "clipExists": false, "fallbackClip": "Ranger_Aim_Idle",
-      "_note": "Ranger E is the heal (Mending Salve) today; the rapid_fire weaponskill wants a fast multi-shot. No clip -> aim idle. If E keeps the heal, use a cast/channel pose."
+      "clip": "Ranger_Rapid_Fire", "clipExists": false, "fallbackClip": "Archery Shot Away",
+      "_note": "Ranger E is the heal (Mending Salve) today; the rapid_fire weaponskill wants a fast multi-shot. Still no distinct clip -> falls back to the real single shot (2026-08-16), not the aim pose. If E keeps the heal, use a cast/channel pose."
     },
     {
       "class": "ranger", "skill": "Barrage", "slot": "r",
       "trigger": "Cast", "combo": -1,
-      "clip": "Ranger_Volley", "clipExists": false, "fallbackClip": "Ranger_Aim_Idle",
-      "_note": "Ultimate (Storm of Arrows, aoe). Needs an upward volley clip; falls back to aim idle."
+      "clip": "Ranger_Volley", "clipExists": false, "fallbackClip": "Archery Shot Away",
+      "_note": "Ultimate (Storm of Arrows, aoe). Still needs an upward volley clip; falls back to the real bow shot (2026-08-16), not the aim pose."
     },
 
     {

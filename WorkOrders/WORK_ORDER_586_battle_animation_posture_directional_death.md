@@ -1,3 +1,10 @@
+> ⚠ **UNRESOLVED NUMBER COLLISION — WO-586 is claimed by more than one file and OWNERSHIP IS NOT DECIDED.**
+> Co-claimants: `WORK_ORDER_586_fleet_save_probe_isolation.md`, `WORK_ORDER_586_battle_animation_posture_directional_death.md`
+> The two tests **disagree**: `WORK_ORDER_586_fleet_save_probe_isolation.md` is first-on-disk (2026-06-29 00:20 vs 2026-07-05 15:25), but the *shipped* reference belongs to the other file — commit `38c7fd4b9` reads "WO-586: battle posture, directional death, orc cadence". First-on-disk-**and**-referenced is satisfied by neither.
+> Flagged (not resolved) by the 2026-08-16 Sunday board-grooming pass — a wrong ownership call is worse
+> than a flagged unknown, so this needs an **owner ruling**. Nothing renumbered or deleted. Until it is
+> ruled, cite this WO by FILENAME, never by bare number.
+
 # WORK ORDER 586 — Battle Animation Posture, Directional Death, Orc Cadence
 
 **Status:** IMPLEMENTED — pending CompileGate + controller rebuild + PO felt-verify (2026-07-05)

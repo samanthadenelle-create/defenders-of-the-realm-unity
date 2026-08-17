@@ -97,6 +97,15 @@ namespace DeNelle.Core
         // PingNearestRaidOutpost only when this is ON). ff.raidwalk=1 restores the old walk-to path.
         public static bool RaidContinuousWalk => Get("raidwalk", defaultOn: false);
 
+        /// <summary>TEST ONLY (owner ask 2026-08-16). Opens the raid selection grid even when the
+        /// army is not full. The full-army gate (RaidSelectionScreen: deployable + queued >= cap,
+        /// cap 10) is CORRECT product behaviour and remains the default — but it means roughly ten
+        /// training jobs before the raid grid opens at all, which makes the raid pillar impossible
+        /// to felt-test in one sitting. Default OFF, so shipping behaviour is untouched; the bypass
+        /// logs a FlowTrace.Warn every time so a bypassed gate can never read as a passed one in a
+        /// capture. PlayerPrefs "ff.raidtest".</summary>
+        public static bool RaidTestBypassArmyGate => Get("raidtest", defaultOn: false);
+
         /// <summary>When ON (default), only the family REP/leader roams the overworld; the full
         /// family (leader + followers) spawns in the BattleArena on engage from the recipe carried
         /// by RepEngageWatcher.Init. Owner 2026-07-10: perf — bounded roaming agents (the overworld
@@ -837,6 +846,31 @@ namespace DeNelle.Core
         /// walked gate routes. Default ON so the owner SEES the draft; PlayerPrefs "ff.hubfoliage" = 0
         /// turns it off with NO rebuild (per-tier const toggles live in the injector).</summary>
         public static bool HubFoliage => Get("hubfoliage", defaultOn: true);
+
+        /// <summary>THE HOLLOW ROADS (owner 2026-08-16: "place a portal to simple tunnel system that
+        /// will drop into the new biomes"). Gates the whole hub -> portal -> tunnel -> four-biome-drop
+        /// spoke: the derived Hollow Roads portal row in <c>DungeonWorldPortalSpawner</c> and the four
+        /// biome drops <c>HollowRoadsDropInjector</c> seats inside the tunnel scene. (Named in
+        /// &lt;c&gt; rather than &lt;see cref&gt; on purpose — both types live in DeNelle.Village, which
+        /// Core does not reference, so a cref to them cannot resolve from this assembly.)
+        /// <para>
+        /// DEFAULT ON, and the reasoning is worth keeping because the obvious precedent points the
+        /// other way. The Map tab ships OFF (ff.maptab) because realm travel is a WO-827 STUB and the
+        /// areas genuinely do not connect. This is NOT that case: the four destinations
+        /// (Goldfields / Stoneback / Mirewood / Ashwood) are REAL walkable ground in the merged
+        /// overworld today -- painted by ExteriorTerrainBuilder as four directional terrain biomes,
+        /// covered by the single baked navmesh, classified by ZoneManager and already roamed by
+        /// OverworldEncounterSpawner. A drop lands somewhere the player could have WALKED. What is
+        /// missing is CONTENT in those regions, not the regions.
+        /// </para>
+        /// <para>
+        /// It is also self-hiding before the bake: the tunnel scene <c>dg_hollow_roads</c> is only
+        /// registered once the graph is composed, and the portal's def is injected behind an
+        /// <c>Application.CanStreamedLevelBeLoaded</c> test -- so on an un-baked tree nothing is
+        /// placed at all rather than a door to a missing scene. PlayerPrefs "ff.biomeroads" = 0
+        /// removes the spoke with no rebuild.
+        /// </para></summary>
+        public static bool BiomeRoads => Get("biomeroads", defaultOn: true);
 
         /// <summary>SECURITY (store-hardening Path A): TRUE in the Editor or any Development build,
         /// FALSE in a release/store build (BuildOptions.None → Debug.isDebugBuild is false). Dev-only

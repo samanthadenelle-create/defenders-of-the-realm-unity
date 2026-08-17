@@ -1,3 +1,13 @@
+> ⚠ **UNRESOLVED NUMBER COLLISION — WO-438 is claimed by more than one file and OWNERSHIP IS NOT DECIDED.**
+> Co-claimants: `WORK_ORDER_438_global_tech_skin_rollout.md` (06-13, first-on-disk), `WORK_ORDER_438_base_loop_rca_fixes.md` (06-17), `WORK_ORDER_438_compass_minimap_widget.md` (07-04)
+> **This is one of a four-number group (WO-437 / 438 / 439 / 440) that collided the same way.** The June
+> files are **first-on-disk**; the 2026-07-04 files are the ones **git history says shipped** — commit
+> `0b0e0915c` reads *"UI-100% wave 1 — shared-kit parchment fix, WO-437/438/439/440, per-screen match"*,
+> which names the 07-04 UI batch, and `aa931577b` separately records *"WO-437/438 landed"*. First-on-disk
+> and referenced-by-commit point at DIFFERENT files, so the project rule resolves to neither.
+> Flagged (not resolved) by the 2026-08-16 Sunday board-grooming pass — needs an **owner ruling**, ideally
+> one ruling for all four at once. Nothing renumbered or deleted. Cite by FILENAME, never by bare number.
+
 # WORK ORDER 438 — Base-loop RCA fixes (dialogue, companion, enemy placement)
 
 **Status: READY TO IMPLEMENT.** Editor-closed (gate + felt-test). Each item below is RCA'd (read-only

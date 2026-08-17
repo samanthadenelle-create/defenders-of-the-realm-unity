@@ -195,7 +195,8 @@ namespace DeNelle.Editor
                 var gss = gssGo.AddComponent<GameStateService>();
                 if (!InstallState(gss, throwaway))
                 {
-                    log.AppendLine("  once-ever check SKIPPED: GameStateService state seam not reflectable");
+                    log.AppendLine("  " + DeNelle.Editor.Regression.RegressionOutcome.PartialSkip(
+                        "once-ever check", "GameStateService state seam not reflectable"));
                     return;
                 }
 

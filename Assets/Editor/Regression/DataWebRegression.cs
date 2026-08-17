@@ -712,7 +712,8 @@ namespace DeNelle.Editor
             string sPath = Path.Combine(streamingRoot, label);
             if (!File.Exists(rPath) || !File.Exists(sPath))
             {
-                log.AppendLine($"  subset[{label}]: skipped — one copy missing (r={File.Exists(rPath)} s={File.Exists(sPath)})");
+                log.AppendLine("  subset[" + label + "]: " + DeNelle.Editor.Regression.RegressionOutcome.PartialSkip(
+                    "subset " + label, $"one copy missing (r={File.Exists(rPath)} s={File.Exists(sPath)}) - subset NOT compared"));
                 return true;
             }
 
@@ -720,7 +721,8 @@ namespace DeNelle.Editor
             var sArr = TryParseObject(sPath)?[arrayKey] as JArray;
             if (rArr == null || sArr == null)
             {
-                log.AppendLine($"  subset[{label}]: skipped — '{arrayKey}' array absent in one copy");
+                log.AppendLine("  subset[" + label + "]: " + DeNelle.Editor.Regression.RegressionOutcome.PartialSkip(
+                    "subset " + label, "'" + arrayKey + "' array absent in one copy - subset NOT compared"));
                 return true;
             }
 

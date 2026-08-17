@@ -1,3 +1,9 @@
+> ⚠ **NUMBER COLLISION — this document does not own WO-329; `WORK_ORDER_329_pet_deploy_timing.md` does.**
+> Referred to hereafter as **WO-329-B (check-in regression test suite)**.
+> Flagged by the 2026-08-16 Sunday board-grooming pass (`python tools/board_build.py` → `DUPLICATE_WO_NUMBERS`);
+> ownership decided by **first-on-disk** (`git log --follow --diff-filter=A`): the winner's file was created first.
+> Banner only — nothing was renumbered or deleted.
+
 # WORK_ORDER_329 — Check-in regression test suite (UI static gate + CLI Unity tests + manual QA)
 
 **Status: READY TO IMPLEMENT** (scaffolds authored by agent; CLI build-verifies the C# tests)

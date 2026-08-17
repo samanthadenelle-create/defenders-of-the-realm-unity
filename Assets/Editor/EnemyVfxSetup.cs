@@ -26,6 +26,17 @@
 //   and all field writes go through SerializedObject — which needs no
 //   compile-time knowledge of the concrete types.
 //
+// SUPERSEDED FOR THE LIVE PATH (2026-08-16) - kept, not deleted:
+//   This tool's step 2 (assign the set to every enemy PREFAB) never persisted: the
+//   only prefab that carries the field, Enemy_HollowWalker.prefab:123, still reads
+//   {fileID: 0}, and the asset's GUID appears nowhere but its own .meta. It also
+//   could not have fixed the live game even if it had - wave/roamer enemies are
+//   built at RUNTIME by EnemyFactory (AddComponent<Enemy>()), so no prefab field is
+//   ever read. Enemy now resolves its set through EnemyTypeVfxLibrary (a Resources
+//   PATH, no serialized edge to lose). Running this tool remains harmless and still
+//   creates/repairs the default asset in step 1, but it is no longer required and
+//   must never again be the only thing standing between an enemy and its cues.
+//
 // RUN:
 //   Editor menu : Defenders/Combat/Setup Enemy VFX Sets
 //   Batchmode   : DeNelle.Editor.EnemyVfxSetup.Apply

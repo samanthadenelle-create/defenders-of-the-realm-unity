@@ -48,7 +48,9 @@ namespace DeNelle.Village.World.Camps
         private const string SceneName = "Village2";
         // NOTE (WO-550, flagged for owner): the CLAIM key is the SCENE NAME "Village2", not the
         // scene-configs id "village2_enemy_outpost". It is self-consistent (this controller both
-        // writes + reads it via RaidClaimService; persisted as dotr-raid-owner-Village2) and keys
+        // WRITES it - ClaimBase -> RaidClaimService.MarkClaimed - and READS it back in
+        // HandleCleared via RaidClaimService.IsClaimed, to tell a first clear from a repeat;
+        // persisted as dotr-raid-owner-Village2) and keys
         // on scene name like the rest of the ownership system (SceneOwnership / HubScenes). Nothing
         // external reads "village2_enemy_outpost" as a claim key, so it is left as-is — changing it
         // would only orphan any existing saved claim. Switch to the config id only on an owner call.
@@ -212,6 +214,16 @@ namespace DeNelle.Village.World.Camps
             FlowTrace.Step("Raid", $"VICTORY — Village2 stronghold garrison wiped. Running claim -> next-companion -> return.");
 
             CoreServices.Audio?.PlayMusic(DeNelle.Core.Audio.MusicTrack.Victory);
+
+            // Read the claim BEFORE ClaimBase flips it - afterwards every clear reads as a
+            // repeat. Village2 grants no RESOURCE loot (it has no RaidScoring), so there is
+            // no payout to gate here; the one-time payoff is the companion, already gated on
+            // newClaim below. The read is kept because a silent repeat clear is exactly the
+            // state that hid the write-only claim set: say which one this was.
+            bool repeatClear = RaidClaimService.IsClaimed(ConfigId);
+            if (repeatClear)
+                FlowTrace.Warn("Raid", $"REPEAT CLEAR of '{ConfigId}' - it was already claimed. No re-grant: " +
+                                       "no companion, no resources (this raid pays no resource loot at all).");
 
             bool newClaim = ClaimBase();
             string joined = newClaim ? UnlockNextCompanion() : null;

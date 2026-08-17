@@ -1214,8 +1214,24 @@ namespace DeNelle.Village
         /// <param name="refunded">What was actually credited back (all-zero on failure or a legacy job).</param>
         /// <returns>True if a job was found and cancelled.</returns>
         public bool CancelChannelJobWithRefund(ChannelId channel, string structureId, out JobCost refunded)
+            => CancelChannelJobWithRefund(channel, structureId, out refunded, out _);
+
+        /// <summary>
+        /// ECON-SWEEP 2026-08-16 (defect 3) — same cancel, plus the honesty flag the notice needs.
+        /// <para>
+        /// <paramref name="unrefundedCurrency"/> comes back as a player-readable currency name
+        /// ("gold") when the cancelled job was paid for in a currency <see cref="JobCost"/> has no
+        /// lane for, and "" otherwise. Research is the only such kind today
+        /// (<see cref="JobCurrency.SpendsUnrefundableCoins"/>). WITHOUT this the UI could only see an
+        /// all-zero basket and told the player "Nothing to refund." for money that WAS taken. This
+        /// changes no refund POLICY -- it only stops the message from lying about it.
+        /// </para>
+        /// </summary>
+        public bool CancelChannelJobWithRefund(ChannelId channel, string structureId, out JobCost refunded,
+                                               out string unrefundedCurrency)
         {
             refunded = default;
+            unrefundedCurrency = "";
             var ch = GetChannel(channel);
             if (ch == null) return false;
 
@@ -1228,8 +1244,19 @@ namespace DeNelle.Village
                 return false;
             }
             var paid = found.Value.Paid;
+            // ECON-SWEEP 2026-08-16 (defect 3): read the kind BEFORE the cancel destroys the record.
+            var cancelledKind = found.Value.JobKind;
 
             if (!CancelChannelJob(channel, structureId)) return false;
+
+            if (JobCurrency.SpendsUnrefundableCoins(cancelledKind))
+            {
+                unrefundedCurrency = JobCurrency.UnrefundableCurrencyLabel(cancelledKind);
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("Obsidian",
+                    $"cancelled '{structureId}' ({cancelledKind}) on {channel} — it was paid for in " +
+                    $"{unrefundedCurrency}, which JobCost has no lane for, so that charge is NOT returned. " +
+                    "The cancel notice names it rather than claiming nothing was taken.");
+            }
 
             if (paid.IsZero)
             {

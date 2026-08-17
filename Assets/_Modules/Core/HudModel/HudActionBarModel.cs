@@ -16,11 +16,17 @@
 // INPUTS (all Core-visible; Village mirrors in via the *HudBridge push seam):
 //   TalkAvailable    - PostureSignals.TalkAvailable   (TalkHudBridge pushes)
 //   RaidCapable      - PostureSignals.RaidCapable     (RaidCapabilityHudBridge:
-//                      FeatureFlags.Raid AND barracks built AND >=1 deployable)
+//                      FeatureFlags.Raid AND barracks built. ⚠ WO-1008: the old
+//                      "AND >=1 deployable" clause was REMOVED — an empty army is
+//                      a DIM reason, not a hide reason.)
 //   RaidArmyReady    - RaidEntryGate.ArmyStatus.Ready (BuildTimerService pushes;
 //                      WO-820/823 dim gate — SEMANTICS PRESERVED: a capable-but-
 //                      not-full army DIMS the visible Raids face, never disables,
 //                      so the tap still reaches the drillmaster redirect)
+//   Raid slot counts - RaidEntryGate.ArmyStatus deployable/queued/cap. WO-1008
+//                      dim-REASON inputs only: they pick NoTroops vs ArmyNotFull
+//                      and build the face's WORD/NUMBER tell (the owner is
+//                      red/green colourblind — grey alone says nothing).
 //   MapUnlocked      - GameStateService.State.Onboarded (WO-825 R4 / WO-826)
 //   BuildingFocused  - HudBuildingFocus.CurrentBuildingId non-empty
 //   posture key      - forwarded by the View from PostureEvaluator (the View
@@ -126,11 +132,24 @@ namespace DeNelle.Core.HudModel
         {
             /// <summary>A talkable NPC is in range (PostureSignals.TalkAvailable).</summary>
             bool TalkAvailable { get; }
-            /// <summary>Player CAN raid: FeatureFlags.Raid + barracks + >=1 deployable
-            /// troop (PostureSignals.RaidCapable, Village-published).</summary>
+            /// <summary>Player CAN raid: FeatureFlags.Raid + a built Barracks
+            /// (PostureSignals.RaidCapable, Village-published).
+            /// ⚠ WO-1008 (owner ask 2026-08-16 "can we add a greyed out option once we have a
+            /// barracks"): the ">=1 deployable troop" clause was REMOVED from this VISIBILITY
+            /// predicate. An empty army is now a DIMMED-WITH-A-REASON face, never an absent one —
+            /// the owner hit a built Barracks with zero troops and reported "I do not see a way to
+            /// start a raid", because a feature that hides itself is indistinguishable from a
+            /// broken one.</summary>
             bool RaidCapable { get; }
             /// <summary>Army full (WO-820/823 dim gate, RaidEntryGate.ArmyStatus.Ready).</summary>
             bool RaidArmyReady { get; }
+            /// <summary>Healthy roster slots (RaidEntryGate.ArmyStatus.DeployableSlots) — WO-1008
+            /// dim-REASON input only; never a visibility input.</summary>
+            int RaidDeployableSlots { get; }
+            /// <summary>Slots committed to in-flight Train jobs (ArmyStatus.QueuedSlots).</summary>
+            int RaidQueuedSlots { get; }
+            /// <summary>Army cap in slots (ArmyStatus.CapSlots).</summary>
+            int RaidCapSlots { get; }
             /// <summary>Realm Map unlocked (GameState.Onboarded, WO-825 R4).</summary>
             bool MapUnlocked { get; }
             /// <summary>An upgradable building holds focus (HudBuildingFocus).</summary>
@@ -144,6 +163,9 @@ namespace DeNelle.Core.HudModel
             public bool TalkAvailable => PostureSignals.TalkAvailable;
             public bool RaidCapable => PostureSignals.RaidCapable;
             public bool RaidArmyReady => DeNelle.Core.UI.RaidEntryGate.ArmyStatus.Ready;
+            public int RaidDeployableSlots => DeNelle.Core.UI.RaidEntryGate.ArmyStatus.DeployableSlots;
+            public int RaidQueuedSlots => DeNelle.Core.UI.RaidEntryGate.ArmyStatus.QueuedSlots;
+            public int RaidCapSlots => DeNelle.Core.UI.RaidEntryGate.ArmyStatus.CapSlots;
             public bool MapUnlocked
             {
                 get
@@ -169,6 +191,28 @@ namespace DeNelle.Core.HudModel
         private string _postureKey = "";
         private bool _raidsDimmed;
         private bool _raidsDimComputed;
+        private RaidDimReason _raidsDimReason = RaidDimReason.None;
+        private string _raidsFaceLabel = RaidsBaseLabel;
+
+        /// <summary>The base (undimmed) Raids face word. The View builds with this exact string.</summary>
+        public const string RaidsBaseLabel = "Raids";
+
+        /// <summary>
+        /// WHY the Raids face is greyed (WO-1008). The owner is red/green colourblind — a grey tint
+        /// carries NO meaning for her, so every dim state must ship a WORD/NUMBER tell as well
+        /// (<see cref="RaidsFaceLabel"/> on the face, <see cref="RaidsDimMessage"/> on the tap).
+        /// The two reasons are deliberately distinct: "you have no army at all" is a different
+        /// player action from "your army is not full yet".
+        /// </summary>
+        public enum RaidDimReason
+        {
+            /// <summary>Not dimmed (face is live).</summary>
+            None = 0,
+            /// <summary>Barracks built, but ZERO troops ready AND zero training — go train.</summary>
+            NoTroops = 1,
+            /// <summary>Some troops, but ready+queued does not cover the cap (WO-820 gate).</summary>
+            ArmyNotFull = 2,
+        }
 
         /// <summary>Raised when the ACTIVE set changed (edge-triggered — never per-frame).
         /// The View re-renders + re-centers exactly <see cref="Active"/>.</summary>
@@ -185,6 +229,40 @@ namespace DeNelle.Core.HudModel
         /// tints the face toward Disabled and keeps it INTERACTABLE (owner ruling:
         /// a dimmed tap still opens the drillmaster redirect).</summary>
         public bool RaidsDimmed => _raidsDimmed;
+
+        /// <summary>WO-1008 — WHY the face is greyed. <see cref="RaidDimReason.None"/> when live.</summary>
+        public RaidDimReason RaidsDimReason => _raidsDimReason;
+
+        /// <summary>
+        /// WO-1008 — the Raids face TEXT for the current state. This is the colourblind-safe tell:
+        /// the greyed face reads "Raids 0/5" (nothing trained) or "Raids 3/5" (not full) instead of
+        /// a plain "Raids" that differs only by hue. ASCII only; kept short because the kit
+        /// single-line-fits (auto-shrink + ellipsis) every bar label.
+        /// </summary>
+        public string RaidsFaceLabel => _raidsFaceLabel;
+
+        /// <summary>
+        /// WO-1008 — the full sentence for the greyed state, for any surface that can afford one
+        /// (toast / tooltip). The Village-side RaidSelectionScreen owns the AUTHORITATIVE refusal
+        /// copy on tap; this is the same distinction stated Core-side so a View never invents one.
+        /// </summary>
+        public string RaidsDimMessage
+        {
+            get
+            {
+                switch (_raidsDimReason)
+                {
+                    case RaidDimReason.NoTroops:
+                        return "No troops yet - train troops at the Barracks to start a raid.";
+                    case RaidDimReason.ArmyNotFull:
+                        return "Army " + (_source.RaidDeployableSlots + _source.RaidQueuedSlots) + "/" +
+                               Math.Max(1, _source.RaidCapSlots) +
+                               " - fill every slot at the Barracks, then open Raids.";
+                    default:
+                        return "";
+                }
+            }
+        }
 
         /// <summary>The posture key last forwarded by the View (test/probe seam).</summary>
         public string PostureKey => _postureKey;
@@ -220,7 +298,21 @@ namespace DeNelle.Core.HudModel
         private void Recompute()
         {
             int mask = ComputeMask();
-            bool dim = (mask & (1 << (int)ActionBarButtonId.Raids)) != 0 && !_source.RaidArmyReady;
+            bool raidsVisible = (mask & (1 << (int)ActionBarButtonId.Raids)) != 0;
+            bool dim = raidsVisible && !_source.RaidArmyReady;
+
+            // WO-1008: the SAME dim mechanism now carries TWO reasons. Zero troops AND zero
+            // training is "go train"; anything else short of the cap is the WO-820 full-army
+            // gate. Never a single generic grey — that tells the player nothing.
+            RaidDimReason reason = RaidDimReason.None;
+            if (dim)
+                reason = (_source.RaidDeployableSlots + _source.RaidQueuedSlots) <= 0
+                    ? RaidDimReason.NoTroops
+                    : RaidDimReason.ArmyNotFull;
+            string faceLabel = reason == RaidDimReason.None
+                ? RaidsBaseLabel
+                : RaidsBaseLabel + " " + Math.Max(0, _source.RaidDeployableSlots + _source.RaidQueuedSlots) +
+                  "/" + Math.Max(1, _source.RaidCapSlots);
 
             if (mask != _activeMask)
             {
@@ -233,13 +325,19 @@ namespace DeNelle.Core.HudModel
                 ActiveButtonsChanged?.Invoke();
             }
 
-            if (!_raidsDimComputed || dim != _raidsDimmed)
+            // Edge on the REASON too, not just the bool: 0 troops -> 2 troops keeps dim==true but
+            // changes the face text, and the View repaints only on this event.
+            if (!_raidsDimComputed || dim != _raidsDimmed || reason != _raidsDimReason ||
+                !string.Equals(faceLabel, _raidsFaceLabel, StringComparison.Ordinal))
             {
                 _raidsDimComputed = true;
                 _raidsDimmed = dim;
+                _raidsDimReason = reason;
+                _raidsFaceLabel = faceLabel;
                 if (dim)
-                    FlowTrace.Step("HudKit", "Raids face DIMMED (army not full - tap still redirects to drillmaster)");
-                else if ((mask & (1 << (int)ActionBarButtonId.Raids)) != 0)
+                    FlowTrace.Step("HudKit", "Raids face DIMMED reason=" + reason + " label='" + faceLabel +
+                                   "' (visible + interactable - tap still reaches the drillmaster redirect)");
+                else if (raidsVisible)
                     FlowTrace.Step("HudKit", "Raids face restored (army full)");
                 RaidsDimmedChanged?.Invoke();
             }

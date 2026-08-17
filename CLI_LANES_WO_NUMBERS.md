@@ -1,7 +1,17 @@
 ﻿# Lanes â€” Work-Order Numbers Only (for CLI)  Â·  reconciled 2026-06-12 (nightly refill)
 
 > ## âš  RECONCILED 2026-08-16 (CLI): main line next free = **1113**.
-> ## âš  RECONCILED 2026-08-16 (Sunday sweep, step 2): UI seat next free = **1044**.
+> ## âš  RECONCILED 2026-08-16 (UI seat): UI seat next free = **1045**.
+> *(UI seat minted **WO-1044** and bumped 1044 -> 1045 in this SAME edit. **1044** = BIOME + TUNNEL
+> IDENTITY -- the creative half of tonight's portal/tunnel spoke. The four biomes turned out to be
+> ALREADY authored in depth (`docs/ECHOES_OF_ELARION_NARRATIVE.md` sec.3-5b,
+> `docs/regions-narrative-and-npcs.md` sec.2-5) with NPCs, crystal grades and region intro voice lines
+> written, so the WO ASSEMBLES that and fills only the real gaps: first-arrival image per biome,
+> palette described in value/texture/light (owner is red/green colourblind), one Echo associated per
+> march (flavour ONLY -- never a harvest gate, CLAUDE.md sec.7), and the tunnel's name + origin.
+> Recommends renaming the DISPLAY STRING "The Hollow Roads" -> **"The Rootways"** while LEAVING the id
+> `dg_hollow_roads` alone (it is a hard contract in `BiomeRoads.ArmRoomIdFor`, the graph json, the
+> injector and BiomeRoadsRegression). Status PROPOSAL, 9 open rulings listed. No code, no data, no bake.)*
 > The paragraph below still says the UI block is *"consumed through 1029"*. **That went stale by
 > fourteen numbers** â€” `WorkOrders/WORK_ORDER_10{30..43}_*.md` all exist on disk, minted 2026-08-15/16
 > (the newest, **1043** = the pending attended dungeon re-bake, minted this sweep and STILL READY â€”

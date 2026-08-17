@@ -166,6 +166,15 @@ namespace DeNelle.Village
         private bool      _lockFaceActive;  // a lock-face is engaged (HeroTargetIndicator drives it)
         private Transform _lockFaceTarget;  // the locked enemy transform to keep facing
 
+        // WO-1105 R3 (owner 2026-08-16: "when a ranger is targeting a enemy they lock facing the
+        // enemy"). The lock-face path above was built for WO-512's soft lock-on and is therefore
+        // gated on FeatureFlags.LockOn, which is DEFAULT OFF (nausea risk lives in that flag's
+        // CAMERA slices, not here). Archer facing is not part of that experiment: an archer who
+        // shoots sideways reads as broken regardless of whether the lock-on camera ships. This
+        // flag lets a caller engage the SAME slew without turning the camera feature on. It is a
+        // second GATE, never a second facing authority -- ApplyLockFaceYaw stays the one writer.
+        private bool      _lockFaceForce;
+
         /// <summary>
         /// WO-423 — request a brief yaw-slew so the hero turns to face <paramref name="worldPoint"/>
         /// before/while attacking. Only applies while movement input is ~0 (so it never fights
@@ -191,13 +200,24 @@ namespace DeNelle.Village
         /// untouched. Null target is treated as a clear. Honored only while <c>FeatureFlags.LockOn</c>;
         /// suspended by the existing InputSuppressed / auto-walk early-returns (dialogue/cutscene win).
         /// </summary>
-        public void SetLockFace(Transform target)
+        /// <param name="force">WO-1105 R3 — honor the slew even with <c>FeatureFlags.LockOn</c> OFF.
+        /// Used by the ranged-class auto-facing drive (an archer must face what she is shooting
+        /// whether or not the lock-on CAMERA experiment is enabled). Default false keeps every
+        /// pre-existing caller byte-identical.</param>
+        public void SetLockFace(Transform target, bool force = false)
         {
             if (target == null) { ClearLockFace(); return; }
+            bool changed = !_lockFaceActive || !ReferenceEquals(_lockFaceTarget, target) || _lockFaceForce != force;
             _lockFaceTarget = target;
             _lockFaceActive = true;
-            DeNelle.Core.Diagnostics.FlowTrace.Step("BattleArena",
-                "LOCKON face-lock on '" + target.gameObject.name.Replace("(Clone)", "").Trim() + "'.");
+            _lockFaceForce  = force;
+            // Only trace on a CHANGE: the ranged drive re-asserts this every LateUpdate, and an
+            // unconditional Step here would be a per-frame firehose that evicts the boot window
+            // out of the logcat ring (memory: logcat-ring-buffer-destroys-evidence).
+            if (changed)
+                DeNelle.Core.Diagnostics.FlowTrace.Step("BattleArena",
+                    "LOCKON face-lock ON target='" + target.gameObject.name.Replace("(Clone)", "").Trim()
+                    + "' force=" + force + ".");
         }
 
         /// <summary>
@@ -207,9 +227,13 @@ namespace DeNelle.Village
         public void ClearLockFace()
         {
             if (!_lockFaceActive && _lockFaceTarget == null) return;
+            string was = _lockFaceTarget != null
+                ? _lockFaceTarget.gameObject.name.Replace("(Clone)", "").Trim() : "none";
             _lockFaceActive = false;
             _lockFaceTarget = null;
-            DeNelle.Core.Diagnostics.FlowTrace.Step("BattleArena", "LOCKON face-lock cleared -> free facing.");
+            _lockFaceForce  = false;
+            DeNelle.Core.Diagnostics.FlowTrace.Step("BattleArena",
+                "LOCKON face-lock OFF (was '" + was + "') -> free facing.");
         }
 
         // WO-512 slice 3: slew the root yaw toward the locked enemy (XZ direction only), reusing
@@ -1083,8 +1107,10 @@ namespace DeNelle.Village
             // EXISTING LookRotation(Velocity) writer below runs byte-identical — zero regression.
             // (WO-968 S1) ...and never while a foreign mover owns the transform — ApplyLockFaceYaw
             // writes transform.rotation, which would make a second rotation writer on the rig.
+            // WO-1105 R3: _lockFaceForce is the ranged-class facing drive, which is NOT part of the
+            // WO-512 lock-on camera experiment and therefore does not wait on its flag.
             bool lockFacing = _lockFaceActive && _lockFaceTarget != null &&
-                              DeNelle.Core.FeatureFlags.LockOn && !foreignOwnsTransform;
+                              (_lockFaceForce || DeNelle.Core.FeatureFlags.LockOn) && !foreignOwnsTransform;
 
             // [Flow:HeroTurn] step-in: capture the PRE-rotation state so the trace below can report
             // the exact yaw applied this frame vs the target. moveHeading = Atan2 of the (camera-

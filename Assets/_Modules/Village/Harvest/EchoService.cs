@@ -16,11 +16,14 @@
 //     reaches the building-upgrade ledger), resets the silo, advances the clock.
 //
 // INTEGRATION TO THE REAL CODE (no placeholder APIs):
-//   - OFFLINE accrual reuses OfflineHarvestService's persisted clock,
-//     GameState.LastHarvestClaimMs (Unix-ms, advanced atomically on every OHS
-//     claim). On a deferred Start we integrate echoCount x ratePerSec over
-//     (TimeSource.NowUnixMs() - LastHarvestClaimMs), CLAMPED to the silo HOUR cap,
-//     into the silo. NO Time.time (that resets per session = wrong for offline).
+//   - OFFLINE accrual is fanned out by OfflineClaimCoordinator (WO-1147), the ONE
+//     owner of the persisted Unix-ms clock. It reads the clock once, computes ONE
+//     elapsed window and hands it to every consumer; we integrate echoCount x
+//     ratePerSec over that window CLAMPED to the silo HOUR cap, into the silo.
+//     NO Time.time (that resets per session = wrong for offline). We NEVER read or
+//     write the clock ourselves -- doing so from our own deferred Start is precisely
+//     what made the silo fill a coin-flip (same-frame race with the old clock writer)
+//     and starved Echo repair entirely. See OfflineClaimCoordinator's header.
 //     The Echo silo is a SEPARATE faucet from OHS's worker/settlement/pet nodes
 //     (which bank to the wallet) -- they share only the CLOCK, never a node, so
 //     there is no double-grant: OHS banks node haul to the wallet; Echo only fills
@@ -49,9 +52,12 @@ namespace DeNelle.Village
     /// Echo unlocks. Persisted via <see cref="GameState"/> (schema v25).
     /// </summary>
     [DisallowMultipleComponent]
-    public sealed class EchoService : MonoBehaviour
+    public sealed class EchoService : MonoBehaviour, IOfflineClaimConsumer
     {
         public static EchoService Instance { get; private set; }
+
+        /// <summary>Trace name for this consumer's share of the shared offline window.</summary>
+        public string OfflineConsumerName => "echo-silo";
 
         // -- Tunables (owner-tunable in playtest) ------------------------------
         [Header("Workforce")]
@@ -84,9 +90,13 @@ namespace DeNelle.Village
         /// consumes the teaching. Shared with EchoUnlockFeedback (the caller).</summary>
         public const string FoundingTaughtKey = "echo_founding_taught";
 
-        // Guard so the one-time offline catch-up runs once per session (not on every
-        // re-enable). The clock advance is owned by OfflineHarvestService; we only READ.
-        private bool _offlineClaimedThisSession;
+        // WO-1147: the once-per-SESSION guard is GONE. It existed because this service
+        // raced OfflineHarvestService for the clock (same frame, undefined order) and had
+        // to protect itself from re-running; the cost was that a mobile RESUME -- which
+        // OfflineHarvestService DID re-claim -- never filled the silo, because the two
+        // disagreed about what a "session" was. OfflineClaimCoordinator now guarantees
+        // exactly one fan-out per claim and advances the clock once, so re-entry is
+        // impossible by construction and every claim (cold load AND resume) fills.
 
         // -- Convenience accessors over the persisted state --------------------
         private static GameState State => GameStateService.Instance != null ? GameStateService.Instance.State : null;
@@ -126,7 +136,7 @@ namespace DeNelle.Village
         public double RatePerSecond => EchoCount * (BaseRatePerHour / 3600.0) * EchoBonusCalculator.AggregateHarvestMultiplier() * (1.0 + HarvestRateBonus());
 
         // WO-676 §2b: ONE registry read at the existing rate calc (this property feeds the
-        // online Update tick AND the offline ClaimOffline integral). StatSum is internally
+        // online Update tick AND the offline ApplyOfflineWindow integral). StatSum is internally
         // null-safe (no service / no tree / no nodes => 0), so behavior is byte-identical
         // to baseline until a harvestRate node is learned. Silo CAPACITY deliberately stays
         // base-rated (capacity is `collectorCap`'s seam, not this one).
@@ -198,6 +208,7 @@ namespace DeNelle.Village
             // (CLAUDE.md memory: singleton-dedup-destroys-host).
             if (Instance != null && Instance != this) { Destroy(this); return; }
             Instance = this;
+            OfflineClaimCoordinator.Register(this);   // one authority fans the offline window to us
 
             // WO-738: keep the Core EchoLaneBonuses contract current whenever a lane assignment
             // changes (the picker writes through EchoAssignments). Count changes recompute in
@@ -207,6 +218,7 @@ namespace DeNelle.Village
 
         private void OnDestroy()
         {
+            OfflineClaimCoordinator.Unregister(this);
             if (Instance == this)
             {
                 EchoAssignments.Changed -= OnAssignmentsChanged;
@@ -228,15 +240,11 @@ namespace DeNelle.Village
             // (and the harvest faucet) see current multipliers before any change event fires.
             EchoBonusCalculator.Recompute();
 
-            // Deferred one frame so GameStateService (loads the save in its Awake) and
-            // OfflineHarvestService are up before we read LastHarvestClaimMs.
-            StartCoroutine(OfflineCatchUpNextFrame());
-        }
-
-        private System.Collections.IEnumerator OfflineCatchUpNextFrame()
-        {
-            yield return null;
-            ClaimOffline();
+            // WO-1147: no per-service offline coroutine any more. We REGISTER with the one
+            // authority (OfflineClaimCoordinator) and it hands us our share of the single
+            // shared window. Registering in Start (as well as Awake) is belt-and-braces for
+            // hosts created after the first claim; registration is idempotent.
+            OfflineClaimCoordinator.Register(this);
         }
 
         // =====================================================================
@@ -244,46 +252,36 @@ namespace DeNelle.Village
         // =====================================================================
 
         /// <summary>
-        /// One-time-per-session offline accrual: integrate echoCount x ratePerSec over
-        /// (now - GameState.LastHarvestClaimMs), CLAMPED to the silo HOUR cap, and add it
-        /// to the silo. Reuses the SAME persisted Unix-ms clock OfflineHarvestService owns
-        /// (it advances the clock atomically on its own claim) -- we only READ the delta, so
-        /// there is no double-grant: OHS banks NODE haul to the wallet; the Echo silo is a
-        /// separate faucet that reaches the wallet only via Dump. Fresh save (clock 0) ->
-        /// nothing accrues (OHS seeds the clock to now on its first claim).
+        /// THIS consumer's share of the ONE shared offline window (WO-1147): integrate
+        /// echoCount x ratePerSec over the window CLAMPED to the silo HOUR cap and add it
+        /// to the silo. The window comes from <see cref="OfflineClaimCoordinator"/>, which
+        /// performed the single read of GameState.LastHarvestClaimMs and owns advancing it
+        /// -- we never touch the clock. No double-grant: OHS banks NODE haul to the wallet;
+        /// the Echo silo is a separate faucet that reaches the wallet only via Dump. A
+        /// fresh clock produces a zero window (the coordinator seeds it and fans out nothing).
         /// </summary>
-        public void ClaimOffline()
+        public void ApplyOfflineWindow(OfflineClaimWindow window)
         {
-            if (_offlineClaimedThisSession) return;
             var s = State;
             if (s == null) return;
-            _offlineClaimedThisSession = true;
 
-            double nowMs = TimeSource.NowUnixMs();
-            double lastMs = s.LastHarvestClaimMs;
-            if (lastMs <= 0)
-            {
-                // Fresh save: OHS seeds the clock to now this launch; nothing to back-fill.
-                FlowTrace.Step("Echo", "ClaimOffline: fresh clock (LastHarvestClaimMs<=0) -- no offline fill this launch.");
-                return;
-            }
-
-            double elapsedSec = Math.Max(0.0, (nowMs - lastMs) / 1000.0);   // monotonic guard (clock-back -> 0)
-            double capSec = Math.Max(0.0, SiloCapHours) * 3600.0;
-            double cappedSec = Math.Min(elapsedSec, capSec);
+            double elapsedSec = window.ElapsedSeconds;
+            double cappedSec = window.CappedSeconds(SiloCapHours);
 
             double gained = RatePerSecond * cappedSec;
             if (gained <= 0.0)
             {
-                FlowTrace.Step("Echo", $"ClaimOffline: away {elapsedSec:F0}s, gained 0 (rate {RatePerSecond:F3}/s, echoes {EchoCount}).");
+                FlowTrace.Step("Echo",
+                    $"claim #{window.Sequence}: 'echo-silo' share = {cappedSec:F0}s of the {elapsedSec:F0}s window, " +
+                    $"gained 0 (rate {RatePerSecond:F3}/s, echoes {EchoCount}).");
                 return;
             }
 
             AddToSilo(gained);
             FlowTrace.Step("Echo",
-                $"ClaimOffline: +{gained:F0} to silo over {cappedSec:F0}s away" +
-                (elapsedSec > capSec ? " (capped)" : "") +
-                $" -> silo {Silo:F0}/{SiloCapacity:F0} (echoes {EchoCount}).");
+                $"claim #{window.Sequence}: 'echo-silo' share = {cappedSec:F0}s of the {elapsedSec:F0}s window" +
+                (window.ExceedsCap(SiloCapHours) ? $" (capped at {SiloCapHours:0.##}h)" : "") +
+                $" -> +{gained:F0} to silo -> {Silo:F0}/{SiloCapacity:F0} (echoes {EchoCount}).");
         }
 
         // =====================================================================
@@ -399,8 +397,22 @@ namespace DeNelle.Village
                 // param -- the single wallet after WO-842). AddCoins is the GOLD mover
                 // (GameState.Resources.Coins). The single banking path -- no double-grant
                 // (the silo is the ONLY source here).
-                eco.GrantSpendable(wood: wood, food: food, iron: iron, crystals: crystals);
+                // ECON-SWEEP 2026-08-16 (defect 2): READ BACK WHAT ACTUALLY LANDED. GrantSpendable
+                // clamps Wood/Iron/Food against the town bank cap, so with a full store the applied
+                // amounts are SMALLER than the split computed above. Logging or popping the request
+                // locals told the player she banked resources she never received -- a log that shows
+                // the pre-clamp number is how a silent loss hides (the pattern OfflineHarvestService
+                // documents). Gold is uncapped, so it applies in full.
+                var applied = eco.GrantSpendable(wood: wood, food: food, iron: iron, crystals: crystals);
                 if (gold > 0) eco.AddCoins(gold);
+                if (applied.Wood != wood || applied.Iron != iron || applied.Food != food)
+                    FlowTrace.Warn("Echo",
+                        $"DumpSilos: town bank cap trimmed the dump -- requested W{wood}/I{iron}/F{food}, " +
+                        $"applied W{applied.Wood}/I{applied.Iron}/F{applied.Food}. The overflow is LOST (clamp-and-warn).");
+                wood = applied.Wood;
+                iron = applied.Iron;
+                food = applied.Food;
+                crystals = applied.Crystals;
             }
             else
             {
@@ -419,10 +431,12 @@ namespace DeNelle.Village
             s.SiloResources -= pool;
             if (s.SiloResources < 0) s.SiloResources = 0;
 
-            // Advance the silo clock to now so the next offline window starts fresh (reusing
-            // the OfflineHarvestService clock = the come-back-RESET) and persist atomically.
-            s.LastHarvestClaimMs = TimeSource.NowUnixMs();
-            if (gs != null) gs.Save();
+            // Advance the silo clock to now so the next offline window starts fresh (the
+            // come-back-RESET). WO-1147: routed through the ONE clock owner
+            // (OfflineClaimCoordinator.StampClock) rather than written here -- a second
+            // writer on this field is exactly what produced the three-consumer race. The
+            // stamp persists atomically with the dump.
+            OfflineClaimCoordinator.StampClock("EchoService.DumpSilos");
 
             FlowTrace.Step("Echo", $"DumpSilos: banked +{wood} wood, +{iron} iron, +{food} food, +{gold} gold, +{crystals} crystals (pool {pool}); silo reset, clock advanced.");
 

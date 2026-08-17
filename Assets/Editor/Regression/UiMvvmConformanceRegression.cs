@@ -158,16 +158,16 @@ namespace DeNelle.Editor
             string modulesDir = Path.Combine(Application.dataPath, "_Modules");
             if (!Directory.Exists(modulesDir))
             {
-                reason = "UI-MVVM CONFORMANCE SKIPPED — Assets/_Modules not found";
-                return true;
+                return DeNelle.Editor.Regression.RegressionOutcome.Skip(out reason,
+                    "UI-MVVM CONFORMANCE", "Assets/_Modules not found at " + modulesDir);
             }
 
             string[] files;
             try { files = Directory.GetFiles(modulesDir, "*.cs", SearchOption.AllDirectories); }
             catch (Exception ex)
             {
-                reason = "UI-MVVM CONFORMANCE SKIPPED — could not enumerate _Modules (" + ex.Message + ")";
-                return true;
+                return DeNelle.Editor.Regression.RegressionOutcome.Skip(out reason,
+                    "UI-MVVM CONFORMANCE", "could not enumerate _Modules (" + ex.Message + ")");
             }
 
             foreach (var path in files)

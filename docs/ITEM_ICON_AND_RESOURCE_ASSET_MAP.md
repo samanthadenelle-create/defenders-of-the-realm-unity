@@ -5,6 +5,14 @@
 collectors/pallets, and gear summary.  
 **Not** a full 3D mesh inventory (see indexes below).
 
+> **See also: [`docs/reference/ICON_CATALOG.md`](reference/ICON_CATALOG.md)** (2026-08-16) — the exhaustive
+> icon registry: all 1 076 icon files across `ItemIcons` / `RpgUi` / `Talents` / `HudIcons` /
+> `ProjectileIcons`, every row tagged Ranger / Knight / Mage / Shared and cited. It covers what THIS file
+> does not: the authored-vs-fallback resolution order, orphans, collisions, and the
+> **`Resources` vs `StreamingAssets` weapons.json desync that shelves 356 icons**. This file stays the
+> *catalog-id → sprite* map for currency, materials, consumables and collector props; that one is the
+> *icon-asset → consumer → class* registry.
+
 ### Related docs that already exist (you were right)
 
 | Doc | What it maps |

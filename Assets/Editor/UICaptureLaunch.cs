@@ -526,6 +526,14 @@ namespace DeNelle.Editor
                 count += CaptureEndStateWaveClear(); // WO-952: the wave-clear banner's fit, MEASURED
                 count += CaptureDialogueOptions(); // WO-1030 DialogueView options state (2-opt + 4-opt worst case); WO-1031 re-pointed off the deleted pet_engage builder
 
+                // RAID PILLAR (2026-08-16). Sixteen cases covered everything EXCEPT the one
+                // pillar the owner asked to verify from screenshots. All three are defensive:
+                // a raid screen that refuses to open logs and returns 0, it never throws the
+                // run away.
+                count += CaptureRaidSelection();     // the grid that was hard-refusing to open
+                count += CaptureRaidDeploy();        // the pre-raid deploy screen (never shot before)
+                count += CaptureRaidsFaceStates();   // WO-1008: the bar face live / 0-of-cap / partial
+
                 Debug.Log("[UICap-HL] done -> " + Path.GetFullPath(OutDir));
             }
             catch (Exception e)
@@ -2102,11 +2110,13 @@ namespace DeNelle.Editor
                 return true;
             }
 
-            public void Grant(DeNelle.Village.ResourceCost amount)
+            public DeNelle.Village.ResourceCost Grant(DeNelle.Village.ResourceCost amount)
             {
                 Wood += amount.Wood; Food += amount.Food; Iron += amount.Iron;
                 Crystals += amount.Crystals; Coins += amount.Coins;
                 OnChanged?.Invoke(new DeNelle.Village.ResourceSnapshot(Wood, Food, Iron, Crystals));
+                // Uncapped fake ledger: every requested unit lands, so applied == requested.
+                return amount;
             }
         }
 
@@ -3560,6 +3570,495 @@ namespace DeNelle.Editor
             canvas.scaleFactor = sf;
             canvas.referencePixelsPerUnit = scaler.referencePixelsPerUnit > 0f
                 ? scaler.referencePixelsPerUnit : 100f;
+        }
+
+        // =====================================================================
+        //  RAID PILLAR CAPTURES (2026-08-16).
+        // ---------------------------------------------------------------------
+        //  Sixteen cases shipped before today and not one of them touched raids --
+        //  the pillar the owner explicitly asked to verify from screenshots. Three
+        //  cases close that hole, each following the established idiom exactly:
+        //  ForEachTarget owns the per-resolution build, the body owns its own
+        //  DestroyImmediate teardown, and every risky step is inside the try so a
+        //  refusing raid screen costs ONE frame, never the remaining sixteen cases.
+        //
+        //  THE ARMY GATE, and how this harness gets past it honestly.
+        //  RaidSelectionScreen.Open() refuses unless ArmyReadiness.Compute says the
+        //  army is full. In an edit-mode capture there is no GameStateService, and
+        //  Compute's documented stateless rule ("null st/Army publishes READY with
+        //  zeros so headless/AutoPilot never false-blocks") returns Ready -- so the
+        //  grid opens on the REAL static entry, with the REAL gate evaluated, not
+        //  driven around it. RaidTestFlagScope additionally raises ff.raidtest for the
+        //  duration as a belt-and-braces: if a future state seeds a partial army into
+        //  this process, the capture still gets its frame instead of silently shooting
+        //  the drillmaster redirect. The scope RESTORES the previous PlayerPrefs value
+        //  (deleting the key when it was unset) so a capture run can never leave the
+        //  owner's flags mutated.
+        //
+        //  TEARDOWN: neither screen's own Close() may be called here -- it routes
+        //  through ElarionUiKit.ClosePanelWithFx, which outside play mode calls the
+        //  runtime Destroy (edit-illegal). Both bodies release the arbiter handle by
+        //  hand and DestroyImmediate the canvas FIRST, so the host's OnDestroy sees a
+        //  dead _ui and skips its own Destroy -- the same contract the rumor-board and
+        //  realm-map cases already keep.
+        // =====================================================================
+
+        /// <summary>
+        /// Raise ff.raidtest for the life of a capture and put PlayerPrefs back exactly as it
+        /// was found. A harness that leaves a bypass flag ON would silently change how the
+        /// owner's next play session gates raids -- the restore is the load-bearing half.
+        /// </summary>
+        private sealed class RaidTestFlagScope : IDisposable
+        {
+            private const string Key = "ff.raidtest";
+            private readonly int _prev;      // -1 == the key was not set at all
+
+            public RaidTestFlagScope()
+            {
+                _prev = PlayerPrefs.GetInt(Key, -1);
+                PlayerPrefs.SetInt(Key, 1);
+                Debug.Log("[UICap-HL] ff.raidtest raised for the raid captures (previous value " +
+                          (_prev < 0 ? "UNSET" : _prev.ToString()) + "); it is restored on scope exit. " +
+                          "NOTE: headless has no GameState, so ArmyReadiness.Compute already returns " +
+                          "READY by its stateless never-false-block rule -- this flag is the safety " +
+                          "net, not the thing that opens the grid.");
+            }
+
+            public void Dispose()
+            {
+                try
+                {
+                    if (_prev < 0) PlayerPrefs.DeleteKey(Key);
+                    else PlayerPrefs.SetInt(Key, _prev);
+                    PlayerPrefs.Save();
+                    Debug.Log("[UICap-HL] ff.raidtest restored to " +
+                              (_prev < 0 ? "UNSET (key deleted)" : _prev.ToString()) + ".");
+                }
+                catch (Exception e)
+                {
+                    Debug.LogError("[UICap-HL] ff.raidtest RESTORE FAILED: " + e +
+                                   " -- the owner's PlayerPrefs may still carry the bypass flag. " +
+                                   "Clear it by hand (PlayerPrefs key 'ff.raidtest').");
+                }
+            }
+        }
+
+        // ---------------------------------------------------------------------
+        //  Panel: RaidSelectionScreen -- the grid of raid cards. This is the screen
+        //  that was hard-refusing to open, so a frame of it OPEN is the single most
+        //  valuable raid picture. Shot through the real static Open(), which builds
+        //  the real chrome + the real RaidSelectionVM projection off
+        //  SceneConfigCatalog (the three flagship enemy raids, falling back to every
+        //  enemy raid). An empty catalog renders the panel's own "No raids available."
+        //  empty state -- which is still a true picture and is logged as such.
+        // ---------------------------------------------------------------------
+        private static int CaptureRaidSelection()
+        {
+            using (new RaidTestFlagScope())
+                return ForEachTarget("RaidSelection", CaptureRaidSelectionOnce);
+        }
+
+        private static int CaptureRaidSelectionOnce(CaptureTarget target)
+        {
+            int saved = 0;
+            GameObject tempEventSystem = null;
+            GameObject canvasGo = null;
+            RaidSelectionScreen screen = null;
+
+            try
+            {
+                if (UnityEngine.Object.FindAnyObjectByType<UnityEngine.EventSystems.EventSystem>() == null)
+                {
+                    tempEventSystem = new GameObject("~UICapEventSystem");
+                    tempEventSystem.AddComponent<UnityEngine.EventSystems.EventSystem>();
+                }
+
+                int raidCount = 0;
+                var probe = RaidSelectionVM.CreateDefault(null);
+                if (probe != null)
+                {
+                    raidCount = probe.Raids != null ? probe.Raids.Count : 0;
+                    probe.Dispose();
+                }
+                if (raidCount == 0)
+                {
+                    Debug.LogWarning("[UICap-HL] SceneConfigCatalog projected ZERO enemy raids -- the raid " +
+                                     "grid will render its 'No raids available.' empty state. The shot is " +
+                                     "still honest, but it proves the CHROME opens, not that cards build.");
+                }
+
+                // The REAL static entry -- the same call the HUD Raids face reaches through
+                // RaidEntryGate, army gate included (see the banner for why it passes headless).
+                RaidSelectionScreen.Open();
+
+                // Awake never runs on an edit-mode AddComponent, so the screen's own _instance
+                // cache is always null here and Open() authors a fresh host each time; find it.
+                screen = UnityEngine.Object.FindAnyObjectByType<RaidSelectionScreen>();
+                if (screen == null)
+                {
+                    Debug.LogWarning("[UICap-HL] RaidSelectionScreen.Open() produced no screen instance -- " +
+                                     "the army gate refused (or the host was not created). Raid grid skipped " +
+                                     "for " + target.Tag + "; the remaining captures continue.");
+                    return 0;
+                }
+
+                canvasGo = GetPrivateGameObject(screen, "_ui");
+                if (canvasGo == null)
+                {
+                    Debug.LogWarning("[UICap-HL] RaidSelectionScreen._ui null after Open -- the grid did not " +
+                                     "build; raid grid skipped for " + target.Tag + ".");
+                    return 0;
+                }
+
+                if (RenderCanvasToPng(canvasGo, OutDir + "RaidSelection_" + target.Tag + ".png",
+                    target.W, target.H)) saved++;
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("[UICap-HL] raid selection capture threw: " + e);
+            }
+            finally
+            {
+                ReleaseScreenHandle(screen, "raid selection");
+                // Canvas FIRST so the host's OnDestroy sees a dead _ui and never calls the
+                // runtime Destroy (edit-illegal) -- the shared teardown contract.
+                if (canvasGo != null) UnityEngine.Object.DestroyImmediate(canvasGo);
+                if (screen != null && screen.gameObject != null)
+                    UnityEngine.Object.DestroyImmediate(screen.gameObject);
+                if (tempEventSystem != null) UnityEngine.Object.DestroyImmediate(tempEventSystem);
+            }
+
+            return saved;
+        }
+
+        // ---------------------------------------------------------------------
+        //  Panel: RaidDeployScreen -- the pre-raid deploy screen (party row, troop
+        //  list, scout report, BEGIN ASSAULT). No test and no bot had ever exercised
+        //  this path, so the first frame of it is genuinely new information.
+        //
+        //  HONEST LIMIT, stated rather than dressed up: with no GameStateService in
+        //  edit mode RaidDeployVM.CreateDefault resolves a NULL army, so the troop
+        //  list renders its "No troops trained yet." empty state and the counts read
+        //  zero. That is the real zero-army layout (exactly what a player with an
+        //  empty barracks sees) -- it is NOT proof that a populated roster lays out.
+        //  Seeding an army would need a live GameStateService, which this harness
+        //  deliberately does not stand up.
+        // ---------------------------------------------------------------------
+        private static int CaptureRaidDeploy()
+        {
+            using (new RaidTestFlagScope())
+                return ForEachTarget("RaidDeploy", CaptureRaidDeployOnce);
+        }
+
+        private static int CaptureRaidDeployOnce(CaptureTarget target)
+        {
+            int saved = 0;
+            GameObject tempEventSystem = null;
+            GameObject canvasGo = null;
+            RaidDeployScreen screen = null;
+            RaidSelectionVM vm = null;
+
+            try
+            {
+                if (UnityEngine.Object.FindAnyObjectByType<UnityEngine.EventSystems.EventSystem>() == null)
+                {
+                    tempEventSystem = new GameObject("~UICapEventSystem");
+                    tempEventSystem.AddComponent<UnityEngine.EventSystems.EventSystem>();
+                }
+
+                // The def the player would have tapped: the FIRST card the real grid projects,
+                // resolved through the same VM the grid uses (never a hand-built fixture def).
+                vm = RaidSelectionVM.CreateDefault(null);
+                SceneConfigDef def = null;
+                if (vm != null && vm.Raids != null)
+                {
+                    foreach (var item in vm.Raids)
+                    {
+                        def = vm.DefFor(item.Id);
+                        if (def != null) break;
+                    }
+                }
+                if (def == null)
+                {
+                    Debug.LogWarning("[UICap-HL] no SceneConfigDef projected for any raid card -- the deploy " +
+                                     "screen has nothing to open for; skipped at " + target.Tag + ".");
+                    return 0;
+                }
+
+                RaidDeployScreen.Open(def);
+
+                screen = UnityEngine.Object.FindAnyObjectByType<RaidDeployScreen>();
+                if (screen == null)
+                {
+                    Debug.LogWarning("[UICap-HL] RaidDeployScreen.Open(def) produced no screen instance -- " +
+                                     "deploy screen skipped at " + target.Tag + ".");
+                    return 0;
+                }
+
+                canvasGo = GetPrivateGameObject(screen, "_ui");
+                if (canvasGo == null)
+                {
+                    Debug.LogWarning("[UICap-HL] RaidDeployScreen._ui null after Open -- the deploy screen " +
+                                     "did not build; skipped at " + target.Tag + ".");
+                    return 0;
+                }
+
+                Debug.Log("[UICap-HL] raid deploy shot is the ZERO-ARMY state (no GameStateService in edit " +
+                          "mode -> RaidDeployVM resolves a null army). Read it as the empty-barracks layout, " +
+                          "not as proof that a populated troop list fits.");
+
+                if (RenderCanvasToPng(canvasGo, OutDir + "RaidDeploy_" + target.Tag + ".png",
+                    target.W, target.H)) saved++;
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("[UICap-HL] raid deploy capture threw: " + e);
+            }
+            finally
+            {
+                if (vm != null) vm.Dispose();
+                ReleaseScreenHandle(screen, "raid deploy");
+                if (canvasGo != null) UnityEngine.Object.DestroyImmediate(canvasGo);
+                if (screen != null && screen.gameObject != null)
+                    UnityEngine.Object.DestroyImmediate(screen.gameObject);
+                if (tempEventSystem != null) UnityEngine.Object.DestroyImmediate(tempEventSystem);
+            }
+
+            return saved;
+        }
+
+        /// <summary>Release a raid screen's single-modal arbiter slot by hand. Its own Close()
+        /// cannot be used (ClosePanelWithFx -> runtime Destroy is edit-illegal), and a leaked
+        /// handle would make the NEXT panel in the run open against a busy arbiter.</summary>
+        private static void ReleaseScreenHandle(object screen, string what)
+        {
+            if (screen == null) return;
+            try
+            {
+                var handle = GetPrivateFieldValue(screen, "_panelHandle") as PanelHandle;
+                if (handle != null) PanelManager.NotifyClosed(handle);
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning("[UICap-HL] " + what + " arbiter release failed (harmless): " + e.Message);
+            }
+        }
+
+        // ---------------------------------------------------------------------
+        //  Panel: the bottom action bar's RAIDS FACE in its THREE states (WO-1008).
+        //  The face used to VANISH with an empty army; it is now visible-and-greyed
+        //  and carries the reason in WORDS ("Raids 0/5" / "Raids 3/5") because the
+        //  owner is red/green colourblind and a hue tells her nothing. Whether that
+        //  reads at a glance is a question ONLY a screenshot can answer -- so all
+        //  three states are shot side by side in ONE frame per target, which is what
+        //  makes them comparable.
+        //
+        //  Not a view-only mock: each row is painted from a REAL HudActionBarModel
+        //  (the Core applicability model) driven over its ISource seam, so the face
+        //  set, the dim decision AND the label text all come from the shipped compute
+        //  -- exactly what HudKitController.ApplyRaidsDim renders. The kit builds the
+        //  faces (BuildObsidianButton, same style/colour arguments as HudKitController),
+        //  so the plate, the font and the touch floor are the shipped ones too.
+        // ---------------------------------------------------------------------
+        private sealed class FakeBarSource : DeNelle.Core.HudModel.HudActionBarModel.ISource
+        {
+            public bool TalkAvailable { get; set; }
+            public bool RaidCapable { get; set; }
+            public bool RaidArmyReady { get; set; }
+            public int RaidDeployableSlots { get; set; }
+            public int RaidQueuedSlots { get; set; }
+            public int RaidCapSlots { get; set; }
+            public bool MapUnlocked { get; set; }
+            public bool BuildingFocused { get; set; }
+        }
+
+        private struct RaidFaceState
+        {
+            public string Caption;
+            public FakeBarSource Source;
+        }
+
+        private static RaidFaceState[] BuildRaidFaceStates()
+        {
+            return new[]
+            {
+                new RaidFaceState
+                {
+                    Caption = "LIVE - army full, the face is undimmed and reads 'Raids'",
+                    Source = new FakeBarSource
+                    {
+                        RaidCapable = true, RaidArmyReady = true,
+                        RaidDeployableSlots = 5, RaidQueuedSlots = 0, RaidCapSlots = 5,
+                    },
+                },
+                new RaidFaceState
+                {
+                    Caption = "GREYED / NO TROOPS - barracks built, nothing trained (WO-1008: visible, not hidden)",
+                    Source = new FakeBarSource
+                    {
+                        RaidCapable = true, RaidArmyReady = false,
+                        RaidDeployableSlots = 0, RaidQueuedSlots = 0, RaidCapSlots = 5,
+                    },
+                },
+                new RaidFaceState
+                {
+                    Caption = "GREYED / PARTIAL ARMY - 2 ready + 1 training of 5",
+                    Source = new FakeBarSource
+                    {
+                        RaidCapable = true, RaidArmyReady = false,
+                        RaidDeployableSlots = 2, RaidQueuedSlots = 1, RaidCapSlots = 5,
+                    },
+                },
+            };
+        }
+
+        // The kit face arguments per id, verbatim from HudKitController's bar build.
+        private static string BarFaceWord(DeNelle.Core.HudModel.ActionBarButtonId id)
+        {
+            switch (id)
+            {
+                case DeNelle.Core.HudModel.ActionBarButtonId.Build: return "Build";
+                case DeNelle.Core.HudModel.ActionBarButtonId.Talk: return "Talk";
+                case DeNelle.Core.HudModel.ActionBarButtonId.Bag: return "Bag";
+                case DeNelle.Core.HudModel.ActionBarButtonId.Raids:
+                    return DeNelle.Core.HudModel.HudActionBarModel.RaidsBaseLabel;
+                case DeNelle.Core.HudModel.ActionBarButtonId.Quests: return "Quests";
+                case DeNelle.Core.HudModel.ActionBarButtonId.Upgrade: return "Manage";
+                default: return id.ToString();
+            }
+        }
+
+        private static ElarionUiKit.ObsidianButtonColor BarFaceColor(DeNelle.Core.HudModel.ActionBarButtonId id)
+        {
+            if (id == DeNelle.Core.HudModel.ActionBarButtonId.Build)
+                return ElarionUiKit.ObsidianButtonColor.Yellow;
+            if (id == DeNelle.Core.HudModel.ActionBarButtonId.Talk)
+                return ElarionUiKit.ObsidianButtonColor.Green;
+            return ElarionUiKit.ObsidianButtonColor.Gray;
+        }
+
+        private static int CaptureRaidsFaceStates()
+        {
+            return ForEachTarget("RaidsFaceStates", CaptureRaidsFaceStatesOnce);
+        }
+
+        private static int CaptureRaidsFaceStatesOnce(CaptureTarget target)
+        {
+            // HudKitController's own bar geometry, so the slot widths are the shipped ones.
+            const float barGap = 0.01f;
+            float barSlotW = (1f - barGap * (DeNelle.Core.HudModel.HudActionBarModel.MaxVisibleFaces - 1))
+                             / DeNelle.Core.HudModel.HudActionBarModel.MaxVisibleFaces;
+
+            int saved = 0;
+            GameObject tempEventSystem = null;
+            GameObject canvasGo = null;
+
+            try
+            {
+                if (UnityEngine.Object.FindAnyObjectByType<UnityEngine.EventSystems.EventSystem>() == null)
+                {
+                    tempEventSystem = new GameObject("~UICapEventSystem");
+                    tempEventSystem.AddComponent<UnityEngine.EventSystems.EventSystem>();
+                }
+
+                canvasGo = new GameObject("~UICapRaidsFace",
+                    typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
+                var canvas = canvasGo.GetComponent<Canvas>();
+                canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+                canvas.sortingOrder = 4000;
+                var scaler = canvasGo.GetComponent<CanvasScaler>();
+                scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+                scaler.referenceResolution = new Vector2(1080f, 1920f);   // HudAreasHost's scaler
+                scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
+                scaler.matchWidthOrHeight = 0.5f;
+
+                // Dark backdrop so the greyed plate's contrast reads honestly in the PNG.
+                var bg = new GameObject("Backdrop", typeof(Image));
+                bg.transform.SetParent(canvasGo.transform, false);
+                var bgrt = (RectTransform)bg.transform;
+                bgrt.anchorMin = Vector2.zero; bgrt.anchorMax = Vector2.one;
+                bgrt.offsetMin = Vector2.zero; bgrt.offsetMax = Vector2.zero;
+                bg.GetComponent<Image>().color = new Color(0.10f, 0.11f, 0.12f, 1f);
+
+                var root = (RectTransform)canvasGo.transform;
+                var title = MakePixelBand(root, "Title", 8f, 52f, 24f);
+                var titleLbl = title.gameObject.AddComponent<TextMeshProUGUI>();
+                ElarionUiKit.EnsureFont(titleLbl);
+                titleLbl.text = "ACTION BAR - RAIDS FACE, THREE STATES (WO-1008)";
+                titleLbl.fontSize = ElarionUi.FontLabel;
+                titleLbl.color = ElarionUi.Gilt;
+                titleLbl.fontStyle = FontStyles.Bold;
+                titleLbl.alignment = TextAlignmentOptions.MidlineLeft;
+                titleLbl.raycastTarget = false;
+
+                var states = BuildRaidFaceStates();
+                float y = 84f;
+                foreach (var state in states)
+                {
+                    // The REAL Core compute decides the set, the dim and the words.
+                    var model = new DeNelle.Core.HudModel.HudActionBarModel(state.Source);
+                    model.SetPosture(DeNelle.Core.HudModel.HudActionBarModel.PostureTown);
+
+                    var cap = MakePixelBand(root, "Caption", y, 44f, 24f);
+                    var capLbl = cap.gameObject.AddComponent<TextMeshProUGUI>();
+                    ElarionUiKit.EnsureFont(capLbl);
+                    capLbl.text = state.Caption + "   [model: dim=" + model.RaidsDimmed +
+                                  " reason=" + model.RaidsDimReason + " label='" + model.RaidsFaceLabel + "']";
+                    capLbl.fontSize = ElarionUi.FontMicro;
+                    capLbl.color = ElarionUi.Parchment;
+                    capLbl.alignment = TextAlignmentOptions.MidlineLeft;
+                    capLbl.raycastTarget = false;
+                    y += 50f;
+
+                    var barBand = MakePixelBand(root, "Bar", y, ElarionUiKit.MinTouchPx, 24f);
+                    var actives = model.Active;
+                    int n = actives != null ? actives.Count : 0;
+                    float groupW = n > 0 ? n * barSlotW + (n - 1) * barGap : 0f;
+                    float x = (1f - groupW) * 0.5f;
+                    for (int i = 0; i < n; i++)
+                    {
+                        var id = actives[i];
+                        bool isRaids = id == DeNelle.Core.HudModel.ActionBarButtonId.Raids;
+                        // WO-1008: the Raids face carries the model's STATE label, every other
+                        // face its plain word -- exactly what ApplyRaidsDim paints.
+                        string word = isRaids ? model.RaidsFaceLabel : BarFaceWord(id);
+                        var face = ElarionUiKit.BuildObsidianButton(barBand, word,
+                            ElarionUiKit.ObsidianButtonStyle.Style1, BarFaceColor(id),
+                            new Vector2(x, 0f), new Vector2(x + barSlotW, 1f), null);
+                        if (isRaids && model.RaidsDimmed && face != null)
+                        {
+                            // ApplyRaidsDim, verbatim: tint face + label toward Disabled and
+                            // NEVER touch interactable (a dimmed tap still reaches the redirect).
+                            var faceImg = face.targetGraphic as Image;
+                            if (faceImg != null) faceImg.color = ElarionUi.Disabled;
+                            var faceLbl = face.GetComponentInChildren<TMP_Text>(true);
+                            if (faceLbl != null) faceLbl.color = ElarionUi.Disabled;
+                        }
+                        x += barSlotW + barGap;
+                    }
+                    if (n == 0)
+                    {
+                        Debug.LogWarning("[UICap-HL] raids-face state '" + state.Caption + "' produced an " +
+                                         "EMPTY action-bar set -- the row will be blank in the shot.");
+                    }
+                    y += ElarionUiKit.MinTouchPx + 42f;
+                }
+
+                Canvas.ForceUpdateCanvases();
+                if (RenderCanvasToPng(canvasGo, OutDir + "RaidsFaceStates_" + target.Tag + ".png",
+                    target.W, target.H)) saved++;
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("[UICap-HL] raids face states capture threw: " + e);
+            }
+            finally
+            {
+                if (canvasGo != null) UnityEngine.Object.DestroyImmediate(canvasGo);
+                if (tempEventSystem != null) UnityEngine.Object.DestroyImmediate(tempEventSystem);
+            }
+
+            return saved;
         }
 
         // ---------------------------------------------------------------------

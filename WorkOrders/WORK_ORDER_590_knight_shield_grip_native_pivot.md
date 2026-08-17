@@ -1,3 +1,10 @@
+> ⚠ **NUMBER COLLISION — this document does not own WO-590; `WORK_ORDER_590_castle_water_dip_fill_and_fish.md` does.**
+> Referred to hereafter as **WO-590-B (knight shield grip / native pivot)**.
+> Flagged by the 2026-08-16 Sunday board-grooming pass (`python tools/board_build.py` → `DUPLICATE_WO_NUMBERS`);
+> ownership decided by **first-on-disk** (`git log --follow --diff-filter=A`): the winner's file was created first.
+> Banner only — nothing was renumbered or deleted.
+> ⚠ **Work HAS shipped under this number** — commit messages and/or a `.RESULT.md` cite WO-590 for THIS document. It is deliberately **not renumbered**; a renumber would orphan those references. Use the alias above when you need to name it unambiguously.
+
 # WORK_ORDER_590 — Knight shield grip: native Blink + Tripo fallback (implementation playbook)
 
 **Status: IMPLEMENTED @ `C:\EoA` (shield path live in `EquipmentController` since 2026-06-19 Blink fix; carry-state/sheath 2026-07-04)** — this doc is the **CLI replication playbook** for Claude/UI. Apply verbatim; do **not** re-debug moat/castle geometry (closed).

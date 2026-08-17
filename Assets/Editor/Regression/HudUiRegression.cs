@@ -224,9 +224,10 @@ namespace DeNelle.Editor
                 string modulesDir = Path.Combine(Application.dataPath, "_Modules");
                 if (!Directory.Exists(modulesDir))
                 {
-                    reason = "HUDUI SKIPPED — Assets/_Modules not found";
+                    bool skipped = DeNelle.Editor.Regression.RegressionOutcome.Skip(out reason,
+                        "HUD UI", "Assets/_Modules not found at " + modulesDir);
                     Debug.LogWarning(reason);
-                    return true;
+                    return skipped;
                 }
 
                 CheckTofu(modulesDir, failures, notes);

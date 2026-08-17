@@ -1,3 +1,9 @@
+> ⚠ **NUMBER COLLISION — this document does not own WO-330; `WORK_ORDER_330_no_account_local_only_warning.md` does.**
+> Referred to hereafter as **WO-330-B (DTT hero cyan material)**.
+> Flagged by the 2026-08-16 Sunday board-grooming pass (`python tools/board_build.py` → `DUPLICATE_WO_NUMBERS`);
+> ownership decided by **first-on-disk** (`git log --follow --diff-filter=A`): the winner's file was created first.
+> Banner only — nothing was renumbered or deleted.
+
 # ⚠ WORK ORDER 330 — DTT Hero Cyan Silhouette Fix — **SUPERSEDED 2026-07-04**
 
 > **SUPERSEDED:** The Defend-the-Tower / PatriciaLight system was removed 2026-06-09.
