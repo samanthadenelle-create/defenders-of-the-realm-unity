@@ -25,7 +25,11 @@
 //                       safely until the mixer asset exists).
 //   * quality tier   -> SeekerBootstrap.ApplyTier (public + idempotent — its
 //                       header explicitly invites a settings screen to call it).
-//   * screen-shake   -> ScreenShakeSetting.Enabled, a static gameplay reads.
+//   * screen-shake   -> ScreenShakeSetting.Enabled (the typed static) AND the
+//                       PlayerPrefs key "camerashake", which is what
+//                       DeNelle.Village's CameraShakeBridge actually gates on.
+//                       Both, because the assemblies cannot see each other — see
+//                       the long note on ApplyScreenShake().
 //
 // ApplyAllOnLaunch() is invoked once at startup by SettingsBootstrap so settings
 // REAPPLY ON LAUNCH (audit requirement).
@@ -207,8 +211,11 @@ namespace DeNelle.Settings
 
         /// <summary>
         /// Whether camera screen-shake effects are enabled. An accessibility /
-        /// comfort option (audit §2.7 reduce-motion family). Gameplay reads
-        /// <see cref="ScreenShakeSetting.Enabled"/>, which mirrors this.
+        /// comfort option (audit §2.7 reduce-motion family). Gameplay reads the
+        /// PlayerPrefs key <c>"camerashake"</c> (via CameraShakeBridge);
+        /// <see cref="ScreenShakeSetting.Enabled"/> is the typed mirror for any
+        /// in-assembly reader. <see cref="ApplyScreenShake"/> publishes to both —
+        /// a write to this property alone does NOT reach gameplay.
         /// </summary>
         public static bool ScreenShake
         {
@@ -260,10 +267,31 @@ namespace DeNelle.Settings
             SeekerBootstrap.ApplyTier(TierName(Quality));
         }
 
-        /// <summary>Mirrors the stored screen-shake flag onto <see cref="ScreenShakeSetting.Enabled"/>.</summary>
+        /// <summary>
+        /// Publishes the stored screen-shake flag to BOTH consumers: the
+        /// <see cref="ScreenShakeSetting.Enabled"/> static, and the PlayerPrefs key
+        /// <c>"camerashake"</c> that the gameplay shake bridge actually reads.
+        /// </summary>
         public static void ApplyScreenShake()
         {
             ScreenShakeSetting.Enabled = ScreenShake;
+
+            // ── THE KEY IS THE SEAM. DO NOT "CLEAN THIS UP" INTO A DIRECT CALL. ──
+            // DeNelle.Village.CameraShakeBridge (Tower.cs) is the single entry point for every
+            // gameplay shake, and it gates on PlayerPrefs.GetInt("camerashake", 1). A direct type
+            // reference from here WILL NOT COMPILE: DeNelle.Village.asmdef does not reference
+            // DeNelle.Settings, and DeNelle.Settings references only DeNelle.Core — neither side
+            // can see the other. The shared PlayerPrefs key is therefore the correct, deliberate
+            // seam between the settings layer and the gameplay layer, exactly as CoreServices is
+            // for typed calls.
+            //
+            // WHY THIS LINE EXISTS (defect fixed 2026-08-16): the toggle was INERT IN BOTH
+            // DIRECTIONS. The settings UI wrote "dotr-settings-screen-shake" and mirrored it onto
+            // ScreenShakeSetting.Enabled, which NOTHING in Assets read; the bridge read
+            // "camerashake", which NOTHING wrote. So the accessibility control moved no shake at
+            // all, and the ~15 shake sites funnelling through the bridge could never be turned off.
+            PlayerPrefs.SetInt("camerashake", ScreenShake ? 1 : 0);
+            PlayerPrefs.Save();
         }
 
         // =====================================================================
@@ -326,10 +354,17 @@ namespace DeNelle.Settings
     }
 
     /// <summary>
-    /// A tiny static flag gameplay camera code can read to decide whether to
-    /// apply screen-shake. Kept separate from <see cref="SettingsModel"/> so a
-    /// gameplay module can check it without taking a dependency on the settings
-    /// persistence layer — it only needs this one bool.
+    /// A tiny static flag for deciding whether to apply screen-shake. Kept separate
+    /// from <see cref="SettingsModel"/> so a caller can check it without taking a
+    /// dependency on the settings persistence layer — it only needs this one bool.
+    /// <para>
+    /// REACH, honestly stated: this static is only visible to assemblies that
+    /// REFERENCE DeNelle.Settings. DeNelle.Village does not, so the gameplay shake
+    /// sites cannot read it and instead gate on the PlayerPrefs key "camerashake",
+    /// which <see cref="SettingsModel.ApplyScreenShake"/> writes alongside this flag.
+    /// If you are adding a shake caller inside DeNelle.Village, use
+    /// CameraShakeBridge — do NOT try to reference this type.
+    /// </para>
     /// </summary>
     public static class ScreenShakeSetting
     {

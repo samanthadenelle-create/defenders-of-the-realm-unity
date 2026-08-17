@@ -872,6 +872,52 @@ namespace DeNelle.Core
         /// </para></summary>
         public static bool BiomeRoads => Get("biomeroads", defaultOn: true);
 
+        /// <summary>HERO GAIT FORENSICS — the per-frame gait/camera recorder
+        /// <c>HeroGaitForensics</c> (DeNelle.Village; named in &lt;c&gt; because Core does not
+        /// reference Village). WHY IT EXISTS: owner F8 2026-07-12 ("look at the data for walking and
+        /// running, hip bones and smart camera") and again WO-965 ("Mage faces northwest when running
+        /// north") — it is the instrument that made both captures decidable, so per CLAUDE.md §12 it
+        /// STAYS IN THE CODE, permanently. It is FLAGGED OFF, never stripped.
+        /// <para>
+        /// WHY IT IS OFF: the recorder self-bootstraps from a
+        /// <c>RuntimeInitializeOnLoadMethod</c>, lives in a SHIPPING assembly with no <c>#if</c>
+        /// guard and no define constraint (unlike DeNelle.DevTools, which is stripped from a release
+        /// player), and its LateUpdate does a 20-field boxed <c>string.Format</c> +
+        /// <c>StreamWriter.WriteLine</c> into <c>persistentDataPath/gait-forensics.csv</c> plus a
+        /// <c>GetCurrentAnimatorClipInfo</c> allocation EVERY FRAME. Until 2026-08-16 it read a raw
+        /// PlayerPrefs key that DEFAULTED ON and was declared in NO flag table — so it ran in the
+        /// release Seeker APK, ~1,200 boxed structs/sec at 60fps and an unbounded file on the
+        /// player's device, with no dev menu, no UI and no URL able to turn it off. Declaring it here
+        /// is what gives it an off-switch and an owner-facing toggle.
+        /// </para>
+        /// <para>
+        /// TURNING IT BACK ON for an investigation: the Defenders/Debug menu, or PlayerPrefs
+        /// "ff.gaitforensics" = 1 on the device. NOT URL-activatable (it writes a file).
+        /// </para></summary>
+        public static bool GaitForensics => Get("gaitforensics", defaultOn: false);
+
+        /// <summary>JUPITER SWAP PANEL (WO-43) — gates <c>JupiterSwapBootstrap</c> (DeNelle.Web3),
+        /// the <c>RuntimeInitializeOnLoadMethod</c> that auto-spawns the crypto swap-panel host in
+        /// Title / HeroSelect / PetSelect and any <c>Dungeon_*</c> scene. DEFAULT OFF, same idiom and
+        /// same reason as <see cref="SkrPreview"/> and <see cref="RealmStorePurchase"/>.
+        /// <para>
+        /// WHY OFF (store-hardening, Path A): those two flags were deliberately flipped OFF so the
+        /// honest ZERO-CRYPTO store build ships NO crypto marketing or purchase surface. This
+        /// bootstrap was the hole in that decision — it was gated by NOTHING, shipped
+        /// unconditionally (its UXML lives under Assets/_Modules/Web3/Resources/), and so put a swap
+        /// CTA host into the very build the ruling stripped crypto out of. Secondary reason it must
+        /// not ship un-gated: it is a UXML panel, and UXML does not render in player builds
+        /// (CLAUDE.md §8), so on device it would most likely draw blank — a broken surface rather
+        /// than a working one.
+        /// </para>
+        /// <para>
+        /// NOT DELETED ON PURPOSE: whether the swap CTA should exist at all is an OWNER ruling, so
+        /// the flag keeps it reversible in one value — PlayerPrefs "ff.jupiterswap" = 1, or the
+        /// Defenders/Debug menu. NOT URL-activatable (monetization surface — excluded from the
+        /// allow-list, same as RealmStorePurchase).
+        /// </para></summary>
+        public static bool JupiterSwap => Get("jupiterswap", defaultOn: false);
+
         /// <summary>SECURITY (store-hardening Path A): TRUE in the Editor or any Development build,
         /// FALSE in a release/store build (BuildOptions.None → Debug.isDebugBuild is false). Dev-only
         /// tooling uses this as its <c>defaultOn</c> so the owner keeps the tool while developing but it
@@ -1097,6 +1143,50 @@ namespace DeNelle.Core
         private static bool ToggleCombatHud611Validate()
         {
             UnityEditor.Menu.SetChecked(CombatHud611Menu, CombatHud611);
+            return true;
+        }
+
+        // Hero gait forensics — the per-frame CSV recorder. OFF by default (it writes a file every
+        // frame in a shipping assembly); this menu is the owner-facing way to arm it for a capture.
+        private const string GaitForensicsMenu = "Defenders/Debug/Hero Gait Forensics (per-frame CSV)";
+
+        [UnityEditor.MenuItem(GaitForensicsMenu, priority = 206)]
+        private static void ToggleGaitForensics()
+        {
+            bool on = !GaitForensics;
+            PlayerPrefs.SetInt("ff.gaitforensics", on ? 1 : 0);
+            PlayerPrefs.Save();
+            Debug.Log("[FeatureFlags] ff.gaitforensics = " + (on
+                ? "ON (HeroGaitForensics: per-frame gait-forensics.csv + [Flow:GaitF] change lines)"
+                : "OFF (no recorder, no csv - the shipping default)"));
+        }
+
+        [UnityEditor.MenuItem(GaitForensicsMenu, validate = true)]
+        private static bool ToggleGaitForensicsValidate()
+        {
+            UnityEditor.Menu.SetChecked(GaitForensicsMenu, GaitForensics);
+            return true;
+        }
+
+        // Jupiter swap panel — the WO-43 crypto swap CTA host. OFF by default (store-hardening
+        // Path A: the shipping build carries no crypto surface).
+        private const string JupiterSwapMenu = "Defenders/Debug/Jupiter Swap Panel (crypto CTA)";
+
+        [UnityEditor.MenuItem(JupiterSwapMenu, priority = 207)]
+        private static void ToggleJupiterSwap()
+        {
+            bool on = !JupiterSwap;
+            PlayerPrefs.SetInt("ff.jupiterswap", on ? 1 : 0);
+            PlayerPrefs.Save();
+            Debug.Log("[FeatureFlags] ff.jupiterswap = " + (on
+                ? "ON (JupiterSwapBootstrap spawns the swap-panel host in Title/HeroSelect/PetSelect/Dungeon_*)"
+                : "OFF (no swap host spawns - the zero-crypto store default)"));
+        }
+
+        [UnityEditor.MenuItem(JupiterSwapMenu, validate = true)]
+        private static bool ToggleJupiterSwapValidate()
+        {
+            UnityEditor.Menu.SetChecked(JupiterSwapMenu, JupiterSwap);
             return true;
         }
 #endif

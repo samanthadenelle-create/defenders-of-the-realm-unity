@@ -181,8 +181,13 @@ namespace DeNelle.Village
                 // ── Camera → SmartMobileCamera (synchronous; no auto-restore hold) ─
                 case "camera_focus":
                 case "camera_glance":         CameraFocus(a0); break;
-                case "camera_shake":          SmartMobileCamera.Instance?.Shake(Mathf.Clamp(ParseFloat(a0), 0.05f, 0.6f), 0.45f); break;
-                case "camera_show_all_gates": SmartMobileCamera.Instance?.Shake(0.08f, 0.3f); break;
+                // These two stay DIRECT calls, not CameraShakeBridge.Shake, and that is deliberate:
+                // the bridge refuses while HeroLocomotion.InputSuppressed is true, which is ALWAYS
+                // the case during an authored dialogue — routing them through it would silence the
+                // scripted beat entirely. They still gate on CameraShakeBridge.Enabled (2026-08-16)
+                // so the player's screen-shake comfort preference is honoured here too.
+                case "camera_shake":          if (CameraShakeBridge.Enabled) SmartMobileCamera.Instance?.Shake(Mathf.Clamp(ParseFloat(a0), 0.05f, 0.6f), 0.45f); break;
+                case "camera_show_all_gates": if (CameraShakeBridge.Enabled) SmartMobileCamera.Instance?.Shake(0.08f, 0.3f); break;
                 case "camera_return_to_hero": { var h = HeroTransform(); if (h != null) SmartMobileCamera.Instance?.SetTarget(h); } break;
 
                 // ── HUD objective / hint / highlight → TutorialHudOverlay ─────────

@@ -31,9 +31,21 @@
 //                  discriminate a camera-space conversion error.
 //
 // Self-bootstrapping (never a scene/prefab edit): attaches to the hero when a
-// HeroLocomotion appears. Toggle: PlayerPrefs "ff.gaitforensics" (default ON
-// while the investigation runs — strip or default-off once root cause ships,
-// §12 lifecycle). LateUpdate so every writer this frame has already run.
+// HeroLocomotion appears. LateUpdate so every writer this frame has already run.
+//
+// TOGGLE: FeatureFlags.GaitForensics ("ff.gaitforensics") — DEFAULT **OFF** since
+// 2026-08-16, and this file is NOT stripped (CLAUDE.md §12: instrumentation is
+// permanent; flag it off, never delete it). Arm it from Defenders/Debug > Hero Gait
+// Forensics, or PlayerPrefs "ff.gaitforensics" = 1 on a device.
+//
+// WHY THE DEFAULT HAD TO MOVE: the toggle used to be a RAW PlayerPrefs read that
+// DEFAULTED ON and was declared in no flag table, so there was no dev menu, no UI and
+// no URL that could turn it off. This class lives in DeNelle.Village — a SHIPPING
+// assembly with no #if guard and no define constraint (unlike DeNelle.DevTools, which
+// is stripped from a release player) — so it ran in the release Seeker APK, doing a
+// 20-field boxed string.Format + a StreamWriter.WriteLine + a GetCurrentAnimatorClipInfo
+// allocation EVERY FRAME (~1,200 boxed structs/sec at 60fps) into an unbounded CSV on
+// the player's device. The recorder is worth keeping; running it on players is not.
 // =============================================================================
 
 using System.Globalization;
@@ -71,7 +83,9 @@ namespace DeNelle.Village
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
         {
-            if (PlayerPrefs.GetInt("ff.gaitforensics", 1) == 0) return;
+            // Declared flag, DEFAULT OFF (see the header). Read the flag, never the raw key —
+            // FeatureFlags is what gives this recorder a dev menu and an owner-facing off-switch.
+            if (!DeNelle.Core.FeatureFlags.GaitForensics) return;
             var host = new GameObject("GaitForensics (runtime)");
             Object.DontDestroyOnLoad(host);
             host.AddComponent<GaitForensicsAttacher>();

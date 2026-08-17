@@ -1225,14 +1225,31 @@ namespace DeNelle.Village
     /// </summary>
     internal static class CameraShakeBridge
     {
+        /// <summary>
+        /// The player's comfort/accessibility screen-shake preference. PlayerPrefs "camerashake"
+        /// (1 = on, DEFAULT ON; 0 = off) — written by DeNelle.Settings' SettingsModel.ApplyScreenShake.
+        /// <para>
+        /// THE KEY IS THE SEAM, DELIBERATELY: DeNelle.Village.asmdef does not reference
+        /// DeNelle.Settings (and cannot — Settings sees only DeNelle.Core), so a typed read of
+        /// ScreenShakeSetting.Enabled from here would not compile. Do not "clean it up".
+        /// </para>
+        /// <para>
+        /// EXPOSED (2026-08-16) so the handful of shake callers that legitimately cannot route
+        /// through <see cref="Shake"/> — because they hold a typed camera reference, or must fire
+        /// while hero input is suppressed — can still honour the one player preference. A new
+        /// shake caller should call <see cref="Shake"/>; this property is for the exceptions,
+        /// and every one of them is named in the [shake-seam] regression.
+        /// </para>
+        /// </summary>
+        public static bool Enabled => PlayerPrefs.GetInt("camerashake", 1) != 0;
+
         public static void Shake(float intensity, float duration)
         {
             try
             {
-                // Feel pass 2026-07-02: player-facing shake toggle. PlayerPrefs "camerashake"
-                // (1 = on, DEFAULT ON; 0 = off) — a comfort/accessibility dial every shake
-                // caller inherits because this bridge is the single shake entry point.
-                if (PlayerPrefs.GetInt("camerashake", 1) == 0) return;
+                // Feel pass 2026-07-02: player-facing shake toggle — a comfort/accessibility dial
+                // every shake caller inherits because this bridge is the single shake entry point.
+                if (!Enabled) return;
 
                 // Never shake while a dialogue/panel has suppressed hero input (the same gate
                 // PlayerAttackController honors) — a camera kick under a conversation or an

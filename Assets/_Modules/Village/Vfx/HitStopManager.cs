@@ -204,9 +204,18 @@ namespace DeNelle.Village
         /// <summary>
         /// Shake the camera. Delegates to ThirdPersonCameraFollow.Shake().
         /// If no camera component is found, the call is silently ignored.
+        /// <para>
+        /// HONOURS THE PLAYER PREFERENCE (2026-08-16). This path holds a TYPED, cached camera
+        /// reference rather than going through CameraShakeBridge's reflection resolve, so it is
+        /// deliberately left as a direct call — but it gates on CameraShakeBridge.Enabled, the
+        /// same "camerashake" preference the bridge reads, so the accessibility toggle covers
+        /// this seam too. Before this guard, every HitStopManager tier and EnvironmentVFX's
+        /// environmental shake ignored the setting entirely.
+        /// </para>
         /// </summary>
         public void Shake(float intensity, float duration)
         {
+            if (!CameraShakeBridge.Enabled) return;
             EnsureCamera();
             _camera?.Shake(intensity, duration);
         }
@@ -214,9 +223,13 @@ namespace DeNelle.Village
         /// <summary>
         /// Apply a brief roll + pitch kick to the camera, then spring back smoothly.
         /// This adds an angular jolt that feels more dramatic than positional shake alone.
+        /// Gated on the same "camerashake" preference (2026-08-16): it is angular rather than
+        /// positional, but to the player it is the same involuntary camera motion the comfort
+        /// toggle exists to suppress, so opting out of shake must opt out of this too.
         /// </summary>
         public void CameraKick(float rollDeg, float pitchDeg, float duration)
         {
+            if (!CameraShakeBridge.Enabled) return;
             EnsureCamera();
             if (_camera == null) return;
             StartCoroutine(CameraKickRoutine(rollDeg, pitchDeg, duration));

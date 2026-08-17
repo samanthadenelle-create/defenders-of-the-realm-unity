@@ -13,6 +13,33 @@ android {
     namespace "com.denelle.defenders.mwa"
     compileSdk 34
 
+    // ── 2026-08-16 PUBLISHER-BLOCKING DEFECT FIX ─────────────────────────────
+    // ⛔ DO NOT REMOVE defaultConfig. Without minSdk/targetSdk HERE, AGP reads
+    // this module's targetSdkVersion as **1** and applies the legacy pre-Donut
+    // compatibility rule, IMPLICITLY granting the whole APP:
+    //     WRITE_EXTERNAL_STORAGE + READ_PHONE_STATE   (the "targetSdkVersion < 4" rule)
+    //     READ_EXTERNAL_STORAGE                       (implied by WRITE)
+    // AGP says so itself in manifest-merger-release-report.txt:
+    //     "IMPLIED ... reason: com.denelle.defenders.mwa has a targetSdkVersion < 4"
+    // That got the build flagged by the publisher for "excessive permissions for
+    // a tower defense game". NOTHING in our source ever requested them:
+    // ForceSDCardPermission is 0 and every file we write (saves, logs, F8
+    // screenshots) goes to Application.persistentDataPath, which needs no
+    // storage permission at all.
+    //
+    // ⚠ IT MUST BE IN THE DSL, NOT THE MANIFEST. A <uses-sdk> element in a
+    // LIBRARY manifest is ignored/stripped by AGP - putting it there first is
+    // exactly why the 21:41 APK still carried all three permissions.
+    //
+    // ⚠ ACCEPTANCE IS THE MERGER REPORT, NOT A GREEN BUILD: rebuild and confirm
+    // the IMPLIED lines are gone AND that the merged manifest lists no
+    // *_EXTERNAL_STORAGE / READ_PHONE_STATE. A build that merely succeeds
+    // proves nothing here - that mistake was already made once.
+    defaultConfig {
+        minSdk 26
+        targetSdk 36
+    }
+
     // ── 2026-08-05 BLOCKING DEFECT FIX ───────────────────────────────────────
     // The sibling manifest was NEVER reaching the APK: the packaged manifest
     // contained ZERO occurrences of "queries" (verified against the shipped

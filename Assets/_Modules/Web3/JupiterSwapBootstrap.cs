@@ -22,6 +22,18 @@
 // SCOPE GUARD: this file lives entirely inside DeNelle.Web3 and edits no other
 // module. It only READS a PanelSettings off whatever UIDocument the active
 // screen already owns.
+//
+// FEATURE-GATED 2026-08-16 — FeatureFlags.JupiterSwap ("ff.jupiterswap"), DEFAULT OFF.
+// Until then this bootstrap was gated by NOTHING: a [RuntimeInitializeOnLoadMethod]
+// that auto-spawned a CRYPTO SWAP CTA host in Title / HeroSelect / PetSelect and every
+// Dungeon_* scene, shipping unconditionally because its UXML lives under
+// Assets/_Modules/Web3/Resources/. That collided head-on with the store-hardening
+// ruling (Path A) that flipped ff.skrpreview and ff.realmstorepurchase OFF precisely so
+// the shipped build carries NO crypto marketing or purchase surface. Second reason not
+// to ship it un-gated: UXML does not render in player builds (CLAUDE.md §8), so on
+// device the panel would most likely draw blank.
+// The file is GATED, NOT DELETED — whether the swap CTA should exist at all is an owner
+// ruling, and the flag makes it reversible in one value.
 // =============================================================================
 
 using UnityEngine;
@@ -56,6 +68,7 @@ namespace DeNelle.Web3
         };
 
         private static bool _warnedNoUxml;
+        private static bool _loggedGateOff;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         public static void EnsureFirst()
@@ -71,6 +84,22 @@ namespace DeNelle.Web3
         private static void SpawnInScene(Scene scene)
         {
             if (!scene.IsValid()) return;
+
+            // STORE-HARDENING GATE (2026-08-16) — DEFAULT OFF, so the shipped build spawns no
+            // crypto swap surface. Checked HERE rather than in EnsureFirst on purpose: reading it
+            // per scene-load keeps the flag LIVE, so flipping ff.jupiterswap at runtime takes
+            // effect on the next scene without a rebuild. Logged once, never silently (§12).
+            if (!DeNelle.Core.FeatureFlags.JupiterSwap)
+            {
+                if (!_loggedGateOff)
+                {
+                    _loggedGateOff = true;
+                    FlowTrace.Step("Web3", "JupiterSwapHost suppressed - ff.jupiterswap OFF " +
+                                           "(zero-crypto store build). Set ff.jupiterswap=1 to restore.");
+                }
+                return;
+            }
+
             if (!IsAllowedScene(scene.name)) return;
 
             // GLOBAL dedupe (across ALL loaded scenes) — see HelpMenuBootstrap.
@@ -150,8 +179,13 @@ namespace DeNelle.Web3
 }
 
 // =============================================================================
-// INTEGRATOR NOTES — the swap panel auto-spawns out-of-the-box.
+// INTEGRATOR NOTES — the swap panel spawns ONLY when ff.jupiterswap is ON.
 // -----------------------------------------------------------------------------
+// FIRST: FeatureFlags.JupiterSwap defaults OFF, so on a stock build NOTHING below
+// happens — no host, no UIDocument, no CTA. Arm it from Defenders/Debug > Jupiter Swap
+// Panel, or PlayerPrefs "ff.jupiterswap" = 1. Everything that follows describes the
+// behaviour once the flag is ON.
+//
 // The panel UXML/USS ship at Assets/_Modules/Web3/Resources/ so the bootstrap's
 // Resources.Load<VisualTreeAsset>("JupiterSwapPanel") resolves automatically in
 // the editor and in player builds. The .uss is pulled in by the UXML's

@@ -117,8 +117,12 @@ namespace DeNelle.Village
         {
             PushWave(_combatTrack);
             // DEF-67: light screen-shake impulse to sell the wave-start transition.
-            // SmartMobileCamera.Instance is null between scenes — safe null-conditional.
-            SmartMobileCamera.Instance?.Shake(0.12f, 0.35f);
+            // ROUTED THROUGH THE BRIDGE (2026-08-16): this used to call
+            // SmartMobileCamera.Instance?.Shake(...) directly, which bypassed the ONE shake
+            // entry point and so ignored the player's screen-shake accessibility preference.
+            // CameraShakeBridge is null-safe by construction (it resolves a target and no-ops
+            // when there is none), so the null-conditional this replaced is not needed.
+            CameraShakeBridge.Shake(0.12f, 0.35f);
         }
 
         // Wave cleared → release the Wave layer; the director auto-falls back to the

@@ -399,8 +399,8 @@ appears without the readout coming back.
 
 | Key | Read at | Verdict |
 |---|---|---|
-| **`camerashake`** | `Assets/_Modules/Village/Buildings/Tower.cs:1235` | **LIKELY DEFECT.** No writer exists anywhere. The player-facing screen-shake toggle actually writes `dotr-settings-screen-shake` (`Assets/_Modules/Settings/SettingsModel.cs:218`), so Tower shake can never be turned off from the settings UI |
-| `ff.gaitforensics` | `HeroGaitForensics.cs:74` | not registered in the `FeatureFlags` table, so `OwnerDevToolsOverlay` cannot toggle it either — unreachable |
+| **`camerashake`** | `CameraShakeBridge.Enabled`, `Assets/_Modules/Village/Buildings/Tower.cs` | ~~**LIKELY DEFECT.** No writer exists anywhere.~~ **FIXED 2026-08-16.** The defect was real and ran BOTH ways: Settings wrote `dotr-settings-screen-shake` + `ScreenShakeSetting.Enabled`, which nothing read, while the bridge read `camerashake`, which nothing wrote — so the accessibility toggle moved no shake at all. `SettingsModel.ApplyScreenShake()` now writes this key alongside the typed mirror. **The key IS the seam, deliberately:** `DeNelle.Village.asmdef` does not reference `DeNelle.Settings` and `DeNelle.Settings` references only `DeNelle.Core`, so a typed call cannot compile. Pinned by the `[shipped-surface-gate]` regression |
+| `ff.gaitforensics` | `HeroGaitForensics.cs` | ~~not registered in the `FeatureFlags` table … unreachable~~ **FIXED 2026-08-16.** Was a raw `PlayerPrefs.GetInt("ff.gaitforensics", 1)` — **default ON, zero writers, in no flag table** — so a per-frame boxed `string.Format` + CSV write shipped in the release APK with no dev menu, no UI and no URL able to stop it. Now `FeatureFlags.GaitForensics`, `defaultOn: false`, with a Defenders/Debug menu toggle. The recorder is **flagged off, not stripped** (CLAUDE.md §12) |
 | `castle.liftY` | 11 runtime read sites (`HeroLocomotion.cs:1738`, `CastleMoatBuilder.cs:571,696,858,1012`, `HeroHealth.cs:1000`, `HeroControlEnsurer.cs:651`, `HomeReturnPortalInjector.cs:159`, …) | written **only** by the editor tool `Assets/Editor/WorldMergeBuilder.cs:430`, restored `:459-460`. In a shipped player it is read-only and always falls back to the `3f` default |
 | `<SeatOnGroundOnStart._baseLiftPrefsKey>` | `SeatOnGroundOnStart.cs:96,189` | key NAME is inspector data; no writer exists for whatever name is authored |
 | `dotr-save.sig` | `HasKey`/`DeleteKey` only, `LocalSaveProvider.cs:46-47` | dead cleanup path — the signature moved inline at `SaveSchema.cs:139-155`; nothing reads or writes the sibling key |
@@ -468,10 +468,19 @@ Generic writer: `OwnerDevToolsOverlay.cs:401`. URL allow-list: `FeatureFlags.cs:
 `ff.stakingpolishbonus` :693 · `ff.caravanmobile` :702 · `ff.combathud611` :718 ·
 `ff.battlehudvm` :729 · `ff.sheathdrawnrot` :742 · `ff.petcombat` :754 · `ff.barracks` :764 ·
 `ff.colosseum` :773 · `ff.wallstab` :789 · `ff.poicallouts` :803 · `ff.dungeonfpv` :829 ·
-`ff.dungeoniso` :836 · `ff.hubfoliage` :848 · `ff.biomeroads` :873.
-Editor-menu writers exist for `ff.blinkchrome` (:988), `ff.overworldencounter` (:1008),
-`ff.lockon` (:1028), `ff.stakedemo` (:1048), `ff.skrpreview` (:1068), `ff.combathud611` (:1089).
-**Unregistered:** `ff.gaitforensics` (`HeroGaitForensics.cs:74`) — see §5.5.
+`ff.dungeoniso` :836 · `ff.hubfoliage` :848 · `ff.biomeroads` :873 ·
+`ff.gaitforensics` :897 (new 2026-08-16, `defaultOn: false`) ·
+`ff.jupiterswap` :919 (new 2026-08-16, `defaultOn: false`).
+Editor-menu writers exist for `ff.blinkchrome` (:1034), `ff.overworldencounter` (:1054),
+`ff.lockon` (:1074), `ff.stakedemo` (:1094), `ff.skrpreview` (:1114), `ff.combathud611` (:1135),
+`ff.gaitforensics` (:1157), `ff.jupiterswap` (:1179). *(Line numbers re-read 2026-08-16 after the
+two new flag declarations shifted the menu block down ~45 lines.)*
+**Unregistered:** none as of 2026-08-16. `ff.gaitforensics` was the last one; it is now a declared
+flag (`FeatureFlags.GaitForensics`, `defaultOn: false`) with its own Defenders/Debug menu writer, and
+`ff.jupiterswap` (`FeatureFlags.JupiterSwap`, `defaultOn: false`) was added the same day to gate
+`JupiterSwapBootstrap` — a crypto swap-panel host that had been auto-spawning gated by nothing in a
+build store-hardening had stripped every other crypto surface out of. Both are pinned by the
+`[shipped-surface-gate]` regression; see §5.5.
 
 ### 6.3 Per-class equipment & ability bars — `EquipPrefKeys`, `GameStateService.cs:58-118`
 

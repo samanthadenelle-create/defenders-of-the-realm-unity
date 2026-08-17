@@ -14,7 +14,8 @@
   Every addition below is required by the Solana Mobile MWA client spec for
   dapps and is documented inline.
 ============================================================================ -->
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+          xmlns:tools="http://schemas.android.com/tools">
 
     <!-- ⛔ DO NOT REMOVE THIS LINE. It is not boilerplate; it is the fix for a
          publisher-blocking defect (owner email 2026-08-16, dApp store review).
@@ -36,7 +37,18 @@
          ⚠ ACCEPTANCE IS THE MERGER REPORT, NOT A GREEN BUILD: after changing
          this, rebuild and confirm the three IMPLIED lines are gone. A build that
          merely succeeds proves nothing here. -->
-    <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="36" />
+    <!-- ⚠ THE SDK LEVELS LIVE IN build.gradle's defaultConfig, NOT HERE. A <uses-sdk>
+         element in a LIBRARY manifest is ignored/stripped by AGP - it was tried here
+         first on 2026-08-16 and the next APK still carried all three permissions. See
+         the full RCA in build.gradle. This block is the BELT-AND-BRACES half: even if
+         some future module re-implies them, these three are explicitly removed at merge.
+         They are not ours - ForceSDCardPermission is 0 and everything we write goes to
+         Application.persistentDataPath, which needs no storage permission on any API
+         level. Also non-functional on API 29+ regardless (scoped storage; READ_PHONE_STATE
+         is dialer-only), so removing them costs the app no capability whatsoever. -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" tools:node="remove" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"  tools:node="remove" />
+    <uses-permission android:name="android.permission.READ_PHONE_STATE"       tools:node="remove" />
 
     <!-- Networking for Solana RPC + the MWA websocket association channel.
          Unity normally injects INTERNET when code references the network, but

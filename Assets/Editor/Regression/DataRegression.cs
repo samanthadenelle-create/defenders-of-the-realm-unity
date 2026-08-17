@@ -806,6 +806,20 @@ namespace DeNelle.Editor
             // duplicate-icon defect cannot return.
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "talent-icons suite", () => { if (!DeNelle.Editor.Regression.TalentIconMapRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[talent-icons] " + r); });
 
+            // --- SHIPPED SURFACE GATE (2026-08-16): three surfaces that SHIPPED in the release
+            // APK while believing they were dev-only, off, or wired up. (a) HeroGaitForensics
+            // gated on a RAW PlayerPrefs key that DEFAULTED ON and was in no flag table, so a
+            // per-frame boxed string.Format + CSV write ran on players' devices with no reachable
+            // off-switch -- now a declared flag, default OFF (flagged off, NOT stripped: §12).
+            // (b) The Settings screen-shake toggle was INERT IN BOTH DIRECTIONS -- it wrote a key
+            // nothing read while the gameplay bridge read a key nothing wrote -- so a visible
+            // accessibility control moved no shake at all. (c) JupiterSwapBootstrap auto-spawned a
+            // crypto swap CTA gated by NOTHING, in the build store-hardening had stripped every
+            // other crypto surface out of. All three defaults are pinned as SOURCE TEXT on purpose:
+            // FeatureFlags.Get reads PlayerPrefs first, so a runtime read describes the gate
+            // machine, never what ships.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "shipped-surface-gate suite", () => { if (!DeNelle.Editor.Regression.ShippedSurfaceGateRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[shipped-surface-gate] " + r); });
+
             // (BANNED VFX used to be registered a SECOND time here - removed 2026-08-15. The suite
             //  is registered ONCE, above with the other VFX oracles; two call sites emitted two
             //  [banned-vfx] lines per run and inflated the suite count. Do not re-add.)
