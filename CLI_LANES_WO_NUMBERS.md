@@ -1,6 +1,15 @@
 ﻿# Lanes â€” Work-Order Numbers Only (for CLI)  Â·  reconciled 2026-06-12 (nightly refill)
 
-> ## âš  RECONCILED 2026-08-16 (CLI): main line next free = **1113**.
+> ## âš  RECONCILED 2026-08-17 (CLI): main line next free = **1114**.
+> *(CLI seat minted **WO-1113** and bumped 1113 -> 1114 in this SAME edit. **1113** = DUNGEON STATUS,
+> a remotely-flippable in-world door state (owner ruling 2026-08-17: flip a dungeon open/closed with
+> NO store build, "so we can make all dungeons feel like the two real ones with depth"; follow-up
+> ruling: **the client side carries the most weight**, so scope is ~80% client / ~20% backend and the
+> client must be fully correct with the backend switched OFF). Reuses the existing in-repo `api/`
+> (Vercel + Neon) -- no new infrastructure. The load-bearing rule: **a closed dungeon reads as WORLD,
+> never as BUILD STATUS** -- "under construction"/"coming soon"/"dev"/"WIP" are BANNED player-facing
+> strings and get a REGRESSION ORACLE, not a comment, because that is the rule most likely to rot.
+> Status READY TO IMPLEMENT, 3 open rulings. No code yet.)*
 > ## âš  RECONCILED 2026-08-16 (UI seat): UI seat next free = **1045**.
 > *(UI seat minted **WO-1044** and bumped 1044 -> 1045 in this SAME edit. **1044** = BIOME + TUNNEL
 > IDENTITY -- the creative half of tonight's portal/tunnel spoke. The four biomes turned out to be
