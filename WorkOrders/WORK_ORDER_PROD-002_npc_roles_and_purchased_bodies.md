@@ -120,11 +120,39 @@ player as one person working two jobs.
 | 1 | No `[F]` prompt at the Lumbermill, Barracks or Arcane Tower | Owner observation | ☐ |
 | 2 | Those NPCs are **still standing there** — bodies kept, only the door removed | Owner observation / screenshot | ☐ |
 | 3 | Every vendor still opens its service in one interact (Sable→Jeweler, Coppin→Shop+Realm Store, Brom→Rumor Board, Herbalist→Alchemy, Borin, Halvard) | Owner walks all six | ☐ |
-| 4 | The cast bodies are the purchased CraftPix people, not KayKit | Screenshot — this is a visual change, the screenshot IS the data | ☐ |
-| 5 | No NPC spawns as a missing-prefab placeholder | Trace: no `LogWarning` for an unresolved NPC prefab | ☐ |
+| 4 | The cast bodies are the purchased CraftPix people, not KayKit | Owner on a live Play session, 2026-08-17: *"i reset character and let it rebuild and all is perfect"* | ☑ |
+| 5 | No NPC spawns as a missing-prefab placeholder | Owner observation (same pass) + the `npcModel` oracle resolving 12/12 to real `.prefab`s | ☑ |
 | 6 | Sylas / `RecruitCompanion` resolved — kept or retired **by owner ruling**, not inference | Owner decision recorded in this file | ☐ |
-| 7 | Compile gate green | `COMPILE_GATE_OK` by marker on a fresh log | ☐ |
-| 8 | Regression no worse than baseline (206/210) | `DataRegression` run | ☐ |
+| 7 | Compile gate green | `COMPILE_GATE_OK` by marker on a fresh log | ☑ |
+| 8 | Regression no worse than baseline (206/210) | `DataRegression` = **206/210, baseline**; `npcModel` oracle 12/12, every row a real `.prefab` | ☑ |
+
+### ⚠ OPEN RISK, NOT A CLOSED ITEM — stale saves showed artifacts a fresh one does not
+
+On the FIRST verification pass, against an EXISTING save, the owner saw the **farm on fire** and a
+**barracks that looked invisible**. Both vanished after *"i reset character and let it rebuild"*.
+
+⛔ **"It went away on reset" is not the same as "it is fixed", and the difference matters here
+because the game is LIVE.** The owner could reset; a player who already has a town cannot be told to.
+If this reproduces on any pre-existing save, it reaches real players on the next update.
+
+What is actually known, from data rather than inference:
+- `state.buildingDamage` in the live save was **`{}` — empty**. Nothing was damaged, so the fire was
+  **NOT** a legitimate `StructureDamageVisuals` state (fire arms at HP ≤ 0.25 =
+  `1 - RepairTarget.DamageFraction`). Whatever lit it, it was not the damage data.
+- The save's `baseLayout` listed `collector_farm` and `barracks` normally, at level 1, with no
+  damage entry — so the persisted layout was healthy too.
+- Both symptoms sat on structures seated by the **bake/injector path on a first town load** — the
+  same path recorded on the `tower_ground_archer` row as never reaching the catalog code. That makes
+  stale seated state the leading candidate, but it is a CANDIDATE: nobody has captured a trace of
+  the burning farm, so the cause is unproven and must not be written up as solved.
+- ⚠ It is NOT attributable to the PROD-002 swap on the evidence available — the swap changes
+  `repo.npcModel` (which body an NPC wears) and touches no structure mesh, health or VFX path.
+  That is an argument from what the change *touches*, not a captured proof of innocence.
+
+**To settle it:** F8 while a stale-save town is showing the burning farm, and read the `[Flow:*]`
+lines around the structure — specifically whether a pooled VFX was reparented onto it
+(`VFXManager.ReturnToPool` / WO-929 deferred-reparent is a known class) versus
+`StructureDamageVisuals` arming a fire on a bad fraction. Until that trace exists this stays OPEN.
 
 ## 5. Not in scope
 - No change to the Manage screen or any building flow.

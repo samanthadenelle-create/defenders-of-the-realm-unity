@@ -1,5 +1,20 @@
 # Lanes â€” Work-Order Numbers Only (for CLI)  Â·  reconciled 2026-06-12 (nightly refill)
 
+> ## PROD SERIES (post-launch): next free = **PROD-005**.
+> *(CLI seat minted **PROD-004** and bumped 004 -> 005 in this SAME edit, per the sec.2 rule that a
+> mint and its banner bump are ONE edit. PROD-004 = baked-twin STANDDOWN LEAVES THE FOOTPRINT.)*
+>
+> **A THIRD, DISJOINT NAMESPACE — deliberately not a slice of the main line.** Owner ruling
+> 2026-08-17: *"can we change numbering to PROD - restarting numbering as now we are live"* /
+> *"thios creates a firm boundary"* / *"there are all issues from dev, but not for prod"* /
+> *"exactly they are all front of the line"* / *"as we close from backlog that other list will
+> shrink not grow"*. PROD numbers are for defects found AFTER the Solana dApp Store launch; they
+> jump the queue. The dev-era backlog keeps its legacy numbers and only ever SHRINKS.
+> `tools/board_build.py` parses `WORK_ORDER_PROD-NNN_*` and sorts PROD first within each bucket.
+> ⛔ Never renumber a PROD ticket into the main line, or the boundary the owner asked for stops
+> existing. Consumed so far: PROD-001 (guide wolf facing), PROD-002 (NPC roles + purchased bodies),
+> PROD-003 (Realm Store permanent storefront), PROD-004 (baked-twin footprint).
+
 > ## âš  RECONCILED 2026-08-17 (CLI): main line next free = **1117**.
 > *(CLI seat minted **WO-1117** and bumped 1117 -> 1118 in this SAME edit. **1117** = the Realm Store
 > gets its own PERMANENT STOREFRONT. Owner ruling 2026-08-17: "can we give monetization its own
