@@ -1,6 +1,29 @@
 # WORK ORDER 1044 - Biome + Tunnel IDENTITY (Goldfields / Stoneback / Mirewood / Ashwood + the tunnel)
 
-**Status:** PROPOSAL - AWAITING OWNER RULING (nothing here is canon until she rules)
+**Status:** READY TO IMPLEMENT - ★ ALL ELEVEN RULINGS APPROVED BY THE OWNER 2026-08-17
+
+> Owner ruling, verbatim: **"yes to all defaults on 1044"** (2026-08-17).
+> Every recommendation in §5 (R1-R11) is RATIFIED AS WRITTEN. The line that used to sit here -
+> *"nothing here is canon until she rules"* - is spent: **this document IS canon now.** Read §5 as
+> decisions, not proposals, and §1-§4 as the authored biome identity rather than a pitch.
+>
+> The eleven, resolved:
+> **R1** tunnel display name = **The Rootways** (id `dg_hollow_roads` UNCHANGED - it is a hard contract
+> in `BiomeRoads.ArmRoomIdFor`, the graph json, the injector and BiomeRoadsRegression; renaming the id
+> breaks all four). **R2** origin = the Heart's roots. **R3** short code names in UI ("Stoneback",
+> "Ashwood"), long forms ("Stoneback Ridge", "Corrupted Ashwood") in prose only. **R4** Elowen/Goldfields,
+> Doran/Stoneback, Corvin/Mirewood, Bran/Ashwood - **flavour only, NEVER a harvest gate** (CLAUDE.md §7).
+> **R5** Doran takes Stoneback; Aldwin stays unattached to any march (he is the founding Echo, tied to
+> the Heart). **R6** Ashwood's "forgetting" is a REAL mechanic - HUD dim + audio mute past the dark ward -
+> and it is **fully reversible and never punishing**. **R7** the four first-arrival frames in §3 are the
+> authored arrival beats. **R8** yes to the moving cart with a person in Goldfields' first frame (one
+> walking NPC on a path). **R9** request the one new light-shaft VFX key for Mirewood. **R10** LEAVE the
+> z=-404 cave mouth pointed at the outpost; the tunnel keeps its own portal. **R11** one distinct ambient
+> bed per march - wind / stone-silence / water-drip / total quiet.
+>
+> ⚠ R11 is load-bearing for R7, not decoration: Ashwood's authored arrival beat is *"the sound stops"*,
+> which cannot exist while all four regions share the single overworld pool at `WorldMusicDirector.cs:12`.
+> Implementing R7 without R11 silently drops that beat.
 **Seat:** UI / creative lane (markdown only; no code, no data, no bake)
 **Date:** 2026-08-16
 **Trigger:** owner, 2026-08-16 - *"place a portal to simple tunnel system that will drop into the new biomes."*
@@ -248,9 +271,14 @@ in the entire dungeon set (no other `dg_*` has one). Ruling R1 costs one string.
 
 ---
 
-## 5. OPEN RULINGS - every choice that is genuinely yours
+## 5. RULINGS - ★ ALL ELEVEN APPROVED AS WRITTEN (owner, 2026-08-17)
 
-Each has my recommendation. Answering "yes to all defaults" is a valid one-word ruling.
+> **"yes to all defaults on 1044"** - the owner took the one-word option. Every `my pick` below is now
+> THE DECISION. Nothing in this section is open. Read each bullet as: the recommendation won.
+>
+> Implementers: do NOT re-litigate these, and do not treat the alternatives listed alongside each pick
+> as still-live options - they are recorded only so a future reader can see what was weighed. If one of
+> these turns out to be wrong in practice, that is a NEW ruling with a new date, not a reopening of this one.
 
 - **R1 - Tunnel name.** Keep **The Hollow Roads**, or rename the display string to **The Rootways** (my pick,
   because it explains why the tunnel is empty), or **The Underroads**?
