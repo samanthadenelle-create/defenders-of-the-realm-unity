@@ -1,7 +1,20 @@
 # PROD-004 — Standing down a baked twin hides the building and leaves its footprint
 
-**Status:** READY TO IMPLEMENT — §3 has ONE branch the owner is checking in-editor; the fix differs a
-lot between the two answers, so do not start until that is known.
+**Status:** IN PROGRESS — **the §3 branch is CLOSED** (see §3b: it is a NAVMESH CARVE, not a decal
+and not terrain paint; owner confirmed *"there is some invisible footprint there"*). No owner ruling
+is outstanding on this ticket.
+- **Cause 1 (bake ran before the rotation) — LANDED + GATED.** `NavMeshBakeFinal` (commit `15944d9f4`):
+  the bake as a standalone always-last step, `COMPILE_GATE_OK` + `NAVMESH_BAKE_OK`, scene diff one line.
+- **Cause 2 (twin active at bake, deactivated at runtime) — WRITTEN, NOT YET GATED.**
+  `NavMeshObstacle` carving on all nine named twins with their colliders held out of the bake, plus a
+  ground-only collection volume (owner ruling: roofs/wall tops must not be walkable). ⛔ No compile
+  gate, no re-bake and no regression have been run on it — the owner has been in the editor, which
+  locks batchmode. **Nothing here is proven; do not treat it as shipped.**
+- ⛔ **NOT PUSHABLE** until §6 is confirmed on an EXISTING save.
+**Superseded status line, kept so the change is visible:** *"READY TO IMPLEMENT — §3 has ONE branch
+the owner is checking in-editor"*. That went stale the moment §3b resolved the branch and was caught
+by a read-only board review, not by the seat that made it — exactly the drift CLAUDE.md §15 exists to
+prevent: the body of the ticket moved and its header did not.
 **Minted:** 2026-08-17 (CLI seat) — banner bumped PROD-004 → PROD-005 in the same edit.
 **Priority:** MEDIUM-HIGH — cosmetic, but it is on the home hub, it affects the LIVE build, and it
 gets WORSE the more the player builds.
@@ -76,6 +89,44 @@ Everything else in this ticket is the same either way; only §4's approach chang
 > SEES, but it is not self-labelling — an editor overlay and a shipped defect can look identical, and
 > a confident reading of an ambiguous image is still a guess. §3's branch stays UNRESOLVED; settle it
 > by selecting the footprint object in the hierarchy with gizmos OFF, not by interpreting a picture.
+
+## 3b. RESOLVED — it is a NAVMESH CARVE, and TWO causes feed it
+
+Owner, 2026-08-17, on the navmesh overlay: ***"there is some invisible footprint there"***. That is
+the tell neither §3 branch predicted — the footprint is not seen, it is **walked into**. A hole in
+the navmesh where nothing stands: an invisible wall the size of a building.
+
+**Cause 1 — the bake runs before the rotation.** Owner: *"when you originally run the script you
+bake it, then you rotate the buildings, so the bake moves with the rotation"*. `CastleHubBuilder`'s
+BATCH-BAKE calls `BuildNavMesh()` partway through the build and keeps going. Confirmed in data by
+the new pose-at-bake log: the twins sit at **non-grid** yaws — `CastleBarracks` 284.0°,
+`Jeweler_Gems_Storefront` 338.7°, `Marketplace_Monetization` 268.2°, watermill 301.8°. A carve baked
+at 0° under a building standing at 284° is skewed off the building in both directions.
+
+**Cause 2 — the twin is ACTIVE at bake time and deactivated at runtime.** The baked twin's collider
+is present when the scene bakes, so it carves. `StandDownBakedTwins` then deactivates it at runtime:
+the building vanishes and **the carve cannot follow**, because baked navmesh is static data. This one
+is not an ordering mistake at all — no bake order fixes it, since the twin is legitimately there when
+the scene is built.
+
+> ### ⛔ THE FIX MUST COVER BOTH, AND ONE MECHANISM DOES
+> A **`NavMeshObstacle` with carving** on each baked twin, with the twin EXCLUDED from the baked
+> carve. An obstacle carves from the object's CURRENT transform every frame, so:
+> - it is immune to Cause 1 — rotate whenever you like, the carve follows;
+> - it is immune to Cause 2 — deactivate the twin and the carve disappears with it.
+>
+> ⚠ **Do NOT "fix" this by excluding buildings from the bake alone.** They do TWO jobs: their bases
+> carve the ground, and (before the ground-only volume) their roofs added surface. Remove them from
+> collection without adding the obstacle and the navmesh runs STRAIGHT THROUGH every building —
+> a far worse bug than an invisible footprint, and one that looks fine until an enemy walks through
+> a wall.
+
+**Already landed (separate commit), because it is a different defect found on the way here:**
+`NavMeshBakeFinal` — the bake as a standalone ALWAYS-LAST step, plus a **ground-only collection
+volume** after the owner ruled that roofs and wall tops must not be walkable (the overlay showed
+walkable polygons floating at roof height, which also silently re-added the upper level that
+`CastleHubBuilder`'s single-level pivot had deliberately stripped). That fixes Cause 1 for anything
+rotated before the bake. **It does NOT fix Cause 2**, and it does not fix runtime-rotated structures.
 
 ## 4. Scope
 

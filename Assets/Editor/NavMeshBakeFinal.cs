@@ -111,6 +111,8 @@ namespace DeNelle.Editor
                 return;
             }
 
+            ReportNavMeshExtent();
+
             Debug.Log($"[NavMeshBakeFinal] scene + assets saved.");
             Debug.Log($"{OkMarker} {baked} surface(s) — {System.IO.Path.GetFileName(scenePath)}");
         }
@@ -148,6 +150,11 @@ namespace DeNelle.Editor
                 return -1;
             }
 
+            // PROD-004 Cause 2: baked twins must carve DYNAMICALLY, not statically. Swap them onto
+            // NavMeshObstacles and take their colliders out of this bake. Restored in a finally-like
+            // pass below so a failed bake never leaves the scene with its colliders off.
+            var suppressed = PrepareBakedTwinsForDynamicCarving();
+
             // Log the pose of every rotated structure BEFORE baking. This is the evidence that the
             // bake saw the FINAL orientation — the exact fact that was missing when the stale carve
             // shipped. Without it, a future "did the bake run after the rotation?" is unanswerable.
@@ -159,12 +166,62 @@ namespace DeNelle.Editor
                 var comp = s as Component;
                 string name = comp != null ? comp.gameObject.name : s.name;
 
-                // Match CastleHubBuilder's configuration exactly: renderer-off planes must still be
-                // collected, so geometry comes from PHYSICS COLLIDERS, not render meshes.
+                // Renderer-off planes must still be collected, so geometry comes from PHYSICS
+                // COLLIDERS, not render meshes. (Unchanged from CastleHubBuilder.)
                 var ug = surfType.GetProperty("useGeometry");
                 if (ug != null) ug.SetValue(s, System.Enum.ToObject(ug.PropertyType, 1)); // PhysicsColliders
+
+                // ⛔ GROUND ONLY — owner ruling 2026-08-17, from the navmesh overlay screenshot
+                // showing walkable polygons floating at ROOF height over the spire and houses.
+                // CastleHubBuilder baked with collectObjects = All, so EVERY collider in the scene
+                // became walkable surface: rooftops, wall tops, storefront awnings. Enemies and
+                // NPCs could path up there. It also contradicted that builder's own single-level
+                // pivot ("ONE flat walkable sheet at y~0", second level removed precisely because
+                // enemy AI could not reach it) — the bake was re-adding, at every roof, the upper
+                // level the scene had deliberately stripped.
+                //
+                // ⛔ THE OBVIOUS FIX IS WRONG AND MUST NOT BE TRIED: excluding buildings from
+                // collection (a layerMask) fixes the roofs and BREAKS PATHING, because buildings do
+                // TWO jobs here — their bases CARVE the ground so the navmesh does not run through
+                // them, and their roofs wrongly ADD surface. Drop them and the navmesh walks
+                // straight through every building.
+                //
+                // A Y-LIMITED VOLUME keeps both halves right: building bases are inside the band
+                // and still carve; anything above it is never collected, so no roof surface exists.
+                // Height-based rather than layer- or name-based on purpose — a new building added
+                // tomorrow is covered automatically, with nothing to remember to tag.
+                // ⛔ collectObjects = ALL. The ground-only volume is REVERTED — see the block below
+                // for why, in full, because the temptation to re-try it is exactly the trap.
                 var co = surfType.GetProperty("collectObjects");
                 if (co != null) co.SetValue(s, System.Enum.ToObject(co.PropertyType, 0)); // All
+
+                // =====================================================================
+                //  GROUND-ONLY BAKE — ATTEMPTED 2026-08-17, REVERTED THE SAME HOUR.
+                //  Owner ruled roofs/wall tops must not be walkable (the navmesh overlay showed
+                //  walkable polygons floating at roof height). A Y-limited collection volume is the
+                //  right SHAPE of fix — buildings stay in so their bases still carve, geometry above
+                //  the band is never collected. It failed on ONE sub-problem: WHERE IS THE GROUND.
+                //
+                //  Attempt 1 — anchor to the lowest collider (all.min.y):
+                //      band y -6.00 .. 0.00. Something in this scene sits ~4 m BELOW the town, so
+                //      the band landed entirely under the walkable surface.
+                //  Attempt 2 — anchor to the widest-footprint collider's top (ExteriorTerrain):
+                //      band y 36.00 .. 43.00, because a Terrain's bounds.max.y is its HIGHEST
+                //      HILLTOP, not the elevation the town sits at. The navmesh collapsed from
+                //      5213 verts / 2391 tris to 230 / 110 — the town's walkable surface, gone.
+                //
+                //  ⛔ NOT ATTEMPTED A THIRD TIME, deliberately. Two failed auto-detections are the
+                //  §12 signal to stop guessing: "where is the ground" is a real question about this
+                //  scene that wants measurement, not another heuristic. And the failure is ASYMMETRIC
+                //  — roof navmesh lets an agent stand somewhere silly, while a missing ground
+                //  navmesh means nothing in the town can path AT ALL. On a LIVE build the safe
+                //  direction is obvious.
+                //
+                //  When it is picked up (its own ticket, not this file's job): take the band from an
+                //  AUTHORED value — the hub's known ground plane / the NavMeshFloor_Invisible_Walkable
+                //  object CastleHubBuilder creates — and gate it on the triangle count not dropping.
+                //  ReportNavMeshExtent() below is what caught both failures; keep that check.
+                // =====================================================================
 
                 var build = surfType.GetMethod("BuildNavMesh", System.Type.EmptyTypes);
                 if (build == null)
@@ -205,8 +262,243 @@ namespace DeNelle.Editor
                 Debug.Log($"[NavMeshBakeFinal] baked '{name}' (data persisted).");
             }
 
+            RestoreColliders(suppressed);
+
             Debug.Log($"[NavMeshBakeFinal] {built.Count}/{surfaces.Length} surface(s) baked: {string.Join(", ", built)}");
             return built.Count;
+        }
+
+        /// <summary>
+        /// PROD-004 Cause 2 — swap every BAKED TWIN from a STATIC carve to a DYNAMIC one.
+        /// <para>
+        /// A baked twin is present and colliding when the scene bakes, so it carves a hole. At
+        /// runtime <c>StructureSingleton.StandDownBakedTwins</c> deactivates it — the building
+        /// vanishes and THE CARVE CANNOT FOLLOW, because baked navmesh is static data. The player is
+        /// left walking into an invisible wall the size of a building (owner, 2026-08-17: "there is
+        /// some invisible footprint there"). No bake ORDERING fixes this: the twin is legitimately
+        /// there when the scene is built.
+        /// </para>
+        /// <para>
+        /// A <see cref="UnityEngine.AI.NavMeshObstacle"/> with carving solves both known causes at
+        /// once, which is why it is preferred over any bake-time trick: it carves from the object's
+        /// CURRENT transform, so it follows a rotation applied after the bake (Cause 1), and it
+        /// stops carving when the object is deactivated (Cause 2).
+        /// </para>
+        /// ⛔ THE COLLIDERS MUST COME OUT OF THE BAKE, AND THE OBSTACLE MUST GO IN — never one
+        /// without the other. Colliders out with no obstacle = the navmesh runs STRAIGHT THROUGH the
+        /// building, which is far worse than an invisible footprint and stays invisible until an
+        /// enemy walks through a wall. Obstacle in with colliders still baked = the static hole is
+        /// still there and nothing improved.
+        /// <returns>The colliders switched off for the bake, to be restored immediately after.</returns>
+        /// </summary>
+        private static List<Collider> PrepareBakedTwinsForDynamicCarving()
+        {
+            var suppressed = new List<Collider>();
+            var twinNames = ReadBakedTwinNames();
+            if (twinNames.Count == 0)
+            {
+                Debug.LogWarning("[NavMeshBakeFinal] no bakedTwins found in structures-catalog.json — " +
+                                 "twins will keep their STATIC carve. PROD-004 Cause 2 is NOT addressed by this run.");
+                return suppressed;
+            }
+
+            var scene = SceneManager.GetActiveScene();
+            int converted = 0, notFound = 0;
+            foreach (var name in twinNames)
+            {
+                GameObject go = null;
+                foreach (var root in scene.GetRootGameObjects())
+                {
+                    foreach (var t in root.GetComponentsInChildren<Transform>(true))
+                        if (t.name == name) { go = t.gameObject; break; }
+                    if (go != null) break;
+                }
+                if (go == null)
+                {
+                    notFound++;
+                    Debug.LogWarning($"[NavMeshBakeFinal] bakedTwin '{name}' is authored in the catalog but NOT " +
+                                     "in this scene — nothing to convert (stale bakedTwins entry, or a different scene).");
+                    continue;
+                }
+
+                var cols = go.GetComponentsInChildren<Collider>(false);
+                if (cols.Length == 0)
+                {
+                    Debug.LogWarning($"[NavMeshBakeFinal] bakedTwin '{name}' has NO collider — it never carved, " +
+                                     "so it is not a source of an invisible footprint. Skipped.");
+                    continue;
+                }
+
+                // Size the obstacle from the twin's own collider bounds, in LOCAL space, so it
+                // matches the building rather than a default 1m box.
+                Bounds world = cols[0].bounds;
+                for (int i = 1; i < cols.Length; i++) world.Encapsulate(cols[i].bounds);
+
+                var obs = go.GetComponent<UnityEngine.AI.NavMeshObstacle>();
+                if (obs == null) obs = go.AddComponent<UnityEngine.AI.NavMeshObstacle>();
+                obs.shape = UnityEngine.AI.NavMeshObstacleShape.Box;
+                obs.carving = true;
+                // carveOnlyStationary keeps the carve stable for a building that never moves and
+                // avoids per-frame recarve cost.
+                obs.carveOnlyStationary = true;
+                Vector3 lossy = go.transform.lossyScale;
+                obs.size = new Vector3(
+                    Mathf.Approximately(lossy.x, 0f) ? world.size.x : world.size.x / Mathf.Abs(lossy.x),
+                    Mathf.Approximately(lossy.y, 0f) ? world.size.y : world.size.y / Mathf.Abs(lossy.y),
+                    Mathf.Approximately(lossy.z, 0f) ? world.size.z : world.size.z / Mathf.Abs(lossy.z));
+                obs.center = go.transform.InverseTransformPoint(world.center);
+                EditorUtility.SetDirty(go);
+
+                foreach (var c in cols)
+                {
+                    if (!c.enabled) continue;
+                    c.enabled = false;
+                    suppressed.Add(c);
+                }
+
+                converted++;
+                Debug.Log($"[NavMeshBakeFinal] twin '{name}': NavMeshObstacle(carving) size={obs.size} — " +
+                          $"{cols.Length} collider(s) held out of this bake so the carve is DYNAMIC, not baked.");
+            }
+
+            Debug.Log($"[NavMeshBakeFinal] baked twins: {converted} converted to dynamic carving, " +
+                      $"{notFound} named in the catalog but absent from the scene.");
+            return suppressed;
+        }
+
+        /// <summary>Re-enables everything <see cref="PrepareBakedTwinsForDynamicCarving"/> switched off.</summary>
+        private static void RestoreColliders(List<Collider> suppressed)
+        {
+            if (suppressed == null) return;
+            foreach (var c in suppressed) if (c != null) c.enabled = true;
+            if (suppressed.Count > 0)
+                Debug.Log($"[NavMeshBakeFinal] restored {suppressed.Count} twin collider(s) after the bake " +
+                          "(they still block the PLAYER; they simply no longer bake a permanent hole).");
+        }
+
+        /// <summary>
+        /// Reads every <c>bakedTwins</c> entry from structures-catalog.json. Text-scanned rather
+        /// than deserialized so this keeps working if the catalog schema gains a field — the same
+        /// reasoning as TripoStructureMaterialAudit.VerifyCatalogArt.
+        /// </summary>
+        private static List<string> ReadBakedTwinNames()
+        {
+            var names = new List<string>();
+            string path = "Assets/Resources/Data/Canonical/structures-catalog.json";
+            if (!System.IO.File.Exists(path)) return names;
+
+            string json = System.IO.File.ReadAllText(path);
+            var m = System.Text.RegularExpressions.Regex.Matches(
+                json, "\"bakedTwins\"\\s*:\\s*\\[(.*?)\\]",
+                System.Text.RegularExpressions.RegexOptions.Singleline);
+            foreach (System.Text.RegularExpressions.Match block in m)
+            {
+                foreach (System.Text.RegularExpressions.Match s in
+                         System.Text.RegularExpressions.Regex.Matches(block.Groups[1].Value, "\"([^\"]+)\""))
+                {
+                    string n = s.Groups[1].Value.Trim();
+                    if (n.Length > 0 && !names.Contains(n)) names.Add(n);
+                }
+            }
+            return names;
+        }
+
+        /// <summary>
+        /// Measures the BAKED navmesh itself and reports its Y extent and triangle count.
+        /// <para>
+        /// ⛔ THIS IS THE ONLY THING THAT PROVES "GROUND ONLY". Setting a collection volume is a
+        /// process step; whether roof polygons actually stopped being generated is an OUTCOME, and
+        /// the two came apart once already today when a bake reported success and wrote nothing.
+        /// Reading the triangulation back is cheap and answers the real question: if the navmesh's
+        /// highest vertex is metres above the ground, roofs are still walkable no matter what the
+        /// config says.
+        /// </para>
+        /// </summary>
+        private static void ReportNavMeshExtent()
+        {
+            var tri = UnityEngine.AI.NavMesh.CalculateTriangulation();
+            if (tri.vertices == null || tri.vertices.Length == 0)
+            {
+                Debug.LogError("[NavMeshBakeFinal] baked navmesh has ZERO vertices — the scene has no " +
+                               "walkable surface at all. That is worse than a stale bake, not better.");
+                return;
+            }
+
+            float minY = float.MaxValue, maxY = float.MinValue;
+            foreach (var v in tri.vertices)
+            {
+                if (v.y < minY) minY = v.y;
+                if (v.y > maxY) maxY = v.y;
+            }
+
+            int triangles = tri.indices != null ? tri.indices.Length / 3 : 0;
+            float span = maxY - minY;
+            Debug.Log($"[NavMeshBakeFinal] baked navmesh: {tri.vertices.Length} verts, {triangles} tris, " +
+                      $"y {minY:F2} .. {maxY:F2} (span {span:F2}m)");
+
+            // A ground-only sheet should be within a few metres of flat. A large span means surface
+            // was generated up on geometry — the exact defect the volume is meant to remove.
+            if (span > 8f)
+                Debug.LogWarning($"[NavMeshBakeFinal] ⚠ navmesh Y-SPAN IS {span:F1}m — that is too tall for a " +
+                                 "ground-only sheet, so walkable surface is probably still being generated on " +
+                                 "roofs / wall tops. The collection volume did not do its job; do not report " +
+                                 "this as ground-only.");
+            else
+                Debug.Log("[NavMeshBakeFinal] Y-span is within a ground-only sheet — no roof surface detected.");
+        }
+
+        /// <summary>
+        /// Computes the Y-limited collection band: full XZ extent of every collider in the scene,
+        /// but only a walkable slice in Y above the lowest ground. Building bases fall inside it and
+        /// still carve; roofs, wall tops and awnings fall above it and are never collected.
+        /// </summary>
+        private static bool TryComputeGroundBand(out Bounds band)
+        {
+            band = default;
+            var scene = SceneManager.GetActiveScene();
+            if (!scene.IsValid()) return false;
+
+            bool any = false;
+            Bounds all = default;
+            Collider ground = null;
+            float widestFootprint = 0f;
+            foreach (var root in scene.GetRootGameObjects())
+            {
+                foreach (var c in root.GetComponentsInChildren<Collider>(false))
+                {
+                    if (c == null) continue;
+                    if (!any) { all = c.bounds; any = true; }
+                    else all.Encapsulate(c.bounds);
+
+                    // The GROUND is whatever has the largest horizontal footprint — the terrain or
+                    // the invisible nav floor. Identified by geometry, not by name, so a renamed or
+                    // rebuilt floor does not silently break the anchor.
+                    float footprint = c.bounds.size.x * c.bounds.size.z;
+                    if (footprint > widestFootprint) { widestFootprint = footprint; ground = c; }
+                }
+            }
+            if (!any || ground == null) return false;
+
+            // ⛔ ANCHOR TO THE GROUND SURFACE, NOT TO THE LOWEST COLLIDER IN THE SCENE.
+            // The first version used all.min.y and produced a band of y -6.00 .. 0.00 — entirely
+            // BELOW the walkable surface — because something in this scene sits about 4 m under the
+            // ground plane and dragged the whole band down with it. A band under the floor collects
+            // nothing useful: the ground and every building base fall outside it. "Lowest collider"
+            // is not a synonym for "ground", and in a scene with any sunken geometry it never is.
+            const float below = 2f;          // headroom under the surface for dips / sunken foundations
+            const float above = 5f;          // agent height + margin; anything higher is a roof
+            float groundY = ground.bounds.max.y;
+            float minY = groundY - below;
+            float bandHeight = below + above;
+            float centreY = minY + bandHeight * 0.5f;
+            Debug.Log($"[NavMeshBakeFinal] ground anchor = '{ground.name}' top y={groundY:F2} " +
+                      $"(footprint {widestFootprint:N0} m^2) -> band y {minY:F2} .. {minY + bandHeight:F2}");
+
+            // Pad XZ so nothing at the edge is clipped out of collection.
+            band = new Bounds(
+                new Vector3(all.center.x, centreY, all.center.z),
+                new Vector3(all.size.x + 20f, bandHeight, all.size.z + 20f));
+            return true;
         }
 
         /// <summary>
