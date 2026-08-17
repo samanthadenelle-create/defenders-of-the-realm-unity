@@ -1039,7 +1039,10 @@ namespace DeNelle.Village.World
             if (!_circleLooked)
             {
                 _circleLooked = true;
-                _circlePrefab = Resources.Load<GameObject>(CirclePrefabResourcePath);
+                // Via the VFX seam (Addressables-first, Resources-fallback): Resources/VFX is
+            // force-included in every build and is migrating to Addressables. The const is already
+            // the full Resources-relative key the grouper addresses, so only the load path changes.
+            _circlePrefab = DeNelle.Core.VfxAssetLoader.LoadVfxPrefab(CirclePrefabResourcePath);
             }
             if (_circlePrefab == null)
             {

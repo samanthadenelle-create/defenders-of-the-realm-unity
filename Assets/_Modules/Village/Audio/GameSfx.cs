@@ -8,8 +8,14 @@
 // surface (CoreServices.Audio?.PlaySfx) — the same pattern EnemyCombatAudio and
 // AbilityAudioBridge/ProceduralSfx already use. Clips are GENERATED procedurally
 // in code (fresh-clone-safe — no binary audio assets, no scene wiring) and
-// cached statically, with an authored CC0 Resources/Sfx/<name> drop-in override
+// cached statically, with an authored CC0 "Sfx/<name>" drop-in override
 // path (matching the EnemyCombatAudio convention).
+//
+// CLIP RESOLUTION goes through DeNelle.Core.AudioAssetLoader (the Addressables-first
+// / Resources-fallback audio seam) — NOT Resources.Load directly. The key is
+// unchanged ("Sfx/<name>"), so dropping a clip under a Resources/Sfx folder still
+// "just works" today; once AudioAddressablesGrouper moves the audio out of
+// Resources the same key resolves from the Audio_Sfx bundle with no edit here.
 //
 // Covers the gaps DEF-183 calls out that DeNelle.Village owns:
 //   • Tower FIRE   — TowerCombat.FireAt (a short punchy "pew")
@@ -66,7 +72,7 @@ namespace DeNelle.Village
         public static void PlayTowerFire()
         {
             if (s_towerFire == null)
-                s_towerFire = Resources.Load<AudioClip>("Sfx/TowerFire") ?? GenerateTowerFire();
+                s_towerFire = AudioAssetLoader.LoadClip("Sfx/TowerFire") ?? GenerateTowerFire();
             CoreServices.Audio?.PlaySfx(s_towerFire, 0.28f);
         }
 
@@ -78,7 +84,7 @@ namespace DeNelle.Village
         public static void PlayTowerPlace()
         {
             if (s_towerPlace == null)
-                s_towerPlace = Resources.Load<AudioClip>("Sfx/TowerPlace") ?? GenerateTowerPlace();
+                s_towerPlace = AudioAssetLoader.LoadClip("Sfx/TowerPlace") ?? GenerateTowerPlace();
             CoreServices.Audio?.PlaySfx(s_towerPlace, 0.7f);
         }
 
@@ -91,7 +97,7 @@ namespace DeNelle.Village
         public static void PlayWaveStart()
         {
             if (s_waveStart == null)
-                s_waveStart = Resources.Load<AudioClip>("Sfx/WaveStart") ?? GenerateWaveStart();
+                s_waveStart = AudioAssetLoader.LoadClip("Sfx/WaveStart") ?? GenerateWaveStart();
             CoreServices.Audio?.PlaySfx(s_waveStart, 0.8f);
         }
 
@@ -104,7 +110,7 @@ namespace DeNelle.Village
         public static void PlayLookoutHorn()
         {
             if (s_lookoutHorn == null)
-                s_lookoutHorn = Resources.Load<AudioClip>("Sfx/LookoutHorn");
+                s_lookoutHorn = AudioAssetLoader.LoadClip("Sfx/LookoutHorn");
             if (s_lookoutHorn != null)
                 CoreServices.Audio?.PlaySfx(s_lookoutHorn, 0.85f);
         }
@@ -122,7 +128,7 @@ namespace DeNelle.Village
         public static void PlaySwordClash()
         {
             if (s_swordClash == null)
-                s_swordClash = Resources.Load<AudioClip>("Sfx/SwordClash") ?? GenerateSwordClash();
+                s_swordClash = AudioAssetLoader.LoadClip("Sfx/SwordClash") ?? GenerateSwordClash();
 
             if (!DeNelle.Core.FeatureFlags.CombatFeel)
             {
@@ -135,7 +141,7 @@ namespace DeNelle.Village
                 var pool = new System.Collections.Generic.List<AudioClip> { s_swordClash };
                 for (int i = 2; i <= 4; i++)
                 {
-                    var c = Resources.Load<AudioClip>("Sfx/SwordClash" + i);
+                    var c = AudioAssetLoader.LoadClip("Sfx/SwordClash" + i);
                     if (c != null) pool.Add(c);
                 }
                 s_swordClashPool = pool.ToArray();
@@ -147,49 +153,49 @@ namespace DeNelle.Village
         public static void PlaySpellCast()
         {
             if (s_spellCast == null)
-                s_spellCast = Resources.Load<AudioClip>("Sfx/SpellCast") ?? GenerateSpellCast();
+                s_spellCast = AudioAssetLoader.LoadClip("Sfx/SpellCast") ?? GenerateSpellCast();
             CoreServices.Audio?.PlaySfx(s_spellCast, 0.55f);
         }
 
         public static void PlayTowerArrowHit()
         {
             if (s_towerArrowHit == null)
-                s_towerArrowHit = Resources.Load<AudioClip>("Sfx/TowerArrowHit") ?? GenerateTowerArrowHit();
+                s_towerArrowHit = AudioAssetLoader.LoadClip("Sfx/TowerArrowHit") ?? GenerateTowerArrowHit();
             CoreServices.Audio?.PlaySfx(s_towerArrowHit, 0.4f);
         }
 
         public static void PlayPetHarvest()
         {
             if (s_petHarvest == null)
-                s_petHarvest = Resources.Load<AudioClip>("Sfx/PetHarvest") ?? GeneratePetHarvest();
+                s_petHarvest = AudioAssetLoader.LoadClip("Sfx/PetHarvest") ?? GeneratePetHarvest();
             CoreServices.Audio?.PlaySfx(s_petHarvest, 0.5f);
         }
 
         public static void PlayBuildingUpgrade()
         {
             if (s_buildingUpgrade == null)
-                s_buildingUpgrade = Resources.Load<AudioClip>("Sfx/BuildingUpgrade") ?? GenerateBuildingUpgrade();
+                s_buildingUpgrade = AudioAssetLoader.LoadClip("Sfx/BuildingUpgrade") ?? GenerateBuildingUpgrade();
             CoreServices.Audio?.PlaySfx(s_buildingUpgrade, 0.75f);
         }
 
         public static void PlayLevelUp()
         {
             if (s_levelUp == null)
-                s_levelUp = Resources.Load<AudioClip>("Sfx/LevelUp") ?? GenerateLevelUp();
+                s_levelUp = AudioAssetLoader.LoadClip("Sfx/LevelUp") ?? GenerateLevelUp();
             CoreServices.Audio?.PlaySfx(s_levelUp, 0.9f);
         }
 
         public static void PlayEnemyDeath()
         {
             if (s_enemyDeath == null)
-                s_enemyDeath = Resources.Load<AudioClip>("Sfx/EnemyDeath") ?? GenerateEnemyDeath();
+                s_enemyDeath = AudioAssetLoader.LoadClip("Sfx/EnemyDeath") ?? GenerateEnemyDeath();
             CoreServices.Audio?.PlaySfx(s_enemyDeath, 0.6f);
         }
 
         public static void PlayHeroHit()
         {
             if (s_heroHit == null)
-                s_heroHit = Resources.Load<AudioClip>("Sfx/HeroHit") ?? GenerateHeroHit();
+                s_heroHit = AudioAssetLoader.LoadClip("Sfx/HeroHit") ?? GenerateHeroHit();
             CoreServices.Audio?.PlaySfx(s_heroHit, 0.5f);
         }
 
@@ -206,7 +212,7 @@ namespace DeNelle.Village
         public static void PlaySwordSwing()
         {
             if (s_swordSwing == null)
-                s_swordSwing = Resources.Load<AudioClip>("Sfx/SwordSwing") ?? GenerateSwordSwing();
+                s_swordSwing = AudioAssetLoader.LoadClip("Sfx/SwordSwing") ?? GenerateSwordSwing();
             CoreServices.Audio?.PlaySfx(s_swordSwing, 0.5f);
         }
 
@@ -214,7 +220,7 @@ namespace DeNelle.Village
         public static void PlayWeaponDraw()
         {
             if (s_weaponDraw == null)
-                s_weaponDraw = Resources.Load<AudioClip>("Sfx/WeaponDraw") ?? GenerateWeaponDraw();
+                s_weaponDraw = AudioAssetLoader.LoadClip("Sfx/WeaponDraw") ?? GenerateWeaponDraw();
             CoreServices.Audio?.PlaySfx(s_weaponDraw, 0.6f);
         }
 
@@ -222,7 +228,7 @@ namespace DeNelle.Village
         public static void PlayDragonRoar()
         {
             if (s_dragonRoar == null)
-                s_dragonRoar = Resources.Load<AudioClip>("Sfx/DragonRoar") ?? GenerateDragonRoar();
+                s_dragonRoar = AudioAssetLoader.LoadClip("Sfx/DragonRoar") ?? GenerateDragonRoar();
             CoreServices.Audio?.PlaySfx(s_dragonRoar, 0.85f);
         }
 
@@ -235,7 +241,7 @@ namespace DeNelle.Village
         public static void PlayBuildDenied()
         {
             if (s_buildDenied == null)
-                s_buildDenied = Resources.Load<AudioClip>("Sfx/BuildDenied") ?? GenerateBuildDenied();
+                s_buildDenied = AudioAssetLoader.LoadClip("Sfx/BuildDenied") ?? GenerateBuildDenied();
             CoreServices.Audio?.PlaySfx(s_buildDenied, 0.55f);
         }
 

@@ -158,7 +158,7 @@ namespace DeNelle.Village
             // WO-491: per-role override controller for the shared Tripo orc rig (Mage/Warrior/Tank);
             // base name for every other enemy.
             string ctrlName = ControllerForModel(rig, modelName);
-            var ctrl = Resources.Load<RuntimeAnimatorController>("Enemies/" + ctrlName);
+            var ctrl = DeNelle.Core.EnemyAssetLoader.LoadEnemyController(ctrlName);
             // WO-436 (§12): step in/out of the controller load so a HEADLESS capture PROVES
             // whether the RuntimeAnimatorController resolved. Failure B (WO-436 RCA) = this load
             // returns null → the Animator idles in its empty default state → the NavMeshAgent
@@ -168,11 +168,12 @@ namespace DeNelle.Village
             // rebuilt), fall back to the shared base so the orc still walks/attacks.
             if (ctrl == null && rig == EnemyRig.OrcHumanoid && ctrlName != "OrcHumanoid")
             {
-                ctrl = Resources.Load<RuntimeAnimatorController>("Enemies/OrcHumanoid");
+                ctrl = DeNelle.Core.EnemyAssetLoader.LoadEnemyController("OrcHumanoid");
                 if (ctrl != null)
                     FlowTrace.Warn("Enemy",
-                        $"animator: model '{modelName}' role override 'Enemies/{ctrlName}' MISSING " +
-                        "- using shared base 'Enemies/OrcHumanoid' (run BuildOrcHumanoidController)");
+                        $"animator: model '{modelName}' role override 'Enemies/{ctrlName}' MISSING via " +
+                        "EnemyAssetLoader (Addressables AND Resources) - using shared base " +
+                        "'Enemies/OrcHumanoid' (run BuildOrcHumanoidController)");
                 ctrlName = "OrcHumanoid";
             }
             if (ctrl != null)

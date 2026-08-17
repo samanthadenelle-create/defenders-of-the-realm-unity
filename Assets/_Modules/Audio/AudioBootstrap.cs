@@ -81,8 +81,11 @@ namespace DeNelle.Audio
             var service = host.AddComponent<AudioService>();
 
             // Pull the mixer from Resources so SetVolume drives the exposed
-            // parameters. The mixer ships under a Resources folder, so this
-            // resolves out of the box; if it is somehow absent the service
+            // parameters. DELIBERATE KEEP-BEHIND: GameAudioMixer.mixer stays in
+            // Resources (1.8 KB, and two other seam-less call sites load it the same
+            // way — AudioMixerBridge.cs:163, VillageAudioResources.cs:55), so this one
+            // is NOT routed through AudioAssetLoader. The mixer ships under a Resources
+            // folder, so this resolves out of the box; if it is somehow absent the service
             // logs and runs in the no-mixer fallback (music still plays;
             // SetVolume scales the sources directly).
             var mixer = Resources.Load<AudioMixer>(MixerResourcePath);
@@ -96,8 +99,11 @@ namespace DeNelle.Audio
                     "pre-wired) author Assets/Audio/Resources/DeNelleAudioService.prefab. " +
                     "See docs/port-notes/audio-system.md.");
 
-            // Music clips — Resources.Load each by short name (the MP3s ship
-            // directly under Assets/Audio/Resources/). Missing ones stay null;
+            // Music clips — resolved by short audio key through
+            // DeNelle.Core.AudioAssetLoader (Addressables-first, Resources-fallback).
+            // The MP3s ship today directly under Assets/Audio/Resources/, so the keys are
+            // unchanged; after AudioAddressablesGrouper runs they resolve from the
+            // per-track Audio_Music_* bundles with no edit here. Missing ones stay null;
             // AudioService's "no clip" guard handles them silently.
             TryAssignClip(service, MusicTrack.Title,   "title");
             // Town/hub theme (owner Suno track 2026-06-29): "Whispering Pines" is the PRIMARY town
@@ -183,33 +189,34 @@ namespace DeNelle.Audio
 
         private static void TryAssignClip(AudioService service, MusicTrack track, string resourceName)
         {
-            var clip = Resources.Load<AudioClip>(resourceName);
+            var clip = DeNelle.Core.AudioAssetLoader.LoadClip(resourceName);
             // TGVRU V: a clip-resolve MISS was COMPLETELY SILENT — all ~14 music clips could fail to
             // wire with zero signal (the "silent clip" class). Warn on a null so a run self-reports
             // WHICH track has no audio, instead of just playing silence.
             if (clip == null)
             {
-                FlowTrace.Warn("Audio", $"TryAssignClip: Resources.Load<AudioClip>('{resourceName}') returned null " +
-                    $"for track '{track}' — that track will be SILENT (clip missing/misnamed under Resources).");
+                FlowTrace.Warn("Audio", $"TryAssignClip: AudioAssetLoader.LoadClip('{resourceName}') returned null " +
+                    $"for track '{track}' — that track will be SILENT (clip missing/misnamed in BOTH the " +
+                    "Addressables catalog and Resources).");
                 return;
             }
             service.SetMusicClip(track, clip);
         }
 
         /// <summary>
-        /// Appends a clip to a pooled track's rotation (WO-171), if the Resource
-        /// exists. Missing extras are silently skipped — the pool just rotates
-        /// over whatever landed.
+        /// Appends a clip to a pooled track's rotation (WO-171), if the clip
+        /// resolves through the audio seam. Missing extras are skipped (with a Warn) —
+        /// the pool just rotates over whatever landed.
         /// </summary>
         private static void TryAddClip(AudioService service, MusicTrack track, string resourceName)
         {
-            var clip = Resources.Load<AudioClip>(resourceName);
+            var clip = DeNelle.Core.AudioAssetLoader.LoadClip(resourceName);
             // TGVRU V: an extra pooled clip going missing was silent. These are optional rotation
             // extras (the pool still works on whatever landed), so this is a Warn, not a Fail —
             // but it must self-report so a thin/missing rotation is visible, not invisible.
             if (clip == null)
             {
-                FlowTrace.Warn("Audio", $"TryAddClip: Resources.Load<AudioClip>('{resourceName}') returned null " +
+                FlowTrace.Warn("Audio", $"TryAddClip: AudioAssetLoader.LoadClip('{resourceName}') returned null " +
                     $"for pooled track '{track}' — extra skipped (rotation runs on remaining clips).");
                 return;
             }

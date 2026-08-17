@@ -305,19 +305,21 @@ namespace DeNelle.Village
         }
 
         /// <summary>
-        /// Plays the row's SFX through the existing seam: sfxId names a
-        /// Resources/Sfx/&lt;sfxId&gt; clip (the GameSfx / EnemyCombatAudio drop-in
-        /// convention), routed via CoreServices.Audio?.PlaySfx (mixer, mobile-safe).
-        /// A missing clip warns once per id — never silent, never a throw.
+        /// Plays the row's SFX through the existing seam: sfxId names an
+        /// "Sfx/&lt;sfxId&gt;" audio key (the GameSfx / EnemyCombatAudio drop-in
+        /// convention), resolved via DeNelle.Core.AudioAssetLoader (Addressables-first,
+        /// Resources-fallback) and routed via CoreServices.Audio?.PlaySfx (mixer,
+        /// mobile-safe). A missing clip warns once per id — never silent, never a throw.
         /// </summary>
         private static void PlaySfx(string sfxId)
         {
-            var clip = Resources.Load<AudioClip>("Sfx/" + sfxId);
+            var clip = DeNelle.Core.AudioAssetLoader.LoadClip("Sfx/" + sfxId);
             if (clip == null)
             {
                 FlowTrace.Once(System, "sfx-missing:" + sfxId,
-                    $"sfxId '{sfxId}' has no clip at Resources/Sfx/{sfxId} — no sound plays. " +
-                    "Drop a CC0 WAV there (GameSfx convention) or fix the row's sfxId.");
+                    $"sfxId '{sfxId}' has no clip at audio key 'Sfx/{sfxId}' (AudioAssetLoader found it in " +
+                    "neither Addressables nor Resources) — no sound plays. Drop a CC0 WAV at that key " +
+                    "(GameSfx convention) or fix the row's sfxId.");
                 return;
             }
             CoreServices.Audio?.PlaySfx(clip, SfxVolume);

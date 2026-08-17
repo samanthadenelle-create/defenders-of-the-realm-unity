@@ -5,8 +5,16 @@
 //
 // THE JOB: a seconds-fast, no-scene / no-play asset oracle that enumerates EVERY
 // enemy the game can spawn (enemies.json -> EnemyCatalog, resolved to a model prefab
-// EXACTLY as the single creation path does: EnemyFactory.ModelForEnemy -> Resources.
-// Load<GameObject>("Enemies/<model>")) and, per enemy, asserts two axes:
+// EXACTLY as the single creation path does: EnemyFactory.ModelForEnemy ->
+// DeNelle.Core.EnemyAssetLoader.LoadEnemyPrefab("<model>"), the Addressables-FIRST /
+// Resources-FALLBACK seam) and, per enemy, asserts two axes:
+//
+// ⚠ WHY THE SEAM AND NOT Resources.Load. Assets/Resources/Enemies is migrating into an
+// Addressable group. A raw Resources.Load<GameObject>("Enemies/<model>") here returns
+// null for EVERY enemy the day the art moves, and this oracle would report the entire
+// roster as unrigged/uncoloured capsules — a false red that reads exactly like a broken
+// roster. Asking the seam keeps the audit honest on both sides of the move AND proves
+// more: that the runtime load path resolves, not just that a file sits in a folder.
 //
 //   RIGGED  -- the prefab is an ANIMATED mesh (>=1 SkinnedMeshRenderer, not a static
 //              primitive/capsule) AND resolves an animation rig: after the REAL runtime
@@ -29,8 +37,10 @@
 //   * OrcHumanoid family (Orc_Warrior/Tank/Mage, WO-482): the FBX ships an UNBOUND
 //     _MainTex and is coloured at runtime by binding a per-orc OrcTex basecolor as the
 //     TripoMaterialFixer fallback (EnemyFactory.cs L178-190). AUTHORITY = that basecolor
-//     Resources texture must EXIST -> assert Resources.Load<Texture>("Enemies/OrcTex/
-//     <model>_basecolor") != null (its absence is the real "solid white orc" bug).
+//     texture must EXIST -> assert EnemyAssetLoader.LoadEnemyAsset<Texture>("Enemies/OrcTex/
+//     <model>_basecolor") != null — resolved through the same Addressables-first /
+//     Resources-fallback seam as the bodies, so the assertion survives the migration
+//     (its absence is the real "solid white orc" bug).
 //   * OrcWarband family + Troll (EnemyFactory.cs L192-223): NO committed texture (FBX
 //     remaps point to deleted tripo_mat_*.mat); coloured at runtime by a HARD-CODED solid
 //     SetFallbackTint. Coloured BY CONSTRUCTION -> exempt from the prefab-sheet audit
@@ -95,11 +105,13 @@ namespace DeNelle.Editor
                 string model = EnemyFactory.ModelForEnemy(e);
                 string resPath = "Enemies/" + model;
 
-                var prefab = Resources.Load<GameObject>(resPath);
+                // Through the RUNTIME SEAM (Addressables-first, Resources-fallback) — never a
+                // raw Resources.Load; see the header note on the migration.
+                var prefab = DeNelle.Core.EnemyAssetLoader.LoadEnemyPrefab(model);
                 if (prefab == null)
                 {
                     // A null load means this enemy ships as a tinted-capsule fallback at runtime.
-                    failures.Add($"'{id}' -> model '{model}': prefab MISSING at Resources/{resPath} (would spawn as a tinted capsule -- not rigged, not the real art)");
+                    failures.Add($"'{id}' -> model '{model}': EnemyAssetLoader could not resolve \"{resPath}\" via Addressables OR Resources (would spawn as a tinted capsule -- not rigged, not the real art)");
                     audited++;
                     continue;
                 }
@@ -168,9 +180,9 @@ namespace DeNelle.Editor
                         // Coloured at runtime by binding the per-orc OrcTex basecolor as the Tripo
                         // fixer fallback (EnemyFactory L178-190). AUTHORITY = that texture must exist.
                         string texPath = "Enemies/OrcTex/" + model + "_basecolor";
-                        var tex = Resources.Load<Texture>(texPath);
+                        var tex = DeNelle.Core.EnemyAssetLoader.LoadEnemyAsset<Texture>(texPath);
                         if (tex == null)
-                            failures.Add($"'{id}' -> '{model}': UNCOLORED -- OrcTex basecolor Resources/{texPath} MISSING (the FBX ships an unbound _MainTex -> would render solid WHITE)");
+                            failures.Add($"'{id}' -> '{model}': UNCOLORED -- EnemyAssetLoader could not resolve OrcTex basecolor \"{texPath}\" via Addressables OR Resources (the FBX ships an unbound _MainTex -> would render solid WHITE)");
                         else
                             orcTexColored++;
                     }

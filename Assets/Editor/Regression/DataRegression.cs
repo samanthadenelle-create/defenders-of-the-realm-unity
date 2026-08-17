@@ -107,8 +107,13 @@ namespace DeNelle.Editor
             // a wrong/missing path silently degrades to a tinted capsule at runtime
             // (EnemyFactory.cs:100-114 fallback) — varied ids, one look, no error. We
             // load the catalog through the same CanonicalJson bytes WaveDataLoader reads,
-            // then for EVERY enemy resolve its model the way the factory does and assert
-            // Resources.Load<GameObject>("Enemies/<model>") returns a real prefab.
+            // then for EVERY enemy resolve its model the way the factory does and assert the
+            // runtime seam DeNelle.Core.EnemyAssetLoader.LoadEnemyPrefab("<model>") returns a
+            // real prefab. The seam (Addressables-FIRST, Resources-FALLBACK) is asked instead
+            // of Resources.Load directly so this assertion stays true across the
+            // Assets/Resources/Enemies -> Addressables migration; a raw Resources.Load would
+            // null out for the whole roster the day the art moves (a false red), and asking
+            // the loader proves MORE: that the real load path resolves.
             CheckEnemies(failures, log);
 
             // --- WAVE-SCALING (CITY-01 / CITY-06) + KILL REWARDS (BLIND-03-01) -----
@@ -367,6 +372,11 @@ namespace DeNelle.Editor
             if (!EnemyRigColorRegression.Run(out var enemyRigColorReason)) failures.Add(enemyRigColorReason); else log.AppendLine("[enemy-rig-color] " + enemyRigColorReason);
             // --- WO-772 Phase 1: EnemyResolver id->family->DISTINCT model (generic-skeleton fix, ENEMY_RESOLVER_OK) ---
             if (!EnemyResolverRegression.Run(out var enemyResolverReason)) failures.Add(enemyResolverReason); else log.AppendLine("[enemy-resolver] " + enemyResolverReason);
+            // --- Resources -> Addressables migration guard: the enemy ADDRESSES must be in the
+            //     catalog once Assets/Resources/Enemies is gone. Migration-state aware (a progress
+            //     note pre-move, a hard assertion post-move); a DANGLING entry fails in either
+            //     state. Without it a quietly-unmarked group ships a roster of tinted capsules ---
+            if (!EnemyAddressableCatalogRegression.Run(out var enemyAddrCatalogReason)) failures.Add(enemyAddrCatalogReason); else log.AppendLine("[enemy-addr-catalog] " + enemyAddrCatalogReason);
             // --- 2026-07-26: retired walk-up outpost (ff.raidwalk) + ambient region roam (ff.regionroam OFF) ---
             if (!OverworldCombatGateRegression.Run(out var owCombatReason)) failures.Add(owCombatReason); else log.AppendLine("[overworld-combat-gate] " + owCombatReason);
             // --- destroyed-structure owner ruling (repair no-op + exclusion predicates; play-mode remove is note-only) ---
@@ -1504,20 +1514,22 @@ namespace DeNelle.Editor
 
                 // PREFAB-PATH CHECK (catches the archer->lumber class). Resolve the model
                 // EXACTLY as the single enemy-creation path does (EnemyFactory.ModelForEnemy),
-                // then attempt the same Resources.Load<GameObject>("Enemies/<model>") the
-                // factory's VisualFactory.Skin call performs. A null load means this enemy
-                // ships as a tinted-capsule fallback at runtime — a silent regression.
+                // then attempt the same load the factory's VisualFactory.Skin call performs —
+                // through DeNelle.Core.EnemyAssetLoader (Addressables-first, Resources-fallback),
+                // NOT a raw Resources.Load, so the check survives the Addressables migration.
+                // A null load means this enemy ships as a tinted-capsule fallback at runtime —
+                // a silent regression.
                 string model = EnemyFactory.ModelForEnemy(e);
                 string path = "Enemies/" + model;
-                var prefab = Resources.Load<GameObject>(path);
+                var prefab = DeNelle.Core.EnemyAssetLoader.LoadEnemyPrefab(model);
                 if (prefab == null)
                 {
-                    failures.Add($"enemies.json: '{e.Id}' resolves to model '{model}' but Resources.Load<GameObject>(\"{path}\") is NULL (would spawn as a tinted capsule — wrong/missing prefab)");
-                    log.AppendLine($"  EN {e.Id} -> model '{model}' | PREFAB MISSING at '{path}'");
+                    failures.Add($"enemies.json: '{e.Id}' resolves to model '{model}' but EnemyAssetLoader could not resolve \"{path}\" via Addressables OR Resources (would spawn as a tinted capsule — wrong/missing prefab)");
+                    log.AppendLine($"  EN {e.Id} -> model '{model}' | PREFAB UNRESOLVABLE via EnemyAssetLoader ('{path}': neither Addressables nor Resources)");
                 }
                 else
                 {
-                    log.AppendLine($"  EN {e.Id} -> model '{model}' | prefab OK ('{path}')");
+                    log.AppendLine($"  EN {e.Id} -> model '{model}' | prefab OK via EnemyAssetLoader ('{path}')");
                 }
             }
             if (badField > 0)

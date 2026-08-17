@@ -155,15 +155,19 @@ namespace DeNelle.Village
         private void EnsureHovlCatalog()
         {
             if (_hovlCatalog != null) return;
-            _hovlCatalog = Resources.Load<HovlVfxCatalog>("VFX/HovlVfxCatalog");
+            // Addressables-first / Resources-fallback seam (VfxAssetLoader). The key is the
+            // FULL Resources-relative path, used verbatim as BOTH the Addressable address and
+            // the Resources.Load key — see VfxAssetLoader's KEY CONVENTION header.
+            _hovlCatalog = DeNelle.Core.VfxAssetLoader.LoadVfxAsset<HovlVfxCatalog>("VFX/HovlVfxCatalog");
             if (_hovlCatalog == null)
                 FlowTrace.Warn("VFXManager",
-                    "EnsureHovlCatalog: no _hovlCatalog assigned and Resources/VFX/HovlVfxCatalog not found — " +
-                    "PlayKey('...') calls will no-op until the catalog is authored " +
-                    "(Defenders/VFX/Generate Hovl VFX Catalog).");
+                    "EnsureHovlCatalog: no _hovlCatalog assigned and 'VFX/HovlVfxCatalog' resolved via NEITHER " +
+                    "Addressables NOR Resources (VfxAssetLoader tried both) — PlayKey('...') calls will no-op " +
+                    "until the catalog is authored (Defenders/VFX/Generate Hovl VFX Catalog); if the VFX content " +
+                    "has been migrated out of Resources, confirm DeNelle.Editor.VfxAddressablesGrouper marked it.");
             else
                 FlowTrace.Step("VFXManager",
-                    $"EnsureHovlCatalog: loaded HovlVfxCatalog ({_hovlCatalog.Rows?.Length ?? 0} rows).");
+                    $"EnsureHovlCatalog: loaded HovlVfxCatalog via VfxAssetLoader key 'VFX/HovlVfxCatalog' ({_hovlCatalog.Rows?.Length ?? 0} rows).");
         }
 
         /// <summary>

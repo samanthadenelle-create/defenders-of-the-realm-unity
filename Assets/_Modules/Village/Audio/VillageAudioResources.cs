@@ -24,8 +24,12 @@
 //   • Tower/Heart voice lines : Resources/Audio/Voice/HeartFailing(_1/_2/_3)
 //   (full list lives in docs/AUDIO/AUDIO_CLIP_MANIFEST.md)
 //
-// WebGL-safe: Resources.Load only (no File I/O); every call is try/catch-guarded
-// so clip resolution never throws out into a controller's lifecycle.
+// WebGL-safe: no File I/O. Clip resolution goes through DeNelle.Core.AudioAssetLoader
+// (Addressables-first, Resources-fallback) so the convention keys above keep working
+// unchanged once AudioAddressablesGrouper moves the audio out of Resources; every call
+// is try/catch-guarded so resolution never throws out into a controller's lifecycle.
+// The MIXER lookup below stays on Resources.Load deliberately — GameAudioMixer.mixer is
+// a documented KEEP-BEHIND (1.8 KB, three seam-less call sites).
 // =============================================================================
 
 using UnityEngine;
@@ -76,13 +80,15 @@ namespace DeNelle.Village
         }
 
         /// <summary>
-        /// Resources.Load an AudioClip by short path (no extension, no "Resources/"
-        /// prefix). Null when absent. WebGL-safe (never throws).
+        /// Load an AudioClip by its audio key (extension-less, no "Resources/" prefix)
+        /// through <see cref="DeNelle.Core.AudioAssetLoader"/> — Addressables-first,
+        /// Resources-fallback, so the same key keeps working after the audio migrates
+        /// out of Resources. Null when absent. WebGL-safe (never throws).
         /// </summary>
         public static AudioClip Load(string resourcePath)
         {
             if (string.IsNullOrEmpty(resourcePath)) return null;
-            try { return Resources.Load<AudioClip>(resourcePath); }
+            try { return DeNelle.Core.AudioAssetLoader.LoadClip(resourcePath); }
             catch { return null; }
         }
 

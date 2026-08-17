@@ -104,20 +104,25 @@ namespace DeNelle.Village
         // WO-504: the VFXCatalog is a ScriptableObject asset (VFXType -> authored prefab).
         // VFXManager is NOT placed in any scene/prefab, so _catalog is never wired in an
         // inspector - without this, every effect falls back to procedural AbilityVfxKit.
-        // Auto-load the script-generated catalog from Resources when none is assigned, so
-        // the authored Lana/Spells/custom prefabs take effect with zero drag-drop. Only the
-        // single asset (+ the prefabs it references) ships - no whole pack in Resources.
+        // Auto-load the script-generated catalog through the VfxAssetLoader seam when none is
+        // assigned, so the authored Lana/Spells/custom prefabs take effect with zero drag-drop.
+        // Only the single asset (+ the prefabs it references) ships - no whole pack in Resources.
         private void EnsureCatalog()
         {
             if (_catalog != null) return;
-            _catalog = Resources.Load<VFXCatalog>("VFX/VFXCatalog");
+            // Addressables-first / Resources-fallback seam (VfxAssetLoader). The key is the
+            // FULL Resources-relative path, used verbatim as BOTH the Addressable address and
+            // the Resources.Load key — see VfxAssetLoader's KEY CONVENTION header.
+            _catalog = DeNelle.Core.VfxAssetLoader.LoadVfxAsset<VFXCatalog>("VFX/VFXCatalog");
             if (_catalog == null)
                 FlowTrace.Warn("VFXManager",
-                    "EnsureCatalog: no _catalog assigned and Resources/VFX/VFXCatalog not found - " +
-                    "ALL effects use procedural fallback. Run DeNelle.Editor.VFXCatalogGenerator.Generate.");
+                    "EnsureCatalog: no _catalog assigned and 'VFX/VFXCatalog' resolved via NEITHER " +
+                    "Addressables NOR Resources (VfxAssetLoader tried both) - ALL effects use procedural " +
+                    "fallback. Run DeNelle.Editor.VFXCatalogGenerator.Generate, and if the VFX content has " +
+                    "been migrated out of Resources, confirm DeNelle.Editor.VfxAddressablesGrouper marked it.");
             else
                 FlowTrace.Step("VFXManager",
-                    $"EnsureCatalog: loaded VFXCatalog from Resources/VFX/VFXCatalog ({_catalog.Entries?.Length ?? 0} entries).");
+                    $"EnsureCatalog: loaded VFXCatalog via VfxAssetLoader key 'VFX/VFXCatalog' ({_catalog.Entries?.Length ?? 0} entries).");
         }
 
         private void OnDestroy()

@@ -40,7 +40,8 @@
 //   from WaveManager.Phase + LiveEnemies if an event was missed.
 //
 // CLIPS  (Suno-generated; load by Resources path; missing = graceful no-op)
-//   Loaded via Resources.Load<AudioClip> (WebGL-safe — no File I/O). Expected at:
+//   Loaded via DeNelle.Core.AudioAssetLoader.LoadClip — Addressables-first,
+//   Resources-fallback (WebGL-safe — no File I/O). Same keys either way. Expected at:
 //      Resources/Music/Battle/Overworld_Battle_1
 //      Resources/Music/Battle/Overworld_Battle_2
 //      Resources/Music/Battle/Overworld_Victory
@@ -492,7 +493,8 @@ namespace DeNelle.Village
         }
 
         // ─────────────────────────────────────────────────────────────────────
-        //  Clip loading (Resources only — WebGL-safe, no File I/O)
+        //  Clip loading (AudioAssetLoader: Addressables-first / Resources-fallback —
+        //  WebGL-safe, no File I/O)
         // ─────────────────────────────────────────────────────────────────────
         private void ResolveClips()
         {
@@ -527,7 +529,7 @@ namespace DeNelle.Village
                 if (string.IsNullOrEmpty(p)) continue;
                 try
                 {
-                    AudioClip clip = Resources.Load<AudioClip>(p);
+                    AudioClip clip = DeNelle.Core.AudioAssetLoader.LoadClip(p);
                     if (clip != null) return clip;
                 }
                 catch { /* WebGL-safe: never throw out of clip resolution */ }

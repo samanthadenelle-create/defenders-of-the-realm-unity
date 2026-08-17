@@ -49,7 +49,41 @@ namespace DeNelle.Editor.Regression
 {
     public static class EnemyRigControllerCoherenceRegression
     {
-        private const string EnemyRoot = "Assets/Resources/Enemies";
+        // ⚠ NOT a const, and deliberately so. The enemy art is migrating OUT of Resources into
+        // Addressables (Assets/EnemyContent) so its ~539 MB stops being force-included in every
+        // build. A hardcoded "Assets/Resources/Enemies" here does NOT call Resources.Load, so the
+        // EnemyAssetLoader seam does not rescue it — the instant the assets physically move, every
+        // FindAssets below returns empty and this whole suite hard-reds with "no models found",
+        // which reads as "the enemy roster broke" when nothing is wrong at all.
+        //
+        // Resolve the live root instead, so the suite is correct in BOTH states and during a
+        // PARTIAL migration. Mirrors EnemyAddressablesGrouper.ResolveActiveRoot / the WO-545
+        // HeroAddressablesGrouper precedent — same rule, so the two cannot drift apart.
+        //
+        // The emptiness guard below stays load-bearing: if NEITHER root holds models that is a
+        // genuine failure and must still red. This resolves WHERE to look; it never weakens WHAT
+        // is asserted.
+        private const string EnemyResourcesRoot = "Assets/Resources/Enemies";
+        private const string EnemyContentRoot   = "Assets/EnemyContent";
+
+        /// <summary>
+        /// The folder that actually holds the enemy models right now: the migrated
+        /// <c>Assets/EnemyContent</c> once it contains at least one model, else the pre-migration
+        /// <c>Assets/Resources/Enemies</c>. Probed per access (AssetDatabase-cheap) so a migration
+        /// that happens between suite runs needs no code change.
+        /// </summary>
+        private static string EnemyRoot
+        {
+            get
+            {
+                if (AssetDatabase.IsValidFolder(EnemyContentRoot))
+                {
+                    string[] migrated = AssetDatabase.FindAssets("t:Model", new[] { EnemyContentRoot });
+                    if (migrated != null && migrated.Length > 0) return EnemyContentRoot;
+                }
+                return EnemyResourcesRoot;
+            }
+        }
 
         /// <summary>
         /// Models deliberately present but NOT wired for animation, with the reason. A name here
@@ -89,9 +123,10 @@ namespace DeNelle.Editor.Regression
             string[] guids = AssetDatabase.FindAssets("t:Model", new[] { EnemyRoot });
             if (guids == null || guids.Length == 0)
             {
-                reason = "FAIL: no models found under " + EnemyRoot +
-                         " — the enemy Resources folder is empty or the path moved. Every enemy " +
-                         "spawn would fall back to a null model.";
+                reason = "FAIL: no enemy models found under EITHER '" + EnemyContentRoot +
+                         "' (post-migration) OR '" + EnemyResourcesRoot + "' (pre-migration) — " +
+                         "so this is not a migration artefact, the models are genuinely gone. " +
+                         "Every enemy spawn would fall back to a null model.";
                 return false;
             }
 

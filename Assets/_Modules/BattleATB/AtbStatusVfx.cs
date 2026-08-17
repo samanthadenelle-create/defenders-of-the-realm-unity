@@ -309,7 +309,12 @@ namespace DeNelle.BattleATB
         private GameObject LoadPrefab(string path, string label)
         {
             if (_prefabs.TryGetValue(path, out var cached)) return cached;
-            var prefab = Resources.Load<GameObject>(path);
+            // Routed through the VFX seam (Addressables-first, Resources-fallback) rather than a
+            // raw Resources.Load: Resources/VFX is force-included in every build, so the status
+            // effects are migrating to Addressables. `path` is already a FULL Resources-relative
+            // key ("VFX/Status/<name>", the consts above), which is exactly the address the
+            // grouper mints — so this is a load-path change only, not a key change.
+            var prefab = DeNelle.Core.VfxAssetLoader.LoadVfxPrefab(path);
             _prefabs[path] = prefab;
             if (prefab == null)
                 FlowTrace.Warn("AtbBattle",

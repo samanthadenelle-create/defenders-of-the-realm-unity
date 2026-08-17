@@ -45,11 +45,42 @@ namespace DeNelle.Editor
     public static class BlinkOrcImporter
     {
         private const string PackRoot  = "Assets/Blink/Art/NPCs/Stylized/Orcs";
-        private const string StageDir  = "Assets/Resources/Enemies/Blink";
-        private const string MatDir    = StageDir + "/Materials";
-        private const string TexDir    = StageDir + "/Textures";
-        private const string AnimDir   = StageDir + "/Anim";
-        private const string BossAnimDir = StageDir + "/AnimBoss";
+
+        // ⚠ StageDir IS NOT A CONST ANYMORE, AND MUST NOT BECOME ONE AGAIN.
+        //
+        // The Blink orcs are the single heaviest thing in the game: ~427 MB, of which ~290 MB is
+        // Textures/. Everything under a folder named "Resources" is force-included in EVERY player
+        // build whether or not it is ever spawned, so that art is being migrated OUT to
+        // Assets/EnemyContent/Blink and served through Addressables (DeNelle.Core.EnemyAssetLoader
+        // + EnemyAddressablesGrouper).
+        //
+        // THE TRAP THIS CLOSES: this importer is the ART INTAKE tool — it CREATES the staging
+        // folder (EnsureFolder(StageDir) below) and writes meshes, prefabs, materials, textures and
+        // controllers into it. While StageDir was hardcoded to "Assets/Resources/Enemies/Blink",
+        // the next Blink art intake after a migration would have silently RE-CREATED that folder
+        // inside Resources and re-inflated the build by up to 427 MB — with no error, no failing
+        // gate, and nothing to attribute it to months later. A generator that quietly undoes an
+        // optimisation is worse than never doing the optimisation.
+        //
+        // So: stage into the MIGRATED root once it exists, else the pre-migration Resources root.
+        // Same resolve rule as EnemyAddressablesGrouper.ResolveActiveRoot and
+        // EnemyRigControllerCoherenceRegression.EnemyRoot — one rule, three call sites, no drift.
+        private const string StageResourcesDir = "Assets/Resources/Enemies/Blink";
+        private const string StageContentDir   = "Assets/EnemyContent/Blink";
+
+        /// <summary>
+        /// Where freshly-imported Blink orc art is staged: the migrated
+        /// <c>Assets/EnemyContent/Blink</c> once that folder exists, else the pre-migration
+        /// <c>Assets/Resources/Enemies/Blink</c>. Existence-probed (not model-probed) because this
+        /// tool must stage into the migrated root even when it is still empty.
+        /// </summary>
+        private static string StageDir =>
+            AssetDatabase.IsValidFolder(StageContentDir) ? StageContentDir : StageResourcesDir;
+
+        private static string MatDir      => StageDir + "/Materials";
+        private static string TexDir      => StageDir + "/Textures";
+        private static string AnimDir     => StageDir + "/Anim";
+        private static string BossAnimDir => StageDir + "/AnimBoss";
 
         // Archetype -> vendor mesh FBX + skin-1 vendor prefab. ADDITIVE naming
         // (Blink_ prefix + Blink/ subfolder) so the Tripo Orc_Warrior/Tank/Mage

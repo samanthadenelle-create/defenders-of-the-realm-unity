@@ -14,15 +14,25 @@
 //   1. every approved Hollow combat id is KNOWN to the resolver (never the
 //      generic size-default),
 //   2. each resolves to a per-id-DISTINCT ResolvedKey (N ids -> N distinct keys),
-//   3. each base model is a real committed prefab in Resources/Enemies (would
-//      skin a real body, not a tinted-capsule fallback),
+//   3. each base model is a real committed prefab that the RUNTIME SEAM resolves
+//      (DeNelle.Core.EnemyAssetLoader — Addressables-first, Resources-fallback);
+//      i.e. it would skin a real body, not a tinted-capsule fallback,
 //   4. the factory hook is actually wired to the resolver (ModelForEnemy(id) ==
 //      the resolver's base model for every approved id),
 //   5. the 5 previously-broken ids each resolve to their INTENDED distinct model.
 //
-// Pure data/logic (Resources.Load only) — runs inside DataRegression.RunAll and
-// prints ENEMY_RESOLVER_OK on pass. Mirrors the TroopRosterRegression contract:
-// public static bool Run(out string reason). Never throws.
+// Pure data/logic (catalog parse + asset resolve only) — runs inside
+// DataRegression.RunAll and prints ENEMY_RESOLVER_OK on pass. Mirrors the
+// TroopRosterRegression contract: public static bool Run(out string reason). Never throws.
+//
+// ⚠ ASSET LOADS GO THROUGH THE SEAM, NEVER Resources.Load DIRECTLY. Every
+// "this mesh is committed" assertion below calls DeNelle.Core.EnemyAssetLoader
+// (Addressables-FIRST, Resources-FALLBACK) — the exact path the spawner uses. This
+// is what makes the oracle survive the Assets/Resources/Enemies -> Addressables
+// migration: a raw Resources.Load would return null for every enemy the moment the
+// art physically moves and paint the whole roster red for a reason that isn't real.
+// Going through the seam also STRENGTHENS the claim — it proves the runtime resolve
+// works, not merely that a file sits in a Resources folder.
 // =============================================================================
 
 using System.Collections.Generic;
@@ -102,9 +112,9 @@ namespace DeNelle.Editor
                     resolvedKeys[resolved.ResolvedKey] = id;
 
                 // 3) The base model must be a real committed prefab (not a capsule fallback).
-                string path = "Enemies/" + resolved.ModelKey;
-                if (Resources.Load<GameObject>(path) == null)
-                    failures.Add($"id '{id}' -> model '{resolved.ModelKey}' but Resources.Load(\"{path}\") is NULL (would spawn a tinted capsule).");
+                if (!ModelLoads(resolved.ModelKey))
+                    failures.Add($"id '{id}' -> model '{resolved.ModelKey}' but EnemyAssetLoader could not resolve " +
+                                 $"\"Enemies/{resolved.ModelKey}\" via Addressables OR Resources (would spawn a tinted capsule).");
 
                 // 4) Factory-hook wiring: the spawner path (ModelForEnemy) MUST return the
                 //    resolver's base model — proves the factory routes through the resolver,
@@ -151,8 +161,9 @@ namespace DeNelle.Editor
                     failures.Add($"deferred Wildlands id '{wid}' is IsCombatApproved==true (should be gated OFF per §1.1).");
                 string sub = EnemyResolver.SubstituteHollowId(wid, null, 2.0f);
                 if (!EnemyResolver.TryResolveHollowModel(sub, null, out string subModel) ||
-                    Resources.Load<GameObject>("Enemies/" + subModel) == null)
-                    failures.Add($"Wildlands id '{wid}' substitute '{sub}' did not resolve to a committed model.");
+                    !ModelLoads(subModel))
+                    failures.Add($"Wildlands id '{wid}' substitute '{sub}' did not resolve to a committed model " +
+                                 $"(EnemyAssetLoader found \"Enemies/{subModel}\" via neither Addressables nor Resources).");
             }
             foreach (var aid in new[] { "hollow-walker", "necromancer", "orc-berserker", "orc-warlord" })
                 if (!EnemyResolver.IsCombatApproved(aid))
@@ -174,21 +185,24 @@ namespace DeNelle.Editor
                     failures.Add($"dungeon id '{did}' shares ResolvedKey '{r.ResolvedKey}' with '{first}' — not distinct.");
                 else
                     dungeonKeys[r.ResolvedKey] = did;
-                if (Resources.Load<GameObject>("Enemies/" + r.ModelKey) == null)
-                    failures.Add($"dungeon id '{did}' -> model '{r.ModelKey}' but Resources.Load is NULL.");
+                if (!ModelLoads(r.ModelKey))
+                    failures.Add($"dungeon id '{did}' -> model '{r.ModelKey}' but EnemyAssetLoader could not resolve " +
+                                 $"\"Enemies/{r.ModelKey}\" via Addressables OR Resources.");
             }
             if (dungeonKeys.Count != dungeonIds.Length && failures.Count == 0)
                 failures.Add($"{dungeonIds.Length} dungeon ids produced only {dungeonKeys.Count} distinct ResolvedKeys.");
 
             // 11) WO-954 — THE COMMITTED-MESH REGISTRY IS REAL. Every name in
-            //     EnemyResolver.CommittedModels must actually load from Resources/Enemies.
-            //     This is what lets the resolver honour data for every family: the registry
-            //     is the safety gate, so a rotted entry would let a typo'd/renamed mesh
-            //     through and spawn a tinted capsule. Fails loudly instead.
+            //     EnemyResolver.CommittedModels must actually load through the runtime seam
+            //     (EnemyAssetLoader: Addressables, else Resources). This is what lets the
+            //     resolver honour data for every family: the registry is the safety gate, so a
+            //     rotted entry would let a typo'd/renamed mesh through and spawn a tinted
+            //     capsule. Fails loudly instead.
             foreach (var key in EnemyResolver.CommittedModelKeys)
-                if (Resources.Load<GameObject>("Enemies/" + key) == null)
-                    failures.Add($"EnemyResolver.CommittedModels lists '{key}', but Resources.Load(\"Enemies/{key}\") " +
-                                 "is NULL — the registry has rotted; data steered to this key would spawn a capsule.");
+                if (!ModelLoads(key))
+                    failures.Add($"EnemyResolver.CommittedModels lists '{key}', but EnemyAssetLoader could not resolve " +
+                                 $"\"Enemies/{key}\" via Addressables OR Resources — the registry has rotted (or the " +
+                                 "address was never grouped); data steered to this key would spawn a capsule.");
 
             // 12) WO-954 — DATA/CODE AGREEMENT for EVERY catalog row, not just the Hollows.
             //     The bug class: enemies.json said one model and an independent code table
@@ -205,10 +219,10 @@ namespace DeNelle.Editor
                 if (e == null || string.IsNullOrEmpty(e.Id)) continue;
                 string model = EnemyFactory.ModelForEnemy(e);
 
-                if (Resources.Load<GameObject>("Enemies/" + model) == null)
+                if (!ModelLoads(model))
                 {
-                    failures.Add($"enemies.json row '{e.Id}' resolves to model '{model}' but " +
-                                 $"Resources.Load(\"Enemies/{model}\") is NULL — this row spawns a tinted capsule.");
+                    failures.Add($"enemies.json row '{e.Id}' resolves to model '{model}' but EnemyAssetLoader could not " +
+                                 $"resolve \"Enemies/{model}\" via Addressables OR Resources — this row spawns a tinted capsule.");
                     continue;
                 }
 
@@ -237,7 +251,8 @@ namespace DeNelle.Editor
             if (failures.Count == 0)
             {
                 reason = $"{EnemyResolver.LintMarker} — {combatIds.Count} approved Hollow ids -> " +
-                         $"{resolvedKeys.Count} DISTINCT resolved keys; every base model loads from Resources; " +
+                         $"{resolvedKeys.Count} DISTINCT resolved keys; every base model resolves through " +
+                         "EnemyAssetLoader (Addressables-first, Resources-fallback); " +
                          "factory routes through EnemyResolver; the 5 previously-generic ids each resolve to their " +
                          "own model; Wildlands reserved as a Phase-2 stub; " +
                          $"WO-954: all {EnemyResolver.CommittedModelKeys.Count} committed mesh keys load, and every " +
@@ -252,6 +267,16 @@ namespace DeNelle.Editor
             reason = sb.ToString();
             return false;
         }
+
+        // TRUE when the committed body for <paramref name="modelKey"/> resolves through the
+        // SINGLE runtime seam the spawner uses: DeNelle.Core.EnemyAssetLoader, which probes
+        // the Addressables catalog for "Enemies/<key>" and falls back to Resources.Load on the
+        // same key. Deliberately NOT Resources.Load here — see the file header: this oracle has
+        // to stay true on both sides of the Resources -> Addressables migration, and asking the
+        // real loader is a STRONGER claim than asking the filesystem.
+        private static bool ModelLoads(string modelKey)
+            => !string.IsNullOrEmpty(modelKey) &&
+               DeNelle.Core.EnemyAssetLoader.LoadEnemyPrefab(modelKey) != null;
 
         // The enemies.json modelKey for an id (A4 data-driven variety), or null.
         private static string DataModelKey(EnemyCatalog catalog, string id)

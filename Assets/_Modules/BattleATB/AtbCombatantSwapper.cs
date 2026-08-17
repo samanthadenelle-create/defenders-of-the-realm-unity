@@ -297,7 +297,7 @@ namespace DeNelle.BattleATB
             if (capsule.Find("AtbEnemyModel") != null) return;   // already swapped
 
             string enemySlug = ResolveEnemySlug();
-            var prefab = Resources.Load<GameObject>("Enemies/" + enemySlug);
+            var prefab = DeNelle.Core.EnemyAssetLoader.LoadEnemyPrefab(enemySlug);
             if (prefab == null)
             {
                 // WO-954 / §1.4b: this used to be a Step reading "expected fallback", which is
@@ -311,7 +311,8 @@ namespace DeNelle.BattleATB
                                 ? h.BreachedIds[0] : "<no handoff>";
                 FlowTrace.Warn("AtbSwap",
                     $"SwapEnemy: breach id '{breachId}' resolved to slug '{enemySlug}', but " +
-                    $"Resources.Load(\"Enemies/{enemySlug}\") is NULL — no such mesh is committed, so the " +
+                    $"EnemyAssetLoader.LoadEnemyPrefab(\"{enemySlug}\") is NULL (Addressables \"Enemies/{enemySlug}\" " +
+                    $"unregistered AND Resources/Enemies/{enemySlug} absent) — no such mesh is committed, so the " +
                     "enemy stays a TINTED CAPSULE PILL instead of a body. FIX: correct the slug in " +
                     "AtbCombatantSwapper.ModelSlugForEngineDef / EnemyResolver, or import the mesh into " +
                     "Assets/Resources/Enemies.");
@@ -428,10 +429,11 @@ namespace DeNelle.BattleATB
             for (int i = 0; i < slugs.Count && i < offs.Length; i++)
             {
                 string slug = slugs[i];
-                var prefab = Resources.Load<GameObject>("Enemies/" + slug);
+                var prefab = DeNelle.Core.EnemyAssetLoader.LoadEnemyPrefab(slug);
                 if (prefab == null)
                 {
-                    FlowTrace.Warn("AtbSwap", $"StageEnemyFollowers: Resources/Enemies/{slug} missing — skipped.");
+                    FlowTrace.Warn("AtbSwap", $"StageEnemyFollowers: enemy '{slug}' missing via EnemyAssetLoader " +
+                                              $"(Addressables \"Enemies/{slug}\" unregistered AND Resources/Enemies/{slug} absent) — skipped.");
                     continue;
                 }
 
@@ -598,7 +600,8 @@ namespace DeNelle.BattleATB
         // Mirror of DeNelle.Village.EnemyAnimatorFactory's rig→controller map. We
         // duplicate the tiny mapping here because BattleATB does not (and must not)
         // reference DeNelle.Village. The shared controllers live in Resources/Enemies
-        // (built by EnemyAnimatorSetup), so a Resources.Load reaches them at runtime.
+        // (built by EnemyAnimatorSetup), so EnemyAssetLoader (Addressables-first,
+        // Resources-fallback) reaches them at runtime.
         private static void ApplyEnemyAnimator(GameObject model, string modelName)
         {
             if (model == null) return;
@@ -610,7 +613,7 @@ namespace DeNelle.BattleATB
                 var anim = model.GetComponentInChildren<Animator>();
                 if (anim == null) anim = model.AddComponent<Animator>();
                 anim.applyRootMotion = false; // turn-based stage: no locomotion drift
-                var ctrl = Resources.Load<RuntimeAnimatorController>("Enemies/" + EnemyControllerFor(modelName));
+                var ctrl = DeNelle.Core.EnemyAssetLoader.LoadEnemyController(EnemyControllerFor(modelName));
                 if (ctrl != null) anim.runtimeAnimatorController = ctrl;
                 else FlowTrace.Warn("AtbSwap",
                     $"ApplyEnemyAnimator: no enemy controller for '{modelName}' — enemy will stay in T-pose. Run EnemyAnimatorSetup.");

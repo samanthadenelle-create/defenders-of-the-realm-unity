@@ -75,7 +75,8 @@ namespace DeNelle.Village
     }
 
     /// <summary>Generates short, click-free ability SFX in code (cached). Prefers an
-    /// authored Resources/Sfx/&lt;Kind&gt; clip if present.</summary>
+    /// authored clip at the audio key "Sfx/&lt;Kind&gt;" if present, resolved through
+    /// DeNelle.Core.AudioAssetLoader (Addressables-first, Resources-fallback).</summary>
     internal static class ProceduralSfx
     {
         private const int Rate = 44100;
@@ -85,8 +86,9 @@ namespace DeNelle.Village
         public static AudioClip ForKind(AbilityEffect kind)
         {
             if (s_cache.TryGetValue(kind, out var cached) && cached != null) return cached;
-            // TODO(sfx): drop a CC0 wav at Resources/Sfx/<Kind> to override the generated clip.
-            AudioClip clip = Resources.Load<AudioClip>("Sfx/" + kind) ?? Generate(kind);
+            // TODO(sfx): drop a CC0 wav at the audio key "Sfx/<Kind>" to override the generated clip
+            // (AudioAssetLoader resolves it from Addressables first, then Resources).
+            AudioClip clip = DeNelle.Core.AudioAssetLoader.LoadClip("Sfx/" + kind) ?? Generate(kind);
             s_cache[kind] = clip;
             return clip;
         }

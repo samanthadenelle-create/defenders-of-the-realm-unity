@@ -58,13 +58,15 @@ namespace DeNelle.Audio
                 return cached;
 
             // Authored CC0/recorded drop-in wins over the synth (same convention as
-            // GameSfx): Resources/Sfx/Sfx_<Id>. Missing -> fall through to synth.
-            AudioClip clip = Resources.Load<AudioClip>("Sfx/" + ResourceName(id)) ?? Generate(id);
+            // GameSfx): the audio key "Sfx/Sfx_<Id>", resolved through
+            // DeNelle.Core.AudioAssetLoader (Addressables-first, Resources-fallback).
+            // Missing -> fall through to synth.
+            AudioClip clip = DeNelle.Core.AudioAssetLoader.LoadClip("Sfx/" + ResourceName(id)) ?? Generate(id);
             s_cache[id] = clip;
             return clip;
         }
 
-        /// <summary>The Resources/Sfx short name an authored override would use for an id.</summary>
+        /// <summary>The "Sfx/" audio-key short name an authored override would use for an id.</summary>
         private static string ResourceName(SfxId id) => "Sfx_" + id;
 
         // Per-id synth recipe — distinct tone for each event so they read apart.

@@ -2158,16 +2158,16 @@ namespace DeNelle.Village
                 // The live Village.unity predates the builder's _apexBossPrefab wiring
                 // (WireApexBossPrefab), so the serialized reference is null and no dragon
                 // ever spawns. Corruption-safe fallback (no risky village rebake): load the
-                // Boss_Dragon prefab copied into Resources/Enemies.
-                _apexBossPrefab = Resources.Load<DragonBoss>("Enemies/Boss_Dragon");
+                // Boss_Dragon prefab via EnemyAssetLoader (Addressables-first, Resources/Enemies-fallback).
+                _apexBossPrefab = DeNelle.Core.EnemyAssetLoader.LoadEnemyAsset<DragonBoss>("Enemies/Boss_Dragon");
                 if (_apexBossPrefab == null)
                 {
                     // U(pgrade Debug->FlowTrace.Fail): the apex wave has no boss to spawn — the
                     // wave's headline threat silently never appears. Fail-loud so a capture knows
                     // the dragon was asked for and the prefab couldn't be resolved.
                     FlowTrace.Fail("Waves",
-                        "SpawnApexBoss: Apex wave has no _apexBossPrefab AND no " +
-                        "Resources/Enemies/Boss_Dragon fallback — no dragon will spawn.");
+                        "SpawnApexBoss: Apex wave has no _apexBossPrefab AND EnemyAssetLoader found no " +
+                        "'Enemies/Boss_Dragon' via Addressables OR Resources — no dragon will spawn.");
                     return;
                 }
                 FlowTrace.Warn("Waves",

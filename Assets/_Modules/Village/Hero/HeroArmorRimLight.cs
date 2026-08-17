@@ -92,8 +92,9 @@ namespace DeNelle.Village
             UpdateLegendaryBurst(vfx.LegendaryBurst);
         }
 
-        // Optional slow apex particle. Guarded Resources load — absent prefab is a graceful
-        // no-op (a Debug-free skip), never a hard dependency on a specific VFX asset.
+        // Optional slow apex particle. Guarded load through the VfxAssetLoader seam
+        // (Addressables-first, Resources-fallback) — an absent prefab is a graceful no-op
+        // (a Debug-free skip), never a hard dependency on a specific VFX asset.
         private GameObject _burstInstance;
 
         private void UpdateLegendaryBurst(bool active)
@@ -105,7 +106,11 @@ namespace DeNelle.Village
             {
                 Guard.Try("ArmorVfx", "spawn legendary Burst_rings", () =>
                 {
-                    var prefab = Resources.Load<GameObject>("VFX/Burst_rings");
+                    // Addressables-first / Resources-fallback seam (VfxAssetLoader) on the VFX key.
+                    // The bare "Burst_rings" second try is a ROOT-Resources key (NOT under VFX/), so
+                    // it stays a raw Resources.Load — routing it through the seam would query an
+                    // address the VFX grouper never registers. See VfxAssetLoader KEY CONVENTION.
+                    var prefab = DeNelle.Core.VfxAssetLoader.LoadVfxPrefab("VFX/Burst_rings");
                     if (prefab == null) prefab = Resources.Load<GameObject>("Burst_rings");
                     if (prefab != null)
                     {
@@ -115,7 +120,9 @@ namespace DeNelle.Village
                     }
                     else
                     {
-                        FlowTrace.Step("ArmorVfx", "legendary apex reached — Burst_rings prefab not in Resources (glow-only).");
+                        FlowTrace.Step("ArmorVfx", "legendary apex reached — 'VFX/Burst_rings' found via NEITHER " +
+                            "Addressables NOR Resources (VfxAssetLoader tried both), and no root-Resources 'Burst_rings' " +
+                            "either (glow-only).");
                     }
                 });
             }

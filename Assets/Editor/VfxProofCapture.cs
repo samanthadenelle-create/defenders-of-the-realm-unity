@@ -295,11 +295,18 @@ namespace DeNelle.Editor
 
         private static void LoadCatalogs()
         {
-            // VFXManager.EnsureCatalog (VFXManager.cs:112) and EnsureHovlCatalog
-            // (VFXManager.Hovl.cs:139) load these exact Resources paths. Resources.Load
-            // works in edit mode, so the harness sees byte-for-byte what the game sees.
-            _vfxCatalog = Resources.Load<VFXCatalog>("VFX/VFXCatalog");
-            _hovlCatalog = Resources.Load<HovlVfxCatalog>("VFX/HovlVfxCatalog");
+            // VFXManager.EnsureCatalog (VFXManager.cs) and EnsureHovlCatalog (VFXManager.Hovl.cs)
+            // resolve these exact keys through VfxAssetLoader — so this harness MUST use the same
+            // seam, or it stops seeing what the game sees, which is its entire purpose.
+            //
+            // ⚠ This was a raw Resources.Load and that made it a migration landmine: Resources/VFX
+            // is moving to Addressables, and the catalogs MUST move (they hold hard GUID refs to
+            // every effect prefab — left behind, they would drag all of them back into the
+            // force-included block and the migration would win zero bytes). The moment they moved,
+            // both loads here would have returned null and every VFX proof shot would have gone
+            // silently blank — evidence loss with no failing gate.
+            _vfxCatalog  = DeNelle.Core.VfxAssetLoader.LoadVfxAsset<VFXCatalog>("VFX/VFXCatalog");
+            _hovlCatalog = DeNelle.Core.VfxAssetLoader.LoadVfxAsset<HovlVfxCatalog>("VFX/HovlVfxCatalog");
 
             if (_vfxCatalog == null)
                 Debug.LogError("[VfxProof] Resources/VFX/VFXCatalog NOT FOUND -- every VFXType shot " +
@@ -974,11 +981,16 @@ namespace DeNelle.Editor
 
         private static GameObject StageSubject(Transform parent, Shot shot, StringBuilder notes)
         {
-            var prefab = Resources.Load<GameObject>(shot.SubjectResourcePath);
+            // Enemy props go through the runtime seam (Addressables-first, Resources-fallback)
+            // so the enemy-subject shots keep staging a real body after Assets/Resources/Enemies
+            // migrates out of Resources; every other key is a plain Resources path.
+            var prefab = shot.SubjectResourcePath.StartsWith(DeNelle.Core.EnemyAssetLoader.EnemyAddrPrefix, System.StringComparison.Ordinal)
+                ? DeNelle.Core.EnemyAssetLoader.LoadEnemyAsset<GameObject>(shot.SubjectResourcePath)
+                : Resources.Load<GameObject>(shot.SubjectResourcePath);
             if (prefab == null)
             {
-                notes.Append("Subject prop 'Resources/").Append(shot.SubjectResourcePath)
-                     .Append("' did not load -- the effect is staged alone (not a failure).");
+                notes.Append("Subject prop '").Append(shot.SubjectResourcePath)
+                     .Append("' did not load (Addressables/Resources) -- the effect is staged alone (not a failure).");
                 StageGroundPlane(parent);
                 return null;
             }

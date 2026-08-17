@@ -574,22 +574,23 @@ namespace DeNelle.Audio
         }
 
         // Cached UI-click blip — generated once, or an authored CC0 clip if dropped
-        // at Resources/Sfx/UiClick (drop-in upgrade path, same convention as the
-        // Village ProceduralSfx/EnemyCombatAudio fallbacks). DEF-183.
+        // at the audio key "Sfx/UiClick" (drop-in upgrade path, same convention as the
+        // Village ProceduralSfx/EnemyCombatAudio fallbacks). Resolved through
+        // DeNelle.Core.AudioAssetLoader (Addressables-first, Resources-fallback). DEF-183.
         private AudioClip _uiClickClip;
 
         /// <summary>
         /// DEF-183: plays the shared UI button-click blip on the UI mixer group.
         /// This is the IAudioService seam DeNelle.HUD calls (HUD references Core
         /// only) so buttons click without the HUD touching the Audio assembly. The
-        /// clip is an authored Resources/Sfx/UiClick if present, otherwise a short
+        /// clip is an authored "Sfx/UiClick" if present, otherwise a short
         /// generated tick — so it works fresh-clone with no asset wiring.
         /// </summary>
         public void PlayUiClick()
         {
             if (_uiClickClip == null)
                 _uiClickClip = Guard.Try("Audio", "load UiClick clip",
-                    () => Resources.Load<AudioClip>("Sfx/UiClick"), fallback: null) ?? GenerateUiClick();
+                    () => AudioAssetLoader.LoadClip("Sfx/UiClick"), fallback: null) ?? GenerateUiClick();
             PlayUiSfx(_uiClickClip, 0.5f);
         }
 
@@ -635,8 +636,8 @@ namespace DeNelle.Audio
         {
             if (id == SfxId.None) return;
 
-            // WO-243: if no library was wired in the Inspector, try a Resources-loaded
-            // one ONCE (the path the SfxClipLibraryBuilder writes to). There is no
+            // WO-243: if no library was wired in the Inspector, try loading one ONCE via
+            // the audio seam (the path the SfxClipLibraryBuilder writes to). There is no
             // DeNelleAudioService prefab to carry an inspector ref, so this is how an
             // authored asset actually reaches the service. Null stays null (the synth
             // fallback below covers it), and _sfxLibraryResolved stops us re-loading.
@@ -645,7 +646,7 @@ namespace DeNelle.Audio
                 // WO-682: guarded — a corrupt/unloadable library asset is ONE logged
                 // line + the synth fallback, never a throw up the combat call stack.
                 _sfxLibrary = Guard.Try("Audio", "load SfxClipLibrary",
-                    () => Resources.Load<SfxClipLibrary>(SfxLibraryResourcePath), fallback: null);
+                    () => AudioAssetLoader.LoadAudioAsset<SfxClipLibrary>(SfxLibraryResourcePath), fallback: null);
                 _sfxLibraryResolved = true;
             }
 
@@ -709,7 +710,7 @@ namespace DeNelle.Audio
         // stay resident; re-entering battle re-runs nothing).
         private bool _sfxPrewarmed;
 
-        // The combat-relevant Resources/Sfx clip names the Village-side players
+        // The combat-relevant "Sfx/*" audio keys the Village-side players
         // (GameSfx / EnemyCombatAudio / AbilityAudioBridge / the owner sound drops)
         // lazy-load on first use. Pre-warming these at battle load moves the WebGL
         // first-use FSB decode (db-proven 167ms/4000ms frame stalls) into the masked
@@ -753,7 +754,7 @@ namespace DeNelle.Audio
                 if (_sfxLibrary == null && !_sfxLibraryResolved)
                 {
                     _sfxLibrary = Guard.Try("Audio", "load SfxClipLibrary (prewarm)",
-                        () => Resources.Load<SfxClipLibrary>(SfxLibraryResourcePath), fallback: null);
+                        () => AudioAssetLoader.LoadAudioAsset<SfxClipLibrary>(SfxLibraryResourcePath), fallback: null);
                     _sfxLibraryResolved = true;
                 }
                 if (_sfxLibrary != null && _sfxLibrary.Entries != null)
@@ -764,7 +765,7 @@ namespace DeNelle.Audio
                 foreach (string path in CombatSfxResourceNames)
                 {
                     var loaded = Guard.Try("Audio", $"load '{path}' (prewarm)",
-                        () => Resources.Load<AudioClip>(path), fallback: null);
+                        () => AudioAssetLoader.LoadClip(path), fallback: null);
                     if (loaded == null) { missing++; continue; } // no authored clip — synth fallback covers it.
                     if (!clips.Contains(loaded)) clips.Add(loaded);
                 }
@@ -1144,8 +1145,12 @@ namespace DeNelle.Audio
                  "failing that, falls back to ProceduralSfx so SFX are never silent (WO-243).")]
         [SerializeField] private SfxClipLibrary _sfxLibrary;
 
-        // WO-243: Resources path the SfxClipLibraryBuilder writes the asset to, and a
-        // one-shot guard so we attempt the Resources.Load at most once.
+        // WO-243: the audio key the SfxClipLibraryBuilder writes the asset to (also its
+        // Resources path), and a one-shot guard so we attempt the seam load at most once.
+        // NOTE: no such asset exists on disk today — verified 2026-08-17 — so this always
+        // falls through to ProceduralSfx. If one is ever authored UNDER a Resources folder
+        // with clips wired into it, those clips are force-included in every build
+        // regardless of the Addressables migration (see AudioAddressablesGrouper KEEP-BEHIND).
         private const string SfxLibraryResourcePath = "Audio/SfxClipLibrary";
         private bool _sfxLibraryResolved;
 

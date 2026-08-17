@@ -237,11 +237,16 @@ namespace DeNelle.Editor.Regression
         private static void Case2_NoPrewarmForUnconsumedKeys(List<string> failures, List<string> notes)
         {
             // --- 2a: measure the REAL bill from the REAL baked catalog ----------
-            var catalog = Resources.Load<HovlVfxCatalog>("VFX/HovlVfxCatalog");
+            // Through the VFX seam, not a raw Resources.Load: Resources/VFX is migrating to
+            // Addressables, and the catalog MUST move with it. A raw load here would return null
+            // the moment it did, hard-redding this suite for a reason that has nothing to do with
+            // the spawn budget it exists to measure.
+            var catalog = DeNelle.Core.VfxAssetLoader.LoadVfxAsset<HovlVfxCatalog>("VFX/HovlVfxCatalog");
             if (catalog == null || catalog.Rows == null || catalog.Rows.Length == 0)
             {
-                failures.Add("[case2] Resources/VFX/HovlVfxCatalog did not load (or has zero rows) - " +
-                             "the pre-warm bill cannot be measured, and a pass here would be hollow.");
+                failures.Add("[case2] VfxAssetLoader could not resolve \"VFX/HovlVfxCatalog\" via " +
+                             "Addressables OR Resources (or it has zero rows) - the pre-warm bill " +
+                             "cannot be measured, and a pass here would be hollow.");
             }
             else
             {

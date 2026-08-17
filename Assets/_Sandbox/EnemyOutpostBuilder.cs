@@ -205,10 +205,11 @@ namespace DeNelle.Sandbox
                 "Skeleton_Rogue",
             };
 
-            // 1) Resources/Enemies/<name> (enemies are committed + runtime-loaded per project memory).
+            // 1) "Enemies/<name>" via EnemyAssetLoader — Addressables-first, Resources/Enemies-fallback
+            //    (enemies are committed + runtime-loaded per project memory).
             foreach (var name in candidates)
             {
-                var fromRes = Resources.Load<GameObject>("Enemies/" + name);
+                var fromRes = DeNelle.Core.EnemyAssetLoader.LoadEnemyPrefab(name);
                 if (fromRes == null) fromRes = Resources.Load<GameObject>(name);
                 if (fromRes != null) return fromRes;
             }

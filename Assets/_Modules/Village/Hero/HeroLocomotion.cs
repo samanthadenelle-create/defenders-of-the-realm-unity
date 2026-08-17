@@ -907,7 +907,7 @@ namespace DeNelle.Village
             if (!_footstepTried)
             {
                 _footstepTried = true;
-                var clip = Resources.Load<AudioClip>("Sfx/FootstepsWalk");
+                var clip = DeNelle.Core.AudioAssetLoader.LoadClip("Sfx/FootstepsWalk");
                 if (clip != null)
                 {
                     _footstepSrc = gameObject.AddComponent<AudioSource>();
