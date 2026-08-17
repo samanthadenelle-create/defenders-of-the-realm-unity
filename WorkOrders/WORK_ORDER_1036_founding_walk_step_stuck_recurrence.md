@@ -47,7 +47,44 @@ based on the truncated text. ⚠ **Do not schedule this as a P0 stranding bug.**
 ⚠ **It also changes the WO-1031 interaction (§4):** a guide despawn firing mid-step would still be
 wrong, but the watchdog would rescue it too. Bad, not catastrophic.
 
-### ★ NEW FINDING — the watchdog fired at 245s against a stated bound of 120s
+### ⚠ THE "2× BOUND" FINDING BELOW IS **DISPROVEN** — corrected 2026-08-17 from the capture itself
+
+**The bound is NOT doubled, and it IS honoured — on every step.** Left visible rather than reworded,
+because "the bound is systematically 2×" is exactly the theory a seat would have refactored against.
+
+The proof was already sitting in the harvested context of `capture-20260817-092752-seq2513.md`, four
+lines below the STEP-STUCK it explains:
+
+```
+[Flow:Tutorial] coach :: step 'founding_walk' idle 245s awaiting 'hero.reached:guide_gate'
+                with the builder never opened - re-stated the objective (beat 2/4).
+[Flow:Tutorial] STEP-STUCK :: founding_walk — ... after 245s in-step (bound 120s ... coachBeats=2)
+[Flow:Offline]  Claim #6 (resume): resume window -- counting from the background edge
+[Flow:Offline]  Claim #6 (resume): ONE delta = 196s (0.05h) ...
+```
+
+Coach beat 2 is due at **90s** and fired at **245s**; only 2 of 4 beats had been spent in what the wall
+clock called four minutes. **Two independent wall-clock timers were late by the same ~196s** — that is a
+stopped frame loop plus a resume jump, never a doubled bound. `45s (beat 1) + 196s (background) = 241s`,
+which is the 2026-08-15 capture **to the second**.
+
+**Real cause:** `Time.unscaledTime` is not clamped by `Time.maximumDeltaTime`, so the first frame after
+the OS restores a backgrounded app carries the **whole suspend window as one `unscaledDeltaTime`**. The
+watchdog held a wall-clock stamp (`_watchdogAt`) and charged all of it to the step. The player had **~49s
+of played time** on the beat and it was rescued-and-SKIPPED on the resume frame, before they could move.
+Compounding it: `PauseController.OnApplicationPause(true)` auto-pauses to `timeScale 0` and **never
+auto-resumes**, so the rescue fired while the hero was frozen (`[Flow:HeroOwner] WORLD CLOCK FROZEN`,
+seq 2343 — §3's cheap check was right to flag it).
+
+**Counter-example proving the bound is fine:** seq 2433 fired at **125s** with `builderOpenedThisStep=True,
+coachBeats=1` — a normal foreground session, bound honoured, builder time correctly excluded.
+
+**Fix:** `TutorialFlow.StepClock` — the bound is spent in **PLAYED FRAMES** (per-frame
+`unscaledDeltaTime` clamped to 1s), excluding builder-open and `timeScale<=0` frames; a suspend jump
+contributes one clamped frame and is TRACED. The coach cadence rides the same budget. Bound unchanged at
+120f (WO-962 §3). Oracle: `TutorialWatchdogBoundRegression` [`tutorial-watchdog-bound`].
+
+### ~~★ NEW FINDING — the watchdog fired at 245s against a stated bound of 120s~~ (DISPROVEN, see above)
 
 `bound 120s` and `builderOpenedThisStep=False`, so **there was no builder time to exclude** — yet the
 rescue landed at **245s, roughly 2x the bound**. The two earlier captures (241s, 125s) fit the same

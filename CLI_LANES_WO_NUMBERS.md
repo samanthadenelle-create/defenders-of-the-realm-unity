@@ -1,4 +1,4 @@
-﻿# Lanes â€” Work-Order Numbers Only (for CLI)  Â·  reconciled 2026-06-12 (nightly refill)
+# Lanes â€” Work-Order Numbers Only (for CLI)  Â·  reconciled 2026-06-12 (nightly refill)
 
 > ## âš  RECONCILED 2026-08-17 (CLI): main line next free = **1115**.
 > *(CLI seat minted **WO-1113** and bumped 1113 -> 1114 in this SAME edit. **1113** = DUNGEON STATUS,
@@ -10,7 +10,49 @@
 > never as BUILD STATUS** -- "under construction"/"coming soon"/"dev"/"WIP" are BANNED player-facing
 > strings and get a REGRESSION ORACLE, not a comment, because that is the rule most likely to rot.
 > Status READY TO IMPLEMENT, 3 open rulings. No code yet.)*
-> ## âš  RECONCILED 2026-08-16 (UI seat): UI seat next free = **1045**.
+> ## âš  RECONCILED 2026-08-17 (UI seat block): next free = **1049**.
+> *(⚠ THE ROW ABOVE WAS STALE. It read "next free = 1045" while WORK_ORDER_1045_* AND
+> WORK_ORDER_1046_* both existed on disk — the 1046 mint wrote its bump into the PROSE below and
+> never updated THE ROW. That is §2 in its quietest form: the banner was wrong in exactly the way
+> that makes the next seat collide, which is how 1043 collided earlier the same day. 1045/1046/1048
+> are CONSUMED; 1047 is deliberately left unused. **1048** = BakeLayoutBatch silently strips every
+> chest/trap/key/lock because populateForPlay defaults to FALSE and the headless entry point takes
+> the default — it emptied three shipped dungeons, exited 0, and was caught only by
+> [authored-placed]. Minted at the owner's instruction.)*
+> *(UI seat minted **WO-1048** and bumped 1048 -> 1049 in this SAME edit. **1048** = owner F8 seq 2515
+> (flagged, `dg_bonecrypt`): *"LEave **still** on all steps with an exit portal in dungeons."*
+> `DungeonController.HydrateExits:643` spawns ONE "Leave Dungeon" arch in the ENTRY ROOM and is called
+> at `:364` inside the per-run/floor hydration sequence — **if that sequence runs per floor, every floor
+> gets its own exit.** ⚠ **"steps" IS AMBIGUOUS** (dungeon FLOORS / stair-traversal links / tutorial
+> steps) and the three readings imply DIFFERENT fixes — **confirm with the owner, do not guess.**
+> ★ If floors: an exit at every depth **deletes the risk of descending**, which undercuts the
+> torch/oil/darkness system AND **WO-1041 §3's "deeper = better" gem tiering — a reward curve paying for
+> elected risk that no longer exists.** ⛔ **COUNTER-CONSTRAINT: never make a run un-leavable** — the same
+> function already warns *"run could be un-leavable!"*, and WO-987's confirm + the spawn grace + the
+> arming latch all exist to stop accidental exits. This is WHERE/WHEN an exit lives, never removal.
+> ⚠ Interacts with `HydrateCheckpoints` in the same sequence — read it or a fix silently changes
+> checkpoint semantics. ⚠ **"still" = recurrence** — check WO-1007 / WO-1008 / WO-987 for a regression,
+> the WO-962→WO-1036 pattern. Also folded into **WO-1047**: `SweepPlaceholderCubes()` exists at `:367`
+> and the orange cube SURVIVED it — read that sweeper first, and note it runs BEFORE later spawners so
+> a one-shot sweep is structurally blind to anything created after hydration. READY.)*
+>
+> *(UI seat minted **WO-1047** and bumped 1047 -> 1048 in this SAME edit. **1047** = owner in a dungeon:
+> *"target attaches to this item and there is a floating key next to it. Something is broken it feels."*
+> ✅ **HALF OF IT IS WORKING AS DESIGNED — do NOT "fix" the floating key.** `ComposedPropVisuals.BuildKey`
+> deliberately spins+bobs it *"so it reads as a pickup from across a dark room"*, and it logs *"was
+> INVISIBLE before WO-1112"* — grounding it re-breaks that readability fix. ★ The real defect is the
+> other object: `HeroTargetIndicator:9` gathers **"alive HOSTILE IDamageables"**, so a PROP is
+> registering as a hostile damageable — a reticle that locks to furniture makes targeting untrustworthy
+> everywhere. ⚠ Plausible mechanism (NOT confirmed): WO-853 dual-implemented `IDamageable` +
+> `IDamageableStructure` across structures; a prop deriving/registering like a structure would inherit
+> that hostility. ⛔ §12 — the orange cube is UNIDENTIFIED and matches NONE of the four builders in
+> `ComposedPropVisuals` (Key=cylinder+cubes, Lock=plate, TrapPad=pad, OilStone=**cylinder plinth +
+> SPHERE bowl**), so **dump the object the reticle holds (`CurrentTarget` is already in hand) before
+> editing**. Fix at the REGISTRATION SOURCE, never as a filter patch in the indicator, or every future
+> prop repeats it. ⚠ Prove ENEMIES still target after the change — a hostile-set edit can silently
+> un-target real combatants. ⚠ An ORANGE cube may be a placeholder path with NO probe covering it
+> (`[Flow:MagentaProbe]` only covers magenta). READY.)*
+>
 > *(UI seat minted **WO-1046** and bumped 1046 -> 1047 in this SAME edit. **1046** = owner asked what an
 > Archer Tower upgrade actually changes (panel says only *"Stronger Archer Tower at Level 3"* for
 > 225 wood + 100 iron). ★ **THE ANSWER LOOKS LIKE: NOTHING BUT THE MODEL AND THE PROJECTILE ART.**

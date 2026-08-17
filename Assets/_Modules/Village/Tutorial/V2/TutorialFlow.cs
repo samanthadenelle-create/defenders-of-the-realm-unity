@@ -66,6 +66,33 @@ namespace DeNelle.Village
         // tuning consts above); the watchdog ALSO pauses outright while the builder is open
         // (TickWatchdog), so only truly-idle time counts against either bound.
         private const float PlacementWatchdogSeconds = 300f;
+
+        // ── WO-1036 (F8 seq 2513/2343, 2026-08-17) — THE BACKGROUND-TIME DEFECT ─────────────
+        // PROVEN FROM CAPTURE, not inferred. The watchdog used to hold a wall-clock stamp
+        // (_watchdogAt) and trip on `Time.unscaledTime - _watchdogAt >= bound`. Time.unscaledTime
+        // is NOT clamped by Time.maximumDeltaTime, so the first frame after the OS backgrounds and
+        // restores the app carries the WHOLE suspend window as one unscaledDeltaTime — and the
+        // whole window was charged to the step as "idle". The proving lines, one capture, one frame:
+        //     [Flow:Tutorial] coach :: step 'founding_walk' idle 245s ... (beat 2/4)
+        //     [Flow:Tutorial] STEP-STUCK :: founding_walk ... after 245s in-step (bound 120s ...
+        //                     builderOpenedThisStep=False, coachBeats=2)
+        //     [Flow:Offline]  Claim #6 (resume): resume window -- counting from the background edge
+        //     [Flow:Offline]  Claim #6 (resume): ONE delta = 196s ...
+        // Coach beat 2 is due at 90s and fired at 245s; the 4-beat cadence had only spent 2 beats.
+        // TWO INDEPENDENT wall-clock timers were late by the SAME ~196s — that is a stopped frame
+        // loop plus a resume jump, never a doubled bound. 45s (beat 1) + 196s (background) = 241s,
+        // which is the 2026-08-15 capture to the second. The player had ~49s of played time on the
+        // beat and it was rescued-and-SKIPPED on the resume frame, before they could move.
+        // Compounding it: PauseController.OnApplicationPause(true) auto-pauses to timeScale 0 and
+        // NEVER auto-resumes, so the rescue fires while the hero is frozen and cannot walk
+        // ([Flow:HeroOwner] "WORLD CLOCK FROZEN: Time.timeScale=0.00", same capture).
+        // THE FIX: the bound is spent by PLAYED FRAMES, never by wall clock. StepClock accumulates
+        // per-frame unscaledDeltaTime CLAMPED to MaxWatchdogFrameStepSeconds, and excludes frames
+        // where the world clock is frozen or the builder owns the screen. A suspend jump can now
+        // contribute at most one clamped frame, and it is TRACED rather than silently charged.
+        // ⚠ NOT a bound change: WatchdogSeconds stays 120f (WO-962 §3 forbids lengthening it).
+        private const float MaxWatchdogFrameStepSeconds = 1f;
+
         private const float ReachedRadius = 6f;         // hero.reached:<anchor> proximity (m)
         private const float ContextualAutoCloseSeconds = 10f; // hint without dialogue: auto-dismiss
 
@@ -302,6 +329,77 @@ namespace DeNelle.Village
             return found;
         }
 
+        // =====================================================================
+        //  WO-1036 — StepClock: the watchdog's budget, spent in PLAYED FRAMES
+        // ---------------------------------------------------------------------
+        //  PUBLIC and PURE on purpose: it reads no UnityEngine.Time, so the oracle
+        //  (Assets/Editor/Regression/TutorialWatchdogBoundRegression.cs) can replay the
+        //  captured 196s suspend jump deterministically and assert the bound is honoured.
+        //  Nothing else in the project may re-implement this accounting — one owner.
+        // =====================================================================
+
+        /// <summary>Frame-accumulated in-step budget. <see cref="Tick"/> is fed one raw
+        /// <c>Time.unscaledDeltaTime</c> per frame; anything larger than
+        /// <see cref="MaxFrameStepSeconds"/> is an app-suspend jump, not played time, and is
+        /// clamped + recorded instead of charged (WO-1036).</summary>
+        public sealed class StepClock
+        {
+            /// <summary>Largest single frame that can count as played time. A 5 FPS device
+            /// still accumulates honestly (0.2s frames); a backgrounded app cannot.</summary>
+            public const float MaxFrameStepSeconds = MaxWatchdogFrameStepSeconds;
+
+            /// <summary>Seconds of played frames since the last <see cref="Reset"/>, excluded
+            /// frames included. The honest "how long has the player been on this beat".</summary>
+            public float Played { get; private set; }
+
+            /// <summary>Seconds charged against the watchdog bound — played time MINUS the
+            /// excluded frames (builder open / world clock frozen).</summary>
+            public float Charged { get; private set; }
+
+            /// <summary>Seconds of played frames deliberately NOT charged (builder / frozen).</summary>
+            public float Excluded { get; private set; }
+
+            /// <summary>Wall-clock seconds discarded as app-suspend jumps — the WO-1036 signal.
+            /// Non-zero means the OS backgrounded the app during this step.</summary>
+            public float DiscardedJumpSeconds { get; private set; }
+
+            /// <summary>How many frames carried a suspend-sized delta.</summary>
+            public int DiscardedJumpFrames { get; private set; }
+
+            /// <summary>Full reset — a new step begins.</summary>
+            public void Reset()
+            {
+                Played = 0f; Charged = 0f; Excluded = 0f;
+                DiscardedJumpSeconds = 0f; DiscardedJumpFrames = 0;
+            }
+
+            /// <summary>Zero only the charged budget (the step "begins again" for the player —
+            /// the WO-702 deferred-intro release). Played/discard history is kept as evidence.</summary>
+            public void RestartCharged() => Charged = 0f;
+
+            /// <summary>Accept one frame. Returns the seconds actually accepted (clamped).</summary>
+            /// <param name="rawUnscaledDelta">Raw <c>Time.unscaledDeltaTime</c> for this frame.</param>
+            /// <param name="excluded">True when this frame must not be charged (builder open,
+            /// or the world clock is frozen so the hero physically cannot act).</param>
+            public float Tick(float rawUnscaledDelta, bool excluded)
+            {
+                if (rawUnscaledDelta <= 0f || float.IsNaN(rawUnscaledDelta)) return 0f;
+                float step = rawUnscaledDelta;
+                if (step > MaxFrameStepSeconds)
+                {
+                    DiscardedJumpSeconds += rawUnscaledDelta - MaxFrameStepSeconds;
+                    DiscardedJumpFrames++;
+                    step = MaxFrameStepSeconds;
+                }
+                Played += step;
+                if (excluded) Excluded += step; else Charged += step;
+                return step;
+            }
+
+            /// <summary>True once the charged budget has spent <paramref name="bound"/> seconds.</summary>
+            public bool Expired(float bound) => Charged >= bound;
+        }
+
         private enum Phase { Idle, Settling, WaitTrigger, Running, AwaitCompletion, Finished }
 
         private List<TutorialStepDef> _steps;            // mandatory chain (ordered)
@@ -309,8 +407,11 @@ namespace DeNelle.Village
         private int _index = -1;
         private Phase _phase = Phase.Idle;
         private TutorialStepDef _step;
-        private float _stepEnteredAt;
-        private float _watchdogAt;
+        private float _stepEnteredAt;               // WALL clock — analytics + the honest "wall vs played" split
+        /// <summary>WO-1036: the watchdog/coach budget, spent in PLAYED frames. Replaces the old
+        /// wall-clock <c>_watchdogAt</c> stamp, which charged app-background time to the step.</summary>
+        private readonly StepClock _stepClock = new StepClock();
+        private bool _suspendJumpTraced;            // one [Flow:Tutorial] line per step per suspend
         private int _skips;
         private float _flowStartedAt;
         private bool _completionArmed;
@@ -324,7 +425,7 @@ namespace DeNelle.Village
 
         // Coach escalation (ROOT CAUSE 4) — per-step nudge bookkeeping.
         private int _coachBeats;
-        private float _nextCoachAt;
+        private float _nextCoachAt;   // WO-1036: a CHARGED-seconds threshold on _stepClock, not a wall stamp
         private bool _builderOpenedThisStep;
 
         private HeroLocomotion _hero;
@@ -491,6 +592,7 @@ namespace DeNelle.Village
                     break;
 
                 case Phase.AwaitCompletion:
+                    TickStepClock();       // WO-1036: spend the bound in PLAYED frames, once per frame
                     TickDeferredIntro();   // WO-702 truce: release a builder-held intro
                     TickHighlightCycle();  // ROOT CAUSE 3: walk EVERY authored highlight
                     TickCoachNudge();      // ROOT CAUSE 4: never five silent minutes again
@@ -568,12 +670,14 @@ namespace DeNelle.Village
         private void EnterStep(TutorialStepDef step)
         {
             _stepEnteredAt = Time.unscaledTime;
-            _watchdogAt = Time.unscaledTime;
+            _stepClock.Reset();                    // WO-1036: a fresh PLAYED budget for this beat
+            _suspendJumpTraced = false;
             _completionArmed = false;
             _awaitSignal = step.Completion != null ? step.Completion.Signal : null;
             _coachBeats = 0;
-            _nextCoachAt = Time.unscaledTime + CoachNudgeSeconds;
+            _nextCoachAt = CoachNudgeSeconds;      // WO-1036: CHARGED seconds, not a wall stamp
             _builderOpenedThisStep = false;
+            _probeTraceAtCharged = 0f;
 
             FlowTrace.Step("Tutorial", $"STEP-ENTER :: {step.Id} (order={step.Order}, completes on '{_awaitSignal}').");
 
@@ -819,10 +923,9 @@ namespace DeNelle.Village
             if (string.IsNullOrEmpty(_deferredIntroId)) return;
             if (DeNelle.Core.BuildModeState.IsActive)
             {
-                // Builder still open — keep holding, and keep the STEP-STUCK watchdog
-                // from firing on a legitimate long builder session (the intro the step
-                // waits on is deliberately not on screen yet).
-                _watchdogAt = Time.unscaledTime;
+                // Builder still open — keep holding. WO-1036: the STEP-STUCK watchdog is already
+                // protected from a legitimate long builder session because TickStepClock EXCLUDES
+                // every build-mode frame from the charged budget; no stamp to push here any more.
                 return;
             }
 
@@ -840,9 +943,10 @@ namespace DeNelle.Village
             FlowTrace.Step("Tutorial",
                 $"deferred-intro :: builder closed — playing held intro '{id}' for step '{stepId}' (WO-702 truce).");
             // The step effectively BEGINS for the player when the intro finally shows —
-            // restart the STEP-STUCK clock so a long, legitimate builder session doesn't
-            // count against the watchdog.
-            _watchdogAt = Time.unscaledTime;
+            // restart the STEP-STUCK budget so a long, legitimate builder session doesn't
+            // count against the watchdog (WO-1036: charged budget only; the played/discard
+            // history is kept so the STEP-STUCK line can still show what really happened).
+            _stepClock.RestartCharged();
             if (!CoreDialogue.DialogueService.Play(id))
                 FlowTrace.Warn("Tutorial", $"step '{stepId}' deferred intro dialogue '{id}' unknown — continuing without it.");
         }
@@ -990,10 +1094,14 @@ namespace DeNelle.Village
             }
             if (_builderOpenedThisStep) return;
             if (_coachBeats >= CoachNudgeMaxBeats) return;
-            if (Time.unscaledTime < _nextCoachAt) return;
+            // WO-1036: the coach cadence rides the SAME played-frame budget as the watchdog.
+            // It used to be a wall stamp, so an app-background window burned beats the player
+            // never saw — captured proof: "coach :: step 'founding_walk' idle 245s ... (beat 2/4)",
+            // i.e. beat 2 of 4 delivered in what the wall clock called four minutes.
+            if (_stepClock.Charged < _nextCoachAt) return;
 
             _coachBeats++;
-            _nextCoachAt = Time.unscaledTime + CoachNudgeSeconds;
+            _nextCoachAt = _stepClock.Charged + CoachNudgeSeconds;
 
             string objective = _step.Objective != null && !string.IsNullOrEmpty(_step.Objective.Text)
                 ? TutorialGuide.ResolveToken(_step.Objective.Text) : null;   // WO-1012 P2 guide token
@@ -1010,7 +1118,7 @@ namespace DeNelle.Village
                 // No authored objective = nothing honest to say. Report it rather than
                 // toasting a placeholder (CLAUDE.md sec.12: no silent failure, no fiction).
                 FlowTrace.Warn("Tutorial", $"coach :: step '{_step.Id}' has been idle " +
-                    $"{Time.unscaledTime - _stepEnteredAt:0}s with NO authored objective text - " +
+                    $"{_stepClock.Charged:0}s played (wall {Time.unscaledTime - _stepEnteredAt:0}s) with NO authored objective text - " +
                     "cannot re-state the ask; the step teaches nothing while stranded.");
                 _coachBeats = CoachNudgeMaxBeats;   // do not re-check every frame
                 return;
@@ -1018,7 +1126,7 @@ namespace DeNelle.Village
 
             ElarionUiKit.ShowToast(msg, ElarionUiKit.ToastTone.Gold, 3.4f);
             FlowTrace.Warn("Tutorial", $"coach :: step '{_step.Id}' idle " +
-                $"{Time.unscaledTime - _stepEnteredAt:0}s awaiting '{_awaitSignal}' with the builder never opened - " +
+                $"{_stepClock.Charged:0}s played (wall {Time.unscaledTime - _stepEnteredAt:0}s) awaiting '{_awaitSignal}' with the builder never opened - " +
                 $"re-stated the objective (beat {_coachBeats}/{CoachNudgeMaxBeats}).");
 
             // Re-assert the spotlight from the top of the walk: a glow the player scrolled
@@ -1722,11 +1830,38 @@ namespace DeNelle.Village
             // narrowest carrot-override seam (no new movement system).
             DeNelle.Pets.PetHeroLeash.SetLeadTarget(pos);
 
-            Vector3 d = _hero.transform.position - pos;
+            Vector3 heroPos = _hero.transform.position;
+            Vector3 d = heroPos - pos;
             d.y = 0f;
+
+            // ── WO-1036 (A): the walk-beat progress trace — PERMANENT (CLAUDE.md §12) ───────────
+            // The STEP-STUCK line proves the event is ABSENT; it never says WHY, and the three
+            // causes need opposite fixes. This splits them from data alone, on a cadence measured
+            // in PLAYED seconds so a backgrounded app cannot flood it:
+            //   * distance shrinking to ~0 with no raise  -> the trigger/radius is the defect
+            //   * distance never shrinking                -> the hero cannot (or does not) path there
+            //   * anchor moving between lines             -> the WO-962 latch regressed
+            //   * guide=none mid-beat                     -> the Echo despawned before arrival (WO-1108)
+            // Cheap: one line per ProbeTraceSeconds of played time while a hero.reached step is live.
+            if (_stepClock.Charged >= _probeTraceAtCharged)
+            {
+                _probeTraceAtCharged = _stepClock.Charged + ProbeTraceSeconds;
+                bool guideAlive = TutorialWorldAnchors.HasLiveGuideBody;
+                FlowTrace.Step("Tutorial",
+                    $"walk-probe :: '{_awaitSignal}' anchor={pos} latched={TutorialWorldAnchors.IsLatched(anchorId)} " +
+                    $"hero={heroPos} dist={d.magnitude:0.0}m (reach {ReachedRadius:0}m) " +
+                    $"guideBody={(guideAlive ? "ALIVE" : "NONE")} leadSet={DeNelle.Pets.PetHeroLeash.IsLeading} " +
+                    $"played={_stepClock.Charged:0}s wall={Time.unscaledTime - _stepEnteredAt:0}s " +
+                    $"timeScale={Time.timeScale:0.00} suspendGap={_stepClock.DiscardedJumpSeconds:0}s");
+            }
+
             if (d.sqrMagnitude <= ReachedRadius * ReachedRadius)
                 TutorialSignals.Raise(_awaitSignal);
         }
+
+        /// <summary>WO-1036: cadence (in PLAYED seconds) of the walk-beat progress trace.</summary>
+        private const float ProbeTraceSeconds = 5f;
+        private float _probeTraceAtCharged;
 
         // =====================================================================
         //  Watchdog — STEP-STUCK oracle (bot verifiability)
@@ -1745,6 +1880,42 @@ namespace DeNelle.Village
         private float WatchdogSecondsForCurrentStep() =>
             IsPlacementStep() ? PlacementWatchdogSeconds : WatchdogSeconds;
 
+        /// <summary>WO-1036: true while the world clock is frozen (pause menu, F8 note freeze,
+        /// PauseController's OnApplicationPause auto-pause — which never auto-resumes). The hero
+        /// physically cannot walk while this holds ([Flow:HeroOwner] "WORLD CLOCK FROZEN"), so
+        /// charging the beat's watchdog budget for it skips a step the player was never able to
+        /// attempt. Excluded, exactly like builder time.</summary>
+        private static bool WorldClockFrozen => Time.timeScale <= 0f;
+
+        /// <summary>
+        /// WO-1036 — the ONE place the in-step budget advances, ticked once per frame from
+        /// <see cref="Update"/> before any consumer reads it (watchdog + coach nudge share it, so
+        /// they can never disagree about how long the player has really been on the beat).
+        /// Suspend jumps are clamped and TRACED, never charged: see the captured proof in the
+        /// MaxWatchdogFrameStepSeconds note above.
+        /// </summary>
+        private void TickStepClock()
+        {
+            if (_step == null) return;
+
+            bool builder = DeNelle.Core.BuildModeState.IsActive;
+            bool frozen  = WorldClockFrozen;
+            int  before  = _stepClock.DiscardedJumpFrames;
+
+            _stepClock.Tick(Time.unscaledDeltaTime, excluded: builder || frozen);
+
+            if (_stepClock.DiscardedJumpFrames > before && !_suspendJumpTraced)
+            {
+                _suspendJumpTraced = true;
+                FlowTrace.Warn("Tutorial",
+                    $"step '{_step.Id}': a {_stepClock.DiscardedJumpSeconds:0}s frame gap was DISCARDED from the " +
+                    $"in-step budget — the app was backgrounded/suspended, not played (WO-1036, F8 seq 2513). " +
+                    $"Charged {_stepClock.Charged:0}s of the {WatchdogSecondsForCurrentStep():0}s bound; wall clock " +
+                    $"reads {Time.unscaledTime - _stepEnteredAt:0}s. Before this fix the whole gap was charged and " +
+                    "the beat was rescued-and-SKIPPED on the resume frame.");
+            }
+        }
+
         private void TickWatchdog()
         {
             if (_step == null) return;
@@ -1754,18 +1925,29 @@ namespace DeNelle.Village
             // player is DOING the asked thing (browsing/placing in the builder), so builder
             // time never counts against the bound. Same build-mode seam the deferred-intro
             // truce already reads (BuildModeState.IsActive, fed by the build.mode_entered/
-            // exited flow); a TRUE pause (deadline shifts by the paused frame), not a reset,
-            // so pre-builder idle time is kept.
+            // exited flow). WO-1036: the pause is now enforced by TickStepClock EXCLUDING the
+            // frame from the charged budget — a true pause, kept, with pre-builder idle intact.
             if (DeNelle.Core.BuildModeState.IsActive)
             {
-                _watchdogAt += Time.unscaledDeltaTime;
                 FlowTrace.Once("Tutorial", "watchdog-builder-pause",
                     "STEP-STUCK watchdog PAUSED while the builder is open (build-mode time never counts — F8 seq 603 rule, 2026-08-02).");
                 return;
             }
 
+            // WO-1036: never rescue a step while the world is frozen. PauseController auto-pauses
+            // on OnApplicationPause and NEVER auto-resumes, so the first resumed frame used to trip
+            // the watchdog while the hero still could not move (captured: seq 2343's WORLD CLOCK
+            // FROZEN lines alongside the STEP-STUCK). A frozen player has not abandoned the beat.
+            if (WorldClockFrozen)
+            {
+                FlowTrace.Once("Tutorial", "watchdog-frozen-pause",
+                    "STEP-STUCK watchdog PAUSED while Time.timeScale<=0 (pause menu / background auto-pause) — " +
+                    "the hero cannot move, so this is not idle time (WO-1036).");
+                return;
+            }
+
             float bound = WatchdogSecondsForCurrentStep();
-            if (Time.unscaledTime - _watchdogAt < bound) return;
+            if (!_stepClock.Expired(bound)) return;
 
             // Owner ruling 2026-07-08 ("auto-advance the watchdog"): a step whose combat/
             // completion driver can never settle (e.g. town_wave's scripted spawner) must not
@@ -1788,22 +1970,32 @@ namespace DeNelle.Village
             //     out of the systems the later beats depend on.
             //
             // Fires ONCE per stuck step: CompleteCurrentStep advances _step and EnterStep resets
-            // _watchdogAt/_stepEnteredAt, so this cannot re-trip on the same step.
-            string stuckId = _step.Id;
+            // _stepClock/_stepEnteredAt, so this cannot re-trip on the same step.
+            string stuckId  = _step.Id;
             string awaited  = _awaitSignal;
-            float  idle     = Time.unscaledTime - _stepEnteredAt;
-            _watchdogAt = Time.unscaledTime;   // re-arm guard (belt-and-suspenders alongside the advance)
+            float  idle     = _stepClock.Charged;                        // WO-1036: PLAYED, charged time
+            float  wall     = Time.unscaledTime - _stepEnteredAt;        // what the old line reported
+            float  excluded = _stepClock.Excluded;
+            float  jumped   = _stepClock.DiscardedJumpSeconds;
+            _stepClock.RestartCharged();   // re-arm guard (belt-and-suspenders alongside the advance)
 
             FlowTrace.Fail("Tutorial", $"STEP-STUCK :: {stuckId} — no '{awaited}' after " +
                 $"{idle:0}s in-step (bound {bound:0}s" +
                 (IsPlacementStep() ? ", placement 300s rule, builder time excluded" : ", builder time excluded") +
                 $"; ff.tutorialv2 on; builderOpenedThisStep={_builderOpenedThisStep}, coachBeats={_coachBeats}); " +
+                // WO-1036: the played/wall split IS the evidence. A large gap between them means the
+                // app was backgrounded or the world was frozen, and the beat is NOT what stalled.
+                $"[WO-1036 clock: played-and-charged {idle:0}s, wall {wall:0}s, excluded (builder/frozen) " +
+                $"{excluded:0}s, discarded suspend gap {jumped:0}s]; " +
                 "RESCUED via watchdog and recorded as SKIPPED - the step was NOT completed, its outro is " +
                 "suppressed (no fiction narrated), grants still applied so the player is never half-granted.");
             DeNelle.Core.Analytics.EventTracker.Track("tutorial_step_drop", new
             {
                 stepId = stuckId,
                 secondsIdle = idle,
+                secondsWall = wall,
+                secondsExcluded = excluded,
+                secondsSuspendGap = jumped,
                 autoAdvanced = true,
                 recordedAs = "skipped",
                 builderOpened = _builderOpenedThisStep,

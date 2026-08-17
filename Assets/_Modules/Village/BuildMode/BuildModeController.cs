@@ -2590,6 +2590,29 @@ namespace DeNelle.Village
         private static readonly float[] s_towerTierMul = { 1f, 1f, 1.25f, 1.55f };
 
         /// <summary>
+        /// The tower stat multiplier for a tier (1..3). THE ONE AUTHORITY — the upgrade card reads
+        /// this to show the player the real deltas, and the placer above applies it to
+        /// <c>tower.Range</c>/<c>tower.Damage</c>. Same number, one definition.
+        /// </summary>
+        /// <remarks>
+        /// ⚠ ADDED 2026-08-17 because the upgrade card said only <i>"Stronger Archer Tower at
+        /// Level 3"</i> for 225 wood + 100 iron. The scaling was REAL all along — it just lived
+        /// here, in the PLACER, while a reader searching <c>DefenseTower.cs</c> for level-driven
+        /// stats found only the projectile key and reasonably concluded the upgrade bought a
+        /// reskin. It does not: L2 is ×1.25 and L3 is ×1.55 on BOTH range and damage.
+        ///
+        /// The card MUST call this rather than re-declaring the ladder. A second copy of these
+        /// three numbers is the duplicate-authority bug this project keeps paying for — and here
+        /// it would be the worst kind, because the copy that drifts is the one that TELLS THE
+        /// PLAYER what they are buying.
+        ///
+        /// Fire rate is deliberately NOT scaled (see the placer comment): range + damage are the
+        /// readable tier wins. Do not add a fire-rate rung here without an owner ruling.
+        /// </remarks>
+        internal static float TowerStatMultiplier(int tier) =>
+            s_towerTierMul[Mathf.Clamp(tier, 1, s_towerTierMul.Length - 1)];
+
+        /// <summary>
         /// The catalog max upgrade level for an entry (S5). Clamped to the ONE named ceiling
         /// <see cref="DeNelle.Core.Catalog.RepoProps.MaxStructureLevel"/> (6 since WO-966 -- it was
         /// a hardcoded 3, tied to StructureTierVisual's 1..3 accent ladder, which made the storage

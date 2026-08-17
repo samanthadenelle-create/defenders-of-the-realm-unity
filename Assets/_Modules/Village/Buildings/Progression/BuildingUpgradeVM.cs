@@ -59,6 +59,21 @@ namespace DeNelle.Village.Buildings.Progression
         Maxed = 5,
         /// <summary>No ladder for this building (nothing to show).</summary>
         Unavailable = 6,
+        /// <summary>
+        /// WO-1045 — the Builders LINE is at its DEPTH cap, so no new work can be lined up at all.
+        /// Affordable, ungated, nothing running here — and still refused. This state exists because
+        /// its ABSENCE was the bug: every one of the three tap paths already refused a full line
+        /// (<c>BuildingUpgradeService.TryUpgrade</c> :91, <c>ResourceBuildingState.TryUpgrade</c>
+        /// :169, <c>PlacedStructureUpgradeService.TryStart</c> :219) while this enum had no way to
+        /// say so, so <see cref="Ready"/> was returned and the View drew a bright, tappable, INERT
+        /// button. The player read that as a broken game.
+        /// <para>
+        /// ⚠ This is the DEPTH axis (<c>BuildTimerConfig.queueDepthPerLine</c>, 5), NOT concurrency.
+        /// A full CREW set (<c>freeBuildSlots</c>, 2) never reaches here — it queues, and shows as
+        /// <see cref="Queued"/>. Never let this state's copy say "all builders are busy".
+        /// </para>
+        /// </summary>
+        QueueFull = 7,
     }
 
     /// <summary>
@@ -397,8 +412,171 @@ namespace DeNelle.Village.Buildings.Progression
 
                 if (_nextRequiresVillageTier > _villageTierNow) return UpgradeActionState.VillageGated;
                 if (!_nextAffordable) return UpgradeActionState.MissingResources;
+
+                // WO-1045 — THE LAST GATE, and the one that was missing. Everything above passed:
+                // affordable, ungated, nothing running here. All three tap paths STILL refuse when
+                // the Builders line is at its depth cap, and until now this getter answered Ready
+                // to that — a bright, tappable button over a guaranteed refusal.
+                //
+                // ⚠ Checked LAST on purpose. A player who is also broke or village-gated has a
+                // blocker they can act on sooner; naming the queue to them would be true but not
+                // the most useful thing to say. This state is reached ONLY when a full line is the
+                // sole remaining reason the tap cannot succeed.
+                if (t != null && t.IsLineFull(ChannelId.Builder)) return UpgradeActionState.QueueFull;
+
                 return UpgradeActionState.Ready;
             }
+        }
+
+        // ── WO-1045 — the QUEUE-FULL surface (reason + offer) ────────────────────
+        // The service already owned every word of this (BuildTimerService.LineFullMessage /
+        // TryBuySlot's Echo-gate text). NOTHING here writes new refusal copy; it only routes the
+        // service's own sentences to a View that previously consumed none of them.
+
+        /// <summary>
+        /// WO-1045 — why the action button is inert, in the SERVICE'S OWN WORDS, or "" when the
+        /// button is not blocked by the queue. Today this is the depth-cap sentence
+        /// (<see cref="BuildTimerService.LineFullMessage"/>) — the exact string a refusal would
+        /// return, so the pre-tap explanation and the post-tap refusal cannot disagree.
+        /// </summary>
+        public string ActionBlockedReason
+        {
+            get
+            {
+                if (ActionState != UpgradeActionState.QueueFull) return "";
+                var t = DeNelle.Core.FeatureFlags.BuildTimers ? BuildTimerService.Instance : null;
+                return t != null ? Ascii(t.LineFullMessage(ChannelId.Builder)) : "";
+            }
+        }
+
+        /// <summary>WO-1045 — items lined up on the Builders channel right now (active + pending).</summary>
+        public int BuilderQueueDepth
+        {
+            get
+            {
+                var t = DeNelle.Core.FeatureFlags.BuildTimers ? BuildTimerService.Instance : null;
+                return t != null ? t.QueueDepth(ChannelId.Builder) : 0;
+            }
+        }
+
+        /// <summary>WO-1045 — the DEPTH cap on the Builders channel (queueDepthPerLine + bought slots).</summary>
+        public int BuilderQueueLimit
+        {
+            get
+            {
+                var t = DeNelle.Core.FeatureFlags.BuildTimers ? BuildTimerService.Instance : null;
+                return t != null ? t.QueueDepthLimit(ChannelId.Builder) : 0;
+            }
+        }
+
+        /// <summary>
+        /// WO-1045 — CONCURRENCY, shown beside <see cref="BuilderQueueDepth"/> so the two axes are
+        /// visibly different numbers. Crews are how many jobs RUN AT ONCE (freeBuildSlots + bought);
+        /// exhausting them queues rather than refuses, and never produces
+        /// <see cref="UpgradeActionState.QueueFull"/>.
+        /// </summary>
+        public int BuilderCrewSlots
+        {
+            get
+            {
+                var t = DeNelle.Core.FeatureFlags.BuildTimers ? BuildTimerService.Instance : null;
+                return t != null ? t.SlotCount(ChannelId.Builder) : 0;
+            }
+        }
+
+        /// <summary>WO-1045 — crews working right now (0..<see cref="BuilderCrewSlots"/>).</summary>
+        public int BuilderCrewsBusy
+        {
+            get
+            {
+                var t = DeNelle.Core.FeatureFlags.BuildTimers ? BuildTimerService.Instance : null;
+                var active = t != null ? t.ActiveJobsOf(ChannelId.Builder) : null;
+                return active != null ? active.Count : 0;
+            }
+        }
+
+        /// <summary>
+        /// WO-1045 — true when an extra queue slot may be OFFERED (the Echo gate passes and the sink
+        /// is priced). Probed through <see cref="BuildTimerService.CanBuySlot"/>, which shares its
+        /// gate text with <see cref="BuildTimerService.TryBuySlot"/>. Deliberately true even when the
+        /// player is short of crystals: the offer stays visible and routes to the faucet.
+        /// </summary>
+        public bool CanBuyQueueSlot
+        {
+            get
+            {
+                var t = DeNelle.Core.FeatureFlags.BuildTimers ? BuildTimerService.Instance : null;
+                return t != null && t.CanBuySlot(ChannelId.Builder, out _);
+            }
+        }
+
+        /// <summary>
+        /// WO-1045 — when <see cref="CanBuyQueueSlot"/> is false, the SERVICE'S sentence naming what
+        /// unlocks the next slot ("Locked. Awaken a 3rd Echo..."). That is a real goal, not a wall —
+        /// so it is shown instead of nothing. "" when a slot IS purchasable.
+        /// </summary>
+        public string QueueSlotLockReason
+        {
+            get
+            {
+                var t = DeNelle.Core.FeatureFlags.BuildTimers ? BuildTimerService.Instance : null;
+                if (t == null) return "";
+                return t.CanBuySlot(ChannelId.Builder, out string why) ? "" : Ascii(why ?? "");
+            }
+        }
+
+        /// <summary>WO-1045 — crystal ask for the next Builder slot (0 when the sink is off).</summary>
+        public int QueueSlotPrice
+        {
+            get
+            {
+                var t = DeNelle.Core.FeatureFlags.BuildTimers ? BuildTimerService.Instance : null;
+                return t != null ? t.NextSlotPrice(ChannelId.Builder) : 0;
+            }
+        }
+
+        /// <summary>
+        /// WO-1045 — buy one extra Builder slot, which widens BOTH the crew pool and the line depth
+        /// (<see cref="BuildTimerService.QueueDepthLimit"/> = authored + bought), so it genuinely
+        /// unblocks a depth-capped queue.
+        /// <para>
+        /// ⛔ Routes through <see cref="BuildTimerService.TryBuySlot"/> and NEVER
+        /// <c>GrantSlot</c>/<c>BuySlot</c>, which are the free grant and skip both the Echo gate and
+        /// the crystal charge (WO-911 ruling Q6: Echoes unlock the RIGHT to buy, crystals complete
+        /// it). A player-facing path into GrantSlot would hand out unlimited free parallelism.
+        /// </para>
+        /// </summary>
+        /// <returns>True on purchase. On false, <see cref="Status"/> carries the service's reason —
+        /// prefixed with <see cref="BuildTimerService.InsufficientCrystalsPrefix"/> when the player
+        /// is merely broke, which is the caller's cue to route to the crystal store.</returns>
+        public bool TryBuyQueueSlot()
+        {
+            var t = DeNelle.Core.FeatureFlags.BuildTimers ? BuildTimerService.Instance : null;
+            if (t == null)
+            {
+                Status = "Build queues are not running right now.";
+                FlowTrace.Warn("Upgrade", _buildingId
+                    + " slot buy skipped: no BuildTimerService (ff.buildtimers off?).");
+                Raise();
+                return false;
+            }
+
+            bool ok = t.TryBuySlot(ChannelId.Builder, out string failure);
+            Status = ok
+                ? "Extra builder slot bought - the queue can take " + t.QueueDepthLimit(ChannelId.Builder) + " items."
+                : Ascii(failure ?? "Could not buy a slot right now.");
+
+            // §12 — the outcome AND the numbers that decided it, so a capture proves which of the
+            // two gates (Echo entitlement vs crystals) refused, and never re-theorises it.
+            FlowTrace.Step("Upgrade", _buildingId + " slot buy -> " + (ok ? "BOUGHT" : "REFUSED")
+                + " (price=" + t.NextSlotPrice(ChannelId.Builder)
+                + " depth=" + t.QueueDepth(ChannelId.Builder) + "/" + t.QueueDepthLimit(ChannelId.Builder)
+                + " crews=" + t.SlotCount(ChannelId.Builder)
+                + (ok ? "" : " reason='" + (failure ?? "") + "'") + ")");
+
+            Rebuild();
+            Raise();
+            return ok;
         }
 
         /// <summary>Whole seconds left on this building's in-flight upgrade (0 when idle).
@@ -514,6 +692,22 @@ namespace DeNelle.Village.Buildings.Progression
                 // always done this; only these mirror gates rejected). The button then shows
                 // "Queued" until the pull. No second state, no dead click.
 
+                // WO-1045 — MIRROR THE DEPTH GATE, because the service reports it as a BARE FALSE
+                // (BuildingUpgradeService.TryUpgrade :91) and the only status this method had for a
+                // false was "You can't afford that yet." Against the owner's 49k wood that sentence
+                // is not vague, it is WRONG — it sends the player to go and harvest more of a
+                // resource they already have piles of. Say what actually refused, in the service's
+                // own words. The button no longer reaches here (ActionState returns QueueFull), so
+                // this is the guard for the other doorways into UpgradeNext (Yarn / Select()).
+                if (timerSvc != null && timerSvc.IsLineFull(ChannelId.Builder))
+                {
+                    Status = Ascii(timerSvc.LineFullMessage(ChannelId.Builder));
+                    FlowTrace.Warn("Upgrade", _buildingId + " tier-" + next + " refused: " + Status
+                        + " (DEPTH cap, not affordability - wallet was not the blocker)");
+                    Raise();
+                    return;
+                }
+
                 bool ok = BuildingUpgradeService.TryUpgrade(_buildingId, next);
                 if (ok)
                 {
@@ -556,6 +750,22 @@ namespace DeNelle.Village.Buildings.Progression
 
             if (_isResource)
             {
+                // WO-1045 — same mirror as the city path above. ResourceBuildingState.TryUpgrade
+                // (:169) collapses a full LINE into UpgradeResult.Insufficient, which this switch
+                // renders as "You can't afford that yet." — a straight lie to a funded player. Catch
+                // the depth cap before the call and quote the service's own sentence.
+                {
+                    var lineSvc = DeNelle.Core.FeatureFlags.BuildTimers ? BuildTimerService.Instance : null;
+                    if (lineSvc != null && lineSvc.IsLineFull(ChannelId.Builder))
+                    {
+                        Status = Ascii(lineSvc.LineFullMessage(ChannelId.Builder));
+                        FlowTrace.Warn("Upgrade", _buildingId + " level upgrade refused: " + Status
+                            + " (DEPTH cap, not affordability)");
+                        Raise();
+                        return;
+                    }
+                }
+
                 var result = ResourceBuildingState.TryUpgrade(_buildingId);
                 switch (result)
                 {
@@ -1118,7 +1328,22 @@ namespace DeNelle.Village.Buildings.Progression
             int next = NextTier;
             _nextTierName = "Level " + next;
             _nextDescription = "Raises " + Ascii(Title) + " to Level " + next + " of " + MaxTier + ".";
-            _nextBonuses.Add("Stronger " + Ascii(Title) + " at Level " + next);
+
+            // ⚠ THIS USED TO BE THE ONE LINE:
+            //       _nextBonuses.Add("Stronger " + Ascii(Title) + " at Level " + next);
+            // For 225 wood + 100 iron the player was told only "Stronger Archer Tower at Level 3".
+            // True, and useless — it names no number, so the player cannot tell a real upgrade from
+            // a reskin, and cannot compare two towers. Owner ask 2026-08-17: show the real deltas.
+            //
+            // THE STATS WERE ALWAYS THERE. Tower range/damage step by tier via
+            // BuildModeController.TowerStatMultiplier (L1 x1.0 / L2 x1.25 / L3 x1.55), applied to
+            // the CATALOG BASE at placement so repeated upgrades never compound. We read that ONE
+            // authority rather than re-declaring the ladder — a second copy of those numbers would
+            // be the worst kind of duplicate authority, because the copy that drifts is the one
+            // that TELLS THE PLAYER what they are buying.
+            //
+            // Fire rate is deliberately not scaled, so it is deliberately not claimed here.
+            AddTowerStatDeltas(entry, next);
 
             var cost = PlacedStructureUpgradeService.CostForNext(entry, CurrentTier);
             AddWalletCostLine("Wood", cost.wood, _economy?.Wood ?? 0);
@@ -1127,6 +1352,62 @@ namespace DeNelle.Village.Buildings.Progression
             AddWalletCostLine("Crystals", cost.crystals, _economy?.Crystals ?? 0);
             _nextAffordable = BuildModeController.CanAfford(cost);
         }
+
+        /// <summary>
+        /// Adds the REAL per-stat deltas for a tower upgrade ("Range 17.5 -> 21.7"), falling back to
+        /// the old generic line for anything that is not a stat-stepping tower.
+        /// </summary>
+        /// <remarks>
+        /// WO-1046 (owner ask 2026-08-17: *"all it says is stronger tower, can we check what
+        /// changes"*). The numbers come from the ONE authority — the catalog base times
+        /// <see cref="BuildModeController.TowerStatMultiplier"/>, which is exactly what the placer
+        /// applies — so the card cannot advertise a number the game will not deliver.
+        ///
+        /// ⚠ WHY THE FALLBACK STAYS. Not every upgradeable row is a tower: storage containers step
+        /// CAPACITY (six levels, StorageCapsCatalog), collectors step YIELD, walls step TOUGHNESS.
+        /// Those ladders live elsewhere and are NOT this method's to claim. Printing "Range ->" for
+        /// a granary would be worse than the vague line it replaces — a confident wrong number
+        /// beats a vague right one only when it is right. Anything without a positive range/damage
+        /// base keeps the generic wording until its own ladder is surfaced.
+        /// </remarks>
+        private void AddTowerStatDeltas(DeNelle.Core.Catalog.CatalogEntry entry, int next)
+        {
+            float baseRange = 0f, baseDamage = 0f;
+            Guard.Try("Upgrade", "read tower stat base from catalog", () =>
+            {
+                if (entry?.repo == null) return;
+                baseRange  = entry.repo.range;
+                baseDamage = entry.repo.damage;
+            });
+
+            // Not a stat-stepping tower (or an unauthored row) — keep the old wording rather than
+            // inventing a ladder this row does not have.
+            if (baseRange <= 0f && baseDamage <= 0f)
+            {
+                _nextBonuses.Add("Stronger " + Ascii(Title) + " at Level " + next);
+                FlowTrace.Step("Upgrade",
+                    $"upgrade card for '{entry?.id}' has no range/damage base — generic bonus line kept.");
+                return;
+            }
+
+            float curMul  = BuildModeController.TowerStatMultiplier(CurrentTier);
+            float nextMul = BuildModeController.TowerStatMultiplier(next);
+
+            if (baseRange > 0f)
+                _nextBonuses.Add("Range " + Fmt(baseRange * curMul) + " -> " + Fmt(baseRange * nextMul));
+            if (baseDamage > 0f)
+                _nextBonuses.Add("Damage " + Fmt(baseDamage * curMul) + " -> " + Fmt(baseDamage * nextMul));
+
+            FlowTrace.Step("Upgrade",
+                $"upgrade card '{entry.id}' L{CurrentTier}->L{next}: range {baseRange * curMul:0.0}->" +
+                $"{baseRange * nextMul:0.0}, damage {baseDamage * curMul:0.0}->{baseDamage * nextMul:0.0} " +
+                $"(mul {curMul:0.00}->{nextMul:0.00}, the placer's own ladder).");
+        }
+
+        /// <summary>One decimal, no trailing ".0" — "17.5" and "14", never "14.0".</summary>
+        private static string Fmt(float v) =>
+            UnityEngine.Mathf.Approximately(v, UnityEngine.Mathf.Round(v)) ? UnityEngine.Mathf.RoundToInt(v).ToString()
+                                                   : v.ToString("0.0");
 
         /// <summary>A cost line whose HAVE column is read from the SAME wallet the placed-structure
         /// charge debits (EconomyService), not the harvest ledger the city/resource ladders use.</summary>
