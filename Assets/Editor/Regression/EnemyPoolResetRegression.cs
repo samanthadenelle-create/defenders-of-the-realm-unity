@@ -177,6 +177,14 @@ namespace DeNelle.Editor.Regression
             // Deliberately persistent.
             { "_poolKey", "THE QUEUE IDENTITY - clearing it is the P1-7 leak (body filed under a queue nobody drains)" },
             { "_authoredHeroAggroRadius", "the authored snapshot the reset RESTORES FROM" },
+            // Latched in Awake from the SERIALIZED field, which cannot change for the life of the
+            // instance - so it is per-BODY, not per-life, and clearing it would be the bug: a
+            // prefab-authored VFX set would be discarded on first reuse and replaced by the
+            // library floor. Note this does NOT strand a pooled body on the wrong family's art:
+            // EnsureTypeVfxSet only latches TRUE for a prefab/foreign assignment, and a
+            // library-resolved set leaves it FALSE (IsLibrarySet), so Configure still upgrades a
+            // recycled body to its new family. Verified at Enemy.EnsureTypeVfxSet.
+            { "_typeVfxSetAuthored", "per-BODY latch of a serialized value; clearing it would discard authored art on reuse" },
         };
 
         private static readonly Dictionary<string, string> BrainExempt = new Dictionary<string, string>
@@ -453,10 +461,12 @@ namespace DeNelle.Editor.Regression
             // Every key literal handed to Get must carry a live prefix, so the queue a Release
             // lands in is one a spawner genuinely drains.
             var bad = new List<string>();
+            int scannedForKeys = 0;
             foreach (string file in EnumerateModuleSources())
             {
                 string s = StripComments(SafeRead(file));
                 if (s == null) continue;
+                scannedForKeys++;
                 foreach (Match m in Regex.Matches(s, @"EnemyPool\.Get\s*\(\s*""([^""]*)"""))
                 {
                     string lit = m.Groups[1].Value;
@@ -469,7 +479,17 @@ namespace DeNelle.Editor.Regression
                              string.Join(", ", LiveKeyPrefixes) + "): " + string.Join(", ", bad) +
                              ". A key nothing else uses is a queue nothing drains.");
 
-            log.AppendLine("[pool-no-orphan-queue] unkeyed releases destroyed; all Get keys use a live prefix.");
+            // ZERO-GUARD (Shape B, 2026-08-16 coverage audit). This case's only assertion
+            // is inside the loop above. If EnumerateModuleSources() yields nothing (a moved
+            // module root, an unreadable tree), `bad` stays empty and the case logged an
+            // unqualified "all Get keys use a live prefix" having read no source at all.
+            // An iteration over nothing is not a verification of everything.
+            if (scannedForKeys == 0)
+                failures.Add("[pool-no-orphan-queue] scanned ZERO module source files - EnumerateModuleSources() " +
+                             "returned nothing readable, so the Get-key prefix check asserted NOTHING (not a pass)");
+
+            log.AppendLine("[pool-no-orphan-queue] scanned " + scannedForKeys +
+                           " module source(s); unkeyed releases destroyed; all Get keys use a live prefix.");
         }
 
         // ── Case 6: stamping a Role obliges applying tactics ─────────────────

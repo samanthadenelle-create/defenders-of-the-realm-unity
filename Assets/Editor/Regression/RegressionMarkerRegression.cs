@@ -127,23 +127,22 @@ namespace DeNelle.Editor.Regression
         //  RULE 4 baseline - files that ALREADY answer OK out of a guard.
         //  RATCHET: a NEW file doing this fails. These are owed cleanups.
         // ---------------------------------------------------------------------
-        //  HeroLocomotionClipRegression       - "motion-castings.json missing - skip"
-        //  OfflineHarvestRegression           - "skipped: needs fleet" (documented NAMED SKIP)
-        //  VillageEconomyRegression           - "skipped: needs fleet"
-        //  ModalArbiterRegistrationRegression - "SKIPPED -- Assets/_Modules not found"
-        //  UiMvvmConformanceRegression        - "SKIPPED -- Assets/_Modules not found"
-        //  UiObsidianConformanceRegression    - "SKIPPED -- Assets/_Modules not found"
-        // The last three are source-lints over Assets/_Modules; that directory cannot be
-        // absent in this project, so the skip is unreachable rather than dangerous - but it
-        // is the same SHAPE, so it is baselined rather than excused.
+        //  EMPTIED 2026-08-16. All six baselined files (HeroLocomotionClip, OfflineHarvest,
+        //  VillageEconomy, ModalArbiterRegistration, UiMvvmConformance, UiObsidianConformance)
+        //  were converted from a silent `return true` to a DECLARED stand-down via
+        //  RegressionOutcome.Skip, which the ratchet accepts and which DataRegression counts
+        //  in the third (skipped) column instead of the green one. So did 18 more sites the
+        //  ratchet had never seen: seven that guarded on a NEGATED CALL rather than a null
+        //  test, and eleven that stood down with a bare `return;` out of a void section.
+        //
+        //  A baseline entry is a hole in the net, not a note in a ledger: while a file sat
+        //  in this list, EVERY hollow pass in it was invisible, including new ones. It is
+        //  empty because the debt was paid, and it must stay empty - a new entry here is a
+        //  suite excused from the only rule that proves it asserts anything. Declare the
+        //  stand-down with RegressionOutcome.Skip / PartialSkip instead; that is honest and
+        //  visible, and it costs one line.
         private static readonly HashSet<string> KnownHollowPassFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
-            "HeroLocomotionClipRegression.cs",
-            "OfflineHarvestRegression.cs",
-            "VillageEconomyRegression.cs",
-            "ModalArbiterRegistrationRegression.cs",
-            "UiMvvmConformanceRegression.cs",
-            "UiObsidianConformanceRegression.cs",
         };
 
         private const string HollowPassOptOut = "hollow-pass-ok";
@@ -271,6 +270,7 @@ namespace DeNelle.Editor.Regression
             //  RULE 4 - and can actually go red / does not answer OK from a guard
             // -----------------------------------------------------------------
             int registered = 0, optedOut = 0, hollowBaseline = 0;
+            int emptyIterationAdvisories = 0, emptyIterationFiles = 0;   // RULE 5 (advisory)
             var newHollow = new List<string>();
             foreach (var p in Directory.GetFiles(regressionDir, "*.cs", SearchOption.AllDirectories))
             {
@@ -309,6 +309,10 @@ namespace DeNelle.Editor.Regression
                                       ") - a suite that green-passes on a null singleton asserts nothing. " +
                                       "Fail (or make the state install), or mark the line '" + HollowPassOptOut + "'.");
                 }
+
+                // RULE 5 - ADVISORY ONLY (see CountUnguardedDiscoveryLoops). Counted, never failed.
+                int adv = CountUnguardedDiscoveryLoops(code);
+                if (adv > 0) { emptyIterationAdvisories += adv; emptyIterationFiles++; }
             }
             foreach (var h in newHollow)
                 failures.Add("hollow pass: " + h);
@@ -364,7 +368,10 @@ namespace DeNelle.Editor.Regression
                      " Run(out) oracles registered in DataRegression.RunAll (" + optedOut +
                      " declared standalone), " + gateGreps +
                      " gate-script marker grep(s) all resolve to exactly one emitter; hollow-pass ratchet " +
-                     hollowBaseline + " baselined / 0 new";
+                     hollowBaseline + " baselined / 0 new; RULE 5 advisory: " + emptyIterationAdvisories +
+                     " unguarded discovered-collection loop(s) across " + emptyIterationFiles +
+                     " suite(s) could report OK having checked ZERO items (Shape B - see CountUnguardedDiscoveryLoops " +
+                     "for why this is counted and not failed)";
             return true;
         }
 
@@ -545,10 +552,31 @@ namespace DeNelle.Editor.Regression
         }
 
         /// <summary>
-        /// Lines where the suite answers TRUE straight out of a null / missing-file /
-        /// empty guard - the "no-op and report OK" shape. Narrow window (the guard and
-        /// the return within 4 lines, with a reason assignment) to keep false positives
-        /// near zero; anything legitimate opts out with the hollow-pass-ok token.
+        /// Lines where the suite answers TRUE straight out of a guard - the "no-op and
+        /// report OK" shape. Narrow window (the guard and the return within 4 lines) to
+        /// keep false positives near zero.
+        ///
+        /// TWO ARMS, and the second one exists because the first had a VOCABULARY, and a
+        /// vocabulary is a list of the shapes somebody already thought of:
+        ///
+        ///   ARM A  the original - a null / IsNullOrEmpty / missing-file / missing-dir
+        ///          guard, a reason assignment, and `return true`.
+        ///
+        ///   ARM B  (2026-08-16) SEVEN suites EVADED arm A by guarding on a NEGATED CALL
+        ///          instead of a null test - `if (!InstallState(gss, throwaway))`,
+        ///          `if (!DevClock.Available)`. Identical damage, invisible to the
+        ///          ratchet, because the detector was matching TOKENS rather than the
+        ///          SHAPE. UpgradeFamilyPrecedence evaded it twice over: its stand-down
+        ///          was a bare `return;` out of a void case, so there was no `return true`
+        ///          to see at all. Arm B keys on the thing every one of them has in
+        ///          common and that no legitimate verdict block has: a guarding `if` plus
+        ///          the WORD "skip", ending in an unqualified return.
+        ///
+        /// THE ESCAPE HATCH IS NOW HONEST. A suite that genuinely must stand down
+        /// declares it with RegressionOutcome.Skip / PartialSkip, which stamps the reason
+        /// so DataRegression counts it in the THIRD column instead of the green one. That
+        /// declaration is what clears this ratchet - not a silent `return true`, and not
+        /// a baseline entry. `hollow-pass-ok` remains for the rare legitimate case.
         /// </summary>
         private static List<int> FindHollowPassLines(string code)
         {
@@ -557,20 +585,115 @@ namespace DeNelle.Editor.Regression
             string[] lines = code.Replace("\r\n", "\n").Split('\n');
             for (int i = 0; i < lines.Length; i++)
             {
-                if (lines[i].IndexOf("return true", StringComparison.Ordinal) < 0) continue;
+                string line = lines[i];
+                bool returnsTrue = line.IndexOf("return true", StringComparison.Ordinal) >= 0;
+                bool bareReturn = Regex.IsMatch(line, @"^\s*return\s*;\s*$");
+                if (!returnsTrue && !bareReturn) continue;
+
                 int from = Math.Max(0, i - 3);
                 var window = new System.Text.StringBuilder();
                 for (int j = from; j <= i; j++) window.Append(lines[j]).Append('\n');
                 string w = window.ToString();
-                bool guarded = w.Contains("== null")
-                            || w.Contains("IsNullOrEmpty")
-                            || w.Contains("!File.Exists")
-                            || w.Contains("!Directory.Exists");
-                bool namesReason = w.Contains("reason");
-                bool alsoFails = w.Contains("return false");
-                if (guarded && namesReason && !alsoFails) hits.Add(i + 1);
+
+                // A declared stand-down is the CORRECT answer, not a hollow pass.
+                if (w.IndexOf("RegressionOutcome.Skip", StringComparison.Ordinal) >= 0 ||
+                    w.IndexOf("RegressionOutcome.PartialSkip", StringComparison.Ordinal) >= 0 ||
+                    w.IndexOf(RegressionOutcome.SkipToken, StringComparison.Ordinal) >= 0 ||
+                    w.IndexOf(RegressionOutcome.PartialSkipToken, StringComparison.Ordinal) >= 0) continue;
+
+                // The window can go red on its own - not a hollow pass. `failures.Add` is
+                // the void-section equivalent of `return false`: a section that RECORDS a
+                // failure and then returns has asserted, and asserted loudly.
+                if (w.Contains("return false") || w.Contains("failures.Add")) continue;
+
+                // ARM A - the classic null/missing guard answering OK.
+                bool guardedByToken = w.Contains("== null")
+                                   || w.Contains("IsNullOrEmpty")
+                                   || w.Contains("!File.Exists")
+                                   || w.Contains("!Directory.Exists");
+                if (returnsTrue && guardedByToken && w.Contains("reason")) { hits.Add(i + 1); continue; }
+
+                // ARM B - ANY guarding `if` whose stand-down says so in words. Keyed on
+                // "skip" rather than on a guard vocabulary so a novel guard form cannot
+                // evade it the way the negated-call form did. A verdict block
+                // (`if (failures.Count == 0) { reason = "... OK"; return true; }`) does
+                // not contain the word, so it is not swept up.
+                bool hasGuardIf = Regex.IsMatch(w, @"\bif\s*\(") &&
+                                  (w.Contains("!") || w.Contains("== null") || w.Contains("== 0"));
+                bool saysSkip = w.IndexOf("skip", StringComparison.OrdinalIgnoreCase) >= 0
+                             || w.IndexOf("stand down", StringComparison.OrdinalIgnoreCase) >= 0
+                             || w.IndexOf("stand-down", StringComparison.OrdinalIgnoreCase) >= 0;
+                if (hasGuardIf && saysSkip) hits.Add(i + 1);
             }
             return hits;
+        }
+
+        // =====================================================================
+        //  RULE 5 [empty-iteration ADVISORY]  --  Shape B, and the honest limit of a
+        //  static scan.
+        // =====================================================================
+        // Shape B is a suite that iterates a collection which can be EMPTY, asserts
+        // inside the loop, and then reports OK having checked nothing: "OK - 0 checked".
+        // It is strictly worse than Shape A because there is no guard, no token and no
+        // return-true to look at - NO TOKEN SCAN CATCHES IT AT ANY WINDOW LENGTH.
+        //
+        // WHY THIS IS ADVISORY AND NOT A FAILING RULE. Deciding "can this collection be
+        // empty at runtime" is undecidable in general, and the decidable approximations
+        // measured on this tree are hopeless as gates: "every assertion is inside a loop
+        // with no zero-guard" matches 132 of ~150 registered suites, because iterating a
+        // `static readonly string[]` that is never empty is the normal way to write an
+        // oracle. Narrowing the source to DISCOVERED collections (Directory.GetFiles,
+        // Enumerate*Sources, FindObjectsByType, GetComponentsInChildren) - the ones that
+        // genuinely can come back empty - still lands on 23 files. Failing the gate on 23
+        // files that were never proven wrong would be the same crime as a hollow pass,
+        // pointed the other way: a number nobody can act on.
+        //
+        // THE REAL FIX, and it generalises to BOTH shapes: every suite DECLARES the
+        // number of things it checked, and a declared zero is a failure. That is a
+        // contract change across ~150 suites, so it is a work order, not a lane edit.
+        // The four sites this audit could prove (CoreDataHub, EnemyPoolReset, and both
+        // BuildMenuRealEconomy source-lint cases) got explicit zero-guards in their own
+        // files instead - a real pin where the evidence existed, and an honest count
+        // here where it did not.
+        //
+        // This method therefore COUNTS the discovered-collection loops that carry
+        // assertions with no zero-guard and reports the number in the reason line. It
+        // never fails. When the declared-count contract lands, this becomes the rule.
+        private static readonly Regex DiscoverySource = new Regex(
+            @"Directory\.(GetFiles|EnumerateFiles|GetDirectories)|Enumerate\w*Sources|EnumerateScripts|" +
+            @"RuntimeSources|FindObjectsByType|GetComponentsInChildren|AssetDatabase\.Find",
+            RegexOptions.Compiled);
+
+        private static readonly Regex ForeachHeader = new Regex(
+            @"^\s*foreach\s*\(\s*[\w<>,\[\]\.\s]+\s+\w+\s+in\s+(.+?)\s*\)\s*$", RegexOptions.Compiled);
+
+        private static int CountUnguardedDiscoveryLoops(string code)
+        {
+            if (string.IsNullOrEmpty(code)) return 0;
+            string[] lines = code.Replace("\r\n", "\n").Split('\n');
+            int count = 0;
+            for (int i = 0; i < lines.Length; i++)
+            {
+                Match h = ForeachHeader.Match(lines[i].TrimEnd());
+                if (!h.Success) continue;
+                if (!DiscoverySource.IsMatch(h.Groups[1].Value)) continue;
+
+                var body = new System.Text.StringBuilder();
+                for (int j = i; j < Math.Min(lines.Length, i + 40); j++) body.Append(lines[j]).Append('\n');
+                string b = body.ToString();
+                if (b.IndexOf("failures.Add", StringComparison.Ordinal) < 0) continue;
+
+                // A counter incremented in the body and compared against zero anywhere in
+                // the file IS the zero-guard (that is the shape the four proven fixes use).
+                bool guarded = false;
+                foreach (Match inc in Regex.Matches(b, @"(\w+)\s*\+\+"))
+                {
+                    string id = inc.Groups[1].Value;
+                    if (Regex.IsMatch(code, @"\b" + Regex.Escape(id) + @"\s*(==|<=|<|>)\s*0\b")) { guarded = true; break; }
+                }
+                if (!guarded) count++;
+            }
+            return count;
         }
     }
 }

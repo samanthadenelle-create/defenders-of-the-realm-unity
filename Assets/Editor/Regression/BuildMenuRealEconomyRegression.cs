@@ -296,11 +296,13 @@ namespace DeNelle.Editor.Regression
                 return true;
             }
 
-            public void Grant(DeNelle.Village.ResourceCost amount)
+            public DeNelle.Village.ResourceCost Grant(DeNelle.Village.ResourceCost amount)
             {
                 Wood += amount.Wood; Food += amount.Food; Iron += amount.Iron;
                 Crystals += amount.Crystals; Coins += amount.Coins;
                 OnChanged?.Invoke(new ResourceSnapshot(Wood, Food, Iron, Crystals));
+                // Uncapped fake ledger: every requested unit lands, so applied == requested.
+                return amount;
             }
 
             public string Describe()
@@ -881,6 +883,14 @@ namespace DeNelle.Editor.Regression
                                  "that is a fabricated balance, exactly the BuildMenu.GetMaterialCount defect");
                 }
             }
+            // ZERO-GUARD (Shape B, 2026-08-16 coverage audit): every assertion in this case
+            // lives inside the loop, so scanning zero files produced zero failures and read
+            // as a clean pass. "scanned 0 source file(s)" is the source root having moved,
+            // not the codebase being clean.
+            if (scanned == 0)
+                failures.Add("[no-fake-wallet] scanned ZERO source file(s) - EnumerateSources() returned nothing, " +
+                             "so this case asserted NOTHING. Fix the source root; do not read this as clean.");
+
             log.AppendLine("  [no-fake-wallet] scanned " + scanned + " source file(s), " + flagged + " hardcoded-balance site(s)");
         }
 
@@ -899,12 +909,13 @@ namespace DeNelle.Editor.Regression
 
         private static void CaseTrySpendHonoured(List<string> failures, StringBuilder log)
         {
-            int calls = 0, discards = 0, allowed = 0;
+            int calls = 0, discards = 0, allowed = 0, scanned = 0;
             foreach (string path in EnumerateSources())
             {
                 if (IsSelf(path)) continue;
                 string src = ReadSource(path);
                 if (src == null) continue;
+                scanned++;
                 string code = StripCommentsAndStrings(src);
 
                 foreach (Match m in TrySpendCall.Matches(code))
@@ -935,8 +946,15 @@ namespace DeNelle.Editor.Regression
                                  "bool (or return it up to a caller that does).");
                 }
             }
-            log.AppendLine("  [tryspend-honoured] " + calls + " TrySpend call site(s): " + discards +
-                           " unverified, " + allowed + " allowlisted");
+            // ZERO-GUARD (Shape B): zero files scanned means this case verified nothing.
+            // Zero CALLS is a weaker signal (the codebase could genuinely have none), so
+            // only the file count is asserted - the honest line, not the convenient one.
+            if (scanned == 0)
+                failures.Add("[tryspend-honoured] scanned ZERO source file(s) - EnumerateSources() returned nothing, " +
+                             "so no TrySpend call site was examined. This case asserted NOTHING.");
+
+            log.AppendLine("  [tryspend-honoured] scanned " + scanned + " file(s), " + calls + " TrySpend call site(s): " +
+                           discards + " unverified, " + allowed + " allowlisted");
         }
 
         private static DiscardException? MatchAllowed(string path, string statement)

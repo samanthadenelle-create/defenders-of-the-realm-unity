@@ -90,6 +90,17 @@ namespace DeNelle.Editor
 
             log.AppendLine($"checked {checkedCount} canonical file(s), excluded {excludedCount} (skr_*/battle_*/*.sample.json).");
 
+            // ZERO-GUARD (Shape B, 2026-08-16 coverage audit). Every assertion in this
+            // suite lives inside the loop above, so an EMPTY `files` array produced zero
+            // failures and an unqualified "CORE DATA HUB OK - 0 canonical file(s)". A
+            // canonical data directory that exists but holds nothing to check is not a
+            // pass, it is the catalog being gone - which is the exact WebGL-empty defect
+            // this oracle was written to catch. An iteration that checked nothing must
+            // never be reported as a verification.
+            if (checkedCount == 0)
+                failures.Add($"canonical data hub checked ZERO files ({files.Length} .json present, {excludedCount} excluded) " +
+                             $"in {streamingDir} - this suite asserted nothing; an empty catalog loads EMPTY in WebGL");
+
             if (failures.Count == 0)
             {
                 Debug.Log(log.ToString() + "CORE_DATAHUB_OK");
