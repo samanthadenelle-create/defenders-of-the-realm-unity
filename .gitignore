@@ -147,6 +147,116 @@ Thumbs.db
 # Un-ignore per asset, deliberately, so the mirror stays ignored and owner art does not.
 # Folders need BOTH the folder and its .meta, and the negation must re-open the folder
 # before a file inside it can be matched.
+# Jeweler — owner-sourced Tripo art, replaced the 160 KB placeholder 2026-08-17. .fbx
+# overwritten in place, .meta KEPT so the GUID survives. The Jeweler is one of the six
+# NPCs that earns its door (it opens the jewelry-crafting bench, which nothing else does)
+# and it anchors the rough-stone economy.
+!/Assets/Resources/Structures/jeweler.fbx
+!/Assets/Resources/Structures/jeweler.fbx.meta
+!/Assets/Resources/Structures/jeweler.fbm/
+!/Assets/Resources/Structures/jeweler.fbm.meta
+!/Assets/Resources/Structures/jeweler.fbm/**
+!/Assets/Resources/Structures/jeweler.prefab
+!/Assets/Resources/Structures/jeweler.prefab.meta
+!/Assets/Resources/Structures/jeweler.mat
+!/Assets/Resources/Structures/jeweler.mat.meta
+
+# RealmStore — owner-sourced Tripo art for PROD-003, the game's DEDICATED monetization
+# storefront. Staged 2026-08-17.
+# ⚠ THIS ONE IS NOT LIKE THE OTHERS AND MUST NOT BE ADDED TO THE BUILD CATALOG. Per the
+# owner's ruling it is baked into the hub at a FIXED location and is NOT destructible:
+# a store that can be sold, moved or destroyed is a store that can go OFFLINE, which
+# turns revenue into a function of whether the last raid wave reached one building.
+# It is world furniture, like the Heart — not a placeable structure.
+!/Assets/Resources/Structures/RealmStore.fbx
+!/Assets/Resources/Structures/RealmStore.fbx.meta
+!/Assets/Resources/Structures/RealmStore.fbm/
+!/Assets/Resources/Structures/RealmStore.fbm.meta
+!/Assets/Resources/Structures/RealmStore.fbm/**
+!/Assets/Resources/Structures/RealmStore.prefab
+!/Assets/Resources/Structures/RealmStore.prefab.meta
+!/Assets/Resources/Structures/RealmStore.mat
+!/Assets/Resources/Structures/RealmStore.mat.meta
+
+# Forge (the WEAPONSMITH — vendors.json: forge sells categories=[weapon]) — owner-sourced
+# Tripo art, replaced the 64 KB placeholder 2026-08-17. .fbx overwritten in place, .meta
+# KEPT so the GUID survives.
+# ⚠ THE FILE IS CALLED Forge.fbx AND THE BUILDING SELLS WEAPONS. Do not "correct" either
+# to match the other without reading vendors.json first — see the displayName defect noted
+# in the catalog. Function (what it sells) is the authority, not the id or the label.
+!/Assets/Resources/Structures/Forge.fbx
+!/Assets/Resources/Structures/Forge.fbx.meta
+!/Assets/Resources/Structures/Forge.fbm/
+!/Assets/Resources/Structures/Forge.fbm.meta
+!/Assets/Resources/Structures/Forge.fbm/**
+!/Assets/Resources/Structures/Forge.prefab
+!/Assets/Resources/Structures/Forge.prefab.meta
+!/Assets/Resources/Structures/Forge.mat
+!/Assets/Resources/Structures/Forge.mat.meta
+
+# Armorer — owner-sourced Tripo art, REPLACED the 96 KB placeholder 2026-08-17. The .fbx
+# was overwritten in place and its .meta KEPT, so the GUID is unchanged and anything
+# referencing it still resolves (a delete-then-add would have re-issued the GUID and
+# broken Building_armorer.prefab). It was previously covered by the blanket
+# Resources/Structures ignore as pack-mirror art; it is owner art now, so it needs its
+# own negation or a fresh clone renders a missing building.
+!/Assets/Resources/Structures/armorer.fbx
+!/Assets/Resources/Structures/armorer.fbx.meta
+!/Assets/Resources/Structures/armorer.fbm/
+!/Assets/Resources/Structures/armorer.fbm.meta
+!/Assets/Resources/Structures/armorer.fbm/**
+!/Assets/Resources/Structures/armorer.prefab
+!/Assets/Resources/Structures/armorer.prefab.meta
+!/Assets/Resources/Structures/armorer.mat
+!/Assets/Resources/Structures/armorer.mat.meta
+
+# Ballista tier ladder — owner-sourced Tripo art (L1 staged 2026-08-17; L2/L3 to follow).
+# Same reasoning as every entry below: purchased art that exists nowhere else. The .fbm
+# folder MUST keep the fbx's basename or Unity cannot resolve the embedded textures, so
+# the negation names it explicitly rather than relying on a glob.
+!/Assets/Resources/Structures/Ballista_L1.fbx
+!/Assets/Resources/Structures/Ballista_L1.fbx.meta
+!/Assets/Resources/Structures/Ballista_L1.fbm/
+!/Assets/Resources/Structures/Ballista_L1.fbm.meta
+!/Assets/Resources/Structures/Ballista_L1.fbm/**
+!/Assets/Resources/Structures/Ballista_L1.prefab
+!/Assets/Resources/Structures/Ballista_L1.prefab.meta
+!/Assets/Resources/Structures/Ballista_L1.mat
+!/Assets/Resources/Structures/Ballista_L1.mat.meta
+!/Assets/Resources/Structures/Ballista_L2.fbx
+!/Assets/Resources/Structures/Ballista_L2.fbx.meta
+!/Assets/Resources/Structures/Ballista_L2.fbm/
+!/Assets/Resources/Structures/Ballista_L2.fbm.meta
+!/Assets/Resources/Structures/Ballista_L2.fbm/**
+!/Assets/Resources/Structures/Ballista_L2.prefab
+!/Assets/Resources/Structures/Ballista_L2.prefab.meta
+!/Assets/Resources/Structures/Ballista_L2.mat
+!/Assets/Resources/Structures/Ballista_L2.mat.meta
+!/Assets/Resources/Structures/Ballista_L3.fbx
+!/Assets/Resources/Structures/Ballista_L3.fbx.meta
+!/Assets/Resources/Structures/Ballista_L3.fbm/
+!/Assets/Resources/Structures/Ballista_L3.fbm.meta
+!/Assets/Resources/Structures/Ballista_L3.fbm/**
+!/Assets/Resources/Structures/Ballista_L3.prefab
+!/Assets/Resources/Structures/Ballista_L3.prefab.meta
+!/Assets/Resources/Structures/Ballista_L3.mat
+!/Assets/Resources/Structures/Ballista_L3.mat.meta
+
+# Wagon — owner-downloaded medieval wagon, staged 2026-08-17 from Downloads where a
+# previous CLI seat left it unimported. SAME REASONING AS THE WATCHTOWER BELOW: this is
+# purchased art that exists nowhere else, so leaving it ignored means it lives on exactly
+# one disk and every other clone renders whatever references it as a missing prefab.
+# The .prefab/.mat lines are pre-authorised so the builder's output is tracked too.
+!/Assets/Resources/Structures/Wagon.fbx
+!/Assets/Resources/Structures/Wagon.fbx.meta
+!/Assets/Resources/Structures/Wagon_Tex/
+!/Assets/Resources/Structures/Wagon_Tex.meta
+!/Assets/Resources/Structures/Wagon_Tex/**
+!/Assets/Resources/Structures/Wagon.prefab
+!/Assets/Resources/Structures/Wagon.prefab.meta
+!/Assets/Resources/Structures/Wagon.mat
+!/Assets/Resources/Structures/Wagon.mat.meta
+
 !/Assets/Resources/Structures/Tower_Wooden_Watchtower.fbx
 !/Assets/Resources/Structures/Tower_Wooden_Watchtower.fbx.meta
 !/Assets/Resources/Structures/Tower_Wooden_Watchtower_Tex/
