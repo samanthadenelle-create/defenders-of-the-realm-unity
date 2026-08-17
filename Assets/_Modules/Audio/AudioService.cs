@@ -646,7 +646,7 @@ namespace DeNelle.Audio
                 // WO-682: guarded — a corrupt/unloadable library asset is ONE logged
                 // line + the synth fallback, never a throw up the combat call stack.
                 _sfxLibrary = Guard.Try("Audio", "load SfxClipLibrary",
-                    () => AudioAssetLoader.LoadAudioAsset<SfxClipLibrary>(SfxLibraryResourcePath), fallback: null);
+                    () => AudioAssetLoader.LoadAudioAsset<SfxClipLibrary>(SfxLibraryResourcePath, optional: true), fallback: null);
                 _sfxLibraryResolved = true;
             }
 
@@ -754,7 +754,7 @@ namespace DeNelle.Audio
                 if (_sfxLibrary == null && !_sfxLibraryResolved)
                 {
                     _sfxLibrary = Guard.Try("Audio", "load SfxClipLibrary (prewarm)",
-                        () => AudioAssetLoader.LoadAudioAsset<SfxClipLibrary>(SfxLibraryResourcePath), fallback: null);
+                        () => AudioAssetLoader.LoadAudioAsset<SfxClipLibrary>(SfxLibraryResourcePath, optional: true), fallback: null);
                     _sfxLibraryResolved = true;
                 }
                 if (_sfxLibrary != null && _sfxLibrary.Entries != null)

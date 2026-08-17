@@ -88,7 +88,16 @@ namespace DeNelle.Village
         public static AudioClip Load(string resourcePath)
         {
             if (string.IsNullOrEmpty(resourcePath)) return null;
-            try { return DeNelle.Core.AudioAssetLoader.LoadClip(resourcePath); }
+            // optional:true — THIS METHOD'S CONTRACT IS "Null when absent" (see summary), and every
+            // caller is written to that contract: HeartwoodAmbientController guards each bed with
+            // `if (_x == null) _x = Load(...)`, TowerVoiceController null-checks before queueing,
+            // and LoadFirst below EXPECTS misses by design — it walks candidates until one resolves,
+            // so on a 4-path list three misses are the normal case, not three errors.
+            // Reporting these at Fail put NINE error-level lines in the F8 queue on 2026-08-17
+            // (Heartwood_Healthy/_Strained/_Critical, Heart_Hit, Heart_Fall, HeartFailing x4) for
+            // ambient and voice content that was simply never authored. Still reported once per
+            // key, just at Warn — the level now matches the contract.
+            try { return DeNelle.Core.AudioAssetLoader.LoadClip(resourcePath, optional: true); }
             catch { return null; }
         }
 

@@ -44,6 +44,24 @@ namespace DeNelle.Village
     /// </summary>
     internal static class GameSfx
     {
+        /// <summary>
+        /// Loads an SFX clip as OPTIONAL. Every lookup in this class is a
+        /// <c>LoadOpt(...) ?? GenerateX()</c> pair — an authored clip when one ships, a synthesised
+        /// tone when none does. AudioAssetLoader's own header names these keys as having NO file on
+        /// disk and never being meant to.
+        /// <para>
+        /// ⛔ SO THEIR MISS IS A DESIGNED STATE, NOT AN ERROR, and it must not report as one. Until
+        /// 2026-08-17 the seam emitted FlowTrace.Fail on every miss — error-level, which trips the
+        /// F8 harness — so a fallback working EXACTLY as intended raised an alarm on every boot
+        /// (seq=2531 'Sfx/BuildDenied', seq=2532 'Sfx/WaveStart'). One helper rather than 17
+        /// call-site edits, so a new SFX added here inherits the right severity by default instead
+        /// of re-introducing the noise.
+        /// </para>
+        /// ⚠ Only for keys with a synth fallback or a null-tolerant caller. A clip that MUST exist
+        /// should call AudioAssetLoader.LoadClip directly and stay loud.
+        /// </summary>
+        private static AudioClip LoadOpt(string key) => AudioAssetLoader.LoadClip(key, optional: true);
+
         private const int Rate = 44100;
 
         private static AudioClip s_towerFire;
@@ -72,7 +90,7 @@ namespace DeNelle.Village
         public static void PlayTowerFire()
         {
             if (s_towerFire == null)
-                s_towerFire = AudioAssetLoader.LoadClip("Sfx/TowerFire") ?? GenerateTowerFire();
+                s_towerFire = LoadOpt("Sfx/TowerFire") ?? GenerateTowerFire();
             CoreServices.Audio?.PlaySfx(s_towerFire, 0.28f);
         }
 
@@ -84,7 +102,7 @@ namespace DeNelle.Village
         public static void PlayTowerPlace()
         {
             if (s_towerPlace == null)
-                s_towerPlace = AudioAssetLoader.LoadClip("Sfx/TowerPlace") ?? GenerateTowerPlace();
+                s_towerPlace = LoadOpt("Sfx/TowerPlace") ?? GenerateTowerPlace();
             CoreServices.Audio?.PlaySfx(s_towerPlace, 0.7f);
         }
 
@@ -97,7 +115,7 @@ namespace DeNelle.Village
         public static void PlayWaveStart()
         {
             if (s_waveStart == null)
-                s_waveStart = AudioAssetLoader.LoadClip("Sfx/WaveStart") ?? GenerateWaveStart();
+                s_waveStart = LoadOpt("Sfx/WaveStart") ?? GenerateWaveStart();
             CoreServices.Audio?.PlaySfx(s_waveStart, 0.8f);
         }
 
@@ -110,7 +128,7 @@ namespace DeNelle.Village
         public static void PlayLookoutHorn()
         {
             if (s_lookoutHorn == null)
-                s_lookoutHorn = AudioAssetLoader.LoadClip("Sfx/LookoutHorn");
+                s_lookoutHorn = LoadOpt("Sfx/LookoutHorn");
             if (s_lookoutHorn != null)
                 CoreServices.Audio?.PlaySfx(s_lookoutHorn, 0.85f);
         }
@@ -128,7 +146,7 @@ namespace DeNelle.Village
         public static void PlaySwordClash()
         {
             if (s_swordClash == null)
-                s_swordClash = AudioAssetLoader.LoadClip("Sfx/SwordClash") ?? GenerateSwordClash();
+                s_swordClash = LoadOpt("Sfx/SwordClash") ?? GenerateSwordClash();
 
             if (!DeNelle.Core.FeatureFlags.CombatFeel)
             {
@@ -141,7 +159,7 @@ namespace DeNelle.Village
                 var pool = new System.Collections.Generic.List<AudioClip> { s_swordClash };
                 for (int i = 2; i <= 4; i++)
                 {
-                    var c = AudioAssetLoader.LoadClip("Sfx/SwordClash" + i);
+                    var c = LoadOpt("Sfx/SwordClash" + i);
                     if (c != null) pool.Add(c);
                 }
                 s_swordClashPool = pool.ToArray();
@@ -153,49 +171,49 @@ namespace DeNelle.Village
         public static void PlaySpellCast()
         {
             if (s_spellCast == null)
-                s_spellCast = AudioAssetLoader.LoadClip("Sfx/SpellCast") ?? GenerateSpellCast();
+                s_spellCast = LoadOpt("Sfx/SpellCast") ?? GenerateSpellCast();
             CoreServices.Audio?.PlaySfx(s_spellCast, 0.55f);
         }
 
         public static void PlayTowerArrowHit()
         {
             if (s_towerArrowHit == null)
-                s_towerArrowHit = AudioAssetLoader.LoadClip("Sfx/TowerArrowHit") ?? GenerateTowerArrowHit();
+                s_towerArrowHit = LoadOpt("Sfx/TowerArrowHit") ?? GenerateTowerArrowHit();
             CoreServices.Audio?.PlaySfx(s_towerArrowHit, 0.4f);
         }
 
         public static void PlayPetHarvest()
         {
             if (s_petHarvest == null)
-                s_petHarvest = AudioAssetLoader.LoadClip("Sfx/PetHarvest") ?? GeneratePetHarvest();
+                s_petHarvest = LoadOpt("Sfx/PetHarvest") ?? GeneratePetHarvest();
             CoreServices.Audio?.PlaySfx(s_petHarvest, 0.5f);
         }
 
         public static void PlayBuildingUpgrade()
         {
             if (s_buildingUpgrade == null)
-                s_buildingUpgrade = AudioAssetLoader.LoadClip("Sfx/BuildingUpgrade") ?? GenerateBuildingUpgrade();
+                s_buildingUpgrade = LoadOpt("Sfx/BuildingUpgrade") ?? GenerateBuildingUpgrade();
             CoreServices.Audio?.PlaySfx(s_buildingUpgrade, 0.75f);
         }
 
         public static void PlayLevelUp()
         {
             if (s_levelUp == null)
-                s_levelUp = AudioAssetLoader.LoadClip("Sfx/LevelUp") ?? GenerateLevelUp();
+                s_levelUp = LoadOpt("Sfx/LevelUp") ?? GenerateLevelUp();
             CoreServices.Audio?.PlaySfx(s_levelUp, 0.9f);
         }
 
         public static void PlayEnemyDeath()
         {
             if (s_enemyDeath == null)
-                s_enemyDeath = AudioAssetLoader.LoadClip("Sfx/EnemyDeath") ?? GenerateEnemyDeath();
+                s_enemyDeath = LoadOpt("Sfx/EnemyDeath") ?? GenerateEnemyDeath();
             CoreServices.Audio?.PlaySfx(s_enemyDeath, 0.6f);
         }
 
         public static void PlayHeroHit()
         {
             if (s_heroHit == null)
-                s_heroHit = AudioAssetLoader.LoadClip("Sfx/HeroHit") ?? GenerateHeroHit();
+                s_heroHit = LoadOpt("Sfx/HeroHit") ?? GenerateHeroHit();
             CoreServices.Audio?.PlaySfx(s_heroHit, 0.5f);
         }
 
@@ -212,7 +230,7 @@ namespace DeNelle.Village
         public static void PlaySwordSwing()
         {
             if (s_swordSwing == null)
-                s_swordSwing = AudioAssetLoader.LoadClip("Sfx/SwordSwing") ?? GenerateSwordSwing();
+                s_swordSwing = LoadOpt("Sfx/SwordSwing") ?? GenerateSwordSwing();
             CoreServices.Audio?.PlaySfx(s_swordSwing, 0.5f);
         }
 
@@ -220,7 +238,7 @@ namespace DeNelle.Village
         public static void PlayWeaponDraw()
         {
             if (s_weaponDraw == null)
-                s_weaponDraw = AudioAssetLoader.LoadClip("Sfx/WeaponDraw") ?? GenerateWeaponDraw();
+                s_weaponDraw = LoadOpt("Sfx/WeaponDraw") ?? GenerateWeaponDraw();
             CoreServices.Audio?.PlaySfx(s_weaponDraw, 0.6f);
         }
 
@@ -228,7 +246,7 @@ namespace DeNelle.Village
         public static void PlayDragonRoar()
         {
             if (s_dragonRoar == null)
-                s_dragonRoar = AudioAssetLoader.LoadClip("Sfx/DragonRoar") ?? GenerateDragonRoar();
+                s_dragonRoar = LoadOpt("Sfx/DragonRoar") ?? GenerateDragonRoar();
             CoreServices.Audio?.PlaySfx(s_dragonRoar, 0.85f);
         }
 
@@ -241,7 +259,11 @@ namespace DeNelle.Village
         public static void PlayBuildDenied()
         {
             if (s_buildDenied == null)
-                s_buildDenied = AudioAssetLoader.LoadClip("Sfx/BuildDenied") ?? GenerateBuildDenied();
+                // LoadOpt already carries optional:true — the `?? GenerateBuildDenied()` IS the
+                // design: AudioAssetLoader's own header names "Sfx/BuildDenied" as a key that has
+                // NO file on disk and is never meant to. A synth fallback working exactly as
+                // intended should not report at error level (F8 seq=2531).
+                s_buildDenied = LoadOpt("Sfx/BuildDenied") ?? GenerateBuildDenied();
             CoreServices.Audio?.PlaySfx(s_buildDenied, 0.55f);
         }
 

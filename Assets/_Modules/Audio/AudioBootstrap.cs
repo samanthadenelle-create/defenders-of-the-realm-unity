@@ -107,9 +107,20 @@ namespace DeNelle.Audio
             // AudioService's "no clip" guard handles them silently.
             TryAssignClip(service, MusicTrack.Title,   "title");
             // Town/hub theme (owner Suno track 2026-06-29): "Whispering Pines" is the PRIMARY town
-            // theme; the prior "village" clip is kept as a pool variant (non-destructive).
+            // theme. It is the ONLY town clip; the rotation has one entry and that is correct.
             TryAssignClip(service, MusicTrack.Village, "whispering_pines");
-            TryAddClip(service,    MusicTrack.Village, "village");
+            // ⛔ THE "village" POOL VARIANT IS GONE, AND THE REQUEST FOR IT IS DELETED WITH IT.
+            // F8 seq=2516 (2026-08-17) fired [Flow:AudioAssets] "audio asset 'village' (AudioClip)
+            // not found via Addressables OR Resources" on every boot. It is NOT a fallout of the
+            // audio Addressables migration, which is what the timing suggested and what I would
+            // have "fixed" by re-running the grouper: Assets/Audio/Resources/village.mp3 was
+            // DELETED ON PURPOSE in 0cec81a78 ("size cuts"), and this line kept asking for it ever
+            // since. The comment above it still described the clip as "kept as a pool variant
+            // (non-destructive)" — true when written, false the day the file was cut, and the
+            // stale comment is why the error read as a regression rather than as dead code.
+            // Restoring the mp3 would undo a deliberate size cut on a LIVE build to serve a
+            // rotation variant nobody asked for; deleting the request costs nothing and the town
+            // theme is unaffected.
             TryAssignClip(service, MusicTrack.Victory, "victory");
             // Dungeon theme (owner slot mapping 2026-08-04): "Echoes Beneath Elarion" is the
             // PRIMARY dungeon track, displacing the prior "whispering_depths" pick. Dungeon is
@@ -137,11 +148,23 @@ namespace DeNelle.Audio
             // Battle/invasion theme (owner Suno track 2026-06-29): "Siege of the Iron Bastion" is the
             // PRIMARY battle theme; the prior battle themes stay as pool variants (cycled by NextFromPool).
             TryAssignClip(service, MusicTrack.Battle,    "siege_iron_bastion");
-            TryAddClip(service,    MusicTrack.Battle,    "battle_theme_NEW");
-            TryAddClip(service,    MusicTrack.Battle,    "battle_theme2_NEW");
-            TryAddClip(service,    MusicTrack.Battle,    "battle_theme3_NEW");
             TryAssignClip(service, MusicTrack.Overworld, "mainworld1_NEW");
-            TryAddClip(service,    MusicTrack.Overworld, "world_theme_NEW");
+            // ⛔ THE FOUR POOL VARIANTS ARE DELETED, LIKE "village", AND FOR THE SAME REASON.
+            // battle_theme_NEW / battle_theme2_NEW / battle_theme3_NEW / world_theme_NEW were all
+            // removed in 0cec81a78 ("size cuts") — the SAME commit that cut village.mp3 — and all
+            // four requests stayed behind. Together they were FIVE error-level FlowTrace.Fail lines
+            // on every single boot, which is what filled the F8 queue on 2026-08-17.
+            //
+            // ⚠ NOTHING WAS EVER SILENT, and that is worth stating because the error text claimed
+            // otherwise. Every PRIMARY resolves: Battle=siege_iron_bastion, Overworld=mainworld1_NEW,
+            // Village=whispering_pines, plus Title/Victory/Defeat/Arena/Raid/Dungeon. Only the
+            // optional rotation EXTRAS were missing, so both pools have always played their primary.
+            //
+            // ⛔ DO NOT "FIX" THIS BY RE-ADDING AUDIO. Assets/Audio/Resources/Music/Battle/ holds
+            // four unreferenced tracks (Overworld_Battle_1/_2, Overworld_Boss_Fight,
+            // Overworld_Victory) that WOULD repopulate this pool — but choosing which music plays
+            // when is the owner's creative call, not the CLI's, and re-adding megabytes to a LIVE
+            // build undoes a deliberate size cut. Surfaced to the owner as a choice; left unwired.
 
             // Arena raid BGM — "Echo's theme" (owner-supplied). Ships at
             // Assets/Audio/Resources/Music/echo_theme.mp3, so the Resources short
@@ -207,10 +230,23 @@ namespace DeNelle.Audio
         /// Appends a clip to a pooled track's rotation (WO-171), if the clip
         /// resolves through the audio seam. Missing extras are skipped (with a Warn) —
         /// the pool just rotates over whatever landed.
+        /// <para>
+        /// ⚠ CURRENTLY UNREFERENCED, ON PURPOSE — NOT DEAD CODE. All five former callers pointed at
+        /// music files deleted in the 0cec81a78 size cut and were removed 2026-08-17. Pooled tracks
+        /// (Battle, Overworld) remain a live, working feature and there are four unreferenced
+        /// tracks under Music/Battle/ that the owner may choose to rotate in; this is the one line
+        /// that does it. Deleting it means the next person re-derives it from scratch.
+        /// </para>
         /// </summary>
         private static void TryAddClip(AudioService service, MusicTrack track, string resourceName)
         {
-            var clip = DeNelle.Core.AudioAssetLoader.LoadClip(resourceName);
+            // optional:true — THIS METHOD IS THE DEFINITION OF AN OPTIONAL LOAD. Its own contract
+            // (see summary above) is "missing extras are skipped; the pool rotates over whatever
+            // landed", so a miss here must not report at error level. TryAssignClip deliberately
+            // does NOT pass this: its clip is a track's PRIMARY, and a missing primary really does
+            // mean silence. Declaring it at the call site is what stops the loader guessing —
+            // F8 seq=2516, where an optional miss read as an error and as "that track is SILENT".
+            var clip = DeNelle.Core.AudioAssetLoader.LoadClip(resourceName, optional: true);
             // TGVRU V: an extra pooled clip going missing was silent. These are optional rotation
             // extras (the pool still works on whatever landed), so this is a Warn, not a Fail —
             // but it must self-report so a thin/missing rotation is visible, not invisible.

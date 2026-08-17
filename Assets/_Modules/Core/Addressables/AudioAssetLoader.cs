@@ -114,7 +114,11 @@ namespace DeNelle.Core
         /// both paths miss — every audio call site already treats null as "use the synth
         /// fallback" or "play silent", so a null return is always safe.
         /// </summary>
-        public static AudioClip LoadClip(string key) => Load<AudioClip>(key);
+        /// <param name="optional">TRUE when the CALLER can survive a miss — a synth-fallback SFX
+        /// key, or a pooled rotation extra. Downgrades the both-paths-missed report from Fail
+        /// (error-level, trips F8) to Warn. Defaults to FALSE so a required clip going missing
+        /// stays loud: the safe default is the one that reports too much, not too little.</param>
+        public static AudioClip LoadClip(string key, bool optional = false) => Load<AudioClip>(key, optional);
 
         /// <summary>
         /// Load any audio-adjacent asset by its FULL Resources-relative key — the
@@ -122,14 +126,14 @@ namespace DeNelle.Core
         /// ScriptableObject (<c>"Audio/SfxClipLibrary"</c>), the AudioService prefab
         /// (<c>"DeNelleAudioService"</c>). Addressables-first, Resources-fallback.
         /// </summary>
-        public static T LoadAudioAsset<T>(string key) where T : Object => Load<T>(key);
+        public static T LoadAudioAsset<T>(string key, bool optional = false) where T : Object => Load<T>(key, optional);
 
         /// <summary>
         /// Try Addressables when <paramref name="key"/> (of type <typeparamref name="T"/>) is
         /// registered, else fall back to Resources.Load on the SAME key. Guarded — a throw at
         /// any step degrades to the Resources fallback so a cue is never left clipless.
         /// </summary>
-        private static T Load<T>(string key) where T : Object
+        private static T Load<T>(string key, bool optional) where T : Object
         {
             if (string.IsNullOrEmpty(key)) return null;
 
@@ -168,11 +172,33 @@ namespace DeNelle.Core
                 result = Resources.Load<T>(key);
             });
 
+            // ⛔ SEVERITY IS THE CALLER'S TO DECLARE, NOT THIS SEAM'S TO ASSUME.
+            // This used to Fail on EVERY miss. Fail is error-level, so it trips the F8 harness and
+            // lands in break-log.jsonl — and on 2026-08-17 (F8 seq=2516) that is exactly what it
+            // did for an OPTIONAL pooled rotation extra whose own caller treats null as fine. The
+            // old text made it worse by asserting "for a music key it means that track is SILENT",
+            // which was FLATLY WRONG for a pool variant: the primary town theme was playing the
+            // whole time. An error that overstates its own consequence costs more than one that
+            // stays quiet — it sends the reader hunting a silent-audio bug that does not exist.
+            //
+            // The loader cannot know which it is. Only the call site knows whether a missing asset
+            // is a designed fallback (synth SFX, pool extras) or a real hole. So the call site says
+            // so, and this reports at the matching level. NOT stripped, per CLAUDE.md §12 — a miss
+            // is still ALWAYS reported, once per key; only the severity moves.
             if (result == null && s_reportedMisses.Add(key))
-                FlowTrace.Fail(System,
-                    $"audio asset '{key}' ({typeof(T).Name}) not found via Addressables OR Resources — caller falls " +
-                    "back (synth SFX / silent cue). Reported ONCE per key: for the synth-fallback SFX keys this miss " +
-                    "is by design (see AudioAssetLoader header), for a music key it means that track is SILENT.");
+            {
+                string what = $"audio asset '{key}' ({typeof(T).Name}) not found via Addressables OR Resources";
+                if (optional)
+                    FlowTrace.Warn(System,
+                        $"{what} — OPTIONAL, the caller declared this miss survivable (synth SFX fallback, or a " +
+                        "pooled rotation extra that simply is not in the rotation). Reported ONCE per key so a " +
+                        "thin rotation stays visible rather than invisible. NOT an error and NOT silent audio.");
+                else
+                    FlowTrace.Fail(System,
+                        $"{what} — REQUIRED by its caller. If this is a music track's primary clip, that track IS " +
+                        "silent. Reported ONCE per key. Check the asset exists before assuming an Addressables " +
+                        "migration regression: a deliberate size-cut deletion looks identical from here.");
+            }
 
             return result;
         }
