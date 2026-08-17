@@ -1,6 +1,10 @@
 # WORK ORDER 1101 — Environment variety: grass/ground texture variety -> per-area biome maps
 
-**Status:** SPEC — READY FOR OWNER REVIEW
+**Status:** READY TO IMPLEMENT — ★ OWNER APPROVED 2026-08-17
+
+> Approval recorded verbatim: *"also I approved 1101"* (owner, 2026-08-17). The spec is ratified as
+> written; it no longer awaits review. No implementation exists yet — this is a fresh READY, not a
+> stale one.
 **Minted:** 2026-08-16 (orchestrator; the CLI_LANES_WO_NUMBERS.md banner was bumped by the
 orchestrator in the same mint — this file did not touch the banner)
 **Lane:** World/Environment (architect lane, CLAUDE.md sec 9). Presentation-layer work — no gameplay,

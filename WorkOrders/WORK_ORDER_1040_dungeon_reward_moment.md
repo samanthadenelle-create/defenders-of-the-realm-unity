@@ -1,6 +1,23 @@
 # WORK ORDER 1040 — Dungeon completion: overlapping text, and a payout that feeds nothing
 
-**Status:** READY TO IMPLEMENT (§2) + SPEC pending owner ruling (§3)
+**Status:** §2 DONE (2026-08-17, commit-verified) · §3 SPEC pending owner ruling
+
+> **§2 — the three-block text collision — IS FIXED.** Shipped inside **eff761fcc**
+> (`feat(dungeon): the rough stone economy`), not under this WO's own number, which is why the board
+> never caught it. The proof is in the code itself:
+> `Assets/_Modules/Dungeons/DungeonTreasurePanel.cs:242` — *"THIS REPLACES EnsureBand, AND THE
+> DIFFERENCE IS THE WHOLE BUG FIX"*. `EnsureBand` pinned a growing payout band against
+> fixed fractional anchors, so at five reward lines it expanded up into the heading.
+>
+> **§3 — the graded-runs payout (stats → rating → reward tier) — is still a SPEC** and still needs the
+> owner ruling in §3b. Nothing has delivered it. WO-1112 shipped *a* payout for composed dungeons,
+> which is adjacent but is NOT this: it wires a reward into composed runs; §3 is about the reward
+> being EARNED by run quality.
+>
+> ⚠ This WO is the clearest instance of the pattern worth watching: **work shipped under a different
+> WO's number.** Nothing references 1040, so no automated sweep can ever reconcile it — only a human
+> reading the code. The owner spotted it (2026-08-17: *"1040 the exit text and the treasure payout,
+> wasn't that completed?"*) — she was right about half of it.
 **Minted:** 2026-08-16 (UI seat) — provenance stack bumped 1040 → 1041 in the same edit
 **Lane:** Dungeon reward presentation + reward economy. §3 overlaps **WO-1028** — read §3 before acting.
 **Provenance:** owner 2026-08-16, verbatim: **"Finishing a dungeon feels lackluster"**, with a

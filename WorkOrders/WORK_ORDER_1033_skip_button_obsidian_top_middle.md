@@ -1,6 +1,13 @@
 # WORK ORDER 1033 — Skip button: use the common Obsidian button, move it to top-middle
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE (2026-08-17, owner-confirmed + commit-verified)
+
+> Shipped in **a6f15e6de** — `fix(ui): WO-1033 - skip tutorial moves to top-middle as an Obsidian button`.
+> The status line sat at READY TO IMPLEMENT for a full day after the work landed; the owner caught it
+> during the 2026-08-17 staleness sweep. Per CLAUDE.md §2 the status line is the board's ONLY source
+> (the board is derived from it), so a shipped WO left READY is invisible-done — it shows as
+> outstanding work forever and nothing reconciles it automatically. Flip the status in the SAME commit
+> as the work.
 **Minted:** 2026-08-16 (UI seat) — provenance stack bumped 1033 → 1034 in the same edit
 **Lane:** HUD / tutorial chrome. Presentation only.
 **Provenance:** owner 2026-08-16, verbatim: *"Move Skip Button to standard Obsidian button from common
