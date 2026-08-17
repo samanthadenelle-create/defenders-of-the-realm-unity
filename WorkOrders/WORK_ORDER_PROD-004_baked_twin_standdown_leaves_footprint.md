@@ -60,6 +60,23 @@ objects — **`CastleBarracks`** (barracks) and **`Windmill_Food_Storefront`** (
 
 Everything else in this ticket is the same either way; only §4's approach changes.
 
+> ### ⚠ FALSE LEAD, RECORDED SO IT IS NOT RE-WALKED (2026-08-17)
+> During the first attempt at §3 the owner sent two screenshots of the hub with a large cyan mesh
+> sheeting the ground. The CLI read it as (1) a flooded town — a water plane at the wrong height,
+> "confirmed" by a green terrain island around the mill and half-submerged characters — and then, on
+> the owner's *"the cyan is the mesh"*, as (2) proof the footprint was a separate GameObject, i.e.
+> branch (a).
+>
+> **Both were wrong. The cyan was the Unity NAVMESH GIZMO**, turned on to inspect the scene: cyan is
+> the navigation overlay's colour, the "island" was the carve-out around a building, and the
+> "submerged" characters were simply standing under a translucent overlay. It is a debug display, not
+> anything the player ever sees, and it says NOTHING about the footprint.
+>
+> **The lesson is the §12 one, in visual form:** a screenshot is primary evidence for what the player
+> SEES, but it is not self-labelling — an editor overlay and a shipped defect can look identical, and
+> a confident reading of an ambiguous image is still a guess. §3's branch stays UNRESOLVED; settle it
+> by selecting the footprint object in the hierarchy with gizmos OFF, not by interpreting a picture.
+
 ## 4. Scope
 
 1. Fix per the §3 branch, **symmetrically on standdown AND resurface** — a fix that hides the
