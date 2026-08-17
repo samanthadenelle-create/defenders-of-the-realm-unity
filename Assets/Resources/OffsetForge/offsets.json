@@ -379,6 +379,66 @@
         "z": 0.0
       },
       "fullOverride": false
+    },
+    {
+      "id": "jeweler",
+      "rot": {
+        "x": -90.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "pos": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "scaleXyz": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "fullOverride": false
+    },
+    {
+      "id": "Forge",
+      "rot": {
+        "x": -90.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "pos": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "scaleXyz": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "fullOverride": false
+    },
+    {
+      "id": "barracks",
+      "rot": {
+        "x": -90.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "pos": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "scaleXyz": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "fullOverride": false
     }
   ]
 }
