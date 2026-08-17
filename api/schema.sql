@@ -297,8 +297,64 @@ CREATE TABLE IF NOT EXISTS promo_codes (
     max_redemptions  INTEGER,                           -- NULL = unlimited global uses
     per_player_limit INTEGER,                           -- NULL = no cross-code cap (PLAYER_LIMIT_REACHED gate)
     expires_at       TIMESTAMPTZ,                       -- NULL = never expires
+    bound_wallet     TEXT,                              -- NULL = public code; SET = only this player_id may redeem
+    reward_pack_sku  TEXT,                              -- NULL = use reward_crystals/coins; SET = grant this pack's whole contents
     created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- reward_pack_sku (added 2026-08-17, owner ask: "i need you to be able to add wood
+-- and all the regular resources too. Or we should also try grant_pack") -----------
+-- reward_crystals/reward_coins can only ever pay TWO currencies. The owner needs
+-- wood, iron and food — and glimmer exists too.
+--
+-- ⛔ THE OBVIOUS FIX IS THE WRONG ONE. Adding reward_wood / reward_iron / reward_food
+-- columns means a MIGRATION EVERY TIME A RESOURCE IS INVENTED, and it still would not
+-- cover glimmer. Worse, it creates a SECOND definition of "a bundle of resources"
+-- alongside packs.json, and the two will drift.
+--
+-- Instead: name a PACK. packs.json already authors contents.economy as an open bag —
+--     impulse-wood-small -> {"wood":1000}
+--     hearth-spark       -> {"glimmer":25,"crystals":200,"food":50,"coins":100}
+-- so a pack sku reaches EVERY resource type, in any combination, already authored and
+-- already priced. The client applies it through PackStoreVM.ApplyPackContents — the
+-- SAME seam a real purchase uses (GrantSpendablePurchased -> PurchasedOrPromised,
+-- never clamped, WO-857 Phase F), which was proven working on device 2026-08-17.
+-- Every future pack becomes grantable for free, with no schema change.
+--
+-- PRECEDENCE: when reward_pack_sku is set it WINS and the crystal/coin columns are
+-- ignored — one source of truth per code, never a merge of two.
+-- ⚠ The sku is NOT validated by the DB. An unknown sku must fail LOUDLY client-side
+-- (the code is already burned by then), never silently grant nothing.
+--
+-- MIGRATION (idempotent, nullable, safe on the live table):
+--     ALTER TABLE promo_codes ADD COLUMN IF NOT EXISTS reward_pack_sku TEXT;
+
+-- bound_wallet (added 2026-08-17, WO-1115) ------------------------------------
+-- NULL  → a PUBLIC code: anyone may redeem, subject to the other gates. This is
+--         every launch promo, influencer code and apology grant. Unchanged.
+-- SET   → a PRIVATE code, redeemable ONLY by that player_id (a BoundWallet address).
+--
+-- WHY: the owner wants DEV codes that grant resources outright. On a PUBLISHED
+-- game that is a free-money exploit the moment it leaks — forum post, screenshot,
+-- support ticket. Binding makes a leak INERT: anyone else gets INVALID_CODE and
+-- the code is NOT consumed, so the owner's own grant still works afterwards.
+--
+-- ⚠ The binding is only as strong as player_id, which is why the check lives in
+-- redeem.js AFTER _lib/wallet-auth.authenticate() — a base58 id has, by then,
+-- produced an ed25519 signature over the exact body bytes plus a single-use nonce.
+-- It compares a PROVEN identity, never a claimed one. Never evaluate this against
+-- a wallet taken from the request body: that is precisely the hole the 2026-08-15
+-- audit closed here (player_id used to come straight from the body, letting anyone
+-- burn a victim's code and lock them out of it forever).
+--
+-- A refused private code returns INVALID_CODE, not a distinct error, on purpose: a
+-- private code must be indistinguishable from a nonexistent one to anyone who is
+-- not its owner. A distinct "not yours" would confirm the code is real and worth
+-- hunting for.
+--
+-- MIGRATION for an existing database (idempotent, safe on a live table — the
+-- column is nullable so every existing row stays a public code):
+--     ALTER TABLE promo_codes ADD COLUMN IF NOT EXISTS bound_wallet TEXT;
 
 
 -- =============================================================================

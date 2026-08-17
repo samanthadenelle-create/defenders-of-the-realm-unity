@@ -133,7 +133,8 @@ async function handler(req, res) {
         // ── 1. Look the code up in the catalog ────────────────────────────────
         const codeRows = await sql`
             SELECT code, reward_crystals, reward_coins, message,
-                   active, max_redemptions, per_player_limit, expires_at
+                   active, max_redemptions, per_player_limit, expires_at,
+                   bound_wallet
             FROM promo_codes
             WHERE code = ${code}
             LIMIT 1
@@ -144,6 +145,34 @@ async function handler(req, res) {
         }
 
         const promo = codeRows[0];
+
+        // ── 1b. Wallet binding ───────────────────────────────────────────────────────
+        // bound_wallet NULL  → a public code, open to anyone (launch promos, influencer
+        //                      codes, apology grants). Unchanged behaviour.
+        // bound_wallet SET   → a PRIVATE code, redeemable ONLY by that player id.
+        //
+        // WHY THIS EXISTS: the owner wants DEV codes that grant resources outright. On a
+        // PUBLISHED game a code like that is a free-money exploit the moment it leaks —
+        // shared on a forum, screenshotted, or pulled from a support ticket. Binding it
+        // makes a leak inert: anyone else who tries it gets INVALID_CODE and the code is
+        // NOT consumed, so the owner's own grant still works afterwards.
+        //
+        // ⚠ THE BINDING IS ONLY AS STRONG AS `playerId`, AND THAT IS THE WHOLE POINT OF
+        // DOING IT HERE: playerId at this line has already been through
+        // _lib/wallet-auth.authenticate — a base58 wallet id demanded an ed25519 signature
+        // over the exact body bytes plus a single-use nonce. So this compares against a
+        // PROVEN identity, not a claimed one. Never move this check anywhere that runs
+        // before authenticate(), and never accept a wallet from the body: that is exactly
+        // the hole the 2026-08-15 audit closed on this endpoint (playerId used to be taken
+        // straight from the body, letting anyone burn a victim's code).
+        //
+        // Returns INVALID_CODE, deliberately — not a distinct "NOT_YOURS". A private code
+        // should be indistinguishable from a nonexistent one to anyone who is not its
+        // owner; a distinct error would confirm the code is real and worth hunting for.
+        if (promo.bound_wallet != null && String(promo.bound_wallet).trim() !== '' &&
+            String(promo.bound_wallet).trim() !== playerId) {
+            return res.status(200).json({ success: false, error: 'INVALID_CODE' });
+        }
 
         // ── 2. Expiry ─────────────────────────────────────────────────────────
         if (promo.expires_at != null && new Date(promo.expires_at).getTime() < Date.now()) {

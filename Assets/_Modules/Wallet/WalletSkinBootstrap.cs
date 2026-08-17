@@ -47,12 +47,84 @@ namespace DeNelle.Wallet
             LoginWalletBridge.ConnectHandler = ConnectForLoginAsync;
             FlowTrace.Step("Wallet", "login wallet-connect handler registered (LoginWalletBridge, skin-independent).");
 
+            TryAutoResumeAsync().Forget();
+
             // Pi skin (the live default): leave the corner-button wallet path entirely unwired.
             if (!CurrencySkinResolver.IsSkr) return;
 
             CurrencySkinResolver.WalletConnectRequested -= OnConnectRequested; // idempotent
             CurrencySkinResolver.WalletConnectRequested += OnConnectRequested;
             FlowTrace.Step("Skin", "SKR skin active — wallet-connect handler installed (WalletSkinBootstrap).");
+        }
+
+        /// <summary>
+        /// Boot-time silent reconnect. Owner ruling 2026-08-17: *"yes it should auto connect, there
+        /// is a menu option to reset"* — a returning player should never be asked to connect again.
+        /// </summary>
+        /// <remarks>
+        /// ⚠ ONLY RUNS WHEN A SEALED SESSION ALREADY EXISTS. `MwaSessionStore.HasStoredSession` is
+        /// the gate, and it is not a nicety: without it, a FIRST-TIME player — or anyone who chose
+        /// Reset — would have the wallet app launched at them unprompted on every cold start. That
+        /// is a far worse first impression than one Connect tap, and it is the exact behaviour the
+        /// owner's "menu option to reset" is meant to give back. Reset clears the store
+        /// (SolanaWalletProvider.Disconnect → MwaSessionStore.Clear), so the very next boot is
+        /// silent again in the other direction: no stored session, no auto-connect, no wallet launch.
+        ///
+        /// FIRE-AND-FORGET, NEVER AWAITED BY BOOT. The association takes ~2.6s on a real Seeker
+        /// (measured 2026-08-17), so awaiting this would stall the title screen for a wallet the
+        /// player did not ask for yet. The manual Connect handler is registered BEFORE this starts,
+        /// so a player who taps Connect during the attempt is served by the normal path — and
+        /// `_connecting` makes the duplicate a no-op rather than a second association.
+        ///
+        /// FAILURE IS SILENT BY DESIGN. Every outcome lands on "the player taps Connect", which is
+        /// exactly today's behaviour, so this can only ever remove a tap and never add a dead end.
+        /// It is traced, not surfaced: a boot-time toast about a wallet the player has not asked
+        /// about yet is noise.
+        /// </remarks>
+        private static async UniTaskVoid TryAutoResumeAsync()
+        {
+            if (!MwaSessionStore.HasStoredSession)
+            {
+                FlowTrace.Step("Wallet",
+                    "auto-resume skipped — no sealed session (first run, or the player chose Reset). " +
+                    "The wallet app is deliberately NOT launched; the player taps Connect.");
+                return;
+            }
+
+            if (_connecting)
+            {
+                FlowTrace.Step("Wallet", "auto-resume skipped — a connect is already in progress.");
+                return;
+            }
+
+            FlowTrace.Step("Wallet",
+                "auto-resume: sealed session present — attempting a SILENT reconnect at boot " +
+                "(no prompt; falls back to the Connect button on any failure).");
+
+            // Explicit try/catch rather than Guard.Try: Guard has no async overload, and a
+            // fire-and-forget UniTaskVoid that throws would otherwise surface as an unobserved
+            // exception with no context. Caught AND LOGGED — never swallowed (§12).
+            // AuthOutcome is a STRUCT (non-nullable), so `default` is the not-set sentinel — its
+            // Success is false, which is exactly the "did not connect" branch we want on a throw.
+            AuthOutcome outcome = default;
+            try
+            {
+                outcome = await ConnectForLoginAsync();
+            }
+            catch (Exception ex)
+            {
+                FlowTrace.Warn("Wallet",
+                    $"auto-resume threw ({ex.GetType().Name}: {ex.Message}) — falling back to the " +
+                    "Connect button. Boot is unaffected; this path is fire-and-forget by design.");
+                return;
+            }
+
+            if (outcome.Success)
+                FlowTrace.Step("Wallet", "auto-resume SUCCEEDED — connected at boot with no player action.");
+            else
+                FlowTrace.Step("Wallet",
+                    "auto-resume did not connect — falling back to the Connect button. " +
+                    "This is not an error: the stored grant may be revoked or expired.");
         }
 
         private static void OnConnectRequested() => ConnectAsync().Forget();

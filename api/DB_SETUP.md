@@ -463,3 +463,86 @@ curl -s -H "X-Admin-Key: $KEY" "$BASE/api/admin/db?view=bugreport&id=42&shot=1"
 Failure codes are listed in `api/_lib/wallet-auth.js` (`AuthCode`). The response
 body a player's client receives is only `{ok:false, code, ref}` — quiet on the
 screen, loud in the database.
+
+
+---
+
+## 17. 2026-08-17 — the OPERATOR DASHBOARD (WO-1116 phase 1): what it reads, and what each number means
+
+`api/admin/stats.js` + `site/admin.html`. `api/admin/db.js` stays the RAW-TABLE triage tool
+(row counts, one save, one trace, auth rejects); `stats.js` is the AGGREGATE view over
+`analytics_events` — who is playing, who comes back, where the tutorial loses them, what sells.
+
+**Where it lives.** The page is deployed with the marketing site (Vercel project
+`echoes-of-elarion`, `https://echoes-of-elarion.vercel.app/admin`); the endpoint is on the API
+project (`defenders-of-the-realm-v2`). It is therefore always a cross-origin caller — the page asks
+for the API host, prefilled with the v2 URL. **Nothing links to `/admin` from `index.html`, and the
+page is `noindex`: it is unlisted and key-gated, nothing more.** `ADMIN_DASH_KEY` must be set on the
+**v2** project, not on the site project.
+
+**The key is never stored.** The page holds it in one JS variable for the life of the tab —
+not localStorage, not sessionStorage, not a cookie, not the URL. `site/` is a PUBLIC deployment;
+anything persisted or hardcoded there is published. Reload = enter it again, on purpose.
+
+```bash
+KEY=$(cat .admin-dash-key)
+BASE=https://defenders-of-the-realm-v2.vercel.app
+curl -s -H "X-Admin-Key: $KEY" "$BASE/api/admin/stats?view=overview&days=30"
+curl -s -H "X-Admin-Key: $KEY" "$BASE/api/admin/stats?view=retention&days=90"
+curl -s -H "X-Admin-Key: $KEY" "$BASE/api/admin/stats?view=funnel&days=30"
+curl -s -H "X-Admin-Key: $KEY" "$BASE/api/admin/stats?view=economy&days=30"
+curl -s -H "X-Admin-Key: $KEY" "$BASE/api/admin/stats?view=players&limit=50"
+curl -s -H "X-Admin-Key: $KEY" "$BASE/api/admin/stats?view=players&ref=<12hex handle>"
+```
+
+### The metrics
+
+| Metric | Definition (exactly what is counted) |
+|---|---|
+| **Active today / 7d / 30d** | DISTINCT `player_id` with a `session_start` in that window. `session_start` fires once per app boot (`EventTracker.Start`), so this is "opened the game", not "was online then". |
+| **App opens (sessions)** | The `session_start` ROW count over the same window. Several per player per day is normal. |
+| **New players per day** | Players whose FIRST-EVER event of any kind landed that day. "First-ever" is computed over the whole table, so a June installer never re-counts as new in August. |
+| **Day-N retention** | Of players whose first-ever event was on `cohort_day`, the share that fired a `session_start` on **exactly** `cohort_day + N` (N = 1, 7, 30). Exact-day, not "within N days". |
+| **Tutorial funnel** | Per step, from `tutorial_step_enter` / `_complete` / `_skip` / `_drop`, ordered by the `order` field on the enter event. |
+| **STUCK (auto-advanced)** | `tutorial_step_drop` — TutorialFlow's watchdog rescued a player who sat on that step until it auto-advanced. **A step with drops is a step players cannot get past on their own.** This is the column that measures the live FTUE defect (WO-1036). |
+| **Lost before next step** | Players who entered step *i* and never entered step *i+1*. |
+| **Purchases / buyers** | `purchase_completed` rows and distinct buyers, by pack and currency. |
+| **Views → buys** | Distinct `bundle_viewed` viewers vs distinct `purchase_completed` buyers per pack. `bundleId` and `packId` are both `pack.Sku` (PackStore), so they join cleanly. |
+| **Promo codes** | From `promo_codes` LEFT JOIN `promo_redemptions` — the ledger, not the client's claim about it. A bound code shows only THAT it is bound; the wallet it is bound to is never displayed. |
+
+### ⚠ The caveats. Read these before acting on a number.
+
+1. **Small N.** Every retention and conversion percentage is returned **with the cohort size it came
+   from**, and anything under **n=10** is flagged `low_n` and rendered with a "low n" chip. *1 of 2 is
+   not 50% retention — it is two players.* Never quote a percentage from this page without its n.
+2. **Immature cohorts are not 0%.** A cohort three days old cannot have day-7 data. Those cells read
+   "too early / needs 7 days"; they are excluded from the pooled rollup entirely rather than dragging
+   it to zero.
+3. **The "anonymous" blind spot.** Every player with no bound wallet shares the single literal id
+   `"anonymous"` (`EventTracker.cs:168` — `BoundWallet ?? "anonymous"`). That is one bucket for many
+   people, so it can never be a distinct-player count. It is EXCLUDED from every player metric and
+   reported separately on the Overview tab. **If the anonymous volume dwarfs the player counts, this
+   dashboard is reporting on a minority of the playerbase** — that is the honest reading, not "one
+   very busy player".
+4. **There is no revenue here, only counts.** `purchase_completed` carries
+   `{packId, packName, currency, txSig}` and **no amount** (`PackStore.cs:582`); the `price` in
+   `EventTracker`'s doc comment is an example, not a live field. A null "amount sent by client" means
+   the client never sent one, NOT that the sale was free. Revenue must come from the chain or from
+   `tower_swaps.cost_usdc` (and read that table's `verification` column first — see §7 of `schema.sql`).
+5. **Zero vs never-fired.** The Overview tab lists every event name seen in the window precisely so a
+   metric reading zero because nobody did it can be told apart from one whose event never fires at all.
+6. **Player ids are masked** to `first4…last4` in every list, alongside `player_ref`, a stable 12-hex
+   SHA-256 handle used to open one player without a full address ever being on screen. The single
+   drill-down (`?player=` / `?ref=`) is the ONE place a full wallet appears, because the operator needs
+   the real address to bind a promo code to that player or answer a support ticket.
+7. **Not verified against live data.** These queries were written from `api/schema.sql` and from the
+   client's actual `EventTracker.Track` call sites; **no seat has run them against the production
+   database.** The shapes are right; the numbers are unproven until the owner opens the page.
+
+### Phase 2 (issuing codes/grants from the panel) is SPEC ONLY
+
+Not built. See `WorkOrders/WORK_ORDER_1116_admin_dashboard_and_grants.md`: POST-only, same
+`ADMIN_DASH_KEY`, an `admin_audit` row per write in the same transaction, and **issue a
+wallet-BOUND promo code** (`promo_codes.bound_wallet`, enforced at `api/promo/redeem.js:172`) rather
+than writing resources into a save row — a direct save write bypasses every ledger, cap and expiry
+the game has, and races the client's own delta-merge upsert.

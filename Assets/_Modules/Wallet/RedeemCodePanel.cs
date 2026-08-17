@@ -179,27 +179,63 @@ namespace DeNelle.Wallet
                 ? (Transform)chrome.layout.body
                 : chrome.content.transform;
 
-            // What this screen is for, in one line.
+            // ⚠ LAYOUT FIXED 2026-08-17 FROM A DEVICE SCREENSHOT, and the screenshot IS the evidence
+            // — the numbers below looked correct on paper and were wrong on glass.
+            //
+            // The first build put four elements in non-overlapping bands (0.78-0.95 blurb,
+            // 0.53-0.75 field, 0.44-0.52 hint, 0.25-0.43 status) and they still overprinted into an
+            // unreadable pile on a 2670x1200 Seeker. The bands never overlapped; THE TEXT
+            // OVERFLOWED THEM. A TMP label does not clip to its RectTransform by default, so a
+            // two-line blurb spills DOWN into the field and a long status sentence spills UP into
+            // the hint. Owner's words: "the screen is hard to read".
+            //
+            // This is the WO-1040 defect class exactly (three text blocks colliding on TREASURE
+            // FOUND): fixed fractional anchors carrying content that grows. The lesson there was
+            // that a band must SOLVE for its content; here the cheapest correct form of that is
+            // auto-sizing — the text shrinks to fit rather than escaping.
+            //
+            // ⛔ DO NOT "fix" a recurrence by nudging these fractions. That treats the symptom and
+            // it re-breaks the moment a string is translated, lengthened, or a device is narrower.
+            // The invariant is: EVERY GROWABLE LABEL ON THIS PANEL AUTO-SIZES INTO ITS BAND.
+
+            // What this screen is for. Auto-sized: it wraps to two lines on a narrow device.
             var blurb = ElarionUiKit.Label(body, PromoStrings.Get(PromoStrings.KeyBlurb),
-                0.78f, 0.95f, ElarionUi.ParchmentDim, ElarionUi.FontBody,
+                0.76f, 0.95f, ElarionUi.ParchmentDim, ElarionUi.FontBody,
                 TextAlignmentOptions.Center, 0.06f, 0.94f);
-            if (blurb != null) blurb.textWrappingMode = TextWrappingModes.Normal;
+            if (blurb != null)
+            {
+                blurb.textWrappingMode = TextWrappingModes.Normal;
+                blurb.enableAutoSizing = true;
+                blurb.fontSizeMin = 14f;
+                blurb.fontSizeMax = blurb.fontSize;
+            }
 
             // The field. Mirrors ClanChatPanel/LoginPanelController's inline TMP_InputField over a
             // rounded well — the kit has no input-field builder, and UXML is not an option (§8).
             _input = MakeInputField(body, PromoStrings.Get(PromoStrings.KeyPlaceholder),
-                new Vector2(0.08f, 0.53f), new Vector2(0.92f, 0.75f));
+                new Vector2(0.08f, 0.52f), new Vector2(0.92f, 0.72f));
 
-            ElarionUiKit.Label(body, PromoStrings.Get(PromoStrings.KeyHint),
-                0.44f, 0.52f, ElarionUi.ParchmentDim, ElarionUi.FontBody,
-                TextAlignmentOptions.Center, 0.06f, 0.94f);
+            // ⚠ THE SEPARATE "codes are not case sensitive" HINT LABEL IS RETIRED. It occupied an
+            // 8%-tall band (0.44-0.52) wedged between the field and the status — the tightest strip
+            // on the panel — to say something the player does not need until they are already
+            // typing. Its content belongs in the PLACEHOLDER, where it is read at exactly the
+            // moment it matters and costs no vertical space. Removing it hands its band to the
+            // status line, which is the label that actually needed room: those sentences are
+            // deliberately long because every one of them has to say whether the code was spent.
 
             // The ONE feedback surface. Every outcome — success and each distinct failure — lands
-            // here as a full sentence; wrapping is on because those sentences are deliberately long.
+            // here as a full sentence. Auto-sized because those sentences vary from "Enter a code
+            // first." to a two-line refusal, and a fixed size that fits one clips the other.
             _status = ElarionUiKit.Label(body, string.Empty,
-                0.25f, 0.43f, ElarionUi.Gold, ElarionUi.FontBody,
+                0.24f, 0.48f, ElarionUi.Gold, ElarionUi.FontBody,
                 TextAlignmentOptions.Center, 0.05f, 0.95f);
-            if (_status != null) _status.textWrappingMode = TextWrappingModes.Normal;
+            if (_status != null)
+            {
+                _status.textWrappingMode = TextWrappingModes.Normal;
+                _status.enableAutoSizing = true;
+                _status.fontSizeMin = 14f;
+                _status.fontSizeMax = _status.fontSize;
+            }
 
             _submit = ElarionUiKit.BuildObsidianButton(body,
                 PromoStrings.Get(PromoStrings.KeyAction),

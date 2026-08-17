@@ -664,16 +664,16 @@
      ],
      "options": [
       {
+       "text": "Show me the Realm Store.",
+       "goto": "open_realm"
+      },
+      {
        "text": "I'd like to buy.",
        "goto": "open_buy"
       },
       {
        "text": "I'd like to sell.",
        "goto": "open_sell"
-      },
-      {
-       "text": "Show me the Realm Store.",
-       "goto": "open_realm"
       },
       {
        "text": "Just passing through.",

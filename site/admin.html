@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Elarion — Live Ops</title>
+<!--
+  =============================================================================
+  site/admin.html — the OWNER-ONLY live-ops dashboard (2026-08-17, WO-1116)
+  -----------------------------------------------------------------------------
+  Read-only view over api/admin/stats.js. UNLISTED: nothing links here from
+  index.html, and it is noindex. The only gate is the admin key.
+
+  ⛔ THE KEY IS NEVER STORED. It lives in one JS variable for the life of the
+     tab and is gone on reload. It is NOT written to localStorage,
+     sessionStorage, a cookie, or the URL — this directory is a PUBLIC Vercel
+     deployment, so anything persisted here is on the internet. Never hardcode
+     a key in this file for convenience "just while testing"; the file is
+     deployed the moment it is committed.
+
+  No build step, no framework, no CDN, no webfonts, no remote images — the site
+  project ships a strict static bundle and everything below is inline.
+
+  ⚠ COLOUR IS NEVER THE SIGNAL. The owner is red/green colourblind, so no metric
+    is encoded in hue: direction is a word plus an arrow glyph (▲ up / ▼ down /
+    ● flat), quality is a text chip ("low n", "not mature yet", "no data yet"),
+    and magnitude is bar LENGTH in one single accent colour.
+  =============================================================================
+-->
+<style>
+  :root{
+    --ink:#07060a; --panel:#12111a; --panel2:#191823; --line:#2b2937;
+    --text:#ece8f5; --dim:#9a94ad; --accent:#e8b84b; --accent2:#7dffc8;
+    --bar:#4a4560;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--ink); color:var(--text); font:15px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-text-size-adjust:100%;
+  }
+  a{color:var(--accent2)}
+  .wrap{max-width:1100px;margin:0 auto;padding:14px}
+  header.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;
+    border-bottom:1px solid var(--line);padding:10px 14px;position:sticky;top:0;background:var(--ink);z-index:5}
+  .brand{font-weight:700;letter-spacing:.03em}
+  .brand small{color:var(--dim);font-weight:400;letter-spacing:0}
+  button,select,input{font:inherit}
+  button{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:8px;
+    padding:10px 14px;min-height:44px;cursor:pointer}
+  button:hover{border-color:var(--accent)}
+  button[aria-pressed="true"]{border-color:var(--accent);color:var(--accent);font-weight:600}
+  button.primary{background:var(--accent);color:#1a1405;border-color:var(--accent);font-weight:700}
+  input,select{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:8px;
+    padding:10px 12px;min-height:44px;width:100%}
+  .tabs{display:flex;flex-wrap:wrap;gap:6px;padding:10px 14px 0}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;margin:12px 0}
+  .card h2{margin:0 0 4px;font-size:16px;letter-spacing:.02em}
+  .card p.note{margin:4px 0 0;color:var(--dim);font-size:13px}
+  .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+  .tile{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px}
+  .tile .k{color:var(--dim);font-size:12px;text-transform:uppercase;letter-spacing:.08em}
+  .tile .v{font-size:28px;font-weight:700;line-height:1.15;margin-top:2px}
+  .tile .s{color:var(--dim);font-size:12px;margin-top:2px}
+  .scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  table{border-collapse:collapse;width:100%;min-width:520px;font-size:14px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+  th{color:var(--dim);font-size:12px;text-transform:uppercase;letter-spacing:.06em;font-weight:600}
+  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+  tr.click{cursor:pointer}
+  tr.click:hover td{background:var(--panel2)}
+  .chip{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:1px 8px;
+    font-size:11px;color:var(--dim);margin-left:6px;white-space:nowrap}
+  .chip.warn{border-color:var(--accent);color:var(--accent)}
+  .chip.warn::before{content:"! ";font-weight:700}
+  .bar{position:relative;background:var(--bar);height:8px;border-radius:4px;min-width:60px}
+  .bar > i{position:absolute;left:0;top:0;bottom:0;background:var(--accent);border-radius:4px;display:block}
+  .none{color:var(--dim);font-style:italic}
+  .err{border-color:var(--accent);color:var(--accent)}
+  .gate{max-width:460px;margin:8vh auto;padding:0 14px}
+  .gate label{display:block;margin:14px 0 6px;color:var(--dim);font-size:13px}
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .grow{flex:1 1 200px}
+  .muted{color:var(--dim)}
+  .arrow{font-weight:700}
+  code{background:var(--panel2);border:1px solid var(--line);border-radius:5px;padding:1px 5px;font-size:12px}
+  @media (max-width:520px){ .wrap{padding:10px} .tile .v{font-size:24px} }
+</style>
+</head>
+<body>
+
+<!-- ── key gate ─────────────────────────────────────────────────────────── -->
+<section id="gate" class="gate">
+  <div class="card">
+    <h2>Elarion — Live Ops</h2>
+    <p class="note">Read-only dashboard. The key is held in memory for this tab only and is
+      never saved anywhere — reloading asks again, by design.</p>
+    <label for="base">API host</label>
+    <input id="base" type="url" autocomplete="off" spellcheck="false"
+           value="https://defenders-of-the-realm-v2.vercel.app">
+    <label for="key">Admin key</label>
+    <input id="key" type="password" autocomplete="off" spellcheck="false" placeholder="ADMIN_DASH_KEY">
+    <div class="row" style="margin-top:14px">
+      <button class="primary grow" id="enter">Open dashboard</button>
+    </div>
+    <p class="note" id="gateMsg"></p>
+  </div>
+</section>
+
+<!-- ── dashboard ────────────────────────────────────────────────────────── -->
+<div id="app" hidden>
+  <header class="bar">
+    <div class="brand">Elarion <small>live ops</small></div>
+    <div class="row">
+      <select id="days" aria-label="Time window" style="width:auto">
+        <option value="7">last 7 days</option>
+        <option value="30" selected>last 30 days</option>
+        <option value="90">last 90 days</option>
+        <option value="180">last 180 days</option>
+      </select>
+      <button id="refresh">Refresh</button>
+      <button id="lock">Lock</button>
+    </div>
+  </header>
+  <nav class="tabs" id="tabs" aria-label="Views"></nav>
+  <main class="wrap" id="out" aria-live="polite"></main>
+</div>
+
+<script>
+(function(){
+'use strict';
+
+// ── state ──────────────────────────────────────────────────────────────────
+// adminKey is deliberately a closure variable. Do not persist it. Do not put
+// it in a query string (it would land in Vercel access logs and browser history).
+var adminKey = null;
+var apiBase  = '';
+var view     = 'overview';
+var days     = 30;
+
+var VIEWS = [
+  ['overview',  'Overview'],
+  ['retention', 'Retention'],
+  ['funnel',    'Tutorial funnel'],
+  ['economy',   'Economy'],
+  ['players',   'Players']
+];
+
+// ── helpers ────────────────────────────────────────────────────────────────
+function el(id){ return document.getElementById(id); }
+function esc(s){
+  return String(s == null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+function n(v){ return (v == null || v === '') ? 0 : Number(v); }
+function fmt(v){
+  if (v == null || v === '') return '<span class="none">no data yet</span>';
+  var x = Number(v);
+  return Number.isFinite(x) ? x.toLocaleString() : esc(v);
+}
+// A percentage is NEVER rendered bare. null → "no data yet"; a small sample
+// carries a "low n" chip; an immature cohort says so instead of showing 0%.
+function pctCell(p, size, lowN, mature, matureLabel){
+  if (mature === false) return '<span class="none">too early</span> <span class="chip">' + esc(matureLabel || 'not old enough') + '</span>';
+  if (p == null) return '<span class="none">no data yet</span>';
+  var s = '<strong>' + p + '%</strong>';
+  if (size != null) s += ' <span class="chip">of ' + fmt(size) + '</span>';
+  if (lowN) s += ' <span class="chip warn">low n</span>';
+  return s;
+}
+function bar(value, max){
+  var w = (max > 0) ? Math.round((n(value) / max) * 100) : 0;
+  return '<span class="bar" role="img" aria-label="' + n(value) + '"><i style="width:' + w + '%"></i></span>';
+}
+function when(ts){
+  if (!ts) return '<span class="none">never</span>';
+  var d = new Date(ts);
+  if (isNaN(d)) return esc(ts);
+  return esc(d.toISOString().slice(0,16).replace('T',' ')) + ' UTC';
+}
+// Direction is a WORD plus a glyph — never a colour (see the header note).
+function trend(curr, prev){
+  var a = n(curr), b = n(prev);
+  if (b === 0 && a === 0) return '<span class="muted">flat ●</span>';
+  if (b === 0) return '<span class="arrow">up ▲</span>';
+  var d = Math.round(((a - b) / b) * 100);
+  if (d > 2)  return '<span class="arrow">up ▲ ' + d + '%</span>';
+  if (d < -2) return '<span class="arrow">down ▼ ' + Math.abs(d) + '%</span>';
+  return '<span class="muted">flat ● ' + d + '%</span>';
+}
+function table(cols, rows){
+  if (!rows || !rows.length) return '<p class="none">No rows in this window.</p>';
+  var h = '<div class="scroll"><table><thead><tr>';
+  cols.forEach(function(c){ h += '<th' + (c.num ? ' class="num"' : '') + '>' + esc(c.label) + '</th>'; });
+  h += '</tr></thead><tbody>';
+  rows.forEach(function(r){
+    h += '<tr' + (r.__ref ? ' class="click" data-ref="' + esc(r.__ref) + '"' : '') + '>';
+    cols.forEach(function(c){ h += '<td' + (c.num ? ' class="num"' : '') + '>' + c.get(r) + '</td>'; });
+    h += '</tr>';
+  });
+  return h + '</tbody></table></div>';
+}
+function card(title, body, note){
+  return '<section class="card"><h2>' + esc(title) + '</h2>'
+       + (note ? '<p class="note">' + esc(note) + '</p>' : '') + body + '</section>';
+}
+
+// ── fetch ──────────────────────────────────────────────────────────────────
+// The key travels in the X-Admin-Key HEADER, never the URL.
+function api(params){
+  var url = apiBase.replace(/\/+$/,'') + '/api/admin/stats?' + params;
+  return fetch(url, { method:'GET', headers:{ 'X-Admin-Key': adminKey } })
+    .then(function(r){ return r.json().then(function(j){ return { ok:r.ok, body:j }; }); })
+    .then(function(res){
+      // The API answers 400 for both "bad key" and "bad view" (project rule:
+      // 200 | 400 | 500 only), so surface its own error text rather than guess.
+      if (res.body && res.body.error) throw new Error(res.body.error);
+      return res.body;
+    });
+}
+
+// ── renderers ──────────────────────────────────────────────────────────────
+function renderOverview(d){
+  var a = d.active || {}, t = d.totals || {}, an = d.anonymous || {};
+  var perDay = d.per_day || [];
+  var yesterday = perDay[1] || {};
+  var h = '<div class="tiles">'
+    + tile('Active today',   fmt(a.today), fmt(a.sessions_today) + ' app opens &middot; ' + trend(a.today, yesterday.active_players))
+    + tile('Active 7 days',  fmt(a.d7),    fmt(a.sessions_7d) + ' app opens')
+    + tile('Active 30 days', fmt(a.d30),   fmt(a.sessions_30d) + ' app opens')
+    + tile('Events stored',  fmt(t.total_events), 'since ' + when(t.first_event_at))
+    + '</div>';
+
+  h = card('Who is playing', h,
+      'Active = distinct players who fired session_start (an app open). These three tiles are FIXED 1/7/30-day windows -- the selector above changes the tables below, not these. '
+    + 'Wallet-less players all share the single id "anonymous" and are excluded here.');
+
+  h += card('The blind spot',
+      '<div class="tiles">'
+      + tile('Anonymous app opens', fmt(an.sessions), 'cannot be split into people')
+      + tile('Anonymous events',    fmt(an.events),   'excluded from every player count')
+      + '</div>',
+      an.note || '');
+
+  var maxNew = 0; (d.new_players_per_day||[]).forEach(function(r){ maxNew = Math.max(maxNew, n(r.new_players)); });
+  h += card('New players per day',
+    table([
+      { label:'Day',  get:function(r){ return esc(r.day); } },
+      { label:'New',  num:true, get:function(r){ return fmt(r.new_players); } },
+      { label:'',     get:function(r){ return bar(r.new_players, maxNew); } }
+    ], d.new_players_per_day),
+    'A player counts as new on the day of their FIRST-EVER event, so an old player never re-counts.');
+
+  var maxAct = 0; perDay.forEach(function(r){ maxAct = Math.max(maxAct, n(r.active_players)); });
+  h += card('Daily activity',
+    table([
+      { label:'Day',       get:function(r){ return esc(r.day); } },
+      { label:'Players',   num:true, get:function(r){ return fmt(r.active_players); } },
+      { label:'App opens', num:true, get:function(r){ return fmt(r.sessions); } },
+      { label:'Events',    num:true, get:function(r){ return fmt(r.events); } },
+      { label:'',          get:function(r){ return bar(r.active_players, maxAct); } }
+    ], perDay));
+
+  h += card('What the game is emitting',
+    table([
+      { label:'Event',   get:function(r){ return '<code>' + esc(r.event_name) + '</code>'; } },
+      { label:'Count',   num:true, get:function(r){ return fmt(r.events); } },
+      { label:'Ids',     num:true, get:function(r){ return fmt(r.ids); } },
+      { label:'Last seen', get:function(r){ return when(r.latest); } }
+    ], d.events_by_name),
+    'Sanity check: a metric reading zero because nobody did it looks the same as one whose event never fires. This tells them apart.');
+  return h;
+}
+function tile(k, v, s){
+  return '<div class="tile"><div class="k">' + esc(k) + '</div><div class="v">' + v + '</div>'
+       + (s ? '<div class="s">' + s + '</div>' : '') + '</div>';
+}
+
+function renderRetention(d){
+  var r = d.rollup || {};
+  var h = '<div class="tiles">'
+    + tile('Day 1', r.d1 && r.d1.pct != null ? r.d1.pct + '%' : '<span class="none">no data yet</span>',
+        r.d1 ? (fmt(r.d1.returned) + ' of ' + fmt(r.d1.cohort_size) + ' players' + (r.d1.low_n ? ' &middot; low n' : '')) : '')
+    + tile('Day 7', r.d7 && r.d7.pct != null ? r.d7.pct + '%' : '<span class="none">no data yet</span>',
+        r.d7 ? (fmt(r.d7.returned) + ' of ' + fmt(r.d7.cohort_size) + ' players' + (r.d7.low_n ? ' &middot; low n' : '')) : '')
+    + tile('Day 30', r.d30 && r.d30.pct != null ? r.d30.pct + '%' : '<span class="none">no data yet</span>',
+        r.d30 ? (fmt(r.d30.returned) + ' of ' + fmt(r.d30.cohort_size) + ' players' + (r.d30.low_n ? ' &middot; low n' : '')) : '')
+    + '</div>';
+
+  h = card('Retention (pooled, mature cohorts only)', h,
+      (d.definition || '') + ' Cohorts too young to have reached day N are left out entirely rather than counted as 0%.');
+
+  h += card('By signup day',
+    table([
+      { label:'Signed up', get:function(x){ return esc(x.cohort_day) + (x.low_n ? ' <span class="chip warn">n=' + x.cohort_size + '</span>' : ''); } },
+      { label:'Cohort', num:true, get:function(x){ return fmt(x.cohort_size); } },
+      { label:'Day 1',  get:function(x){ return pctCell(x.d1_pct,  x.cohort_size, x.low_n, x.d1_mature,  'needs 1 day'); } },
+      { label:'Day 7',  get:function(x){ return pctCell(x.d7_pct,  x.cohort_size, x.low_n, x.d7_mature,  'needs 7 days'); } },
+      { label:'Day 30', get:function(x){ return pctCell(x.d30_pct, x.cohort_size, x.low_n, x.d30_mature, 'needs 30 days'); } }
+    ], d.cohorts),
+    'Every percentage carries the cohort size it came from. Anything under n=' + n(d.low_n_threshold)
+    + ' is flagged "low n" — 1 of 2 is not 50% retention, it is two players.');
+  return h;
+}
+
+function renderFunnel(d){
+  var f = d.flow || {};
+  var h = '<div class="tiles">'
+    + tile('Started tutorial',  fmt(f.started_players),   'distinct players')
+    + tile('Finished it',       fmt(f.completed_players), f.completion_pct != null ? f.completion_pct + '% of starters' + (f.low_n ? ' (low n)' : '') : 'no data yet')
+    + tile('Skipped all of it', fmt(f.skipped_all_players), f.skip_all_pct != null ? f.skip_all_pct + '% of starters' : 'no data yet')
+    + '</div>';
+  h = card('Tutorial, end to end', h);
+
+  var maxEnter = 0; (d.steps||[]).forEach(function(s){ maxEnter = Math.max(maxEnter, n(s.entered_players)); });
+  h += card('Step by step',
+    table([
+      { label:'#',    num:true, get:function(s){ return s.order == null ? '<span class="none">?</span>' : s.order; } },
+      { label:'Step', get:function(s){ return '<code>' + esc(s.step_id) + '</code>' + (s.low_n ? ' <span class="chip warn">low n</span>' : ''); } },
+      { label:'Entered', num:true, get:function(s){ return fmt(s.entered_players); } },
+      { label:'',     get:function(s){ return bar(s.entered_players, maxEnter); } },
+      { label:'Completed', num:true, get:function(s){ return fmt(s.completed_players) + (s.completion_pct != null ? ' <span class="chip">' + s.completion_pct + '%</span>' : ''); } },
+      { label:'Skipped', num:true, get:function(s){ return fmt(s.skipped_players); } },
+      { label:'STUCK (auto-advanced)', num:true, get:function(s){
+          if (!n(s.dropped_players)) return '<span class="muted">0</span>';
+          return '<strong>' + fmt(s.dropped_players) + '</strong>'
+               + (s.drop_pct != null ? ' <span class="chip warn">' + s.drop_pct + '% stuck</span>' : '')
+               + (s.max_seconds_idle_sample != null ? ' <span class="chip">idle up to ' + Math.round(s.max_seconds_idle_sample) + 's</span>' : '');
+        } },
+      { label:'Lost before next step', num:true, get:function(s){
+          if (s.lost_to_next == null) return '<span class="muted">last step</span>';
+          if (!n(s.lost_to_next)) return '<span class="muted">none</span>';
+          return '<strong>▼ ' + fmt(s.lost_to_next) + '</strong>'
+               + (s.lost_to_next_pct != null ? ' <span class="chip">' + s.lost_to_next_pct + '%</span>' : '');
+        } }
+    ], d.steps),
+    d.note || '');
+
+  h += card('Contextual hints seen',
+    table([
+      { label:'Hint',    get:function(s){ return '<code>' + esc(s.step_id) + '</code>'; } },
+      { label:'Players', num:true, get:function(s){ return fmt(s.players); } },
+      { label:'Shown',   num:true, get:function(s){ return fmt(s.events); } }
+    ], d.contextual_hints));
+  return h;
+}
+
+function renderEconomy(d){
+  var ref = d.referrals || {};
+  var h = card('Purchases',
+    table([
+      { label:'Pack',      get:function(r){ return esc(r.pack_name || r.pack_id || '(unknown)'); } },
+      { label:'Currency',  get:function(r){ return esc(r.currency || '—'); } },
+      { label:'Purchases', num:true, get:function(r){ return fmt(r.purchases); } },
+      { label:'Buyers',    num:true, get:function(r){ return fmt(r.buyers); } },
+      { label:'Amount sent by client', get:function(r){
+          var v = r.price_sample != null ? r.price_sample : r.amount_sample;
+          return v == null ? '<span class="none">none sent</span>' : esc(v);
+        } },
+      { label:'Last', get:function(r){ return when(r.latest); } }
+    ], d.purchases),
+    d.revenue_note || '');
+
+  h += card('Store views → buys',
+    table([
+      { label:'Pack',    get:function(r){ return esc(r.pack_name || r.pack_id); } },
+      { label:'Viewers', num:true, get:function(r){ return fmt(r.viewers); } },
+      { label:'Buyers',  num:true, get:function(r){ return fmt(r.buyers); } },
+      { label:'Converted', get:function(r){ return pctCell(r.conversion_pct, r.viewers, r.low_n, true); } }
+    ], d.conversion),
+    'Distinct players who opened the pack card, against distinct players who completed a purchase of it.');
+
+  h += card('Promo codes',
+    table([
+      { label:'Code',   get:function(r){ return '<code>' + esc(r.code) + '</code>'
+          + (r.is_bound ? ' <span class="chip">bound to one wallet</span>' : '')
+          + (r.active ? '' : ' <span class="chip warn">disabled</span>'); } },
+      { label:'Redeemed', num:true, get:function(r){ return fmt(r.redemptions)
+          + (r.max_redemptions != null ? ' <span class="chip">cap ' + fmt(r.max_redemptions) + '</span>' : ''); } },
+      { label:'Crystals', num:true, get:function(r){ return fmt(r.crystals_granted); } },
+      { label:'Coins',    num:true, get:function(r){ return fmt(r.coins_granted); } },
+      { label:'Expires',  get:function(r){ return r.expires_at ? when(r.expires_at) : '<span class="muted">never</span>'; } },
+      { label:'Last used', get:function(r){ return when(r.latest_redemption); } }
+    ], d.promo_codes),
+    'Straight from promo_codes + promo_redemptions — the ledger, not the client. A bound code shows only THAT it is bound; the wallet it belongs to is not displayed.');
+
+  h += card('Referrals',
+    '<div class="tiles">'
+    + tile('Codes minted', fmt(ref.codes_minted), '')
+    + tile('Claims',       fmt(ref.claims), fmt(ref.referrers_with_a_claim) + ' referrers earned one')
+    + tile('Crystals paid out', fmt(ref.claim_crystals_granted), 'to claimers')
+    + '</div>');
+
+  h += card('Client-side events for the same rails',
+    table([
+      { label:'Event',   get:function(r){ return '<code>' + esc(r.event_name) + '</code>'; } },
+      { label:'Events',  num:true, get:function(r){ return fmt(r.events); } },
+      { label:'Players', num:true, get:function(r){ return fmt(r.players); } },
+      { label:'Last',    get:function(r){ return when(r.latest); } }
+    ], d.client_events),
+    'If the client fired an event but the table above has no matching row, the write never landed. That gap is a finding, not a rounding error.');
+  return h;
+}
+
+function renderPlayers(d){
+  if (d.found === false) return card('Player', '<p class="none">No match among the 500 most recently active players.</p>');
+  if (d.player) {
+    var s = d.summary || {}, sv = d.save;
+    var h = card('Player ' + d.player_masked,
+      '<div class="tiles">'
+      + tile('App opens', fmt(s.sessions), '')
+      + tile('Events',    fmt(s.events), '')
+      + tile('Active days', fmt(s.active_days), '')
+      + tile('Last seen', when(s.last_seen), 'first seen ' + when(s.first_seen))
+      + '</div>'
+      + '<p class="note" style="margin-top:10px">Full id (needed to bind a promo code to this player):<br>'
+      + '<code>' + esc(d.player) + '</code></p>',
+      'This is the only screen that shows a whole wallet address. Everything else is masked.');
+    h += card('Cloud save', sv
+      ? '<div class="tiles">'
+        + tile('Schema', fmt(sv.schema_version), '')
+        + tile('Trust rail', esc(sv.trust || '—'), '')
+        + tile('Payload', fmt(sv.payload_bytes) + ' B', '')
+        + tile('Updated', when(sv.updated_at), 'created ' + when(sv.created_at))
+        + '</div>'
+      : '<p class="none">No player_data row — this player has never completed a cloud save.</p>');
+    h += card('Events by name',
+      table([
+        { label:'Event',  get:function(r){ return '<code>' + esc(r.event_name) + '</code>'; } },
+        { label:'Count',  num:true, get:function(r){ return fmt(r.events); } },
+        { label:'Last',   get:function(r){ return when(r.latest); } }
+      ], d.events_by_name));
+    h += card('Recent activity',
+      table([
+        { label:'When',  get:function(r){ return when(r.received_at); } },
+        { label:'Event', get:function(r){ return '<code>' + esc(r.event_name) + '</code>'; } }
+      ], d.recent_events),
+      'Names and times only — event properties are client-authored free text and are never displayed here.');
+    h += '<p><button id="backPlayers">&larr; Back to all players</button></p>';
+    return h;
+  }
+  return card('Recent players',
+    table([
+      { label:'Player', get:function(r){ return '<code>' + esc(r.player_masked) + '</code>'
+          + (r.is_guest ? ' <span class="chip">guest</span>' : ''); } },
+      { label:'App opens', num:true, get:function(r){ return fmt(r.sessions); } },
+      { label:'Events',    num:true, get:function(r){ return fmt(r.events); } },
+      { label:'Active days', num:true, get:function(r){ return fmt(r.active_days); } },
+      { label:'First seen', get:function(r){ return when(r.first_seen); } },
+      { label:'Last seen',  get:function(r){ return when(r.last_seen); } }
+    ], (d.rows||[]).map(function(r){ r.__ref = r.player_ref; return r; })),
+    'Ids are masked to first four and last four characters. Tap a row to open that player.');
+}
+
+// ── shell ──────────────────────────────────────────────────────────────────
+function paintTabs(){
+  el('tabs').innerHTML = VIEWS.map(function(v){
+    return '<button data-view="' + v[0] + '" aria-pressed="' + (v[0] === view) + '">' + esc(v[1]) + '</button>';
+  }).join('');
+}
+
+function load(extra){
+  var out = el('out');
+  out.innerHTML = '<section class="card"><p class="muted">Loading ' + esc(view) + '…</p></section>';
+  var params = 'view=' + encodeURIComponent(view) + '&days=' + encodeURIComponent(days) + (extra || '');
+  api(params).then(function(d){
+    var html;
+    if (view === 'overview')       html = renderOverview(d);
+    else if (view === 'retention') html = renderRetention(d);
+    else if (view === 'funnel')    html = renderFunnel(d);
+    else if (view === 'economy')   html = renderEconomy(d);
+    else                           html = renderPlayers(d);
+    out.innerHTML = html
+      + '<p class="muted" style="font-size:12px;padding:0 2px 24px">Generated ' + when(d.generated_at)
+      + ' &middot; window ' + esc(d.window_days) + ' days &middot; read-only.</p>';
+  }).catch(function(e){
+    out.innerHTML = '<section class="card err"><h2>Could not load</h2><p>' + esc(e.message || e) + '</p>'
+      + '<p class="note">A wrong key and an unknown view both answer 400 here. If it says Unauthorized, '
+      + 'press Lock and enter the key again.</p></section>';
+  });
+}
+
+el('enter').addEventListener('click', function(){
+  var k = el('key').value.trim();
+  var b = el('base').value.trim();
+  if (!k) { el('gateMsg').textContent = 'Enter the admin key.'; return; }
+  if (!/^https?:\/\//i.test(b)) { el('gateMsg').textContent = 'API host must start with https://'; return; }
+  adminKey = k; apiBase = b;
+  el('key').value = '';                 // clear the field; the value lives only in the closure
+  el('gate').hidden = true;
+  el('app').hidden = false;
+  paintTabs();
+  load();
+});
+el('key').addEventListener('keydown', function(e){ if (e.key === 'Enter') el('enter').click(); });
+
+el('tabs').addEventListener('click', function(e){
+  var b = e.target.closest('button[data-view]');
+  if (!b) return;
+  view = b.getAttribute('data-view');
+  paintTabs();
+  load();
+});
+el('days').addEventListener('change', function(e){ days = parseInt(e.target.value, 10) || 30; load(); });
+el('refresh').addEventListener('click', function(){ load(); });
+el('lock').addEventListener('click', function(){
+  adminKey = null;                      // the only copy — gone
+  el('out').innerHTML = '';
+  el('app').hidden = true;
+  el('gate').hidden = false;
+  el('gateMsg').textContent = 'Locked.';
+});
+el('out').addEventListener('click', function(e){
+  var back = e.target.closest('#backPlayers');
+  if (back) { load(); return; }
+  var row = e.target.closest('tr.click');
+  if (row && view === 'players') load('&ref=' + encodeURIComponent(row.getAttribute('data-ref')));
+});
+})();
+</script>
+</body>
+</html>

@@ -629,7 +629,35 @@ namespace DeNelle.Core
         // default. A device that ever set "ff.realmstorepurchase" = 1 keeps the Buy rail until that key
         // is cleared/zeroed. Changing this default protects FRESH INSTALLS (every store reviewer and
         // every real player); it does not retroactively re-gate an existing device.
+        // ── LOCAL PURCHASE-RAIL TEST BUILD (2026-08-17) ─────────────────────────────────────
+        // ⛔ THIS DEFAULT STAYS false FOR EVERY SHIPPED BUILD. The owner asked to exercise the
+        // full purchase flow on her own Seeker; the answer was a LOCAL build, side-loaded, NOT
+        // distributed — not a change to what the dApp Store serves. Enable with the define
+        // STORE_RAIL_LOCAL_TEST, which is set ONLY on a hand-built local APK and MUST NEVER be
+        // added to ProjectSettings' Android define list.
+        //
+        // ⚠ WHY THIS IS NOT SAFE TO SHIP, and the reason is NOT the flag — it is the NETWORK.
+        // WalletService.DefaultNetwork is Devnet, and devnet SOL/USDC/SKR are FREE TEST TOKENS.
+        // The WO-931 seam refusal does NOT block here (it only refuses the stub provider or a
+        // wallet that cannot sign — a real connected Seeker wallet passes), and
+        // SolanaWalletProvider.SendPayment only hard-blocks MAINNET. So on a devnet build with
+        // this flag on, the purchase chain COMPLETES: worthless tokens move, real pack contents
+        // are granted. Ship that publicly and every download is free packs with a genuine
+        // purchase_completed event behind it — indistinguishable in the data from real revenue.
+        //
+        // The game is PUBLISHED. "Only the owner has it today" is a race, not a guarantee.
+        //
+        // TO GO LIVE FOR REAL, this flag is the LAST step, not the first:
+        //   1. mainnet decision + lift SolanaWalletProvider.SendPayment's mainnet block (:429)
+        //   2. switch WalletService.DefaultNetwork off Devnet
+        //   3. verify a real signed transaction settles on-chain
+        //   4. THEN this default, with the WO-931 seam refusal left exactly as it is.
+        // Flipping this one first only ever produces a Buy button in front of free goods.
+#if STORE_RAIL_LOCAL_TEST
+        public static bool RealmStorePurchase => Get("realmstorepurchase", defaultOn: true);
+#else
         public static bool RealmStorePurchase => Get("realmstorepurchase", defaultOn: false);
+#endif
 
         /// <summary>RELEASE BLOCKER GATE (2026-08-07) — gates the WHOLE rewarded-ad timer-skip path:
         /// the "Ad" CTA on every queue row (ManageScreenPanel + ObsidianQueueHud) and
