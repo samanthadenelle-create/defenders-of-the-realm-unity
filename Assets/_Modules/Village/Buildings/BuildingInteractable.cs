@@ -69,6 +69,55 @@ namespace DeNelle.Village
             if (!string.IsNullOrEmpty(structureId)) _npcCovered.Add(structureId);
         }
 
+        // =====================================================================
+        //  PROD-002 Deliverable A — STRUCTURES WITH NO TALK DOOR.
+        //
+        //  THE RULE (owner, 2026-08-17): "what is the value of having a NPC at the lumbermill, the
+        //  Arcane Tower, or the Barracks, if you can no longer enter through them, now the entrance
+        //  is through manage which is cleaner" / "they dont offer any value only store shops".
+        //  An NPC or a building exists to open something that HAS NO OTHER ENTRANCE. Once Manage
+        //  owns a flow, a prompt in front of that building is a door to a room that moved: it costs
+        //  a tap target on a phone and teaches the player that talking to people is pointless right
+        //  before they meet a vendor who isn't.
+        //
+        //  ⛔ BOTH DOORS MUST GO TOGETHER, WHICH IS WHY THIS LIVES BESIDE _npcCovered.
+        //  A structure can be entered from TWO places — the front NPC's CastleNpcInteractable and
+        //  the building's own prompt — and they are coupled: MarkNpcCovered makes the building
+        //  defer so only one fires. Remove the NPC's door alone and the building's prompt SILENTLY
+        //  COMES BACK (it is only suppressed while covered), so the door would appear to move rather
+        //  than close. Suppressing here, at the building, closes the half the NPC change cannot.
+        //
+        //  ⚠ NOT A SERVICE CHECK. Deliberately an explicit list of the ids the owner NAMED, not a
+        //  derived "has no vendor row" rule. A derived rule would also strip Brom (rumour board) and
+        //  the Herbalist (alchemy), whose doors are their ONLY entrance — silently deleting real
+        //  service access while looking like a tidy generalisation.
+        // =====================================================================
+        private static readonly System.Collections.Generic.HashSet<string> _noTalkDoor =
+            new System.Collections.Generic.HashSet<string>
+            {
+                "collector_lumbermill",   // production building; Manage owns the flow
+                "arcane-tower",           // upgrades moved to Manage
+                // ⛔ "barracks" is DELIBERATELY ABSENT — it needs an owner ruling first, and the
+                //    reason is copy, not code. The drillmaster's Talk opens only
+                //    DialogueService.PlayStructure("barracks", …) — structure dialogue, NOT a
+                //    training panel — so by this rule it IS a dead door. BUT BarracksNpcInjector
+                //    fires a once-teach toast that says "Elarion needs soldiers. The drillmaster at
+                //    the Barracks trains them." Close the door and that toast points the player at
+                //    nothing. It is arguably already wrong; either way the fix is a copy change the
+                //    owner has to make, so the door stays until she does. (It is also gated behind
+                //    ff.barracks, default OFF, so it is not reaching most players today.)
+            };
+
+        /// <summary>
+        /// True when this structure must offer NO talk door — no [F] prompt, no tap target, no sign.
+        /// The NPC BODY still stands there: "they add no value" was true of the DOOR, not the person,
+        /// and a town with people working in it is not a diorama.
+        /// </summary>
+        public static bool HasNoTalkDoor(string structureId)
+        {
+            return !string.IsNullOrEmpty(structureId) && _noTalkDoor.Contains(structureId);
+        }
+
         private void Awake()
         {
             _building = GetComponent<Building>();
@@ -84,8 +133,18 @@ namespace DeNelle.Village
             // proximity "Interact" prompt. Skipped for buildings whose FRONT NPC owns
             // the talk — the NPC carries its own sign (CastleVendorNpcInjector), so the
             // building deferring its prompt must not double up a sign over the same spot.
-            if (_myHookId == null || !_npcCovered.Contains(_myHookId))
+            // PROD-002 A: no sign either. A sign is an advertisement for a door — leaving one over a
+            // building that no longer opens is the same broken promise as the prompt, just quieter.
+            if (HasNoTalkDoor(_myHookId))
+            {
+                FlowTrace.Once("Village", "no-talk-door-" + _myHookId,
+                    $"BuildingInteractable: '{_myHookId}' offers NO talk door (PROD-002 A) — prompt and " +
+                    "sign both suppressed; Manage owns this flow. The NPC body stays.");
+            }
+            else if (_myHookId == null || !_npcCovered.Contains(_myHookId))
+            {
                 InteractableSign.ForBuilding(_building, _myHookId);
+            }
         }
 
         private void ResolveHero()
@@ -101,6 +160,15 @@ namespace DeNelle.Village
 
             // WO-415: this structure has a front NPC that owns the talk → defer entirely. Release the
             // shared button + hide our bubble so only the NPC's CastleNpcInteractable opens the dialogue.
+            // PROD-002 A: this structure offers no talk door at all. Same release path as the
+            // npc-covered case — the difference is that NOTHING takes over, by design.
+            if (HasNoTalkDoor(_myHookId))
+            {
+                MobileInteractButton.Release(this);
+                if (_promptGo != null) HidePrompt();
+                return;
+            }
+
             if (_myHookId != null && _npcCovered.Contains(_myHookId))
             {
                 MobileInteractButton.Release(this);

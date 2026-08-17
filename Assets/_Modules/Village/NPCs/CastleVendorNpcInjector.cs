@@ -866,6 +866,23 @@ namespace DeNelle.Village
         {
             // G: a throw while wiring the interaction would otherwise spawn a mute, uninteractable
             // vendor with no log. Guard it so the failure self-reports (Fail -> break-log) and is skipped.
+            // PROD-002 Deliverable A — this structure's flow moved to Manage, so the NPC opens
+            // nothing. ⛔ RETURN BEFORE MarkNpcCovered, not after: MarkNpcCovered is what makes the
+            // BUILDING defer its own prompt, so calling it here while attaching no interactable
+            // would suppress the building's door on behalf of an NPC door that does not exist —
+            // closing both by accident and for the wrong reason. BuildingInteractable.HasNoTalkDoor
+            // closes the building side deliberately; this side just declines to open one.
+            // ⚠ THE BODY IS NOT TOUCHED. It has already been spawned, seated and animated above;
+            // only the affordance is withheld. "They add no value" was true of the door, not the
+            // person — a town with people working in it is not a diorama.
+            if (BuildingInteractable.HasNoTalkDoor(v.StructureId))
+            {
+                FlowTrace.Once("Village", "npc-no-talk-door-" + v.StructureId,
+                    $"CastleVendorNpcInjector: '{v.StructureId}' has no service door (PROD-002 A) — " +
+                    "body kept as ambient life, NO CastleNpcInteractable, no sign, building not marked covered.");
+                return;
+            }
+
             Guard.Try("Village", $"attach vendor interaction '{v.StructureId}'", () =>
             {
                 var interact = body.AddComponent<CastleNpcInteractable>();

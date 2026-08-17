@@ -45,6 +45,40 @@ about.
 
 ## 2. Deliverable A — keep the bodies, remove the doors
 
+> ### STATUS 2026-08-17: 2 of 3 DONE. Barracks needs ONE owner ruling, and it is about COPY.
+> **Done:** `collector_lumbermill`, `arcane-tower`. **Held:** `barracks`.
+>
+> **It was not the one-line change this ticket implied.** The three structures reach their door by
+> three DIFFERENT paths — `barracks` via `BarracksNpcInjector` (gated `ff.barracks`, default OFF),
+> `arcane-tower` via `BuildingInteractable` (the building itself, no NPC involved), and
+> `collector_lumbermill` via the vendor-injector roster.
+>
+> **And a structure has TWO doors, which are coupled.** The front NPC's `CastleNpcInteractable` AND
+> the building's own prompt open the same dialogue; `MarkNpcCovered` makes the building defer so only
+> one fires. ⛔ Remove the NPC's door alone and the building's prompt **silently comes back** — it was
+> only suppressed while covered. The door would appear to MOVE rather than close. So the fix is one
+> rule (`BuildingInteractable.HasNoTalkDoor`) consulted at BOTH sites: the NPC declines to open a
+> door, the building declines to offer one, and the NPC injector returns BEFORE `MarkNpcCovered` so
+> it never suppresses the building on behalf of a door that does not exist.
+>
+> **Deliberately an explicit list, not a derived "has no vendor row" rule.** A derived rule would
+> also strip **Brom** (rumour board) and the **Herbalist** (alchemy), whose doors are their ONLY
+> entrance — silently deleting real service access while looking like a tidy generalisation.
+>
+> ### ⛔ WHY BARRACKS IS HELD — the finding that changes the ticket
+> The drillmaster's Talk opens **only** `DialogueService.PlayStructure("barracks", …)` — structure
+> dialogue, **not** a training panel. By this ticket's own rule that is a dead door and should close.
+> **But `BarracksNpcInjector` fires a once-teach toast:**
+> > *"Elarion needs soldiers. The drillmaster at the Barracks trains them."*
+>
+> Close the door and that toast points the player at nothing. It is arguably already wrong — the
+> drillmaster does not train anyone today; Manage does. Either way the resolution is **player-facing
+> copy**, which is the owner's call, so the door stays until she makes it. Three options:
+> **(a)** close the door and retire the toast; **(b)** close the door and re-point the copy at Manage
+> (*"…train them from Manage"*); **(c)** keep the door because the drillmaster SHOULD open training,
+> in which case this is a missing feature, not a dead door — and that is a different ticket.
+> ⚠ Low urgency either way: `ff.barracks` defaults OFF, so it is not reaching most players today.
+
 The production-building NPCs (`barracks`, `arcane-tower`, `collector_lumbermill` per
 `KayKitNpcImporter`) **stay in the world as ambient life** — a town with people working in it is not
 the same as a diorama, and this project already invested in that (`CastleTownsfolkInjector`, walking
