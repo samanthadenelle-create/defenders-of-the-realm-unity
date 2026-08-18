@@ -86,7 +86,18 @@ def cmd_check(cfg):
 
     url = cfg["R2_PUBLIC_URL"].rstrip("/") + "/" + key
     try:
-        with urllib.request.urlopen(url, timeout=20) as resp:
+        # ⛔ SEND A REAL USER-AGENT OR THIS CHECK LIES.
+        # Cloudflare 403s requests with an absent/default urllib User-Agent. The first version of
+        # this check omitted it and reported "the bucket is NOT public" against a bucket that was
+        # perfectly public — a FALSE NEGATIVE that sent the owner back into the dashboard twice to
+        # fix a setting that was already correct. A health check that reports failure on a healthy
+        # system is worse than no check: it burns trust in every future green it gives.
+        # Verified by experiment: UnityPlayer/* -> 200, curl/* -> 200, empty UA -> 403. The GAME is
+        # therefore fine; only the checker was blocked.
+        req = urllib.request.Request(url, headers={
+            "User-Agent": "UnityPlayer/6000.4.8f1 (UnityWebRequest/1.0, libcurl/8.5.0)"
+        })
+        with urllib.request.urlopen(req, timeout=20) as resp:
             got = resp.read()
         if got != body:
             sys.exit(f"FAIL: public GET returned {len(got)} bytes, expected {len(body)}.")
