@@ -64,6 +64,7 @@ namespace DeNelle.Editor
             "Assets/Models/Cathedral/",
             "Assets/Art/TripoStructures/",   // owner Tripo building models (farm/forge/etc.)
             DeNelle.Core.AssetRoots.StructureContent + "/",  // owner Tripo Portal_To_Dungeon (dungeon entrance)
+            DeNelle.Core.AssetRoots.EnemyContent + "/",      // Tripo enemy bodies (Troll/Orc/Skeleton sets)
             // WHITE HERO ROOT (fleet [Flow:HeroBody] 2026-07-07): the Paladin package FBX embeds
             // 3 PNGs (diffuse/normal/specular) that were never extracted → NULL albedo → solid-white
             // hero. EXACT FILE prefix (StartsWith match) so the sibling Animations/ FBXs and the
@@ -104,6 +105,23 @@ namespace DeNelle.Editor
             importer.materialLocation = ModelImporterMaterialLocation.External;
             importer.materialName = ModelImporterMaterialName.BasedOnTextureName;
             importer.materialSearch = ModelImporterMaterialSearch.RecursiveUp;
+
+            // ⛔ ARRIVE UPRIGHT (owner ruling 2026-08-18: "fix before scene so we dont have to
+            // rotate after bake" / "maybe cleaner is adding this step as a import Tripo step").
+            // Tripo exports Z-up; Unity is Y-up. Without this, EVERY Tripo model imports lying down
+            // and has to be stood back up by a hand-authored rot=(-90,0,0) in Offset Forge — a
+            // per-asset correction, applied forever, by every consumer. bakeAxisConversion applies
+            // the conversion to the MESH DATA at import, so the asset is correct at identity and
+            // needs no offset at all.
+            // Doing it HERE rather than as a manual pass is what stops the debt recurring: a Tripo
+            // model dropped in tomorrow is upright on arrival instead of joining the backlog of
+            // things someone has to remember to rotate.
+            // ⚠ This runs only for NEW imports (the marker check above returns early on
+            // already-processed assets), so it cannot double-correct an existing model that still
+            // carries its -90. TripoAxisBake handles that backlog, flipping the importer flag and
+            // retiring the offset in the SAME pass — both halves together, or a model ends up
+            // upside down.
+            importer.bakeAxisConversion = true;
 
             // Animation — leave whatever the user already configured. The
             // hero/pet pipelines may set animationType themselves.

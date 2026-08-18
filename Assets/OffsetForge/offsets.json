@@ -323,7 +323,7 @@
         {
             "id": "Tower_Wooden_Watchtower_L3",
             "rot": {
-                "x": -90.0,
+                "x": 0.0,
                 "y": 0.0,
                 "z": 0.0
             },
@@ -338,7 +338,8 @@
                 "y": 0.0,
                 "z": 0.0
             },
-            "fullOverride": false
+            "fullOverride": false,
+            "axisBaked": true
         },
         {
             "id": "bow_A_withString",
@@ -363,7 +364,7 @@
         {
             "id": "jeweler",
             "rot": {
-                "x": -90.0,
+                "x": 0.0,
                 "y": 0.0,
                 "z": 0.0
             },
@@ -378,12 +379,13 @@
                 "y": 0.0,
                 "z": 0.0
             },
-            "fullOverride": false
+            "fullOverride": false,
+            "axisBaked": true
         },
         {
             "id": "Forge",
             "rot": {
-                "x": -90.0,
+                "x": 0.0,
                 "y": 0.0,
                 "z": 0.0
             },
@@ -398,12 +400,13 @@
                 "y": 0.0,
                 "z": 0.0
             },
-            "fullOverride": false
+            "fullOverride": false,
+            "axisBaked": true
         },
         {
             "id": "barracks",
             "rot": {
-                "x": -90.0,
+                "x": 0.0,
                 "y": 0.0,
                 "z": 0.0
             },
@@ -418,12 +421,13 @@
                 "y": 0.0,
                 "z": 0.0
             },
-            "fullOverride": false
+            "fullOverride": false,
+            "axisBaked": true
         },
         {
             "id": "armorer",
             "rot": {
-                "x": -90.0,
+                "x": 0.0,
                 "y": 0.0,
                 "z": 0.0
             },
@@ -438,12 +442,13 @@
                 "y": 0.0,
                 "z": 0.0
             },
-            "fullOverride": false
+            "fullOverride": false,
+            "axisBaked": true
         },
         {
             "id": "Ballista_L1",
             "rot": {
-                "x": -90.0,
+                "x": 0.0,
                 "y": 0.0,
                 "z": 0.0
             },
@@ -458,12 +463,13 @@
                 "y": 0.0,
                 "z": 0.0
             },
-            "fullOverride": false
+            "fullOverride": false,
+            "axisBaked": true
         },
         {
             "id": "Ballista_L2",
             "rot": {
-                "x": -90.0,
+                "x": 0.0,
                 "y": 0.0,
                 "z": 0.0
             },
@@ -478,12 +484,13 @@
                 "y": 0.0,
                 "z": 0.0
             },
-            "fullOverride": false
+            "fullOverride": false,
+            "axisBaked": true
         },
         {
             "id": "Ballista_L3",
             "rot": {
-                "x": -90.0,
+                "x": 0.0,
                 "y": 0.0,
                 "z": 0.0
             },
@@ -498,12 +505,13 @@
                 "y": 0.0,
                 "z": 0.0
             },
-            "fullOverride": false
+            "fullOverride": false,
+            "axisBaked": true
         },
         {
             "id": "RealmStore",
             "rot": {
-                "x": -90.0,
+                "x": 0.0,
                 "y": 0.0,
                 "z": 0.0
             },
@@ -518,12 +526,13 @@
                 "y": 0.0,
                 "z": 0.0
             },
-            "fullOverride": false
+            "fullOverride": false,
+            "axisBaked": true
         },
         {
             "id": "ShopAndCrafting",
             "rot": {
-                "x": -90.0,
+                "x": 0.0,
                 "y": 0.0,
                 "z": 0.0
             },
@@ -538,7 +547,8 @@
                 "y": 0.0,
                 "z": 0.0
             },
-            "fullOverride": false
+            "fullOverride": false,
+            "axisBaked": true
         }
     ]
 }

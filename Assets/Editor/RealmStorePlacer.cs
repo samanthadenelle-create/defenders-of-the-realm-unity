@@ -42,11 +42,74 @@ namespace DeNelle.Editor
         private const string ObjectName = "RealmStore_Storefront";
         private const string OkMarker   = "REALM_STORE_PLACED_OK";
 
-        /// <summary>Owner ruling (a): south plaza, across the centre from Coppin, clear of the gate.</summary>
-        private static readonly Vector3 Placement = new Vector3(12f, 0f, -32f);
+        /// <summary>
+        /// FALLBACK ONLY — the owner-ruled (a) position, used when Offset Forge has no authored
+        /// placement for this storefront.
+        /// <para>
+        /// ⛔ THE AUTHORED VALUE WINS. Owner principle, applied consistently all session: a value
+        /// the owner tunes must live in DATA, not in code. Hardcoding the transform here would make
+        /// every nudge a code edit and a round trip through me — the same mistake as the hardcoded
+        /// asset paths that became AssetRoots. Offset Forge already stores pos/rot/scale by id and
+        /// is the tool she tunes with; this reads what it authored.
+        /// </para>
+        /// </summary>
+        private static readonly Vector3 FallbackPlacement = new Vector3(12f, 0f, -32f);
+
+        /// <summary>Offset Forge key. Matches the asset name, which is how that file is keyed.</summary>
+        private const string OffsetKey = "RealmStore";
 
         [MenuItem("Defenders/World/Place the Realm Store storefront")]
         public static void RunMenu() => Run();
+
+        /// <summary>
+        /// Reads a non-zero authored position for this storefront out of Offset Forge.
+        /// <para>
+        /// A ZERO pos is treated as "not authored" rather than "place it at the world origin".
+        /// Every row in that file defaults to pos (0,0,0), so honouring a zero literally would drop
+        /// the storefront on top of the Heart the moment anyone touched its rotation without
+        /// intending to move it — a tuning tool must not be able to teleport a building by
+        /// omission.
+        /// </para>
+        /// </summary>
+        private static bool TryReadAuthoredPosition(out Vector3 pos)
+        {
+            pos = default;
+            const string path = "Assets/OffsetForge/offsets.json";
+            if (!System.IO.File.Exists(path)) return false;
+
+            try
+            {
+                string json = System.IO.File.ReadAllText(path);
+                // Locate this key's block, then the pos object inside it. Text-scanned rather than
+                // deserialized so a schema addition to offsets.json cannot break the bake.
+                int at = json.IndexOf($"\"id\": \"{OffsetKey}\"", System.StringComparison.Ordinal);
+                if (at < 0) return false;
+
+                int posAt = json.IndexOf("\"pos\"", at, System.StringComparison.Ordinal);
+                if (posAt < 0) return false;
+
+                var m = System.Text.RegularExpressions.Regex.Match(
+                    json.Substring(posAt, System.Math.Min(220, json.Length - posAt)),
+                    "\"x\"\\s*:\\s*(-?[0-9.eE+]+).*?\"y\"\\s*:\\s*(-?[0-9.eE+]+).*?\"z\"\\s*:\\s*(-?[0-9.eE+]+)",
+                    System.Text.RegularExpressions.RegexOptions.Singleline);
+                if (!m.Success) return false;
+
+                var v = new Vector3(
+                    float.Parse(m.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture),
+                    float.Parse(m.Groups[2].Value, System.Globalization.CultureInfo.InvariantCulture),
+                    float.Parse(m.Groups[3].Value, System.Globalization.CultureInfo.InvariantCulture));
+
+                if (v.sqrMagnitude < 0.0001f) return false;   // unauthored zero — see summary
+                pos = v;
+                return true;
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogWarning($"[RealmStore] could not read the authored offset ({ex.Message}) — " +
+                                 "falling back to the owner-ruled default.");
+                return false;
+            }
+        }
 
         public static void Run()
         {
@@ -77,13 +140,27 @@ namespace DeNelle.Editor
                 }
             }
 
+            // Read the AUTHORED placement first; fall back to the owner-ruled default.
+            Vector3 placement = FallbackPlacement;
+            bool authored = TryReadAuthoredPosition(out var authoredPos);
+            if (authored)
+            {
+                placement = authoredPos;
+                Debug.Log($"[RealmStore] using the AUTHORED position from Offset Forge: {placement}");
+            }
+            else
+            {
+                Debug.Log($"[RealmStore] no authored position for '{OffsetKey}' — using the owner-ruled " +
+                          $"default {placement}. Tune it in Offset Forge and re-run to make it stick.");
+            }
+
             var inst = (GameObject)PrefabUtility.InstantiatePrefab(model);
             inst.name = ObjectName;
-            inst.transform.position = Placement;
+            inst.transform.position = placement;
             // Face the plaza centre so the shopfront looks at the player walking in from it,
             // rather than presenting its back to the town.
             inst.transform.rotation = Quaternion.LookRotation(
-                new Vector3(0f, 0f, 0f) - Placement, Vector3.up);
+                new Vector3(0f, 0f, 0f) - placement, Vector3.up);
 
             // A collider so the player cannot walk through the building. NOT an
             // IDamageableStructure and NOT a catalog row — it blocks, it does not take damage.
@@ -123,9 +200,10 @@ namespace DeNelle.Editor
                 return;
             }
 
-            Debug.Log($"[RealmStore] placed at {Placement} facing the plaza centre, with a collider " +
-                      "and RealmStoreVendor. NOT in the build catalog, NOT damageable.");
-            Debug.Log($"{OkMarker} at {Placement}");
+            Debug.Log($"[RealmStore] placed at {placement} ({(authored ? "AUTHORED in Offset Forge" : "owner-ruled default")}) " +
+                      "facing the plaza centre, with a collider and RealmStoreVendor. " +
+                      "NOT in the build catalog, NOT damageable.");
+            Debug.Log($"{OkMarker} at {placement}");
         }
     }
 }
