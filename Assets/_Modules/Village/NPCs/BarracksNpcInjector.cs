@@ -248,18 +248,21 @@ namespace DeNelle.Village
                 // the Barracks surfaces with its drillmaster after founding, tell the player
                 // where the army comes from. One-shot via the SeenTutorials ledger; the full
                 // Sylas Yarn beat + the Train-3 task ride the UI seat's copy pass (WO-813 §1).
-                var st = DeNelle.Core.State.GameStateService.Instance != null
-                    ? DeNelle.Core.State.GameStateService.Instance.State : null;
-                if (st != null && st.SeenTutorials != null &&
-                    !(st.SeenTutorials.TryGetValue("barracks_intro", out bool seen) && seen))
-                {
-                    st.SeenTutorials["barracks_intro"] = true;
-                    DeNelle.Core.State.GameStateService.Instance.Save();
-                    DeNelle.Core.UI.ElarionUiKit.ShowToast(
-                        "Elarion needs soldiers. The drillmaster at the Barracks trains them.",
-                        DeNelle.Core.UI.ElarionUiKit.ToastTone.Info);
-                    FlowTrace.Step("Barracks", "WO-813 once-teach fired (barracks_intro marked seen).");
-                }
+                // ⛔ THE ONCE-TEACH TOAST IS RETIRED (owner ruling PROD-002, option (a), 2026-08-18).
+                // It read: "Elarion needs soldiers. The drillmaster at the Barracks trains them."
+                // That sentence was FALSE. The drillmaster's Talk opens only
+                // DialogueService.PlayStructure("barracks", …) — structure dialogue, never a
+                // training panel; Manage owns troop training. So the one piece of copy whose whole
+                // job was teaching the player where the army comes from pointed them at an NPC that
+                // cannot do it.
+                // Retired rather than re-pointed at Manage (option (b)) by owner ruling: the
+                // barracks door itself is closing in the same change, so a toast introducing a door
+                // that no longer exists would be teaching a flow the player cannot follow.
+                // ⚠ The 'barracks_intro' SeenTutorials key is deliberately left in the schema and in
+                // the WO-950 gate-refusal reset below. Removing a key that shipped saves carry buys
+                // nothing and risks the migration path; it simply stops being written.
+                FlowTrace.Step("Barracks", "drillmaster placed; once-teach toast RETIRED (PROD-002 a) — " +
+                                           "training lives in Manage, not at this NPC.");
             }
             else
             {

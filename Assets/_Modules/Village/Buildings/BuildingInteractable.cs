@@ -97,15 +97,15 @@ namespace DeNelle.Village
             {
                 "collector_lumbermill",   // production building; Manage owns the flow
                 "arcane-tower",           // upgrades moved to Manage
-                // ⛔ "barracks" is DELIBERATELY ABSENT — it needs an owner ruling first, and the
-                //    reason is copy, not code. The drillmaster's Talk opens only
-                //    DialogueService.PlayStructure("barracks", …) — structure dialogue, NOT a
-                //    training panel — so by this rule it IS a dead door. BUT BarracksNpcInjector
-                //    fires a once-teach toast that says "Elarion needs soldiers. The drillmaster at
-                //    the Barracks trains them." Close the door and that toast points the player at
-                //    nothing. It is arguably already wrong; either way the fix is a copy change the
-                //    owner has to make, so the door stays until she does. (It is also gated behind
-                //    ff.barracks, default OFF, so it is not reaching most players today.)
+                // Owner ruling PROD-002 option (a), 2026-08-18: the barracks door CLOSES and its
+                // once-teach toast is RETIRED (removed in BarracksNpcInjector, same change).
+                // The drillmaster's Talk opened only DialogueService.PlayStructure("barracks", …) —
+                // structure dialogue, never a training panel — so it was a dead door by this file's
+                // own rule, and the toast that advertised it ("the drillmaster at the Barracks
+                // trains them") was simply untrue: Manage owns training.
+                // ⚠ The drillmaster BODY still stands at the barracks. Only the affordance goes —
+                // same as the other two.
+                "barracks",
             };
 
         /// <summary>
