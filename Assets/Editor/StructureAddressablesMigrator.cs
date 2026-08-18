@@ -57,6 +57,7 @@ namespace DeNelle.Editor
         private const string ManifestPath  = "Assets/AddressableAssetsData/asset-move-manifest.json";
         private const string CatalogPath   = "Assets/Resources/Data/Canonical/structures-catalog.json";
 
+        private const string GroupName  = "Structure_Art";
         private const string OkMarker   = "STRUCTURE_MIGRATE_OK";
         private const string DryMarker  = "STRUCTURE_MIGRATE_DRYRUN_OK";
 
@@ -182,11 +183,95 @@ namespace DeNelle.Editor
                 return;
             }
 
-            Debug.LogError("[Migrate] LIVE move is not enabled in this build of the tool — DryRun only. " +
-                           "Review the manifest, then implement Run() once the plan is accepted.");
+            // ================= LIVE MOVE =================
+            // Reached only when the leak check above found ZERO staying-assets referencing the
+            // closure — otherwise Execute has already returned. That ordering is deliberate: a
+            // partial move is worse than none, because it relocates files, reports success, and
+            // leaves the payload unchanged.
+            var settings = UnityEditor.AddressableAssets.AddressableAssetSettingsDefaultObject.Settings;
+            if (settings == null)
+            {
+                Debug.LogError("[Migrate] Addressables settings not found — ABORTED before moving anything. " +
+                               "Moving assets out of Resources without an Addressables home would make every " +
+                               "one of them unloadable.");
+                return;
+            }
+
+            var group = settings.FindGroup(GroupName) ?? settings.CreateGroup(
+                GroupName, setAsDefaultGroup: false, readOnly: false, postEvent: false,
+                schemasToCopy: null,
+                types: new[] { typeof(UnityEditor.AddressableAssets.Settings.GroupSchemas.BundledAssetGroupSchema),
+                               typeof(UnityEditor.AddressableAssets.Settings.GroupSchemas.ContentUpdateGroupSchema) });
+
+            EnsureFolder(ArtRoot);
+
+            int moved = 0, failed = 0;
+            AssetDatabase.StartAssetEditing();
+            try
+            {
+                foreach (var e in entries)
+                {
+                    EnsureFolder(System.IO.Path.GetDirectoryName(e.to).Replace('\\', '/'));
+
+                    // MoveAsset PRESERVES the GUID, so every prefab/material/scene reference to this
+                    // asset survives. Only hardcoded STRING paths break — which is exactly what the
+                    // manifest exists to fix.
+                    string err = AssetDatabase.MoveAsset(e.from, e.to);
+                    if (!string.IsNullOrEmpty(err))
+                    {
+                        failed++;
+                        Debug.LogError($"[Migrate] MoveAsset FAILED '{e.from}' -> '{e.to}': {err}");
+                        continue;
+                    }
+                    moved++;
+                }
+            }
+            finally
+            {
+                AssetDatabase.StopAssetEditing();
+                AssetDatabase.Refresh();
+            }
+
+            if (failed > 0)
+            {
+                Debug.LogError($"[Migrate] {failed} move(s) FAILED — the tree is now PARTIALLY migrated. " +
+                               "Do not build; resolve the failures and re-run.");
+            }
+
+            // Mark AFTER the move: the address must point at the asset's NEW location, and marking
+            // first would register a path that is about to become wrong.
+            int marked = 0;
+            foreach (var e in entries)
+            {
+                string guid = AssetDatabase.AssetPathToGUID(e.to);
+                if (string.IsNullOrEmpty(guid)) continue;
+                var entry = settings.CreateOrMoveEntry(guid, group, readOnly: false, postEvent: false);
+                if (entry == null) continue;
+                entry.SetAddress(e.address, postEvent: false);
+                marked++;
+            }
+            settings.SetDirty(UnityEditor.AddressableAssets.Settings.AddressableAssetSettings
+                                  .ModificationEvent.BatchModification, null, true, true);
+            AssetDatabase.SaveAssets();
+
+            Debug.Log($"[Migrate] moved {moved}/{entries.Count}, marked {marked} addressable in group '{GroupName}'.");
+
+            // Rewrite the manifest in LIVE mode so it records reality, not the plan.
+            WriteManifest(entries, dryRun: false, bytes);
+
+            Debug.Log($"{OkMarker} moved {moved}, marked {marked}, {bytes / 1048576.0:F1} MB out of Resources");
         }
 
         // ---------------------------------------------------------------------
+
+        /// <summary>Creates a folder chain if absent. MoveAsset fails outright on a missing parent.</summary>
+        private static void EnsureFolder(string folder)
+        {
+            if (string.IsNullOrEmpty(folder) || AssetDatabase.IsValidFolder(folder)) return;
+            string parent = System.IO.Path.GetDirectoryName(folder).Replace('\\', '/');
+            EnsureFolder(parent);
+            AssetDatabase.CreateFolder(parent, System.IO.Path.GetFileName(folder));
+        }
 
         private static long SafeLen(string assetPath)
         {

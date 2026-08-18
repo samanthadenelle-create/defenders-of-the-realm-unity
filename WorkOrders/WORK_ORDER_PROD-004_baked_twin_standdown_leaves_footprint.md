@@ -10,7 +10,10 @@ is outstanding on this ticket.
   ground-only collection volume (owner ruling: roofs/wall tops must not be walkable). ⛔ No compile
   gate, no re-bake and no regression have been run on it — the owner has been in the editor, which
   locks batchmode. **Nothing here is proven; do not treat it as shipped.**
-- ⛔ **NOT PUSHABLE** until §6 is confirmed on an EXISTING save.
+- ✅ **OWNER WALKED IT AND SIGNED OFF 2026-08-17.** Push unblocked.
+  ⚠ Recorded honestly: the sign-off is the PO's felt verification, which is the only thing that
+  can close a spatial defect — but the §6 boxes were not ticked individually, so if an invisible
+  footprint resurfaces on an established town, re-open here rather than treating this as disproven.
 **Superseded status line, kept so the change is visible:** *"READY TO IMPLEMENT — §3 has ONE branch
 the owner is checking in-editor"*. That went stale the moment §3b resolved the branch and was caught
 by a read-only board review, not by the seat that made it — exactly the drift CLAUDE.md §15 exists to

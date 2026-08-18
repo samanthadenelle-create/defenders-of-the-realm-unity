@@ -1,6 +1,9 @@
 # PROD-001 — The guide wolf walks north facing left
 
-**Status:** DONE — awaiting owner verification (see §5; **NOT PUSHABLE** until every box is confirmed)
+**Status:** ✅ **CLOSED — owner walked it and signed off 2026-08-17.** Verified on device by the PO,
+which is the only thing that could close it: §5's boxes are felt/observational and the CLI is
+explicitly forbidden from ticking them from its own gates. Push unblocked by that sign-off (owner
+rule: *"never push if everything in prod ticket isnt tested"*).
 **Minted:** 2026-08-17 (CLI seat) — the first ticket of the post-launch PROD series
 **Priority:** HIGH — the guide is the first character a new player follows in the FTUE.
 **Provenance:** owner, 2026-08-17, on a live build: *"the wolf still walks north facing left"*.
