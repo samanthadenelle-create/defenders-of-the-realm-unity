@@ -15,18 +15,14 @@
 > existing. Consumed so far: PROD-001 (guide wolf facing), PROD-002 (NPC roles + purchased bodies),
 > PROD-003 (Realm Store permanent storefront), PROD-004 (baked-twin footprint).
 
-> ## âš  RECONCILED 2026-08-17 (CLI): main line next free = **1117**.
-> *(CLI seat minted **WO-1117** and bumped 1117 -> 1118 in this SAME edit. **1117** = the Realm Store
-> gets its own PERMANENT STOREFRONT. Owner ruling 2026-08-17: "can we give monetization its own
-> Storefront?" -> "something with a static location not destructible". Today the ONLY monetization
-> surface in the game is the THIRD dialogue option on Coppin, a produce vendor, BELOW A SCROLL FOLD.
-> Interim fix applied the same day: that option is now FIRST. The real fix is a baked, fixed-location
-> storefront with its own NPC, ABSENT from the build catalog and NOT an IDamageableStructure -- a
-> DELIBERATE exception to the player-built-town model (CLAUDE.md sec.8) because sellable / movable /
-> destructible each mean the store can go OFFLINE: a raid would turn revenue into a function of
-> whether the last wave happened to reach one building. 1 open ruling: WHERE it stands, which is
-> expensive to change once baked.)*
-> *(CLI seat minted **WO-1116** and bumped 1116 -> 1117 in this SAME edit. **1116** = the OPERATOR /
+> ## ⚠ RECONCILED 2026-08-17 (CLI): main line next free = **1123**.
+> *(CLI seat minted **WO-1117..1122** and bumped 1117 -> 1123 in this SAME edit — monetization
+> profitability program. **1117** = program spine (pack audit + phase map). **1118** = honest SKU
+> shelf (hide vapor; keep impulse; rewrite $2/$5 ladder). **1119** = crystal sink + 2x harvest boost
+> Version B. **1120** = ads effective free path (stop free grants; LevelPlay; placements live).
+> **1121** = live money rails + Buy gate checklist. **1122** = season pass SPEC + revenue KPI.
+> Realm Store permanent storefront lives as **PROD-003** (not 1117 — renumbered into PROD series).)*
+> *(Earlier same day: CLI minted **WO-1116** and bumped 1116 -> 1117. **1116** = the OPERATOR /
 > LIVE-OPS DASHBOARD. **Phase 1 is BUILT**: `api/admin/stats.js` (read-only aggregate endpoint --
 > overview / retention / funnel / economy / players, reusing db.js's constant-time X-Admin-Key auth
 > VERBATIM, every query a LIMITed parameterised SELECT, player ids masked first4...last4) plus
