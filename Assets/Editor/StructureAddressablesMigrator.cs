@@ -64,6 +64,57 @@ namespace DeNelle.Editor
         [MenuItem("Defenders/Art/Structures -> Addressables (DRY RUN)")]
         public static void DryRunMenu() => DryRun();
 
+        /// <summary>
+        /// Moves any orphaned "&lt;name&gt;.fbm" folder whose FBX has already been migrated, so the
+        /// textures follow the model that owns them.
+        /// <para>
+        /// ⛔ THIS EXISTS BECAUSE THE FIRST LIVE RUN STRANDED THEM. AssetDatabase.MoveAsset refuses
+        /// to move a file OUT of a .fbm (the folder belongs to its FBX), so 66 per-file moves failed
+        /// while the 20 FBXs succeeded — models in one folder, their textures in another. Moving the
+        /// FOLDER is allowed; moving its contents is not. Idempotent and safe to re-run.
+        /// </para>
+        /// </summary>
+        [MenuItem("Defenders/Art/Repair stranded .fbm folders")]
+        public static void RepairFbmFolders()
+        {
+            if (!AssetDatabase.IsValidFolder(ArtRoot))
+            {
+                Debug.Log("[Migrate] no migrated art root — nothing to repair.");
+                Debug.Log("STRUCTURE_FBM_REPAIR_OK 0 moved");
+                return;
+            }
+
+            int moved = 0, failed = 0, skipped = 0;
+            foreach (var dir in System.IO.Directory.GetDirectories(ResourcesRoot, "*.fbm"))
+            {
+                string src  = dir.Replace('\\', '/');
+                string name = System.IO.Path.GetFileName(src);                       // "Forge.fbm"
+                string stem = System.IO.Path.GetFileNameWithoutExtension(name);      // "Forge"
+
+                // Only follow an FBX that has ACTUALLY moved. A .fbm whose model is still in
+                // Resources must stay put — moving it would strand the textures the other way.
+                if (!System.IO.File.Exists($"{ArtRoot}/{stem}.fbx")) { skipped++; continue; }
+
+                string dst = $"{ArtRoot}/{name}";
+                string err = AssetDatabase.MoveAsset(src, dst);
+                if (!string.IsNullOrEmpty(err))
+                {
+                    failed++;
+                    Debug.LogError($"[Migrate] .fbm repair FAILED '{src}' -> '{dst}': {err}");
+                }
+                else
+                {
+                    moved++;
+                    Debug.Log($"[Migrate] .fbm moved with its model: {name}");
+                }
+            }
+
+            AssetDatabase.Refresh();
+            Debug.Log($"[Migrate] .fbm repair: {moved} moved, {skipped} left (model still in Resources), {failed} failed.");
+            Debug.Log(failed == 0 ? $"STRUCTURE_FBM_REPAIR_OK {moved} moved"
+                                  : $"STRUCTURE_FBM_REPAIR_FAIL {failed}");
+        }
+
         public static void DryRun()  => Execute(dryRun: true);
         public static void Run()     => Execute(dryRun: false);
 
@@ -105,6 +156,13 @@ namespace DeNelle.Editor
                                  $"will NOT be migrated: {string.Join(", ", missing)}");
             }
 
+            // ⛔ .fbm FOLDERS MOVE AS A UNIT, NEVER FILE-BY-FILE.
+            // Unity treats a "<name>.fbm" folder as OWNED BY its FBX (it is the FBX SDK's unpacked
+            // embedded-media folder), and AssetDatabase.MoveAsset REFUSES to move individual files
+            // out of one. The first live run learned this the expensive way: 20 FBXs moved while
+            // all 66 of their .fbm texture files failed, stranding the folders in Resources and
+            // leaving every one of those models without its textures. So .fbm CONTENTS are excluded
+            // from the per-file entry list here, and the folder is moved whole after its FBX.
             var closure = new SortedSet<string>(System.StringComparer.OrdinalIgnoreCase);
             foreach (var kv in roots)
             {
@@ -114,8 +172,10 @@ namespace DeNelle.Editor
                     // Only things currently UNDER Resources are a payload problem. A dependency that
                     // already lives outside Resources is fine where it is — moving it would be churn
                     // with no size benefit and extra reference risk.
-                    if (dep.StartsWith(ResourcesRoot, System.StringComparison.OrdinalIgnoreCase))
-                        closure.Add(dep);
+                    if (!dep.StartsWith(ResourcesRoot, System.StringComparison.OrdinalIgnoreCase)) continue;
+                    // Skip anything inside a .fbm — it rides with its FBX (see the note above).
+                    if (dep.IndexOf(".fbm/", System.StringComparison.OrdinalIgnoreCase) >= 0) continue;
+                    closure.Add(dep);
                 }
             }
 

@@ -242,7 +242,13 @@ namespace DeNelle.Editor
             int ok = 0, missing = 0;
             foreach (var kv in paths)
             {
-                var go = Resources.Load<GameObject>(kv.Value);
+                // ⛔ RESOLVE THROUGH THE RUNTIME SEAM, NOT Resources.Load.
+                // After the S1 migration the art lives in an Addressable group, so a bare
+                // Resources.Load reports 34/34 MISSING on a perfectly healthy tree — it would be
+                // testing where the files USED to be. The seam is what the game actually calls
+                // (Addressables-first, Resources-fallback), so asking it is the only check that
+                // tracks reality through the migration instead of being invalidated by it.
+                var go = DeNelle.Core.StructureAssetLoader.LoadStructurePrefab(kv.Value);
                 if (go == null)
                 {
                     missing++;
