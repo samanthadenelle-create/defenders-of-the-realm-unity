@@ -12,11 +12,16 @@ ModelImporter:
   - first:
       type: UnityEngine:Material
       assembly: UnityEngine.CoreModule
+      name: Material_Pbr
+    second: {fileID: 2100000, guid: 7949fd113d9a377478ff37ed090fa6cb, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
       name: skeleton
     second: {fileID: 2100000, guid: 9a22937b7b087264e96a3cfb2a3a2a7e, type: 2}
   materials:
     materialImportMode: 2
-    materialName: 0
+    materialName: 1
     materialSearch: 1
     materialLocation: 0
   animations:

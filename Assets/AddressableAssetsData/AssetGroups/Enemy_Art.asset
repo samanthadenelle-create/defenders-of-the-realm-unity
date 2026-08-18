@@ -1,0 +1,168 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bbb281ee3bf0b054c82ac2347e9e782c, type: 3}
+  m_Name: Enemy_Art
+  m_EditorClassIdentifier: Unity.Addressables.Editor::UnityEditor.AddressableAssets.Settings.AddressableAssetGroup
+  m_GroupName: Enemy_Art
+  m_GUID: f9a9e09329000e0448c327a5a7b7399f
+  m_SerializeEntries:
+  - m_GUID: 0eeb96808af19c14b85ada877bd1718d
+    m_Address: Enemies/LargeHumanoid
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 162a6c4939cfd0a4992bd10be79ef3d3
+    m_Address: Enemies/LargeEnemy
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 189ebcaec8d15894283c1db1b5ae0f38
+    m_Address: Enemies/Skeleton_Golem_NEW
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1c04fe23e687b12469f65aea60137a54
+    m_Address: Enemies/OrcHumanoid
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2a45637b34ffcfd4abfc88766e4d0f66
+    m_Address: Enemies/Orc_Shaman
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3bddc9f232c05a442806dd4f6dbf412a
+    m_Address: Enemies/Skeleton_Golem
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 50aa0ddb3052ecb4597674fafd8393cf
+    m_Address: Enemies/Orc_Mage_Legacy
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 55cdd34f5a6d9fc45ac65758861150fa
+    m_Address: Enemies/OrcWarband
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 59f6a9cb1ce6bef4bbec3922efcdf839
+    m_Address: Enemies/Orc_Berserker
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5b524eaf028edaf4b9dbe113a7f15563
+    m_Address: Enemies/Necromancer_NEW
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6066d47ca793874439884eacffdf1165
+    m_Address: Enemies/Skeleton_Minion
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 60e38b0cb9939d045a8c68fab937a640
+    m_Address: Enemies/SkeletonHumanoid
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 63f0d2098c640f24b89f4eb3812374f8
+    m_Address: Enemies/Necromancer
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6afe4aba3d324af49b469a98bb8d9844
+    m_Address: Enemies/Troll
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6d6937df696c64143ab9047b25668a7c
+    m_Address: Enemies/Orc_Necromancer
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 70784628d067e0b48a44c665010def8d
+    m_Address: Enemies/Skeleton_Healer
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 83bb901389a57af4c8f393f5fa2e8181
+    m_Address: Enemies/Orc_Warlord
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 86367789586a0f043a38ffefad914b87
+    m_Address: Enemies/Skeleton_Rogue
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 88cc09a1a6d8f274795b7efdae793fb8
+    m_Address: Enemies/Troll_Mage
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8a53b52f760a558418a313e7c01609f9
+    m_Address: Enemies/Skeleton_Warrior
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 930df79824491b6478e9ecaf73398f22
+    m_Address: Enemies/Troll_Overlord
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ad02d97a589870647b6a580b1c35f207
+    m_Address: Enemies/Orc_Tank
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b17eda4b37a8fe1459cab240101ae1fa
+    m_Address: Enemies/Boss_Dragon
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b839d6b46fa2b0a439e3815a3857b66b
+    m_Address: Enemies/Orc_Mage
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: cb57466c1483c9c44ae1a355d1735c60
+    m_Address: Enemies/HumanoidEnemy
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: cfde23b22f282144194d154abedcbba1
+    m_Address: Enemies/Boss
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d6bad9e773bd99047b3fe07c4a18f64b
+    m_Address: Enemies/Skeleton_Mage
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ea8b49aa47e59be47b3b28812a80bc20
+    m_Address: Enemies/Orc_Warrior
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: fab00f1c1b8e8b546bbd42ba5e75fa36
+    m_Address: Enemies/Demon
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  m_ReadOnly: 0
+  m_Settings: {fileID: 11400000, guid: 73b1d645ccb43af47916e90d8a1f17d4, type: 2}
+  m_SchemaSet:
+    m_Schemas:
+    - {fileID: 11400000, guid: 6b0ced05116fbea4c9503b19f3576f89, type: 2}
+    - {fileID: 11400000, guid: 66fde48ac2585a3479cfd6b0701e24b2, type: 2}

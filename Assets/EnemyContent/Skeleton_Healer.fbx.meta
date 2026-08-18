@@ -1,24 +1,14 @@
 fileFormatVersion: 2
-guid: d6bad9e773bd99047b3fe07c4a18f64b
+guid: 70784628d067e0b48a44c665010def8d
 ModelImporter:
   serializedVersion: 24200
   internalIDToNameTable: []
-  externalObjects:
-  - first:
-      type: UnityEngine:Material
-      assembly: UnityEngine.CoreModule
-      name: Glow
-    second: {fileID: 2100000, guid: 9a22937b7b087264e96a3cfb2a3a2a7e, type: 2}
-  - first:
-      type: UnityEngine:Material
-      assembly: UnityEngine.CoreModule
-      name: skeleton
-    second: {fileID: 2100000, guid: 9a22937b7b087264e96a3cfb2a3a2a7e, type: 2}
+  externalObjects: {}
   materials:
     materialImportMode: 2
-    materialName: 0
+    materialName: 1
     materialSearch: 1
-    materialLocation: 0
+    materialLocation: 1
   animations:
     legacyGenerateAnimations: 4
     bakeSimulation: 0
@@ -44,15 +34,15 @@ ModelImporter:
   meshes:
     lODScreenPercentages: []
     globalScale: 1
-    meshCompression: 2
+    meshCompression: 1
     addColliders: 0
     useSRGBMaterialColor: 1
     sortHierarchyByName: 1
     importPhysicalCameras: 1
-    importVisibility: 0
-    importBlendShapes: 0
-    importCameras: 0
-    importLights: 0
+    importVisibility: 1
+    importBlendShapes: 1
+    importCameras: 1
+    importLights: 1
     nodeNameCollisionStrategy: 1
     fileIdsGeneration: 2
     swapUVChannels: 0

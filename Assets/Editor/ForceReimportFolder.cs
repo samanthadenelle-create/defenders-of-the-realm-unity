@@ -19,6 +19,7 @@
 // the WHOLE affected tree afterwards rather than assuming Refresh() caught it.
 // =============================================================================
 
+using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 
@@ -34,31 +35,49 @@ namespace DeNelle.Editor
         /// </summary>
         public static void Run()
         {
-            string folder = "Assets/Resources";
+            // ⛔ THE MIGRATED ROOTS MUST BE IN THIS LIST, NOT JUST Resources.
+            // The runner cannot pass extra args, and the first version defaulted to
+            // Assets/Resources alone — so after enemy art moved to Assets/EnemyContent, running
+            // this reported a healthy 1996-asset reimport while never touching the tree that had
+            // actually just moved. A repair tool that silently repairs the wrong folder is worse
+            // than none: it produces a green line and leaves the fault in place.
+            var folders = new List<string>
+            {
+                "Assets/Resources",
+                DeNelle.Core.AssetRoots.EnemyContent,
+                DeNelle.Core.AssetRoots.StructureContent,
+            };
+
             var args = System.Environment.GetCommandLineArgs();
             for (int i = 0; i < args.Length - 1; i++)
-                if (args[i] == "-folder") { folder = args[i + 1]; break; }
+                if (args[i] == "-folder") { folders = new List<string> { args[i + 1] }; break; }
 
-            if (!AssetDatabase.IsValidFolder(folder))
+            int grandTotal = 0;
+            foreach (var folder in folders)
             {
-                Debug.LogError($"[Reimport] '{folder}' is not a valid folder — nothing done.");
-                return;
+                if (!AssetDatabase.IsValidFolder(folder))
+                {
+                    Debug.Log($"[Reimport] '{folder}' absent — skipped (not an error; it may not exist yet).");
+                    continue;
+                }
+
+                Debug.Log($"[Reimport] force re-importing '{folder}' ...");
+                AssetDatabase.ImportAsset(folder,
+                    ImportAssetOptions.ImportRecursive |
+                    ImportAssetOptions.ForceUpdate |
+                    ImportAssetOptions.ForceSynchronousImport);
+
+                // Report what the database can SEE afterwards — the count is the evidence the index
+                // recovered, which is the whole question. A silent "done" would prove nothing.
+                int prefabs = AssetDatabase.FindAssets("t:Prefab", new[] { folder }).Length;
+                int models  = AssetDatabase.FindAssets("t:Model",  new[] { folder }).Length;
+                int all     = AssetDatabase.FindAssets("", new[] { folder }).Length;
+                grandTotal += all;
+                Debug.Log($"[Reimport] '{folder}' now indexes {all} asset(s): {prefabs} prefab(s), {models} model(s).");
             }
 
-            Debug.Log($"[Reimport] force re-importing '{folder}' ...");
-            AssetDatabase.ImportAsset(folder,
-                ImportAssetOptions.ImportRecursive |
-                ImportAssetOptions.ForceUpdate |
-                ImportAssetOptions.ForceSynchronousImport);
             AssetDatabase.Refresh(ImportAssetOptions.ForceUpdate);
-
-            // Report what the database can SEE afterwards — the count is the evidence the index
-            // recovered, which is the whole question. A silent "done" would prove nothing.
-            int prefabs = AssetDatabase.FindAssets("t:Prefab", new[] { folder }).Length;
-            int models  = AssetDatabase.FindAssets("t:Model",  new[] { folder }).Length;
-            int all     = AssetDatabase.FindAssets("", new[] { folder }).Length;
-            Debug.Log($"[Reimport] '{folder}' now indexes {all} asset(s): {prefabs} prefab(s), {models} model(s).");
-            Debug.Log($"FORCE_REIMPORT_OK {all} assets");
+            Debug.Log($"FORCE_REIMPORT_OK {grandTotal} assets across {folders.Count} root(s)");
         }
     }
 }

@@ -1,12 +1,12 @@
 fileFormatVersion: 2
-guid: ad02d97a589870647b6a580b1c35f207
+guid: 50aa0ddb3052ecb4597674fafd8393cf
 ModelImporter:
   serializedVersion: 24200
   internalIDToNameTable: []
   externalObjects: {}
   materials:
     materialImportMode: 2
-    materialName: 0
+    materialName: 1
     materialSearch: 1
     materialLocation: 1
   animations:
@@ -508,13 +508,13 @@ ModelImporter:
         length: 0
         modified: 0
     skeleton:
-    - name: Orc_Tank(Clone)
+    - name: Orc_Mage(Clone)
       parentName: 
       position: {x: 0, y: 0, z: 0}
       rotation: {x: 0, y: 0, z: 0, w: 1}
       scale: {x: 1, y: 1, z: 1}
     - name: root
-      parentName: Orc_Tank(Clone)
+      parentName: Orc_Mage(Clone)
       position: {x: -0, y: 0, z: 0}
       rotation: {x: -0.7071068, y: 0, z: -0, w: 0.7071068}
       scale: {x: 1, y: 1, z: 1}
@@ -1019,7 +1019,7 @@ ModelImporter:
       rotation: {x: -0.000001565798, y: 0.3394746, z: -0.00000029847823, w: 0.94061524}
       scale: {x: 0.9999999, y: 0.99999976, z: 0.9999998}
     - name: tripo_mesh_80c4114e
-      parentName: Orc_Tank(Clone)
+      parentName: Orc_Mage(Clone)
       position: {x: -0, y: 0, z: 0}
       rotation: {x: -0.7071068, y: 0, z: -0, w: 0.7071068}
       scale: {x: 1, y: 1, z: 1}

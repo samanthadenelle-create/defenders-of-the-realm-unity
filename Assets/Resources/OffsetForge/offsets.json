@@ -238,7 +238,7 @@
         "y": 0.0,
         "z": 0.0
       },
-      "fullOverride": false
+      "fullOverride": true
     },
     {
       "id": "sword_A@sheathed",
@@ -258,7 +258,7 @@
         "y": 0.0,
         "z": 0.0
       },
-      "fullOverride": false
+      "fullOverride": true
     },
     {
       "id": "arcane tower",
