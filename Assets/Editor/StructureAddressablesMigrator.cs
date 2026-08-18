@@ -48,7 +48,13 @@ namespace DeNelle.Editor
     {
         private const string ResourcesRoot = "Assets/Resources/Structures";
         private const string ArtRoot       = "Assets/Art/Structures";
-        private const string ManifestPath  = "Assets/Resources/Data/Canonical/asset-move-manifest.json";
+        // ⛔ NOT UNDER Resources/. The first version wrote this to Resources/Data/Canonical and the
+        // data-web regression caught it immediately: anything under Resources is FORCE-INCLUDED, so
+        // a tool whose whole purpose is getting bytes OUT of Resources was adding a file TO it — and
+        // Resources-only catalogs also beat their StreamingAssets counterpart at runtime, which is
+        // the drift that gate exists to prevent. This manifest is EDITOR-ONLY data: the runtime
+        // resolves by ADDRESS, never by path, so nothing at runtime needs it.
+        private const string ManifestPath  = "Assets/AddressableAssetsData/asset-move-manifest.json";
         private const string CatalogPath   = "Assets/Resources/Data/Canonical/structures-catalog.json";
 
         private const string OkMarker   = "STRUCTURE_MIGRATE_OK";

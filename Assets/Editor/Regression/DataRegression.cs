@@ -161,6 +161,14 @@ namespace DeNelle.Editor
             // owner's slugs VERBATIM (creative pick is owner-only).
             CheckNpcModels(failures, log);
 
+            // --- ASSET-MOVE MANIFEST (Addressables migration, 2026-08-17) ----------
+            // The generated manifest is the single source of truth for what moved out of Resources
+            // and where it went. Registered HERE, not left as a menu item, because the whole point
+            // is that a stale manifest FAILS A GATE rather than silently blanking a building — and
+            // a suite that only runs when someone remembers is exactly the stale-second-source-of-
+            // truth problem it exists to prevent. No-ops when no migration has run.
+            DeNelle.Editor.Regression.AssetMoveManifestRegression.Verify(failures, log);
+
             // --- BUILDINGS (buildings.json -> BuildingCatalog) ---------------------
             // Load through the real loader; assert non-zero + non-empty id/displayName.
             // NOTE (conservative): BuildingDef.Model is a KayKit mesh KEY, NOT a

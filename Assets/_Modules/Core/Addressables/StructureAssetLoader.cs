@@ -105,6 +105,7 @@ namespace DeNelle.Core
                 {
                     FlowTrace.Once(System, "addr-hit-" + address,
                         $"'{address}' resolved from ADDRESSABLES (out of the force-included Resources payload).");
+                    DependencyClosureTrace.Verify(System, address, result, viaFallback: false);
                     return result;
                 }
 
@@ -123,6 +124,12 @@ namespace DeNelle.Core
             {
                 result = Resources.Load<T>(address);
             });
+
+            // Trace the FALLBACK closure too. This is the branch that matters most during a
+            // migration: a moved asset that still answers from Resources means the address is wrong
+            // and the bytes are shipping twice — invisible in game, and invisible to every gate
+            // except this line.
+            if (result != null) DependencyClosureTrace.Verify(System, address, result, viaFallback: true);
 
             if (result == null && s_reportedMisses.Add(address))
             {
