@@ -74,7 +74,7 @@ namespace DeNelle.Editor
 
         private const string PolyPrefabRoot =
             "Assets/polyperfect/Low Poly Ultimate Pack/_M/Prefabs_M/";
-        private const string ResStructRoot = "Assets/Resources/Structures/";
+        private const string ResStructRoot = DeNelle.Core.AssetRoots.StructureContent + "/";
 
         private const string RootName = "StrongholdRoot";
 

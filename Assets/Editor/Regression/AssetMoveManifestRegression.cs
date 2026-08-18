@@ -4,7 +4,7 @@
 // -----------------------------------------------------------------------------
 // OWNER DESIGN (2026-08-17): "all we do is tag a file with what we moved as a
 // json so we store its path". The manifest replaces ~14 hardcoded
-// "Assets/Resources/Structures" strings with one lookup, and makes the move
+// DeNelle.Core.AssetRoots.StructureContent strings with one lookup, and makes the move
 // reversible and auditable.
 //
 // ⛔ THIS SUITE IS THE ENTIRE REASON THE MANIFEST IS SAFE TO RELY ON.
@@ -90,6 +90,31 @@ namespace DeNelle.Editor.Regression
                 return;
             }
 
+            // FOLDER MODE: the migration was performed as a single AssetDatabase folder move, so
+            // there is one fact to verify — the tree is at the new root and NOT at the old one.
+            // Per-GUID checks do not apply (a folder record carries no asset GUID), and inventing
+            // per-file entries for a move that was not performed per-file would be exactly the
+            // second-source-of-truth problem this suite exists to catch.
+            if (json.Contains("LIVE_FOLDER_MOVE"))
+            {
+                string from = Extract(json, "\"from\"\\s*:\\s*\"([^\"]+)\"");
+                string to   = Extract(json, "\"to\"\\s*:\\s*\"([^\"]+)\"");
+
+                if (!string.IsNullOrEmpty(to) && !AssetDatabase.IsValidFolder(to))
+                    failures.Add($"folder move target '{to}' does not exist — the migrated art is gone.");
+
+                // The one that actually matters: anything back under Resources is FORCE-INCLUDED in
+                // every build again, silently undoing the migration while it still looks done.
+                if (!string.IsNullOrEmpty(from) && AssetDatabase.IsValidFolder(from))
+                    failures.Add($"'{from}' EXISTS AGAIN — structure art is back under Resources and " +
+                                 "force-included in every build. An importer with a stale destination " +
+                                 "is the usual cause; repoint it rather than deleting the folder.");
+
+                if (failures.Count == 0)
+                    log.AppendLine($"  folder move verified: '{from}' -> '{to}', nothing back under Resources.");
+                return;
+            }
+
             bool dryRun = json.Contains("DRY_RUN");
             var entries = ParseEntries(json);
             if (entries.Count == 0)
@@ -153,6 +178,13 @@ namespace DeNelle.Editor.Regression
 
             if (failures.Count == 0)
                 log.AppendLine($"  {OkMarker} {entries.Count} entries");
+        }
+
+        /// <summary>First regex capture, or empty. Keeps the folder-mode check dependency-free.</summary>
+        private static string Extract(string text, string pattern)
+        {
+            var m = System.Text.RegularExpressions.Regex.Match(text, pattern);
+            return m.Success ? m.Groups[1].Value : "";
         }
 
         private static bool PathsEqual(string a, string b)

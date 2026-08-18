@@ -286,11 +286,19 @@ namespace DeNelle.Editor
                     for (int i = 0; i < ladder.Length; i++)
                     {
                         if (string.IsNullOrEmpty(ladder[i])) continue;   // "keep previous model" is legal
-                        // The SAME resolve StructureFactory.VisualPathForLevel feeds to
-                        // VisualFactory.Skin → Resources.Load. A null here = the upgraded
-                        // tower silently keeps its old look (F8 2026-07-06 class of bug).
-                        if (Resources.Load<GameObject>(ladder[i]) == null)
-                            failures.Add($"'{e.id}' upgradeVisualPath[{i}] '{ladder[i]}' (the L{i + 2} model) loads NULL from Resources");
+                        // The SAME resolve StructureFactory feeds to VisualFactory.Skin. A null
+                        // here = the upgraded tower silently keeps its old look (F8 2026-07-06
+                        // class of bug).
+                        // ⛔ RESOLVES THROUGH StructureAssetLoader, NOT Resources.Load. Structure
+                        // art migrated OUT of Resources into an Addressable group (2026-08-18), so
+                        // a bare Resources.Load reports every tier model NULL on a perfectly
+                        // healthy tree — it would be testing where the files USED to be, and it did
+                        // exactly that: 8 false failures the moment the folder moved. The seam is
+                        // what the game actually calls, so asking it is the check that survives the
+                        // migration instead of being invalidated by it.
+                        if (DeNelle.Core.StructureAssetLoader.LoadStructurePrefab(ladder[i]) == null)
+                            failures.Add($"'{e.id}' upgradeVisualPath[{i}] '{ladder[i]}' (the L{i + 2} model) " +
+                                         "does not resolve via StructureAssetLoader (Addressables, then Resources)");
                         else
                             log.AppendLine($"  TIER {e.id} L{i + 2} -> '{ladder[i]}' prefab OK");
                     }

@@ -1687,7 +1687,7 @@ namespace DeNelle.Editor
                 // Resources.Load<GameObject>(visualPrefabPath). A null load = the structure
                 // builds with NO mesh (StructureFactory.cs:88-90 warning) — the archer->
                 // lumber class for towers/structures.
-                var prefab = Resources.Load<GameObject>(entry.visualPrefabPath);
+                var prefab = DeNelle.Core.StructureAssetLoader.LoadStructurePrefab(entry.visualPrefabPath);
                 if (prefab == null)
                 {
                     failures.Add($"structures-catalog.json: '{entry.id}' visualPrefabPath '{entry.visualPrefabPath}' loads NULL (structure would build with no mesh — wrong/missing prefab)");
@@ -2864,7 +2864,7 @@ namespace DeNelle.Editor
                 {
                     // Legacy/Tripo weapon: resolve the Resources mesh path the controller would load.
                     string path = EquipmentController.ResolveWeaponMeshResourcePath(w.id);
-                    var prefab = string.IsNullOrEmpty(path) ? null : Resources.Load<GameObject>(path);
+                    var prefab = string.IsNullOrEmpty(path) ? null : DeNelle.Core.StructureAssetLoader.LoadStructurePrefab(path);
                     if (prefab == null)
                     {
                         failures.Add($"armed-hero: BestWeapon('{job}', 1) = '{w.id}' maps to Resources " +

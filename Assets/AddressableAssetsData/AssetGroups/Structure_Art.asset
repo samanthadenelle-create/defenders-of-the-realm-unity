@@ -1,0 +1,198 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bbb281ee3bf0b054c82ac2347e9e782c, type: 3}
+  m_Name: Structure_Art
+  m_EditorClassIdentifier: Unity.Addressables.Editor::UnityEditor.AddressableAssets.Settings.AddressableAssetGroup
+  m_GroupName: Structure_Art
+  m_GUID: 33233eb1f797e534cbb8ffc2e385fc9e
+  m_SerializeEntries:
+  - m_GUID: 0225e10fc70c9dd49a8548d2a016cf50
+    m_Address: Structures/lumbermill
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0a7c9cb08bbabf746b74f27fb8340631
+    m_Address: Structures/jeweler
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0d652e1697cad5143b40baa0d598bf49
+    m_Address: Structures/ArcaneSpire_3
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0f46a351c6cf4294caae9f8104843606
+    m_Address: Structures/Tower_Wooden_Watchtower_L3
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 21dfa815591a82f44987371dda478366
+    m_Address: Structures/farm
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 294d8adbb92adaf4b915a77edf0ecc1a
+    m_Address: Structures/Wall_Medieval_Wood
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2bed26b46123b3c47af97ff975b1c7f7
+    m_Address: Structures/Ballista_L2
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 33656d4c1def7684cb6ef673115174c2
+    m_Address: Structures/ShopAndCrafting
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 474ff7ec5c045c2469756fbb0be8d90d
+    m_Address: Structures/Tower_Wooden_Watchtower
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4825b1172e379f34db7ced2a2e8e4526
+    m_Address: Structures/GenericContainer
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4e7028782b403834ea6ab7ba048abf8c
+    m_Address: Structures/Gate_Medieval_Medium
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 51c2d614deea3824ea0b5a4be3417a90
+    m_Address: Structures/House_Medieval_Medium
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5a258590045b55041aa22a4362144c9d
+    m_Address: Structures/barracks
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6138eb473a78499582083fc03a4f3d4a
+    m_Address: Structures/ArcaneSpire_2_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6254865297bb0bc4094ca766dc12c0d3
+    m_Address: Structures/Torche_Wall
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 627ba0ec3c9ac5841898e5cd267a013b
+    m_Address: Structures/Well
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6e45956185e5e83438f9db36d971ee6a
+    m_Address: Structures/Ballista_L1
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7f7d4fe86bedeb54a9c82b36e3632c25
+    m_Address: Structures/Catapult
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 82950f9e84e76ce478bc6d84967bf5d9
+    m_Address: Structures/PetHouse2
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8ca1b2bfa79f57d4d8e66a3632fec68c
+    m_Address: Structures/Windmill_Medieval
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 98314dbe415039f44bced3813d40b577
+    m_Address: Structures/Tower_Wooden_Watchtower_L2
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9bd160f93232e2d4893a5592f5c66985
+    m_Address: Structures/Ballista_L3
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b8752fc910f647b9b5377babbdf8922d
+    m_Address: Structures/ArcaneSpire_3_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ba5bdaa758c7ee94db84dcb7269162d7
+    m_Address: Structures/store
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: be3addb50ab81f14b84c7c06859c1768
+    m_Address: Structures/Ballista
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c83598997a5b4f1797e66e82b1a8fb7a
+    m_Address: Structures/ArcaneSpire_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d8478f8e20a9a3c44a3a22e5405764d0
+    m_Address: Structures/ArcaneSpire_2
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: dd1a409803987a94791b857d7e72f003
+    m_Address: Structures/armorer
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: deb6db9f252b94f4d941b57c198b636d
+    m_Address: Structures/Watermill_Medieval
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ecaa54c6a4d512f41ae9b8dc55b292ac
+    m_Address: Structures/ArcaneTower_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: edc9e21a5960f7e4f8d84543eae60a5b
+    m_Address: Structures/Forge
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f70a5ba1f6656fe4fb83272ea292424e
+    m_Address: Structures/arcane tower
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f8b351bb6b391f94094953f40b8a8b12
+    m_Address: Structures/Wall_Medieval_Stone
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: fd7e7f6f8b6a9f34291bfd7585dbbaaa
+    m_Address: Structures/Tower_Wooden_Watchtower_L3_Tex/WoodenWatchtowerL3_basecolor
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: fdbdc8e2c3cad234eb116332a5148b42
+    m_Address: Structures/ArcaneSpire_1
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  m_ReadOnly: 0
+  m_Settings: {fileID: 11400000, guid: 73b1d645ccb43af47916e90d8a1f17d4, type: 2}
+  m_SchemaSet:
+    m_Schemas:
+    - {fileID: 11400000, guid: 4b7c4ef443c837d44ad03da37af3b723, type: 2}
+    - {fileID: 11400000, guid: 3727444067761e146b958add46232a7a, type: 2}

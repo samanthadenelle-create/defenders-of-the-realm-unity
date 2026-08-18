@@ -145,17 +145,29 @@ namespace DeNelle.Village
         {
             using var _ = FlowTrace.Enter("VisualFactory", $"Skin('{resourcesPath}')");
 
+            // ⛔ RESOLVES THROUGH StructureAssetLoader, NOT Resources.Load.
+            // This is the SINGLE point every structure visual flows through — StructureFactory.Create,
+            // the tier-upgrade reskin and the build-preview probe all land here. Structure art moved
+            // OUT of Resources into a remote Addressable group (2026-08-18), so a bare Resources.Load
+            // here returns null for EVERY building: the town renders empty while every gate that does
+            // not instantiate still passes. The seam is Addressables-first with a Resources fallback,
+            // so this line is correct both before and after the migration.
             GameObject prefab = null;
-            FlowTrace.Try("VisualFactory", $"Resources.Load '{resourcesPath}'",
-                () => prefab = Resources.Load<GameObject>(resourcesPath));
+            FlowTrace.Try("VisualFactory", $"resolve '{resourcesPath}'",
+                () => prefab = DeNelle.Core.StructureAssetLoader.LoadStructurePrefab(resourcesPath));
 
             if (prefab == null)
             {
                 // §12: a missing model is a hard miss the caller falls back on — promote from a
                 // swallowed Debug.LogWarning to FlowTrace.Fail so it rolls up to the break-log
-                // (error severity) and a headless capture pinpoints the unresolved Resources path.
+                // (error severity) and a headless capture pinpoints the unresolved address.
+                // ⚠ Post-CDN this line NAMES THE ADDRESS that failed, which is the whole benefit of
+                // resolving by address rather than by path: a remote miss says exactly which asset
+                // and which key, instead of leaving a silently empty spot in the world.
                 FlowTrace.Fail("VisualFactory",
-                    $"model not found in Resources: '{resourcesPath}' — returning null (caller falls back).");
+                    $"model not found via Addressables OR Resources: '{resourcesPath}' — returning null " +
+                    "(caller falls back). Check the address exists in the Structure_Art group and that " +
+                    "its bundle is uploaded to the CDN.");
                 return null;
             }
             FlowTrace.Step("VisualFactory", $"resolved Resources model '{resourcesPath}' -> '{prefab.name}'.");

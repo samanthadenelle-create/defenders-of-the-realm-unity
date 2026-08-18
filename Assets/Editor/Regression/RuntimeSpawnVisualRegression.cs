@@ -491,7 +491,19 @@ namespace DeNelle.Editor.Regression
         {
             string rel = ResolveTroopModelRel(model);
             if (string.IsNullOrEmpty(rel)) return false;
-            string basePath = "Assets/Resources/" + rel;
+
+            // ⛔ STRUCTURE ART NO LONGER LIVES UNDER Resources.
+            // A "Structures/..." key migrated to AssetRoots.StructureContent on 2026-08-18 (an
+            // Addressable group served from the CDN); everything else is still Resources-resident.
+            // Checking only Resources reported 'troop-catapult' as a missing model on a tree where
+            // the asset is present and loadable — a false failure from testing where the file USED
+            // to be. One prefix, one root; the runtime makes the same distinction via
+            // StructureAssetLoader.
+            const string structPrefix = "Structures/";
+            string basePath = rel.StartsWith(structPrefix, System.StringComparison.OrdinalIgnoreCase)
+                ? DeNelle.Core.AssetRoots.StructureContent + "/" + rel.Substring(structPrefix.Length)
+                : "Assets/Resources/" + rel;
+
             foreach (string ext in new[] { ".prefab", ".fbx", ".FBX" })
                 if (File.Exists(basePath + ext)) return true;
             return false;

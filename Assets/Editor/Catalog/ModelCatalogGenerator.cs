@@ -33,7 +33,7 @@ namespace DeNelle.Editor.Catalog
         private static readonly (string resFolder, string assetFolder, string[] exts, string note)[] Targets =
         {
             ("Enemies",    "Assets/Resources/Enemies",    new[] { ".prefab", ".fbx" }, "Loaded by EnemyFactory.ModelForEnemy → VisualFactory.Skin(\"Enemies/<Name>\")"),
-            ("Structures", "Assets/Resources/Structures", new[] { ".prefab" },         "Loaded by StructureFactory from structures-catalog.json visualPrefabPath"),
+            ("Structures", DeNelle.Core.AssetRoots.StructureContent, new[] { ".prefab" },         "Loaded by StructureFactory from structures-catalog.json visualPrefabPath"),
             ("Heroes",     "Assets/Resources/Heroes",     new[] { ".prefab", ".fbx" }, "Loaded by Resources.Load<GameObject>(\"Heroes/<slug>\") — slug = Knight/Mage/Ranger/Cleric"),
             ("Towers",     "Assets/Resources/Towers",     new[] { ".asset" },          "TowerData ScriptableObjects (data, not models) — upgrades[].visualPrefab are GUID refs"),
         };

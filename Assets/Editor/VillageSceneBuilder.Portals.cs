@@ -90,7 +90,7 @@ namespace DeNelle.Editor
             // TripoMaterialFixer (ForceRebuildAll) colours it from its real basemap
             // with a violet tint fallback; -90°X stands it upright like the other
             // Tripo structures (verify orientation after the re-bake and flip if needed).
-            var portalModel = LoadModel("Assets/Resources/Structures/Portal.fbx");
+            var portalModel = LoadModel(DeNelle.Core.AssetRoots.StructureContent + "/Portal.fbx");
             if (portalModel != null)
             {
                 var arch = (GameObject)PrefabUtility.InstantiatePrefab(portalModel);

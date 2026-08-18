@@ -1,6 +1,6 @@
 // =============================================================================
 // CatalogPrefabImporter — copies the defensive-kit _M prefabs out of the
-// (gitignored) Polyperfect pack into Assets/Resources/Structures/ so the catalog's
+// (gitignored) Polyperfect pack into Assets/StructureContent/ so the catalog's
 // Resources.Load(visualPrefabPath) can actually find them at runtime.
 // -----------------------------------------------------------------------------
 // The _M prefabs live at
@@ -31,7 +31,7 @@ namespace DeNelle.Editor
             "Assets/polyperfect/Low Poly Ultimate Pack/_M/Prefabs_M/";
 
         // Destination Resources folder (so visualPrefabPath = "Structures/<Name>" loads).
-        private const string DstDir = "Assets/Resources/Structures/";
+        private const string DstDir = DeNelle.Core.AssetRoots.StructureContent + "/";
 
         // One kit prefab: file stem (no .prefab) + the category folder it lives in.
         // Root defaults to the _M tier (CLAUDE.md §4); a per-entry root override exists

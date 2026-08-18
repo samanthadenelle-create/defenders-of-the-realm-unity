@@ -96,7 +96,7 @@ namespace DeNelle.Editor.Regression
             "Assets/Tech hud elements/",                 // .gitignore:318
             "Assets/Action/textures/",                   // .gitignore:302
             "Assets/Art/TripoStructures/",               // .gitignore:119
-            "Assets/Resources/Structures/",              // .gitignore:121
+            DeNelle.Core.AssetRoots.StructureContent + "/",              // .gitignore:121
             "Assets/Lana Studio/Casual RPG VFX/Upgrade for URP/", // .gitignore:312 (subfolder only)
         };
 

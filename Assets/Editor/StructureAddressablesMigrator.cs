@@ -47,7 +47,15 @@ namespace DeNelle.Editor
     public static class StructureAddressablesMigrator
     {
         private const string ResourcesRoot = "Assets/Resources/Structures";
-        private const string ArtRoot       = "Assets/Art/Structures";
+        // ⛔ A DEDICATED TOP-LEVEL FOLDER, NOT Assets/Art/Structures.
+        // The first attempt targeted Assets/Art/Structures, and during its revert a cleanup step
+        // resolved 'Assets/Art' instead of 'Assets/Art/Structures' and recursively deleted the
+        // ENTIRE Assets/Art tree — 227 tracked files including the CraftPix source art. It was
+        // recoverable only because those files were tracked; the same slip one folder over, in
+        // Resources/Structures where 226 of 244 files are gitignored, would have destroyed
+        // owner-purchased art permanently. A destination that shares no parent with existing art
+        // makes that class of mistake impossible rather than merely unlikely.
+        private const string ArtRoot       = DeNelle.Core.AssetRoots.StructureContent;
         // ⛔ NOT UNDER Resources/. The first version wrote this to Resources/Data/Canonical and the
         // data-web regression caught it immediately: anything under Resources is FORCE-INCLUDED, so
         // a tool whose whole purpose is getting bytes OUT of Resources was adding a file TO it — and
@@ -106,9 +114,6 @@ namespace DeNelle.Editor
             int before = System.IO.Directory.GetFiles(ResourcesRoot, "*", System.IO.SearchOption.AllDirectories)
                                             .Count(p => !p.EndsWith(".meta"));
 
-            EnsureFolder("Assets/StructureContent_Parent_Probe");   // no-op guard: proves folder creation works
-            AssetDatabase.DeleteAsset("Assets/StructureContent_Parent_Probe");
-
             string err = AssetDatabase.MoveAsset(ResourcesRoot, ArtRoot);
             if (!string.IsNullOrEmpty(err))
             {
@@ -156,6 +161,12 @@ namespace DeNelle.Editor
                                   .ModificationEvent.BatchModification, null, true, true);
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
+
+            // Record the move as ONE entry, because that is what actually happened. The per-file
+            // manifest belonged to the abandoned per-file strategy; leaving it in place would have
+            // described a migration that was never performed, which is precisely the stale-manifest
+            // failure the gate exists to catch — and it duly caught it, with 114 false entries.
+            WriteFolderManifest(before, after, marked);
 
             Debug.Log($"[Migrate] marked {marked} catalog asset(s) addressable in '{GroupName}'.");
             Debug.Log($"STRUCTURE_FOLDER_MOVE_OK {after} files, {marked} addressable");
@@ -420,6 +431,35 @@ namespace DeNelle.Editor
         }
 
         // ---------------------------------------------------------------------
+
+        /// <summary>
+        /// Writes the manifest for a FOLDER move: one entry describing the relocation, plus the
+        /// counts that prove nothing was lost.
+        /// <para>
+        /// The per-file manifest served the abandoned per-file strategy. A folder move has exactly
+        /// one fact to record — old root, new root — and recording 114 imaginary per-file moves
+        /// instead would be a second source of truth that is wrong on the day it is written.
+        /// </para>
+        /// </summary>
+        private static void WriteFolderManifest(int before, int after, int marked)
+        {
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine("{");
+            sb.AppendLine("  \"_generated\": \"DeNelle.Editor.StructureAddressablesMigrator.MoveFolder — DO NOT HAND-EDIT.\",");
+            sb.AppendLine("  \"_why\": \"Structure art moved OUT of Resources (force-included in every build) into an Addressable group served from Cloudflare R2. Editor scripts read the new root from here rather than hardcoding it, so a future relocation is one regeneration instead of ~16 edits.\",");
+            sb.AppendLine("  \"_mode\": \"LIVE_FOLDER_MOVE\",");
+            sb.AppendLine($"  \"_filesBefore\": {before},");
+            sb.AppendLine($"  \"_filesAfter\": {after},");
+            sb.AppendLine($"  \"_addressableEntries\": {marked},");
+            sb.AppendLine("  \"moves\": [");
+            sb.AppendLine("    { \"address\": \"<folder>\", \"resourcesKey\": \"Structures/\", " +
+                          $"\"from\": \"{ResourcesRoot}\", \"to\": \"{ArtRoot}\", \"guid\": \"\", \"bytes\": 0 }}");
+            sb.AppendLine("  ]");
+            sb.AppendLine("}");
+            System.IO.File.WriteAllText(ManifestPath, sb.ToString());
+            AssetDatabase.Refresh();
+            Debug.Log($"[Migrate] manifest rewritten as a single folder move: {ResourcesRoot} -> {ArtRoot}");
+        }
 
         /// <summary>Creates a folder chain if absent. MoveAsset fails outright on a missing parent.</summary>
         private static void EnsureFolder(string folder)

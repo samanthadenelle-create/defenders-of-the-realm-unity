@@ -269,7 +269,10 @@ namespace DeNelle.Editor.Regression
                 if (!visual)
                     failures.Add("[l1-cap] " + WoodWallId + ".repo.upgradeVisualPath[0] != '" + StoneVisual +
                                  "' - upgrading to stone would not swap the model (the tier reskin reads this array)");
-                else if (Resources.Load<GameObject>(StoneVisual) == null)
+                // Resolves through the seam, not Resources.Load: structure art migrated OUT of
+                // Resources to a remote Addressable group (2026-08-18), so a bare Resources.Load
+                // reports the stone tier missing on a tree where it loads fine.
+                else if (DeNelle.Core.StructureAssetLoader.LoadStructurePrefab(StoneVisual) == null)
                     failures.Add("[l1-cap] the stone tier model '" + StoneVisual + "' does not LOAD from Resources - " +
                                  "the authored upgradeVisualPath points at nothing");
                 if (wood.repo.wallTierBase != 0)

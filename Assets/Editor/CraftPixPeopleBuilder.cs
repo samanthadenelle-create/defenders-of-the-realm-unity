@@ -36,7 +36,7 @@
 //
 //   GIT: neither path is matched by any rule in .gitignore (checked line by line -
 //   the blanket ignores are /Assets/Models/*, /Assets/Art/TripoStructures/ and
-//   /Assets/Resources/Structures/*, none of which touch these two folders), so NO
+//   /Assets/StructureContent/*, none of which touch these two folders), so NO
 //   negation is needed and the art is tracked by default. .gitattributes routes
 //   *.fbx and *.png through LFS, so the ~3.1 MB of models travels as LFS pointers.
 //

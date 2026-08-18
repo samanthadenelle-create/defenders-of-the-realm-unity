@@ -346,7 +346,7 @@ namespace DeNelle.Editor
         // ── The Resources/Structures kit prefabs physically exist ──────────────
         private static CaseResult Case_StructuresKitPresent()
         {
-            const string kitDir = "Assets/Resources/Structures";
+            const string kitDir = DeNelle.Core.AssetRoots.StructureContent;
             if (!Directory.Exists(kitDir)) return Fail($"missing kit folder {kitDir}");
             int n = Directory.GetFiles(kitDir, "*.prefab", SearchOption.TopDirectoryOnly).Length;
             return n > 0

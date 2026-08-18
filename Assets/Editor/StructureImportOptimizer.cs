@@ -1,5 +1,5 @@
 // =============================================================================
-// StructureImportOptimizer — shrink what Assets/Resources/Structures costs in the
+// StructureImportOptimizer — shrink what Assets/StructureContent costs in the
 // APK, without changing what the player sees.
 // -----------------------------------------------------------------------------
 // WHY (owner, 2026-08-17): the APK went 570.9 -> 603.6 MB (+32.7 MB) after the
@@ -51,10 +51,10 @@ using UnityEngine;
 
 namespace DeNelle.Editor
 {
-    /// <summary>Import-settings optimiser for Assets/Resources/Structures.</summary>
+    /// <summary>Import-settings optimiser for Assets/StructureContent.</summary>
     public static class StructureImportOptimizer
     {
-        private const string Root = "Assets/Resources/Structures";
+        private const string Root = DeNelle.Core.AssetRoots.StructureContent;
         private const string OkMarker = "STRUCTURE_IMPORT_OK";
 
         /// <summary>Buildings are read at phone distance; 2048 never resolves.</summary>

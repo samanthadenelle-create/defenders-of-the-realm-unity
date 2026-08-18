@@ -233,7 +233,7 @@ namespace DeNelle.Editor
         private const string Tag        = "[WoodenWatchtowerBuilder] ";
 
         // -- Paths -------------------------------------------------------------
-        private const string StructuresDir = "Assets/Resources/Structures";
+        private const string StructuresDir = DeNelle.Core.AssetRoots.StructureContent;
 
         // -- URP shader --------------------------------------------------------
         // The project-wide convention (KayKitMaterials, MagentaMaterialFixer,

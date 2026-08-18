@@ -4,7 +4,7 @@
 // -----------------------------------------------------------------------------
 // WHY THIS EXISTS (2026-08-17, the eight owner-purchased models)
 //
-// TripoAssetPostprocessor already watches Assets/Resources/Structures/ and is
+// TripoAssetPostprocessor already watches Assets/StructureContent/ and is
 // supposed to make these render. It did not, for two independent reasons that
 // both hide behind a green compile gate — a gate on the CODE cannot see a
 // wrong ARTIFACT:
@@ -46,11 +46,11 @@ namespace DeNelle.Editor
 {
     /// <summary>
     /// Read-only audit + targeted repair for Tripo FBX material bindings under
-    /// Assets/Resources/Structures.
+    /// Assets/StructureContent.
     /// </summary>
     public static class TripoStructureMaterialAudit
     {
-        private const string StructuresRoot = "Assets/Resources/Structures";
+        private const string StructuresRoot = DeNelle.Core.AssetRoots.StructureContent;
         private const string MarkerSuffix = ".tripo-extracted";
 
         /// <summary>Marker printed on a clean audit pass, per the project's marker discipline.</summary>

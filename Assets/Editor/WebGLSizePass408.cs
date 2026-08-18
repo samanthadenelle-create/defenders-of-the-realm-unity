@@ -45,7 +45,7 @@ namespace DeNelle.Editor
         {
             "Assets/Resources/Enemies",
             "Assets/Resources/Heroes",
-            "Assets/Resources/Structures",
+            DeNelle.Core.AssetRoots.StructureContent,
             "Assets/Resources/Walls",
         };
 

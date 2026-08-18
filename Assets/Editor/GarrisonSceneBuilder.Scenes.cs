@@ -31,7 +31,7 @@ namespace DeNelle.Editor
         private const string ScenesDir = "Assets/Scenes";
         private const string PolyPrefabRoot =
             "Assets/polyperfect/Low Poly Ultimate Pack/_M/Prefabs_M/";
-        private const string ResStructRoot = "Assets/Resources/Structures/";
+        private const string ResStructRoot = DeNelle.Core.AssetRoots.StructureContent + "/";
 
         // OUTPOST-DRESSING PASS (2026-06-13): the owner's Tribal_T set lives in the
         // _T quality tier (NOT _M), so it has its own root. polyperfect is GITIGNORED

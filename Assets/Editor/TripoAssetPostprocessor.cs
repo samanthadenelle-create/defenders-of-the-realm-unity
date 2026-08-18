@@ -63,7 +63,7 @@ namespace DeNelle.Editor
             "Assets/Resources/Heroes/",
             "Assets/Models/Cathedral/",
             "Assets/Art/TripoStructures/",   // owner Tripo building models (farm/forge/etc.)
-            "Assets/Resources/Structures/",  // owner Tripo Portal_To_Dungeon (dungeon entrance)
+            DeNelle.Core.AssetRoots.StructureContent + "/",  // owner Tripo Portal_To_Dungeon (dungeon entrance)
             // WHITE HERO ROOT (fleet [Flow:HeroBody] 2026-07-07): the Paladin package FBX embeds
             // 3 PNGs (diffuse/normal/specular) that were never extracted → NULL albedo → solid-white
             // hero. EXACT FILE prefix (StartsWith match) so the sibling Animations/ FBXs and the
@@ -263,7 +263,7 @@ namespace DeNelle.Editor
         [MenuItem("Defenders/Tripo/Extract ArcaneSpire_1 (white fix)")]
         public static void ExtractArcaneSpire1()
         {
-            const string path = "Assets/Resources/Structures/ArcaneSpire_1.fbx";
+            const string path = DeNelle.Core.AssetRoots.StructureContent + "/ArcaneSpire_1.fbx";
             string marker = MarkerPathFor(path);
             if (File.Exists(marker)) File.Delete(marker);
             AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);

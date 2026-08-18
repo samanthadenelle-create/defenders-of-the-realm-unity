@@ -250,7 +250,7 @@ namespace DeNelle.Editor
             // TreeOfLifeMaterialFixer spawn-guard fill it; never bake a placeholder here.
             GameObject treeOfLife =
                 LoadAt(TreeOfLifePrefabPath, "TreeOfLife")
-                ?? LoadAt("Assets/Resources/Structures/tree_of_life.fbx", "tree_of_life");
+                ?? LoadAt(DeNelle.Core.AssetRoots.StructureContent + "/tree_of_life.fbx", "tree_of_life");
             if (treeOfLife == null)
                 Debug.LogWarning("[Village2Build] Canonical Tree of Life prefab/FBX not found — " +
                                  "leaving village centre EMPTY (runtime TreeOfLifeMaterialFixer will spawn it). " +

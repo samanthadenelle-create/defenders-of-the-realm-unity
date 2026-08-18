@@ -213,7 +213,7 @@ namespace DeNelle.Editor
                 // centre — a generic tree at origin is the bug. If the canonical FBX is missing,
                 // leave the centre EMPTY and let the runtime TreeOfLifeMaterialFixer spawn-guard
                 // fill it.
-                var tolModel = LoadModel("Assets/Resources/Structures/tree_of_life.fbx");
+                var tolModel = LoadModel(DeNelle.Core.AssetRoots.StructureContent + "/tree_of_life.fbx");
                 if (tolModel != null)
                 {
                     GameObject tree = (GameObject)PrefabUtility.InstantiatePrefab(tolModel);
@@ -239,7 +239,7 @@ namespace DeNelle.Editor
                 {
                     // WO-311: canonical missing — leave the centre empty, NO generic tree at origin.
                     Debug.LogWarning("[VillageSceneBuilder] Canonical Tree of Life FBX not found at " +
-                                     "Assets/Resources/Structures/tree_of_life.fbx — leaving village " +
+                                     DeNelle.Core.AssetRoots.StructureContent + "/tree_of_life.fbx — leaving village " +
                                      "centre EMPTY (runtime TreeOfLifeMaterialFixer will spawn it). " +
                                      "NOT placing a generic trees_A_large/primitive at origin (WO-311).");
                 }
