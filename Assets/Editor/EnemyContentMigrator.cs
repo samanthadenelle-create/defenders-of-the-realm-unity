@@ -98,12 +98,32 @@ namespace DeNelle.Editor
             var schema = group.GetSchema<UnityEditor.AddressableAssets.Settings.GroupSchemas.BundledAssetGroupSchema>();
             if (schema != null)
             {
-                // ⛔ REMOTE, set IN CODE rather than hand-edited YAML. A local group ships inside
-                // the APK, so getting this wrong produces a migration that moves bytes from one
-                // part of the download to another and saves nothing.
                 schema.BuildPath.SetVariableById(settings, RemoteBuildPathId);
                 schema.LoadPath.SetVariableById(settings, RemoteLoadPathId);
-                Debug.Log("[EnemyMigrate] group set to the REMOTE profile (ServerData/[BuildTarget] -> r2.dev/[BuildTarget]).");
+
+                // ⛔ DIRTY + SAVE, THEN VERIFY BY READING IT BACK.
+                // The first run set these and logged "group set to the REMOTE profile" — and the
+                // values did NOT persist. The group built LOCAL, its bundle went into the APK, and
+                // the APK grew 8.5 MB while the migrator reported success. A setter whose result is
+                // never read back is a claim, not a fact; on a size migration the whole point is the
+                // byte movement, so this is exactly the thing that must be proven.
+                EditorUtility.SetDirty(schema);
+                EditorUtility.SetDirty(group);
+                AssetDatabase.SaveAssets();
+
+                string buildId = schema.BuildPath.Id;
+                string loadId  = schema.LoadPath.Id;
+                if (buildId != RemoteBuildPathId || loadId != RemoteLoadPathId)
+                {
+                    Debug.LogError($"[EnemyMigrate] REMOTE PROFILE DID NOT STICK — build='{buildId}' load='{loadId}' " +
+                                   $"(expected '{RemoteBuildPathId}' / '{RemoteLoadPathId}'). The group will build " +
+                                   "LOCAL and its bytes will ship INSIDE the APK. Set the ids in the schema asset " +
+                                   "directly before building.");
+                }
+                else
+                {
+                    Debug.Log("[EnemyMigrate] group verified REMOTE (ServerData/[BuildTarget] -> r2.dev/[BuildTarget]).");
+                }
             }
             else
             {
