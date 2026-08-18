@@ -1,11 +1,11 @@
 // =============================================================================
 // EnemyAddressablesGrouper — marks the enemy art Addressable and (separately)
-// migrates it OUT of Resources, so the ~539 MB under Assets/Resources/Enemies
+// migrates it OUT of Resources, so the ~539 MB under Assets/EnemyContent
 // stops shipping in every build. Sibling of HeroAddressablesGrouper (WO-545,
 // docs/DATA_ARCHITECTURE_DECISION_2026-06-27.md); same shape, enemy address space.
 // -----------------------------------------------------------------------------
 // WHY: Unity FORCE-INCLUDES everything under a Resources/ folder in EVERY player
-// build, spawned or not. Assets/Resources/Enemies is 539 MB (Blink/ alone is
+// build, spawned or not. Assets/EnemyContent is 539 MB (Blink/ alone is
 // 427 MB, of which ~290 MB is Blink/Textures) — the single largest line item in
 // the payload, landing whole in WebGL.data / the APK.
 //
@@ -30,10 +30,10 @@
 //
 // ADDRESS RULE (computed, never a table): the address is the extension-less path
 // RELATIVE TO the Resources folder, used verbatim —
-//     Assets/Resources/Enemies/Orc_Warrior.fbx        -> "Enemies/Orc_Warrior"
-//     Assets/Resources/Enemies/OrcHumanoid.controller -> "Enemies/OrcHumanoid"
-//     Assets/Resources/Enemies/Boss_Dragon.prefab     -> "Enemies/Boss_Dragon"
-//     Assets/Resources/Enemies/Blink/BlinkOrc.controller -> "Enemies/Blink/BlinkOrc"
+//     Assets/EnemyContent/Orc_Warrior.fbx        -> "Enemies/Orc_Warrior"
+//     Assets/EnemyContent/OrcHumanoid.controller -> "Enemies/OrcHumanoid"
+//     Assets/EnemyContent/Boss_Dragon.prefab     -> "Enemies/Boss_Dragon"
+//     Assets/EnemyContent/Blink/BlinkOrc.controller -> "Enemies/Blink/BlinkOrc"
 // Post-migration the same relative path under Assets/EnemyContent yields the SAME
 // address, so grouping is correct before OR after the move (ResolveActiveRoot).
 // A prefab and a controller MAY share one address (the loader queries type-filtered,
@@ -44,7 +44,7 @@
 // AssetDatabase.MoveAsset (GUID- and .meta-preserving → import settings, texture
 // caps and every scene/prefab GUID reference survive the move).
 //
-// ⛔ KEEP-BEHIND LIST — these STAY in Assets/Resources/Enemies and are neither moved
+// ⛔ KEEP-BEHIND LIST — these STAY in Assets/EnemyContent and are neither moved
 //    NOR marked, because a RAW Resources.Load still reaches them and would silently
 //    return null (a nulled VFX set / atlas is invisible until it is on screen):
 //   • EnemyVfxSet_Default.asset
@@ -72,7 +72,7 @@
 //       two-rung basecolor probe never straddles two storage mechanisms.
 //
 // FOLLOW-UP (not a keep-behind, no runtime load): Assets/Editor/BlinkOrcImporter.cs:48
-// stages into "Assets/Resources/Enemies/Blink" — re-running that INTAKE tool after the
+// stages into DeNelle.Core.AssetRoots.EnemyContent + "/Blink" — re-running that INTAKE tool after the
 // migration re-creates the folder inside Resources. Repoint it (or re-run this migrator)
 // whenever new Blink art is imported.
 //
@@ -105,7 +105,7 @@ namespace DeNelle.Editor
     public static class EnemyAddressablesGrouper
     {
         // Pre-migration folder (the shipped location today — force-included, 539 MB).
-        internal const string EnemiesRoot = "Assets/Resources/Enemies";
+        internal const string EnemiesRoot = DeNelle.Core.AssetRoots.EnemyContent;
 
         // Post-migration destination (NOT under any Resources/ folder).
         internal const string EnemyContentRoot = "Assets/EnemyContent";

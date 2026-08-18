@@ -2,7 +2,7 @@
 // EnemyAddressableCatalogRegression — the enemy ADDRESSES must actually be in the
 // Addressables catalog once the art leaves Resources.
 // -----------------------------------------------------------------------------
-// THE BUG CLASS THIS GUARDS. `Assets/Resources/Enemies` (~539 MB) is migrating into
+// THE BUG CLASS THIS GUARDS. `Assets/EnemyContent` (~539 MB) is migrating into
 // an Addressable group so it stops being force-included in every build. The runtime
 // seam DeNelle.Core.EnemyAssetLoader is Addressables-FIRST with a Resources-FALLBACK,
 // which is exactly what makes the migration safe — and also exactly what makes it
@@ -21,7 +21,7 @@
 //
 // MIGRATION-STATE AWARE — green before the move, green after, red only in the
 // dangerous state:
-//   • PRE-migration  (Assets/Resources/Enemies still holds models): grouping has not
+//   • PRE-migration  (Assets/EnemyContent still holds models): grouping has not
 //     happened yet by design. Missing addresses are REPORTED as a progress note, not
 //     failed — failing here would be demanding work that is not due.
 //   • POST-migration (the Resources copy is gone): every committed model address AND
@@ -60,7 +60,7 @@ namespace DeNelle.Editor
     public static class EnemyAddressableCatalogRegression
     {
         /// <summary>Where the pre-migration Resources copy lives. Its ABSENCE is the migration signal.</summary>
-        private const string ResourcesEnemyRoot = "Assets/Resources/Enemies";
+        private const string ResourcesEnemyRoot = DeNelle.Core.AssetRoots.EnemyContent;
 
         public static bool Run(out string reason)
         {

@@ -131,7 +131,7 @@ namespace DeNelle.Editor
         /// any embedded clip names. Reuses the exact same InspectOne dump the hero pipeline proved out.
         /// </summary>
         [MenuItem("Defenders/Enemies/Inspect Orc Berserker")]
-        public static void InspectOrcBerserker() => InspectOne("Assets/Resources/Enemies/Orc_Berserker.fbx");
+        public static void InspectOrcBerserker() => InspectOne(DeNelle.Core.AssetRoots.EnemyContent + "/Orc_Berserker.fbx");
 
         /// <summary>
         /// Batchmode-callable entry point. Loads each package FBX and logs its full

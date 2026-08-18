@@ -3,7 +3,7 @@
 // runtime-loadable so AtbCombatantSwapper can stage them in the ATB battle.
 // -----------------------------------------------------------------------------
 // Copies the 3 staged Orcs (Warrior/Tank/Mage) from Assets/Art/Incoming_Tripo/
-// into Assets/Resources/Enemies/ (ADDITIVE — these names don't exist there yet,
+// into Assets/EnemyContent/ (ADDITIVE — these names don't exist there yet,
 // so nothing is overwritten), imports each as Humanoid + Read/Write + a native
 // ~1.9-2.15m scale, and reports avatar validity so CLI confirms they load before
 // the swapper wiring. Textures land in Resources/Enemies/OrcTex/ for the runtime
@@ -21,8 +21,8 @@ namespace DeNelle.Editor
     public static class PromoteOrcsToResources
     {
         private const string Src = "Assets/Art/Incoming_Tripo/Enemies/Orcs/";
-        private const string DstDir = "Assets/Resources/Enemies";
-        private const string TexDir = "Assets/Resources/Enemies/OrcTex";
+        private const string DstDir = DeNelle.Core.AssetRoots.EnemyContent;
+        private const string TexDir = DeNelle.Core.AssetRoots.EnemyContent + "/OrcTex";
 
         // name -> target stage height (tank is the meaty one)
         private static readonly (string name, float height)[] Orcs =

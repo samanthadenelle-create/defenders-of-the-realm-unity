@@ -29,7 +29,7 @@
 // because DeNelle.Editor cannot reference DeNelle.Village - they MUST stay identical
 // to DeNelle.Village.DragonAnim.
 //
-// WHAT BuildDragonBossPrefab DOES. Assembles Assets/Resources/Enemies/Boss_Dragon.
+// WHAT BuildDragonBossPrefab DOES. Assembles Assets/EnemyContent/Boss_Dragon.
 // prefab (the load path WaveManager.SpawnApexBoss uses): the Dragon.prefab rig as
 // the visual child (Animator -> SyndrathDragon.controller, root motion off), a
 // solid CapsuleCollider (air-defense / hero raycasts hit it), and the DragonBoss
@@ -70,7 +70,7 @@ namespace DeNelle.Editor
         private const string AnimatorDir  = "Assets/Generated/Animators";
         private const string ControllerPath = AnimatorDir + "/SyndrathDragon.controller";
 
-        private const string PrefabDir  = "Assets/Resources/Enemies";
+        private const string PrefabDir  = DeNelle.Core.AssetRoots.EnemyContent;
         private const string PrefabPath = PrefabDir + "/Boss_Dragon.prefab";
 
         // -- Gameplay type - resolved by reflection (no asmdef dependency) ---------
@@ -225,7 +225,7 @@ namespace DeNelle.Editor
         }
 
         /// <summary>
-        /// Assembles <c>Assets/Resources/Enemies/Boss_Dragon.prefab</c> - the licensed
+        /// Assembles <c>Assets/EnemyContent/Boss_Dragon.prefab</c> - the licensed
         /// rig + SyndrathDragon.controller + a solid CapsuleCollider + DragonBoss
         /// (reflection). Idempotent - overwrites the prefab in place.
         /// </summary>

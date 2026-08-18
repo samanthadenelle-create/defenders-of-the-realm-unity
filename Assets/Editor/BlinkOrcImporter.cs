@@ -9,7 +9,7 @@
 // references; this importer stages it through the sanctioned mirror-to-Resources
 // path (Assets/Blink is GITIGNORED — nothing may reference it at runtime):
 //
-//   1. Mesh FBX  -> Assets/Resources/Enemies/Blink/Blink_Orc_<A>_Mesh.fbx
+//   1. Mesh FBX  -> Assets/EnemyContent/Blink/Blink_Orc_<A>_Mesh.fbx
 //      (CopyAsset = fresh GUID; Humanoid verdict per PeopleCharacterImporter).
 //   2. Skin-1 materials + textures (read off the vendor Orc_<A>1.prefab)
 //      -> Blink/Materials + Blink/Textures, with texture refs re-pointed to the
@@ -56,7 +56,7 @@ namespace DeNelle.Editor
         //
         // THE TRAP THIS CLOSES: this importer is the ART INTAKE tool — it CREATES the staging
         // folder (EnsureFolder(StageDir) below) and writes meshes, prefabs, materials, textures and
-        // controllers into it. While StageDir was hardcoded to "Assets/Resources/Enemies/Blink",
+        // controllers into it. While StageDir was hardcoded to DeNelle.Core.AssetRoots.EnemyContent + "/Blink",
         // the next Blink art intake after a migration would have silently RE-CREATED that folder
         // inside Resources and re-inflated the build by up to 427 MB — with no error, no failing
         // gate, and nothing to attribute it to months later. A generator that quietly undoes an
@@ -65,13 +65,13 @@ namespace DeNelle.Editor
         // So: stage into the MIGRATED root once it exists, else the pre-migration Resources root.
         // Same resolve rule as EnemyAddressablesGrouper.ResolveActiveRoot and
         // EnemyRigControllerCoherenceRegression.EnemyRoot — one rule, three call sites, no drift.
-        private const string StageResourcesDir = "Assets/Resources/Enemies/Blink";
+        private const string StageResourcesDir = DeNelle.Core.AssetRoots.EnemyContent + "/Blink";
         private const string StageContentDir   = "Assets/EnemyContent/Blink";
 
         /// <summary>
         /// Where freshly-imported Blink orc art is staged: the migrated
         /// <c>Assets/EnemyContent/Blink</c> once that folder exists, else the pre-migration
-        /// <c>Assets/Resources/Enemies/Blink</c>. Existence-probed (not model-probed) because this
+        /// <c>Assets/EnemyContent/Blink</c>. Existence-probed (not model-probed) because this
         /// tool must stage into the migrated root even when it is still empty.
         /// </summary>
         private static string StageDir =>

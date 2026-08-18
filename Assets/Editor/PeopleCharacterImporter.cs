@@ -34,7 +34,7 @@ namespace DeNelle.Editor
     {
         private const string ActionDir = "Assets/Action/";
         private const string HeroDir   = "Assets/Resources/Heroes/";
-        private const string EnemyDir  = "Assets/Resources/Enemies/";
+        private const string EnemyDir  = DeNelle.Core.AssetRoots.EnemyContent + "/";
 
         private struct ModelMap { public string Src; public string Dst; public string Label; }
 

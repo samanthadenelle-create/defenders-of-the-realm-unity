@@ -43,7 +43,7 @@ namespace DeNelle.Editor
         // Folders whose FBX meshes ship and are heavy (per BuildReport).
         private static readonly string[] MeshFolders =
         {
-            "Assets/Resources/Enemies",
+            DeNelle.Core.AssetRoots.EnemyContent,
             "Assets/Resources/Heroes",
             DeNelle.Core.AssetRoots.StructureContent,
             "Assets/Resources/Walls",

@@ -3,7 +3,7 @@
 // controller whose CLIP TYPE its rig can actually play.
 // -----------------------------------------------------------------------------
 // THE INVARIANT. For every .fbx reachable by Resources.Load under
-// Assets/Resources/Enemies/**, the rig type of the MODEL and the clip type of the
+// Assets/EnemyContent/**, the rig type of the MODEL and the clip type of the
 // controller EnemyAnimatorFactory will hand it must agree:
 //
 //     Humanoid model  ->  controller carrying Humanoid clips
@@ -51,7 +51,7 @@ namespace DeNelle.Editor.Regression
     {
         // ⚠ NOT a const, and deliberately so. The enemy art is migrating OUT of Resources into
         // Addressables (Assets/EnemyContent) so its ~539 MB stops being force-included in every
-        // build. A hardcoded "Assets/Resources/Enemies" here does NOT call Resources.Load, so the
+        // build. A hardcoded DeNelle.Core.AssetRoots.EnemyContent here does NOT call Resources.Load, so the
         // EnemyAssetLoader seam does not rescue it — the instant the assets physically move, every
         // FindAssets below returns empty and this whole suite hard-reds with "no models found",
         // which reads as "the enemy roster broke" when nothing is wrong at all.
@@ -63,13 +63,13 @@ namespace DeNelle.Editor.Regression
         // The emptiness guard below stays load-bearing: if NEITHER root holds models that is a
         // genuine failure and must still red. This resolves WHERE to look; it never weakens WHAT
         // is asserted.
-        private const string EnemyResourcesRoot = "Assets/Resources/Enemies";
+        private const string EnemyResourcesRoot = DeNelle.Core.AssetRoots.EnemyContent;
         private const string EnemyContentRoot   = "Assets/EnemyContent";
 
         /// <summary>
         /// The folder that actually holds the enemy models right now: the migrated
         /// <c>Assets/EnemyContent</c> once it contains at least one model, else the pre-migration
-        /// <c>Assets/Resources/Enemies</c>. Probed per access (AssetDatabase-cheap) so a migration
+        /// <c>Assets/EnemyContent</c>. Probed per access (AssetDatabase-cheap) so a migration
         /// that happens between suite runs needs no code change.
         /// </summary>
         private static string EnemyRoot

@@ -9,7 +9,7 @@
 // DeNelle.Core.EnemyAssetLoader.LoadEnemyPrefab("<model>"), the Addressables-FIRST /
 // Resources-FALLBACK seam) and, per enemy, asserts two axes:
 //
-// ⚠ WHY THE SEAM AND NOT Resources.Load. Assets/Resources/Enemies is migrating into an
+// ⚠ WHY THE SEAM AND NOT Resources.Load. Assets/EnemyContent is migrating into an
 // Addressable group. A raw Resources.Load<GameObject>("Enemies/<model>") here returns
 // null for EVERY enemy the day the art moves, and this oracle would report the entire
 // roster as unrigged/uncoloured capsules — a false red that reads exactly like a broken

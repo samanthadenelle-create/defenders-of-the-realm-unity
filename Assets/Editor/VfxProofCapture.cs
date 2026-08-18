@@ -982,7 +982,7 @@ namespace DeNelle.Editor
         private static GameObject StageSubject(Transform parent, Shot shot, StringBuilder notes)
         {
             // Enemy props go through the runtime seam (Addressables-first, Resources-fallback)
-            // so the enemy-subject shots keep staging a real body after Assets/Resources/Enemies
+            // so the enemy-subject shots keep staging a real body after Assets/EnemyContent
             // migrates out of Resources; every other key is a plain Resources path.
             var prefab = shot.SubjectResourcePath.StartsWith(DeNelle.Core.EnemyAssetLoader.EnemyAddrPrefix, System.StringComparison.Ordinal)
                 ? DeNelle.Core.EnemyAssetLoader.LoadEnemyAsset<GameObject>(shot.SubjectResourcePath)

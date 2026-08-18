@@ -135,7 +135,7 @@ namespace DeNelle.Editor
 
         private static void AuditResourcesModel(string model, List<string> failures, List<string> notes)
         {
-            string path = "Assets/Resources/Enemies/" + model + ".fbx";
+            string path = DeNelle.Core.AssetRoots.EnemyContent + "/" + model + ".fbx";
             var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
             if (prefab == null)
             {

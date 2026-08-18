@@ -36,7 +36,7 @@ namespace DeNelle.Editor
 {
     public static class EnemyAnimatorSetup
     {
-        private const string Res = "Assets/Resources/Enemies/";
+        private const string Res = DeNelle.Core.AssetRoots.EnemyContent + "/";
         private const string Gen = "Assets/Generated/Animators/";
 
         // KayKit skeleton meshes still on the Generic Rig_Medium clip library.

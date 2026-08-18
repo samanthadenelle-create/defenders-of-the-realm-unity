@@ -68,7 +68,7 @@ namespace DeNelle.Editor
         private static readonly string[] RootFolders =
         {
             "Assets/Models",             // KayKit + all env/prop/character model packs
-            "Assets/Resources/Enemies",  // enemy rigs (skinned meshes)
+            DeNelle.Core.AssetRoots.EnemyContent,  // enemy rigs (skinned meshes)
             "Assets/Resources/Heroes",   // hero rigs (skinned meshes) -- meshCompression only
             "Assets/polyperfect",        // low-poly shared model pack
             "Assets/Quaternius",         // low-poly model pack (gitignored -- may be absent)

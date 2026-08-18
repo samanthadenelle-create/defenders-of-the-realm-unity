@@ -25,9 +25,9 @@ namespace DeNelle.Editor
     {
         private static readonly string[] WightFbx =
         {
-            "Assets/Resources/Enemies/Demon.fbx",
-            "Assets/Resources/Enemies/OgreMage.fbx",
-            "Assets/Resources/Enemies/Troll.fbx",   // 2026-06-13: untextured (externalObjects:{}) — featured in the brute wave
+            DeNelle.Core.AssetRoots.EnemyContent + "/Demon.fbx",
+            DeNelle.Core.AssetRoots.EnemyContent + "/OgreMage.fbx",
+            DeNelle.Core.AssetRoots.EnemyContent + "/Troll.fbx",   // 2026-06-13: untextured (externalObjects:{}) — featured in the brute wave
         };
 
         [MenuItem("Defenders/Art/Extract Wight (Demon+OgreMage) Tripo Textures")]
@@ -94,8 +94,8 @@ namespace DeNelle.Editor
         {
             string[] unmappable =
             {
-                "Assets/Resources/Enemies/Demon.fbx",
-                "Assets/Resources/Enemies/OgreMage.fbx",
+                DeNelle.Core.AssetRoots.EnemyContent + "/Demon.fbx",
+                DeNelle.Core.AssetRoots.EnemyContent + "/OgreMage.fbx",
             };
             foreach (var p in unmappable)
             {
@@ -110,7 +110,7 @@ namespace DeNelle.Editor
         }
 
         /// <summary>
-        /// Ground-truth test: import Assets/Resources/Enemies/_WightCheck.fbx as Humanoid and
+        /// Ground-truth test: import Assets/EnemyContent/_WightCheck.fbx as Humanoid and
         /// report whether Unity can build a HUMAN avatar (isHuman). True = the rig is
         /// humanoid-mappable (AccuRIG worked) → it will animate on the shared controller.
         /// False = still a non-humanoid (raw Tripo) skeleton → needs a real AccuRIG pass.
@@ -118,7 +118,7 @@ namespace DeNelle.Editor
         [MenuItem("Defenders/Art/Check _WightCheck.fbx is Humanoid (AccuRIG verify)")]
         public static void CheckWightHumanoid()
         {
-            const string p = "Assets/Resources/Enemies/_WightCheck.fbx";
+            const string p = DeNelle.Core.AssetRoots.EnemyContent + "/_WightCheck.fbx";
             var imp = AssetImporter.GetAtPath(p) as ModelImporter;
             if (imp == null) { Debug.LogWarning($"[WightCheck] no ModelImporter at '{p}'."); return; }
             imp.animationType = ModelImporterAnimationType.Human;
@@ -144,7 +144,7 @@ namespace DeNelle.Editor
         [MenuItem("Defenders/Art/Finalize Wight (Demon) — Humanoid + 1024 cap")]
         public static void FinalizeDemonWight()
         {
-            const string p = "Assets/Resources/Enemies/Demon.fbx";
+            const string p = DeNelle.Core.AssetRoots.EnemyContent + "/Demon.fbx";
             var imp = AssetImporter.GetAtPath(p) as ModelImporter;
             if (imp == null) { Debug.LogWarning("[Finalize] no ModelImporter for Demon.fbx"); return; }
             imp.animationType = ModelImporterAnimationType.Human;
@@ -158,7 +158,7 @@ namespace DeNelle.Editor
 
             // Cap the wight's textures to 1024 (mobile/Seeker memory).
             foreach (var guid in AssetDatabase.FindAssets("t:Texture2D",
-                         new[] { "Assets/Resources/Enemies/Demon.fbm" }))
+                         new[] { DeNelle.Core.AssetRoots.EnemyContent + "/Demon.fbm" }))
             {
                 var tp = AssetDatabase.GUIDToAssetPath(guid);
                 if (AssetImporter.GetAtPath(tp) is TextureImporter ti && ti.maxTextureSize > 1024)
@@ -179,7 +179,7 @@ namespace DeNelle.Editor
         [MenuItem("Defenders/Art/Finalize OgreMage — Humanoid + extract + 1024 cap")]
         public static void FinalizeOgreMage()
         {
-            const string p = "Assets/Resources/Enemies/OgreMage.fbx";
+            const string p = DeNelle.Core.AssetRoots.EnemyContent + "/OgreMage.fbx";
             var imp = AssetImporter.GetAtPath(p) as ModelImporter;
             if (imp == null) { Debug.LogWarning("[Finalize] no ModelImporter for OgreMage.fbx"); return; }
             imp.animationType = ModelImporterAnimationType.Human;
@@ -195,7 +195,7 @@ namespace DeNelle.Editor
                               $"{(av.isValid && av.isHuman ? "-> ANIMATES" : "-> still not humanoid")}");
 
             foreach (var guid in AssetDatabase.FindAssets("t:Texture2D",
-                         new[] { "Assets/Resources/Enemies/OgreMage.fbm" }))
+                         new[] { DeNelle.Core.AssetRoots.EnemyContent + "/OgreMage.fbm" }))
             {
                 var tp = AssetDatabase.GUIDToAssetPath(guid);
                 if (AssetImporter.GetAtPath(tp) is TextureImporter ti && ti.maxTextureSize > 1024)
@@ -230,7 +230,7 @@ namespace DeNelle.Editor
         [MenuItem("Defenders/Art/Repair Orc_Shaman Material (green fix)")]
         public static void RepairOrcShaman()
         {
-            bool ok = RepairNullMaterialSlot("Assets/Resources/Enemies/Orc_Shaman.fbx");
+            bool ok = RepairNullMaterialSlot(DeNelle.Core.AssetRoots.EnemyContent + "/Orc_Shaman.fbx");
 
             // Same-class sweep (verify-only): report BOUND / MIS-BOUND for every other
             // orc + Tripo enemy FBX so the fix run names any sibling with the same rot.
@@ -248,7 +248,7 @@ namespace DeNelle.Editor
         [MenuItem("Defenders/Art/Repair Orc_Necromancer Material (green fix)")]
         public static void RepairOrcNecromancer()
         {
-            bool ok = RepairNullMaterialSlot("Assets/Resources/Enemies/Orc_Necromancer.fbx");
+            bool ok = RepairNullMaterialSlot(DeNelle.Core.AssetRoots.EnemyContent + "/Orc_Necromancer.fbx");
             AuditEnemyMaterialBindings();
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
@@ -411,7 +411,7 @@ namespace DeNelle.Editor
         [MenuItem("Defenders/Art/Audit Enemy Material Bindings (null-slot scan)")]
         public static void AuditEnemyMaterialBindings()
         {
-            const string enemyDir = "Assets/Resources/Enemies";
+            const string enemyDir = DeNelle.Core.AssetRoots.EnemyContent;
             int misBound = 0, total = 0;
             foreach (var guid in AssetDatabase.FindAssets("t:Model", new[] { enemyDir }))
             {

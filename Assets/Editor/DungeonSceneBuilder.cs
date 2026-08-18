@@ -120,7 +120,7 @@ namespace DeNelle.Editor
         private const string BrynIdleControllerPath =
             "Assets/_Modules/Village/NPCs/Animators/AC_AmbientNPC_Tob.controller";
         private const string MiniBossControllerPath =
-            "Assets/Resources/Enemies/SkeletonHumanoid.controller";
+            DeNelle.Core.AssetRoots.EnemyContent + "/SkeletonHumanoid.controller";
 
         // ── Dungeon MonoBehaviour / SO type names (resolved by reflection) ───
         private const string NsDungeons = "DeNelle.Dungeons";

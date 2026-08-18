@@ -12,11 +12,11 @@
 //
 // WHAT THIS DOES (idempotent):
 //   1. Creates (or reuses) an EnemyTypeVfxSet asset at
-//      Assets/Resources/Enemies/EnemyVfxSet_Default.asset with
+//      Assets/EnemyContent/EnemyVfxSet_Default.asset with
 //      TelegraphDuration = 0.5s. Optional VFX-prefab fields stay null — the
 //      telegraph DURATION is what plays the WindUp anim + grants reaction time.
 //   2. Scans enemy prefabs (Assets/Prefabs/Village/Generated/Enemy_*.prefab and
-//      Assets/Resources/Enemies/*.prefab) and, for any that has an Enemy
+//      Assets/EnemyContent/*.prefab) and, for any that has an Enemy
 //      component with a null _typeVfxSet, assigns the default set via
 //      SerializedObject and saves the prefab.
 //
@@ -57,8 +57,8 @@ namespace DeNelle.Editor
     /// </summary>
     public static class EnemyVfxSetup
     {
-        private const string AssetPath  = "Assets/Resources/Enemies/EnemyVfxSet_Default.asset";
-        private const string AssetDir   = "Assets/Resources/Enemies";
+        private const string AssetPath  = DeNelle.Core.AssetRoots.EnemyContent + "/EnemyVfxSet_Default.asset";
+        private const string AssetDir   = DeNelle.Core.AssetRoots.EnemyContent;
         private const float  TelegraphSeconds = 0.5f;
 
         private const string EnemyTypeName    = "DeNelle.Village.Enemy, DeNelle.Village";
@@ -69,7 +69,7 @@ namespace DeNelle.Editor
         private static readonly string[] PrefabSearchFolders =
         {
             "Assets/Prefabs/Village/Generated",
-            "Assets/Resources/Enemies",
+            DeNelle.Core.AssetRoots.EnemyContent,
         };
 
         [MenuItem("Defenders/Combat/Setup Enemy VFX Sets")]

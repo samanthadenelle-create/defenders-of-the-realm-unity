@@ -38,11 +38,11 @@ namespace DeNelle.Editor
                 new Actor { Fbx = Inc+"Heroes/Knight/Knight.fbx", TexDir = Inc+"Heroes/Knight/", TexPrefix = "medieval_knight_3d_model",
                             Clip = "Assets/Action/Knight/sword and shield idle.fbx", Pos = new Vector3(-2.6f,0,0.2f), Yaw = 90f, Height = 1.80f },
                 // Orcs loaded from RESOURCES (the promoted assets the live swapper uses) + OrcTex textures.
-                new Actor { Fbx = "Assets/Resources/Enemies/Orc_Warrior.fbx", TexDir = "Assets/Resources/Enemies/OrcTex/", TexPrefix = "Orc_Warrior",
+                new Actor { Fbx = DeNelle.Core.AssetRoots.EnemyContent + "/Orc_Warrior.fbx", TexDir = DeNelle.Core.AssetRoots.EnemyContent + "/OrcTex/", TexPrefix = "Orc_Warrior",
                             Clip = "Assets/Action/Orc Idle.fbx", Pos = new Vector3(2.4f,0,0f), Yaw = 270f, Height = 2.00f },   // LEADER
-                new Actor { Fbx = "Assets/Resources/Enemies/Orc_Tank.fbx", TexDir = "Assets/Resources/Enemies/OrcTex/", TexPrefix = "Orc_Tank",
+                new Actor { Fbx = DeNelle.Core.AssetRoots.EnemyContent + "/Orc_Tank.fbx", TexDir = DeNelle.Core.AssetRoots.EnemyContent + "/OrcTex/", TexPrefix = "Orc_Tank",
                             Clip = "Assets/Action/Orc Idle.fbx", Pos = new Vector3(3.7f,0,1.5f), Yaw = 250f, Height = 2.15f },
-                new Actor { Fbx = "Assets/Resources/Enemies/Orc_Mage.fbx", TexDir = "Assets/Resources/Enemies/OrcTex/", TexPrefix = "Orc_Mage",
+                new Actor { Fbx = DeNelle.Core.AssetRoots.EnemyContent + "/Orc_Mage.fbx", TexDir = DeNelle.Core.AssetRoots.EnemyContent + "/OrcTex/", TexPrefix = "Orc_Mage",
                             Clip = "Assets/Action/Orc Idle.fbx", Pos = new Vector3(3.7f,0,-1.5f), Yaw = 290f, Height = 1.85f },
             };
 

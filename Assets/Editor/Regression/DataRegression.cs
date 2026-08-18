@@ -111,7 +111,7 @@ namespace DeNelle.Editor
             // runtime seam DeNelle.Core.EnemyAssetLoader.LoadEnemyPrefab("<model>") returns a
             // real prefab. The seam (Addressables-FIRST, Resources-FALLBACK) is asked instead
             // of Resources.Load directly so this assertion stays true across the
-            // Assets/Resources/Enemies -> Addressables migration; a raw Resources.Load would
+            // Assets/EnemyContent -> Addressables migration; a raw Resources.Load would
             // null out for the whole roster the day the art moves (a false red), and asking
             // the loader proves MORE: that the real load path resolves.
             CheckEnemies(failures, log);
@@ -381,7 +381,7 @@ namespace DeNelle.Editor
             // --- WO-772 Phase 1: EnemyResolver id->family->DISTINCT model (generic-skeleton fix, ENEMY_RESOLVER_OK) ---
             if (!EnemyResolverRegression.Run(out var enemyResolverReason)) failures.Add(enemyResolverReason); else log.AppendLine("[enemy-resolver] " + enemyResolverReason);
             // --- Resources -> Addressables migration guard: the enemy ADDRESSES must be in the
-            //     catalog once Assets/Resources/Enemies is gone. Migration-state aware (a progress
+            //     catalog once Assets/EnemyContent is gone. Migration-state aware (a progress
             //     note pre-move, a hard assertion post-move); a DANGLING entry fails in either
             //     state. Without it a quietly-unmarked group ships a roster of tinted capsules ---
             if (!EnemyAddressableCatalogRegression.Run(out var enemyAddrCatalogReason)) failures.Add(enemyAddrCatalogReason); else log.AppendLine("[enemy-addr-catalog] " + enemyAddrCatalogReason);

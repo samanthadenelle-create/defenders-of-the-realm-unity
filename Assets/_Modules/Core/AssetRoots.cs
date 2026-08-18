@@ -48,6 +48,24 @@ namespace DeNelle.Core
         public const string StructureContent = "Assets/StructureContent";
 
         /// <summary>
+        /// Enemy art (bodies, rigs, controllers, textures). Migrating OUT of Resources 2026-08-18
+        /// for the same reason as the structures: force-inclusion. After the Blink removal this is
+        /// 112 MB, of which 107 MB is FBX — and an enemy the player never fights still ships.
+        /// <para>The runtime was ALREADY clean before this move — zero raw
+        /// <c>Resources.Load("Enemies/…")</c> call sites; everything goes through
+        /// <c>EnemyAssetLoader</c>. That is why this migration is the safe one to do second.</para>
+        /// </summary>
+        public const string EnemyContent = "Assets/EnemyContent";
+
+        /// <summary>
+        /// The Resources path enemy art USED to occupy. Kept for the same reason as its structure
+        /// twin: detecting a pre-migration tree, and detecting art that has come BACK (an importer
+        /// with a stale destination silently re-inflating the build — the exact BlinkOrcImporter
+        /// trap). History, not a location.
+        /// </summary>
+        public const string EnemyContentLegacyResources = "Assets/Resources/Enemies";
+
+        /// <summary>
         /// The Resources path structure art USED to occupy. Kept deliberately: the migrator needs
         /// it to detect a pre-migration tree, and the manifest gate needs it to detect art that has
         /// come BACK (an importer with a stale destination re-inflating the build — the

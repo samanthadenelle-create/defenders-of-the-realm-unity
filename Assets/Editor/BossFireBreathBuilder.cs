@@ -98,7 +98,7 @@ namespace DeNelle.Editor
         private const string DestRootName   = "Boss_FireBreath";
 
         private const string CatalogPath   = "Assets/Resources/VFX/VFXCatalog.asset";
-        private const string BossPrefabPath = "Assets/Resources/Enemies/Boss_Dragon.prefab";
+        private const string BossPrefabPath = DeNelle.Core.AssetRoots.EnemyContent + "/Boss_Dragon.prefab";
 
         // ── Type names resolved at run time (see header) ──────────────────────
         private const string CatalogTypeName  = "DeNelle.Village.VFXCatalog, DeNelle.Village";

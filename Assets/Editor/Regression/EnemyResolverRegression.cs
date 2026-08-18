@@ -28,7 +28,7 @@
 // ⚠ ASSET LOADS GO THROUGH THE SEAM, NEVER Resources.Load DIRECTLY. Every
 // "this mesh is committed" assertion below calls DeNelle.Core.EnemyAssetLoader
 // (Addressables-FIRST, Resources-FALLBACK) — the exact path the spawner uses. This
-// is what makes the oracle survive the Assets/Resources/Enemies -> Addressables
+// is what makes the oracle survive the Assets/EnemyContent -> Addressables
 // migration: a raw Resources.Load would return null for every enemy the moment the
 // art physically moves and paint the whole roster red for a reason that isn't real.
 // Going through the seam also STRENGTHENS the claim — it proves the runtime resolve

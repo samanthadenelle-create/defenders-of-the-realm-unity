@@ -19,7 +19,7 @@
 // SCOPE (path-gated — assets outside these folders are never touched):
 //   Assets/Models/People/        — heroes + companions + orcs (shared Tripo rig)
 //   Assets/Resources/Heroes/     — Mage / Knight / Ranger / Cleric bodies + props
-//   Assets/Resources/Enemies/    — KayKit skeletons + Dragon
+//   Assets/EnemyContent/    — KayKit skeletons + Dragon
 //   …and every .fbm / *_tex / Textures sidecar nested under those folders,
 //   which are covered automatically because their paths start with the prefix.
 //
@@ -61,7 +61,7 @@ namespace DeNelle.Editor
         {
             "Assets/Models/People/",
             "Assets/Resources/Heroes/",
-            "Assets/Resources/Enemies/",
+            DeNelle.Core.AssetRoots.EnemyContent + "/",
         };
 
         // ── Cap values ───────────────────────────────────────────────────────

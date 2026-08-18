@@ -3,7 +3,7 @@
 // IN PLACE, and VERIFY the avatar actually came back valid.
 // -----------------------------------------------------------------------------
 // WHY THIS EXISTS. Seven AccuRig CC_Base meshes were staged into
-// Assets/Resources/Enemies/ and Unity auto-imported them with its DEFAULT
+// Assets/EnemyContent/ and Unity auto-imported them with its DEFAULT
 // animationType: 2 (Generic). The rig is fine — every one carries real skinning
 // (Deformer/Cluster/Pose) and a 29-34 bone CC_Base skeleton. What is missing is the
 // Humanoid AVATAR: without it Unity cannot retarget, so none of the 191 shared
@@ -34,7 +34,7 @@ namespace DeNelle.Editor
 {
     public static class HumanoidRigFixup
     {
-        private const string Dir = "Assets/Resources/Enemies";
+        private const string Dir = DeNelle.Core.AssetRoots.EnemyContent;
 
         /// <summary>The 2026-08-09 AccuRig staging set. Explicit, not a wildcard sweep -
         /// this must never silently re-import an unrelated mesh.</summary>

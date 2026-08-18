@@ -26,7 +26,7 @@ namespace DeNelle.Editor
 {
     public static class BuildOrcHumanoidController
     {
-        private const string BasePath = "Assets/Resources/Enemies/OrcHumanoid.controller";
+        private const string BasePath = DeNelle.Core.AssetRoots.EnemyContent + "/OrcHumanoid.controller";
 
         // Action Keyword Registry targets (motion-castings.json, WO-670 slice 1):
         // base states resolve `orc`; the role overrides resolve orc-mage/-warrior/
@@ -84,9 +84,9 @@ namespace DeNelle.Editor
         private const float DeathBlendIn  = 0.15f; // Any -> Dead (soften the collapse)
 
         // Override asset paths (each IS a RuntimeAnimatorController — Resources.Load works).
-        private const string MageOverridePath    = "Assets/Resources/Enemies/OrcHumanoid_Mage.controller";
-        private const string WarriorOverridePath = "Assets/Resources/Enemies/OrcHumanoid_Warrior.controller";
-        private const string TankOverridePath    = "Assets/Resources/Enemies/OrcHumanoid_Tank.controller";
+        private const string MageOverridePath    = DeNelle.Core.AssetRoots.EnemyContent + "/OrcHumanoid_Mage.controller";
+        private const string WarriorOverridePath = DeNelle.Core.AssetRoots.EnemyContent + "/OrcHumanoid_Warrior.controller";
+        private const string TankOverridePath    = DeNelle.Core.AssetRoots.EnemyContent + "/OrcHumanoid_Tank.controller";
 
         // State / clip names captured on the BASE so overrides can key into them.
         private static AnimationClip s_idle, s_walk, s_run, s_hit, s_death, s_windup;
