@@ -47,6 +47,76 @@ namespace DeNelle.Editor
         private const string RemoteBuildPathId = "ad0e68328bd7fd54ea79f0a9ab1dd9b1";
         private const string RemoteLoadPathId  = "cf151d4962873af43b9302d323a9d707";
 
+        /// <summary>
+        /// Addresses every loadable asset under the enemy content root. Idempotent, and safe to run
+        /// on an already-moved tree — which is why it is separate from the move.
+        /// <para>
+        /// ⛔ ONE FindAssets CALL PER TYPE. The first version passed
+        /// <c>FindAssets("t:GameObject t:Model t:AnimatorController", …)</c> — Unity ANDs multiple
+        /// t: filters rather than ORing them, so almost nothing matched: only 29 of the tree's
+        /// assets were addressed and OrcHumanoid_Tank / _Warrior silently fell out. In game that
+        /// surfaced as "enemy asset not found via Addressables OR Resources — caller falls back",
+        /// i.e. a live enemy quietly losing its animator. The query looked plausible and was wrong,
+        /// which is exactly why the device trace matters more than the tool's own success line.
+        /// </para>
+        /// </summary>
+        private static int AddressAll(UnityEditor.AddressableAssets.Settings.AddressableAssetSettings settings,
+                                      UnityEditor.AddressableAssets.Settings.AddressableAssetGroup group)
+        {
+            var guids = new System.Collections.Generic.HashSet<string>();
+            // ⛔ AnimatorOverrideController IS A DIFFERENT TYPE and t:AnimatorController does NOT
+            // match it. OrcHumanoid_Tank / _Warrior / _Mage are override controllers (Unity class
+            // 221) while OrcHumanoid is a base controller (1101) — so the base one addressed fine
+            // and its three variants silently did not. In game that read as
+            // "enemy asset 'Enemies/OrcHumanoid_Tank' not found via Addressables OR Resources",
+            // i.e. a live enemy losing its animator while the migration reported success.
+            // t:Object would be simpler but sweeps in .meta-only and folder entries; naming the
+            // types keeps the address list to things that can actually be loaded.
+            foreach (var filter in new[] { "t:GameObject", "t:Model", "t:AnimatorController",
+                                           "t:AnimatorOverrideController", "t:RuntimeAnimatorController",
+                                           "t:AnimationClip", "t:Material", "t:Texture" })
+                foreach (var g in AssetDatabase.FindAssets(filter, new[] { ContentRoot }))
+                    guids.Add(g);
+
+            int marked = 0;
+            foreach (var guid in guids)
+            {
+                string path = AssetDatabase.GUIDToAssetPath(guid);
+                if (string.IsNullOrEmpty(path) || !path.StartsWith(ContentRoot)) continue;
+
+                string rel = path.Substring(ContentRoot.Length + 1);
+                // The address is the EXACT key EnemyAssetLoader builds: "Enemies/<slug>".
+                string address = "Enemies/" + System.IO.Path.ChangeExtension(rel, null).Replace('\\', '/');
+
+                var entry = settings.CreateOrMoveEntry(guid, group, readOnly: false, postEvent: false);
+                if (entry == null) continue;
+                entry.SetAddress(address, postEvent: false);
+                marked++;
+            }
+
+            settings.SetDirty(UnityEditor.AddressableAssets.Settings.AddressableAssetSettings
+                                  .ModificationEvent.BatchModification, null, true, true);
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+            return marked;
+        }
+
+        /// <summary>Re-address an already-moved tree without moving anything.</summary>
+        [MenuItem("Defenders/Art/Enemies -> Addressables (RE-ADDRESS ONLY)")]
+        public static void ReAddress()
+        {
+            var settings = UnityEditor.AddressableAssets.AddressableAssetSettingsDefaultObject.Settings;
+            if (settings == null) { Debug.LogError("[EnemyMigrate] Addressables settings missing."); return; }
+            if (!AssetDatabase.IsValidFolder(ContentRoot)) { Debug.LogError($"[EnemyMigrate] '{ContentRoot}' not found."); return; }
+
+            var group = settings.FindGroup(GroupName);
+            if (group == null) { Debug.LogError($"[EnemyMigrate] group '{GroupName}' not found — run the move first."); return; }
+
+            int marked = AddressAll(settings, group);
+            Debug.Log($"[EnemyMigrate] re-addressed {marked} asset(s) in '{GroupName}'.");
+            Debug.Log($"{OkMarker} re-address {marked}");
+        }
+
         [MenuItem("Defenders/Art/Enemies -> Addressables (MOVE FOLDER)")]
         public static void MoveFolder()
         {
@@ -134,26 +204,7 @@ namespace DeNelle.Editor
             // ---- address every model the resolver can ask for --------------------
             // Addresses are the EXACT keys EnemyAssetLoader builds: "Enemies/<slug>". Do not invent
             // a second scheme — the loader and the grouper must agree on the string, verbatim.
-            int marked = 0;
-            foreach (var guid in AssetDatabase.FindAssets("t:GameObject t:Model t:AnimatorController", new[] { ContentRoot }))
-            {
-                string path = AssetDatabase.GUIDToAssetPath(guid);
-                if (string.IsNullOrEmpty(path)) continue;
-
-                string rel = path.Substring(ContentRoot.Length + 1);
-                string address = "Enemies/" + System.IO.Path.ChangeExtension(rel, null).Replace('\\', '/');
-
-                var entry = settings.CreateOrMoveEntry(guid, group, readOnly: false, postEvent: false);
-                if (entry == null) continue;
-                entry.SetAddress(address, postEvent: false);
-                marked++;
-            }
-
-            settings.SetDirty(UnityEditor.AddressableAssets.Settings.AddressableAssetSettings
-                                  .ModificationEvent.BatchModification, null, true, true);
-            AssetDatabase.SaveAssets();
-            AssetDatabase.Refresh();
-
+            int marked = AddressAll(settings, group);
             Debug.Log($"[EnemyMigrate] marked {marked} asset(s) addressable in '{GroupName}'.");
             Debug.Log($"{OkMarker} {after} files, {marked} addressable");
         }
