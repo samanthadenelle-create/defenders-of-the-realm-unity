@@ -87,9 +87,22 @@ namespace DeNelle.Core.Enemies
             "Troll", "Troll_Mage", "Troll_Overlord",
             // Misc committed bodies
             "Demon", "Boss_Dragon",
-            // Blink stylized orcs (WO-680) — committed MIRRORS under Resources/Enemies/Blink
-            "Blink/Blink_Orc_Warrior", "Blink/Blink_Orc_Hunter",
-            "Blink/Blink_Orc_Warlock", "Blink/Blink_Orc_Boss",
+            // ⛔ THE FOUR BLINK ORCS WERE REMOVED 2026-08-18 (owner ruling) — do not re-add here
+            // without also re-staging the art, or every key listed in this registry that cannot
+            // resolve spawns a CAPSULE in front of a player.
+            // WHY THEY WENT: Resources/Enemies/Blink was 427 MB and Unity FORCE-INCLUDES everything
+            // under a Resources/ folder, used or not. An audit found the ids blink-orc-warrior /
+            // hunter / warlock / boss in NO enemies.json row — the only things that could spawn them
+            // were EnemyFamilyTestSpawner (a debug side-by-side comparison) and an editor capture
+            // tool. 427 MB shipped in every APK for a debug spawner.
+            // ⚠ REVERSIBLE, which is why removal was safe: the vendor pack at Assets/Blink/ is
+            // gitignored but PRESENT, and Assets/Editor/BlinkOrcImporter.cs is intact — re-running it
+            // re-stages all four. Unlike the owner-purchased Tripo art (identified by its
+            // .tripo-extracted marker, of which these had NONE), the Resources copy was never the
+            // only copy.
+            // ⚠ UNRELATED TO THE OBSIDIAN UI, despite sharing the "Blink" name: that ships from
+            // Assets/Blink/Art/UI/Obsidian_UI via BlinkUiImporter into Resources/RpgUi, is consumed
+            // by ElarionUiKit, and is untouched by this.
         };
 
         /// <summary>The committed Resources/Enemies mesh keys data is allowed to name.</summary>
