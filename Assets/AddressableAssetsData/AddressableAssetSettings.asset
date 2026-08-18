@@ -17,7 +17,7 @@ MonoBehaviour:
     serializedVersion: 2
     Hash: 00000000000000000000000000000000
   m_OptimizeCatalogSize: 0
-  m_BuildRemoteCatalog: 0
+  m_BuildRemoteCatalog: 1
   m_CatalogRequestsTimeout: 0
   m_DisableCatalogUpdateOnStart: 0
   m_InternalIdNamingMode: 0
@@ -52,9 +52,9 @@ MonoBehaviour:
   m_CheckForContentUpdateRestrictionsOption: 0
   m_MonoScriptBundleCustomNaming: 
   m_RemoteCatalogBuildPath:
-    m_Id: 
+    m_Id: ad0e68328bd7fd54ea79f0a9ab1dd9b1
   m_RemoteCatalogLoadPath:
-    m_Id: 
+    m_Id: cf151d4962873af43b9302d323a9d707
   m_ContentStateBuildPathProfileVariableName: 
   m_CustomContentStateBuildPath: 
   m_ContentStateBuildPath: 
@@ -83,7 +83,7 @@ MonoBehaviour:
       - m_Id: ad0e68328bd7fd54ea79f0a9ab1dd9b1
         m_Value: 'ServerData/[BuildTarget]'
       - m_Id: cf151d4962873af43b9302d323a9d707
-        m_Value: <undefined>
+        m_Value: 'https://pub-ab6dfaf1b3d74ca78891876611ccb832.r2.dev/[BuildTarget]'
       - m_Id: d19bc1fe81246534eb024166f66486ba
         m_Value: '[UnityEditor.EditorUserBuildSettings.activeBuildTarget]'
     m_ProfileEntryNames:

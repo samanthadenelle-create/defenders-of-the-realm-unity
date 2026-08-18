@@ -65,6 +65,103 @@ namespace DeNelle.Editor
         public static void DryRunMenu() => DryRun();
 
         /// <summary>
+        /// Moves the WHOLE Resources/Structures folder out of Resources in ONE AssetDatabase
+        /// operation, then marks the catalog-referenced art Addressable.
+        /// <para>
+        /// ⛔ THIS REPLACES THE PER-FILE STRATEGY, WHICH FAILED BADLY. Per-file moves cannot work
+        /// here: AssetDatabase.MoveAsset refuses to move a file OUT of a "&lt;name&gt;.fbm" folder AND
+        /// refuses to move the .fbm folder itself, because Unity treats .fbm as owned by its FBX.
+        /// Routing around that with filesystem moves nested folders into themselves, tripped Unity's
+        /// collision auto-rename, and left the tree with 100 regression failures.
+        /// </para>
+        /// <para>
+        /// Moving the PARENT folder sidesteps the whole problem: .fbm folders travel inside it as
+        /// ordinary content, Unity handles the reparenting itself, GUIDs are preserved, and it is a
+        /// SINGLE operation that either succeeds or fails — no partial state. The cost is that the
+        /// ~14 editor scripts hardcoding "Assets/Resources/Structures" must be repointed, which is
+        /// exactly what the manifest was built to make mechanical.
+        /// </para>
+        /// ⚠ Everything under the folder leaves Resources, INCLUDING the small Polyperfect prefab
+        /// mirrors the scene builders load. That is fine — they are loaded by editor tooling via
+        /// AssetDatabase paths, not Resources.Load, so they follow the manifest like everything else.
+        /// </summary>
+        [MenuItem("Defenders/Art/Structures -> Addressables (MOVE FOLDER)")]
+        public static void MoveFolder()
+        {
+            if (!AssetDatabase.IsValidFolder(ResourcesRoot))
+            {
+                Debug.LogError($"[Migrate] '{ResourcesRoot}' not found — already moved, or wrong project.");
+                return;
+            }
+
+            var settings = UnityEditor.AddressableAssets.AddressableAssetSettingsDefaultObject.Settings;
+            if (settings == null)
+            {
+                Debug.LogError("[Migrate] Addressables settings missing — ABORTED before touching anything. " +
+                               "Moving art out of Resources with no Addressables home makes every asset unloadable.");
+                return;
+            }
+
+            // Count first so the move can be PROVEN rather than assumed.
+            int before = System.IO.Directory.GetFiles(ResourcesRoot, "*", System.IO.SearchOption.AllDirectories)
+                                            .Count(p => !p.EndsWith(".meta"));
+
+            EnsureFolder("Assets/StructureContent_Parent_Probe");   // no-op guard: proves folder creation works
+            AssetDatabase.DeleteAsset("Assets/StructureContent_Parent_Probe");
+
+            string err = AssetDatabase.MoveAsset(ResourcesRoot, ArtRoot);
+            if (!string.IsNullOrEmpty(err))
+            {
+                Debug.LogError($"[Migrate] FOLDER MOVE FAILED '{ResourcesRoot}' -> '{ArtRoot}': {err}. " +
+                               "Nothing was moved — MoveAsset on a folder is all-or-nothing.");
+                return;
+            }
+            AssetDatabase.Refresh();
+
+            int after = System.IO.Directory.GetFiles(ArtRoot, "*", System.IO.SearchOption.AllDirectories)
+                                           .Count(p => !p.EndsWith(".meta"));
+            Debug.Log($"[Migrate] folder moved: {before} file(s) before -> {after} at the new root.");
+            if (before != after)
+            {
+                Debug.LogError($"[Migrate] FILE COUNT CHANGED ({before} -> {after}) — files were lost or duplicated " +
+                               "in the move. Investigate before building.");
+            }
+
+            // Mark ONLY what the catalog references. The rest rides along out of Resources (which is
+            // the size win) without needing an address it would never be loaded by.
+            var group = settings.FindGroup(GroupName) ?? settings.CreateGroup(
+                GroupName, setAsDefaultGroup: false, readOnly: false, postEvent: false,
+                schemasToCopy: null,
+                types: new[] { typeof(UnityEditor.AddressableAssets.Settings.GroupSchemas.BundledAssetGroupSchema),
+                               typeof(UnityEditor.AddressableAssets.Settings.GroupSchemas.ContentUpdateGroupSchema) });
+
+            int marked = 0;
+            foreach (var key in ReadCatalogArtKeys())
+            {
+                string rel = key.Substring("Structures/".Length);
+                string path = null;
+                foreach (var ext in new[] { ".prefab", ".fbx", ".png", ".jpg", ".jpeg", ".asset", ".mat", ".JPEG" })
+                    if (System.IO.File.Exists($"{ArtRoot}/{rel}{ext}")) { path = $"{ArtRoot}/{rel}{ext}"; break; }
+                if (path == null) continue;
+
+                string guid = AssetDatabase.AssetPathToGUID(path);
+                if (string.IsNullOrEmpty(guid)) continue;
+                var entry = settings.CreateOrMoveEntry(guid, group, readOnly: false, postEvent: false);
+                if (entry == null) continue;
+                entry.SetAddress(key, postEvent: false);   // address == the catalog's own key, verbatim
+                marked++;
+            }
+
+            settings.SetDirty(UnityEditor.AddressableAssets.Settings.AddressableAssetSettings
+                                  .ModificationEvent.BatchModification, null, true, true);
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+
+            Debug.Log($"[Migrate] marked {marked} catalog asset(s) addressable in '{GroupName}'.");
+            Debug.Log($"STRUCTURE_FOLDER_MOVE_OK {after} files, {marked} addressable");
+        }
+
+        /// <summary>
         /// Moves any orphaned "&lt;name&gt;.fbm" folder whose FBX has already been migrated, so the
         /// textures follow the model that owns them.
         /// <para>
