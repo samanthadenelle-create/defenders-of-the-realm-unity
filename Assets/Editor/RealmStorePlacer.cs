@@ -105,6 +105,47 @@ namespace DeNelle.Editor
         private const string OffsetKey = "RealmStore";
 
         /// <summary>
+        /// THE OWNER-RULED ORIENTATION CORRECTION for RealmStore.fbx, applied to the SKINNED CHILD as
+        /// <see cref="DeNelle.Village.SkinOptions.LocalRotation"/> — i.e. BEFORE Fit + SeatOnGround.
+        ///
+        /// <para>⛔ OWNER PROVENANCE, 2026-08-18, felt-test on the Seeker, quoted VERBATIM:
+        /// <c>"store is on its side needs rot 90 euler 0,0,90f"</c> and then, once upright,
+        /// <c>"after you stand it up, rotate it 180 degrees as its facing the wall"</c> +
+        /// <c>"this is realm store"</c>.
+        /// A manual=true owner correction is CANON and is NEVER overwritten by an automatic pass
+        /// (ARCHITECTURE_PRINCIPLES §4). Do not "tidy" this to zero because the .fbx.meta carries
+        /// bakeAxisConversion — the bake ran (commit f995c4706, flag verified in the meta, asset
+        /// reimported) and the building was STILL on its side on her screen: a device screenshot shows
+        /// the roof gable apex pointing screen-RIGHT, so this mesh's true up is its local +X.</para>
+        ///
+        /// <para>WHY THIS EULER, AS MECHANISM RATHER THAN AS A DIALLED NUMBER. Unity composes
+        /// <c>Quaternion.Euler</c> in Z→X→Y order about the PARENT's axes, and this rotation's parent
+        /// is the storefront root, which carries only the plaza-facing yaw. So (0, 180, 90) reads
+        /// exactly as she said it: roll +90 about Z FIRST (local +X → +Y, the gable apex swings from
+        /// horizontal to vertical and the building stands up), THEN yaw 180 about the root's up (it
+        /// stops presenting its front to the wall). One authored value, applied in one place.</para>
+        ///
+        /// <para>WHY THE CHILD AND NOT THE ROOT: the root's rotation is COMPUTED every run
+        /// (LookRotation toward the plaza centre), so anything written there is either recomputed away
+        /// or has to be smuggled into the facing maths — and the 180 would then be applied twice the
+        /// next time someone re-derived the facing. Putting the whole correction on LocalRotation also
+        /// puts it UPSTREAM of the fit: VisualFactory applies LocalRotation BEFORE Fit, so fit-to-height
+        /// measures the UPRIGHT axis. That second-order effect is the real bug — lying down, the fit
+        /// forced the model's 0.619 m short axis to 4 m (scale 6.46x) and sprawled a 4.7 x 6.5 m
+        /// footprint. Standing up first, the fit measures 0.728 m (scale 5.49x) and the footprint
+        /// shrinks with it. Same defect shape as WO-928's L3 Archer Tower.</para>
+        ///
+        /// <para>WHY NOT Offset Forge, even though this script reads that file: the placer reads only
+        /// the <c>"pos"</c> block for this key (see TryReadAuthoredPosition) — <c>"rot"</c> is never
+        /// read on this path, and no other consumer looks this id up (AttachmentOffsetRegistry is
+        /// keyed by hero attachment/mesh ids). A rotation written there would be INERT. Worse, this
+        /// row is flagged <c>axisBaked: true</c>, and <c>TripoAxisBake</c> REWRITES the rot of flagged
+        /// rows to zero — an authored value there would be silently deleted by the next auto pass,
+        /// which is precisely the §4 overwrite this comment exists to prevent.</para>
+        /// </summary>
+        private static readonly Quaternion AuthoredCorrection = Quaternion.Euler(0f, 180f, 90f);
+
+        /// <summary>
         /// The storefront's place in the town HEIGHT CADENCE, expressed the way every catalog row
         /// expresses it: a multiplier on <c>StructureFactory.YHeightVariable</c> (RepoProps.heightMul).
         /// 1.0 = the uniform building base (4 m). It is a MULTIPLIER, not a size, precisely so this
@@ -298,10 +339,13 @@ namespace DeNelle.Editor
             var opts = DeNelle.Village.SkinOptions.Structure(0f); // clears FitLargest; keeps SeatOnGround + Tripo fix
             opts.FitHeight = FitHeightMeters;                     // DERIVED from the town cadence
             opts.TraceId   = OffsetKey;                           // stamps the Xform value-trace lines
-            // NOTE: PreservePrefabRotation is deliberately LEFT FALSE. RealmStore.fbx carries
-            // bakeAxisConversion (f995c4706), so its axis correction is baked at IMPORT and the
-            // prefab-native pose is already upright — preserving a native rotation on top of that,
-            // or re-applying one of the ten retired -90 offsets, would compose into a wrong pose.
+            opts.LocalRotation = AuthoredCorrection;              // owner-ruled upright + facing (see the field)
+            // NOTE: PreservePrefabRotation is deliberately LEFT FALSE, and that is still right AFTER
+            // the 2026-08-18 correction below. The prefab-native pose captured on this asset is a 90
+            // X-PITCH; the pose it actually needs is a 90 Z-ROLL. Those are different axes, so
+            // reinstating the discarded native pose would have laid the storefront down a DIFFERENT
+            // way rather than standing it up — the native pose is itself wrong, and the DEF-232
+            // identity reset is not the defect here. The correction is AUTHORED, via LocalRotation.
 
             var visual = DeNelle.Village.VisualFactory.Skin(root.transform, model, opts);
             if (visual == null)
