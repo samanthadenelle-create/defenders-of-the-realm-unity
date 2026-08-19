@@ -1910,6 +1910,11 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e50e4c05ebe63f245b87e52ca7cb90ca
+    m_Address: gear/weapon/ShieldWithItemLogic
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e56f226c8eb73c04ba1f5576b3d1ae67
     m_Address: gear/weapon/Scythe2h_15
     m_ReadOnly: 0

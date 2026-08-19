@@ -72,6 +72,8 @@
       "icon": "🛡️",
       "job": "knight",
       "category": "shield",
+      "prefabPath": "gear/weapon/ShieldWithItemLogic",
+      "loadVia": "addressable",
       "rarity": "common",
       "defense": 0.03,
       "req": {
