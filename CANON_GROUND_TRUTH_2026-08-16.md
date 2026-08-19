@@ -1,3 +1,14 @@
+> ## ⚠ SUPERSEDED 2026-08-18 — the live anchor is `CANON_GROUND_TRUTH_2026-08-18.md`
+>
+> This file is FROZEN as a dated point-in-time ledger (CLAUDE.md §15) — its body is kept verbatim and
+> is NOT rewritten. Read the 08-18 anchor first; it wins on any conflict. Everything here that the
+> 08-18 anchor does not contradict still stands as history.
+>
+> ⚠ Specifically stale below: the header's `HEAD 210d4f2bb` snapshot, and any structure-orientation
+> reading — the 08-18 anchor records that the `f995c4706` axis-bake pass corrected `offsets.json`,
+> which is INERT for structures, while the live channels (`structures-catalog.json` orientation +
+> `HubStructureVisualInjector` `pitchDeg`) still carried the legacy `-90`.
+
 # CANON GROUND TRUTH — 2026-08-16
 
 **Supersedes `CANON_GROUND_TRUTH_2026-08-09.md`** (now bannered/frozen, along with the 08-07 anchor,

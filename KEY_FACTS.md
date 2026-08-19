@@ -1,9 +1,13 @@
-> ## ▶ LIVE ANCHOR = `CANON_GROUND_TRUTH_2026-08-09.md` — read it FIRST (refreshed here 2026-08-09)
+> ## ▶ LIVE ANCHOR = `CANON_GROUND_TRUTH_2026-08-18.md` — read it FIRST (refreshed here 2026-08-18)
 >
-> The `Latest (2026-08-09)` section immediately below is current. **Older dated `Latest (...)` sections
+> The `Latest (2026-08-18)` section immediately below is current. **Older dated `Latest (...)` sections
 > are history — where one disagrees with a newer section or with the anchor, the newer wins.**
-> The 08-08 anchor is bannered SUPERSEDED and is **INVERTED** on its two headline sections (the machine
-> block is resolved; the dungeon-stair hunt is closed). Do not act on it.
+> The 08-16 and 08-08 anchors are bannered SUPERSEDED. The 08-08 one is additionally **INVERTED** on
+> its two headline sections (the machine block is resolved; the dungeon-stair hunt is closed) — do not
+> act on it.
+>
+> *(This pointer read `CANON_GROUND_TRUTH_2026-08-09.md` until 2026-08-18 — it sat nine days stale and
+> skipped the 08-16 anchor entirely. Re-stamp it in the same change as any new anchor.)*
 >
 > Per CLAUDE.md §15 THIS file is LIVING — edited in place, never snapshotted. The `CANON_GROUND_TRUTH_*`
 > anchors are the dated snapshots.
@@ -37,6 +41,107 @@
   `docs/ARCHITECTURE_NORTH_STAR.md` (does the foundation grow into the dream).
 - **The operating dream:** the owner plays and rules; agents build in parallel lanes; every bug is
   a captured line; every system self-reports; the fleet + web bots verify before she ever has to.
+
+## Latest (2026-08-18) — the overnight loop: orientation, the sign-in forever-bug, CDN + R2 discipline
+
+*Anchor: `CANON_GROUND_TRUTH_2026-08-18.md` (file:line citations live there).*
+
+- **⛔ STRUCTURE ORIENTATION — `Assets/OffsetForge/offsets.json` IS INERT FOR STRUCTURES.** Nothing
+  resolves structure ids through `AttachmentOffsetRegistry` (it is keyed by **hero/enemy attachment
+  mesh ids**). `f995c4706` baked ten FBXs and zeroed ten offset rows — a no-op for the town. **The
+  LIVE channels are:** (a) `entry.orientation` in `structures-catalog.json`, applied at
+  `Assets/_Modules/Village/Catalog/StructureFactory.cs:151-158` **only when `manual == true`**
+  (auto-baked rows are advisory and deliberately not applied); (b) hardcoded `pitchDeg` on the `Swap`
+  rows in `Assets/_Modules/Village/HubStructureVisualInjector.cs` (~:81-91) for hub-scene swaps.
+  Both carried the legacy `-90`, so bake AND correction both applied = models lying down.
+- **`structures-catalog.json` version 22 → 23** (2026-08-18) — orientation zeroed for `forge`,
+  `workshop`, `jeweler`, `barracks`, `tower_ballista`. **Channel (b) was IN FLIGHT** when written.
+- **⛔ EIGHT `-90`s ARE CORRECT AND MUST STAY:** `pet-house`, `market`, `arcane-tower`,
+  `collector_farm`, `collector_lumbermill`, `lumberyard`, `foundry`, `silo`. Their FBX metas read
+  `bakeAxisConversion: 0`. **A "tidy up the -90s" pass breaks all eight**, incl.
+  `collector_lumbermill`, **the FTUE's first building**. The rule: **`-90` is legacy IFF that FBX's
+  meta says `bakeAxisConversion: 1`** — check the meta, per asset, every time.
+- **Headless gates CANNOT see orientation** (`f995c4706`'s own message: "sits correctly in the town is
+  a felt claim"). The instrument exists and was unused —
+  `Assets/Editor/WoodenWatchtowerBuilder.cs:277` `UprightAspectMin = 1.2f` (used at `:988`, `:1245`;
+  observed 1.70–1.92 upright vs 0.52–0.59 lying down). Filed **PROD-008**.
+- **Realm Store (PROD-003)** upright + facing the plaza via owner-authored
+  `Quaternion.Euler(0, 180, 90)` on `RealmStorePlacer`'s `opts.LocalRotation`. Owner verbatim:
+  *"store is on its side needs rot 90 euler 0,0,90f"* → *"after you stand it up, rotate it 180
+  degrees as its facing the wall"*. ⚠ **Deliberately NOT in Offset Forge** —
+  `Assets/Editor/TripoAxisBake.cs:147-154` auto-rewrites the `rot` of `axisBaked` rows toward `0.0`,
+  so a hand-dialled value parked there is destroyed by the next pass. Measured: scale 5.49,
+  boundsSize (5.12, 4.00, 6.35), collider (3.400, 4.000, 5.503), height exactly 4.00 m,
+  `REALM_STORE_REACHABLE_OK nearest walkable 0.08m`.
+- **⛔ SIGN-IN GATE (PROD-006) — a wallet-only player would have seen SIGN IN on EVERY LAUNCH,
+  FOREVER.** `LoginPanelController`'s gate read ONLY `FirebaseAuthService.Instance.IsSignedIn`, but
+  this build's identity law (same file, ~:556-557) is that **email/Google success binds NOTHING —
+  only the wallet path re-keys the save.** Not a race: wallet published `connected=True` at
+  20:21:38.597, the gate decided at 20:21:43.478. Fixed with a pure
+  `LoginPanelController.ShouldContinueWithoutLogin(walletConnected, walletIdentityBound,
+  firebaseSignedIn)` + `GameStateService.HasAttestedWalletIdentity` (persisted key + device
+  attestation, **true synchronously at boot**). **No timing constant added.** Pinned by
+  `Assets/Editor/Regression/LoginGateRegression.cs` (`[login-gate]`).
+- **MWA session sealing WORKS** — `auto-resume: sealed session present`, `MWA session found for
+  CHKK...sfkC`, silent reauthorize ~3.3 s, `auto-resume SUCCEEDED - connected at boot with no player
+  action`. `6e9f86cc3` is doing its job; **only the gate ignored it** — do not re-debug MWA from the
+  sign-in symptom.
+- **CDN, measured on the 2026-08-18 build:** exactly two remote Addressables groups —
+  `Structure_Art` **19.71 MiB** + `Enemy_Art` **64.45 MiB** = **~84.26 MiB first run**.
+  `m_UseAssetBundleCache: 1` on both → one-time **PER BUILD** (content-hashed names mean each new APK
+  re-downloads). Both `PackTogether` with **ZERO labels authored** (78 enemy + 35 structure entries,
+  all `m_SerializedLabels: []`) → **all-or-nothing**, no partial-fetch axis.
+- **`Assets/_Modules/Core/Addressables/StructureAssetLoader.cs` (~:99-100) uses synchronous
+  `WaitForCompletion` — a MAIN-THREAD FREEZE, not async pop-in** — and so do its **five siblings**
+  (`AudioAssetLoader`, `EnemyAssetLoader`, `HeroAssetLoader`, `HeroTextureLoader`, `VfxAssetLoader`).
+  **No Addressables prewarm exists anywhere in the project.** Worst stall = **FTUE beat 7/8
+  `founding_defend`**, which resolves the 64.45 MiB enemy bundle through that blocking call **as
+  combat opens**. Filed **PROD-009/010**.
+- **⛔ WHY "KEEP THE CDN" (owner ruling) WAS RIGHT:** `m_DisableCatalogUpdateOnStart: 0` → already-
+  installed APKs adopt the new remote catalog at launch. Re-pointing an asset local would make
+  existing players resolve a path that **does not exist inside their installed build** — **invisible
+  buildings for everyone already playing**, with no client change. Re-grouping rehashes bundles and
+  forces a full re-download for every existing player.
+- **R2 shipping (PROD-011):** every APK build REQUIRES a fresh
+  `python tools/r2_sync.py --push ServerData` — **`ServerData`, NOT `ServerData/Android`** (relpath
+  keying flattens the latter to the bucket root). ⚠ **The docstring at `tools/r2_sync.py:22` still
+  documents the wrong form** — do not copy it. Push **AFTER the build, BEFORE the device install**.
+  `--check` proves credentials only, never that your catalog's bundles are present; `--push` skips by
+  **SIZE not hash** and `catalog_*.hash` is always exactly 32 bytes. **No gate exists for an
+  APK-vs-bucket mismatch** — `16e22dba3`: *"NO GATE COULD HAVE CAUGHT THIS."* Tonight a build shipped
+  with an enemy bundle that had never been uploaded; caught by hand.
+- **Monetization stays OFF** (verified at source): `FeatureFlags.RealmStorePurchase` `defaultOn:
+  false`; Buy CTA renders "Coming soon"; `Purchase()` refuses at entry; `WalletService.Pay`/`PayFlat`
+  refuse for the stub; Devnet with a hard mainnet block; `Web3.Wallet` is **never assigned anywhere**
+  so `SendPayment` cannot construct a transfer. ⚠ Deliberate asymmetry pinned by
+  `Assets/Editor/Regression/PromoRedeemEntryRegression.cs:292` — the store **ENTRY is NOT gated** on
+  that flag (it gates BUYING; redeeming spends nothing). Do not "fix" the entry by gating it.
+  **Two HARD blockers before real money:** no server-authoritative economy
+  (`api/game/save.js:404-421` is an explicit built-to-flip seam — a client can set its own crystal
+  balance up to `MAX_RESOURCE`) and no payment-verification endpoint (`@solana/web3.js` is not even a
+  dependency). Flipping the flag on devnet would grant real pack contents for worthless tokens and
+  emit `purchase_completed` events **indistinguishable from real revenue**.
+- **Security fix, UNCOMMITTED at time of writing / NOT DEPLOYED (promotion is the owner's call):**
+  `api/promo/redeem.js` + `api/referral/claim.js` now require the signed wallet rail
+  (`X-Wallet`/`X-Nonce`/`X-Signature`) via a new **`authenticateGranting()`** in
+  `api/_lib/wallet-auth.js` (`:31` — *"⛔ ROUTES THAT GRANT VALUE CALL authenticateGranting(), NOT
+  authenticate()"*). The guest rail was **self-asserted bearer trust** — `verifyGuest` regex-checks
+  `^guest-local-[0-9a-f]{64}$` and echoes it back; the id is client-minted and unsigned
+  (`api/DEPLOY.md:48`), so an attacker could mint unlimited identities to burn `max_redemptions` and
+  bypass `per_player_limit`. ⚠ **BREAKING: guest players lose promo redemption and referral
+  claiming.** `TEST10` (10 crystals, active, uncapped, unbound), previously seeded unconditionally by
+  `api/schema.sql`, is now opt-in behind `SET dotr.seed_test_codes = 'on';`
+  (`api/DB_SETUP.md:82-83`, `:209-223`).
+- **Known-red regression baseline: 4** — `CaravanStatusChip` (UI-OBSIDIAN), `vfx-self-contained`,
+  `vfx-null-slot` (awaiting owner ruling), `WANDERER BUBBLE x4` (needs a dungeon **re-bake in an
+  isolated worktree**). **Two NEW reds tonight were FIXED AT SOURCE, not baselined:**
+  `[fallback-parity] tower_ballista` code/JSON drift, and a **hollow pass** in the newly written
+  `LoginGateRegression`. *(Never restate a suite COUNT from a doc — read the `Builds/` markers.)*
+- **Open owner rulings — do NOT answer these:** PROD-012 is-internet-required; pack pricing (five SKUs
+  above the $5 early-access cap, up to $49.99); mainnet; the Realm Store vendor NPC body; storefront
+  height 4 m vs the 1.25 landmark tier; `vfx-null-slot` retag-or-repair.
+- **IN FLIGHT when written:** the hub-injector orientation lane (channel (b)); the gear seating lane —
+  a prop measured `worldBounds=(0,0,0)` and a **`parent-scale compensate` firing every frame**.
 
 ## Latest (2026-08-15 late) — Grok-stack audit + gate-red fix wave (this seat)
 - **The 10-commit pushed stack `fba0b1079..0e4690036` (WO-896 talent tree, WO-986 CoC footprints, portals,

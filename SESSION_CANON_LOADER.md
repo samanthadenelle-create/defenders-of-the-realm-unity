@@ -1,4 +1,11 @@
-> ## ▶ REFRESHED 2026-08-09 — the live anchor is `CANON_GROUND_TRUTH_2026-08-09.md`
+> ## ▶ REFRESHED 2026-08-18 — the live anchor is `CANON_GROUND_TRUTH_2026-08-18.md`
+>
+> The **08-18 LIVE THREAD** below is current; every thread under it is SUPERSEDED and kept as history.
+> *(This banner read "REFRESHED 2026-08-09 / anchor 08-09" until tonight — nine days stale, and it
+> disagreed with the LIVE THREAD directly beneath it, which had been re-anchored to 08-16. Re-stamp
+> both in the same change as any new anchor.)*
+>
+> ## ⚠ (previous) REFRESHED 2026-08-09 — SUPERSEDED 2026-08-18
 >
 > The **08-09 LIVE THREAD** below is current; every thread under it is SUPERSEDED and kept as history.
 > The 08-08 anchor is bannered and is **INVERTED** on its two headline sections (the machine block is
@@ -7,7 +14,69 @@
 > Per CLAUDE.md §15 the newest `CANON_GROUND_TRUTH_<date>.md` wins on any conflict with this file.
 # DeNelle Studios — Project Canon Loader
 
-> ## ▶ LIVE THREAD (2026-08-09) — READ BEFORE WORKING *(header re-anchored 2026-08-10 morning)*
+> ## ▶ LIVE THREAD (2026-08-18) — READ BEFORE WORKING
+> **Reality anchor = `CANON_GROUND_TRUTH_2026-08-18.md`** (minted tonight; the 08-16 anchor is now
+> bannered/frozen). Branch `wip/village2-and-f8-tickets`. **This block records NO HEAD sha, NO
+> commits-ahead, NO suite count and NO next-free WO number** — read them off `git status` /
+> `git rev-list origin/..HEAD`, the MARKER files under `Builds/`, and the `CLI_LANES_WO_NUMBERS.md`
+> banner (sole authority, two disjoint blocks). Save schema version → read
+> `SaveSchema.CurrentVersion` at `Assets/_Modules/Core/State/SaveSchema.cs:41`. One committer, staged
+> by explicit path, never `git add -A`.
+>
+> **Current state, in one breath.** This is a LIVE game on the Solana dApp Store, so the blast radius
+> of a content change lands on installed devices, not on this tree. Tonight's overnight loop turned on
+> one lesson: **a correction pass corrected the wrong file, twice.** `f995c4706` baked ten structure
+> FBXs upright and zeroed ten rows in `Assets/OffsetForge/offsets.json` — **but those rows are INERT
+> for structures** (`AttachmentOffsetRegistry` is keyed by hero/enemy attachment mesh ids). The live
+> orientation channels are `entry.orientation` in `structures-catalog.json`
+> (`Assets/_Modules/Village/Catalog/StructureFactory.cs:151-158`, applied only when `manual == true`)
+> and hardcoded `pitchDeg` in `Assets/_Modules/Village/HubStructureVisualInjector.cs` (~:81-91). Both
+> still carried the legacy `-90`, so bake **and** correction both applied and the models lay down. The
+> catalog channel was fixed for five ids (catalog **version 22 → 23**); **the hub-injector channel was
+> IN FLIGHT at time of writing.** **No headless gate can see orientation** — the instrument for it
+> exists unused at `Assets/Editor/WoodenWatchtowerBuilder.cs:277` (`UprightAspectMin = 1.2f`; 1.70–1.92
+> upright vs 0.52–0.59 flat), filed **PROD-008**.
+>
+> **⛔ THE ONE LINE TO CARRY OUT OF THIS BLOCK: eight `-90`s are CORRECT AND MUST STAY** —
+> `pet-house`, `market`, `arcane-tower`, `collector_farm`, `collector_lumbermill`, `lumberyard`,
+> `foundry`, `silo`. Their FBX metas read `bakeAxisConversion: 0`, so the `-90` is what stands them
+> up. A "tidy up the remaining -90s" pass lays all eight down, **including `collector_lumbermill`,
+> the FTUE's first building.** The rule is **"-90 is legacy IFF that FBX's meta says
+> `bakeAxisConversion: 1`"** — check the meta, per asset, every time.
+>
+> **Also settled tonight (see the anchor for file:line):** the **sign-in gate (PROD-006)** would have
+> shown SIGN IN on every launch **forever** for a wallet-only player, because it read only
+> `FirebaseAuthService.IsSignedIn` while the identity law says only the wallet path binds — fixed with
+> a pure `ShouldContinueWithoutLogin(...)` + `GameStateService.HasAttestedWalletIdentity`, **no timing
+> constant**, pinned `[login-gate]`; **MWA session sealing WORKS** (`6e9f86cc3`) and only the gate was
+> ignoring it; the **Realm Store (PROD-003)** stands via an owner-authored
+> `Quaternion.Euler(0, 180, 90)` and is **deliberately NOT in Offset Forge**
+> (`Assets/Editor/TripoAxisBake.cs:147-154` auto-rewrites baked rows); the **CDN is ~84.26 MiB across
+> two unlabelled remote groups** pulled through a **synchronous main-thread `WaitForCompletion`** with
+> **no prewarm** (PROD-009/010), and **keeping the CDN was RIGHT** because
+> `m_DisableCatalogUpdateOnStart: 0` means going local = invisible buildings for installed players;
+> **every APK build REQUIRES `python tools/r2_sync.py --push ServerData`** (NOT `ServerData/Android`;
+> the docstring at `tools/r2_sync.py:22` is wrong) with **no gate to catch a mismatch** (PROD-011);
+> **monetization stays OFF** behind five independent refusals plus two hard blockers (no
+> server-authoritative economy, no payment verification); and an **api/ security fix moving
+> grant-bearing endpoints to the signed wallet rail is UNCOMMITTED and NOT DEPLOYED** — ⚠ it
+> **BREAKS guest promo redemption and referral claiming**, so deploying is the owner's call.
+>
+> **Known-red baseline: 4** (`CaravanStatusChip`, `vfx-self-contained`, `vfx-null-slot` — awaiting
+> owner ruling, `WANDERER BUBBLE x4` — needs a dungeon re-bake in an **isolated worktree**). Two new
+> reds tonight were **fixed at source, not baselined**. **Never restate a suite count from a doc** —
+> the three entry points emit DISTINCT markers (`REGRESSION_OK` / `CHECKIN_SUITE_OK` /
+> `SESSION_GUARDS_OK`).
+>
+> **IN FLIGHT when written:** the hub-injector orientation lane; the gear seating lane (a prop
+> measured `worldBounds=(0,0,0)` and a `parent-scale compensate` firing **every frame**). Re-verify
+> both at source before acting.
+>
+> **Open owner rulings — do NOT answer these:** PROD-012 is-internet-required · pack pricing (five
+> SKUs above the $5 early-access cap, up to $49.99) · mainnet · the Realm Store vendor NPC body ·
+> storefront height 4 m vs the 1.25 landmark tier · `vfx-null-slot` retag-or-repair.
+
+> ## ▶ LIVE THREAD (2026-08-09) — SUPERSEDED (see 08-18 above) *(header re-anchored 2026-08-10 morning)*
 > **Reality anchor = `CANON_GROUND_TRUTH_2026-08-16.md`** (minted 2026-08-16; 08-09 and 08-07 are now
 > bannered/frozen). ⚠ The HEAD/gate/tree lines in the rest of THIS block are the 08-09/08-10 snapshot —
 > read the 08-16 anchor and `git status` for current state. Branch
