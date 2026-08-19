@@ -115,6 +115,37 @@ if (-not $SkipApk) {
     Say ("     OK  {0:N0} MB  {1}  (release-signed)" -f ((Get-Item $apkPath).Length/1MB), (Get-Item $apkPath).LastWriteTime)
 } else { Say "2/4 APK SKIPPED" }
 
+# --- 2b) R2 CONTENT PARITY (PROD-011) ---------------------------------------
+# WHY THIS EXISTS: Structure_Art and Enemy_Art are REMOTE Addressables groups
+# served from R2, and their bundle names are CONTENT-HASHED - so every build
+# emits new bundle names that must be uploaded. Miss the upload and the game
+# does NOT crash: StructureAssetLoader finds the address registered, the remote
+# load returns null, and Assets/Resources/Structures + /Enemies no longer exist
+# as a fallback, so the player gets PLACEHOLDER GEOMETRY. Silent to the player,
+# invisible to every other gate. On 2026-08-18 an APK sat on disk ready to
+# install whose enemy bundle had never been uploaded at all; it was caught by
+# hand. 16e22dba3 conceded in its own body: "NO GATE COULD HAVE CAUGHT THIS."
+# This is that gate. It runs AFTER the APK (the Addressables content build
+# happens inside BuildSeekerApk) and BEFORE distribution.
+if (-not $SkipApk) {
+    Say "2b/4 R2 content parity ..."
+    $parityLog = Join-Path $proj 'Builds\r2-parity.log'
+    & python (Join-Path $proj 'tools\r2_sync.py') --verify-catalog *>&1 | Tee-Object -FilePath $parityLog
+    # Judge by the MARKER on a fresh log, never the exit code - this project's
+    # runners exit 0 on refusals (memory: gates-report-success-without-proving-it).
+    if (-not (Test-Path $parityLog)) { Die "r2 parity produced no log - cannot prove content is hosted" 16 }
+    if (-not (Select-String -Path $parityLog -Pattern 'R2_PARITY_OK' -Quiet)) {
+        Write-Host ""
+        Write-Host "  The APK references remote bundles that are NOT in the bucket."
+        Write-Host "  Players would see placeholder buildings/enemies with no error."
+        Write-Host "  FIX:  python tools\r2_sync.py --push ServerData     <-- the PARENT folder"
+        Write-Host "        (never 'ServerData/Android' - that flattens keys to the bucket root)"
+        Write-Host "  Then re-run this chain. See Builds\r2-parity.log"
+        Die "R2 content parity FAILED - refusing to distribute a build whose content is not hosted" 16
+    }
+    Say "     OK  $((Select-String -Path $parityLog -Pattern 'R2_PARITY_OK' | Select-Object -First 1).Line.Trim())"
+} else { Say "2b/4 R2 parity SKIPPED (no APK built)" }
+
 # --- 3) FIREBASE APP DISTRIBUTION -------------------------------------------
 if (-not $SkipFirebase) {
     if (-not (Test-Path $apkPath)) { Die "no APK to distribute" 14 }
