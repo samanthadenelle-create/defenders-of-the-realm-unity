@@ -148,7 +148,18 @@ namespace DeNelle.Editor
             // Min SDK 26 (Android 8) — the Seeker ships with Android 13 (API 33),
             // and 26 is the modern floor for IL2CPP / 64-bit Play Store policy.
             PlayerSettings.Android.minSdkVersion = AndroidSdkVersions.AndroidApiLevel26;
-            PlayerSettings.Android.targetSdkVersion = AndroidSdkVersions.AndroidApiLevelAuto;
+
+            // ⛔ TARGET SDK IS PINNED, NOT AUTO (store-readiness audit 2026-08-19).
+            // This read `AndroidApiLevelAuto`, which resolves to the HIGHEST SDK INSTALLED ON THE
+            // BUILD MACHINE — so the shipped targetSdkVersion was a property of whoever built it,
+            // not of the project, and could not be known by reading the repo. Two machines building
+            // the same commit could submit two different declared targets, and a store listing's
+            // compatibility claims derive from this number.
+            // 36 is what Auto has been resolving to here (the APK installed on the Seeker
+            // 2026-08-18 reports `targetSdk=36` under `dumpsys package`), so pinning it changes
+            // NOTHING about today's binary — it only makes today's binary reproducible.
+            // Raise this deliberately when a store policy floor moves; never return it to Auto.
+            PlayerSettings.Android.targetSdkVersion = AndroidSdkVersions.AndroidApiLevel36;
 
             // RELEASE SIGNING (owner 2026-07-16 — testers must be able to UPDATE IN PLACE, which
             // needs a STABLE signature across builds). Read the keystore + passwords from a

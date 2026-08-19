@@ -129,8 +129,11 @@ if (-not $SkipApk) {
 # happens inside BuildSeekerApk) and BEFORE distribution.
 if (-not $SkipApk) {
     Say "2b/4 R2 content parity ..."
+    # EXPLICIT TARGET FOLDER (2026-08-19): ServerData holds BOTH Android and StandaloneWindows64,
+    # and bare --verify-catalog refuses to guess ("FAIL: cannot pick a build target"). Bare form =
+    # no marker = this chain Dies at the parity step for a reason unrelated to parity.
     $parityLog = Join-Path $proj 'Builds\r2-parity.log'
-    & python (Join-Path $proj 'tools\r2_sync.py') --verify-catalog *>&1 | Tee-Object -FilePath $parityLog
+    & python (Join-Path $proj 'tools\r2_sync.py') --verify-catalog ServerData/Android *>&1 | Tee-Object -FilePath $parityLog
     # Judge by the MARKER on a fresh log, never the exit code - this project's
     # runners exit 0 on refusals (memory: gates-report-success-without-proving-it).
     if (-not (Test-Path $parityLog)) { Die "r2 parity produced no log - cannot prove content is hosted" 16 }
