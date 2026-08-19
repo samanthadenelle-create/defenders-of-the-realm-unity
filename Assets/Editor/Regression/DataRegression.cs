@@ -475,6 +475,8 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "wallet-provider suite", () => { if (!WalletProviderSelectionRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[wallet-provider] " + r); });
             // --- wallet session (2026-08-17): the MWA grant survives a relaunch (she force-quit and was asked to connect again), is SEALED not plaintext, is BOUND to its wallet, is cleared on disconnect, and is never logged ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "wallet-session suite", () => { if (!DeNelle.Editor.Regression.WalletSessionPersistenceRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[wallet-session] " + r); });
+            // --- login gate (2026-08-18): her wallet auto-resumed at boot and the SIGN IN wall was presented anyway 5s later. The gate read Firebase ONLY on a wallet-first build; it must continue for connected OR attested-bound OR signed-in, and still present on a genuine first run ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "login-gate suite", () => { if (!DeNelle.Editor.Regression.LoginGateRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[login-gate] " + r); });
             // --- promo redeem door: the Realm Store's ungated Redeem-a-Code entry routes through PromoCodeService, never logs the code, gives every failure its own canon sentence in both copies, and grants on the uncapped pack seam ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "promo-redeem-entry suite", () => { if (!PromoRedeemEntryRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[promo-redeem-entry] " + r); });
             // --- WO-835 action bar: Core applicability model invariants + View purity ---
@@ -879,6 +881,17 @@ namespace DeNelle.Editor
             // mirror unparseable) with every marker green. Pins the shield_A rows through
             // the real Resources-first read path + the WO-994 seat-drift tripwire wiring.
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "attachment-offset suite", () => { if (!DeNelle.Editor.Regression.AttachmentOffsetRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[attachment-offset] " + r); });
+
+            // --- GEAR PROP RENDERS (owner report 2026-08-18, build 2026.08.19.331306:
+            // "shield is missing and sword is now wrong"). The device trace carried
+            // "parent-scale compensate: ... -> worldBounds=(0, 0, 0)" — a held prop with no
+            // volume at all. Every existing gate was green for that build, because they all
+            // ask "did the pipeline RUN" and none asks "does what it produced have VOLUME".
+            // Also pins the address half: c072e5736 records weapons.json naming
+            // "gear/weapon/ShieldWithItemLogic" while no group published it, so the load
+            // failed and the equip fell back to the legacy mesh — the swap looked done and
+            // changed nothing, silently, in a shippable tree.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "gear-prop-renders suite", () => { if (!DeNelle.Editor.GearPropRendersRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[gear-prop-renders] " + r); });
 
             // --- ECHO WORLD PRESENCE (WO-1108 Lane B, 2026-08-16): the owner's rule is
             // "it takes you to the gate, gives you your dialogue, then it disappears... The

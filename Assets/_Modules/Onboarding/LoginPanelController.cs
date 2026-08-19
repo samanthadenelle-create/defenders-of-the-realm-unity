@@ -40,6 +40,7 @@ using Cysharp.Threading.Tasks;
 using DeNelle.Core.Auth;
 using DeNelle.Core.Diagnostics;
 using DeNelle.Core.Platform;
+using DeNelle.Core.State;
 using DeNelle.Core.UI;
 using TMPro;
 using UnityEngine;
@@ -88,10 +89,41 @@ namespace DeNelle.Onboarding
         }
 
         /// <summary>
-        /// Init-aware boot entry: if a returning player is already signed in (Firebase
-        /// caches the session), continue straight through; otherwise present the
-        /// login-or-guest surface. Safe if Firebase init fails — falls through to the
-        /// panel, where Play-as-Guest always works, so the boot flow can never lock.
+        /// THE GATE DECISION, pure and testable (2026-08-18 defect: the owner's wallet
+        /// auto-resumed at boot and the SIGN IN panel was presented anyway ~5s later —
+        /// device capture 20:21:38 "auto-resume SUCCEEDED", 20:21:43 LoginPanelController.Build).
+        /// <para>
+        /// ROOT CAUSE (fixed here): this gate read ONE source — <c>FirebaseAuthService.IsSignedIn</c>
+        /// — while the identity that actually keys this game is the WALLET (see the identity law in
+        /// <see cref="HandleOutcome"/>: "Firebase = ACCESS, the wallet = DATA identity"). A player who
+        /// has only ever connected a wallet is not Firebase-signed-in, so the gate presented the
+        /// login surface on TOP of an already-connected, already-bound session.
+        /// </para>
+        /// <para>
+        /// <paramref name="walletIdentityBound"/> is the RACE-PROOF half: it comes from the persisted
+        /// save + this device's attestation, so it is true SYNCHRONOUSLY at boot — before any silent
+        /// reconnect finishes. That is why this fix needs no delay, no timeout and no extra await.
+        /// <paramref name="walletConnected"/> is the live published state for the in-session case.
+        /// </para>
+        /// <para>FIRST RUN IS PRESERVED: a genuine first run has no connected wallet, no attested
+        /// bound identity (its save key is the <c>guest-local-</c> device hash, which is not
+        /// cloud-identity-shaped) and no Firebase session — all three inputs are false, so this
+        /// returns false and the panel presents. That is its one legitimate purpose.</para>
+        /// </summary>
+        public static bool ShouldContinueWithoutLogin(bool walletConnected, bool walletIdentityBound,
+                                                      bool firebaseSignedIn)
+            => walletConnected || walletIdentityBound || firebaseSignedIn;
+
+        /// <summary>
+        /// Init-aware boot entry: if the player is ALREADY IN — a connected wallet, an
+        /// attested wallet-bound save, or a cached Firebase session — continue straight
+        /// through; otherwise present the login-or-guest surface. Safe if Firebase init
+        /// fails — falls through to the panel, where Play-as-Guest always works, so the
+        /// boot flow can never lock.
+        /// <para>CORRECTED 2026-08-18: this doc used to say "already signed in (Firebase caches the
+        /// session)" and the code matched it — Firebase-only. On a wallet-first Android build that
+        /// is the wrong source, and it re-prompted a player whose wallet had just auto-resumed. The
+        /// decision now lives in <see cref="ShouldContinueWithoutLogin"/>.</para>
         /// </summary>
         public static async void PresentOrContinue(Action onContinue)
         {
@@ -116,9 +148,32 @@ namespace DeNelle.Onboarding
             }
             catch (Exception e) { FlowTrace.Warn("Auth", "login init check threw: " + e.Message); }
 
-            if (signedIn)
+            // The WALLET is the data identity, so it is sampled here and not assumed:
+            //   * walletConnected      - live published state (CurrencySkinResolver.PublishWalletConnected,
+            //                            raised by the Wallet assembly on connect AND on silent auto-resume);
+            //   * walletIdentityBound  - the persisted, provider-ATTESTED save key. Available with no
+            //                            await, which is what makes the boot-time resume race a non-event.
+            bool walletConnected = false, walletIdentityBound = false;
+            Guard.Try("Auth", "sample wallet state for the login gate", () =>
             {
-                FlowTrace.Step("Auth", "already signed in — skipping login, continuing.");
+                walletConnected = CurrencySkinResolver.IsWalletConnected;
+                var svc = GameStateService.Instance;
+                walletIdentityBound = svc != null && svc.HasAttestedWalletIdentity;
+            });
+
+            bool continueIn = ShouldContinueWithoutLogin(walletConnected, walletIdentityBound, signedIn);
+
+            // §1.4b: the decision AND every input it was made from, so the next reader never has to
+            // guess WHY the panel appeared. A trace that cannot report the wrong outcome is decoration.
+            FlowTrace.Step("Auth",
+                "login gate decision=" + (continueIn ? "CONTINUE" : "PRESENT") +
+                " (walletConnected=" + walletConnected +
+                " wallet=" + (walletConnected ? CurrencySkinResolver.ConnectedWalletShortAddress : "none") +
+                ", walletIdentityBound=" + walletIdentityBound +
+                ", firebaseSignedIn=" + signedIn + ").");
+
+            if (continueIn)
+            {
                 onContinue?.Invoke();
                 return;
             }

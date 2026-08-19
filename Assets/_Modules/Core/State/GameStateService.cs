@@ -1299,6 +1299,14 @@ namespace DeNelle.Core.State
         /// <para>ALLOWLIST, not a denylist (see the block comment above): shape AND attestation AND
         /// currency. Anything that has not been vouched for by a real signing wallet on THIS device
         /// stays local, so a stub/UID/debug string can never reach a shared cloud row.</para></summary>
+        /// <summary>Read-only public face of <see cref="IsRealWalletConnected"/> for callers that must
+        /// answer "is this player ALREADY identified by a real wallet?" without touching sync internals —
+        /// notably the boot login gate (LoginPanelController.ShouldContinueWithoutLogin, 2026-08-18), which
+        /// must not re-prompt a returning wallet player. Synchronous and race-proof: it reads the persisted
+        /// save key plus this device's attestation, so it is already true before any boot-time silent
+        /// reconnect completes. A guest / unattested / unbound save returns false.</summary>
+        public bool HasAttestedWalletIdentity => IsRealWalletConnected();
+
         private bool IsRealWalletConnected()
         {
             string id = _state?.BoundWallet;
