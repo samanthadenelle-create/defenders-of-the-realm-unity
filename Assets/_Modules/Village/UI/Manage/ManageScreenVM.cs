@@ -1013,8 +1013,23 @@ namespace DeNelle.Village.UI
                 Rebuild();
                 return;
             }
-            Notice = svc.WatchAdToSkip(channel, jobId) ? "Time skipped." : "No ad available right now.";
+            // WO-1125: ASYNC. The bool overload answers "was the reward earned", which is
+            // unanswerable at return time once a real SDK is wired - this screen would tell a
+            // player who just watched thirty seconds of video "No ad available right now."
             NoticeIsBrokeCase = false;
+            svc.WatchAdToSkip(channel, jobId, result =>
+            {
+                if (result.Rewarded)
+                    Notice = "Time skipped.";
+                else if (result.Reason == DeNelle.Core.Ads.AdUnavailableReason.Abandoned)
+                    Notice = "Ad closed early - no time skipped.";   // their choice, not a failure
+                else if (result.Reason == DeNelle.Core.Ads.AdUnavailableReason.CappedByGame)
+                    Notice = "You have used your ad skips for now.";  // OUR cap, said plainly
+                else
+                    Notice = "No ad available right now.";
+                NoticeIsBrokeCase = false;
+                Rebuild();
+            });
             Rebuild();
         }
 

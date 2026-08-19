@@ -19,6 +19,7 @@
 // =============================================================================
 
 using System;
+using DeNelle.Core.Ads;
 using UnityEngine;
 
 namespace DeNelle.Village
@@ -119,6 +120,115 @@ namespace DeNelle.Village
             if (presented) _lastShownRealtime = Time.realtimeSinceStartup;
 
             return granted;
+        }
+
+        /// <summary>
+        /// WO-1125 — THE ASYNC CONTRACT. Presents a rewarded ad and reports the outcome through
+        /// <paramref name="onComplete"/> WHEN THE AD FINISHES, which is the only shape a real SDK
+        /// can honour. Returns true when presentation STARTED (so the caller can show a spinner or
+        /// disable the button); it does NOT mean a reward was earned.
+        ///
+        /// <para>WHY THE SYNCHRONOUS <see cref="TryShowAd(Action)"/> CANNOT BE USED WITH A REAL SDK.
+        /// That method returns `granted`, which is only true if the reward callback fired BEFORE it
+        /// returned. A real network presents a full-screen ad and calls back seconds later, so
+        /// `granted` is ALWAYS false at return time. The player watches the whole ad, earns the
+        /// reward, and the caller reports failure - `ManageScreenVM` would say "No ad available
+        /// right now." to someone who just sat through thirty seconds of video. The file has warned
+        /// about this since it was written ("an override will need this bool contract revisited
+        /// (present -> await callback -> grant), not just filled in"); this is that revisit.</para>
+        ///
+        /// <para>THE GRANT STILL COMES FROM THE SDK, NEVER FROM US. <paramref name="onReward"/> is
+        /// invoked only from a genuine earned-reward callback. <paramref name="onComplete"/> reports
+        /// what happened either way, so a caller can tell "dismissed early" (no reward, say so
+        /// honestly) from "never presented" (offer a retry) - a distinction the bool could not make.</para>
+        ///
+        /// <para>Cooldown is spent on PRESENTATION, matching the sync path: a refusal must never
+        /// lock the player out of retrying.</para>
+        /// </summary>
+        public bool RequestAd(Action onReward, Action<AdShowResult> onComplete)
+        {
+            if (!DeNelle.Core.FeatureFlags.RewardedAdSkip)
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Once("Ads", "flagoff-async",
+                    "RequestAd refused: ff.rewardedadskip is OFF (no ad SDK is wired). " +
+                    "No ad is shown and NO reward is granted.");
+                onComplete?.Invoke(AdShowResult.Unavailable(AdUnavailableReason.Disabled));
+                return false;
+            }
+
+            if (!IsAdReady)
+            {
+                // CappedByGame, not NoFill: OUR cooldown said no, not the network. Telemetry
+                // must never confuse the two - that distinction is the launch metric.
+                onComplete?.Invoke(AdShowResult.Unavailable(AdUnavailableReason.CappedByGame));
+                return false;
+            }
+
+            // ONE-SHOT GUARD. An SDK that fires its callbacks twice (or a completion racing a
+            // dismissal) must never grant twice - the reward here is real player value.
+            bool settled = false;
+            bool granted = false;
+
+            Action onRewardEarned = () =>
+            {
+                if (settled) return;
+                granted = true;
+                DeNelle.Core.Diagnostics.Guard.Try("Ads", "rewarded grant", () => onReward?.Invoke());
+            };
+
+            Action<AdShowResult> onSettled = result =>
+            {
+                if (settled)
+                {
+                    DeNelle.Core.Diagnostics.FlowTrace.Warn("Ads",
+                        $"rewarded completion fired TWICE (second={result}) - ignored. " +
+                        "The grant is one-shot; a double callback can never pay twice.");
+                    return;
+                }
+                settled = true;
+
+                // Trust the SDK's outcome, but never pay for an outcome that did not grant.
+                if (result.Rewarded && !granted)
+                    DeNelle.Core.Diagnostics.FlowTrace.Warn("Ads",
+                        "SDK reported Rewarded but no earned-reward callback ever fired - " +
+                        "NOT granting. The grant may only come from the reward callback itself.");
+
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Ads",
+                    $"rewarded presentation settled: outcome={result} granted={granted}");
+                DeNelle.Core.Diagnostics.Guard.Try("Ads", "rewarded onComplete",
+                    () => onComplete?.Invoke(result));
+            };
+
+            bool presented = false;
+            DeNelle.Core.Diagnostics.Guard.Try("Ads", "RewardedAdManager.ShowAdInternal(async)",
+                () => { presented = ShowAdInternal(onRewardEarned, onSettled); });
+
+            if (presented) _lastShownRealtime = Time.realtimeSinceStartup;
+            else if (!settled) onSettled(AdShowResult.Unavailable(AdUnavailableReason.LoadFailed));
+
+            return presented;
+        }
+
+        /// <summary>
+        /// WO-1125 — the ASYNC presentation seam a real SDK overrides. Return true when the ad was
+        /// actually put on screen. Call <paramref name="onReward"/> ONLY from the SDK's genuine
+        /// earned-reward callback (LevelPlay <c>OnAdRewarded</c>), and call
+        /// <paramref name="onComplete"/> exactly once when the ad closes, fails, or is dismissed.
+        ///
+        /// <para>The base implementation delegates to the legacy synchronous seam so an existing
+        /// override keeps working unchanged: it presents, and settles immediately with whatever the
+        /// sync path decided. That is correct for a refusal (today's shipping state) and is exactly
+        /// what a real SDK must NOT do - which is why the SDK override goes here, not there.</para>
+        /// </summary>
+        protected virtual bool ShowAdInternal(Action onReward, Action<AdShowResult> onComplete)
+        {
+            bool granted = false;
+            bool presented = ShowAdInternal(() => { granted = true; onReward?.Invoke(); });
+            onComplete?.Invoke(granted
+                ? AdShowResult.Earned()
+                : presented ? AdShowResult.Dismissed()
+                            : AdShowResult.Unavailable(AdUnavailableReason.NotInitialised));
+            return presented;
         }
 
         /// <summary>

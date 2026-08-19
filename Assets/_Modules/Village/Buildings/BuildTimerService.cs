@@ -945,6 +945,70 @@ namespace DeNelle.Village
         }
 
         /// <summary>
+        /// WO-1125 — the ASYNC ad-skip. Same gates and same grant as the bool overload, but the
+        /// outcome arrives through <paramref name="onComplete"/> when the ad actually finishes,
+        /// which is the only shape a real SDK can honour. The return value means PRESENTATION
+        /// STARTED, never "reward earned".
+        ///
+        /// <para>The bool overload above is kept and still correct for the shipping state (the flag
+        /// is OFF, so it refuses synchronously). It becomes WRONG the moment a real network is
+        /// wired: the reward callback lands seconds after the return, so `granted` is always false
+        /// and the player is told the ad failed after watching all of it. New callers use this one.</para>
+        ///
+        /// <para>EVERY refusal path reports through <paramref name="onComplete"/> too. A UI that
+        /// disables a button on the call and re-enables it in the callback must never be left
+        /// hanging by an early return - a silent refusal is a stuck button (CLAUDE.md section 12).</para>
+        /// </summary>
+        public bool WatchAdToSkip(ChannelId channel, string structureId,
+                                  Action<DeNelle.Core.Ads.AdShowResult> onComplete)
+        {
+            if (!DeNelle.Core.FeatureFlags.RewardedAdSkip)
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Fail("Obsidian",
+                    $"WatchAdToSkip('{structureId}' on {channel}) REFUSED: ff.rewardedadskip is OFF. " +
+                    "No ad SDK is wired, so granting the skip would be a free reward with no ad shown. " +
+                    "No time was skipped and no window allowance was consumed.");
+                onComplete?.Invoke(DeNelle.Core.Ads.AdShowResult.Unavailable(
+                    DeNelle.Core.Ads.AdUnavailableReason.Disabled));
+                return false;
+            }
+
+            var job = FindInChannel(GetChannel(channel), structureId, out bool isActive);
+            if (!job.HasValue || !isActive || job.Value.StartMs <= 0)
+            {
+                onComplete?.Invoke(DeNelle.Core.Ads.AdShowResult.Unavailable(
+                    DeNelle.Core.Ads.AdUnavailableReason.Disabled));
+                return false;
+            }
+
+            if (!UnderDailyAdCap())
+            {
+                // OUR cap, not the network's - CappedByGame keeps that distinction in telemetry.
+                onComplete?.Invoke(DeNelle.Core.Ads.AdShowResult.Unavailable(
+                    DeNelle.Core.Ads.AdUnavailableReason.CappedByGame));
+                return false;
+            }
+
+            var mgr = RewardedAdManager.Instance;
+            if (mgr == null)
+            {
+                onComplete?.Invoke(DeNelle.Core.Ads.AdShowResult.Unavailable(
+                    DeNelle.Core.Ads.AdUnavailableReason.NotInitialised));
+                return false;
+            }
+
+            // The grant runs from the SDK's earned-reward callback ONLY - identical body to the
+            // bool overload, so the two paths can never drift into granting different things.
+            return mgr.RequestAd(
+                () =>
+                {
+                    RecordAdSkipUsed();
+                    ApplySkipSeconds(channel, structureId, Config.adSkipSeconds);
+                },
+                onComplete);
+        }
+
+        /// <summary>
         /// Premium instant-finish: spend crystals (single GameState wallet) to complete the
         /// Builder job now. No-op if the price is 0 (disabled) or unaffordable.
         /// </summary>

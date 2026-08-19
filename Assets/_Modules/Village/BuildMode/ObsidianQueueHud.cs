@@ -401,10 +401,29 @@ namespace DeNelle.Village
         {
             var svc = BuildTimerService.Instance;
             if (svc == null || string.IsNullOrEmpty(structureId)) return;
-            bool ok = svc.WatchAdToSkip(structureId);
-            if (!ok)
-                ElarionUiKit.ShowToast("Ad skip unavailable right now.", ElarionUiKit.ToastTone.Danger);
-            FlowTrace.Step("HUD", "ObsidianQueueHud WatchAdToSkip '" + structureId + "' ok=" + ok);
+            // WO-1125: the ASYNC overload. The bool one reports "reward earned", which a real SDK
+            // can never answer synchronously - the callback lands seconds after the return, so the
+            // player would watch a full ad and be toasted "unavailable". The outcome now arrives
+            // when the ad actually finishes.
+            svc.WatchAdToSkip(DeNelle.Core.Jobs.ChannelId.Builder, structureId, result =>
+            {
+                if (result.Rewarded)
+                {
+                    ElarionUiKit.ShowToast("Time skipped.", ElarionUiKit.ToastTone.Info);
+                }
+                else if (result.Reason == DeNelle.Core.Ads.AdUnavailableReason.Abandoned)
+                {
+                    // Dismissed early is NOT an error and must not read as one - the player chose
+                    // to stop watching, and telling them something broke is a lie.
+                    ElarionUiKit.ShowToast("Ad closed early - no time skipped.", ElarionUiKit.ToastTone.Info);
+                }
+                else
+                {
+                    ElarionUiKit.ShowToast("Ad skip unavailable right now.", ElarionUiKit.ToastTone.Danger);
+                }
+                FlowTrace.Step("HUD",
+                    "ObsidianQueueHud WatchAdToSkip '" + structureId + "' outcome=" + result);
+            });
         }
 
         // ── public format helpers (regression + Refresh) ──────────────────────
