@@ -80,15 +80,42 @@ namespace DeNelle.Village
             // superseding the height fit — see note; clear its scaleX to make it obey uniform height.)
             new Swap { bakedName = "EchoHollow_Pets_RoamingArea",   modelPath = "Structures/PetHouse2",    yawDeg = 0f,   pitchDeg = -90f, rollDeg = 270f },   // owner hand-dialed 2026-06-21
             new Swap { bakedName = "ArcaneTower_MagicUpgrades",     modelPath = "Structures/arcane tower", yawDeg = 0f,   pitchDeg = -90f, posY = -0.6f, texPath = "Structures/ArcaneTower_Albedo" },   // NORMALIZED 2026-08-06 (owner F8: "why is the cathedral of magic so large? Normalize"). heightMul was 1.25f here, hardcoded, which is what she was LOOKING AT - the hub scene injects its own swap, so the catalog row alone would not have moved it and the fix would have read as ineffective. The landmark-tier exception is retired; unset = the uniform 1.0 building base, matching the catalog row. DEF-arcane-white: texture moved OUT of the nested "arcane tower/" folder (its name collided with the sibling "arcane tower.fbx" so Resources.Load<Texture2D> returned null -> forced-texture no-op -> pure-white spire). Flat path resolves.
-            new Swap { bakedName = "Blacksmith_Weapons_Storefront", modelPath = "Structures/Forge",        yawDeg = 0f,   pitchDeg = -90f, rollDeg = 180f },   // owner hand-dialed 2026-06-21
-            new Swap { bakedName = "Forge_Armor_Storefront",        modelPath = "Structures/armorer",      yawDeg = 90f,  pitchDeg = -90f },
+            // ═══ AXIS-BAKE, SECOND CHANNEL — retired here 2026-08-18 (this injector) ═══
+            // Commit f995c4706 set bakeAxisConversion:1 on the Tripo structure FBXs, so the
+            // upright correction now lives IN THE MESH. Earlier today the CATALOG channel
+            // (structures-catalog.json entry.orientation) had its -90 X removed for the rows whose
+            // model is baked. THIS TABLE IS A SECOND, INDEPENDENT CHANNEL: SkinStorefront/TryPlace
+            // feed pitchDeg straight into opts.LocalRotation (VisualFactory.cs:229-232), which is
+            // applied BEFORE Fit — so a baked model carrying a -90 here was rotated TWICE: it lay
+            // down AND the fit-to-height then measured its SHORT axis, mis-scaling it. That is the
+            // hovering, tapered-underside building in the device capture.
+            //
+            // THE RULE, and it is per-model, read off the .fbx.meta — NEVER blanket:
+            //   bakeAxisConversion: 1 -> pitchDeg MUST be 0 here (Forge, armorer, jeweler, barracks)
+            //   bakeAxisConversion: 0 -> the -90 is CORRECT and LOAD-BEARING, do not touch
+            //                            (PetHouse2, arcane tower, store, lumbermill, farm, arena)
+            // The catalog agrees model-for-model: every bake:1 row is euler [0,0,0] and every
+            // bake:0 row is euler [-90,0,0]. Two channels, one truth — keep them in step.
+            //
+            // WHY THE ROLL BECAME A YAW (DERIVED, not hand-dialed). Unity composes
+            // R = Ry(yaw)·Rx(pitch)·Rz(roll). The bake is B = Rx(-90), so to leave the WORLD pose
+            // byte-identical we need R_new·B = R_old, i.e. R_new = R_old·Rx(+90). With pitch=-90,
+            //   Rx(-90)·Rz(roll)·Rx(+90) = R_ŷ(roll)        [Rx(-90) maps ẑ -> ŷ]
+            // so R_new = Ry(yaw)·Ry(roll) = Ry(yaw + roll) — a PURE YAW of (yaw + roll), with
+            // pitch and roll both zero. This is the same fact the tower_ground_archer catalog note
+            // records as "after a -90 X the yaw for this family lives on Z, not Y". No owner-dialed
+            // facing is changed; it is re-expressed on the axis the baked mesh now uses.
+            // Jeweler's explicit non-uniform scale is conjugated the same way (S_new = B·S_old·B⁻¹),
+            // which permutes Y and Z: (5.4, 3.77, 3.6) -> (5.4, 3.6, 3.77). Same world size.
+            new Swap { bakedName = "Blacksmith_Weapons_Storefront", modelPath = "Structures/Forge",        yawDeg = 180f, pitchDeg = 0f,   rollDeg = 0f },   // owner hand-dialed 2026-06-21; AXIS-BAKE 2026-08-18: was yaw 0 / pitch -90 / roll 180 (Forge.fbx bakeAxisConversion:1) -> yaw 0+180
+            new Swap { bakedName = "Forge_Armor_Storefront",        modelPath = "Structures/armorer",      yawDeg = 90f,  pitchDeg = 0f },   // AXIS-BAKE 2026-08-18: was pitch -90 (armorer.fbx bakeAxisConversion:1); roll was 0 so the yaw is unchanged
             new Swap { bakedName = "Marketplace_Monetization",      modelPath = "Structures/store",        yawDeg = 90f,  pitchDeg = -90f },
-            new Swap { bakedName = "Jeweler_Gems_Storefront",       modelPath = "Structures/jeweler",      yawDeg = 0f,   pitchDeg = -90f, rollDeg = 110.4f, scaleX = 5.4f, scaleY = 3.77f, scaleZ = 3.6f },
+            new Swap { bakedName = "Jeweler_Gems_Storefront",       modelPath = "Structures/jeweler",      yawDeg = 110.4f, pitchDeg = 0f, rollDeg = 0f, scaleX = 5.4f, scaleY = 3.6f, scaleZ = 3.77f },   // AXIS-BAKE 2026-08-18: was yaw 0 / pitch -90 / roll 110.4, scale (5.4,3.77,3.6) (jeweler.fbx bakeAxisConversion:1) -> yaw 0+110.4, scale Y/Z conjugated
             new Swap { bakedName = "Lumbermill_Wood_Storefront",    modelPath = "Structures/lumbermill",   yawDeg = 0f,   pitchDeg = -90f, posY = 1.5f },
             new Swap { bakedName = "Windmill_Food_Storefront",      modelPath = "Structures/farm",         yawDeg = 0f,   pitchDeg = -90f, rollDeg = 212f },   // owner hand-dialed 2026-06-21
             // Castle barracks = the troop-TRAINING building (existing scene prefab "CastleBarracks");
             // visual swap only — its training function is already wired. Yaw/pos owner-dialed; height uniform.
-            new Swap { bakedName = "CastleBarracks",                modelPath = "Structures/barracks",     yawDeg = 180f, pitchDeg = -90f, setLocalPos = true, posX = 38.3f, posY = 0f, posZ = 36f },
+            new Swap { bakedName = "CastleBarracks",                modelPath = "Structures/barracks",     yawDeg = 180f, pitchDeg = 0f, setLocalPos = true, posX = 38.3f, posY = 0f, posZ = 36f },   // AXIS-BAKE 2026-08-18: was pitch -90 (barracks.fbx bakeAxisConversion:1); roll was 0 so the yaw is unchanged
             // (ArenaMonument was deleted; the colosseum is a NEW placement at the arena herald
             //  spot (15,0,6) — see the Places table below, not a swap.)
         };

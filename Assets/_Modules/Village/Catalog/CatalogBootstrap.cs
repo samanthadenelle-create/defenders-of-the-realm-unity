@@ -295,14 +295,23 @@ namespace DeNelle.Village
                 },
                 orientation = new OrientationFix
                 {
-                    // manual=true so the auto baker never re-tips it; the Tripo fbx needs
-                    // the standard X-90 to stand up. Without this the fallback ships a
-                    // ballista lying on its side.
+                    // AXIS-BAKE RETIREMENT 2026-08-18 — was { -90f, 0f, 0f }.
+                    // The X-90 upright correction now lives in the MESH: Ballista_L1/L2/L3.fbx.meta
+                    // all carry bakeAxisConversion: 1 (set by the Tripo import path). Keeping the
+                    // -90 here applied the correction TWICE — baked mesh + this euler — and laid
+                    // the ballista on its side. manual:true is DELIBERATELY KEPT at (0,0,0), the
+                    // tower_ground_archer precedent, so no auto-baker re-tips the row.
+                    // This SUPERSEDES commit f995c4706, which retired the ten -90s in
+                    // Assets/OffsetForge/offsets.json — an INERT file for structures. The LIVE
+                    // structure orientation channel is entry.orientation (catalog + this mirror),
+                    // applied by StructureFactory.Create when manual==true.
+                    // MIRRORS structures-catalog.json v23 "tower_ballista"; gate 12
+                    // [fallback-parity] (BuildEconomyRegression) fails the build on any drift.
                     corrected = false, manual = true,
-                    euler  = new[] { -90f, 0f, 0f },
+                    euler  = new[] { 0f, 0f, 0f },
                     offset = new[] { 0f, 0f, 0f },
                     scale  = 1f,
-                    note   = "mirrors the catalog row (manual X-90 â€” the Tripo fbx stands upright with it)",
+                    note   = "mirrors the catalog row (zero + manual-locked; the X-90 upright correction is baked into the Ballista_L1/L2/L3 meshes, not applied from the row)",
                 },
             });
 
