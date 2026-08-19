@@ -150,27 +150,26 @@ namespace DeNelle.Village
 
                 if (entry.orientation != null && entry.orientation.manual)
                 {
-                    // Apply ONLY human-verified (Inspector) orientation corrections — auto-baked
-                    // ones are advisory (a bounds heuristic can't be trusted to not tip good assets).
-                    // G: guarded so a malformed orientation row logs + leaves the raw mesh, never throws.
-                    Guard.Try("Structure", $"apply orientation '{entry.id}'", () =>
+                    // Euler is applied PRE-fit via OptsFor → LocalRotation (GROK_BRIEF 2026-08-19).
+                    // Re-multiplying it here would tip twice. Only offset + non-uniform scale remain
+                    // post-Skin; reseat when those move the bounds base off the root y.
+                    Guard.Try("Structure", $"apply orientation offset/scale '{entry.id}'", () =>
                     {
-                        visual.transform.localRotation = Quaternion.Euler(entry.orientation.Euler) * visual.transform.localRotation;
-                        visual.transform.localPosition += entry.orientation.Offset;
-                        // Per-axis (non-uniform) scale: uniform `scale` × `scaleAxis` per component.
-                        // For legacy entries (scale only) EffectiveScale is (s,s,s) — identical to
-                        // the old `localScale *= scale`. A stretched wall (e.g. X=2) widens here, and
-                        // the ReseatCorrectedBottom below uses the SCALED bounds so it still sits flat.
+                        bool moved = false;
+                        Vector3 off = entry.orientation.Offset;
+                        if (off.sqrMagnitude > 0.0001f)
+                        {
+                            visual.transform.localPosition += off;
+                            moved = true;
+                        }
                         if (entry.orientation.HasScale)
-                            visual.transform.localScale = Vector3.Scale(visual.transform.localScale, entry.orientation.EffectiveScale);
-
-                        // FIX (build-placed FLOAT) — VisualFactory.SeatOnGround already seated the
-                        // RAW (un-corrected, often lying-down) bounds base at the root y. Applying the
-                        // upright correction AFTER that re-tips the mesh so its real base is no longer
-                        // at root y → the placed tower floats (or sinks). Re-seat the CORRECTED bounds:
-                        // drop the now-upright bounds.min.y back to the root's y. Same corrected mesh the
-                        // ghost shows, so WYSIWYG holds and pieces sit flat on the ground.
-                        ReseatCorrectedBottom(visual, root.transform.position.y);
+                        {
+                            visual.transform.localScale = Vector3.Scale(
+                                visual.transform.localScale, entry.orientation.EffectiveScale);
+                            moved = true;
+                        }
+                        if (moved)
+                            ReseatCorrectedBottom(visual, root.transform.position.y);
                     });
                 }
 
@@ -349,7 +348,8 @@ namespace DeNelle.Village
 
             GameObject visual = Guard.Try("Structure",
                 $"reskin '{entry.id}' L{level} visual '{path}'",
-                () => VisualFactory.Skin(root.transform, path, OptsFor(entry)),
+                // applyManualEuler:false — base catalog euler must NOT tip tier models (§9 / F8-2).
+                () => VisualFactory.Skin(root.transform, path, OptsFor(entry, applyManualEuler: false)),
                 fallback: null);
             if (visual == null)
             {
@@ -428,7 +428,12 @@ namespace DeNelle.Village
         /// and it retires the third copy of this formula.
         /// </para>
         /// </summary>
-        public static SkinOptions OptsFor(CatalogEntry entry)
+        /// <param name="applyManualEuler">
+        /// True for Create / ghost (euler → LocalRotation BEFORE Fit). False for
+        /// <see cref="ReskinForLevel"/> — tier models rely on prefab-native orientation;
+        /// re-applying the base euler tips upright L2/L3 models (F8-2 2026-07-07).
+        /// </param>
+        public static SkinOptions OptsFor(CatalogEntry entry, bool applyManualEuler = true)
         {
             var o = SkinOptions.Structure(0f);   // clear FitLargest
             o.FitHeight = EffectiveVisualHeight(entry, out _);
@@ -436,6 +441,16 @@ namespace DeNelle.Village
             // Per-row rotation policy (WO-928). Null-guarded the same way EffectiveVisualHeight
             // guards repo: a sparse / missing repo means "no opt-in", i.e. the known-good default.
             o.PreservePrefabRotation = entry != null && entry.repo != null && entry.repo.preservePrefabRotation;
+
+            // GROK_BRIEF 2026-08-19 / owner upright: a manual catalog euler MUST feed
+            // SkinOptions.LocalRotation so VisualFactory applies it BEFORE Fit. Post-fit
+            // euler measured the lying-down short axis (~6.3 m storefronts). Pre-fit yields 4.00 m.
+            if (applyManualEuler && entry != null && entry.orientation != null && entry.orientation.manual)
+            {
+                Vector3 e = entry.orientation.Euler;
+                if (e.sqrMagnitude > 0.0001f)
+                    o.LocalRotation = Quaternion.Euler(e);
+            }
 
             // Instrumentation (§12): stamp the ROW id into every Xform line VisualFactory emits, so
             // the preserve-vs-identity branch is attributable to a row by grep. The model name alone

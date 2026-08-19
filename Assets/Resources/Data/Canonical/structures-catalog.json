@@ -641,20 +641,20 @@
         ]
       },
       "orientation": {
-        "corrected": false,
+        "corrected": true,
         "manual": true,
         "euler": [
-          0,
-          0,
-          0
+          90.0,
+          0.0,
+          0.0
         ],
         "offset": [
-          0,
-          0,
-          0
+          0.0,
+          0.0,
+          0.0
         ],
         "scale": 1,
-        "note": "owner hand-dialed 2026-06-21 via HubStructureVisualInjector swap table (sizeM 7 -> footprint fit, pitch -90 / roll 180); ported WO-707 -- manual:true so no tool overwrites it FACING ZEROED 2026-08-06 (owner ruling): the -90 X is the UPRIGHT fix and stays; the Y/Z were a baked FACING, which belongs to the player at placement, not the catalog. Was [-90.0, 0.0, 180.0]. AXIS-BAKE RETIREMENT 2026-08-18: the -90 X is GONE from this row because the axis conversion now lives in the MESH (bakeAxisConversion: 1 on the source FBX, set by TripoAssetPostprocessor / TripoAxisBake). Keeping it here applied the correction TWICE (baked mesh + this euler) and laid the model down. manual:true is DELIBERATELY KEPT at (0,0,0) so no auto-baker re-tips this row - the tower_ground_archer precedent. This SUPERSEDES commit f995c4706, which retired the ten -90s in Assets/OffsetForge/offsets.json - an INERT file for structures (AttachmentOffsetRegistry is keyed by hero/enemy attachment mesh ids; nothing resolves a structure id through it). The LIVE structure orientation channel is entry.orientation here, applied by StructureFactory.Create when manual==true (Assets/_Modules/Village/Catalog/StructureFactory.cs:151-158). Was [-90.0, 0.0, 0.0]."
+        "note": "owner 2026-08-19 upright X=90 flagged fixed — applied PRE-fit via StructureFactory.OptsFor LocalRotation (GROK_BRIEF). Was [0,0,0] after 2026-08-18 axis-bake pass that discarded the imported root rotation."
       }
     },
     {
@@ -815,20 +815,20 @@
         }
       },
       "orientation": {
-        "corrected": false,
+        "corrected": true,
         "manual": true,
         "euler": [
-          0,
-          0,
-          0
+          90.0,
+          0.0,
+          0.0
         ],
         "offset": [
-          0,
-          0,
-          0
+          0.0,
+          0.0,
+          0.0
         ],
         "scale": 1,
-        "note": "owner hand-dialed 2026-06-21 via HubStructureVisualInjector swap table (sizeM 7 -> footprint fit, yaw 90 / pitch -90); ported WO-707 -- manual:true so no tool overwrites it FACING ZEROED 2026-08-06 (owner ruling): the -90 X is the UPRIGHT fix and stays; the Y/Z were a baked FACING, which belongs to the player at placement, not the catalog. Was [-90.0, 90.0, 0.0]. AXIS-BAKE RETIREMENT 2026-08-18: the -90 X is GONE from this row because the axis conversion now lives in the MESH (bakeAxisConversion: 1 on the source FBX, set by TripoAssetPostprocessor / TripoAxisBake). Keeping it here applied the correction TWICE (baked mesh + this euler) and laid the model down. manual:true is DELIBERATELY KEPT at (0,0,0) so no auto-baker re-tips this row - the tower_ground_archer precedent. This SUPERSEDES commit f995c4706, which retired the ten -90s in Assets/OffsetForge/offsets.json - an INERT file for structures (AttachmentOffsetRegistry is keyed by hero/enemy attachment mesh ids; nothing resolves a structure id through it). The LIVE structure orientation channel is entry.orientation here, applied by StructureFactory.Create when manual==true (Assets/_Modules/Village/Catalog/StructureFactory.cs:151-158). Was [-90.0, 0.0, 0.0]."
+        "note": "owner 2026-08-19 upright X=90 flagged fixed — applied PRE-fit via StructureFactory.OptsFor LocalRotation (GROK_BRIEF). Was [0,0,0] after 2026-08-18 axis-bake pass that discarded the imported root rotation."
       }
     },
     {
@@ -858,20 +858,20 @@
         }
       },
       "orientation": {
-        "corrected": false,
-        "manual": false,
+        "corrected": true,
+        "manual": true,
         "euler": [
-          0,
-          0,
-          0
+          90.0,
+          0.0,
+          0.0
         ],
         "offset": [
-          0,
-          0,
-          0
+          0.0,
+          0.0,
+          0.0
         ],
         "scale": 1,
-        "note": "WO-673 additive row (L4 vendor anchor): the Blacksmith storefront as a player-placeable GameplayBuilding -- vendor structureId 'armorer' (StructureFactory maps blacksmith->BuildingType.Armorer); visual reuses House_Medieval_Medium like its workshop/forge siblings"
+        "note": "owner 2026-08-19 upright X=90 flagged fixed — applied PRE-fit via StructureFactory.OptsFor LocalRotation (GROK_BRIEF). Was [0,0,0] after 2026-08-18 axis-bake pass that discarded the imported root rotation."
       }
     },
     {
@@ -904,20 +904,20 @@
         }
       },
       "orientation": {
-        "corrected": false,
+        "corrected": true,
         "manual": true,
         "euler": [
-          0,
-          0,
-          0
+          90.0,
+          0.0,
+          0.0
         ],
         "offset": [
-          0,
-          0,
-          0
+          0.0,
+          0.0,
+          0.0
         ],
         "scale": 1,
-        "note": "owner hand-dialed 2026-06-21 via HubStructureVisualInjector swap table (pitch -90 / roll 110.4); ported WO-707 -- manual:true. Swap-table ABSOLUTE scale 5.4/3.77/3.6 NOT portable (catalog scales multiply the footprint fit) -- size rides the fit; owner Orient trim if it reads small. FACING ZEROED 2026-08-06 (owner ruling): the -90 X is the UPRIGHT fix and stays; the Y/Z were a baked FACING, which belongs to the player at placement, not the catalog. Was [-90.0, 0.0, 110.4]. AXIS-BAKE RETIREMENT 2026-08-18: the -90 X is GONE from this row because the axis conversion now lives in the MESH (bakeAxisConversion: 1 on the source FBX, set by TripoAssetPostprocessor / TripoAxisBake). Keeping it here applied the correction TWICE (baked mesh + this euler) and laid the model down. manual:true is DELIBERATELY KEPT at (0,0,0) so no auto-baker re-tips this row - the tower_ground_archer precedent. This SUPERSEDES commit f995c4706, which retired the ten -90s in Assets/OffsetForge/offsets.json - an INERT file for structures (AttachmentOffsetRegistry is keyed by hero/enemy attachment mesh ids; nothing resolves a structure id through it). The LIVE structure orientation channel is entry.orientation here, applied by StructureFactory.Create when manual==true (Assets/_Modules/Village/Catalog/StructureFactory.cs:151-158). Was [-90.0, 0.0, 0.0]."
+        "note": "owner 2026-08-19 upright X=90 flagged fixed — applied PRE-fit via StructureFactory.OptsFor LocalRotation (GROK_BRIEF). Was [0,0,0] after 2026-08-18 axis-bake pass that discarded the imported root rotation."
       }
     },
     {
@@ -1205,11 +1205,36 @@
         },
         "maxLevel": 6,
         "upgradeCost": [
-          { "wood": 150,  "food": 0, "iron": 60,  "crystals": 0 },
-          { "wood": 300,  "food": 0, "iron": 120, "crystals": 0 },
-          { "wood": 600,  "food": 0, "iron": 240, "crystals": 0 },
-          { "wood": 1200, "food": 0, "iron": 480, "crystals": 0 },
-          { "wood": 2400, "food": 0, "iron": 960, "crystals": 0 }
+          {
+            "wood": 150,
+            "food": 0,
+            "iron": 60,
+            "crystals": 0
+          },
+          {
+            "wood": 300,
+            "food": 0,
+            "iron": 120,
+            "crystals": 0
+          },
+          {
+            "wood": 600,
+            "food": 0,
+            "iron": 240,
+            "crystals": 0
+          },
+          {
+            "wood": 1200,
+            "food": 0,
+            "iron": 480,
+            "crystals": 0
+          },
+          {
+            "wood": 2400,
+            "food": 0,
+            "iron": 960,
+            "crystals": 0
+          }
         ],
         "navSurface": "Blocker",
         "placement": {
@@ -1256,11 +1281,36 @@
         },
         "maxLevel": 6,
         "upgradeCost": [
-          { "wood": 180,  "food": 0, "iron": 90,   "crystals": 0 },
-          { "wood": 360,  "food": 0, "iron": 180,  "crystals": 0 },
-          { "wood": 720,  "food": 0, "iron": 360,  "crystals": 0 },
-          { "wood": 1440, "food": 0, "iron": 720,  "crystals": 0 },
-          { "wood": 2880, "food": 0, "iron": 1440, "crystals": 0 }
+          {
+            "wood": 180,
+            "food": 0,
+            "iron": 90,
+            "crystals": 0
+          },
+          {
+            "wood": 360,
+            "food": 0,
+            "iron": 180,
+            "crystals": 0
+          },
+          {
+            "wood": 720,
+            "food": 0,
+            "iron": 360,
+            "crystals": 0
+          },
+          {
+            "wood": 1440,
+            "food": 0,
+            "iron": 720,
+            "crystals": 0
+          },
+          {
+            "wood": 2880,
+            "food": 0,
+            "iron": 1440,
+            "crystals": 0
+          }
         ],
         "navSurface": "Blocker",
         "placement": {
@@ -1307,11 +1357,36 @@
         },
         "maxLevel": 6,
         "upgradeCost": [
-          { "wood": 180,  "food": 0, "iron": 45,  "crystals": 0 },
-          { "wood": 360,  "food": 0, "iron": 90,  "crystals": 0 },
-          { "wood": 720,  "food": 0, "iron": 180, "crystals": 0 },
-          { "wood": 1440, "food": 0, "iron": 360, "crystals": 0 },
-          { "wood": 2880, "food": 0, "iron": 720, "crystals": 0 }
+          {
+            "wood": 180,
+            "food": 0,
+            "iron": 45,
+            "crystals": 0
+          },
+          {
+            "wood": 360,
+            "food": 0,
+            "iron": 90,
+            "crystals": 0
+          },
+          {
+            "wood": 720,
+            "food": 0,
+            "iron": 180,
+            "crystals": 0
+          },
+          {
+            "wood": 1440,
+            "food": 0,
+            "iron": 360,
+            "crystals": 0
+          },
+          {
+            "wood": 2880,
+            "food": 0,
+            "iron": 720,
+            "crystals": 0
+          }
         ],
         "navSurface": "Blocker",
         "placement": {
@@ -1367,20 +1442,20 @@
         ]
       },
       "orientation": {
-        "corrected": false,
+        "corrected": true,
         "manual": true,
         "euler": [
-          0,
-          0,
-          0
+          90.0,
+          0.0,
+          0.0
         ],
         "offset": [
-          0,
-          0,
-          0
+          0.0,
+          0.0,
+          0.0
         ],
         "scale": 1,
-        "note": "WO-812: the army train hub, placeable at last (the hub redesign never re-added it). Pitch -90 matches the Tripo fbx family (workshop/forge); Orient-tool trim if felt. FIRST place is FREE via the 2026-07-24 first-of-each-type freebie lane (non-tower building); singleton so no doubles vs a legacy baked CastleBarracks. Train entry = the drillmaster (BarracksNpcInjector anchors to baked OR placed instance) + BuildingInteractable panel; progression stays BarracksService level, not structure tier. FACING ZEROED 2026-08-06 (owner ruling): the -90 X is the UPRIGHT fix and stays; the Y/Z were a baked FACING, which belongs to the player at placement, not the catalog. Was [-90.0, 0.0, 180.0]. AXIS-BAKE RETIREMENT 2026-08-18: the -90 X is GONE from this row because the axis conversion now lives in the MESH (bakeAxisConversion: 1 on the source FBX, set by TripoAssetPostprocessor / TripoAxisBake). Keeping it here applied the correction TWICE (baked mesh + this euler) and laid the model down. manual:true is DELIBERATELY KEPT at (0,0,0) so no auto-baker re-tips this row - the tower_ground_archer precedent. This SUPERSEDES commit f995c4706, which retired the ten -90s in Assets/OffsetForge/offsets.json - an INERT file for structures (AttachmentOffsetRegistry is keyed by hero/enemy attachment mesh ids; nothing resolves a structure id through it). The LIVE structure orientation channel is entry.orientation here, applied by StructureFactory.Create when manual==true (Assets/_Modules/Village/Catalog/StructureFactory.cs:151-158). Was [-90.0, 0.0, 0.0]."
+        "note": "owner 2026-08-19 upright X=90 flagged fixed — applied PRE-fit via StructureFactory.OptsFor LocalRotation (GROK_BRIEF). Was [0,0,0] after 2026-08-18 axis-bake pass that discarded the imported root rotation."
       }
     },
     {

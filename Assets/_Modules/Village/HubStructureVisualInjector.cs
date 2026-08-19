@@ -90,32 +90,23 @@ namespace DeNelle.Village
             // down AND the fit-to-height then measured its SHORT axis, mis-scaling it. That is the
             // hovering, tapered-underside building in the device capture.
             //
-            // THE RULE, and it is per-model, read off the .fbx.meta — NEVER blanket:
-            //   bakeAxisConversion: 1 -> pitchDeg MUST be 0 here (Forge, armorer, jeweler, barracks)
+            // THE RULE, per-model from .fbx.meta — NEVER blanket (GROK_BRIEF 2026-08-19):
+            //   bakeAxisConversion: 1 -> imported root is (90,0,0), BUT VisualFactory.cs:236
+            //     zeros that for non-PreservePrefabRotation rows. The upright MUST live on
+            //     opts.LocalRotation = pitchDeg 90 (owner-dialed). pitchDeg 0 lays them on their faces.
             //   bakeAxisConversion: 0 -> the -90 is CORRECT and LOAD-BEARING, do not touch
             //                            (PetHouse2, arcane tower, store, lumbermill, farm, arena)
-            // The catalog agrees model-for-model: every bake:1 row is euler [0,0,0] and every
-            // bake:0 row is euler [-90,0,0]. Two channels, one truth — keep them in step.
-            //
-            // WHY THE ROLL BECAME A YAW (DERIVED, not hand-dialed). Unity composes
-            // R = Ry(yaw)·Rx(pitch)·Rz(roll). The bake is B = Rx(-90), so to leave the WORLD pose
-            // byte-identical we need R_new·B = R_old, i.e. R_new = R_old·Rx(+90). With pitch=-90,
-            //   Rx(-90)·Rz(roll)·Rx(+90) = R_ŷ(roll)        [Rx(-90) maps ẑ -> ŷ]
-            // so R_new = Ry(yaw)·Ry(roll) = Ry(yaw + roll) — a PURE YAW of (yaw + roll), with
-            // pitch and roll both zero. This is the same fact the tower_ground_archer catalog note
-            // records as "after a -90 X the yaw for this family lives on Z, not Y". No owner-dialed
-            // facing is changed; it is re-expressed on the axis the baked mesh now uses.
-            // Jeweler's explicit non-uniform scale is conjugated the same way (S_new = B·S_old·B⁻¹),
-            // which permutes Y and Z: (5.4, 3.77, 3.6) -> (5.4, 3.6, 3.77). Same world size.
-            new Swap { bakedName = "Blacksmith_Weapons_Storefront", modelPath = "Structures/Forge",        yawDeg = 180f, pitchDeg = 0f,   rollDeg = 0f },   // owner hand-dialed 2026-06-21; AXIS-BAKE 2026-08-18: was yaw 0 / pitch -90 / roll 180 (Forge.fbx bakeAxisConversion:1) -> yaw 0+180
-            new Swap { bakedName = "Forge_Armor_Storefront",        modelPath = "Structures/armorer",      yawDeg = 90f,  pitchDeg = 0f },   // AXIS-BAKE 2026-08-18: was pitch -90 (armorer.fbx bakeAxisConversion:1); roll was 0 so the yaw is unchanged
-            new Swap { bakedName = "Marketplace_Monetization",      modelPath = "Structures/store",        yawDeg = 90f,  pitchDeg = -90f },
-            new Swap { bakedName = "Jeweler_Gems_Storefront",       modelPath = "Structures/jeweler",      yawDeg = 110.4f, pitchDeg = 0f, rollDeg = 0f, scaleX = 5.4f, scaleY = 3.6f, scaleZ = 3.77f },   // AXIS-BAKE 2026-08-18: was yaw 0 / pitch -90 / roll 110.4, scale (5.4,3.77,3.6) (jeweler.fbx bakeAxisConversion:1) -> yaw 0+110.4, scale Y/Z conjugated
-            new Swap { bakedName = "Lumbermill_Wood_Storefront",    modelPath = "Structures/lumbermill",   yawDeg = 0f,   pitchDeg = -90f, posY = 1.5f },
-            new Swap { bakedName = "Windmill_Food_Storefront",      modelPath = "Structures/farm",         yawDeg = 0f,   pitchDeg = -90f, rollDeg = 212f },   // owner hand-dialed 2026-06-21
+            // Jeweler non-uniform scale is conjugated with the pitch change (S_new = B·S·B⁻¹
+            // permutes Y↔Z): pitch0 (5.4, 3.6, 3.77) → pitch+90 (5.4, 3.77, 3.6).
+            new Swap { bakedName = "Blacksmith_Weapons_Storefront", modelPath = "Structures/Forge",        yawDeg = 180f, pitchDeg = 90f,  rollDeg = 0f },   // owner 2026-08-19: X=90 upright (Forge.fbx bakeAxisConversion:1); yaw kept
+            new Swap { bakedName = "Forge_Armor_Storefront",        modelPath = "Structures/armorer",      yawDeg = 90f,  pitchDeg = 90f },  // same family; X=90 upright
+            new Swap { bakedName = "Marketplace_Monetization",      modelPath = "Structures/store",        yawDeg = 90f,  pitchDeg = -90f }, // bake:0 — KEEP -90 (§6 negative control)
+            new Swap { bakedName = "Jeweler_Gems_Storefront",       modelPath = "Structures/jeweler",      yawDeg = 0f, pitchDeg = 90f, rollDeg = 0f, scaleX = 5.4f, scaleY = 3.77f, scaleZ = 3.6f },   // owner 2026-08-19 felt: Rotation X=90 Y=0 Z=0 (was yaw 110.4 from old pose)
+            new Swap { bakedName = "Lumbermill_Wood_Storefront",    modelPath = "Structures/lumbermill",   yawDeg = 0f,   pitchDeg = -90f, posY = 1.5f }, // bake:0 — KEEP -90
+            new Swap { bakedName = "Windmill_Food_Storefront",      modelPath = "Structures/farm",         yawDeg = 0f,   pitchDeg = -90f, rollDeg = 212f },   // bake:0 — KEEP -90
             // Castle barracks = the troop-TRAINING building (existing scene prefab "CastleBarracks");
-            // visual swap only — its training function is already wired. Yaw/pos owner-dialed; height uniform.
-            new Swap { bakedName = "CastleBarracks",                modelPath = "Structures/barracks",     yawDeg = 180f, pitchDeg = 0f, setLocalPos = true, posX = 38.3f, posY = 0f, posZ = 36f },   // AXIS-BAKE 2026-08-18: was pitch -90 (barracks.fbx bakeAxisConversion:1); roll was 0 so the yaw is unchanged
+            // visual swap only — its training function is already wired. Owner 2026-08-19: X=90.
+            new Swap { bakedName = "CastleBarracks",                modelPath = "Structures/barracks",     yawDeg = 180f, pitchDeg = 90f, setLocalPos = true, posX = 38.3f, posY = 0f, posZ = 36f },
             // (ArenaMonument was deleted; the colosseum is a NEW placement at the arena herald
             //  spot (15,0,6) — see the Places table below, not a swap.)
         };

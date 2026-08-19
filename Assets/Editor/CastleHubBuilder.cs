@@ -1,5 +1,8 @@
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -7,6 +10,7 @@ using UnityEngine.AI;
 using Unity.AI.Navigation;          // NavMeshLink (direct) — DeNelle.Editor asmdef references this (EnemyStrongholdBuilder proves it compiles)
 using UnityEngine.SceneManagement;
 using DeNelle.Core.Diagnostics;     // FlowTrace / Guard — TGVRU (CLAUDE.md §12), same as EnemyStrongholdBuilder
+using DeNelle.Village;              // VisualFactory / SkinOptions — upright LocalRotation BEFORE Fit
 
 namespace DeNelle.Editor
 {
@@ -455,6 +459,12 @@ namespace DeNelle.Editor
             // All pieces are low-poly single-atlas or URP ShaderGraph → excellent batching.
             // After placing: mark static where appropriate, add light probes / reflection probes for upper/lower contrast.
 
+            // GROK_BRIEF 2026-08-19 / owner: upright axis-baked Tripo storefronts (X=90, Y=ground)
+            // and flag catalog rows fixed — MUST run BEFORE the nav floor / bake so footprints shrink
+            // into the mesh the navmesh will see. Do NOT skip this; a bake of lying-down placeholders
+            // locks the oversized claim into the scene.
+            ApplyOwnerUprightCorrectionsBeforeBake();
+
             // Invisible, continuous walkable NavMesh floor (interior + gate bridge) so the
             // NavMeshAgent hero can traverse the WHOLE castle and cross the gate. The visual
             // qFloorWood tiles only cover the central ~±16 plaza; this fills the rest.
@@ -469,6 +479,226 @@ namespace DeNelle.Editor
             Debug.Log("[CastleHubBuilder] CastleHubRoot complete (SINGLE-LEVEL). 8 structures + keep + outer walls + inner CoC wall ring + gate marker placed; NO second level.\n" +
                       "Next: Save under Assets/Scenes/ (e.g. MainCastle_Hall.unity), Bake NavMesh (NavMeshSurface recommended), wire NPC points + connection via existing systems (WorldSceneLoader, Economy, Yarn).");
             Selection.activeGameObject = root;
+        }
+
+        // =====================================================================
+        //  OWNER UPRIGHT CORRECTIONS (GROK_BRIEF 2026-08-19) — BEFORE BAKE
+        // -----------------------------------------------------------------------------
+        //  Tripo storefronts with bakeAxisConversion:1 import at root (90,0,0) which
+        //  VisualFactory then zeros. Owner-dialed fix is LocalRotation Euler(90,0,0)
+        //  BEFORE Fit so height = 4.00 m and footprints shrink. Catalog rows flagged
+        //  manual:true + euler [90,0,0]. RealmStore placed via RealmStorePlacer with
+        //  the same correction. The eight bake:0 rows (lumbermill/farm/store/…) are
+        //  NOT touched — negative control.
+        //  Menu: Defenders > Scenes > Apply Owner Upright Structure Corrections (pre-bake)
+        //  Batch: DeNelle.Editor.CastleHubBuilder.ApplyOwnerUprightCorrectionsBeforeBake
+        // =====================================================================
+        private static readonly (string hostName, string modelPath, float yawDeg, float pitchDeg)[] OwnerUprightSkins =
+        {
+            ("Blacksmith_Weapons_Storefront", "Structures/Forge",           180f, 90f),
+            ("Forge_Armor_Storefront",        "Structures/armorer",         90f,  90f),
+            ("Jeweler_Gems_Storefront",       "Structures/jeweler",         0f,    90f),  // owner felt: X=90 Y=0 Z=0
+            ("CastleBarracks",                "Structures/barracks",        180f, 90f),
+        };
+
+        // Catalog ids owner named + ShopAndCrafting (= workshop). armorer included (same FBX family).
+        private static readonly string[] OwnerUprightCatalogIds =
+            { "forge", "workshop", "jeweler", "barracks", "armorer" };
+
+        private const string HubScenePath = "Assets/Scenes/Main_Castle_Overworld.unity";
+        private const string UprightBakeOkMarker = "OWNER_UPRIGHT_PREBAKE_OK";
+
+        [MenuItem("Defenders/Scenes/Apply Owner Upright Structure Corrections (pre-bake)")]
+        public static void ApplyOwnerUprightCorrectionsBeforeBake()
+        {
+            Log("=== ApplyOwnerUprightCorrectionsBeforeBake START (X=90, Y=ground, flag fixed) ===");
+
+            if (!File.Exists(HubScenePath))
+            {
+                Debug.LogError($"[CastleHubBuilder] hub scene missing: {HubScenePath}");
+                return;
+            }
+            EditorSceneManager.OpenScene(HubScenePath, OpenSceneMode.Single);
+            Log($"opened {HubScenePath}");
+
+            int skinned = 0;
+            foreach (var (hostName, modelPath, yawDeg, pitchDeg) in OwnerUprightSkins)
+            {
+                var host = GameObject.Find(hostName);
+                if (host == null)
+                {
+                    Debug.Log($"[CastleHubBuilder] upright skip — host '{hostName}' not in scene (ok if player-placeable only).");
+                    continue;
+                }
+                if (SkinHostUpright(host, modelPath, yawDeg, pitchDeg))
+                    skinned++;
+            }
+
+            int flagged = FlagCatalogUprightFixed(OwnerUprightCatalogIds, eulerX: 90f);
+
+            // Persist host skins before RealmStorePlacer re-opens the same scene.
+            EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+            EditorSceneManager.SaveOpenScenes();
+
+            // Realm Store is scene-root — placer applies Euler(90,0,0) pre-fit and saves.
+            try
+            {
+                RealmStorePlacer.Run();
+                Log("RealmStorePlacer.Run OK (AuthoredCorrection Euler(90,0,0)).");
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogWarning($"[CastleHubBuilder] RealmStorePlacer.Run failed: {ex.Message}");
+            }
+
+            EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+            EditorSceneManager.SaveOpenScenes();
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+
+            Debug.Log($"[CastleHubBuilder] {UprightBakeOkMarker} skinned={skinned} catalogFlagged={flagged}");
+            Log($"=== ApplyOwnerUprightCorrectionsBeforeBake DONE — skinned={skinned}, catalogFlagged={flagged} ===");
+        }
+
+        /// <summary>
+        /// Batchmode: upright corrections THEN navmesh (owner: rotate before bake).
+        /// -executeMethod DeNelle.Editor.CastleHubBuilder.BakeOwnerUprightThenNavMesh
+        /// </summary>
+        public static void BakeOwnerUprightThenNavMesh()
+        {
+            ApplyOwnerUprightCorrectionsBeforeBake();
+            NavMeshBakeFinal.Run();
+            Debug.Log("[CastleHubBuilder] OWNER_UPRIGHT_AND_NAVMESH_BAKE_OK");
+        }
+
+        /// <summary>
+        /// Owner felt 2026-08-19: jeweler only — Rotation X=90 Y=0 Z=0. Does not retouch other storefronts.
+        /// -executeMethod DeNelle.Editor.CastleHubBuilder.BakeJewelerUprightOnly
+        /// </summary>
+        public static void BakeJewelerUprightOnly()
+        {
+            if (!File.Exists(HubScenePath))
+            {
+                Debug.LogError($"[CastleHubBuilder] hub scene missing: {HubScenePath}");
+                return;
+            }
+            EditorSceneManager.OpenScene(HubScenePath, OpenSceneMode.Single);
+            var host = GameObject.Find("Jeweler_Gems_Storefront");
+            if (host == null)
+            {
+                Debug.LogError("[CastleHubBuilder] Jeweler_Gems_Storefront not in scene — nothing baked.");
+                return;
+            }
+            if (!SkinHostUpright(host, "Structures/jeweler", yawDeg: 0f, pitchDeg: 90f))
+                return;
+
+            EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+            EditorSceneManager.SaveOpenScenes();
+            AssetDatabase.SaveAssets();
+
+            NavMeshBakeFinal.Run();
+            Debug.Log("[CastleHubBuilder] JEWELER_UPRIGHT_BAKE_OK LocalRotation=(90,0,0)");
+        }
+
+        /// <summary>
+        /// Replace a hub host's visual with the Tripo model, LocalRotation = (pitch, yaw, 0)
+        /// BEFORE Fit/Seat so Y = ground and height hits the 4 m cadence.
+        /// </summary>
+        private static bool SkinHostUpright(GameObject host, string modelPath, float yawDeg, float pitchDeg)
+        {
+            // Strip prior skinned / placeholder mesh children (keep NPC_* interact points).
+            var toDestroy = new List<GameObject>();
+            for (int i = 0; i < host.transform.childCount; i++)
+            {
+                var c = host.transform.GetChild(i);
+                if (c.name.StartsWith("NPC_")) continue;
+                if (c.name.StartsWith("Anvil")) continue;
+                if (c.GetComponentInChildren<Renderer>(true) != null)
+                    toDestroy.Add(c.gameObject);
+            }
+            // Also strip renderers on the host itself (polyperfect prefab root often carries mesh).
+            foreach (var r in host.GetComponents<Renderer>())
+                Object.DestroyImmediate(r);
+            foreach (var mf in host.GetComponents<MeshFilter>())
+                Object.DestroyImmediate(mf);
+            foreach (var go in toDestroy)
+                Object.DestroyImmediate(go);
+
+            var opts = SkinOptions.Structure(0f);
+            opts.FitHeight = StructureFactory.YHeightVariable; // 4 m cadence
+            opts.LocalRotation = Quaternion.Euler(pitchDeg, yawDeg, 0f);
+            opts.TraceId = host.name;
+
+            var visual = VisualFactory.Skin(host.transform, modelPath, opts);
+            if (visual == null)
+            {
+                Debug.LogWarning($"[CastleHubBuilder] upright Skin failed for '{host.name}' model '{modelPath}'.");
+                return false;
+            }
+
+            // Pin host to ground Y (owner: y should always equal ground height). Local Y under
+            // courtyard parent stays 0; world Y follows CastleFootprintLiftY via root.
+            var lp = host.transform.localPosition;
+            host.transform.localPosition = new Vector3(lp.x, 0f, lp.z);
+
+            Log($"upright skinned '{host.name}' ← {modelPath} LocalRotation=({pitchDeg},{yawDeg},0) FitHeight={opts.FitHeight:0.##}m");
+            return true;
+        }
+
+        /// <summary>
+        /// Write euler [90,0,0] + manual:true + corrected:true into BOTH catalog copies (byte-equal).
+        /// StructureFactory.OptsFor feeds this into LocalRotation BEFORE Fit.
+        /// </summary>
+        private static int FlagCatalogUprightFixed(string[] ids, float eulerX)
+        {
+            string[] paths =
+            {
+                "Assets/StreamingAssets/Data/Canonical/structures-catalog.json",
+                "Assets/Resources/Data/Canonical/structures-catalog.json",
+            };
+            string src = paths[0];
+            if (!File.Exists(src))
+            {
+                Debug.LogError($"[CastleHubBuilder] catalog missing: {src}");
+                return 0;
+            }
+
+            JObject root = JObject.Parse(File.ReadAllText(src));
+            var entries = root["entries"] as JArray;
+            if (entries == null) return 0;
+
+            var want = new HashSet<string>(ids);
+            int n = 0;
+            foreach (var e in entries)
+            {
+                var entry = e as JObject;
+                if (entry == null) continue;
+                string id = entry.Value<string>("id");
+                if (id == null || !want.Contains(id)) continue;
+
+                entry["orientation"] = new JObject
+                {
+                    ["corrected"] = true,
+                    ["manual"] = true,
+                    ["euler"] = new JArray(eulerX, 0f, 0f),
+                    ["offset"] = new JArray(0f, 0f, 0f),
+                    ["scale"] = 1,
+                    ["note"] = $"owner 2026-08-19 upright X={eulerX} flagged fixed — applied PRE-fit via StructureFactory.OptsFor LocalRotation (GROK_BRIEF). Was [0,0,0] after 2026-08-18 axis-bake pass that discarded the imported root rotation.",
+                };
+                n++;
+                Log($"catalog '{id}' → euler [{eulerX},0,0] manual=true corrected=true");
+            }
+
+            string outText = root.ToString(Formatting.Indented);
+            foreach (var p in paths)
+            {
+                if (!File.Exists(p)) continue;
+                File.WriteAllText(p, outText);
+                AssetDatabase.ImportAsset(p, ImportAssetOptions.ForceSynchronousImport);
+            }
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+            return n;
         }
 
         // =====================================================================

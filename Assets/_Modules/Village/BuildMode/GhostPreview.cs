@@ -113,23 +113,26 @@ namespace DeNelle.Village
             if (!string.IsNullOrEmpty(entry.visualPrefabPath))
                 skinned = VisualFactory.Skin(_visual.transform, entry.visualPrefabPath, opts);
 
-            // WYSIWYG — apply the entry's human-verified upright correction to the skinned
-            // model the SAME way StructureFactory.Create does (StructureFactory.cs:90-98),
-            // so the ghost stands upright exactly like the placed result. _visual carries
-            // the player's yaw (MoveTo), so this composes UNDER it (yaw outermost).
+            // WYSIWYG — euler is already in OptsFor → LocalRotation (pre-Fit), matching
+            // StructureFactory.Create after GROK_BRIEF 2026-08-19. Only offset/scale remain
+            // post-Skin; do NOT re-multiply euler (would tip twice / wrong height).
             if (skinned != null && _orientation != null && _orientation.manual)
             {
                 var t = skinned.transform;
-                t.localRotation = Quaternion.Euler(_orientation.Euler) * t.localRotation;
-                t.localPosition += _orientation.Offset;
+                bool moved = false;
+                Vector3 off = _orientation.Offset;
+                if (off.sqrMagnitude > 0.0001f)
+                {
+                    t.localPosition += off;
+                    moved = true;
+                }
                 if (_orientation.scale > 0f && !Mathf.Approximately(_orientation.scale, 1f))
+                {
                     t.localScale *= _orientation.scale;
-
-                // WYSIWYG seat — VisualFactory.SeatOnGround seated the RAW bounds at the host
-                // y; the correction above re-tipped the mesh so it now floats/sinks. Re-drop
-                // the CORRECTED bounds base to the ghost host's y, matching StructureFactory's
-                // ReseatCorrectedBottom so the ghost sits exactly where the piece will land.
-                ReseatCorrectedBottom(skinned, _visual.transform.position.y);
+                    moved = true;
+                }
+                if (moved)
+                    ReseatCorrectedBottom(skinned, _visual.transform.position.y);
             }
 
             if (skinned == null)

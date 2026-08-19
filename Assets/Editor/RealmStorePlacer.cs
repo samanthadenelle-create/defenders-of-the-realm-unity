@@ -108,42 +108,21 @@ namespace DeNelle.Editor
         /// THE OWNER-RULED ORIENTATION CORRECTION for RealmStore.fbx, applied to the SKINNED CHILD as
         /// <see cref="DeNelle.Village.SkinOptions.LocalRotation"/> — i.e. BEFORE Fit + SeatOnGround.
         ///
-        /// <para>⛔ OWNER PROVENANCE, 2026-08-18, felt-test on the Seeker, quoted VERBATIM:
-        /// <c>"store is on its side needs rot 90 euler 0,0,90f"</c> and then, once upright,
-        /// <c>"after you stand it up, rotate it 180 degrees as its facing the wall"</c> +
-        /// <c>"this is realm store"</c>.
-        /// A manual=true owner correction is CANON and is NEVER overwritten by an automatic pass
-        /// (ARCHITECTURE_PRINCIPLES §4). Do not "tidy" this to zero because the .fbx.meta carries
-        /// bakeAxisConversion — the bake ran (commit f995c4706, flag verified in the meta, asset
-        /// reimported) and the building was STILL on its side on her screen: a device screenshot shows
-        /// the roof gable apex pointing screen-RIGHT, so this mesh's true up is its local +X.</para>
-        ///
-        /// <para>WHY THIS EULER, AS MECHANISM RATHER THAN AS A DIALLED NUMBER. Unity composes
-        /// <c>Quaternion.Euler</c> in Z→X→Y order about the PARENT's axes, and this rotation's parent
-        /// is the storefront root, which carries only the plaza-facing yaw. So (0, 180, 90) reads
-        /// exactly as she said it: roll +90 about Z FIRST (local +X → +Y, the gable apex swings from
-        /// horizontal to vertical and the building stands up), THEN yaw 180 about the root's up (it
-        /// stops presenting its front to the wall). One authored value, applied in one place.</para>
+        /// <para>⛔ OWNER 2026-08-19 (GROK_BRIEF_STRUCTURE_ORIENTATION): <c>rot 90,0,0</c> —
+        /// pos 0,0,0 / Y = ground / flagged fixed. Calibrated against FBX vertex extents: Z runs
+        /// [0,H] (true vertical); after bakeAxisConversion Unity negates Z so imported up is local
+        /// −Z; <c>Euler(90,0,0)</c> puts that at world up (right way up). <c>Euler(−90,0,0)</c> is
+        /// AABB-identical but UPSIDE-DOWN. The 2026-08-18 <c>Euler(0,180,90)</c> left local +X at
+        /// world up — still on its side (device build 331367). Do not revert to (0,180,90).</para>
         ///
         /// <para>WHY THE CHILD AND NOT THE ROOT: the root's rotation is COMPUTED every run
-        /// (LookRotation toward the plaza centre), so anything written there is either recomputed away
-        /// or has to be smuggled into the facing maths — and the 180 would then be applied twice the
-        /// next time someone re-derived the facing. Putting the whole correction on LocalRotation also
-        /// puts it UPSTREAM of the fit: VisualFactory applies LocalRotation BEFORE Fit, so fit-to-height
-        /// measures the UPRIGHT axis. That second-order effect is the real bug — lying down, the fit
-        /// forced the model's 0.619 m short axis to 4 m (scale 6.46x) and sprawled a 4.7 x 6.5 m
-        /// footprint. Standing up first, the fit measures 0.728 m (scale 5.49x) and the footprint
-        /// shrinks with it. Same defect shape as WO-928's L3 Archer Tower.</para>
+        /// (LookRotation toward the plaza centre). LocalRotation is UPSTREAM of Fit so height
+        /// measures the upright axis (~4.00 m) and the footprint shrinks (~2.9 m across).</para>
         ///
-        /// <para>WHY NOT Offset Forge, even though this script reads that file: the placer reads only
-        /// the <c>"pos"</c> block for this key (see TryReadAuthoredPosition) — <c>"rot"</c> is never
-        /// read on this path, and no other consumer looks this id up (AttachmentOffsetRegistry is
-        /// keyed by hero attachment/mesh ids). A rotation written there would be INERT. Worse, this
-        /// row is flagged <c>axisBaked: true</c>, and <c>TripoAxisBake</c> REWRITES the rot of flagged
-        /// rows to zero — an authored value there would be silently deleted by the next auto pass,
-        /// which is precisely the §4 overwrite this comment exists to prevent.</para>
+        /// <para>WHY NOT Offset Forge <c>rot</c>: inert for this id (placer reads <c>pos</c> only);
+        /// <c>TripoAxisBake</c> would zero a flagged rot. Facing yaw stays on the root LookRotation.</para>
         /// </summary>
-        private static readonly Quaternion AuthoredCorrection = Quaternion.Euler(0f, 180f, 90f);
+        private static readonly Quaternion AuthoredCorrection = Quaternion.Euler(90f, 0f, 0f);
 
         /// <summary>
         /// The storefront's place in the town HEIGHT CADENCE, expressed the way every catalog row
