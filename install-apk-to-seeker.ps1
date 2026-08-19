@@ -100,6 +100,28 @@ No Android device in 'device' state. Confirm:
         exit 1
     }
 
+    # --- CONTENT PARITY (2026-08-19, WO-1124) --------------------------------
+    # An APK whose remote bundles are not in the bucket installs perfectly and then shows
+    # no buildings and no enemies, with no error on screen. That shipped on 2026-08-19:
+    # a real Android APK carrying StandaloneWindows64 content, every marker green.
+    # PROD-011's gate is the only thing that can tell, and this path did not run it.
+    # WARN, do not block: sideloading a deliberately-offline or experimental build is a
+    # legitimate thing to do from this script. The owner just must never be surprised.
+    $parity = Join-Path $PSScriptRoot 'Builds2-parity-install.log'
+    & python (Join-Path $PSScriptRoot 'tools2_sync.py') --verify-catalog ServerData/Android *>&1 |
+        Tee-Object -FilePath $parity
+    if (-not ((Test-Path $parity) -and (Select-String -Path $parity -Pattern 'R2_PARITY_OK' -Quiet))) {
+        Write-Host ""
+        Write-Host "  WARNING: content parity did NOT pass." -ForegroundColor Yellow
+        Write-Host "  This APK references remote bundles the bucket may not hold - on device that"
+        Write-Host "  reads as missing buildings/enemies with NO error shown to the player."
+        Write-Host "  Fix:  python tools2_sync.py --push ServerData    (the PARENT folder)"
+        Write-Host "  See $parity"
+        Write-Host ""
+    } else {
+        Write-Host "  parity OK - $((Select-String -Path $parity -Pattern 'R2_PARITY_OK' | Select-Object -First 1).Line.Trim())" -ForegroundColor Green
+    }
+
     Write-Host "=== Installing APK to Seeker ===" -ForegroundColor Cyan
     & $adb install -r $apk
     if ($LASTEXITCODE -ne 0) {

@@ -1,6 +1,6 @@
 # PROD-008 — No oracle can see ORIENTATION: author the height-fidelity / aspect gate
 
-**Status:** READY TO IMPLEMENT
+**Status:** PARTIALLY IMPLEMENTED 2026-08-18 (`fc9b1eb69`) — the oracle exists and measures correctly (`Assets/Editor/Regression/StructureOrientationOracle.cs`, markers `STRUCTURE_ORIENTATION_OK/_FAIL`), but **IT IS NOT A GATE YET**. THREE THINGS REMAIN: (1) §5.1 — it is NOT registered in `DataRegression.RunAll`; its header carries `regression-registry: standalone` (`StructureOrientationOracle.cs:8`), the explicit opt-out token `RegressionMarkerRegression.cs:123` honours, so **nothing runs it**; (2) it is RED on the current tree — `STRUCTURE_ORIENTATION_FAIL: 2 issue(s)` on `tower_ballista` / `tower_ballista L2` (`Builds/struct-orient.log:571`, 2026-08-18 21:43), pending an **OWNER RULING** on whether the row is mis-classed (typed `Tower` at `structures-catalog.json:87` while its art is a wide siege machine) — that ruling is the blocker for registration; (3) §5.2's known-bad direction was never run, so the gate has been proven in ONE direction only.
 **Minted:** 2026-08-18 (docs seat) — PROD series.
 **Priority:** HIGH — this is the gate whose absence let PROD-007 (and WO-928 before it) reach a LIVE store build.
 **Silo:** Regression / catalog oracles. **Lane:** `Assets/Editor/Regression`. No scenes, no gameplay code.
