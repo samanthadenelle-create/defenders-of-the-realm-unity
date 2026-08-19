@@ -3919,107 +3919,6 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 329238026}
   m_Mesh: {fileID: 4300002, guid: c6cf9114a861823418cd75af84aefb99, type: 3}
---- !u!1001 &330111217
-PrefabInstance:
-  m_ObjectHideFlags: 0
-  serializedVersion: 2
-  m_Modification:
-    serializedVersion: 3
-    m_TransformParent: {fileID: 0}
-    m_Modifications:
-    - target: {fileID: -8679921383154817045, guid: 54f795e6004947e488b96d86a60f0ab3, type: 3}
-      propertyPath: m_LocalPosition.x
-      value: 12
-      objectReference: {fileID: 0}
-    - target: {fileID: -8679921383154817045, guid: 54f795e6004947e488b96d86a60f0ab3, type: 3}
-      propertyPath: m_LocalPosition.y
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: -8679921383154817045, guid: 54f795e6004947e488b96d86a60f0ab3, type: 3}
-      propertyPath: m_LocalPosition.z
-      value: -32
-      objectReference: {fileID: 0}
-    - target: {fileID: -8679921383154817045, guid: 54f795e6004947e488b96d86a60f0ab3, type: 3}
-      propertyPath: m_LocalRotation.w
-      value: 0.98395354
-      objectReference: {fileID: 0}
-    - target: {fileID: -8679921383154817045, guid: 54f795e6004947e488b96d86a60f0ab3, type: 3}
-      propertyPath: m_LocalRotation.x
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: -8679921383154817045, guid: 54f795e6004947e488b96d86a60f0ab3, type: 3}
-      propertyPath: m_LocalRotation.y
-      value: -0.17842482
-      objectReference: {fileID: 0}
-    - target: {fileID: -8679921383154817045, guid: 54f795e6004947e488b96d86a60f0ab3, type: 3}
-      propertyPath: m_LocalRotation.z
-      value: -0
-      objectReference: {fileID: 0}
-    - target: {fileID: -8679921383154817045, guid: 54f795e6004947e488b96d86a60f0ab3, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.x
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: -8679921383154817045, guid: 54f795e6004947e488b96d86a60f0ab3, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.y
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: -8679921383154817045, guid: 54f795e6004947e488b96d86a60f0ab3, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.z
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 919132149155446097, guid: 54f795e6004947e488b96d86a60f0ab3, type: 3}
-      propertyPath: m_Name
-      value: RealmStore_Storefront
-      objectReference: {fileID: 0}
-    m_RemovedComponents: []
-    m_RemovedGameObjects: []
-    m_AddedGameObjects: []
-    m_AddedComponents:
-    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 54f795e6004947e488b96d86a60f0ab3, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 330111220}
-    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 54f795e6004947e488b96d86a60f0ab3, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 330111219}
-  m_SourcePrefab: {fileID: 100100000, guid: 54f795e6004947e488b96d86a60f0ab3, type: 3}
---- !u!1 &330111218 stripped
-GameObject:
-  m_CorrespondingSourceObject: {fileID: 919132149155446097, guid: 54f795e6004947e488b96d86a60f0ab3, type: 3}
-  m_PrefabInstance: {fileID: 330111217}
-  m_PrefabAsset: {fileID: 0}
---- !u!114 &330111219
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 330111218}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: f5fb0ba3fcaf0114795fc04050034122, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: DeNelle.Village::DeNelle.Village.RealmStoreVendor
---- !u!65 &330111220
-BoxCollider:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 330111218}
-  m_Material: {fileID: 0}
-  m_IncludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ExcludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_LayerOverridePriority: 0
-  m_IsTrigger: 0
-  m_ProvidesContacts: 0
-  m_Enabled: 1
-  serializedVersion: 3
-  m_Size: {x: 1.0344527, y: 0.6195447, z: 1.1947198}
-  m_Center: {x: -0.00000022351742, y: 0, z: 0.4999999}
 --- !u!1001 &346143033
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -11986,6 +11885,118 @@ Transform:
   m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: f797e0b841fd8774f945c9e771d9b468, type: 3}
   m_PrefabInstance: {fileID: 1142755870}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &1156882180
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1156882181}
+  - component: {fileID: 1156882184}
+  - component: {fileID: 1156882183}
+  - component: {fileID: 1156882182}
+  m_Layer: 0
+  m_Name: RealmStore(Clone)
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1156882181
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1156882180}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 2, z: 3.228177}
+  m_LocalScale: {x: 6.456354, y: 6.456354, z: 6.456354}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1990159890}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1156882182
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1156882180}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: db377d76f15a56c4eac161d076b504d0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: DeNelle.Core::DeNelle.Core.TripoMaterialFixer
+  _fallbackTextureName: 
+  _forcedTextureName: 
+  _fallbackTint: {r: 0.5, g: 0.5, b: 0.5, a: 1}
+  _hasFallbackTint: 0
+  _missTint: {r: 0.6, g: 0.58, b: 0.54, a: 1}
+  _hasMissTint: 0
+  _smoothness: 0.15
+  _metallic: 0
+  _forceRebuild: 0
+--- !u!23 &1156882183
+MeshRenderer:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1156882180}
+  m_Enabled: 1
+  m_CastShadows: 1
+  m_ReceiveShadows: 1
+  m_DynamicOccludee: 1
+  m_StaticShadowCaster: 0
+  m_MotionVectors: 1
+  m_LightProbeUsage: 1
+  m_ReflectionProbeUsage: 1
+  m_RayTracingMode: 2
+  m_RayTraceProcedural: 0
+  m_RayTracingAccelStructBuildFlagsOverride: 0
+  m_RayTracingAccelStructBuildFlags: 1
+  m_SmallMeshCulling: 1
+  m_ForceMeshLod: -1
+  m_MeshLodSelectionBias: 0
+  m_RenderingLayerMask: 1
+  m_RendererPriority: 0
+  m_Materials:
+  - {fileID: 2100000, guid: c5ec13ade3d2148479554074a925ff85, type: 2}
+  m_StaticBatchInfo:
+    firstSubMesh: 0
+    subMeshCount: 0
+  m_StaticBatchRoot: {fileID: 0}
+  m_ProbeAnchor: {fileID: 0}
+  m_LightProbeVolumeOverride: {fileID: 0}
+  m_ScaleInLightmap: 1
+  m_ReceiveGI: 1
+  m_PreserveUVs: 0
+  m_IgnoreNormalsForChartDetection: 0
+  m_ImportantGI: 0
+  m_StitchLightmapSeams: 1
+  m_SelectedEditorRenderState: 3
+  m_MinimumChartSize: 4
+  m_AutoUVMaxDistance: 0.5
+  m_AutoUVMaxAngle: 89
+  m_LightmapParameters: {fileID: 0}
+  m_GlobalIlluminationMeshLod: 0
+  m_SortingLayerID: 0
+  m_SortingLayer: 0
+  m_SortingOrder: 0
+  m_MaskInteraction: 0
+  m_AdditionalVertexStreams: {fileID: 0}
+--- !u!33 &1156882184
+MeshFilter:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1156882180}
+  m_Mesh: {fileID: 1002161314714806047, guid: 54f795e6004947e488b96d86a60f0ab3, type: 3}
 --- !u!1001 &1157364198
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -20698,6 +20709,73 @@ Transform:
   m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: 089037bd29fd0fe48ad039c6a1b5866e, type: 3}
   m_PrefabInstance: {fileID: 1967172189}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &1990159887
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1990159890}
+  - component: {fileID: 1990159889}
+  - component: {fileID: 1990159888}
+  m_Layer: 0
+  m_Name: RealmStore_Storefront
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1990159888
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1990159887}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f5fb0ba3fcaf0114795fc04050034122, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: DeNelle.Village::DeNelle.Village.RealmStoreVendor
+--- !u!65 &1990159889
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1990159887}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Size: {x: 4.7053757, y: 4, z: 6.473542}
+  m_Center: {x: 0, y: 2, z: 0}
+--- !u!4 &1990159890
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1990159887}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: -0.17842482, z: -0, w: 0.98395354}
+  m_LocalPosition: {x: 12, y: 0, z: -32}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 1156882181}
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1001 &2009252064
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -21905,4 +21983,4 @@ SceneRoots:
   - {fileID: 565611520}
   - {fileID: 1319176935}
   - {fileID: 1017363089}
-  - {fileID: 330111217}
+  - {fileID: 1990159890}

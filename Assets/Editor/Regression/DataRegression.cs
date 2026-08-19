@@ -935,6 +935,15 @@ namespace DeNelle.Editor
 
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "forge-shelf-kind suite", () => { if (!DeNelle.Editor.Regression.ForgeShelfClassKindRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[forge-shelf-kind] " + r); });
 
+            // PROD-003 (2026-08-18): the Realm Store storefront is BAKED into the hub, so a gate on
+            // the placer cannot see a stale bake — and there was one: an FBX axis re-import left the
+            // saved collider describing a mesh shape that no longer existed, and every code-level
+            // check stayed green. This pins the ARTIFACT: present exactly once, standing where the
+            // producer says, fit to the town's height cadence, seated, with its door, NOT an
+            // IDamageableStructure, and absent from both dual copies of structures-catalog.json and
+            // build-categories.json (a catalog row is the failure the ticket exists to prevent).
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "realm-storefront suite", () => { if (!DeNelle.Editor.Regression.RealmStorefrontRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[realm-storefront] " + r); });
+
             // --- THE ORACLE THAT GUARDS THIS FILE: distinct markers, no unregistered
             // oracle, no gate script grepping a marker nobody emits. Registered LAST so
             // it sees the fully-built registry above it (it reads SOURCE, not runtime

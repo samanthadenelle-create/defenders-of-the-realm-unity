@@ -26,6 +26,52 @@
 //
 // Idempotent: re-running replaces the existing instance rather than stacking a
 // second storefront in the scene.
+//
+// -----------------------------------------------------------------------------
+// SCALE IS DERIVED, NOT TYPED (ARCHITECTURE_PRINCIPLES section 4).
+// The first version of this script instantiated the FBX RAW. Measured, the model
+// is about 1.0 x 0.6 x 1.2 m, standing next to neighbours fitted to 4 m - a
+// waist-high shed where the ticket (section 3.4) asks for the one building a
+// player can find without being told. The fix is NOT a hand-typed multiplier: the
+// storefront is now skinned through VisualFactory.Skin - the SAME seam every
+// catalog structure flows through - with FitHeight = StructureFactory.YHeightVariable
+// * HeightMul, so it inherits the town's height cadence and re-scales with it when
+// that one number moves. HeightMul stays at the uniform 1.0 building base on
+// purpose: the cadence names the Cathedral of Magic as the ONE landmark, and
+// promoting a second one is a creative call for the owner, not something a fix
+// should smuggle in. If she wants it to read taller, this constant is the knob.
+//
+// KNOWN TRADE-OFF, stated rather than hidden: VisualFactory.Skin uses
+// Object.Instantiate, so the baked storefront is a PLAIN hierarchy, not a prefab
+// instance linked back to RealmStore.fbx. Editing the FBX therefore no longer
+// updates the scene by itself — you re-run this placer, which is the workflow the
+// header already mandates and what the [realm-storefront] oracle checks. The
+// alternative was to keep the prefab link and hand-write the fit maths here, i.e.
+// a second copy of the scaling law that would drift from the town's. One re-run is
+// cheaper than one more source of truth.
+//
+// -----------------------------------------------------------------------------
+// THE COLLIDER IS RECOMPUTED EVERY RUN, AND THAT IS THE POINT.
+// Commit f995c4706 set bakeAxisConversion on RealmStore.fbx, re-orienting the mesh
+// at IMPORT, and did not re-run this placer - so the saved scene kept a collider
+// (size 1.034 x 0.620 x 1.195, centre z 0.4999) describing a mesh shape that no
+// longer exists. A producer script cannot see a stale artifact it did not write.
+// So: the box is measured from the CURRENT renderer bounds on every run, with the
+// root temporarily unrotated so world axes equal local axes (the old code assigned
+// a world-space AABB of a YAWED object straight into a local-space box, which is
+// inflated by the yaw even when the mesh is right), and the saved result is READ
+// BACK and asserted before this script claims success.
+//
+// -----------------------------------------------------------------------------
+// DURABILITY COUPLING - READ THIS BEFORE REBUILDING THE HUB.
+// This storefront is placed by THIS standalone script at scene root. CastleHubBuilder
+// does NOT create it and never will, so the documented "new empty scene + rebuild the
+// hub" workflow SILENTLY DROPS THE GAME'S ONLY STOREFRONT. Restructuring the hub
+// builder to own it is structural work and is deliberately out of scope here; the
+// loss is made LOUD instead, by RealmStorefrontRegression [realm-storefront], which
+// pins the object in the SAVED scene and goes red the moment a bake drops it.
+// >>> AFTER ANY Defenders > Scenes > Build CastleHub_MainKeep, RE-RUN
+// >>> DeNelle.Editor.RealmStorePlacer.Run AND THEN RE-BAKE THE NAVMESH. <<<
 // =============================================================================
 
 using UnityEditor;
@@ -57,6 +103,34 @@ namespace DeNelle.Editor
 
         /// <summary>Offset Forge key. Matches the asset name, which is how that file is keyed.</summary>
         private const string OffsetKey = "RealmStore";
+
+        /// <summary>
+        /// The storefront's place in the town HEIGHT CADENCE, expressed the way every catalog row
+        /// expresses it: a multiplier on <c>StructureFactory.YHeightVariable</c> (RepoProps.heightMul).
+        /// 1.0 = the uniform building base (4 m). It is a MULTIPLIER, not a size, precisely so this
+        /// building re-scales with the town when that one number moves - a typed metre value here
+        /// would drift the day the cadence changes and nobody would know until a screenshot.
+        /// </summary>
+        private const float HeightMul = 1.0f;
+
+        /// <summary>
+        /// The fit-to-height target in metres, DERIVED from the shared cadence. Public so the
+        /// [realm-storefront] oracle can assert the SAVED scene against the producer's own current
+        /// answer instead of against a number copied into a second file (a copied number is how the
+        /// collider went stale in the first place).
+        /// </summary>
+        public static float FitHeightMeters =>
+            DeNelle.Village.StructureFactory.YHeightVariable * HeightMul;
+
+        /// <summary>
+        /// The placement this script WOULD use right now: the Offset Forge authored position when one
+        /// exists, otherwise the owner-ruled fallback. Public for the same reason as
+        /// <see cref="FitHeightMeters"/> - the oracle compares the artifact to the producer, so an
+        /// owner nudge in Offset Forge that was never re-baked shows up as a red suite rather than as
+        /// a building standing somewhere nobody authored.
+        /// </summary>
+        public static Vector3 ResolvePlacement()
+            => TryReadAuthoredPosition(out var authored) ? authored : FallbackPlacement;
 
         [MenuItem("Defenders/World/Place the Realm Store storefront")]
         public static void RunMenu() => Run();
@@ -111,6 +185,60 @@ namespace DeNelle.Editor
             }
         }
 
+        /// <summary>
+        /// (Re)computes the storefront's BoxCollider from the CURRENT renderer bounds. Returns false
+        /// when there is nothing to measure.
+        /// <para>
+        /// ⛔ TWO BUGS ARE FIXED HERE AND THEY ARE DIFFERENT BUGS.
+        /// (1) The old code only added a collider "if none existed", so it could describe a shape the
+        /// model no longer has and never repair it. This always recomputes: the collider is DERIVED
+        /// state, and derived state that is written once is stale state.
+        /// (2) <c>Renderer.bounds</c> is a WORLD-space AABB. Assigning it into a LOCAL-space
+        /// BoxCollider on a YAWED root stores a box inflated by the yaw. Measuring with the root
+        /// temporarily unrotated makes world axes equal local axes, so the numbers written are the
+        /// numbers meant.
+        /// </para>
+        /// </summary>
+        private static bool ApplyCollider(GameObject root)
+        {
+            if (root == null) return false;
+
+            var rends = root.GetComponentsInChildren<Renderer>();
+            if (rends == null || rends.Length == 0) return false;
+
+            var t = root.transform;
+            Quaternion keptRotation = t.rotation;
+            t.rotation = Quaternion.identity;
+
+            Bounds b = rends[0].bounds;
+            for (int i = 1; i < rends.Length; i++) b.Encapsulate(rends[i].bounds);
+
+            t.rotation = keptRotation;
+
+            if (b.size.sqrMagnitude < 1e-6f) return false;
+
+            // The fit scale lives on the SKINNED CHILD, so the root is unit-scaled and world sizes
+            // convert to local ones 1:1. Say so out loud rather than assuming it: if a future change
+            // scales the root, this line is the one that explains the wrong-sized box.
+            Vector3 s = t.lossyScale;
+            if (Mathf.Abs(s.x - 1f) > 0.001f || Mathf.Abs(s.y - 1f) > 0.001f || Mathf.Abs(s.z - 1f) > 0.001f)
+            {
+                Debug.LogWarning($"[RealmStore] the storefront ROOT is scaled {s:F3}, not 1 — the collider " +
+                                 "size below is a world measurement written into a local-space box and will " +
+                                 "be wrong by that factor. Keep the fit scale on the skinned child.");
+            }
+
+            var box = root.GetComponent<BoxCollider>();
+            if (box == null) box = root.AddComponent<BoxCollider>();
+            box.isTrigger = false;
+            box.center = b.center - t.position;   // identity rotation + unit scale => world delta == local
+            box.size   = b.size;
+
+            Debug.Log($"[RealmStore] collider RECOMPUTED from live bounds: size={box.size:F3} centre={box.center:F3} " +
+                      $"(measured with the root unrotated; {rends.Length} renderer(s)).");
+            return true;
+        }
+
         public static void Run()
         {
             string modelPath = DeNelle.Core.AssetRoots.StructureContent + "/RealmStore.fbx";
@@ -127,9 +255,9 @@ namespace DeNelle.Editor
             var scene = SceneManager.GetActiveScene();
 
             // Idempotent: drop any previous instance first, so re-running never stacks storefronts.
-            foreach (var root in scene.GetRootGameObjects())
+            foreach (var existingRoot in scene.GetRootGameObjects())
             {
-                foreach (var t in root.GetComponentsInChildren<Transform>(true))
+                foreach (var t in existingRoot.GetComponentsInChildren<Transform>(true))
                 {
                     if (t != null && t.name == ObjectName)
                     {
@@ -154,56 +282,114 @@ namespace DeNelle.Editor
                           $"default {placement}. Tune it in Offset Forge and re-run to make it stick.");
             }
 
-            var inst = (GameObject)PrefabUtility.InstantiatePrefab(model);
-            inst.name = ObjectName;
-            inst.transform.position = placement;
+            // ROOT HOST + SKINNED VISUAL — the same shape StructureFactory.Create gives every catalog
+            // structure. The root owns the world pose, the collider and the vendor door; the model is
+            // skinned UNDERNEATH it by the one shared seam. Reusing VisualFactory.Skin rather than
+            // instantiating the FBX raw is what supplies the fit-to-height (see the SCALE block in the
+            // header) and the Tripo->URP material fixer, and it means this storefront obeys the same
+            // scaling law as its neighbours instead of a rule written only here.
+            var root = new GameObject(ObjectName);
             // Face the plaza centre so the shopfront looks at the player walking in from it,
             // rather than presenting its back to the town.
-            inst.transform.rotation = Quaternion.LookRotation(
-                new Vector3(0f, 0f, 0f) - placement, Vector3.up);
+            root.transform.SetPositionAndRotation(
+                placement,
+                Quaternion.LookRotation(new Vector3(0f, 0f, 0f) - placement, Vector3.up));
+
+            var opts = DeNelle.Village.SkinOptions.Structure(0f); // clears FitLargest; keeps SeatOnGround + Tripo fix
+            opts.FitHeight = FitHeightMeters;                     // DERIVED from the town cadence
+            opts.TraceId   = OffsetKey;                           // stamps the Xform value-trace lines
+            // NOTE: PreservePrefabRotation is deliberately LEFT FALSE. RealmStore.fbx carries
+            // bakeAxisConversion (f995c4706), so its axis correction is baked at IMPORT and the
+            // prefab-native pose is already upright — preserving a native rotation on top of that,
+            // or re-applying one of the ten retired -90 offsets, would compose into a wrong pose.
+
+            var visual = DeNelle.Village.VisualFactory.Skin(root.transform, model, opts);
+            if (visual == null)
+            {
+                Debug.LogError("[RealmStore] VisualFactory.Skin returned NULL for the storefront model — " +
+                               "nothing was placed and the empty root has been removed. The skin seam logs " +
+                               "the reason ([Flow:VisualFactory]); a render-verify miss means the FBX loaded " +
+                               "but draws nothing.");
+                Object.DestroyImmediate(root);
+                return;
+            }
 
             // A collider so the player cannot walk through the building. NOT an
             // IDamageableStructure and NOT a catalog row — it blocks, it does not take damage.
-            if (inst.GetComponentInChildren<Collider>() == null)
+            if (!ApplyCollider(root))
             {
-                var box = inst.AddComponent<BoxCollider>();
-                var rends = inst.GetComponentsInChildren<Renderer>();
-                if (rends != null && rends.Length > 0)
-                {
-                    Bounds b = rends[0].bounds;
-                    for (int i = 1; i < rends.Length; i++) b.Encapsulate(rends[i].bounds);
-                    box.center = inst.transform.InverseTransformPoint(b.center);
-                    box.size = b.size;
-                }
+                Debug.LogError("[RealmStore] could not measure renderer bounds for the collider — " +
+                               "the storefront would be walk-through. Nothing saved.");
+                Object.DestroyImmediate(root);
+                return;
             }
 
             // The door. PackStoreBootstrap already registers PanelId.RealmStore at boot, so this
             // component only has to call it.
-            if (inst.GetComponent<DeNelle.Village.RealmStoreVendor>() == null)
-                inst.AddComponent<DeNelle.Village.RealmStoreVendor>();
+            if (root.GetComponent<DeNelle.Village.RealmStoreVendor>() == null)
+                root.AddComponent<DeNelle.Village.RealmStoreVendor>();
 
-            EditorUtility.SetDirty(inst);
+            EditorUtility.SetDirty(root);
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveOpenScenes();
             AssetDatabase.SaveAssets();
 
-            // Verify the ARTIFACT, not the intent — the navmesh bake earlier today reported success
-            // having written nothing, because nothing read the result back.
-            bool present = false;
-            foreach (var root in SceneManager.GetActiveScene().GetRootGameObjects())
-                foreach (var t in root.GetComponentsInChildren<Transform>(true))
-                    if (t.name == ObjectName) { present = true; break; }
+            // ── VERIFY THE ARTIFACT, NOT THE INTENT ──────────────────────────────────────────
+            // INSTRUMENTATION_STANDARD 1.4b: assert MEASURED values. "Present in the scene" is the
+            // weakest possible claim and is exactly the claim that was true the whole time the
+            // collider was 90 degrees out of alignment. Re-find the object in the SAVED scene and
+            // read its real numbers back, so this script cannot print its OK marker over a shape it
+            // did not actually produce.
+            GameObject saved = null;
+            foreach (var r in SceneManager.GetActiveScene().GetRootGameObjects())
+            {
+                foreach (var t in r.GetComponentsInChildren<Transform>(true))
+                    if (t.name == ObjectName) { saved = t.gameObject; break; }
+                if (saved != null) break;
+            }
 
-            if (!present)
+            if (saved == null)
             {
                 Debug.LogError("[RealmStore] storefront is NOT in the saved scene — placement failed.");
+                return;
+            }
+
+            var savedBox = saved.GetComponent<BoxCollider>();
+            if (savedBox == null)
+            {
+                Debug.LogError("[RealmStore] the saved storefront has NO BoxCollider — the player would " +
+                               "walk straight through the game's only storefront.");
+                return;
+            }
+
+            float target = FitHeightMeters;
+            float measuredH = savedBox.size.y;
+            float measuredBase = savedBox.center.y - savedBox.size.y * 0.5f;
+
+            // Tolerances are deliberately generous (a building is not a ruler) but NOT unfalsifiable:
+            // the pre-fix artifact measured 0.62 m tall against a 4 m target and would fail this by
+            // a factor of six, which is the whole reason the check is written as a number.
+            if (Mathf.Abs(measuredH - target) > target * 0.10f)
+            {
+                Debug.LogError($"[RealmStore] MEASURED HEIGHT {measuredH:F2} m != the derived fit target " +
+                               $"{target:F2} m. The fit-to-height did not take, so the storefront does not " +
+                               "stand in the town's height cadence. Not claiming success.");
+                return;
+            }
+            if (Mathf.Abs(measuredBase) > 0.35f)
+            {
+                Debug.LogError($"[RealmStore] the collider base sits {measuredBase:F2} m off the root's y — " +
+                               "the model is not seated on the ground (it would float or sink).");
                 return;
             }
 
             Debug.Log($"[RealmStore] placed at {placement} ({(authored ? "AUTHORED in Offset Forge" : "owner-ruled default")}) " +
                       "facing the plaza centre, with a collider and RealmStoreVendor. " +
                       "NOT in the build catalog, NOT damageable.");
-            Debug.Log($"{OkMarker} at {placement}");
+            Debug.Log($"[RealmStore] MEASURED from the saved scene: collider size={savedBox.size:F3} " +
+                      $"centre={savedBox.center:F3} (fit target {target:F2} m, base offset {measuredBase:F2} m), " +
+                      $"pos={saved.transform.position:F2}.");
+            Debug.Log($"{OkMarker} at {placement} height {measuredH:F2}m");
         }
     }
 }

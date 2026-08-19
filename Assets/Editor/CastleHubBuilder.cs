@@ -18,6 +18,19 @@ namespace DeNelle.Editor
     // Designed to run AFTER you create a blank/empty scene (File > New Scene > Empty).
     // It is idempotent: re-running in the same scene will clear the prior root and rebuild.
     //
+    // ⛔ THIS BUILDER DOES NOT CREATE THE REALM STORE STOREFRONT (PROD-003).
+    // The game's ONLY monetization surface, RealmStore_Storefront, is placed at scene
+    // ROOT by a separate script — Assets/Editor/RealmStorePlacer.cs — and is therefore
+    // NOT part of the rebuild above. The "new empty scene + rebuild the hub" workflow in
+    // the header below will SILENTLY DROP IT: the hub will look correct and the store
+    // will simply not exist, with no error anywhere.
+    //     >>> AFTER RUNNING THIS BUILDER, RE-RUN
+    //     >>> DeNelle.Editor.RealmStorePlacer.Run   AND THEN RE-BAKE THE NAVMESH. <<<
+    // The loss is caught rather than trusted: RealmStorefrontRegression [realm-storefront]
+    // pins the storefront in the SAVED scene and goes red if a bake drops it. Owning the
+    // storefront here instead would be the durable answer, but that is a structural change
+    // and is deliberately not smuggled into a player-facing fix.
+    //
     // Implements the Central Castle Hub spec:
     // - Separate scene for home + hub (distinct from Village2 primary).
     // - Beautifully designed castle using Quaternius (modular beauty, walls/floors/stairs/props)
