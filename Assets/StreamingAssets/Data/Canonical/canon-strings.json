@@ -36,6 +36,20 @@
   "lantern": "the Lantern of Elarion",
   "lanternShort": "the Lantern",
 
+  "tunnelName": "The Rootways",
+  "tunnelOrigin": "made by the Heart's own roots",
+  "_tunnelNameNote": "WO-1044 R1/R2, owner ruling 2026-08-17 ('yes to all defaults on 1044'). RETIRED: 'The Hollow Roads'. That name read as THE HOLLOWED'S roads, which promises enemies inside a graph that deliberately authors zero encounters (nine rooms, no traps, no keys, no chests) -- so the player walked an empty crossroads and concluded content was missing. 'The Rootways' explains the quiet as lore: the Heart's song runs down there, so the rot does not; and it explains why the tunnel reaches exactly the four marches, because roots reach where the wards are. THE ID IS DELIBERATELY NOT RENAMED: the scene/graph id stays 'dg_hollow_roads' (BiomeRoads.TunnelSceneId), a contract shared by BiomeRoads.ArmRoomIdFor, dg_hollow_roads.json (dual copy), HollowRoadsDropInjector and BiomeRoadsRegression. Ids are live contracts; display names are not. Pinned by BiomeRoadsRegression Case 7, which fails both if this key drifts from BiomeRoads.TunnelDisplayName and if the retired name returns.",
+
+  "regionGoldfields": "Goldfields",
+  "regionStoneback": "Stoneback",
+  "regionMirewood": "Mirewood",
+  "regionAshwood": "Ashwood",
+  "regionGoldfieldsLong": "the Goldfields",
+  "regionStonebackLong": "Stoneback Ridge",
+  "regionMirewoodLong": "Mirewood",
+  "regionAshwoodLong": "Corrupted Ashwood",
+  "_regionNamesNote": "WO-1044 R3, owner ruling 2026-08-17. Code said 'Stoneback'/'Ashwood' while narrative canon said 'Stoneback Ridge'/'Corrupted Ashwood'; the two disagreed. RULED: the SHORT forms are the UI names (they fit the travel prompt, 'Travel to Ashwood (deadly)'), and the LONG forms are PROSE ONLY -- narrative docs, region intro voice lines, quest text. The RUNTIME authority is ZoneManager.Regions, never this file: these keys are the canon RECORD so the ruling has a home outside a markdown doc, and BiomeRoadsRegression Case 3 fails if the short forms here ever drift from that table.",
+
   "tagline": "Echoes of a Forgotten Civilization",
   "titleTagline": "Echoes of a Forgotten Civilization",
   "bibleTitleTagline": "Tend the Heart. Hold the dark.",

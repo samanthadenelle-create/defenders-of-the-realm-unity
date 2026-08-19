@@ -37,6 +37,15 @@
 //      suite fails if BiomeRoads ever grows its own copy of a display name, cardinal
 //      or tier - the duplicated-state drift CLAUDE.md sec.2/sec.5 keep un-rotting.
 //
+//   6. THE RULED IDENTITY HOLDS, BOTH WAYS (WO-1044 R1/R2, owner 2026-08-17). The tunnel
+//      reads to the player as "The Rootways" and its id stays "dg_hollow_roads". Case 7
+//      fails if the id is "tidied" to match the name (which would silently unhook the
+//      graph file, the injector and the WO-1112 hero carry) AND if the display name is
+//      reverted or re-typed (which puts the player back in front of a name promising the
+//      Hollowed inside a graph that authors zero encounters). A ruled player-facing word
+//      with no assertion behind it survives exactly until the next person who did not
+//      know it was ruled.
+//
 // SOURCE-LINT NOTE: the source scan below strips COMMENTS AND STRING LITERALS before
 // matching. Without that, this file's own prose (and the very literals it forbids)
 // would satisfy the search and the lint would pass by reading itself.
@@ -84,6 +93,7 @@ namespace DeNelle.Editor.Regression
                 Case4_KillSwitchExistsAndBothEndsReadIt(failures, notes, log);
                 Case5_EgressLawIsNotWeakened(failures, notes, log);
                 Case6_NoTypedWorldCoordinatesInTheDerivation(failures, notes, log);
+                Case7_TunnelIdentityIsTheRuledOne(failures, notes, log);
             }
             catch (Exception ex)
             {
@@ -95,7 +105,7 @@ namespace DeNelle.Editor.Regression
             string noteStr = notes.Count > 0 ? " | " + string.Join("; ", notes) : "";
             if (failures.Count == 0)
             {
-                reason = "biome-roads: 6 cases green" + noteStr;
+                reason = "biome-roads: 7 cases green" + noteStr;
                 Debug.Log(log.ToString() + "BIOME_ROADS_OK");
                 return true;
             }
@@ -361,9 +371,30 @@ namespace DeNelle.Editor.Regression
                                  "be a blank button, which is a silently-dead door with extra steps.");
             }
 
+            // WO-1044 R3 (owner 2026-08-17): the SHORT names are the UI names and the long forms
+            // ("Stoneback Ridge", "Corrupted Ashwood") are prose only. canon-strings.json carries
+            // the ruling as the canon RECORD - and a second home for a name is only safe while
+            // something fails when the two disagree, which is this loop. ZoneManager stays the
+            // runtime authority; canon-strings is checked AGAINST it, never read instead of it.
+            const string CanonRes = "Assets/Resources/Data/Canonical/canon-strings.json";
+            foreach (RegionId region in BiomeRoads.DropRegions)
+            {
+                if (!ZoneManager.Regions.TryGetValue(region, out var zone) || zone == null) continue;
+                string key = "region" + region;                       // regionGoldfields, regionAshwood, ...
+                string canonVal = ReadCanonKey(CanonRes, key);
+                if (canonVal == null)
+                    failures.Add($"[biome-roads-names] canon-strings has no '{key}' - WO-1044 R3 ruled the short " +
+                                 "UI name for every march, and a ruling with no record is a ruling the next " +
+                                 "session re-litigates.");
+                else if (!string.Equals(canonVal, zone.DisplayName, StringComparison.Ordinal))
+                    failures.Add($"[biome-roads-names] canon-strings '{key}' is '{canonVal}' but the authored " +
+                                 $"table says '{zone.DisplayName}'. R3 ruled the SHORT form is the UI name; if " +
+                                 "the long prose form has leaked into either, they now disagree on screen.");
+            }
+
             notes.Add($"[biome-roads-names] {BiomeRoads.DropRegions.Length} regions cross-checked against " +
-                      "ZoneManager.Regions");
-            log.AppendLine("  names: all four read from the authored region table");
+                      "ZoneManager.Regions + canon-strings R3 short names");
+            log.AppendLine("  names: all four read from the authored region table (R3 short forms pinned)");
         }
 
         // ── Case 4 — a real kill switch, read at BOTH ends. ────────────────────
@@ -509,7 +540,130 @@ namespace DeNelle.Editor.Regression
             log.AppendLine("  typed-check: no world-scale constants in the derivation");
         }
 
+        // ── Case 7 — the RULED identity: id frozen, display name renamed. ──────
+        // WO-1044 R1/R2 (owner, 2026-08-17): the tunnel the player reads is "The Rootways";
+        // the id stays "dg_hollow_roads" because it is a four-way contract (ArmRoomIdFor, the
+        // graph JSON's filename, HollowRoadsDropInjector, this suite).
+        //
+        // THIS CASE EXISTS TO FAIL IN BOTH DIRECTIONS, which is the only reason to write it:
+        //   • someone "tidies" the id to match the new name  -> the graph file, the injector and
+        //     the WO-1112 hero carry all lose their key, silently, at runtime;
+        //   • someone reverts / re-types the display name    -> the player is back to being
+        //     promised the Hollowed in a tunnel that authors zero encounters.
+        // A ruled player-facing name with no assertion behind it is a name that lasts until the
+        // next person who does not know it was ruled.
+        private static void Case7_TunnelIdentityIsTheRuledOne(
+            List<string> failures, List<string> notes, StringBuilder log)
+        {
+            const string RuledId   = "dg_hollow_roads";
+            const string RuledName = "The Rootways";
+            const string RetiredName = "The Hollow Roads";
+
+            // (a) The ID is frozen. Not "starts with dg_" - the exact string, because the graph
+            //     file is named after it and a near-miss is a missing scene, not a typo.
+            if (!string.Equals(BiomeRoads.TunnelSceneId, RuledId, StringComparison.Ordinal))
+                failures.Add($"[biome-roads-identity] TunnelSceneId is '{BiomeRoads.TunnelSceneId}', not " +
+                             $"'{RuledId}'. WO-1044 R1 renamed the DISPLAY NAME and froze the ID on purpose: " +
+                             "the id keys ArmRoomIdFor, the authored graph JSON's filename, the drop injector " +
+                             "and this suite. Renaming it here does not rename them.");
+
+            // (b) The graph the id names must actually be on disk, in BOTH copies. This is what
+            //     turns (a) from a string comparison into a proof that the contract still lands.
+            foreach (string path in new[] { GraphResources, GraphStreaming })
+            {
+                string expected = RuledId + ".json";
+                if (!path.EndsWith(expected, StringComparison.Ordinal))
+                    failures.Add($"[biome-roads-identity] '{path}' no longer matches the ruled id '{RuledId}' - " +
+                                 "the graph file and the id have drifted apart.");
+                else if (!File.Exists(Path.Combine(Directory.GetCurrentDirectory(), path)))
+                    failures.Add($"[biome-roads-identity] the tunnel graph '{path}' does not exist - the id is a " +
+                                 "contract with a file that is not there.");
+            }
+
+            // (c) The player-facing name is the RULED one.
+            string shown = BiomeRoads.TunnelDisplayName;
+            if (string.IsNullOrWhiteSpace(shown))
+                failures.Add("[biome-roads-identity] TunnelDisplayName is empty - the tunnel portal would show a " +
+                             "blank label, which is a nameless door.");
+            else if (!string.Equals(shown, RuledName, StringComparison.Ordinal))
+                failures.Add($"[biome-roads-identity] TunnelDisplayName is '{shown}', but WO-1044 R1 ruled " +
+                             $"'{RuledName}' (owner 2026-08-17). If this is a NEW ruling it needs a new date in " +
+                             "the WO and this line updated with it - not a quiet re-type.");
+
+            if (string.Equals(shown, RetiredName, StringComparison.OrdinalIgnoreCase))
+                failures.Add($"[biome-roads-identity] the RETIRED name '{RetiredName}' is back. It reads as " +
+                             "'the Hollowed's roads' and promises enemies in a graph that authors zero " +
+                             "encounters - the player finds an empty crossroads and concludes content is missing. " +
+                             "That is precisely what R1 fixed.");
+
+            if (string.Equals(shown, BiomeRoads.TunnelSceneId, StringComparison.OrdinalIgnoreCase))
+                failures.Add("[biome-roads-identity] the display name has been set to the raw id - the player " +
+                             "would read a database key on a portal sign.");
+
+            foreach (char c in shown ?? string.Empty)
+            {
+                if (c > 127)
+                {
+                    failures.Add($"[biome-roads-identity] TunnelDisplayName carries a non-ASCII character " +
+                                 $"(U+{(int)c:X4}) - TMP renders it as a tofu box on device.");
+                    break;
+                }
+            }
+
+            // (d) canon-strings.json is the CANON record of the name, in both copies, and it must
+            //     agree with the Core const the portal spawner actually reads. Two homes for one
+            //     player-facing word is fine; two DIFFERENT words in them is the drift CLAUDE.md
+            //     sec.15 exists to stop.
+            const string CanonRes  = "Assets/Resources/Data/Canonical/canon-strings.json";
+            const string CanonStr  = "Assets/StreamingAssets/Data/Canonical/canon-strings.json";
+            string resVal = ReadCanonKey(CanonRes, "tunnelName");
+            string strVal = ReadCanonKey(CanonStr, "tunnelName");
+
+            if (resVal == null)
+                failures.Add($"[biome-roads-identity] canon-strings key 'tunnelName' is missing from {CanonRes} - " +
+                             "the ruled name has no canon home, so the next reader has only a code const to " +
+                             "trust and no way to know it was ruled.");
+            if (strVal == null)
+                failures.Add($"[biome-roads-identity] canon-strings key 'tunnelName' is missing from {CanonStr} - " +
+                             "CanonStrings reads the StreamingAssets copy, so the name would resolve to " +
+                             "[[missing:tunnelName]] at runtime.");
+            if (resVal != null && strVal != null && !string.Equals(resVal, strVal, StringComparison.Ordinal))
+                failures.Add($"[biome-roads-identity] canon-strings 'tunnelName' DIFFERS between the copies " +
+                             $"('{resVal}' vs '{strVal}') - the dual copy must be identical; the Resources copy " +
+                             "wins at load, so the two would disagree only on device.");
+            if (resVal != null && !string.Equals(resVal, shown, StringComparison.Ordinal))
+                failures.Add($"[biome-roads-identity] canon-strings 'tunnelName' is '{resVal}' but " +
+                             $"BiomeRoads.TunnelDisplayName is '{shown}' - one of the two homes for the tunnel's " +
+                             "name has gone stale.");
+
+            notes.Add($"[biome-roads-identity] id '{BiomeRoads.TunnelSceneId}' frozen; display '{shown}' " +
+                      "matched against canon-strings dual copy");
+            log.AppendLine($"  identity: id '{BiomeRoads.TunnelSceneId}' (frozen) / name '{shown}' (WO-1044 R1)");
+        }
+
         // ── helpers ────────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Read one top-level STRING value out of a canon-strings copy. Returns null when the file
+        /// or the key is absent, or when the value is not a string - all three are reported by the
+        /// caller as the same defect class (the ruled word is not reachable), which is what the
+        /// player would experience.
+        /// </summary>
+        private static string ReadCanonKey(string relPath, string key)
+        {
+            try
+            {
+                string full = Path.Combine(Directory.GetCurrentDirectory(), relPath);
+                if (!File.Exists(full)) return null;
+                var o = JObject.Parse(File.ReadAllText(full));
+                var tok = o[key];
+                return tok?.Type == JTokenType.String ? (string)tok : null;
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        }
 
         /// <summary>
         /// Read a source file with COMMENTS AND STRING LITERALS REMOVED. Both, not just comments:

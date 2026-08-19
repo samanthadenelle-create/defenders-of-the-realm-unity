@@ -1,6 +1,27 @@
 # WORK ORDER 1044 - Biome + Tunnel IDENTITY (Goldfields / Stoneback / Mirewood / Ashwood + the tunnel)
 
-**Status:** READY TO IMPLEMENT - ★ ALL ELEVEN RULINGS APPROVED BY THE OWNER 2026-08-17
+**Status:** DONE - ★ ALL ELEVEN RULINGS APPROVED BY THE OWNER 2026-08-17, FOLDED INTO CANON 2026-08-19
+
+> ## ✅ IMPLEMENTED 2026-08-19 - what landed, and what did not (by design)
+>
+> Per **R12** (also ratified: *"does any of this become a build ticket tonight? My pick: no"*), this
+> ticket delivered the **identity**, not the systems. What shipped:
+>
+> | Ruling | Landed as |
+> |---|---|
+> | **R1** | `BiomeRoads.TunnelDisplayName` = **"The Rootways"**. **`TunnelSceneId` UNCHANGED at `dg_hollow_roads`** - the id is a four-way contract and additionally keys the WO-1112 hero carry via `HubScenes.IsComposedDungeon`. Recorded as `tunnelName` in `canon-strings.json` (dual copy, byte-identical). |
+> | **R2** | Origin = the Heart's roots, written into the graph JSON `_comment` (dual copy), `canon-strings` `tunnelOrigin`, and narrative §5c - including the *why the tunnel is quiet* logic and the audio-falloff consequence. |
+> | **R3** | Short forms are the UI names; long forms prose only. Already true in `ZoneManager.Regions`; now RECORDED in `canon-strings.json` (`regionGoldfields` ... `regionAshwoodLong`) and **cross-checked against `ZoneManager` by BiomeRoadsRegression Case 3**, so the two homes cannot drift. |
+> | **R4, R5, R6, R7, R8, R9, R10, R11** | Folded verbatim into `docs/ECHOES_OF_ELARION_NARRATIVE.md` **§5c** (canon lives there, CLAUDE.md §15) + `docs/regions-narrative-and-npcs.md` §9, with §8 Q4 closed by R6. **No gameplay/system code was written for these** - that is R12's whole point. |
+> | **R12** | Honoured: the six follow-on build tickets are enumerated at the end of narrative §5c, **without minted WO numbers** (the `CLI_LANES_WO_NUMBERS.md` banner is the sole authority). |
+>
+> **Regression:** `BiomeRoadsRegression` grows **Case 7 - the ruled identity**, and Case 3 grows the
+> canon-strings cross-check. Case 7 fails in BOTH directions: if the id is "tidied" to match the name
+> (silently unhooking the graph file, the injector and the hero carry) **and** if the display name is
+> reverted or re-typed. Suite reason string bumped `6 cases green` -> `7 cases green`.
+>
+> **Still open / needs a Unity run:** the compile gate + `DataRegression.RunAll` have NOT been run
+> (single-Unity-lock; CLI seat). **Nothing here needs a scene edit or a bake.**
 
 > Owner ruling, verbatim: **"yes to all defaults on 1044"** (2026-08-17).
 > Every recommendation in §5 (R1-R11) is RATIFIED AS WRITTEN. The line that used to sit here -
@@ -312,6 +333,9 @@ in the entire dungeon set (no other `dg_*` has one). Ruling R1 costs one string.
 
 ---
 
-**Nothing in this document is canon until ruled.** On ruling, the approved blocks fold into
-`docs/ECHOES_OF_ELARION_NARRATIVE.md` and `docs/regions-narrative-and-npcs.md` (canon lives there, not here,
-per CLAUDE.md sec.15), and this WO flips to DONE.
+~~**Nothing in this document is canon until ruled.**~~ **RULED 2026-08-17 and FOLDED 2026-08-19.**
+The approved blocks now live in `docs/ECHOES_OF_ELARION_NARRATIVE.md` **§5c** and
+`docs/regions-narrative-and-npcs.md` **§9** (canon lives there, not here, per CLAUDE.md sec.15).
+**Read the canon from those two docs, not from this WO** - this file is the record of how it was
+decided, and the §5 bullets are preserved in their original question form only so a future reader can
+see what was weighed. This WO is DONE.

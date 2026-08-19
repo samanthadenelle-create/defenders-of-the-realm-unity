@@ -237,6 +237,150 @@ grief wearing armor. (Full lore: `docs/regions-narrative-and-npcs.md` §5.)
 
 ---
 
+## 5c. BIOME + TUNNEL IDENTITY - CANON (WO-1044, owner ruling 2026-08-17)
+
+> Owner, verbatim: **"yes to all defaults on 1044"**. All eleven rulings R1-R11 of
+> `WorkOrders/WORK_ORDER_1044_biome_identity.md` are ratified as written and folded here.
+> This section is canon; the WO is the record of how it was decided. R12 ("does any of this
+> become a build ticket tonight?") was ruled **no** - the identity is fixed first, and the
+> systems work below is queued as follow-on tickets, listed at the end of this section.
+
+### The names (R1, R2, R3)
+
+**The tunnel is THE ROOTWAYS.** It was made by the Heart's own roots. That single fact is doing
+real work: it is *why the tunnel is empty*. The song runs down there, so the rot does not - and it
+is why the tunnel reaches exactly the four marches, because roots reach where the ward-stones are.
+Every crossing is the Heart carrying the Keeper.
+
+The retired name, **"The Hollow Roads"**, failed for a structural reason and not a matter of taste:
+"Hollow" reads as *the Hollowed's*, so it promised enemies inside a graph that deliberately authors
+zero encounters, and the player who found the crossroads empty concluded the content was missing.
+
+> **⛔ THE ID IS NOT RENAMED.** The scene / graph id stays **`dg_hollow_roads`**. It is a four-way
+> contract - `BiomeRoads.ArmRoomIdFor`, `dg_hollow_roads.json` (dual copy), `HollowRoadsDropInjector`,
+> `BiomeRoadsRegression` - and it additionally keys the WO-1112 hero carry through
+> `HubScenes.IsComposedDungeon`. **Ids are live contracts; display names are not.** The id reading
+> "hollow" while the player reads "The Rootways" is intentional. Pinned by BiomeRoadsRegression Case 7,
+> which fails in BOTH directions.
+
+**Region names (R3):** the **short** forms are the UI names - `Goldfields`, `Stoneback`, `Mirewood`,
+`Ashwood` - because they are what fits the travel prompt ("Travel to Ashwood (deadly)"). The long
+forms **Stoneback Ridge** and **Corrupted Ashwood** are **prose only**: this document, the region
+intro voice lines, quest text. The runtime authority is `ZoneManager.Regions`; `canon-strings.json`
+carries the record (`regionGoldfields` ... `regionAshwoodLong`) and is cross-checked against that
+table by BiomeRoadsRegression Case 3, so the two homes cannot drift.
+
+**Consequence of the Rootways for art and audio:** the tunnel should feel like the inside of
+something living and old - walls of root and packed earth rather than cut stone, faint light in the
+wood itself, and the Heart's tone audible and **thinning the further down an arm you walk**, so the
+four mouths are the moment the song runs out. That last beat is free drama and costs one audio falloff.
+
+### The four palettes, in value / texture / light (never hue)
+
+Described by value, texture and light on purpose: the owner is red/green colourblind, so a palette
+that only names colours is unusable to her and to a greyscale check. Each must survive greyscale.
+
+| March | Value + light | Texture + motion | Greyscale test |
+|---|---|---|---|
+| **Goldfields** | brightest place in the game, **lowest contrast**; low raking light, long soft shadows | dry, fine, in constant slow motion (wind) | a near-white page with three or four charcoal silhouettes |
+| **Stoneback** | highest *local* contrast, flattest *global* light; overcast, near shadowless, the rock's own faceting does the modelling; sky brighter than ground | matte, dusty, hard-edged, mid-value; nothing moves except the player | mid-grey faceted shapes with white cut into the crevices |
+| **Mirewood** | narrowest value range in the game - crushed into a dark mid-band, no highlights, no true blacks; light only in vertical shafts; **the water is the brightest thing in frame** so the eye is pulled down at the drowned town | wet, sheened, slick; fog eats distance past ~20m | near-uniform dark grey with bright ribbons of water threading through |
+| **Ashwood** | **highest contrast in the game, almost no mid-tones** - near-black trunks on pale powdery ground, like ink on ash; flat shadowless light, silhouette does all the work; corruption-fog and ward-stones are the only things that EMIT | dry, matte, dead, shedding particles | two values only, plus two glows |
+
+**Load-bearing, do not let art undo it:** danger and crystal richness are the same fact told twice
+(sec.3-5b above). **Ashwood must never look poor and Goldfields must never look rich.**
+
+### Signature hazard per march
+
+- **Goldfields - open ground.** Nothing hides here; enemies cross in formation, visible from far off.
+  The threat is **time**, not surprise: you see them coming and cannot stop them coming.
+- **Stoneback - the ground itself.** Steep grades slow everyone, the player included, so fights are
+  positional. Fewer enemies, each tougher; retreat is uphill.
+- **Mirewood - false footing.** Ground that reads walkable and is not; a hero slowed or stranded in
+  water while a march comes up the causeway. Plus the canon fact that this is the heaviest enemy
+  pressure in the realm - you must hold a forward position to harvest.
+- **Ashwood - the forgetting (R6, a REAL mechanic).** Linger past a dark ward and the audio mutes,
+  the HUD dims, the Heart's voice fades. **Fully reversible and never punishing** - relight a ward
+  and you come back to yourself. Ward-stones are the only safe islands, so the biome is played
+  stone-to-stone.
+
+### Echo association (R4, R5) - LORE ONLY, NEVER A HARVEST GATE
+
+| March | Echo | Why |
+|---|---|---|
+| Goldfields | **Elowen**, the Nature Echo | "the grove-warden who once walked Elarion's every furrow" - the Goldfields *are* her furrows |
+| Stoneback | **Doran**, the Earth Echo | "the mason who raised Elarion's stones" - Stoneback is where the stones were cut |
+| Mirewood | **Corvin**, the Void Echo | "the scout who ranged the far dark and never came home" - Mirewood is the road that does not give people back |
+| Ashwood | **Bran**, the Storm Echo | "the watchman who held Elarion's wall through every gale... he fell at his post" - the north wards *are* the posts, and they are failing |
+
+**Aldwin and Maren stay home.** Aldwin is the founding Echo, tied to the Heart and the FTUE, so he is
+attached to no march (R5 - the cold of Stoneback suits the Ice Echo, and he was still passed over for
+Doran deliberately). Maren is the hearth-keeper and belongs to the town forge. Four marches, four
+Echoes, two kept at home.
+
+> **⛔ These are arrival lines, fragments and quest flavour ONLY. They are NOT a harvest gate.**
+> CLAUDE.md sec.7 is explicit that Echo affinity is an additive **match bonus and never a lock**;
+> nothing in this section may be implemented as one.
+
+### First arrival - the authored frame per march (R7, R8)
+
+What the player sees in the first two seconds of stepping out of an arm. Each is a single composed
+sightline from a fixed drop point; no new systems. The **region intro voice line** already written in
+sec.3-5b above plays over it, **verbatim** - do not rewrite those lines.
+
+- **GOLDFIELDS:** you step out of the dark into flat open light, and the first thing in frame is
+  **a cart on a road, moving, with someone walking beside it.** Not a ruin. Somebody else is still
+  alive out here. The whole tonal argument of the east march with no dialogue. *(R8 ratified: yes to
+  the living NPC - one walking NPC on a path. The east arrival is the one that is not empty.)*
+- **STONEBACK:** the mouth opens **on a ledge** and the ground drops away - and down there, small, is
+  **the valley you defend.** The first time in the game the player sees home from outside. It should
+  look worth it, and it should look tiny.
+- **MIREWOOD:** you come out **ankle-deep**, and the first thing in frame is **a rooftop** - a house's
+  roof standing out of black water at the wrong height, with one lantern lit on it. The town is *under* you.
+- **ASHWOOD:** you come out and **the sound stops.** First thing in frame is **a dark ward-stone**, and
+  behind it among the trunks **a standing figure that does not move toward you** - the One Who
+  Remembers (sec.5b), put in the doorway.
+
+### Sound: one ambient bed per march (R11)
+
+All four regions currently share one cycled overworld pool (`WorldMusicDirector.cs`). Ruled: **each
+march gets one distinct ambient bed - wind / stone-silence / water-drip / total quiet.**
+
+> **R11 is load-bearing for R7, not decoration.** Ashwood's authored arrival beat is *"the sound
+> stops"*, and that beat cannot exist while all four regions share one pool. Shipping the arrival
+> frames without the per-region beds silently drops it.
+
+### Two standing notes (R9, R10)
+
+- **R9 - Mirewood's light shafts.** No god-ray / light-shaft key exists in either VFX registry
+  (the `VFXType` enum or the Hovl string catalog). Ruled: **ask for the one small addition.** Until it
+  lands, Mirewood leans on `PP_GroundFog` + `Env_LanternGlow`.
+- **R10 - the existing cave mouth.** The finished walk-up cave and flat cave-road corridor at roughly
+  z=-404 stays **pointed at the outpost** by the owner's earlier ruling. **The Rootways keep their own
+  portal.** Do not repoint it.
+
+### Follow-on build tickets (R12 ruled: not tonight, and not in this ticket)
+
+R1/R2/R3 shipped as data + one string + regression. The rest is systems work and is queued
+separately, so that ruling the identity stayed cheap:
+
+1. **The four arrival frames** (R7/R8) - fixed drop-point sightlines, one walking NPC on a path in
+   Goldfields, the region intro voice line over each.
+2. **Per-region ambient beds** (R11) - `WorldMusicDirector` gains a per-`RegionId` bed; must land
+   with or before (1), or Ashwood's beat is lost.
+3. **The Rootways' material + audio falloff** - root-and-earth walls, the Heart's tone thinning
+   down each arm.
+4. **Mirewood light-shaft VFX key** (R9) - one registry addition.
+5. **The nine march NPCs are lore-complete and data-empty** - none of Maeren, Brightwheat, Sister
+   Wren, the Frostmother, Garrick, Old Sedge, Vessa, Old Bram or the One Who Remembers exists in
+   `dialogue/dialogues.json`. That is a build ticket, not a creative one.
+6. **Ashwood's forgetting** (R6) as a real, reversible, never-punishing mechanic.
+
+*(WO numbers deliberately not minted here - the numbering banner in `CLI_LANES_WO_NUMBERS.md` is the
+sole authority, and a number written into a second doc is exactly how the collisions happen.)*
+
+---
+
 ## 6. The Echoes — ruins and crystal as remnants of the greater age
 
 The "Echoes" theme has two physical forms in the world. Both say the same thing: *a greater age was here,

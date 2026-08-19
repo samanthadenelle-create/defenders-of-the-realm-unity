@@ -91,11 +91,37 @@ namespace DeNelle.Core.World
         /// in with a bare rig and NO abilities -- silently, which is how WO-1112's defect survived
         /// nightly play. Authored as a dungeon-graph JSON of the same id; the baker derives the
         /// scene path from graphId, so this string is the scene name AND the graph id.
+        /// <para>
+        /// WO-1044 R1 renamed the tunnel's DISPLAY NAME and deliberately left this ID ALONE. The id
+        /// is a four-way contract -- <see cref="ArmRoomIdFor"/>, the authored graph JSON
+        /// (dg_hollow_roads.json, dual copy), HollowRoadsDropInjector, and BiomeRoadsRegression --
+        /// and renaming it buys a tidier string at the price of four silent breakages. IDS ARE LIVE
+        /// CONTRACTS; DISPLAY NAMES ARE NOT. The id staying "hollow" while the player reads
+        /// "The Rootways" is intentional, not drift.
+        /// </para>
         /// </summary>
         public const string TunnelSceneId = "dg_hollow_roads";
 
-        /// <summary>Player-facing name of the tunnel. ASCII only (mobile font atlas).</summary>
-        public const string TunnelDisplayName = "The Hollow Roads";
+        /// <summary>
+        /// Player-facing name of the tunnel. ASCII only (mobile font atlas).
+        /// <para>
+        /// WO-1044 R1/R2 (owner ruling 2026-08-17, "yes to all defaults on 1044"): the tunnel is
+        /// <b>The Rootways</b>, and its origin is the Heart's own roots. The rename is not taste --
+        /// the retired name "The Hollow Roads" read as <i>the Hollowed's</i> roads, which promises
+        /// enemies in a graph that authors ZERO encounters, so the player walked a deliberately
+        /// empty crossroads and concluded the content was missing. "The Rootways" explains the
+        /// quiet as lore: the Heart's song runs down there, so the rot does not; and it explains why
+        /// the tunnel reaches exactly the four marches (roots reach where the wards are).
+        /// </para>
+        /// <para>
+        /// This is the ONLY authored display-name constant in the dungeon set -- no other
+        /// <c>dg_*</c> carries one -- which is why R1 costs one string and no risk.
+        /// The canonical record of the name lives in canon-strings.json ("tunnelName", dual copy);
+        /// this const is the Core-assembly copy the portal spawner reads, kept in step by
+        /// BiomeRoadsRegression Case 7.
+        /// </para>
+        /// </summary>
+        public const string TunnelDisplayName = "The Rootways";
 
         /// <summary>
         /// Fraction of the measured half-extent at which a drop sits.

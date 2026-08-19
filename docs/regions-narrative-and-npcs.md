@@ -151,6 +151,7 @@ Add to `narrative-bible.md` §9 once ratified:
 | Term | Meaning |
 |---|---|
 | The ward-tether | The reach of the Heart's song past the walls; extended by relighting ward-stones |
+| **The Rootways** | The tunnel from the castle hub to the four marches, made by the Heart's own roots. Ruled WO-1044 R1/R2 (owner 2026-08-17), replacing "The Hollow Roads". **Code/scene id stays `dg_hollow_roads` and is NOT renamed** - it is a live contract in four places. Ids are contracts; display names are not. |
 | The Goldfields | Eastern region — warm grassland, the last open road |
 | Stoneback Ridge | Western region — cold high stone, frost-spirits, deepest seams |
 | Mirewood | Southern region — drowned swamp, the main march, a sunken first valley |
@@ -173,9 +174,31 @@ Add to `narrative-bible.md` §9 once ratified:
 1. **Is the ward-tether the exploration mechanic?** It unifies Rung 3 + resource nodes + the Arcane Tower lore. If yes, it should become its own work order (suggested: WO-112, ward-stone relight + reach system) and feed WO-111.
 2. **How explicit should the Alduin / previous-Keeper threads get?** My pick: keep them as implication in v1 (Wren's healers, Bram's fading, the One Who Remembers). Name nothing the player can't infer. It matches the bible's restraint.
 3. **Do NPCs give repeatable side-objectives or one-time story beats?** My pick: one anchor questline per region for v1 (the four plotlines above), with the resource node as the repeatable layer underneath.
-4. **The forgetting mechanic in the Ashwood** (HUD dims / song fades past a dark ward) — keep as a real mechanic, or flavor-only? My pick: a gentle real mechanic, fully reversible, never punishing — it sells the dread without frustrating.
+4. ~~**The forgetting mechanic in the Ashwood** (HUD dims / song fades past a dark ward) — keep as a real mechanic, or flavor-only?~~ **★ RULED 2026-08-17 (WO-1044 R6, owner: "yes to all defaults on 1044"): a REAL mechanic — HUD dim + audio mute past a dark ward, fully reversible and never punishing, relit by a ward-stone.** Pair it with the ward-stones as the only safe islands, so Ashwood is played stone-to-stone. This question is closed; do not re-litigate it.
 
 Defaults if unanswered: ward-tether adopted, threads kept implicit, one questline per region, forgetting kept as a gentle reversible mechanic.
+
+---
+
+## 9. Ratified identity — see the narrative doc (WO-1044, owner 2026-08-17)
+
+The owner ratified all eleven rulings of `WorkOrders/WORK_ORDER_1044_biome_identity.md` on 2026-08-17
+("yes to all defaults on 1044"). The canon now lives in
+**`docs/ECHOES_OF_ELARION_NARRATIVE.md` §5c** — the tunnel's name and origin, the four palettes in
+value/texture/light, the signature hazard per march, the Echo association, the first-arrival frame per
+march, and the per-region ambient beds. Two rulings that land on *this* document:
+
+- **Region names (R3).** The **short** forms — `Goldfields`, `Stoneback`, `Mirewood`, `Ashwood` — are
+  the **UI** names (they fit the travel prompt). The long forms used throughout this document,
+  **"Stoneback Ridge"** and **"Corrupted Ashwood"**, are **prose only**. The two are not in conflict
+  any more; they have different jobs. Runtime authority is `ZoneManager.Regions`.
+- **Echo association (R4/R5), flavour only.** Elowen/Goldfields, Doran/Stoneback, Corvin/Mirewood,
+  Bran/Ashwood; **Aldwin and Maren stay home** (the founding Echo and the hearth-keeper).
+  **⛔ Never a harvest gate** — CLAUDE.md §7 rules Echo affinity an additive match bonus, never a lock.
+
+**The nine NPCs in §6 above are lore-complete and data-empty** — not one of them exists in
+`Assets/Resources/Data/Canonical/dialogue/dialogues.json`. That is a build ticket, not a creative one,
+and it is listed as a follow-on in §5c of the narrative doc.
 
 ---
 
