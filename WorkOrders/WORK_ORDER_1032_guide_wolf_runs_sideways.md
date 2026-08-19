@@ -1,6 +1,6 @@
 # WORK ORDER 1032 — The guide wolf runs sideways: a hand-authored yaw fix for a mesh that was replaced
 
-**Status:** READY TO IMPLEMENT (⚠ step 1 is measurement — see §3)
+**Status:** DONE — completed and verified by the owner 2026-08-19.
 **Minted:** 2026-08-16 (UI seat) — provenance stack bumped 1032 → 1033 in the same edit
 **Lane:** Pets / visual orientation. Disjoint from WO-1031 (which removes a dialogue, not the body).
 **Provenance:** owner 2026-08-16, verbatim **"wOLF RUNS SIDEWAYS"**, with an FTUE screenshot — the guide
