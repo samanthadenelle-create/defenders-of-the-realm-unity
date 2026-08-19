@@ -1,7 +1,78 @@
 # Lanes â€” Work-Order Numbers Only (for CLI)  Â·  reconciled 2026-06-12 (nightly refill)
 
-> ## PROD SERIES (post-launch): next free = **PROD-006**.
-> *(Docs seat minted **PROD-005** and bumped 005 -> 006 in this SAME edit, per the sec.2 rule that a
+> ## PROD SERIES (post-launch): next free = **PROD-013**.
+> *(Docs seat minted **PROD-012** and bumped 012 -> 013 in this SAME edit. **PROD-012** = IS INTERNET
+> REQUIRED on first run — an OWNER DECISION, not a defect, deliberately left BLOCKED with no answer
+> proposed. The CDN migration DELETED `Assets/Resources/Structures` and `Assets/Resources/Enemies`
+> (verified absent), so the Addressables-first / Resources-fallback chain has NO second tier: a
+> disconnected first run = no buildings, no enemy models. The owner's nuance is CORRECT — bundles
+> cache (`m_UseAssetBundleCache: 1`), so it is a FIRST-RUN-per-build requirement, not per-launch. The
+> miss is LOUD to us (`StructureAssetLoader.cs:139` FlowTrace.Fail) and SILENT to the player. Three
+> rulings owed: store-listing declaration; an honest no-connection screen with retry; whether a
+> minimal offline FLOOR is wanted — that third one is the ONLY thing that would justify duplication,
+> and duplication carries the PROD-010 §1 already-installed-APK hazard.)*
+> *(Earlier: Docs seat minted **PROD-011** and bumped 011 -> 012 in this SAME edit. **PROD-011** = NOTHING gates
+> an APK-vs-bucket content mismatch — tonight the APK's `structure_art_..._7608a3cb` was absent from
+> R2 and the morning build's enemy bundle had never been uploaded, caught ONLY BY HAND; `16e22dba3`
+> already conceded *"NO GATE COULD HAVE CAUGHT THIS"*. The gate: parse the built catalog's remote
+> `m_InternalId`s, `list_objects_v2` the bucket, diff — every input already exists in
+> `tools/r2_sync.py`. Three sharp edges to fix in the same change: `--push ServerData/Android`
+> FLATTENS to the bucket root and the docstring at `:21` STILL teaches that wrong form; `--push` skips
+> by SIZE and `catalog_*.hash` is always 32 bytes so a reused bundleVersion silently skips; `--check`
+> proves credentials ONLY. Bundles the `m_RetryCount: 0` / `m_Timeout: 0` fix (schema `:36`/`:33`),
+> which PROD-009 makes mandatory.)*
+> *(Earlier: Docs seat minted **PROD-010** and bumped 010 -> 011 in this SAME edit. **PROD-010** = the first-run
+> content signal + an opt-in OFFLINE download, owner-designed (*"lets keep the cdn"*, *"registering
+> build to user and creating profile"*, *"watching the left hand while the right hand does the
+> work"*). WHY keeping the CDN was RIGHT: `m_DisableCatalogUpdateOnStart: 0` means already-installed
+> APKs adopt the new remote catalog, so re-pointing an asset local = a path that does not exist inside
+> shipped builds = INVISIBLE BUILDINGS for every existing player. Caching is ON
+> (`m_UseAssetBundleCache: 1`), so the cost is one-time PER BUILD. ⛔ THE COPY MUST BE TRUE PER
+> LAUNCH — beats selected from measured inputs, and when nothing is true SHOW NOTHING; a fixed string
+> claiming profile creation on the fifth launch is the `[[missing:market]]` defect class. No timer-driven
+> beats, no hardcoded MB.)*
+> *(Earlier: Docs seat minted **PROD-009** and bumped 009 -> 010 in this SAME edit. **PROD-009** = enemy content
+> is ALL-OR-NOTHING and loads on the MAIN THREAD (`EnemyAssetLoader.cs:115` `WaitForCompletion`;
+> PackTogether + ZERO labels on all 78 `Enemy_Art` entries; NO prewarm exists anywhere). Owner ruling
+> *"one family not every family"* / *"streaming all seems wasteful"*: on-demand PER FAMILY, labels
+> DERIVED from `enemies.json`'s `family` field (19 rows: hollow/troll/orc) via an editor tool, never
+> hand-assigned. ⛔ THE ASYNC LOADER IS A HARD PREREQUISITE — on-demand on a BLOCKING loader is
+> strictly WORSE than today, because it moves the freeze from the loading screen INTO a fight. Roster
+> lookahead is possible because `WaveCompositionBuilder.Build` is a pure deterministic static
+> (`:169`), but it re-seeds the GLOBAL RNG (`:179`) so `Random.state` must be saved/restored.
+> STRUCTURES stay WHOLE (19.71 MiB): they are player-chosen, so there is no roster to read ahead.
+> PROD-011 is a PREREQUISITE (more bundles + `m_RetryCount: 0` = permanent misses).)*
+> *(Earlier: Docs seat minted **PROD-008** and bumped 008 -> 009 in this SAME edit. **PROD-008** = NO ORACLE
+> CAN SEE ORIENTATION — every orientation defect this project shipped went out compile-green and
+> regression-green, because the only oracle is the owner's eyes. The instrument already exists
+> (`WoodenWatchtowerBuilder.cs:270-278`, `UprightAspectMin = 1.2f`, measured 1.70-1.92 upright vs
+> 0.52-0.59 down). ⛔ A GLOBAL aspect threshold FALSE-POSITIVES on wide buildings
+> (`House_Medieval_Medium` = 0.72 upright), so the PRIMARY assert must be HEIGHT FIDELITY
+> (`bounds.size.y` vs `YHeightVariable * heightMul`, threshold-free) with the 1.2 band scoped to
+> tower-class rows. `RealmStore` is not a catalog row and is a stated coverage GAP, not a special
+> case. Must be proven to FAIL pre-PROD-007-fix and PASS after.)*
+> *(Earlier: Docs seat minted **PROD-007** and bumped 007 -> 008 in this SAME edit. **PROD-007** = commit
+> `f995c4706`'s axis-conversion pass corrected the WRONG FILE — for STRUCTURES the
+> `Assets/OffsetForge/offsets.json` rows it retired are INERT (`AttachmentOffsetRegistry` is keyed by
+> hero/enemy attachment mesh ids). The LIVE channel is `entry.orientation` in
+> `structures-catalog.json`, applied at `StructureFactory.cs:151-158`, which still carried
+> `[-90,0,0]` — baked mesh + legacy -90 = the building lies down. Five rows zeroed in tree
+> (forge/workshop/jeweler/barracks/tower_ballista), catalog v22 -> v23, dual copies md5-identical.
+> ⛔ EIGHT OTHER ROWS KEEP A LIVE -90 AND ARE CORRECT (pet-house, market, arcane-tower,
+> collector_farm, collector_lumbermill, lumberyard, foundry, silo) — a "tidy up the -90s" pass would
+> lay all eight down, including the FTUE's first building. OPEN: `Tower_Wooden_Watchtower_L3` is
+> double-corrected via `preservePrefabRotation` (WO-928 regressing) and was deliberately left.)*
+> *(Earlier: Docs seat minted **PROD-006** and bumped 006 -> 007 in this SAME edit, per the sec.2 rule that a
+> mint and its banner bump are ONE edit. **PROD-006** = the SIGN IN gate presents to a player whose
+> wallet is ALREADY connected (owner, LIVE build: *"im already signed in should not show this
+> screen"*). Failure class (b) WRONG SOURCE, NOT a race: `LoginPanelController.cs` pre-fix line 106
+> read `FirebaseAuthService.IsSignedIn` as the gate's ONLY input, and that file's own identity law
+> (`:556-557`) says an email/Google success binds NOTHING — so a wallet-only player would have seen
+> this wall on EVERY launch forever. Fixed in tree tonight (pure `ShouldContinueWithoutLogin` seam +
+> `GameStateService.HasAttestedWalletIdentity`), COMPILE_GATE_OK, pinned by
+> `Assets/Editor/Regression/LoginGateRegression.cs` [login-gate]. ⛔ NO delay/timeout constant was
+> added and none may be added — a timing knob would encode the WRONG diagnosis permanently.)*
+> *(Earlier: Docs seat minted **PROD-005** and bumped 005 -> 006 in this SAME edit, per the sec.2 rule that a
 > mint and its banner bump are ONE edit. **PROD-005** = the default shield renders THROUGH the hero's
 > body and the break survives a dungeon->town port (owner, LIVE build). Diagnostic ancestor = **WO-994**,
 > left INTACT and bannered — it holds the trace-proven RCA. Approach: REPLACE the asset
