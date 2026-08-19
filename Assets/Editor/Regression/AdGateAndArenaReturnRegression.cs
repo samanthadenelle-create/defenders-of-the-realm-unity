@@ -37,6 +37,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.IO;
 using System.Reflection;
 using System.Text;
@@ -102,16 +103,29 @@ namespace DeNelle.Editor
                    ?? FindType("RewardedAdManager");
             if (mgr == null) { failures.Add("RewardedAdManager type not found"); return; }
 
-            var show = mgr.GetMethod("ShowAdInternal",
-                BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
-            if (show == null)
+            // ⛔ ALL OVERLOADS, NOT GetMethod(name). WO-1125 added the ASYNC seam
+            // ShowAdInternal(Action, Action<AdShowResult>) beside the legacy sync one, and a
+            // single-name GetMethod threw AmbiguousMatchException the moment it existed — this
+            // suite went RED on a change that was correct, and the exception said nothing about
+            // ads. Enumerating also states the rule better than picking one did: NO overload of
+            // this seam may be void, now or later. A future third overload is covered for free.
+            var shows = mgr.GetMethods(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)
+                           .Where(m => m.Name == "ShowAdInternal")
+                           .ToArray();
+            if (shows.Length == 0)
                 failures.Add("RewardedAdManager.ShowAdInternal not found — the SDK seam is gone.");
-            else if (show.ReturnType != typeof(bool))
-                failures.Add("RewardedAdManager.ShowAdInternal returns " + show.ReturnType.Name +
-                             ", expected bool. The void form is the old always-granting stub — it " +
-                             "called onReward?.Invoke() unconditionally, i.e. a free reward with no ad.");
             else
-                log.AppendLine("[ad-gate] ShowAdInternal returns bool (cannot silently grant)");
+            {
+                foreach (var s in shows)
+                    if (s.ReturnType != typeof(bool))
+                        failures.Add("RewardedAdManager.ShowAdInternal(" +
+                                     string.Join(", ", s.GetParameters().Select(p => p.ParameterType.Name)) +
+                                     ") returns " + s.ReturnType.Name + ", expected bool. The void form is " +
+                                     "the old always-granting stub — it called onReward?.Invoke() " +
+                                     "unconditionally, i.e. a free reward with no ad.");
+                log.AppendLine("[ad-gate] ShowAdInternal x" + shows.Length +
+                               " overload(s), all return bool (none can silently grant)");
+            }
 
             var stub = ReadRepoFile("Assets/_Modules/Village/Monetization/RewardedAdManager.cs");
             if (stub != null && stub.Contains("protected virtual void ShowAdInternal"))

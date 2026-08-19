@@ -44,12 +44,7 @@
       "_note": "UNREACHABLE IN V1 - no enabled placement references it. Kept as vocabulary. Coins are a SOFT currency with no purchase path, so it does not trip _LAW_1; it is parked by D4 (ads stay on queue timers for V1), not by policy."
     },
     {
-      "id": "reward.glimmer.trickle",
-      "kind": "currency",
-      "grant": { "currency": "glimmer", "amount": 15 },
-      "description": "+15 glimmer (cosmetic shop currency)",
-      "maxStack": 3,
-      "_note": "UNREACHABLE IN V1 - same as above. Glimmer buys cosmetics only."
+      "_REMOVED_2026_08_19_reward_glimmer_trickle": "DELETED (owner ruling 2026-08-19). It granted 15 glimmer and was an ORPHAN - no placement referenced it - but _LAW_1 bans an ad reward paying any currency BOUGHT WITH REAL MONEY, and glimmer is still sold in packs.json today (glimmer=300, glimmer=400, a bundle with glimmer:1000). Its own _note called it safe because 'glimmer buys cosmetics only', which was true of the SPEND side and silent about the SELL side. Wiring any placement to it would have shipped a policy violation past a guard that may not list glimmer as premium. Owner: 'we removed glimmer long time ago', 'we use crystals' - the wider retirement is WO-1126, which is blocked on a ruling because it touches three months of real player balances. This one line needed no ruling: an orphan on the banned side of LAW 1 is pure downside."
     },
     {
       "id": "reward.harvest.doubler",
