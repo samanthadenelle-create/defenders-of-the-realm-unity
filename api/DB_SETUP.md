@@ -79,7 +79,9 @@ tower_swaps
 Spot-check the seed promo code:
 
 ```sql
-SELECT code, reward_crystals, active FROM promo_codes;   -- expect TEST10, 10, true
+-- Expect ZERO rows on a plain apply (2026-08-18: the TEST10 seed is opt-in — see
+-- note 9). TEST10 appears only if you ran `SET dotr.seed_test_codes = 'on';` first.
+SELECT code, reward_crystals, active FROM promo_codes;
 ```
 
 Check indexes landed:
@@ -204,9 +206,38 @@ analytics' `clientTs`). `tx_sig` has a partial-unique index to dedup re-posts.
    raw; convert in queries with the right factor. The trustworthy ordering
    column on every table is the server-side `*_at` / `received_at` timestamp.
 
-9. **Seed `TEST10` is included** because the client ships an editor menu item
-   that redeems it. Remove the seed `INSERT` block at the bottom of `schema.sql`
-   for production if you don't want a live working code.
+9. **Seed `TEST10` is OPT-IN as of 2026-08-18** — it used to run unconditionally.
+   ⚠ This note previously read: *"Seed `TEST10` is included ... Remove the seed
+   `INSERT` block at the bottom of `schema.sql` for production if you don't want a
+   live working code."* Corrected, not deleted, because that instruction is how a
+   public, uncapped, never-expiring free-crystal code got into a **published**
+   game's schema: the game is live, the redeem door is in the Realm Store
+   (`PackStore.cs:207-213`, deliberately outside the purchase flag), and the
+   safety step was a sentence someone had to remember. It is now a default.
+   The seed only runs when the SAME session first does:
+
+   ```sql
+   SET dotr.seed_test_codes = 'on';
+   ```
+
+   A plain paste of `schema.sql` leaves `TEST10` unseeded. Even when opted in the
+   row is capped (25 redemptions) and expires (30 days). **Dev/staging only.**
+
+   To check whether an EARLIER run already put it in production (read-only):
+
+   ```sql
+   SELECT code, active, reward_crystals, reward_coins, max_redemptions,
+          per_player_limit, expires_at, bound_wallet, created_at
+     FROM promo_codes WHERE code = 'TEST10';
+   SELECT COUNT(*) AS burned FROM promo_redemptions WHERE code = 'TEST10';
+   ```
+
+   If present and active, prefer the kill-switch over a delete — `promo_redemptions.code`
+   is FK'd `ON DELETE CASCADE`, so deleting the code erases the redemption audit trail:
+
+   ```sql
+   UPDATE promo_codes SET active = FALSE WHERE code = 'TEST10';
+   ```
 
 10. **Codes are uppercase.** Both `PromoCodeService` and `ReferralService`
     uppercase the code client-side before sending. The redeem/generate/claim
@@ -223,10 +254,16 @@ prior table being populated):
 1. `player_data` — already live; load/save round-trip from the game.
 2. `analytics_events` — boot the game; `session_start` should appear.
 3. `promo_codes`/`promo_redemptions` — redeem `TEST10`; a redemption row appears,
-   a second redeem returns `ALREADY_REDEEMED`.
+   a second redeem returns `ALREADY_REDEEMED`. **Two 2026-08-18 caveats:** the code
+   must have been seeded opt-in (note 9), and `/api/promo/redeem` is now **wallet
+   rail only** — a guest (`X-Guest-Id`) is refused with `AUTH_WALLET_REQUIRED`, so
+   smoke-test it from a wallet-connected client, not a guest one.
 4. `referrals` — call generate twice; same code both times.
 5. `referral_claims` — claim from a *second* player; `SELF_REFERRAL` from the
-   same player; `ALREADY_CLAIMED` on a second claim.
+   same player; `ALREADY_CLAIMED` on a second claim. **2026-08-18:** `/api/referral/claim`
+   is now **wallet rail only** (it pays crystals), so both players must be
+   wallet-connected; a guest claimer is refused with `AUTH_WALLET_REQUIRED`.
+   `/api/referral/generate` still accepts guests — minting your own code grants nothing.
 6. `tower_swaps` — perform a paid swap; one row, re-post is deduped by `tx_sig`.
 7. `bug_reports` — file a bug from the Help menu (resolve the host mismatch first).
 

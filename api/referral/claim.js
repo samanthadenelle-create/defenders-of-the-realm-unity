@@ -9,12 +9,30 @@
 // STRAIGHT FROM THE BODY with no proof, and referral_claims is UNIQUE(claimer_id)
 // — so ONE forged claim permanently consumed a victim's only claim, and the
 // SELF_REFERRAL guard (bare string equality on an unproven id) was trivially
-// sybilled. It now runs through the SAME rail /api/game/save uses
-// (_lib/wallet-auth.authenticate). No new auth scheme; the one that existed.
+// sybilled. It now runs through the SAME rail /api/game/save uses.
+//
+// ⚠ CORRECTED 2026-08-18 — THE 08-15 AUDIT ONLY HALF-CLOSED THAT. The paragraph
+// above used to end "(_lib/wallet-auth.authenticate). No new auth scheme; the one
+// that existed." That is true and it was NOT ENOUGH: authenticate() routes a
+// guest-shaped id to verifyGuest, which merely regex-checks a client-MINTED
+// `guest-local-<64 hex>` bearer id and echoes it back — no signature at all
+// (BackendRequestSigner.TryAttachAsync:111-114). So the sybil this file's own
+// header names as the thing being fixed SURVIVED the fix: mint a fresh guest id,
+// claim, mint another, claim again. UNIQUE(claimer_id) bounds a PERSON; it does
+// not bound someone who can invent people. And SELF_REFERRAL still compared a
+// chosen string to a chosen string whenever both sides were guests.
+//
+// NOW: this route calls _lib/wallet-auth.authenticateGranting() — WALLET RAIL
+// ONLY. Claiming pays crystals, so the claimer must present an ed25519 signature
+// over the exact body bytes plus a single-use nonce. A guest is refused with
+// AUTH_WALLET_REQUIRED. THIS is what finally makes the SELF_REFERRAL check and the
+// one-claim-ever constraint mean something: both now key off an identity backed by
+// a private key the attacker would have to own, not a string they typed.
 //
 // Client : Assets/_Modules/Core/Referral/ReferralService.cs (ClaimAsync)
 //   POST  application/json   (raw body — bodyParser disabled)
-//   Headers: X-Guest-Id, or X-Wallet + X-Nonce + X-Signature
+//   Headers: X-Wallet + X-Nonce + X-Signature   (WALLET RAIL ONLY as of 2026-08-18;
+//            X-Guest-Id is no longer accepted here — see the correction above)
 //   Body  : { playerId, code }   (code uppercased client-side)
 //   Success: { success: true, reward: { crystals }, message }
 //   Failure: { success: false, error: "SELF_REFERRAL" | "ALREADY_CLAIMED"
@@ -37,7 +55,7 @@
 // =============================================================================
 
 const { neon } = require('@neondatabase/serverless');
-const { AuthCode, authenticate, WALLET_MAX_BODY_BYTES, isGuestId } = require('../_lib/wallet-auth');
+const { AuthCode, authenticateGranting, WALLET_MAX_BODY_BYTES, isGuestId } = require('../_lib/wallet-auth');
 const { applyCors, newRef, quietFail, readBodyExact } = require('../_lib/http');
 const { logAuthReject } = require('../_lib/audit');
 
@@ -106,17 +124,23 @@ async function handler(req, res) {
         return quietFail(res, 500, AuthCode.SERVER_ERROR, ref);
     }
 
-    // ── AUTH GATE — the claimer must PROVE they are the claimer ────────────
-    // This is also what makes the SELF_REFERRAL check below mean anything: the
-    // string equality now compares a proven identity, not a chosen one.
+    // ── AUTH GATE — WALLET RAIL ONLY (2026-08-18) ──────────────────────────
+    // The claimer must PROVE they are the claimer, and "proof" here has to mean a
+    // signature: this route PAYS crystals, and a guest id is a string the client
+    // chooses. authenticateGranting, NOT authenticate — see the correction in this
+    // file's header. This is also what makes the SELF_REFERRAL check below mean
+    // anything: the string equality now compares a proven identity, not a chosen
+    // one. Fails CLOSED — a thrown auth check is a refusal, never a pass-through.
     let auth;
     try {
-        auth = await authenticate(sql, req, rawBody, claimerId);
+        auth = await authenticateGranting(sql, req, rawBody, claimerId);
     } catch (err) {
         console.error('[referral/claim] Auth check error:', err);
         return quietFail(res, 500, AuthCode.SERVER_ERROR, ref);
     }
     if (!auth.ok) {
+        // LOUD server-side (full audit row + runtime line), QUIET to the player
+        // (a stable code + ref, never a wall of JSON).
         await logAuthReject(sql, req, {
             code: auth.code, ref, identity: auth.identity, mode: auth.mode, detail: auth.detail,
         });

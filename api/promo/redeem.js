@@ -10,19 +10,40 @@
 // OTHER players: POST a victim's id with a live code and UNIQUE(code, player_id)
 // locks them out of it forever, while a loop of invented ids burns a launch
 // code's max_redemptions before anyone real arrives. It now goes through the SAME
-// rail /api/game/save uses (_lib/wallet-auth.authenticate): a base58 id demands
-// an ed25519 signature over the exact body bytes plus a single-use nonce; a
-// guest-local id demands the matching X-Guest-Id. No second auth scheme, no
-// weaker path — the route simply never had the one that already existed.
+// rail /api/game/save uses.
+//
+// ⚠ CORRECTED 2026-08-18 — THE 08-15 AUDIT DID NOT CLOSE THAT HOLE. It closed it
+// for BASE58 WALLET IDS ONLY. The paragraph above used to end:
+//     "...a base58 id demands an ed25519 signature over the exact body bytes plus
+//      a single-use nonce; a guest-local id demands the matching X-Guest-Id. No
+//      second auth scheme, no weaker path."
+// The guest half of that sentence WAS the weaker path. `X-Guest-Id` carries NO
+// signature (BackendRequestSigner.TryAttachAsync:111-114 attaches the header and
+// returns) and the server only regex-checks it and echoes it back
+// (_lib/wallet-auth.verifyGuest). The id is MINTED BY THE CLIENT, so an attacker
+// chooses it: every fresh `guest-local-<64 hex>` is a brand-new "player". That
+// burns max_redemptions (step 4 below counts ROWS) and steps over per_player_limit
+// (step 5 counts rows keyed by that same chosen id). The cap was decorative.
+// The stale comment is kept above, struck through in words rather than deleted,
+// because "an audit says this is closed" is exactly what stopped anyone looking.
+//
+// NOW: this route calls _lib/wallet-auth.authenticateGranting() — WALLET RAIL
+// ONLY. A guest is refused with AUTH_WALLET_REQUIRED. Redeeming grants value, and
+// a self-asserted identity may never be handed value on a published game.
+// ⛔ Do not "restore guest redeem for convenience". If guests must ever redeem,
+//    the answer is a server-side scarcity key an attacker cannot mint (attested
+//    device / IP-and-code budget), never trusting the id they chose.
 //
 // Client : Assets/_Modules/Core/Promo/PromoCodeService.cs
 //   POST  application/json   (raw body — bodyParser disabled; the signature is
 //                             over the EXACT bytes, same as save.js)
-//   Headers: X-Guest-Id, or X-Wallet + X-Nonce + X-Signature
+//   Headers: X-Wallet + X-Nonce + X-Signature   (WALLET RAIL ONLY as of 2026-08-18;
+//            X-Guest-Id is no longer accepted here — see the correction above)
 //   Body  : { playerId, code }   (code is uppercased client-side; store/compare uppercase)
 //   Success: { success: true, reward: { crystals, coins }, message }
 //   Failure: { success: false, error: "INVALID_CODE" | "ALREADY_REDEEMED"
-//                                    | "EXPIRED" | "PLAYER_LIMIT_REACHED" }
+//                                    | "EXPIRED" | "PLAYER_LIMIT_REACHED"
+//                                    | "REWARD_UNAVAILABLE" }
 //
 // GATE → ERROR mapping (per schema.sql, table 3):
 //   row missing / active=false                 → INVALID_CODE
@@ -30,6 +51,8 @@
 //   global redemptions >= max_redemptions       → ALREADY_REDEEMED
 //   this player already redeemed this code      → ALREADY_REDEEMED
 //   player's distinct redeemed codes >= per_player_limit → PLAYER_LIMIT_REACHED
+//   reward_pack_sku set (client cannot pay it) → REWARD_UNAVAILABLE  ← NOT consumed
+//   reward is zero crystals AND zero coins     → REWARD_UNAVAILABLE  ← NOT consumed
 //
 // Driver: @neondatabase/serverless
 // Status codes: 200 | 400 | 401 | 500
@@ -40,7 +63,7 @@
 // =============================================================================
 
 const { neon } = require('@neondatabase/serverless');
-const { AuthCode, authenticate, WALLET_MAX_BODY_BYTES, isGuestId } = require('../_lib/wallet-auth');
+const { AuthCode, authenticateGranting, WALLET_MAX_BODY_BYTES, isGuestId } = require('../_lib/wallet-auth');
 const { applyCors, newRef, quietFail, readBodyExact } = require('../_lib/http');
 const { logAuthReject } = require('../_lib/audit');
 
@@ -111,15 +134,22 @@ async function handler(req, res) {
         return quietFail(res, 500, AuthCode.SERVER_ERROR, ref);
     }
 
-    // ── AUTH GATE ──────────────────────────────────────────────────────────
+    // ── AUTH GATE — WALLET RAIL ONLY (2026-08-18) ──────────────────────────
+    // authenticateGranting, NOT authenticate: this route hands out crystals and
+    // coins, and a guest id is a value the CLIENT picks. See the correction in
+    // this file's header and the honesty note in _lib/wallet-auth.verifyGuest.
+    // Fails CLOSED — a thrown auth check is a refusal, never a pass-through.
     let auth;
     try {
-        auth = await authenticate(sql, req, rawBody, playerId);
+        auth = await authenticateGranting(sql, req, rawBody, playerId);
     } catch (err) {
         console.error('[promo/redeem] Auth check error:', err);
         return quietFail(res, 500, AuthCode.SERVER_ERROR, ref);
     }
     if (!auth.ok) {
+        // LOUD server-side (a full audit row + a runtime line), QUIET to the
+        // player (a stable code + ref; the client maps 401/400 to its one calm
+        // "we couldn't confirm your identity" sentence — never raw JSON).
         await logAuthReject(sql, req, {
             code: auth.code, ref, identity: auth.identity, mode: auth.mode, detail: auth.detail,
         });
@@ -134,7 +164,7 @@ async function handler(req, res) {
         const codeRows = await sql`
             SELECT code, reward_crystals, reward_coins, message,
                    active, max_redemptions, per_player_limit, expires_at,
-                   bound_wallet
+                   bound_wallet, reward_pack_sku
             FROM promo_codes
             WHERE code = ${code}
             LIMIT 1
@@ -172,6 +202,53 @@ async function handler(req, res) {
         if (promo.bound_wallet != null && String(promo.bound_wallet).trim() !== '' &&
             String(promo.bound_wallet).trim() !== playerId) {
             return res.status(200).json({ success: false, error: 'INVALID_CODE' });
+        }
+
+        // ── 1c. reward_pack_sku — REFUSE BEFORE THE BURN (added 2026-08-18) ──────────
+        // schema.sql:301 has defined reward_pack_sku since 2026-08-17 ("SET = grant
+        // this pack's whole contents"), and step 1 above did not SELECT it until this
+        // change. A pack-sku code therefore passed EVERY gate, reached step 6, and
+        // INSERTed a promo_redemptions row — which UNIQUE(code, player_id)
+        // (schema.sql:381) makes PERMANENT — and then returned
+        // { crystals: 0, coins: 0 }. The client's PromoCodeService.ApplyReward logs
+        // "reward carried no crystals and no coins — nothing to grant" and stops.
+        // Net effect: the player's code is spent forever and they get NOTHING, with
+        // no path back short of an operator deleting the row by hand.
+        //
+        // ⛔ THE RULE THIS ENCODES: A CODE MUST NEVER BURN FOR ZERO REWARD.
+        //
+        // WHY REFUSE RATHER THAN "HONOUR IT HERE": honouring it is not this file's to
+        // do. schema.sql:311-323 is explicit that the CLIENT applies pack contents
+        // through PackStoreVM.ApplyPackContents — the same seam a real purchase uses —
+        // and the client's RedeemResponse (PromoCodeService.cs) has NO pack field to
+        // receive a sku through. Inventing a server-side expansion of packs.json here
+        // would create the second definition of "a bundle of resources" that
+        // schema.sql:307-310 exists to forbid, and it would drift. So the honest,
+        // smallest, LOSSLESS move is: refuse, and do not consume.
+        //
+        // A refusal is RETRYABLE; a burn is not. The moment the client learns to carry
+        // a sku, the very same code in the player's hand still works. That asymmetry
+        // is the whole justification for this branch.
+        //
+        // This is an OPERATOR authoring error, not a player error, so it is LOUD in
+        // the runtime log (the owner authored a code the shipped client cannot pay)
+        // and QUIET to the player: REWARD_UNAVAILABLE is unmapped in
+        // PromoCodeService.MapErrorKey, so it lands on the calm KeyErrUnknown line —
+        // never a wall of JSON. It is deliberately NOT ALREADY_REDEEMED, which would
+        // tell the player their good code was spent.
+        //
+        // TO ENABLE PACK CODES LATER: add the sku to RedeemResponse + apply it via
+        // PackStoreVM.ApplyPackContents client-side, THEN replace this refusal with a
+        // pass-through of promo.reward_pack_sku. Not before — the burn is one-way.
+        const packSku = promo.reward_pack_sku != null ? String(promo.reward_pack_sku).trim() : '';
+        if (packSku !== '') {
+            console.error(
+                `[promo/redeem] REFUSED-UNBURNED code=${code} — reward_pack_sku="${packSku}" is set, but the ` +
+                'shipped client has no field to receive a pack sku and this endpoint will not expand packs ' +
+                'server-side (schema.sql:311-323). The code was NOT consumed. Author it with ' +
+                'reward_crystals/reward_coins, or ship client pack-sku support first.'
+            );
+            return res.status(200).json({ success: false, error: 'REWARD_UNAVAILABLE' });
         }
 
         // ── 2. Expiry ─────────────────────────────────────────────────────────
@@ -214,6 +291,26 @@ async function handler(req, res) {
         // ── 6. Record the redemption (snapshot the reward for audit) ─────────
         const crystals = promo.reward_crystals || 0;
         const coins    = promo.reward_coins    || 0;
+
+        // STRUCTURAL BACKSTOP (added 2026-08-18) — the last line before the burn.
+        // The pack-sku refusal at 1c closes the one KNOWN way a code reached this
+        // point paying nothing. This closes the CLASS: any code that would grant
+        // zero crystals AND zero coins is refused here, un-consumed, whatever put it
+        // in that state (a mis-authored row, a future column this file forgets to
+        // SELECT, a NULL where an integer was meant). The invariant is worth more
+        // than the branch that discovered it: INSERTing below is IRREVERSIBLE
+        // (UNIQUE(code, player_id), schema.sql:381) and there is no un-burn.
+        // A message-only "thanks for playing" code is also refused, deliberately:
+        // spending a player's one-shot code on a sentence is still spending it, and
+        // a refusal can be undone by authoring a reward while a burn cannot.
+        if (crystals <= 0 && coins <= 0) {
+            console.error(
+                `[promo/redeem] REFUSED-UNBURNED code=${code} — resolves to zero crystals AND zero coins ` +
+                `(reward_crystals=${JSON.stringify(promo.reward_crystals)}, reward_coins=${JSON.stringify(promo.reward_coins)}). ` +
+                'A code must never burn for nothing. The code was NOT consumed — fix the row, the player can retry.'
+            );
+            return res.status(200).json({ success: false, error: 'REWARD_UNAVAILABLE' });
+        }
 
         try {
             await sql`

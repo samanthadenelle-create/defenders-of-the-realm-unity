@@ -744,11 +744,67 @@ CREATE INDEX IF NOT EXISTS idx_achievement_grants_wallet
 -- =============================================================================
 -- OPTIONAL SEED — a test promo code so /api/promo/redeem can be smoke-tested.
 -- The client ships an editor menu "Simulate Promo Redeem (TEST10)", so seed it.
--- Comment this out in production if you don't want a live test code.
+--
+-- ⚠ GUARDED 2026-08-18 — THIS BLOCK USED TO RUN UNCONDITIONALLY. Its own comment
+-- said "Comment this out in production if you don't want a live test code" and it
+-- was NOT commented out. schema.sql is what api/DEPLOY.md step 2 tells the operator
+-- to paste into the Neon SQL editor, so following the deploy checklist SEEDED A
+-- LIVE, PUBLIC, UNCAPPED, NEVER-EXPIRING FREE-CRYSTAL CODE into production:
+--     active = TRUE, max_redemptions = NULL (unlimited), per_player_limit = NULL,
+--     expires_at = NULL (forever), bound_wallet = NULL (anyone).
+-- The game is PUBLISHED and the redeem door is reachable in the Realm Store
+-- (PackStore.cs:207-213, deliberately outside the purchase feature flag), so
+-- "TEST10" is four keystrokes from being posted somewhere public. A relying-on-
+-- a-human-to-remember safety note is not a safety mechanism; the default had to
+-- change. Nothing is deleted here — the seed still exists, it is now OPT-IN.
+--
+-- ⛔ NOTE THE COMMENT IS KEPT, NOT STRIPPED. The record of what the default was is
+-- the reason the next reader believes the guard matters.
+--
+-- HOW TO SEED IT DELIBERATELY (dev/staging only) — run in the SAME session:
+--     SET dotr.seed_test_codes = 'on';
+--     \i schema.sql            -- (or paste this file)
+-- Anything else — a plain paste, a migration runner, a fresh Neon project — leaves
+-- TEST10 UNSEEDED. Re-running with the flag on is still idempotent.
+--
+-- Even when opted in, the seeded row is now DEFANGED relative to the old one:
+-- capped at 25 total redemptions and expiring 30 days out, so a leak from a test
+-- environment has a bounded blast radius instead of an unbounded one. Adjust
+-- deliberately if a test needs more; never remove the caps to "make testing easier".
+--
+-- ⚠ THIS GUARD PROTECTS FUTURE APPLICATIONS OF schema.sql. It says NOTHING about
+-- whether the row is ALREADY LIVE in the production database from an earlier run —
+-- this file cannot know that, and deleting production data is the OWNER'S call, not
+-- this script's. To find out, run against production (read-only):
+--     SELECT code, active, reward_crystals, reward_coins, max_redemptions,
+--            per_player_limit, expires_at, bound_wallet, created_at
+--       FROM promo_codes WHERE code = 'TEST10';
+--     SELECT COUNT(*) AS burned FROM promo_redemptions WHERE code = 'TEST10';
+-- If it is present and active, the least-destructive remedy is a kill-switch flip,
+-- NOT a delete (promo_redemptions.code is FK'd ON DELETE CASCADE, so deleting the
+-- code would also erase the audit trail of who redeemed it):
+--     UPDATE promo_codes SET active = FALSE WHERE code = 'TEST10';
 -- =============================================================================
-INSERT INTO promo_codes (code, reward_crystals, reward_coins, message, active)
-VALUES ('TEST10', 10, 0, 'Thanks for testing — 10 Aether Crystals!', TRUE)
-ON CONFLICT (code) DO NOTHING;
+DO $seed_test_codes$
+BEGIN
+    -- current_setting(..., true) returns NULL instead of erroring when the setting
+    -- was never set, which is precisely the "plain paste" case that must NOT seed.
+    IF COALESCE(current_setting('dotr.seed_test_codes', true), 'off') = 'on' THEN
+        INSERT INTO promo_codes (
+            code, reward_crystals, reward_coins, message, active,
+            max_redemptions, expires_at
+        )
+        VALUES (
+            'TEST10', 10, 0, 'Thanks for testing — 10 Aether Crystals!', TRUE,
+            25, NOW() + INTERVAL '30 days'
+        )
+        ON CONFLICT (code) DO NOTHING;
+        RAISE NOTICE 'schema.sql: TEST10 promo code SEEDED (dotr.seed_test_codes=on). Capped at 25 redemptions, expires in 30 days. DO NOT DO THIS IN PRODUCTION.';
+    ELSE
+        RAISE NOTICE 'schema.sql: TEST10 promo code NOT seeded (dotr.seed_test_codes is off/unset). This is the safe default.';
+    END IF;
+END
+$seed_test_codes$;
 
 -- =============================================================================
 -- END OF SCHEMA
