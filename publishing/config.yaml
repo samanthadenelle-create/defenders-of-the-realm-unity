@@ -40,7 +40,7 @@ app:
   name: Echoes of Elarion
 
   # Filled in BY THE CLI after the App NFT is minted. Leave empty.
-  address: ""
+  address: "5MG4atMRDSVn9t75oFz1KVxKdUkyz2wPi2MeunT8yFe6"   # App NFT, owner-provided 2026-08-19
 
   # Source: VERIFIED at Assets/Editor/AndroidBuild.cs:46 —
   #   private const string PackageId = "com.denellestudios.echoesofelarion";
