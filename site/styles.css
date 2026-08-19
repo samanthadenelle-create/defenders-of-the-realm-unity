@@ -564,3 +564,49 @@ blockquote.draftnote p { margin: 0; color: var(--parch-dim); }
   border: 1px solid var(--ink-line);
   box-shadow: var(--shadow);
 }
+
+/* ---------------------------------------------------------------------------
+   dApp Store CTA + QR (2026-08-19)
+   The gold button is the primary action on a Seeker; the QR is the desktop path.
+   Both live on the parchment/ink palette already defined above - no new colours.
+--------------------------------------------------------------------------- */
+.btn--gold {
+  border: 1px solid var(--gold-dim);
+  color: var(--gold);
+  background: rgba(232, 184, 75, 0.10);
+}
+.btn--gold:hover {
+  border-color: var(--gold);
+  background: rgba(232, 184, 75, 0.18);
+}
+
+.hero__note {
+  max-width: 46ch;
+  margin: 14px auto 0;
+  font-size: 0.9rem;
+  line-height: 1.55;
+  color: var(--parch-dim);
+}
+
+.qr {
+  margin: 28px 0 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+/* White quiet-zone behind the code: a QR on a dark ground is unreliable to scan, and the
+   card must read as deliberate rather than as an image that failed to theme. */
+.qr img {
+  display: block;
+  width: 240px;
+  height: 240px;
+  padding: 14px;
+  border-radius: 14px;
+  background: #ffffff;
+}
+.qr figcaption {
+  font-size: 0.82rem;
+  letter-spacing: 0.04em;
+  color: var(--parch-dim);
+}

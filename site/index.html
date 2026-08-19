@@ -91,9 +91,25 @@
     </p>
 
     <div class="hero__actions">
-      <span class="badge">Coming to the Solana dApp Store — Seeker</span>
+      <span class="badge">Live on the Solana dApp Store — Seeker</span>
+      <!-- Deep link. There is NO https listing URL for a dApp Store app: the store app registers
+           only the solanadappstore:// scheme (verified 2026-08-19 via
+           `dumpsys package com.solanamobile.dappstore`), so this is the only link that can open a
+           listing, and it resolves ONLY on a device with the store installed. Desktop visitors get
+           the QR below instead. See docs/SOLANA_STORE_LISTING.md. -->
+      <a class="btn btn--gold" id="dappStoreLink"
+         href="solanadappstore://details?id=com.denellestudios.echoesofelarion">
+        Get it on Solana dApp Store
+      </a>
       <a class="btn btn--ghost" href="#about">Enter the story</a>
     </div>
+
+    <!-- Shown only when the deep link did NOT open the store app (see the script at the end of the
+         page). Hidden by default so the hero stays clean for the Seeker visitors it works for. -->
+    <p class="hero__note" id="dappStoreFallback" hidden>
+      That link opens the Solana dApp Store, which lives on Solana Mobile devices such as the Seeker.
+      On a desktop or another phone, scan the code below with your Seeker instead.
+    </p>
   </div>
 </header>
 
@@ -153,6 +169,24 @@
   <!-- Screenshots: intentionally omitted until approved marketing frames exist.
        See site/README.md. Re-add #screens with local /assets/*.png when ready. -->
 
+  <section class="wrap section section--get" id="get-the-app">
+    <div class="section__label">Get it</div>
+    <h2 class="section__title">Play on Seeker</h2>
+    <p>
+      Echoes of Elarion is published on the Solana dApp Store, which ships on Solana Mobile devices.
+      Scan this with your Seeker to open the listing.
+    </p>
+    <!-- The QR is the DESKTOP path. The hero button is the on-device path: a solanadappstore:// link
+         cannot resolve anywhere the store app is not installed, so a page with only that link is a
+         dead end for most visitors. The image is hidden by script if the file is absent, so a missing
+         asset never renders as a broken image on a page dApp Store reviewers read. -->
+    <figure class="qr" id="dappStoreQr" hidden>
+      <img src="/qr-dappstore.png" alt="QR code linking to Echoes of Elarion on the Solana dApp Store"
+           width="240" height="240" loading="lazy" id="dappStoreQrImg">
+      <figcaption>Scan to download in the Solana dApp Store</figcaption>
+    </figure>
+  </section>
+
   <section class="wrap section section--support" id="support">
     <div class="support-card">
       <div class="section__label">Support</div>
@@ -180,6 +214,63 @@
     </p>
   </div>
 </footer>
+
+<script>
+  /* ---------------------------------------------------------------------------
+     dApp Store deep link + honest fallback.
+
+     WHY NOT THE ELAPSED-TIME TRICK. The common snippet starts a timer, waits ~1s and
+     redirects if `Date.now() - start < 1500`. That condition is TRUE on essentially every
+     run - a 1000 ms timeout elapses in about 1000 ms whether or not the app opened - so it
+     fires the fallback even when the store DID open, yanking the visitor to another page
+     out from under the app they just launched. Timer-throttling only reliably skews the
+     number on some browsers, which is why it appears to work while being wrong.
+
+     WHAT WE DO INSTEAD. The Page Visibility API answers the actual question: if the store
+     app opened, this page was backgrounded, so `document.hidden` is true (or a `pagehide` /
+     `blur` fired). Only when the page is STILL VISIBLE after the delay did nothing happen -
+     and only then do we say so.
+
+     AND WE DO NOT REDIRECT. Sending someone to a different site because a scheme did not
+     resolve is a guess about what they wanted. We reveal an explanation and point at the QR,
+     which is true on every device and cannot break.
+  --------------------------------------------------------------------------- */
+  (function () {
+    var link = document.getElementById('dappStoreLink');
+    var note = document.getElementById('dappStoreFallback');
+    var qr = document.getElementById('dappStoreQr');
+    var qrImg = document.getElementById('dappStoreQrImg');
+
+    // Only offer the QR if the asset actually exists - a broken image on the page a store
+    // reviewer reads is worse than no QR at all.
+    if (qr && qrImg) {
+      if (qrImg.complete && qrImg.naturalWidth > 0) qr.hidden = false;
+      qrImg.addEventListener('load', function () { qr.hidden = false; });
+      qrImg.addEventListener('error', function () { qr.hidden = true; });
+    }
+
+    if (!link || !note) return;
+
+    link.addEventListener('click', function () {
+      var left = false;
+      var markLeft = function () { left = true; };
+
+      // Any of these means the OS handed the visitor to the store app.
+      document.addEventListener('visibilitychange', function () {
+        if (document.hidden) markLeft();
+      });
+      window.addEventListener('pagehide', markLeft);
+      window.addEventListener('blur', markLeft);
+
+      window.setTimeout(function () {
+        if (left || document.hidden) return;   // the store opened - say nothing
+        note.hidden = false;
+        var target = document.getElementById('get-the-app');
+        if (target && target.scrollIntoView) target.scrollIntoView({ behavior: 'smooth' });
+      }, 1200);
+    });
+  })();
+</script>
 
 </body>
 </html>
