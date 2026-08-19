@@ -1,6 +1,36 @@
 # PROD-003 — The Realm Store gets its own permanent storefront
 
-**Status:** READY TO IMPLEMENT (§4 needs one owner ruling on placement)
+**Status:** IMPLEMENTED — AWAITING OWNER FELT-VERIFY (2026-08-18; owner ruled §4 = (a), NO ruling outstanding).
+Shipped across two commits: `233613615` (placement) and `72a43ea36` (scale, collider, oracle).
+DONE: storefront baked into Main_Castle_Overworld at (12,0,-32) by `Assets/Editor/RealmStorePlacer.cs`; RealmStoreVendor
+opens PanelId.RealmStore via the PackStoreBootstrap opener; NOT in structures-catalog.json or build-categories.json
+(both dual copies verified identical); not an IDamageableStructure; Coppin's shortcut intact and first in dialogues.json.
+**§3.4 SCALE — CLOSED.** Now routed through `VisualFactory.Skin` with `FitHeight` (the same seam `StructureFactory.Create`
+uses), so the scale is DERIVED, never typed. Measured: scale 6.46, boundsSize (6.68, 4.00, 7.71), height exactly 4.00 m
+against the 1.0 building-base cadence. Was ~1.2 m in a town of 4 m buildings.
+**COLLIDER — CLOSED, and the ticket's stated mechanism was WRONG.** The re-run was never blocked by the
+"add a collider if none" guard (the FBX imports `addColliders: 0` and the placer destroys the prior instance first).
+The real defect: `Renderer.bounds` is a WORLD-space AABB assigned straight into a LOCAL-space BoxCollider on a root
+yawed ~20.5 deg, so the box was inflated by the yaw even when the mesh was right. Now always recomputed with the root
+temporarily unrotated. Old size (1.034, 0.620, 1.195) centre z=0.4999 -> new size (4.705, 4.000, 6.474) centre (0, 2.000, 0).
+**§3.6 ORACLE — CLOSED.** `Assets/Editor/Regression/RealmStorefrontRegression.cs`, tag `[realm-storefront]`, registered in
+DataRegression (suite count 210 -> 211). Asserts MEASURED values, not existence: baked exactly once at the resolved
+placement, height within 10% of the derived target, base seated, vendor present, every script resolved and checked against
+IDamageableStructure, and absent from all FOUR catalog artifacts (whole normalised values, never substrings — both
+`structures-catalog.json` copies carry an authoring note saying "Realm Store" in prose that a grep would have gone red on).
+OPEN — 1 gap:
+  1. §3.2 THERE IS NO VENDOR NPC. `RealmStoreVendor` is a 6 m proximity component on the BUILDING; no NPC body is placed.
+     ⛔ WHICH BODY IS A CREATIVE CALL FOR THE OWNER — deliberately not invented. Blocks nothing else.
+DURABILITY NOTE (mitigated, not closed): placed by a standalone editor script, not CastleHubBuilder. It survives a
+CastleHubRoot rebuild (scene-root sibling) but is NOT recreated by a hub rebuild from an empty scene. That loss is now
+LOUD — the `[realm-storefront]` suite goes red and both scripts carry headers naming the coupling. Making CastleHubBuilder
+own it is structural work for its own ticket.
+GATES (2026-08-18): `COMPILE_GATE_OK` · `REALM_STORE_PLACED_OK` · `NAVMESH_BAKE_OK 1 surface` ·
+`REALM_STORE_REACHABLE_OK nearest walkable 0.08m` (was 0.33 m) · `REGRESSION 207/211` — the same 4 known-baseline reds,
+no new red. Scene delta +1,163 bytes (no resave bloat).
+Owner-felt items still open: how it LOOKS at 4 m, whether the position reads as its own establishment rather than a second
+stall beside Coppin, and a walk-up interact test (§6.6). ⛔ NOT PUSHABLE until felt-verified — owner rule:
+*"never push if everything in prod ticket isnt tested"*.
 **Minted:** 2026-08-17 (CLI seat) — minted as WO-1117 minutes before the PROD series was ruled; RENUMBERED, not duplicated. 1117 returned to the legacy pool unused.
 **Lane:** Monetization / town. Touches the build catalog and the hub scene builder.
 **Provenance:** owner, 2026-08-17, from a device screenshot: *"the store offers a place to buy
@@ -95,7 +125,12 @@ change away from destroying it.
 
 ---
 
-## 4. ⛔ OWNER RULING NEEDED — where does it stand?
+## 4. ✅ RULED 2026-08-18 — option **(a)**, the south plaza (was: OWNER RULING NEEDED)
+
+> **The owner ruled (a).** Sited at **(12, 0, -32)** — south plaza, across the open centre from
+> Coppin at (0,0,32), offset ~16 m east of the south-gate corridor because (0,0,-32) is exactly
+> where the Jeweler was removed from for blocking the south door. Nothing below is open; it is the
+> record of the decision.
 
 The requirement is "static", which means the location is a one-time decision that is expensive to
 change later (it is baked, and saves reference the world). Options:

@@ -1,11 +1,18 @@
 # PROD-002 — NPCs: retire the doors that lead nowhere, cast the people we bought
 
-**Status:** PARTIAL — **Deliverable B (cast the purchased bodies) is DONE**, awaiting owner
-verification (§4 boxes 4/5). **Deliverable A (retire the dead interact doors on Lumbermill /
-Barracks / Arcane Tower) is NOT started.** ⛔ NOT PUSHABLE until the checklist is confirmed —
-owner rule: *"never push if everything in prod ticket isnt tested"*.
-⚠ **Ungated as of writing:** the owner was in the editor, so batchmode was locked out. No
-`COMPILE_GATE_OK` and no regression run has been claimed for this change yet.
+**Status:** DONE — **both deliverables shipped**, PENDING OWNER FELT-VERIFY (§4 boxes 4/5).
+**Deliverable A (retire the dead interact doors) is DONE** (2026-08-18, commit `233613615`, owner
+ruled **(a)**): all three doors are shut — `collector_lumbermill` + `arcane-tower` earlier, and
+**`barracks` in that commit** via `BarracksNpcInjector` + `BuildingInteractable.HasNoTalkDoor` (both
+sites, so the building's own prompt does not silently come back). The once-teach drillmaster toast is
+**REMOVED, not re-pointed** — option (b) was rejected by the owner. The drillmaster BODY stays; only
+the affordance went. The `barracks_intro` `SeenTutorials` key is deliberately left in the schema and
+simply stops being written.
+**Deliverable B (cast the purchased bodies) is DONE** — 12 rows retagged, awaiting the same felt-verify.
+⛔ NOT PUSHABLE until the checklist is confirmed — owner rule: *"never push if everything in prod
+ticket isnt tested"*.
+⚠ **Gate status:** commit `233613615` records `REGRESSION 206/210 = BASELINE`. It does **not** claim a
+`COMPILE_GATE_OK` marker — treat the compile gate as unproven for this change until one is run.
 **Minted:** 2026-08-17 (CLI seat)
 **Priority:** MEDIUM — no crash, but it is the town's whole first impression.
 **Provenance:** owner, 2026-08-17, on a live build: *"what is the value of having a NPC at the
@@ -45,8 +52,9 @@ about.
 
 ## 2. Deliverable A — keep the bodies, remove the doors
 
-> ### STATUS 2026-08-17: 2 of 3 DONE. Barracks needs ONE owner ruling, and it is about COPY.
-> **Done:** `collector_lumbermill`, `arcane-tower`. **Held:** `barracks`.
+> ### STATUS 2026-08-18: ALL 3 DONE. The owner ruled **(a)** — close the door, retire the toast.
+> **Done:** `collector_lumbermill`, `arcane-tower`, **`barracks`** (commit `233613615`). No ruling
+> outstanding; the three options below are kept as the record of the decision, not as an open question.
 >
 > **It was not the one-line change this ticket implied.** The three structures reach their door by
 > three DIFFERENT paths — `barracks` via `BarracksNpcInjector` (gated `ff.barracks`, default OFF),

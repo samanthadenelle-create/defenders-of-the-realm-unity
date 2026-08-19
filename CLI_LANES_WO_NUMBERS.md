@@ -1,8 +1,16 @@
 # Lanes â€” Work-Order Numbers Only (for CLI)  Â·  reconciled 2026-06-12 (nightly refill)
 
-> ## PROD SERIES (post-launch): next free = **PROD-005**.
-> *(CLI seat minted **PROD-004** and bumped 004 -> 005 in this SAME edit, per the sec.2 rule that a
-> mint and its banner bump are ONE edit. PROD-004 = baked-twin STANDDOWN LEAVES THE FOOTPRINT.)*
+> ## PROD SERIES (post-launch): next free = **PROD-006**.
+> *(Docs seat minted **PROD-005** and bumped 005 -> 006 in this SAME edit, per the sec.2 rule that a
+> mint and its banner bump are ONE edit. **PROD-005** = the default shield renders THROUGH the hero's
+> body and the break survives a dungeon->town port (owner, LIVE build). Diagnostic ancestor = **WO-994**,
+> left INTACT and bannered — it holds the trace-proven RCA. Approach: REPLACE the asset
+> (`gear/weapon/ShieldWithItemLogic`, addressable) rather than re-dial `shield_A`'s stranded
+> `rot=(-160,-180,-84)`, so it seats from DERIVED geometry with no offsets.json row at all.
+> ⚠ Acceptance requires a SCREENSHOT after a dungeon->town port — headless gates cannot see
+> orientation; the bow proved that.)*
+> *(Earlier: CLI seat minted **PROD-004** and bumped 004 -> 005 in this SAME edit.
+> PROD-004 = baked-twin STANDDOWN LEAVES THE FOOTPRINT.)*
 >
 > **A THIRD, DISJOINT NAMESPACE — deliberately not a slice of the main line.** Owner ruling
 > 2026-08-17: *"can we change numbering to PROD - restarting numbering as now we are live"* /
@@ -13,7 +21,8 @@
 > `tools/board_build.py` parses `WORK_ORDER_PROD-NNN_*` and sorts PROD first within each bucket.
 > ⛔ Never renumber a PROD ticket into the main line, or the boundary the owner asked for stops
 > existing. Consumed so far: PROD-001 (guide wolf facing), PROD-002 (NPC roles + purchased bodies),
-> PROD-003 (Realm Store permanent storefront), PROD-004 (baked-twin footprint).
+> PROD-003 (Realm Store permanent storefront), PROD-004 (baked-twin footprint),
+> PROD-005 (default shield renders through the hero body; survives a dungeon->town port).
 
 > ## ⚠ RECONCILED 2026-08-17 (CLI): main line next free = **1123**.
 > *(CLI seat minted **WO-1117..1122** and bumped 1117 -> 1123 in this SAME edit — monetization

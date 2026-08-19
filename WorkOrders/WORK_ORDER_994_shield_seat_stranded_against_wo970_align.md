@@ -1,6 +1,14 @@
 # WORK ORDER 994 - The shield's authored seat is stranded against a base WO-970 moved
 
 **Status:** IMPLEMENTED 2026-08-16 (2nd pass) - trace-proven diagnosis; A eliminated; dead re-seat fixed + survive-path hardening + seat-drift tripwire + [attachment-offset] suite; committed; PO felt-verify = dungeon->town port on the new exe
+> ## 📌 DIAGNOSTIC ANCESTOR OF **PROD-005** (bannered 2026-08-18, docs seat)
+> The live-build recurrence — *"the shield is now mid body"* / *"broken shield carried back on exit"* —
+> is tracked as **PROD-005**
+> (`WorkOrders/WORK_ORDER_PROD-005_default_shield_renders_through_hero_body.md`), which jumps the
+> queue as a post-launch defect. **This file is NOT superseded and NOT closed.** It holds the captured,
+> trace-proven RCA (the WO-970 align move that stranded `shield_A`'s 2026-07-07
+> `rot=(-160,-180,-84)`) that PROD-005 builds on — ⛔ do not rewrite, gut or archive its body.
+
 **Minted:** 2026-08-14 (CLI)
 **Silo:** Gear / equip seating
 **Source:** OWNER REPORT - *"still same problem when porting from dungeon with Shield position"*
