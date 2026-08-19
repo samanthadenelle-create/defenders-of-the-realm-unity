@@ -20,6 +20,7 @@
 // Close() / IsOpen / SettingsClosed — PauseController's wiring still holds.
 // =============================================================================
 
+using DeNelle.Core.Diagnostics;
 using System;
 using DeNelle.Core.State;
 using DeNelle.Core.UI;
@@ -248,6 +249,23 @@ namespace DeNelle.Settings
             ElarionUiKit.BuildObsidianButton(body, "Reset Defaults",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Red,
                 new Vector2(0.52f, y - Frac(120f)), new Vector2(0.94f, y), OnResetClicked);
+            y -= Frac(120f);   // step PAST the Help row - Caption only advances 54, a button row is 120
+
+            // -- Legal (store-readiness 2026-08-19) --------------------------
+            // Most app stores require the privacy policy to be reachable FROM INSIDE the app, not
+            // only from the listing. publishing/config.yaml already declares both URLs (:52 license,
+            // :65 privacy) and both pages return 200, but nothing in the client linked to either -
+            // `git grep echoes-of-elarion.vercel.app -- Assets/*` returned zero hits.
+            // ASCII-only labels (non-ASCII renders as tofu in TMP), and the two sit side by side on
+            // the same 120 px rung every other row uses, so touch targets stay at the mobile floor.
+            y = Caption(body, "Legal", y);
+            ElarionUiKit.BuildObsidianButton(body, "Privacy Policy",
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
+                new Vector2(0.06f, y - Frac(120f)), new Vector2(0.48f, y), OnPrivacyClicked);
+            ElarionUiKit.BuildObsidianButton(body, "Terms of Service",
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
+                new Vector2(0.52f, y - Frac(120f)), new Vector2(0.94f, y), OnTermsClicked);
+            y -= Frac(120f);
 
             // ── Developer (owner ruling 2026-08-08) ──────────────────────────
             // "remove the dev flag on the left side, and let's hide the dev panel ... let's stick it
@@ -485,6 +503,33 @@ namespace DeNelle.Settings
         {
             Close();
             PanelRouter.Open(PanelId.GameGuide);
+        }
+
+        // Store listing declares these two (publishing/config.yaml:52 license_url, :65
+        // privacy_policy_url) and both return 200. They live here as consts so the app and the
+        // listing cannot drift apart silently - if one moves, this is the single other place to change.
+        // NOTE the domain differs from the backend on purpose: the API lives on
+        // defenders-of-the-realm-v2.vercel.app, the public pages on echoes-of-elarion.vercel.app.
+        private const string PrivacyUrl = "https://echoes-of-elarion.vercel.app/privacy";
+        private const string TermsUrl   = "https://echoes-of-elarion.vercel.app/terms";
+
+        /// <summary>Opens the privacy policy in the device browser. Settings stays OPEN, unlike the
+        /// Game Guide route: this leaves the app entirely, and the player should land back on the
+        /// screen they left rather than on the town.</summary>
+        private void OnPrivacyClicked() => OpenExternal(PrivacyUrl, "privacy");
+
+        /// <summary>Opens the terms of service in the device browser.</summary>
+        private void OnTermsClicked() => OpenExternal(TermsUrl, "terms");
+
+        private void OpenExternal(string url, string what)
+        {
+            // Guarded: on a platform where OpenURL throws or is a no-op the player gets nothing
+            // visible, so the failure must at least be a logged line and never a silent dead button.
+            Guard.Try("Settings", $"open {what} url", () =>
+            {
+                FlowTrace.Step("Settings", $"opening {what} policy -> {url}");
+                Application.OpenURL(url);
+            });
         }
 
         /// <summary>Opens the developer console. Mirrors the Game Guide route exactly - close
