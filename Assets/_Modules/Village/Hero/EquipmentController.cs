@@ -1022,7 +1022,8 @@ namespace DeNelle.Village
             gripRoot.transform.SetParent(hand, false);
             _weaponParentCompensate = true;
             _weaponAuthoredScale = 1f;   // no offset yet — reset; the offset branches below record fo.scale
-            CompensateParentScale(gripRoot.transform);
+            CompensateParentScale(gripRoot.transform, 1f,
+                SeatSubject("main-hand", weaponId, offsetKey), ref _weaponCompState);
             gripRoot.transform.localPosition = vis.gripPos;
 
             // Hold state: store the base grip euler so the idle<->combat pose can offset
@@ -1132,7 +1133,8 @@ namespace DeNelle.Village
                 // render ParentScaleCompensation(parent) * fo.scale, so the approved size persists.
                 gripRoot.transform.localPosition = vis.gripPos + fo.pos;
                 _weaponAuthoredScale = fo.scale > 0f ? fo.scale : 1f;
-                CompensateParentScale(gripRoot.transform, _weaponAuthoredScale);
+                CompensateParentScale(gripRoot.transform, _weaponAuthoredScale,
+                    SeatSubject("main-hand", weaponId, offsetKey), ref _weaponCompState);
                 FlowTrace.Step("Offset", $"OVERRIDE '{offsetKey}': raw-pivot pos={fo.pos} rot={fo.eulerRot} scale={fo.scale:0.###}");
             }
             else if (hasOffset)
@@ -1909,7 +1911,8 @@ namespace DeNelle.Village
                 gripRoot.transform.SetParent(hand, false);
                 _offHandParentCompensate = true;
                 _offHandAuthoredScale = 1f;   // the nudge block below records fo.scale if present
-                CompensateParentScale(gripRoot.transform);
+                CompensateParentScale(gripRoot.transform, 1f,
+                    SeatSubject("off-hand", id, offsetKey), ref _offHandCompState);
                 gripRoot.transform.localPosition = Vector3.zero;
                 gripRoot.transform.localRotation = Quaternion.identity;
             }
@@ -1920,7 +1923,8 @@ namespace DeNelle.Village
                 gripRoot.transform.SetParent(hand, false);
                 _offHandParentCompensate = true;
                 _offHandAuthoredScale = 1f;   // the nudge block below records fo.scale if present
-                CompensateParentScale(gripRoot.transform);
+                CompensateParentScale(gripRoot.transform, 1f,
+                    SeatSubject("off-hand", id, offsetKey), ref _offHandCompState);
                 gripRoot.transform.localPosition = vis.gripPos;
                 gripRoot.transform.localRotation = Quaternion.Euler(vis.gripEuler);
             }
@@ -2188,7 +2192,9 @@ namespace DeNelle.Village
                     _gripRoot.SetParent(back, false);
                     // Back-socket bones carry a different lossyScale than the hand — always compensate
                     // so the attach-authored multiplier (fo.scale) survives the carry-state re-parent.
-                    CompensateParentScale(_gripRoot, _weaponAuthoredScale);
+                    CompensateParentScale(_gripRoot, _weaponAuthoredScale,
+                        SeatSubject("main-hand", _currentWeaponId, _currentWeaponMeshKey),
+                        ref _weaponCompState);
                     _gripRoot.localPosition = _sheatheWeaponLocalPos;
                     // DERIVED sheathe rotation (the fix): build the base orientation from the body's
                     // own axes via the SAME LookRotation(flat, blade) construction the correct battle
@@ -2243,7 +2249,10 @@ namespace DeNelle.Village
                 {
                     // Drawn (or sheathed with no back bone on this rig — never leave it floating unparented).
                     _gripRoot.SetParent(_weaponHand, false);
-                    if (_weaponParentCompensate) CompensateParentScale(_gripRoot, _weaponAuthoredScale);
+                    if (_weaponParentCompensate)
+                        CompensateParentScale(_gripRoot, _weaponAuthoredScale,
+                            SeatSubject("main-hand", _currentWeaponId, _currentWeaponMeshKey),
+                            ref _weaponCompState);
                     _gripRoot.localPosition = _weaponDrawnLocalPos;
                     _gripRoot.localRotation = _baseGripRot;
                     if (_currentWeaponKind == WeaponClass.Bow)
@@ -2262,7 +2271,9 @@ namespace DeNelle.Village
                     // path respected _offHandParentCompensate (false for fullOverride shields).
                     // That made one prop render at two sizes (hand vs back). Same guard both ways.
                     if (_offHandParentCompensate)
-                        CompensateParentScale(offT, _offHandAuthoredScale);
+                        CompensateParentScale(offT, _offHandAuthoredScale,
+                            SeatSubject("off-hand", _currentOffHandId, _currentOffHandMeshKey),
+                            ref _offHandCompState);
                     offT.localPosition = _sheatheOffHandLocalPos;
                     // DE-BAND-AID NOTE (2026-07-07): _sheatheOffHandLocalEuler (the hand-tuned magic
                     // euler, owner Z+=180 correction 2026-07-04) is now only the DEFAULT under the
@@ -2276,7 +2287,10 @@ namespace DeNelle.Village
                 else if (_offHandHand != null)
                 {
                     offT.SetParent(_offHandHand, false);
-                    if (_offHandParentCompensate) CompensateParentScale(offT, _offHandAuthoredScale);
+                    if (_offHandParentCompensate)
+                        CompensateParentScale(offT, _offHandAuthoredScale,
+                            SeatSubject("off-hand", _currentOffHandId, _currentOffHandMeshKey),
+                            ref _offHandCompState);
                     offT.localPosition = _offHandDrawnLocalPos;
                     offT.localRotation = _offHandDrawnLocalRot;
                     RecordOffHandSeatWrite("ApplyHoldPose.drawn");      // WO-994 tripwire
@@ -2409,25 +2423,81 @@ namespace DeNelle.Village
             return new Vector3(1f / ls.x, 1f / ls.y, 1f / ls.z);
         }
 
-        private static void CompensateParentScale(Transform gripRoot, float authoredScale = 1f)
+        // ── WHAT THE SOLVE LAST RAN AGAINST, PER SLOT (seat-trace fix 2026-08-18) ────────────────────────────
+        // The compensation is a PURE FUNCTION of (gripRoot, parent, parent.lossyScale, authored).
+        // Re-running it on a frame where all four are unchanged writes the identical localScale and
+        // measures the identical bounds — pure waste, and (worse) it emitted the trace line at frame
+        // rate. Recording the inputs turns the solve EVENT-DRIVEN: it fires on attach, on every
+        // hand<->back re-parent, on a body/height swap that moves the bone's lossyScale, and on an
+        // authored-scale change — and on nothing else. The instrumentation is NOT removed (CLAUDE.md
+        // §12 forbids stripping FlowTrace); it now fires when something actually changed, which is
+        // when a diagnostic is worth reading.
+        private struct ParentCompensationState
+        {
+            public int gripRootId;      // 0 = never applied; a new grip root invalidates
+            public int parentId;
+            public Vector3 parentLossy;
+            public float authored;
+
+            public bool Matches(int grip, int parent, Vector3 lossy, float auth) =>
+                gripRootId == grip && parentId == parent && Mathf.Approximately(authored, auth) &&
+                (parentLossy - lossy).sqrMagnitude <= 1e-10f;
+        }
+
+        private ParentCompensationState _weaponCompState, _offHandCompState;
+        private ParentCompensationState _previewCompState;   // seating-editor preview slot
+
+        /// <summary>
+        /// Subject label for the seat traces — §1.4b: a measurement you cannot attribute is
+        /// decoration. Every compensate line now names the SLOT, the catalog id and the registry
+        /// mesh key, because the back socket carries the main weapon AND the off-hand at once and
+        /// the line used to name only the shared parent.
+        /// </summary>
+        private static string SeatSubject(string slot, string id, string meshKey) =>
+            $"{slot} id='{(string.IsNullOrEmpty(id) ? "<none>" : id)}' mesh='{(string.IsNullOrEmpty(meshKey) ? "<none>" : meshKey)}'";
+
+        private void CompensateParentScale(Transform gripRoot, float authoredScale,
+                                           string subject, ref ParentCompensationState state)
         {
             var p = gripRoot != null ? gripRoot.parent : null;
             if (p == null) return;
             Vector3 ls = p.lossyScale;
             if (ls.x <= 1e-4f || ls.y <= 1e-4f || ls.z <= 1e-4f) return;
             if (authoredScale <= 0f) authoredScale = 1f;
+            // ── CHANGE GATE (seat-trace fix 2026-08-18). Same grip root, same parent, same bone lossyScale, same
+            // authored multiplier => the write below is a no-op and the measurement below is a
+            // duplicate. Bail BEFORE the GetComponentsInChildren<Renderer> walk, which is the
+            // per-frame allocation this method was paying ~30x/second per character for.
+            if (state.Matches(gripRoot.GetInstanceID(), p.GetInstanceID(), ls, authoredScale)) return;
+            state = new ParentCompensationState
+            {
+                gripRootId  = gripRoot.GetInstanceID(),
+                parentId    = p.GetInstanceID(),
+                parentLossy = ls,
+                authored    = authoredScale,
+            };
             // comp * authored — the owner-dialed offsets.json scale (fo.scale) survives every
             // re-parent instead of being wiped back to pure 1/lossy (scale-parity fix 2026-07-07).
             gripRoot.localScale = ParentScaleCompensation(p) * authoredScale;
             // §12: log the RESULTING world size, not just the math — capture 9403 showed the
             // sheathed shield still rendering oversized while these compensate lines fired,
             // so the proof must be the rendered bounds, not the applied scale.
+            // §1.4b: count what was WALKED as well as what was FOUND. "<no renderer>" (nothing to
+            // measure) and "(0,0,0)" (a renderer present but measuring nothing) are DIFFERENT
+            // defects with different fixes, and the old line could print the second while the
+            // reader assumed the first. Inactive renderers are counted separately because
+            // GetComponentsInChildren skips them here while SeatNative's TryLocalBounds includes
+            // them — so a prop can be SIZED off a renderer this measurement cannot see.
             Bounds wb = default; bool hasB = false;
-            foreach (var r in gripRoot.GetComponentsInChildren<Renderer>())
+            int rendTotal = 0, rendInactive = 0;
+            foreach (var r in gripRoot.GetComponentsInChildren<Renderer>(true))
             {
                 if (r == null) continue;
+                rendTotal++;
+                if (!r.gameObject.activeInHierarchy) { rendInactive++; continue; }
                 if (!hasB) { wb = r.bounds; hasB = true; } else wb.Encapsulate(r.bounds);
             }
+            bool measuresNothing = !hasB || wb.size.sqrMagnitude <= 1e-8f;
             // THROTTLED (owner F8 seq 637, "cannot move" in the Healer's Cottage): this line was
             // FlowTrace.Step, and it fires EVERY FRAME. Chain: HeroLocomotion.Update:1076 calls
             // EquipmentController.SetCombatActive unconditionally each frame; SetCombatActive's
@@ -2435,17 +2505,45 @@ namespace DeNelle.Village
             // result flooded break-log.jsonl and Player.log at frame rate, and the F8 harness
             // harvests only the LAST 60 signal lines - so EVERY line of that capture was this one
             // message, evicting the movement/lock traces needed to diagnose the actual report.
-            // A diagnostic that blinds the diagnostics is worse than no diagnostic. One line per
-            // second per hero keeps the signal and restores the capture. The per-frame WORK
-            // (GetComponentsInChildren<Renderer> above + the pose re-solve) is a separate,
-            // deeper defect - the comment at :1738 claims "the pose only re-applies on a state
-            // change", which the :1725 early-return contradicts. Ticketed, not silently changed
-            // here: altering the re-assert could regress the WO "sword stays drawn" fixes.
-            FlowTrace.Throttle("Equip", "parent-scale-compensate-" + p.GetInstanceID(), 1f,
-                $"parent-scale compensate: parent='{p.name}' lossy=({ls.x:0.###},{ls.y:0.###},{ls.z:0.###}) " +
-                $"authored={authoredScale:0.###} " +
+            // A diagnostic that blinds the diagnostics is worse than no diagnostic. The throttle
+            // below is kept as the backstop, but it is no longer the only defence:
+            //
+            // ✔ THE DEEPER DEFECT THE OLD COMMENT DEFERRED IS NOW FIXED (2026-08-18). That comment
+            //   read "the per-frame WORK (GetComponentsInChildren<Renderer> above + the pose
+            //   re-solve) is a separate, deeper defect ... ticketed, not silently changed here",
+            //   because touching the re-assert risked the "sword stays drawn" fixes. The change
+            //   gate at the top of this method resolves it WITHOUT touching the re-assert at all:
+            //   ApplyHoldPose still runs every frame and still re-asserts the seat exactly as it
+            //   did, but this solve now returns immediately when its four inputs are unchanged. So
+            //   the renderer walk, the localScale write and this log line all become event-driven
+            //   while the pose path keeps its shipped behaviour byte for byte.
+            //
+            // ⛔ THE KEY NOW CARRIES THE SUBJECT, NOT JUST THE PARENT (seat-trace fix 2026-08-18).
+            // It used to be "parent-scale-compensate-<parentInstanceId>" — and the BACK SOCKET is
+            // ONE transform that carries BOTH the main weapon and the off-hand. ApplyHoldPose
+            // compensates the weapon first, so the weapon's line took the bucket every second and
+            // the SHIELD'S LINE WAS NEVER PRINTED. That is why the owner's capture is ~30
+            // sword lines (authored=1.1, the sword_A offsets row) and one unattributable
+            // authored=1 line: two props were sharing one throttle slot on every character.
+            string key = "parent-scale-compensate-" + p.GetInstanceID() + "-" + subject;
+            string line =
+                $"parent-scale compensate: {subject} on '{name}' parent='{p.name}' " +
+                $"lossy=({ls.x:0.###},{ls.y:0.###},{ls.z:0.###}) authored={authoredScale:0.###} " +
+                $"renderers={rendTotal}(inactive={rendInactive}) " +
                 $"-> worldBounds={(hasB ? wb.size.ToString("0.###") : "<no renderer>")} " +
-                "(the proportional solve should read here as heldLength * authored on the longest axis)");
+                "(the proportional solve should read here as heldLength * authored on the longest axis)";
+            // ESCALATION: a prop that measures NOTHING is invisible to the player. That is the
+            // report ("sword is wrong", "shield is missing"), not a diagnostic curiosity — so it
+            // leaves the Step channel and goes out as a Warn the F8 harvest cannot miss. It needs no
+            // throttle of its own: the change gate above already means this method only reaches here
+            // when a seat input actually changed, and it re-asserts on the next re-parent.
+            if (measuresNothing)
+                FlowTrace.Warn("Equip", line +
+                    " ⛔ MEASURES NOTHING: this prop renders no world volume, so the player sees " +
+                    "NO ITEM in this slot. Cause is one of: no renderer under the grip root, every " +
+                    "renderer inactive, or a MeshRenderer whose mesh is null/empty.");
+            else
+                FlowTrace.Throttle("Equip", key, 1f, line);
         }
 
         private Transform ResolveBackSocket()
@@ -2879,6 +2977,12 @@ namespace DeNelle.Village
             // the SAME helper CompensateParentScale (attach + hold-pose) composes from.
             bool compensate = offHand ? _offHandParentCompensate : _weaponParentCompensate;
             grt.localScale = (compensate ? ParentScaleCompensation(grt.parent) : Vector3.one) * scale;
+            // The line above is a SECOND WRITER to the same localScale the change-gated
+            // CompensateParentScale owns (seat-trace fix 2026-08-18). Invalidate that slot's recorded state so the
+            // next hold-pose re-solve actually runs instead of short-circuiting on stale inputs and
+            // leaving the editor's preview scale live in the game. (Before the gate, the per-frame
+            // re-solve made this self-healing by brute force; now it must be said out loud.)
+            if (offHand) _offHandCompState = default; else _weaponCompState = default;
 
             // Keep the editor's mirror of base state coherent so a later EndSeatingEdit / hold
             // re-apply uses the previewed orientation as the base (no snap-back).
@@ -2910,7 +3014,12 @@ namespace DeNelle.Village
             {
                 grt.SetParent(back, false);
                 bool comp = offHand ? _offHandParentCompensate : _weaponParentCompensate;
-                if (comp) CompensateParentScale(grt, offHand ? _offHandAuthoredScale : _weaponAuthoredScale);
+                if (comp)
+                    CompensateParentScale(grt, offHand ? _offHandAuthoredScale : _weaponAuthoredScale,
+                        SeatSubject(offHand ? "off-hand(preview)" : "main-hand(preview)",
+                                    offHand ? _currentOffHandId : _currentWeaponId,
+                                    offHand ? _currentOffHandMeshKey : _currentWeaponMeshKey),
+                        ref _previewCompState);
             }
 
             Vector3    basePos;
