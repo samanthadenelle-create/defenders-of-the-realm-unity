@@ -222,7 +222,13 @@ namespace DeNelle.Village
             dlg._panelHandle = PanelManager.Register("EchoUnlockDialogue", dlg.Close, () => dlg._open);
             if (!PanelManager.NotifyOpened(dlg._panelHandle))
             {
-                FlowTrace.Warn("Echo", "unlock card rejected by PanelManager (battle-lock) -- not shown.");
+                // SELF-CLOSE on rejection, do not just return. The comment above has always said a
+                // rejected open "self-closes", but the bare return left the built canvas on screen,
+                // _open true, s_active set and the handle registered - a second way to strand the
+                // arbiter. Close() tears the card down and releases the handle idempotently.
+                FlowTrace.Warn("Echo", "unlock card rejected by PanelManager (battle-lock) -- self-closing.");
+                dlg.Close();
+                s_active = null;
                 return false;
             }
             FlowTrace.Step("Echo", $"unlock card shown id={entry.Id} count={newCount} (one screen; announcement folded in)");
@@ -620,6 +626,35 @@ namespace DeNelle.Village
         private void OnDestroy()
         {
             if (s_active == this) s_active = null;
+
+            // ⛔ RELEASE THE ARBITER HANDLE HERE TOO, NOT ONLY IN Close().
+            // Close() is the tidy path and it does notify - but ANY other route to destruction
+            // (scene unload, a parent torn down, a Retire() from elsewhere, the object dying with
+            // the Echo body) skipped this and left PanelManager._open pointing at a panel that no
+            // longer exists. There is no second owner to clear it: OpenPanelName reads _open.Name
+            // directly, so the arbiter reports a modal open forever.
+            //
+            // CAPTURED, not theorised (owner F8, 2026-08-19, seq2536-2539):
+            //   [Flow:UI] Dialogue suppressed - modal open ('EchoUnlockDialogue' at dialogue open,
+            //             WO-795 truce); restored on modal close.
+            // fired for FOUR consecutive tutorial dialogues over ~10 minutes while the card was
+            // long gone from the owner's screen ("echo closes fine for me"). Each step then timed
+            // out at its 120 s watchdog and was rescued as SKIPPED: founding_walk (the hero could
+            // not walk, inputSuppressed, pos unchanged to the centimetre across all four captures),
+            // founding_ack, founding_defense, founding_timers. The FTUE narrated nothing and
+            // granted everything, and combat opened on a frozen hero.
+            //
+            // Idempotent: NotifyClosed no-ops unless _open IS this handle, and Close() nulls the
+            // field, so the tidy path still notifies exactly once.
+            if (_panelHandle != null)
+            {
+                FlowTrace.Warn("Echo", "unlock card DESTROYED while still holding the modal arbiter " +
+                    "- releasing it here. Something retired this card without calling Close(); that " +
+                    "path used to strand PanelManager._open and suppress every later dialogue.");
+                PanelManager.NotifyClosed(_panelHandle);
+                _panelHandle = null;
+                _open = false;
+            }
         }
 
         // Buttons need an EventSystem to receive clicks (mirrors EchoWorkforceHud).
