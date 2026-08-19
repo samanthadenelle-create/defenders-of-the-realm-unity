@@ -261,6 +261,36 @@ namespace DeNelle.Village
         private Vector3 _currentOffHandGripPos;
         private Vector3 _currentOffHandGripEuler;
         private bool    _currentOffHandNative;
+        // ── WO-1123 derived-seat state (mirrors _currentWeaponKind for the off hand) ──────────
+        // Captured ONCE at attach so ApplyHoldPose — which re-asserts the pose EVERY FRAME — never
+        // pays a catalog lookup per frame (the same discipline the throttled sheathed-offset traces
+        // above were forced into after they blinded three F8 captures).
+        private WeaponClass _currentOffHandKind;
+        /// <summary>`manual: true` on this off-hand's catalog row: CANON, never auto-overwritten.</summary>
+        private bool _currentOffHandManual;
+        /// <summary>The off-hand passed every precedence gate at attach, so a derived pose may be
+        /// computed for it (still re-checked per pose for an authored SHEATHED row).</summary>
+        private bool _currentOffHandDerivable;
+        /// <summary>The measured half of the shield seat (thickness axis + which face has the
+        /// handle), resolved ONCE at attach. Default/invalid = no derivation available.</summary>
+        private WeaponOrientHelper.ShieldFrame _currentOffHandShieldFrame;
+        /// <summary>The same measurement taken against the SEATING EDITOR's own preview seat (which
+        /// re-seats through NormalizeInto even for a native prop). Separate from the runtime frame
+        /// on purpose — sharing one would pose the preview off the wrong axis.</summary>
+        private WeaponOrientHelper.ShieldFrame _previewShieldFrame;
+
+        /// <summary>
+        /// WO-1123: the ONE reader of `WeaponDef.manual` on the gear side. `manual: true` means the
+        /// row's seat is owner-dialled and a derived pass leaves it EXACTLY as loaded
+        /// (ARCHITECTURE_PRINCIPLES §4). Absent/unknown id => false => derivable, which is the
+        /// correct answer for the 15 hand-authored rows (knight_shield_starter among them).
+        /// </summary>
+        private static bool IsManualOrientRow(string id)
+        {
+            if (string.IsNullOrEmpty(id)) return false;
+            var def = GearCatalog.FindWeapon(id);
+            return def != null && def.manual;
+        }
         // While a seating edit is live: suspend the auto idle/combat hold so the grip root
         // the editor drives is not stomped by ApplyHoldPose, and remember which slot is edited.
         private bool _seatingEditActive;
@@ -1015,6 +1045,20 @@ namespace DeNelle.Village
                 if (meleeSeat)
                 {
                     FlowTrace.Try("Equip", "SeatHiltLowerHalf", () => SeatHiltLowerHalf(prop, gripRoot.transform));
+                    // ── WO-1123 §4 STEP 1: MEASUREMENT, NOT AN EDIT ─────────────────────────────
+                    // Read-only. It states what the owner's 2026-08-19 archetype rules WOULD say
+                    // about THIS mesh — which end the taper calls the hilt, where the staff's
+                    // 0.75 grip lands — beside what the live SeatHiltLowerHalf path actually did.
+                    // The melee SEAT is deliberately unchanged by WO-1123: the live rotation is
+                    // already rig-derived (ComputeMeleeGripRotation), and re-resolving which end is
+                    // the hilt is a thing you must SEE before you ship (docs/ARCHITECTURE.md:155-159
+                    // — a derived value can be arithmetically perfect and land 90 deg out one
+                    // transform up). This line is the prediction to diff a screenshot against.
+                    FlowTrace.Try("Equip", "OrientMeasure(melee)", () =>
+                        WeaponOrientHelper.TraceMeasuredSeat(prop, gripRoot.transform, hand,
+                            WeaponOrientHelper.Classify(null,
+                                !string.IsNullOrEmpty(vis.mesh) ? vis.mesh : weaponId),
+                            weaponId));
                     FlowTrace.Step("Equip", $"trued+seated: grip-shift localY={prop.transform.localPosition.y:0.###} (geometry hilt-lower-half{(fullOverride ? ", vertical-delta" : "")} infer={FeatureFlags.WeaponGripInfer})");
                 }
             }
@@ -1929,6 +1973,79 @@ namespace DeNelle.Village
                 gripRoot.transform.localRotation = Quaternion.Euler(vis.gripEuler);
             }
 
+            // ── WO-1123: DERIVED SHIELD SEAT (owner spec 2026-08-19) ─────────────────────────
+            // WHAT THIS REPLACES: the drawn shield above is the preset euler on a hand bone —
+            // for the LIVE default shield (knight_shield_starter -> ShieldWithItemLogic, which has
+            // no authored row in either pose) that resolves to IDENTITY ∘ the 180° global yaw. No
+            // derivation of any kind, which is the exact construct ARCHITECTURE_PRINCIPLES §4 bans.
+            //
+            // The owner's rule, verbatim: "the thinness/thickness of the shield is facing away from
+            // the player ... with the handle where the hand mounts on the off-player's hand."
+            // WeaponOrientHelper measures which extent IS the thickness and which face carries the
+            // handle, and builds the pose in WORLD off the body's own axes — the same construction
+            // ComputeSheathRotation and ComputeBowHeldRotation already use.
+            //
+            // PRECEDENCE (WeaponOrientHelper.ResolveSource): an authored Offset Forge row outranks
+            // this, then `manual: true` on the catalog row, then this derivation, then the preset
+            // constant — which is KEPT above, not deleted, and still runs whenever the geometry
+            // cannot answer (§12: fallbacks are never stripped).
+            //
+            // GLOBAL YAW IS WITHHELD from a derived seat, exactly as the bow's derived path
+            // withholds it (:1181-1188): the 180° flip exists to correct grips that INHERITED the
+            // raw bone axes, and composing it onto a fully-derived world target spins the shield's
+            // face to point back at the player — the very defect this fixes.
+            bool offHandDerivedSeat = false;
+            _currentOffHandManual = IsManualOrientRow(id);
+            _currentOffHandShieldFrame = default;
+            // NATIVE IS DELIBERATELY *NOT* EXCLUDED. "Native" means "trust the authored pivot",
+            // and the LIVE default shield (knight_shield_starter -> ShieldWithItemLogic) is exactly
+            // a native prop whose authored orientation is the broken one — WO-1123 §1's table row
+            // "shield, drawn (native): IDENTITY, no derivation of any kind". Excluding native would
+            // have fixed every shield except the one that is wrong. Only the ROTATION is derived;
+            // the native pivot and scale are untouched.
+            if (!fullOverride && vis.kind == WeaponClass.Shield &&
+                WeaponOrientHelper.MayDerive(hasOffset, _currentOffHandManual))
+            {
+                Transform shieldBody = _animator != null ? _animator.transform : transform;
+                Quaternion derivedShield = Quaternion.identity;
+                var frame = default(WeaponOrientHelper.ShieldFrame);
+                offHandDerivedSeat = Guard.Try("Equip",
+                    $"derived shield seat for '{id}' (WO-1123)",
+                    // ONE vertex walk: resolve the frame, then pose from it. (The GameObject
+                    // overload would walk the mesh a second time.)
+                    () => WeaponOrientHelper.TryResolveShieldFrame(prop, gripRoot.transform, out frame) &&
+                          WeaponOrientHelper.TryComputeShieldMountRotation(
+                              frame, id, hand,
+                              // NOT `out _`: line 1904 opens `using var _ = FlowTrace.Enter(...)`,
+                              // so `_` is a using variable in this scope and a discard there is
+                              // CS1657. Name the throwaway instead (the WHY is already traced
+                              // inside the helper, so it is genuinely unused here).
+                              shieldBody.forward, shieldBody.up, out derivedShield, out string _shieldWhyUnused),
+                    false);
+                if (offHandDerivedSeat)
+                {
+                    // Cache the MEASURED half (one vertex walk) so the sheathed pose — re-asserted
+                    // every frame by ApplyHoldPose — rebuilds only the cheap rotation.
+                    _currentOffHandShieldFrame = frame;
+                    gripRoot.transform.localRotation = derivedShield;
+                    FlowTrace.Step("Equip",
+                        $"off-hand seat DERIVED (WO-1123) for '{id}' key='{offsetKey}': thickness -> " +
+                        $"away from the player, handle -> inward. presetEuler={vis.gripEuler} was " +
+                        $"SUPERSEDED by derivedEuler={derivedShield.eulerAngles:0.#}; global yaw WITHHELD.");
+                }
+            }
+            else if (vis.kind == WeaponClass.Shield)
+            {
+                // §12 / §1.4b: the un-derived shield must be distinguishable from the derived one in
+                // a capture — otherwise "the shield is wrong" cannot be split into "the derivation
+                // ran and is wrong" vs "the derivation never ran".
+                FlowTrace.Step("Equip",
+                    $"off-hand seat NOT derived for '{id}' key='{offsetKey}': source=" +
+                    $"{WeaponOrientHelper.ResolveSource(hasOffset, _currentOffHandManual, canDerive: true)} " +
+                    $"(authoredRow={hasOffset} manual={_currentOffHandManual} native={vis.native} " +
+                    $"fullOverride={fullOverride}) — keeping the preset euler {vis.gripEuler}.");
+            }
+
             // OFFSET FORGE NUDGE (mirror main-hand): compose onto the seated frame, then global Y.
             if (!fullOverride && hasOffset)
             {
@@ -1949,7 +2066,14 @@ namespace DeNelle.Village
                     : $"off-hand offset '{offsetKey}' is all-zero — pure geometry (no nudge).");
             }
 
-            gripRoot.transform.localRotation = ApplyGlobalWeaponYaw(gripRoot.transform.localRotation);
+            // WO-1123: WITHHELD on a derived seat (bow precedent, :1181-1188) — the flip corrects
+            // bone-inherited grips, and a derived world target has not inherited anything.
+            if (!offHandDerivedSeat)
+                gripRoot.transform.localRotation = ApplyGlobalWeaponYaw(gripRoot.transform.localRotation);
+            else
+                FlowTrace.Step("Equip",
+                    $"off-hand '{id}': ApplyGlobalWeaponYaw WITHHELD (derived world seat). Composing " +
+                    "the 180 deg flip onto a derived target would face the shield's smooth side at the player.");
 
             _currentOffHandProp = gripRoot;
             // Capture off-hand attach inputs for the in-game Seating Editor (WO-577).
@@ -1958,6 +2082,10 @@ namespace DeNelle.Village
             _currentOffHandGripPos    = vis.gripPos;
             _currentOffHandGripEuler  = vis.gripEuler;
             _currentOffHandNative     = vis.native;
+            // WO-1123: the sheathed pose needs the same three facts the drawn seat just used.
+            _currentOffHandKind       = vis.kind;
+            _currentOffHandDerivable  = !fullOverride && vis.kind == WeaponClass.Shield &&
+                                        WeaponOrientHelper.MayDerive(hasOffset, _currentOffHandManual);
 
             // RENDER-VERIFY + DETACH-ON-FAIL (TGVRU): the shield can attach but be invisible (no
             // enabled renderer / no mesh) or seated on the wrong bone. PROVE it renders + is parented
@@ -2006,6 +2134,12 @@ namespace DeNelle.Village
                 _currentOffHandProp = null;
             }
             _offHandHand = null;   // drop the resolved draw target so a stale (old-body) hand is never reused
+            // WO-1123: the measured shield frame belongs to the prop that just died. Clearing it is
+            // not tidiness — a stale frame would pose the NEXT shield off the PREVIOUS shield's
+            // handle side, which is a wrong pose that looks deliberate.
+            _currentOffHandShieldFrame = default;
+            _currentOffHandDerivable = false;
+            _currentOffHandManual = false;
         }
 
         // ── Hold state: idle (lowered) ↔ combat (drawn/raised) ───────────────────────
@@ -2280,7 +2414,9 @@ namespace DeNelle.Village
                     // @sheathed offset seam — an owner-authored "<meshKey>@sheathed" registry entry
                     // (Seating Editor, Sheathed mode) supersedes it below. Kept, not removed: with no
                     // entry this line is the exact shipped pose (zero regression).
-                    offT.localRotation = ApplyGlobalWeaponYaw(Quaternion.Euler(_sheatheOffHandLocalEuler));
+                    // WO-1123: DERIVED when the geometry answers, else the shipped constant — one
+                    // method so this pose and the Seating Editor preview can never disagree.
+                    offT.localRotation = ComputeSheathedOffHandRotation(back);
                     ApplySheathedOffset(offT, _currentOffHandMeshKey);
                     RecordOffHandSeatWrite("ApplyHoldPose.sheathed");   // WO-994 tripwire
                 }
@@ -2593,6 +2729,57 @@ namespace DeNelle.Village
             // Express in the socket's local frame (the socket follows the chest bone), then the nudge.
             Quaternion localBase = Quaternion.Inverse(socket.rotation) * worldTarget;
             return localBase * Quaternion.Euler(_sheatheWeaponLocalEuler);
+        }
+
+        // ── DERIVED SHEATHED OFF-HAND (SHIELD) ROTATION — WO-1123 ────────────────────────────────
+        // WHAT THIS REPLACES: `_sheatheOffHandLocalEuler = (0, 90, 192)` ∘ the global yaw. Its own
+        // field comment concedes the euler has "no relationship to geometry OR the chest-bone axes"
+        // — the §4 smell, hand-typed once for ONE mesh (shield_A) and inherited by every shield
+        // since, including the live default (ShieldWithItemLogic) that has no authored row at all.
+        //
+        // The owner's rule is the SAME rule in both poses (2026-08-19): the shield's thickness axis
+        // faces AWAY FROM THE PLAYER and the handled face is against the mount. On the back, "away
+        // from the player" is -body.forward — the only term that changes between hand and back.
+        //
+        // PRECEDENCE, re-checked here and not just at attach, because a SHEATHED pose has its own
+        // authored channel: an explicit "<meshKey>@sheathed" row outranks this derivation entirely
+        // (ApplySheathedOffset would otherwise compose a nudge dialled against the constant on top
+        // of a different base). The constant is KEPT as the return for every non-derivable case —
+        // §12: fallbacks are never stripped, and with no shield attached this is byte-identical to
+        // the shipped pose.
+        //
+        // CHEAP BY CONSTRUCTION: ApplyHoldPose calls this EVERY FRAME. The mesh-walking half was
+        // resolved once at attach into _currentOffHandShieldFrame; this only builds a rotation.
+        private Quaternion ComputeSheathedOffHandRotation(Transform socket)
+        {
+            Quaternion shipped = ApplyGlobalWeaponYaw(Quaternion.Euler(_sheatheOffHandLocalEuler));
+            if (socket == null || !_currentOffHandDerivable || !_currentOffHandShieldFrame.Valid ||
+                _currentOffHandKind != WeaponClass.Shield)
+                return shipped;
+
+            // An owner-authored @sheathed pose is tier 1 — it wins outright.
+            if (TryResolveSheathedOffset(_currentOffHandMeshKey, out _, out var src) &&
+                src == SheathedOffsetSource.Explicit)
+            {
+                FlowTrace.Throttle("Equip", $"sheath-derive-skip-{_currentOffHandMeshKey}", 5f,
+                    $"sheathed shield '{_currentOffHandMeshKey}': derivation SKIPPED — an authored " +
+                    "'@sheathed' row exists and outranks it (precedence: authored -> manual -> derived).");
+                return shipped;
+            }
+
+            Transform body = _animator != null ? _animator.transform : transform;
+            Quaternion derived = WeaponOrientHelper.ComputeShieldMountRotation(
+                _currentOffHandShieldFrame, socket, -body.forward, body.up);
+            // THROTTLED (1/5s): this runs every frame and an unthrottled Step here is exactly the
+            // spam that swallowed three F8 captures (see ApplySheathedOffset's note). The numbers
+            // still prove the pose — faceOff must read ~0 deg.
+            Vector3 faceWorld = (socket.rotation * derived) * Vector3.right;
+            float faceOff = Vector3.Angle(faceWorld, -body.forward);
+            FlowTrace.Throttle("Equip", $"sheath-derived-{_currentOffHandMeshKey}", 5f,
+                $"sheathed shield '{_currentOffHandMeshKey}' DERIVED: thickness faces away from the " +
+                $"player at the back; localEuler={derived.eulerAngles:0.#} faceOffOutward={faceOff:0.#}deg " +
+                $"(shipped constant would have been {shipped.eulerAngles:0.#}).");
+            return derived;
         }
 
         // Force the given slot's prop to its DRAWN (in-hand) seat regardless of combat state — used by
@@ -2936,6 +3123,16 @@ namespace DeNelle.Village
                         SeatHiltLowerHalf(child, grt);
                 }
                 _seatEditMode = wantMode;
+                // WO-1123: re-measure the shield frame AGAINST THE PREVIEW'S OWN SEAT. The cached
+                // attach-time frame was measured on the runtime seat, which for a NATIVE shield is
+                // SeatNative — while this preview re-seats through NormalizeInto. Reusing the attach
+                // frame across that difference would pose the preview off the wrong axis. Measured
+                // here, inside the mode-change branch, so it costs one vertex walk per mode flip and
+                // not one per drag frame.
+                _previewShieldFrame = default;
+                if (offHand && _currentOffHandKind == WeaponClass.Shield)
+                    Guard.Try("Offset", "seating-preview ShieldFrame",
+                        () => WeaponOrientHelper.TryResolveShieldFrame(child, grt, out _previewShieldFrame));
             }
 
             // Compose the grip-root transform exactly as the attach path does for this mode.
@@ -2967,8 +3164,23 @@ namespace DeNelle.Village
                     Quaternion.identity) * baseRot;
             }
 
+            // WYSIWYG for the DERIVED SHIELD seat (WO-1123) — the same reasoning as the bow above.
+            // The bow's comment says "the off-hand slot is the SHIELD's, previewed and attached
+            // unchanged"; that stopped being true today. Now that the drawn shield derives its pose
+            // and withholds the global yaw, a preview still showing the preset euler + yaw would
+            // render a shield the game does not ship, and the owner would dial a delta to cancel a
+            // pose that does not exist at runtime — the exact WO-994 class of bug.
+            bool shieldPreview = offHand && !fullOverride && _currentOffHandDerivable &&
+                                 _previewShieldFrame.Valid && grt.parent != null;
+            if (shieldPreview)
+            {
+                Transform shieldPreviewBody = _animator != null ? _animator.transform : transform;
+                baseRot = WeaponOrientHelper.ComputeShieldMountRotation(
+                    _previewShieldFrame, grt.parent, shieldPreviewBody.forward, shieldPreviewBody.up);
+            }
+
             grt.localPosition = gripPos + pos;
-            grt.localRotation = bowPreview
+            grt.localRotation = bowPreview || shieldPreview
                 ? baseRot * Quaternion.Euler(euler)                    // derived: no global yaw
                 : ApplyGlobalWeaponYaw(baseRot * Quaternion.Euler(euler));
             // WYSIWYG break proven 2026-07-07: preview lacked compensate (hand lossy 1.666) —
@@ -3027,7 +3239,10 @@ namespace DeNelle.Village
             if (offHand)
             {
                 basePos = _sheatheOffHandLocalPos;
-                baseRot = ApplyGlobalWeaponYaw(Quaternion.Euler(_sheatheOffHandLocalEuler));
+                // WO-1123: the SAME base the runtime sheathe uses (derived when the geometry answers,
+                // the shipped constant otherwise). If these two ever diverge again the owner dials a
+                // nudge against a back pose the game never renders — the WO-994 lesson.
+                baseRot = ComputeSheathedOffHandRotation(back);
             }
             else
             {

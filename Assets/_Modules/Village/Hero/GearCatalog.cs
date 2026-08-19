@@ -153,6 +153,30 @@ namespace DeNelle.Village
         /// <summary>Slow magnitude 0..1 for a "slow" rider (0.35 = -35% move speed).</summary>
         public float ammoSlowPct;
 
+        // ── ORIENT CANON: `manual` (WO-1123 §1.2 — the flag that was authored 81 times and read
+        //    ZERO times) ─────────────────────────────────────────────────────────────────────
+        // ARCHITECTURE_PRINCIPLES.md §4: "A `manual=true` correction is CANON and is NEVER
+        // overwritten by the auto pass." WEAPON_ARMOR_ORIENT_LOGIC.md repeats it twice. It is
+        // honoured for STRUCTURES by three readers (CatalogOrientationBaker, StructureFactory,
+        // GhostPreview) — and, until this field existed, by NOTHING on the gear side.
+        //
+        // 81 of the 96 rows in Assets/Resources/Data/Canonical/weapons.json carry it. WeaponDef
+        // did not DECLARE it, so Newtonsoft dropped it on deserialize and every consumer that
+        // might have honoured it saw nothing. That is not untidy, it is dangerous: a seat setting
+        // manual:true on a weapon row believed it had locked that row against an automatic pass,
+        // and had not. The first derived orientation pass over weapons would have silently
+        // overwritten all 81 owner-dialled poses — the structure side already paid this exact bill
+        // (2026-08-18: an axis-bake zeroed corrections it believed redundant; the town lay down).
+        //
+        // READ BY: EquipmentController's derived-seat gate, via WeaponOrientHelper.ResolveSource
+        // (precedence: authored offset row -> manual -> derived -> archetype default). A
+        // manual:true row is left EXACTLY as loaded — not normalized, not rotated, not shifted.
+        // Absent in JSON => false => the row is eligible for derivation (the 15 hand-authored
+        // rows, including knight_shield_starter and the starter sword/bow).
+        /// <summary>Orient canon: this row's seat is owner-dialled. A derived/auto orientation pass
+        /// MUST leave it untouched (ARCHITECTURE_PRINCIPLES.md §4, WO-1123).</summary>
+        public bool manual;
+
         /// <summary>WO-295: part of the legendary Aegis of Elarion set.</summary>
         public bool IsAegis =>
             !string.IsNullOrEmpty(setId) && setId.Equals("aegis", StringComparison.OrdinalIgnoreCase);

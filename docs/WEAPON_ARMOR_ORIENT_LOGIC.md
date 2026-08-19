@@ -12,6 +12,28 @@ identity.** The name tells you the *archetype*; the bounding box tells you the *
 yield a best-estimate transform with no guessed Euler. A rare human nudge then perfects it and *teaches*
 the heuristic.
 
+> **⚠ UPDATED 2026-08-19 (WO-1123, owner ruling — BINDING).** `WeaponOrientHelper` now EXISTS
+> (`Assets/_Modules/Core/Geometry/WeaponOrientHelper.cs`, assembly `DeNelle.Core`) and `manual` is
+> READ on the gear side for the first time. Two lines below are **superseded** and are marked in
+> place: the staff's grip (**lower third → 0.75 up the long axis**) and the shield's rule (now
+> stated as thickness-away-from-the-player + handle-inward). Nothing else in this doc changed.
+
+## The shared axis frame (owner, 2026-08-19 — verbatim)
+
+> "**Y = the LONGEST dimension, X = the MIDDLE dimension, Z = the NARROWEST dimension.**"
+
+Every archetype rule is expressed in that frame, and longest/middle/narrowest are **MEASURED off the
+bounds, never assumed off the FBX import**.
+
+**⚠ Naming vs. the shipped seat, deliberately NOT reconciled.** The seated prop frame this project
+actually ships (`WeaponBoundsOrient.AlignAxesYLongXNarrowZWide`) puts longest→+Y, **narrowest→+X,
+middle→+Z** — X and Z swapped relative to the naming above. The *names* differ; the *geometry* does
+not. Every rule in `WeaponOrientHelper` is written against the measured ROLE (longest / middle /
+narrowest) and then mapped onto whichever local axis that role actually landed on, verified by
+measurement each time. Re-permuting the shipped align to match the letters would rotate the
+**felt-verified bow** 90° about its long axis for a documentation reason. If the seated frame is to
+be re-lettered, that is its own ticket with a screenshot per family.
+
 ## The bounds rule (geometry → orientation)
 Measure combined renderer bounds, then:
 - **Longest axis → the item's primary direction.** For a blade/staff/bow that's the LENGTH → stand it
@@ -32,9 +54,34 @@ bow's logic to every weapon + armor.
 5. **Grip point** = the handle **just below the cross-guard** → align to the `RightHand` bone.
 Result: vertical, blade up, hand below the hilt — never blade-in-hand or laid flat.
 
-(Archetype rules extend per type: **shield** → flat face forward, centre→hand; **staff** → longest
-vertical, grip lower third; **axe** → longest vertical, grip the haft below the head; **helm/chest** →
-fit to the head/torso socket, no hand grip.)
+(Archetype rules extend per type — **as ruled by the owner on 2026-08-19 and implemented in
+`WeaponOrientHelper`**; the two superseded lines are struck, not deleted, because a reader will find
+the old wording in an older copy and must be able to tell which is current:)
+
+- **SWORD** — *"Find the pointy edge that goes farthest away"* (the tip is the far end of the longest
+  axis); *"the hilt is gonna be the short edge"*; *"you find the edge that is NOT sharp, and you go up
+  to the hilt."* So the **non-tapering end is the hilt**, the blade points **+Y**, and the grip sits
+  just up at the hilt — the handle centre below the cross-guard when one can be measured, else an
+  archetype-default fraction up from that end. Never blade-in-hand, never laid flat.
+- **STAFF** — ~~grip lower third~~ **SUPERSEDED 2026-08-19.** Owner, verbatim: *"The longest length is
+  Y, and you go three quarters of the way up Y, and that can be where the hand is attached."*
+  → **grip at 0.75 along the longest axis** (`WeaponOrientHelper.StaffGripFractionUpLongAxis`).
+- **SHIELD** — ~~flat face forward, centre→hand~~ **RESTATED 2026-08-19.** Owner, verbatim: *"One side
+  is gonna be relatively smooth, the other side is gonna have a handle. You take the thinnest side of
+  the object, which will generally be the Z, but whichever of the three is the shortest is the
+  thickness of the shield"* … *"the thinness/thickness of the shield is facing away from the player,
+  with the handle where the hand mounts on the off-player's hand."* So: **narrowest measured extent =
+  the thickness = the face normal**, pointed **away from the player** (on the back socket that is
+  −body.forward); the **handled (non-smooth) face turns inward** to the mount. Note *"whichever of the
+  three is the shortest"* is the owner explicitly refusing an axis-NAME rule — the measurement is the
+  authority, which is also what lets the rule work on a NATIVE prop that skipped the align.
+- **BOW** — unchanged and **felt-verified by the owner (2026-08-19)**. `WeaponOrientHelper`'s Bow
+  archetype DELEGATES to `WeaponBoundsOrient` verbatim; it is the template, not a target.
+- **axe / hammer / mace / wand / crossbow** — **no rule exists yet**, so they classify as `Unknown`
+  and DERIVE NOTHING: the caller keeps its existing behaviour and a `FlowTrace.Warn` says so. Each
+  family's rule leans on a property these lack (an axe head does not taper, so the sword's
+  "which end is not sharp" test would confidently pick the wrong end). Ask the owner; do not guess.
+- **helm/chest** → fit to the head/torso socket, no hand grip. (Unchanged, not yet implemented.)
 
 ## The system — `WeaponOrientHelper` (generalize `HeroBowAttachment.NormalizeInto`)
 1. **Estimate:** `name → archetype` + `bounds → axes` ⇒ best-estimate `{rotation, gripOffset, scale}`.
@@ -48,10 +95,54 @@ fit to the head/torso socket, no hand grip.)
    accumulated deltas refine the archetype defaults (e.g. "swords consistently need +5° → fold it into
    the rule"). Corrections *teach* the next estimate.
 
+## Precedence — the ONE order, asserted in code (WO-1123)
+
+```
+authored offset row  →  manual: true  →  derived  →  archetype default
+```
+
+`WeaponOrientHelper.ResolveSource(hasAuthoredOffset, manual, canDerive)` **is** that order, as one
+pure function, so no call site can re-order it by accident and `AttachmentOffsetRegression`'s
+`seat-precedence` case asserts it without a scene.
+
+**`manual` is now READ.** `WeaponDef.manual` (`GearCatalog.cs`) exists; `EquipmentController
+.IsManualOrientRow` is its one gear-side reader. 81 of the 96 rows in `weapons.json` author it and,
+until 2026-08-19, **nothing declared the field** — the flag read as protection and protected nothing.
+A `manual: true` row is left **exactly as loaded**: not normalized, not rotated, not shifted, so a
+second pass over it is a zero delta by construction. The 15 hand-authored rows (including
+`knight_shield_starter`, the live default shield) are the ones eligible for derivation.
+
+**Ambiguity falls back, it never guesses.** Every measured decision carries a decision margin — the
+sword's taper gap, the shield's smooth-vs-handle face score, the shield's plate-shaped check. Under
+the margin the helper emits a `FlowTrace.Warn` naming both measurements and **returns the caller to
+its existing behaviour**. The hand-typed constants (`Shield` preset euler, `_sheatheOffHandLocalEuler
+= (0,90,192)`) are **kept in the code as that documented fallback** — never deleted (CLAUDE.md §12).
+
+## What is wired live, and what is measurement only (WO-1123, 2026-08-19)
+
+| path | state |
+|---|---|
+| **shield, drawn** | **DERIVED** (both native and normalized props), global weapon yaw withheld |
+| **shield, sheathed** | **DERIVED** off the back socket with outward = −body.forward; the Seating Editor preview shares the same method so the two can never disagree |
+| **bow, drawn + sheathed** | unchanged — felt-verified |
+| **melee (sword/staff/…)** | seat unchanged. The archetype rules run as a **read-only `[Flow:Equip] OrientMeasure` prediction** beside the live seat (WO-1123 §4 step 1), because re-resolving which end is the hilt is a thing you must SEE before shipping. Wiring them is a follow-up that needs a screenshot per family. |
+
+**Companion reference:** `docs/WEAPON_MESH_ARCHETYPES.md` — what each archetype's mesh *is* in
+measurable terms (the bin/profile-curve primitive and the per-family **disambiguator** that separates
+the two ends of an axis, which a bounding box can never answer). This doc is the *canon*; that one is
+the *dictionary* the helper classifies against.
+
 ## Existing groundwork (extend, do NOT rebuild)
 - `Assets/Editor/CatalogOrientationBaker.cs` — bounds-orient for the structures catalog (longest→+Y,
   base-to-origin, `{euler,offset,scale,note}`, `manual=true` preserved). The template.
-- `HeroBowAttachment.NormalizeInto` — the bow's bounds-based auto-orient (the weapon seed to generalize).
+- `WeaponBoundsOrient` (`Assets/_Modules/Core/Geometry/`) — the bow's bounds-based auto-orient
+  (`NormalizeInto` / `ComputeBowHeldRotation` / `TryAspectRatio`). **The seed. Do not modify it.**
+- `WeaponOrientHelper` (`Assets/_Modules/Core/Geometry/`) — **the generalization (WO-1123, 2026-08-19).**
+  One entry point (`TrySeat`) takes a prop + an archetype's stipulations; `Classify` maps name/category
+  → archetype; `ResolveSource` is the precedence ladder; `TryResolveShieldFrame` /
+  `ComputeShieldMountRotation` split the shield seat into one measured half (cached per attach) and a
+  cheap per-pose half; `TraceMeasuredSeat` is the read-only measurement instrument. In `DeNelle.Core`
+  so Village, Pets and Dungeons can all read it across the asmdef boundary.
 - `Assets/_Modules/Village/Hero/EquipmentController.cs` — where weapons equip/attach (the apply point).
 - The **Orientation Inspector** (manual correction tool) + DevOrient/RAID (the dev-adjust UI).
 
