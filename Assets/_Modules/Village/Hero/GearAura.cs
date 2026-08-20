@@ -615,7 +615,11 @@ namespace DeNelle.Village
         /// <summary>
         /// The equipped weapon prop. Under the hand first (the normal held case); otherwise the
         /// whole rig, so a SHEATHED weapon - which EquipmentController re-seats under
-        /// 'SheatheSocket_Back' - still carries its flame instead of leaving it on an empty hand.
+        /// 'SheatheSocket_HipMain' (renamed from 'SheatheSocket_Back' by the owner's 2026-08-20 hip
+        /// ruling; the off-hand now has its own 'SheatheSocket_HipOff' on the other hip) - still
+        /// carries its flame instead of leaving it on an empty hand. NOTE THIS IS ONLY A COMMENT:
+        /// the search below is a rig-wide walk by PROP name, never by socket name, which is exactly
+        /// why the socket rename could not break it.
         /// The off-hand prop is a different name ('EquipmentProp_OffHand') so a shield can never
         /// be mistaken for the blade.
         /// </summary>

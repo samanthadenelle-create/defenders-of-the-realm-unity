@@ -260,7 +260,11 @@ namespace DeNelle.Editor.Regression
         //   - that row loses its prefabPath (the mesh key becomes underivable);
         //   - the live key has NO authored row AND the derived seat is not wired at source - i.e.
         //     the shield is back to "identity, no derivation of any kind", which is the exact state
-        //     WO-1123 was raised to end.
+        //     WO-1123 was raised to end;
+        //   - the live key has a DRAWN row, no '@sheathed' row, and the sheathed derivation carries
+        //     no gate of its own (added 2026-08-20). "Wired" and "reached" are different properties,
+        //     and this case asserted only the first for a month while the shield sat on a hand-typed
+        //     euler in every capture.
         private const string StarterShieldId = "knight_shield_starter";
 
         private static string Case4_StarterShieldKey(List<string> failures)
@@ -302,7 +306,24 @@ namespace DeNelle.Editor.Regression
             // constant again - the defect, restated.
             string src = File.Exists(EquipSrc) ? Regex.Replace(File.ReadAllText(EquipSrc), @"//[^\r\n]*", "") : "";
             bool derivedDrawnWired = src.Contains("WeaponOrientHelper.TryResolveShieldFrame");
-            bool derivedSheathWired = src.Contains("ComputeSheathedOffHandRotation(back)");
+            // ⚠ THIS USED TO READ `src.Contains("ComputeSheathedOffHandRotation(back)")` — the NAME of
+            // a local variable. The owner's 2026-08-20 instruction moved the sheathed props to two
+            // per-slot HIP sockets, so `back` became `sheatheOff`, and this went red while the seam it
+            // guards was still wired exactly as required. A guard pinned to a spelling fails on a
+            // rename and says nothing about a repeal. It now matches the CALL SHAPE: the derivation
+            // method invoked with a single argument that is not its own parameter declaration.
+            bool derivedSheathWired = Regex.IsMatch(
+                src, @"ComputeSheathedOffHandRotation\(\s*(?!Transform\b)[A-Za-z_]\w*\s*\)");
+            // AND THE GATE, which is the half this suite could not see before. The derivation being
+            // PRESENT in the file never meant it RAN: it was gated on _currentOffHandDerivable, which
+            // folds in the DRAWN pose's authored row. This very shield has one, so the device capture
+            // (logs/device/2026-08-20-equip.log) reads
+            //   "off-hand seat NOT derived for 'knight_shield_starter' key='ShieldWithItemLogic':
+            //    source=AuthoredOffset (authoredRow=True manual=False native=True fullOverride=False)"
+            // and contains ZERO ShieldFrame lines in the whole session — the frame was never measured,
+            // and the sheathed shield sat on the hand-typed (0,90,192) with this case GREEN. A row
+            // dialled for the hand must not speak for the pose on the hip.
+            bool sheathGateIsOwn = src.Contains("_currentOffHandSheathDerivable");
             bool manualReaderWired = src.Contains("IsManualOrientRow");
 
             if (!drawnRow && !derivedDrawnWired)
@@ -311,15 +332,23 @@ namespace DeNelle.Editor.Regression
                              " - the drawn shield is back to IDENTITY with no derivation of any kind.");
             if (!sheathedRow && !derivedSheathWired)
                 failures.Add("[starter-shield-key] the LIVE shield mesh '" + meshKey + "' has no authored " +
-                             "'@sheathed' row AND the derived sheathed seat is not wired - the back carry " +
-                             "is back to the hand-typed (0,90,192) with no relationship to this mesh.");
+                             "'@sheathed' row AND the derived sheathed seat is not wired - the sheathed " +
+                             "carry is back to the hand-typed (0,90,192) with no relationship to this mesh.");
+            if (!sheathedRow && drawnRow && !sheathGateIsOwn)
+                failures.Add("[starter-shield-key] '" + meshKey + "' has an authored DRAWN row but no " +
+                             "'@sheathed' row, and the sheathed derivation has no gate of its own " +
+                             "(_currentOffHandSheathDerivable absent from " + EquipSrc + "). That is the " +
+                             "exact shape that shipped broken: the drawn row switches off the SHEATHED " +
+                             "derivation, the shield frame is never measured, and the sheathed pose " +
+                             "silently falls back to the hand-typed (0,90,192) while the derivation sits " +
+                             "in the file looking wired.");
             if (!manualReaderWired)
                 failures.Add("[starter-shield-key] nothing in " + EquipSrc + " reads the catalog's `manual` " +
                              "flag - a derived pass could overwrite an owner-dialled row (WO-1123 sec 1.2).");
 
             return "starter shield '" + offHandId + "' -> mesh key '" + meshKey + "' (drawnRow=" + drawnRow +
                    " sheathedRow=" + sheathedRow + " derivedDrawn=" + derivedDrawnWired +
-                   " derivedSheathed=" + derivedSheathWired + ")";
+                   " derivedSheathed=" + derivedSheathWired + " sheathGateIsOwn=" + sheathGateIsOwn + ")";
         }
 
         /// <summary>The offset-registry key the equip path uses: the mesh name. For an Addressable

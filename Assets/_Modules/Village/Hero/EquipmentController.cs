@@ -271,6 +271,14 @@ namespace DeNelle.Village
         /// <summary>The off-hand passed every precedence gate at attach, so a derived pose may be
         /// computed for it (still re-checked per pose for an authored SHEATHED row).</summary>
         private bool _currentOffHandDerivable;
+        /// <summary>The SHEATHED pose's own derivability, deliberately SEPARATE from
+        /// <see cref="_currentOffHandDerivable"/> (owner ruling 2026-08-20). The drawn flag folds in
+        /// the DRAWN authored row, and the capture proved that an authored drawn row
+        /// ("source=AuthoredOffset ... authoredRow=True") silently switched off the sheathed
+        /// derivation as well — a row dialled for the hand speaking for a pose on the hip. The
+        /// sheathed pose has its own "&lt;meshKey&gt;@sheathed" channel, checked per pose in
+        /// ComputeSheathedOffHandRotation; this flag is only "is it a shield we may derive at all".</summary>
+        private bool _currentOffHandSheathDerivable;
         /// <summary>The measured half of the shield seat (thickness axis + which face has the
         /// handle), resolved ONCE at attach. Default/invalid = no derivation available.</summary>
         private WeaponOrientHelper.ShieldFrame _currentOffHandShieldFrame;
@@ -402,9 +410,33 @@ namespace DeNelle.Village
         // auto-fallback below mirrors it so the draw matches the just-shipped calm/combat idle split.
         //
         // Sheathed pose is VISUAL (owner felt-tunes) — Inspector-exposed with deterministic defaults.
-        // The weapon rides a back socket (created under the Chest/Spine bone by ResolveBackSocket)
-        // laid diagonally across the back; the off-hand/shield rides the same socket, opposite side.
-        [SerializeField] private Vector3 _sheatheWeaponLocalPos   = new Vector3(-0.10f, 0.12f, -0.15f);
+        //
+        // ⛔ THE BACK CARRY IS RETIRED — SHEATHED PROPS HANG FROM THE HIPS (owner ruling 2026-08-20,
+        // verbatim: "sheathed should sit inverted with the longest mesh (y) up and down attached to
+        // hip bone"). The line that used to sit here read "The weapon rides a back socket (created
+        // under the Chest/Spine bone by ResolveBackSocket) laid diagonally across the back; the
+        // off-hand/shield rides the SAME socket, opposite side" — and BOTH halves of it were the
+        // defect the owner reported, proven by the device capture (logs/device/2026-08-20-equip.log):
+        //   • "ResolveBackSocket on 'Hero (Blaise)': sheathe anchor under bone 'CC_Base_Spine01'."
+        //     GetBoneTransform(Chest) resolves to the LOW spine on this CC rig, so the "back" carry
+        //     was already sitting at the waist — which is exactly the horizontal-across-the-waist
+        //     sword in logs/device/sheathed-weapon.png.
+        //   • "AttachOffHandProp MEASURED ... parent='SheatheSocket_Back' ... s(0.72, 0.92, 0.72)"
+        //     the shield is NOT missing — it renders a real 0.72x0.92x0.72 m volume. It shared ONE
+        //     socket transform with the sword at the same origin, so it was buried in the body mesh.
+        //     "Rides the same socket, opposite side" was never true: both props got the same anchor
+        //     and only their own local offsets separated them, which the bone's 1.67 lossyScale and
+        //     the rig-arbitrary bone axes then scrambled.
+        // So: TWO sockets, on OPPOSITE HIPS, and the long axis runs vertical. See ResolveSheatheSocket.
+        //
+        // ⚠ THESE OFFSETS ARE IN *BODY* SPACE NOW, NOT BONE-LOCAL (same ruling). x = OUTWARD along
+        // the prop's own hip side (the per-side sign is applied for you, so both defaults are
+        // POSITIVE), y = up, z = forward. ComputeSheathLocalPosition converts to the socket frame
+        // with InverseTransformVector, which also divides out the bone's lossyScale — so a metre
+        // here is a metre on the hero, on any rig, whatever axes CC_Base_Hips happens to carry.
+        // A bone-local vector could not survive either (the old (-0.10, 0.12, -0.15) was authored
+        // against a chest bone and inherited by a spine one).
+        [SerializeField] private Vector3 _sheatheWeaponLocalPos   = new Vector3(0.15f, -0.02f, -0.04f);
         // SHEATHED SWORD ROTATION — DERIVED, not guessed (owner F8 fix 2026-07-04): the on-back sword
         // rotation is no longer a magic hand-typed euler (the old (8,0,158) had ZERO relationship to the
         // weapon geometry OR the chest bone's rig-specific axes — the §4 smell, exactly why it sat wrong
@@ -416,10 +448,30 @@ namespace DeNelle.Village
         // Default ZERO = pure geometric sheathe (component is always runtime AddComponent, so this code
         // default applies — no scene/prefab serializes an old value over it).
         [SerializeField] private Vector3 _sheatheWeaponLocalEuler = Vector3.zero;
-        // Diagonal the sheathed blade leans across the back, degrees off straight-up toward the OFF
-        // (main-hand-opposite) shoulder — a natural baldric carry. Authored/persisted; owner felt-tunes.
-        [SerializeField] private float _sheatheBladeDiagonalDeg = 28f;
-        [SerializeField] private Vector3 _sheatheOffHandLocalPos   = new Vector3(0.12f, 0.06f, -0.17f);
+        // Degrees the sheathed long axis leans off VERTICAL, toward the OFF (main-hand-opposite)
+        // side. DEFAULT IS NOW 0 = straight up-and-down at the hip (owner ruling 2026-08-20: "the
+        // longest mesh (y) up and down"). It used to default to 28 — the baldric diagonal of the
+        // retired back carry, and the reason the capture's sword read as lying across the waist.
+        // The FIELD IS KEPT, not deleted (§12: never strip a tuning seam), so the owner can lean
+        // the hang a few degrees off the leg without a recompile. The regression asserts the
+        // SHIPPED DEFAULT is vertical, so a re-introduced diagonal fails loudly rather than quietly.
+        [SerializeField] private float _sheatheBladeDiagonalDeg = 0f;
+        // ⚑ THE ONE NUMBER THAT FLIPS "INVERTED" (owner ruling 2026-08-20 — read this before
+        // touching anything else in the sheathe path). The owner asked for the sheathed prop
+        // "inverted"; we implement that as TIP-DOWN — hilt up at the belt, blade hanging down the
+        // thigh, the way a sword hangs from a scabbard. That is -1.
+        //   -1  = tip DOWN / hilt up   (shipped default — prop-local +Y maps onto -body.up)
+        //   +1  = tip UP   / hilt down (prop-local +Y maps onto +body.up)
+        // If it reads upside down on the device, flip this ONE field; nothing else in the pose
+        // depends on the sign. Both signs keep the long axis VERTICAL, which is the half of the
+        // ruling that is not a matter of taste.
+        [SerializeField] private float _sheatheLongAxisSign = -1f;
+        // Body-space offset for the SHEATHED off-hand (shield) — see _sheatheWeaponLocalPos for the
+        // frame. It sits on the OPPOSITE hip from the weapon (ResolveSheatheSocket owns which), and
+        // it is pushed further out (0.26) than the sword because the live default shield MEASURES
+        // 0.72 m across: at the sword's 0.15 its inner half would be inside the leg. The measured
+        // number is the reason for the number.
+        [SerializeField] private Vector3 _sheatheOffHandLocalPos   = new Vector3(0.26f, 0f, -0.05f);
         // AUTHORED CORRECTION (§4 sanctioned manual nudge, owner live felt-tune 2026-07-04 — manual=true,
         // never auto-overwritten): sheathed shield-on-back rotation. Base (0,90,12); owner Z+=180 →
         // (0,90,192) for the face-on-back read. Y+=180 is NOT baked here — ApplyGlobalWeaponYaw
@@ -434,7 +486,19 @@ namespace DeNelle.Village
         private Transform  _offHandHand;
         private Vector3    _offHandDrawnLocalPos;
         private Quaternion _offHandDrawnLocalRot = Quaternion.identity;
-        private Transform  _backSocket;   // lazily created under Chest/Spine — the shared sheathe anchor
+        // TWO sheathe anchors, lazily created under the HIPS bone, one per slot (owner ruling
+        // 2026-08-20). There used to be exactly one — `_backSocket`, "the SHARED sheathe anchor" —
+        // and sharing it is what buried the shield inside the body: the capture shows both props
+        // parented to the single 'SheatheSocket_Back' transform at the same origin. Two transforms
+        // on opposite hips make that failure mode structurally impossible, not merely tuned around.
+        private Transform  _sheatheSocketMain;   // main-hand weapon — the hip OPPOSITE the weapon hand
+        private Transform  _sheatheSocketOff;    // off-hand / shield — the weapon-hand-side hip
+        // Which way each slot's hip offset points, as a multiplier on body.right. The weapon hangs
+        // on the hip OPPOSITE the drawing hand (a right-handed hero draws across the body from the
+        // left hip) and the shield takes the other one. Constants, not fields: this is the invariant
+        // "they are never on the same side", and a field could be set to make them collide again.
+        private const float SheatheSideMain = -1f;   // -body.right → the hero's LEFT hip
+        private const float SheatheSideOff  = +1f;   // +body.right → the hero's RIGHT hip
 
         // ── SWORD GRIP ORIENTATION (rig-relative) ────────────────────────────────────
         // THE FIX (task #36 follow-up): the grip POINT (handle below the crossguard) is
@@ -692,7 +756,9 @@ namespace DeNelle.Village
             if (anim == null || !anim.isHuman) return;   // need a humanoid rig to seat on bones
             _animator = anim;
             _cachedHeroHeightM = 0f;   // new rig proportions → re-measure for heldLength scale
-            _backSocket = null;   // new body → the old chest-anchored sheathe socket is stale; re-create under the new chest
+            // New body → both hip-anchored sheathe sockets are stale; re-create under the new hips.
+            _sheatheSocketMain = null;
+            _sheatheSocketOff  = null;
             FlowTrace.Step("Equip", $"ReseatForBody: re-seating equipped props onto '{body.name}' bones (animator='{anim.name}').");
             EquipBestForHero();
         }
@@ -1997,6 +2063,22 @@ namespace DeNelle.Village
             bool offHandDerivedSeat = false;
             _currentOffHandManual = IsManualOrientRow(id);
             _currentOffHandShieldFrame = default;
+            // ── MEASURE FIRST, DECIDE AFTER (owner ruling 2026-08-20) ────────────────────────────
+            // The vertex walk used to live INSIDE the drawn-pose precedence gate below, so a shield
+            // with an authored DRAWN row was never measured at all — and the SHEATHED pose, which
+            // has its own authored channel and its own precedence, was left with no frame to pose
+            // from. Proving line, from logs/device/2026-08-20-equip.log: NOT ONE `ShieldFrame` line
+            // appears in the whole capture, while "off-hand seat NOT derived ... source=
+            // AuthoredOffset (authoredRow=True ...)" appears on every equip. Measurement is not a
+            // decision: it is one walk, at attach, and both poses read the same numbers afterwards.
+            if (vis.kind == WeaponClass.Shield)
+            {
+                var measured = default(WeaponOrientHelper.ShieldFrame);
+                if (Guard.Try("Equip", $"shield frame measure for '{id}' (owner ruling 2026-08-20)",
+                        () => WeaponOrientHelper.TryResolveShieldFrame(prop, gripRoot.transform, out measured),
+                        false))
+                    _currentOffHandShieldFrame = measured;
+            }
             // NATIVE IS DELIBERATELY *NOT* EXCLUDED. "Native" means "trust the authored pivot",
             // and the LIVE default shield (knight_shield_starter -> ShieldWithItemLogic) is exactly
             // a native prop whose authored orientation is the broken one — WO-1123 §1's table row
@@ -2008,13 +2090,12 @@ namespace DeNelle.Village
             {
                 Transform shieldBody = _animator != null ? _animator.transform : transform;
                 Quaternion derivedShield = Quaternion.identity;
-                var frame = default(WeaponOrientHelper.ShieldFrame);
-                offHandDerivedSeat = Guard.Try("Equip",
+                // Reads the frame measured above — STILL exactly one vertex walk per attach, and
+                // still the frame overload (the GameObject one would walk the mesh a second time).
+                var frame = _currentOffHandShieldFrame;
+                offHandDerivedSeat = frame.Valid && Guard.Try("Equip",
                     $"derived shield seat for '{id}' (WO-1123)",
-                    // ONE vertex walk: resolve the frame, then pose from it. (The GameObject
-                    // overload would walk the mesh a second time.)
-                    () => WeaponOrientHelper.TryResolveShieldFrame(prop, gripRoot.transform, out frame) &&
-                          WeaponOrientHelper.TryComputeShieldMountRotation(
+                    () => WeaponOrientHelper.TryComputeShieldMountRotation(
                               frame, id, hand,
                               // NOT `out _`: line 1904 opens `using var _ = FlowTrace.Enter(...)`,
                               // so `_` is a using variable in this scope and a discard there is
@@ -2024,9 +2105,6 @@ namespace DeNelle.Village
                     false);
                 if (offHandDerivedSeat)
                 {
-                    // Cache the MEASURED half (one vertex walk) so the sheathed pose — re-asserted
-                    // every frame by ApplyHoldPose — rebuilds only the cheap rotation.
-                    _currentOffHandShieldFrame = frame;
                     gripRoot.transform.localRotation = derivedShield;
                     FlowTrace.Step("Equip",
                         $"off-hand seat DERIVED (WO-1123) for '{id}' key='{offsetKey}': thickness -> " +
@@ -2086,6 +2164,19 @@ namespace DeNelle.Village
             _currentOffHandKind       = vis.kind;
             _currentOffHandDerivable  = !fullOverride && vis.kind == WeaponClass.Shield &&
                                         WeaponOrientHelper.MayDerive(hasOffset, _currentOffHandManual);
+            // ⚠ The SHEATHED flag does NOT read `hasOffset` (owner ruling 2026-08-20). `hasOffset`
+            // is the DRAWN row, and letting it speak here is what left the hip-hung shield posed by
+            // a retired back-carry constant. A fullOverride row still wins (it owns the transform
+            // outright) and `manual: true` is still canon; the sheathed row itself is checked per
+            // pose in ComputeSheathedOffHandRotation, where it belongs.
+            _currentOffHandSheathDerivable = !fullOverride && vis.kind == WeaponClass.Shield &&
+                                             !_currentOffHandManual;
+            FlowTrace.Step("Equip",
+                $"off-hand SHEATHE derivability for '{id}' key='{offsetKey}': " +
+                $"sheathDerivable={_currentOffHandSheathDerivable} (drawnDerivable=" +
+                $"{_currentOffHandDerivable} authoredDrawnRow={hasOffset} manual={_currentOffHandManual} " +
+                $"fullOverride={fullOverride}) frameValid={_currentOffHandShieldFrame.Valid} — the two " +
+                "flags differing is EXPECTED and is the 2026-08-20 fix, not a bug.");
 
             // RENDER-VERIFY + DETACH-ON-FAIL (TGVRU): the shield can attach but be invisible (no
             // enabled renderer / no mesh) or seated on the wrong bone. PROVE it renders + is parented
@@ -2139,6 +2230,7 @@ namespace DeNelle.Village
             // handle side, which is a wrong pose that looks deliberate.
             _currentOffHandShieldFrame = default;
             _currentOffHandDerivable = false;
+            _currentOffHandSheathDerivable = false;
             _currentOffHandManual = false;
         }
 
@@ -2163,7 +2255,7 @@ namespace DeNelle.Village
 
         /// <summary>
         /// True while the weapon prop is DRAWN to the hand - the SAME predicate ApplyHoldPose
-        /// seats the props by (a live SHEATHED Seating-Editor edit pins the props to the back,
+        /// seats the props by (a live SHEATHED Seating-Editor edit pins the props to the hips,
         /// so it reads as not-drawn even mid-combat). WO-959 (owner ruling 2026-08-10): element
         /// weapon auras (GearAura) render ONLY while this is true.
         /// </summary>
@@ -2312,54 +2404,70 @@ namespace DeNelle.Village
 
         private void ApplyHoldPose()
         {
-            // A live SHEATHED seating edit pins the props to the back socket even if combat starts —
-            // the owner is dialing the back pose (Update's auto-mirror is already suspended while
-            // _seatingEditActive; this covers an explicit SetCombatActive caller mid-edit).
+            // A live SHEATHED seating edit pins the props to the sheathe sockets even if combat
+            // starts — the owner is dialing the sheathed pose (Update's auto-mirror is already
+            // suspended while _seatingEditActive; this covers an explicit SetCombatActive caller
+            // mid-edit).
             bool drawn = _combatActive && !(_seatingEditActive && _seatEditSheathed);
-            Transform back = drawn ? null : ResolveBackSocket();
+            // TWO sockets, opposite hips (owner ruling 2026-08-20). The single shared `back` local
+            // this replaced is the reason the shield was buried: one transform, one origin, two
+            // props. Resolving them separately means no future edit can accidentally re-share them.
+            Transform sheatheMain = drawn ? null : ResolveSheatheSocket(offHand: false);
+            Transform sheatheOff  = drawn ? null : ResolveSheatheSocket(offHand: true);
 
             // ── Main weapon ──
             if (_gripRoot != null)
             {
-                if (!drawn && back != null)
+                if (!drawn && sheatheMain != null)
                 {
-                    _gripRoot.SetParent(back, false);
-                    // Back-socket bones carry a different lossyScale than the hand — always compensate
-                    // so the attach-authored multiplier (fo.scale) survives the carry-state re-parent.
+                    _gripRoot.SetParent(sheatheMain, false);
+                    // Sheathe-socket bones carry a different lossyScale than the hand — always
+                    // compensate so the attach-authored multiplier (fo.scale) survives the
+                    // carry-state re-parent.
                     CompensateParentScale(_gripRoot, _weaponAuthoredScale,
                         SeatSubject("main-hand", _currentWeaponId, _currentWeaponMeshKey),
                         ref _weaponCompState);
-                    _gripRoot.localPosition = _sheatheWeaponLocalPos;
+                    // Body-space → socket-local (owner ruling 2026-08-20). A raw bone-local vector
+                    // here was authored against a chest bone, inherited by a spine one, and scaled
+                    // by whatever lossyScale that bone happened to carry.
+                    _gripRoot.localPosition = ComputeSheathLocalPosition(
+                        sheatheMain, _sheatheWeaponLocalPos, SheatheSideMain);
                     // DERIVED sheathe rotation (the fix): build the base orientation from the body's
                     // own axes via the SAME LookRotation(flat, blade) construction the correct battle
                     // draw uses (ComputeMeleeGripRotation), then compose the persisted authored nudge —
                     // instead of the old hand-guessed magic euler that ignored the chest-bone axes.
                     // ── BOW EXCEPTION: SHEATHED AND DRAWN ARE THE SAME POSE ──────────────────
                     // Owner ruling 2026-08-16, verbatim: "both sheathed and drawn bow stay in this
-                    // same pose". ComputeSheathRotation lays the prop DIAGONALLY up the spine with
-                    // its flat against the back — a baldric carry. That is right for a sword, axe,
-                    // hammer or staff and is felt-approved, so it is UNTOUCHED for every one of
-                    // them; the branch below is entered ONLY for WeaponClass.Bow.
+                    // same pose". The branch below is entered ONLY for WeaponClass.Bow and is
+                    // UNTOUCHED by the 2026-08-20 hip ruling — a bow keeps its own derived carry.
+                    // ⚠ The sentence that stood here — "ComputeSheathRotation lays the prop
+                    // DIAGONALLY up the spine with its flat against the back ... and is
+                    // felt-approved" — is now FALSE for every melee family: that diagonal back
+                    // carry is exactly what the owner rejected on 2026-08-20. Melee now hangs
+                    // vertical and inverted at the hip. Only the ANCHOR moved for the bow (it is
+                    // anchor-independent by construction, see below), so its pose is unchanged.
                     //
                     // A slung bow must instead answer the SAME four clauses the held bow does, so
                     // the same solver produces it: ComputeBowHeldRotation builds its target in
                     // WORLD from the body's axes and expresses it in the ANCHOR's local frame, and
-                    // it reads nothing off the anchor but its rotation. Feeding it the back socket
-                    // instead of the hand therefore yields the IDENTICAL WORLD ORIENTATION — which
-                    // is the ruling stated exactly. Only the anchor changes; the pose does not.
-                    // (Position still comes from _sheatheWeaponLocalPos above: the ruling is about
-                    // the POSE. A bow on the back still sits on the back.)
+                    // it reads nothing off the anchor but its rotation. Feeding it the sheathe
+                    // socket instead of the hand therefore yields the IDENTICAL WORLD ORIENTATION —
+                    // which is the ruling stated exactly. Only the anchor changes; the pose does
+                    // not, and that is precisely why moving the anchor from spine to HIP on
+                    // 2026-08-20 did not disturb the bow's felt-verified orientation. (Position
+                    // still comes from _sheatheWeaponLocalPos above: the ruling is about the POSE.
+                    // A slung bow now hangs at the hip like everything else.)
                     //
                     // MEASURED, so the change is not asserted: ComputeSheathRotation put the bow at
                     // limbTiltFromVertical = _sheatheBladeDiagonalDeg (28 deg, the diagonal in the
-                    // owner's photo) and bellyOffAim = 180 deg EXACTLY, because worldFlat is
-                    // -body.forward - the flat lies against the back, which for a bow means the
+                    // owner's photo) and bellyOffAim = 180 deg EXACTLY, because worldFlat was
+                    // -body.forward - the flat lay against the back, which for a bow means the
                     // STRING faces downrange and the curve faces the archer. So the old sheathed
                     // bow was wrong on BOTH axes, not just the tilt. After this line both read 0.
                     //
-                    // _sheatheWeaponLocalEuler (the melee back-pose felt-nudge, currently zero) is
+                    // _sheatheWeaponLocalEuler (the melee sheathe felt-nudge, currently zero) is
                     // deliberately NOT composed here - it lives inside ComputeSheathRotation and
-                    // belongs to the baldric carry. The bow's nudge seam is ApplySheathedOffset,
+                    // belongs to the melee hip carry. The bow's nudge seam is ApplySheathedOffset,
                     // one line below, exactly as before.
                     //
                     // WHY THIS WAS MISSED: a capture proved limbTiltFromVertical=0 for the HELD
@@ -2370,18 +2478,18 @@ namespace DeNelle.Village
                     _gripRoot.localRotation = _currentWeaponKind == WeaponClass.Bow
                         ? Guard.Try("Equip", "sheathed bow ComputeBowHeldRotation",
                             () => WeaponBoundsOrient.ComputeBowHeldRotation(
-                                      back, _animator != null ? _animator.transform : transform),
+                                      sheatheMain, _animator != null ? _animator.transform : transform),
                             Quaternion.identity)
-                        : ComputeSheathRotation(back);
+                        : ComputeSheathRotation(sheatheMain, SheatheSideMain);
                     // Sheathed pose: explicit "<meshKey>@sheathed" wins; else fall back to the drawn
-                    // offset ("<meshKey>") as a nudge on this built-in back pose (town carry fix).
+                    // offset ("<meshKey>") as a nudge on this built-in sheathe pose (town carry fix).
                     ApplySheathedOffset(_gripRoot, _currentWeaponMeshKey);
                     if (_currentWeaponKind == WeaponClass.Bow)
                         TraceBowSeatMeasured(_gripRoot, _weaponHand, _currentWeaponId, _bowSeatDerived);
                 }
                 else if (_weaponHand != null)
                 {
-                    // Drawn (or sheathed with no back bone on this rig — never leave it floating unparented).
+                    // Drawn (or sheathed with no sheathe bone on this rig — never leave it floating unparented).
                     _gripRoot.SetParent(_weaponHand, false);
                     if (_weaponParentCompensate)
                         CompensateParentScale(_gripRoot, _weaponAuthoredScale,
@@ -2398,17 +2506,23 @@ namespace DeNelle.Village
             if (_currentOffHandProp != null)
             {
                 var offT = _currentOffHandProp.transform;
-                if (!drawn && back != null)
+                if (!drawn && sheatheOff != null)
                 {
-                    offT.SetParent(back, false);
+                    // ⛔ NOTE THE PARENT: `sheatheOff`, NOT the weapon's socket. This line used to
+                    // read `offT.SetParent(back, false)` with `back` being the ONE shared socket the
+                    // sword had just taken — same transform, same origin — which is why the capture
+                    // shows a shield with a real 0.72 x 0.92 x 0.72 m volume that the player never
+                    // sees. It was inside the hero.
+                    offT.SetParent(sheatheOff, false);
                     // WO-994 B: sheathed path used to compensate UNCONDITIONALLY while the drawn
                     // path respected _offHandParentCompensate (false for fullOverride shields).
-                    // That made one prop render at two sizes (hand vs back). Same guard both ways.
+                    // That made one prop render at two sizes (hand vs sheathed). Same guard both ways.
                     if (_offHandParentCompensate)
                         CompensateParentScale(offT, _offHandAuthoredScale,
                             SeatSubject("off-hand", _currentOffHandId, _currentOffHandMeshKey),
                             ref _offHandCompState);
-                    offT.localPosition = _sheatheOffHandLocalPos;
+                    offT.localPosition = ComputeSheathLocalPosition(
+                        sheatheOff, _sheatheOffHandLocalPos, SheatheSideOff);
                     // DE-BAND-AID NOTE (2026-07-07): _sheatheOffHandLocalEuler (the hand-tuned magic
                     // euler, owner Z+=180 correction 2026-07-04) is now only the DEFAULT under the
                     // @sheathed offset seam — an owner-authored "<meshKey>@sheathed" registry entry
@@ -2416,7 +2530,7 @@ namespace DeNelle.Village
                     // entry this line is the exact shipped pose (zero regression).
                     // WO-1123: DERIVED when the geometry answers, else the shipped constant — one
                     // method so this pose and the Seating Editor preview can never disagree.
-                    offT.localRotation = ComputeSheathedOffHandRotation(back);
+                    offT.localRotation = ComputeSheathedOffHandRotation(sheatheOff);
                     ApplySheathedOffset(offT, _currentOffHandMeshKey);
                     RecordOffHandSeatWrite("ApplyHoldPose.sheathed");   // WO-994 tripwire
                 }
@@ -2441,7 +2555,7 @@ namespace DeNelle.Village
             if (drawn != _lastNotifiedDrawn)
             {
                 _lastNotifiedDrawn = drawn;
-                FlowTrace.Step("Equip", "carry state -> " + (drawn ? "DRAWN (hand)" : "SHEATHED (back)") +
+                FlowTrace.Step("Equip", "carry state -> " + (drawn ? "DRAWN (hand)" : "SHEATHED (hip)") +
                     " on '" + name + "' - notifying carry-state subscribers (WO-959).");
                 var handler = OnCarryStateChanged;
                 if (handler != null)
@@ -2682,21 +2796,73 @@ namespace DeNelle.Village
                 FlowTrace.Throttle("Equip", key, 1f, line);
         }
 
-        private Transform ResolveBackSocket()
+        // ── SHEATHE ANCHORS: ONE PER SLOT, ON THE HIPS (owner ruling 2026-08-20) ─────────────────
+        // ⛔ WHAT THIS REPLACES — `ResolveBackSocket()`, which created ONE GameObject named
+        // 'SheatheSocket_Back' under Chest→Spine→UpperChest and handed the SAME transform to both
+        // the sword and the shield. Two proven defects in four lines, from the device capture:
+        //   1. "sheathe anchor under bone 'CC_Base_Spine01'" — on this CC rig GetBoneTransform(Chest)
+        //      lands on the LOW spine, so the "back" pose was already at waist height. The owner's
+        //      screenshot of a sword lying across the waist is that line rendered.
+        //   2. Both props got the identical anchor at the identical origin, so the shield (measured
+        //      0.72 x 0.92 x 0.72 m — it draws, it is not null) sat inside the torso and the body
+        //      mesh ate it. "Shield isn't showing" was never a missing prop.
+        // The owner's instruction is the hip bone, so Hips is now FIRST, not a fallback — and the
+        // spine/chest chain is KEPT BELOW it, never stripped (§12), for a rig with no mapped Hips.
+        // A rig that falls back logs a Warn, because on that rig the pose is NOT the ruled one and
+        // the next reader must be able to see that from the capture instead of re-deriving it.
+        private Transform ResolveSheatheSocket(bool offHand)
         {
-            if (_backSocket != null) return _backSocket;   // a destroyed Unity object compares == null → re-created
+            Transform cached = offHand ? _sheatheSocketOff : _sheatheSocketMain;
+            if (cached != null) return cached;            // a destroyed Unity object compares == null → re-created
             if (_animator == null || !_animator.isHuman) return null;
-            Transform anchor = _animator.GetBoneTransform(HumanBodyBones.Chest);
+            Transform anchor = _animator.GetBoneTransform(HumanBodyBones.Hips);
+            bool onHips = anchor != null;
             if (anchor == null) anchor = _animator.GetBoneTransform(HumanBodyBones.Spine);
+            if (anchor == null) anchor = _animator.GetBoneTransform(HumanBodyBones.Chest);
             if (anchor == null) anchor = _animator.GetBoneTransform(HumanBodyBones.UpperChest);
             if (anchor == null) return null;
-            var go = new GameObject("SheatheSocket_Back");
+            // Names carry the slot AND the anchor's intent, so a capture line names which prop it is
+            // talking about. The old shared name said "Back" while sitting on the spine — a name that
+            // lies is how a reader concludes the pose is right when the transform says otherwise.
+            var go = new GameObject(offHand ? "SheatheSocket_HipOff" : "SheatheSocket_HipMain");
             go.transform.SetParent(anchor, false);
             go.transform.localPosition = Vector3.zero;
             go.transform.localRotation = Quaternion.identity;
-            _backSocket = go.transform;
-            FlowTrace.Step("Equip", $"ResolveBackSocket on '{name}': sheathe anchor under bone '{anchor.name}'.");
-            return _backSocket;
+            if (offHand) _sheatheSocketOff = go.transform; else _sheatheSocketMain = go.transform;
+            string msg = $"ResolveSheatheSocket({(offHand ? "off-hand" : "main-hand")}) on '{name}': " +
+                         $"anchor '{go.name}' under bone '{anchor.name}' " +
+                         $"(hips={onHips}; side={(offHand ? SheatheSideOff : SheatheSideMain):+0;-0} * body.right).";
+            if (onHips) FlowTrace.Step("Equip", msg);
+            else FlowTrace.Warn("Equip", msg + " ⛔ NOT THE HIPS BONE — this rig has no mapped Hips, so " +
+                 "the sheathed prop is hanging off a spine/chest bone and will sit HIGHER than the " +
+                 "owner-ruled hip carry. The pose math is unchanged (it is body-derived); only the " +
+                 "attach height is wrong. Fix the rig's humanoid Hips mapping, not this code.");
+            return go.transform;
+        }
+
+        /// <summary>
+        /// Converts a BODY-space sheathe offset (x = outward on this slot's hip side, y = up,
+        /// z = forward, metres) into the socket's local frame. Derived, never bone-local-typed:
+        /// InverseTransformVector divides out both the bone's arbitrary axes and its lossyScale
+        /// (1.67 on this rig, per the capture's boneLossy), so the authored metres are metres on
+        /// the hero. The old code wrote a raw bone-local vector authored against a DIFFERENT bone.
+        /// </summary>
+        private Vector3 ComputeSheathLocalPosition(Transform socket, Vector3 bodyOffset, float sideSign)
+        {
+            if (socket == null) return bodyOffset;
+            Transform body = _animator != null ? _animator.transform : transform;
+            Vector3 world = body.right * (bodyOffset.x * sideSign)
+                          + body.up * bodyOffset.y
+                          + body.forward * bodyOffset.z;
+            Vector3 ls = socket.lossyScale;
+            if (Mathf.Abs(ls.x) < 1e-5f || Mathf.Abs(ls.y) < 1e-5f || Mathf.Abs(ls.z) < 1e-5f)
+            {
+                FlowTrace.Warn("Equip", $"ComputeSheathLocalPosition on '{name}': socket '{socket.name}' " +
+                    $"has a degenerate lossyScale {ls} — cannot express the body-space offset in its " +
+                    "frame. Falling back to the raw offset; the prop may sit off the hip.");
+                return bodyOffset;
+            }
+            return socket.InverseTransformVector(world);
         }
 
         // ── DERIVED SHEATHE ROTATION (owner F8 fix 2026-07-04 — "the secret is on battle") ──────────
@@ -2705,30 +2871,71 @@ namespace DeNelle.Village
         // axes so the prop's blade line (prop-local +Y, put there by NormalizeInto + SeatHiltLowerHalf)
         // and its flat-plane normal (prop-local +Z) land forward-out-of-the-fist. The OLD sheathe used a
         // hand-typed magic euler (8,0,158) with no relationship to geometry OR the chest-bone axes, so it
-        // sat wrong. This DERIVES the on-back orientation the SAME way — from the BODY's own axes — with
+        // sat wrong. This DERIVES the sheathed orientation the SAME way — from the BODY's own axes — with
         // the identical LookRotation(flat, blade) construction, so the sheathed sword sits right the way
-        // the drawn one does. On the back we want the blade laid diagonally (up the spine, leaning toward
-        // the off shoulder — a baldric carry) with the flat of the blade against the back (facing out).
-        //   • prop +Y (blade)  -> worldBlade  (up, tilted _sheatheBladeDiagonalDeg toward the off shoulder)
-        //   • prop +Z (flat)   -> worldFlat = body backward (blade lies flat on the back, edge out)
+        // the drawn one does. AT THE HIP (owner ruling 2026-08-20) we want the blade hanging VERTICAL
+        // and INVERTED — hilt up at the belt, tip down the thigh — with the flat against the leg:
+        //   • prop +Y (blade)  -> worldBlade = body up * _sheatheLongAxisSign (-1 = tip down), with an
+        //                        optional _sheatheBladeDiagonalDeg lean off vertical (default 0)
+        //   • prop +Z (flat)   -> worldFlat = this hip's OUTWARD side (blade lies flat on the leg)
         // Built in WORLD from the body's axes, then expressed in the socket's LOCAL frame so it follows
-        // the chest bone through animation/turning exactly like the drawn seat follows the hand. Finally
+        // the hip bone through animation/turning exactly like the drawn seat follows the hand. Finally
         // the persisted authored nudge (_sheatheWeaponLocalEuler, owner felt-tune) composes on top —
         // the sheathe equivalent of _swordGripEuler nudging the drawn seat.
-        private Quaternion ComputeSheathRotation(Transform socket)
+        private Quaternion ComputeSheathRotation(Transform socket) =>
+            ComputeSheathRotation(socket, SheatheSideMain);
+
+        // ⛔ THE BALDRIC DIAGONAL IS RETIRED (owner ruling 2026-08-20). The body of this method used
+        // to lean the blade `_sheatheBladeDiagonalDeg` (28) off vertical toward the off shoulder and
+        // lay its flat against the BACK (`worldFlat = -body.forward`) — a diagonal back carry. On a
+        // socket that actually resolved to CC_Base_Spine01 that reads as a sword lying sideways
+        // across the waist, which is precisely what the owner photographed. The CONSTRUCTION below
+        // is unchanged and deliberately so — it is still LookRotation(flat, blade) built in WORLD
+        // from the body's own axes and expressed in the socket's local frame, exactly as the correct
+        // battle draw is, and there is still no hand-typed euler anywhere in it. Only the two INPUT
+        // DIRECTIONS moved: the blade line goes VERTICAL (and inverted), and the flat turns to face
+        // outward from the leg instead of backward, because a belt-hung sword lies against the thigh.
+        private Quaternion ComputeSheathRotation(Transform socket, float sideSign)
         {
             Transform body = _animator != null ? _animator.transform : transform;
-            // Off shoulder = opposite the main (right) hand → toward body-left. Blade leans that way.
-            Vector3 offShoulder = -body.right;
+            // ── Long axis: VERTICAL, sign-flippable. _sheatheLongAxisSign is the single number the
+            // owner flips if "inverted" reads the other way (-1 = tip down, the shipped reading).
+            // _sheatheBladeDiagonalDeg survives as an optional lean off vertical (default 0), and it
+            // leans across the body toward the OTHER hip, so a leaning sword still hangs off its own.
+            float sign = _sheatheLongAxisSign >= 0f ? 1f : -1f;
+            Vector3 vertical = body.up * sign;
             float rad = _sheatheBladeDiagonalDeg * Mathf.Deg2Rad;
-            Vector3 worldBlade = (body.up * Mathf.Cos(rad) + offShoulder * Mathf.Sin(rad)).normalized;
-            Vector3 worldFlat  = -body.forward;   // flat of the blade rests against the back, edge out
+            Vector3 worldBlade = (vertical * Mathf.Cos(rad) + body.right * (-sideSign) * Mathf.Sin(rad)).normalized;
+            // Flat of the blade rests against the LEG, so its normal points outward on this hip's side.
+            Vector3 worldFlat = body.right * sideSign;
+            // Orthogonalize: with a non-zero lean the two are no longer perpendicular, and
+            // LookRotation silently re-derives its own up in that case — which would quietly undo the
+            // lean instead of applying it. Project the flat off the blade line so the frame we hand
+            // over is the frame we asked for.
+            worldFlat -= Vector3.Dot(worldFlat, worldBlade) * worldBlade;
+            if (worldFlat.sqrMagnitude < 1e-6f)
+                worldFlat = Vector3.ProjectOnPlane(body.forward, worldBlade);
+            if (worldFlat.sqrMagnitude < 1e-6f) worldFlat = Vector3.forward;
+            worldFlat.Normalize();
             // LookRotation(forward, upwards): +Z -> forward, +Y -> upwards. We want prop +Z -> flat and
             // prop +Y -> blade — the SAME axis mapping ComputeMeleeGripRotation uses (LookRotation(up, blade)).
             Quaternion worldTarget = Quaternion.LookRotation(worldFlat, worldBlade);
-            // Express in the socket's local frame (the socket follows the chest bone), then the nudge.
+            // Express in the socket's local frame (the socket follows the hip bone), then the nudge.
             Quaternion localBase = Quaternion.Inverse(socket.rotation) * worldTarget;
-            return localBase * Quaternion.Euler(_sheatheWeaponLocalEuler);
+            Quaternion result = localBase * Quaternion.Euler(_sheatheWeaponLocalEuler);
+            // §12: the pose must PROVE itself in a capture, not be argued from source. tiltFromVertical
+            // is the number that was 28 (by construction) and must now read ~0; longAxisDotUp names the
+            // inversion (-1 = tip down) so "it looks upside down" is answerable without a rebuild.
+            // Throttled: ApplyHoldPose re-asserts this every frame.
+            Vector3 bladeWorld = (socket.rotation * result) * Vector3.up;
+            float tiltFromVertical = Vector3.Angle(bladeWorld, vertical);
+            FlowTrace.Throttle("Equip", $"sheathe-rot-{(sideSign < 0f ? "main" : "off")}-{name}", 5f,
+                $"sheathed long axis on '{name}': tiltFromVertical={tiltFromVertical:0.#}deg " +
+                $"(must read ~{_sheatheBladeDiagonalDeg:0.#}; ~90 means it is lying across the body) " +
+                $"longAxisDotUp={Vector3.Dot(bladeWorld, body.up):0.##} " +
+                $"(sign={sign:+0;-0}: -1 = tip DOWN / hilt up, the owner's 'inverted') " +
+                $"socket='{socket.name}'.");
+            return result;
         }
 
         // ── DERIVED SHEATHED OFF-HAND (SHIELD) ROTATION — WO-1123 ────────────────────────────────
@@ -2738,8 +2945,25 @@ namespace DeNelle.Village
         // since, including the live default (ShieldWithItemLogic) that has no authored row at all.
         //
         // The owner's rule is the SAME rule in both poses (2026-08-19): the shield's thickness axis
-        // faces AWAY FROM THE PLAYER and the handled face is against the mount. On the back, "away
-        // from the player" is -body.forward — the only term that changes between hand and back.
+        // faces AWAY FROM THE PLAYER and the handled face is against the mount.
+        //
+        // ⚠ "AWAY FROM THE PLAYER" IS NOW THE HIP SIDE, NOT -body.forward (owner ruling 2026-08-20).
+        // The retired line here said "On the back, 'away from the player' is -body.forward — the only
+        // term that changes between hand and back", and it was true of a BACK mount. A shield slung
+        // on the hip lies against the leg, so the face that must point away is the LATERAL one; and
+        // the long axis is now handed `body.up * _sheatheLongAxisSign` so the shield obeys the same
+        // vertical/inverted rule the sword does. Both terms are still body-derived — no euler.
+        //
+        // ⛔ THE SECOND HALF OF THE BUG, AND THE LESS OBVIOUS ONE: this derivation was gated on
+        // `_currentOffHandDerivable`, which is computed at attach from the DRAWN pose's precedence
+        // (WeaponOrientHelper.MayDerive(hasOffset, manual)). The capture's proving line is
+        //   "off-hand seat NOT derived for 'knight_shield_starter' key='ShieldWithItemLogic':
+        //    source=AuthoredOffset (authoredRow=True manual=False native=True fullOverride=False)"
+        // — an authored DRAWN row therefore silently disabled the SHEATHED derivation too, and
+        // (grep the capture) not one `ShieldFrame` line was ever emitted, so the frame was never
+        // even measured. The sheathed pose has its OWN authored channel ("<meshKey>@sheathed",
+        // checked below); a drawn-pose row must not speak for it. The gate is now
+        // _currentOffHandSheathDerivable, which is about the sheathed row alone.
         //
         // PRECEDENCE, re-checked here and not just at attach, because a SHEATHED pose has its own
         // authored channel: an explicit "<meshKey>@sheathed" row outranks this derivation entirely
@@ -2753,9 +2977,22 @@ namespace DeNelle.Village
         private Quaternion ComputeSheathedOffHandRotation(Transform socket)
         {
             Quaternion shipped = ApplyGlobalWeaponYaw(Quaternion.Euler(_sheatheOffHandLocalEuler));
-            if (socket == null || !_currentOffHandDerivable || !_currentOffHandShieldFrame.Valid ||
+            if (socket == null || !_currentOffHandSheathDerivable || !_currentOffHandShieldFrame.Valid ||
                 _currentOffHandKind != WeaponClass.Shield)
+            {
+                // The shipped constant is a BACK-pose euler; on a hip socket it is a guess about a
+                // mount it was never dialled against. Say so — this is the line that tells the next
+                // reader "the shield is at the hip but its rotation is the old back constant", which
+                // is a different defect from "the derivation ran and is wrong".
+                if (socket != null && _currentOffHandKind == WeaponClass.Shield)
+                    FlowTrace.Throttle("Equip", $"sheath-shield-fallback-{_currentOffHandMeshKey}", 5f,
+                        $"sheathed shield '{_currentOffHandMeshKey}': NOT derived (sheathDerivable=" +
+                        $"{_currentOffHandSheathDerivable} frameValid={_currentOffHandShieldFrame.Valid}) — " +
+                        "falling back to the retired BACK-carry constant on a HIP socket. Expect the " +
+                        "face to read wrong; the cause is upstream (no measurable bounds, or an " +
+                        "authored '@sheathed' row).");
                 return shipped;
+            }
 
             // An owner-authored @sheathed pose is tier 1 — it wins outright.
             if (TryResolveSheathedOffset(_currentOffHandMeshKey, out _, out var src) &&
@@ -2768,16 +3005,31 @@ namespace DeNelle.Village
             }
 
             Transform body = _animator != null ? _animator.transform : transform;
+            // Outward = the hip side the shield hangs on (it lies against the leg, face out); up =
+            // the SAME vertical/inverted long axis the sword obeys, so one ruling drives both props.
+            Vector3 outward = body.right * SheatheSideOff;
+            Vector3 longUp  = body.up * (_sheatheLongAxisSign >= 0f ? 1f : -1f);
             Quaternion derived = WeaponOrientHelper.ComputeShieldMountRotation(
-                _currentOffHandShieldFrame, socket, -body.forward, body.up);
+                _currentOffHandShieldFrame, socket, outward, longUp);
             // THROTTLED (1/5s): this runs every frame and an unthrottled Step here is exactly the
             // spam that swallowed three F8 captures (see ApplySheathedOffset's note). The numbers
-            // still prove the pose — faceOff must read ~0 deg.
-            Vector3 faceWorld = (socket.rotation * derived) * Vector3.right;
-            float faceOff = Vector3.Angle(faceWorld, -body.forward);
+            // still prove the pose — faceOff must read ~0 deg, and longTilt ~0 proves the owner's
+            // "longest mesh (y) up and down" on the SHIELD as well as on the sword.
+            // MEASURE THE PROP'S OWN AXES, not +X/+Y. The frame's ThicknessAxis/LongAxis are whichever
+            // extents MEASURED shortest/longest (a native prop keeps its authored axes — the live
+            // default shield is one), so the old `worldRot * Vector3.right` was only the face by
+            // luck. A trace that assumes the post-normalize permutation reports a healthy angle for
+            // a prop that is sideways, which is the class of mistake this whole path exists to end.
+            Quaternion worldRot = socket.rotation * derived;
+            Vector3 faceWorld = worldRot * _currentOffHandShieldFrame.ThicknessAxis;
+            Vector3 longWorld = worldRot * _currentOffHandShieldFrame.LongAxis;
+            float faceOff = Vector3.Angle(faceWorld, outward);
+            float longTilt = Vector3.Angle(longWorld, longUp);
             FlowTrace.Throttle("Equip", $"sheath-derived-{_currentOffHandMeshKey}", 5f,
                 $"sheathed shield '{_currentOffHandMeshKey}' DERIVED: thickness faces away from the " +
-                $"player at the back; localEuler={derived.eulerAngles:0.#} faceOffOutward={faceOff:0.#}deg " +
+                $"player at the HIP; localEuler={derived.eulerAngles:0.#} faceOffOutward={faceOff:0.#}deg " +
+                $"longTiltFromVertical={longTilt:0.#}deg longAxisDotUp=" +
+                $"{Vector3.Dot(longWorld, body.up):0.##} " +
                 $"(shipped constant would have been {shipped.eulerAngles:0.#}).");
             return derived;
         }
@@ -3051,13 +3303,16 @@ namespace DeNelle.Village
             _seatEditMode      = -1;   // force a re-seat on the first preview (drawn mode)
             if (sheathed)
             {
-                // Sheathed edit tunes the BACK pose — force the sheathed placement (ApplyHoldPose
+                // Sheathed edit tunes the HIP pose — force the sheathed placement (ApplyHoldPose
                 // treats combat as inactive while _seatEditSheathed) so the preview math runs in
-                // the back-socket frame the runtime consumption uses.
+                // the sheathe-socket frame the runtime consumption uses. The socket asked for is
+                // THIS SLOT's (2026-08-20): the two slots no longer share one, so checking the
+                // weapon's socket would report a healthy edit for a shield that has none.
                 ApplyHoldPose();
-                if (ResolveBackSocket() == null)
-                    FlowTrace.Warn("Offset", $"BeginSeatingEdit(sheathed): no back socket on '{name}' — " +
-                        "sheathed preview would run in the hand frame; pose may not reproduce.");
+                if (ResolveSheatheSocket(offHand) == null)
+                    FlowTrace.Warn("Offset", $"BeginSeatingEdit(sheathed): no sheathe socket on '{name}' " +
+                        $"for the {(offHand ? "off-hand" : "main-hand")} slot — sheathed preview would run " +
+                        "in the hand frame; pose may not reproduce.");
             }
             else
             {
@@ -3205,9 +3460,9 @@ namespace DeNelle.Village
             }
         }
 
-        // SHEATHED-pose preview (2026-07-07): applies pos/euler in the BACK-SOCKET frame exactly
-        // per ApplySheathedOffset's consumption contract, so what the owner dials on the back is
-        // byte-identical to what ApplyHoldPose reproduces in town on every boot:
+        // SHEATHED-pose preview (2026-07-07): applies pos/euler in THIS SLOT'S SHEATHE-SOCKET frame
+        // exactly per ApplySheathedOffset's consumption contract, so what the owner dials on the
+        // sheathed pose is byte-identical to what ApplyHoldPose reproduces in town on every boot:
         //   • fullOverride=true  → localPosition = pos, localRotation = Euler(euler) — absolute in
         //     the socket frame, NO global yaw (the authored value IS the pose).
         //   • fullOverride=false → nudge composed on the built-in sheathe pose (derived
@@ -3216,15 +3471,19 @@ namespace DeNelle.Village
         private void ApplySheathedSeatingPreview(Transform grt, bool offHand,
             Vector3 pos, Vector3 euler, bool fullOverride)
         {
-            Transform back = ResolveBackSocket();
-            if (back == null)
+            // THIS SLOT's socket (2026-08-20). Previewing the shield in the WEAPON's socket would
+            // dial a nudge against a pose on the other hip — the WO-994 lesson, one hip over.
+            Transform socket = ResolveSheatheSocket(offHand);
+            float sideSign = offHand ? SheatheSideOff : SheatheSideMain;
+            if (socket == null)
             {
-                FlowTrace.Warn("Offset", $"ApplySheathedSeatingPreview: no back socket on '{name}' — cannot preview the sheathed pose.");
+                FlowTrace.Warn("Offset", $"ApplySheathedSeatingPreview: no sheathe socket on '{name}' for the " +
+                    $"{(offHand ? "off-hand" : "main-hand")} slot — cannot preview the sheathed pose.");
                 return;
             }
-            if (grt.parent != back)
+            if (grt.parent != socket)
             {
-                grt.SetParent(back, false);
+                grt.SetParent(socket, false);
                 bool comp = offHand ? _offHandParentCompensate : _weaponParentCompensate;
                 if (comp)
                     CompensateParentScale(grt, offHand ? _offHandAuthoredScale : _weaponAuthoredScale,
@@ -3238,26 +3497,28 @@ namespace DeNelle.Village
             Quaternion baseRot;
             if (offHand)
             {
-                basePos = _sheatheOffHandLocalPos;
+                // The SAME body-space → socket-local conversion the runtime uses, or the preview
+                // sits somewhere the game never puts it.
+                basePos = ComputeSheathLocalPosition(socket, _sheatheOffHandLocalPos, sideSign);
                 // WO-1123: the SAME base the runtime sheathe uses (derived when the geometry answers,
                 // the shipped constant otherwise). If these two ever diverge again the owner dials a
-                // nudge against a back pose the game never renders — the WO-994 lesson.
-                baseRot = ComputeSheathedOffHandRotation(back);
+                // nudge against a sheathed pose the game never renders — the WO-994 lesson.
+                baseRot = ComputeSheathedOffHandRotation(socket);
             }
             else
             {
-                basePos = _sheatheWeaponLocalPos;
+                basePos = ComputeSheathLocalPosition(socket, _sheatheWeaponLocalPos, sideSign);
                 // BOW: sheathed and drawn are the SAME pose (owner ruling 2026-08-16), so the
-                // preview must show the derived upright carry, not the shared diagonal baldric —
-                // otherwise the owner dials a nudge against a back pose the game never renders.
+                // preview must show the derived upright carry, not a shared melee carry — otherwise
+                // the owner dials a nudge against a sheathed pose the game never renders.
                 // Bow-only; every melee family still previews ComputeSheathRotation unchanged, and
                 // the shield is the offHand branch above, untouched.
                 baseRot = _currentWeaponKind == WeaponClass.Bow
                     ? Guard.Try("Offset", "sheathed-preview ComputeBowHeldRotation",
                         () => WeaponBoundsOrient.ComputeBowHeldRotation(
-                                  back, _animator != null ? _animator.transform : transform),
+                                  socket, _animator != null ? _animator.transform : transform),
                         Quaternion.identity)
-                    : ComputeSheathRotation(back);
+                    : ComputeSheathRotation(socket, sideSign);
             }
 
             if (fullOverride)

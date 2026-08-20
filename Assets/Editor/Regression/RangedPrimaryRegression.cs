@@ -109,8 +109,11 @@
 //            2026-08-16, verbatim: "both sheathed and drawn bow stay in this same
 //            pose"). Corrects a call made that same night: a capture proving the HELD
 //            seat was 0 deg off vertical was generalised to the diagonally-slung back
-//            bow, a transform it never covered. Bow-only - the baldric carry stays for
-//            swords/axes/hammers/staves and this case fails if it is removed from them.
+//            bow, a transform it never covered. Bow-only - melee keeps its OWN derived
+//            sheathe carry and this case fails if the bow branch ever swallows it.
+//            (The melee EXPRESSION of that carry - a diagonal baldric on the back - was
+//            superseded by owner instruction on 2026-08-20; see Case10's header. The BOW
+//            half of the 08-16 ruling is untouched and still binding.)
 //
 // ★ THE OWNER'S CANONICAL BOW RULE — HER EXACT WORDS, 2026-08-16, BINDING FOR EVERY BOW.
 // Recorded verbatim (never paraphrased) because a rule without its reasoning gets "fixed"
@@ -1250,15 +1253,35 @@ namespace DeNelle.Editor.Regression
         // bow was then reported as correct - by generalising a measurement of the DRAWN transform to
         // the SHEATHED one, which it never covered. A trace that proves one state proves one state.
         //
-        // The sheathed seat used to be ComputeSheathRotation - a baldric carry, blade up the spine
-        // and leaning toward the off shoulder. That is right and felt-approved for swords, axes,
-        // hammers and staves, and it is DELIBERATELY LEFT ALONE for them; assertion (a) fails if it
-        // is ever removed. Only WeaponClass.Bow is diverted, and the diversion is not a second solve:
-        // ComputeBowHeldRotation builds its target in WORLD from the body's axes and merely EXPRESSES
-        // it in whatever anchor it is handed, so feeding it the back socket yields the identical world
-        // orientation the hand does. Assertion (c) measures exactly that identity, on a fixture where
-        // the socket and the hand are rotated nowhere near each other - which is the ruling itself,
-        // and the assertion that stops the two paths drifting apart again.
+        // Melee keeps its OWN derived sheathe carry (ComputeSheathRotation); assertion (a) fails if
+        // the bow branch ever swallows it. Only WeaponClass.Bow is diverted, and the diversion is not
+        // a second solve: ComputeBowHeldRotation builds its target in WORLD from the body's axes and
+        // merely EXPRESSES it in whatever anchor it is handed, so feeding it the SHEATHE SOCKET yields
+        // the identical world orientation the hand does. Assertion (c) measures exactly that identity,
+        // on a fixture where the socket and the hand are rotated nowhere near each other - which is the
+        // ruling itself, and the assertion that stops the two paths drifting apart again.
+        //
+        // ⚠ THE MELEE HALF OF THIS CASE WAS SUPERSEDED ON 2026-08-20 — BY OWNER INSTRUCTION, NOT BY
+        // A CLI DECISION. Her words: "sheathed should sit inverted with the longest mesh (y) up and
+        // down attached to hip bone". So the sheathe ANCHOR moved from the chest/spine bone to two
+        // per-slot HIP sockets, and the melee EXPRESSION moved from the diagonal baldric back-carry
+        // to a vertical, inverted hip hang (_sheatheBladeDiagonalDeg 28 -> 0). The sentences that
+        // stood here — "a baldric carry, blade up the spine and leaning toward the off shoulder …
+        // right and felt-approved … DELIBERATELY LEFT ALONE" — described a pose the owner has since
+        // replaced, so this case can no longer assert it without asserting a retired ruling. What it
+        // asserts INSTEAD is the part of the 08-16 ruling that survives: melee still owns a derived
+        // carry of its own, and the BOW still matches its drawn pose. The new melee contract (hips,
+        // vertical, inverted) is owned by SheathePoseRegression (marker SHEATHE_POSE_OK) — asserted
+        // there, not weakened away here.
+        //
+        // ⚠ AND BOTH SOURCE ASSERTIONS WERE PINNED TO A LOCAL VARIABLE'S NAME. They matched the
+        // literal text "ComputeSheathRotation(back)" and "ComputeBowHeldRotation(back," — so when the
+        // single shared `back` socket became `sheatheMain`/`sheatheOff`, both went red while the code
+        // they guard was still doing exactly what they demand: the bow branch still calls
+        // ComputeBowHeldRotation with the sheathe socket, and melee still falls to its own carry. A
+        // guard pinned to an identifier cries on a rename and stays silent on a real repeal. They are
+        // pinned to the CALL SHAPE and the ANCHOR IDENTITY now: inside ApplyHoldPose's bow ternary,
+        // the bow and the melee arms must be handed the SAME anchor, and it must not be the hand.
         private const float SheathedDrawnAgreementDeg = 0.5f;
         /// <summary>The socket and hand must be at least this far apart, or "they agree" is trivial.</summary>
         private const float FixtureMinAnchorSpreadDeg = 45f;
@@ -1278,22 +1301,60 @@ namespace DeNelle.Editor.Regression
                                                      .Replace("\r", string.Empty)
                                                      .Replace("\n", string.Empty);
 
-            if (src.IndexOf("ComputeSheathRotation(back)", StringComparison.Ordinal) < 0)
-                failures.Add("[sheathed-bow-matches-drawn] ComputeSheathRotation(back) is gone from " +
-                             "the sheathe path. The bow ruling must NOT take the diagonal baldric " +
-                             "carry away from swords, axes, hammers and staves - their back pose is " +
-                             "felt-approved. The bow is the EXCEPTION on that expression, not a " +
-                             "replacement for it.");
+            // The ternary is read out of ApplyHoldPose itself - the LIVE sheathe path. Scoping it to
+            // that method matters: the Seating-Editor preview carries the same shape, and a check
+            // that accepted either could pass on the preview while the pose the player sees was
+            // gutted. (The preview is guarded by its own suite's parity rule, not by this one.)
+            string holdPose = MethodBody(src, "voidApplyHoldPose(");
+            if (holdPose == null)
+            {
+                failures.Add("[sheathed-bow-matches-drawn] ApplyHoldPose was not found in " +
+                             EquipmentControllerPath + " - the live sheathe path cannot be inspected, " +
+                             "so neither half of the owner's bow ruling can be confirmed.");
+            }
+            else
+            {
+                string bowArm = BowTernary(holdPose);
+                if (bowArm == null)
+                {
+                    failures.Add("[sheathed-bow-matches-drawn] ApplyHoldPose no longer branches on " +
+                                 "_currentWeaponKind == WeaponClass.Bow with a '?' - the bow exception " +
+                                 "is gone from the live sheathe path, so a slung bow now takes whatever " +
+                                 "carry melee takes. Owner ruling 2026-08-16: 'both sheathed and drawn " +
+                                 "bow stay in this same pose'.");
+                }
+                else
+                {
+                    string bowAnchor = FirstArgOf(bowArm, "ComputeBowHeldRotation(");
+                    string meleeAnchor = FirstArgOf(bowArm, ":ComputeSheathRotation(");
 
-            if (src.IndexOf("ComputeBowHeldRotation(back,", StringComparison.Ordinal) < 0)
-                failures.Add("[sheathed-bow-matches-drawn] no live call passing the BACK SOCKET to " +
-                             "ComputeBowHeldRotation (comments and string literals stripped). The " +
-                             "sheathed bow has reverted to the shared diagonal carry, so it no longer " +
-                             "holds the same pose as the drawn bow - owner ruling 2026-08-16: 'both " +
-                             "sheathed and drawn bow stay in this same pose'. The socket is the ANCHOR " +
-                             "the world target is expressed in; passing the hand instead would seat the " +
-                             "back prop with the hand's frame, which is a different bug wearing the " +
-                             "same shape.");
+                    if (meleeAnchor == null)
+                        failures.Add("[sheathed-bow-matches-drawn] the bow branch's ELSE arm no longer " +
+                                     "calls ComputeSheathRotation. The bow ruling must NOT take their own " +
+                                     "derived sheathe carry away from swords, axes, hammers and staves - " +
+                                     "the bow is the EXCEPTION on that expression, not a replacement for " +
+                                     "it. (The melee carry's SHAPE - hips, vertical, inverted since the " +
+                                     "owner's 2026-08-20 instruction - is asserted by SheathePoseRegression; " +
+                                     "what is asserted HERE is only that melee still has one of its own.)");
+
+                    if (bowAnchor == null)
+                        failures.Add("[sheathed-bow-matches-drawn] no live call to ComputeBowHeldRotation " +
+                                     "inside ApplyHoldPose's bow branch (comments and string literals " +
+                                     "stripped). The sheathed bow has reverted to the melee carry, so it no " +
+                                     "longer holds the same pose as the drawn bow - owner ruling 2026-08-16.");
+                    else if (IsHandAnchor(bowAnchor))
+                        failures.Add("[sheathed-bow-matches-drawn] ComputeBowHeldRotation is being handed '" +
+                                     bowAnchor + "' - a HAND, not the sheathe socket. The anchor is the frame " +
+                                     "the world target is EXPRESSED in; passing the hand seats the sheathed " +
+                                     "prop in the hand's frame, which is a different bug wearing the same shape.");
+                    else if (meleeAnchor != null && bowAnchor != meleeAnchor)
+                        failures.Add("[sheathed-bow-matches-drawn] the bow arm anchors at '" + bowAnchor +
+                                     "' while the melee arm anchors at '" + meleeAnchor + "'. Both arms of " +
+                                     "ONE ternary seat ONE prop, so two different anchors means one of them " +
+                                     "is not the socket the prop is actually parented to - the bow would hold " +
+                                     "a pose measured against a transform it does not hang from.");
+                }
+            }
 
             if (src.IndexOf("_currentWeaponKind==WeaponClass.Bow", StringComparison.Ordinal) < 0)
                 failures.Add("[sheathed-bow-matches-drawn] the sheathe path no longer gates on " +
@@ -1314,10 +1375,12 @@ namespace DeNelle.Editor.Regression
                 hand.SetParent(body, false);
                 hand.localRotation = Quaternion.Euler(90f, 0f, 53f);
 
-                // The back socket hangs off the chest and is rotated nowhere near the hand - which
-                // is the whole point: if the derivation were anchor-dependent, these two would
-                // disagree, and assertion (d) proves they are far enough apart for that to bite.
-                var socket = new GameObject("SheatheSocket_Back").transform;
+                // The sheathe socket hangs off the HIPS (it hung off the chest until the owner's
+                // 2026-08-20 instruction; the fixture angles below are unchanged, because the point
+                // was never WHICH bone - it is that the socket is rotated nowhere near the hand. If
+                // the derivation were anchor-dependent these two would disagree, and assertion (d)
+                // proves they are far enough apart for that to bite.)
+                var socket = new GameObject("SheatheSocket_HipMain").transform;
                 socket.SetParent(body, false);
                 socket.localRotation = Quaternion.Euler(-18f, 164f, 25f);
                 socket.localPosition = new Vector3(-0.10f, 0.12f, -0.15f);
@@ -1344,7 +1407,7 @@ namespace DeNelle.Editor.Regression
                           "deg sheathedBellyOff=" + bellyOff.ToString("0.##") + "deg");
 
                 if (anchorSpread < FixtureMinAnchorSpreadDeg)
-                    failures.Add("[sheathed-bow-matches-drawn] FIXTURE BROKEN: the hand and the back " +
+                    failures.Add("[sheathed-bow-matches-drawn] FIXTURE BROKEN: the hand and the sheathe " +
                                  "socket are only " + anchorSpread.ToString("0.##") + "deg apart " +
                                  "(needs >= " + FixtureMinAnchorSpreadDeg.ToString("0.#") + "deg). Two " +
                                  "nearly-aligned anchors would agree by accident and this case would " +
@@ -1356,9 +1419,10 @@ namespace DeNelle.Editor.Regression
                                  disagreement.ToString("0.##") + "deg away from the drawn one (allowed " +
                                  SheathedDrawnAgreementDeg.ToString("0.##") + "deg). Owner ruling " +
                                  "2026-08-16: 'both sheathed and drawn bow stay in this same pose'. " +
-                                 "A large value means the sheathed seat went back to the diagonal " +
-                                 "baldric carry (ComputeSheathRotation), which is correct for a sword " +
-                                 "and wrong for a bow.");
+                                 "A large value means the sheathed seat fell back to the MELEE carry " +
+                                 "(ComputeSheathRotation - the vertical, inverted hip hang since the " +
+                                 "owner's 2026-08-20 instruction, a diagonal baldric before it), which " +
+                                 "is correct for a sword and wrong for a bow in either expression.");
 
                 // ...and as the four clauses, so a future 'agreement' between two WRONG poses cannot
                 // pass. Both halves are required: agreeing and correct are different properties.
@@ -1381,6 +1445,70 @@ namespace DeNelle.Editor.Regression
                 if (rig != null) UnityEngine.Object.DestroyImmediate(rig);
             }
         }
+
+        // ── SOURCE-SHAPE HELPERS (2026-08-20) ────────────────────────────────────────────────────
+        // Added when the two literal matches above ("...(back)") went red on a RENAME while the code
+        // still honoured the ruling. Everything here works on the whitespace-free, comment-free,
+        // string-free projection of the file, so it reads STRUCTURE - which method, which branch,
+        // which argument - instead of a spelling that any refactor is entitled to change.
+
+        /// <summary>The brace-balanced body following <paramref name="signature"/>, or null.</summary>
+        private static string MethodBody(string src, string signature)
+        {
+            if (string.IsNullOrEmpty(src)) return null;
+            int at = src.IndexOf(signature, StringComparison.Ordinal);
+            if (at < 0) return null;
+            int open = src.IndexOf('{', at);
+            if (open < 0) return null;
+            int depth = 0;
+            for (int i = open; i < src.Length; i++)
+            {
+                if (src[i] == '{') depth++;
+                else if (src[i] == '}')
+                {
+                    depth--;
+                    if (depth == 0) return src.Substring(open, i - open + 1);
+                }
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// The single statement in which the sheathe path branches on WeaponClass.Bow: from the gate
+        /// to the terminating ';'. Both arms of one ternary seat ONE prop, which is what lets the
+        /// anchor-identity assertion above be meaningful rather than a coincidence of naming.
+        /// </summary>
+        private static string BowTernary(string methodBody)
+        {
+            if (string.IsNullOrEmpty(methodBody)) return null;
+            int at = methodBody.IndexOf("_currentWeaponKind==WeaponClass.Bow?", StringComparison.Ordinal);
+            if (at < 0) return null;
+            int end = methodBody.IndexOf(';', at);
+            return end < 0 ? methodBody.Substring(at) : methodBody.Substring(at, end - at);
+        }
+
+        /// <summary>First argument of the first <paramref name="call"/> in <paramref name="region"/>,
+        /// or null when the call is absent. Stops at the first ',' or ')'.</summary>
+        private static string FirstArgOf(string region, string call)
+        {
+            if (string.IsNullOrEmpty(region)) return null;
+            int at = region.IndexOf(call, StringComparison.Ordinal);
+            if (at < 0) return null;
+            int start = at + call.Length;
+            int comma = region.IndexOf(',', start);
+            int close = region.IndexOf(')', start);
+            int end = comma >= 0 && (close < 0 || comma < close) ? comma : close;
+            if (end < 0) return null;
+            string arg = region.Substring(start, end - start);
+            return arg.Length == 0 ? null : arg;
+        }
+
+        /// <summary>True when an anchor identifier names a HAND bone rather than a sheathe socket.
+        /// Named, not enumerated: the hands are _weaponHand / _offHandHand today and the point is the
+        /// ROLE, not those two spellings.</summary>
+        private static bool IsHandAnchor(string anchor)
+            => !string.IsNullOrEmpty(anchor) &&
+               anchor.IndexOf("hand", StringComparison.OrdinalIgnoreCase) >= 0;
 
         /// <summary>
         /// Source with // and /* */ comments AND every string literal (plain, verbatim, interpolated)
