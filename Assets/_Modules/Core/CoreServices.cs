@@ -42,6 +42,22 @@ namespace DeNelle.Core
         /// </summary>
         public static IVillageHud Hud { get; private set; }
 
+        /// <summary>
+        /// Raised right after a non-null <see cref="Hud"/> registers. Exists so a consumer that
+        /// arrives BEFORE the HUD can wait for it instead of giving up (WO-1024).
+        ///
+        /// <para>The case that forced it: WaveFeedbackDirector.EnsureWallRepairInstalled deferred
+        /// when the HUD had not registered yet, and its only retry was the wave-cleared event. In
+        /// the HUB, where a wave may never run, that retry never came - so the enabled
+        /// WallRepairController never installed and tap-to-repair did not exist for the whole
+        /// session. A poll would have worked; an event is honest about what is actually being
+        /// waited on.</para>
+        ///
+        /// <para>Subscribers MUST unsubscribe once satisfied - this is a static event and holds
+        /// its handlers across scene loads.</para>
+        /// </summary>
+        public static event System.Action<IVillageHud> HudRegistered;
+
         /// <summary>Registers the village HUD. Called by VillageHudController.Awake.
         /// Main-thread only (no locking) — registrations happen in Awake/OnDestroy.</summary>
         public static void RegisterHud(IVillageHud hud)
@@ -53,6 +69,14 @@ namespace DeNelle.Core
             }
             Hud = hud;
             DeNelle.Core.Diagnostics.FlowTrace.Step("CoreSvc", hud != null ? "IVillageHud registered." : "IVillageHud registered as NULL.");
+
+            // Guarded: a throwing subscriber must never break HUD registration itself - the HUD
+            // is load-bearing for every screen, the notification is a courtesy to late arrivals.
+            if (hud != null)
+            {
+                DeNelle.Core.Diagnostics.Guard.Try("CoreSvc", "raise HudRegistered",
+                    () => HudRegistered?.Invoke(hud));
+            }
         }
 
         /// <summary>Unregisters the village HUD. Called by VillageHudController.OnDestroy.</summary>

@@ -401,9 +401,20 @@ namespace DeNelle.Village
         /// the editor wiring serialized) — no Village->HUD asmdef reference is added.
         /// No per-structure registration is needed: SurfaceWorstRepair calls
         /// CollectAllDamaged, which scans the scene itself (DEF-226 explicit flow).
-        /// If the HUD has not registered yet, install is deferred — OnWaveCleared
-        /// retries, by which time the HUD is live.
+        /// If the HUD has not registered yet, install is deferred and RE-ARMED on
+        /// <see cref="CoreServices.HudRegistered"/> (WO-1024).
+        ///
+        /// <para>⛔ THE OLD COMMENT HERE WAS WRONG AND IT COST A WHOLE SESSION'S REPAIR SURFACE.
+        /// It read "OnWaveCleared retries, by which time the HUD is live" — but that retry only
+        /// fires on a WAVE-CLEARED event. In the HUB, where no wave may ever run, the retry never
+        /// came, so the only path that installs an ENABLED WallRepairController never ran and
+        /// tap-to-repair did not exist at all. (Both other paths — HubRepairAffordance.EnsureRepair
+        /// and EchoRepairService — deliberately create a DISABLED, logic-only controller.) The
+        /// deferral now re-arms on the event it is actually waiting for, so it is correct in a
+        /// scene that never fights.</para>
         /// </summary>
+        private static bool s_awaitingHudForRepair;
+
         private static void EnsureWallRepairInstalled(string context)
         {
             if (UnityEngine.Object.FindAnyObjectByType<WallRepairController>() != null) return;
@@ -411,8 +422,14 @@ namespace DeNelle.Village
             var hud = CoreServices.Hud as UnityEngine.Object;
             if (hud == null)
             {
+                if (!s_awaitingHudForRepair)
+                {
+                    s_awaitingHudForRepair = true;
+                    CoreServices.HudRegistered += OnHudRegisteredForRepair;
+                }
                 FlowTrace.Warn("WaveClear",
-                    $"wall-repair self-install deferred ({context}): CoreServices.Hud not registered yet");
+                    $"wall-repair self-install deferred ({context}): CoreServices.Hud not registered yet - " +
+                    "RE-ARMED on CoreServices.HudRegistered (WO-1024), so this no longer depends on a wave clearing.");
                 return;
             }
 
@@ -426,6 +443,17 @@ namespace DeNelle.Village
 
             FlowTrace.Step("WaveClear",
                 $"self-installed WallRepairController (scene='{SceneManager.GetActiveScene().name}', {context})");
+        }
+
+        /// <summary>
+        /// WO-1024 re-arm. Unsubscribes FIRST - CoreServices.HudRegistered is a static event that
+        /// survives scene loads, so a handler left attached would accumulate across every load.
+        /// </summary>
+        private static void OnHudRegisteredForRepair(DeNelle.Core.HUD.IVillageHud hud)
+        {
+            CoreServices.HudRegistered -= OnHudRegisteredForRepair;
+            s_awaitingHudForRepair = false;
+            EnsureWallRepairInstalled("hud-registered re-arm");
         }
     }
 }

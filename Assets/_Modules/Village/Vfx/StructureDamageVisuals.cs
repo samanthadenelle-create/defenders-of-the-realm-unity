@@ -525,6 +525,15 @@ namespace DeNelle.Village
                 BarOffset = offset,
             };
 
+            // WO-1024: THIS is the moment a repairable provably exists in the scene. This class
+            // installs unconditionally while HubRepairAffordance gated on a scene-load-time scan,
+            // and the town is restored from the save AFTER that scan - so a structure could burn
+            // here, with fire rendering from this very tracker, while no repair surface existed at
+            // all. Raising the install from the tracker closes the asymmetry at its source: the
+            // repair surface now follows the town instead of racing it. Guarded by a static bool
+            // on the other side, so this costs a bool test once a scene is served.
+            HubRepairAffordance.NotifyRepairableAppeared();
+
             // WO-891 (adjacent, reported): the PER-HIT flinch. Everything above this line
             // is a damage-STATE ladder driven by the 0.3 s Evaluate poll against DATA
             // THRESHOLDS - so a hit that does not cross 0.5 or 0.25 HP produced no reaction

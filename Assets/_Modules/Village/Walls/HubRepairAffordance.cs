@@ -85,6 +85,13 @@ namespace DeNelle.Village
         //  Self-install (mirrors WaveFeedbackDirector's spawn pattern)
         // =====================================================================
 
+        /// <summary>
+        /// True once this scene has an affordance, so <see cref="NotifyRepairableAppeared"/> can
+        /// be called from a per-structure hot path for the price of a bool test. Cleared on every
+        /// scene load - a new scene starts with no affordance regardless of what the last one had.
+        /// </summary>
+        private static bool s_installedThisScene;
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void InstallHook()
         {
@@ -93,11 +100,48 @@ namespace DeNelle.Village
             TrySpawn();   // the first scene is already loaded when this runs
         }
 
-        private static void OnSceneLoaded(Scene s, LoadSceneMode mode) => TrySpawn();
+        private static void OnSceneLoaded(Scene s, LoadSceneMode mode)
+        {
+            s_installedThisScene = false;
+            TrySpawn();
+        }
+
+        /// <summary>
+        /// WO-1024. Install the affordance the moment a repairable structure actually EXISTS,
+        /// instead of only at scene load.
+        ///
+        /// <para>THE BUG THIS CLOSES. The town is player-built and restored from the save AFTER
+        /// the scene finishes loading, so at the instant the scene-load gate ran the town was
+        /// legitimately empty, <see cref="SceneHasRepairables"/> answered false, and the one-shot
+        /// bailed forever. Meanwhile StructureDamageVisuals installs UNCONDITIONALLY - so a
+        /// structure could burn, with fire rendering, and the player had no way to repair anything
+        /// for the rest of the session. Captured as <c>WallRepairController=ABSENT
+        /// HubRepairAffordance=ABSENT WaveManager=Active</c> (owner F8 seq=2398).</para>
+        ///
+        /// <para>WHY THE CALLER IS StructureDamageVisuals. It already installs unconditionally and
+        /// already knows a repairable exists - it is tracking one. Raising the install from there
+        /// inverts the dependency so the repair surface FOLLOWS the town instead of racing it,
+        /// which makes the two systems structurally symmetric. That asymmetry was the defect; a
+        /// wider predicate could never have fixed it, because the predicate was not wrong - it was
+        /// asked too early.</para>
+        ///
+        /// <para>Idempotent and cheap: a bool test after the first install, and TrySpawn itself
+        /// early-returns on an existing instance, so a burst of placement restores cannot install
+        /// two.</para>
+        /// </summary>
+        internal static void NotifyRepairableAppeared()
+        {
+            if (s_installedThisScene) return;
+            TrySpawn();
+        }
 
         private static void TrySpawn()
         {
-            if (UnityEngine.Object.FindAnyObjectByType<HubRepairAffordance>() != null) return;
+            if (UnityEngine.Object.FindAnyObjectByType<HubRepairAffordance>() != null)
+            {
+                s_installedThisScene = true;
+                return;
+            }
             if (!SceneHasRepairables())
             {
                 // NO SILENT FAILURE (CLAUDE.md section 12.2). This bare `return` used to be
@@ -111,14 +155,16 @@ namespace DeNelle.Village
                 FlowTrace.Warn("Repair",
                     $"hub repair affordance NOT installed (scene='{SceneManager.GetActiveScene().name}') - " +
                     "no WallSegment/Gate/Building/Tower/DefenseTower/ArcaneTower/HarvestSite/collector " +
-                    "found at scene-load time. This check runs ONCE per scene load and never retries, so " +
-                    "structures rebuilt AFTER load (saved placement restore) would leave the player with " +
-                    "no repair surface in this scene.");
-                return;   // Title / HeroSelect / menus: nothing to repair.
+                    "found YET. Not terminal since WO-1024: StructureDamageVisuals calls " +
+                    "NotifyRepairableAppeared() the moment it tracks a structure, so a town restored " +
+                    "AFTER scene load installs the affordance then. A scene that genuinely has nothing " +
+                    "to repair (Title / HeroSelect / menus) simply never raises that call.");
+                return;
             }
 
             var go = new GameObject("HubRepairAffordance");
             go.AddComponent<HubRepairAffordance>();
+            s_installedThisScene = true;
             FlowTrace.Step("Repair",
                 $"hub repair affordance installed (scene='{SceneManager.GetActiveScene().name}')");
         }
