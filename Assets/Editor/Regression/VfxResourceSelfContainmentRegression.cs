@@ -158,7 +158,38 @@ namespace DeNelle.Editor.Regression
                 // to nothing and the portals fall back to their procedural glow - which is why
                 // both portal call sites emit a FlowTrace line naming that exact cause instead
                 // of failing silently.
-                { "Assets/Resources/VFX/HovlVfxCatalog.asset", 689 },
+                // 689 -> 680 (2026-08-20). THIS IS A TIGHTENING, NOT A REFRESH - read the
+                // direction before you read the number. The ratchet CAUGHT a real regression
+                // here (measured 702 vs a baselined 689, +13) and the number went DOWN anyway,
+                // because the growth turned out to be a BUG WITH A FREE FIX rather than new debt.
+                //
+                // WHAT THE +13 ACTUALLY WAS. Commit e65b549ff (2026-08-16, "mirror pass +
+                // catalog regen outputs") did two things in one commit: it BUILT AND COMMITTED
+                // tracked, self-contained mirrors of three pack prefabs -
+                //   Hovl 'Magic circle dark star'   -> Resources/VFX/Portal/PortalCircleDarkStar
+                //   Hovl 'Marker 2 Pointer Loop'    -> Resources/VFX/UI/TalentNodePointer
+                //   ParticlePack 'BigExplosion'     -> Resources/VFX/Status/BigExplosion
+                // - and then regenerated this catalog with every one of those rows still
+                // pointing at the PACK. The mirror was made and not used. The +13 was the
+                // dark star's own art (4 Hovl materials, CenterPlate.fbx, 3 textures) plus the
+                // Spells Pack Casting_Arcane chain, arriving through rows that had a committed
+                // tracked twin sitting right next to them.
+                //
+                // The cause was structural, which is why the FIX is not in this file: the
+                // generator wires whatever path the owner browsed in the VFX Caster, and she
+                // browses the PACK. VfxMirrorRedirect now resolves a pack path to its committed
+                // mirror at GENERATE time (same law as the IsLoop derivation - a correction
+                // applied to the .asset by hand survives exactly one regenerate). Eight rows
+                // moved onto tracked art, and the fileID is IDENTICAL on all eight, which is
+                // the proof they are byte-copies of her pick and not a substitution.
+                //
+                // So the debt did not grow and was not accepted: it fell 689 -> 680, and the
+                // baseline follows it DOWN so the same silent regrowth cannot hide under the
+                // old headroom. NOTHING WAS ADDED TO GIT to achieve this - the mirrors were
+                // already committed. The standing remedy for the remaining 680 is unchanged
+                // (TRIM to gameplay-reachable rows, then mirror that subset); the largest
+                // single un-mirrored pick left is Spells Pack 'Casting_Arcane' (ShieldBuff_Cast).
+                { "Assets/Resources/VFX/HovlVfxCatalog.asset", 680 },
                 { "Assets/Resources/VFX/VFXCatalog.asset",      34 },
             };
 

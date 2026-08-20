@@ -246,9 +246,11 @@ namespace DeNelle.Editor
             // REPOINTED 2026-08-16: the old pick was the now-banned "sun loop" magic circle
             // (owner ban verbatim at the Arcane_Aura note above). The owner tagged, same day,
             // verbatim: "Aura_PetLevel2 -> Node Auras" - and this key IS the node aura, so it
+            // (that prefab was RENAMED to Aura_TalentNode on 2026-08-20: it was never a pet
+            //  aura, and the pet-aura feature it was named for never shipped)
             // now points at the TRACKED Resources mirror (fresh-clone safe, unlike the
             // gitignored Hovl art it replaces). Recolour OFF (keep the authored look).
-            { "Poi_NodeAura",           new Pick(AURA + "Aura_PetLevel2.prefab", poolSize: 6, recolorable: false, isLoop: true) },
+            { "Poi_NodeAura",           new Pick(AURA + "Aura_TalentNode.prefab", poolSize: 6, recolorable: false, isLoop: true) },
             // Far-field ENEMY FORTRESS beacon — a TALL looping pillar/beam visible from range,
             // stands until the outpost is cleared. Verticality is the read (not hue). Scale up so it
             // towers over the fort silhouette.
@@ -371,11 +373,15 @@ namespace DeNelle.Editor
             int skippedMissing = 0;
             foreach (var kv in Map)
             {
-                var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(kv.Value.Path);
+                // A pack path with a COMMITTED tracked mirror resolves to the mirror.
+                // Derived here for the same reason IsLoop is (see below): a redirect
+                // applied to the .asset by hand survives exactly one regenerate.
+                string mapPath = ResolveMirror(kv.Key, kv.Value.Path);
+                var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(mapPath);
                 if (prefab == null)
                 {
                     Debug.LogWarning($"[HovlVfxCatalogGenerator] prefab missing for '{kv.Key}': " +
-                                     $"'{kv.Value.Path}' — key skipped (will no-op at call time).");
+                                     $"'{mapPath}' — key skipped (will no-op at call time).");
                     skippedMissing++;
                     continue;
                 }
@@ -394,17 +400,22 @@ namespace DeNelle.Editor
                                      "key/prefabPath — skipped.");
                     continue;
                 }
-                var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(m.prefabPath);
+                // The overlay records the path the owner BROWSED in the VFX Caster, which
+                // is the pack path. Redirecting it to the committed byte-copy of that same
+                // prefab is not a substitution of her pick — it is the only copy of her
+                // pick that renders on a machine without the pack. VfxMirrorRedirect.
+                string manualPath = ResolveMirror(m.key, m.prefabPath);
+                var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(manualPath);
                 if (prefab == null)
                 {
                     Debug.LogWarning($"[HovlVfxCatalogGenerator] manual prefab missing for '{m.key}': " +
-                                     $"'{m.prefabPath}' — key skipped (will no-op at call time).");
+                                     $"'{manualPath}' — key skipped (will no-op at call time).");
                     skippedMissing++;
                     continue;
                 }
                 string mKey = m.key;
                 rows.RemoveAll(r => string.Equals(r.key, mKey, StringComparison.OrdinalIgnoreCase));
-                rows.Add((m.key, prefab, new Pick(m.prefabPath, scale: m.scale, isLoop: m.isLoop)));
+                rows.Add((m.key, prefab, new Pick(manualPath, scale: m.scale, isLoop: m.isLoop)));
                 manualWired++;
             }
             if (manualWired > 0)
@@ -479,6 +490,29 @@ namespace DeNelle.Editor
 
             Debug.Log($"[HovlVfxCatalogGenerator] {rows.Count} wired, {skippedMissing} skipped (missing prefab).");
             return rows.Count;
+        }
+
+        /// <summary>
+        /// Route one pick path through VfxMirrorRedirect and SAY SO in the log when it
+        /// moves. Silence here would hide the single most useful fact about a regenerate:
+        /// which owner picks are shipping off tracked art and which are still pack-only.
+        /// A gitignored pick with no mirror is warned about by name — that row is the
+        /// next fresh-clone hole, and it is now visible instead of merely counted by the
+        /// self-containment ratchet after the fact.
+        /// </summary>
+        private static string ResolveMirror(string key, string path)
+        {
+            string mirrored, detail;
+            if (VfxMirrorRedirect.TryResolve(path, out mirrored, out detail))
+            {
+                Debug.Log($"[HovlVfxCatalogGenerator] '{key}' pack pick '{path}' -> tracked mirror " +
+                          $"'{mirrored}' ({detail}).");
+                return mirrored;
+            }
+            if (DeNelle.Editor.Regression.VfxResourceSelfContainmentRegression.IsInGitignoredArtRoot(path))
+                Debug.LogWarning($"[HovlVfxCatalogGenerator] '{key}' stays on GITIGNORED art '{path}' — " +
+                                 $"{detail}. On a fresh clone this key resolves to nothing.");
+            return path;
         }
 
         private static void EnsureDir(string dir)

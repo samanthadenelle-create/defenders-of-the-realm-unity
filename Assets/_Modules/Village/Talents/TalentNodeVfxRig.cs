@@ -7,9 +7,11 @@
 //   "Assets\Hovl Studio\Map track markers VFX\Prefabs\Marker 2 Pointer Loop.prefab"
 //       -> the NODE POINTER (single focused/next node). Ships via the tracked
 //          mirror Resources/VFX/UI/TalentNodePointer (TalentPointerVfxMirror).
-//   "Assets\Resources\VFX\Aura\Aura_PetLevel2.prefab"
+//   "Assets\Resources\VFX\Aura\Aura_TalentNode.prefab"
 //       -> the NODE AURA (owned/learned nodes, plural). Already tracked - loaded
-//          straight from Resources "VFX/Aura/Aura_PetLevel2", no mirror needed.
+//          straight from Resources "VFX/Aura/Aura_TalentNode", no mirror needed.
+//          (RENAMED 2026-08-20 from Aura_PetLevel2 - it was never a pet aura; the
+//           name outlived the unshipped feature and was actively misleading.)
 //
 // ONE rig class serves both picks: the talent panel is screen-space uGUI
 // (code-built, ElarionUiKit.BuildModalCanvas), so a world particle prefab cannot
@@ -53,7 +55,7 @@ namespace DeNelle.Village.Talents
         public const string PointerResourcePath = "VFX/UI/TalentNodePointer";
 
         /// <summary>Aura pick's Resources path - already tracked, no mirror step.</summary>
-        public const string AuraResourcePath = "VFX/Aura/Aura_PetLevel2";
+        public const string AuraResourcePath = "VFX/Aura/Aura_TalentNode";
 
         // Masked-off preview layer - same resolution chain as HeroPreviewViewer.
         private const string PreviewLayerName = "HeroPreview";

@@ -25,7 +25,9 @@
 
 using UnityEngine;
 using UnityEngine.UI;
+using TMPro;
 using DeNelle.Core.Diagnostics;
+using DeNelle.Core.UI;
 
 namespace DeNelle.Village
 {
@@ -47,7 +49,7 @@ namespace DeNelle.Village
 
         private HealingCaravanMobility _mobility;
         private Canvas _canvas;
-        private Text _label;
+        private TextMeshProUGUI _label;
         private Transform _cam;
         private bool _lastRolling;
         private bool _built;
@@ -88,23 +90,28 @@ namespace DeNelle.Village
             var crt = _canvas.GetComponent<RectTransform>();
             crt.sizeDelta = new Vector2(1.6f, 0.28f);
 
-            var labelGo = new GameObject("StateLabel");
-            labelGo.transform.SetParent(canvasGo.transform, false);
-            _label = labelGo.AddComponent<Text>();
-            _label.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            _label.fontSize = 32;
-            _label.fontStyle = FontStyle.Bold;
-            _label.alignment = TextAnchor.MiddleCenter;
-            _label.horizontalOverflow = HorizontalWrapMode.Overflow;
-            _label.verticalOverflow = VerticalWrapMode.Overflow;
-            _label.raycastTarget = false;
-            _label.text = "IDLE";
-            _label.color = IdleColor;
-            var lrt = _label.GetComponent<RectTransform>();
-            lrt.anchorMin = Vector2.zero;
-            lrt.anchorMax = Vector2.one;
-            lrt.offsetMin = Vector2.zero;
-            lrt.offsetMax = Vector2.zero;
+            // ROUTED THROUGH THE KIT (UI-OBSIDIAN conformance, 2026-08-20). This used to
+            // hand-roll a legacy `Text` with Resources.GetBuiltinResource("LegacyRuntime.ttf"),
+            // which the conformance oracle flags as a NEW hand-rolled widget — and rightly:
+            // it was the only surface in the project still building legacy uGUI text, so it
+            // could not inherit a font, palette or style change the rest of the UI got.
+            //
+            // ElarionUiKit.Label is parent-agnostic — it anchors by FRACTION of whatever
+            // RectTransform it is handed — so it drops straight into this WORLD-SPACE canvas
+            // with no screen-space assumption. EnsureFont() inside it also removes the TMP
+            // first-generation NRE hazard the hand-rolled version had no guard for.
+            //
+            // The canvas itself stays hand-built: a bare world-space root Canvas is only a
+            // WEAK smell in the oracle and is the legitimate pattern for a diegetic tell
+            // (same shape as FloatingHealthBar / NodeFillIndicator, both sanctioned).
+            _label = ElarionUiKit.Label(
+                canvasGo.transform, "IDLE",
+                y0: 0f, y1: 1f,
+                color: IdleColor, size: 32, align: TextAlignmentOptions.Center,
+                x0: 0f, x1: 1f, bold: true);
+            _label.enableWordWrapping = false;
+            _label.overflowMode = TextOverflowModes.Overflow;
+            var labelGo = _label.gameObject;
             // World-space canvas renders sizeDelta as metres; a 32px font needs a
             // small uniform scale to land at ~0.10 m tall text over a ~2 m cart.
             labelGo.transform.localScale = Vector3.one * 0.0035f;

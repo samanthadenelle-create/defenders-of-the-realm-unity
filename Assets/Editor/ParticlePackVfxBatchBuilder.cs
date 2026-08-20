@@ -625,27 +625,16 @@ namespace DeNelle.Editor
             // DustMotes ships at 100/sec (a room-fill ambience); a pet-sized aura wants a
             // fraction of that. Gravity 0 = the flat sideways drift that keeps L1 visually
             // "inert" next to L2's bobbing twinkle.
-            new Row { TypeName = "Aura_PetLevel1", Source = Misc + "DustMotesEffect.prefab",
-                      Dest = DestAura + "Aura_PetLevel1.prefab", Expect = Family.Continuous,
-                      MinQuality = 1, PoolSize = 3, Required = false,
-                      Scale = 0.6f, RateMul = 0.15f, SpeedMul = 1f, LifeMul = 1f, Gravity = 0f,
-                      Why = "registry 6d: pet L1 = DustMotes, dull flat drift (ladder floor)" },
 
-            new Row { TypeName = "Aura_PetLevel2", Source = Misc + "FireFlies.prefab",
-                      Dest = DestAura + "Aura_PetLevel2.prefab", Expect = Family.Continuous,
+            new Row { TypeName = "Aura_TalentNode", Source = Misc + "FireFlies.prefab",
+                      Dest = DestAura + "Aura_TalentNode.prefab", Expect = Family.Continuous,
                       MinQuality = 1, PoolSize = 3, Required = false,
                       Scale = 0.6f, RateMul = 1.5f, SpeedMul = 1f, LifeMul = 1f, Gravity = None,
-                      Why = "registry 6d: pet L2 = FireFlies, discrete bobbing twinkle" },
+                      Why = "TALENT-TREE NODE aura = FireFlies, discrete bobbing twinkle. Built as the pet L2 rung in registry 6d; the pet ladder was deleted 2026-08-20 and this recipe survives because the TALENT TREE uses it (TalentNodeVfxRig.AuraResourcePath)." },
 
             // The top rung MERGES a second recipe rather than merely turning L2 up - a
             // denser copy of L2 would be indistinguishable from L2 at a glance, which is
             // exactly the failure the registry's "density escalation" phrase invites.
-            new Row { TypeName = "Aura_PetLevel3", Source = Misc + "FireFlies.prefab",
-                      Secondary = Misc + "SparksEffect.prefab",
-                      Dest = DestAura + "Aura_PetLevel3.prefab", Expect = Family.Continuous,
-                      MinQuality = 1, PoolSize = 2, Required = false,
-                      Scale = 0.7f, RateMul = 1.6f, SpeedMul = 1f, LifeMul = 1f, Gravity = None,
-                      Why = "registry 6d: pet L3 = FireFlies + Sparks (twinkle PLUS falling glints)" },
 
             // -- Boss phase ladder (registry 6d "calm -> enraged -> seething") -----
             // DragonBoss already drives these three VFXType values through ONE handle
@@ -1058,14 +1047,14 @@ namespace DeNelle.Editor
             "consumer at once, silently re-skinning the founding-Echo aura - a felt change to the " +
             "onboarding moment under a combat-aura ticket. Needs an owner ruling, not a builder row.",
 
-            "WO-889 Pet_Aura_Fire / Pet_Aura_Ice: REFUSED - no selector exists. VERIFIED AT SOURCE: " +
-            "VFXManager.PlayPetAura(pet, level) switches on LEVEL only and can return nothing but " +
-            "Aura_PetLevel1/2/3, and PetAuraVFX (the only caller) passes a serialized 1-3 level with " +
-            "no element field anywhere. The enum doc says these are 'use instead of Aura_PetLevel* " +
-            "when pet type is Fire' - but no pet TYPE signal reaches this path, so the rows would be " +
-            "Resources bytes nothing can select. The level ladder IS built above. Wiring an element " +
-            "selector is a design question (which pets are fire/ice, and does element outrank level?) " +
-            "that belongs to the owner.",
+            "WO-889 Pet_Aura_Fire / Pet_Aura_Ice: REFUSED, and the whole question is now MOOT. " +
+            "The original refusal was: no element selector existed, because PlayPetAura switched on " +
+            "LEVEL only and PetAuraVFX (its only caller) passed a serialized 1-3 with no element " +
+            "field. OWNER RULING 2026-08-20 - 'delete the pet aura system but keep Aura_PetLevel2' - " +
+            "so PetAuraVFX, VFXManager.PlayPetAura and the Aura_PetLevel1/3 rungs are DELETED: the " +
+            "pet aura feature never shipped and had zero runtime references. The L2 recipe survives " +
+            "under its true name, Aura_TalentNode, because the TALENT TREE uses it. There is no pet " +
+            "aura ladder left to add an element tier to.",
 
             "WO-889 Aura_Healer: not built - it already has a committed row (Lana " +
             "Regeneration/Regeneration_health_loop) that derives CONTINUOUS, and no code plays it " +

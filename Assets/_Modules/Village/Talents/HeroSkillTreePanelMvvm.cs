@@ -73,7 +73,7 @@ namespace DeNelle.Village.Talents
         // -- OWNER VFX PICKS 2026-08-16 (both mapped verbatim, both ADDITIVE) --------
         //   POINTER (Hovl "Marker 2 Pointer Loop") -> the single FOCUS (next/selected)
         //     node, behind the code-built gold focus ring.
-        //   AURA (Aura_PetLevel2, tracked under Resources/VFX/Aura) -> node AURAS.
+        //   AURA (Aura_TalentNode, tracked under Resources/VFX/Aura) -> node AURAS.
         //     DEFAULT (NOT A LOCK): the aura lights OWNED/learned nodes - the prestige
         //     read on talents already taken. One owner word flips it to available-to-buy
         //     nodes: change IsAuraNode below.

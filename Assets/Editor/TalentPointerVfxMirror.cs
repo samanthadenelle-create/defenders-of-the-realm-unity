@@ -55,12 +55,12 @@ namespace DeNelle.Editor
         private const string Tag        = "[TalentPointerVfxMirror] ";
 
         /// <summary>The owner's verbatim pick (2026-08-16, "for nodes").</summary>
-        private const string SrcPath =
+        public const string SrcPath =
             "Assets/Hovl Studio/Map track markers VFX/Prefabs/Marker 2 Pointer Loop.prefab";
 
         /// <summary>The tracked mirror. Runtime loads it as Resources "VFX/UI/TalentNodePointer"
         /// (TalentNodeVfxRig.PointerResourcePath) - keep the two in lockstep.</summary>
-        private const string DstPath = "Assets/Resources/VFX/UI/TalentNodePointer.prefab";
+        public const string DstPath = "Assets/Resources/VFX/UI/TalentNodePointer.prefab";
 
         [MenuItem("Defenders/VFX/Mirror Talent Pointer VFX")]
         public static void Run()

@@ -337,9 +337,7 @@ namespace DeNelle.Editor
             // Pet level ladder. Escalates by RECIPE then LAYER COUNT then density, so a
             // level-up is legible with the colour removed: dull flat motes -> discrete
             // bobbing twinkle -> twinkle PLUS falling glints (a merged Sparks layer).
-            { "Aura_PetLevel1",         new Pick(AuraVfx + "Aura_PetLevel1.prefab", isLoop: true, minQuality: 1, poolSize: 3) },
-            { "Aura_PetLevel2",         new Pick(AuraVfx + "Aura_PetLevel2.prefab", isLoop: true, minQuality: 1, poolSize: 3) },
-            { "Aura_PetLevel3",         new Pick(AuraVfx + "Aura_PetLevel3.prefab", isLoop: true, minQuality: 1, poolSize: 2) },
+            { "Aura_TalentNode",        new Pick(AuraVfx + "Aura_TalentNode.prefab", isLoop: true, minQuality: 1, poolSize: 3) },
 
             // Boss phase ladder, driven by DragonBoss through ONE swapped handle.
             // calm -> enraged -> seething reads as thin-and-vertical (RisingSteam, 1 layer)

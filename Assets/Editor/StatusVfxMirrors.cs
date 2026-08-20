@@ -31,7 +31,7 @@ namespace DeNelle.Editor
         // source (pack) -> dest (tracked Resources). A null source means the dest is
         // expected to ALREADY be on disk (hand-staged tracked-pack copies) and only
         // needs the self-containment verify.
-        private static readonly (string src, string dst)[] Mirrors =
+        public static readonly (string src, string dst)[] Mirrors =
         {
             ("Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire & Explosion Effects/Prefabs/BigExplosion.prefab",
              "Assets/Resources/VFX/Status/BigExplosion.prefab"),

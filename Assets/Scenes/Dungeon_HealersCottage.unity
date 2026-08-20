@@ -7393,11 +7393,12 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: DeNelle.Dungeons::DeNelle.Dungeons.WandererBubble
   _height: 2.6
-  _panelWidth: 4.4
-  _panelHeight: 1.7
+  _panelWidth: 1.8
+  _panelHeight: 0.7
   _panelColor: {r: 0.953, g: 0.918, b: 0.835, a: 0.96}
   _textColor: {r: 0.149, g: 0.122, b: 0.094, a: 1}
-  _wrapWidth: 34
+  _wrapWidth: 22
+  _textScale: 0.07
 --- !u!4 &225764395
 Transform:
   m_ObjectHideFlags: 0
@@ -29759,8 +29760,8 @@ MonoBehaviour:
   _loreStoneRoot: {fileID: 1898136061}
   _checkpointRoot: {fileID: 807650906}
   _encounterRoot: {fileID: 593581866}
-  _heroBaselineHp: 120
-  _heroBaselineMana: 60
+  _fallbackHp: 120
+  _fallbackMana: 60
   _cameraOffset: {x: 0, y: 9, z: -6.25}
   _cameraPitch: 52
   _ambientBgm: {fileID: 1349265093}
@@ -71181,6 +71182,21 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7d07f9dc022417349b6292dec8c614fe, type: 3}
   m_Name: 
   m_EditorClassIdentifier: DeNelle.Dungeons::DeNelle.Dungeons.DungeonCameraRig
+  _otsShoulderOffset: {x: 0.5, y: 1.9, z: 0}
+  _otsVerticalArmLength: 0.35
+  _otsCameraDistance: 3.2
+  _otsCameraSide: 0.6
+  _otsDamping: {x: 0.18, y: 0.18, z: 0.18}
+  _headingYawOffset: 0
+  _otsAvoidObstacles: 0
+  _otsObstacleMask:
+    serializedVersion: 2
+    m_Bits: 1
+  _fpvShoulderOffset: {x: 0, y: 1.62, z: 0.28}
+  _fpvCameraDistance: 0.05
+  _fpvLookSensitivity: 0.14
+  _fpvPitchClamp: 70
+  _fpvLookScreenLeftReserve: 0.5
   _followOffset: {x: 0, y: 9, z: -6.25}
   _maxHeightAboveHero: 9
   _pitch: 52

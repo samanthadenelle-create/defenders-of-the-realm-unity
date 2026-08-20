@@ -60,12 +60,12 @@ namespace DeNelle.Editor
         private const string Tag        = "[PortalCircleVfxMirror] ";
 
         /// <summary>The owner's verbatim pick (2026-08-16, "use this rotated for the portals").</summary>
-        private const string SrcPath =
+        public const string SrcPath =
             "Assets/Hovl Studio/Magic circles/Prefabs/Magic circle dark star.prefab";
 
         /// <summary>The tracked mirror. Runtime loads it as Resources
         /// "VFX/Portal/PortalCircleDarkStar" (DungeonWorldPortalSpawner) - keep in lockstep.</summary>
-        private const string DstPath = "Assets/Resources/VFX/Portal/PortalCircleDarkStar.prefab";
+        public const string DstPath = "Assets/Resources/VFX/Portal/PortalCircleDarkStar.prefab";
 
         [MenuItem("Defenders/VFX/Mirror Portal Circle VFX")]
         public static void Run()

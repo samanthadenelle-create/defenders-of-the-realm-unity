@@ -380,7 +380,7 @@
         },
         {
             "key": "Node_Aura",
-            "prefabPath": "Assets/Resources/VFX/Aura/Aura_PetLevel2.prefab",
+            "prefabPath": "Assets/Resources/VFX/Aura/Aura_TalentNode.prefab",
             "isLoop": true,
             "scale": 1.0,
             "manual": true

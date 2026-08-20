@@ -32,7 +32,7 @@
 //   projHandle.Stop(); // call when projectile hits
 //
 //   // Pet aura that auto-selects level:
-//   VFXManager.Instance.PlayPetAura(pet, petLevel);
+//   (PlayPetAura was deleted 2026-08-20 with the unshipped pet-aura system.)
 //
 //   // Quality control:
 //   VFXManager.Instance.SetQuality(VFXQuality.Low);   // call from settings
@@ -370,23 +370,15 @@ namespace DeNelle.Village
         public VFXHandle PlayEnvironment(VFXType type, Transform parent)
             => PlayLoop(type, parent.position, parent);
 
-        /// <summary>
-        /// Play a pet aura that auto-selects the right VFXType for the pet's level.
-        /// Level clamped to 1–3. Returns a VFXHandle for later Stop().
-        /// </summary>
-        public VFXHandle PlayPetAura(Component pet, int petLevel)
-        {
-            var t = pet != null ? pet.transform : null;
-            if (t == null) return null;
-
-            var type = petLevel switch
-            {
-                1 => VFXType.Aura_PetLevel1,
-                2 => VFXType.Aura_PetLevel2,
-                _ => VFXType.Aura_PetLevel3,    // 3+
-            };
-            return PlayLoop(type, t.position, t);
-        }
+        // PlayPetAura DELETED 2026-08-20 (owner: "delete the pet aura system but keep
+        // Aura_PetLevel2"). It selected Aura_PetLevel1/2/3 by pet level for PetAuraVFX,
+        // which was its ONLY caller and is itself deleted. The pet aura feature never
+        // shipped: PetAuraVFX had zero runtime references anywhere in the tree.
+        //
+        // ⚠ Aura_PetLevel2 IS STILL LIVE and must not be removed with the rest — it was
+        // repurposed as the TALENT-TREE NODE aura (TalentNodeVfxRig.AuraResourcePath).
+        // Its name is the misleading part, and renaming it to what it actually is is a
+        // separate, deliberate pass; deleting it would break the talent tree.
 
         // ── WO-59: Dungeon mode ───────────────────────────────────────────────
 

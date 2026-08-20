@@ -116,11 +116,9 @@ namespace DeNelle.Village
         /// <summary>Empowered tower persistent glow — nucleus loop (tinted by element).</summary>
         Aura_EmpowerTower,
         /// <summary>Pet aura level 1 — dim sparkle loop.</summary>
-        Aura_PetLevel1,
         /// <summary>Pet aura level 2 — medium sparkle loop, brighter particles.</summary>
-        Aura_PetLevel2,
+        Aura_TalentNode,
         /// <summary>Pet aura level 3 — bright sparkle loop, high emission.</summary>
-        Aura_PetLevel3,
 
         // ── Environment (attach to scene objects, DontDestroyWithOwner) ────────
         /// <summary>Torch / brazier fire loop — Lana Studio torch flame.</summary>
@@ -170,9 +168,9 @@ namespace DeNelle.Village
         Combo_Tier1,
         /// <summary>Kill-combo tier-2 feedback burst (bigger than tier 1). WO-62.</summary>
         Combo_Tier2,
-        /// <summary>Pet fire aura loop — use instead of Aura_PetLevel* when pet type is Fire. WO-62.</summary>
+        /// <summary>Pet fire aura loop. WO-62. (The Aura_PetLevel* ladder it once alternated with was deleted 2026-08-20 with the unshipped pet-aura system.)</summary>
         Pet_Aura_Fire,
-        /// <summary>Pet ice aura loop — use instead of Aura_PetLevel* when pet type is Ice. WO-62.</summary>
+        /// <summary>Pet ice aura loop. WO-62. (See the fire note above.)</summary>
         Pet_Aura_Ice,
         /// <summary>Oneshot pet attack impact burst. WO-62.</summary>
         Pet_Attack,
