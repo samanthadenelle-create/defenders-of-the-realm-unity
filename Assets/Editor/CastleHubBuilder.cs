@@ -497,13 +497,24 @@ namespace DeNelle.Editor
         {
             ("Blacksmith_Weapons_Storefront", "Structures/Forge",           180f, 90f),
             ("Forge_Armor_Storefront",        "Structures/armorer",         90f,  90f),
-            ("Jeweler_Gems_Storefront",       "Structures/jeweler",         0f,    90f),  // owner felt: X=90 Y=0 Z=0
+            ("Jeweler_Gems_Storefront",       "Structures/jeweler",         0f,   -90f),  // owner 2026-08-19: INVERTED to -90.
+            // The jeweler alone still baked upside down at +90 after the whole-city pass. +90 and -90 are
+            // AABB-identical, so no measurement can separate them - only the screen can, and the screen
+            // said inverted. The other three rows STAY at +90: they are correct on device and this is a
+            // per-mesh fact, not a family-wide one.
             ("CastleBarracks",                "Structures/barracks",        180f, 90f),
         };
 
         // Catalog ids owner named + ShopAndCrafting (= workshop). armorer included (same FBX family).
-        private static readonly string[] OwnerUprightCatalogIds =
-            { "forge", "workshop", "jeweler", "barracks", "armorer" };
+        // PER-ID SIGN, not one sign for the family (owner 2026-08-19). Every row here is +90
+        // EXCEPT the jeweler, which bakes upside down at +90 and correct at -90. +90 and -90 are
+        // AABB-identical so no measurement separates them - the screen decides, per mesh.
+        // This MUST stay in step with OwnerUprightSkins above: the baked hub object and a
+        // player-PLACED copy of the same structure have to agree, or one of them is inverted.
+        private static readonly (string id, float eulerX)[] OwnerUprightCatalogIds =
+        {
+            ("forge", 90f), ("workshop", 90f), ("jeweler", -90f), ("barracks", 90f), ("armorer", 90f),
+        };
 
         private const string HubScenePath = "Assets/Scenes/Main_Castle_Overworld.unity";
         private const string UprightBakeOkMarker = "OWNER_UPRIGHT_PREBAKE_OK";
@@ -534,7 +545,7 @@ namespace DeNelle.Editor
                     skinned++;
             }
 
-            int flagged = FlagCatalogUprightFixed(OwnerUprightCatalogIds, eulerX: 90f);
+            int flagged = FlagCatalogUprightFixed(OwnerUprightCatalogIds);
 
             // Persist host skins before RealmStorePlacer re-opens the same scene.
             EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
@@ -568,7 +579,64 @@ namespace DeNelle.Editor
         {
             ApplyOwnerUprightCorrectionsBeforeBake();
             NavMeshBakeFinal.Run();
+            VerifyJewelerUprightAfterBake();
             Debug.Log("[CastleHubBuilder] OWNER_UPRIGHT_AND_NAVMESH_BAKE_OK");
+        }
+
+        /// <summary>
+        /// FINAL STAGE, owner 2026-08-19: "if you can add it at the end just to flip it, then that
+        /// would be absolutely perfect, and there would be no reason to rebake it."
+        ///
+        /// <para>Runs AFTER the navmesh bake and ASSERTS the jeweler ended up inverted. If some other
+        /// path left it at +90 it is corrected here and the scene re-saved, so no second bake is ever
+        /// needed to get the jeweler right. Idempotent: when the skin table already produced -90 this
+        /// logs and changes nothing.</para>
+        ///
+        /// <para>WHY THE JEWELER SPECIFICALLY: it is the one mesh in the family that bakes upside down
+        /// at +90. +90 and -90 are AABB-identical, so no gate and no measurement can catch a
+        /// regression here - only the screen can. This stage is the closest thing to a guard we have,
+        /// so it prints the value it FOUND rather than merely announcing success.</para>
+        /// </summary>
+        private static void VerifyJewelerUprightAfterBake()
+        {
+            var host = GameObject.Find("Jeweler_Gems_Storefront");
+            if (host == null)
+            {
+                Debug.LogWarning("[CastleHubBuilder] JEWELER_UPRIGHT_UNVERIFIED - Jeweler_Gems_Storefront " +
+                                 "not in the open scene after bake; nothing checked.");
+                return;
+            }
+
+            // The skinned visual is the child the injector/skin path creates, not the baked host.
+            Transform visual = null;
+            for (int i = 0; i < host.transform.childCount; i++)
+            {
+                var c = host.transform.GetChild(i);
+                if (c.GetComponentInChildren<MeshRenderer>(true) != null ||
+                    c.GetComponentInChildren<SkinnedMeshRenderer>(true) != null) { visual = c; break; }
+            }
+            if (visual == null)
+            {
+                Debug.LogWarning("[CastleHubBuilder] JEWELER_UPRIGHT_UNVERIFIED - no skinned visual under " +
+                                 "Jeweler_Gems_Storefront; nothing checked.");
+                return;
+            }
+
+            Vector3 e = visual.localEulerAngles;
+            float x = Mathf.DeltaAngle(0f, e.x);          // -180..180, so 270 reads as -90
+            if (Mathf.Abs(x - (-90f)) < 1f)
+            {
+                Debug.Log($"[CastleHubBuilder] JEWELER_UPRIGHT_OK - visual '{visual.name}' localEuler=" +
+                          $"({x:F1},{Mathf.DeltaAngle(0f, e.y):F1},{Mathf.DeltaAngle(0f, e.z):F1}) - already inverted, no change.");
+                return;
+            }
+
+            visual.localRotation = Quaternion.Euler(-90f, Mathf.DeltaAngle(0f, e.y), Mathf.DeltaAngle(0f, e.z));
+            EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+            EditorSceneManager.SaveOpenScenes();
+            AssetDatabase.SaveAssets();
+            Debug.Log($"[CastleHubBuilder] JEWELER_UPRIGHT_FLIPPED - found x={x:F1}, forced to -90 and re-saved. " +
+                      "Something upstream still writes +90 for this mesh; this stage covered it.");
         }
 
         /// <summary>
@@ -589,7 +657,7 @@ namespace DeNelle.Editor
                 Debug.LogError("[CastleHubBuilder] Jeweler_Gems_Storefront not in scene — nothing baked.");
                 return;
             }
-            if (!SkinHostUpright(host, "Structures/jeweler", yawDeg: 0f, pitchDeg: 90f))
+            if (!SkinHostUpright(host, "Structures/jeweler", yawDeg: 0f, pitchDeg: -90f))   // owner 2026-08-19: inverted, matches OwnerUprightSkins
                 return;
 
             EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
@@ -649,7 +717,7 @@ namespace DeNelle.Editor
         /// Write euler [90,0,0] + manual:true + corrected:true into BOTH catalog copies (byte-equal).
         /// StructureFactory.OptsFor feeds this into LocalRotation BEFORE Fit.
         /// </summary>
-        private static int FlagCatalogUprightFixed(string[] ids, float eulerX)
+        private static int FlagCatalogUprightFixed((string id, float eulerX)[] ids)
         {
             string[] paths =
             {
@@ -667,14 +735,15 @@ namespace DeNelle.Editor
             var entries = root["entries"] as JArray;
             if (entries == null) return 0;
 
-            var want = new HashSet<string>(ids);
+            var want = new Dictionary<string, float>();
+            foreach (var t in ids) want[t.id] = t.eulerX;
             int n = 0;
             foreach (var e in entries)
             {
                 var entry = e as JObject;
                 if (entry == null) continue;
                 string id = entry.Value<string>("id");
-                if (id == null || !want.Contains(id)) continue;
+                if (id == null || !want.TryGetValue(id, out float eulerX)) continue;
 
                 entry["orientation"] = new JObject
                 {
