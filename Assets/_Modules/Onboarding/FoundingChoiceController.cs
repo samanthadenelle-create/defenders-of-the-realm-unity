@@ -113,6 +113,23 @@ namespace DeNelle.Onboarding
         {
             using var _ = FlowTrace.Enter("Founding", "FoundingChoiceController.PresentFoundingChoice");
 
+            // OWNER RULING 2026-08-20: the prebuilt "Default Town" start is FLAGGED OFF while it
+            // still has issues ("flag that off to unblock"). Checked BEFORE ShouldOffer so the
+            // session latch below is not consumed - if the flag is flipped back on mid-session the
+            // choice is still offerable. Founding continues as Build Your Own, which is the path
+            // that works: StrategicPlacementMigrated stays true, so the blank template + FTUE run
+            // exactly as they do for every player who picks "Build Your Own" today. Nothing is
+            // deleted; ff.defaulttown = 1 restores the screen without a rebuild.
+            if (!DeNelle.Core.FeatureFlags.FoundingDefaultTown)
+            {
+                FlowTrace.Step("Founding",
+                    "founding choice SUPPRESSED - ff.defaulttown is OFF (owner ruling 2026-08-20: the " +
+                    "prebuilt Default Town start still has issues). Founding as Build Your Own (blank " +
+                    "template + FTUE); set PlayerPrefs 'ff.defaulttown' = 1 to restore the choice.");
+                onContinue?.Invoke();
+                return;
+            }
+
             if (!ShouldOffer)
             {
                 FlowTrace.Step("Founding",

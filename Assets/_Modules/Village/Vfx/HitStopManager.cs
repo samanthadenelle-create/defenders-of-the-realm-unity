@@ -29,6 +29,7 @@
 
 using System.Collections;
 using UnityEngine;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village
 {
@@ -87,7 +88,8 @@ namespace DeNelle.Village
         {
             // Guarantee timeScale is restored if this object is torn down mid-stop
             // (scene unload / domain reload) so a freeze can never leak past us.
-            if (_hitStopRoutine != null) Time.timeScale = 1f;
+            if (_hitStopRoutine != null || _frozenScaleApplied >= 0f) Time.timeScale = 1f;
+            _frozenScaleApplied = -1f;
             if (Instance == this) Instance = null;
         }
 
@@ -109,6 +111,13 @@ namespace DeNelle.Village
 
         private Coroutine _hitStopRoutine;
         private float     _hitStopEndTime;
+
+        /// <summary>
+        /// The scale the ACTIVE stop applied, or -1 when no stop is in flight. Read by the
+        /// <see cref="LateUpdate"/> deadline watchdog so it only ever un-does OUR freeze and
+        /// never stamps over a legitimate slow-mo owned by someone else.
+        /// </summary>
+        private float _frozenScaleApplied = -1f;
 
         // ── Static convenience ────────────────────────────────────────────────
 
@@ -188,9 +197,86 @@ namespace DeNelle.Village
                 Mathf.Max(_hitStopMinScale, frozenScale), duration));
         }
 
+        // =====================================================================
+        //  DEADLINE WATCHDOG (owner report 2026-08-20: town frozen after a fight)
+        // =====================================================================
+
+        /// <summary>
+        /// Restore <c>Time.timeScale</c> if our stop outlived its deadline.
+        ///
+        /// <para>CAPTURED DEFECT. After an arena fight in the hub the owner was left unable to move.
+        /// The trace named it exactly: <c>[Flow:HeroOwner] ... inputSuppressed=False timeScale=0.04
+        /// dt=0.0013</c> — input was never blocked, the world was running at 4% speed, and it stayed
+        /// there for 182 consecutive samples over three minutes. 0.04 is this class's own value
+        /// (<c>HitTier.Medium</c>, and <c>Enemy.cs</c>'s death stop), applied at the instant the
+        /// battle resolved and the victory modal opened.</para>
+        ///
+        /// <para>WHY A COROUTINE CANNOT BE THE ONLY RESTORE PATH. <see cref="HitStopRoutine"/>
+        /// writes a GLOBAL and hands the only restore to a coroutine — and a coroutine stops
+        /// silently whenever its GameObject is deactivated, taking the restore with it and leaving
+        /// the global stuck. <c>OnDestroy</c> does not fire for a deactivation, so the existing
+        /// guard there cannot cover it. A frozen world is not a survivable outcome for a mechanism
+        /// this cosmetic, so the restore is now owned by a deadline that runs every frame on the
+        /// UNSCALED clock — it cannot be starved by the very slow-down it exists to undo.</para>
+        ///
+        /// <para>It only reverts a scale THIS class applied (see <see cref="_frozenScaleApplied"/>),
+        /// so an ArenaDeathCam or WaveCelebration slow-mo passes through untouched.</para>
+        ///
+        /// <para>And it FAILS LOUDLY rather than healing quietly: the exact leak this fixes went
+        /// unexplained precisely because nothing announced it. If this fires, the next capture names
+        /// the cause instead of starting from zero (CLAUDE.md sec. 12).</para>
+        /// </summary>
+        private void LateUpdate()
+        {
+            if (_frozenScaleApplied < 0f) return;
+            if (Time.unscaledTime <= _hitStopEndTime + DeadlineGraceSeconds) return;
+
+            float leaked = Time.timeScale;
+            bool stillOurs = Mathf.Abs(leaked - _frozenScaleApplied) < 0.001f;
+
+            if (_hitStopRoutine != null) { StopCoroutine(_hitStopRoutine); _hitStopRoutine = null; }
+            _frozenScaleApplied = -1f;
+
+            if (!stillOurs)
+            {
+                // Someone else owns the clock now. Our stop is simply over; say nothing and
+                // above all do NOT stamp 1f over their slow-mo.
+                return;
+            }
+
+            Time.timeScale = 1f;
+            FlowTrace.Fail("HitStop",
+                $"HIT-STOP LEAK RECOVERED: timeScale was still {leaked:F2} " +
+                $"{(Time.unscaledTime - _hitStopEndTime):F2}s past its deadline - the restore " +
+                "coroutine never completed (its GameObject was almost certainly deactivated, which " +
+                "stops coroutines without firing OnDestroy). Restored to 1. The world was running " +
+                $"at {leaked * 100f:F0}% speed, which reads to the player as frozen controls.");
+        }
+
+        /// <summary>How far past the deadline to wait before calling it a leak. Generous enough that
+        /// a frame hitch or a one-frame ordering race is never mistaken for one.</summary>
+        private const float DeadlineGraceSeconds = 0.25f;
+
+        private void OnDisable()
+        {
+            // A coroutine dies on deactivation and OnDestroy does NOT fire for it, so without this
+            // a mid-stop SetActive(false) leaves the global pinned. This is the cheap half of the
+            // same fix as the watchdog above; both exist because either alone can be out-raced.
+            if (_frozenScaleApplied >= 0f && Mathf.Abs(Time.timeScale - _frozenScaleApplied) < 0.001f)
+            {
+                Time.timeScale = 1f;
+                FlowTrace.Warn("HitStop",
+                    "hit-stop host DISABLED mid-stop - timeScale restored to 1 here, because the " +
+                    "restore coroutine has just been killed by the deactivation.");
+            }
+            _frozenScaleApplied = -1f;
+            _hitStopRoutine = null;
+        }
+
         private IEnumerator HitStopRoutine(float frozenScale, float duration)
         {
             Time.timeScale = frozenScale;
+            _frozenScaleApplied = frozenScale;
             yield return new WaitForSecondsRealtime(duration);
             // DEF-178: restore to the game's normal 1f, NOT a captured `prev`. The
             // project has no slow-mo system — normal time is always 1 — and capturing
@@ -199,6 +285,7 @@ namespace DeNelle.Village
             // the same frame. Restoring to 1 makes the two managers safe to coexist.
             Time.timeScale = 1f;
             _hitStopRoutine = null;
+            _frozenScaleApplied = -1f;
         }
 
         /// <summary>

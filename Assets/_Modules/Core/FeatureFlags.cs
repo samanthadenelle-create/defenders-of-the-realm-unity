@@ -704,6 +704,28 @@ namespace DeNelle.Core
         public static bool MapTab => Get("maptab", defaultOn: false);
 
         /// <summary>
+        /// Owner ruling 2026-08-20 — gates the founding "Default Town" (prebuilt ring) option.
+        /// Owner, verbatim: <i>"we are going to flag the start with prebuilt as it still has issues,
+        /// so flag that off to unblock"</i>.
+        ///
+        /// <para>Default OFF. With it off, <c>FoundingChoiceController</c> does not present the
+        /// choice at all and a new game founds as <b>Build Your Own</b> (the blank template + FTUE),
+        /// which is the path that works today. Presenting a two-option screen with one option
+        /// disabled would be worse than not presenting it: the player would be asked to make a
+        /// decision that has already been made for them.</para>
+        ///
+        /// <para>Nothing is deleted. "Default Town" works by setting
+        /// <c>GameState.StrategicPlacementMigrated = false</c> so the Castle-load migration writer
+        /// converts the baked ring into movable records — that whole path is intact and flipping
+        /// PlayerPrefs "ff.defaulttown" = 1 restores the choice without a rebuild, which is exactly
+        /// what it will need for its own re-test once the issues are fixed.</para>
+        ///
+        /// <para>The suppression is FlowTrace'd at the decision site, so a capture shows WHY the
+        /// screen is missing rather than reading as a vanished screen.</para>
+        /// </summary>
+        public static bool FoundingDefaultTown => Get("defaulttown", defaultOn: false);
+
+        /// <summary>
         /// WO-1042 (owner ruling 2026-08-16) — gates the STAKING bonus hook on the Jeweler's polish
         /// economy. What it grants is ATTEMPTS ONLY: +1 free re-roll per week for a native SKR staker,
         /// and +1 to the per-stone roll cap at 10k+ SKR. It NEVER touches a probability — a staker's
