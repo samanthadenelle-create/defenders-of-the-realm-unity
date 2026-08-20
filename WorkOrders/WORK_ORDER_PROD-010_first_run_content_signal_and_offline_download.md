@@ -1,6 +1,18 @@
 # PROD-010 — First-run content signal ("registering build / creating profile") + opt-in OFFLINE download
 
-**Status:** RE-OPENED then RE-IMPLEMENTED 2026-08-20 — **UNGATED, UNCOMMITTED, NOT FELT-VERIFIED.**
+**Status:** RE-IMPLEMENTED, GATED, COMMITTED and SHIPPED 2026-08-20 (`fa411367d`) — **AWAITING THE ONE
+THING ONLY THE OWNER CAN DO: AN AIRPLANE-MODE RUN ON DEVICE.**
+
+> The "UNGATED, UNCOMMITTED" line that used to sit here was written by the authoring lane BEFORE the
+> committer gated it, and it went stale the moment the batch landed. Current, verified state:
+> `COMPILE_GATE_OK`; `REGRESSION_OK 225/225 suites — 225 green, 0 red` with `[offline-pull]`
+> registered and green; working tree clean for `OfflineContentService.cs` / `OfflineOptInPanel.cs`;
+> shipped in build **2026.08.20.333831** on the Seeker.
+>
+> ⛔ WHAT REMAINS IS NOT CODE. Every acceptance criterion is met EXCEPT the airplane-mode felt-test,
+> and no amount of further engineering can close it: the whole claim of this feature is "the game
+> opens without a connection", and only a device with the radio off can witness that. Two minutes:
+> Settings → Offline → Download → wait for 100% → turn Wi-Fi OFF → cold-start the app.
 
 > ## ⛔ THE 2026-08-19 "IMPLEMENTED" WAS FALSE. RECORDED HERE SO IT CANNOT BE RE-LITIGATED.
 >
