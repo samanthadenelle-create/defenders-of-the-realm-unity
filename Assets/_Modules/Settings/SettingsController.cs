@@ -267,6 +267,19 @@ namespace DeNelle.Settings
                 new Vector2(0.52f, y - Frac(120f)), new Vector2(0.94f, y), OnTermsClicked);
             y -= Frac(120f);
 
+            // -- Offline (PROD-010, 2026-08-19) -------------------------------
+            // The opt-in door for offline mode. It lives in Settings rather than firing at boot
+            // because this is an ~88 MB download: a prompt that ambushes a new player during the
+            // opening minutes is the wrong trade, and the owner's spec is "opt IN", not "opt out".
+            // The button's LABEL carries the state, not a colour - the owner is red/green
+            // colourblind, so "Downloaded" vs "Download for Offline" must read in greyscale.
+            y = Caption(body, "Offline", y);
+            ElarionUiKit.BuildObsidianButton(body,
+                DeNelle.Core.OfflineContentService.PulledForThisBuild ? "Offline Ready" : "Play Offline",
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
+                new Vector2(0.06f, y - Frac(120f)), new Vector2(0.48f, y), OnOfflineClicked);
+            y -= Frac(120f);
+
             // ── Developer (owner ruling 2026-08-08) ──────────────────────────
             // "remove the dev flag on the left side, and let's hide the dev panel ... let's stick it
             // under settings." The on-screen DEV chips are gone (ff.devresourcetool defaults OFF
@@ -517,6 +530,10 @@ namespace DeNelle.Settings
         /// Game Guide route: this leaves the app entirely, and the player should land back on the
         /// screen they left rather than on the town.</summary>
         private void OnPrivacyClicked() => OpenExternal(PrivacyUrl, "privacy");
+
+        /// <summary>PROD-010: open the offline opt-in prompt. Show() is a no-op when the
+        /// content is already pulled for this build, so a second tap cannot re-download.</summary>
+        private void OnOfflineClicked() => DeNelle.Core.UI.OfflineOptInPanel.Show();
 
         /// <summary>Opens the terms of service in the device browser.</summary>
         private void OnTermsClicked() => OpenExternal(TermsUrl, "terms");
