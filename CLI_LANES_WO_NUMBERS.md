@@ -95,7 +95,15 @@
 > PROD-003 (Realm Store permanent storefront), PROD-004 (baked-twin footprint),
 > PROD-005 (default shield renders through the hero body; survives a dungeon->town port).
 
-> ## ⚠ RECONCILED 2026-08-20 (CLI): main line next free = **1128**.
+> ## ⚠ RECONCILED 2026-08-20 (CLI): main line next free = **1129**.
+> *(CLI seat minted **WO-1128** and bumped 1128 -> 1129 in this SAME edit — SERVER-RECONCILED
+> OFFLINE ACCRUAL. Owner question 2026-08-20: *"would we be able to verify that their offline data
+> was valid... getting resources from their pets harvesting while they're offline"*. Answer: do not
+> verify it — make it not matter. The server stamps `last_seen` and RECOMPUTES time-derived accrual
+> from its OWN clock on sync, capping the client claim. `ResourceCollector.CatchUpAway` already
+> clamps a BACKWARDS clock to zero; the open hole is a FORWARDS clock, currently bounded only by
+> container capacity — a design property silently doing security work. Also carries the
+> local-save-loss warning for the offline opt-in panel.)*
 > *(CLI seat minted **WO-1127** and bumped 1127 -> 1128 in this SAME edit — the BATTLE-END
 > QUIESCENCE GATE. Owner ruling 2026-08-20 after weighing a full scene-swap against a teardown
 > contract and choosing the contract: a scene load does NOT reset `Time.timeScale`, does not touch
