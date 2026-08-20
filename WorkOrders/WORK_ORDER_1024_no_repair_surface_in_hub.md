@@ -123,3 +123,36 @@ This capture was queued behind ~48 duplicates of the WO-1022 GUID flood on 2026-
 when the queue was drained. It is the second real signal that noise was burying (the other: two
 `[Flow:Tutorial] STEP-STUCK` lines, still un-ticketed). **Argument for prioritising WO-1022:** until the
 scene throws stop, every genuine capture arrives buried under four duplicates.
+
+---
+
+## ⛔ OWNER RULING 2026-08-19 — the wave gate is CORRECT. The defect is the missing controller.
+
+> Owner, verbatim: **"cannot build/repair during battle"** and **"as far as repairing should be
+> available as soon as battle ends"**.
+
+**This CLOSES the open design question in this ticket.** `HubRepairAffordance.cs:207-219` hides the
+REPAIR ALL surface unless `wave == null || Phase == Idle || Phase == Countdown` — i.e. it hides during
+Active/Breached and returns the moment the wave ends. That is exactly the ruling, so **the gate needs no
+change** and its `// BY DESIGN` comment is now owner-confirmed rather than merely asserted.
+`EchoRepairService.cs:310` holds the same line for passive mend (`BattleLock.IsInBattle()`), and that is
+also correct.
+
+**So the remaining defect is narrower than the ticket title suggests.** It is not "no repair surface in
+hub" as a policy problem — it is that the surface can be absent when it SHOULD be present:
+
+- `HubRepairAffordance.cs:180-186` and `EchoRepairService.cs:376-388` both create their
+  `WallRepairController` **disabled** (logic-only), so tap-to-repair does not exist in the hub.
+- The only path that installs an ENABLED one, `WaveFeedbackDirector.EnsureWallRepairInstalled`
+  (`:407`), **defers and returns without retry** when `CoreServices.Hud` is not yet registered
+  (`:411-417`). Its doc comment claims *"OnWaveCleared retries, by which time the HUD is live"* — but
+  that retry only fires on a wave-cleared event. **In the hub, where no wave may ever run, the retry
+  never comes**, and the controller stays absent for the whole session.
+
+That is the WO-1024 capture verbatim: `WallRepairController=ABSENT` while `WaveManager=Active`.
+
+**Acceptance, restated against the ruling:** after a wave ends, every repair surface is present and
+usable within one frame of `Phase` returning to Idle — AND the hub has a usable repair surface even in a
+session where no wave ever runs. The second half is the one nothing currently guarantees.
+
+**Do NOT "fix" this by relaxing the wave gate.** The owner has now ruled it twice.

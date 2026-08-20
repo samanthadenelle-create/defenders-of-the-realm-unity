@@ -167,7 +167,7 @@ namespace DeNelle.Core.Enemies
                 ["hollow-brute"] = new EnemyClass
                 {
                     Id = "brute", RoleKey = "brute",
-                    ModelKey = "Skeleton_Golem", Variant = null,
+                    ModelKey = "Skeleton_Golem_NEW", Variant = null,   // WO-954: retired the KayKit mesh (owner 2026-08-19 "I hate the KayKat enemies"); same character, Tripo re-make
                     AnimatorRig = "HumanoidLarge",       // KayKit large rig
                     Equip = EnemyEquipParts.None,
                 },
@@ -182,7 +182,7 @@ namespace DeNelle.Core.Enemies
                 ["necromancer"] = new EnemyClass
                 {
                     Id = "wave-boss", RoleKey = "elite",
-                    ModelKey = "Necromancer", Variant = null,
+                    ModelKey = "Necromancer_NEW", Variant = null,      // WO-954: retired the KayKit mesh; _NEW also fixes the legacy Generic rig -> Humanoid
                     AnimatorRig = "Boss",
                     Equip = EnemyEquipParts.None,
                 },
@@ -236,7 +236,7 @@ namespace DeNelle.Core.Enemies
                 ["alduin"] = new EnemyClass
                 {
                     Id = "antagonist", RoleKey = "elite",
-                    ModelKey = "Necromancer", Variant = "alduin",
+                    ModelKey = "Necromancer_NEW", Variant = "alduin",  // WO-954: same swap - alduin is a VARIANT of the same character, so it follows the base mesh
                     AnimatorRig = "Boss",
                     CombatSpawnable = false,
                     Equip = EnemyEquipParts.None,

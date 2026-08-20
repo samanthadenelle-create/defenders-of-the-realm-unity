@@ -58,9 +58,9 @@ namespace DeNelle.Editor
                 ["hollow-acolyte"]    = "Skeleton_Healer",
                 ["hollow-mage"]       = "Skeleton_Mage",
                 ["hollow-reaper"]     = "Skeleton_Warrior",
-                ["hollow-brute"]      = "Skeleton_Golem",
+                ["hollow-brute"]      = "Skeleton_Golem_NEW",
                 ["cellar-hollow"]     = "Skeleton_Minion",
-                ["necromancer"]       = "Necromancer",
+                ["necromancer"]       = "Necromancer_NEW",
                 ["hollow-apprentice"] = "Skeleton_Mage",
             };
 

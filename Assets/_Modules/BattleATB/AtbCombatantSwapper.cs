@@ -575,8 +575,8 @@ namespace DeNelle.BattleATB
                 case "orc-tank":          return "Orc_Tank";          // WO-481 follower
                 case "orc-mage":          return "Orc_Mage";          // WO-481 follower
                 case "goblin":            return "Skeleton_Minion";   // small grunt
-                case "bruiser":           return "Skeleton_Golem";    // heavy tank → large rig
-                case "necromancer":       return "Necromancer";
+                case "bruiser":           return "Skeleton_Golem_NEW"; // heavy tank -> large rig (WO-954: KayKit mesh retired)
+                case "necromancer":       return "Necromancer_NEW";   // WO-954: KayKit mesh retired
                 case "hollow-captain":    return "Orc_Berserker";     // elite captain
                 // WO-954: was "Dragon" — Resources/Enemies/Dragon.fbx DOES NOT EXIST. The
                 // 3DHaupt CC-BY-NC "Dragon" fbx was RETIRED 2026-07-24 and replaced by the
@@ -667,8 +667,10 @@ namespace DeNelle.BattleATB
         {
             switch (modelName)
             {
-                case "Skeleton_Golem":  return "LargeEnemy";
-                case "Necromancer":     return "Boss";
+                case "Skeleton_Golem":
+                case "Skeleton_Golem_NEW": return "LargeEnemy";   // WO-954: both keys map to the same rig
+                case "Necromancer":
+                case "Necromancer_NEW": return "Boss";            // WO-954: both keys map to the same rig
                 case "Dragon":          return "Dragon";   // legacy key — mesh retired 2026-07-24
                 case "Boss_Dragon":     return "Dragon";   // WO-954: licensed rig, same controller
                 case "Orc_Warrior":     // WO-481 new Tripo orcs are HUMANOID → humanoid controller
