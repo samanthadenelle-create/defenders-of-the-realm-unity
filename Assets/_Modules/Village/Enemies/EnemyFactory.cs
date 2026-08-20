@@ -110,6 +110,99 @@ namespace DeNelle.Village
             // blanket-rotate. (The old warning here — that "Troll" fell through to KayKit
             // HumanoidMedium and got 0 rotation — is DEAD as of 2026-08-09: Troll.fbx landed,
             // RigFor routes it to LargeHumanoid, and the AccuRigIntake branch rotates it.)
+            // ⛔ RESOLVES THROUGH EnemyAssetLoader (resident-first, per-family, NON-BLOCKING).
+            // Extracted into TrySkinBody so the LATE RE-SKIN can run the exact same recipe when the
+            // family bundle lands — one body-building path, never a second one that drifts.
+            var vis = TrySkinBody(go, def, model, height);
+            if (vis == null)
+            {
+                ReportNoRenderableMesh(def, model);
+                AddCapsuleFallback(go, sizeScale);
+                // ⛔ A CAPSULE MUST NEVER BE PERMANENT because the player spawned two seconds early.
+                // Arm the re-skin: it polls the resident cache and swaps the real body in the moment
+                // the family bundle lands. It self-destructs on success, and on a proven-missing
+                // address it stops and says so once (see EnemyLateSkinner).
+                EnemyLateSkinner.Arm(go, def, model, height, sizeScale);
+            }
+
+            var agent = go.AddComponent<NavMeshAgent>();
+            // Share the hero's agent type (0) so enemies traverse the SAME NavMeshLinks
+            // the hero uses (StairNavLink builds links for agentTypeID 0 — rampart + any
+            // player-built stairs). Match hero radius/height for uniform "as mobile as the
+            // player" pathing on the shared single-agent navmesh.
+            agent.agentTypeID = 0;
+            agent.radius = 0.4f;
+            agent.height = 1.8f;
+
+            // AGENT ON-MESH VERIFY + REPAIR (WO-791; was TGVRU report-only): a NavMeshAgent
+            // that wakes with isOnNavMesh==false NEVER paths — the "idle, never chases"
+            // class of bug. The spawn was already seated above, but an agent can still wake
+            // a hair off-surface. Instead of only reporting, REPAIR it: Warp onto the
+            // nearest sampled point (Warp is the canonical off-mesh re-seat — see Enemy.cs's
+            // own teleport note). Only if even that fails is the loud Warn kept — that line
+            // now genuinely means "the bake is missing here", with zero ambiguity.
+            if (!agent.isOnNavMesh)
+            {
+                bool repaired = NavMesh.SamplePosition(go.transform.position, out NavMeshHit wakeHit, 12f, NavMesh.AllAreas)
+                                && agent.Warp(wakeHit.position);
+                if (repaired)
+                    FlowTrace.Step("Enemy",
+                        $"NavMeshAgent for '{(def != null ? def.Id : "enemy")}' (model '{model}') woke OFF-mesh " +
+                        $"at {pos} — REPAIRED via Warp to {go.transform.position} (isOnNavMesh={agent.isOnNavMesh}).");
+                else
+                FlowTrace.Warn("Enemy",
+                    $"NavMeshAgent for '{(def != null ? def.Id : "enemy")}' (model '{model}') spawned " +
+                    $"OFF the navmesh at {go.transform.position} (isOnNavMesh=false) and Warp found no mesh " +
+                    "within 12m — it will idle and never chase. Check the spawn point / bake.");
+            }
+
+            var enemy = go.AddComponent<Enemy>();                          // RequireComponent pulls EnemyDamageable
+            if (go.GetComponent<EnemyDamageable>() == null)
+                go.AddComponent<EnemyDamageable>();
+
+            // Ensure ActorAnimator on the logical root (it finds the Animator on the
+            // skinned vis child set by EnemyAnimatorFactory.Apply). This makes
+            // Enemy.cs drives (SetLocomotion/PlayAttack/Die) work for skeleton/orc/troll etc.
+            if (go.GetComponent<ActorAnimator>() == null)
+                go.AddComponent<ActorAnimator>();
+
+            // WO-VFX-WEAPON-TRAILS: enemies share the same rig + ActorAnimator, so give them the
+            // blade-trail flash too (owner: "both hero and enemy"). It self-drives off
+            // ActorAnimator.AttackStarted; with no GearLoadout it uses the steel-common default
+            // trail and anchors on the RightHand bone. DisallowMultipleComponent => safe re-add.
+            if (go.GetComponent<WeaponTrailController>() == null)
+                go.AddComponent<WeaponTrailController>();
+
+            // WO-315 / WO-363: attach the opt-in orientation gate to the enemy ROOT —
+            // the same transform Enemy.DriveNav slerps toward agent velocity. The guard
+            // is INERT in shipping builds (needs its bool ticked AND the ORIENTATION_GATE
+            // define / editor), so this is zero-cost at runtime; in a QA/validation run it
+            // turns an ambiguous "enemy looks backwards" into a precise GATE-FAILED verdict
+            // (root facing vs world displacement) instead of a felt guess. Enemies carried
+            // no guard before, so the WO-363 rule was never actually exercised on them.
+            if (go.GetComponent<OrientationGuard>() == null)
+                go.AddComponent<OrientationGuard>();
+
+            return enemy;
+        }
+
+
+        // =====================================================================
+        //  BODY BUILD — shared by the spawn path and by the LATE RE-SKIN
+        // =====================================================================
+
+        /// <summary>
+        /// Build the skinned visual child for <paramref name="model"/> under <paramref name="go"/>,
+        /// or null when the art is not resolvable RIGHT NOW. Never blocks: the prefab comes from
+        /// EnemyAssetLoader, which answers from the resident cache and asks for a miss
+        /// asynchronously (per family) instead of waiting for it.
+        /// <para>⛔ This is the ONLY place an enemy body is skinned. EnemyLateSkinner re-runs THIS
+        /// method when content arrives, so a re-skinned enemy is byte-for-byte the enemy it would
+        /// have been had the bundle been local at spawn.</para>
+        /// </summary>
+        internal static GameObject TrySkinBody(GameObject go, EnemyDef def, string model, float height)
+        {
+            if (go == null || string.IsNullOrEmpty(model)) return null;
             var skinOpts = SkinOptions.Enemy(height);
             // WO-482: resolve the rig ONCE here so the orc-yaw/material block AND the post-Skin
             // basecolor fallback below both read the same authority (EnemyAnimatorFactory.RigFor).
@@ -154,7 +247,20 @@ namespace DeNelle.Village
                 skinOpts.LocalRotation = Quaternion.Euler(0f, -90f, 0f);
                 skinOpts.FixTripoMaterials = true;
             }
-            var vis = VisualFactory.Skin(go.transform, "Enemies/" + model, skinOpts);
+            // ⛔ RESOLVES THROUGH EnemyAssetLoader, NOT VisualFactory's path overload.
+            // That overload resolves through StructureAssetLoader — correct for buildings, WRONG
+            // for enemies, and it is why the owner's 2026-08-20 capture contained ZERO
+            // [Flow:EnemyAssets] lines while enemies were plainly loading: the enemy seam was
+            // never being entered at all. Enemy art then missed the STRUCTURE residency cache
+            // (it only warms "Structures/"), missed Resources (Assets/Resources/Enemies is
+            // DELETED), and every body fell through to the tinted capsule.
+            //
+            // EnemyAssetLoader is resident-first and NON-BLOCKING: a miss returns null after
+            // asking for this family's bundle asynchronously. Never wait here — an enemy spawn is
+            // reachable from wave callbacks and scene-entry paths, exactly the nesting that turned
+            // the structure seam's wait into a three-minute deadlock.
+            GameObject bodyPrefab = DeNelle.Core.EnemyAssetLoader.LoadEnemyPrefab(model);
+            var vis = bodyPrefab != null ? VisualFactory.Skin(go.transform, bodyPrefab, skinOpts) : null;
             // RENDER-VERIFY (owner directive 2026-06-19, TGVRU on the enemy choke point —
             // mirrors HeroArmorVisual.VerifyArmorRendersNow): VisualFactory.Skin returning
             // non-null only means "an object was instantiated", NOT that it actually RENDERS.
@@ -311,82 +417,72 @@ namespace DeNelle.Village
                     FlowTrace.Step("Enemy",
                         $"'{model}' visual localEuler={vis.transform.localEulerAngles} worldUp={vis.transform.up} (upright iff worldUp~=(0,1,0))");
             }
+            return vis;
+        }
+
+        /// <summary>
+        /// The tinted placeholder body. Hittable and visible, so a spawner never ships a ghost —
+        /// but it is a PLACEHOLDER, and EnemyLateSkinner is responsible for replacing it.
+        /// </summary>
+        internal static void AddCapsuleFallback(GameObject go, float sizeScale)
+        {
+            if (go == null) return;
+            var cap = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+            // NAMED, deliberately: EnemyLateSkinner finds and destroys the placeholder by this
+            // exact name when the real body arrives. A rename here orphans a capsule INSIDE the
+            // re-skinned enemy, so the two constants live together.
+            cap.name = CapsuleName;
+            if (cap.TryGetComponent(out Collider cc)) Object.Destroy(cc);
+            cap.transform.SetParent(go.transform, false);
+            cap.transform.localPosition = new Vector3(0f, 0.9f * sizeScale, 0f);
+            cap.transform.localScale = Vector3.one * sizeScale;
+            TintCapsule(cap.GetComponent<Renderer>());
+        }
+
+        /// <summary>Name of the placeholder capsule child. Shared with EnemyLateSkinner, which
+        /// destroys it on a successful re-skin.</summary>
+        internal const string CapsuleName = "PlaceholderCapsule";
+
+        /// <summary>
+        /// ROOT-CAUSE TRACE (MOST IMPORTANT): the model failed to load/skin OR loaded but did not
+        /// render, so this body becomes a tinted capsule — silent variety loss. If many families hit
+        /// this, every enemy looks the same despite varied ids.
+        /// <para>⛔ IT MUST SAY WHY, because the two causes need different fixes and used to read
+        /// identically. NOT-YET-DOWNLOADED is transient and re-skins itself; GENUINELY-MISSING is
+        /// permanent and someone has to ship the address. EnemyAssetLoader has already logged the
+        /// authoritative [Flow:EnemyAssets] line with the catalog state; this one names the ENEMY.</para>
+        /// </summary>
+        private static void ReportNoRenderableMesh(EnemyDef def, string model)
+        {
+            string address = DeNelle.Core.EnemyAssetLoader.EnemyAddrPrefix + model;
+            string family  = DeNelle.Core.EnemyContentWarmer.FamilyOf(model);
+            bool registered = DeNelle.Core.EnemyContentWarmer.IsRegisteredAddress(address);
+            bool settled    = DeNelle.Core.EnemyContentWarmer.IsSettled;
+            bool missing    = DeNelle.Core.EnemyContentWarmer.IsKnownAbsent<GameObject>(address) ||
+                              (settled && !registered);
+            string id = def != null ? def.Id : "?";
+
+            if (missing)
+            {
+                // Permanent. No amount of waiting fixes it, and there is no Resources copy left to
+                // catch it (Assets/Resources/Enemies was deleted by the CDN migration).
+                FlowTrace.Fail("Enemy",
+                    $"model '{model}' (id '{id}') has NO renderable mesh at '{address}' and the asset is " +
+                    $"GENUINELY MISSING (registeredInCatalog={registered}, catalogState=" +
+                    $"{DeNelle.Core.EnemyContentWarmer.State}) — FALLBACK to tinted capsule, and it will NOT " +
+                    "re-skin. Ship this address in the enemy Addressable group. This is a VISUAL defect; " +
+                    "the enemy still spawns, moves and fights.");
+            }
             else
             {
-                // ROOT-CAUSE TRACE (MOST IMPORTANT): the model failed to load/skin OR loaded
-                // but did not render (render-verify above dropped it), so this body becomes a
-                // tinted capsule — silent variety loss. If many families hit this, every enemy
-                // looks the same despite varied ids.
                 FlowTrace.Warn("Enemy",
-                    $"model '{model}' (id '{(def != null ? def.Id : "?")}') had NO renderable mesh at " +
-                    $"'Enemies/{model}' — FALLBACK to tinted capsule (no family silhouette)");
-                var cap = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-                if (cap.TryGetComponent(out Collider cc)) Object.Destroy(cc);
-                cap.transform.SetParent(go.transform, false);
-                cap.transform.localPosition = new Vector3(0f, 0.9f * sizeScale, 0f);
-                cap.transform.localScale = Vector3.one * sizeScale;
-                TintCapsule(cap.GetComponent<Renderer>());
+                    $"model '{model}' (id '{id}') has no renderable mesh at '{address}' YET — the family " +
+                    $"'{family}' bundle is NOT YET DOWNLOADED (familyDownloading=" +
+                    $"{DeNelle.Core.EnemyContentWarmer.IsFamilyDownloading(family)}, catalogState=" +
+                    $"{DeNelle.Core.EnemyContentWarmer.State}). Spawning the tinted capsule NOW and " +
+                    "RE-SKINNING when it lands — deliberately not waiting, because waiting on this seam is " +
+                    "what deadlocked the game on 2026-08-20.");
             }
-
-            var agent = go.AddComponent<NavMeshAgent>();
-            // Share the hero's agent type (0) so enemies traverse the SAME NavMeshLinks
-            // the hero uses (StairNavLink builds links for agentTypeID 0 — rampart + any
-            // player-built stairs). Match hero radius/height for uniform "as mobile as the
-            // player" pathing on the shared single-agent navmesh.
-            agent.agentTypeID = 0;
-            agent.radius = 0.4f;
-            agent.height = 1.8f;
-
-            // AGENT ON-MESH VERIFY + REPAIR (WO-791; was TGVRU report-only): a NavMeshAgent
-            // that wakes with isOnNavMesh==false NEVER paths — the "idle, never chases"
-            // class of bug. The spawn was already seated above, but an agent can still wake
-            // a hair off-surface. Instead of only reporting, REPAIR it: Warp onto the
-            // nearest sampled point (Warp is the canonical off-mesh re-seat — see Enemy.cs's
-            // own teleport note). Only if even that fails is the loud Warn kept — that line
-            // now genuinely means "the bake is missing here", with zero ambiguity.
-            if (!agent.isOnNavMesh)
-            {
-                bool repaired = NavMesh.SamplePosition(go.transform.position, out NavMeshHit wakeHit, 12f, NavMesh.AllAreas)
-                                && agent.Warp(wakeHit.position);
-                if (repaired)
-                    FlowTrace.Step("Enemy",
-                        $"NavMeshAgent for '{(def != null ? def.Id : "enemy")}' (model '{model}') woke OFF-mesh " +
-                        $"at {pos} — REPAIRED via Warp to {go.transform.position} (isOnNavMesh={agent.isOnNavMesh}).");
-                else
-                FlowTrace.Warn("Enemy",
-                    $"NavMeshAgent for '{(def != null ? def.Id : "enemy")}' (model '{model}') spawned " +
-                    $"OFF the navmesh at {go.transform.position} (isOnNavMesh=false) and Warp found no mesh " +
-                    "within 12m — it will idle and never chase. Check the spawn point / bake.");
-            }
-
-            var enemy = go.AddComponent<Enemy>();                          // RequireComponent pulls EnemyDamageable
-            if (go.GetComponent<EnemyDamageable>() == null)
-                go.AddComponent<EnemyDamageable>();
-
-            // Ensure ActorAnimator on the logical root (it finds the Animator on the
-            // skinned vis child set by EnemyAnimatorFactory.Apply). This makes
-            // Enemy.cs drives (SetLocomotion/PlayAttack/Die) work for skeleton/orc/troll etc.
-            if (go.GetComponent<ActorAnimator>() == null)
-                go.AddComponent<ActorAnimator>();
-
-            // WO-VFX-WEAPON-TRAILS: enemies share the same rig + ActorAnimator, so give them the
-            // blade-trail flash too (owner: "both hero and enemy"). It self-drives off
-            // ActorAnimator.AttackStarted; with no GearLoadout it uses the steel-common default
-            // trail and anchors on the RightHand bone. DisallowMultipleComponent => safe re-add.
-            if (go.GetComponent<WeaponTrailController>() == null)
-                go.AddComponent<WeaponTrailController>();
-
-            // WO-315 / WO-363: attach the opt-in orientation gate to the enemy ROOT —
-            // the same transform Enemy.DriveNav slerps toward agent velocity. The guard
-            // is INERT in shipping builds (needs its bool ticked AND the ORIENTATION_GATE
-            // define / editor), so this is zero-cost at runtime; in a QA/validation run it
-            // turns an ambiguous "enemy looks backwards" into a precise GATE-FAILED verdict
-            // (root facing vs world displacement) instead of a felt guess. Enemies carried
-            // no guard before, so the WO-363 rule was never actually exercised on them.
-            if (go.GetComponent<OrientationGuard>() == null)
-                go.AddComponent<OrientationGuard>();
-
-            return enemy;
         }
 
         // WO-791: seat a spawn position on the baked NavMesh — REPAIR, not just report.

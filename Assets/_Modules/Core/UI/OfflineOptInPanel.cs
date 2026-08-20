@@ -114,11 +114,20 @@ namespace DeNelle.Core.UI
 
         private IEnumerator ShowSize()
         {
-            yield return OfflineContentService.GetDownloadSize(bytes =>
+            // The KEY COUNT comes back alongside the byte total on purpose. "0 bytes" is only
+            // "already downloaded" if the set resolved to something; on 2026-08-19 it resolved
+            // to NOTHING and this screen said "already downloaded" to every player. The panel
+            // does not get to make that call by eye - OfflineContentService.ClassifySize does.
+            long sizeBytes = -1; int sizeKeys = 0;
+            yield return OfflineContentService.GetDownloadSize((bytes, keyCount) =>
             {
+                sizeBytes = bytes; sizeKeys = keyCount;
+
                 if (_body == null) return;
 
-                if (bytes < 0)
+                var verdict = OfflineContentService.ClassifySize(keyCount, bytes);
+
+                if (verdict == OfflineSizeVerdict.CannotMeasure)
                 {
                     // UNKNOWN, which is NOT the same as zero. The service returns -1 when it could
                     // not work out what to download at all, and stamping someone offline-ready on
@@ -126,20 +135,25 @@ namespace DeNelle.Core.UI
                     // content set was keyed by GROUP name, matched nothing, and every player was
                     // told "already downloaded"). Say so honestly and record NOTHING.
                     FlowTrace.Fail("OfflineContent",
-                        "size UNKNOWN (-1) - NOT marking offline-ready. Telling the player they are " +
-                        "covered when we could not even measure the set is how they find out on a plane.");
+                        $"size UNKNOWN (bytes={bytes}, keys={keyCount}) - NOT marking offline-ready. Telling " +
+                        "the player they are covered when we could not even measure the set is how they " +
+                        "find out on a plane.");
                     _body.text = "We could not check the download right now. Please try again in a moment - " +
                                  "the game still works normally with a connection.";
                     _progress.text = "";
                     return;
                 }
 
-                if (bytes == 0)
+                if (verdict == OfflineSizeVerdict.AlreadyCached)
                 {
-                    // Genuinely nothing left to fetch. Do not offer a download that would do
-                    // nothing - record the state and get out of the player's way.
-                    FlowTrace.Step("OfflineContent", "size = 0 - already fully cached; marking offline-ready");
-                    OfflineContentService.SetOptedIn(true);
+                    // Nothing left to fetch, and we know that is genuine because the set resolved
+                    // to real keys. The offline-ready stamp is STILL taken through the pull path
+                    // (below) rather than set here: the service owns that stamp and only writes it
+                    // after a measured verification. A screen that could stamp on its own reading
+                    // is exactly the door the 2026-08-19 defect walked through.
+                    FlowTrace.Step("OfflineContent",
+                        $"size = 0 across {keyCount} key(s) - already fully cached; running the verified " +
+                        "pull path so the offline-ready stamp comes from evidence, not from this label.");
                     _body.text = "Everything is already downloaded. This game will work without a connection.";
                     _progress.text = "";
                     return;
@@ -155,6 +169,19 @@ namespace DeNelle.Core.UI
                     "You need Wi-Fi for this one-time download. After it finishes the game " +
                     "opens without a connection.";
             });
+
+            // ALREADY CACHED -> take the offline-ready stamp through the SAME verified path a
+            // real download takes. With 0 bytes outstanding this costs one more size query and
+            // no network traffic, and it means there is exactly ONE place in the codebase that
+            // can mark a player offline-ready: the branch that has just measured the evidence.
+            if (OfflineContentService.ClassifySize(sizeKeys, sizeBytes) == OfflineSizeVerdict.AlreadyCached
+                && !OfflineContentService.PulledForThisBuild)
+            {
+                yield return OfflineContentService.DownloadAllForOffline(
+                    (pct, doneBytes, totalBytes) => { },
+                    (ok, reason) => FlowTrace.Step("OfflineContent",
+                        $"already-cached stamp path finished ok={ok} ({reason})"));
+            }
         }
 
         /// <summary>Honest range, both ends. One number would read as a promise.</summary>
@@ -178,24 +205,34 @@ namespace DeNelle.Core.UI
         private IEnumerator RunDownload()
         {
             yield return OfflineContentService.DownloadAllForOffline(
-                pct => { if (_progress != null) _progress.text = $"{Mathf.RoundToInt(pct * 100f)}%"; },
-                ok =>
+                // MEASURED BYTES, shown as well as the percent. Two reasons, both about trust:
+                // a percent alone gives the player no way to tell a slow download from a stuck
+                // one, and the megabyte figure is the promise made on the previous screen, so
+                // watching it climb toward the stated total is the receipt for that promise.
+                // The fraction is byte-weighted inside the service (GetDownloadStatus), so with
+                // the per-family / per-asset re-pack it advances continuously across many small
+                // bundles instead of stepping once per key.
+                (pct, doneBytes, totalBytes) =>
+                {
+                    if (_progress == null) return;
+                    float doneMb  = doneBytes  / (1024f * 1024f);
+                    float totalMb = totalBytes / (1024f * 1024f);
+                    _progress.text = totalBytes > 0
+                        ? $"{Mathf.RoundToInt(pct * 100f)}%   {doneMb:F0} of {totalMb:F0} MB"
+                        : $"{Mathf.RoundToInt(pct * 100f)}%";
+                },
+                (ok, reason) =>
                 {
                     _downloading = false;
                     if (_body == null) return;
-                    if (ok)
-                    {
-                        _body.text = "Done. This game now works without a connection.";
-                        _progress.text = "";
-                    }
-                    else
-                    {
-                        // Never claim success on a partial pull - the service deliberately
-                        // does not stamp it, and the message must match that truth.
-                        _body.text = "The download did not finish. You can try again any time; " +
-                                     "the game still works normally with a connection.";
-                        _progress.text = "";
-                    }
+                    // The message comes FROM THE SERVICE, which is the only thing that knows
+                    // whether bytes actually landed. The panel used to author both outcomes
+                    // itself from a bare bool - and a bool that was true whenever the handles
+                    // finished, downloaded or not, is how "Everything is already downloaded"
+                    // got shown to players who had downloaded nothing.
+                    _body.text = reason;
+                    _progress.text = "";
+                    if (!ok) FlowTrace.Warn("OfflineContent", $"offline pull reported FAILURE to the player: {reason}");
                 });
         }
 

@@ -343,6 +343,9 @@ namespace DeNelle.Editor
             if (!StructureCadenceRegression.Run(out var cadenceReason)) failures.Add(cadenceReason); else log.AppendLine("[structure-cadence] " + cadenceReason);
             if (!StructureLoadBoundedRegression.Run(out var loadBoundedReason)) failures.Add(loadBoundedReason); else log.AppendLine("[structure-load-bounded] " + loadBoundedReason);
             if (!SheathePoseRegression.Run(out var sheatheReason)) failures.Add(sheatheReason); else log.AppendLine("[sheathe-pose] " + sheatheReason);
+            if (!OfflinePullRegression.Run(out var offlinePullReason)) failures.Add(offlinePullReason); else log.AppendLine("[offline-pull] " + offlinePullReason);
+            if (!EnemyLoadBoundedRegression.Run(out var enemyBoundedReason)) failures.Add(enemyBoundedReason); else log.AppendLine("[enemy-load-bounded] " + enemyBoundedReason);
+            if (!ContentPackingRegression.Run(out var packingReason)) failures.Add(packingReason); else log.AppendLine("[content-packing] " + packingReason);
             // --- WO-912 sec.9.3 + D4/D7: no ad reward may ever grant a real-money currency ---
             if (!AdPlacementCovenantRegression.Run(out var adCovReason)) failures.Add(adCovReason); else log.AppendLine("[ad-covenant] " + adCovReason);
             // --- WO-976: the `hasSurface` false green stays dead — each of the four visibility

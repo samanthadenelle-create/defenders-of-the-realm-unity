@@ -226,6 +226,14 @@ namespace DeNelle.Village
                 FlowTrace.Warn("EnemyAnim",
                     $"Controller NULL for {modelName} ('Enemies/{ctrlName}') — enemy will SLIDE with no " +
                     "animation (run 'Build Animator Controllers' + EnemyAnimatorSetup to populate Resources/Enemies).");
+
+                // 2026-08-20: a NULL controller is now ALSO a legitimate transient — enemy content
+                // is fetched per family on demand and the controller's bundle may simply not have
+                // landed yet (EnemyAssetLoader never waits for it; waiting is what deadlocked the
+                // structure seam). Without this, "arrived two seconds late" would mean a sliding
+                // statue for the whole encounter. Arm a late bind; it self-destructs the moment the
+                // controller lands, or once the address is proven missing.
+                EnemyAnimatorLateBinder.Arm(anim, modelName, ctrlName);
             }
         }
 
