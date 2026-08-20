@@ -1,0 +1,6 @@
+Albedo bound explicitly by NewBodyAlbedoBinder (externalObjects -> a real .mat).
+This marker stops TripoAssetPostprocessor.OnPreprocessModel forcing
+materialLocation=External + materialName=BasedOnTextureName on this FBX. Under
+External the importer IGNORES the remap table and SEARCHES the project for a .mat
+named after the TEXTURE — the same search that bound four AccuRig skeletons to one
+shared diffuse. See EnemyBodyMaterialFixer for the original diagnosis.

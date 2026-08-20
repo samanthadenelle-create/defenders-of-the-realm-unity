@@ -570,8 +570,16 @@ Assets/Plugins/CW/LeanTouch/Examples/
 Assets/Plugins/CW/LeanTouch/Examples.meta
 Assets/Plugins/CW/Shared/Common/Examples/
 Assets/Plugins/CW/Shared/Common/Examples.meta
-*.tripo-extracted
-*.tripo-extracted.meta
+# *.tripo-extracted — UN-IGNORED 2026-08-20. These are NOT build droppings; they are the
+# ONLY opt-out TripoAssetPostprocessor.OnPreprocessModel honours. Without a sentinel it
+# force-sets materialLocation=External + materialName=BasedOnTextureName on EVERY import of
+# every FBX under EnemyContent, which IGNORES the externalObjects remap table and resolves
+# materials by TEXTURE NAME instead. All four AccuRig skeletons name their diffuse
+# 'Material_Pbr_Diffuse', so they collapse onto one material and seven enemy ids end up
+# wearing the Mage's skin (measured 2026-08-20).
+# Ignoring these made the fix local-only: on a fresh clone the sentinels are absent, the
+# importer is rewritten, and the defect returns silently. The sentinel IS the state, so it
+# is tracked.
 
 # --- 2026-07-30 check-in sweep -------------------------------------------------
 # Unity Technologies Particle Pack (191 MB / 886 files). Same policy as KayKit /
