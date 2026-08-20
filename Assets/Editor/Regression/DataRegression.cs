@@ -337,6 +337,7 @@ namespace DeNelle.Editor
             if (!RaidScoringRegression.Run(out var raidScoringReason)) failures.Add(raidScoringReason); else log.AppendLine("[raid-scoring] " + raidScoringReason);
             // --- WO-912 sec.10.5: the ad provider stays BEHIND IAdService (registered BEFORE any SDK) ---
             if (!AdServiceSeamRegression.Run(out var adSeamReason)) failures.Add(adSeamReason); else log.AppendLine("[ad-seam] " + adSeamReason);
+            if (!AndroidContentTargetRegression.Run(out var androidTargetReason)) failures.Add(androidTargetReason); else log.AppendLine("[android-content-target] " + androidTargetReason);
             // --- WO-912 sec.9.3 + D4/D7: no ad reward may ever grant a real-money currency ---
             if (!AdPlacementCovenantRegression.Run(out var adCovReason)) failures.Add(adCovReason); else log.AppendLine("[ad-covenant] " + adCovReason);
             // --- WO-976: the `hasSurface` false green stays dead — each of the four visibility

@@ -1,6 +1,16 @@
 # WORK ORDER 1124 — The APK builds its Addressables content for whatever target the editor was last on
 
-**Status:** READY TO IMPLEMENT
+**Status:** IMPLEMENTED 2026-08-20 — AWAITING PO CLOSE (§13). **All five acceptance criteria met.**
+`BuildSeekerApk` now switches the active target to Android BEFORE the content build, passes
+`BuildTarget.Android` to a new `EnsureBuilt(caller, BuildTarget?)` overload that HARD-FAILS on a
+mismatch, and asserts `ServerData/Android/catalog_<bundleVersion>.bin` afterwards. §5.1 was proven by
+REPRODUCING the failing case — the editor was genuinely on `StandaloneWindows64` and the log reads
+`active target is 'StandaloneWindows64' — switching to Android` → `ADDRESSABLES_CONTENT_OK ... target=Android`
+→ `ANDROID_CATALOG_OK ... catalog_2026.08.20.332839.bin`. §5.2 proven: `EnsureBuilt(expected=iOS)`
+`correctly REJECTED while active=Android`. §5.3: `R2_PARITY_FAILED` now **exit 3**s — it previously only
+wrote "DO NOT INSTALL" into a status file, which is advice, not a gate. New registered suite
+`AndroidContentTargetRegression` (`ANDROID_CONTENT_TARGET_OK`). Gates: `COMPILE_GATE_OK`; DataRegression
+**210/214** with the 4 known-red baseline and nothing new.
 **Minted:** 2026-08-19 (CLI seat) — banner bumped 1124 → 1125 in the SAME edit
 **Lane:** Release tooling. `Assets/Editor/AndroidBuild.cs` + `Assets/Editor/AddressablesContentBuild.cs`
 + `run-unity-method.ps1` / `overnight-apk-build.ps1`. No gameplay code, no scenes.

@@ -42,8 +42,40 @@ namespace DeNelle.Editor
         /// Build Addressables content before a player build. Returns false when the content
         /// build reported an error — the caller decides whether to continue.
         /// </summary>
-        public static bool EnsureBuilt(string caller)
+        /// <summary>
+        /// Back-compat overload: builds for whatever the ACTIVE target happens to be and does not
+        /// check it. Prefer the overload that takes an expected target — WO-1124 exists because a
+        /// content build that cannot state which platform it built for shipped Windows bundles
+        /// inside an Android APK, with every marker in the chain green.
+        /// </summary>
+        public static bool EnsureBuilt(string caller) => EnsureBuilt(caller, null);
+
+        /// <summary>
+        /// Build Addressables content and PROVE it was built for <paramref name="expectedTarget"/>.
+        ///
+        /// <para>WO-1124. Addressables builds for the ACTIVE build target, so content lands in
+        /// whichever platform folder the editor happened to be on. An APK built from an editor left
+        /// on Win64 got Windows bundles: the device then asked the CDN for an Android catalog that
+        /// was never uploaded and resolved NOTHING - no buildings, no enemies - silently, on a build
+        /// that gated clean. Passing the expected target makes that state impossible to reach
+        /// quietly: mismatch is a hard FAIL with a named reason, not a log line.</para>
+        ///
+        /// <para>Pass null to keep the old "build for whatever is active" behaviour.</para>
+        /// </summary>
+        public static bool EnsureBuilt(string caller, BuildTarget? expectedTarget)
         {
+            // Check BEFORE building. Building 175 MB for the wrong platform and then complaining
+            // wastes the minutes; the caller is supposed to have switched the target already.
+            BuildTarget active = EditorUserBuildSettings.activeBuildTarget;
+            if (expectedTarget.HasValue && active != expectedTarget.Value)
+            {
+                Debug.LogError($"{MarkerFail} :: {caller} — WRONG BUILD TARGET. Addressables builds for the " +
+                               $"ACTIVE target, which is '{active}', but the caller expects '{expectedTarget.Value}'. " +
+                               "Content would land in the wrong ServerData/<platform>/ folder and the shipped " +
+                               "player would resolve nothing (WO-1124). Switch the target BEFORE building content.");
+                return false;
+            }
+
             var settings = AddressableAssetSettingsDefaultObject.Settings;
             if (settings == null)
             {
@@ -91,8 +123,10 @@ namespace DeNelle.Editor
                 return false;
             }
 
+            // State the PLATFORM in the success line, not just the count. WO-1124 survived because
+            // every marker was green and none of them named a platform - the one fact that was wrong.
             Debug.Log($"{MarkerOk} {result.LocationCount} locations :: {caller} " +
-                      $"({result.Duration:0.0}s -> {result.OutputPath})");
+                      $"target={active} ({result.Duration:0.0}s -> {result.OutputPath})");
             return true;
         }
     }

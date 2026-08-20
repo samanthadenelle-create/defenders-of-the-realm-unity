@@ -105,12 +105,41 @@ namespace DeNelle.Editor
             // WO-974: build Addressables content EXPLICITLY. Without this the bundles are rebuilt
             // only if an uncommitted per-machine Editor preference happens to say so — so a fresh
             // clone or CI ships stale/absent StreamingAssets/aa and resolves nothing at runtime.
-            if (!AddressablesContentBuild.EnsureBuilt("AndroidBuild"))
+            //
+            // WO-1124: SWITCH THE TARGET FIRST. Addressables builds for the ACTIVE target, and
+            // BuildPlayer is what switches it — so content built here landed in whichever platform
+            // folder the editor happened to be on. From an editor left on Win64 that meant Windows
+            // bundles inside an Android APK: the device asked the CDN for an Android catalog that
+            // was never uploaded and resolved NOTHING, silently, on a build where every marker was
+            // green. The switch lives HERE and not in a wrapper script precisely because the whole
+            // failure was assuming a human step; this way it holds for the menu item, batchmode, CI
+            // and the ship chain alike. It is a no-op when already on Android, so the fast path
+            // stays fast.
+            if (EditorUserBuildSettings.activeBuildTarget != BuildTarget.Android)
             {
-                Debug.LogError("[AndroidBuild] ABORTED — Addressables content build failed (WO-974).");
+                Debug.Log($"[AndroidBuild] active target is '{EditorUserBuildSettings.activeBuildTarget}' — " +
+                          "switching to Android BEFORE the content build (WO-1124).");
+                if (!EditorUserBuildSettings.SwitchActiveBuildTarget(BuildTargetGroup.Android, BuildTarget.Android))
+                {
+                    Debug.LogError("[AndroidBuild] ABORTED — could not switch the active build target to Android. " +
+                                   "Building content now would produce the wrong platform's bundles (WO-1124).");
+                    EditorApplication.Exit(1);
+                    return;
+                }
+            }
+
+            if (!AddressablesContentBuild.EnsureBuilt("AndroidBuild", BuildTarget.Android))
+            {
+                Debug.LogError("[AndroidBuild] ABORTED — Addressables content build failed (WO-974/WO-1124).");
                 EditorApplication.Exit(1);
                 return;
             }
+
+            // WO-1124 §3.2: PROVE the catalog this APK will ask for actually exists, by name, in the
+            // Android folder. ApplyVersionStamp already set bundleVersion, so this is a file-exists
+            // check against a known name — cheap, and it catches every future variant of "content
+            // went somewhere else", not just the target-switch one this ticket found.
+            if (!AssertAndroidCatalogForThisBuild()) return;
 
             BuildReport report = BuildPipeline.BuildPlayer(options);
             BuildSummary summary = report.summary;
@@ -125,6 +154,40 @@ namespace DeNelle.Editor
                                $"errors={summary.totalErrors}. See log for Gradle output.");
                 EditorApplication.Exit(1);
             }
+        }
+
+        /// <summary>
+        /// WO-1124. Assert that <c>ServerData/Android/catalog_&lt;bundleVersion&gt;.bin</c> exists after
+        /// the content build. This is the check that would have caught the shipped defect: every
+        /// other marker in the chain (COMPILE_GATE_OK, APK_OK, R2_PUSH_OK) was green while the APK
+        /// carried content the CDN did not host, because none of them ever named a platform.
+        /// Exits the editor with a NAMED error rather than returning quietly — a build that cannot
+        /// prove its own content must not reach a device.
+        /// </summary>
+        private static bool AssertAndroidCatalogForThisBuild()
+        {
+            string version = PlayerSettings.bundleVersion;
+            string expected = Path.GetFullPath(Path.Combine("ServerData", "Android", $"catalog_{version}.bin"));
+
+            if (File.Exists(expected))
+            {
+                Debug.Log($"[AndroidBuild] ANDROID_CATALOG_OK — {expected}");
+                return true;
+            }
+
+            // Name what IS there. "Missing" alone sends the reader hunting; the sibling listing
+            // usually names the wrong-platform folder outright.
+            string dir = Path.GetFullPath(Path.Combine("ServerData", "Android"));
+            string siblings = Directory.Exists(dir)
+                ? string.Join(", ", Directory.GetFiles(dir, "catalog_*.bin").Select(Path.GetFileName))
+                : "(ServerData/Android does not exist)";
+
+            Debug.LogError($"[AndroidBuild] ABORTED — ANDROID_CATALOG_MISSING. This APK is stamped " +
+                           $"'{version}' and will request 'Android/catalog_{version}.bin' at launch, but that file " +
+                           $"was not produced. Present instead: {siblings}. The content was built for another " +
+                           "platform or not at all; shipping this APK means no buildings and no enemies (WO-1124).");
+            EditorApplication.Exit(1);
+            return false;
         }
 
         /// <summary>

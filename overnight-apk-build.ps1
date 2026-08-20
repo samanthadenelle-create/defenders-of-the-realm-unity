@@ -86,6 +86,15 @@ if ((Test-Path $parityLog) -and (Select-String -Path $parityLog -Pattern 'R2_PAR
     "  DO NOT INSTALL OR DISTRIBUTE THIS BUILD. Players would see no buildings and no enemies," | Out-File -Encoding ascii -Append $status
     "  with no error on screen. Fix: python tools\r2_sync.py --push ServerData   (the PARENT)." | Out-File -Encoding ascii -Append $status
     "  See $parityLog" | Out-File -Encoding ascii -Append $status
+
+    # WO-1124 sec.5.3: FAIL CLOSED. Until now this branch only WROTE "DO NOT INSTALL" into a
+    # status file - advice, not a gate. Anything downstream (install-apk-to-seeker,
+    # distribute-android, or a human reading the last line) proceeded exactly as if parity had
+    # passed, which is how a build whose content the CDN does not host reaches a device with
+    # every marker green. A non-zero exit is the only form of "do not install" a script can
+    # actually enforce.
+    Write-Host "[apk] R2_PARITY_FAILED - refusing to continue. See $parityLog"
+    exit 3
 }
 
 "APK_DONE $(Get-Date -Format o)" | Out-File -Encoding ascii -Append $status
