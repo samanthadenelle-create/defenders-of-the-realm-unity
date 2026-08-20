@@ -497,23 +497,28 @@ namespace DeNelle.Editor
         {
             ("Blacksmith_Weapons_Storefront", "Structures/Forge",           180f, 90f),
             ("Forge_Armor_Storefront",        "Structures/armorer",         90f,  90f),
-            ("Jeweler_Gems_Storefront",       "Structures/jeweler",         0f,   -90f),  // owner 2026-08-19: INVERTED to -90.
-            // The jeweler alone still baked upside down at +90 after the whole-city pass. +90 and -90 are
-            // AABB-identical, so no measurement can separate them - only the screen can, and the screen
-            // said inverted. The other three rows STAY at +90: they are correct on device and this is a
-            // per-mesh fact, not a family-wide one.
+            ("Jeweler_Gems_Storefront",       "Structures/jeweler",         0f,    90f),  // owner felt: X=90 Y=0 Z=0 (render-PROVEN 2026-08-20)
+            // ALL FOUR ROWS ARE +90, AND THE JEWELER IS NOT AN EXCEPTION - PROVEN, not assumed.
+            // +90 and -90 about X are AABB-identical, so nothing measurable separates them; only a
+            // render can. Builds/StorefrontCaps (2026-08-20, StorefrontOrientationCapture) shot the
+            // jeweler at both signs from one camera: +90 is roof-up with the sign readable, -90 is
+            // upside down. An earlier session inverted this row to -90 chasing an upside-down report
+            // from the device; that report's real cause was the post-Fit non-uniform scaleX in
+            // HubStructureVisualInjector, cleared in cd0d109b8. If the jeweler ever looks inverted
+            // again, RE-RENDER IT before touching this sign - the scale/Fit path is the likelier
+            // culprit and flipping the sign hides it while breaking the mesh.
             ("CastleBarracks",                "Structures/barracks",        180f, 90f),
         };
 
         // Catalog ids owner named + ShopAndCrafting (= workshop). armorer included (same FBX family).
-        // PER-ID SIGN, not one sign for the family (owner 2026-08-19). Every row here is +90
-        // EXCEPT the jeweler, which bakes upside down at +90 and correct at -90. +90 and -90 are
-        // AABB-identical so no measurement separates them - the screen decides, per mesh.
+        // PER-ID SIGN (the tuple carries its own eulerX) so a future per-mesh exception costs one
+        // number, not a refactor - but as of 2026-08-20 every row is +90, jeweler included, and that
+        // is render-proven (see OwnerUprightSkins above). Do not invert a row on a felt report alone.
         // This MUST stay in step with OwnerUprightSkins above: the baked hub object and a
         // player-PLACED copy of the same structure have to agree, or one of them is inverted.
         private static readonly (string id, float eulerX)[] OwnerUprightCatalogIds =
         {
-            ("forge", 90f), ("workshop", 90f), ("jeweler", -90f), ("barracks", 90f), ("armorer", 90f),
+            ("forge", 90f), ("workshop", 90f), ("jeweler", 90f), ("barracks", 90f), ("armorer", 90f),
         };
 
         private const string HubScenePath = "Assets/Scenes/Main_Castle_Overworld.unity";
@@ -587,9 +592,9 @@ namespace DeNelle.Editor
         /// FINAL STAGE, owner 2026-08-19: "if you can add it at the end just to flip it, then that
         /// would be absolutely perfect, and there would be no reason to rebake it."
         ///
-        /// <para>Runs AFTER the navmesh bake and ASSERTS the jeweler ended up inverted. If some other
+        /// <para>Runs AFTER the navmesh bake and ASSERTS the jeweler ended up UPRIGHT (+90). If some other
         /// path left it at +90 it is corrected here and the scene re-saved, so no second bake is ever
-        /// needed to get the jeweler right. Idempotent: when the skin table already produced -90 this
+        /// needed to get the jeweler right. Idempotent: when the skin table already produced +90 this
         /// logs and changes nothing.</para>
         ///
         /// <para>WHY THE JEWELER SPECIFICALLY: it is the one mesh in the family that bakes upside down
@@ -624,19 +629,19 @@ namespace DeNelle.Editor
 
             Vector3 e = visual.localEulerAngles;
             float x = Mathf.DeltaAngle(0f, e.x);          // -180..180, so 270 reads as -90
-            if (Mathf.Abs(x - (-90f)) < 1f)
+            if (Mathf.Abs(x - 90f) < 1f)
             {
                 Debug.Log($"[CastleHubBuilder] JEWELER_UPRIGHT_OK - visual '{visual.name}' localEuler=" +
-                          $"({x:F1},{Mathf.DeltaAngle(0f, e.y):F1},{Mathf.DeltaAngle(0f, e.z):F1}) - already inverted, no change.");
+                          $"({x:F1},{Mathf.DeltaAngle(0f, e.y):F1},{Mathf.DeltaAngle(0f, e.z):F1}) - already upright, no change.");
                 return;
             }
 
-            visual.localRotation = Quaternion.Euler(-90f, Mathf.DeltaAngle(0f, e.y), Mathf.DeltaAngle(0f, e.z));
+            visual.localRotation = Quaternion.Euler(90f, Mathf.DeltaAngle(0f, e.y), Mathf.DeltaAngle(0f, e.z));
             EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
             EditorSceneManager.SaveOpenScenes();
             AssetDatabase.SaveAssets();
-            Debug.Log($"[CastleHubBuilder] JEWELER_UPRIGHT_FLIPPED - found x={x:F1}, forced to -90 and re-saved. " +
-                      "Something upstream still writes +90 for this mesh; this stage covered it.");
+            Debug.Log($"[CastleHubBuilder] JEWELER_UPRIGHT_FLIPPED - found x={x:F1}, forced to +90 and re-saved. " +
+                      "Something upstream wrote a different pitch for this mesh; this stage covered it.");
         }
 
         /// <summary>
@@ -657,7 +662,7 @@ namespace DeNelle.Editor
                 Debug.LogError("[CastleHubBuilder] Jeweler_Gems_Storefront not in scene — nothing baked.");
                 return;
             }
-            if (!SkinHostUpright(host, "Structures/jeweler", yawDeg: 0f, pitchDeg: -90f))   // owner 2026-08-19: inverted, matches OwnerUprightSkins
+            if (!SkinHostUpright(host, "Structures/jeweler", yawDeg: 0f, pitchDeg: 90f))    // render-PROVEN upright 2026-08-20
                 return;
 
             EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
