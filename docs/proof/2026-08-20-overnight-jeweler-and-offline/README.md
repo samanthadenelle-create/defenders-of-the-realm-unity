@@ -2,8 +2,9 @@
 
 **Seat:** CLI, running with owner-granted overnight autonomy.
 **Branch:** `wip/village2-and-f8-tickets` — pushed.
-**Device:** build **2026.08.20.332813** installed on the Seeker (`versionCode=332813`, verified by
-`dumpsys package com.denellestudios.echoesofelarion`).
+**Device:** build **2026.08.20.332839** installed on the Seeker (`versionCode=332839`, verified by
+`dumpsys package com.denellestudios.echoesofelarion`), with `R2_PARITY_OK 4 object(s) verified` for
+its catalog **before** the install — see §5.
 
 ---
 
@@ -127,6 +128,62 @@ content-partitioning schemes for one problem.
 
 ---
 
+## 3. Two more tickets closed while you slept
+
+### WO-1024 — structures burn with no repair surface
+
+Your F8 seq=2398. Two defects behind one dead end:
+
+**A.** `HubRepairAffordance` ran its "does this scene have anything to repair?" check once, at scene
+load. The town is player-built and restored from the save **after** the scene loads, so the answer was
+legitimately "none yet" — and it never asked again. Meanwhile the damage visuals install
+unconditionally, so fire still rendered. Fire with no repair button was that asymmetry. Fixed by the
+ticket's preferred option: `StructureDamageVisuals` raises the install the moment it tracks a
+structure, so the repair surface **follows** the town instead of racing it.
+
+**B.** The only path that installs an *enabled* repair controller deferred when the HUD had not
+registered yet, and its only retry fired on a **wave-cleared** event. In the hub, where no wave may
+ever run, that retry never came — so tap-to-repair did not exist at all. Added a `HudRegistered`
+event and re-armed the deferral on the thing it is actually waiting for.
+
+Proven in **4/4 headless fleet runs**:
+`NOT installed ... found YET` → `installed`, `Title` stays empty, and
+`deferred (scene load)` → `hud-registered re-arm` → `self-installed WallRepairController`.
+
+**Your 08-19 ruling needed no code change.** "Cannot build/repair during battle" and "available as
+soon as battle ends" is exactly what the wave gate already reads; its `// BY DESIGN` comment is now
+owner-confirmed rather than merely asserted.
+
+⚠ Two boxes left for you: the Manage screen's "Repair all" was never driven by a run, and
+`[Flow:RepairProbe]` said nothing because no fleet run burned a structure.
+
+### WO-1124 — the APK was building its content for whatever platform the editor was last on
+
+This one is a store-push blocker and it is worth knowing how close it came. An APK built from an
+editor left on Win64 got **Windows** bundles; the device would ask the CDN for an Android catalog that
+was never uploaded and resolve **nothing** — no buildings, no enemies — silently, with
+`COMPILE_GATE_OK`, `APK_OK` and `R2_PUSH_OK` all green. None of those markers ever named a platform,
+which was the one fact that was wrong.
+
+The build now switches to Android **before** building content, hard-fails on a target mismatch, and
+asserts the per-version Android catalog exists afterwards. §5.1 was proven by *reproducing* the
+failing case rather than simulating it — the editor genuinely was on Win64:
+
+```
+[AndroidBuild] active target is 'StandaloneWindows64' - switching to Android BEFORE the content build
+ADDRESSABLES_CONTENT_OK 634 locations :: AndroidBuild target=Android
+[AndroidBuild] ANDROID_CATALOG_OK - ServerData\Android\catalog_2026.08.20.332839.bin
+```
+
+And the gate fails the known-bad state, which the ticket rightly insisted on:
+`[gate] EnsureBuilt(expected=iOS) correctly REJECTED while active=Android`.
+
+One more thing I changed that was not in the ticket's letter but is in its spirit: on a parity
+failure, `overnight-apk-build.ps1` used to write *"DO NOT INSTALL OR DISTRIBUTE THIS BUILD"* into a
+status file and carry on. That is advice, not a gate. It now exits 3.
+
+---
+
 ## 3. Gates
 
 | gate | result |
@@ -136,8 +193,10 @@ content-partitioning schemes for one problem.
 | `NAVMESH_BAKE_OK` | PASS — 1 surface, `Main_Castle_Overworld.unity` |
 | `JEWELER_UPRIGHT_OK` | PASS — `(90.0, 0.0, 0.0)` |
 | `STOREFRONT_CAPTURE_OK` | PASS — 5 subjects |
-| `R2_PARITY_OK` | PASS — 4 objects verified, catalog `2026.08.20.332807` |
-| APK | built 21:56, installed, `versionCode=332813` confirmed on device |
+| `ANDROID_CONTENT_TARGET_OK` | PASS — new suite, WO-1124 |
+| `R2_PARITY_OK` | PASS — 4 objects verified for catalog `2026.08.20.332839` |
+| APK | `versionCode=332839` confirmed on device, parity verified before install |
+| `FLEET_PLAYERLOG_OK` | 4/4 — the WO-1024 oracle |
 
 The 4 baseline reds, unchanged: `CaravanStatusChip` (hand-rolled UI), `vfx-self-contained`,
 `vfx-null-slot`, `WANDERER BUBBLE ×4` (dungeon needs an isolated-worktree re-bake).
@@ -164,7 +223,25 @@ So these are unproven and need you:
 2. **PROD-010's airplane-mode path.** Proven in code and gate only. The real test is: Settings →
    Offline → Download, wait for 100%, then turn off Wi-Fi and cold-start. That is the one that matters
    and it has never been run.
-3. Everything already sitting in AWAITING OWNER FELT-VERIFY on the board (PROD-002/003/005/006/011).
+3. **WO-1024's repair button.** Damage a structure in the hub, let the wave end, and confirm a repair
+   path is actually reachable from Manage. The controller now exists — the trace proves it — but no run
+   drove that screen.
+4. Everything already sitting in AWAITING OWNER FELT-VERIFY on the board (PROD-002/003/005/006/011).
 
 If you want unattended device testing on future nights, leaving the Seeker unlocked (or with the
 screen-lock off while it is plugged in) is the whole difference between "installed" and "verified".
+
+---
+
+## 5. The night, in commits
+
+| commit | what |
+|---|---|
+| `5b6e97e95` | jeweler reverted to +90, render-proven; `StorefrontOrientationCapture` added |
+| `345a7b464` | PROD-010 opt-in offline mode |
+| `98a0f08bf` | board: PROD-010 implemented, PROD-009 closed as superseded |
+| `edd6cae1c` | this proof folder |
+| `b06cd5fd8` | WO-1024 repair surface |
+| `11d166fe9` | WO-1124 content-target gate |
+
+All pushed to `wip/village2-and-f8-tickets`. F8 inbox: `NO_CAPTURE` — nothing queued.
