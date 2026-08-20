@@ -152,8 +152,14 @@ namespace DeNelle.Core
         private static readonly List<Action> s_settleCallbacks = new List<Action>();
         private static readonly List<Action> s_deferred = new List<Action>();
 
+        // Every string key Addressables knows about, harvested once during the warm pass. Used by
+        // DependencyClosureTrace to tell a REAL double-ship (address registered AND Resources
+        // answered) from content that legitimately still lives in Resources.
+        private static readonly HashSet<string> s_registeredKeys = new HashSet<string>();
+
         private static Host s_host;
         private static bool s_warmStarted;
+        private static int s_discovered;
 
         /// <summary>Where the warm pass has got to.</summary>
         public static StructureContentState State { get; private set; } = StructureContentState.Cold;
@@ -169,6 +175,20 @@ namespace DeNelle.Core
 
         /// <summary>How many handles are being retained for the life of the process.</summary>
         public static int RetainedHandleCount => s_retained.Count;
+
+        /// <summary>How many structure addresses the warm pass found in the catalog.</summary>
+        public static int DiscoveredAddressCount => s_discovered;
+
+        /// <summary>
+        /// True when Addressables has a key for this exact address. Answered from a set harvested
+        /// once during the warm pass -- no catalog probe, no handle, no blocking.
+        /// <para>This exists to keep the Resources-fallback report HONEST. A fallback is only a
+        /// double-ship when the address is ALSO registered; content that was never migrated (e.g.
+        /// the four ~33-156 KB Harvest/* FBXs, deliberately Resources-resident per the note at
+        /// HarvestSite.cs:274) is answering from the only place it lives.</para>
+        /// </summary>
+        public static bool IsRegisteredAddress(string address) =>
+            !string.IsNullOrEmpty(address) && s_registeredKeys.Contains(address);
 
         // =====================================================================
         //  Synchronous read — a dictionary probe. CANNOT BLOCK.
@@ -414,8 +434,9 @@ namespace DeNelle.Core
                     if (locator?.Keys == null) continue;
                     foreach (var k in locator.Keys)
                     {
-                        if (k is string s && s.StartsWith(AddressPrefix, StringComparison.Ordinal) &&
-                            !keys.Contains(s))
+                        if (!(k is string s)) continue;
+                        s_registeredKeys.Add(s);   // full key set -- powers IsRegisteredAddress
+                        if (s.StartsWith(AddressPrefix, StringComparison.Ordinal) && !keys.Contains(s))
                             keys.Add(s);
                     }
                 }
@@ -452,11 +473,90 @@ namespace DeNelle.Core
                 }
             }
 
-            State = keys.Count > 0 ? StructureContentState.Warm : StructureContentState.Degraded;
+            // --- 4. LOAD AND RETAIN.
+            // THIS PHASE IS THE WHOLE POINT AND IT WAS MISSING IN THE FIRST VERSION OF THIS FILE,
+            // which shipped to the owner's device on 2026-08-20 and logged, verbatim:
+            //     structure content download Succeeded in 2.8s.
+            //     warm pass settled as Warm in 2.8s (resident=0, inFlight=0, retained=0).
+            // DownloadDependenciesAsync makes the BUNDLES local. It does not put a single ASSET in
+            // the resident dictionary. So TryGet missed for every address, the loader fell through
+            // to a Resources copy that the CDN migration had DELETED, and build-mode placement
+            // ghosts rendered as placeholder PILLS. Warm was a marker claiming a state it had not
+            // reached -- the same overclaiming defect class we spent the day removing.
+            //
+            // COST, MEASURED NOT GUESSED: the Structure_Art group holds exactly 35 addresses
+            // (24 of them the catalog's complete visualPrefabPath/upgradeVisualPath set -- full
+            // coverage, no gaps) totalling 28.9 MB of source bytes on disk. That is the SAME set
+            // DownloadDependenciesAsync already pulled above in 2.8 s on the device. Loading all
+            // 35 is therefore the cheap option, not the expensive one, and it removes every reason
+            // for a synchronous caller with no retry seam (BuildModeController's ghost) to miss.
+            //
+            // Request() is reused deliberately: it already dedupes, hooks Completed, indexes into
+            // s_resident and retains the handle. One code path, so a late arrival after the
+            // deadline still lands instead of being dropped.
+            if (keys.Count > 0)
+            {
+                for (int i = 0; i < keys.Count; i++) Request(keys[i]);
+                FlowTrace.Step(System,
+                    $"warm pass requested {keys.Count} structure asset(s) for RESIDENCY " +
+                    "(downloading a bundle is not the same as holding an asset).");
+
+                while (s_inFlight.Count > 0 && Now() - t0 < WarmDeadlineSeconds) yield return null;
+
+                if (s_inFlight.Count > 0)
+                    FlowTrace.Warn(System,
+                        $"{s_inFlight.Count} structure asset(s) still loading after {Now() - t0:F1}s -- " +
+                        "NOT waited on and NOT cancelled; they still become resident when they land.");
+            }
+
+            s_discovered = keys.Count;
+            State = DecideState(s_discovered, s_resident.Count);
             FlowTrace.Step(System,
-                $"warm pass settled as {State} in {Now() - t0:F1}s (resident={s_resident.Count}, " +
-                $"inFlight={s_inFlight.Count}, retained={s_retained.Count}).");
+                $"warm pass settled as {State} in {Now() - t0:F1}s (discovered={s_discovered}, " +
+                $"resident={s_resident.Count}, inFlight={s_inFlight.Count}, retained={s_retained.Count}).");
             MaybeNotifySettled();
+        }
+
+        /// <summary>
+        /// The ONE place <see cref="StructureContentState.Warm"/> can be decided, so the reported
+        /// state cannot drift from the achieved one.
+        /// <para>Warm REQUIRES resident content. On 2026-08-20 this pass reported Warm with
+        /// resident=0 and the owner got placeholder pills instead of buildings; nothing checked
+        /// whether the marker was true. A state that cannot be falsified is not a state, it is a
+        /// wish. StructureLoadBoundedRegression fails the suite if this guard is removed.</para>
+        /// </summary>
+        private static StructureContentState DecideState(int discovered, int resident)
+        {
+            if (discovered == 0)
+            {
+                FlowTrace.Warn(System,
+                    $"warm pass found NO '{AddressPrefix}' addresses in the catalog. That is the expected " +
+                    "state pre-migration and a DEFECT afterwards (35 are authored in the Structure_Art " +
+                    "group today). Reporting DEGRADED -- callers fall back to Resources or keep their " +
+                    "current visual.");
+                return StructureContentState.Degraded;
+            }
+
+            if (resident == 0)
+            {
+                FlowTrace.Fail(System,
+                    $"warm pass discovered {discovered} structure address(es) but NOT ONE is resident. " +
+                    "Reporting DEGRADED, never Warm. This is the exact 2026-08-20 'pills loading' " +
+                    "regression: bundles downloaded, assets never loaded, TryGet missed everything, " +
+                    "and Assets/Resources/Structures no longer exists to catch it. Buildings and " +
+                    "placement ghosts render as placeholders until this is fixed.");
+                return StructureContentState.Degraded;
+            }
+
+            if (resident < discovered)
+            {
+                FlowTrace.Warn(System,
+                    $"warm pass is only PARTIALLY resident ({resident}/{discovered}). The missing " +
+                    "addresses render as placeholders or keep their baked twin; each one failed " +
+                    "with its own line above. Reporting Warm because the fast path does exist.");
+            }
+
+            return StructureContentState.Warm;
         }
 
         // =====================================================================

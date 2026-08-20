@@ -55,6 +55,18 @@
 //       EquipmentController has no [ExecuteAlways], so AddComponent runs no Awake here.
 //   (b) REAL HELPER. Case G5 drives WeaponOrientHelper.ComputeShieldMountRotation, the
 //       same entry point the sheathed shield pose calls, with a synthetic ShieldFrame.
+//   (d) REAL RENDERER, REAL MEASUREMENT. Cases G8/G9 build an actual MeshRenderer plate
+//       at the live shield's proportions, run the shipped TryResolveShieldFrame on it at
+//       a hostile attach rotation, apply the shipped pose and assert the RENDERED WORLD
+//       VOLUME. Added 2026-08-20 second pass, after every angle in this suite read
+//       perfect while the shield rendered flat on the owner's device.
+//
+// ⚠ THE SHIELD DOES NOT TAKE THE SWORD'S "INVERTED" RULE (owner ruling scope, 2026-08-20).
+// The instruction "sheathed should sit inverted with the longest mesh (y) up and down" is
+// about a SWORD - the long axis is the blade, inverted is tip-down in a scabbard. A shield
+// has no tip and no meaningful end-for-end. It keeps the felt-approved WO-1123 rule
+// (thickness away from the player, handle inward), applied at the new HIP anchor. G1-G4
+// assert the sword rule; G5-G9 assert the shield rule; neither is applied to the other.
 //   (c) SOURCE LINT for the two facts that are structural rather than numeric (which
 //       BONE is asked for, and which VARIABLE each slot parents to). Both lints run on
 //       COMMENT-BLANKED source — the tombstone comments in EquipmentController name the
@@ -205,10 +217,15 @@ namespace DeNelle.Editor
             // ── CASE G5: the shield's sheathed rule, through the real helper ──────────
             CheckShieldMountRule(failures, log);
 
+            // ── CASES G8/G9: the shield's RENDERED SHAPE, on a real MeshRenderer ──────
+            // The one that would have caught the flat shield before the owner saw it.
+            CheckSheathedShieldRendersAsAPlate(failures, log);
+
             if (failures.Count == 0)
             {
-                reason = "sheathe pose: hip anchor, one socket per slot, long axis vertical + inverted (tip down) " +
-                         "— and every rule proven to REJECT the pre-2026-08-20 state.";
+                reason = "sheathe pose: hip anchor, one socket per slot, SWORD vertical + inverted (tip down), " +
+                         "SHIELD face-outward and still rendering as a plate — every rule proven to REJECT " +
+                         "the pre-2026-08-20 state and the flat-shield state.";
                 Debug.Log(log + "SHEATHE_POSE_OK - " + reason);
                 return true;
             }
@@ -534,8 +551,16 @@ namespace DeNelle.Editor
                     LongAxis = Vector3.up,
                 };
 
+                // ⛔ NOT INVERTED. This read `-body.up`, "inverted, matching the sword", and that
+                // generalisation is the defect the owner reported on 2026-08-20 ("redo the sword and
+                // sheild. not working"). Her instruction — "sheathed should sit inverted with the
+                // longest mesh (y) up and down" — is about a SWORD: the long axis is the blade and
+                // inverted means tip-down. A shield has no tip and no meaningful end-for-end, so the
+                // extra constraint buys nothing and only gives a mis-measured axis a second way to
+                // decide the pose. The shield keeps the felt-approved WO-1123 rule (thickness away
+                // from the player, handle inward), now applied at the HIP anchor.
                 Vector3 outward = body.right;    // the hip side: away from the leg
-                Vector3 longUp = -body.up;       // inverted, matching the sword
+                Vector3 longUp = body.up;        // plain up — the sword's inversion is sword-only
 
                 Quaternion local = WeaponOrientHelper.ComputeShieldMountRotation(frame, socket, outward, longUp);
                 Quaternion world = socket.rotation * local;
@@ -544,8 +569,8 @@ namespace DeNelle.Editor
 
                 if (longOff > AngleTolDeg)
                     failures.Add("G6: the sheathed SHIELD's long axis sits " + longOff.ToString("0.#") +
-                                 " deg off the vertical it was handed. The owner's 'longest mesh (y) up and " +
-                                 "down' applies to the shield as much as the sword.");
+                                 " deg off the vertical it was handed — the solve did not honour the " +
+                                 "second axis it was given, so the roll is unresolved.");
                 else if (faceOff > AngleTolDeg)
                     failures.Add("G6: the sheathed SHIELD's thickness axis sits " + faceOff.ToString("0.#") +
                                  " deg off the hip's outward direction, so its face is not turned away from " +
@@ -576,6 +601,249 @@ namespace DeNelle.Editor
                 if (probe != null) UnityEngine.Object.DestroyImmediate(probe);
             }
         }
+
+        // =====================================================================
+        //  G8/G9 — THE RENDERED SHAPE, not the euler
+        // =====================================================================
+        //
+        // WHY THIS CASE EXISTS, in one sentence: G6 passed while the shield rendered FLAT.
+        //
+        // The owner's capture (2026-08-20, pid 32572) is the whole argument:
+        //   sheathed shield DERIVED: faceOffOutward=0deg longTiltFromVertical=0deg longAxisDotUp=-1
+        //   MEASURED after hold: worldEuler=(90.00, 105.00, 0.00) worldBounds=s(0.92, 0.20, 0.81)
+        // Every angle read perfect and the prop was a dinner plate at the hip — because the angles
+        // are measured against the FRAME's axes, and the frame had named the mesh's longest extent
+        // as its "thickness". An assertion phrased in degrees cannot separate "posed correctly" from
+        // "posed correctly with respect to a lie". An assertion phrased in RENDERED VOLUME can: a
+        // 0.20 m vertical extent on a 0.78 m plate is a collapse no wrong frame can talk its way out
+        // of. So this case drives the REAL measurement (TryResolveShieldFrame) and the REAL solve on
+        // a real MeshRenderer, at a hostile attach rotation, and asserts the SHAPE that comes out.
+        //
+        // The hostile attach rotation is the point, not decoration: the retired measurement read the
+        // renderer's WORLD AABB and re-expressed its extents vector in the parent basis, which is
+        // only correct when the prop is axis-aligned with that parent. Measured at identity the old
+        // code passes; measured at a rotated seat — which is where the game measures, because the
+        // prop is on the hand — it mis-orders the axes. G9 pins that the collapse is detectable.
+        //
+        // ⚠ AND THE SHAPE IS MEASURED ALONG THE DIRECTIONS THAT MEAN SOMETHING, NOT ALONG WORLD X/Y/Z.
+        // The first draft of G8b asked whether ANY world-AABB axis was thin, and it red-flagged a
+        // CORRECTLY posed shield at 0.46 m — because the fixture's body is yawed 64 deg, so the
+        // 0.20 m thinness splits across world X and Z and no world axis is thin. An AABB is three
+        // fixed directions; the pose is about `outward` and `up`. Projecting onto those two (see
+        // ExtentAlong) is exact under any body or socket rotation. The world-Y clause is KEPT
+        // alongside them because vertical extent is the one AABB number a yaw cannot smear, and it
+        // is the number the device capture actually prints — the oracle should speak the log's
+        // language as well as the geometry's.
+        private const float PlateThickness = 0.20f;   // the live shield's measured thinness, to scale
+        private const float PlateWidth = 0.63f;
+        private const float PlateHeight = 0.78f;
+
+        private static void CheckSheathedShieldRendersAsAPlate(List<string> failures, StringBuilder log)
+        {
+            GameObject probe = null;
+            try
+            {
+                probe = new GameObject("SheatheShieldShapeProbe");
+                // Body yaw ONLY. A pitched body would tilt the world Y axis and smear the vertical
+                // extent, which would make this case an assertion about the fixture instead of about
+                // the pose. The socket below still carries a hostile full rotation, which is what
+                // proves the solve is anchor-independent.
+                probe.transform.rotation = Quaternion.Euler(0f, 64f, 0f);
+                Transform body = probe.transform;
+
+                var socket = new GameObject("SheatheSocket_HipOff").transform;
+                socket.SetParent(body, false);
+                socket.localRotation = Quaternion.Euler(41f, -12f, 96f);
+
+                // The grip root sits at a ROTATED seat, exactly as it does on the hand when the
+                // runtime takes its one measurement.
+                var gripRoot = new GameObject("EquipmentProp_OffHand").transform;
+                gripRoot.SetParent(socket, false);
+                gripRoot.localRotation = Quaternion.Euler(292f, 140f, 105f);
+
+                // A real renderer with a real mesh: thickness on Z, long axis on Y, width on X —
+                // the live shield's proportions (back-solved from the owner's capture).
+                var plate = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                plate.name = "ShieldPlate";
+                plate.transform.SetParent(gripRoot, false);
+                plate.transform.localRotation = Quaternion.identity;
+                plate.transform.localScale = new Vector3(PlateWidth, PlateHeight, PlateThickness);
+
+                // ── G8a: the MEASUREMENT names the real axes despite the rotated seat ────────
+                if (!WeaponOrientHelper.TryResolveShieldFrame(plate, gripRoot, out var frame) || !frame.Valid)
+                {
+                    failures.Add("G8: TryResolveShieldFrame could not measure a plain 0.63 x 0.78 x 0.20 " +
+                                 "plate at a rotated seat. Every shield pose downstream falls back to a " +
+                                 "hand-typed euler when this returns false.");
+                    return;
+                }
+
+                bool axesRight = frame.Axes.NarrowestAxis == 2 && frame.Axes.LongestAxis == 1;
+                if (!axesRight)
+                    failures.Add("G8a: the plate measures narrowest=" + AxisLetter(frame.Axes.NarrowestAxis) +
+                                 " longest=" + AxisLetter(frame.Axes.LongestAxis) + " (" + frame.Axes.Describe() +
+                                 ") but it was built 0.63 x 0.78 x 0.20 — narrowest MUST be Z and longest Y. " +
+                                 "A frame that mis-names the axes poses the prop perfectly about a lie: that " +
+                                 "is the 2026-08-20 flat shield, and it comes from measuring the WORLD AABB " +
+                                 "of a prop that is sitting at a rotated seat.");
+                else
+                    log.AppendLine("  G8a plate measured correctly at a rotated seat ........... ok");
+
+                // ── G8b: the RENDERED VOLUME is still a plate after the sheathed pose ───────
+                Vector3 outward = body.right;
+                gripRoot.localRotation = WeaponOrientHelper.ComputeShieldMountRotation(
+                    frame, socket, outward, body.up);
+
+                // ⛔ DO NOT ASK A WORLD AABB WHETHER THE PLATE IS THIN. A clause here once read
+                // `minExtent > PlateThickness * 2f` — "no axis of the rendered shield is thin" — and
+                // it failed on a CORRECTLY posed shield, reporting 0.46 m. That number is not a bug
+                // in the pose and not a bad threshold to nudge; it is arithmetic:
+                //
+                //   the fixture's body is yawed 64 deg, so with the thin axis pointing along
+                //   body.right the 0.20 m thickness projects onto BOTH world X and world Z
+                //     world X extent = 0.899*0.63 + 0.438*0.20 = 0.654
+                //     world Y extent =               1.000*0.78 = 0.780
+                //     world Z extent = 0.438*0.63 + 0.899*0.20 = 0.456   <- the reported 0.46
+                //
+                // A world-axis-aligned box around a rotated plate never exposes the plate's thinness
+                // unless the plate happens to be square-on to the world axes. The owner's capture DID
+                // read 0.20 — but in world Y, and only because there the thin axis was standing
+                // exactly vertical (worldEuler pitch 90), and the VERTICAL extent is the one quantity
+                // a yaw cannot smear. So: the vertical clause below is kept, because it is both
+                // yaw-invariant and literally the number the device log prints; the "some axis is
+                // thin" clause is replaced by extents measured along the axes that MEAN something —
+                // outward and up. Those are exact under any body/socket rotation, which makes them
+                // strictly stronger than the AABB clause they replace, not a relaxation of it.
+                float alongOutward = ExtentAlong(plate, outward);   // must be the THICKNESS
+                float alongUp = ExtentAlong(plate, body.up);        // must be the HEIGHT
+                Vector3 size = WorldExtents(plate);
+
+                if (alongOutward > PlateThickness * 1.5f)
+                    failures.Add("G8b: the shield measures " + alongOutward.ToString("0.##") + " m across " +
+                                 "the OUTWARD direction, but its thickness is only " +
+                                 PlateThickness.ToString("0.##") + " m. The face is not turned away from " +
+                                 "the player — an edge is. This is the dinner-plate defect stated in the " +
+                                 "one direction that cannot be smeared by which way the hero happens to face.");
+                else if (alongOutward < PlateThickness * 0.5f)
+                    failures.Add("G8b: the shield measures only " + alongOutward.ToString("0.###") + " m " +
+                                 "across the outward direction against a " + PlateThickness.ToString("0.##") +
+                                 " m thickness - the prop has been squashed, not seated.");
+                else if (alongUp < PlateHeight * 0.9f)
+                    failures.Add("G8b: the shield stands only " + alongUp.ToString("0.##") + " m tall along " +
+                                 "the body's up axis from a " + PlateHeight.ToString("0.##") + " m plate. Its " +
+                                 "long axis is not upright, so it is hanging on a diagonal or on its side.");
+                else if (size.y < PlateHeight * 0.7f)
+                    failures.Add("G8b: the sheathed shield renders only " + size.y.ToString("0.##") +
+                                 " m tall in WORLD Y from a " + PlateHeight.ToString("0.##") + " m plate. It " +
+                                 "is lying FLAT — the exact defect the owner reported, and the exact shape " +
+                                 "the capture measured as s(0.92, 0.20, 0.81) while every angle read 0 deg.");
+                else
+                    log.AppendLine("  G8b sheathed shield renders as a plate (thickness-out=" +
+                                   alongOutward.ToString("0.##") + "m upright=" + alongUp.ToString("0.##") +
+                                   "m worldY=" + size.y.ToString("0.##") + "m) ... ok");
+
+                // ── G9: TEETH. Feed the solve the SWAPPED frame the old measurement produced and
+                // prove the shape check REJECTS it. Without this, G8b could be passing because the
+                // fixture cannot fail rather than because the pose is right.
+                var swapped = frame;
+                swapped.ThicknessAxis = frame.LongAxis;
+                swapped.LongAxis = frame.ThicknessAxis;
+                gripRoot.localRotation = WeaponOrientHelper.ComputeShieldMountRotation(
+                    swapped, socket, outward, body.up);
+                // Both of G8b's live clauses are re-run against it, not just one: after the 0.46
+                // correction the PRIMARY clause is the outward extent, so proving only that the
+                // vertical clause bites would leave the clause that actually guards the pose
+                // unexercised. Expected on a swapped frame: outward reads the 0.78 long axis
+                // (should trip the >1.5x thickness clause) and world Y collapses to the 0.20
+                // thin axis (should trip the vertical clause).
+                float badOutward = ExtentAlong(plate, outward);
+                float badHeight = WorldExtents(plate).y;
+                bool outwardClauseBites = badOutward > PlateThickness * 1.5f;
+                bool verticalClauseBites = badHeight < PlateHeight * 0.7f;
+
+                if (!outwardClauseBites)
+                    failures.Add("G9: posing the plate off a SWAPPED frame (thickness<->long, which is " +
+                                 "precisely what the retired world-AABB measurement produced) leaves only " +
+                                 badOutward.ToString("0.##") + " m across the outward direction, so G8b's " +
+                                 "PRIMARY clause does not fire. That clause is the one guarding the pose; " +
+                                 "if it cannot detect a swapped frame it is not guarding anything.");
+                else if (!verticalClauseBites)
+                    failures.Add("G9: a SWAPPED frame still renders " + badHeight.ToString("0.##") + " m tall " +
+                                 "in world Y, so G8b's vertical clause — the one phrased in the same number " +
+                                 "the device capture prints — cannot detect the collapse it exists to detect.");
+                else
+                    log.AppendLine("  G9 a swapped frame is REJECTED by BOTH clauses (outward=" +
+                                   badOutward.ToString("0.##") + "m worldY=" + badHeight.ToString("0.##") +
+                                   "m) ... ok");
+            }
+            catch (Exception e)
+            {
+                failures.Add("G8/G9: the rendered-shape probe threw — " + e.GetType().Name + ": " + e.Message);
+            }
+            finally
+            {
+                if (probe != null) UnityEngine.Object.DestroyImmediate(probe);
+            }
+        }
+
+        /// <summary>
+        /// The world-axis-aligned size of a renderer's mesh — computed from the mesh's own corners
+        /// rather than read off Renderer.bounds. Identical by definition, and deterministic: outside
+        /// Play mode a renderer's cached bounds can lag a transform written in the same frame, and a
+        /// stale read here would make this case flicker instead of assert.
+        /// </summary>
+        private static Vector3 WorldExtents(GameObject go)
+        {
+            var filter = go.GetComponent<MeshFilter>();
+            if (filter == null || filter.sharedMesh == null) return Vector3.zero;
+            Bounds mb = filter.sharedMesh.bounds;
+            Vector3 c = mb.center, e = mb.extents;
+            Vector3 min = Vector3.zero, max = Vector3.zero;
+            for (int corner = 0; corner < 8; corner++)
+            {
+                var p = new Vector3(
+                    c.x + ((corner & 1) == 0 ? -e.x : e.x),
+                    c.y + ((corner & 2) == 0 ? -e.y : e.y),
+                    c.z + ((corner & 4) == 0 ? -e.z : e.z));
+                Vector3 w = go.transform.TransformPoint(p);
+                if (corner == 0) { min = max = w; }
+                else { min = Vector3.Min(min, w); max = Vector3.Max(max, w); }
+            }
+            return max - min;
+        }
+
+        /// <summary>
+        /// The prop's extent along an ARBITRARY world direction — the span of its mesh corners
+        /// projected onto that axis. This is the measurement a world AABB cannot give you: an AABB
+        /// is only ever three fixed world directions, so a plate that is thin along `outward` but
+        /// yawed away from the world axes reports a fat minimum extent (0.46 m on this fixture) and
+        /// looks nothing like a plate. Projecting onto the direction the pose was ASKED to satisfy
+        /// is exact under any body or socket rotation, which is what makes G8b both strict and stable.
+        /// </summary>
+        private static float ExtentAlong(GameObject go, Vector3 axis)
+        {
+            var filter = go != null ? go.GetComponent<MeshFilter>() : null;
+            if (filter == null || filter.sharedMesh == null) return 0f;
+            if (axis.sqrMagnitude < 1e-9f) return 0f;
+            axis = axis.normalized;
+
+            Bounds mb = filter.sharedMesh.bounds;
+            Vector3 c = mb.center, e = mb.extents;
+            float min = float.MaxValue, max = float.MinValue;
+            for (int corner = 0; corner < 8; corner++)
+            {
+                var p = new Vector3(
+                    c.x + ((corner & 1) == 0 ? -e.x : e.x),
+                    c.y + ((corner & 2) == 0 ? -e.y : e.y),
+                    c.z + ((corner & 4) == 0 ? -e.z : e.z));
+                float d = Vector3.Dot(go.transform.TransformPoint(p), axis);
+                if (d < min) min = d;
+                if (d > max) max = d;
+            }
+            return max - min;
+        }
+
+        private static string AxisLetter(int axis) => axis == 0 ? "X" : axis == 1 ? "Y" : "Z";
 
         // =====================================================================
         //  SOURCE HELPERS

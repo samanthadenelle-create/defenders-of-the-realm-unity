@@ -3005,16 +3005,38 @@ namespace DeNelle.Village
             }
 
             Transform body = _animator != null ? _animator.transform : transform;
-            // Outward = the hip side the shield hangs on (it lies against the leg, face out); up =
-            // the SAME vertical/inverted long axis the sword obeys, so one ruling drives both props.
+            // Outward = the hip side the shield hangs on: it lies against the leg, face out.
+            //
+            // ⛔ THE SHIELD DOES *NOT* TAKE THE SWORD'S "INVERTED" RULE (2026-08-20, second pass).
+            // The line here read `body.up * (_sheatheLongAxisSign >= 0f ? 1f : -1f)` with the comment
+            // "the SAME vertical/inverted long axis the sword obeys, so one ruling drives both
+            // props" — and generalising the owner's sentence from the prop it was about to a prop it
+            // was not is the whole mistake. Her instruction, verbatim: "sheathed should sit inverted
+            // with the longest mesh (y) up and down". That is a statement about a SWORD, where the
+            // long axis IS the blade and "inverted" means tip-down in a scabbard. A shield has no
+            // meaningful long axis to invert and no tip to point anywhere: turning a roughly
+            // symmetric plate end-for-end is a no-op the player cannot see, so the constraint buys
+            // nothing — while adding a second constraint to an over-determined solve is exactly how
+            // a mis-measured axis gets to decide the pose. What matters for a shield is the rule
+            // that was already felt-approved (WO-1123): the thickness faces AWAY FROM THE PLAYER and
+            // the handled face is against the mount. That rule is now applied at the HIP anchor —
+            // the anchor is all that the 08-20 instruction changes for this prop.
+            //
+            // `up` is still passed, because LookRotation needs a second axis to resolve the roll;
+            // it is plain body.up, so the shield stands the way a shield stands.
+            // _sheatheLongAxisSign is SWORD-ONLY and is not read here.
             Vector3 outward = body.right * SheatheSideOff;
-            Vector3 longUp  = body.up * (_sheatheLongAxisSign >= 0f ? 1f : -1f);
+            Vector3 longUp  = body.up;
             Quaternion derived = WeaponOrientHelper.ComputeShieldMountRotation(
                 _currentOffHandShieldFrame, socket, outward, longUp);
             // THROTTLED (1/5s): this runs every frame and an unthrottled Step here is exactly the
-            // spam that swallowed three F8 captures (see ApplySheathedOffset's note). The numbers
-            // still prove the pose — faceOff must read ~0 deg, and longTilt ~0 proves the owner's
-            // "longest mesh (y) up and down" on the SHIELD as well as on the sword.
+            // spam that swallowed three F8 captures (see ApplySheathedOffset's note).
+            //
+            // ⚠ AND THE MEASURED EXTENTS ARE PRINTED WITH THEM. faceOff/longTilt are angles between
+            // the pose and the FRAME's axes: they read 0/0 in the capture that showed a flat shield,
+            // because the frame itself named the wrong axes. Without the extents beside them the
+            // reader has to back-solve the world AABB by hand (which is how the 08-20 defect was
+            // actually found) instead of seeing "narrowest=Y(0.78)" and knowing in one line.
             // MEASURE THE PROP'S OWN AXES, not +X/+Y. The frame's ThicknessAxis/LongAxis are whichever
             // extents MEASURED shortest/longest (a native prop keeps its authored axes — the live
             // default shield is one), so the old `worldRot * Vector3.right` was only the face by
@@ -3030,6 +3052,9 @@ namespace DeNelle.Village
                 $"player at the HIP; localEuler={derived.eulerAngles:0.#} faceOffOutward={faceOff:0.#}deg " +
                 $"longTiltFromVertical={longTilt:0.#}deg longAxisDotUp=" +
                 $"{Vector3.Dot(longWorld, body.up):0.##} " +
+                $"frame[{_currentOffHandShieldFrame.Axes.Describe()}] " +
+                "(if 'narrowest' is not the plate's thinness the pose is right about a WRONG frame — " +
+                "that reads as a flat shield however healthy these angles look) " +
                 $"(shipped constant would have been {shipped.eulerAngles:0.#}).");
             return derived;
         }

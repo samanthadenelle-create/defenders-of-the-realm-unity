@@ -1123,21 +1123,104 @@ namespace DeNelle.Core.Geometry
             return list[list.Count / 2];
         }
 
+        // ⛔ THE MEASUREMENT WAS THE BUG (owner report 2026-08-20: "redo the sword and sheild. not
+        // working" — the sheathed shield rendered FLAT, like a plate at the hip).
+        //
+        // WHAT THIS REPLACED, and why it could never be right:
+        //     Bounds wb = r.bounds;                                  // WORLD-axis-aligned AABB
+        //     Vector3 c = parent.InverseTransformPoint(wb.center);
+        //     Vector3 e = parent.InverseTransformVector(wb.extents);  // ← the defect
+        // `r.bounds` is the renderer's AABB *in world axes*. Re-expressing that half-size VECTOR in
+        // another basis and taking |components| does not yield the prop's extents in that basis —
+        // it yields the world box's diagonal smeared across the new axes. The two agree only when
+        // the prop happens to be axis-aligned with `parent`. Every measurement taken while the prop
+        // sat at a rotated seat was therefore a different shape than the mesh.
+        //
+        // THE PROOF, from the owner's capture (logs/device, pid 32572), because this is exactly the
+        // §12 case where a static read would have argued the old code was fine:
+        //   MEASURED after hold: worldEuler=(90.00, 105.00, 0.00) worldBounds=s(0.92, 0.20, 0.81)
+        // Back-solving that AABB through that rotation gives prop-local extents X=0.63, Y=0.78,
+        // Z=0.20. So the mesh's NARROWEST axis is Z and its LONGEST is Y. But the pose had put
+        // local Y on `outward` and local Z on `up` — i.e. ComputeShieldMountRotation was handed a
+        // frame claiming Thickness=Y(0.78) and Long=Z(0.20), the exact inverse of the real mesh.
+        // The solve then did its job perfectly (faceOffOutward=0deg longTiltFromVertical=0deg) and
+        // stood the shield's THICKNESS up: a 0.20 m vertical extent, the dinner plate the owner saw.
+        // The angles were true statements about a false frame — which is why an euler assertion
+        // could not catch it and a BOUNDS-SHAPE assertion can (SheathePoseRegression case G8).
+        //
+        // NOW: the mesh's own local bounds, corner-transformed through the renderer's transform into
+        // `parent`. That is the real OBB projected onto the parent's axes, and it is invariant to
+        // whatever seat the prop happens to be sitting at when the measurement is taken — which is
+        // the property every caller here already assumed it had.
+        //
+        // ⚠ SCOPE, deliberately: WeaponBoundsOrient keeps its OWN TryLocalBounds and is NOT touched.
+        // The bow is felt-verified against that copy (owner, 2026-08-19); changing the numbers under
+        // a felt-approved pose to fix a different prop is how one fix becomes two bugs. Same for
+        // EquipmentController's private copy, which feeds the proportional SIZE solve, not a pose.
         private static bool TryLocalBounds(GameObject prop, Transform parent, out Bounds bounds)
         {
             bounds = new Bounds();
             bool any = false;
+            bool fellBack = false;
+            Vector3 min = Vector3.zero, max = Vector3.zero;
+
             foreach (var r in prop.GetComponentsInChildren<Renderer>(true))
             {
                 if (r == null) continue;
+                if (TryRendererLocalBounds(r, out Bounds rb))
+                {
+                    Vector3 c = rb.center, e = rb.extents;
+                    for (int corner = 0; corner < 8; corner++)
+                    {
+                        var p = new Vector3(
+                            c.x + ((corner & 1) == 0 ? -e.x : e.x),
+                            c.y + ((corner & 2) == 0 ? -e.y : e.y),
+                            c.z + ((corner & 4) == 0 ? -e.z : e.z));
+                        Vector3 local = parent.InverseTransformPoint(r.transform.TransformPoint(p));
+                        if (!any) { min = max = local; any = true; }
+                        else { min = Vector3.Min(min, local); max = Vector3.Max(max, local); }
+                    }
+                    continue;
+                }
+
+                // FALLBACK, kept and never stripped (§12): a renderer with no readable mesh (a
+                // particle system, a procedural renderer) still has a world AABB. It is the OLD,
+                // rotation-sensitive estimate, so it is announced rather than silently mixed in.
+                fellBack = true;
                 Bounds wb = r.bounds;
-                Vector3 c = parent.InverseTransformPoint(wb.center);
-                Vector3 e = parent.InverseTransformVector(wb.extents);
-                var lb = new Bounds(c, new Vector3(Mathf.Abs(e.x), Mathf.Abs(e.y), Mathf.Abs(e.z)) * 2f);
-                if (!any) { bounds = lb; any = true; }
-                else bounds.Encapsulate(lb);
+                Vector3 wc = parent.InverseTransformPoint(wb.center);
+                Vector3 we = parent.InverseTransformVector(wb.extents);
+                we = new Vector3(Mathf.Abs(we.x), Mathf.Abs(we.y), Mathf.Abs(we.z));
+                if (!any) { min = wc - we; max = wc + we; any = true; }
+                else { min = Vector3.Min(min, wc - we); max = Vector3.Max(max, wc + we); }
             }
-            return any;
+
+            if (!any) return false;
+            bounds = new Bounds((min + max) * 0.5f, max - min);
+            if (fellBack)
+                FlowTrace.Throttle("Equip", "local-bounds-fallback-" + prop.name, 5f,
+                    $"TryLocalBounds '{prop.name}': at least one renderer has no readable mesh, so its " +
+                    "WORLD AABB was folded in. That estimate is rotation-sensitive (it is the defect " +
+                    "fixed on 2026-08-20), so any axis ordering derived from this prop is suspect while " +
+                    "the prop sits at a rotated seat.");
+            return true;
+        }
+
+        /// <summary>The renderer's bounds in ITS OWN local space (never world). SkinnedMeshRenderer
+        /// publishes exactly this as localBounds; a MeshRenderer's comes off the shared mesh.</summary>
+        private static bool TryRendererLocalBounds(Renderer r, out Bounds local)
+        {
+            local = default;
+            if (r is SkinnedMeshRenderer smr)
+            {
+                if (smr.sharedMesh == null) return false;
+                local = smr.localBounds;
+                return local.size.sqrMagnitude > 1e-12f;
+            }
+            var filter = r.GetComponent<MeshFilter>();
+            if (filter == null || filter.sharedMesh == null) return false;
+            local = filter.sharedMesh.bounds;
+            return local.size.sqrMagnitude > 1e-12f;
         }
     }
 }

@@ -124,10 +124,33 @@ namespace DeNelle.Core
 
             if (viaFallback)
             {
-                // Not fatal, but it means this asset did NOT come from where it was supposed to.
-                FlowTrace.Warn(system, $"'{address}' resolved from the RESOURCES FALLBACK. If this asset has been " +
-                                       "migrated, the address is wrong and its bytes are shipping TWICE — once in the " +
-                                       "bundle and once in the force-included Resources payload.");
+                // ⛔ THIS BRANCH USED TO CRY WOLF, AND IT COST A TRIAGE CYCLE ON 2026-08-20.
+                // It Warned on EVERY fallback with the words "its bytes are shipping TWICE",
+                // hedged only by an "if this asset has been migrated" the reader cannot evaluate.
+                // The device log then carried four of them — Harvest/crystals, /food, /iron, /wood
+                // — which read as a shipping defect and are nothing of the kind: there is NO
+                // Harvest/* key in Addressables (verified against
+                // Assets/AddressableAssetsData/AssetGroups/*.asset: the only prefixes registered
+                // are gear/, Enemies/, Structures/, hero, dungeon and the localization tables), and
+                // those four FBXs are ~33-156 KB each, deliberately left in Resources for WebGL
+                // (HarvestSite.cs:274). Nothing is duplicated. An oracle that cries wolf gets
+                // ignored on the day it is right — the same lesson the albedo check above learned.
+                //
+                // So ASK, do not guess. A fallback is a double-ship ONLY when the address is also
+                // registered with Addressables; otherwise Resources is the only place it lives.
+                if (StructureContentWarmer.IsRegisteredAddress(address))
+                {
+                    FlowTrace.Fail(system, $"'{address}' is REGISTERED with Addressables but resolved from the " +
+                                           "RESOURCES FALLBACK. Its bytes are shipping TWICE — once in the bundle and " +
+                                           "once in the force-included Resources payload — and the Addressables copy " +
+                                           "is the one nobody is reading. Delete the Resources copy or fix the address.");
+                }
+                else
+                {
+                    FlowTrace.Step(system, $"'{address}' resolved from Resources, which is the ONLY place it lives " +
+                                           "(no Addressables key for it). Not a double-ship, not a migration gap — " +
+                                           "content that was deliberately never moved.");
+                }
             }
 
             // STEP OUT. The count is the whole point: "deps 7/7 ok" is a pass you can grep for on

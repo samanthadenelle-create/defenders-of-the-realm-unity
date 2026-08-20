@@ -41,6 +41,14 @@
 // punish exactly the documentation CLAUDE.md §12/§15 demands. Group 5 proves the
 // blanking works rather than assuming it.
 //
+// ⛔ IT ALSO PINS THE FOLLOW-ON DEFECT (group 3b), because the first fix caused it.
+// The shipped warm pass downloaded the BUNDLES and never loaded the ASSETS, then
+// reported itself Warm with resident=0. TryGet missed every address, the loader fell
+// through to a Resources copy the CDN migration had deleted, and the owner's build-mode
+// placement ghosts rendered as placeholder PILLS. Nothing checked whether "Warm" was
+// true, which is why it reached a device. A marker that cannot be falsified is not a
+// marker. Group 3b makes the residency claim checkable at build time.
+//
 // ⛔ IT ASSERTS BOTH DIRECTIONS (group 5). A gate that does not FAIL the known-bad
 // state is not a gate, and a gate that fails a clean state becomes a permanent red
 // everyone learns to ignore. Group 5 runs the real detector over synthetic sources —
@@ -252,7 +260,86 @@ namespace DeNelle.Editor
                                  "restores the eviction cycle this fix exists to stop.");
                 }
 
-                log.AppendLine($"  {WarmerRel}: coroutine warm pass, retained handles, non-blocking TryGet.");
+                // ── 3b. THE WARM PASS ACTUALLY LOADS, AND CANNOT OVERCLAIM ────
+                //  The defect that reached the owner's device: downloaded, never loaded,
+                //  reported Warm with resident=0, shipped pills.
+                string warmBody;
+                if (!TryMethodBody(warmer, "IEnumerator WarmRoutine(", out warmBody))
+                {
+                    failures.Add($"Assets/{WarmerRel}: WarmRoutine() not found — the warm pass has been " +
+                                 "renamed or removed and this gate can no longer see what it does.");
+                }
+                else
+                {
+                    if (warmBody.IndexOf("Request(", StringComparison.Ordinal) < 0 &&
+                        warmBody.IndexOf("LoadAssetAsync", StringComparison.Ordinal) < 0)
+                    {
+                        failures.Add($"Assets/{WarmerRel}: WarmRoutine downloads but never LOADS. " +
+                                     "DownloadDependenciesAsync makes the BUNDLES local; it puts nothing in the " +
+                                     "resident dictionary, so TryGet misses every address and every synchronous " +
+                                     "caller degrades. That shipped on 2026-08-20 and rendered placement ghosts " +
+                                     "as pills. The warm pass must load and retain the assets themselves.");
+                    }
+
+                    if (warmBody.IndexOf("DecideState(", StringComparison.Ordinal) < 0)
+                        failures.Add($"Assets/{WarmerRel}: WarmRoutine no longer routes its final state through " +
+                                     "DecideState(). That method is the single place Warm can be decided; " +
+                                     "bypassing it is how the reported state drifts from the achieved one.");
+                }
+
+                // Warm may be RETURNED only by DecideState, never ASSIGNED anywhere. The assignment
+                // form is what let 'Warm' be stamped without anyone checking residency.
+                if (warmer.IndexOf("State = StructureContentState.Warm;", StringComparison.Ordinal) >= 0)
+                {
+                    failures.Add($"Assets/{WarmerRel} assigns State = Warm directly. Warm must be decided ONLY by " +
+                                 "DecideState(discovered, resident), which refuses it when nothing is resident. " +
+                                 "A direct assignment reinstates the marker that claimed success with resident=0.");
+                }
+
+                string decideBody;
+                if (!TryMethodBody(warmer, "StructureContentState DecideState(", out decideBody))
+                {
+                    failures.Add($"Assets/{WarmerRel}: DecideState(discovered, resident) is missing. It is the " +
+                                 "guard that makes 'Warm' falsifiable — without it the warm pass can report " +
+                                 "success having loaded nothing, which is exactly what reached the owner.");
+                }
+                else
+                {
+                    if (!ResidentZeroIsRefused(decideBody))
+                        failures.Add($"Assets/{WarmerRel}: DecideState no longer refuses the resident==0 case. " +
+                                     "It must return Degraded AND FlowTrace.Fail when it discovered addresses but " +
+                                     "holds none of them — reporting Warm there is the 2026-08-20 'pills loading' bug.");
+                    if (decideBody.IndexOf("StructureContentState.Warm;", StringComparison.Ordinal) < 0)
+                        failures.Add($"Assets/{WarmerRel}: DecideState never returns Warm — the fast path can " +
+                                     "never be reported as available, which makes the whole residency cache dead code.");
+                }
+
+                // Honest fallback reporting: a Resources answer is a double-ship only when the
+                // address is ALSO registered. Four Harvest/* lines were reported as duplication on
+                // 2026-08-20 and none of them was.
+                RequireToken(failures, warmer, "IsRegisteredAddress", WarmerRel,
+                    "DependencyClosureTrace needs it to tell a REAL double-ship from content that " +
+                    "legitimately still lives in Resources; without it the fallback warning cries wolf");
+
+                log.AppendLine($"  {WarmerRel}: coroutine warm pass LOADS + retains, Warm gated on residency.");
+            }
+
+            // ── 3c. THE FALLBACK REPORT DOES NOT CRY WOLF ─────────────────────
+            string dctPath = Path.Combine(assets,
+                "_Modules/Core/Addressables/DependencyClosureTrace.cs".Replace('/', Path.DirectorySeparatorChar));
+            string dctRaw = ReadOrNull(dctPath);
+            if (dctRaw == null)
+            {
+                failures.Add("Assets/_Modules/Core/Addressables/DependencyClosureTrace.cs is missing.");
+            }
+            else
+            {
+                string dct = Code(dctRaw);
+                RequireToken(failures, dct, "StructureContentWarmer.IsRegisteredAddress", "_Modules/Core/Addressables/DependencyClosureTrace.cs",
+                    "the Resources-fallback branch must ASK whether the address is registered before calling it a " +
+                    "double-ship. Unconditional, it reported the four Harvest/* FBXs (~33-156 KB, deliberately " +
+                    "Resources-resident, NO Addressables key) as shipping twice and sent triage down a dead end");
+                log.AppendLine("  DependencyClosureTrace.cs: double-ship claim is conditional on registration.");
             }
 
             // ── 4. THE HUB DEGRADES GRACEFULLY AND OFF THE CALLBACK ───────────
@@ -299,6 +386,21 @@ namespace DeNelle.Editor
                              "The detector no longer discriminates, so every PASS above is meaningless.");
             }
             log.AppendLine($"  oracle self-test: {OracleCases().Count} case(s), known-bad flagged + clean/tombstone clear.");
+
+            //  The residency guard needs its own both-directions proof, for the same reason: if
+            //  ResidentZeroIsRefused() cannot tell a guarded DecideState from an unguarded one,
+            //  group 3b is decoration.
+            foreach (var c in ResidencyOracleCases())
+            {
+                bool refuses = ResidentZeroIsRefused(Code(c.Source));
+                if (refuses == c.ShouldFlag) continue;
+                failures.Add($"RESIDENCY ORACLE SELF-TEST FAILED ({c.Name}): expected " +
+                             (c.ShouldFlag ? "REFUSES resident==0" : "does NOT refuse") +
+                             $" but got {(refuses ? "refuses" : "does not refuse")}. " +
+                             "The residency guard no longer discriminates, so 'Warm' is unchecked again.");
+            }
+            log.AppendLine($"  residency oracle: {ResidencyOracleCases().Count} case(s), " +
+                           "guarded DecideState accepted + the shipped unguarded one rejected.");
 
             if (failures.Count == 0)
             {
@@ -399,6 +501,16 @@ namespace DeNelle.Editor
                 },
                 new OracleCase
                 {
+                    Name = "clean: warm pass that loads and retains",
+                    ShouldFlag = false,
+                    Source =
+                        "class W { void M() {\n" +
+                        "  for (int i = 0; i < keys.Count; i++) Request(keys[i]);\n" +
+                        "  State = DecideState(keys.Count, s_resident.Count);\n" +
+                        "} }",
+                },
+                new OracleCase
+                {
                     Name = "tombstone: the token only in a line comment",
                     ShouldFlag = false,
                     Source =
@@ -452,6 +564,95 @@ namespace DeNelle.Editor
         {
             if (code.IndexOf(token, StringComparison.Ordinal) >= 0) return;
             failures.Add($"Assets/{relPath} no longer contains '{token}' — {why}.");
+        }
+
+        /// <summary>
+        /// True when this DecideState body REFUSES to call a zero-residency pass Warm: it must both
+        /// test the resident count against zero and report that refusal at error level. Either half
+        /// alone is not enough — a silent Degraded is how the owner ends up reading the log instead
+        /// of the game telling her.
+        /// </summary>
+        private static bool ResidentZeroIsRefused(string decideBody)
+        {
+            if (string.IsNullOrEmpty(decideBody)) return false;
+            bool testsZero = decideBody.IndexOf("resident == 0", StringComparison.Ordinal) >= 0 ||
+                             decideBody.IndexOf("resident <= 0", StringComparison.Ordinal) >= 0 ||
+                             decideBody.IndexOf("resident < 1", StringComparison.Ordinal) >= 0;
+            bool degrades  = decideBody.IndexOf("StructureContentState.Degraded", StringComparison.Ordinal) >= 0;
+            bool reports   = decideBody.IndexOf("FlowTrace.Fail", StringComparison.Ordinal) >= 0;
+            return testsZero && degrades && reports;
+        }
+
+        /// <summary>
+        /// Both directions for <see cref="ResidentZeroIsRefused"/>. The known-bad case is the exact
+        /// line that shipped on 2026-08-20 — a ternary on the DISCOVERED count, which is true the
+        /// moment a catalog exists and says nothing at all about what was loaded.
+        /// </summary>
+        private static List<OracleCase> ResidencyOracleCases()
+        {
+            return new List<OracleCase>
+            {
+                new OracleCase
+                {
+                    Name = "clean: guarded on residency, Fails loudly",
+                    ShouldFlag = true,
+                    Source =
+                        "if (resident == 0) {\n" +
+                        "  FlowTrace.Fail(System, \"nothing resident\");\n" +
+                        "  return StructureContentState.Degraded;\n" +
+                        "}\n" +
+                        "return StructureContentState.Warm;",
+                },
+                new OracleCase
+                {
+                    Name = "known-bad: the shipped ternary on the DISCOVERED count",
+                    ShouldFlag = false,
+                    Source = "State = keys.Count > 0 ? StructureContentState.Warm : StructureContentState.Degraded;",
+                },
+                new OracleCase
+                {
+                    Name = "known-bad: degrades silently, never reports",
+                    ShouldFlag = false,
+                    Source =
+                        "if (resident == 0) return StructureContentState.Degraded;\n" +
+                        "return StructureContentState.Warm;",
+                },
+                new OracleCase
+                {
+                    Name = "known-bad: tests residency but still calls it Warm",
+                    ShouldFlag = false,
+                    Source =
+                        "if (resident == 0) FlowTrace.Warn(System, \"empty\");\n" +
+                        "return StructureContentState.Warm;",
+                },
+            };
+        }
+
+        /// <summary>
+        /// Balanced-brace body of the first method whose signature contains
+        /// <paramref name="signatureNeedle"/>. Runs on ALREADY-BLANKED source, so no brace inside a
+        /// string or comment can throw the depth count off. Brace chars come from code points
+        /// (123/125) to keep this file's own brace balance clean under CLAUDE.md sec.1.
+        /// </summary>
+        private static bool TryMethodBody(string code, string signatureNeedle, out string body)
+        {
+            body = null;
+            if (string.IsNullOrEmpty(code)) return false;
+            char openBrace = (char)123;
+            char closeBrace = (char)125;
+            int sig = code.IndexOf(signatureNeedle, StringComparison.Ordinal);
+            if (sig < 0) return false;
+            int open = code.IndexOf(openBrace, sig);
+            if (open < 0) return false;
+            int depth = 0, i = open;
+            for (; i < code.Length; i++)
+            {
+                if (code[i] == openBrace) depth++;
+                else if (code[i] == closeBrace) { depth--; if (depth == 0) break; }
+            }
+            if (depth != 0) return false;
+            body = code.Substring(open, i - open + 1);
+            return true;
         }
 
         private static int Count(string haystack, string needle)

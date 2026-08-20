@@ -339,6 +339,10 @@ namespace DeNelle.Editor
             if (!AdServiceSeamRegression.Run(out var adSeamReason)) failures.Add(adSeamReason); else log.AppendLine("[ad-seam] " + adSeamReason);
             if (!AndroidContentTargetRegression.Run(out var androidTargetReason)) failures.Add(androidTargetReason); else log.AppendLine("[android-content-target] " + androidTargetReason);
             if (!BattleQuiescenceRegression.Run(out var quiescenceReason)) failures.Add(quiescenceReason); else log.AppendLine("[battle-quiescence] " + quiescenceReason);
+            if (!StructureSeatRegression.Run(out var seatReason)) failures.Add(seatReason); else log.AppendLine("[structure-seat] " + seatReason);
+            if (!StructureCadenceRegression.Run(out var cadenceReason)) failures.Add(cadenceReason); else log.AppendLine("[structure-cadence] " + cadenceReason);
+            if (!StructureLoadBoundedRegression.Run(out var loadBoundedReason)) failures.Add(loadBoundedReason); else log.AppendLine("[structure-load-bounded] " + loadBoundedReason);
+            if (!SheathePoseRegression.Run(out var sheatheReason)) failures.Add(sheatheReason); else log.AppendLine("[sheathe-pose] " + sheatheReason);
             // --- WO-912 sec.9.3 + D4/D7: no ad reward may ever grant a real-money currency ---
             if (!AdPlacementCovenantRegression.Run(out var adCovReason)) failures.Add(adCovReason); else log.AppendLine("[ad-covenant] " + adCovReason);
             // --- WO-976: the `hasSurface` false green stays dead — each of the four visibility
