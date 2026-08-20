@@ -1,0 +1,5 @@
+Jeweler_Gems_Storefront          visual='jeweler(Clone)' localEuler=(90,0,0)         boundsSize=(3.62,4.00,3.37) -> Builds/StorefrontCaps\Jeweler_Gems_Storefront.png
+Blacksmith_Weapons_Storefront    visual='Anvil' localEuler=(8,-118,-5)      boundsSize=(3.06,4.22,3.48) -> Builds/StorefrontCaps\Blacksmith_Weapons_Storefront.png
+Forge_Armor_Storefront           visual='armorer(Clone)' localEuler=(90,90,0)        boundsSize=(2.54,4.00,2.92) -> Builds/StorefrontCaps\Forge_Armor_Storefront.png
+CastleBarracks                   visual='barracks(Clone)' localEuler=(90,180,0)       boundsSize=(5.91,4.00,6.11) -> Builds/StorefrontCaps\CastleBarracks.png
+Jeweler ALT pitch                localEuler=(-90,0,0) -> Builds/StorefrontCaps\Jeweler_Gems_Storefront__ALT.png
