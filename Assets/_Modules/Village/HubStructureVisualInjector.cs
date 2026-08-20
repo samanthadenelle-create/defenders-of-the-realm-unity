@@ -175,10 +175,34 @@ namespace DeNelle.Village
             if (HubScenes.IsHub(SceneManager.GetActiveScene().name)) ApplyAll();
         }
 
+        // ⛔ P0 HANG FIX, 2026-08-20 — DO NOT PUT ApplyAll() BACK INLINE HERE.
+        // The captured hang was three minutes of total process silence whose last line was
+        //   [Flow:VisualFactory] -> Skin('Structures/barracks')
+        // with THIS METHOD on the stack. The chain was
+        //   Internal_SceneLoaded -> OnSceneLoaded -> ApplyAll -> TrySwap -> SkinStorefront
+        //     -> VisualFactory.Skin -> StructureAssetLoader -> Addressables WaitForCompletion()
+        // and WaitForCompletion is an uninterruptible spin that needs the ResourceManager to be
+        // pumped from the PLAYER LOOP. Inside a nested engine callback the player loop cannot
+        // re-enter, so the thread that would finish the operation is the thread waiting on it.
+        // It was NOT a slow network (CDN pinged 2/2, 31.5 ms, while the device was hung).
+        //
+        // Two independent fixes, and this is the structural one: get OFF the engine callback.
+        // StructureAssetLoader no longer blocks at all (see its header), so this deferral is
+        // belt-and-braces — but it is the belt that survives someone re-introducing a blocking
+        // load somewhere further down the chain, so it stays.
         private static void OnSceneLoaded(Scene scene, LoadSceneMode mode)
         {
-            if (HubScenes.IsHub(scene.name)) ApplyAll();
+            if (!HubScenes.IsHub(scene.name)) return;
+            s_warmReapplies = 0;
+            DeNelle.Core.StructureContentWarmer.Defer(ApplyAll);
         }
+
+        // Re-apply budget per hub load. Skins that were skipped because their art was not yet
+        // resident get one more chance once the warmer settles; capped so a genuinely missing
+        // address cannot spin ApplyAll forever.
+        private const int MaxWarmReapplies = 3;
+        private static int s_warmReapplies;
+        private static bool s_warmReapplyArmed;
 
         /// <summary>
         /// WO-724: re-surface the baked CastleBarracks LIVE when the unlock flips true
@@ -262,6 +286,31 @@ namespace DeNelle.Village
                     continue;
                 }
                 TryPlace(Places[i]);
+            }
+
+            // P0 HANG FIX, 2026-08-20 (the graceful half). StructureAssetLoader now SKIPS rather
+            // than waits when structure art is not yet resident, and SkinStorefront already
+            // degrades correctly on that null — it re-enables the baked renderers and leaves the
+            // baked twin standing, writing NO LightSkin_ marker. So a skip is recoverable, and the
+            // recovery is armed HERE, after the passes, on the one signal that says a skip actually
+            // happened: the loader issues an async Request per skip, so PendingRequests > 0 means
+            // at least one structure went unskinned this pass. When those land, re-apply.
+            // A slightly wrong-looking building for a second beats a dead game for three minutes.
+            if (!s_warmReapplyArmed && s_warmReapplies < MaxWarmReapplies &&
+                DeNelle.Core.StructureContentWarmer.PendingRequests > 0)
+            {
+                s_warmReapplyArmed = true;
+                DeNelle.Core.StructureContentWarmer.WhenSettled(() =>
+                {
+                    s_warmReapplyArmed = false;
+                    s_warmReapplies++;
+                    if (!HubScenes.IsHub(SceneManager.GetActiveScene().name)) return;
+                    DeNelle.Core.Diagnostics.FlowTrace.Step("Hub",
+                        $"structure content settled ({DeNelle.Core.StructureContentWarmer.State}, " +
+                        $"resident={DeNelle.Core.StructureContentWarmer.ResidentCount}) — " +
+                        $"re-applying hub skins (pass {s_warmReapplies}/{MaxWarmReapplies}).");
+                    ApplyAll();
+                });
             }
         }
 

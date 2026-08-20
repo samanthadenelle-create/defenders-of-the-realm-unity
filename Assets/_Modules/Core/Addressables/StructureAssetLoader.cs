@@ -17,6 +17,55 @@
 // and only then do the assets physically move. Move the assets first and every
 // unconverted call site returns null — an invisible town, in a live build.
 //
+// =============================================================================
+// ⛔⛔ 2026-08-20 — P0 HANG. THIS FILE USED TO DEADLOCK THE GAME. READ THIS BEFORE
+// YOU TOUCH THE RESOLVE ORDER.
+//
+// Captured on a Seeker device, returning from a dungeon to the town hub:
+//   08-20 10:25:14.917 [Flow:VisualFactory] -> Skin('Structures/barracks')
+//       DeNelle.Village.VisualFactory:Skin(Transform, String, SkinOptions)
+//       DeNelle.Village.HubStructureVisualInjector:SkinStorefront(Swap, Transform)
+//       DeNelle.Village.HubStructureVisualInjector:TrySwap(Swap)
+//       DeNelle.Village.HubStructureVisualInjector:ApplyAll()
+//       DeNelle.Village.HubStructureVisualInjector:OnSceneLoaded(Scene, LoadSceneMode)
+//   ...and then NOTHING, ever again. The device clock reached 10:28:35 while the
+//   game's last log line was still 10:25:14.917 — three minutes of total silence
+//   from a process that was alive and foregrounded, showing a stale frame.
+//
+// IT WAS NOT THE NETWORK. The owner tested the device while it was hung: Wi-Fi
+// associated, ping to the R2 CDN 2/2 packets, 0% loss, 31.5 ms. The CDN was healthy
+// while the main thread was dead. A TIMEOUT WOULD NOT HAVE HELPED — and Addressables
+// 2.9.1 does not offer one anyway: AsyncOperationBase.WaitForCompletion is literally
+//     while (!InvokeWaitForCompletion()) { }
+// with no timeout, no yield and no exit. The full three-part proof (including the
+// provider paths that return false forever and Thread.Sleep the main thread) is in
+// the header of StructureContentWarmer.cs, cited to file and line.
+//
+// THE MECHANISM: this file called WaitForCompletion() from inside a
+// SceneManager.sceneLoaded ENGINE CALLBACK. Addressables operations are driven by the
+// ResourceManager, which is pumped from the player loop. Blocking inside a nested
+// engine callback means the thread that would drive the operation to completion is
+// the thread waiting for it. Classic deadlock. It was intermittent because content
+// ALREADY RESIDENT in memory returns without needing to pump — and the owner's
+// constant town -> dungeon -> town loop is exactly what evicts it.
+//
+// TWO THINGS MADE IT UNSURVIVABLE RATHER THAN MERELY SLOW, and both are now fixed:
+//   1. Every guard here is EXCEPTION-shaped. Guard.Try handles a throw perfectly and
+//      does nothing whatsoever for a HANG. A stalled operation is not an exception;
+//      it is silence. Guards are still here — they are just not the safety net.
+//   2. There is NO Resources fallback tier for structures any more: the CDN migration
+//      deleted Assets/Resources/Structures. So Addressables was the ONLY tier, and
+//      when it stalled there was nothing to fall back to. The residency cache is now
+//      that tier.
+//
+// THE RULE THIS FILE NOW KEEPS, and the gate that enforces it:
+//   ⛔ ZERO occurrences of WaitForCompletion in this file. Not one, not under an #if.
+//   Assets/Editor/Regression/StructureLoadBoundedRegression.cs fails the build if a
+//   single one reappears, and it blanks comments AND string literals first so it
+//   cannot match its own tombstone. The one allowlisted site in the whole seam is
+//   StructureEditorSyncResolver.cs, which is entirely inside #if UNITY_EDITOR.
+// =============================================================================
+//
 // CONTRACT (V1-SAFE, NON-NEGOTIABLE): Addressables-FIRST, Resources-FALLBACK.
 //   • The address is the extension-less, Resources-relative key used VERBATIM as
 //     BOTH the Addressable address AND the Resources.Load key — e.g.
@@ -25,11 +74,15 @@
 //     repo.visualPrefabPath / repo.upgradeVisualPath, so NOTHING in the catalog
 //     changes. Do NOT invent a second address scheme; the grouper registers these
 //     same strings (same rule as Hero/Enemy/Vfx/Audio).
-//   • A miss on BOTH paths returns null and is reported ONCE per key. Callers
-//     already treat null as "no art" (StructureFactory logs a LogWarning per
-//     CLAUDE.md §4), so a null return is never a crash — but it IS a defect for a
-//     structure, unlike the audio seam where a miss can be by design. Structures
-//     have no synth fallback: a missing prefab is an invisible building.
+//   • "Addressables-first" is now served by the RESIDENT CACHE
+//     (StructureContentWarmer.TryGet) rather than by a synchronous load. Same
+//     precedence, same addresses — the difference is that a miss now costs a frame
+//     of wrong-looking building instead of the whole game.
+//   • A miss on ALL paths returns null and is reported. Callers already treat null as
+//     "no art" (StructureFactory logs a LogWarning per CLAUDE.md §4), so a null return
+//     is never a crash — and HubStructureVisualInjector.SkinStorefront specifically
+//     RESTORES THE BAKED TWIN on null, which is the graceful degradation this fix
+//     depends on. A slightly wrong-looking building beats a dead game.
 //
 // ⚠ THE MIGRATION HAS A TRAP, RECORDED HERE BECAUSE IT HAS ALREADY BEEN HIT ONCE
 // TODAY IN ANOTHER FOLDER: CatalogPrefabImporter COPIES pack prefabs INTO
@@ -48,8 +101,9 @@ using Object = UnityEngine.Object;
 namespace DeNelle.Core
 {
     /// <summary>
-    /// Addressables-first, Resources-fallback loader for structure art
+    /// Resident-first, Resources-fallback loader for structure art
     /// (<c>repo.visualPrefabPath</c> / <c>repo.upgradeVisualPath</c>).
+    /// <para>⛔ EVERY PATH IN HERE IS NON-BLOCKING BY CONSTRUCTION. See the file header.</para>
     /// </summary>
     public static class StructureAssetLoader
     {
@@ -59,13 +113,14 @@ namespace DeNelle.Core
         /// <summary>Address/Resources prefix every structure key carries.</summary>
         public const string StructureAddrPrefix = "Structures/";
 
-        /// <summary>Keys whose both-paths-missed failure has already been reported (once per key).</summary>
+        /// <summary>Keys whose all-paths-missed failure has already been escalated (once per key).</summary>
         private static readonly HashSet<string> s_reportedMisses = new HashSet<string>();
 
         /// <summary>
         /// Load a structure's visual prefab by its catalog key — the value authored in
         /// <c>repo.visualPrefabPath</c> / <c>repo.upgradeVisualPath</c>, e.g.
-        /// "Structures/Ballista_L1". Null when both paths miss (caller logs + renders nothing).
+        /// "Structures/Ballista_L1". Null when nothing is resolvable RIGHT NOW (caller logs +
+        /// keeps whatever it already had). Never blocks.
         /// </summary>
         public static GameObject LoadStructurePrefab(string key) => Load<GameObject>(key);
 
@@ -83,43 +138,38 @@ namespace DeNelle.Core
 
             T result = null;
 
-            // ---- Addressables first -----------------------------------------
-            // Guarded: a catalog that is absent (editor, pre-migration) or malformed must degrade
-            // to Resources, never throw into the caller. Guard.Try reports via FlowTrace so a
-            // broken catalog is visible instead of silently costing every load its fast path.
-            bool wasRegistered = false;
-            Guard.Try(System, $"probe '{address}' registration", () =>
+            // ---- 1. RESIDENT CACHE (this is the Addressables tier now) -------
+            // A dictionary probe. It cannot download, cannot pump, cannot sleep and cannot
+            // deadlock — which is the entire difference between this file and the one that
+            // hung the game for three minutes on 2026-08-20.
+            if (StructureContentWarmer.TryGet(address, out result) && result != null)
             {
-                wasRegistered = AddressableRegistered<T>(address);
-            });
-
-            if (wasRegistered)
-            {
-                Guard.Try(System, $"Addressables load {address} ({typeof(T).Name})", () =>
-                {
-                    var handle = UnityEngine.AddressableAssets.Addressables.LoadAssetAsync<T>(address);
-                    result = handle.WaitForCompletion();
-                });
-
-                if (result != null)
-                {
-                    FlowTrace.Once(System, "addr-hit-" + address,
-                        $"'{address}' resolved from ADDRESSABLES (out of the force-included Resources payload).");
-                    DependencyClosureTrace.Verify(System, address, result, viaFallback: false);
-                    return result;
-                }
-
-                FlowTrace.Warn(System,
-                    $"Addressables '{address}' is registered but resolved null — falling back to " +
-                    $"Resources.Load(\"{address}\").");
-            }
-            else
-            {
-                FlowTrace.Step(System,
-                    $"no Addressables entry for '{address}' (expected pre-migration) — using Resources.Load(\"{address}\").");
+                FlowTrace.Once(System, "addr-hit-" + address,
+                    $"'{address}' served RESIDENT from the structure warm cache " +
+                    "(out of the force-included Resources payload, and off the blocking path).");
+                DependencyClosureTrace.Verify(System, address, result, viaFallback: false);
+                return result;
             }
 
-            // ---- Resources fallback ------------------------------------------
+#if UNITY_EDITOR
+            // ---- 2. EDITOR-ONLY synchronous Addressables ---------------------
+            // Kept AHEAD of Resources so editor precedence matches the original
+            // Addressables-first contract byte for byte. Safe only because the Editor uses the
+            // AssetDatabase provider — no bundle, no UnityWebRequest, no player loop to starve.
+            // See StructureEditorSyncResolver.cs; it is the ONE allowlisted blocking site.
+            result = StructureEditorSyncResolver.Resolve<T>(address);
+            if (result != null)
+            {
+                DependencyClosureTrace.Verify(System, address, result, viaFallback: false);
+                return result;
+            }
+#endif
+
+            // ---- 3. Resources fallback ---------------------------------------
+            // Instant and local; kept for pre-migration content and for anything that never
+            // left Resources. Note Assets/Resources/Structures itself is GONE, so in a shipped
+            // build this tier answers nothing for structures — it is not the safety net any
+            // more, the residency cache is.
             Guard.Try(System, $"Resources.Load {address} ({typeof(T).Name})", () =>
             {
                 result = Resources.Load<T>(address);
@@ -129,34 +179,53 @@ namespace DeNelle.Core
             // migration: a moved asset that still answers from Resources means the address is wrong
             // and the bytes are shipping twice — invisible in game, and invisible to every gate
             // except this line.
-            if (result != null) DependencyClosureTrace.Verify(System, address, result, viaFallback: true);
-
-            if (result == null && s_reportedMisses.Add(address))
+            if (result != null)
             {
-                // ⛔ NO SYNTH FALLBACK EXISTS FOR A BUILDING. Unlike AudioAssetLoader — where a miss
-                // can be a designed state — a structure that resolves nothing is an INVISIBLE
-                // BUILDING the player has paid resources for. Always error-level, always once per key.
-                FlowTrace.Fail(System,
-                    $"structure asset '{address}' ({typeof(T).Name}) not found via Addressables OR Resources — " +
-                    "the structure will render NOTHING. Check repo.visualPrefabPath against the assets on " +
-                    "disk, and (post-migration) that the grouper registered this exact address.");
+                DependencyClosureTrace.Verify(System, address, result, viaFallback: true);
+                return result;
             }
 
-            return result;
-        }
+            // ---- 4. NOT RESIDENT. SKIP THIS FRAME — DO NOT WAIT. -------------
+            // Ask for it asynchronously (idempotent; the warmer dedupes) and return null. The
+            // caller degrades: HubStructureVisualInjector.SkinStorefront re-enables the baked
+            // renderers and keeps the baked twin, and the injector re-applies once the warmer
+            // settles. A slightly wrong-looking building beats a dead game.
+            //
+            // ⛔ THE REPORTING IS THE POINT. Three minutes were lost to unexplained silence
+            // because nothing announced the wait. Every skip names the address AND how long it
+            // has been waiting, and escalates to Fail once it stops looking transient.
+            bool knownAbsent = StructureContentWarmer.IsKnownAbsent(address);
+            float waited = StructureContentWarmer.SecondsWaiting(address);
 
-        /// <summary>
-        /// True when the Addressables catalog has at least one location for <paramref name="address"/>
-        /// providing type <typeparamref name="T"/>. Type-filtered so a prefab and a texture sharing an
-        /// address resolve apart. Silent on the common pre-migration miss — that is the expected state
-        /// until the grouper runs, and warning on it would bury the real failures.
-        /// </summary>
-        private static bool AddressableRegistered<T>(string address) where T : Object
-        {
-            var locHandle = UnityEngine.AddressableAssets.Addressables
-                .LoadResourceLocationsAsync(address, typeof(T));
-            var locations = locHandle.WaitForCompletion();
-            return locations != null && locations.Count > 0;
+            if (!knownAbsent) StructureContentWarmer.Request(address);
+
+            if (knownAbsent || waited > StructureContentWarmer.MissEscalateSeconds)
+            {
+                if (s_reportedMisses.Add(address))
+                {
+                    // ⛔ NO SYNTH FALLBACK EXISTS FOR A BUILDING. Unlike AudioAssetLoader — where a miss
+                    // can be a designed state — a structure that resolves nothing is an INVISIBLE
+                    // BUILDING the player has paid resources for. Always error-level, always once per key.
+                    FlowTrace.Fail(System,
+                        $"structure asset '{address}' ({typeof(T).Name}) still unresolved after " +
+                        $"{waited:F1}s via the resident cache OR Resources — the caller is keeping its " +
+                        $"baked/previous visual (warmerState={StructureContentWarmer.State}, " +
+                        $"knownAbsent={knownAbsent}, resident={StructureContentWarmer.ResidentCount}, " +
+                        $"pending={StructureContentWarmer.PendingRequests}). Check repo.visualPrefabPath " +
+                        "against the assets on disk, and that the grouper registered this exact address. " +
+                        "NOTE: this is a VISUAL defect. The game did not stall — that is deliberate.");
+                }
+            }
+            else
+            {
+                FlowTrace.Throttle(System, "skip-" + address, 1f,
+                    $"'{address}' ({typeof(T).Name}) is not resident yet — SKIPPING this frame after " +
+                    $"{waited:F1}s and requesting it asynchronously (warmerState={StructureContentWarmer.State}, " +
+                    $"pending={StructureContentWarmer.PendingRequests}). The caller keeps its current visual. " +
+                    "This deliberately does NOT wait: waiting here is what deadlocked the game on 2026-08-20.");
+            }
+
+            return null;
         }
     }
 }
