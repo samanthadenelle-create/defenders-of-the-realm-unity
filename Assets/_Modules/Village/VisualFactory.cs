@@ -34,6 +34,20 @@ namespace DeNelle.Village
     {
         public float FitHeight;          // >0 → scale so world-bounds HEIGHT = this
         public float FitLargest;         // >0 → scale so LARGEST world-bounds dim = this (wins over FitHeight)
+
+        // FOOTPRINT CAP (owner F8 2026-08-20 "farm seems to be much larger than anything else").
+        // >0 => after the height fit, if the widest HORIZONTAL world-bounds extent (max of x,z)
+        // exceeds this many metres, scale DOWN uniformly so it equals it. A CAP, never an
+        // enlargement, never non-uniform.
+        //
+        // WHY IT IS NEEDED: fit-to-HEIGHT is a SINGLE-AXIS promise executed as a UNIFORM scale, so
+        // it silently drags the other two axes with it. A model whose FIT-TIME pose is flat blows
+        // up: Structures/farm measures 0.977 x 0.391 x 1.000 m once its (-90,0,0) euler is applied
+        // PRE-fit, so a 5.6 m height target divides by 0.391 and drags the 1.000 m plan axis to
+        // 14.34 m — measured, against a 2.8–5.8 m family. Neither direction on heightMul fixes
+        // that, because heightMul IS the thing being multiplied.
+        // DEFAULT 0 = disabled = byte-identical behaviour for every existing caller.
+        public float MaxFootprint;
         public bool  SeatOnGround;       // shift so the bounds base sits at the host's y
         public bool  StripColliders;     // remove the model's own colliders (the host owns its collider)
         public bool  FixTripoMaterials;  // attach DeNelle.Core.TripoMaterialFixer (Tripo→URP) via reflection
@@ -264,6 +278,11 @@ namespace DeNelle.Village
                 if (opts.FitLargest > 0f)     Fit(go, opts.FitLargest, largest: true);
                 else if (opts.FitHeight > 0f) Fit(go, opts.FitHeight,  largest: false);
 
+                // AFTER the fit and BEFORE the seat: the cap is a ceiling on the fit's result, not
+                // a second competing fit, and it changes height as well as width (uniform), so it
+                // must land before the bounds base is dropped to the host.
+                if (opts.MaxFootprint > 0f) CapFootprint(go, opts.MaxFootprint);
+
                 // SeatOnGround centres the (now correctly-oriented) bounds over the host's x/z and
                 // drops the bounds-base to the host's y — so the visible mesh sits dead-centre over
                 // the hero ROOT, the transform the camera follows and HeroLocomotion drives.
@@ -388,15 +407,92 @@ namespace DeNelle.Village
             go.transform.localScale *= target / measure;
         }
 
+        // ── Seat verification (§12: the next float NAMES ITSELF) ─────────────
+        //
+        // ⚠ READ THE TRACE IN WORLD SPACE, NOT IN THE Xform LINE'S localPosition.
+        // The "[Flow:Xform] ... after Fit+SeatOnGround: pos=(0.00, 2.00, 3.13)" line prints
+        // transform.localPosition — the position of the model's PIVOT relative to its host, NOT
+        // the height of its bottom above the ground. A model whose pivot sits at the centre of a
+        // 4 m body seats CORRECTLY at local y = +2.00: that is exactly the lift needed to put the
+        // bounds BOTTOM on the host's y. Reading that 2.00 as "floating 2 m" is a misdiagnosis
+        // that has cost a session already (2026-08-20 portal triage). The only number that can
+        // decide the question is bounds.min.y vs the ground plane — which is what this pair of
+        // helpers measures and prints, so nobody has to re-derive the pivot maths from a log.
+        //
+        // Epsilon: a seat is "on the ground" when its bounds bottom is within this of the ground
+        // plane. Renderer bounds are a loose world AABB and a fitted 4 m building carries a few
+        // mm of float error, so a hard == would cry wolf on every correct seat. 5 cm is well under
+        // anything a player can perceive as a gap and well over the numeric noise.
+        public const float SeatEpsilonMetres = 0.05f;
+
+        /// <summary>
+        /// TRUE when <paramref name="go"/>'s world-bounds BOTTOM rests within
+        /// <see cref="SeatEpsilonMetres"/> of <paramref name="groundY"/>. <paramref name="bottomY"/>
+        /// receives the measured bottom (NaN when the object has no measurable bounds — which is
+        /// itself a fail, since an unmeasurable object cannot have been seated).
+        /// <para>PUBLIC on purpose: this is the one definition of "seated", shared by the runtime
+        /// seat below and by <c>StructureSeatRegression</c>, so the gate cannot drift from the game.</para>
+        /// </summary>
+        public static bool IsSeatedOnGround(GameObject go, float groundY, out float bottomY,
+                                            float epsilon = SeatEpsilonMetres)
+        {
+            bottomY = float.NaN;
+            if (go == null || !TryBounds(go, out Bounds b)) return false;
+            bottomY = b.min.y;
+            return Mathf.Abs(bottomY - groundY) <= epsilon;
+        }
+
         /// <summary>Shifts the object so its bounds base sits at <paramref name="basePos"/>.y
         /// (centred on basePos.x/z).</summary>
+        /// <summary>
+        /// Uniformly scales DOWN (never up) so the widest horizontal world-bounds extent (max of
+        /// x,z) is at most <paramref name="maxMetres"/>. Runs AFTER <see cref="Fit"/>, so it is a
+        /// ceiling on that fit rather than a second competing fit; proportions are preserved.
+        /// </summary>
+        private static void CapFootprint(GameObject go, float maxMetres)
+        {
+            if (maxMetres <= 0f || !TryBounds(go, out Bounds b)) return;
+            float widest = Mathf.Max(b.size.x, b.size.z);
+            if (widest < 0.0001f || widest <= maxMetres) return;
+            float k = maxMetres / widest;
+            go.transform.localScale *= k;
+            FlowTrace.Step("VisualFactory",
+                $"footprint cap: widest {widest:0.##}m > {maxMetres:0.##}m — scaled x{k:0.###} uniformly " +
+                "(height follows; this row's fit-time pose is flat, so fit-to-height alone over-scales it).");
+        }
+
         private static void SeatOnGround(GameObject go, Vector3 basePos)
         {
-            if (!TryBounds(go, out Bounds b)) return;
+            // W: an unmeasurable body used to return here in SILENCE, leaving the model wherever
+            // Fit left it — the exact "it floats and nothing said so" class §12 exists to kill.
+            if (!TryBounds(go, out Bounds b))
+            {
+                FlowTrace.Warn("VisualFactory",
+                    $"SeatOnGround('{go?.name}'): NO measurable renderer bounds — NOT seated, left at " +
+                    $"{(go != null ? go.transform.position.ToString("F2") : "<null>")} (ground y={basePos.y:F2}). " +
+                    "The body may float or sink; check the model has an enabled renderer with a mesh.");
+                return;
+            }
+
             Vector3 delta = new Vector3(basePos.x - b.center.x,
                                         basePos.y - b.min.y,
                                         basePos.z - b.center.z);
             go.transform.position += delta;
+
+            // VERIFY THE SEAT ACTUALLY LANDED (§12). The shift above is correct by construction
+            // *given the bounds it measured*; the failure mode is that the measurement was stale or
+            // degenerate (skinned-mesh bounds before the first pose, a renderer that reports an
+            // empty AABB). Re-measuring after the move is the only thing that proves the bottom is
+            // on the plane — and it makes the offending object print its OWN name and its OWN
+            // offending Y, so the next occurrence is one grep away instead of one felt-test away.
+            if (!IsSeatedOnGround(go, basePos.y, out float bottomY))
+            {
+                FlowTrace.Warn("VisualFactory",
+                    $"SeatOnGround('{go.name}') LEFT IT OFF THE GROUND: bounds bottom y={bottomY:F2} vs " +
+                    $"ground y={basePos.y:F2} (off by {bottomY - basePos.y:F2} m, tolerance " +
+                    $"{SeatEpsilonMetres:F2} m). NOTE: the Xform line's localPosition is the PIVOT, " +
+                    "not the bottom — this line is the one that decides whether it floats.");
+            }
         }
 
         private static bool TryBounds(GameObject go, out Bounds bounds)

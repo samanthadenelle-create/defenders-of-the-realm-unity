@@ -293,6 +293,47 @@ namespace DeNelle.Core.Catalog
         public float heightMul = 1.0f;
 
         /// <summary>
+        /// FOOTPRINT CEILING in metres for the height-fitted model — the widest HORIZONTAL
+        /// world-bounds extent (max of X and Z) this row is allowed to occupy. &gt;0 arms it;
+        /// <b>DEFAULT 0 = DISARMED = exactly today's behaviour</b>, so a row that does not author
+        /// it is byte-identical to before this field existed. It only ever scales DOWN, never up,
+        /// and it scales UNIFORMLY — the model keeps its proportions, it just stops eating the
+        /// plaza. Applied AFTER the height fit (VisualFactory.Fit), so it is a CAP on that fit and
+        /// not a second competing fit.
+        /// <para>WHY A SECOND AXIS EXISTS AT ALL — and why <see cref="heightMul"/> could not do
+        /// this job. Fit-to-height is a SINGLE-AXIS promise over a UNIFORM scale: the model is
+        /// scaled by <c>target / boundsY</c>, so whatever the footprint happens to be, it comes
+        /// along at the same factor. That is fine while every model's fitted pose is roughly
+        /// building-shaped. It breaks the moment a model's fitted pose is FLAT, because a small
+        /// Y divisor makes the scale explode and the footprint explodes with it. MEASURED, on
+        /// device, 2026-08-20 (logs/device/2026-08-20-portal.log, [Flow:Xform] + [Flow:VisualFactory]
+        /// "skinned"): <c>Structures/farm</c> is natively 0.977 x 1.000 x 0.391 m, and the row's
+        /// authored orientation euler (-90,0,0) — applied PRE-fit since the GROK_BRIEF 2026-08-19
+        /// change — stands the 0.391 axis up. Fit therefore divided a 5.6 m target by 0.391 and
+        /// produced <c>scale=(14.34)</c> and a fitted footprint of <b>14.00 x 14.34 m</b>, against
+        /// a family that measures 2.8-5.8 m across. The owner's report was "farm seems to be much
+        /// larger than anything else"; the number behind that felt-report is 3.5x.</para>
+        /// <para>NO OTHER ROW CAN BE FIXED BY DIALING HEIGHT INSTEAD. Both directions on
+        /// <see cref="heightMul"/> are wrong here: lowering it shrinks the BUILDING as well as the
+        /// footprint (that is literally the "shrunk farm" the owner already rejected, commit
+        /// 31b41d19), and raising it makes the footprint worse. Height and footprint were ONE
+        /// number by design; this is the deliberate, opt-in second number for the case where that
+        /// design has no answer.</para>
+        /// <para>SAVE COMPAT, same rule as <see cref="heightMul"/>: BuildModeController claims
+        /// <c>ceil(measured / 3 m)</c> cells from StructureFactory.MeasureUprightFootprintXZ, which
+        /// measures the fitted model, so arming this key SHRINKS a claim. Shrinking is overlap-safe
+        /// (a saved town reloads with a smaller claim, never an overlapping one) — collector_farm
+        /// goes 5x5 cells -&gt; 2x2. RAISING an already-armed cap can grow a claim; state the
+        /// before/after cell claim when you change one, exactly as for heightMul. Never arm this on
+        /// a WALL row: a narrower segment opens pathable GAPS in already-placed runs.</para>
+        /// <para>Read by <c>StructureFactory.OptsFor</c> into <c>SkinOptions.MaxFootprint</c>, so it
+        /// reaches Create, ReskinForLevel, the placement GHOST and MeasureUprightFootprintXZ through
+        /// the one shared options builder — the ghost cannot disagree with the placed structure.
+        /// JSON deserializes "maxFootprint" straight in.</para>
+        /// </summary>
+        public float maxFootprint = 0f;
+
+        /// <summary>
         /// DEPRECATED (WO-764) — the legacy ABSOLUTE visual height (metres) the model was fit to.
         /// Superseded by <see cref="heightMul"/> (base × multiplier) and NO LONGER READ by
         /// StructureFactory.EffectiveVisualHeight. Retained only so any older serialized JSON that

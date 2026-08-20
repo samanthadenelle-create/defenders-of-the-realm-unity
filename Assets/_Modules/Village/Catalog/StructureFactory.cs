@@ -442,6 +442,12 @@ namespace DeNelle.Village
             // guards repo: a sparse / missing repo means "no opt-in", i.e. the known-good default.
             o.PreservePrefabRotation = entry != null && entry.repo != null && entry.repo.preservePrefabRotation;
 
+            // FOOTPRINT CAP (owner F8 2026-08-20). One line, and it is deliberately HERE rather
+            // than at each call site: Create, ReskinForLevel, the placement GHOST and
+            // MeasureUprightFootprintXZ all route through OptsFor, so the grid claim shrinks with
+            // the visual and the ghost can never disagree with the placed structure.
+            o.MaxFootprint = entry != null && entry.repo != null ? entry.repo.maxFootprint : 0f;
+
             // GROK_BRIEF 2026-08-19 / owner upright: a manual catalog euler MUST feed
             // SkinOptions.LocalRotation so VisualFactory applies it BEFORE Fit. Post-fit
             // euler measured the lying-down short axis (~6.3 m storefronts). Pre-fit yields 4.00 m.
@@ -637,6 +643,21 @@ namespace DeNelle.Village
                 float dy = groundY - b.min.y;
                 if (!Mathf.Approximately(dy, 0f))
                     visual.transform.position += new Vector3(0f, dy, 0f);
+
+                // VERIFY THE RESEAT LANDED (§12, 2026-08-20 portal triage). This helper runs AFTER
+                // the per-row orientation offset/scale has moved the mesh, i.e. it is the LAST thing
+                // that decides whether a placed structure's bottom touches the plaza. It used to
+                // shift and return with no proof, so a stale/degenerate bounds measurement produced
+                // a silent floater and the only evidence left was the [Flow:Xform] line — whose
+                // pos= is the PIVOT, not the bottom, and is therefore routinely misread as a float
+                // when a centre-pivoted 4 m building correctly reports local y = +2.00.
+                // VisualFactory.IsSeatedOnGround is the SHARED definition of "seated" (same epsilon
+                // as the runtime seat and as StructureSeatRegression) — never re-derive it here.
+                if (!VisualFactory.IsSeatedOnGround(visual, groundY, out float bottomY))
+                    FlowTrace.Warn("Structure",
+                        $"ReseatCorrectedBottom('{visual.name}') LEFT IT OFF THE GROUND: bounds bottom " +
+                        $"y={bottomY:F2} vs ground y={groundY:F2} (off by {bottomY - groundY:F2} m, " +
+                        $"tolerance {VisualFactory.SeatEpsilonMetres:F2} m) — this structure floats/sinks.");
             });
         }
 

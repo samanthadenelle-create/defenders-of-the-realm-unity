@@ -163,10 +163,24 @@ namespace DeNelle.Village.World
             new AuthoredPortal("HealersCottage", new Vector3(20f, 0f, -140f), 352f),
         };
 
-        // Townsfolk-injector ground band (CastleTownsfolkInjector.GroundMinY/MaxY):
-        // a NavMesh sample outside [-0.35..0.75] is elevated mesh (wall-top /
-        // bridge deck) — never a valid portal seat.
-        private const float GroundMinY = -0.35f;
+        // ⛔ THE BAND IS AN UPPER LIMIT ONLY — corrected 2026-08-20 (owner: "portal floating in the air").
+        //
+        // This was copied verbatim from CastleTownsfolkInjector, whose job is to reject ELEVATED
+        // mesh: a wall-top or a bridge deck is never a valid spawn. That purpose is entirely
+        // one-sided, but the constant was written as a symmetric window, so the LOWER bound
+        // rejected perfectly good ground that simply sits below sea level — and then the fallback
+        // planted the portal at y=0 regardless.
+        //
+        // MEASURED: ExteriorTerrain at the starter-loop portal column (140, 20) is -2.51 m, and the
+        // hero provably stands there on-navmesh at y=-2.65. The sample was rejected for being 2 m
+        // too LOW, the fallback forced y=0, and the portal hung ~2.5 m in the air. THREE of five
+        // portals failed identically in one run (dg_starter_loop, dg_sunken_vault, dg_bonecrypt);
+        // only the two authored over high ground seated.
+        //
+        // So the ceiling is kept (it is the real rule) and the floor is dropped to the terrain's
+        // own reach. ExteriorTerrain's origin is y=-4, so -6 clears the lowest authored ground with
+        // margin while still rejecting anything at wall-top height.
+        private const float GroundMinY = -6f;
         private const float GroundMaxY = 0.75f;
 
         // PlayerPrefs key prefix for "this portal has been discovered" (position-keyed,
@@ -468,10 +482,10 @@ namespace DeNelle.Village.World
             return false;
         }
 
-        // Ground-band NavMesh seat (the townsfolk-injector idiom): accept a sample only
-        // inside [-0.35..0.75] so a portal never seats on a wall-top / bridge deck;
-        // widen the search once, then fall back to the raw authored point at y=0 —
-        // a portal ALWAYS appears where authored.
+        // Ground-band NavMesh seat: accept a sample only BELOW the ceiling so a portal never seats
+        // on a wall-top / bridge deck; widen the search once; and if no mesh answers, fall back to
+        // the TERRAIN height rather than y=0 — a portal always appears where authored, and
+        // "where authored" has never meant "at sea level".
         private static Vector3 SeatOnGround(Vector3 authored, out bool seated)
         {
             float[] radii = { 8f, 20f };
@@ -484,11 +498,46 @@ namespace DeNelle.Village.World
                     return hit.position;
                 }
             }
+
+            // NO NAVMESH. The old fallback returned y=0 flat, which is why a portal over ground at
+            // -2.5 m hung in the air. Ask the terrain instead: it is authored, always present in the
+            // overworld, and needs no bake. Only if there is no terrain either do we keep the
+            // authored y — and then we say so, loudly, instead of inventing a zero.
+            float groundY;
+            bool haveGround = TrySampleTerrainHeight(authored, out groundY);
+
             FlowTrace.Warn("DungeonPortal",
-                $"SeatOnGround: no ground-band [-0.35..0.75] NavMesh hit within 20m of authored {authored} — " +
-                "using the raw authored point (verify walkability in the next fleet run).");
+                $"SeatOnGround: no ground-band [{GroundMinY}..{GroundMaxY}] NavMesh hit within 20m of " +
+                $"authored {authored} — falling back to " +
+                (haveGround ? $"TERRAIN height y={groundY:F2}." : $"the authored y={authored.y:F2} (NO terrain either).") +
+                " Verify walkability in the next fleet run.");
+
             seated = false;
-            return new Vector3(authored.x, 0f, authored.z);
+            return new Vector3(authored.x, haveGround ? groundY : authored.y, authored.z);
+        }
+
+        /// <summary>
+        /// Terrain height under a world point. Checks the terrain that actually contains the point
+        /// rather than <c>Terrain.activeTerrain</c>, so a multi-tile world cannot silently answer
+        /// with the wrong tile's height.
+        /// </summary>
+        private static bool TrySampleTerrainHeight(Vector3 world, out float y)
+        {
+            y = 0f;
+            var terrains = Terrain.activeTerrains;
+            if (terrains == null || terrains.Length == 0) return false;
+
+            foreach (var t in terrains)
+            {
+                if (t == null || t.terrainData == null) continue;
+                Vector3 pos = t.transform.position;
+                Vector3 size = t.terrainData.size;
+                if (world.x < pos.x || world.x > pos.x + size.x ||
+                    world.z < pos.z || world.z > pos.z + size.z) continue;
+                y = t.SampleHeight(world) + pos.y;
+                return true;
+            }
+            return false;
         }
 
         // =====================================================================
