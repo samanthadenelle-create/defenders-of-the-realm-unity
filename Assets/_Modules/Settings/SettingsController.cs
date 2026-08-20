@@ -267,6 +267,21 @@ namespace DeNelle.Settings
                 new Vector2(0.52f, y - Frac(120f)), new Vector2(0.94f, y), OnTermsClicked);
             y -= Frac(120f);
 
+            // -- Ad privacy (2026-08-20) --------------------------------------
+            // CONSENT THAT CANNOT BE WITHDRAWN IS NOT CONSENT, so the prompt is reachable here for
+            // ever, not just once at first run. Two separate controls because they are two separate
+            // rights: "Ad Privacy" re-asks the personalised-ads question, and the CCPA opt-out is a
+            // standing instruction that is NOT cleared by re-answering the first one.
+            // The label carries the state, not a colour (the owner is red/green colourblind).
+            y = Caption(body, "Ad Privacy", y);
+            ElarionUiKit.BuildObsidianButton(body, "Ad Privacy Choices",
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
+                new Vector2(0.06f, y - Frac(120f)), new Vector2(0.48f, y), OnAdPrivacyClicked);
+            _doNotSellButton = ElarionUiKit.BuildObsidianButton(body, DoNotSellLabel(),
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
+                new Vector2(0.52f, y - Frac(120f)), new Vector2(0.94f, y), OnDoNotSellClicked);
+            y -= Frac(120f);
+
             // -- Offline (PROD-010, 2026-08-19) -------------------------------
             // The opt-in door for offline mode. It lives in Settings rather than firing at boot
             // because this is an ~88 MB download: a prompt that ambushes a new player during the
@@ -530,6 +545,37 @@ namespace DeNelle.Settings
         /// Game Guide route: this leaves the app entirely, and the player should land back on the
         /// screen they left rather than on the town.</summary>
         private void OnPrivacyClicked() => OpenExternal(PrivacyUrl, "privacy");
+
+        /// <summary>Re-ask the personalised-ads question. Clears only the GDPR answer — the CCPA
+        /// opt-out is a standing instruction and survives (AdConsentService.ResetGdprForReprompt).</summary>
+        private void OnAdPrivacyClicked()
+        {
+            DeNelle.Core.Monetization.AdConsentService.ResetGdprForReprompt();
+            DeNelle.Core.UI.AdConsentPanel.Show();
+        }
+
+        /// <summary>The button that carries the CCPA opt-out state in its LABEL (never by colour —
+        /// the owner is red/green colourblind, so the words have to do the work).</summary>
+        private Button _doNotSellButton;
+
+        private static string DoNotSellLabel() =>
+            DeNelle.Core.Monetization.AdConsentService.CcpaOptOut ? "Do Not Sell: ON" : "Do Not Sell: OFF";
+
+        /// <summary>Toggle the CCPA "do not sell or share" opt-out. Takes effect on the next SDK
+        /// init; the value is persisted immediately so it cannot be lost by a crash before then.
+        /// The label is updated IN PLACE rather than rebuilding the screen — a settings panel that
+        /// reflows under the player's thumb is how a mis-tap happens.</summary>
+        private void OnDoNotSellClicked()
+        {
+            bool next = !DeNelle.Core.Monetization.AdConsentService.CcpaOptOut;
+            DeNelle.Core.Monetization.AdConsentService.SetCcpaOptOut(next);
+
+            if (_doNotSellButton != null)
+            {
+                var label = _doNotSellButton.GetComponentInChildren<TextMeshProUGUI>(true);
+                if (label != null) label.text = DoNotSellLabel();
+            }
+        }
 
         /// <summary>PROD-010: open the offline opt-in prompt. Show() is a no-op when the
         /// content is already pulled for this build, so a second tap cannot re-download.</summary>

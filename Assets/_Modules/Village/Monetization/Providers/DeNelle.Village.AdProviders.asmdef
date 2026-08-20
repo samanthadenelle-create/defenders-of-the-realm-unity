@@ -1,0 +1,25 @@
+{
+    "name": "DeNelle.Village.AdProviders",
+    "rootNamespace": "DeNelle.Village.Monetization",
+    "references": [
+        "DeNelle.Core",
+        "Unity.LevelPlay"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "LEVELPLAY_PRESENT"
+    ],
+    "versionDefines": [
+        {
+            "name": "com.unity.services.levelplay",
+            "expression": "",
+            "define": "LEVELPLAY_PRESENT"
+        }
+    ],
+    "noEngineReferences": false
+}

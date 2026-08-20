@@ -118,9 +118,25 @@ namespace DeNelle.Core.UI
             {
                 if (_body == null) return;
 
-                if (bytes <= 0)
+                if (bytes < 0)
                 {
-                    // Everything is already cached. Do not offer a download that would do
+                    // UNKNOWN, which is NOT the same as zero. The service returns -1 when it could
+                    // not work out what to download at all, and stamping someone offline-ready on
+                    // that is precisely the silent false promise that shipped on 2026-08-19 (the
+                    // content set was keyed by GROUP name, matched nothing, and every player was
+                    // told "already downloaded"). Say so honestly and record NOTHING.
+                    FlowTrace.Fail("OfflineContent",
+                        "size UNKNOWN (-1) - NOT marking offline-ready. Telling the player they are " +
+                        "covered when we could not even measure the set is how they find out on a plane.");
+                    _body.text = "We could not check the download right now. Please try again in a moment - " +
+                                 "the game still works normally with a connection.";
+                    _progress.text = "";
+                    return;
+                }
+
+                if (bytes == 0)
+                {
+                    // Genuinely nothing left to fetch. Do not offer a download that would do
                     // nothing - record the state and get out of the player's way.
                     FlowTrace.Step("OfflineContent", "size = 0 - already fully cached; marking offline-ready");
                     OfflineContentService.SetOptedIn(true);

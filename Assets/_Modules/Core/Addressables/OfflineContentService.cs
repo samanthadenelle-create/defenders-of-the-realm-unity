@@ -81,9 +81,58 @@ namespace DeNelle.Core
         /// <summary>bundleVersion the completed pull belongs to (content is per-build).</summary>
         private const string PrefPulledBuild = "offline.pulledbuild";
 
-        /// <summary>Every remote label/key the pull must cover. Addressables resolves a
-        /// label to its whole dependency closure, so this is the content set, not a file list.</summary>
-        private static readonly string[] ContentKeys = { "Structure_Art", "Enemy_Art" };
+        /// <summary>
+        /// Address PREFIXES that make up the offline content set.
+        ///
+        /// ⛔ THESE ARE NOT LABELS AND NOT GROUP NAMES — CORRECTED 2026-08-20, and the original
+        /// version of this field was a REAL DEFECT, not a style issue. It read
+        /// <c>{ "Structure_Art", "Enemy_Art" }</c>, which are the names of Addressable GROUPS. A
+        /// group name is not an Addressables key: only addresses and LABELS are, and the only
+        /// labels this project authors are <c>default</c>, <c>Locale</c> and <c>Locale-en</c>
+        /// (verified in AddressableAssetSettings.asset m_LabelTable). So every
+        /// <c>GetDownloadSizeAsync</c> matched nothing and returned 0, the prompt told the player
+        /// "everything is already downloaded", <see cref="SetOptedIn"/> stamped them offline-ready
+        /// — and NOTHING WAS EVER FETCHED. A silent false promise is worse than the missing feature,
+        /// because the player finds out on the plane.
+        ///
+        /// Addresses are enumerated from the in-memory locators instead (see
+        /// <see cref="CollectContentKeys"/>), the same way StructureContentWarmer does it. That
+        /// needs no network and cannot go stale against a group rename.
+        /// </summary>
+        private static readonly string[] ContentAddressPrefixes = { "Structures/", "Enemies/" };
+
+        /// <summary>
+        /// Every remote address in the offline set, read from the loaded catalog. Empty is a
+        /// MEANINGFUL answer and callers must treat it as "cannot size / cannot pull", never as
+        /// "nothing to do" — that conflation is exactly the bug this replaced.
+        /// </summary>
+        private static List<string> CollectContentKeys()
+        {
+            var keys = new List<string>();
+            Guard.Try(Sys, "enumerate offline content addresses", () =>
+            {
+                foreach (var locator in Addressables.ResourceLocators)
+                {
+                    if (locator?.Keys == null) continue;
+                    foreach (var k in locator.Keys)
+                    {
+                        if (!(k is string s)) continue;
+                        for (int i = 0; i < ContentAddressPrefixes.Length; i++)
+                        {
+                            if (s.StartsWith(ContentAddressPrefixes[i], StringComparison.Ordinal) &&
+                                !keys.Contains(s))
+                            {
+                                keys.Add(s);
+                                break;
+                            }
+                        }
+                    }
+                }
+            });
+            FlowTrace.Step(Sys, $"offline content set = {keys.Count} address(es) under " +
+                                $"[{string.Join(", ", ContentAddressPrefixes)}].");
+            return keys;
+        }
 
         /// <summary>Resolved once per launch by <see cref="ResolveContentSource"/>.</summary>
         public static ContentSource Source { get; private set; } = ContentSource.Unknown;
@@ -202,7 +251,22 @@ namespace DeNelle.Core
         public static IEnumerator GetDownloadSize(Action<long> onSize)
         {
             long total = 0;
-            foreach (string key in ContentKeys)
+            var contentKeys = CollectContentKeys();
+
+            if (contentKeys.Count == 0)
+            {
+                // NOT "nothing to download" — "we could not work out what to download". Reporting
+                // -1 keeps those two apart, because the caller stamps the player offline-ready on
+                // a 0 and must never do that on an unknown. This is the exact conflation that made
+                // the group-name bug silent.
+                FlowTrace.Fail(Sys, "offline size UNKNOWN - no addresses matched the content prefixes. " +
+                                    "Either the catalog has not loaded yet or the address scheme changed; " +
+                                    "reporting -1 so the caller cannot mistake this for 'already cached'.");
+                onSize?.Invoke(-1);
+                yield break;
+            }
+
+            foreach (string key in contentKeys)
             {
                 AsyncOperationHandle<long> h = default;
                 bool ok = true;
@@ -242,9 +306,18 @@ namespace DeNelle.Core
             }
 
             bool allOk = true;
-            for (int i = 0; i < ContentKeys.Length; i++)
+            var contentKeys = CollectContentKeys();
+            if (contentKeys.Count == 0)
             {
-                string key = ContentKeys[i];
+                FlowTrace.Fail(Sys, "offline pull ABORTED - no addresses matched the content prefixes, " +
+                                    "so there is nothing to fetch and no basis for claiming success.");
+                onDone?.Invoke(false);
+                yield break;
+            }
+
+            for (int i = 0; i < contentKeys.Count; i++)
+            {
+                string key = contentKeys[i];
                 AsyncOperationHandle h = default;
                 bool started = false;
                 try { h = Addressables.DownloadDependenciesAsync(key, false); started = true; }
@@ -261,7 +334,7 @@ namespace DeNelle.Core
                     // without a second round of size queries, and a slightly coarse bar that
                     // always moves beats an exact one that stalls.
                     float within = h.GetDownloadStatus().Percent;
-                    onProgress?.Invoke((i + Mathf.Clamp01(within)) / ContentKeys.Length);
+                    onProgress?.Invoke((i + Mathf.Clamp01(within)) / contentKeys.Count);
                     yield return null;
                 }
 
