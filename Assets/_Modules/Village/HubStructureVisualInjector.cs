@@ -76,8 +76,8 @@ namespace DeNelle.Village
             // belongs on the building base with everything else. The TOWER class is 1.2, the
             // owner-ruled archer anchor - do not resurrect a landmark tier from it.
             // yaw/pitch/roll/pos/scale hand-dials are orientation/placement,
-            // untouched. (Jeweler still carries an explicit scaleX so it keeps its bespoke proportions,
-            // superseding the height fit — see note; clear its scaleX to make it obey uniform height.)
+            // untouched. (Jeweler scaleX CLEARED 2026-08-19 — owner upright (90,0,0) + uniform FitHeight;
+            // post-Fit non-uniform scale was flipping it upside-down on new-town injector reload.)
             new Swap { bakedName = "EchoHollow_Pets_RoamingArea",   modelPath = "Structures/PetHouse2",    yawDeg = 0f,   pitchDeg = -90f, rollDeg = 270f },   // owner hand-dialed 2026-06-21
             new Swap { bakedName = "ArcaneTower_MagicUpgrades",     modelPath = "Structures/arcane tower", yawDeg = 0f,   pitchDeg = -90f, posY = -0.6f, texPath = "Structures/ArcaneTower_Albedo" },   // NORMALIZED 2026-08-06 (owner F8: "why is the cathedral of magic so large? Normalize"). heightMul was 1.25f here, hardcoded, which is what she was LOOKING AT - the hub scene injects its own swap, so the catalog row alone would not have moved it and the fix would have read as ineffective. The landmark-tier exception is retired; unset = the uniform 1.0 building base, matching the catalog row. DEF-arcane-white: texture moved OUT of the nested "arcane tower/" folder (its name collided with the sibling "arcane tower.fbx" so Resources.Load<Texture2D> returned null -> forced-texture no-op -> pure-white spire). Flat path resolves.
             // ═══ AXIS-BAKE, SECOND CHANNEL — retired here 2026-08-18 (this injector) ═══
@@ -96,12 +96,14 @@ namespace DeNelle.Village
             //     opts.LocalRotation = pitchDeg 90 (owner-dialed). pitchDeg 0 lays them on their faces.
             //   bakeAxisConversion: 0 -> the -90 is CORRECT and LOAD-BEARING, do not touch
             //                            (PetHouse2, arcane tower, store, lumbermill, farm, arena)
-            // Jeweler non-uniform scale is conjugated with the pitch change (S_new = B·S·B⁻¹
-            // permutes Y↔Z): pitch0 (5.4, 3.6, 3.77) → pitch+90 (5.4, 3.77, 3.6).
+            // Jeweler: owner felt X=90 Y=0 Z=0 upright. Do NOT keep the old non-uniform
+            // scaleX/Y/Z here — SkinStorefront applies that AFTER LocalRotation/Fit and it
+            // re-tips the model upside-down on new-town load (bake without that scale looked
+            // perfect). Clear scaleX so FitHeight 4 m matches Forge/armorer/barracks.
             new Swap { bakedName = "Blacksmith_Weapons_Storefront", modelPath = "Structures/Forge",        yawDeg = 180f, pitchDeg = 90f,  rollDeg = 0f },   // owner 2026-08-19: X=90 upright (Forge.fbx bakeAxisConversion:1); yaw kept
             new Swap { bakedName = "Forge_Armor_Storefront",        modelPath = "Structures/armorer",      yawDeg = 90f,  pitchDeg = 90f },  // same family; X=90 upright
             new Swap { bakedName = "Marketplace_Monetization",      modelPath = "Structures/store",        yawDeg = 90f,  pitchDeg = -90f }, // bake:0 — KEEP -90 (§6 negative control)
-            new Swap { bakedName = "Jeweler_Gems_Storefront",       modelPath = "Structures/jeweler",      yawDeg = 0f, pitchDeg = 90f, rollDeg = 0f, scaleX = 5.4f, scaleY = 3.77f, scaleZ = 3.6f },   // owner 2026-08-19 felt: Rotation X=90 Y=0 Z=0 (was yaw 110.4 from old pose)
+            new Swap { bakedName = "Jeweler_Gems_Storefront",       modelPath = "Structures/jeweler",      yawDeg = 0f,   pitchDeg = 90f,  rollDeg = 0f },   // owner: Rotation (90,0,0); no scaleX — uniform FitHeight
             new Swap { bakedName = "Lumbermill_Wood_Storefront",    modelPath = "Structures/lumbermill",   yawDeg = 0f,   pitchDeg = -90f, posY = 1.5f }, // bake:0 — KEEP -90
             new Swap { bakedName = "Windmill_Food_Storefront",      modelPath = "Structures/farm",         yawDeg = 0f,   pitchDeg = -90f, rollDeg = 212f },   // bake:0 — KEEP -90
             // Castle barracks = the troop-TRAINING building (existing scene prefab "CastleBarracks");
