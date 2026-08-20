@@ -1,6 +1,6 @@
 # WORK ORDER 1011 — Board workflow: acclimate the CLI to BOARD.html as the live board (source-of-truth discipline)
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — closed by the owner 2026-08-19.
 **Minted:** 2026-08-08 (UI seat) — number from `CLI_LANES_WO_NUMBERS.md` banner (bumped 1011 → 1012 in the same edit)
 **Lane:** Process/tooling. Touches docs + one script + (optionally) the boot skill. **No game code.**
 **Provenance:** owner ruling 2026-08-08 — Notion is RETIRED as the board. Root cause: the Notion mirror
