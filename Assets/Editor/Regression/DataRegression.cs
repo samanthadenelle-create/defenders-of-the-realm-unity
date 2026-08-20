@@ -346,6 +346,9 @@ namespace DeNelle.Editor
             if (!OfflinePullRegression.Run(out var offlinePullReason)) failures.Add(offlinePullReason); else log.AppendLine("[offline-pull] " + offlinePullReason);
             if (!EnemyLoadBoundedRegression.Run(out var enemyBoundedReason)) failures.Add(enemyBoundedReason); else log.AppendLine("[enemy-load-bounded] " + enemyBoundedReason);
             if (!ContentPackingRegression.Run(out var packingReason)) failures.Add(packingReason); else log.AppendLine("[content-packing] " + packingReason);
+            if (!DungeonCameraFeelRegression.Run(out var dungeonCamReason)) failures.Add(dungeonCamReason); else log.AppendLine("[dungeon-camera-feel] " + dungeonCamReason);
+            if (!DungeonMovementOwnerRegression.Run(out var dungeonMoveReason)) failures.Add(dungeonMoveReason); else log.AppendLine("[dungeon-movement-owner] " + dungeonMoveReason);
+            if (!EnemyTintRegression.Run(out var enemyTintReason)) failures.Add(enemyTintReason); else log.AppendLine("[enemy-tint] " + enemyTintReason);
             // --- WO-912 sec.9.3 + D4/D7: no ad reward may ever grant a real-money currency ---
             if (!AdPlacementCovenantRegression.Run(out var adCovReason)) failures.Add(adCovReason); else log.AppendLine("[ad-covenant] " + adCovReason);
             // --- WO-976: the `hasSurface` false green stays dead — each of the four visibility

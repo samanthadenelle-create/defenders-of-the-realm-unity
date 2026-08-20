@@ -42,6 +42,18 @@ namespace DeNelle.Village
         private MaterialPropertyBlock _mpb;
         private Coroutine _routine;
 
+        // ⛔ THE FLASH MUST RESTORE WHAT IT FOUND, NOT WIPE IT (2026-08-20).
+        // ClearTint used to call SetPropertyBlock(null), which does not mean "undo my
+        // flash" — it means "drop EVERY property override on this renderer, whoever set
+        // it". Nothing else overrode enemy colour until EnemyBodyColorGuard started
+        // repainting textureless white/grey bodies with their family tint, and the very
+        // first hit would then have wiped that repair and put the enemy back to white.
+        // So snapshot the pre-flash block per renderer and re-apply THAT. Strictly more
+        // correct than the null even with no guard present: an empty snapshot restores
+        // exactly what null did.
+        private MaterialPropertyBlock[] _restBlocks;
+        private bool _flashing;
+
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
         private static readonly int ColorId     = Shader.PropertyToID("_Color");
 
@@ -77,9 +89,30 @@ namespace DeNelle.Village
 
         private void SetTint(Color c)
         {
-            foreach (var r in _renderers)
+            // Snapshot the resting overrides ONCE PER FLASH, and only when a flash is not
+            // already running. Flash() StopCoroutine()s the previous routine BEFORE ClearTint
+            // has run, so a re-entrant hit (spam-clicking a mob) would otherwise capture the
+            // RED flash colour as the resting colour and leave the enemy permanently red.
+            bool capture = !_flashing;
+            _flashing = true;
+            if (_restBlocks == null || _restBlocks.Length != _renderers.Length)
+                _restBlocks = new MaterialPropertyBlock[_renderers.Length];
+
+            for (int i = 0; i < _renderers.Length; i++)
             {
+                var r = _renderers[i];
                 if (r == null) continue;
+
+                // SetTint runs exactly once per flash (FlashRoutine's first line), so capturing
+                // here IS "once per flash". Reuse the block instances — allocating one per hit
+                // would be per-swing GC churn on mobile, which is the very thing the
+                // MaterialPropertyBlock approach exists to avoid.
+                if (capture)
+                {
+                    if (_restBlocks[i] == null) _restBlocks[i] = new MaterialPropertyBlock();
+                    r.GetPropertyBlock(_restBlocks[i]);   // empty when nothing has overridden this renderer
+                }
+
                 r.GetPropertyBlock(_mpb);
                 _mpb.SetColor(BaseColorId, c);
                 _mpb.SetColor(ColorId, c);   // legacy/standard shader fallback
@@ -89,10 +122,24 @@ namespace DeNelle.Village
 
         private void ClearTint()
         {
-            // Passing null clears the override block → renderer reverts to the
-            // material's own colours (no stored original needed).
-            foreach (var r in _renderers)
-                if (r != null) r.SetPropertyBlock(null);
+            // Restore the PRE-FLASH block instead of nuking every override on the renderer.
+            // See the _restBlocks note above: SetPropertyBlock(null) also discarded
+            // EnemyBodyColorGuard's repaint of a textureless body, so one hit turned a
+            // repaired enemy back into the white/grey one the owner reported on 2026-08-20.
+            _flashing = false;
+            if (_renderers == null) return;
+            for (int i = 0; i < _renderers.Length; i++)
+            {
+                var r = _renderers[i];
+                if (r == null) continue;
+                if (_restBlocks != null && i < _restBlocks.Length && _restBlocks[i] != null)
+                    r.SetPropertyBlock(_restBlocks[i]);
+                else
+                    r.SetPropertyBlock(null);
+            }
+            // Snapshots are NOT dropped: SetTint re-captures into the same instances on the
+            // next flash, so a colour the guard changed in the meantime is still picked up
+            // and no block is allocated per hit.
         }
 
         private void OnDisable()

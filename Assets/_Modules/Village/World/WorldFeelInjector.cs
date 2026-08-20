@@ -149,7 +149,9 @@ namespace DeNelle.Village.World
 
         private Material _skyboxMat;          // built once, reused across scene loads
         private VolumeProfile _postProfile;   // built once, reused
+        private GameObject _postVolume;       // the DDOL global grade -- MUST stand down indoors
         private GameObject _motes;            // follows the camera in the open world
+        private string _lastStandDownScene;   // one standdown trace per scene entry, not per event
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
@@ -199,13 +201,17 @@ namespace DeNelle.Village.World
             if (!IsOutdoor(active))
             {
                 ClearMotes();
+                StandDown(active);
                 return;
             }
+
+            _lastStandDownScene = null;   // re-arm the standdown trace for the next interior entry
 
             if (!FeatureFlags.WorldFeel)
             {
                 FlowTrace.Step("WorldFeel", "ff.worldfeel OFF -- world aesthetics pass skipped (prior look preserved).");
                 ClearMotes();
+                StandDown(active);
                 return;
             }
 
@@ -321,14 +327,31 @@ namespace DeNelle.Village.World
 
             // One global volume, parented to this DDOL singleton so it survives
             // scene swaps (idempotent -- created once).
-            if (transform.Find("WorldFeelVolume") == null)
+            if (_postVolume == null)
             {
-                var go = new GameObject("WorldFeelVolume");
-                go.transform.SetParent(transform, false);
-                var vol = go.AddComponent<Volume>();
-                vol.isGlobal = true;
-                vol.priority = PostVolumePriority;   // BattleArena's fight volume (100) outranks us
-                vol.sharedProfile = _postProfile;
+                var existing = transform.Find("WorldFeelVolume");
+                if (existing != null)
+                {
+                    _postVolume = existing.gameObject;
+                }
+                else
+                {
+                    var go = new GameObject("WorldFeelVolume");
+                    go.transform.SetParent(transform, false);
+                    var vol = go.AddComponent<Volume>();
+                    vol.isGlobal = true;
+                    vol.priority = PostVolumePriority;   // BattleArena's fight volume (100) outranks us
+                    vol.sharedProfile = _postProfile;
+                    _postVolume = go;
+                }
+            }
+
+            // RE-ARM after a StandDown (an interior scene disables it). Outdoor is the
+            // only place this grade is allowed to be live -- see StandDown's header.
+            if (!_postVolume.activeSelf)
+            {
+                _postVolume.SetActive(true);
+                FlowTrace.Step("WorldFeel", "global grade volume RE-ARMED (back in an outdoor scene).");
             }
 
             // The volume only renders if the camera opts into post-processing.
@@ -416,6 +439,101 @@ namespace DeNelle.Village.World
             if (_motes == null) return;
             Destroy(_motes);
             _motes = null;
+        }
+
+        // =====================================================================
+        //  STANDDOWN -- the injector actively LETS GO of a non-outdoor scene.
+        // ---------------------------------------------------------------------
+        //  WHY THIS EXISTS (2026-08-20, from captured data -- CLAUDE.md 12).
+        //  Owner report: "healers cottage broken still, movement or camera issues"
+        //  with a screenshot of Dungeon_HealersCottage framed into a wall.
+        //  The standing theory was that THIS injector was applying overworld
+        //  camera treatment (Skybox clear + post + motes) inside the dungeon.
+        //  THE DATA REFUTED THAT, and the refutation is worth keeping written down:
+        //    logs/device/enemy-color.log, session pid ( 6783) --
+        //      14:05:54.209  [Flow:WorldFeel] camera 'Main Camera' clearFlags
+        //                    SolidColor -> Skybox ...
+        //      14:05:54.214  [Flow:WorldFeel] scene='Main_Castle_Overworld' ...
+        //      14:10:01.753  [DungeonPortal] Entering dungeon scene: Dungeon_HealersCottage
+        //      14:10:02.713  [Flow:FloorDiag] LIGHTING scene='Dungeon_HealersCottage'
+        //                    ambientMode=Flat ambient=RGBA(0.050, 0.050, 0.055)
+        //    i.e. WorldFeel ran FOUR MINUTES EARLIER, in the OVERWORLD, and ZERO
+        //    [Flow:WorldFeel] lines exist after the dungeon load. The dungeon's own
+        //    authored dark Flat ambient survived intact. The near-black band in the
+        //    screenshot is the dungeon camera's OWN authored clear
+        //    (DungeonSceneBuilder.CreateCamera: SolidColor #070709), not a skybox.
+        //
+        //  SO WHY CHANGE ANYTHING? Because the investigation surfaced a REAL latent
+        //  leak sitting one step away from that theory: the global grade Volume is
+        //  a child of this DontDestroyOnLoad singleton (isGlobal, priority 10) and
+        //  NOTHING ever switched it off. RenderSettings are per-scene, so sky/fog/
+        //  ambient correctly revert on load -- but the Volume does not. Bloom 4.5,
+        //  +0.75 EV, +10 saturation and a warm filter stayed armed underground,
+        //  waiting on any interior camera that happens to have post-processing on
+        //  (pipeline B's runtime "GameplayCamera (ensured)" is exactly such a
+        //  camera). It did not cause THIS screenshot; it is a loaded gun that the
+        //  next interior camera would have fired. Standing down is what "outdoor
+        //  scenes only" was always supposed to mean.
+        //
+        //  GATED STRUCTURALLY, NOT BY SCENE NAME: the condition is simply "the
+        //  active scene is not on the outdoor list", and the trace additionally
+        //  reports HubScenes.IsDungeon so a NEW dungeon is covered the day it is
+        //  added -- there is no per-scene list here to forget to update.
+        // =====================================================================
+        private void StandDown(string activeScene)
+        {
+            // Disable, never destroy: the profile + volume are built once and
+            // re-armed on the next outdoor scene (idempotent, allocation-free).
+            bool wasArmed = _postVolume != null && _postVolume.activeSelf;
+            if (wasArmed) _postVolume.SetActive(false);
+
+            if (_lastStandDownScene == activeScene) return;   // one trace per entry
+            _lastStandDownScene = activeScene;
+
+            bool isDungeon = DeNelle.Core.HubScenes.IsDungeon(activeScene);
+            FlowTrace.Step("WorldFeel",
+                $"STANDDOWN scene='{activeScene}' isDungeon={isDungeon} -- not an outdoor scene. " +
+                $"global grade volume {(wasArmed ? "DISABLED (was armed)" : "already off")}; motes cleared. " +
+                "Scene RenderSettings (sky/fog/ambient) are per-scene and revert on their own.");
+
+            // The instrument the 2026-08-20 triage wished it had: dump what the
+            // INTERIOR camera actually is, at steady state. If an interior ever
+            // looks wrong again, this line answers "is it the camera treatment or
+            // the camera SEAT?" without a code read. Deferred a couple of frames
+            // because the scene's own rig (Cinemachine brain / runtime ensurer)
+            // has not seated the camera yet at sceneLoaded time.
+            if (isActiveAndEnabled) StartCoroutine(DumpInteriorCamera(activeScene));
+        }
+
+        private System.Collections.IEnumerator DumpInteriorCamera(string activeScene)
+        {
+            yield return null;
+            yield return null;
+            yield return new WaitForEndOfFrame();
+
+            // Bail if we left the scene while waiting -- never trace a stale frame.
+            if (SceneManager.GetActiveScene().name != activeScene) yield break;
+
+            Guard.Try("WorldFeel", "dump interior camera state", () =>
+            {
+                var cam = Camera.main;
+                if (cam == null)
+                {
+                    FlowTrace.Warn("WorldFeel", $"interior '{activeScene}': no Camera.main at steady state.");
+                    return;
+                }
+
+                var data = cam.GetComponent<UniversalAdditionalCameraData>();
+                string post = data == null ? "no-UACD" : (data.renderPostProcessing ? "ON" : "off");
+                var t = cam.transform;
+
+                FlowTrace.Step("WorldFeel",
+                    $"interior camera '{cam.name}' scene='{activeScene}' clear={cam.clearFlags} " +
+                    $"bg={cam.backgroundColor} fov={cam.fieldOfView:0.0} near={cam.nearClipPlane:0.000} " +
+                    $"far={cam.farClipPlane:0.0} pos={t.position} euler={t.eulerAngles} post={post} " +
+                    $"skybox={(RenderSettings.skybox != null ? RenderSettings.skybox.name : "null")} " +
+                    $"worldFeelVolumeArmed={(_postVolume != null && _postVolume.activeSelf)}");
+            });
         }
     }
 }

@@ -163,6 +163,21 @@ namespace DeNelle.Village
             // So evaluate the WHOLE loaded set now, not just the active scene (the old bug: this
             // checked only GetActiveScene() == "Main_Castle_Overworld", which is FALSE in MainCastle_Hall, so
             // reps never spawned in the live additive setup).
+            // SPAWN-INTENT PREWARM (owner report 2026-08-20: "One enemy came in as a pill then
+            // switched to enemy"). This spawner's rosters are FIXED static pools, known here at
+            // boot, while the reps themselves are not built until the hero walks out and the
+            // gates open — seconds to minutes later. Asking for those families NOW means the
+            // bundle is usually already resident by the time a body is skinned, which is the only
+            // honest way to shrink the placeholder window (the window IS download latency; the
+            // captured arrivals ran 0.6s–6.4s, and blocking to wait is what deadlocked the device).
+            // Bounded + per-family: exactly the handful of models these pools can produce, never
+            // the whole enemy set.
+            EnemyFactory.PrewarmForIds(new[]
+            {
+                "orc-warrior", "orc-tank", "orc-mage",
+                "hollow-warrior", "hollow-rogue", "hollow-acolyte"
+            });
+
             MaybePopulate();
         }
 

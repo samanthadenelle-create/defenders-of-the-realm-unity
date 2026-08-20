@@ -147,6 +147,48 @@ namespace DeNelle.Dungeons
         /// <summary>While false, input is ignored — the Keeper stands still (load / cutscene).</summary>
         private bool _inputEnabled = true;
 
+        // ── BASIS LATCH (2026-08-20) — the fix for "healers cottage movement broken" ─────
+        // See the block comment on ResolveBasisYaw. While the active dungeon framing slaves the
+        // camera yaw to the hero's facing (over-the-shoulder — DungeonCameraRig.BasisFollowsHeroYaw),
+        // the basis is LATCHED for the duration of a stick hold instead of re-read every frame.
+        private bool _basisLatched;
+        private float _latchedBasisYaw;
+        private Vector2 _latchedStickRaw;
+
+        /// <summary>Re-latch when the player deliberately re-aims the stick by more than this.</summary>
+        private const float BasisRelatchDeg = 12f;
+
+        // ── TAP-TO-MOVE WATCHDOG (2026-08-20) ────────────────────────────────
+        // An armed destination used to be abandoned ONLY on arrival, so an unreachable one ran
+        // the Keeper at full throttle into a wall forever. Captured: 570 consecutive 1 Hz
+        // [Flow:DungeonMover] lines (08-19 19:51:29 -> 20:01:06, pid 6863) reading
+        // `planarVel=4.20 ... tapTarget=True pos=(-22.37, 0.08, -7.15)` — nine and a half minutes
+        // of full-speed input with the position frozen to the centimetre.
+        private float _tapArmedAt;
+        private Vector3 _tapProgressPos;
+        private float _tapProgressAt;
+
+        /// <summary>Seconds of no meaningful travel before an armed tap target is abandoned.</summary>
+        private const float TapStallSeconds = 1.5f;
+
+        /// <summary>Travel that counts as progress toward an armed tap target (world units).</summary>
+        private const float TapStallDistance = 0.35f;
+
+        /// <summary>Hard ceiling on a single tap-walk, however unobstructed it looks.</summary>
+        private const float TapMaxSeconds = 20f;
+
+        /// <summary>Minimum upness of a raycast hit normal for it to count as walkable floor.</summary>
+        private const float TapFloorNormalY = 0.5f;
+
+        // ── Raw input seams, captured for the heartbeat (§12) ────────────────────────
+        // Without these the trace could only say "planarVel=0.00", which cannot tell
+        // "the player published no input" from "input was published and never consumed".
+        private Vector2 _rawKeyboard, _rawStick, _rawDpad;
+
+        // ── Travel-stall detector (§12) ────────────────────────────────────
+        private Vector3 _stallAnchorPos;
+        private float _stallAnchorAt;
+
         // ── Read-only state ──────────────────────────────────────────────────
 
         /// <summary>True when the Keeper is moving under its own power this frame.</summary>
@@ -268,6 +310,7 @@ namespace DeNelle.Dungeons
             {
                 _planarVelocity = Vector3.zero;
                 _hasMoveTarget = false;
+                ReleaseBasisLatch();
             }
         }
 
@@ -291,6 +334,7 @@ namespace DeNelle.Dungeons
             _planarVelocity = Vector3.zero;
             _verticalVelocity = 0f;
             _hasMoveTarget = false;
+            ReleaseBasisLatch();   // a warp re-frames the view; the next hold reads it fresh
         }
 
         // ── Per-frame ────────────────────────────────────────────────────────
@@ -315,6 +359,7 @@ namespace DeNelle.Dungeons
                 _planarVelocity = Vector3.zero;
                 _verticalVelocity = 0f;
                 _hasMoveTarget = false;
+                ReleaseBasisLatch();
                 DriveSpeed(0f);
                 return;
             }
@@ -339,7 +384,96 @@ namespace DeNelle.Dungeons
             // idle <-> walk — but ONLY while no ActorAnimator owns the parameter (WO-968 F2).
             DriveSpeed(_planarVelocity.magnitude);
 
+            TickTapWatchdog();
+            TraceTravelStall();
             TraceMoverHeartbeat();
+        }
+
+        // ── Tap-to-move watchdog ─────────────────────────────────────────
+
+        /// <summary>
+        /// Abandons an armed tap-to-move destination that is not being reached — a target on a
+        /// wall, behind a closed door, or across a gap the CharacterController cannot climb.
+        /// Without this the walk is abandoned ONLY on arrival, so an unreachable target pins the
+        /// Keeper at full throttle against geometry indefinitely (the captured 570-second jam).
+        /// </summary>
+        private void TickTapWatchdog()
+        {
+            if (!_hasMoveTarget) return;
+
+            float now = Time.time;
+            if ((transform.position - _tapProgressPos).sqrMagnitude
+                >= TapStallDistance * TapStallDistance)
+            {
+                _tapProgressPos = transform.position;
+                _tapProgressAt = now;
+                return;
+            }
+
+            if (now - _tapProgressAt >= TapStallSeconds)
+            {
+                AbandonTapTarget(
+                    $"BLOCKED — no progress ({TapStallDistance:0.00}m) in {now - _tapProgressAt:0.0}s " +
+                    $"while driving at {_planarVelocity.magnitude:F2} m/s toward {_moveTarget:F2}");
+                return;
+            }
+
+            if (now - _tapArmedAt >= TapMaxSeconds)
+                AbandonTapTarget($"TIMED OUT after {now - _tapArmedAt:0.0}s (cap {TapMaxSeconds:0}s)");
+        }
+
+        /// <summary>Clears the armed tap-walk and says why, loudly (§12: no silent give-up).</summary>
+        private void AbandonTapTarget(string why)
+        {
+            _hasMoveTarget = false;
+            _planarVelocity = Vector3.zero;
+            FlowTrace.Warn("DungeonMover",
+                $"DungeonHero tap-to-move ABANDONED at pos={transform.position:F2}: {why}. " +
+                "The Keeper is released to stick/WASD input rather than grinding into geometry.");
+        }
+
+        // ── Travel-stall detector (§12) ───────────────────────────────────
+
+        /// <summary>
+        /// Names the failure the moment it happens: the mover is commanding real speed but the
+        /// Keeper is not getting anywhere. Both known causes print their evidence on the same
+        /// line — a rotating basis (yaw sweeping, camYaw glued to it) and hard geometry (yaw
+        /// steady, position pinned) — so the next capture identifies itself without a code read.
+        /// </summary>
+        private void TraceTravelStall()
+        {
+            if (!FlowTrace.Enabled) return;
+
+            if (_planarVelocity.magnitude <= 0.5f)
+            {
+                _stallAnchorAt = 0f;
+                return;
+            }
+
+            if (_stallAnchorAt <= 0f)
+            {
+                _stallAnchorAt = Time.time;
+                _stallAnchorPos = transform.position;
+                return;
+            }
+
+            float window = Time.time - _stallAnchorAt;
+            if (window < 3f) return;
+
+            float travelled = (transform.position - _stallAnchorPos).magnitude;
+            float expected = _planarVelocity.magnitude * window;
+            if (travelled < expected * 0.25f)
+                FlowTrace.Throttle("DungeonMover", "travel-stall", 3f,
+                    $"TRAVEL STALL: commanded {_planarVelocity.magnitude:F2} m/s for {window:0.0}s " +
+                    $"({expected:F1}m of path) but moved {travelled:F2}m. " +
+                    $"yaw={transform.eulerAngles.y:F1} camYaw={CurrentCameraYaw():F1} " +
+                    $"basisFollowsHero={DungeonCameraRig.BasisFollowsHeroYaw} " +
+                    $"basisLatched={_basisLatched} latchedYaw={_latchedBasisYaw:F1} " +
+                    $"tapTarget={_hasMoveTarget}. A SWEEPING yaw with camYaw glued to it is the " +
+                    "camera/basis feedback loop; a STEADY yaw is hard geometry.");
+
+            _stallAnchorAt = Time.time;
+            _stallAnchorPos = transform.position;
         }
 
         // ── [Flow:DungeonMover] 1 Hz heartbeat (WO-968, §12) ─────────────────────────
@@ -370,7 +504,16 @@ namespace DeNelle.Dungeons
                 $"animSpeed={(_animator != null && _hasSpeedParam ? _animator.GetFloat(AnimSpeed) : float.NaN):F2} " +
                 $"basis={DungeonStickBasis} " +
                 $"moveCam={(_moveCamera != null ? _moveCamera.name : "<null>")} " +
-                $"camYaw={(_moveCamera != null ? _moveCamera.transform.eulerAngles.y : -1f):F1}");
+                $"camYaw={(_moveCamera != null ? _moveCamera.transform.eulerAngles.y : -1f):F1} " +
+                // §12 (2026-08-20): the RAW seams. "planarVel=0.00" alone cannot tell
+                // "the player published nothing" from "input was published and never consumed";
+                // these three make that a one-line read on the next capture.
+                $"| rawStick={_rawStick:F2} rawDpad={_rawDpad:F2} rawKeys={_rawKeyboard:F2} " +
+                // §12 (2026-08-20): the basis-feedback state. basisFollowsHero=True with
+                // basisLatched=False is the spin bug back again.
+                $"basisFollowsHero={DungeonCameraRig.BasisFollowsHeroYaw} " +
+                $"basisLatched={_basisLatched} latchedYaw={_latchedBasisYaw:F1} " +
+                $"tapAge={(_hasMoveTarget ? Time.time - _tapArmedAt : 0f):F1}s");
 
             // Called out as a failure the moment it is true: this component is translating the root
             // and NOBODY can publish that to the animator — its own handle is dead AND no
@@ -428,6 +571,10 @@ namespace DeNelle.Dungeons
             // (DungeonCameraRig consumes right-half drags for the free-look), so do not
             // arm a tap-to-move destination while FPV is active. The over-the-shoulder /
             // iso modes keep tap-to-move.
+            // Nothing is steering this frame: drop the basis latch so the NEXT hold reads the
+            // view the player can currently see (see ResolveBasisYaw).
+            ReleaseBasisLatch();
+
             if (!FeatureFlags.DungeonFpv)
                 TrySampleTap();
             return ResolveTapDirection();
@@ -514,8 +661,12 @@ namespace DeNelle.Dungeons
                 }
                 else
                 {
-                    fwd = Vector3.ProjectOnPlane(_moveCamera.transform.forward, Vector3.up);
-                    right = Vector3.ProjectOnPlane(_moveCamera.transform.right, Vector3.up);
+                    // NOT the raw camera forward: the over-the-shoulder rig's yaw IS the hero's
+                    // yaw, and this heading is what turns the hero. ResolveBasisYaw latches the
+                    // basis for the duration of a hold so the two cannot feed back (see below).
+                    Quaternion basis = Quaternion.Euler(0f, ResolveBasisYaw(raw), 0f);
+                    fwd = basis * Vector3.forward;
+                    right = basis * Vector3.right;
                 }
             }
 
@@ -529,6 +680,99 @@ namespace DeNelle.Dungeons
             Vector3 dir = right * raw.x + fwd * raw.y;
             if (dir.sqrMagnitude > 1f) dir.Normalize();
             return dir;
+        }
+
+        // ── THE BASIS LATCH — why the camera yaw is not read every frame (2026-08-20) ───────
+        // OWNER F8, 2026-08-20: "healers cottage movement broken ... movement or camera issues".
+        //
+        // WHAT THE CAPTURE PROVES (logs/device/enemy-color.log, pid 6783, 08-20 14:10:03..14:10:12):
+        //   * EVERY [Flow:DungeonMover] line in that dungeon reads `yaw=X ... camYaw=X` — the two
+        //     are IDENTICAL on every sample (e.g. `yaw=174.1 ... camYaw=174.1`), and the matching
+        //     [Flow:DungeonCam] line reports the follow pivot at the same yaw. The camera is not
+        //     merely near the hero's facing; it IS the hero's facing.
+        //   * Across nine 1 Hz samples at `planarVel=4.20` (top speed) the yaw sweeps
+        //     90 -> 206.7 -> 120.1 -> 291.9 -> 79.9 -> 211.1 -> 142.3 -> 129.7 -> 323.6,
+        //     while the position goes (-28.00, 0.00) -> (-27.13, -2.06): 2.24 m of travel out of
+        //     roughly 30 m of integrated path. The Keeper was running in circles.
+        //
+        // WHY: DungeonCameraRig.EnsurePivot parents the follow pivot TO THE HERO at identity local
+        // rotation, so camera yaw == hero yaw (over-the-shoulder is the shipped default — WO-920).
+        // Reading the stick against that camera and then FaceHeading-ing the hero to the result
+        // closes a positive-feedback loop: a stick held at angle theta off screen-forward turns the
+        // hero by theta, which turns the camera by theta, which re-offsets the heading by theta
+        // again … every frame. Only dead-ahead is stable; everything else spirals.
+        //
+        // THE FIX (and why it is not a feel change): the basis is CAMERA-RELATIVE exactly as
+        // before — the open owner pin P1 on DungeonStickBasis is untouched. What changed is WHEN
+        // it is sampled: once per hold, at the moment the stick leaves rest, plus a re-sample when
+        // the player deliberately re-aims by more than BasisRelatchDeg. Within one hold the world
+        // heading is CONSTANT, so the Keeper walks a straight line and the camera swings in behind
+        // him — the standard third-person contract. Release and push again and the basis is the
+        // view the player is now looking at.
+        //
+        // When the framing is NOT slaved to the hero (FPV's independent look layer, iso's fixed
+        // world yaw) there is no loop to break, so the latch stands down and the camera yaw is
+        // read live every frame, exactly as it always was.
+        private float ResolveBasisYaw(Vector2 raw)
+        {
+            float camYaw = CurrentCameraYaw();
+
+            if (!DungeonCameraRig.BasisFollowsHeroYaw)
+            {
+                // No feedback path — track the view live (FPV / iso / no rig).
+                if (_basisLatched) ReleaseBasisLatch();
+                return camYaw;
+            }
+
+            if (!_basisLatched)
+            {
+                LatchBasis(camYaw, raw, "stick left rest");
+            }
+            else if (raw.sqrMagnitude > 0.0001f && _latchedStickRaw.sqrMagnitude > 0.0001f
+                     && Vector2.Angle(_latchedStickRaw, raw) > BasisRelatchDeg)
+            {
+                LatchBasis(camYaw, raw, $"player re-aimed >{BasisRelatchDeg:0}°");
+            }
+
+            return _latchedBasisYaw;
+        }
+
+        private void LatchBasis(float camYaw, Vector2 raw, string why)
+        {
+            _basisLatched = true;
+            _latchedBasisYaw = camYaw;
+            _latchedStickRaw = raw;
+            FlowTrace.Throttle("DungeonMover", "basis-latch", 0.5f,
+                $"movement basis LATCHED to camYaw={camYaw:F1} ({why}); heroYaw={transform.eulerAngles.y:F1}. " +
+                "The over-the-shoulder rig's yaw is the hero's own yaw, so a live basis would " +
+                "steer against itself and the Keeper would circle instead of travel.");
+        }
+
+        private void ReleaseBasisLatch()
+        {
+            if (!_basisLatched) return;
+            _basisLatched = false;
+            _latchedStickRaw = Vector2.zero;
+        }
+
+        /// <summary>The active movement-basis camera's flattened yaw, or the hero's when there is none.</summary>
+        private float CurrentCameraYaw()
+        {
+            ResolveMoveCamera();
+            if (_moveCamera == null) return transform.eulerAngles.y;
+            Vector3 f = Vector3.ProjectOnPlane(_moveCamera.transform.forward, Vector3.up);
+            if (f.sqrMagnitude < 0.0001f) return _moveCamera.transform.eulerAngles.y;
+            return Quaternion.LookRotation(f, Vector3.up).eulerAngles.y;
+        }
+
+        /// <summary>
+        /// Pure, scene-free statement of the ownership rule the capture proved was violated:
+        /// the movement basis may only be re-read every frame when the camera yaw is NOT slaved
+        /// to the hero's own facing. Regression-testable (DungeonMovementOwnerRegression).
+        /// </summary>
+        public static bool ShouldLatchBasis(bool basisFollowsHeroYaw, bool steeringInputHeld)
+        {
+            return basisFollowsHeroYaw && steeringInputHeld;
         }
 
         // ── Kit D-pad seam (loose reflection; cached) — F8 2026-07-30 ─────────
@@ -554,6 +798,7 @@ namespace DeNelle.Dungeons
 
             Vector2 raw = default;
             try { raw = (Vector2)s_hudMoveProp.GetValue(null); } catch { return Vector3.zero; }
+            _rawDpad = raw;
             if (raw.sqrMagnitude < 0.02f * 0.02f) return Vector3.zero;
             return CameraRelative(raw);
         }
@@ -567,6 +812,7 @@ namespace DeNelle.Dungeons
         private Vector3 SampleJoystickMove()
         {
             Vector2 stick = DeNelle.Village.VirtualJoystick.Move;
+            _rawStick = stick;
             if (stick.sqrMagnitude < 0.02f * 0.02f) return Vector3.zero;   // deadzone
             return CameraRelative(stick);
         }
@@ -578,7 +824,7 @@ namespace DeNelle.Dungeons
         private Vector3 SampleDesktopMove()
         {
             var kb = Keyboard.current;
-            if (kb == null) return Vector3.zero;
+            if (kb == null) { _rawKeyboard = Vector2.zero; return Vector3.zero; }
 
             float x = 0f, z = 0f;
             if (kb.aKey.isPressed || kb.leftArrowKey.isPressed) x -= 1f;
@@ -586,6 +832,7 @@ namespace DeNelle.Dungeons
             if (kb.sKey.isPressed || kb.downArrowKey.isPressed) z -= 1f;
             if (kb.wKey.isPressed || kb.upArrowKey.isPressed) z += 1f;
 
+            _rawKeyboard = new Vector2(x, z);
             if (x == 0f && z == 0f) return Vector3.zero;
 
             // Make the raw input camera-relative so "up" is screen-up under the tilt.
@@ -607,10 +854,27 @@ namespace DeNelle.Dungeons
             if (Physics.Raycast(ray, out RaycastHit hit, _tapRayLength,
                     _walkableMask, QueryTriggerInteraction.Ignore))
             {
+                // ⚠ _walkableMask defaults to ~0 (everything), so a tap high on a WALL used to
+                // arm a destination the Keeper can never stand on. Captured 08-20 14:10:09:
+                // "armed walk to (-26.59, 1.44, -2.00)" — y=1.44 with the floor at y=0.08, from a
+                // tap at screen y=224. Only a surface facing roughly upward is walkable.
+                if (hit.normal.y < TapFloorNormalY)
+                {
+                    FlowTrace.Throttle("DungeonMover", "tap-not-floor", 1f,
+                        $"DungeonHero tap-to-move: REJECTED {hit.point:F2} on '{hit.collider.name}' — " +
+                        $"hit normal.y={hit.normal.y:F2} < {TapFloorNormalY:0.00} (a wall / vertical face, " +
+                        "not walkable floor). No target armed; the Keeper stays under stick control.");
+                    return;
+                }
+
                 _moveTarget = hit.point;
                 _hasMoveTarget = true;
+                _tapArmedAt = Time.time;
+                _tapProgressPos = transform.position;
+                _tapProgressAt = Time.time;
                 FlowTrace.Step("Dungeon",
-                    $"DungeonHero tap-to-move: armed walk to {hit.point} (tap screen={screenPos}).");
+                    $"DungeonHero tap-to-move: armed walk to {hit.point} (tap screen={screenPos}, " +
+                    $"surface='{hit.collider.name}' normalY={hit.normal.y:F2}).");
             }
         }
 

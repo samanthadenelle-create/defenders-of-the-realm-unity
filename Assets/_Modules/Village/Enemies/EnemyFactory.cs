@@ -307,6 +307,26 @@ namespace DeNelle.Village
                     // returned null for any orc it did not name, which rendered the warlord solid
                     // white — a new model silently had no skin path at all.
                     string orcTex = ResolveBasecolor(model);
+                    // ⛔ MISS-TINT FIRST, ALWAYS (owner report 2026-08-20, "enemies not having
+                    // coloring"). SetMissTint is TEXTURE-MISS-ONLY (TripoMaterialFixer.cs:187):
+                    // a slot that resolves a real map is byte-unchanged; a slot that resolves
+                    // NOTHING takes this colour instead of the fixer's unpainted 0.5 grey
+                    // (TripoMaterialFixer.cs:121). It is therefore safe to set unconditionally,
+                    // and it closes the asymmetry that made this branch the silent one: the
+                    // OrcWarband arm below has an ELSE that paints a family tint when no
+                    // basecolor resolves, and this arm had NONE — so an OrcHumanoid model with
+                    // no atlas (Orc_Warlord is exactly that case, see the 2026-08-09 note above)
+                    // fell through with no texture, no tint and NO TRACE LINE, and rendered flat
+                    // grey. Silent by construction, which is why it survived this long.
+                    var missFixer = vis.GetComponentInChildren<DeNelle.Core.TripoMaterialFixer>();
+                    if (missFixer != null) missFixer.SetMissTint(FamilyFallbackTint(def, model));
+                    if (string.IsNullOrEmpty(orcTex))
+                        FlowTrace.Warn("Enemy",
+                            $"OrcHumanoid model '{model}' (id '{(def != null ? def.Id : "?")}') resolved NO basecolor " +
+                            "under Enemies/TripoTex or Enemies/OrcTex — any slot whose own map is missing would have " +
+                            $"rendered FLAT GREY with nothing said. Bound the family MISS-TINT " +
+                            $"{FamilyFallbackTint(def, model)} as the floor. Permanent fix = ship " +
+                            $"'Enemies/TripoTex/{model}_basecolor'.");
                     if (!string.IsNullOrEmpty(orcTex))
                     {
                         // Explicit Unity null-check (NOT ?. — GetComponent returns a fake-null the
@@ -358,28 +378,11 @@ namespace DeNelle.Village
                         //   troll/caveman → grey-green troll hide; ogre → cold ogre grey;
                         //   real Warband orcs → orc green/brown.
                         string tId  = def != null ? (def.Id ?? "").Trim().ToLowerInvariant() : "";
-                        string tFam = def != null ? (def.Family ?? "").Trim().ToLowerInvariant() : "";
-                        bool isTroll = model == "Troll" || tId == "troll" || tId == "caveman" || tFam == "troll";
-                        bool isOgre  = tId == "ogre" || tId == "ogre-mage" || tFam == "ogre";
-                        // Warlord/Necromancer BOSS distinct from grunt orcs (owner F8 2026-07-10 "enemy green
-                        // needs fixed" — confirmed the BOSS): the flat G-dominant orc tint read as a material
-                        // defect on the prominent boss. Give it a dark, desaturated undead slate so it reads as
-                        // an elite necromancer, not flat-green error — by LUMINANCE (dark), colorblind-safe.
-                        bool isWarlord = model == "Orc_Necromancer" || tId == "orc-warlord" || tId == "orc-necromancer";
-                        // WO-956 (owner F8 seq 2269, 2026-08-10 "the one is green"): the old grunt
-                        // arm was the saturated G-dominant orc green (0.30, 0.42, 0.22) — a whole
-                        // ENEMY BODY painted the SAFE hue (owner is red/green colourblind; the 07-10
-                        // "enemy green needs fixed" ruling had spared the grunts as "intended", and
-                        // this F8 re-flags exactly that). Hostile never wears green: the grunt arm
-                        // now reads HostilePalette.PlaceholderBodyTint (umber PLACEHOLDER — final
-                        // hue = owner look pass). Troll/ogre/warlord stay: all three are desaturated
-                        // near-neutrals that fail the green-dominance margin (they read grey/slate).
-                        Color fallbackTint =
-                            isTroll   ? new Color(0.38f, 0.40f, 0.34f) :   // grey-green troll hide (near-neutral, reads grey)
-                            isOgre    ? new Color(0.48f, 0.47f, 0.52f) :   // cold ogre grey
-                            isWarlord ? new Color(0.22f, 0.20f, 0.26f) :   // Warlord/Necromancer boss — dark undead slate
-                                        HostilePalette.PlaceholderBodyTint; // Warband grunts — WO-956 umber placeholder (was orc green)
+                        Color fallbackTint = FamilyFallbackTint(def, model);
                         warbandFixer.SetFallbackTint(fallbackTint);
+                        // Same colour as the MISS floor, so a slot the fixer cannot texture and a
+                        // slot the fixer never sees agree instead of drifting apart.
+                        warbandFixer.SetMissTint(fallbackTint);
                         FlowTrace.Step("Enemy",
                             $"garrison fallback TINT {fallbackTint} bound to '{model}' (id '{tId}', rig {rigForModel}) — " +
                             "no OrcTex basecolor for Warband/Troll family, paints solid colour not white " +
@@ -387,6 +390,16 @@ namespace DeNelle.Village
                         }
                     }
                 }
+
+                // ⛔ COLOUR-VERIFY THE FINAL BODY (owner report 2026-08-20, "enemies not having
+                // coloring"). Everything above is INTENT — "bind this atlas", "bind that tint".
+                // Nothing above proves the body the player sees ends up coloured, and for every
+                // rig OUTSIDE the three branches above (HumanoidMedium / SkeletonHumanoid — 16 of
+                // the 20 enemy spawns in the pid-6783 capture) there is no colour code at ALL.
+                // This guard reads the FINAL materials one frame later — after TripoMaterialFixer's
+                // own Awake/Start rebuild — names any white/grey slot in the trace, and repaints it.
+                // Armed HERE, at the single skin choke point, so the late re-skin gets it too.
+                EnemyBodyColorGuard.Arm(vis, def, model, rigForModel.ToString(), FamilyFallbackTint(def, model));
 
                 // WIGHT HALF-UNDERGROUND FIX (RCA 2026-06-17): the Tripo/AccuRIG FBXs pivot at
                 // the mesh CENTRE, so when the visual is scaled up (the Demon/wight at 4x) the
@@ -437,6 +450,14 @@ namespace DeNelle.Village
             cap.transform.localPosition = new Vector3(0f, 0.9f * sizeScale, 0f);
             cap.transform.localScale = Vector3.one * sizeScale;
             TintCapsule(cap.GetComponent<Renderer>());
+
+            // PILL-SWAP MITIGATION (owner report 2026-08-20: "One enemy came in as a pill then
+            // switched to enemy"). Hold the placeholder INVISIBLE for a short grace, so a family
+            // bundle that lands quickly is swapped in with no pill ever on screen. Armed on the
+            // CAPSULE, not on EnemyLateSkinner — the skinner is not armed for a proven-missing
+            // model, and a capsule that is never revealed would be an invisible-but-hittable
+            // enemy. See EnemyPlaceholderReveal for why the window cannot be closed entirely.
+            EnemyPlaceholderReveal.Arm(cap);
         }
 
         /// <summary>Name of the placeholder capsule child. Shared with EnemyLateSkinner, which
@@ -940,6 +961,78 @@ namespace DeNelle.Village
                 return false;
             }
             return true;
+        }
+
+        /// <summary>
+        /// SPAWN-INTENT PREWARM: ask for the family bundles of a roster BEFORE anything from it
+        /// is built. Non-blocking and idempotent — it starts the fetch and returns immediately.
+        /// <para>The pill window is download latency (0.6s–6.4s in the pid-6783 capture), and the
+        /// fetch normally starts on the very frame the first body is skinned. A spawner that knows
+        /// its roster earlier — a garrison whose composition is fixed when its room is authored —
+        /// can start the same fetch sooner and shrink the window for free. It downloads exactly the
+        /// families the roster will use, so it stays inside the owner's PER-FAMILY ruling: never
+        /// the whole 64 MiB enemy set.</para>
+        /// </summary>
+        public static void PrewarmForIds(System.Collections.Generic.IEnumerable<string> enemyIds)
+        {
+            if (enemyIds == null) return;
+            var seen = new System.Collections.Generic.HashSet<string>();
+            foreach (string id in enemyIds)
+            {
+                if (string.IsNullOrEmpty(id)) continue;
+                string m = ModelForEnemy(new EnemyDef { Id = id });
+                if (string.IsNullOrEmpty(m) || !seen.Add(m)) continue;
+                DeNelle.Core.EnemyAssetLoader.PrewarmFamily(m);
+            }
+            if (seen.Count > 0)
+                FlowTrace.Step("Enemy",
+                    $"spawn-intent PREWARM: asked for {seen.Count} enemy model famil(ies) [{string.Join(", ", seen)}] " +
+                    "before the first body is built — the bundle fetch starts earlier, so the placeholder window " +
+                    "is shorter. Non-blocking; per-family, never the whole enemy set.");
+        }
+
+        /// <summary>
+        /// THE SINGLE AUTHORITY for "what colour is this enemy when it has no skin".
+        /// <para>Extracted 2026-08-20 (owner: "enemies not having coloring"). It was previously
+        /// an inline ternary buried in the OrcWarband arm of <see cref="TrySkinBody"/>, which is
+        /// why the OrcHumanoid arm and every other rig had NO colour floor at all — the fallback
+        /// existed, it just was not reachable from anywhere else. Three call sites now share it:
+        /// the Warband fallback tint, the miss-tint floor on every fixer, and
+        /// <see cref="EnemyBodyColorGuard"/>'s last-resort repaint — so a family cannot read as
+        /// one colour on one path and another colour on the next.</para>
+        /// <para>⛔ EVERY colour returned here is CHROMATIC by design (see
+        /// <see cref="EnemyBodyColorGuard.ChromaFloor"/>) — an achromatic "fallback" is
+        /// indistinguishable from the unpainted grey it is supposed to replace, so the guard
+        /// would flag its own repair. EnemyTintRegression pins that.</para>
+        /// </summary>
+        public static Color FamilyFallbackTint(EnemyDef def, string model)
+        {
+            string tId  = def != null ? (def.Id ?? "").Trim().ToLowerInvariant() : "";
+            string tFam = def != null ? (def.Family ?? "").Trim().ToLowerInvariant() : "";
+
+            // STAND-IN TINT (no Troll.fbx / OgreMage.fbx yet): troll & ogre reuse an OrcWarband
+            // orc model (see ModelForEnemy) but are DISTINGUISHED by tint so a player reads them
+            // as a different foe, not just another orc. Keyed by def.Id/Family (the model is now
+            // an orc, so "model == Troll" no longer fires on its own).
+            bool isTroll = model == "Troll" || tId == "troll" || tId == "caveman" || tFam == "troll";
+            bool isOgre  = tId == "ogre" || tId == "ogre-mage" || tFam == "ogre";
+            // Warlord/Necromancer BOSS distinct from grunt orcs (owner F8 2026-07-10 "enemy green
+            // needs fixed" — confirmed the BOSS): the flat G-dominant orc tint read as a material
+            // defect on the prominent boss. Give it a dark, desaturated undead slate so it reads
+            // as an elite necromancer, not flat-green error — by LUMINANCE (dark), colorblind-safe.
+            bool isWarlord = model == "Orc_Necromancer" || tId == "orc-warlord" || tId == "orc-necromancer";
+
+            // WO-956 (owner F8 seq 2269, 2026-08-10 "the one is green"): the old grunt arm was the
+            // saturated G-dominant orc green (0.30, 0.42, 0.22) — a whole ENEMY BODY painted the
+            // SAFE hue (owner is red/green colourblind; the 07-10 "enemy green needs fixed" ruling
+            // had spared the grunts as "intended", and that F8 re-flagged exactly that). Hostile
+            // never wears green: the grunt arm reads HostilePalette.PlaceholderBodyTint (umber
+            // PLACEHOLDER — final hue = owner look pass). Troll/ogre/warlord stay: all three are
+            // desaturated near-neutrals that fail the green-dominance margin (they read grey/slate).
+            return isTroll   ? new Color(0.38f, 0.40f, 0.34f) :   // grey-green troll hide (near-neutral, reads grey)
+                   isOgre    ? new Color(0.48f, 0.47f, 0.52f) :   // cold ogre grey
+                   isWarlord ? new Color(0.22f, 0.20f, 0.26f) :   // Warlord/Necromancer boss — dark undead slate
+                               HostilePalette.PlaceholderBodyTint; // Warband grunts — WO-956 umber placeholder
         }
 
         private static void TintCapsule(Renderer mr)

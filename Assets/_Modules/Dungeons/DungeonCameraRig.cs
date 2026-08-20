@@ -264,6 +264,42 @@ namespace DeNelle.Dungeons
         // FPV/iso is restored to the resolved mode when it clears.
         private bool _combatFramingActive;
 
+        // ── BASIS OWNERSHIP (WO dungeon-movement, 2026-08-20) — READ BEFORE TOUCHING ─────────
+        // In OVER-THE-SHOULDER (the shipped default) the follow pivot is PARENTED TO THE HERO
+        // with an identity local rotation (EnsurePivot), so the camera's yaw IS the hero's yaw.
+        // DungeonHero reads its stick CAMERA-RELATIVE and then FaceHeading turns the hero to the
+        // resulting heading — which turns this camera — which moves the basis. That closed loop
+        // is a positive feedback: any stick angle other than dead-ahead makes the Keeper CIRCLE
+        // instead of travel. It is what the owner felt as "healers cottage movement broken".
+        //   PROOF (logs/device/enemy-color.log, pid 6783, 08-20 14:10:03..14:10:12):
+        //   every [Flow:DungeonMover] line reads `yaw=X ... camYaw=X` (identical), the yaw swings
+        //   90->206->120->291->79->211->142->129->323 in nine 1 Hz samples at planarVel=4.20,
+        //   and the NET travel over those nine seconds is 2.24 m — a ~30 m path spent in a circle.
+        // This flag publishes that fact to DungeonHero, which LATCHES its basis while the stick is
+        // held (see DungeonHero.ResolveBasisYaw) instead of re-reading a yaw it is itself driving.
+        // FPV drives the pivot's WORLD rotation from an independent look layer, and iso holds a
+        // FIXED world yaw — neither is slaved to the hero, so both leave this FALSE.
+        // ⚠ This is a STATIC because it must be readable with no rig reference and must survive the
+        // async bind; it is CLEARED on teardown so it can never leak to the town hero.
+        private static bool s_basisFollowsHeroYaw;
+
+        /// <summary>
+        /// True while the ACTIVE dungeon framing slaves the camera yaw to the hero's own facing
+        /// (over-the-shoulder). Read by <see cref="DungeonHero"/> so it can latch its movement
+        /// basis rather than steer against a basis it is itself rotating.
+        /// </summary>
+        public static bool BasisFollowsHeroYaw => s_basisFollowsHeroYaw;
+
+        /// <summary>Publishes <see cref="BasisFollowsHeroYaw"/>, tracing every edge (§12).</summary>
+        private static void SetBasisFollowsHeroYaw(bool follows, string why)
+        {
+            if (s_basisFollowsHeroYaw == follows) return;
+            s_basisFollowsHeroYaw = follows;
+            FlowTrace.Step("DungeonCam",
+                $"BasisFollowsHeroYaw -> {follows} ({why}). true = the camera yaw IS the hero yaw, " +
+                "so DungeonHero must LATCH its stick basis or the two feed back into a spin.");
+        }
+
         // -- Hidden hero body (FPV) -------------------------------------------
         // The hero mesh renderers switched to ShadowsOnly on FPV bind (so the camera is
         // not inside the mesh but the shadow survives), with their prior cast mode saved
@@ -402,6 +438,12 @@ namespace DeNelle.Dungeons
             // prior first-person bind; the FPV branch below re-hides when needed.
             RestoreHeroBody();
             _fpvActive = firstPerson;
+
+            // OTS parents the pivot to the hero (identity local yaw) => camera yaw == hero yaw.
+            // FPV re-points the same pivot from the independent look layer => decoupled.
+            SetBasisFollowsHeroYaw(!firstPerson,
+                firstPerson ? "FPV: independent look layer owns the pivot yaw"
+                            : "OverShoulder: pivot is parented to the hero at identity yaw");
 
             EnsurePivot(hero);
 
@@ -958,6 +1000,8 @@ namespace DeNelle.Dungeons
         {
             // Never leak the FPV body-hide onto the shared hero rig (it survives the scene).
             RestoreHeroBody();
+            // ...nor the basis flag: the town hero's camera is NOT slaved to its facing.
+            SetBasisFollowsHeroYaw(false, "dungeon camera rig destroyed (teardown)");
         }
 
         // -- Legacy top-down iso ----------------------------------------------
@@ -965,6 +1009,9 @@ namespace DeNelle.Dungeons
         /// <summary>Seats the legacy fixed-angle top-down iso chase (ff.dungeoniso).</summary>
         private void ApplyIso(Transform hero)
         {
+            // Iso holds a FIXED world yaw (_yaw) — nothing here follows the hero's facing.
+            SetBasisFollowsHeroYaw(false, "Iso: fixed world yaw, not slaved to the hero");
+
             // The iso path needs a CinemachineFollow body and NO ThirdPersonFollow.
             if (_tpf != null) _tpf.enabled = false;
             if (_follow == null) _follow = GetComponent<CinemachineFollow>();
