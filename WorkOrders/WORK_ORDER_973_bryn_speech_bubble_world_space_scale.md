@@ -1,6 +1,6 @@
 # WORK ORDER 973 — Bryn's speech bubble is a giant skewed world-space card
 
-**Status:** READY TO IMPLEMENT (first step is a re-shot — see §6)
+**Status:** DONE — closed by the owner 2026-08-19.
 **Lane:** Dialogue / presentation
 **Silo:** `Dungeon_HealersCottage` NPC speak bubbles
 **Minted:** 2026-08-10 (CLI). Banner bumped 973 → 974 in the same edit.

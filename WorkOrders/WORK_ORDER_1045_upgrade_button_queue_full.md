@@ -1,6 +1,12 @@
 # WORK ORDER 1045 — Queue full = a dead upgrade button. Disable it, say why, offer the slot.
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — pending PO felt-verify
+⚠ **STATUS WAS STALE FOR TWO DAYS.** The work SHIPPED in `c1e9636f2` ("feat(upgrade): say WHY the
+button is dead, and show what the upgrade actually buys", 2026-08-17 10:28) but that commit did not
+flip this line, so `BOARD.html` — which is DERIVED from it — kept rendering WO-1045 as Ready and the
+owner re-raised it on 2026-08-19 as an untouched "simple fix". Line corrected 2026-08-19 from a
+source verification of the current tree (see §9); **no code was changed to close it.** This is the
+CLAUDE.md §2 rule ("the Status line is flipped in the SAME COMMIT as the work") failing in practice.
 **Minted:** 2026-08-17 (UI seat) — provenance stack bumped 1045 → 1046 in the same edit
 ⚠ **Renumbered from 1043 on mint day.** I minted 1043 from a stale banner read while another seat had
 already consumed 1043 (dungeon re-bake) and 1044 (biome identity) in the same sweep. Theirs were
@@ -110,3 +116,35 @@ rail) as the vocabulary here rather than inventing a second one.
    live re-enable
 3. `UI_CAPTURE_OK` — **open the PNGs**, plus a greyscale pass
 4. Owner felt-verifies: *"do I understand why I can't build, and do I know what to do about it?"*
+
+---
+
+## 9. Source verification of the shipped fix (2026-08-19, current tree — read at source, not from the commit message)
+
+Every §7 criterion re-checked against the working tree at HEAD. Line numbers are as-read today.
+
+| §7 criterion | verified at | verdict |
+|---|---|---|
+| Visibly disabled, never enabled-and-inert | `BuildingUpgradePanelMvvm.cs:1188` routes `QueueFull` to `BuildQueueFullBand`; that band calls `BuildLockButton(..., onClick: null)` — the dim lock plate, `Button.interactable` false | PASS |
+| Reason on screen, names WHICH limit | `:1262-1320` prints the depth line (`"Queue full - {0} of {1} lined up"`) AND a separate crew line (`"{0} of {1} crews working"`) — the two axes are different numbers on one screen | PASS |
+| Offer routed via `TryBuySlot` | `OnBuyQueueSlotTapped` → `_vm.TryBuyQueueSlot()`; `GrantSlot` has **no** player-facing caller (only `BuildTimerService.cs:223` decl, `:237` the `[Obsolete]` alias, `:334` inside `TryBuySlot` itself) | PASS |
+| Echo-gate names the unlock condition | `_vm.QueueSlotLockReason` is appended to the dead half whenever no purchase is offered — surfaces `TryBuySlot`'s own sentence, no new copy written (§2/§6 honoured) | PASS |
+| Re-enables on its own, no reopen | `Update()` (`:290`) polls `ObsidianQueueGate.Status.Version` and re-`Render()`s on publish; `ContentSignature()` (`:461`) now hashes `BuilderQueueDepth/Limit`, `BuilderCrewsBusy/CrewSlots`, `CanBuyQueueSlot` + `QueueSlotPrice`, so the band repaints as the line drains | PASS (code); needs a live run to prove felt |
+| ASCII-only | asserted by the suite's COPY section, which walks the label char-by-char | PASS |
+| `freeBuildSlots == 2`, `queueDepthPerLine == 5` unchanged | `BuildTimerConfig.cs:136` and `:159` | PASS — unchanged |
+| Verified at 2670x1200 + greyscale | — | **NOT PROVEN — still owed** (see below) |
+
+**Regression coverage:** `Assets/Editor/Regression/UpgradeQueueFullSurfaceRegression.cs`
+(`[queue-full-surface]`, marker `QUEUE_FULL_SURFACE_OK`), registered at
+`Assets/Editor/Regression/DataRegression.cs:429`, so it runs under `REGRESSION_OK`. Its assertions are
+real oracles, not decoration — each names a broken state that would print differently: removing the
+`QueueFull` enum member fails §1; a blank or non-ASCII face fails §4; a `QueueFull` label containing
+"busy"/"crew" fails the axis-conflation check; making `LineFullMessage` non-public fails §5; and a
+re-added `GrantSlot(` in the player path fails the source scan. A live section fills the Builder line
+through `ObsidianQueueEngine` and asserts the refusal actually fires.
+
+**STILL OWED before this can be CLOSED** (both need the Unity seat, which was busy on an APK build):
+1. `COMPILE_GATE_OK` + `REGRESSION_OK` at HEAD — the suite has not been re-run since the tree moved on.
+2. `UI_CAPTURE_OK` at **2670x1200**: queue filled, panel open, showing disabled + reason + offer; then
+   free a slot and capture the live re-enable. Plus the greyscale pass. **Code review cannot discharge
+   these** — the disabled read and the greyscale contrast are pixel facts, not source facts.

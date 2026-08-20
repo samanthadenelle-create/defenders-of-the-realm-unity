@@ -28,6 +28,7 @@
 Set-Location $PSScriptRoot
 $status = 'Builds\overnight-apk-status.txt'
 New-Item -ItemType Directory -Force -Path 'Builds' | Out-Null
+$startedAt = Get-Date
 "APK_START $(Get-Date -Format o)" | Out-File -Encoding ascii $status
 
 try {
@@ -36,7 +37,18 @@ try {
     "APK_THREW $($_.Exception.Message)" | Out-File -Encoding ascii -Append $status
 }
 
+# ⛔ FRESHNESS, NOT EXISTENCE (2026-08-19). This used to take the newest *.apk on disk and
+# call it success. On 2026-08-19 18:48 the build FAILED (gradle could not configure the
+# AdsIdentity.androidlib module), no APK was written, this glob found the 16:22 artifact,
+# and the script printed APK_OK with its size - so a STALE build was installed to the
+# owner's device and reported as the new one. morning-ship-chain.ps1 already carried this
+# lesson in its own comments: "Existence proves nothing. Freshness does."
 $apk = Get-ChildItem (Join-Path $PSScriptRoot 'Builds') -Recurse -Filter *.apk -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+if ($apk -and $apk.LastWriteTime -lt $startedAt) {
+    "APK_STALE $(Get-Date -Format o) newest apk is $($apk.FullName) dated $($apk.LastWriteTime.ToString('o')) - OLDER than this run. The build produced NO apk; see Builds/apk-build.log. DO NOT INSTALL IT." | Out-File -Encoding ascii -Append $status
+    "APK_DONE $(Get-Date -Format o)" | Out-File -Encoding ascii -Append $status
+    exit 1
+}
 if ($apk) {
     "APK_OK $(Get-Date -Format o) path=$($apk.FullName) size=$([math]::Round($apk.Length/1MB,0))MB" | Out-File -Encoding ascii -Append $status
 } else {

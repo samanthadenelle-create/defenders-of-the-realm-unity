@@ -74,7 +74,42 @@ nested bonus object, *while WO-912 was being written to tell Unity in writing th
 reach money*. Nothing caught it because **that file has no interpreter** — no `AdGateService` exists and
 nothing under `Assets/**.cs` reads it. **Timer minutes only. Never crystals.**
 
-## 4. PART 2 — WHAT REMAINS
+## 4. ⛔ PART 2 IS NOT THIS TICKET — IT BELONGS TO WO-1120
+
+**Corrected 2026-08-19 after the owner pointed at it: "WO1120 is ads placement".** WO-1120 ("Ads:
+effective free path - stop free grants; real SDK; placements", minted 2026-08-17, program WO-1117)
+ALREADY owns the SDK wiring, the `ad-placements.json` interpreter, `IsAdReady` as a real fill check,
+and the five hard placement laws. This ticket was minted without checking the board and duplicated it.
+
+**PART 1 (the async contract) stands and is DONE** - and it is genuinely NOT in WO-1120. In fact
+WO-1120 section 3.1 says *"do not rewrite callers"*, which turned out to be impossible: the sync bool
+returns `granted`, and a real SDK cannot answer that at return time. The callers HAD to move. Read
+section 1 above before implementing WO-1120, or the first thing that happens is a player watches a full
+ad and is told none was available.
+
+**Everything below is CONTEXT FOR WO-1120, not scope for this one.** Recorded here because it was
+gathered from the owner's live dashboards today and would otherwise be lost:
+
+### Credentials captured 2026-08-19
+- LevelPlay app: `com.denellestudios.ech...` (Android) - matches `AndroidBuild.cs:46`
+- Rewarded ad unit: **`2ibxid58jat3sxyd`** (`rewarded_build_skip_android`) -> `place.build.skip`
+- Also live in the dashboard: `imk56dcdi5mym2wq` (`place.harvest.doubler`),
+  `it6izgx1flbj5rce` (`place.daily.chest`) - all three already recorded in `ad-placements.json`
+  `_LAW_3_AD_UNIT_IDS`, and they MATCH. The dashboard-to-repo join held.
+- Unity Ads direct alternative: Android Game ID **6171199**, placement `Rewarded_Android`
+- Test device (owner Seeker) registered: advertising ID held by the owner, NOT recorded in this repo
+- ⚠ **ironSource Ads account is PENDING APPROVAL** (dashboard banner). Gates FILL, not integration.
+- STILL MISSING: the LevelPlay **App Key**.
+
+### Landed here rather than in WO-1120 because it is a build-config prerequisite
+`Assets/Plugins/Android/AdsIdentity.androidlib/` declares
+`com.google.android.gms.permission.AD_ID`, required at API 33+ and we pin targetSdk 36. Without it the
+GAID reads as zeros, ads serve non-personalised or not at all, and the symptom looks like NO FILL rather
+than a missing manifest entry. It follows the sibling `MobileWalletAdapter.androidlib` pattern - a
+manifest-only library module, never a custom main manifest.
+
+### The rest of Part 2 - IMPLEMENT UNDER WO-1120
+
 
 **Blocked on the owner:** LevelPlay **App Key** + **rewarded ad unit ID**, and the ironSource Ads
 account is **pending approval** (dashboard banner, 2026-08-19). Approval gates *fill*, not integration.

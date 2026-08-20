@@ -1,6 +1,6 @@
 # WORK ORDER 975 — The `Gear` Addressables group points at a gitignored art pack
 
-**Status:** READY — PARTIAL - hard fence landed; **OWNER RULING 2026-08-15 closes path A (do not promote Blink)**
+**Status:** DONE — owner-confirmed fixed and verified 2026-08-19.
 **Lane:** Build path / Addressables / asset pipeline
 **Minted:** 2026-08-10 (CLI), from the same architect verification as WO-974, ordered by the owner:
 *"make sure that addressables are implemented as supposed to be. Have an architect read and verify."*

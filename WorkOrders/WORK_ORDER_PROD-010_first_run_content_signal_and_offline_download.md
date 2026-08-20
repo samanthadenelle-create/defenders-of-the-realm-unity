@@ -12,6 +12,38 @@ smaller window — its copy and duration assumptions change, so re-read them bef
 
 ---
 
+## 0. ⛔ OWNER RULING 2026-08-19 — THIS TICKET SUPERSEDES PROD-009. LANDING IT CLOSES BOTH.
+
+> Owner, verbatim: **"PROD 10 kills 10 and 09"**.
+
+**Why it is the right call and not merely the cheaper one:** PROD-009 (per-family on-demand enemy
+content) exists to shrink the first-run download by streaming families as they are needed. This ticket
+takes the same bytes and moves them to ONE honest, opt-in, up-front download behind a signal that tells
+the player what is happening. Once the player has consciously chosen to pull the content, there is
+nothing left for per-family streaming to solve - it would spread the identical bytes across the session
+and buy a worse experience for a large amount of Addressables complexity.
+
+It also removes the ordering trap this ticket used to carry. The old cross-ref warned that PROD-009
+landing first would change this ticket's copy and duration assumptions ("gives us the 10 seconds (one
+time) to load"). With 009 retired, the duration is simply the real download - and the copy has to be
+honest about it. Measured 2026-08-19: the remote set is 88,253,119 bytes (enemy 67,582,523 + structure
+20,670,596), i.e. roughly **141 s at 5 Mbps and 471 s at 1.5 Mbps**. **DO NOT ship copy promising ten
+seconds in front of a two-to-eight minute download.** The signal's job is to be true, not brief.
+
+⚠ Two things PROD-009 was ALSO carrying that do not die with it - re-home them or they are lost:
+  1. The **main-thread freeze**: `StructureAssetLoader` (and five sibling loaders) call
+     `handle.WaitForCompletion()`, a SYNCHRONOUS stall, not async pop-in. An up-front download does not
+     fix a blocking resolve; it only moves when it hurts.
+  2. **Zero labels** on all 78 enemy + 35 structure entries (`m_SerializedLabels: []`), which is what
+     made partial fetch impossible in the first place. An opt-in "download everything" needs no labels -
+     but anything that ever wants a subset does.
+
+**Action:** mark PROD-009 SUPERSEDED BY PROD-010, do not implement it, and fold the two survivors above
+into this ticket or mint them separately. Recorded here in the same breath as the ruling (CLAUDE.md
+section 15) so the retirement cannot be re-litigated from a stale doc.
+
+---
+
 ## 1. The owner's ruling: KEEP THE CDN. Record WHY it was right.
 
 > *"lets keep the cdn"* — no duplication, no local/remote moves, no group split for this ticket.

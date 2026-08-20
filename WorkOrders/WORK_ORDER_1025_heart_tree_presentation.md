@@ -1,6 +1,6 @@
 # WORK ORDER 1025 — Heart of Elarion reads amateurish: unidentified VFX + an unlit single-texture tree
 
-**Status:** READY — PARTIAL (steps 1 + 2-fireflies-slice are COMMITTED; steps 2-remainder + 3 open)
+**Status:** DONE — owner-confirmed fixed + felt-verified 2026-08-19 ("wo1025 is fixed. i like the vfx there").
 — **the "pending committer gate" clause is RETIRED as of the 2026-08-16 board-grooming pass: the work
 COMMITTED as `8a25d9e76` "feat(vfx): WO-1025 steps 1+2 — Heart audit instrumentation + fireflies
 exemption" (2026-08-16 09:03, on `wip/village2-and-f8-tickets`), touching `HeartAuraController.cs`,

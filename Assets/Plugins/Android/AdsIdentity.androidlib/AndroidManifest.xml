@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- ===========================================================================
+  WO-1125 - the advertising-ID permission the rewarded-ad SDK needs.
+
+  WHY A .androidlib: this folder is an Android Library Project; its manifest
+  MERGES additively into the final app manifest at gradle build time. Hand-
+  authoring a custom main AndroidManifest.xml would REPLACE Unity 6's generated
+  activity/launcher manifest (entry-point dependent - Activity vs GameActivity)
+  and is the risky path. Same reasoning, same shape, as the sibling
+  MobileWalletAdapter.androidlib - see its header.
+
+  NOTE (AGP 8 / Unity 6): no `package=` attribute here - AGP 8 rejects it. The
+  module namespace lives in the sibling build.gradle instead.
+
+  ⛔ THIS IS THE ONLY PERMISSION THIS MODULE MAY EVER DECLARE. It exists for one
+  reason and the publisher already flagged this app once for "excessive
+  permissions for a tower defense game". Anything else needs its own module and
+  its own justification.
+============================================================================ -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- ⛔ REQUIRED AT API 33+, WHICH IS US. PlayerSettings pins
+         targetSdkVersion = 36 (Assets/Editor/AndroidBuild.cs, WO-1124), and from
+         Android 13 an app cannot read the Google Advertising ID without
+         declaring this. Google Play Services returns zeros instead.
+
+         WHY IT MATTERS MORE THAN IT LOOKS: a missing AD_ID does not throw and
+         does not warn. The SDK simply gets no advertising identifier, ads serve
+         as non-personalised or not at all, and the symptom on our side reads as
+         "no fill" - i.e. it looks like ordinary market conditions rather than a
+         manifest we forgot. That is a miserable thing to debug from a fill-rate
+         graph, which is why it goes in BEFORE the SDK rather than after the
+         first disappointing test.
+
+         It is also how the LevelPlay Integration Helper reports a real GAID at
+         the bottom of its log: no permission, no GAID line.
+
+         The device-side control stays with the player - Settings > Google > Ads
+         offers Reset and Delete, and a deleted advertising ID means apps read
+         zeros no matter what this manifest says. -->
+    <uses-permission android:name="com.google.android.gms.permission.AD_ID" />
+
+</manifest>

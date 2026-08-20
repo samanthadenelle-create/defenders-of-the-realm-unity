@@ -1,6 +1,6 @@
 # WORK ORDER 1039 — Build mode looks disjointed: 4 builders each decide their own chrome. `UiStyle` exists and they ignore it
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — owner-confirmed fixed 2026-08-19 ("1039 was already fixed. I confirmed").
 **Minted:** 2026-08-16 (UI seat) — provenance stack bumped 1039 → 1040 in the same edit
 **Lane:** UI presentation, build-mode surfaces. No gameplay behaviour changes.
 **Provenance:** owner 2026-08-16 — *"should we style all of these with one unified style? Looks good but

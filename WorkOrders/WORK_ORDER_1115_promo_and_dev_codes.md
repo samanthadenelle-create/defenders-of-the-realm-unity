@@ -1,6 +1,6 @@
 # WORK ORDER 1115 — Redeem codes: player promotions, and a dev grant that survives a release build
 
-**Status:** SPEC — READY TO IMPLEMENT once §3 is ruled
+**Status:** IMPLEMENTED — owner-confirmed a code was ACCEPTED on device 2026-08-19. Grant path verified at source (api/promo/redeem.js returns reward{crystals,coins}; PromoCodeService applies via EconomyService.GrantSpendablePurchased + AddCoins). ⚠ NO ADMIN SURFACE: api/admin/db.js has no promo view, so codes are added by hand-written SQL and redemption status is unreadable — see the follow-up note at the end of this file.
 **Minted:** 2026-08-17 (CLI seat, main line — banner bumped 1115 → 1116 in this same edit)
 **Lane:** Monetization / live-ops. Touches the payment path — read §4 before writing a line.
 **Provenance:** owner, 2026-08-17, verbatim: *"we could add a code option for promotions like 50% but
@@ -160,3 +160,39 @@ long-term answer but is not a ten-minute job. Faster options, in order of prefer
 2. **Editor playtest** — DevTools is present in-Editor; the economy is identical. Loses device-fidelity
    for touch/perf, keeps it for the crafting logic she is actually testing.
 3. A one-off development APK — **least preferred**, for the §1 reasons.
+
+---
+
+## FOLLOW-UP (CLI, 2026-08-19) — the grant works; the OPERATOR SURFACE does not exist
+
+Owner, 2026-08-19: *"1115 complete, can you confirm code gave resources? I know it accepted code, dont
+remember if we have place to add addresses and status"*. Both halves answered, verified at source.
+
+**1. Yes, a redeemed code grants resources.** `api/promo/redeem.js` returns
+`{ success: true, reward: { crystals, coins }, message }` (header `:43`), reading `reward_crystals` /
+`reward_coins` from `promo_codes` (`:165`). Client-side, `PromoCodeService` applies them through
+`EconomyService.GrantSpendablePurchased(wood, food, iron, crystals)` for crystals and `AddCoins` for
+coins (`:237`), and traces the outcome: `redeem OUTCOME=redeemed - crystals:{n} coins:{n}` (`:219`).
+It is WALLET-GATED — a guest is refused `AUTH_WALLET_REQUIRED` (`:31`), and the route uses
+`authenticateGranting`, not plain `authenticate`, *"because this route hands out crystals"* (`:138`).
+So a code being ACCEPTED on device means a wallet was bound and the grant path ran.
+
+⚠ One edge worth knowing: a code whose reward is **zero crystals AND zero coins** returns
+`REWARD_UNAVAILABLE` and is **NOT consumed** (`:55`). So a mis-authored code fails safe rather than
+burning the player's one redemption.
+
+**2. No, there is nowhere to add codes or read status.** The tables exist — `promo_codes` (the catalog
+of valid codes, `schema.sql:265`) and `promo_redemptions` (`:278`) — but `api/admin/db.js` serves only
+`overview`, `players`, `metrics`, `traces`, `bugreport(s)` and `authrejects`. **There is no `promo`
+view.** Consequences today:
+
+- A new code is added by hand-written SQL against Neon. There is no form, no validation, and no record
+  of who issued what.
+- Redemption status is unreadable without a manual query: no view of which codes exist, how many times
+  each has been redeemed, what `max_redemptions` is, or who redeemed.
+- "Addresses" (the wallet gate) are equally invisible — you cannot see which wallet claimed a code.
+
+**Proposed, NOT built (needs a WO number and an owner nod on scope):** a read-only `view=promo` on
+`api/admin/db.js` joining `promo_codes` to a redemption count, which is small and matches the existing
+key-gated admin pattern. **Writing codes from the browser is a bigger call** — that endpoint hands out
+currency, so it wants more thought than "add a form", and the read view delivers most of the value.

@@ -1,6 +1,6 @@
 # WORK ORDER 980 — Dungeon camera framing after the fix: blown-out wall, hero as silhouette
 
-**Status:** READY — **needs an owner ruling first (§3)**, not an engineering decision
+**Status:** DONE — owner-confirmed fixed and verified 2026-08-19.
 **Lane:** Dungeons / presentation
 **Minted:** 2026-08-10 (CLI), from the WO-968 after-fix proof run
 

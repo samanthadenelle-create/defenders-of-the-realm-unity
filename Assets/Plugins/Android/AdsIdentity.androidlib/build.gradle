@@ -1,0 +1,55 @@
+// =============================================================================
+// WO-1125 - build.gradle for the AdsIdentity.androidlib module.
+// Manifest-only library module whose single job is merging the AD_ID permission
+// into the app manifest. No sources, no resources, no dependencies.
+//
+// ⛔ THIS FILE IS NOT OPTIONAL. Without it (and without a legacy
+// project.properties) the 2026-08-19 18:48 APK build FAILED outright:
+//     A problem occurred configuring project ':unityLibrary:AdsIdentity.androidlib'
+// A .androidlib needs EITHER a build.gradle - a real Gradle module, this file - OR
+// a project.properties, which is the legacy path the sibling FirebaseApp.androidlib
+// uses. A folder with neither is handed to AGP as a module it cannot configure.
+// Mirrors MobileWalletAdapter.androidlib, which learned all of the below the hard way.
+// =============================================================================
+apply plugin: 'com.android.library'
+
+android {
+    namespace "com.denelle.defenders.adsidentity"
+    compileSdk 36
+
+    // ── DO NOT REMOVE defaultConfig ──────────────────────────────────────────
+    // Copied deliberately from MobileWalletAdapter.androidlib, which documents the
+    // 2026-08-16 publisher-blocking defect: without minSdk/targetSdk HERE, AGP reads
+    // this module's targetSdkVersion as **1** and applies the legacy pre-Donut
+    // compatibility rule, IMPLICITLY granting the whole APP:
+    //     WRITE_EXTERNAL_STORAGE + READ_PHONE_STATE  (the "targetSdkVersion < 4" rule)
+    //     READ_EXTERNAL_STORAGE                      (implied by WRITE)
+    // AGP states it itself in manifest-merger-release-report.txt as "IMPLIED ...
+    // reason: <module> has a targetSdkVersion < 4". That got a build flagged by the
+    // publisher for "excessive permissions for a tower defense game" - on an app that
+    // writes everything to Application.persistentDataPath and needs no storage
+    // permission at all.
+    //
+    // ⚠ IT MUST BE IN THE DSL, NOT THE MANIFEST. A <uses-sdk> element in a LIBRARY
+    // manifest is ignored/stripped by AGP - putting it there first is exactly why an
+    // earlier attempt on the sibling module still shipped all three permissions.
+    //
+    // targetSdk 36 matches PlayerSettings (AndroidBuild.cs, pinned by WO-1124).
+    defaultConfig {
+        minSdk 26
+        targetSdk 36
+    }
+
+    // ── manifest lives at the FOLDER ROOT, not src/main/ ─────────────────────
+    // The moment a build.gradle exists, Unity stops treating this folder as a legacy
+    // .androidlib and hands it to AGP as a real Gradle module - and AGP's DEFAULT
+    // manifest location is src/main/AndroidManifest.xml, NOT the module root. Without
+    // this the sibling AndroidManifest.xml is silently ignored, with no warning, and
+    // the permission never reaches the APK while everything still builds green.
+    // That exact failure cost the MWA module a shipped build with zero "queries" in it.
+    sourceSets {
+        main {
+            manifest.srcFile 'AndroidManifest.xml'
+        }
+    }
+}
