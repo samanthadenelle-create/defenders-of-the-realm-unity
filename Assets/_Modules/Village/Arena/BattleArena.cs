@@ -332,6 +332,54 @@ namespace DeNelle.Village.Arena
             _instance = this;
             _battleProbe = () => BattleInProgress;
             BattleLock.RegisterProbe(_battleProbe);
+
+            RegisterQuiescenceProbes();
+        }
+
+        /// <summary>
+        /// WO-1127: hand the gate the invariants only Village can see. They cannot live in Core -
+        /// DeNelle.Core cannot reference Enemy or HeroLocomotion - so they arrive as delegates
+        /// instead of dissolving the asmdef boundary. Register() replaces by name, so a scene
+        /// reload that re-runs Awake cannot accumulate duplicates.
+        /// </summary>
+        private void RegisterQuiescenceProbes()
+        {
+            // Orphaned stage actors. The in-place arena stages its enemies ~7 km out, so a survivor
+            // is INVISIBLE to the player while still ticking, pathing and holding references. On a
+            // resolved battle _liveEnemies must be empty; anything left is a teardown miss.
+            BattleQuiescenceGate.Register(new QuiescenceProbe
+            {
+                Name = "arena-actors",
+                Check = () =>
+                {
+                    if (BattleInProgress) return null;   // a new battle started; not our business
+                    int alive = 0;
+                    for (int i = 0; i < _liveEnemies.Count; i++)
+                        if (_liveEnemies[i] != null) alive++;
+                    return alive == 0
+                        ? null
+                        : $"{alive} staged arena enemy(ies) still alive after resolve. They sit ~7 km " +
+                          "from the player, so they are invisible while still ticking and pathing.";
+                }
+            });
+
+            // Hero owner. 'owner=FOREIGN-CC' is a known movement failure on the dungeon side and
+            // belongs in the same net: a foreign mover holding the transform looks exactly like
+            // frozen controls to the player, which is the symptom this whole ticket started from.
+            BattleQuiescenceGate.Register(new QuiescenceProbe
+            {
+                Name = "hero-owner",
+                Check = () =>
+                {
+                    var loco = UnityEngine.Object.FindFirstObjectByType<HeroLocomotion>();
+                    if (loco == null) return null;   // no hero in this scene; nothing to assert
+                    var cc = loco.GetComponent<CharacterController>();
+                    return (cc != null && cc.enabled)
+                        ? "a foreign CharacterController is ENABLED on the hero, so HeroLocomotion is " +
+                          "not the mover. The player reads this as unresponsive movement."
+                        : null;
+                }
+            });
         }
 
         private void OnDestroy()
@@ -2608,6 +2656,19 @@ namespace DeNelle.Village.Arena
                     "Continue (watchdog armed). NOT yet returned; 'FADE IN: home arrival' proves arrival.");
             else
                 FlowTrace.Step("BattleArena", "Resolve: stage torn down, hero retreated SAFE, battle ended.");
+
+            // WO-1127: THE TEARDOWN CONTRACT. Nothing used to assert the world was back to baseline
+            // when a battle ended, which is why a leaked hit-stop left the owner at 4% world speed
+            // for three minutes on 2026-08-20 and read to her as frozen controls. The gate waits out
+            // the reward screen, settles on the UNSCALED clock, then names any invariant still wrong.
+            //
+            // Guarded and fire-and-forget: this is diagnostics and it must never be able to break a
+            // battle resolve. It is armed on BOTH outcomes - a retreat tears down the same systems a
+            // win does, and a contract with a hole in it is not a contract.
+            Guard.Try("BattleArena", "arm battle-end quiescence gate", () =>
+                StartCoroutine(BattleQuiescenceGate.Arm(
+                    won ? (System.Func<bool>)(() => EndStateView.IsShowing) : null,
+                    won ? "arena win" : "retreat")));
         }
 
         /// <summary>

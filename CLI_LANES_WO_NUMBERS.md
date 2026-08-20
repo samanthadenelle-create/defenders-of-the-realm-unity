@@ -95,7 +95,15 @@
 > PROD-003 (Realm Store permanent storefront), PROD-004 (baked-twin footprint),
 > PROD-005 (default shield renders through the hero body; survives a dungeon->town port).
 
-> ## ⚠ RECONCILED 2026-08-17 (CLI): main line next free = **1127**.
+> ## ⚠ RECONCILED 2026-08-20 (CLI): main line next free = **1128**.
+> *(CLI seat minted **WO-1127** and bumped 1127 -> 1128 in this SAME edit — the BATTLE-END
+> QUIESCENCE GATE. Owner ruling 2026-08-20 after weighing a full scene-swap against a teardown
+> contract and choosing the contract: a scene load does NOT reset `Time.timeScale`, does not touch
+> 350 `DontDestroyOnLoad` call sites across 212 files, and does not clear ~290 mutable statics in
+> the Vfx+Arena modules alone — so the measured 3.75 s hub reload would have bought a frozen town
+> AFTER a loading screen. The gate asserts the world is back to baseline at battle resolve and
+> names whichever invariant is wrong. Works in-place AND across the real scene loads the dungeon /
+> garrison / raid paths already do.)*
 > *(CLI seat minted **WO-1117..1122** and bumped 1117 -> 1123 in this SAME edit — monetization
 > profitability program. **1117** = program spine (pack audit + phase map). **1118** = honest SKU
 > shelf (hide vapor; keep impulse; rewrite $2/$5 ladder). **1119** = crystal sink + 2x harvest boost

@@ -1,0 +1,281 @@
+// =============================================================================
+// BattleQuiescenceGate — WO-1127. Assert the world is back to baseline after a
+// battle, and name exactly which invariant is not.
+// -----------------------------------------------------------------------------
+// Assembly: DeNelle.Core (Core/Combat). Core-only by construction: the invariants
+// it owns are all Core-visible (Time, BattleLock, PanelManager). Anything that
+// needs a Village/Dungeon type arrives as a REGISTERED PROBE (see Register), so
+// the asmdef boundary is never crossed and the gate stays usable from any module.
+//
+// ⛔ WHY THIS EXISTS — the incident, and the architecture it replaced.
+//
+// 2026-08-20, owner device session. She fought in town, won, and could not move:
+//   [Flow:HeroOwner] ... scriptedMove=off inputSuppressed=False timeScale=0.04 dt=0.0013
+// Input was never blocked. The WORLD was running at 4% speed and stayed there for
+// 182 consecutive samples across three minutes, starting the instant the battle
+// resolved. A cosmetic hit-stop had leaked a global and NOTHING NOTICED.
+//
+// The owner's first instinct was a full scene swap (save -> tear down -> load an
+// arena scene -> reward -> tear down -> reload town), on the reasoning that a scene
+// load guarantees teardown. It does not guarantee the teardown that matters here:
+//   * Time.timeScale is an ENGINE GLOBAL. SceneManager.LoadScene does not reset it.
+//     0.04 would have ridden straight through the load — a frozen town AFTER a
+//     loading screen.
+//   * DontDestroyOnLoad: 350 call sites across 212 files in this repo, HitStopManager
+//     among them. ~290 mutable statics in the Vfx+Arena modules alone. All survive.
+//   * Measured on the owner's Seeker: LoadScene -> hub loaded = 3.75s, ~5s to a
+//     steady frame. Round trip ~7.5s x 13 battles in one session = ~90s of loading.
+// She ruled for the contract over the swap. This is the contract.
+//
+// WHAT IT IS NOT. It is not a repair mechanism and it is not an eighth owner of
+// Time.timeScale (there are already seven: HitStopManager, CombatFeedbackManager,
+// ArenaDeathCam, WaveCelebrationManager, PauseController, HeroHitReaction,
+// GameOverScreen). It OBSERVES and REPORTS. The single exception is timeScale,
+// where the safe value is unambiguous and a wrong one is unsurvivable — and even
+// there it FAILS LOUDLY FIRST and says it restored. A gate that quietly fixes
+// things trains everyone to stop reading it and hides the real owner of the bug.
+//
+// TIMING. Some invariants legitimately settle over a frame or two (posture
+// transitions, the reward modal's own open), so a one-shot check on the resolve
+// frame would false-positive — and a gate that fails on correct behaviour is a gate
+// people learn to ignore. Arm() therefore waits for the reward screen to close and
+// then re-checks on the UNSCALED clock, which is the only clock that still advances
+// when the very defect it hunts is present.
+// =============================================================================
+
+using System;
+using System.Collections.Generic;
+using System.Text;
+using UnityEngine;
+using DeNelle.Core.Diagnostics;
+using DeNelle.Core.UI;
+
+namespace DeNelle.Core.Combat
+{
+    /// <summary>One named invariant the world must satisfy once a battle is over.</summary>
+    public sealed class QuiescenceProbe
+    {
+        /// <summary>Short stable name, used in the failure text (e.g. "timeScale", "hero-owner").</summary>
+        public string Name;
+
+        /// <summary>
+        /// Returns null when the invariant holds, or a HUMAN-READABLE reason when it does not.
+        /// The reason must name the observed value — "hero owner is wrong" costs a debugging
+        /// session that "hero owner = FOREIGN-CC" does not.
+        /// </summary>
+        public Func<string> Check;
+    }
+
+    /// <summary>
+    /// WO-1127. The battle-end teardown contract. <see cref="Arm"/> at battle resolve;
+    /// the gate settles, checks every invariant, and reports.
+    /// </summary>
+    public static class BattleQuiescenceGate
+    {
+        private const string Sys = "Quiescence";
+
+        public const string MarkerOk   = "BATTLE_QUIESCENCE_OK";
+        public const string MarkerFail = "BATTLE_QUIESCENCE_FAIL";
+
+        /// <summary>timeScale tolerance. Wide enough that a legitimate 1.0 never trips it.</summary>
+        private const float ScaleEpsilon = 0.01f;
+
+        /// <summary>
+        /// How long (unscaled) to let the world settle after the reward screen closes before
+        /// judging it. Generous on purpose: a false failure is more expensive than a late one,
+        /// because it is the thing that gets a gate switched off.
+        /// </summary>
+        private const float SettleSeconds = 0.75f;
+
+        /// <summary>
+        /// Hard cap (unscaled) on waiting for the reward screen to close. A reward screen that
+        /// never closes is itself a defect, and the gate must report rather than wait forever —
+        /// silence is the failure mode this whole ticket exists to end.
+        /// </summary>
+        private const float ModalWaitCapSeconds = 60f;
+
+        private static readonly List<QuiescenceProbe> s_extra = new List<QuiescenceProbe>();
+
+        /// <summary>
+        /// Register a module-specific invariant (orphaned arena actors, hero owner, …). Village and
+        /// Dungeon types cannot be referenced from Core, so they arrive here instead. Re-registering
+        /// the same <see cref="QuiescenceProbe.Name"/> REPLACES the previous one, so a scene reload
+        /// that re-installs its probes cannot accumulate duplicates.
+        /// </summary>
+        public static void Register(QuiescenceProbe probe)
+        {
+            if (probe == null || string.IsNullOrEmpty(probe.Name) || probe.Check == null) return;
+            for (int i = 0; i < s_extra.Count; i++)
+            {
+                if (s_extra[i].Name == probe.Name) { s_extra[i] = probe; return; }
+            }
+            s_extra.Add(probe);
+            FlowTrace.Step(Sys, $"probe registered: '{probe.Name}' ({s_extra.Count} module probe(s) total)");
+        }
+
+        /// <summary>Remove a probe by name. Safe to call for one never registered.</summary>
+        public static void Unregister(string name)
+        {
+            for (int i = 0; i < s_extra.Count; i++)
+            {
+                if (s_extra[i].Name == name) { s_extra.RemoveAt(i); return; }
+            }
+        }
+
+        /// <summary>Registered module probes, for the regression suite. Never mutate.</summary>
+        public static IReadOnlyList<QuiescenceProbe> ModuleProbes => s_extra;
+
+        // =====================================================================
+        //  The check itself
+        // =====================================================================
+
+        /// <summary>
+        /// Evaluate every invariant NOW and return the failures, most fundamental first.
+        /// Pure and synchronous — this is the entry point the regression suite drives, which is
+        /// what lets the suite prove the gate FAILS each known-bad state rather than only that it
+        /// passes a clean one.
+        /// </summary>
+        /// <param name="rewardScreenOpen">
+        /// True while the reward/victory screen is legitimately up. The modal invariant is SKIPPED
+        /// then: an open reward screen is correct behaviour, and failing on it is the fastest way to
+        /// teach everyone to ignore this gate.
+        /// </param>
+        public static List<string> Evaluate(bool rewardScreenOpen)
+        {
+            var failures = new List<string>();
+
+            // 1. timeScale — THE captured defect, and the cheapest check for the most
+            //    player-visible failure there is.
+            Guard.Try(Sys, "probe timeScale", () =>
+            {
+                float ts = Time.timeScale;
+                if (Mathf.Abs(ts - 1f) > ScaleEpsilon)
+                {
+                    failures.Add($"timeScale: the world clock is {ts:F2} ({ts * 100f:F0}% speed), not 1.00. " +
+                                 "The player will read this as frozen or unresponsive controls even though " +
+                                 "input is fine — this is the exact 2026-08-20 defect (a leaked hit-stop).");
+                }
+            });
+
+            // 2. battle lock — a stuck lock suppresses combat input and pins the HUD out of its
+            //    town context indefinitely.
+            Guard.Try(Sys, "probe battle lock", () =>
+            {
+                if (BattleLock.IsInBattle())
+                    failures.Add("battle-lock: still HELD after the battle ended. Combat input stays " +
+                                 "suppressed and the HUD cannot return to its town context.");
+            });
+
+            // 3. modal — the Echo-modal FTUE cascade was exactly this, and it is invisible until a
+            //    tap goes nowhere. Only meaningful once the reward screen is down.
+            if (!rewardScreenOpen)
+            {
+                Guard.Try(Sys, "probe modal arbiter", () =>
+                {
+                    if (PanelManager.AnyOpen)
+                        failures.Add("modal: a panel handle is STILL OPEN after the reward screen closed. " +
+                                     "The world interact button stays suppressed underneath and the back " +
+                                     "button targets a panel the player cannot see.");
+                });
+            }
+
+            // 4..n — module probes (orphaned arena actors, hero owner, combat input gating).
+            //        Guarded individually: one bad probe must never hide the others' findings, and
+            //        a diagnostic must never take down a battle resolve.
+            for (int i = 0; i < s_extra.Count; i++)
+            {
+                var p = s_extra[i];
+                if (p == null) continue;
+                Guard.Try(Sys, $"probe '{p.Name}'", () =>
+                {
+                    string why = p.Check();
+                    if (!string.IsNullOrEmpty(why)) failures.Add($"{p.Name}: {why}");
+                });
+            }
+
+            return failures;
+        }
+
+        // =====================================================================
+        //  Arming (drive this from battle resolve)
+        // =====================================================================
+
+        /// <summary>
+        /// Arm the gate at battle resolve. Returns an enumerator the caller runs as a coroutine:
+        /// it waits out the reward screen, lets the world settle on the UNSCALED clock, then
+        /// evaluates and reports.
+        ///
+        /// <para>Unscaled throughout ON PURPOSE — a scaled wait would be slowed by the very defect
+        /// this gate exists to catch, and at timeScale 0.04 a 0.75 s settle becomes 19 s.</para>
+        /// </summary>
+        /// <param name="isRewardScreenOpen">
+        /// Polled to know when the reward screen closes. Pass null when a battle ends with no
+        /// reward screen (a retreat), and the settle begins immediately.
+        /// </param>
+        /// <param name="context">Short description for the log, e.g. "arena win" / "retreat".</param>
+        public static System.Collections.IEnumerator Arm(Func<bool> isRewardScreenOpen, string context)
+        {
+            float waitStarted = Time.unscaledTime;
+
+            // Wait out the reward screen — but never forever. A reward screen that never closes is
+            // its own defect and must be REPORTED, not waited on in silence.
+            bool cappedOut = false;
+            while (isRewardScreenOpen != null && SafeIsOpen(isRewardScreenOpen))
+            {
+                if (Time.unscaledTime - waitStarted > ModalWaitCapSeconds)
+                {
+                    cappedOut = true;
+                    FlowTrace.Warn(Sys,
+                        $"reward screen still open {ModalWaitCapSeconds:F0}s after resolve ({context}) - " +
+                        "checking anyway rather than waiting in silence. The modal invariant is reported " +
+                        "as a finding, because a reward screen that will not close IS the defect.");
+                    break;
+                }
+                yield return null;
+            }
+
+            float settleStarted = Time.unscaledTime;
+            while (Time.unscaledTime - settleStarted < SettleSeconds) yield return null;
+
+            var failures = Evaluate(rewardScreenOpen: false);
+
+            if (failures.Count == 0)
+            {
+                FlowTrace.Step(Sys,
+                    $"{MarkerOk} ({context}) - timeScale 1.00, battle-lock clear, no modal held, " +
+                    $"{s_extra.Count} module probe(s) clean. The world is back to baseline.");
+                yield break;
+            }
+
+            var sb = new StringBuilder();
+            sb.Append(MarkerFail).Append(" (").Append(context).Append(") - ")
+              .Append(failures.Count).Append(" invariant(s) NOT restored after the battle:");
+            for (int i = 0; i < failures.Count; i++) sb.Append("\n  - ").Append(failures[i]);
+            if (cappedOut) sb.Append("\n  (note: the reward-screen wait hit its cap, see the warning above)");
+
+            FlowTrace.Fail(Sys, sb.ToString());
+
+            // THE ONE RESTORE. Unsurvivable and unambiguous: there is no legitimate reason for the
+            // world clock to sit at anything but 1 once every battle system has finished. Reported
+            // FIRST (above) and announced here, so the leaking owner is still named rather than
+            // masked — the whole reason the 2026-08-20 defect went three minutes unexplained is
+            // that something silently tolerated it.
+            if (Mathf.Abs(Time.timeScale - 1f) > ScaleEpsilon)
+            {
+                float leaked = Time.timeScale;
+                Time.timeScale = 1f;
+                FlowTrace.Warn(Sys,
+                    $"timeScale RESTORED to 1.00 by the quiescence gate (was {leaked:F2}). This is a " +
+                    "SAFETY NET, not a fix: something above still leaked the world clock and the " +
+                    "FAIL line above names when. Fix the owner, do not rely on this.");
+            }
+        }
+
+        private static bool SafeIsOpen(Func<bool> probe)
+        {
+            bool open = false;
+            Guard.Try(Sys, "poll reward-screen state", () => open = probe());
+            return open;
+        }
+    }
+}

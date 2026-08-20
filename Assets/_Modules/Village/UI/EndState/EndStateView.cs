@@ -44,6 +44,14 @@ namespace DeNelle.Village.UI
     {
         private static EndStateView _open;
 
+        /// <summary>
+        /// WO-1127: true while the end-state (victory / defeat) screen is up. Read by the
+        /// battle-end quiescence gate, which must NOT judge the modal invariant while a reward
+        /// screen is legitimately open — failing a gate on correct behaviour is the fastest way to
+        /// get it switched off.
+        /// </summary>
+        public static bool IsShowing => _open != null;
+
         private EndStateVM _vm;
         private bool _fired;                      // primary-action latch (fires exactly once)
         private readonly List<Reveal> _reveals = new List<Reveal>();
