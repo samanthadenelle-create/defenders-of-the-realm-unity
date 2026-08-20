@@ -95,7 +95,16 @@
 > PROD-003 (Realm Store permanent storefront), PROD-004 (baked-twin footprint),
 > PROD-005 (default shield renders through the hero body; survives a dungeon->town port).
 
-> ## ⚠ RECONCILED 2026-08-20 (CLI): main line next free = **1129**.
+> ## ⚠ RECONCILED 2026-08-20 (CLI): main line next free = **1130**.
+> *(CLI seat minted **WO-1129** and bumped 1129 -> 1130 in this SAME edit — THE ART TREE
+> RECONCILIATION, an owner-requested dedicated overnight session. Owner: *"I think we need one
+> dedicated overnight session to properly map everything into the proper structure of the tree...
+> that's why I was trying to get everybody to do it in a way that we start replacing literals with
+> string variables or constants."* MEASURED: **111 distinct asset-path literals** in code, and FOUR
+> competing conventions for one job (TripoTex/, OrcTex/, per-model .fbm, Incoming_Tripo staging).
+> Each seat that touched enemy art invented its own home for it, which is exactly why a
+> model-name search could report "no texture anywhere" while the art sat in a folder nobody
+> named. The deliverable is a DERIVED resolver + a coverage oracle, not a tidy-up.)*
 > *(CLI seat minted **WO-1128** and bumped 1128 -> 1129 in this SAME edit — SERVER-RECONCILED
 > OFFLINE ACCRUAL. Owner question 2026-08-20: *"would we be able to verify that their offline data
 > was valid... getting resources from their pets harvesting while they're offline"*. Answer: do not
