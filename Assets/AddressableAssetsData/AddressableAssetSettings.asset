@@ -110,6 +110,11 @@ MonoBehaviour:
     - default
     - Locale
     - Locale-en
+    - enemyfam-orc
+    - enemyfam-hollow
+    - enemyfam-shared
+    - enemyfam-troll
+    - enemyfam-bosses
   m_SchemaTemplates: []
   m_GroupTemplateObjects:
   - {fileID: 11400000, guid: 68a9725f91bb76a4198c31ea0f6c8caa, type: 2}

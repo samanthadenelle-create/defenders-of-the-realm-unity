@@ -18,392 +18,470 @@ MonoBehaviour:
   - m_GUID: 03a6870cdd5717b42be69cc062bcc8fd
     m_Address: Enemies/Orc_Mage.fbm/tripo_mat_80c4114e_Pbr_Diffuse
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-orc
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 042a1e0292ddecf448f4cd6fe3c72122
     m_Address: Enemies/Materials/skeleton_texture_A
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-hollow
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 0a240dd5ab0a273498b4cf46955f8439
     m_Address: Enemies/TripoTex/Orc_Mage_basecolor
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-orc
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 0b1ab4e6e66da944eb32758269bd1b09
     m_Address: Enemies/Materials/Material_Pbr_Diffuse
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-shared
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 0eeb96808af19c14b85ada877bd1718d
     m_Address: Enemies/LargeHumanoid
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-shared
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 162a6c4939cfd0a4992bd10be79ef3d3
     m_Address: Enemies/LargeEnemy
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-shared
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 175600ff32d79654f96027e2a05dc8d7
     m_Address: Enemies/TripoTex/Troll_Mage_normal
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-troll
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 189ebcaec8d15894283c1db1b5ae0f38
     m_Address: Enemies/Skeleton_Golem_NEW
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-hollow
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 1bbffbdf5cc63414a8b02d8b57ecbfb5
     m_Address: Enemies/Materials/Glow
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-shared
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 1c04fe23e687b12469f65aea60137a54
     m_Address: Enemies/OrcHumanoid
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-orc
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 27ff19a16a8497e478191e49fb8bc7f4
     m_Address: Enemies/TripoTex/Necromancer_basecolor
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-hollow
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 2a45637b34ffcfd4abfc88766e4d0f66
     m_Address: Enemies/Orc_Shaman
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-orc
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 303dbf586641ea54985888a6b163d533
     m_Address: Enemies/Orc_Tank.fbm/tripo_mat_80c4114e_Pbr_Diffuse
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-orc
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 36825e15082e3834ebdf462fedc2e4b9
     m_Address: Enemies/OrcTex/Orc_Tank_normal
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-orc
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 3822b27b45e63e24f8839ee666b16cca
     m_Address: Enemies/OrcTex/Orc_Tank_metallic
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-orc
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 3bddc9f232c05a442806dd4f6dbf412a
     m_Address: Enemies/Skeleton_Golem
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-hollow
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 502644dfb10d124409afdc67b67192b5
     m_Address: Enemies/OrcTex/Orc_Warrior_basecolor
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-orc
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 50aa0ddb3052ecb4597674fafd8393cf
     m_Address: Enemies/Orc_Mage_Legacy
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-orc
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 52b06f2a509287749916248f0a96d918
     m_Address: Enemies/OrcTex/Orc_Warrior_roughness
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-orc
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 55cdd34f5a6d9fc45ac65758861150fa
     m_Address: Enemies/OrcWarband
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-orc
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 59f6a9cb1ce6bef4bbec3922efcdf839
     m_Address: Enemies/Orc_Berserker
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-orc
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 5b524eaf028edaf4b9dbe113a7f15563
     m_Address: Enemies/Necromancer_NEW
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-hollow
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 60051d8a86c7b9a4b87145aa50adca68
     m_Address: Enemies/Skeleton_Rogue.fbm/Material_Pbr_Diffuse
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-hollow
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 6066d47ca793874439884eacffdf1165
     m_Address: Enemies/Skeleton_Minion
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-hollow
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 60e38b0cb9939d045a8c68fab937a640
     m_Address: Enemies/SkeletonHumanoid
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-hollow
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 62978c0be354f4045b1ad5dea188e445
     m_Address: Enemies/OrcHumanoid_Tank
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-orc
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 63f0d2098c640f24b89f4eb3812374f8
     m_Address: Enemies/Necromancer
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-hollow
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 6afe4aba3d324af49b469a98bb8d9844
     m_Address: Enemies/Troll
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-troll
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 6d6937df696c64143ab9047b25668a7c
     m_Address: Enemies/Orc_Necromancer
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-orc
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 700b2bc03914210439189ba8cc0754df
     m_Address: Enemies/TripoTex/Necromancer_normal
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-hollow
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 70784628d067e0b48a44c665010def8d
     m_Address: Enemies/Skeleton_Healer
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-hollow
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 70fb9b95c96d13b4485f01d9a6cecdfb
     m_Address: Enemies/Orc_Tank.fbm/tripo_mat_80c4114e_Pbr_Normal
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-orc
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 70feedf9ada7ae047b92dc0c31987e31
     m_Address: Enemies/Orc_Warrior.fbm/tripo_mat_71b5a650_Pbr_Diffuse
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-orc
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 756700e7515091641808f85bf7ecdda3
     m_Address: Enemies/OrcTex/Orc_Mage_basecolor
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-orc
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 7704145f589537243921721c2a6fd334
     m_Address: Enemies/OrcTex/Orc_Mage_normal
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-orc
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 7949fd113d9a377478ff37ed090fa6cb
     m_Address: Enemies/Materials/Material_Pbr
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-shared
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 7b481e3a3d3ea3648ac7a71be2257b6c
     m_Address: Enemies/OrcHumanoid_Warrior
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-orc
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 83bb901389a57af4c8f393f5fa2e8181
     m_Address: Enemies/Orc_Warlord
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-orc
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 84183eb4561764549a99a533564aad92
     m_Address: Enemies/Materials/skeleton
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-hollow
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 85b8f2629cd7c084a9874ccf6380ef58
     m_Address: Enemies/Orc_Warrior.fbm/tripo_mat_71b5a650_Pbr_Normal
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-orc
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 86367789586a0f043a38ffefad914b87
     m_Address: Enemies/Skeleton_Rogue
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-hollow
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 88cc09a1a6d8f274795b7efdae793fb8
     m_Address: Enemies/Troll_Mage
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-troll
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 8a53b52f760a558418a313e7c01609f9
     m_Address: Enemies/Skeleton_Warrior
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-hollow
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 930df79824491b6478e9ecaf73398f22
     m_Address: Enemies/Troll_Overlord
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-troll
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 9423fbb583a45b74ea7121554e7f82ec
     m_Address: Enemies/OrcTex/Orc_Mage_metallic
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-orc
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 9a22937b7b087264e96a3cfb2a3a2a7e
     m_Address: Enemies/skeleton_texture_A_URP
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-hollow
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 9ac17f032083e7b4c93560a8bf97802a
     m_Address: Enemies/OrcTex/Orc_Warrior_metallic
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-orc
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 9ba657bcb52d045479a61a4957fb56cc
     m_Address: Enemies/Demon.fbm/tripo_mat_38a37fc5_Pbr_Diffuse
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-bosses
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 9dc79985e3c22ce43917fd563e30ea78
     m_Address: Enemies/TripoTex/Orc_Warlord_normal
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-orc
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: a297ed3b44f9a2247b7426bdf5d37259
     m_Address: Enemies/skeleton_texture_A
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-hollow
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: a3b2a0b460d9c0942b95be157de5a1da
     m_Address: Enemies/Orc_Mage.fbm/tripo_mat_80c4114e_Pbr_Normal
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-orc
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: a4358490018e357459a0d65f700db084
     m_Address: Enemies/TripoTex/Troll_Overlord_basecolor
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-troll
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: a68663ae8b5366f40b6dc97a9a16bda6
     m_Address: Enemies/Orc_Shaman
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-orc
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: ad02d97a589870647b6a580b1c35f207
     m_Address: Enemies/Orc_Tank
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-orc
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: aeaefd8d8d7cdf741821e80d2ed89503
     m_Address: Enemies/TripoTex/Troll_Overlord_normal
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-troll
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b17eda4b37a8fe1459cab240101ae1fa
     m_Address: Enemies/Boss_Dragon
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-bosses
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b18ad3044f20eba4ab25077a1a16a3b1
     m_Address: Enemies/Orc_Berserker
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-orc
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b38f950f96b590448bbfb601d93c7ce1
     m_Address: Enemies/TripoTex/Skeleton_Golem_normal
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-hollow
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b4da52a04f534fd4da047a60d9afd840
     m_Address: Enemies/OrcHumanoid_Mage
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-orc
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b644bff0d325aae428339d6a439c72b1
     m_Address: Enemies/TripoTex/Troll_normal
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-troll
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b8255d42b153d6f49a1a9f721eb3c0b1
     m_Address: Enemies/OrcTex/Orc_Warrior_normal
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-orc
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b839d6b46fa2b0a439e3815a3857b66b
     m_Address: Enemies/Orc_Mage
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-orc
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: bc721785eb19efe4dbdd379f136a7e68
     m_Address: Enemies/Skeleton_Mage.fbm/Material_Pbr_Diffuse
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-hollow
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: cb57466c1483c9c44ae1a355d1735c60
     m_Address: Enemies/HumanoidEnemy
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-shared
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: ce977d5bf56523342892482f67c2ebd3
     m_Address: Enemies/TripoTex/Troll_basecolor
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-troll
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: cefab100b7e0bd844b7398b7a569c43b
     m_Address: Enemies/TripoTex/Orc_Warlord_basecolor
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-orc
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: cfde23b22f282144194d154abedcbba1
     m_Address: Enemies/Boss
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-bosses
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: d1069391a8048f14c87801f25d4eee6b
     m_Address: Enemies/TripoTex/Skeleton_Golem_basecolor
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-hollow
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: d5f92e09e6ef10c479fe23edb9947efa
     m_Address: Enemies/TripoTex/Orc_Mage_normal
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-orc
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: d6bad9e773bd99047b3fe07c4a18f64b
     m_Address: Enemies/Skeleton_Mage
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-hollow
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: de35fce9c503ab14884de7e72880494d
     m_Address: Enemies/Orc_Necromancer
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-orc
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: dec00bc3a0b10804a92f8220a57f0d6f
     m_Address: Enemies/TripoTex/Troll_Mage_basecolor
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-troll
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: ea8b49aa47e59be47b3b28812a80bc20
     m_Address: Enemies/Orc_Warrior
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-orc
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: eedd0b8458265554f9191976e832db6a
     m_Address: Enemies/Skeleton_Warrior.fbm/Material_Pbr_Diffuse
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-hollow
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: f07f3b0f4b85cbb4997636f5a98f90b5
     m_Address: Enemies/OrcTex/Orc_Mage_roughness
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-orc
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: f8c2e231844bd394eb19e144ccd8edb5
     m_Address: Enemies/OrcTex/Orc_Tank_basecolor
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-orc
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: f8e35fcf98ad82a42a627c1417a243c1
     m_Address: Enemies/OrcTex/Orc_Tank_roughness
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-orc
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: fab00f1c1b8e8b546bbd42ba5e75fa36
     m_Address: Enemies/Demon
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-bosses
     FlaggedDuringContentUpdateRestriction: 0
   m_ReadOnly: 0
   m_Settings: {fileID: 11400000, guid: 73b1d645ccb43af47916e90d8a1f17d4, type: 2}

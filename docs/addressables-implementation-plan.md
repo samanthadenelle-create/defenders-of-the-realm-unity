@@ -6,6 +6,45 @@
 
 ---
 
+## ⚠ CURRENT PACKING LAW (2026-08-20) — supersedes anything below about grouping
+
+The 2026-05-28 plan below describes a group layout the project never built. **The live
+grouping is `Assets/AddressableAssetsData/AssetGroups/*.asset`; read it there, never here.**
+What IS canon, by owner ruling 2026-08-20 ("I want this broken down to each family of
+enemy" / "i want the structures one at a time"):
+
+| Group | `BundleMode` | Result |
+|---|---|---|
+| `Enemy_Art` | `PackTogetherByLabel` (2) | ONE bundle per enemy FAMILY, keyed by an `enemyfam-*` label |
+| `Structure_Art` | `PackSeparately` (1) | ONE bundle per structure asset |
+
+**Why:** both were `PackTogether`, which is why the built files read
+`enemy_art_assets_all_*.bundle` (64.45 MiB) and `structure_art_assets_all_*.bundle`
+(19.71 MiB). Under PackTogether the first Hollow Skirmisher a player meets pulls all
+64 MiB and the first hut pulls all 19.7 MiB. After the split a Hollow costs
+19.26 MiB + a 0.48 MiB shared bundle, and a building costs 0.14–2.58 MiB.
+
+**⛔ THE FAMILY LABELS ARE DERIVED, NOT TYPED.** `ContentPackingSetup.FamilyMap()` reads the
+`family` / `modelKey` pairing out of `Assets/Resources/Data/Canonical/enemies.json`. Add a
+family to that JSON and the grouper picks it up; do **not** hand-maintain a family list in a
+second file (same drift class as the stale WO-number block, CLAUDE.md §2).
+
+**⛔ RE-PACKING NEVER CHANGES AN ADDRESS.** Addresses are the contract —
+`structures-catalog.json` authors them verbatim as `repo.visualPrefabPath` /
+`repo.upgradeVisualPath` and the loaders resolve that exact string. Pinned by
+`Assets/Editor/Regression/ContentPackingRegression.cs` (`CONTENT_PACKING_OK`), which also
+fails if either group is reverted to `PackTogether`.
+
+**KNOWN COST, MEASURED (not inherent to the split):** total content went
+105,176,098 → 112,008,819 bytes (+6.5%). The Addressables build-layout report attributes
+effectively all of it to THREE shaders — URP `Lit.shader`, URP `FallbackError.shader` and
+core `FallbackShader.shader` — being implicit (non-addressable) dependencies, so each of the
+now-37 bundles embeds its own copy. `Lit.shader` alone is 7.96 MB across 37 copies, 7.75 MB
+of which is duplication. **FIX (open):** register those shaders as their own Addressable
+entry so they land in one bundle; that is a NEW address and changes no existing one.
+
+---
+
 ## 0. Golden Rules
 
 1. **If it's not needed on game start, it should be in Addressables.**
