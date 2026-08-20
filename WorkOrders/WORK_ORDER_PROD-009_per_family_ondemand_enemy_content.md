@@ -1,6 +1,12 @@
 # PROD-009 — Enemy/structure content is ALL-OR-NOTHING and loads on the MAIN THREAD: per-family on-demand + async loader + roster lookahead
 
-**Status:** READY TO IMPLEMENT
+**Status:** ❌ **CLOSED — SUPERSEDED by PROD-010** (owner ruling 2026-08-19: *"PROD 10 kills 10 and 09"*).
+This ticket shrank the first-run download by splitting enemy content per family and fetching on demand.
+PROD-010 answers the same player problem a different way — the player opts in and pulls the WHOLE set once,
+then runs local — so the per-family split buys nothing and would add a second content-partitioning scheme to
+maintain. Nothing here is orphaned: the honest size figure PROD-010 shows the player (~88 MB) is exactly the
+number this ticket would have reduced, and PROD-010 measures it rather than promising a shrink.
+Do not re-open without an owner ruling that reverses the 08-19 decision.
 **Minted:** 2026-08-18 (docs seat) — PROD series.
 **Priority:** HIGH — the freeze is on the LIVE build, and it lands inside the FTUE.
 **Silo:** Addressables / content delivery. **Lane:** `Assets/_Modules/Core/Addressables` + `AddressableAssetsData`. No scenes.

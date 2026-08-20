@@ -1,6 +1,14 @@
 # PROD-010 — First-run content signal ("registering build / creating profile") + opt-in OFFLINE download
 
-**Status:** READY TO IMPLEMENT (owner-designed; the CDN ruling below is DECIDED, the copy rules are binding)
+**Status:** IMPLEMENTED 2026-08-20 (`345a7b464`) — AWAITING OWNER FELT-VERIFY (PO closes, §13).
+Three parts landed: `OfflineContentService` (opt-in state keyed to `Application.version`, boot resolve that
+SKIPS the catalog refresh when offline so no-network launches cannot stall, measured `GetDownloadSize`,
+`DownloadAllForOffline`), `OfflineContentBootstrap` (`RuntimeInitializeOnLoadMethod(AfterSceneLoad)`,
+Guard-wrapped, deliberately NOT a boot barrier), and `OfflineOptInPanel` reached from a new **Settings ->
+Offline** row. `m_DisableCatalogUpdateOnStart` was deliberately NOT flipped — see the commit for why.
+Gates: `COMPILE_GATE_OK`; DataRegression 209/213 with the 4 known-red baseline and nothing new.
+⚠ NOT PROVEN: no on-device run of the airplane-mode path — the Seeker was locked overnight, so the
+offline fallback has been proven in code + gate only, never felt. That is the one thing left to verify.
 **Minted:** 2026-08-18 (docs seat) — PROD series.
 **Priority:** MEDIUM-HIGH — it is the first thing a new player sees on the LIVE build.
 **Silo:** Core UI / content delivery. **Lane:** `Assets/_Modules/Core/UI/LoadingOverlay.cs` + Addressables API. No scenes.
