@@ -95,7 +95,7 @@
 > PROD-003 (Realm Store permanent storefront), PROD-004 (baked-twin footprint),
 > PROD-005 (default shield renders through the hero body; survives a dungeon->town port).
 
-> ## ⚠ RECONCILED 2026-08-21 (CLI): main line next free = **1133**.
+> ## ⚠ RECONCILED 2026-08-21 (CLI): main line next free = **1132**.
 > *(**UI seat (Claude UI)** minted **WO-1132** and bumped 1132 -> 1133 in this SAME edit. ⚠ minted from the CLI MAIN LINE rather than the UI block (next free 1050); no collision, but the blocks are disjoint for a reason — see the ticket. **WO-1132** = THE NIGHT
 > MARKET — Realm Pack Store presentation redesign. The store works the way a RECEIPT works: five
 > browsable SKUs of 25 as 132 px text rows in one scroll column, no art, no price relationship
@@ -185,7 +185,7 @@
 > never as BUILD STATUS** -- "under construction"/"coming soon"/"dev"/"WIP" are BANNED player-facing
 > strings and get a REGRESSION ORACLE, not a comment, because that is the rule most likely to rot.
 > Status READY TO IMPLEMENT, 3 open rulings. No code yet.)*
-> ## âš  RECONCILED 2026-08-17 (UI seat): UI seat next free = **1050**.
+> ## âš  RECONCILED 2026-08-17 (UI seat): UI seat next free = **1051**.
 > *(⚠ THE ROW ABOVE WAS STALE. It read "next free = 1045" while WORK_ORDER_1045_* AND
 > WORK_ORDER_1046_* both existed on disk — the 1046 mint wrote its bump into the PROSE below and
 > never updated THE ROW. That is §2 in its quietest form: the banner was wrong in exactly the way
