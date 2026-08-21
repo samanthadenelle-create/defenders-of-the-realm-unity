@@ -823,6 +823,12 @@ namespace DeNelle.Editor
             //     every cost fits its owning class's pool, at least one costed non-ultimate per kit
             //     (kills the "everything is cooldown-gated" gap), both abilities.json copies identical. ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "class-resource suite", () => { if (!DeNelle.Editor.Regression.ClassResourceRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[class-resource] " + r); });
+            // --- Owner 2026-08-20 ("mana does not draw down on use ... i can spam spells non stop"):
+            //     the SPEND half of that economy, asserted on a LIVE HeroAbilities probe, not on JSON —
+            //     a costed cast charges EXACTLY its effective cost, an unaffordable cast is refused and
+            //     charges nothing, the FlowTrace charge/refusal lines survive, and the producer ->
+            //     ManaExact -> kit ManaFill presentation chain is intact. Balance-neutral by design. ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "mana-spend suite", () => { if (!DeNelle.Editor.Regression.ManaSpendRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[mana-spend] " + r); });
             // --- WO-973 Bryn bubble legibility: code defaults small + scene copy agrees + ratio vs the
             //     shipped TownsfolkBubble. Case 2 is a DRIFT CATCHER that stays red until the
             //     Dungeon_HealersCottage bake rewrites the serialised copy — an honest red, not noise. ---
@@ -982,6 +988,7 @@ namespace DeNelle.Editor
             // state, so its own registration line is what satisfies its self-reference).
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "enemy-warm-order suite", () => { if (!DeNelle.Editor.Regression.EnemyWarmOrderRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[enemy-warm-order] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "npc-idle-controller suite", () => { if (!DeNelle.Editor.Regression.NpcIdleControllerRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[npc-idle-controller] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "spawn-area-enemy-ids suite", () => { if (!DeNelle.Editor.Regression.SpawnAreaEnemyIdRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[spawn-area-enemy-ids] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "regression-marker suite", () => { if (!DeNelle.Editor.Regression.RegressionMarkerRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[regression-marker] " + r); });
 
             // =====================================================================

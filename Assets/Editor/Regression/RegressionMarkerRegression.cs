@@ -256,6 +256,34 @@ namespace DeNelle.Editor.Regression
                 }
             }
 
+            // NON-UNITY EMITTERS (2026-08-20). RULE 3 asks "does SOMEBODY emit the marker this
+            // gate greps for?" — and the answer is not always a C# class. The content-ship gate
+            // (tools/r2-ship.ps1) greps R2_PUSH_OK / R2_PARITY_OK, which are printed by
+            // tools/r2_sync.py, a PYTHON tool. Scanning only Assets/Editor made those two read as
+            // "NO class emits it - that gate stage can never pass", which is false: they pass every
+            // time the content ship runs.
+            //
+            // ⛔ THIS IS A WIDENED SCAN, NOT AN ALLOWLIST, and the distinction is the point. An
+            // allowlist would have silenced the two names and, with them, the actual protection: a
+            // typo'd R2_PARITY_OKK in the ship script must STILL fail this suite. Crediting the real
+            // emitter keeps the rule's teeth while telling the truth about who emits what.
+            foreach (var toolRoot in GateScriptRoots)
+            {
+                string toolDir = Path.Combine(projectRoot, toolRoot.Replace('/', Path.DirectorySeparatorChar));
+                if (!Directory.Exists(toolDir)) continue;
+                foreach (var py in Directory.GetFiles(toolDir, "*.py", SearchOption.AllDirectories))
+                {
+                    if (py.Replace('\\', '/').IndexOf("/node_modules/", StringComparison.OrdinalIgnoreCase) >= 0) continue;
+                    string pyName = Path.GetFileName(py);
+                    foreach (Match m in MarkerToken.Matches(ReadOrEmpty(py)))
+                    {
+                        string tok = m.Groups[1].Value;
+                        if (tok.EndsWith("_FAIL", StringComparison.Ordinal)) continue;
+                        Add(allMarkerOwners, tok, pyName);
+                    }
+                }
+            }
+
             foreach (var kv in markerOwners)
             {
                 if (kv.Value.Count < 2) continue;

@@ -720,20 +720,45 @@ namespace DeNelle.Village
             // F8 wind-up: ignore a new cast while one is winding up (safer than cancel-and-restart)
             // and during the brief post-cancel anti-flicker lockout.
             if (_casting || Time.time < _castLockoutUntil)
+            {
+                // CLAUDE.md §12 (no silent refusal): name WHICH gate ate the tap.
+                FlowTrace.Throttle("HeroMana", "gate-windup", 0.5f,
+                    $"cast REFUSED slot={slot} '{def.Name}': {(_casting ? "a cast is already winding up" : "post-cancel lockout")}.");
                 return false;
+            }
 
             // castAbility.ts: `if (combat.cd[kind] > 0 || combat.mana < def.mana) return null;`
             // WO-861 Phase 3: the cost is the Cathedral-scaled cost (identity for non-mage).
             float manaCost = ManaCostOf(def);
             if (_cooldownRemaining[(int)slot] > 0f || _mana < manaCost)
+            {
+                // CLAUDE.md §12: the mana/cooldown gate was the single silent step in the whole cast
+                // chain — a tap that was refused for cost left NO line, so "mana does not drain / I can
+                // spam" had no evidence either way. Trace the NUMBERS (authored cost, scaled cost, pool)
+                // so the next capture answers it in one read.
+                FlowTrace.Throttle("HeroMana", "gate-" + slot, 0.5f,
+                    $"cast REFUSED slot={slot} '{def.Name}': cd={_cooldownRemaining[(int)slot]:0.00}s " +
+                    $"{_resourceDisplayName} {_mana:0.00}/{EffectiveMaxMana:0.00} cost={manaCost:0.00} " +
+                    $"(authored {def.ManaCost:0.##}).");
                 return false;
+            }
 
             // WO-36 (talent -> stat): unlocked skill-tree talents shave cooldowns
             // class-wide via CdReduction. CooldownMultiplier returns 1f when the
             // hero has no cooldown talents unlocked, preserving the JSON baseline.
             float scaledCooldown = def.Cooldown * HeroTalentModifiers.CooldownMultiplier(_heroClass);
             _cooldownRemaining[(int)slot] = scaledCooldown;
+            float manaBefore = _mana;
             _mana -= manaCost;
+            // CLAUDE.md §12: the CHARGE is the step the owner reported as missing ("mana does not
+            // draw down on use"). Trace before -> after with the cost that produced it, so a
+            // zero-cost AUTHORING (cost=0 => before == after, a legitimate free spell) is instantly
+            // distinguishable from a broken DEDUCT (cost>0 but before == after).
+            FlowTrace.Throttle("HeroMana", "charge-" + slot, 0.5f,
+                $"cast CHARGED slot={slot} '{def.Name}' cost={manaCost:0.00} (authored {def.ManaCost:0.##}) " +
+                $"{_resourceDisplayName} {manaBefore:0.00} -> {_mana:0.00} / {EffectiveMaxMana:0.00}" +
+                (manaCost <= 0f ? "  [FREE: authored manaCost is 0 — this spell is cooldown-gated only]" : "") +
+                $" cd={scaledCooldown:0.00}s windup={def.CastSeconds:0.00}s");
 
             // WO-97 Bug 3: drive the per-slot cooldown fill overlay on the ability
             // button. AbilityCooldownUI lives on the button GameObject; the ability
@@ -782,11 +807,25 @@ namespace DeNelle.Village
             // F8 wind-up: ignore a new cast while one is winding up + during the anti-flicker lockout.
             if (_casting || Time.time < _castLockoutUntil) return false;
             float manaCost = ManaCostOf(def);   // WO-861 Phase 3: Cathedral-scaled (identity for non-mage)
-            if (ExtraCooldownRemaining(abilityId) > 0f || _mana < manaCost) return false;
+            if (ExtraCooldownRemaining(abilityId) > 0f || _mana < manaCost)
+            {
+                // CLAUDE.md §12 (no silent refusal) — same numbers as the Q/W/E/R gate above.
+                FlowTrace.Throttle("HeroMana", "gate-extra-" + abilityId, 0.5f,
+                    $"extra cast REFUSED '{abilityId}': cd={ExtraCooldownRemaining(abilityId):0.00}s " +
+                    $"{_resourceDisplayName} {_mana:0.00}/{EffectiveMaxMana:0.00} cost={manaCost:0.00} " +
+                    $"(authored {def.ManaCost:0.##}).");
+                return false;
+            }
 
             float scaledCooldown = def.Cooldown * HeroTalentModifiers.CooldownMultiplier(_heroClass);
             _extraCooldown[abilityId] = scaledCooldown;
+            float extraManaBefore = _mana;
             _mana -= manaCost;
+            FlowTrace.Throttle("HeroMana", "charge-extra-" + abilityId, 0.5f,
+                $"extra cast CHARGED '{abilityId}' cost={manaCost:0.00} (authored {def.ManaCost:0.##}) " +
+                $"{_resourceDisplayName} {extraManaBefore:0.00} -> {_mana:0.00} / {EffectiveMaxMana:0.00}" +
+                (manaCost <= 0f ? "  [FREE: authored manaCost is 0 — cooldown-gated only]" : "") +
+                $" cd={scaledCooldown:0.00}s windup={def.CastSeconds:0.00}s");
 
             // F8 "movement interrupts casting": route spells with a wind-up (CastSeconds > 0) through the
             // interruptible routine; instant skills (CastSeconds <= 0) commit immediately as before.
