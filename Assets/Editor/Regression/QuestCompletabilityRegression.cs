@@ -3,23 +3,18 @@
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.EditorRegression (references DeNelle.Core + DeNelle.Village).
 //
-// regression-registry: standalone
+// regression-registry: DataRegression.RunAll (single registration, DataRegression.cs:510)
 //
-// WHY STANDALONE, AND WHEN THAT CHANGES (committer decision, 2026-08-03):
-// This oracle is RED on today's tree and it is red HONESTLY -- 0/63 stages are
-// completable, plus three hard failures naming real defects (orphan
-// companion.sylas verbs, the non-existent iron-sword reward, and five legendary
-// recipes gated behind an uncompletable quest). DataRegression.RunAll collects
-// every suite's failure into one list, so wiring this in today turns the whole
-// aggregate gate RED and blocks every unrelated commit until owner rulings D4/D6/D8
-// land. Softening the three into notes was the other option and was REFUSED: a
-// suite that reports OK while the thing is broken is the exact failure this
-// program exists to end.
-// So it runs STANDALONE and publishes its number:
+// ⚠ THE OLD HEADER HERE SAID "regression-registry: standalone" AND "0/63 stages are
+// completable". BOTH WERE STALE and are corrected (2026-08-21). The suite HAS been wired
+// into DataRegression.RunAll since WO-854's final wave; the baseline it was written against
+// (zero sourced stages, three open owner rulings) closed the same week and all 63 stages are
+// sourced today -- MinCompletableStages below is the live floor. A header that still argued
+// "wire it in the moment those clear" invited exactly one of the two errors this file must
+// never make: a SECOND registration (double-counted failures) or a seat "re-wiring" an
+// already-wired suite. There is ONE registration line and it lives in DataRegression.cs.
+// It still publishes its number standalone for a fast read:
 //     run-unity-method -Method DeNelle.Editor.Regression.QuestCompletabilityRegression.RunAll
-// WIRE IT INTO DataRegression.RunAll the moment those three clear. The line is:
-//   Guard.Try("Regression", "quest-reach suite", () => { if (!QuestCompletabilityRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[quest-reach] " + r); });
-// Standalone is a SCHEDULING decision, never a verdict. The number is the number.
 //
 // WHAT THIS ORACLE PROVES, AND WHAT IT DOES NOT -- read this before quoting it.
 //
@@ -55,7 +50,7 @@
 // Case 1's chain walk stops its stages counting toward the score.
 //
 // ---------------------------------------------------------------------------
-//  THE NINE CASES
+//  THE THIRTEEN CASES  (0-8 story quests; 9-12 added 2026-08-21, quest audit)
 // ---------------------------------------------------------------------------
 //   0 [catalog-shape]   Both copies of quests.json are byte-identical; quest ids
 //                       are unique and non-empty; every quest has at least one
@@ -154,6 +149,69 @@
 //                       gated on a flag nothing sets can never satisfy its gate.
 //
 // ---------------------------------------------------------------------------
+//  CASES 9-12 -- ADDED 2026-08-21 BY THE QUEST AUDIT. Read WHY before touching them.
+// ---------------------------------------------------------------------------
+//  The audit found TWO OF THE THREE DAILY SLOTS could never complete, and had been
+//  dead for MONTHS with nothing detecting it. Dailies are how a brand-new player earns
+//  extra resources, so this was the on-ramp, broken for everyone:
+//    * combat.build-towers (day1Guaranteed) ticked only from
+//      TowerPlacementSystem.OnTowerPlaced, whose sole caller (BuildMenu) is in NO scene
+//      and NO prefab. Worst of the three: DailyQuests FORCE-RETURNS a day1Guaranteed
+//      template for its slot on EVERY roll while Day1QuestDone is false, and that latch
+//      is set only on COMPLETION -- so an uncompletable day-1 quest does not cost one
+//      day, it PINS the combat slot forever.
+//    * the 17 combat.clear-waves.* templates reported through DailyQuestCombatBridge,
+//      which was attached ONLY by the editor-only VillageSceneBuilder -- it never
+//      existed in a player build.
+//    * the 12 explore.visit-gate.* templates ticked from GateProximityOpener, attached
+//      only by VillageController, whose guid is in no scene either.
+//  Every one of those is a MISSING TICK, and a missing tick is invisible: it looks
+//  exactly like "the player did not do it yet". So the oracle proves the tick PATH
+//  exists for every template, by enumeration, so a template added tomorrow is covered
+//  the day it lands and nobody has to remember this file exists.
+//
+//   9 [kind-incrementer] For EVERY completeOn.kind authored in quests.json, a NAMED live
+//                       incrementer must exist in source. Case 2 already proves the
+//                       composed SIGNAL has a Raise site; this case pins the seam that
+//                       feeds the Raise, so deleting the subscription (not the Raise) is
+//                       caught too: talk -> DialogueService.EndedWithId; panel ->
+//                       PanelRouter.PanelOpened (both in TutorialCoreSignalAdapter);
+//                       wave -> WaveManager.OnWaveCleared; arena ->
+//                       BattleArena.OnBattleEnded; build ->
+//                       BuildModeController.StructurePlaced (all three in
+//                       TutorialSignalAdapters); pet -> PetAcquisitionService raising
+//                       TutorialSignals.PetBondedPrefix. A kind with NO row in that table
+//                       is reported as a NOTE naming itself as UNJUDGED by this case (Case 2
+//                       still judges its signal) -- never as a silent pass, because "the
+//                       oracle is not looking here" must be visible in the output.
+//
+//  10 [daily-reachable] EVERY template in daily-quests.json must be satisfiable by some
+//                       DailyQuestService.Report call site, under the SERVICE'S OWN
+//                       matching rule (DailyQuests.cs:259 -- exact, or template starts
+//                       with reportedId + "."). Enumerated from the JSON, never a
+//                       hand-list. AND THE REVERSE: a reporter whose id matches NO
+//                       template is a dead call -- the code believes it is crediting the
+//                       player and nothing moves. Both directions fail hard.
+//
+//  11 [daily-bridge-live] The three audit fixes, pinned so they cannot regress:
+//                       DailyQuestTowerBridge subscribes BuildModeController.
+//                       StructurePlaced (NOT only the legacy TowerPlacementSystem event);
+//                       WaveSystemBridgeBootstrap contains Ensure<DailyQuestCombatBridge>;
+//                       StructureFactory's "Gate" case attaches GateProximityOpener.
+//                       PLUS THE INVARIANT THAT MAKES THE PREFIX FILTER SAFE: every
+//                       structures-catalog.json row typed "Tower" has an id starting
+//                       "tower_". No runtime code reads that catalog's type field, so the
+//                       bridge uses a prefix test as its stand-in -- a Tower row added
+//                       without the prefix would silently never count toward the day-1
+//                       quest, which is the same invisible-miss class all over again.
+//
+//  12 [day1-guaranteed] Every day1Guaranteed template must be PROVABLY completable by
+//                       Case 10's evidence. Separated from Case 10 on purpose: the force-
+//                       return latch makes an uncompletable day-1 template categorically
+//                       worse than an uncompletable ordinary one, and the failure string
+//                       has to say so or the reader triages it as one row of 41.
+//
+// ---------------------------------------------------------------------------
 //  THE RATCHET -- how "repeat till 100%" is enforced
 // ---------------------------------------------------------------------------
 //   MinCompletableStages is the stage count proven completable as of the last
@@ -174,6 +232,11 @@
 //   the floor rise phase by phase instead of the suite screaming 63 times a run.
 //
 // Markers: QUEST_REACH_OK <n>/<total> stages completable / QUEST_REACH_FAIL: ...
+//          QUEST_COMPLETABILITY_OK / QUEST_COMPLETABILITY_FAIL are emitted as ALIASES on
+//          the same line. QUEST_REACH_* is the ORIGINAL and is kept because WO-854's
+//          RESULT, the lanes banner and the true-status doc all grep for it; the alias
+//          exists so a reader who greps the file's own name finds the verdict too. Never
+//          rename one without the other, and never emit only one.
 // Standalone: run-unity-method DeNelle.Editor.Regression.QuestCompletabilityRegression.RunAll
 //
 // Covenant contract Run(out reason) is DataRegression-shaped; wiring into
@@ -240,6 +303,16 @@ namespace DeNelle.Editor.Regression
         private const string GlossaryRes    = "Assets/Resources/Data/Canonical/glossary.json";
         private const string CanonStringsRes = "Assets/Resources/Data/Canonical/canon-strings.json";
 
+        // --- daily quests (cases 10-12) --------------------------------------
+        private const string DailyQuestsRes = "Assets/Resources/Data/Canonical/daily-quests.json";
+        private const string DailyQuestsSA  = "Assets/StreamingAssets/Data/Canonical/daily-quests.json";
+
+        private const string TowerBridgeSrc      = "Assets/_Modules/Village/Buildings/DailyQuestTowerBridge.cs";
+        private const string WaveBootstrapSrc    = "Assets/_Modules/Village/WaveSystemBridgeBootstrap.cs";
+        private const string StructureFactorySrc = "Assets/_Modules/Village/Catalog/StructureFactory.cs";
+        private const string GateOpenerSrc       = "Assets/_Modules/Village/Gates/GateProximityOpener.cs";
+        private const string CombatBridgeSrc     = "Assets/_Modules/Village/Waves/DailyQuestCombatBridge.cs";
+
         private const string ModulesRoot        = "Assets/_Modules";
         private const string RumorBoardSrc      = "Assets/_Modules/Village/Hero/RumorBoardVM.cs";
         private const string QuestServiceSrc    = "Assets/_Modules/Core/Quests/QuestService.cs";
@@ -262,13 +335,20 @@ namespace DeNelle.Editor.Regression
         /// <summary>Total authored stage count from the most recent Run (marker payload).</summary>
         public static int LastTotalStages { get; private set; }
 
+        /// <summary>Daily templates enumerated from daily-quests.json on the most recent Run.</summary>
+        public static int LastDailyTemplates { get; private set; }
+
+        /// <summary>Daily templates PROVEN reachable (some Report call site can satisfy them).</summary>
+        public static int LastDailyTemplatesProven { get; private set; }
+
         /// <summary>Standalone batch entry - prints the marker, which always carries n/total.</summary>
         public static void RunAll()
         {
             bool ok = Run(out string reason);
-            string tally = LastCompletableStages + "/" + LastTotalStages + " stages completable";
-            if (ok) Debug.Log("QUEST_REACH_OK " + tally + " - " + reason);
-            else Debug.LogError("QUEST_REACH_FAIL: " + tally + " - " + reason);
+            string tally = LastCompletableStages + "/" + LastTotalStages + " stages completable, " +
+                           LastDailyTemplatesProven + "/" + LastDailyTemplates + " daily templates reachable";
+            if (ok) Debug.Log("QUEST_REACH_OK QUEST_COMPLETABILITY_OK " + tally + " - " + reason);
+            else Debug.LogError("QUEST_REACH_FAIL QUEST_COMPLETABILITY_FAIL: " + tally + " - " + reason);
         }
 
         /// <summary>Covenant contract (DataRegression-shaped). Never throws.</summary>
@@ -280,9 +360,21 @@ namespace DeNelle.Editor.Regression
             LastCompletableStages = 0;
             LastTotalStages = 0;
 
+            LastDailyTemplates = 0;
+            LastDailyTemplatesProven = 0;
+
             var ctx = new Ctx();
+            var daily = new DailyCtx();
             try
             {
+                // The DAILY half runs FIRST and UNCONDITIONALLY. It shares no state with the
+                // story half on purpose: a broken quests.json must not silently take the daily
+                // coverage down with it, because the dailies are the thing every new player
+                // touches and the thing that was dead for months.
+                Case(failures, "daily-reachable",   () => Case10_DailyReachable(daily, failures, notes));
+                Case(failures, "daily-bridge-live", () => Case11_DailyBridgeLive(daily, failures, notes));
+                Case(failures, "day1-guaranteed",   () => Case12_Day1Guaranteed(daily, failures, notes));
+
                 Case(failures, "catalog-shape",     () => Case0_CatalogShape(ctx, failures, notes));
                 if (ctx.Quests.Count > 0)
                 {
@@ -295,6 +387,7 @@ namespace DeNelle.Editor.Regression
                     Case(failures, "terminal-consumer", () => Case6_TerminalConsumer(ctx, failures, notes));
                     Case(failures, "no-orphan-verbs",   () => Case7_NoOrphanVerbs(ctx, failures, notes));
                     Case(failures, "flag-satisfiable",  () => Case8_FlagSatisfiable(ctx, failures, notes));
+                    Case(failures, "kind-incrementer",  () => Case9_KindIncrementer(ctx, failures, notes));
                 }
             }
             catch (Exception ex)
@@ -318,12 +411,14 @@ namespace DeNelle.Editor.Regression
                           " this program was scoped against - the denominator moved, so compare percentages with care");
 
             string tally = ctx.Completable + "/" + ctx.TotalStages + " stages completable across " +
-                           ctx.Quests.Count + " quests (floor " + MinCompletableStages + ")";
+                           ctx.Quests.Count + " quests (floor " + MinCompletableStages + "); " +
+                           LastDailyTemplatesProven + "/" + LastDailyTemplates +
+                           " daily templates reachable across " + daily.Slots.Count + " slots";
 
             // FULL detail goes to the log; the reason string that DataRegression aggregates
             // stays bounded. Truncation always names how many entries it dropped, so the log
             // is the complete ledger and the reason is never a quiet lie about its size.
-            LogDetail(ctx, failures, ledger, notes, tally);
+            LogDetail(ctx, daily, failures, ledger, notes, tally);
 
             string ledgerStr = ledger.Count > 0
                 ? " [not-yet-completable x" + ledger.Count + ": " + Join(ledger, 10) + "]"
@@ -334,7 +429,9 @@ namespace DeNelle.Editor.Regression
             {
                 reason = "QUEST REACHABILITY OK - " + tally + "; every authored completion source is " +
                          "distinct per stage index and backed by a live emitter or an openable dialogue, " +
-                         "every quest is enterable, every reward is payable, every quest verb resolves" +
+                         "every quest is enterable, every reward is payable, every quest verb resolves, " +
+                         "every daily template has a Report call site that can satisfy it and every " +
+                         "Report call site has a template it can reach" +
                          ledgerStr + noteStr;
                 return true;
             }
@@ -346,11 +443,26 @@ namespace DeNelle.Editor.Regression
         /// <summary>Writes the complete per-quest tally, the full not-yet-completable ledger and
         /// the full note list to the log. This is the artifact a phase reads to decide what to
         /// author next; the reason string is only the headline.</summary>
-        private static void LogDetail(Ctx ctx, List<string> failures, List<string> ledger,
+        private static void LogDetail(Ctx ctx, DailyCtx daily, List<string> failures, List<string> ledger,
                                       List<string> notes, string tally)
         {
             var sb = new StringBuilder();
-            sb.AppendLine("--- QUEST COMPLETABILITY (WO-854) --- " + tally);
+            sb.AppendLine("--- QUEST COMPLETABILITY (WO-854 + 2026-08-21 daily audit) --- " + tally);
+            if (daily != null && daily.Templates.Count > 0)
+            {
+                sb.AppendLine("  DAILY REPORT CALL SITES x" + daily.Reporters.Count + ":");
+                var shown = new HashSet<string>(StringComparer.Ordinal);
+                foreach (var r in daily.Reporters)
+                {
+                    if (!shown.Add(r.Id + "|" + r.File)) continue;
+                    int hits = 0;
+                    foreach (var t in daily.Templates) if (DailyMatches(t.Id, r.Id)) hits++;
+                    sb.AppendLine("    '" + r.Id + "' -> " + hits + " template(s)   [" + r.File + "]");
+                }
+                foreach (var t in daily.Templates)
+                    if (!daily.Proven.Contains(t.Id))
+                        sb.AppendLine("    UNREACHABLE TEMPLATE: " + t.Id + " (slot " + t.Slot + ")");
+            }
             foreach (var q in ctx.Quests)
             {
                 string why = q.EntryLive
@@ -1844,6 +1956,620 @@ namespace DeNelle.Editor.Regression
             if (gated == 0)
                 notes.Add("no stage carries a requiresFlag today, so the flag gate is unexercised - the check is " +
                           "armed for the moment one is authored");
+        }
+
+        // =====================================================================
+        //  CASE 9 - every authored completeOn KIND has a named live incrementer
+        // =====================================================================
+
+        /// <summary>
+        /// Case 2 proves the composed SIGNAL has a TutorialSignals.Raise site. This case proves
+        /// the SEAM THAT FEEDS THAT RAISE is still subscribed, which is a different failure:
+        /// deleting `_wave.OnWaveCleared.AddListener(...)` leaves the Raise line sitting in the
+        /// file, so Case 2 stays green while every wave stage in the game goes dead. One row per
+        /// kind, each naming the exact event to re-wire.
+        /// </summary>
+        private static void Case9_KindIncrementer(Ctx ctx, List<string> failures, List<string> notes)
+        {
+            // kind -> (source file, tokens that must ALL appear, the sentence a 2am reader needs)
+            var table = new Dictionary<string, KindIncrementer>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["talk"] = new KindIncrementer(
+                    "Assets/_Modules/Core/Tutorial/TutorialSignals.cs",
+                    new[] { "DialogueService.EndedWithId", "DialogueEndedPrefix" },
+                    "TutorialCoreSignalAdapter.Wire must subscribe DialogueService.EndedWithId and " +
+                    "raise TutorialSignals.DialogueEndedPrefix + id"),
+                ["panel"] = new KindIncrementer(
+                    "Assets/_Modules/Core/Tutorial/TutorialSignals.cs",
+                    new[] { "PanelRouter.PanelOpened", "PanelOpenedPrefix" },
+                    "TutorialCoreSignalAdapter.Wire must subscribe PanelRouter.PanelOpened and raise " +
+                    "TutorialSignals.PanelOpenedPrefix + id"),
+                ["wave"] = new KindIncrementer(
+                    SignalAdaptersSrc,
+                    new[] { "OnWaveCleared", "TutorialSignals.WaveCleared" },
+                    "TutorialSignalAdapters must add a listener to WaveManager.OnWaveCleared that raises " +
+                    "TutorialSignals.WaveCleared"),
+                ["arena"] = new KindIncrementer(
+                    SignalAdaptersSrc,
+                    new[] { "OnBattleEnded", "TutorialSignals.ArenaWin" },
+                    "TutorialSignalAdapters must subscribe BattleArena.OnBattleEnded and raise " +
+                    "TutorialSignals.ArenaWin / ArenaLoss"),
+                ["build"] = new KindIncrementer(
+                    SignalAdaptersSrc,
+                    new[] { "BuildModeController.StructurePlaced", "StructurePlacedPrefix" },
+                    "TutorialSignalAdapters must subscribe BuildModeController.StructurePlaced (the LIVE " +
+                    "placement path - TowerPlacementSystem/BuildMenu is the legacy one and is in no scene) " +
+                    "and raise TutorialSignals.StructurePlacedPrefix + entryId"),
+                ["pet"] = new KindIncrementer(
+                    "Assets/_Modules/Pets/PetAcquisitionService.cs",
+                    new[] { "TutorialSignals.PetBondedPrefix" },
+                    "PetAcquisitionService.Acquire must raise TutorialSignals.PetBondedPrefix + def.Species " +
+                    "on every new bond"),
+            };
+
+            // Kinds the SPINE resolves without an incrementer of their own: a flag is polled
+            // through QuestService.HasFlag (Case 8 owns it) and a dialogueCommand is an
+            // AdvanceQuest node (Case 2's pool owns it). Listing them here is what keeps the
+            // "no row" branch below meaningful instead of noisy.
+            var selfSourced = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "flag", "dialogueCommand" };
+
+            var authored = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            foreach (var q in ctx.Quests)
+                foreach (var s in q.Stages)
+                {
+                    if (!s.HasCompleteOn || string.IsNullOrEmpty(s.OnKind)) continue;
+                    authored.TryGetValue(s.OnKind, out int n);
+                    authored[s.OnKind] = n + 1;
+                }
+
+            var cache = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var kv in authored)
+            {
+                string kind = kv.Key;
+                int stages = kv.Value;
+                if (selfSourced.Contains(kind)) continue;
+
+                KindIncrementer inc;
+                if (!table.TryGetValue(kind, out inc))
+                {
+                    notes.Add("completeOn kind '" + kind + "' (" + stages + " stage(s)) has NO row in Case 9's " +
+                              "incrementer table - it is judged only by Case 2's signal scan, which cannot see a " +
+                              "deleted subscription. Add a row naming the event that feeds its Raise.");
+                    continue;
+                }
+
+                string code;
+                if (!cache.TryGetValue(inc.File, out code))
+                {
+                    code = File.Exists(inc.File) ? StripComments(File.ReadAllText(inc.File)) : null;
+                    cache[inc.File] = code;
+                }
+                if (code == null)
+                {
+                    failures.Add("[kind-incrementer] completeOn kind '" + kind + "' backs " + stages +
+                                 " stage(s) and its incrementer file " + inc.File + " DOES NOT EXIST - nothing " +
+                                 "can advance those stages. " + inc.Fix);
+                    continue;
+                }
+
+                foreach (var token in inc.Tokens)
+                {
+                    if (code.IndexOf(token, StringComparison.Ordinal) >= 0) continue;
+                    failures.Add("[kind-incrementer] completeOn kind '" + kind + "' backs " + stages +
+                                 " stage(s) but " + inc.File + " no longer contains '" + token + "' - the seam " +
+                                 "that feeds the signal is gone, so every one of those stages is dead while the " +
+                                 "Raise line still reads as live. " + inc.Fix + ".");
+                }
+            }
+
+            if (authored.Count == 0)
+                notes.Add("no stage carries a completeOn today, so the incrementer table is unexercised - it is " +
+                          "armed for the moment one is authored");
+        }
+
+        private sealed class KindIncrementer
+        {
+            public readonly string File;
+            public readonly string[] Tokens;
+            public readonly string Fix;
+            public KindIncrementer(string file, string[] tokens, string fix)
+            { File = file; Tokens = tokens; Fix = fix; }
+        }
+
+        // =====================================================================
+        //  CASES 10-12 - THE DAILY QUESTS
+        // =====================================================================
+
+        private sealed class DailyTemplateRec
+        {
+            public string Id = "";
+            public string Slot = "";
+            public int Target = 1;
+            public bool Day1Guaranteed;
+            public string RequiresFeature = "";
+        }
+
+        private sealed class ReporterRec
+        {
+            public string Id = "";
+            public string File = "";
+        }
+
+        private sealed class DailyCtx
+        {
+            public List<DailyTemplateRec> Templates = new List<DailyTemplateRec>();
+            public List<string> Slots = new List<string>();
+            public List<ReporterRec> Reporters = new List<ReporterRec>();
+            /// <summary>Template ids some Report call site can actually satisfy.</summary>
+            public HashSet<string> Proven = new HashSet<string>(StringComparer.Ordinal);
+        }
+
+        /// <summary>
+        /// THE SERVICE'S OWN MATCHING RULE, mirrored exactly (DailyQuests.cs:259):
+        /// <c>q.TemplateId == eventId || q.TemplateId.StartsWith(eventId + ".")</c>.
+        /// Ordinal, like the runtime's default string comparisons. If that line ever changes,
+        /// change THIS one in the same edit - an oracle judging by a different rule than the
+        /// game is worse than no oracle, because it is confidently wrong.
+        /// </summary>
+        private static bool DailyMatches(string templateId, string reportedId)
+        {
+            if (string.IsNullOrEmpty(templateId) || string.IsNullOrEmpty(reportedId)) return false;
+            return string.Equals(templateId, reportedId, StringComparison.Ordinal)
+                || templateId.StartsWith(reportedId + ".", StringComparison.Ordinal);
+        }
+
+        // ---------------------------------------------------------------------
+        //  CASE 10 - every daily template is reachable, and every reporter reaches one
+        // ---------------------------------------------------------------------
+
+        private static void Case10_DailyReachable(DailyCtx d, List<string> failures, List<string> notes)
+        {
+            string res = ReadText(DailyQuestsRes, failures);
+            string sa = ReadText(DailyQuestsSA, failures);
+            if (res == null) return;
+
+            if (sa != null && !string.Equals(res, sa, StringComparison.Ordinal))
+                failures.Add("[daily-reachable] the Resources and StreamingAssets copies of daily-quests.json " +
+                             "DIFFER. The catalog reads Resources first, so a template authored only in " +
+                             "StreamingAssets never rolls on device. Write BOTH copies in the same edit.");
+
+            JObject root;
+            try { root = JObject.Parse(res); }
+            catch (Exception ex)
+            {
+                failures.Add("[daily-reachable] daily-quests.json is not valid JSON (" + ex.Message +
+                             ") - the daily catalog loads EMPTY, so all three slots are blank for every player");
+                return;
+            }
+
+            var slots = root["slots"] as JArray;
+            if (slots != null)
+                foreach (var s in slots)
+                {
+                    string id = Str(Get(s, "slot"));
+                    if (!string.IsNullOrEmpty(id) && !d.Slots.Contains(id)) d.Slots.Add(id);
+                }
+
+            var arr = root["templates"] as JArray;
+            if (arr == null || arr.Count == 0)
+            {
+                failures.Add("[daily-reachable] daily-quests.json has no 'templates' array - every slot rolls " +
+                             "nothing, so the whole daily-resource on-ramp is gone");
+                return;
+            }
+
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var t in arr)
+            {
+                var o = t as JObject;
+                if (o == null) continue;
+                var rec = new DailyTemplateRec
+                {
+                    Id = Str(o["id"]),
+                    Slot = Str(o["slot"]),
+                    Target = Math.Max(1, o["target"] != null ? Int(o["target"]) : 1),
+                    Day1Guaranteed = Bool(o["day1Guaranteed"]),
+                    RequiresFeature = Str(o["requiresFeature"]),
+                };
+                if (string.IsNullOrEmpty(rec.Id))
+                {
+                    failures.Add("[daily-reachable] a daily template has NO id - Report() matches on the id, so " +
+                                 "an id-less template can roll into a slot and can never be advanced");
+                    continue;
+                }
+                if (!seen.Add(rec.Id))
+                {
+                    failures.Add("[daily-reachable] duplicate daily template id '" + rec.Id + "' - FindTemplate " +
+                                 "returns the first match, so the second row's target/label are dead content");
+                    continue;
+                }
+                if (!string.IsNullOrEmpty(rec.Slot) && !d.Slots.Contains(rec.Slot))
+                    failures.Add("[daily-reachable] template '" + rec.Id + "' declares slot '" + rec.Slot +
+                                 "' which is in no slots[] row - it can never be rolled into any slot. Fix the " +
+                                 "slot name or add the slot.");
+                d.Templates.Add(rec);
+            }
+            LastDailyTemplates = d.Templates.Count;
+
+            // The REAL load path must agree with the raw file, for the same reason Case 0 makes
+            // QuestCatalog agree: a DTO field that stops mapping is how a template can be
+            // authored, shipped and silently ignored.
+            try
+            {
+                DeNelle.Core.Quests.DailyQuestCatalog.Reload();
+                var live = DeNelle.Core.Quests.DailyQuestCatalog.Templates;
+                int liveCount = live != null ? live.Count : 0;
+                if (liveCount != d.Templates.Count)
+                    failures.Add("[daily-reachable] the raw daily-quests.json holds " + d.Templates.Count +
+                                 " templates but the REAL load path (DailyQuestCatalog) sees " + liveCount +
+                                 " - a DTO mapping has broken, so authored dailies are being dropped on load");
+            }
+            catch (Exception ex)
+            {
+                failures.Add("[daily-reachable] DailyQuestCatalog.Reload threw " + ex.GetType().Name + ": " +
+                             ex.Message + " - the runtime cannot load the daily catalog at all");
+            }
+
+            d.Reporters = CollectDailyReporters(failures, notes);
+            if (d.Reporters.Count == 0)
+            {
+                failures.Add("[daily-reachable] found ZERO DailyQuestService Report call sites under " +
+                             ModulesRoot + " - every one of the " + d.Templates.Count + " templates is " +
+                             "uncompletable and no player can finish a single daily. Either the scan root moved " +
+                             "or every bridge was removed.");
+                return;
+            }
+
+            // ---- FORWARD: every template must have a reporter that can satisfy it ----
+            foreach (var t in d.Templates)
+            {
+                bool reachable = false;
+                foreach (var r in d.Reporters) if (DailyMatches(t.Id, r.Id)) { reachable = true; break; }
+                if (reachable) { d.Proven.Add(t.Id); continue; }
+
+                failures.Add("[daily-reachable] daily template '" + t.Id + "' (slot '" + t.Slot + "', target " +
+                             t.Target + ") can NEVER be completed: no DailyQuestService.Report call site under " +
+                             ModulesRoot + " uses an id that matches it. Report matches EXACTLY or by the " +
+                             "'<reportedId>.' prefix, so wire a Report(\"" + DailyPrefixHint(t.Id) + "\", 1) into " +
+                             "the system that already owns that event (the way DailyQuestCombatBridge does for " +
+                             "combat.clear-waves). A template with no reporter looks identical to a player who " +
+                             "just has not done it yet - that is why it went unnoticed for months.");
+            }
+            LastDailyTemplatesProven = d.Proven.Count;
+
+            // ---- REVERSE: every reporter must be able to reach some template ----
+            // A dead reporter is the mirror defect and just as invisible: the code believes it
+            // is crediting the player, the tick lands nowhere, and nothing says so.
+            var deadReported = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var r in d.Reporters)
+            {
+                bool hits = false;
+                foreach (var t in d.Templates) if (DailyMatches(t.Id, r.Id)) { hits = true; break; }
+                if (hits || !deadReported.Add(r.Id)) continue;
+
+                failures.Add("[daily-reachable] DEAD REPORTER: " + r.File + " calls DailyQuestService.Report(\"" +
+                             r.Id + "\") but NO template in daily-quests.json matches that id (exact or '" +
+                             r.Id + ".' prefix). The tick is thrown away every time it fires. Either author the " +
+                             "template(s) it is meant to advance, or delete the reporter - leaving it is a " +
+                             "standing lie in the code about what the game credits.");
+            }
+
+            // A slot whose every template is unreachable is a slot that shows the player a quest
+            // and can never pay it. That is the shape the audit actually found, twice.
+            foreach (var slot in d.Slots)
+            {
+                int total = 0, ok = 0;
+                foreach (var t in d.Templates)
+                {
+                    if (!string.Equals(t.Slot, slot, StringComparison.Ordinal)) continue;
+                    total++;
+                    if (d.Proven.Contains(t.Id)) ok++;
+                }
+                if (total == 0)
+                    failures.Add("[daily-reachable] slot '" + slot + "' has NO templates at all - it rolls empty " +
+                                 "for every player, every day");
+                else if (ok == 0)
+                    failures.Add("[daily-reachable] slot '" + slot + "' has " + total + " template(s) and NOT ONE " +
+                                 "of them is reachable - whatever rolls into that slot can never be completed. " +
+                                 "This is exactly the state the 2026-08-21 audit found for the combat and " +
+                                 "exploration slots.");
+                else
+                    notes.Add("daily slot '" + slot + "': " + ok + "/" + total + " templates reachable");
+            }
+        }
+
+        /// <summary>The id a fix should report, given a template id: everything before the last
+        /// dot-segment, which is the family prefix the bridges use (combat.clear-waves.warband
+        /// -> combat.clear-waves). Purely advisory text inside a failure string.</summary>
+        private static string DailyPrefixHint(string templateId)
+        {
+            if (string.IsNullOrEmpty(templateId)) return "";
+            int dot = templateId.LastIndexOf('.');
+            return dot > 0 ? templateId.Substring(0, dot) : templateId;
+        }
+
+        /// <summary>
+        /// Every DailyQuestService.Report call site under Assets/_Modules, with its first
+        /// argument resolved to a literal. Const identifiers are resolved from the declaring
+        /// file first, then from a repo-wide const map, so
+        /// <c>Report(DailyQuestService.Day1QuestTemplateId, 1)</c> is judged as
+        /// "combat.build-towers" rather than skipped. Comments are stripped first, so a Report
+        /// call that only exists in prose (there are three) never counts as a live reporter.
+        /// </summary>
+        private static List<ReporterRec> CollectDailyReporters(List<string> failures, List<string> notes)
+        {
+            var result = new List<ReporterRec>();
+            string[] files;
+            try { files = Directory.GetFiles(ModulesRoot, "*.cs", SearchOption.AllDirectories); }
+            catch (Exception ex)
+            {
+                failures.Add("[daily-reachable] could not enumerate " + ModulesRoot + ": " + ex.Message +
+                             " - without the source scan no daily template can be proven reachable");
+                return result;
+            }
+
+            var constRx = new Regex("const\\s+string\\s+(\\w+)\\s*=\\s*\"([^\"]*)\"\\s*;");
+            var codes = new Dictionary<string, string>(StringComparer.Ordinal);
+            var perFileConsts = new Dictionary<string, Dictionary<string, string>>(StringComparer.Ordinal);
+            var globalConsts = new Dictionary<string, string>(StringComparer.Ordinal);
+
+            foreach (var file in files)
+            {
+                string src;
+                try { src = File.ReadAllText(file); } catch { continue; }
+                string code = StripComments(src);
+                codes[file] = code;
+
+                var map = new Dictionary<string, string>(StringComparer.Ordinal);
+                foreach (Match m in constRx.Matches(code))
+                {
+                    map[m.Groups[1].Value] = m.Groups[2].Value;
+                    if (!globalConsts.ContainsKey(m.Groups[1].Value))
+                        globalConsts[m.Groups[1].Value] = m.Groups[2].Value;
+                }
+                perFileConsts[file] = map;
+            }
+
+            foreach (var kv in codes)
+            {
+                string file = kv.Key, code = kv.Value;
+                if (code.IndexOf("DailyQuest", StringComparison.Ordinal) < 0) continue;
+
+                int at = 0;
+                while (true)
+                {
+                    int idx = code.IndexOf(".Report(", at, StringComparison.Ordinal);
+                    if (idx < 0) break;
+                    at = idx + 8;
+
+                    // Only DailyQuestService receivers. The window is deliberately short so an
+                    // unrelated Report( on another service cannot be captured by a mention of
+                    // DailyQuest elsewhere in the file.
+                    int from = Math.Max(0, idx - 80);
+                    if (code.Substring(from, idx - from).IndexOf("DailyQuest", StringComparison.Ordinal) < 0)
+                        continue;
+
+                    string args = ExtractBalanced(code, idx + 7);
+                    if (args == null) continue;
+                    string first = FirstArgument(args);
+                    string id = ResolveStringExpr(first, perFileConsts[file], globalConsts);
+                    if (id == null)
+                    {
+                        notes.Add("UNJUDGED daily reporter in " + file + ": Report(" + Trim(first, 48) +
+                                  ") - the first argument is not a literal or a resolvable string const, so this " +
+                                  "oracle cannot tell which templates it can satisfy. Make it a const string.");
+                        continue;
+                    }
+                    if (id.Length == 0) continue;
+                    result.Add(new ReporterRec { Id = id, File = file });
+                }
+            }
+            return result;
+        }
+
+        /// <summary>The first argument of an argument list, split at depth-0 commas.</summary>
+        private static string FirstArgument(string args)
+        {
+            int depth = 0;
+            bool inStr = false;
+            for (int i = 0; i < args.Length; i++)
+            {
+                char c = args[i];
+                if (inStr)
+                {
+                    if (c == '\\') { i++; continue; }
+                    if (c == '"') inStr = false;
+                    continue;
+                }
+                if (c == '"') { inStr = true; continue; }
+                if (c == '(' || c == '[' || c == '<') depth++;
+                else if (c == ')' || c == ']' || c == '>') depth--;
+                else if (c == ',' && depth <= 0) return args.Substring(0, i);
+            }
+            return args;
+        }
+
+        /// <summary>A string literal's value, or a const identifier's value, or null when the
+        /// expression cannot be resolved statically (which is reported as UNJUDGED, never
+        /// silently treated as absent).</summary>
+        private static string ResolveStringExpr(string expr, Dictionary<string, string> local,
+                                                Dictionary<string, string> global)
+        {
+            if (expr == null) return null;
+            string e = expr.Trim();
+            if (e.Length == 0) return null;
+
+            var lit = Regex.Match(e, "^\"([^\"]*)\"$");
+            if (lit.Success) return lit.Groups[1].Value;
+
+            if (!Regex.IsMatch(e, @"^[A-Za-z_][\w\.]*$")) return null;
+            int dot = e.LastIndexOf('.');
+            string name = dot >= 0 ? e.Substring(dot + 1) : e;
+            string v;
+            if (local != null && local.TryGetValue(name, out v)) return v;
+            if (global != null && global.TryGetValue(name, out v)) return v;
+            return null;
+        }
+
+        private static string Trim(string s, int max)
+        {
+            if (string.IsNullOrEmpty(s)) return "";
+            s = s.Trim();
+            return s.Length <= max ? s : s.Substring(0, max) + "...";
+        }
+
+        // ---------------------------------------------------------------------
+        //  CASE 11 - the three audit fixes, and the invariant that makes one safe
+        // ---------------------------------------------------------------------
+
+        private static void Case11_DailyBridgeLive(DailyCtx d, List<string> failures, List<string> notes)
+        {
+            // (1) The tower bridge listens to the LIVE placement event.
+            string tower = ReadText(TowerBridgeSrc, failures);
+            string towerPrefix = "tower_";
+            if (tower != null)
+            {
+                string code = StripComments(tower);
+                if (code.IndexOf("BuildModeController.StructurePlaced", StringComparison.Ordinal) < 0)
+                    failures.Add("[daily-bridge-live] " + TowerBridgeSrc + " no longer subscribes " +
+                                 "BuildModeController.StructurePlaced. That is the ONLY live placement event: " +
+                                 "TowerPlacementSystem.OnTowerPlaced fires solely from BuildMenu, whose guid is " +
+                                 "in no scene and no prefab. Without it 'combat.build-towers' never ticks - and " +
+                                 "because it is day1Guaranteed the combat slot force-returns it on EVERY roll " +
+                                 "until it is completed, so the slot is pinned to an uncompletable quest FOREVER.");
+                var pfx = Regex.Match(code, "TowerIdPrefix\\s*=\\s*\"([^\"]*)\"");
+                if (pfx.Success && pfx.Groups[1].Value.Length > 0) towerPrefix = pfx.Groups[1].Value;
+                else
+                    notes.Add("could not read TowerIdPrefix from " + TowerBridgeSrc + "; the Tower-row invariant " +
+                              "below is checked against the default '" + towerPrefix + "'");
+                if (code.IndexOf("RuntimeInitializeOnLoadMethod", StringComparison.Ordinal) < 0)
+                    failures.Add("[daily-bridge-live] " + TowerBridgeSrc + " lost its " +
+                                 "RuntimeInitializeOnLoadMethod self-bootstrap - nothing else AddComponents it " +
+                                 "(its guid is in no scene and no prefab), so the component would never exist at " +
+                                 "runtime and the subscription above would never happen.");
+            }
+
+            // (2) The combat bridge is attached at RUNTIME, not only by the editor scene builder.
+            string boot = ReadText(WaveBootstrapSrc, failures);
+            if (boot != null && StripComments(boot).IndexOf("Ensure<DailyQuestCombatBridge>", StringComparison.Ordinal) < 0)
+                failures.Add("[daily-bridge-live] " + WaveBootstrapSrc + " no longer contains " +
+                             "Ensure<DailyQuestCombatBridge>. The component's guid is in NO .unity and NO " +
+                             ".prefab - it was attached only by the EDITOR-ONLY VillageSceneBuilder, which does " +
+                             "not run in a player build. Without this one line the 17 combat.clear-waves.* " +
+                             "templates have no listener and can never tick.");
+            if (!File.Exists(CombatBridgeSrc))
+                failures.Add("[daily-bridge-live] " + CombatBridgeSrc + " is missing - the component " +
+                             WaveBootstrapSrc + " attaches does not exist, so every combat.clear-waves.* daily " +
+                             "is dead.");
+
+            // (3) A gate built by the real placement path carries its proximity opener.
+            string factory = ReadText(StructureFactorySrc, failures);
+            if (factory != null)
+            {
+                string code = StripComments(factory);
+                int gateCase = code.IndexOf("case \"Gate\":", StringComparison.Ordinal);
+                bool attached = false;
+                if (gateCase >= 0)
+                {
+                    int end = code.IndexOf("break;", gateCase, StringComparison.Ordinal);
+                    if (end < 0) end = Math.Min(code.Length, gateCase + 2000);
+                    attached = code.IndexOf("AddComponent<GateProximityOpener>", gateCase,
+                                            Math.Max(0, end - gateCase), StringComparison.Ordinal) >= 0;
+                }
+                if (gateCase < 0)
+                    failures.Add("[daily-bridge-live] " + StructureFactorySrc + " has no `case \"Gate\":` - the " +
+                                 "oracle cannot find where a gate is built, so it cannot prove the 12 " +
+                                 "explore.visit-gate.* templates have a ticker. Restore the case or update this " +
+                                 "check in the same edit.");
+                else if (!attached)
+                    failures.Add("[daily-bridge-live] " + StructureFactorySrc + "'s `case \"Gate\":` no longer " +
+                                 "calls AddComponent<GateProximityOpener>(). That opener is what raises " +
+                                 "OnHeroEntered, which is the ONLY tick behind the 12 explore.visit-gate.* " +
+                                 "templates. The only other attacher is VillageController, whose guid is in no " +
+                                 "scene - so on a player-built town the whole exploration slot goes dead.");
+            }
+            if (!File.Exists(GateOpenerSrc))
+                failures.Add("[daily-bridge-live] " + GateOpenerSrc + " is missing - nothing can report " +
+                             "explore.visit-gate, so the exploration slot is uncompletable.");
+
+            // (4) ⛔ THE INVARIANT THAT MAKES THE PREFIX FILTER SAFE.
+            // The bridge tests structureId.StartsWith("tower_") because NO runtime code reads
+            // structures-catalog.json's "type" field. That stand-in is only correct while the
+            // naming holds: a row typed Tower without the prefix would place fine, look like a
+            // tower, and silently never count toward the day-1 quest.
+            int towerRows = 0;
+            try
+            {
+                if (File.Exists(StructuresRes))
+                {
+                    var root = JObject.Parse(File.ReadAllText(StructuresRes));
+                    var entries = root["entries"] as JArray;
+                    if (entries != null)
+                        foreach (var e in entries)
+                        {
+                            if (!string.Equals(Str(Get(e, "type")), "Tower", StringComparison.Ordinal)) continue;
+                            towerRows++;
+                            string id = Str(Get(e, "id"));
+                            if (id.StartsWith(towerPrefix, StringComparison.OrdinalIgnoreCase)) continue;
+                            failures.Add("[daily-bridge-live] structures-catalog.json row '" + id + "' is typed " +
+                                         "\"Tower\" but its id does not start with '" + towerPrefix + "'. " +
+                                         "DailyQuestTowerBridge filters placements by that PREFIX (no runtime " +
+                                         "code reads the catalog's type field), so placing this tower would " +
+                                         "silently NOT count toward 'combat.build-towers' - the day1Guaranteed " +
+                                         "quest that pins the combat slot until it is completed. Rename the row " +
+                                         "to '" + towerPrefix + "...', or teach the bridge to read the type.");
+                        }
+                }
+                else failures.Add("[daily-bridge-live] " + StructuresRes + " is missing - the Tower-prefix " +
+                                  "invariant cannot be checked");
+            }
+            catch (Exception ex)
+            {
+                failures.Add("[daily-bridge-live] could not read " + StructuresRes + " (" + ex.GetType().Name +
+                             ") - the Tower-prefix invariant is unchecked");
+            }
+
+            bool wantsTowers = false;
+            foreach (var t in d.Templates)
+                if (t.Id.StartsWith("combat.build-towers", StringComparison.Ordinal)) wantsTowers = true;
+            if (wantsTowers && towerRows == 0)
+                failures.Add("[daily-bridge-live] daily-quests.json asks the player to build towers but " +
+                             "structures-catalog.json ships ZERO rows typed \"Tower\" - there is nothing to " +
+                             "build, so the quest is uncompletable by construction.");
+            else if (towerRows > 0)
+                notes.Add(towerRows + " structures-catalog rows are typed Tower and all carry the '" +
+                          towerPrefix + "' prefix the bridge filters on");
+        }
+
+        // ---------------------------------------------------------------------
+        //  CASE 12 - day1Guaranteed templates must be PROVABLY completable
+        // ---------------------------------------------------------------------
+
+        private static void Case12_Day1Guaranteed(DailyCtx d, List<string> failures, List<string> notes)
+        {
+            int flagged = 0;
+            foreach (var t in d.Templates)
+            {
+                if (!t.Day1Guaranteed) continue;
+                flagged++;
+                if (d.Proven.Contains(t.Id)) continue;
+
+                failures.Add("[day1-guaranteed] template '" + t.Id + "' is day1Guaranteed AND unreachable - this " +
+                             "is categorically worse than an ordinary dead template. DailyQuests FORCE-RETURNS a " +
+                             "day1Guaranteed template for its slot ('" + t.Slot + "') on EVERY roll while " +
+                             "Day1QuestDone is false, and that latch is set ONLY when the quest completes " +
+                             "(DailyQuests.cs Report -> Day1DonePrefKey). So an uncompletable one does not cost " +
+                             "the player one day - it PINS that slot to an unwinnable quest permanently, for " +
+                             "every new player, and re-rolls cannot escape it. Wire its Report tick (see the " +
+                             "[daily-reachable] failure for the same id) or clear the day1Guaranteed flag.");
+            }
+
+            if (flagged == 0 && d.Templates.Count > 0)
+                notes.Add("no daily template is day1Guaranteed today, so the force-return path is unexercised - " +
+                          "this check is armed for the moment one is flagged");
+            else if (flagged > 1)
+                notes.Add(flagged + " templates are day1Guaranteed; DailyQuests force-returns one PER SLOT, so " +
+                          "two flagged in the same slot means one of them can never appear on day 1");
         }
 
         // =====================================================================

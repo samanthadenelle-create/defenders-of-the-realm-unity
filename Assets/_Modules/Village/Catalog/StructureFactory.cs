@@ -901,6 +901,15 @@ namespace DeNelle.Village
                 // Configure() to size the opening; a free-placed gate keeps defaults.
                 case "Gate":
                     root.AddComponent<Gate>();
+                    // ⛔ THE FIX (quest audit 2026-08-21) — the 12 explore.visit-gate.* daily
+                    // templates tick from GateProximityOpener.OnHeroEntered, and a gate built
+                    // HERE never had one. The opener was attached only by VillageController,
+                    // whose guid is in no scene or prefab, so on a player-built town the whole
+                    // exploration slot could never advance. Attaching it at the one place gates
+                    // are actually created is what makes the templates reachable at all.
+                    // [RequireComponent(typeof(Gate))] is satisfied by the line above; the
+                    // opener self-builds its trigger relay and no-ops without a hero.
+                    root.AddComponent<GateProximityOpener>();
                     break;
 
                 // ResourceCollector — CoC-style typed town collector (Farm / Lumbermill /

@@ -50,12 +50,57 @@ namespace DeNelle.Village
         {
             if (_instance != null && _instance != this) { Destroy(gameObject); return; }
             _instance = this;
+
+            // ⛔ THE LIVE SEAM (quest audit 2026-08-21) — this is the subscription that
+            // actually ticks. See HandleStructurePlaced for why the one below it is dead.
+            BuildModeController.StructurePlaced += HandleStructurePlaced;
         }
 
         private void OnDestroy()
         {
+            BuildModeController.StructurePlaced -= HandleStructurePlaced;
             UnsubscribePlacement();
             if (_instance == this) _instance = null;
+        }
+
+        /// <summary>
+        /// The id prefix every defensive tower carries. structures-catalog.json classifies
+        /// them as <c>"type": "Tower"</c> and all five such rows are named <c>tower_*</c>
+        /// (tower_ground_archer, tower_ballista, tower_siege_tower, tower_catapult,
+        /// tower_arcane_spire). <c>arcane-tower</c> is deliberately EXCLUDED — the catalog
+        /// types it as a Resource building, not a defence.
+        /// <para>⚠ No runtime code reads that catalog's <c>type</c> field, so this prefix is
+        /// the cheap runtime stand-in for it. That is only safe while the naming holds, so
+        /// <c>QuestCompletabilityRegression</c> PINS the invariant: a future row typed Tower
+        /// without this prefix fails the gate instead of silently never counting toward the
+        /// day-1 quest.</para>
+        /// </summary>
+        private const string TowerIdPrefix = "tower_";
+
+        /// <summary>
+        /// ⛔ THE FIX (quest audit 2026-08-21). <c>combat.build-towers</c> is
+        /// <c>day1Guaranteed</c>, and DailyQuests force-returns it for the combat slot on
+        /// EVERY roll while Day1QuestDone is false — a latch set only on completion. So a
+        /// tick that never arrives does not cost one day, it pins every player's combat slot
+        /// to an uncompletable quest FOREVER. Dailies are how a new player earns extra
+        /// resources, so this was the on-ramp, broken for everyone.
+        /// <para>Root cause: the only subscription was <c>TowerPlacementSystem.OnTowerPlaced</c>,
+        /// which fires solely from <c>PlaceTower</c> &lt;- <c>StartPlacing</c> &lt;- <c>BuildMenu</c> —
+        /// and BuildMenu's guid is in NO scene and NO prefab, and is never AddComponent'ed.
+        /// BuildModeController's own header calls TowerPlacementSystem/BuildMenu the LEGACY
+        /// path. The bridge was listening to a door nobody walks through.</para>
+        /// <para>The legacy subscription is KEPT rather than deleted: it is harmless (the two
+        /// paths cannot both fire for one placement) and it costs nothing, whereas removing
+        /// it would be a second, unrelated change riding along in a defect fix.</para>
+        /// </summary>
+        private void HandleStructurePlaced(string structureId)
+        {
+            if (string.IsNullOrEmpty(structureId)) return;
+            if (!structureId.StartsWith(TowerIdPrefix, System.StringComparison.OrdinalIgnoreCase)) return;
+
+            DeNelle.Core.Diagnostics.FlowTrace.Step("DailyQuest",
+                $"tower placed ('{structureId}') -> reporting 1 tick to '{DailyQuestService.Day1QuestTemplateId}'.");
+            DailyQuestService.Instance?.Report(DailyQuestService.Day1QuestTemplateId, 1);
         }
 
         // ── Tower-placement subscription (re-checked each frame) ────────────────

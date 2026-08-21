@@ -267,6 +267,26 @@ namespace DeNelle.Core.Quests
                     changed = true;
                 }
             }
+            // ⛔ MAKE THE NEGATIVE OBSERVABLE (quest audit 2026-08-21, CLAUDE.md §12).
+            // Three daily slots were dead for months and NOTHING said so: a report that
+            // matched no active template looked exactly like a report that was never sent.
+            // The proof of a broken bridge is the ABSENCE of a tick, and an absence you
+            // cannot see is not evidence. Now a run states which it was, so the next
+            // breakage is one capture away instead of one audit away.
+            if (!changed)
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("DailyQuest",
+                    $"Report('{eventId}', {amount}) matched NO active daily quest. Either today's " +
+                    "roll does not include that template (ordinary), or its bridge is reporting an " +
+                    "id no template uses (a defect - see the quest audit).");
+            }
+            else
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Step("DailyQuest",
+                    $"Report('{eventId}', {amount}) advanced " +
+                    $"{(justCompleted?.Count ?? 0)} completion(s) this call.");
+            }
+
             if (changed) { Save(); SetChanged?.Invoke(); }
             if (justCompleted != null)
             {

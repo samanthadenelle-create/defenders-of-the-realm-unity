@@ -60,6 +60,20 @@ namespace DeNelle.Village
             // via GetComponent<WaveManager>() + reflects the HUD through CoreServices,
             // so attaching it here is all that's needed (no Village.unity re-save).
             Ensure<StartWaveHudBridge>(go);
+
+            // ⛔ THE FIX (quest audit 2026-08-21) — 17 of 41 daily-quest templates were dead
+            // for want of this ONE line. Every combat.clear-waves.* daily reports through
+            // DailyQuestCombatBridge, whose guid appears in NO .unity and NO .prefab: it was
+            // attached only by VillageSceneBuilder.Wiring.cs, which is EDITOR-ONLY and does
+            // not run in a player build. So the component simply never existed at runtime and
+            // the templates could never tick.
+            //
+            // It belongs here for the same reason every sibling above does: this bootstrap is
+            // the runtime attacher for wave-scene bridges, it already runs on every scene load,
+            // and Ensure<T> is idempotent — so this needs no scene re-save and cannot double up.
+            // Dailies are a new player's route to extra resources; a silently absent listener
+            // is the most expensive kind of missing line.
+            Ensure<DailyQuestCombatBridge>(go);
         }
 
         private static void Ensure<T>(GameObject go) where T : Component
