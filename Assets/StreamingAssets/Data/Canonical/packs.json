@@ -10,7 +10,7 @@
     "packDef": "Each entry mirrors React's PackDef: sku, tier, name, tagline, pricing { usd, usdc, sol, skr }, contents { cosmetics, economy, convenience }, founderOnly?, packExclusiveCosmetic. The Unity loader deserializes each entry straight into a PackDef record.",
     "pricing": "usd is the Stripe/USD reference price; usdc/sol/skr are the per-currency wallet-rail amounts. The Unity wallet module reads sol/usdc/skr only. Starter bundles reuse the three ladder price points: $4.99 -> {usdc 4.99, sol 0.045, skr 60}; $9.99 -> {usdc 9.99, sol 0.09, skr 120}; $19.99 -> {usdc 19.99, sol 0.18, skr 240}.",
     "tier": "Unique 1..N lookup key (PackCatalog.FindByTier). NOT the price band — multiple bundles share a price point but each has a unique tier.",
-    "convenience": "TIME-SAVING only, never combat-power (the bent covenant, §5.3). instant-build / instant-repair / harvest-auto-collect / xp-weekend. No permanent passives.",
+    "convenience": "TIME-SAVING only, never combat-power (the bent covenant, §5.3). instant-build / instant-repair / harvest-auto-collect / xp-weekend / lantern-oil-2x-expedition / lantern-oil-3x-expedition. Lantern blessings are consumed per expedition. No permanent passives.",
     "economy": "In-game currency top-ups (§5.2). GameState applies crystals/food/coins; glimmer is carried for catalogue completeness (not yet applied at runtime per the audit).",
     "impulsePacks": "Packs 14-25 (tiers 14-25) are the WO-1037 SINGLE-RESOURCE IMPULSE PACKS, authored 2026-08-17 under the owner ruling of 2026-08-16 (option (b), verbatim: \"we should have small instant packs\" / \"small wood only\") and legalised by the WO-947 s12 amendment (the PURCHASE boundary is not the COST boundary). ONE family per harvestable resource (wood, iron, food, crystals) x small/medium/large. THE LOAD-BEARING RULE: each of these SKUs carries EXACTLY ONE economy key and an EMPTY cosmetics + convenience list. A multi-resource impulse bundle would re-mix the WO-947 cost baskets through the back door and is FORBIDDEN (WO-947 s12c guardrail 1) - asserted headlessly by DeNelle.Editor.Regression.ImpulsePackRegression [impulse-pack], which also pins the $5 PRICE CEILING (owner standing ruling, memory solana-store-early-access-pack-pricing) and the no-structures/no-levels/no-queue-completions rule. AMOUNTS ARE PENDING OWNER RATIFICATION - they were sized against the REAL demand curve read out of building-tiers.json (tier costWood 500..16000, costFood 300..13000, costCrystal 100..4800) and structures-catalog.json (repo.upgradeCost iron 20..1440): small closes the cheapest tier upgrade (the Lumber Mill T1 900-wood shortfall in the screenshot that prompted this WO), medium closes a mid-ladder step, large closes a late step but deliberately NOT the Barracks T6 16000-wood ceiling, so the top pack does not trivialise the game. The optional impulse/impulseResource/impulseSize fields are the machine-readable family tag ShortfallPackOffer resolves on; older packs omit them (absent = false/null, no migration break).",
     "cosmeticGrant": "Every cosmetics[] SKU is recorded into OwnedItemIds on grant and MUST exist in cosmetics.json (id == the SKU) or it is unredeemable. Starter-bundle cosmetics live in cosmetics.json with unlockMethod 'achievement' + glimmerCost 0 (owned via entitlement, equippable, not glimmer-buyable)."
@@ -21,6 +21,7 @@
     {
       "sku": "hearth-spark",
       "tier": 1,
+      "storeSection": "essentials",
       "name": "Hearth Spark",
       "tagline": "A tiny welcome — the Heart kindles a spark for a new tender.",
       "theme": "Tiny welcome — beginner cosmetic + small economy bump.",
@@ -53,6 +54,8 @@
     {
       "sku": "lanternlight",
       "tier": 2,
+      "storeSection": "essentials",
+      "storeBadge": "POPULAR",
       "name": "Lanternlight",
       "tagline": "Light carried forward — the value tier most tenders choose.",
       "theme": "The \"value\" tier — what most players who buy something will buy.",
@@ -91,6 +94,7 @@
     {
       "sku": "folks-thanks",
       "tier": 3,
+      "storeVisible": false,
       "name": "Folk's Thanks",
       "tagline": "The Folk send a small thanks for tending the Heart.",
       "theme": "The supporter-edition slot — themed cosmetic set + named seasonal recognition.",
@@ -135,6 +139,7 @@
     {
       "sku": "patron-of-elarion",
       "tier": 4,
+      "storeVisible": false,
       "name": "Patron of Elarion",
       "tagline": "A patron's gift to Elarion — a meaningful headstart for the Heart.",
       "theme": "Heavyweight cosmetic suite + meaningful economy headstart.",
@@ -185,6 +190,7 @@
     {
       "sku": "founders-vow",
       "tier": 5,
+      "storeVisible": false,
       "name": "Founder's Vow",
       "tagline": "A thank-you to early believers — a vow kept, not a flex.",
       "theme": "One-time only, available v1 launch only — special founder cosmetic + permanent in-village banner.",
@@ -237,6 +243,7 @@
     {
       "sku": "frostfall-bundle",
       "tier": 6,
+      "storeSection": "style",
       "name": "Frostfall Bundle",
       "tagline": "Winter comes to Elarion — armour the Heart in pale frost and rime.",
       "theme": "Seasonal cosmetic-forward bundle (winter): Frostfall Knight regalia + Glacierborn companion + Frozen Hearth palette.",
@@ -273,6 +280,7 @@
     {
       "sku": "embergrove-bundle",
       "tier": 7,
+      "storeSection": "style",
       "name": "Embergrove Bundle",
       "tagline": "Autumn embers drift through the grove — warm the village in banked-forge gold.",
       "theme": "Seasonal cosmetic-forward bundle (autumn): Embergrove Mage vestments + Emberkin companion + Embergrove palette.",
@@ -309,6 +317,7 @@
     {
       "sku": "bloomtide-bundle",
       "tier": 8,
+      "storeSection": "style",
       "name": "Spring Awakening",
       "tagline": "The first thaw greens the realm — raise the Bloomtide banners and welcome the season.",
       "theme": "Seasonal cosmetic bundle (spring), value-priced: Bloomtide Ranger garb + Bloomtide banners + first-thaw palette.",
@@ -345,6 +354,8 @@
     {
       "sku": "starters-hand",
       "tier": 9,
+      "storeSection": "featured",
+      "storeBadge": "BEST START",
       "name": "Starter's Hand",
       "tagline": "A steady hand for a new tender — everything you need to get the Heart growing.",
       "theme": "Onboarding value pack: economy-heavy headstart + early instant-build/repair + one welcome cosmetic. The 'best first buy'.",
@@ -375,6 +386,11 @@
             "kind": "instant-repair",
             "count": 2,
             "description": "Skip the repair queue for two buildings."
+          },
+          {
+            "kind": "lantern-oil-2x-expedition",
+            "count": 2,
+            "description": "Lantern Blessing: oil lasts twice as long on two dungeon expeditions."
           }
         ]
       },
@@ -383,6 +399,8 @@
     {
       "sku": "echo-patron-pack",
       "tier": 10,
+      "storeSection": "featured",
+      "storeBadge": "EXPEDITION",
       "name": "Echo Patron Pack",
       "tagline": "Patron of the echoes — set the harvest loop humming and let the workforce roll.",
       "theme": "Harvest-loop economy headstart: heavy resources + harvest-auto-collect tokens + workshop palette. Built around the echo workforce.",
@@ -414,6 +432,11 @@
             "kind": "instant-build",
             "count": 5,
             "description": "Skip the build animation for five buildings."
+          },
+          {
+            "kind": "lantern-oil-3x-expedition",
+            "count": 3,
+            "description": "Greater Lantern Blessing: oil lasts three times as long on three dungeon expeditions."
           }
         ]
       },
@@ -422,6 +445,7 @@
     {
       "sku": "hero-wardrobe-pack",
       "tier": 11,
+      "storeSection": "style",
       "name": "Hero Wardrobe Pack",
       "tagline": "A full wardrobe for the Knight — four ways to wear the watch over Elarion.",
       "theme": "Cosmetic-forward Knight wardrobe set (ties into Wardrobe/Dressable): four swappable outfit pieces, light economy.",
@@ -458,6 +482,7 @@
     {
       "sku": "realm-defender-bundle",
       "tier": 12,
+      "storeSection": "style",
       "name": "Realm Defender Bundle",
       "tagline": "Bear the colours of the realm — flair for blade and shield, no edge but the eye's.",
       "theme": "Visual weapon/shield flair (cosmetic only, zero combat power per the covenant) + a defender's banner.",
@@ -494,6 +519,7 @@
     {
       "sku": "builders-cache",
       "tier": 13,
+      "storeVisible": false,
       "name": "Builder's Cache",
       "tagline": "For the tender who builds without pause — skip the queue, raise the realm.",
       "theme": "Convenience-forward (needs the token tray): large instant-build/repair stacks + xp-weekends + a master-builder palette.",

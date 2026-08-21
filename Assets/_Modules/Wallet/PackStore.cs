@@ -319,9 +319,13 @@ namespace DeNelle.Wallet
                 _disclaimerLabel.text = PackCatalog.CurrencyDisclaimer;
 
             int built = 0;
-            foreach (var pack in PackCatalog.Packs)
+            foreach (var section in new[] { "featured", "essentials", "style", "support" })
             {
-                if (pack == null) continue;
+                bool sectionStarted = false;
+                foreach (var pack in PackCatalog.Packs)
+                {
+                    if (pack == null || !pack.StoreVisible ||
+                        !string.Equals(pack.StoreSection ?? "essentials", section, StringComparison.OrdinalIgnoreCase)) continue;
 
                 // WO-1037 / WO-947 §12c.4 — the single-resource impulse SKUs are a SHORTFALL REMEDY,
                 // NOT a storefront row. They exist to answer "I am 880 wood short" at the moment the
@@ -330,16 +334,23 @@ namespace DeNelle.Wallet
                 // explicitly is not. They are reachable ONLY through ShortfallPackOffer.
                 // ⚠ Do NOT "fix" this by showing them here because the shelf looks thin — that is the
                 // whole guardrail, and it is why the tiers 1-13 ladder is unchanged above.
-                if (pack.Impulse) continue;
+                    if (pack.Impulse) continue;
 
-                var card = BuildPackCard(pack);
-                if (card == null)
-                {
+                    if (!sectionStarted)
+                    {
+                        BuildSectionHeader(SectionTitle(section));
+                        sectionStarted = true;
+                    }
+
+                    var card = BuildPackCard(pack);
+                    if (card == null)
+                    {
                     // BuildPackCard guarded out -> this pack has no card. Skip, don't blank the row.
                     FlowTrace.Warn("Store", $"Render: BuildPackCard returned null for pack '{pack.Sku}' — card skipped.");
-                    continue;
+                        continue;
+                    }
+                    built++;
                 }
-                built++;
             }
 
             // R: never a silently blank store. If the catalogue had packs but nothing built, the
@@ -379,6 +390,10 @@ namespace DeNelle.Wallet
             else bg.color = new Color(0f, 0f, 0f, 0.35f);
 
             var card = cardGo.transform;
+
+            if (!string.IsNullOrEmpty(pack.StoreBadge))
+                MakeText(card, pack.StoreBadge, 11, ElarionUi.Gold, FontStyles.Bold,
+                    TextAlignmentOptions.Right, new Vector2(0.47f, 0.84f), new Vector2(0.68f, 0.98f));
 
             // Launch-window tag (founder packs only).
             if (pack.FounderOnly)
@@ -470,6 +485,26 @@ namespace DeNelle.Wallet
             return _selectedCurrency.TryGetValue(sku, out var c) ? c : _defaultCurrency;
         }
 
+        private void BuildSectionHeader(string title)
+        {
+            var go = new GameObject("section-" + title, typeof(RectTransform), typeof(LayoutElement));
+            go.transform.SetParent(_listContent, false);
+            go.GetComponent<LayoutElement>().preferredHeight = 42f;
+            MakeText(go.transform, title, 15, ElarionUi.Gold, FontStyles.Bold,
+                TextAlignmentOptions.BottomLeft, new Vector2(0.02f, 0f), new Vector2(0.98f, 1f));
+        }
+
+        private static string SectionTitle(string section)
+        {
+            switch (section)
+            {
+                case "featured": return "For Your Next Adventure";
+                case "style": return "Make the Realm Yours";
+                case "support": return "Support Elarion";
+                default: return "Useful Supplies";
+            }
+        }
+
         private static string DescribeContents(PackDef pack)
         {
             var sb = new StringBuilder();
@@ -490,8 +525,20 @@ namespace DeNelle.Wallet
 
                 if (c.Convenience != null && c.Convenience.Count > 0)
                 {
+                    foreach (var item in c.Convenience)
+                    {
+                        if (item == null || item.Count <= 0 || string.IsNullOrEmpty(item.Kind)) continue;
+                        if (item.Kind == "lantern-oil-2x-expedition" || item.Kind == "lantern-oil-3x-expedition")
+                        {
+                            if (sb.Length > 0) sb.Append(", ");
+                            sb.Append(item.Kind.Contains("3x") ? "3x" : "2x")
+                              .Append(" lantern x").Append(item.Count).Append(" runs");
+                        }
+                    }
                     var tokens = 0;
-                    foreach (var item in c.Convenience) tokens += item != null ? item.Count : 0;
+                    foreach (var item in c.Convenience)
+                        if (item != null && item.Kind != "lantern-oil-2x-expedition" && item.Kind != "lantern-oil-3x-expedition")
+                            tokens += item.Count;
                     if (tokens > 0)
                     {
                         if (sb.Length > 0) sb.Append(", ");

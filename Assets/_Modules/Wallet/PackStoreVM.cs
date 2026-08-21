@@ -129,6 +129,16 @@ namespace DeNelle.Wallet
 
             // VERIFY the entitlement actually landed before persisting — the SKU must now be owned, or
             // the paid-for grant silently failed. This is the proof the entitlement took.
+            if (pack.Contents != null && pack.Contents.Convenience != null)
+                foreach (var item in pack.Contents.Convenience)
+                {
+                    if (item == null || string.IsNullOrWhiteSpace(item.Kind) || item.Count <= 0) continue;
+                    string key = "convenience:" + item.Kind.Trim().ToLowerInvariant();
+                    if (state.GearInventory == null) state.GearInventory = new Dictionary<string, int>();
+                    state.GearInventory.TryGetValue(key, out int prior);
+                    state.GearInventory[key] = Mathf.Max(0, prior) + item.Count;
+                }
+
             bool owned = state.OwnedItemIds != null && state.OwnedItemIds.Contains(pack.Sku);
             if (!owned)
                 FlowTrace.Fail("Store",

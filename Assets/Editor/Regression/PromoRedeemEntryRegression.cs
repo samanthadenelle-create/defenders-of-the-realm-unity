@@ -73,7 +73,7 @@ namespace DeNelle.Editor
         {
             "redeemEntry", "redeemTitle", "redeemBlurb", "redeemPlaceholder", "redeemAction",
             "redeemHint", "redeemBusy", "redeemSuccess", "redeemSuccessNoReward",
-            "redeemRewardCrystals", "redeemRewardCoins",
+            "redeemRewardCrystals", "redeemRewardCoins", "redeemRewardPack",
         };
 
         public static bool Run(out string reason)

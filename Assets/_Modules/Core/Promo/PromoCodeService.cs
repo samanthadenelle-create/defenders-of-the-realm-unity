@@ -142,7 +142,7 @@ namespace DeNelle.Core.Promo
                 return;
             }
 
-            var payload = JsonConvert.SerializeObject(new { playerId, code });
+            var payload = JsonConvert.SerializeObject(new { playerId, code, supportsPackRewards = true });
             var bodyRaw = Encoding.UTF8.GetBytes(payload);
 
             using var req = new UnityWebRequest(BackendRedeemUrl, "POST");
@@ -201,7 +201,11 @@ namespace DeNelle.Core.Promo
 
             // ── Apply reward ──────────────────────────────────────────────────
             var reward = resp.Reward ?? new PromoReward();
-            ApplyReward(reward);
+            if (!ApplyReward(reward))
+            {
+                Refuse("reward-application-failed-after-server-success", PromoStrings.KeyErrUnknown);
+                return;
+            }
 
             // ── Local dedup ───────────────────────────────────────────────────
             _redeemedLocally.Add(code);
@@ -214,6 +218,7 @@ namespace DeNelle.Core.Promo
             {
                 crystals = reward.Crystals,
                 coins    = reward.Coins,
+                hasPack  = !string.IsNullOrEmpty(reward.PackSku),
             });
 
             FlowTrace.Step("Promo", $"redeem OUTCOME=redeemed — crystals:{reward.Crystals} coins:{reward.Coins} (entry withheld by design).");
@@ -248,15 +253,19 @@ namespace DeNelle.Core.Promo
         /// violation of it. Every failure is FAIL-level: the server has already burned the code, so a
         /// lost grant means the player spent a one-time code for nothing.</para>
         /// </summary>
-        private static void ApplyReward(PromoReward reward)
+        private static bool ApplyReward(PromoReward reward)
         {
             int crystals = Mathf.Max(0, reward != null ? reward.Crystals : 0);
             int coins    = Mathf.Max(0, reward != null ? reward.Coins    : 0);
-            if (crystals <= 0 && coins <= 0)
+            string packSku = reward != null ? reward.PackSku?.Trim() : null;
+            if (crystals <= 0 && coins <= 0 && string.IsNullOrEmpty(packSku))
             {
                 FlowTrace.Warn("Promo", "reward carried no crystals and no coins — nothing to grant.");
-                return;
+                return false;
             }
+
+            if (!string.IsNullOrEmpty(packSku) && !TryApplyPack(packSku)) return false;
+            if (crystals <= 0 && coins <= 0) return true;
 
             var econ = ResolveEconomyService(out var type);
             if (econ == null || type == null)
@@ -264,7 +273,7 @@ namespace DeNelle.Core.Promo
                 FlowTrace.Fail("Promo",
                     $"grant (crystals {crystals} / coins {coins}) FAILED: EconomyService not resolvable — " +
                     "the redemption is ALREADY BURNED server-side, so this reward is LOST.");
-                return;
+                return false;
             }
 
             if (crystals > 0)
@@ -290,6 +299,43 @@ namespace DeNelle.Core.Promo
                 else
                     try { m.Invoke(econ, new object[] { coins }); }
                     catch (Exception ex) { FlowTrace.Fail("Promo", $"grant coins THREW: {ex.GetType().Name}: {ex.Message} — reward LOST, redemption already burned."); }
+            }
+            return true;
+        }
+
+        private static bool TryApplyPack(string packSku)
+        {
+            Type catalog = null, vmType = null;
+            foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                if (catalog == null) catalog = asm.GetType("DeNelle.Wallet.PackCatalog");
+                if (vmType == null) vmType = asm.GetType("DeNelle.Wallet.PackStoreVM");
+                if (catalog != null && vmType != null) break;
+            }
+            if (catalog == null || vmType == null)
+            {
+                FlowTrace.Fail("Promo", "pack reward FAILED: Wallet pack types are not loaded; redemption already burned.");
+                return false;
+            }
+            try
+            {
+                var pack = catalog.GetMethod("Find", new[] { typeof(string) })?.Invoke(null, new object[] { packSku });
+                if (pack == null)
+                {
+                    FlowTrace.Fail("Promo", $"pack reward FAILED: catalog has no SKU '{packSku}'; redemption already burned.");
+                    return false;
+                }
+                var vm = vmType.GetMethod("CreateDefault", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)?.Invoke(null, null);
+                var apply = vmType.GetMethod("ApplyPackContents", new[] { pack.GetType() });
+                if (vm == null || apply == null) return false;
+                apply.Invoke(vm, new[] { pack });
+                var isOwned = vmType.GetMethod("IsOwned", new[] { typeof(string) });
+                return isOwned != null && (bool)isOwned.Invoke(vm, new object[] { packSku });
+            }
+            catch (Exception ex)
+            {
+                FlowTrace.Fail("Promo", $"pack reward THREW: {ex.GetType().Name}: {ex.Message} - redemption already burned.");
+                return false;
             }
         }
 
@@ -367,6 +413,7 @@ namespace DeNelle.Core.Promo
     {
         [JsonProperty("crystals")] public int Crystals { get; set; }
         [JsonProperty("coins")]    public int Coins    { get; set; }
+        [JsonProperty("packSku")]  public string PackSku { get; set; }
         [JsonProperty("message")]  public string Message { get; set; }
     }
 }

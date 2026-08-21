@@ -28,6 +28,7 @@
 
 using System.Collections.Generic;
 using DeNelle.Core.Diagnostics;
+using DeNelle.Core.State;
 using UnityEngine;
 using System.Collections.Generic;
 
@@ -147,6 +148,8 @@ namespace DeNelle.Dungeons
         private float _fogStartBeforeWarning;
         private float _fogEndBeforeWarning;
         private bool _darknessGradeApplied;
+        private bool _expeditionBlessingApplied;
+        private float _expeditionOilMultiplier = 1f;
 
         // ── Read-only state ──────────────────────────────────────────────────
 
@@ -279,6 +282,7 @@ namespace DeNelle.Dungeons
             _hero = hero;
             _oil = _maxOil;
             _liveRange = FullRange;
+            ApplyExpeditionBlessing();
         }
 
         /// <summary>
@@ -294,6 +298,7 @@ namespace DeNelle.Dungeons
             _hero = hero;
             _oil = _maxOil;
             _liveRange = FullRange;
+            ApplyExpeditionBlessing();
             FlowTrace.Step("Dungeon",
                 $"Lantern.ConfigureStandalone: oil={_oil:F0} stones={oilStones?.Count ?? 0} " +
                 $"hero='{(hero != null ? hero.name : "<null>")}' (composed path)");
@@ -382,7 +387,40 @@ namespace DeNelle.Dungeons
         /// <summary>Drains oil over time; the run's lantern slowly burns down.</summary>
         private void DrainOil(float dt)
         {
-            _oil = Mathf.Max(0f, _oil - _oilDrainPerSec * dt);
+            _oil = Mathf.Max(0f, _oil - (_oilDrainPerSec / Mathf.Max(1f, _expeditionOilMultiplier)) * dt);
+        }
+
+        /// <summary>Consumes one bounded Lantern Blessing for this dungeon visit.
+        /// Triple is preferred when owned; otherwise double. It stretches burn-time
+        /// only and never changes combat power, loot, or darkness thresholds.</summary>
+        private void ApplyExpeditionBlessing()
+        {
+            if (_expeditionBlessingApplied) return;
+            _expeditionBlessingApplied = true;
+            var svc = GameStateService.Instance;
+            var state = svc != null ? svc.State : null;
+            var inventory = state != null ? state.GearInventory : null;
+            if (inventory == null) return;
+
+            const string tripleKey = "convenience:lantern-oil-3x-expedition";
+            const string doubleKey = "convenience:lantern-oil-2x-expedition";
+            bool consumed = false;
+            if (inventory.TryGetValue(tripleKey, out int triple) && triple > 0)
+            {
+                inventory[tripleKey] = triple - 1;
+                _expeditionOilMultiplier = 3f;
+                consumed = true;
+            }
+            else if (inventory.TryGetValue(doubleKey, out int twice) && twice > 0)
+            {
+                inventory[doubleKey] = twice - 1;
+                _expeditionOilMultiplier = 2f;
+                consumed = true;
+            }
+
+            if (!consumed) return;
+            svc.Save();
+            FlowTrace.Step("Dungeon", $"Lantern Blessing applied: {_expeditionOilMultiplier:0}x oil duration for this expedition; one charge consumed.");
         }
 
         /// <summary>

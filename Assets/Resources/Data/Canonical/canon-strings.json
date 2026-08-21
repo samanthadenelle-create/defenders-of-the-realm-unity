@@ -138,6 +138,7 @@
   "redeemSuccessNoReward": "Code accepted, but it carried no reward to add.",
   "redeemRewardCrystals": "{0} Crystals",
   "redeemRewardCoins": "{0} Gold",
+  "redeemRewardPack": "{0} Pack",
   "redeemErrEmpty": "Enter a code first.",
   "redeemErrInvalid": "We do not recognize that code. Check the spelling and try again - nothing was used up.",
   "redeemErrAlreadyUsed": "You have already redeemed this code. Each code can be used once per player.",

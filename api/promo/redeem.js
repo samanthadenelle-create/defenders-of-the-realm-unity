@@ -39,8 +39,8 @@
 //                             over the EXACT bytes, same as save.js)
 //   Headers: X-Wallet + X-Nonce + X-Signature   (WALLET RAIL ONLY as of 2026-08-18;
 //            X-Guest-Id is no longer accepted here — see the correction above)
-//   Body  : { playerId, code }   (code is uppercased client-side; store/compare uppercase)
-//   Success: { success: true, reward: { crystals, coins }, message }
+//   Body  : { playerId, code, supportsPackRewards }
+//   Success: { success: true, reward: { crystals, coins, packSku }, message }
 //   Failure: { success: false, error: "INVALID_CODE" | "ALREADY_REDEEMED"
 //                                    | "EXPIRED" | "PLAYER_LIMIT_REACHED"
 //                                    | "REWARD_UNAVAILABLE" }
@@ -107,6 +107,7 @@ async function handler(req, res) {
     // hole this gate closes, and authenticate() would reject it anyway.
     const playerId = body.playerId != null ? String(body.playerId).trim() : '';
     const code = body.code != null ? String(body.code).trim().toUpperCase() : '';
+    const supportsPackRewards = body.supportsPackRewards === true;
 
     if (!playerId) {
         return quietFail(res, 400, AuthCode.PLAYER_ID_MISSING, ref);
@@ -241,12 +242,10 @@ async function handler(req, res) {
         // PackStoreVM.ApplyPackContents client-side, THEN replace this refusal with a
         // pass-through of promo.reward_pack_sku. Not before — the burn is one-way.
         const packSku = promo.reward_pack_sku != null ? String(promo.reward_pack_sku).trim() : '';
-        if (packSku !== '') {
+        if (packSku !== '' && !supportsPackRewards) {
             console.error(
-                `[promo/redeem] REFUSED-UNBURNED code=${code} — reward_pack_sku="${packSku}" is set, but the ` +
-                'shipped client has no field to receive a pack sku and this endpoint will not expand packs ' +
-                'server-side (schema.sql:311-323). The code was NOT consumed. Author it with ' +
-                'reward_crystals/reward_coins, or ship client pack-sku support first.'
+                '[promo/redeem] REFUSED-UNBURNED pack reward: client did not advertise ' +
+                'supportsPackRewards=true. The code was NOT consumed; update the client and retry.'
             );
             return res.status(200).json({ success: false, error: 'REWARD_UNAVAILABLE' });
         }
@@ -303,7 +302,7 @@ async function handler(req, res) {
         // A message-only "thanks for playing" code is also refused, deliberately:
         // spending a player's one-shot code on a sentence is still spending it, and
         // a refusal can be undone by authoring a reward while a burn cannot.
-        if (crystals <= 0 && coins <= 0) {
+        if (crystals <= 0 && coins <= 0 && packSku === '') {
             console.error(
                 `[promo/redeem] REFUSED-UNBURNED code=${code} — resolves to zero crystals AND zero coins ` +
                 `(reward_crystals=${JSON.stringify(promo.reward_crystals)}, reward_coins=${JSON.stringify(promo.reward_coins)}). ` +
@@ -329,7 +328,7 @@ async function handler(req, res) {
         // ── 7. Success ────────────────────────────────────────────────────────
         return res.status(200).json({
             success: true,
-            reward: { crystals, coins },
+            reward: { crystals, coins, packSku: packSku || null },
             message: promo.message ?? null,
         });
     } catch (err) {

@@ -66,6 +66,8 @@ namespace DeNelle.Core.Promo
         public const string KeyRewardCrystals   = "redeemRewardCrystals";
         /// <summary>Reward part; {0} = coin amount.</summary>
         public const string KeyRewardCoins      = "redeemRewardCoins";
+        /// <summary>Reward part; {0} = the store pack name.</summary>
+        public const string KeyRewardPack       = "redeemRewardPack";
 
         // ── Failures — ONE distinct sentence per documented cause ────────────
         /// <summary>The player submitted an empty field.</summary>

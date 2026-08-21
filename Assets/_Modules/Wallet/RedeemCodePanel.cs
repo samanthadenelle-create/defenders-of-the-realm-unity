@@ -304,8 +304,9 @@ namespace DeNelle.Wallet
         {
             int crystals = reward != null ? Mathf.Max(0, reward.Crystals) : 0;
             int coins    = reward != null ? Mathf.Max(0, reward.Coins)    : 0;
+            string packSku = reward != null ? reward.PackSku : null;
 
-            if (crystals <= 0 && coins <= 0)
+            if (crystals <= 0 && coins <= 0 && string.IsNullOrEmpty(packSku))
             {
                 // Say so plainly rather than claiming a reward the player will not find in their bank.
                 SetStatus(PromoStrings.Get(PromoStrings.KeySuccessNoReward));
@@ -317,6 +318,13 @@ namespace DeNelle.Wallet
             {
                 string coinPart = PromoStrings.Format(PromoStrings.KeyRewardCoins, coins);
                 summary = summary.Length > 0 ? summary + " + " + coinPart : coinPart;
+            }
+            if (!string.IsNullOrEmpty(packSku))
+            {
+                var pack = PackCatalog.Find(packSku);
+                string packName = pack != null && !string.IsNullOrEmpty(pack.Name) ? pack.Name : packSku;
+                string packPart = PromoStrings.Format(PromoStrings.KeyRewardPack, packName);
+                summary = summary.Length > 0 ? summary + " + " + packPart : packPart;
             }
 
             SetStatus(PromoStrings.Format(PromoStrings.KeySuccess, summary));

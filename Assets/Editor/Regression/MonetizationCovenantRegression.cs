@@ -35,13 +35,15 @@ namespace DeNelle.Editor
     {
         // --- documented leaf CONVENIENCE kinds (time-saving only) ----------------
         // PackDef set: packs.json _schemaNotes.convenience ("instant-build / instant-repair /
-        // harvest-auto-collect / xp-weekend"). Economy-pack extension set: WorkOrders/
+        // harvest-auto-collect / xp-weekend / bounded lantern expedition blessings).
+        // Economy-pack extension set: WorkOrders/
         // economy_store_packs.sample.json _schemaExtensions (harvest-boost, instant-fill-
         // storage, workforce-slot, storage-tier-jump, offline-window-extension). Stored
         // NORMALISED (lower + '-'/' ' -> '_') so hyphen/underscore spellings compare equal.
         private static readonly string[] DocumentedConvenienceKinds =
         {
             "instant_build", "instant_repair", "harvest_auto_collect", "xp_weekend",
+            "lantern_oil_2x_expedition", "lantern_oil_3x_expedition",
             "harvest_boost", "instant_fill_storage", "workforce_slot",
             "storage_tier_jump", "offline_window_extension",
         };

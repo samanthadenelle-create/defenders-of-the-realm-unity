@@ -99,6 +99,12 @@ namespace DeNelle.Wallet
         [JsonProperty("theme")] public string Theme;
         /// <summary>True for the launch-window-only Founder's Vow (§4).</summary>
         [JsonProperty("founderOnly")] public bool FounderOnly;
+        /// <summary>Whether this SKU appears on the browsable Realm Store shelf.</summary>
+        [JsonProperty("storeVisible")] public bool StoreVisible = true;
+        /// <summary>Retention-oriented shelf section: featured / essentials / style / support.</summary>
+        [JsonProperty("storeSection")] public string StoreSection = "essentials";
+        /// <summary>Short, honest card badge such as "BEST START" or "EXPEDITION".</summary>
+        [JsonProperty("storeBadge")] public string StoreBadge;
         /// <summary>Per-currency pricing.</summary>
         [JsonProperty("pricing")] public PackPricing Pricing = new PackPricing();
         /// <summary>The contents bag.</summary>
@@ -252,6 +258,7 @@ namespace DeNelle.Wallet
         {
             // PackDef documented set (packs.json _schemaNotes.convenience)
             "instant_build", "instant_repair", "harvest_auto_collect", "xp_weekend",
+            "lantern_oil_2x_expedition", "lantern_oil_3x_expedition",
             // economy-pack extension set (WO economy_store_packs _schemaExtensions)
             "harvest_boost", "instant_fill_storage", "workforce_slot",
             "storage_tier_jump", "offline_window_extension",
