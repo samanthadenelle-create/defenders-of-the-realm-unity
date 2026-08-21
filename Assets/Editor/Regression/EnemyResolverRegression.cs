@@ -52,14 +52,19 @@ namespace DeNelle.Editor
         private static readonly Dictionary<string, string> ExpectedBaseModel =
             new Dictionary<string, string>
             {
-                ["hollow-walker"]     = "Skeleton_Minion",
+                // 2026-08-20: both rows moved off the shared KayKit Skeleton_Minion stand-in onto
+                // their own owner-delivered AccuRig bodies. Skeleton_Minion is NOT now unreferenced
+                // — hollow-villager-a still wears it, EnemyFactory uses it as the size-default
+                // fallback, AtbCombatantSwapper maps the "goblin" slug to it and VillageSceneBuilder
+                // bakes it as the enemy prefab. Do not schedule it for deletion.
+                ["hollow-walker"]     = "Hollow_Walker",
                 ["hollow-warrior"]    = "Skeleton_Warrior",
                 ["hollow-rogue"]      = "Skeleton_Rogue",
                 ["hollow-acolyte"]    = "Skeleton_Healer",
                 ["hollow-mage"]       = "Skeleton_Mage",
                 ["hollow-reaper"]     = "Skeleton_Warrior",
                 ["hollow-brute"]      = "Skeleton_Golem_NEW",
-                ["cellar-hollow"]     = "Skeleton_Minion",
+                ["cellar-hollow"]     = "Cellar_Hollow",
                 ["necromancer"]       = "Necromancer_NEW",
                 ["hollow-apprentice"] = "Skeleton_Mage",
             };

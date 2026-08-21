@@ -98,6 +98,187 @@ ranged-cast fields are **HovlVfxCatalog string keys** (`EnemyTypeVfxSet.cs:80-13
 
 ---
 
+## 3b. Enemy bodies — the shared-texture TRAP (added 2026-08-20, verified from a render)
+
+- **`TripoAssetPostprocessor.OnPreprocessModel` claims EVERY FBX under `Assets/EnemyContent/`,**
+  not just Tripo output, and force-sets `materialLocation = External (legacy)` +
+  `materialName = BasedOnTextureName` + `materialSearch = RecursiveUp` on every import that has no
+  `<Body>.fbx.tripo-extracted` sentinel beside it. Legacy External mode **resolves a model's
+  material by SEARCHING the project for a `.mat` named after the TEXTURE, and IGNORES the `.meta`
+  `externalObjects` remap table entirely.**
+- **Consequence, and it is a class of bug, not an instance:** any two bodies whose diffuse files
+  share a NAME collapse onto ONE project material. The four AccuRig skeleton bodies
+  (`Skeleton_Warrior/Rogue/Healer/Mage`) all name their diffuse `Material_Pbr_Diffuse`, so
+  **7 enemy ids rendered with the Mage's texture** — the owner's "enemies not having coloring".
+  Tripo bodies escape only because their textures carry unique hashed names
+  (`tripo_mat_<hash>_Pbr_Diffuse`). That is why the Orc/Troll set never showed the defect.
+- **⚠ Rewriting the `externalObjects` remaps DOES NOT FIX IT and is how you make it worse.**
+  `EnemyMaterialRemap` / `SearchAndRemapMaterials` resolve by the same name search, so repointing
+  the remaps only MOVES the collision — observed live: all seven flipped to the *Warrior's*
+  texture and the previously-correct Mage broke.
+- **The fix is all three together:** write the sentinel (`<Body>.fbx.tripo-extracted` — the
+  postprocessor's own opt-out), set `materialLocation = InPrefab`, and remap to a **per-body
+  `.mat`** bound to that body's own `<Body>.fbm/` diffuse. Any two of the three still render
+  another body's art. Tool: `DeNelle.Editor.EnemyBodyMaterialFixer.Run`
+  (`ENEMY_BODY_MATERIAL_FIX_OK`). Guard: `EnemyBodyTextureRegression.RunAll`
+  (`ENEMY_BODY_TEXTURE_OK`) — asserts no two bodies share a base map and every base map lives in
+  its own `.fbm`. Evidence: `EnemyProvingHarness.RunBatch` → `Builds/EnemyCaps/*.png`.
+- `Materials/Material_Pbr.mat` is an **addressable entry** (`Enemy_Art.asset`,
+  `Enemies/Materials/Material_Pbr`) and holds the **Mage's** diffuse — correct; **add** per-body
+  siblings, never mutate or delete it. `Materials/Material_Pbr_Diffuse.mat` is a pre-existing
+  orphan holding the Warrior diffuse; it is the asset the texture-name search kept landing on.
+- `Skeleton_Healer.fbm/` did not exist until 2026-08-20; the Healer's diffuse was embedded in the
+  FBX and had **never been extracted**, so it had no art of its own to bind. It does now.
+
+## 3c. The two `_NEW` bodies — where an enemy's colour ACTUALLY comes from (2026-08-20)
+
+- **`_NEW` DISAMBIGUATES A MESH FILE, NOT A CHARACTER.** `Necromancer_NEW.fbx` and
+  `Skeleton_Golem_NEW.fbx` carry the suffix only because a legacy sculpt of the same name already
+  sat in `EnemyContent`; their authored atlases ship under the **legacy** name
+  (`TripoTex/Necromancer_basecolor.jpg`, `TripoTex/Skeleton_Golem_basecolor.jpg`). These two matter
+  more than most — **WO-954 swapped TO them** because the owner rejected the KayKit originals, so
+  the bodies she chose were the ones rendering as **pure-white silhouettes**
+  (`Builds/EnemyCaps_before/necromancer.png`, `hollow-brute.png`).
+- **THE RESOLUTION ORDER, which is the fact that was missing.** For any model there are three
+  sources, in precedence:
+  1. **The imported material on the mesh** (`externalObjects`, or the importer's name SEARCH).
+     Real in edit mode, in a build, and before `Start()`. The only tier guaranteed to match the
+     mesh's own UVs. **This was empty for both bodies.**
+  2. **`TripoMaterialFixer`'s fallback atlas** — `EnemyFactory.ResolveBasecolor` →
+     `SetFallbackTexture("Enemies/TripoTex/<name>_basecolor")`. Applies **only** when the source
+     material has no map. **RUNTIME-ONLY** (`Run()` is driven from `Start()`), and resolved through
+     a Resources/Addressables address whose **Resources half no longer exists**
+     (`Assets/Resources/Enemies` was deleted).
+  3. The family **miss-tint** / `EnemyBodyColorGuard` — a flat colour floor, not a look.
+- **The `_NEW` name-strip in `EnemyFactory.ResolveBasecolor` (91ea3ca95) is CORRECT and STAYS** —
+  but it only ever reaches tier 2, which is why every editor-side observer still saw a blank body.
+  Binding at tier 1 is what makes the look independent of load path and lifecycle.
+- **Per-body albedo source (verified by render, not by name):**
+  - `Necromancer_NEW` **carries its own embedded art** →
+    `Necromancer_NEW.fbm/tripo_mat_82fc39ea_Pbr_Diffuse.jpg`. Own UVs; preferred.
+    *(The legacy `TripoTex/Necromancer_basecolor.jpg` **also fits** — proven in
+    `Builds/OrcCaps/10_Necromancer_NEW__TripoTex_Necro.png`. Which one ships is a creative call.)*
+  - `Skeleton_Golem_NEW.fbm` **is EMPTY** — that FBX embeds no texture, so the legacy
+    `TripoTex/Skeleton_Golem_basecolor.jpg` is its only candidate. **It fits**: cracked-stone
+    plating registers on the armour plates, the skull lands on the head, ribs on the chest cavity
+    (`Builds/OrcCaps/13_Skeleton_Golem_NEW__TripoTex_Golem.png`).
+- **Tool: `DeNelle.Editor.NewBodyAlbedoBinder.Run`** (`NEW_BODY_ALBEDO_OK <n>/<n>`). Applies §3b's
+  same three-part fix — sentinel, `InPrefab`, per-body `.mat` — with the albedo chosen as **own
+  `.fbm` diffuse first, `_NEW`-stripped `TripoTex` atlas second**. ⚠ It gathers material names from
+  **three** places (FBX sub-assets, the existing external-object map, the prefab's renderers): once
+  a material is remapped it stops being a sub-asset, so a sub-asset-only probe reports "no embedded
+  Material to remap" and cannot repair the state the postprocessor creates.
+- **Guard: `EnemyArtCoverageRegression.RunAll`** (`ENEMY_ART_COVERAGE_OK` / `_FAIL`) — every model
+  referenced by `enemies.json` must resolve a basecolor at some tier (bound / own `.fbm` / atlas /
+  loose pack image). **Marked `regression-registry: standalone` ONLY until the orc art lands**;
+  register the `[enemy-art-coverage]` row in `DataRegression.RunAll` then.
+- **⚠ OPEN HOLE — THE SENTINEL IS GITIGNORED (`.gitignore:573  *.tripo-extracted`).** All six
+  `<Body>.fbx.tripo-extracted` files (§3b's four skeletons + these two) exist only in the local
+  working tree. The `.meta` half of the fix IS tracked, but `OnPreprocessModel` rewrites
+  `materialLocation`/`materialName` on **every import that has no sentinel**, so on a fresh clone
+  the tracked settings are overwritten and both fixes silently revert to the texture-name SEARCH.
+  This is measured, not inferred: the first pass at the `_NEW` binding wrote `externalObjects`
+  **without** the sentinel, and the reimport flipped `materialLocation` to External and extracted
+  texture-named materials, ignoring the remap entirely. **Either un-ignore the sentinels or move
+  the opt-out to a tracked asset** — until then this repair does not survive a clone.
+- **⚠ THE ORC NAMING TRAP.** `EnemyContent/OrcTex/` holds three per-body orc atlases — but they are
+  **`Orc_Mage`, `Orc_Tank`, `Orc_Warrior`**, while `enemies.json` references **`Orc_Berserker`,
+  `Orc_Shaman`, `Orc_Necromancer`**. Adjacent names, different bodies. "The orc art is already in
+  the project" is therefore false, and only matching the folder against the DATA shows it.
+  **⚠ PARTLY SUPERSEDED 2026-08-20 — see §3d: `orc-shaman` now references `Orc_Mage`,** so the
+  "no enemies.json row names an OrcTex body" half of this bullet is no longer true. The naming
+  trap itself still stands for `Orc_Tank` / `Orc_Warrior`, and the OrcTex atlases are still the
+  WRONG art for the current `Orc_Mage` mesh (§3d) — which is the sharper version of the same warning.
+
+## 3d. `Orc_Mage` — the slot was REUSED, and its old atlases are now poison (2026-08-20)
+
+- **The mesh at `EnemyContent/Orc_Mage.fbx` was REPLACED** (owner ruling *"use the unused orcmage"*)
+  with a fresh AccuRig delivery: 100 skin clusters on a `CC_Base` skeleton, 60,351 verts, one
+  material. **The `.meta` — and therefore the GUID — was PRESERVED**, so every Addressables entry
+  and every reference that pointed at the old sculpt still resolves. Only the binary changed.
+  *(This is the SECOND replacement of this slot; a 2026-08-09 swap preceded it, which is why the
+  file already had one stale atlas before this one added a second.)*
+- **⛔ `TripoTex/Orc_Mage_basecolor.jpg` AND `OrcTex/Orc_Mage_basecolor.jpg` ARE BOTH STALE** — each
+  was baked for a DIFFERENT, superseded sculpt. Rendered on the current mesh they produce the
+  camouflage-patch scramble, proven in `Builds/OrcMageCaps/03_*.png` and `04_*.png`. They are
+  **deliberately left on disk** (`EnemyRigColorRegression:182` and `AtbCombatantSwapper:761-763`
+  assert the OrcTex path exists, and the folders are shared with `Orc_Tank` / `Orc_Warlord` /
+  `Orc_Warrior`) — **ADD, never mutate.** Deleting them is a separate ticket.
+- **WHY THEY ARE HARMLESS, measured rather than assumed.** `EnemyFactory` still hands the fixer
+  `SetFallbackTexture("Enemies/TripoTex/Orc_Mage_basecolor")` — the poison IS registered. But
+  `TripoMaterialFixer`'s per-slot rebuild reaches the fallback only through
+  `if (tex == null && fallbackTex != null)`, and the built body measures **1/1 renderer slots
+  carrying their own `_BaseMap`** from `Orc_Mage.fbm/tripo_mat_2256a6d3_Pbr_Diffuse.jpg`, with no
+  forced texture and no fallback tint. `tex == null` is false on every slot, so the branch never
+  runs. **Tier-1 binding is what makes the stale atlas unreachable** — this is the concrete case
+  §3c's precedence list describes. Instrument: `DeNelle.Editor.OrcMageProof.RunBatch`
+  (`ORC_MAGE_PROOF_OK`), which prints the slot census beside the verdict.
+- **The delivery shipped TWO diffuse images and they are different pictures, not one file renamed**
+  — `orcmage.fbm/tripo_mat_2256a6d3_Pbr_Diffuse.jpg` (md5 `b2bd4950`, AccuRig re-bake) and the
+  unrigged convert's `orcmage_basecolor.JPEG` (md5 `f90e74b7`). **Both REGISTER on the rigged
+  mesh** — they share a UV layout, so the usual "the wrong atlas smears" tell does NOT fire here
+  and cannot be used to choose. The AccuRig bake is the one that ships because it is visibly
+  cleaner (the convert's is blotchy, with baked-in AO mottling); `Builds/OrcMageCaps/01_*.png` vs
+  `02_*.png` is the comparison. **Do not assume a mismatched atlas always scrambles.**
+- Tool: `DeNelle.Editor.OrcMageBodyImport.Run` (`ORC_MAGE_IMPORT_OK`) — applies §3b's three-part
+  fix for this body and measures the result back off the imported asset (bones, avatar validity,
+  upright check, slot-to-`.mat` census) instead of asserting it.
+- **`Orc_Mage_Legacy.fbx` and the `tripo_mat_80c4114e` pair inside `Orc_Mage.fbm/` are now more
+  clearly dead** — `80c4114e` was already proven pixel-identical to `Orc_Tank`'s, and it belonged
+  to a sculpt that is now two replacements behind. Left in place; cleanup is its own ticket.
+- **`orc-shaman` now wears `Orc_Mage`** (owner ruling: *"shaman and mage can use same form one is
+  healer class other is dps"*). Consequence worth knowing: **`Orc_Shaman.fbx` is now referenced by
+  nothing but the `ogre` stand-in** (`ogre` asks for `OgreMage`, which has no mesh, and falls back
+  to `Orc_Shaman` in `EnemyFactory`). The remaining BARE orc bodies are `Orc_Berserker`
+  (worn by `orc-berserker` + `orc-raider`), `Orc_Necromancer`, and `Orc_Shaman` (via `ogre`).
+
+## 3e. `Cellar_Hollow` — imported, bound, PROVEN, and DELIBERATELY NOT WIRED (2026-08-20)
+
+- **The body is in the tree and it is correct.** `Assets/EnemyContent/Cellar_Hollow.fbx` (AccuRig,
+  94 bound bones, humanoid Avatar valid) + `Cellar_Hollow.fbm/tripo_mat_acabe1ac_Pbr_{Diffuse,Normal}.jpg`
+  + `Materials/Cellar_Hollow_Body.mat` + the sentinel. §3b's three-part fix applied by
+  `DeNelle.Editor.CellarHollowImport.Run` (`CELLAR_HOLLOW_IMPORT_OK`); proven by
+  `DeNelle.Editor.CellarHollowProof.Run` (`CELLAR_HOLLOW_PROOF_OK`, `Builds/CellarHollowProof/`).
+  `EnemyBodyTextureRegression` is green at **11** embedded-media bodies with it in scope.
+- **⛔ `enemies.json` WAS NOT CHANGED, ON PURPOSE.** Pointing the `cellar-hollow` row at this body
+  would have been INERT AND RED at the same time, which is the fact worth writing down:
+  `cellar-hollow` is a HOLLOW id, so `EnemyFactory.ModelForEnemy` resolves it through
+  `EnemyResolver.TryResolveHollowModel`, which honours a data `modelKey` **only if it is in
+  `EnemyResolver.KnownHollowModels`** — a seven-name set that predates this body. The row would
+  still have spawned `Skeleton_Minion` while `EnemyResolverRegression` check 12 failed the tree for
+  naming a key that is neither committed nor declared art-pending. **A new enemy body is a
+  three-edit change, not a data edit** (all three in files an art-import lane does not own):
+  `KnownHollowModels`, `CommittedModels` (both `Assets/_Modules/Core/Enemies/EnemyResolver.cs`),
+  and `ExpectedBaseModel` in `Assets/Editor/Regression/EnemyResolverRegression.cs`. The same pin
+  blocks `Hollow_Walker`, imported the same day by a different lane.
+- **THE FILENAME.** Delivered as `cellar hollow.fbx`, **with a space** — the only one in the
+  delivery set. Imported as `Cellar_Hollow`: space → underscore, Pascal case, matching the roster's
+  key shape and `displayName` "Cellar Hollow", so `EnemyFactory.TryBasecolor`'s
+  `Enemies/TripoTex/<model>_basecolor` probe would resolve rather than silently miss.
+- **⚠ THIS DELIVERY DOES NOT EMBED ITS TEXTURES — and `ExtractTextures` LIES ABOUT IT.** Measured:
+  `ModelImporter.ExtractTextures` returned **`true`** and wrote **nothing**. AccuRig shipped the two
+  maps as loose files in a sibling `cellar hollow.fbm/` folder that the FBX references by relative
+  path. So the return value proves nothing here — only an image actually being in `<Body>.fbm/`
+  does, which is what the importer asserts. Staging the delivery's `.fbm` contents beside the
+  renamed FBX is a required import step for AccuRig bodies of this shape.
+- **THE TEXTURE FORK WAS BENIGN THIS TIME — proven, not assumed.** The hashed
+  `tripo_mat_acabe1ac_Pbr_Diffuse.jpg` (179,783 B) and the pretty
+  `cellar_hollow_basecolor.JPEG` (112,608 B) have different md5s but are **the same bake at
+  different JPEG quality**: rendered on the same rigged mesh from one camera they are
+  indistinguishable (`ab_embedded_fbm.png` vs `ab_convert_basecolor.png`, coverage 8.22% both).
+  That is the OPPOSITE of the orc delivery an hour earlier, where the two were different bakes —
+  so "AccuRig re-bakes its own atlas" is **not** a rule, and the A/B render stays the only way to
+  know which delivery you have.
+- **⚠ IT DOES NOT READ AS A HOLLOW ONE.** The body is a **living green-skinned orc/goblin soldier**
+  in a bucket helm with strapped leather and steel plate — no exposed bone anywhere. Beside
+  `Skeleton_Warrior` and `Skeleton_Rogue` (bare skulls, bone limbs) it matches on rig, scale
+  (H≈1.04 m vs 1.06 / 1.18 m), poly style and value range, and differs on SPECIES. Whether it
+  ships as `cellar-hollow` or joins the Orc Warband is an owner call, and it is the reason this
+  landed unwired rather than swapped in.
+- **Facing:** it points the opposite way to the KayKit hollows (photographed from the same camera,
+  the skeletons face the lens and this body shows its back) — the AccuRig `+X`-forward convention.
+  Registering it means adding it to `EnemyFactory.AccuRigIntake` too, or it spawns turned 90°.
+
 ## 4. Heroes — KnightV3 is THE body; Cleric/Mage/Ranger FBX are GONE
 
 - On disk/tracked FBX at root: **`Knight.fbx`, `knightV2.fbx`, `KnightV3.fbx` only** (all LFS;

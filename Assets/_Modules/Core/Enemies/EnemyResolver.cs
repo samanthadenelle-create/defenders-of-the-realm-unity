@@ -55,6 +55,20 @@ namespace DeNelle.Core.Enemies
             "Skeleton_Mage",
             "Skeleton_Golem",
             "Necromancer",
+            // AccuRig replacement for the KayKit Skeleton_Minion (owner ruling 2026-08-20).
+            // MUST be here as well as in CommittedModels: TryResolveHollowModel silently falls
+            // back to Skeleton_Minion for an unknown key, so an omission here reads as "the data
+            // was ignored" with no error anywhere.
+            "Hollow_Walker",
+            // AccuRig replacement for the 'cellar-hollow' Skeleton_Minion "sorrow variant"
+            // (owner ruling 2026-08-20: "Cellar Hollow is a tanky type or barbarian ish type").
+            // ⚠ NOTE FOR A LATER ART PASS, recorded rather than acted on: rendered beside
+            // Skeleton_Warrior and Skeleton_Rogue this body reads as a LIVING green-skinned
+            // soldier - no exposed bone anywhere - where the other Hollows are visibly undead.
+            // It matches on rig, poly style, scale and value; it mismatches on species. The owner
+            // named it, saw its turntable and placed it here, so here it is - but if the Hollow
+            // family ever gets a coherence pass, this is the row to revisit.
+            "Cellar_Hollow",
         };
 
         // ── THE COMMITTED-MESH REGISTRY (WO-954) ───────────────────────────────────
@@ -79,6 +93,8 @@ namespace DeNelle.Core.Enemies
             // Hollow Ones (KayKit legacy + AccuRig)
             "Skeleton_Minion", "Skeleton_Warrior", "Skeleton_Rogue", "Skeleton_Healer",
             "Skeleton_Mage", "Skeleton_Golem", "Skeleton_Golem_NEW",
+            "Hollow_Walker",
+            "Cellar_Hollow",
             "Necromancer", "Necromancer_NEW",
             // Orc Warband (Tripo) + WO-481 orc family + the outpost raid boss
             "Orc_Berserker", "Orc_Shaman", "Orc_Necromancer",
@@ -123,8 +139,8 @@ namespace DeNelle.Core.Enemies
                 ["hollow-walker"] = new EnemyClass
                 {
                     Id = "walker", RoleKey = "grunt",
-                    ModelKey = "Skeleton_Minion", Variant = null,
-                    AnimatorRig = "HumanoidMedium",      // KayKit legacy Generic rig
+                    ModelKey = "Hollow_Walker", Variant = null,
+                    AnimatorRig = "SkeletonHumanoid",    // AccuRig humanoid, retargeted
                     Equip = EnemyEquipParts.None,
                 },
                 ["hollow-warrior"] = new EnemyClass
@@ -174,8 +190,13 @@ namespace DeNelle.Core.Enemies
                 ["cellar-hollow"] = new EnemyClass
                 {
                     Id = "cellar", RoleKey = "grunt",
-                    ModelKey = "Skeleton_Minion", Variant = "cellar",    // sorrow variant (kneel-rock idle)
-                    AnimatorRig = "HumanoidMedium",
+                    // 2026-08-20: was Skeleton_Minion + Variant "cellar" (the kneel-rock sorrow
+                    // idle) — a KayKit stand-in shared with hollow-villager-a. It now wears its own
+                    // AccuRig body. The VARIANT IS DROPPED, not carried over: "cellar" selected a
+                    // pose on the Minion, and the owner's ruling for this body is "a tanky type or
+                    // barbarian ish type" — a kneeling mourner is the opposite read.
+                    ModelKey = "Cellar_Hollow", Variant = null,
+                    AnimatorRig = "SkeletonHumanoid",   // AccuRig humanoid, retargeted (94 bound bones)
                     Equip = EnemyEquipParts.None,
                 },
                 // ── Canon-locked ids (ruling: APPROVED as-written, never rename) ──

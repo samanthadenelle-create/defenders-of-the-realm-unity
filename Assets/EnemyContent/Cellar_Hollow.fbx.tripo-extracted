@@ -1,0 +1,3 @@
+Cellar_Hollow.fbx — TripoAssetPostprocessor opt-out sentinel.
+Written by CellarHollowImport (resources-art.md 3b): without this the postprocessor
+force-sets materialLocation=External and the per-body material remap goes inert.

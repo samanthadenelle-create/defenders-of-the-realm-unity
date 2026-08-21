@@ -1,0 +1,22 @@
+Hollow_Walker: albedo + normal bound explicitly by HollowWalkerImport (externalObjects -> a real per-body .mat).
+
+This marker is TripoAssetPostprocessor.OnPreprocessModel's own opt-out. Without it the
+postprocessor force-sets materialLocation=External (legacy) + materialName=BasedOnTextureName +
+materialSearch=RecursiveUp on EVERY import of every FBX under Assets/EnemyContent. Under legacy
+External the importer IGNORES the .meta externalObjects remap table entirely and instead SEARCHES
+the project for a .mat named after the TEXTURE -- the search that collapsed four AccuRig skeleton
+bodies (all of whose diffuses are named Material_Pbr_Diffuse) onto ONE shared project material and
+made 7 enemy ids wear the Mage's UV layout.
+
+The fix is THREE PARTS and any two of them still render another body's art:
+  1. this sentinel,
+  2. materialLocation = InPrefab,
+  3. an explicit per-body .mat remap (Materials/Hollow_Walker_Body.mat, bound to this body's own
+     Hollow_Walker.fbm/ diffuse + normal).
+
+This body's embedded maps carry Tripo's unique hash (tripo_mat_836f0627_Pbr_Diffuse/_Pbr_Normal),
+so they cannot collide with the Material_Pbr_Diffuse family by name -- but the sentinel still
+matters, because without it the importer would drop the remap and re-extract texture-named
+materials on the next reimport.
+
+See docs/MASTER_CATALOG/resources-art.md SS3b/SS3c, EnemyBodyMaterialFixer, NewBodyAlbedoBinder.

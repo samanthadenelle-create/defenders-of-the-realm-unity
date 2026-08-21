@@ -553,6 +553,15 @@ namespace DeNelle.Village
                 "Troll", "Troll_Mage", "Troll_Overlord", "Skeleton_Golem_NEW", "Necromancer_NEW",
                 // Orc_Warlord + Orc_Mage are in the intake too, but resolve to the OrcHumanoid rig,
                 // which already applies the same yaw + fixer in the branch above.
+
+                // 2026-08-20 intake: the two owner-delivered AccuRig bodies that retire the KayKit
+                // Skeleton_Minion stand-in. Same CC_Base +X-forward export as the rest of this set.
+                // ⚠ THESE ARE HERE DESPITE ROUTING TO THE SkeletonHumanoid RIG, and that is the whole
+                // point of the doc comment above: rig class is which CLIPS a body plays, the intake is
+                // which way its mesh FACES. The KayKit Skeleton_* bodies share the controller and face
+                // +Z; these two share the controller and face +X. Judging either by the other is how a
+                // body ends up standing sideways in the raid.
+                "Hollow_Walker", "Cellar_Hollow",
             };
 
         /// <summary>

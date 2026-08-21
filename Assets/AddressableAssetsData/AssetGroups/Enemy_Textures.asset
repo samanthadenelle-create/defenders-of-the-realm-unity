@@ -1,0 +1,39 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bbb281ee3bf0b054c82ac2347e9e782c, type: 3}
+  m_Name: Enemy_Textures
+  m_EditorClassIdentifier: Unity.Addressables.Editor::UnityEditor.AddressableAssets.Settings.AddressableAssetGroup
+  m_GroupName: Enemy_Textures
+  m_GUID: cc1afdfee3880ee4783235fbbfba9732
+  m_SerializeEntries:
+  - m_GUID: 23fa08f68b4879a40b700eeee4fbbf1b
+    m_Address: Enemies/_CellarHollowAB_TEMP/convert_normal
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 378f609732f1e4e42bcea185ae0c035e
+    m_Address: Enemies/_CellarHollowAB_TEMP/convert_basecolor
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a297ed3b44f9a2247b7426bdf5d37259
+    m_Address: Enemies/skeleton_texture_A
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - enemyfam-hollow
+    FlaggedDuringContentUpdateRestriction: 0
+  m_ReadOnly: 0
+  m_Settings: {fileID: 11400000, guid: 73b1d645ccb43af47916e90d8a1f17d4, type: 2}
+  m_SchemaSet:
+    m_Schemas:
+    - {fileID: 11400000, guid: e8ed087f499750b4aa047e12bb8cc1d8, type: 2}
+    - {fileID: 11400000, guid: f82125978373413498bb355a9e3b9352, type: 2}

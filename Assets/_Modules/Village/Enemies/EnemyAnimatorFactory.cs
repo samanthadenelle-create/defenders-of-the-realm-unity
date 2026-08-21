@@ -79,7 +79,24 @@ namespace DeNelle.Village
                 case "Skeleton_Mage":
                 case "Skeleton_Warrior":
                 case "Skeleton_Rogue":
-                case "Skeleton_Healer": return EnemyRig.SkeletonHumanoid;
+                case "Skeleton_Healer":
+                // Hollow_Walker (2026-08-20): the AccuRig body that RETIRES the KayKit
+                // Skeleton_Minion for hollow-walker. It is humanoid with a valid avatar and
+                // 94 bound bones, and it imports NO usable clips of its own (two 0.02s T-poses)
+                // - exactly like Skeleton_Warrior and Skeleton_Rogue, which import zero. Motion
+                // comes from THIS controller by humanoid retarget, measured at 0.0099m/3.10deg
+                // on a probe bone. Routing it to the KayKit Generic HumanoidEnemy instead would
+                // leave it T-posing and sliding, because a humanoid mesh cannot consume generic
+                // clips.
+                case "Hollow_Walker":
+                // Cellar_Hollow (2026-08-20): the AccuRig body for the 'cellar-hollow' row. It is
+                // HUMANOID (avatar isHuman=True, 94 bound bones), and the rig audit caught it
+                // routing to HumanoidEnemy, which carries only GENERIC clips — a Generic clip
+                // cannot pose a Humanoid avatar, so it T-posed and slid. Its own 4 AnimStacks
+                // import as two 0.02s T-pose clips and are irrelevant: like Skeleton_Warrior and
+                // Skeleton_Rogue, which import ZERO clips and animate fine, this body's motion is
+                // retargeted from the shared controller (measured: 9.84° max bone rotation).
+                case "Cellar_Hollow":   return EnemyRig.SkeletonHumanoid;
                 // WO-680: Blink Stylized Orcs — professionally Humanoid-rigged vendor family
                 // staged ADDITIVELY by BlinkOrcImporter into Resources/Enemies/Blink/ (side-by-
                 // side with the Tripo orcs for a felt-compare). Their controllers are built from
