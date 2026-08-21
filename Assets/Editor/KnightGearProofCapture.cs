@@ -217,6 +217,9 @@ namespace DeNelle.Editor
         /// that matter — a hand up on the BLADE (&gt;1) and a hand past the POMMEL (&lt;0).</summary>
         private const float GripFracMin = 0.15f;
         private const float GripFracMax = 1.00f;
+        // A centre/strap seat belongs within a forearm's breadth of the off-hand.
+        private const float DrawnShieldCentreMaxM = 0.18f;
+
         /// <summary>Shots the run must produce: 3 drawn + 1 marked diagnostic + 3 sheathed.</summary>
         private const int ExpectedPngs = 7;
 
@@ -564,8 +567,8 @@ namespace DeNelle.Editor
                     // A shield has no hilt/tip; what matters is that it is ON the off arm.
                     float dCentre = Vector3.Distance(handBone.position, m.centreWorld);
                     _log.AppendLine($"{"",-16}  shield centre is {dCentre:0.####}m from '{Nm(handBone)}' " +
-                                    $"(a shield strapped to the off arm measures well under half its own {m.lengthM:0.###}m span)");
-                    if (dCentre > m.lengthM)
+                                    $"(maximum {DrawnShieldCentreMaxM:0.##}m for a centre/strap seat)");
+                    if (dCentre > DrawnShieldCentreMaxM)
                         _failures.Add($"{label}: shield centre is {dCentre:0.####}m from the off hand — further than its own " +
                                       $"{m.lengthM:0.###}m span. It is not on the arm.");
                 }

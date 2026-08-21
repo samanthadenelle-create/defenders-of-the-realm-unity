@@ -2163,6 +2163,23 @@ namespace DeNelle.Village
                     $"off-hand '{id}': ApplyGlobalWeaponYaw WITHHELD (derived world seat). Composing " +
                     "the 180 deg flip onto a derived target would face the shield's smooth side at the player.");
 
+            // The live native starter shield's pivot is on its rim (proof: hand-to-origin 0.043 m,
+            // hand-to-plate-centre 0.392 m). Centre it only after final rotation and scale so the
+            // hand mounts behind the plate instead of at its edge. Full/manual overrides remain
+            // absolute; a normal Offset Forge position remains as the base nudge.
+            // ShieldWithItemLogic is authored end-for-end relative to its visible crest. Roll in
+            // the plate plane: face direction stays unchanged while top and bottom swap. Keep this
+            // asset-specific so shields whose native up is already correct are not inverted.
+            if (vis.kind == WeaponClass.Shield && !fullOverride && !_currentOffHandManual &&
+                string.Equals(offsetKey, "ShieldWithItemLogic", System.StringComparison.OrdinalIgnoreCase) &&
+                _currentOffHandShieldFrame.Valid)
+                gripRoot.transform.localRotation *= Quaternion.AngleAxis(
+                    180f, _currentOffHandShieldFrame.ThicknessAxis);
+
+            if (vis.kind == WeaponClass.Shield && !fullOverride && !_currentOffHandManual)
+                ApplyOffHandCentreOnSocket(gripRoot.transform, hand,
+                    gripRoot.transform.localPosition);
+
             _currentOffHandProp = gripRoot;
             // Capture off-hand attach inputs for the in-game Seating Editor (WO-577).
             _currentOffHandMeshKey    = offsetKey;
@@ -3120,6 +3137,14 @@ namespace DeNelle.Village
             Vector3 longUp  = body.up;
             Quaternion derived = WeaponOrientHelper.ComputeShieldMountRotation(
                 _currentOffHandShieldFrame, socket, outward, longUp);
+            // This asset's handle-side heuristic selects the opposite signed face from its visible
+            // crest. Flip about the long axis: upright stays upright, while the crest turns outward
+            // and the handle turns inward toward the hero. Other shield assets remain derived.
+            if (string.Equals(_currentOffHandMeshKey, "ShieldWithItemLogic",
+                              System.StringComparison.OrdinalIgnoreCase))
+                derived *= Quaternion.AngleAxis(180f, _currentOffHandShieldFrame.LongAxis);
+
+
             // THROTTLED (1/5s): this runs every frame and an unthrottled Step here is exactly the
             // spam that swallowed three F8 captures (see ApplySheathedOffset's note).
             //
