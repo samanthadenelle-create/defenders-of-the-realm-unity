@@ -273,8 +273,10 @@ namespace DeNelle.Core.UI
             ObsidianQueueGate.WorkQueueStatus st, ChannelId channel)
         {
             var src = st.EntriesOf(channel);
-            int slots = Mathf.Max(0, st.SlotsOf(channel));
-            int free = Mathf.Max(0, slots - st.BusyOf(channel));
+            // WO-1027: the free-slot count comes off the SNAPSHOT, not a local subtraction. There
+            // were already three independent busy/free derivations in the tree; this one is now
+            // the gate's own FreeSlotsOf, so the rail and the Manage screen cannot drift apart.
+            int free = st.FreeSlotsOf(channel);
             var outp = new ObsidianQueueGate.QueueEntry[src.Length + free];
 
             int w = 0;
@@ -380,7 +382,11 @@ namespace DeNelle.Core.UI
             float x = 0f;
             for (int i = 0; i < n; i++)
             {
-                BuildCard(model[i], x, w);
+                // §12.2 — one bad card LOGS and is skipped; it must never blank the whole rail,
+                // which on this surface would read to the player as "my queue is empty".
+                var entry = model[i];
+                float cx = x;
+                Guard.Try("QueueUi", "build queue card", () => BuildCard(entry, cx, w));
                 x += w + _opts.Gap;
             }
             if (tail) BuildTailCard(model.Length - n, x, w);
@@ -418,9 +424,7 @@ namespace DeNelle.Core.UI
             bool dim = e.Free || e.Queued;
 
             var plateImg = card.GetComponent<Image>();
-            plateImg.color = e.Free
-                ? new Color(0.10f, 0.10f, 0.12f, 0.55f)     // recessed = nothing here
-                : new Color(0.09f, 0.085f, 0.08f, 0.95f);
+            plateImg.color = e.Free ? FreeSocketPlate : BusyCardPlate;
             var slotSprite = RpgUiCatalog.Get(RpgUiCatalog.RoleSlot, RpgUiCatalog.SlotItem);
             if (slotSprite != null && !e.Free)
             {
@@ -429,6 +433,41 @@ namespace DeNelle.Core.UI
                 plateImg.color = Color.white;
             }
             else ElarionUiKit.ApplyRounded(plateImg);
+
+            // ── WO-1027 surface B — MAKE THE EMPTY SLOT READ AS AN EMPTY SOCKET ──────────
+            // The free card is not new: WO-864 already synthesises it, and the data contract
+            // states the law ("a free slot must render as a visible empty-slot CARD, never as
+            // blank space"). It shipped and then FAILED TO READ — the free plate and the busy
+            // plate were separated by 0.015 Rec.709 luma, thirty times under the 0.45 bar this
+            // repo's own greyscale oracle sets. A hue-free signal that is still invisible is the
+            // colourblind law's sibling failure and just as disqualifying.
+            //
+            // The fix is SHAPE, deliberately, and there is no hue in it:
+            //   1. the well goes DEEP — a near-black recess, not a slightly-darker card;
+            //   2. a bright SOCKET RIM outlines it, so it is obviously a container that is
+            //      obviously containing nothing (the rim clears the 0.45 luma bar against the
+            //      well it frames, which is a comparison that holds whether or not the busy
+            //      card's slot-frame art resolved);
+            //   3. the whole plate is INSET, so a row reads "socket, socket, card" by rhythm
+            //      from silhouette alone;
+            //   4. the "+" mark is kept — it is the one part of the old free card that already
+            //      survived greyscale.
+            // ⛔ If this still does not read, the answer is a heavier rim or a deeper inset.
+            // NEVER a tint, an accent, or "a subtle warm edge" — CoC's red badge is banned here.
+            if (e.Free)
+            {
+                // HORIZONTAL inset only, and deliberately so: the card's bands are FIXED-PIXEL
+                // rows measured from the TOP (verb / icon / name / timer sum to the card height),
+                // so shortening the card would push the last band out of its own rect. Narrowing
+                // is free — every band stretches horizontally — and narrower-with-a-rim is the
+                // rhythm cue on its own.
+                card.sizeDelta = new Vector2(
+                    Mathf.Max(ElarionUiKit.MinTouchPx * 0.5f, card.sizeDelta.x - FreeSocketInsetPx * 2f),
+                    card.sizeDelta.y);
+                card.anchoredPosition = new Vector2(card.anchoredPosition.x + FreeSocketInsetPx,
+                                                    card.anchoredPosition.y);
+                BuildSocketRim(card);
+            }
 
             // 1. VERB — the load-bearing band. Present on EVERY card, icon or not.
             var verb = BandLabel(card, "Verb", CardPadPx, VerbBandPx, VerbFont,
@@ -458,8 +497,11 @@ namespace DeNelle.Core.UI
             else
             {
                 // ASCII initial (or "+" for an open slot) — no glyph fonts, no tofu.
+                // WO-1027: the "+" on a FREE card takes the SOCKET RIM's brightness, not the dim
+                // ink — it sits inside a near-black well now, and it is the one mark on the old
+                // free card that already survived a greyscale pass. Keep it legible.
                 var mark = StretchLabel(iconBand, e.Free ? "+" : InitialOf(e.Label),
-                    InitialFont, dim ? ElarionUi.ParchmentDim : ElarionUi.Gold, bold: true);
+                    InitialFont, e.Free ? FreeSocketRim : (dim ? ElarionUi.ParchmentDim : ElarionUi.Gold), bold: true);
                 mark.alignment = TextAlignmentOptions.Center;
             }
 
@@ -516,6 +558,57 @@ namespace DeNelle.Core.UI
             ElarionUiKit.ApplyRounded(img);
             var lbl = StretchLabel(card, "+" + more + "\nMORE", NameFont, ElarionUi.ParchmentDim, bold: true);
             lbl.alignment = TextAlignmentOptions.Center;
+        }
+
+        // =====================================================================
+        //  WO-1027 surface B — THE EMPTY SOCKET. Shape and number only, no hue.
+        // =====================================================================
+
+        /// <summary>The deep recess of an EMPTY slot. Near-black on purpose: the socket must read
+        /// as a hole, and the rim below is what makes it visible.</summary>
+        public static readonly Color FreeSocketPlate = new Color(0.015f, 0.015f, 0.020f, 0.92f);
+
+        /// <summary>The socket's OUTLINE — the shape that carries the whole message. Bright enough
+        /// to clear the greyscale bar against <see cref="FreeSocketPlate"/> with colour stripped.
+        /// ⛔ Not a status colour: it never changes to mean anything.</summary>
+        public static readonly Color FreeSocketRim = new Color(0.86f, 0.86f, 0.86f, 0.95f);
+
+        /// <summary>A card that is DOING something. Kept as a named constant so the oracle can
+        /// compare the two plates without re-reading literals out of the build path.</summary>
+        public static readonly Color BusyCardPlate = new Color(0.09f, 0.085f, 0.08f, 0.95f);
+
+        /// <summary>Socket inset vs a busy card, in reference px — the rhythm cue. &gt; 0 is the
+        /// non-colour channel that separates the two card kinds even in a thumbnail.</summary>
+        public const float FreeSocketInsetPx = 6f;
+
+        /// <summary>Rim thickness, reference px.</summary>
+        public const float FreeSocketRimPx = 3f;
+
+        /// <summary>Four thin edges around the well. Built as plain stretched strips rather than an
+        /// outline sprite so the socket cannot silently vanish when the catalog art is absent —
+        /// which is exactly how the previous free card came to be invisible.</summary>
+        private static void BuildSocketRim(RectTransform card)
+        {
+            Edge(card, "RimTop", new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, FreeSocketRimPx), new Vector2(0.5f, 1f));
+            Edge(card, "RimBottom", new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0f, FreeSocketRimPx), new Vector2(0.5f, 0f));
+            Edge(card, "RimLeft", new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(FreeSocketRimPx, 0f), new Vector2(0f, 0.5f));
+            Edge(card, "RimRight", new Vector2(1f, 0f), new Vector2(1f, 1f), new Vector2(FreeSocketRimPx, 0f), new Vector2(1f, 0.5f));
+        }
+
+        private static void Edge(RectTransform parent, string name, Vector2 aMin, Vector2 aMax,
+                                 Vector2 size, Vector2 pivot)
+        {
+            var go = new GameObject(name, typeof(Image));
+            go.transform.SetParent(parent, false);
+            var rt = (RectTransform)go.transform;
+            rt.anchorMin = aMin;
+            rt.anchorMax = aMax;
+            rt.pivot = pivot;
+            rt.sizeDelta = size;
+            rt.anchoredPosition = Vector2.zero;
+            var img = go.GetComponent<Image>();
+            img.color = FreeSocketRim;
+            img.raycastTarget = false;
         }
 
         private RectTransform NewCardRoot(string name, float x, float w)

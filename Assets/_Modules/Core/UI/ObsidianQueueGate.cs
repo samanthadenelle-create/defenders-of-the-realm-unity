@@ -133,6 +133,68 @@ namespace DeNelle.Core.UI
                 }
             }
 
+            // ─────────────────────────────────────────────────────────────────
+            //  WO-1027 — THE SESSION-SHAPE DERIVATION. ONE sentence, one home.
+            // ─────────────────────────────────────────────────────────────────
+            // IDLE == ZERO ACTIVE WORKERS ON THE LINE. Deliberately NOT (Busy < Slots):
+            // a line running 1 of 2 builders is WORKING, not aching, and a bar that said
+            // "idle" while a building is visibly under construction reads as a bug. The
+            // finer has-a-free-slot fact is the FREE CARD's business (QueueRailView), and
+            // it is deliberately a different, finer signal.
+            //
+            // ⚠ queueDepthPerLine (5) IS NOT AN INPUT. Depth is the LINE LENGTH;
+            // freeBuildSlots (2) is CONCURRENCY (ObsidianQueueEngine: "Depth is NOT
+            // concurrency ... conflating them would delete the waiting pain the crystal
+            // sink monetizes"). Idleness is a concurrency fact only.
+            //
+            // These live ON the struct every reader already holds so the bar face, the
+            // rail and the Manage screen cannot disagree — this project's dominant bug is
+            // duplicate authority, and three surfaces each deriving their own idleness is
+            // exactly how it starts. A `BusyOf(...) == 0` written anywhere else is the bug.
+
+            /// <summary>The three queue channels — the denominator of the "N of 3 idle" glance.</summary>
+            public const int LineCount = 3;
+
+            /// <summary>TRUE when nothing at all is running on this channel. False before the
+            /// first publish (<see cref="Available"/>): never claim idleness we have not been told
+            /// about — at boot that would put "3 of 3 idle" on a screen that has heard nothing.</summary>
+            public bool IsLineIdle(DeNelle.Core.Jobs.ChannelId c) => Available && BusyOf(c) == 0;
+
+            /// <summary>How many of the three channels have NOTHING running. 0 before first publish.</summary>
+            public int IdleLineCount()
+            {
+                if (!Available) return 0;
+                int n = 0;
+                if (IsLineIdle(DeNelle.Core.Jobs.ChannelId.Builder)) n++;
+                if (IsLineIdle(DeNelle.Core.Jobs.ChannelId.Train)) n++;
+                if (IsLineIdle(DeNelle.Core.Jobs.ChannelId.Research)) n++;
+                return n;
+            }
+
+            /// <summary>
+            /// WO-1027 §3.3 — the QUIET INVERSE of the ache: every line is not merely busy but
+            /// FULLY crewed, so there is nothing left to start. Deliberately STRICTER than
+            /// <c>IdleLineCount()==0</c> (which only means each line has one worker going): telling
+            /// a player she is done while a slot is still free would be a lie, and a wrong
+            /// session-complete signal is worse than none.
+            /// </summary>
+            public bool AllLinesLoaded()
+            {
+                if (!Available) return false;
+                return BusyOf(DeNelle.Core.Jobs.ChannelId.Builder) >= SlotsOf(DeNelle.Core.Jobs.ChannelId.Builder)
+                    && BusyOf(DeNelle.Core.Jobs.ChannelId.Train) >= SlotsOf(DeNelle.Core.Jobs.ChannelId.Train)
+                    && BusyOf(DeNelle.Core.Jobs.ChannelId.Research) >= SlotsOf(DeNelle.Core.Jobs.ChannelId.Research)
+                    && IdleLineCount() == 0;
+            }
+
+            /// <summary>Free (uncrewed) worker slots on a channel — the FREE-CARD axis, and the
+            /// single home for it. QueueRailView reads this instead of re-deriving it.</summary>
+            public int FreeSlotsOf(DeNelle.Core.Jobs.ChannelId c)
+            {
+                int f = SlotsOf(c) - BusyOf(c);
+                return f > 0 ? f : 0;
+            }
+
             /// <summary>Player-facing channel name — never "Obsidian" (naming law).</summary>
             public static string LabelOf(DeNelle.Core.Jobs.ChannelId c)
             {

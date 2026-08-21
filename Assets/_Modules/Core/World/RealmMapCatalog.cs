@@ -102,13 +102,28 @@ namespace DeNelle.Core.World
         [JsonProperty("adjacency")]     public List<string> Adjacency = new List<string>();
     }
 
+    /// <summary>
+    /// The `withering` block (WO-829 §1). The Withering is the corruption creeping out
+    /// of the Wound; on the parchment it is a darkened edge band — ATMOSPHERE ONLY.
+    /// <see cref="WeeklyRealmThreat"/> stays false until a real event system exists:
+    /// WO-829 forbids faking a "threatened" week, and realm-map.json's own comment
+    /// forbids a punishing timer ("the cozy covenant forbids FOMO countdowns").
+    /// </summary>
+    [Serializable]
+    public sealed class WitheringDef
+    {
+        [JsonProperty("edgeBorder")]        public bool EdgeBorder;
+        [JsonProperty("weeklyRealmThreat")] public bool WeeklyRealmThreat;
+    }
+
     /// <summary>The whole parsed realm-map.json (metadata keys are simply not mapped).</summary>
     [Serializable]
     public sealed class RealmMapData
     {
-        [JsonProperty("version")]  public int Version;
-        [JsonProperty("homeBase")] public HomeBaseDef HomeBase;
-        [JsonProperty("regions")]  public List<RealmRegionDef> Regions = new List<RealmRegionDef>();
+        [JsonProperty("version")]   public int Version;
+        [JsonProperty("homeBase")]  public HomeBaseDef HomeBase;
+        [JsonProperty("regions")]   public List<RealmRegionDef> Regions = new List<RealmRegionDef>();
+        [JsonProperty("withering")] public WitheringDef Withering;
     }
 
     /// <summary>Static typed surface over the dual-copy Data/Canonical/realm-map.json.</summary>
@@ -127,6 +142,22 @@ namespace DeNelle.Core.World
         /// <summary>All regions, sorted by mapOrder ascending. Never null (empty on load failure).</summary>
         public static IReadOnlyList<RealmRegionDef> Regions
         { get { EnsureLoaded(); return _data.Regions; } }
+
+        /// <summary>The `withering` atmosphere block (WO-829 §1). NEVER null — an absent
+        /// block yields the authored default (edge band on, weekly threat OFF), so the
+        /// parchment always has its edge treatment and no surface can accidentally light
+        /// up a "threatened" week that has no event system behind it.</summary>
+        public static WitheringDef Withering
+        {
+            get
+            {
+                EnsureLoaded();
+                return _data.Withering ?? DefaultWithering;
+            }
+        }
+
+        private static readonly WitheringDef DefaultWithering =
+            new WitheringDef { EdgeBorder = true, WeeklyRealmThreat = false };
 
         /// <summary>Region by id, or null when unknown.</summary>
         public static RealmRegionDef Find(string regionId)

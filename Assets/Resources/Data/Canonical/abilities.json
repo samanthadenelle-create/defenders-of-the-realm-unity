@@ -89,7 +89,7 @@
         "regenPerSecond": 2.0,
         "onHitRestore": 0
       },
-      "_comment": "WO-750 Right ActionBar canon (owner rulings 2026-07-19). Kit: Q Sword Heroic (dash) / W Shield Charge (knockback) / E Warden's Grace (gracebuff \u2014 hybrid support REDESIGN, was the taunt 'Defender's Call') / R Radiant Strike (meteor ult). W/E/R now carry ids (knight.w/e/r) so hot-swap can address them. Effects dash|knockback|gracebuff are shapes resolved by HeroAbilities.ResolveEffect (raw-string branch): gracebuff = ResolveWardensGrace (heal 25% max HP read from 'damage' as a percent + Defense-scaled bonus, then Grace Shield for 'seconds': HoT 5% max HP/2s + -20% incoming dmg pending a HeroHealth mitigation seam). Anim: E castAnim 'castHeal' -> knight castHeal clip (Mage Spell Cast 5); R castAnim 'r' -> CastVariant 4 (its own Cast_r state, de-dups the whirlwind it shared with W). Cooldowns Leap 6 / Charge 9 / Grace 20 / Radiant 40. Re-sync on v1 data/abilities.json publish. WO-861: DELIBERATELY UNCHANGED (acceptance requires 'Knight abilities are UNCHANGED'); the only Grom rename touches hero-talents.json + canon-strings.json copy, never this kit.",
+      "_comment": "WO-750 Right ActionBar canon (owner rulings 2026-07-19). Kit: Q Sword Heroic (dash) / W Shield Bash (knockback; RENAMED from 'Shield Charge' by owner ruling 2026-08-21 so the kit matches the player-facing en.json string 'tooltip.ability.knight.w.title' and the authored Bash medallion art - the mechanic is unchanged) / E Warden's Grace (gracebuff \u2014 hybrid support REDESIGN, was the taunt 'Defender's Call') / R Radiant Strike (meteor ult). W/E/R now carry ids (knight.w/e/r) so hot-swap can address them. Effects dash|knockback|gracebuff are shapes resolved by HeroAbilities.ResolveEffect (raw-string branch): gracebuff = ResolveWardensGrace (heal 25% max HP read from 'damage' as a percent + Defense-scaled bonus, then Grace Shield for 'seconds': HoT 5% max HP/2s + -20% incoming dmg pending a HeroHealth mitigation seam). Anim: E castAnim 'castHeal' -> knight castHeal clip (Mage Spell Cast 5); R castAnim 'r' -> CastVariant 4 (its own Cast_r state, de-dups the whirlwind it shared with W). Cooldowns Leap 6 / Charge 9 / Grace 20 / Radiant 40. Re-sync on v1 data/abilities.json publish. WO-861: DELIBERATELY UNCHANGED (acceptance requires 'Knight abilities are UNCHANGED'); the only Grom rename touches hero-talents.json + canon-strings.json copy, never this kit.",
       "abilities": {
         "q": {
           "id": "knight.q",
@@ -111,7 +111,7 @@
           "id": "knight.w",
           "slot": "w",
           "key": "W",
-          "name": "Shield Charge",
+          "name": "Shield Bash",
           "description": "Charge behind your shield \u2014 26 dmg cone + slow; breaks a Tank's guard, interrupts a Wizard (9s cd).",
           "icon": "\u2726",
           "color": "#facc15",

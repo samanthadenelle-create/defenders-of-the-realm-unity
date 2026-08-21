@@ -172,12 +172,23 @@ namespace DeNelle.HUD.Kit
         private string[] _cycleIds;
         private ElarionUiKit.SlideDockHandle _slideDock;   // WO-439: left slide-out (Chat/Ranks/Music/Settings)
         private HudCompassWidget _compass;
+        private HudMinimapWidget _minimap;   // WO-828 — null when ff.minimap is OFF
         // WO-778: persistent Builders/Training status chip (CoC-feel; polls ObsidianQueueGate.Status).
         private TMP_Text _queueChipLabel;
         private QueueRailView _queueRail;     // WO-864: the CoC card rail replaces the WC3 text rows
         private RectTransform _queueRailMount;   // the Builders EXPANDED section (collapsed by default)
         private int _queueStatusVersion = -1;
         private int _queueRailSyncFrames;        // post-expand re-sync countdown (see SetRailSection)
+
+        // WO-1027 — the Manage face carries the SESSION-SHAPE numeral ("Manage - 2 of 3 idle").
+        // The View only paints it; the words are decided in Core (HudActionBarModel), exactly as
+        // the Raids dim tell above. Zero predicates here.
+        private TMP_Text _manageButtonLabel;
+
+        // WO-900 §4 — the AMBIENT collector tell. The diegetic tell (CollectorStackView) lives on
+        // the building; this chip is the one you can read from anywhere in town, with no modal.
+        private TMP_Text _collectorsChipLabel;
+        private int _collectorStatusVersion = -1;
 
         // ── RIGHT RAIL, ONE CHIP STYLE (owner ruling 2026-08-05) ────────────────────
         // "I love the builder screen on the right. However, it should be minimized like
@@ -504,6 +515,14 @@ namespace DeNelle.HUD.Kit
             // rewrite.
             // BuildQueueStatusChip(pool);   // retired 2026-08-07 (owner)
 
+            // WO-900 §4 — THE AMBIENT COLLECTOR TELL takes the band the retired Builders chip
+            // left free (HudArea.QueueStatus). ⚠ It is NOT the chip coming back: it carries no
+            // queue state, opens no queue door, and the "exactly ONE Queues entry" rule is
+            // untouched (the bar's Manage face is still it). The player's question here is a
+            // different one — "has a collector stopped earning while I was not looking?" — and
+            // today the only answer is the wallet number quietly failing to move.
+            BuildCollectorsChip(pool);
+
             // ── town action bar (WO-835 APPLICABILITY REPACK): Build / Talk / Bag /
             // Raids / Map / Quests / Upgrade ──
             // The bar is no longer a fixed-divisor row. The Core HudActionBarModel computes
@@ -610,10 +629,14 @@ namespace DeNelle.HUD.Kit
             // It is no longer a context face: the model now packs it in whenever the town bar is
             // up, because it is the single door onto all three production lines. Gating it on a
             // focused building is exactly the undiscoverability WO-911 exists to remove.
-            var manage = ElarionUiKit.BuildObsidianButton(pool, "Manage",
+            //
+            // WO-1027: the base word comes from the model so the live label and the model's
+            // session-shape labels can never drift apart (the Raids precedent, line ~567).
+            var manage = ElarionUiKit.BuildObsidianButton(pool, HudActionBarModel.ManageBaseLabel,
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
                 slot0Min, slot0Max, OnManageAction);
             RegisterBarButton(ActionBarButtonId.Upgrade, "upgradeButton", manage);
+            _manageButtonLabel = manage != null ? manage.GetComponentInChildren<TMP_Text>(true) : null;
 
             // ── moveCluster -> HudMoveInput ──
             if (FeatureFlags.CombatHud611)
@@ -655,6 +678,25 @@ namespace DeNelle.HUD.Kit
             WireCompassProviders(_compass);
             Register("compass", WrapAsWidget("compass", _compass.gameObject));
 
+            // ── minimap: the "you are here" plate (WO-828) ──
+            // The compass answers WHICH WAY; this answers WHERE. Same three providers,
+            // re-wired rather than shared, so neither widget can break the other by
+            // caching a stale hero. Placed by the hud-areas.json "minimap" rows into the
+            // left-column Minimap band in calm(town) + calm(explore) only.
+            //
+            // Flag-OFF builds NOTHING (not a hidden widget): a minimap that is off should
+            // cost zero, and an unregistered id is simply absent from every occupancy row.
+            if (FeatureFlags.Minimap)
+            {
+                _minimap = HudMinimapWidget.Create(pool);
+                WireMinimapProviders(_minimap);
+                Register("minimap", WrapAsWidget("minimap", _minimap.gameObject));
+            }
+            else
+            {
+                FlowTrace.Step("Minimap", "ff.minimap=0 - the corner minimap is not built this session.");
+            }
+
             // ── feedback: the CombatTextLayer marker (its own capped/pooled canvas) ──
             var fb = new GameObject("FeedbackLayerMarker", typeof(RectTransform));
             fb.transform.SetParent(pool, false);
@@ -670,12 +712,38 @@ namespace DeNelle.HUD.Kit
         private static void WireCompassProviders(HudCompassWidget compass)
         {
             if (compass == null) return;
-            var heroT = Type.GetType("DeNelle.Village.HeroLocomotion, DeNelle.Village");
-            var linkT = Type.GetType("DeNelle.Village.HeroLinkCrossing, DeNelle.Village");
-            var enemyT = Type.GetType("DeNelle.Village.Enemy, DeNelle.Village");
-            Transform heroCache = null;
+            var hero = MakeHeroProvider();
+            compass.HeroProvider = hero;
+            compass.ObjectiveProvider = MakeSeamObjectiveProvider(hero);
+            compass.EnemyProvider = MakeEnemyProvider();
+        }
 
-            compass.HeroProvider = () =>
+        // WO-828: the minimap reads the SAME three world facts as the compass — where the
+        // hero is, where the objective is, where the threats are — so it is wired from the
+        // same three factories rather than from a second, drifting copy of the reflection.
+        // Each widget gets its OWN closures (its own hero cache and its own enemy buffer):
+        // sharing one buffer between two widgets polling on different timers is exactly how
+        // one widget ends up reading a list the other is mid-rebuild.
+        private static void WireMinimapProviders(HudMinimapWidget minimap)
+        {
+            if (minimap == null) return;
+            var hero = MakeHeroProvider();
+            minimap.HeroProvider = hero;
+            minimap.ObjectiveProvider = MakeSeamObjectiveProvider(hero);
+            minimap.EnemyProvider = MakeEnemyProvider();
+        }
+
+        // ── the three shared provider factories (loose reflection, HUD -> Core edge kept) ──
+        // DeNelle.HUD may not reference DeNelle.Village (§5), so the Village types are
+        // resolved by name. A null type is NOT an error here — it is the legitimate
+        // "this scene has no Village assembly loaded" case, and every provider degrades
+        // to "nothing to show" rather than throwing into the HUD.
+
+        private static Func<Transform> MakeHeroProvider()
+        {
+            var heroT = Type.GetType("DeNelle.Village.HeroLocomotion, DeNelle.Village");
+            Transform heroCache = null;
+            return () =>
             {
                 if ((heroCache == null || !heroCache) && heroT != null)
                 {
@@ -684,13 +752,17 @@ namespace DeNelle.HUD.Kit
                 }
                 return heroCache;
             };
+        }
 
-            // Nearest region-gate seam crossing (HeroLinkCrossing markers) to the hero =
-            // "where do I go" — points at the gate to leave town, and the way home in the open.
-            compass.ObjectiveProvider = () =>
+        // Nearest region-gate seam crossing (HeroLinkCrossing markers) to the hero =
+        // "where do I go" — points at the gate to leave town, and the way home in the open.
+        private static Func<Vector3?> MakeSeamObjectiveProvider(Func<Transform> heroProvider)
+        {
+            var linkT = Type.GetType("DeNelle.Village.HeroLinkCrossing, DeNelle.Village");
+            return () =>
             {
                 if (linkT == null) return (Vector3?)null;
-                var hero = compass.Hero;
+                var hero = heroProvider != null ? heroProvider() : null;
                 if (hero == null || !hero) return (Vector3?)null;
                 Vector3 hp = hero.position;
                 float best = float.MaxValue; Vector3? bestPos = null;
@@ -705,9 +777,13 @@ namespace DeNelle.HUD.Kit
                 }
                 return bestPos;
             };
+        }
 
+        private static Func<IReadOnlyList<Transform>> MakeEnemyProvider()
+        {
+            var enemyT = Type.GetType("DeNelle.Village.Enemy, DeNelle.Village");
             var enemyBuf = new List<Transform>();
-            compass.EnemyProvider = () =>
+            return () =>
             {
                 enemyBuf.Clear();
                 if (enemyT == null) return enemyBuf;
@@ -887,6 +963,79 @@ namespace DeNelle.HUD.Kit
                 return;
             }
             SetRailSection(RailSection.Builders);
+        }
+
+        // =====================================================================
+        //  WO-900 §4 — THE AMBIENT COLLECTOR CHIP
+        // =====================================================================
+        // "We need to somehow convey to the player when capacity is full" (owner, 2026-08-04).
+        // §3 delivered the DIEGETIC tell on the building (CollectorStackView: the pile, the
+        // near-full band, the "N/20", the "!"). This is the AMBIENT half: a right-column glance
+        // that answers the same question from across town, with no modal open.
+        //
+        // It reuses the shared rail chip (BuildRailChip -> ElarionUiKit obsidian face), so it
+        // inherits the MinTouchPx (112) floor and matches the Resources chip it sits beside.
+        // The tap is the EXISTING command: CollectorStatusGate.RequestCollectAll() carries it to
+        // Village, which answers with ResourceCollectorService.CollectAll(). No new collect verb.
+        //
+        // ⚠ COPY LAW: this chip says "Collectors", never "Storage" — "Storage"/"Bank"/current-max
+        // is the WALLET's word (WO-857), and the player must never meet two different notions of
+        // "full" on one screen.
+        private void BuildCollectorsChip(Transform pool)
+        {
+            var root = new GameObject("CollectorsChip", typeof(RectTransform));
+            root.transform.SetParent(pool, false);
+            var rrt = (RectTransform)root.transform;
+            rrt.anchorMin = Vector2.zero; rrt.anchorMax = Vector2.one;
+            rrt.offsetMin = Vector2.zero; rrt.offsetMax = Vector2.zero;
+
+            var chip = BuildRailChip(rrt, "CollectorsChip", "Collectors", 0f, OnCollectorsChipTapped);
+            _collectorsChipLabel = chip != null ? chip.GetComponentInChildren<TMP_Text>(true) : null;
+            if (_collectorsChipLabel == null)
+                FlowTrace.Warn("HudKit", "collectors chip built without a label - the ambient collector " +
+                                         "tell will show nothing (the kit returned no button/text).");
+
+            Register("collectorsChip", WrapAsWidget("collectorsChip", root));
+        }
+
+        private void OnCollectorsChipTapped()
+        {
+            if (!CollectorStatusGate.HasSubscriber)
+            {
+                // A boot race (tapped before the Village publisher installs) must not read as a
+                // broken button — say so in the trace rather than swallowing the tap silently.
+                FlowTrace.Warn("HudKit", "collectors chip tapped with NO Village listener - " +
+                                         "CollectorStatusPublisher has not installed yet.");
+                return;
+            }
+            FlowTrace.Step("HudKit", "collectors chip tapped -> CollectorStatusGate.RequestCollectAll");
+            CollectorStatusGate.RequestCollectAll();
+        }
+
+        /// <summary>
+        /// "Collectors 2/3 full" + the action line. TEXT-ENCODED STATE ONLY — the owner is
+        /// red/green colourblind, so the chip never leans on a tint to say "full"; the count and
+        /// the word carry it. Two short lines, matching the sibling rail chip (the chip is
+        /// MinTouchPx tall, so the second line costs nothing and survives a narrow face far
+        /// better than one wrapped line would).
+        /// ASCII only. Never the word "Storage" (WO-900 §4 copy law).
+        /// </summary>
+        private static string FormatCollectorChip(CollectorStatusGate.CollectorStatus s)
+        {
+            if (!s.Available || s.TotalCount <= 0) return "Collectors";
+
+            string line = "Collectors " + s.FullCount + "/" + s.TotalCount + " full";
+            if (s.FullCount > 0)
+                // The load-bearing sentence: a full collector has STOPPED EARNING, and the fix is
+                // one tap. (Cross-WO: once the bank gets a headroom check, WO-857 replaces this
+                // line with "Bank full" when the collect cannot bank — flagged in both WOs so
+                // neither surface ships a lie.)
+                line += "\nTap to collect";
+            else if (s.MaxFillPct >= 85)
+                line += "\n" + s.MaxFillPct + "% - tap to collect";
+            else if (s.TotalPending > 0)
+                line += "\n" + s.TotalPending + " waiting";
+            return line;
         }
 
         /// <summary>THE one collapsed rail chip. Echoes, Builders and Resources are the same
@@ -1423,10 +1572,34 @@ namespace DeNelle.HUD.Kit
             _unsubscribe.Add(() => _barModel.ActiveButtonsChanged -= ApplyActionBar);
             _barModel.RaidsDimmedChanged += ApplyRaidsDim;
             _unsubscribe.Add(() => _barModel.RaidsDimmedChanged -= ApplyRaidsDim);
+            _barModel.ManageFaceChanged += ApplyManageFaceTell;
+            _unsubscribe.Add(() => _barModel.ManageFaceChanged -= ApplyManageFaceTell);
             // Sync to the model's CURRENT state (a scene-swap kit binds an already-live
             // shared model whose set may not change again for a while).
             ApplyActionBar();
             ApplyRaidsDim();
+            ApplyManageFaceTell();
+        }
+
+        // WO-1027 — paint the session-shape numeral onto the Manage face.
+        // ---------------------------------------------------------------------
+        // The View decides NOTHING here: HudActionBarModel owns the words ("Manage" when every
+        // line is cooking, "Manage - 2 of 3 idle" when they are not). CoC would put a red badge
+        // here; the owner is red/green colourblind, so the ache is carried by a NUMERAL that has
+        // no hue to get wrong. ⛔ Never add a tint or a badge to "help" — if it does not read,
+        // the model's WORD gets clearer.
+        private void ApplyManageFaceTell()
+        {
+            Guard.Try("HudKit", "apply manage face tell", () =>
+            {
+                if (_manageButtonLabel == null) return;
+                string face = _barModel != null ? _barModel.ManageFaceLabel : HudActionBarModel.ManageBaseLabel;
+                if (string.IsNullOrEmpty(face) ||
+                    string.Equals(_manageButtonLabel.text, face, StringComparison.Ordinal)) return;
+                _manageButtonLabel.text = face;
+                FlowTrace.Step("HudKit", "Manage face text -> '" + face +
+                               "' (the idle-line ache is carried in WORDS + a NUMBER, never hue).");
+            });
         }
 
         // Render pass (purely mechanical): SetActive + position EXACTLY the buttons in
@@ -2367,6 +2540,19 @@ namespace DeNelle.HUD.Kit
                     _queueChipLabel.text = FormatQueueChip(qs);
                     // The card rail (WO-864) is self-driving off the same published Version
                     // and repaints only when the queue SHAPE moves — nothing to do here.
+                }
+            }
+
+            // WO-900 §4: the ambient collector chip — the same cheap poll, on the same terms.
+            // The Village publisher bumps Version at most twice a second, so this repaints only
+            // when the collectors actually moved; nothing here derives any collector state.
+            if (_collectorsChipLabel != null)
+            {
+                var cs = CollectorStatusGate.Status;
+                if (cs.Version != _collectorStatusVersion)
+                {
+                    _collectorStatusVersion = cs.Version;
+                    _collectorsChipLabel.text = FormatCollectorChip(cs);
                 }
             }
 

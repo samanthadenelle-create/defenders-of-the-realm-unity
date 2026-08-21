@@ -26,11 +26,18 @@ namespace DeNelle.Village.Buildings.Progression
 
         private static void EnsureHost()
         {
-            var existing = GameObject.Find(HostName);
-            if (existing != null) return;
-            var host = new GameObject(HostName);
-            Object.DontDestroyOnLoad(host);
-            FlowTrace.Step("Harvest", "ResourceCollectorHost DDOL created");
+            var host = GameObject.Find(HostName);
+            if (host == null)
+            {
+                host = new GameObject(HostName);
+                Object.DontDestroyOnLoad(host);
+                FlowTrace.Step("Harvest", "ResourceCollectorHost DDOL created");
+            }
+            // WO-900 §4 — the AMBIENT tell needs a publisher, and this DDOL host is the one
+            // object that already outlives every scene load the collectors do. Additive and
+            // idempotent: an existing host (a re-entered scene) just keeps the component it has.
+            if (host.GetComponent<CollectorStatusPublisher>() == null)
+                host.AddComponent<CollectorStatusPublisher>();
         }
 
         private static void WireScene(Scene scene)

@@ -193,9 +193,31 @@ namespace DeNelle.Core.HudModel
         private bool _raidsDimComputed;
         private RaidDimReason _raidsDimReason = RaidDimReason.None;
         private string _raidsFaceLabel = RaidsBaseLabel;
+        private string _manageFaceLabel = ManageBaseLabel;
+        private int _manageStatusVersion = int.MinValue;   // change-detect on the published snapshot
 
         /// <summary>The base (undimmed) Raids face word. The View builds with this exact string.</summary>
         public const string RaidsBaseLabel = "Raids";
+
+        /// <summary>The base (unadorned) Manage face word. The View builds with this exact string.</summary>
+        public const string ManageBaseLabel = "Manage";
+
+        /// <summary>
+        /// WO-1027 — the SESSION-SHAPE tell on the Manage face. CoC's retention engine was never
+        /// the queue; it was the ACHE of an idle builder. CoC carries that ache on a RED BADGE,
+        /// which is banned here outright: the owner is red/green colourblind, so the message is
+        /// carried by a NUMERAL — it has no hue to get wrong and needs no mitigation. Same
+        /// WORD/NUMBER-tell contract the Raids face already ships (WO-1008, RaidsFaceLabel above).
+        ///   3 idle  -> "Manage - 3 idle"        (nothing cooking at all; the denominator is noise)
+        ///   1-2     -> "Manage - 2 of 3 idle"   (the denominator is what makes it legible)
+        ///   0       -> "Manage"                 (the calm state IS the bare word; silence is the reward)
+        /// The ache lives ON the button that fills it, so WO-1027 §3.2 ("one tap from the thing that
+        /// fills it") costs zero new code — OnManageAction is already the single Queues door.
+        /// ⛔ NEVER append a colour, a glyph badge or a tint. If it does not read, make the WORD
+        /// clearer. ⛔ Never a toast — ruling (c) of WO-1027 §4 is REJECTED, and a permanent
+        /// adornment on a calm bar is that nag sneaking back in by another door.
+        /// </summary>
+        public string ManageFaceLabel => _manageFaceLabel;
 
         /// <summary>
         /// WHY the Raids face is greyed (WO-1008). The owner is red/green colourblind — a grey tint
@@ -221,6 +243,10 @@ namespace DeNelle.Core.HudModel
         /// <summary>Raised when the Raids dim state changed (WO-820 full-army gate —
         /// visual dim only; the View never reads the army status itself).</summary>
         public event Action RaidsDimmedChanged;
+
+        /// <summary>WO-1027 — raised ONLY when <see cref="ManageFaceLabel"/> actually changed
+        /// (a transition, never a per-frame string build). The View repaints the face word.</summary>
+        public event Action ManageFaceChanged;
 
         /// <summary>The ordered active buttons (enum order, left to right).</summary>
         public IReadOnlyList<ActionBarButtonId> Active => _active;
@@ -341,6 +367,51 @@ namespace DeNelle.Core.HudModel
                     FlowTrace.Step("HudKit", "Raids face restored (army full)");
                 RaidsDimmedChanged?.Invoke();
             }
+
+            RecomputeManageFace();
+        }
+
+        // WO-1027 — the session-shape numeral on the Manage face.
+        // ---------------------------------------------------------------------
+        // GUARDED ON THE PUBLISHED VERSION, not the frame: ObsidianQueueGate.Status bumps
+        // Version once per publish (BuildTimerService's QueueChanged + its 1s tick), so this
+        // builds a string only on a real transition. Everything it needs is derived ONCE, on
+        // the snapshot itself (WorkQueueStatus.IdleLineCount) — this model computes no
+        // idleness of its own, so it can never disagree with the rail or the Manage screen.
+        private void RecomputeManageFace()
+        {
+            var st = DeNelle.Core.UI.ObsidianQueueGate.Status;
+            if (st.Version == _manageStatusVersion) return;
+            _manageStatusVersion = st.Version;
+
+            if (!st.Available)
+            {
+                // NORMAL AT BOOT, not a defect — Once, never Warn. Without this line "the numeral
+                // never appears" is indistinguishable from "the numeral is broken", which is the
+                // exact ambiguity §12.3 says to split BEFORE touching code.
+                FlowTrace.Once("HudKit", "manage-tell-unavailable",
+                    "ObsidianQueueGate.Status.Available is false - the Manage face shows the bare word; " +
+                    "BuildTimerService has not published a queue snapshot yet.");
+            }
+
+            int idle = st.IdleLineCount();
+            string label =
+                idle <= 0 ? ManageBaseLabel :
+                idle >= DeNelle.Core.UI.ObsidianQueueGate.WorkQueueStatus.LineCount
+                    ? ManageBaseLabel + " - " + idle + " idle"
+                    : ManageBaseLabel + " - " + idle + " of " +
+                      DeNelle.Core.UI.ObsidianQueueGate.WorkQueueStatus.LineCount + " idle";
+
+            if (string.Equals(label, _manageFaceLabel, StringComparison.Ordinal)) return;
+
+            // Step on the EDGE only. A permanent/recurring condition logged per frame buries the
+            // owner's real F8 signals — and an idle line is a NORMAL player state, so it is never
+            // Warn/Fail either.
+            FlowTrace.Step("HudKit", "manage face tell: '" + _manageFaceLabel + "' -> '" + label +
+                           "' (idle " + idle + "/" + DeNelle.Core.UI.ObsidianQueueGate.WorkQueueStatus.LineCount +
+                           ", statusVer=" + st.Version + ")");
+            _manageFaceLabel = label;
+            ManageFaceChanged?.Invoke();
         }
 
         // The WO-835 §3b predicate table, verbatim. Posture-first: only the two calm

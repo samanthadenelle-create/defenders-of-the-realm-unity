@@ -197,6 +197,7 @@ namespace DeNelle.Village.UI
             _slotLabel = null;
             _noticeLabel = null;
             _slotButton = null;
+            _sessionCompleteShown = false;   // WO-1027: the "you're set" line is per-open state
 
             if (_ui != null) { Destroy(_ui); _ui = null; }
             PanelManager.NotifyClosed(_panelHandle);
@@ -540,6 +541,46 @@ namespace DeNelle.Village.UI
                     UnityEngine.UI.LayoutRebuilder.ForceRebuildLayoutImmediate(_listContent);
             });
             FlushNotice();
+            RenderSessionComplete();
+        }
+
+        // =====================================================================
+        //  WO-1027 §3.3 — THE SESSION-COMPLETE SIGNAL (the quiet inverse of the ache)
+        // =====================================================================
+        // CoC never told a player she was DONE, and that is a genuine gap: a player who does not
+        // know she is finished leaves hunting for a missed thing instead of leaving satisfied.
+        //
+        // ⚠ ITS PREDICATE IS STRICTER THAN THE BAR NUMERAL'S, on purpose. The Manage face goes
+        // quiet at "no line is idle" (something is cooking everywhere); this line waits for
+        // AllLinesLoaded() — every line at FULL crew, nothing left to start. Telling a player she
+        // is set while a slot sits free would be a lie, and a wrong session-complete signal is
+        // worse than none at all.
+        //
+        // It is A SENTENCE. Not a colour, not a checkmark glyph, not a toast (ruling (c) is
+        // REJECTED and nothing here fires on entering town). It reuses the existing notice seat,
+        // so no band is added and the panel's pixel budget is untouched — and it NEVER stomps a
+        // real notice, which is the one message the player actually asked for.
+        private const string SessionCompleteText = "Every line is loaded - you are set for now.";
+        private bool _sessionCompleteShown;
+
+        private void RenderSessionComplete()
+        {
+            if (_noticeLabel == null) return;
+            bool set = ObsidianQueueGate.Status.AllLinesLoaded();
+            if (set == _sessionCompleteShown) return;      // transition only
+
+            if (set)
+            {
+                if (!string.IsNullOrEmpty(_noticeLabel.text)) return;   // a live notice wins
+                _noticeLabel.text = SessionCompleteText;
+                _sessionCompleteShown = true;
+                FlowTrace.Step("Manage", "session complete: all 3 lines loaded, no free slots");
+                return;
+            }
+
+            if (string.Equals(_noticeLabel.text, SessionCompleteText, StringComparison.Ordinal))
+                _noticeLabel.text = "";
+            _sessionCompleteShown = false;
         }
 
         private void RenderStrip()

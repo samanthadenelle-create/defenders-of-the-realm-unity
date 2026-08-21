@@ -460,7 +460,14 @@ namespace DeNelle.Core.HudModel
             FlowTrace.Throttle("HUD", "worldmetrics", 1f, $"heart {HeartHp}/{HeartMaxHp} towers {TowersBuilt}/{TowersMax} pop {Population} wards {WardsLit}/{WardsTotal}");
         }
 
-        /// <summary>Producer-only mutator: replace the minimap POIs, fire Changed, trace (throttled — hot).</summary>
+        /// <summary>Producer-only mutator: replace the minimap POIs, fire Changed, trace (throttled — hot).
+        /// <para>⚠ SUPERSEDED BY <c>DeNelle.Core.World.RealmPinBoard</c> (WO-828/829, 2026-08-21).
+        /// The live minimap (<c>HudMinimapWidget</c>) and the parchment Realm Map both read the
+        /// pin BOARD, which carries what this record cannot: a label (the colourblind text
+        /// channel), a region id (the fog rule), a count, per-source replacement and a visible
+        /// cap. This seam has no producers and no readers — it is left in place rather than
+        /// deleted, but do NOT wire a new producer to it: two minimap registries is precisely
+        /// how the two map surfaces start disagreeing.</para></summary>
         public void SetMinimap(IReadOnlyList<MinimapPoiRecord> minimap)
         {
             Minimap = minimap ?? Array.Empty<MinimapPoiRecord>();

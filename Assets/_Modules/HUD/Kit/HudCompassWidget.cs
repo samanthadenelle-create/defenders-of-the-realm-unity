@@ -575,8 +575,12 @@ namespace DeNelle.HUD.Kit
 
         // Procedural white apex-up triangle, tinted by Image.color. Built ONCE per app run
         // (static cache, HideAndDontSave) — no per-frame or per-tick allocation.
+        // WO-828: `internal` (was private) so HudMinimapWidget draws its THREAT pip from
+        // this exact sprite instead of re-deriving a second triangle. One owner, one
+        // silhouette — the compass and the minimap must never disagree about what a
+        // threat looks like, because that shape IS the colourblind-safe channel.
         private static Sprite _pipSprite;
-        private static Sprite EnemyPipSprite()
+        internal static Sprite EnemyPipSprite()
         {
             if (_pipSprite != null) return _pipSprite;
             const int W = 16, H = 16;

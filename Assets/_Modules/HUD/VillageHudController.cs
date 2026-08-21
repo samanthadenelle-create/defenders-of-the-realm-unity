@@ -40,12 +40,14 @@
 //     kit builds no Pi affordance.
 // =============================================================================
 
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Events;
 using DeNelle.Core;
 using DeNelle.Core.Diagnostics;
 using DeNelle.Core.HUD;
 using DeNelle.Core.HudModel;
+using DeNelle.Core.World;
 using DeNelle.HUD.Kit;
 
 namespace DeNelle.HUD
@@ -188,8 +190,63 @@ namespace DeNelle.HUD
         public void SetWardsReadout(int wardsLit, int wardsTotal, string summary) { /* Arcane Tower panel */ }
         public void SetPassiveXp(int xpPerMin, int towerCount) { /* earns-its-place: OFF until real+verified */ }
         public void SetPassiveXpVisible(bool visible) { /* earns-its-place: OFF */ }
-        public void SetMinimapPoi(string kind, float worldX, float worldZ) { /* minimap deferred (P23 report) */ }
-        public void ClearMinimapPois() { /* minimap deferred */ }
+        // ── minimap POIs — LIVE as of WO-828 §5 (was "deferred (P23 report)") ──
+        // The minimap now exists (HudMinimapWidget), so these forward instead of dropping.
+        // They publish into RealmPinBoard, the ONE registry both the corner minimap and the
+        // parchment Realm Map read (WO-829 §6: "no duplicate game logic"). Note the older
+        // WorldMetricsModel.SetMinimap seam is deliberately NOT also fed — writing the same
+        // pins to two registries is how the two surfaces start disagreeing.
+        //
+        // Contract note for callers: this is an ACCUMULATING setter, matching the historical
+        // ClearMinimapPois-then-SetMinimapPoi-per-POI call shape. Pins reach the board on the
+        // next Clear or on the first Set after a Clear, under the source id below.
+        private const string MinimapPoiSource = "villageHud";
+        private readonly List<RealmPin> _minimapPois = new List<RealmPin>();
+
+        public void SetMinimapPoi(string kind, float worldX, float worldZ)
+        {
+            // FAIL-CLOSED on an unrecognised kind (§12 no-silent-failure, but also no
+            // GUESSING): a POI drawn with the wrong silhouette actively misinforms — a
+            // storehouse rendered as a threat pip is worse than no pin at all. Report the
+            // token once and skip it, so whoever adds the producer sees exactly what to map.
+            if (!TryMapPoiKind(kind, out var mapped))
+            {
+                FlowTrace.Once("Minimap", "poikind:" + (kind ?? "<null>"),
+                    "SetMinimapPoi: unmapped kind '" + (kind ?? "<null>") + "' - pin SKIPPED. " +
+                    "Add it to VillageHudController.TryMapPoiKind (RealmPinKind) when its producer lands.");
+                return;
+            }
+
+            var style = DeNelle.Core.UI.RealmAtmosphereStyle.Pin(mapped);
+            _minimapPois.Add(new RealmPin(mapped, worldX, worldZ, style.Label));
+            RealmPinBoard.Publish(MinimapPoiSource, _minimapPois);
+        }
+
+        public void ClearMinimapPois()
+        {
+            _minimapPois.Clear();
+            RealmPinBoard.Clear(MinimapPoiSource);
+        }
+
+        // The legacy IVillageHud kind strings -> the WO-829 pin taxonomy.
+        private static bool TryMapPoiKind(string kind, out RealmPinKind mapped)
+        {
+            switch ((kind ?? "").Trim().ToLowerInvariant())
+            {
+                case "enemy":
+                case "threat":    mapped = RealmPinKind.Threat;     return true;
+                case "objective":
+                case "seam":      mapped = RealmPinKind.Objective;  return true;
+                case "raid":
+                case "camp":      mapped = RealmPinKind.RaidTarget; return true;
+                case "dungeon":
+                case "portal":    mapped = RealmPinKind.Dungeon;    return true;
+                case "rumor":     mapped = RealmPinKind.Rumor;      return true;
+                case "army":
+                case "barracks":  mapped = RealmPinKind.Army;       return true;
+                default:          mapped = RealmPinKind.Threat;     return false;
+            }
+        }
         public void SetComboCount(int count) { /* WO-563: momentum badge removed */ }
         public void SetKillStreak(int streak) { /* WO-563: momentum badge removed */ }
         public void SetEnemyCount(int live, int total) { /* WaveProducer -> WaveModel */ }

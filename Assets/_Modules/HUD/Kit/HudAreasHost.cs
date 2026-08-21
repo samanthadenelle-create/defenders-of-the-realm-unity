@@ -48,6 +48,9 @@ namespace DeNelle.HUD.Kit
         HeartStatus,
         /// <summary>FRIENDLY — persistent Builders/Training status chip (right, under System; WO-778).</summary>
         QueueStatus,
+        /// <summary>FRIENDLY — the corner minimap "you are here" plate (left column, between
+        /// the Dock and HeartStatus; WO-828). Calm postures only — see hud-areas.json.</summary>
+        Minimap,
     }
 
     /// <summary>One canvas, nine mounts. Pure scaffolding (see header).</summary>
@@ -115,6 +118,16 @@ namespace DeNelle.HUD.Kit
             // height is transparent rather than the old full-height dark rows plate that
             // reserved five rows to show one job. Still clear of ActionRail (tops 0.420).
             Add(HudArea.QueueStatus, new Vector2(0.780f, 0.530f), new Vector2(0.995f, 0.865f));
+            // WO-828: the minimap plate — the LEFT column's one free band, boxed in by the
+            // Dock above nothing (Dock tops at 0.430) and HeartStatus below it (bottoms at
+            // 0.700). Deliberately on the OPPOSITE side of the screen from the compass
+            // (top-centre Status) so the two navigation reads never crowd each other, and
+            // clear of the MoveCluster thumb arc (tops at 0.330) so the map is never under
+            // the moving thumb. At 2340x1080 this band resolves to roughly 678 x 244
+            // reference units; HudMinimapWidget draws a FIXED 200x200 square hanging from
+            // its top-left plus a ~30-unit region chip, so it fits with room to spare and
+            // stays square on every aspect (a fraction-sized square would not).
+            Add(HudArea.Minimap,     new Vector2(0.010f, 0.440f), new Vector2(0.330f, 0.690f));
             Add(HudArea.Feedback,    Vector2.zero,                Vector2.one);
 
             // Feedback overlay never eats taps (stamps/toasts are decorative).

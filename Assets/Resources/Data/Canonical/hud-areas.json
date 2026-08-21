@@ -14,6 +14,12 @@
           ]
         },
         {
+          "area": "minimap",
+          "widgets": [
+            "minimap"
+          ]
+        },
+        {
           "area": "heartStatus",
           "widgets": [
             "heartStatus"
@@ -35,7 +41,8 @@
         {
           "area": "queueStatus",
           "widgets": [
-            "queueStatusChip"
+            "queueStatusChip",
+            "collectorsChip"
           ]
         },
         {
@@ -94,6 +101,12 @@
           "widgets": [
             "playerNameplate",
             "xpBar"
+          ]
+        },
+        {
+          "area": "minimap",
+          "widgets": [
+            "minimap"
           ]
         },
         {

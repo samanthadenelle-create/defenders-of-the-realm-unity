@@ -117,6 +117,10 @@ namespace DeNelle.HUD.Kit
                 // which is exactly how the Work button went dark. Never add a json area
                 // without its parser case.
                 case "queuestatus": area = HudArea.QueueStatus; return true;
+                // WO-828: the minimap band. Added in the SAME edit as the json rows, per the
+                // WO-778 rule directly above — a row whose area has no case here is warn-
+                // skipped and the widget is code-present, behavior-absent.
+                case "minimap":     area = HudArea.Minimap;     return true;
                 default:            area = HudArea.Vitals;      return false;
             }
         }

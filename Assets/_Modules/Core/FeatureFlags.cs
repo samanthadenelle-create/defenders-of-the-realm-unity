@@ -704,6 +704,23 @@ namespace DeNelle.Core
         public static bool MapTab => Get("maptab", defaultOn: false);
 
         /// <summary>
+        /// WO-828 — the corner minimap plate (<c>HudMinimapWidget</c>) in the calm postures.
+        ///
+        /// <para>Default ON. Unlike <see cref="MapTab"/> — which is OFF because realm travel is a
+        /// WO-827 stub and a visible tab would promise a journey the game cannot take — the minimap
+        /// promises nothing it cannot deliver: it reads the hero, the seam objective and the live
+        /// threats that ALREADY drive <c>HudCompassWidget</c>, so it is correct the moment it is
+        /// drawn. It adds no camera and no RenderTexture (WO-828's cost rule), so there is no
+        /// performance reason to ship it dark either.</para>
+        ///
+        /// <para>OFF hides the plate entirely (the widget is never built, so it costs nothing at
+        /// all rather than being an invisible ticking widget). Flip without a rebuild via
+        /// PlayerPrefs "ff.minimap" = 0. Visibility per posture stays owned by hud-areas.json —
+        /// this flag is the master switch, NOT a posture rule.</para>
+        /// </summary>
+        public static bool Minimap => Get("minimap", defaultOn: true);
+
+        /// <summary>
         /// Owner ruling 2026-08-20 — gates the founding "Default Town" (prebuilt ring) option.
         /// Owner, verbatim: <i>"we are going to flag the start with prebuilt as it still has issues,
         /// so flag that off to unblock"</i>.
