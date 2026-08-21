@@ -376,6 +376,10 @@ namespace DeNelle.Village
         // contact strike + damage, Dead bool on death. All parameter sets are
         // null-guarded so an enemy with no Animator still runs its gameplay.
         private Animator _animator;
+        // Controllers may arrive after spawn through EnemyAnimatorLateBinder. Track
+        // which controller supplied the cached parameter set so a late bind cannot
+        // leave a moving enemy permanently classified as having no Speed parameter.
+        private RuntimeAnimatorController _scannedAnimatorController;
 
         // Combat-feel (additive): red hit-flash on each non-lethal hit. Auto-added
         // in Awake so it needs no prefab wiring; flashed from the hit branch below.
@@ -1121,6 +1125,9 @@ namespace DeNelle.Village
         /// </summary>
         private void DriveAnimator()
         {
+            // Cheap in steady state; rescans only when a late-downloaded controller
+            // has actually replaced the controller observed during Awake.
+            EnsureAnimator();
             if (_animator == null || !_hasSpeedParam) return;
             float speed = (_agent != null && _agent.isOnNavMesh)
                 ? _agent.velocity.magnitude
@@ -2558,6 +2565,7 @@ namespace DeNelle.Village
             _hasLastAnimPos        = false;
             _lastAnimPos           = Vector3.zero;
             _animSpeedSmoothed     = 0f;
+            _scannedAnimatorController = null; // force a fresh parameter scan on reuse
             _navWarned             = false;
             _attackCooldown        = 0f;
 
@@ -3383,10 +3391,23 @@ namespace DeNelle.Village
             if (_animator == null)
                 _animator = GetComponentInChildren<Animator>();
 
+            RuntimeAnimatorController controller = _animator != null
+                ? _animator.runtimeAnimatorController
+                : null;
+            if (controller == _scannedAnimatorController) return;
+
+            _scannedAnimatorController = controller;
+            _hasSpeedParam = false;
+            _hasAttackParam = false;
+            _hasWindUpParam = false;
+            _hasHitParam = false;
+            _hasDeadParam = false;
+            _hasHitDirParam = false;
+
             // WO-163: cache which params the controller actually declares so the
             // per-frame DriveAnimator (and the trigger/bool calls) never drive an
             // absent param — that spams "Parameter does not exist" every frame.
-            if (_animator != null && _animator.runtimeAnimatorController != null)
+            if (_animator != null && controller != null)
             {
                 foreach (var p in _animator.parameters)
                 {
