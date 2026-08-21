@@ -1459,6 +1459,12 @@ namespace DeNelle.Core.State
                 return;
             }
 
+            // WO-912 §7.2: anchor the clock BEFORE any early-out below. The handshake is
+            // valuable even when the payload turns out to be empty or rejected — the
+            // rewarded-ad window is hardened by having ANY server time this process, and
+            // throwing that away because there was no save data would be a silent loss.
+            if (resp?.ServerNowMs != null) ServerClock.Sync(resp.ServerNowMs.Value);
+
             if (resp?.Success != true || resp.Data == null) return;
 
             // Absorb remote config if present; keep existing config on null (older backend).
@@ -2031,6 +2037,13 @@ namespace DeNelle.Core.State
             [JsonProperty("success")] public bool                       Success { get; set; }
             [JsonProperty("data")]    public SaveSchema.PersistedState  Data    { get; set; }
             [JsonProperty("config")]  public ServerConfig               Config  { get; set; }
+
+            /// <summary>
+            /// WO-912 §7.2 — the server's own unix-ms, used to anchor <see cref="ServerClock"/>.
+            /// Nullable on purpose: an older backend that does not send it must keep loading
+            /// normally rather than failing to parse, and the clock simply stays unanchored.
+            /// </summary>
+            [JsonProperty("serverNowMs")] public double?                ServerNowMs { get; set; }
         }
 
         // ── Conversions ──────────────────────────────────────────────────────

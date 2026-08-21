@@ -41,6 +41,19 @@
 // owner wires the field through the schema), so server "now" and the banked haul
 // stay consistent — the server sees the post-grant wallet + post-grant clock, never
 // a stale window to replay. See the save-schema note at the bottom.
+//
+// WO-1119 -- THE 2x HARVEST BOOST, AND WHY THIS FILE APPLIES IT THE WAY IT DOES.
+// The boost multiplies the RATE we integrate and NOTHING ELSE. It is expressed as
+// EXTRA INTEGRATION SECONDS (HarvestBoostService.BoostedSeconds) and then clamped
+// to OUR OWN pre-existing 10h away-cap, which is untouched. That clamp is the
+// covenant: a player who is away long enough to reach the cap banks exactly what
+// they always banked -- they just reach it sooner. The boost sells TIME, never
+// AMOUNT. Folding the multiplier into the cap instead (Version A) would hand an
+// offline player 2x the RESOURCES, which is power, and is forbidden.
+// CRYSTALS ARE EXCLUDED ENTIRELY: they are the real-money on-ramp, so a boosted
+// crystal node would be a currency printer. The exclusion is asked of
+// HarvestBoostService.IsBoostable rather than tested inline, so no accrual path
+// can half-apply it.
 // =============================================================================
 using System.Collections.Generic;
 using UnityEngine;
@@ -48,6 +61,7 @@ using DeNelle.Core.Diagnostics;
 using DeNelle.Core.Economy;   // WO-857 Phase F — the town bank cap (this path writes the wallet directly)
 using DeNelle.Core.State;
 using DeNelle.Core.World;
+using DeNelle.Village.Monetization;   // WO-1119 — HarvestBoostService (Version B rate boost)
 using DeNelle.Village.UI;
 
 namespace DeNelle.Village
@@ -195,16 +209,23 @@ namespace DeNelle.Village
                 WasCapped = wasCapped,
             };
 
+            // WO-1119 Version B: the boost's OVERLAP with this window becomes extra integration
+            // seconds, clamped to the SAME 10h away-cap we already enforced. Crystal nodes keep
+            // the unboosted figure — see the header.
+            double boostedSec = HarvestBoostService.BoostedSeconds(window.NowUnixMs, cappedSec, OfflineCapSeconds);
+
             if (cappedSec > 0.0)
             {
                 // ORDER MATTERS for double-grant safety. AccrueWorkerNodes snapshots the
                 // worker-owned node set FIRST; AccruePets then credits the pet-owned nodes,
                 // which it derives as "claimed but NOT worker-owned" — so the two source
                 // sets are disjoint by construction and a node is never counted twice.
-                AccrueWorkerNodes(result, cappedSec);
-                AccrueSettlements(result, cappedSec);
-                AccruePets(result, cappedSec);
-                FlowTrace.Step("Offline", $"accrued over {cappedSec:0}s: worker-owned={_workerOwnedThisClaim.Count} node(s), total={result.Total}");
+                AccrueWorkerNodes(result, cappedSec, boostedSec);
+                AccrueSettlements(result, cappedSec, boostedSec);
+                AccruePets(result, cappedSec, boostedSec);
+                FlowTrace.Step("Offline", $"accrued over {cappedSec:0}s" +
+                    (boostedSec > cappedSec ? $" (boosted to {boostedSec:0}s for non-crystal sources)" : "") +
+                    $": worker-owned={_workerOwnedThisClaim.Count} node(s), total={result.Total}");
             }
 
             if (result.Total > 0) Grant(result, state);
@@ -226,7 +247,13 @@ namespace DeNelle.Village
         // Each on-station worker drives one node at MineNode.RatePerSecond. We
         // integrate that rate over the capped window. (RatePerSecond is 0 for a
         // finite-reserve node, so those are handled only by the settlement path.)
-        private void AccrueWorkerNodes(OfflineHarvestResult result, double cappedSec)
+        // WO-1119: the ONE place the boost is applied to a resource. Crystals never take the
+        // boosted figure (HarvestBoostService.IsBoostable), so a crystal node integrates the plain
+        // window even while a boost is running.
+        private static double SecondsFor(MineResource resource, double cappedSec, double boostedSec) =>
+            HarvestBoostService.IsBoostable(resource) ? boostedSec : cappedSec;
+
+        private void AccrueWorkerNodes(OfflineHarvestResult result, double cappedSec, double boostedSec)
         {
             _workerOwnedThisClaim.Clear();
 
@@ -245,7 +272,7 @@ namespace DeNelle.Village
                 if (node.IsDepleted) continue;
                 float rate = node.RatePerSecond;
                 if (rate <= 0f) continue;
-                int accrued = (int)(rate * cappedSec);
+                int accrued = (int)(rate * SecondsFor(node.Resource, cappedSec, boostedSec));
                 result.Add(node.Resource, accrued);
             }
         }
@@ -255,7 +282,7 @@ namespace DeNelle.Village
         // HarvestRatePerSecond. Offline we credit rate × window, but never more than
         // the reserve actually held (the ward/claim gate: only an active settlement on
         // a non-empty reserve accrues — a razed/outpost settlement or empty node yields 0).
-        private void AccrueSettlements(OfflineHarvestResult result, double cappedSec)
+        private void AccrueSettlements(OfflineHarvestResult result, double cappedSec, double boostedSec)
         {
             var all = Settlement.All;
             if (all == null) return;
@@ -266,7 +293,7 @@ namespace DeNelle.Village
                 var node = s.ClaimedNode;
                 if (node == null || !node.UseFiniteReserve || node.IsReserveEmpty) continue;
 
-                int owed = (int)(s.HarvestRatePerSecond * cappedSec);
+                int owed = (int)(s.HarvestRatePerSecond * SecondsFor(node.Resource, cappedSec, boostedSec));
                 if (owed <= 0) continue;
                 // Clamp to what's left in the ground so offline can't over-mine a reserve.
                 int banked = Mathf.Min(owed, node.ReserveRemaining);
@@ -292,7 +319,7 @@ namespace DeNelle.Village
         // re-acquired a node yet within this deferred frame → pets contribute 0 that
         // launch (the clock still advances; nothing is lost, just not retro-credited).
         // On RESUME (the common mobile case) claims are live, so the away-gap is credited.
-        private void AccruePets(OfflineHarvestResult result, double cappedSec)
+        private void AccruePets(OfflineHarvestResult result, double cappedSec, double boostedSec)
         {
 #if UNITY_2023_1_OR_NEWER
             var nodes = Object.FindObjectsByType<MineNode>();
@@ -308,7 +335,7 @@ namespace DeNelle.Village
                 if (_workerOwnedThisClaim.Contains(node)) continue; // a Worker owns it → already credited
                 float rate = node.RatePerSecond;                   // finite-reserve nodes report 0 (settlement path)
                 if (rate <= 0f) continue;
-                int accrued = (int)(rate * cappedSec);
+                int accrued = (int)(rate * SecondsFor(node.Resource, cappedSec, boostedSec));
                 result.Add(node.Resource, accrued);
             }
         }

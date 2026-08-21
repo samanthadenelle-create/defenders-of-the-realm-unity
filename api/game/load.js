@@ -100,6 +100,12 @@ module.exports = async (req, res) => {
         return res.status(200).json({
             ok: true,
             success: true,
+            // WO-912 s7.2: authoritative server time. The client anchors ServerClock
+            // to this against a MONOTONIC timer, so the rewarded-ad window cannot be
+            // reset by rolling the device clock (= fabricated ad impressions).
+            // Always send it, even on an otherwise-empty response: the handshake is
+            // the valuable part, not the payload.
+            serverNowMs: Date.now(),
             mode: auth.mode,
             schemaVersion: row.schema_version,
             updatedAt: row.updated_at,

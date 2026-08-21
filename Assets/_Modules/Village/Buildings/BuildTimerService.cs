@@ -42,6 +42,7 @@ using UnityEngine;
 using DeNelle.Core.Catalog;
 using DeNelle.Core.Jobs;
 using DeNelle.Core.State;
+using DeNelle.Village.Monetization;   // WO-1120 — AdGateService, the ad-placements.json interpreter
 
 // WO-911 refund plumbing refers to the resource ledger as `Ledger.*` (ResourceCost,
 // HarvestResource, ResourceLedger). There is no namespace by that name - those types
@@ -906,9 +907,26 @@ namespace DeNelle.Village
             // purchase, so it is not the regulated shape. Only the CASH/crystal instant-finish is
             // excluded — see JobRushPolicy and InstantFinishPrice. Do not "tidy" a gate in here.
             if (UnderDailyAdCap() == false) return false;
+
+            // WO-1120 — THE PLACEMENT GATE, ANDed with the WO-912 rolling window above, never
+            // merged with it. They answer different questions: the rolling window is the owner's
+            // 2026-08-06 four-hour conversion wall, and the placement carries its own per-local-day
+            // cap, per-placement cooldown and the global hardDailyCap from ad-placements.json.
+            // Merging them would silently retire one of the two rulings; ANDing means the stricter
+            // one binds, which is the only safe direction for a gate that hands out real value.
+            if (!AdGateService.IsOffered(BuildSkipPlacementId)) return false;
+
             var mgr = RewardedAdManager.Instance;
             return mgr != null && mgr.IsAdReady;
         }
+
+        /// <summary>
+        /// The ad-placements.json placement this channel's skip is served by. It is the file's
+        /// "THE ONLY V1 PLACEMENT" and its reward (reward.build.timeskip) pays MINUTES, never a
+        /// completion — an instant finish is what crystals are sold for, and giving it away for a
+        /// watch would hand away the paid product for free.
+        /// </summary>
+        public const string BuildSkipPlacementId = "place.build.skip";
 
         /// <summary>
         /// Watch a rewarded ad to knock a fixed chunk (Config.adSkipSeconds) off the remaining
@@ -997,9 +1015,20 @@ namespace DeNelle.Village
                 return false;
             }
 
-            // The grant runs from the SDK's earned-reward callback ONLY - identical body to the
-            // bool overload, so the two paths can never drift into granting different things.
-            return mgr.RequestAd(
+            // WO-1120 — routed through the PLACEMENT INTERPRETER rather than straight at
+            // RewardedAdManager. AdGateService re-checks the placement's own cooldown / daily cap /
+            // global hard cap, screens the reward against _LAW_1 a second time, records the watch
+            // in the placement ledger, and still grants ONLY from the SDK's genuine earned-reward
+            // callback. The subject (WHICH job) is ours to supply and only ours — that is what the
+            // action below is; the POLICY stays in the gate, so a call site can pick the job but
+            // never the rules.
+            //
+            // RecordAdSkipUsed() stays here and is NOT moved into the gate: it stamps the WO-912
+            // four-hour rolling window in the SAVE, which is a different ledger with a different
+            // shape and a different ruling behind it. Two ledgers, both advanced on the same
+            // genuine reward.
+            return AdGateService.Present(
+                BuildSkipPlacementId,
                 () =>
                 {
                     RecordAdSkipUsed();
@@ -1484,8 +1513,22 @@ namespace DeNelle.Village
             if (state == null) return;
             // The FIRST watch of a window is what starts the clock, so stamp it here
             // rather than on the check - merely opening a screen must not burn the window.
+            //
+            // WO-912 §7.1: the stamp is unix-ms from TimeSource (server-anchored when a
+            // handshake has happened this process), NOT DateTime.UtcNow. Stamping from the
+            // device clock is what let a player roll the phone forward and mint a fresh
+            // allowance - i.e. fabricated impressions against a live ad account.
+            // The field stays a string and the SCHEMA DOES NOT BUMP: a unix-ms number
+            // round-trips through it fine, and RollWindowIfNeeded parses both this shape
+            // and the legacy ISO/day-key shapes.
             if (string.IsNullOrEmpty(state.AdSkipDayKey))
-                state.AdSkipDayKey = DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture);
+            {
+                state.AdSkipDayKey = TimeSource.NowUnixMs().ToString("F0", CultureInfo.InvariantCulture);
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Obsidian",
+                    $"ad-skip window OPENED - serverAnchored={TimeSource.IsServerAnchored}. " +
+                    "An unanchored open is legitimate (offline//fresh launch) and is reconciled " +
+                    "by the server on the next save round trip.");
+            }
             state.AdSkipsUsedToday++;
             Persist();
         }
@@ -1500,23 +1543,52 @@ namespace DeNelle.Village
 
             if (string.IsNullOrEmpty(state.AdSkipDayKey)) return;   // no window open yet
 
-            DateTime start;
-            if (!DateTime.TryParse(state.AdSkipDayKey,
-                                   CultureInfo.InvariantCulture,
-                                   DateTimeStyles.RoundtripKind,
-                                   out start))
+            // WO-912: the stamp is unix-ms as of this WO. Two legacy shapes still exist in
+            // the wild and BOTH must keep loading - a save is not re-writable on demand:
+            //   * ISO round-trip ("o") written between v13 and WO-912
+            //   * "yyyy-MM-dd" device-local day key from the original WO-172 build
+            double startMs;
+            if (!double.TryParse(state.AdSkipDayKey,
+                                 NumberStyles.Float, CultureInfo.InvariantCulture, out startMs))
             {
-                // A legacy "yyyy-MM-dd" day key (or anything unparseable) lands here.
-                // Treat it as a closed window rather than trusting it: the player gets a
-                // fresh allowance once, on upgrade, which is the forgiving direction.
-                state.AdSkipDayKey = null;
-                state.AdSkipsUsedToday = 0;
-                return;
+                DateTime legacyStart;
+                if (DateTime.TryParse(state.AdSkipDayKey,
+                                      CultureInfo.InvariantCulture,
+                                      DateTimeStyles.RoundtripKind,
+                                      out legacyStart))
+                {
+                    startMs = new DateTimeOffset(legacyStart.ToUniversalTime()).ToUnixTimeMilliseconds();
+                }
+                else
+                {
+                    // Anything unparseable: treat as a closed window rather than trusting it.
+                    // The player gets a fresh allowance once, on upgrade - the forgiving
+                    // direction, and the one that cannot strand someone at zero forever.
+                    state.AdSkipDayKey = null;
+                    state.AdSkipsUsedToday = 0;
+                    return;
+                }
             }
 
-            double elapsed = (DateTime.UtcNow - start.ToUniversalTime()).TotalSeconds;
+            double elapsed = (TimeSource.NowUnixMs() - startMs) / 1000d;
             // A NEGATIVE elapsed means the clock moved backwards since the stamp - treat it
             // as tampering and close the window rather than leaving it open forever.
+            //
+            // WO-912 §7.3 - REFUSE, DON'T PUNISH. Closing the window costs the player at
+            // most one allowance and self-heals; we never wipe state, flag an account, or
+            // tell the player they were caught. A false positive here is ordinary life
+            // (timezone change, DST, a dead coin cell, someone correcting a wrong clock),
+            // and punishing that would break a paying player's save for nothing. It is also
+            // why we do not teach an attacker what the detector measures.
+            if (elapsed < 0d)
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("Obsidian",
+                    $"ad-skip window CLOSED EARLY - clock moved BACKWARDS {(-elapsed):F0}s since the " +
+                    $"stamp (serverAnchored={TimeSource.IsServerAnchored}). Refusing the window, not " +
+                    "punishing the save. A rising rate here is the signal to move the window fully " +
+                    "server-side (WO-912 §7.2 defence 1).");
+            }
+
             if (elapsed < 0d || elapsed >= windowSeconds)
             {
                 state.AdSkipDayKey = null;

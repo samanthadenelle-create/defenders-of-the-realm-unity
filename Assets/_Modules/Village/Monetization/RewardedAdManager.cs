@@ -227,7 +227,7 @@ namespace DeNelle.Village
         /// <summary>
         /// WO-1125 — the ASYNC presentation seam a real SDK overrides. Return true when the ad was
         /// actually put on screen. Call <paramref name="onReward"/> ONLY from the SDK's genuine
-        /// earned-reward callback (LevelPlay <c>OnAdRewarded</c>), and call
+        /// earned-reward callback (the provider adapter's OnAdRewarded), and call
         /// <paramref name="onComplete"/> exactly once when the ad closes, fails, or is dismissed.
         ///
         /// <para>The base implementation delegates to the legacy synchronous seam so an existing
@@ -259,25 +259,29 @@ namespace DeNelle.Village
         /// (AdMob OnUserEarnedReward / Unity Ads OnUnityAdsShowComplete) by invoking
         /// <paramref name="onReward"/> — NEVER from "we showed it".
         ///
-        /// THIS BASE IMPLEMENTATION IS A REFUSAL, NOT A REWARD. No ad SDK exists anywhere in this
-        /// project (no AdMob / Unity Ads / ironSource / AppLovin package in Packages/manifest.json,
-        /// no ad unit id, no mediation), so there is nothing to show and nothing has been earned.
+        /// THIS BASE IMPLEMENTATION IS A REFUSAL, NOT A REWARD, AND IT IS THE LEGACY SYNC PATH.
         /// It used to call onReward unconditionally, which made "Watch an ad to skip 10 minutes" a
         /// button that granted the reward instantly, for free, with no ad and no revenue — and once a
         /// real network sits behind it, granting-on-show is fraud against that network.
+        ///
+        /// <para>WO-1120 — THE "NO SDK EXISTS" JUSTIFICATION IS RETIRED, THE REFUSAL IS NOT. A real
+        /// network IS wired now (WO-1125; the vendor is named ONLY inside Providers/, never here). What is
+        /// still true is that a SYNCHRONOUS bool cannot express "the player is watching": a real
+        /// rewarded ad completes seconds after this returns, so anything granted from this path is
+        /// granted BEFORE the ad finished. That is why it still refuses, and why it must keep
+        /// refusing even after the flag goes on. The live path is
+        /// <see cref="ShowAdInternal(Action, Action{AdShowResult})"/>, which reaches the SDK through
+        /// <see cref="IAdService"/> and grants only from the genuine earned-reward callback.</para>
         /// </summary>
-        // TODO (blocked on FeatureFlags.RewardedAdSkip prerequisites): integrate Unity Ads / AdMob in
-        // a platform override of this method. The override presents the ad, returns true, and calls
-        // onReward ONLY from the SDK's earned-reward callback.
         protected virtual bool ShowAdInternal(Action onReward)
         {
             DeNelle.Core.Diagnostics.FlowTrace.Fail("Ads",
-                "ShowAdInternal: NO ad SDK is wired in this project (no AdMob/Unity Ads/ironSource/" +
-                "AppLovin package, no ad unit id, no mediation), so no ad can be presented. " +
-                "The reward is WITHHELD on purpose - it may only ever be granted from a real " +
-                "OnUserEarnedReward callback, never from having shown something. " +
-                "See FeatureFlags.RewardedAdSkip for the two prerequisites (real SDK + WO-912 " +
-                "server-side ad-window validation).");
+                "ShowAdInternal(sync): REFUSED. This is the legacy SYNCHRONOUS seam and it can never " +
+                "grant honestly - a real rewarded ad completes AFTER this returns, so any reward paid " +
+                "here would be paid before the ad finished, which is fraud against the network. " +
+                "A network IS integrated (WO-1125); the async seam RequestAd/ShowAdInternal" +
+                "(onReward, onComplete) is the live path and grants only from OnAdRewarded. " +
+                "If you reached this line, the CALLER is on the old path - move it, do not fill this in.");
             return false;
         }
     }

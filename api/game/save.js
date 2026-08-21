@@ -171,7 +171,7 @@ async function handler(req, res) {
     const delta = buildState(body);
 
     if (Object.keys(delta).length === 0) {
-        return res.status(200).json({ ok: true, success: true, note: 'empty payload — no write', ref: ref });
+        return res.status(200).json({ ok: true, success: true, serverNowMs: Date.now(), note: 'empty payload — no write', ref: ref });
     }
 
     // ── SANITY-CHECK GUARDS (WO-120 §2) ────────────────────────────────────
@@ -194,7 +194,7 @@ async function handler(req, res) {
     }
 
     if (Object.keys(delta).length === 0) {
-        return res.status(200).json({ ok: true, success: true, note: 'all fields rejected by guards', rejects, ref });
+        return res.status(200).json({ ok: true, success: true, serverNowMs: Date.now(), note: 'all fields rejected by guards', rejects, ref });
     }
 
     // ── Upsert into Neon ───────────────────────────────────────────────────
@@ -230,6 +230,10 @@ async function handler(req, res) {
             bytes: rawBody.length,
             rejects: rejects.length ? rejects : undefined,
             ref: ref,
+            // WO-912 s7.2: authoritative server time for ServerClock. The save round trip
+            // is the most frequent handshake the client makes, so this is the main way the
+            // rewarded-ad window stays anchored during a session.
+            serverNowMs: Date.now(),
         });
     } catch (err) {
         console.error('[save] DB error:', err);

@@ -67,8 +67,28 @@ namespace DeNelle.Village
         /// </summary>
         public static double NowUnixMs()
         {
+            // WO-912 §7.2: when a server anchor exists for THIS process, it wins outright.
+            // ServerClock advances on a monotonic timer, so a wall-clock edit cannot move
+            // it — which is the whole defence. ServerOffsetMs is NOT added on top: the
+            // anchor already IS server time, and adding a device-derived correction to it
+            // would re-introduce the very term we are trying to escape.
+            // DevSkipMs still applies so QA can jump queues against a synced clock; it
+            // compiles to a constant 0 in shipped player builds.
+            if (DeNelle.Core.State.ServerClock.TryNowUnixMs(out double serverNow))
+                return serverNow + DevClock.SkipMs;
+
+            // No anchor this process (fresh launch, or never reached the backend).
+            // Fall back to the device clock and let the server reconcile on the next
+            // round trip — WO-912 deliberately does not block offline play.
             return DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + ServerOffsetMs + DevClock.SkipMs;
         }
+
+        /// <summary>
+        /// True when <see cref="NowUnixMs"/> is currently server-anchored and therefore
+        /// resistant to a device-clock edit. Callers that hand out real value (the
+        /// rewarded-ad window) log this so a capture shows which clock was trusted.
+        /// </summary>
+        public static bool IsServerAnchored => DeNelle.Core.State.ServerClock.IsTrusted;
 
         /// <summary>
         /// DEV: pushes the queue clock forward by <paramref name="deltaMs"/> (additive —
