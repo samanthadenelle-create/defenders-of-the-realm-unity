@@ -24,7 +24,7 @@
           "color": "#ff7043",
           "effect": "strike",
           "cooldown": 0.6,
-          "manaCost": 0,
+          "manaCost": 2,
           "damage": 30,
           "range": 14,
           "vfxCast": "Fire_Cast",
