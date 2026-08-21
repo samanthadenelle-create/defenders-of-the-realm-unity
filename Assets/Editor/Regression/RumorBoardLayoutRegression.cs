@@ -110,6 +110,7 @@ namespace DeNelle.Editor.Regression
                 Case(failures, "tab-band", () => Case1_TabBandFitsTheWell(failures, notes));
                 Case(failures, "detail", () => Case2_DetailStackFitsThePane(failures, notes));
                 Case(failures, "no-overlap", () => Case3_SourceLaws(failures, notes));
+                Case(failures, "close-band", () => Case4_PortraitCloseBand(failures, notes));
             }
             catch (Exception ex)
             {
@@ -374,6 +375,93 @@ namespace DeNelle.Editor.Regression
                              "CLAUDE.md Sec.0) - the compile gate rejects this");
 
             notes.Add("source laws checked on " + ViewSrc);
+        }
+
+        // =====================================================================
+        //  CASE 4 - WO-941: the PORTRAIT detail pane clears the shared Close band
+        // =====================================================================
+        /// <summary>
+        /// THE DEFECT THIS PINS (UICap-GEO, both portrait sizes, 14 assertions):
+        ///   CloseButton (y -763..-631) covers DetailRewardRow's "Food 90" / "Magic 45" /
+        ///   "Relic Drowned Ledger" AND the Accept/Track labels -- and Accept/Track cover
+        ///   "Close" right back.
+        /// Landscape gives the shared Close a home (BuildFooterBand). PORTRAIT did not: the
+        /// detail pane claimed a hardcoded 0.05 floor on the SAME chrome.content the kit seats
+        /// the fixed CanonCtaHeight Close box on, growing UPWARD from y = 0.050. Two surfaces,
+        /// one band -- UI_PLAYBOOK sec.8 verbatim.
+        ///
+        /// The View now MEASURES the Close's top (CloseReserveTopFraction) instead of hoping a
+        /// literal clears it. This case pins the arithmetic behind that: at both portrait capture
+        /// sizes, the floor the View computes must sit ABOVE the Close box's top, and the pane
+        /// left over must still seat the declared fixed detail stack plus a two-line body.
+        /// The capture oracle proves the shipped layout; this proves the budget, at gate speed.
+        /// </summary>
+        private static void Case4_PortraitCloseBand(List<string> failures, List<string> notes)
+        {
+            Type view = FindType(ViewType);
+            Type kit = FindType(KitType);
+            if (view == null || kit == null) { failures.Add("[close-band] view/kit type not found"); return; }
+
+            float ctaH = ConstFloat(kit, "CanonCtaHeight", failures, "[close-band]");
+            float panelMinY = ConstFloat(view, "PanelAnchorMinY", failures, "[close-band]");
+            float panelMaxY = ConstFloat(view, "PanelAnchorMaxY", failures, "[close-band]");
+            float gap = ConstFloat(view, "CloseReserveGapFrac", failures, "[close-band]");
+            float floorY = ConstFloat(view, "PortraitDetailFloorY", failures, "[close-band]");
+            float topY = ConstFloat(view, "PortraitDetailTopY", failures, "[close-band]");
+            float fixedStack = ConstFloat(view, "DetailFixedStackPx", failures, "[close-band]");
+            float bodyMin = ConstFloat(view, "DetailBodyMinPx", failures, "[close-band]");
+            if (ctaH <= 0f || panelMaxY <= panelMinY || topY <= 0f || fixedStack <= 0f) return;
+
+            // The kit's DefaultCloseZone lower edge. It is private to ElarionUiKit, so it is
+            // asserted here as the value SeatSharedCloseInside is documented to seat at -- if the
+            // kit ever moves the band, this case's numbers stop matching the capture and the
+            // capture is the tie-breaker.
+            const float CloseBandLowerEdge = 0.050f;
+
+            // The two PORTRAIT capture sizes the oracle failed on.
+            int[,] sizes = { { 1080, 2340 }, { 1200, 2670 } };
+            for (int s = 0; s < sizes.GetLength(0); s++)
+            {
+                int w = sizes[s, 0], h = sizes[s, 1];
+                // CanvasScaler ScaleWithScreenSize, reference 1080x1920, match 0.5 (BuildModalCanvas).
+                float scale = Mathf.Sqrt(w / 1080f) * Mathf.Sqrt(h / 1920f);
+                float canvasH = h / scale;
+                float panelH = (panelMaxY - panelMinY) * canvasH;
+                float closeTop = CloseBandLowerEdge + ctaH / panelH;
+                float paneFloor = Mathf.Max(floorY, closeTop + gap);
+
+                if (paneFloor <= closeTop)
+                    failures.Add("[close-band] at " + w + "x" + h + " the portrait detail pane floor (" +
+                                 paneFloor.ToString("F3") + ") does not clear the shared Close box top (" +
+                                 closeTop.ToString("F3") + ") - the reward chips and the Accept/Track CTAs " +
+                                 "land inside the Close again (the 14 WO-941 assertions verbatim)");
+
+                float panePx = (topY - paneFloor) * panelH;
+                if (panePx < fixedStack + bodyMin)
+                    failures.Add("[close-band] at " + w + "x" + h + " the portrait detail pane is " +
+                                 panePx.ToString("F0") + " ref px after the Close reserve, under " +
+                                 "DetailFixedStackPx(" + fixedStack + ") + DetailBodyMinPx(" + bodyMin +
+                                 ") = " + (fixedStack + bodyMin) + " - the body band goes negative and TMP " +
+                                 "culls the tale whole (the WO-866 failure, re-reachable through the reserve)");
+
+                notes.Add("portrait " + w + "x" + h + ": close top " + closeTop.ToString("F3") +
+                          ", pane " + paneFloor.ToString("F3") + ".." + topY.ToString("F2") +
+                          " = " + panePx.ToString("F0") + "px");
+            }
+
+            // The View must MEASURE the band, not re-hardcode a literal floor.
+            string raw = ReadSource(ViewSrc, failures);
+            if (raw != null)
+            {
+                string src = StripComments(raw);
+                if (src.IndexOf("CloseReserveTopFraction", StringComparison.Ordinal) < 0)
+                    failures.Add("[close-band] RumorBoardPanel no longer measures the shared Close band " +
+                                 "(CloseReserveTopFraction) - a hardcoded portrait floor is exactly what put " +
+                                 "the reward row and the CTAs inside the Close box (WO-941)");
+                if (Regex.IsMatch(src, @"detailMin\s*=\s*new\s+Vector2\s*\(\s*0\.05f\s*,\s*0\.05f\s*\)"))
+                    failures.Add("[close-band] the portrait detail pane is back on the literal 0.05 floor - " +
+                                 "that literal IS the WO-941 defect");
+            }
         }
 
         // =====================================================================

@@ -142,6 +142,46 @@ namespace DeNelle.Village.Hero
         /// <summary>Footer band that seats the shared Close, hung from the wells' floor.</summary>
         public const float FooterBandPx = 200f;
 
+        // =====================================================================
+        //  WO-941 -- THE PORTRAIT CLOSE BAND, PUBLISHED AND SUBTRACTED
+        // -----------------------------------------------------------------------------
+        //  LANDSCAPE gives the shared Close a home: BuildFooterBand paints a 200px plate
+        //  under it and the two wells end above it. PORTRAIT had no such band -- the detail
+        //  pane simply claimed 0.05..0.46 of chrome.content, while the kit seats the ONE
+        //  shared Close as a FIXED CanonCtaWidth x CanonCtaHeight box on that SAME
+        //  chrome.content, bottom-centred, growing UPWARD from its band's lower edge
+        //  (ElarionUiKit.SeatSharedCloseInside). Two surfaces, one band -- exactly the
+        //  failure UI_PLAYBOOK sec.8 names, and the geometry oracle read it as 14
+        //  `BUTTON OVER TEXT` assertions at BOTH portrait sizes: Close over the reward chip
+        //  labels ("Food 90" / "Magic 45" / "Relic Drowned Ledger") and over the
+        //  Accept/Track CTA labels, and Accept/Track back over "Close".
+        //
+        //  The fix is the playbook's, not a tune: PUBLISH the band the Close owns and
+        //  SUBTRACT it. CloseReserveTopFraction reads the Close's own seated anchor and
+        //  its canonical pixel height and returns where that box really TOPS OUT, in the
+        //  panel's fraction space -- so the pane's floor tracks the Close on every aspect
+        //  instead of hoping a hardcoded 0.05 clears it.
+        // =====================================================================
+
+        /// <summary>The modal's own vertical anchor band. Declared ONCE and read by both
+        /// <c>BuildObsidianModal</c> and the close-band math, so the two can never drift
+        /// (the duplicated-constant failure CLAUDE.md sec.2/sec.5 keeps catching).</summary>
+        public const float PanelAnchorMinY = 0.10f;
+        /// <inheritdoc cref="PanelAnchorMinY"/>
+        public const float PanelAnchorMaxY = 0.90f;
+        /// <summary>Breathing gap above the shared Close box before any other surface may start.</summary>
+        public const float CloseReserveGapFrac = 0.02f;
+        /// <summary>Floor for the portrait detail pane: also the fallback when the Close cannot
+        /// be measured (no button / no canvas), so a missing measurement never re-opens the band.</summary>
+        public const float PortraitDetailFloorY = 0.16f;
+        /// <summary>Sanity ceiling -- a very short canvas must not lose the whole pane to the band.</summary>
+        public const float CloseReserveMaxFrac = 0.45f;
+        /// <summary>Portrait detail pane's ceiling (the list well starts at 0.48).</summary>
+        public const float PortraitDetailTopY = 0.46f;
+        /// <summary>Hard ceiling the pane may grow to on a degenerate canvas before it would
+        /// touch the list well above it.</summary>
+        public const float PortraitDetailTopMaxY = 0.47f;
+
         private GameObject _ui;
         private Transform _panelRoot;
         private Transform _chromeContent;
@@ -204,7 +244,7 @@ namespace DeNelle.Village.Hero
             _vm.Changed += Repaint;
 
             var modal = ElarionUiKit.BuildObsidianModal("RumorBoardPanelUI", "Brom's Rumor Board",
-                new Vector2(0.08f, 0.1f), new Vector2(0.92f, 0.9f), Close, sortingOrder: 1000,
+                new Vector2(0.08f, PanelAnchorMinY), new Vector2(0.92f, PanelAnchorMaxY), Close, sortingOrder: 1000,
                 frameName: RpgUiCatalog.FrameQuest, medallionIcon: "quest");
             _ui = modal.canvas;
             var panel = modal.chrome.content;
@@ -230,8 +270,28 @@ namespace DeNelle.Village.Hero
             float listBottomInsetPx = 0f;
             if (portrait)
             {
+                // WO-941: the pane's FLOOR is the top of the shared Close box + a gap, MEASURED
+                // off the Close the kit just seated on this same chrome.content -- never the old
+                // hardcoded 0.05, which put the reward-chip row and the Accept/Track CTA band
+                // inside the Close's fixed 360x132 box at every portrait size.
+                float panelHPx = Mathf.Max(1f, (PanelAnchorMaxY - PanelAnchorMinY) *
+                                                ElarionUiKit.PostScaleCanvasHeight(panel.transform));
+                float detailFloorY = CloseReserveTopFraction(modal.chrome.close, panelHPx);
+                float detailTopY = PortraitDetailTopY;
+                // The detail stack is a DECLARED fixed-pixel budget; if the reserved band would
+                // starve it, grow the pane UP into the slack under the list well (0.48) rather
+                // than back DOWN into the band the Close owns. Collapse, never invert (sec.8).
+                float needFrac = (DetailFixedStackPx + DetailBodyMinPx) / panelHPx;
+                if (detailTopY - detailFloorY < needFrac)
+                {
+                    detailTopY = Mathf.Min(PortraitDetailTopMaxY, detailFloorY + needFrac);
+                    Debug.LogWarning("[RumorBoardPanel] WO-941: portrait detail pane is tight after the " +
+                        "Close-band reserve (floor " + detailFloorY.ToString("F3") +
+                        ", top " + detailTopY.ToString("F3") + ", panelH " + panelHPx.ToString("F0") + " px).");
+                }
+
                 listMin = new Vector2(0.03f, 0.48f); listMax = new Vector2(0.97f, 0.855f);
-                detailMin = new Vector2(0.05f, 0.05f); detailMax = new Vector2(0.95f, 0.46f);
+                detailMin = new Vector2(0.05f, detailFloorY); detailMax = new Vector2(0.95f, detailTopY);
                 listHost = bodyHost;
                 detailHost = panel.transform;
                 // Portrait stacks the panes and the band hangs from the BODY top, well above
@@ -481,6 +541,32 @@ namespace DeNelle.Village.Hero
         {
             if (_vm != null) { _vm.Changed -= Repaint; _vm.Dispose(); _vm = null; }
             if (_ui != null) Destroy(_ui);
+        }
+
+        /// <summary>
+        /// WO-941 -- where the ONE shared Close box really TOPS OUT, expressed as a fraction of
+        /// this panel's own height, plus <see cref="CloseReserveGapFrac"/>. Any surface parented
+        /// to chrome.content must start at or above this line.
+        ///
+        /// The Close is seated by <c>ElarionUiKit.SeatSharedCloseInside</c>: anchorMin.y ==
+        /// anchorMax.y == the band's lower edge, pivot y = 0, sizeDelta y ==
+        /// <c>ElarionUiKit.CanonCtaHeight</c> -- a FIXED pixel box growing UPWARD. So its top is
+        /// the seated anchor plus that fixed height over the panel's height in the SAME
+        /// post-scale reference px the anchors resolve against. <paramref name="panelHPx"/> is
+        /// derived from <c>PostScaleCanvasHeight</c> (never a live <c>rect.height</c>, which
+        /// returns RAW SCREEN PIXELS on the canvas's creation frame -- the F8-5 root cause the
+        /// kit documents at <c>ElarionUiKit.PostScaleCanvasHeight</c>).
+        ///
+        /// Returns <see cref="PortraitDetailFloorY"/> when the Close cannot be measured, so a
+        /// missing measurement can never silently re-open the band.
+        /// </summary>
+        private static float CloseReserveTopFraction(UnityEngine.UI.Button close, float panelHPx)
+        {
+            if (close == null || panelHPx <= 1f) return PortraitDetailFloorY;
+            var crt = close.transform as RectTransform;
+            if (crt == null) return PortraitDetailFloorY;
+            float closeTop = crt.anchorMin.y + ElarionUiKit.CanonCtaHeight / panelHPx;
+            return Mathf.Clamp(closeTop + CloseReserveGapFrac, PortraitDetailFloorY, CloseReserveMaxFrac);
         }
 
         /// <summary>The LIST well's top line expressed as a fraction of the DETAIL well's own

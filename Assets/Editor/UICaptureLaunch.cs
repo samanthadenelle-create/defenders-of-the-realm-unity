@@ -2499,6 +2499,13 @@ namespace DeNelle.Editor
                     // (2) BLOCKED — the refusal must be READABLE, not just red.
                     hud.TrackGhost(new Vector2(target.W * 0.5f, target.H * 0.55f), false, "Not enough Wood");
                     hud.LayoutGhostControlsNow();
+                    // WO-942 gap 2: the D17 SPRITE path's invalid verdict had no assertion
+                    // anywhere. The worded refusal on the PILL is photographed by this shot, but
+                    // the confirm chip's own invalid state is a colour/alpha + interactable flip
+                    // that a PNG cannot be trusted to prove (the owner is red/green colourblind;
+                    // "did the check-mark dim" is exactly the judgement a screenshot should not
+                    // be asked for). Measure it instead — see AssertConfirmChipInvalid.
+                    AssertConfirmChipInvalid(canvasGo, target.Tag);
                     if (RenderCanvasToPng(canvasGo, OutDir + "BuildGhostChips_blocked_" + target.Tag + ".png",
                         target.W, target.H)) saved++;
 
@@ -2506,24 +2513,39 @@ namespace DeNelle.Editor
                     //     still be fully on-screen and still be tappable.
                     hud.TrackGhost(new Vector2(target.W - 2f, 2f), true, null);
                     hud.LayoutGhostControlsNow();
-                    if (RenderCanvasToPng(canvasGo, OutDir + "BuildGhostChips_edgeclamp_" + target.Tag + ".png",
-                        target.W, target.H)) saved++;
+                    string edgePath = OutDir + "BuildGhostChips_edgeclamp_" + target.Tag + ".png";
+                    if (RenderCanvasToPng(canvasGo, edgePath, target.W, target.H)) saved++;
 
-                    // (4) NUDGE PAD — it now follows STATE, with no toggle for the player to
-                    //     find (owner ruling 2026-08-09: "it should be smart... user should not
-                    //     need to do anything"). The pad is therefore already up from the
-                    //     SetState(Placing) above; the shot proves it appears unaided.
-                    //     The assertion is inverted from the old one: a surviving toggle button
-                    //     would now be the defect, so its ABSENCE is what gets checked.
+                    // (4) NUDGE PAD — it follows STATE, with no toggle for the player to find
+                    //     (owner ruling 2026-08-09: "it should be smart... user should not need
+                    //     to do anything"). The assertion is inverted from the old one: a
+                    //     surviving toggle button would now be the defect, so its ABSENCE is
+                    //     what gets checked.
+                    //
+                    // ── WO-942 gap 1: THIS CASE USED TO PROVE NOTHING. ───────────────────
+                    // It photographed BYTE-IDENTICAL to (3) at all three sizes (88555 / 108491 /
+                    // 118402 — the identical-file-size tell, UI_PLAYBOOK §13.1), for TWO reasons
+                    // that both had to be fixed:
+                    //   a. it never moved the ghost, so it re-shot (3)'s corner-clamped frame; and
+                    //   b. the pad's visibility is the BRAIN's per-frame verdict, delivered via
+                    //      SetNudgePadAllowed from an Update that DOES NOT RUN IN EDIT MODE — so
+                    //      the stick built by SetState(Placing) was still SetActive(false) and
+                    //      the shot contained no stick at all.
+                    // Both are now driven EXPLICITLY, exactly as LayoutGhostControlsNow() already
+                    // is and for the identical reason. A capture that cannot draw the thing it
+                    // captures launders an unverified state as verified (§13).
+                    hud.TrackGhost(new Vector2(target.W * 0.28f, target.H * 0.5f), true, null);
+                    hud.LayoutGhostControlsNow();
+                    hud.SetNudgePadAllowed(true);
+
                     if (canvasGo.transform.Find("BuildNudgePadToggle") != null)
                         Debug.LogWarning("[UICap-HL] a BuildNudgePadToggle still exists -- the '+' toggle was " +
                                          "RETIRED; the pad follows placement state. REAL gap, not noise.");
-                    var pad = canvasGo.transform.Find("BuildNudgePad");
-                    if (pad == null || !pad.gameObject.activeInHierarchy)
-                        Debug.LogWarning("[UICap-HL] BuildNudgePad is absent/hidden while PLACING -- the player " +
-                                         "has no way to nudge a piece and no toggle to summon one.");
-                    if (RenderCanvasToPng(canvasGo, OutDir + "BuildGhostChips_padon_" + target.Tag + ".png",
-                        target.W, target.H)) saved++;
+                    AssertNudgePadOnScreen(canvasGo, target.Tag, target.W, target.H);
+
+                    string padPath = OutDir + "BuildGhostChips_padon_" + target.Tag + ".png";
+                    if (RenderCanvasToPng(canvasGo, padPath, target.W, target.H)) saved++;
+                    AssertShotsDiffer(edgePath, padPath, "BuildGhostChips edgeclamp vs padon", target.Tag);
                 }
                 catch (Exception e)
                 {
@@ -2535,6 +2557,162 @@ namespace DeNelle.Editor
                 }
                 return saved;
             });
+        }
+
+        // =====================================================================
+        //  WO-942 — the assertions that close the two capture-case gaps
+        // =====================================================================
+
+        /// <summary>
+        /// WO-942 gap 2 — the D17 SPRITE path's INVALID verdict, MEASURED.
+        ///
+        /// D17 gave the confirm verb a check-mark sprite, and a check-mark has no word to flip.
+        /// So <c>BuildHudController</c> renders the invalid state as DIM + DISABLED: the icon
+        /// Image goes to alpha 0.35 and the Button goes non-interactable, with the WORDED reason
+        /// staying on the pill. Both halves of that are unphotographable in practice — an alpha
+        /// change on a small glyph is precisely the judgement a PNG (and a red/green colourblind
+        /// reader) should never be asked to make — and until now NOTHING measured them. This is
+        /// the measurement. On the ASCII fallback path the chip flips its WORD instead, so that
+        /// is what gets asserted there.
+        ///
+        /// Warn-only, matching every other assertion in this harness: it prints a REAL-gap line
+        /// the capture judge reads, and never aborts a capture run mid-way.
+        /// </summary>
+        private static void AssertConfirmChipInvalid(GameObject canvasGo, string tag)
+        {
+            if (canvasGo == null) return;
+
+            Transform chip = FindDescendant(canvasGo.transform, "OkChip");
+            if (chip == null)
+            {
+                Debug.LogWarning("[UICap-HL] " + tag + ": no 'OkChip' under the build HUD canvas -- the confirm " +
+                                 "verb was renamed or removed, so the D17 invalid verdict is unmeasured. " +
+                                 "REAL gap, not noise.");
+                return;
+            }
+
+            var btn = chip.GetComponent<Button>();
+            if (btn == null)
+                Debug.LogWarning("[UICap-HL] " + tag + ": 'OkChip' carries no Button -- confirm cannot be " +
+                                 "disabled at all while the placement is invalid. REAL gap, not noise.");
+            else if (btn.interactable)
+                Debug.LogWarning("[UICap-HL] " + tag + ": 'OkChip' is still INTERACTABLE while the ghost is " +
+                                 "invalid -- the player can commit a refused placement. REAL gap, not noise.");
+
+            // Sprite path: the glyph Image dims. ASCII fallback: the label flips OK -> No.
+            Transform icon = FindDescendant(chip, "ChipIcon");
+            var iconImg = icon != null ? icon.GetComponent<Image>() : null;
+            if (iconImg != null)
+            {
+                const float WantAlpha = 0.35f;   // BuildHudController: new Color(1,1,1,0.35f)
+                if (Mathf.Abs(iconImg.color.a - WantAlpha) > 0.02f)
+                    Debug.LogWarning("[UICap-HL] " + tag + ": D17 sprite path -- 'OkChip/ChipIcon' alpha is " +
+                                     iconImg.color.a.ToString("F2") + ", expected " + WantAlpha.ToString("F2") +
+                                     " for the invalid verdict. The check-mark reads as ENABLED while the " +
+                                     "placement is refused. REAL gap, not noise.");
+                else
+                    Debug.Log("[UICap-HL] " + tag + ": D17 invalid verdict OK (sprite path: icon alpha " +
+                              iconImg.color.a.ToString("F2") + ", confirm non-interactable).");
+                return;
+            }
+
+            var label = chip.GetComponentInChildren<TMP_Text>(true);
+            if (label == null)
+                Debug.LogWarning("[UICap-HL] " + tag + ": 'OkChip' has neither a ChipIcon nor a label -- the " +
+                                 "confirm verb renders nothing at all. REAL gap, not noise.");
+            else if (!string.Equals(label.text, "No", StringComparison.Ordinal))
+                Debug.LogWarning("[UICap-HL] " + tag + ": ASCII fallback path -- 'OkChip' label reads '" +
+                                 label.text + "', expected 'No' for the invalid verdict. The refusal would " +
+                                 "rest on COLOUR ALONE, which the owner cannot see. REAL gap, not noise.");
+            else
+                Debug.Log("[UICap-HL] " + tag + ": D17 invalid verdict OK (ASCII path: label 'No', " +
+                          "confirm non-interactable).");
+        }
+
+        /// <summary>
+        /// WO-942 gap 1 — the nudge stick is ACTUALLY UP and ACTUALLY ON-SCREEN before the padon
+        /// shot is taken. Edit-mode safe: the pad's visibility has just been driven explicitly by
+        /// <c>SetNudgePadAllowed(true)</c>, because the brain's per-frame verdict never ticks here.
+        /// An off-screen or hidden pad means the shot photographs a stick the player does not have.
+        /// </summary>
+        private static void AssertNudgePadOnScreen(GameObject canvasGo, string tag, int w, int h)
+        {
+            if (canvasGo == null) return;
+
+            var pad = canvasGo.transform.Find("BuildNudgePad");
+            if (pad == null || !pad.gameObject.activeInHierarchy)
+            {
+                Debug.LogWarning("[UICap-HL] " + tag + ": BuildNudgePad is absent/hidden while PLACING -- the " +
+                                 "player has no way to nudge a piece and no toggle to summon one, and the " +
+                                 "padon shot photographs nothing. REAL gap, not noise.");
+                return;
+            }
+
+            // The host stretches the whole canvas; the STICK is the widget that has to be reachable.
+            Transform stick = FindDescendant(pad, "AnalogStick") ?? FindDescendant(pad, "VirtualDPad");
+            var root = canvasGo.GetComponent<RectTransform>();
+            var srt = stick as RectTransform;
+            if (stick == null || srt == null)
+            {
+                Debug.LogWarning("[UICap-HL] " + tag + ": BuildNudgePad is active but carries NO stick/d-pad " +
+                                 "widget -- ElarionUiKit.BuildAnalogStick and the WO-611 d-pad fallback BOTH " +
+                                 "failed to construct. REAL gap, not noise.");
+                return;
+            }
+
+            if (!TryRectInRoot(srt, root, out Rect r))
+            {
+                Debug.LogWarning("[UICap-HL] " + tag + ": nudge stick rect could not be measured.");
+                return;
+            }
+
+            Rect canvasRect = root.rect;
+            bool inside = r.xMin >= canvasRect.xMin - GeoContainSlackPx && r.xMax <= canvasRect.xMax + GeoContainSlackPx
+                       && r.yMin >= canvasRect.yMin - GeoContainSlackPx && r.yMax <= canvasRect.yMax + GeoContainSlackPx;
+            if (!inside)
+                Debug.LogWarning("[UICap-HL] " + tag + ": nudge stick rect (" + r + ") is NOT fully inside the " +
+                                 canvasRect + " canvas at " + w + "x" + h + " -- part of the only pixel-nudge " +
+                                 "control is unreachable. REAL gap, not noise.");
+            else
+                Debug.Log("[UICap-HL] " + tag + ": nudge stick UP and fully on-screen (" + stick.name +
+                          ", " + r.width.ToString("F0") + "x" + r.height.ToString("F0") + " ref px).");
+        }
+
+        /// <summary>
+        /// WO-942 gap 1 — the identical-file-size tell (UI_PLAYBOOK §13.1) turned into an
+        /// assertion. Two capture cases that are meant to photograph DIFFERENT states and come out
+        /// byte-identical did not photograph two states; one of them proved nothing, and a green
+        /// run then launders that unverified state as verified. Byte length is the cheap, exact
+        /// signal — PNGs of two genuinely different frames are never the same length.
+        /// </summary>
+        private static void AssertShotsDiffer(string pathA, string pathB, string what, string tag)
+        {
+            try
+            {
+                if (!File.Exists(pathA) || !File.Exists(pathB)) return;   // a missing shot is reported elsewhere
+                long a = new FileInfo(pathA).Length;
+                long b = new FileInfo(pathB).Length;
+                if (a == b)
+                    Debug.LogWarning("[UICap-HL] " + tag + ": " + what + " produced BYTE-IDENTICAL shots (" + a +
+                                     " bytes each) -- the two cases photographed the SAME frame, so one of them " +
+                                     "proves nothing (UI_PLAYBOOK 13.1). REAL gap, not noise.");
+                else
+                    Debug.Log("[UICap-HL] " + tag + ": " + what + " differ (" + a + " vs " + b + " bytes).");
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning("[UICap-HL] " + tag + ": shot-difference check threw: " + e.Message);
+            }
+        }
+
+        /// <summary>First descendant named <paramref name="name"/> (inactive included), or null.</summary>
+        private static Transform FindDescendant(Transform root, string name)
+        {
+            if (root == null) return null;
+            var all = root.GetComponentsInChildren<Transform>(true);
+            for (int i = 0; i < all.Length; i++)
+                if (all[i] != null && string.Equals(all[i].name, name, StringComparison.Ordinal)) return all[i];
+            return null;
         }
 
         // =====================================================================
