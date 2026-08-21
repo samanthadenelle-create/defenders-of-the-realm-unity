@@ -4,7 +4,7 @@
 
 # WORK ORDER 127 — Tower "Manage All Towers" UI Shows Stale Level 1 After Upgrade
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Date:** 2026-05-30
 **Priority:** High — live playtest bug; the upgrade sink looks broken to the player
 **Lane:** Combat / UI (code only — no scene files, no bakes)
@@ -140,3 +140,5 @@ and make the action actually upgrade. Keep changes inside this one file (UI/comb
 - **`TowerPersistenceService.cs`** — its "build at level 1 then replay upgrades"
   (`TowerPersistenceService.cs:104-105`) correctly restores `CurrentLevel`; not the cause.
 - No scene files, no `VillageSceneBuilder`, no PanelSettings rewiring.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `BuildMenu.cs:123,594-703` — upgrade retargeted to live Tower. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

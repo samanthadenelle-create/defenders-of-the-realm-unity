@@ -111,3 +111,5 @@ BOTH dual copies, verified byte-identical and parsing. The two control fixtures 
 
 **Owner felt-verify (after the re-bake):** dark `dg_ember_deep` - the mid-floor pads read as quiet
 discs saying "Leave", exactly one arch+beam, and the beam does not stand proud of the floor above.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — STILL VALID. Evidence: `DungeonExitInteractable.cs:118-135; 7 layouts exitRoomId=entry` — true exit unpinned. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.

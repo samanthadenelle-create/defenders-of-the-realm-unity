@@ -4,7 +4,7 @@
 
 # WORK ORDER 731 — Felt-Complete Vertical + Flag Flip + Canon
 
-**Status:** READY TO IMPLEMENT (serial program close)  
+**Status:** CLOSED — REMOVED (owner ruling 2026-08-21).
 **Priority:** P0 (ship gate for the CoC block)  
 **Silo:** QA / PO close / Canon  
 **Depends on:** WO-724, 725, 726, 727; **728 recommended**; 729–730 optional for “full CoC”  
@@ -74,3 +74,7 @@ One continuous playtest script; flip flag **defaults** only after PO felt-pass; 
 ## RESULT
 
 `WorkOrders/WORK_ORDER_731_coc_felt_complete_close.RESULT.md`
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — NEEDS OWNER RULING. Evidence: `FeatureFlags.cs:33,872,863` — flag flip is PO sign-off. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** Colosseum stays OFF. The flag-flip vertical is withdrawn rather than deferred; FeatureFlags.cs:33 (Arena) and :872 (Colosseum) remain defaultOn:false and NOTHING here authorises flipping them.

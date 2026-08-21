@@ -1,6 +1,6 @@
 # WORK ORDER 861 — Make Sylas + Thrain playable (simplified)
 
-**Status:** READY. Architect-reviewed 2026-08-02. **Both heroes were already BUILT + PLAYABLE and deliberately gated
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 OFF while the platform stabilized (owner) — so this is RE-ENABLE + verify, not build-from-scratch. No new body art.**
 **Author:** UI/QA triage + architect review (read-only, §13) — Claude UI
 **Lane:** Hero/Class — gate-flips + content authoring; NO new class enum. (Cathedral of Magic ALREADY EXISTS — re-point
@@ -225,3 +225,5 @@ Tree (`trees.ranger` retuned, displayName→"Sylas (Ranger)"): **sustain** (Natu
 ## A5. Balance (role split, all self-sustaining)
 Knight (Grom) = durable melee anchor (Warden's Grace) · Sylas = ranged sustain-DPS/kiter (Healing Shot + evasion) ·
 Thrain = burst glass cannon (Mend + mana management; fragile). Costs/cds in existing bands. No hero wins every axis.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `PlayableHeroes.cs:19-22` — heroes ungated. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

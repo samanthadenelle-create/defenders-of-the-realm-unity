@@ -1,3 +1,5 @@
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
+
 > ⚠ **UNRESOLVED NUMBER COLLISION — WO-439 is claimed by more than one file and OWNERSHIP IS NOT DECIDED.**
 > Co-claimants: `WORK_ORDER_439_quest_board_collection.md` (06-17, first-on-disk), `WORK_ORDER_439_left_slide_panel.md` (07-04)
 > **This is one of a four-number group (WO-437 / 438 / 439 / 440) that collided the same way.** The June
@@ -52,3 +54,5 @@ the same seam the shop/inventory used:
 
 *Cross-ref:* `docs/UI_MVVM_BINDING_MAP.md §2/§5` (Quest row), WO-431/434 (the proven VM pattern),
 WO-437 (open via interaction, not hotkey), panel audit (`RumorBoardPanel`, `DailyQuestHud`).
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

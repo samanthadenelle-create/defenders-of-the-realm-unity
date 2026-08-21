@@ -6,7 +6,7 @@
 
 # WORK ORDER 282 — HELD (not shipped overnight)
 
-**Status:** BLOCKED — HELD for a daytime, play-verified session. **Not** started.
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 **Date:** 2026-06-06 (overnight run)
 **Decision by:** CLI — flagged per owner's best-practice-pushback standing instruction.
 
@@ -58,3 +58,5 @@ Reasons this should not land blind overnight:
 4. Reconcile `HeroAnimatorFactory` controller output path (no longer Resources).
 5. CompileGate → Addressables content build → player build → **play-test all 4 classes**.
 6. Commit, write RESULT, close the Linear issue.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

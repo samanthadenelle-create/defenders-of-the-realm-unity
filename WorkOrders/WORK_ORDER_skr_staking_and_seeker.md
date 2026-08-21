@@ -5,7 +5,7 @@
 # WORK ORDER — SKR Staking Reward + Solana Seeker Ecosystem Pitch
 
 **Type:** DESIGN + RESEARCH SPEC (ideas, data schema, phased plan, cited sources). **No `.cs` in this WO** — implementation is a follow-up WO once the owner greenlights a stage.
-**Status:** DRAFT FOR OWNER REVIEW — not yet READY TO IMPLEMENT.
+**Status:** CLOSED — ALREADY DONE (owner ruling 2026-08-21).
 **Author lane:** Monetization/Backend + Distribution (§9 parallel lane — isolated from gameplay).
 **Date:** 2026-06-28
 **Supersedes nothing.** *Layers on top of* `WorkOrders/WORK_ORDER_skr_store_design.md` (held-SKR premium store, `ISkrLedger`), `WorkOrders/WORK_ORDER_pi_browser_integration.md` (parallel web rail), `docs/monetization-v2-spec.md` §12 (owner's yield-funded rewards), and `docs/DATA_ARCHITECTURE_DECISION_2026-06-27.md` (staged local→cloud→Solana). Staking is a **small loyalty layer + a distribution wedge**, not a new economy.
@@ -271,3 +271,5 @@ The pitch is uncommonly strong because of one alignment most applicants don't ha
 - Memory `data-architecture-hybrid-db-direction`, `combat-pivot-single-hero-northstar`, `owner-thinks-in-data-structures`, `wardrobe-dressable-capability`.
 </content>
 </invoke>
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** Owner states the SKR staking reward + Seeker ecosystem pitch has already been done. Closed on her word. Related shipped state: StakeRewardsResolver / StakeRewardsPanel exist read-only.

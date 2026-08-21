@@ -1,3 +1,5 @@
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
+
 > ⚠ **NUMBER COLLISION — this document does not own WO-433; `WORK_ORDER_433_shop_blink_cohesion.md` does.**
 > Referred to hereafter as **WO-433-B (Village2 raid destination)**.
 > Flagged by the 2026-08-16 Sunday board-grooming pass (`python tools/board_build.py` → `DUPLICATE_WO_NUMBERS`);
@@ -87,3 +89,5 @@ self-verifies the raid end-to-end with no human.
 - `Assets/Resources/Data/Canonical/garrison-recipes.json` (`village2_stronghold` — add boss if decision #2=yes).
 - `Assets/_Modules/DevTools/AutoPilotDriver.cs` + `AutoPilotProbes.cs` (Village2 phase + oracles).
 - Objective UI: a small code-built HUD callout (reuse the castle pattern).
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

@@ -1,3 +1,5 @@
+**Status:** CLOSED — owner ruling 2026-08-21.
+
 > ## RECONCILED 2026-08-08 - true status is PARTIAL - BLOCKED ON RESEARCH
 > Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: the prefab-kit half EXISTS (`StairConnector_*_{Up,Down}.prefab`, landed `15d1081d`), but acceptance sec.6 (`dg_descent_probe` = `PathComplete`) is UNMET after FOUR failed hypothesis rounds - see WO-927. Marking this "READY TO IMPLEMENT" understates a hard research blocker and would send a session in expecting a straightforward build.
 > The previous Status line read "READY TO IMPLEMENT" and was wrong.
@@ -234,3 +236,5 @@ Add to `DungeonMultiLevelRegression` or `RoomForgeRegression`:
 ## 9. RESULT
 
 `WorkOrders/WORK_ORDER_923_walkable_stair_prefab_kit.RESULT.md`
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** Closed by the owner.

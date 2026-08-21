@@ -4,7 +4,7 @@
 
 # WO-370: Arena Monument VFX Aura — Magical Spell Effects & Glow
 
-**Status:** READY TO IMPLEMENT  
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Estimated Effort:** P1 (1–1.5 days — particles + shaders + tweaking)  
 **Priority:** HIGH (visual polish, makes monument iconic)  
 **Lane:** 9 VFX/Audio
@@ -346,3 +346,5 @@ public class ArenaMonumentAura : MonoBehaviour
 - [ ] Monument feels truly iconic and magical
 - [ ] Endgame destination feels powerful and unique
 - [ ] Ready for monetization (WO-361) to tie rewards to this location
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `ArenaHeraldSpawner.cs:324,347-365,455` — persistent aura + glow. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

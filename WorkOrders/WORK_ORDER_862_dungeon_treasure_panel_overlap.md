@@ -1,6 +1,6 @@
 # WORK ORDER 862 — Dungeon Treasure reward panel: fix the overlapping text (stack, don't center)
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Author:** UI/QA triage (read-only RCA, §13) — Claude UI
 **Lane:** HUD/UI — single new file `DungeonTreasurePanel.cs` (WO-850). Layout only; grant/callback logic untouched.
 **WO#:** UI-seat block (860–899); 860=weapons, 861=characters, **862**=this.
@@ -55,3 +55,5 @@ The dev **"What looks wrong?"** capture field bleeding over the "TREASURE FOUND"
 - Do NOT touch the grant/ownership logic (`CloseAndGrant`/`Teardown`/`s_onTake`) — it's correct (WO-844/850 lessons).
 - Do NOT go back to fractional-height bands (keep `EnsureBand`); the bug is POSITION, not height.
 - Do NOT add a second exit — Take stays the only CTA (owner F8 seq 628). ASCII-only; colorblind text.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `DungeonTreasurePanel.cs:59-64,126-174` — stack layout. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

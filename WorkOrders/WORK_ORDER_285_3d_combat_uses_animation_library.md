@@ -1,6 +1,6 @@
 # WORK ORDER 285 — 3D Real-Time Fighting Uses the Animation Library (responsive event → clip)
 
-**Status:** ✅ **SHIPPED (hero combat)** — committed `bac3fd9`
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 (see `WORK_ORDER_285_3d_combat_uses_animation_library.RESULT.md`).
 This is the WO that already built the Knight's 3-swing escalating combo plus hit/death/block routed
 through `ActorAnimator` — i.e. combo sequencing is NOT greenfield; extend this spine.
@@ -109,3 +109,5 @@ This is the "responsive" half — animations must line up with gameplay, not lag
   small responsive combo, not the entire 99-clip set.
 - Linear note: workspace is at its free-issue limit, so this couldn't be filed as a DEF
   ticket yet — assign from the WO file, or clear a Linear slot and I'll create it.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

@@ -1,3 +1,5 @@
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
+
 # WORK ORDER 288 — Class Signature Combat Moves (the fight is the hook)
 
 **Status: IN PROGRESS — core shipped, class variants are SPEC.**
@@ -66,3 +68,5 @@ on equip. Keeps every weapon landing right without per-weapon code. Tool committ
 - Keep slo-mo SPECIAL (rate-capped / skill-gated) so it doesn't become constant stutter.
 - All `Time.timeScale` dips restore in a `finally` (safe); `CombatFeedbackManager.OnDestroy` resets too.
 - Local WO (Linear maxed; tracked in-repo). Files now ≤288.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

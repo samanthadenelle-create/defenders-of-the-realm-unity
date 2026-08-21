@@ -1,3 +1,5 @@
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
+
 <!-- era-sweep-2026-08-17 -->
 > ### ⚠ AGED 2026-08-17 — still READY, but unverified since 2026-07-04
 > The 2026-08-17 era sweep found **no evidence** that this WO's subject was deleted or superseded, so its **Status stays READY** and nothing else was changed. It is simply OLD (git first-add 2026-07-04) and has not been re-verified against current canon (`CANON_GROUND_TRUTH_*.md`, CLAUDE.md §7). **Re-verify before pulling it.**
@@ -119,3 +121,5 @@ The spawning SME inventory is authoritative — key breakages the merge causes +
 Land Lane A (hero movement build) first on an isolated gate so this large/risky navmesh merge cannot delay the
 owner's #1 walkable build. Then implement WO-608 on the clean committed tree. Lane C (spawning WO-609) shares
 the world/seam files → same world lane, sequenced with this (one agent on the §9 bottleneck files).
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

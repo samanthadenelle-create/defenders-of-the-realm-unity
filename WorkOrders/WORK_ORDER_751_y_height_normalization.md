@@ -1,6 +1,6 @@
 # WORK ORDER 751 — Y-height normalization: default height + sparse overrides + audit tool
 
-**Status:** SPEC — READY TO IMPLEMENT (owner rulings 2026-07-19). Blocked only on the 2 target numbers.
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Classification:** system + tool (extends the existing DEF-208 fit-to-height). Player-felt (structure sizing).
 **PO:** Sam. Memory: [[normalize-items-by-y-height]]. Principle: ARCHITECTURE_PRINCIPLES §4 (scale from bounds).
 
@@ -43,3 +43,5 @@ legacy fit-to-largest-dimension - the inconsistency source.
 ## Do NOT
 - Don't set a per-entry visualHeight on everything (defeats the default relationship) — only the larger overrides.
 - ASCII-only; dual-copy the catalog; don't hand-edit .unity scenes.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `StructureFactory.cs:56,61` — shipped as WO-764 height multipliers. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

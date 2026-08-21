@@ -1,6 +1,6 @@
 ﻿# WORK ORDER 852 â€” Echo card: fixed-band layout so the resource picker is clean + usable
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Author:** UI/QA triage (read-only RCA, Â§13) â€” Claude UI
 **Lane:** HUD/UI â€” `EchoCardView.cs` (+ possibly `EchoCardVM.cs` copy). View-layout only; no economy/VM-logic change.
 **Origin:** owner felt-test 2026-08-02, ECHO card (WO-830 resource picker) â€” *"read-only RCA this so it's clean and
@@ -72,3 +72,4 @@ there, not here.
 - Do NOT go back to scaling fraction bands â€” use fixed pixel line boxes / touch floor (the proven WO-841 pattern).
 - Do NOT hand-edit scenes; single View-layout change (+ its test).
 
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `EchoCardView.cs:2-3,22-60` — fixed-band layout. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

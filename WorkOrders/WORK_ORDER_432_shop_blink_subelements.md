@@ -10,7 +10,7 @@
 
 # WORK ORDER 432 — Dress the Shop's structural sub-elements with Blink sprites
 
-**Status:** READY TO IMPLEMENT
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 **Lane:** UI / Presentation (re-skin) — follow-on to **WO-431** (ShopPanel MVVM slice).
 **Type:** Cosmetic re-skin, flag-gated. No logic/behavior change.
 **Owner routing:** CLI writes the code (UI never touches `.cs`).
@@ -259,3 +259,5 @@ the current code-built View read as one Blink surface today, fully reversible vi
 - `docs/BLINK_UI.md` (re-skin system, importer, the `*SolidFill` alpha-0 / neutralize technique, slots deferred-TODO).
 - `Assets/_Modules/Core/FeatureFlags.cs` (`BlinkChrome`, `ff.blinkchrome`, the `Defenders/Debug/Blink Chrome` menu).
 - WO-431 (ShopPanel MVVM slice — the View this dresses).
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

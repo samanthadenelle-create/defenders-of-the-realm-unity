@@ -5,7 +5,7 @@
 # WORK ORDER — Pi Browser / Pi Network Integration (Feasibility + Design)
 
 **Type:** RESEARCH + DESIGN SPEC (feasibility, architecture, phased plan). **No `.cs` in this WO** — implementation is a follow-up WO once the owner greenlights a phase.
-**Status:** DRAFT FOR OWNER REVIEW — not yet READY TO IMPLEMENT.
+**Status:** PARKED — FUTURE WORK, not a priority (owner ruling 2026-08-21).
 **Author lane:** Monetization/Backend + Distribution (§9 parallel lane — isolated from gameplay).
 **Date:** 2026-06-28
 **Supersedes nothing.** *Layers on top of* the ratified `docs/DATA_ARCHITECTURE_DECISION_2026-06-27.md` (staged local→cloud→Solana) and `WorkOrders/WORK_ORDER_skr_store_design.md` (held-SKR premium store). Pi is a **new payment rail + distribution channel**, not a new economy.
@@ -257,3 +257,5 @@ Submit for app review / ecosystem listing; finalize domain, privacy, support. Op
 - `docs/DATA_ARCHITECTURE_DECISION_2026-06-27.md` — staged local→cloud→Solana; T1 Addressables-remote (the size lever Pi WebGL needs); T2 cloud backend (shared with the Pi verifier).
 - `WorkOrders/WORK_ORDER_skr_store_design.md` — held-SKR premium store, `ISkrLedger`, PackStore on-ramp, ethical covenant + validator firewall.
 - Memory `data-architecture-hybrid-db-direction`, `combat-pivot-single-hero-northstar` (V1 = hub + Knight = the small build that can fit WebGL).
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** Pi accepts WEB UI ONLY and no web-UI push has been made; Pi offers no funding and takes 30% commission. Owner will revisit at some point. The DEEP file is the live decision doc - this feasibility pass is the older of the two.

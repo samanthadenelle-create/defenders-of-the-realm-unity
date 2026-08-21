@@ -4,7 +4,7 @@
 
 # WORK_ORDER_507 — BATTLE HUD: 9-zone polish (first pass)
 
-**Status:** READY TO IMPLEMENT (all decisions resolved owner+Grok 2026-06-24) · HUD/Presentation lane · 2026-06-24
+**Status:** CLOSED — DEPRECATED, audit-verified obsolete (2026-08-21 backlog audit).
 **Origin:** owner directive + Grok Prompt-2 brief, synthesized against the real code (SME extrapolation, not a
 verbatim copy). Builds on `WORK_ORDER_498` (the authoritative 9-zone mockup spec).
 
@@ -73,3 +73,5 @@ e. **Icons — use what exists.** Pull from `RpgUiCatalog`, `abilities.json` (gl
 ## 7. Do NOT touch
 The combat systems (read-only), the fight lifecycle, gear JSON. Keep it behind `FeatureFlags.BattleHud9Zone`
 until the owner blesses it on.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** DEPRECATED. Evidence: `BattleHud9Zone.cs:2 RETIRED SHIM` — 9-zone HUD demolished. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

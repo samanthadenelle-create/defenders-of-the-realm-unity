@@ -4,7 +4,7 @@
 
 # WORK ORDER 745 — Room Forge: Regression Oracle + FlowTrace Instrumentation
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Minted:** 2026-07-18 (next-free 745 per the 2026-07-18 banner refresh; RECORD THIS MINT —
 bump banner next-free to 746 in the WO-743 canon-close commit, which is the current banner's
 active editor)
@@ -143,3 +143,5 @@ Baseline: suite starts at 0 known failures — no pre-exister allowance for a br
 5. Re-bake of the WO-742 demo layout still green end-to-end after the gate hardening.
 6. RESULT file `WorkOrders/WORK_ORDER_745.RESULT.md` with evidence; banner records 745 and
    next-free 746 in the same canon commit.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `WORK_ORDER_745.RESULT.md` — room forge oracle shipped. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

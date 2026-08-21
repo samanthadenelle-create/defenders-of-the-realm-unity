@@ -4,7 +4,7 @@
 
 # WORK ORDER 338 — Echo Hollow Rebrand (formerly "Pet House")
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Lane:** 12 (Narrative/Onboarding/Quests) + touches Lane 4 (UI strings) and Lane 1 (world label)
 **Priority:** MEDIUM — naming polish; no gameplay regression risk
 **Creative decision:** Approved by owner 2026-06-07
@@ -163,3 +163,5 @@ its old name, update in place.
 - Village.unity (hand-edits forbidden; use SceneBuilder menu)
 - Any gameplay code that is string-keyed only by pet *slot index*
 - WO-297–299 pet system code (these implement the mechanic; this WO is naming only)
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `EchoHollowRouteRegression.cs; PetDeployer.cs:140` — rebrand+guard. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

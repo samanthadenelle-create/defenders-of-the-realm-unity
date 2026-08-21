@@ -1,6 +1,6 @@
 # WORK ORDER 684 — Outstanding items board (post 07-12 evening wave)
 
-**Status:** SPEC - dated triage board (reconciled 2026-08-09 - a 2026-07-12 snapshot of outstanding items to be tagged and routed individually, not itself an implementable work order; the live board is now the generated `BOARD.html` (WO-1011). Frozen dated ledger, body untouched per sec.15)
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 
 **Status: TRIAGE BOARD** (owner directive 2026-07-12: "give me a work order of outstanding items
 and we tag them after these currently running land"). Tag/route each after the in-flight lanes
@@ -132,3 +132,5 @@ positives) — the suite is now catching real defects the fleet couldn't.
 20. **NOTION_SOURCE_OF_TRUTH.md** still says next-free 430 — refresh line.
 21. **CLI_PREP_2026-07-08** pointer in SESSION_CANON_LOADER Key Files — supersede when a new prep
     doc exists (START_HERE.md now carries the role).
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

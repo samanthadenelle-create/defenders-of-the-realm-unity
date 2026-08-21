@@ -1,6 +1,6 @@
 # WORK_ORDER_498 — BATTLE UI LAYOUT (mobile combat HUD — target mockup)
 
-**Status:** SPEC · HUD/Presentation lane · owner mockup 2026-06-23 (the visual TARGET)
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 **Goal:** a visually appealing mobile battle HUD. The mockup is INSPIRATION, not a literal copy — owner:
 "not everything is applicable." The CORE asks distilled:
 1. **ROLE READABILITY — the #1 thing:** at a glance, tell WHO is the Healer vs DPS vs Tank vs Wizard
@@ -83,3 +83,5 @@ HeroAbilities/AbilityCatalog (ability buttons + cooldowns), HeroTargetIndicator 
   (BattleHudVisibilityManager Battle mode, now firing in the arena via BattleLock).
 - This is the felt-tuning-heavy layer (button placement/size, joystick feel) — build the layout, then the
   owner tunes positions live. The mockup is the north star.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

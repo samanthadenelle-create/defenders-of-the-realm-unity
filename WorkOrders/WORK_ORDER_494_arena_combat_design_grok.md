@@ -1,6 +1,6 @@
 # WORK_ORDER_494 — ARENA COMBAT DESIGN: family synergy, counterplay, clarity (Grok-guided)
 
-**Status:** SPEC (reconciled 2026-08-09 - restates this file's own DESIGN / TABLED line in the canonical vocabulary: a design capture that feeds WO-491/493/496, with no ship of its own; no commit references WO-494)
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 
 **Status:** DESIGN / TABLED · Combat lane · captured 2026-06-23 (Grok review of the open-kite arena)
 **Relates:** WO-491 (animation/telegraphs), WO-493 (game feel), the themed arena scene, the immersion
@@ -128,3 +128,5 @@ fights feel slow. Ties to WO-496 #1 (fire feedback on the button TAP, not on res
 - **BOSS FIGHTS:** one HUGE boss with its OWN unique movesets (telegraphed, WO-491) + its own timer for stars.
   Special boss scenes/backdrops (WO-499, LFS art "when we get there"). The boss is the climactic time-boxed test.
 - Post-fight: stars slam in + count-up rewards + "Retry/Continue" (WO-494 post-fight screen).
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

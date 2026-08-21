@@ -4,7 +4,7 @@
 
 # WORK ORDER 541 — HUD One-Model (data-model-first; dumb presentation)
 
-**Status:** READY TO IMPLEMENT (foundation lane)
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Silo:** HUD/Core (code-only; no scene hand-edit)
 **Source:** Owner directive 2026-06-27 — "architect should look at ALL models, get all data groups by what all HUDs need, design those models, then a common CoreServices FROM the model, then the model is exposed to the presentation layer which is dumb and simply skins — no logic, just presentation." Backed by F8 flags 00–10.
 **Supersedes:** the rejected per-canvas "context gate" patch (WORK_ORDER_541_hud_context_authority.md). Subsumes WO-540 (HUD leak) + WO-535 (panel register) + the duplicate-hero-card / Echo-bleed / green-MP-box defects.
@@ -57,3 +57,5 @@ Each = plain data + `Changed` event, no UI/Village types (Core enums only; map `
 ## What NOT to touch
 - No `.unity` hand-edits. No System.Reflection in HUD bridges. HUD→Core only.
 - Don't redesign the four modal INTERNALS until their open-state is captured (Stage 5 gate).
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `Core/HudModel/; HudKitController.cs:215` — one-model facade landed. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

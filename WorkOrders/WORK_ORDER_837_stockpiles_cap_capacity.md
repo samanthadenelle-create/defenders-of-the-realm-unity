@@ -1,6 +1,6 @@
 # WORK ORDER 837 — Stockpiles cap resource capacity (not founding freebies)
 
-**Status:** READY TO IMPLEMENT (owner-ruled 2026-08-02, verbal during felt-test)
+**Status:** DONE — owner-confirmed 2026-08-21.
 **Silo:** Economy / BuildMode / Tutorial (single lane; no scene files)
 **Depends on:** WO-834 (blank town — shipped). Touches the same FoundingKit/tutorial surface as WO-780/822.
 
@@ -56,3 +56,5 @@ stockpiles to raise how much you can hold).
 - Do NOT pre-seed any container on a blank town (WO-834 stands). Do NOT touch .unity scenes.
 - Do NOT rename catalog ids without the owner's explicit word (save/data references).
 - Do NOT couple with WO-830 Echo affinity (separate lane; the Dump clamp seam is the only contact).
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** Owner: "the other duplicate on 837, which is stockpile caps - that one is done."

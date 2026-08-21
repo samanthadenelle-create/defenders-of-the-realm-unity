@@ -4,7 +4,7 @@
 
 # WORK ORDER 724 — Barracks Live: Train → ArmyStorage
 
-**Status:** READY TO IMPLEMENT (after WO-723)  
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Priority:** P0  
 **Silo:** Buildings / UI / State  
 **Depends on:** WO-723 — **DONE** (read RESULT only; Path A locked)  
@@ -91,3 +91,5 @@ Player can unlock/use Barracks, train troops into the **persisted** army (`ArmyS
 ## RESULT
 
 `WorkOrders/WORK_ORDER_724_barracks_live_train_army.RESULT.md`
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `FeatureFlags.cs:863 barracks ON; barracks.json` — train->ArmyStorage live. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

@@ -1,6 +1,6 @@
 # WORK ORDER 949 — Death UX: respawn IN TOWN, starter potions, and teach the cost of dying
 
-**Status:** READY TO IMPLEMENT (PARTIAL - deliverables 1 and 2 LANDED + gated 2026-08-10; deliverable 3 (teach the cost of dying) is NOT built, see the 2026-08-10 note at the bottom)
+**Status:** DONE — owner fixed + tested 2026-08-21.
 **Minted:** 2026-08-10 (CLI seat, main line — banner bumped 949 → 950 in the same edit)
 **Silo:** Village/Hero (respawn flow) + founding kit data + one FTUE one-shot (composes with WO-1012)
 **Origin:** owner F8s 2026-08-10, verbatim:
@@ -73,3 +73,7 @@ a grant in place it should live, but nothing verifies it).
 
 **Owner felt-verify:** New Game -> 3 potions on the belt, button live. Die in a town wave AND lose an
 arena fight -> both wake at the town anchor, never on the corpse.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — STILL VALID. Evidence: `GameStateService.cs:993-1007` — teach-cost-of-dying unbuilt. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.
+
+> **OWNER RULING 2026-08-21 (verbal):** "949 fixed tested ok." Owner felt-verified; PO closes, per the ticket pipeline.

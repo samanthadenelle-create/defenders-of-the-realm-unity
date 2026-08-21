@@ -1,3 +1,5 @@
+**Status:** DONE — owner-confirmed 2026-08-21.
+
 # WORK ORDER 824 — CoC + Warcraft **player enjoyment** program (master sequence + PO fun bar)
 
 > ⚠ 2026-08-01: "Work" panel/button references = the QUEUES panel, reached via the right-column Builders chip (bar button retired eb5d0710; rename 85ed4c98).
@@ -208,3 +210,5 @@ After ship: update child status + short RESULT; tick the matching §2 bar item o
 
 **823** = make the gates trustworthy.  
 **824** = make the game *feel* like CoC production + WC3 queues + CoC attack — by sequencing **817 → 822 → 774 → 809 → …** and closing the PO fun bar.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** Owner: player enjoyment program is done.

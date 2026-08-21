@@ -1,3 +1,5 @@
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
+
 # ⚠ WORK_ORDER_319 — Defend the Tower: town hero model + firing animations + faster fire rate — **SUPERSEDED 2026-07-04**
 
 > **SUPERSEDED:** The Defend-the-Tower / PatriciaLight system was removed 2026-06-09.
@@ -46,3 +48,5 @@ the attack cadence as a configurable cooldown. Coordinate with WO-317/318 (same 
 
 ## Do NOT touch
 - No `.unity` edits. Reuse HeroBodySwapper + ActorAnimator (don't fork). Coordinate with WO-317/318 (same mode/controller).
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

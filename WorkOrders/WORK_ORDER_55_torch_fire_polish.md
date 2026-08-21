@@ -1,6 +1,6 @@
 # WORK ORDER 55 — Torch & Environmental Fire Polish (Lana Studio)
 
-**Status:** PARTIAL - remaining: editor/scene wiring (code is dead, zero scene refs)
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 
 > **PARTIAL - re-scoped 2026-08-14 (phantom sweep).** Remaining work: EDITOR/SCENE WIRING. TorchFireController is code-complete but a GUID search finds ZERO prefab/scene references, so it is dead code. Remaining: wire it in the editor.
 > Everything else in this WO is present in HEAD. The named remainder IS the ticket now - do not
@@ -190,3 +190,5 @@ many torches. If the village has >8 torches, switch to an event-based approach:
 - [ ] Embers speed up slightly during combat
 - [ ] Torches still look good when `combatRadius` gizmo is visible in Scene view
 - [ ] No `NullReferenceException` when Light or Ember PS is not assigned
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

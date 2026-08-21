@@ -1,6 +1,6 @@
 # WORK ORDER 73 — Shop UI + Battle Pass System
 
-**Status:** PARTIAL - remaining: scene/instance wiring (zero instances, zero callers)
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 
 > **PARTIAL - re-scoped 2026-08-14 (phantom sweep).** Remaining work: SCENE/INSTANCE WIRING. BattlePassManager, CryptoPaymentManager and CosmeticApplier all exist in HEAD with ZERO instances and ZERO callers. Remaining: instantiate + call them.
 > Everything else in this WO is present in HEAD. The named remainder IS the ticket now - do not
@@ -381,3 +381,5 @@ public class BattlePassSystem : MonoBehaviour
 - [ ] `PurchasePremiumPass()` fails gracefully when shards are insufficient
 - [ ] Premium track grants back-dated rewards immediately on purchase
 - [ ] Battle pass level + XP persists across app restarts via PlayerPrefs
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

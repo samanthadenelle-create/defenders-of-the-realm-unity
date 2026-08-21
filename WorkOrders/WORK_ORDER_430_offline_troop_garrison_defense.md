@@ -6,7 +6,7 @@
 
 # WORK ORDER 430 — Offline Troop Garrison Defense (RECONCILED)
 
-**Status:** SPEC - queued post-V1 (reconciled 2026-08-09 - restates this file's own SPEC - queued (post V1 / post Pi-loop) line in the canonical vocabulary; no commit references WO-430. DUPLICATE NUMBER: six files claim 430)
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 
 Status: **SPEC — queued (post V1 / post Pi-loop).** Priority: V1 loop polish (NOT Pi critical path).
 Origin: owner/Grok concept 2026-06-26. **Reconciled against real code 2026-06-26** (read-only pass).
@@ -53,3 +53,5 @@ Zero-cost; logging-in feels rewarding not punishing; repair quick; no balance br
 ## Sequencing
 After the four-side seam (DONE) + the Pi V1 critical path (VillageTier unlock + farm→build→level→raid).
 Deterministic sim is the hard part — headless-testable (DataRegression). NOT a blind build.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

@@ -4,7 +4,7 @@
 
 # WORK ORDER 85 — World Atmosphere & Immersion Pass (Phase 3)
 
-**Status:** READY TO IMPLEMENT
+**Status:** CLOSED — DEPRECATED, audit-verified obsolete (2026-08-21 backlog audit).
 **Date:** 2026-05-28
 **Priority:** High
 **Scope:** Large — terrain, lighting, WeatherManager, foliage, performance pass
@@ -276,3 +276,5 @@ correction so the next agent starts from the real question:
 
 **Owner pin that unblocks it:** in a fresh player build, is the ground visibly grass-and-roads at all, or
 visible-but-too-subtle? One word decides which of the two fixes this becomes.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** DEPRECATED. Evidence: `573b3a515 removed Village.unity; 61ecc990f OuterWorld` — targets deleted hub. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

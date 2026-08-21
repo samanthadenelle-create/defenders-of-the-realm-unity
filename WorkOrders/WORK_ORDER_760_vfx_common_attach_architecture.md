@@ -11,7 +11,7 @@
 
 # WORK ORDER 760 — Common VFX attach class (architect determination)
 
-**Status:** READY TO IMPLEMENT - partial (reconciled 2026-08-09 - this file's own line records the architecture decision as ratified but the implementation as not shipped, and no `.RESULT.md` exists. Note the WO-760 commits in git (`27de1aff`, `08b912bf`, `3dd024a9`) belong to the OTHER WO-760, `WORK_ORDER_760_dragon_syndrath_fly_land_burn_tree.md`. DUPLICATE NUMBER: two files claim 760)
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 
 **Status:** PARTIAL — ARCHITECTURE DECISION ratified, implementation not shipped. This WO is the ADR (why + apply matrix).
 **⚠ The LOCKED implementation contract lives in WO-884 §0.2** and OVERRIDES this WO where they differ:
@@ -513,3 +513,5 @@ API target:
 
 **One-line decision:**  
 **`Vfx` + `VfxBones` + `VfxSocket` are the single low-cost attach layer; `VFXManager` remains the only engine; element recipes stay in `SpellVfxFactory`; Particle Pack is catalog-referenced (gitignored-safe); every feature (breath, towers, spells, candles, steam) is an application of that one API.**
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

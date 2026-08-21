@@ -4,7 +4,7 @@
 
 # WORK ORDER 51 — Mobile Performance Settings
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Date:** 2026-05-28
 **Priority:** High
 **Scope:** Medium — ScriptableObject quality tiers + runtime applier
@@ -290,3 +290,5 @@ public class PerformanceManager : MonoBehaviour
 - [ ] On first launch, tier is auto-selected based on device RAM
 - [ ] `PerformanceManager.SetTier()` can be called from a settings UI button at runtime
 - [ ] No `NullReferenceException` if the post-process Volume is not assigned
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `SeekerBootstrap.cs:61-119, MobileSettings.cs:297-393` — tiers shipped, different names. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

@@ -4,7 +4,7 @@
 
 # WORK ORDER 560 — VFX Usage Pass (reuse-first juice + clarity)
 
-**Status:** READY TO IMPLEMENT (spec from read-only VFX review, 2026-06-28)
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Silo:** VFX/Audio lane (§9) — `Assets/_Modules/Village/Vfx/*`, `VFXCatalog.asset`, arena/enemy fire-points. No scene hand-edits.
 **Source:** read-only VFX SME review (data-grounded, file:line cited below). Owner ask: "someone look over all vfx and suggest better usage."
 
@@ -107,3 +107,5 @@ catalog element-matrix wiring is **DEFERRED to an owner pack-import task** (see 
   material-cache code touched. No gitignored-asset references.
 - `ArenaCombatOracle.cs` has no existing telegraph assertion; behaviour now guarantees the
   telegraph window > 0 (floor 1.0s) — adding an explicit oracle assertion is a cheap follow-up.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `VFXManager.cs:1388,1399; BattleArena.cs:2727,2742` — telegraph+victory burst. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

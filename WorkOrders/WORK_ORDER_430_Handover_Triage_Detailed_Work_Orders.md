@@ -4,7 +4,7 @@
 
 # WORK_ORDER_430 — Handover Triage: Detailed Work Orders Consolidation (Open Tickets 363–437 + P0 Gates)
 
-**Status:** READY TO IMPLEMENT  
+**Status:** CLOSED — DEPRECATED, audit-verified obsolete (2026-08-21 backlog audit).
 **Authority:** CLI_LANES_WO_NUMBERS.md (reconciled 2026-06-12) + docs/MASTER_CATALOG/docs-wo-state.md. Next free WO = 430. This file supplies the missing detailed specs for the enumerated handover list (most previously only in Notion rows). Slot new numbers from 430+ into the lanes documented in CLI_LANES (do not mint from filesystem max; collisions 328–339 etc. already noted — do not reuse).  
 **Branch context:** feat/tower-core-loop (git status at session start: 1 commit ahead, clean).  
 **Date synthesized:** 2026-06-13 from user-provided handover enumeration + verified MASTER_CATALOG / ARCHITECTURE_PRINCIPLES / PIPELINE_STATE / area catalogs (hud, battle-atb, village-hero, editor-tools, scenes, dialogue, core, etc.).  
@@ -370,3 +370,5 @@ These block shipping / WebGL / regression gates per list + MASTER_CATALOG risk l
 **Ready for assignment per lanes. Owner creative calls on visuals/mockup parity (Tech pack, hud_mobile_*.png). Quality over speed — what is right, not what is easy.**
 
 (End of consolidated detailed work orders. All items from user handover list + cross-referenced open state in MASTER_CATALOG / lanes addressed with files, acceptance, NOT-touch, and architecture guardrails.)
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** DEPRECATED. Evidence: `WO_430:9 asserts MainCastle_Hall hub + Village.unity` — retired canon umbrella. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

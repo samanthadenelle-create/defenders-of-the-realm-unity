@@ -6,7 +6,7 @@
 
 > (Renumbered from WO-106 → WO-109 to avoid collision with UI's WO-106 in-game XP HUD. Distinct features: this is the **web/backend** dashboard; WO-106 is the **in-game** XP display.)
 
-**Status:** READY TO SPEC-REVIEW
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Date:** 2026-05-29
 **Target repo:** `defenders-of-the-realm` (Vercel `/api` + Neon Postgres) — **NOT the Unity repo**
 **Owner of build:** backend dev (Kayden). Unity-side event instrumentation = CLI.
@@ -67,3 +67,5 @@ The in-game `DevPanelController` reads **one live session** in real time (debugg
 - **Unity event instrumentation (C)** → CLI, as a small follow-up WO with the brace/compile gate.
 
 🤖 Spec drafted by the build-connected CLI for owner routing.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `api/admin/stats.js:1-30, site/admin.html` — metrics dashboard shipped. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

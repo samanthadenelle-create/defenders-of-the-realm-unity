@@ -4,7 +4,7 @@
 
 # WORK ORDER 885 — VFX registry wiring: all remaining domains (phases 2–7)
 
-**Status:** READY TO IMPLEMENT - partial (reconciled 2026-08-09, per this file's own 08-08 banner - an umbrella index whose own precondition, the WO-884 facade, never landed; children 886-893 wired straight to `VFXManager` instead, silently voiding this WO's LOCKED contract)
+**Status:** CLOSED — DEPRECATED, audit-verified obsolete (2026-08-21 backlog audit).
 
 **Status:** PARTIAL (reconciled 2026-08-08) — umbrella index; the WO-884 Phase 0 platform precondition never landed
 **Silo:** Village combat / VFX / economy / structures / dungeon
@@ -118,3 +118,5 @@ no nullref on missing socket/bone; **headless screenshot-verify each phase (open
 ## RESULT
 `WorkOrders/WORK_ORDER_885_vfx_registry_wiring_all_domains.RESULT.md` — per-phase: builders run, catalog rows,
 call sites, markers, the loop-cap/nearest-N numbers used, and the phase screenshots. Owner felt-verifies + closes.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** DEPRECATED. Evidence: `VfxFacade.cs absent; children shipped direct` — contract voided. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

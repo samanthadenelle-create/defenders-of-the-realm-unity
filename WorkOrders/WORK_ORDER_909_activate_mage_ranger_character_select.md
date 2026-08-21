@@ -31,7 +31,7 @@
 >   nodes total.
 > - Full ledger: `docs/reference/SESSION_INDEX_2026-08-06.md` §6.3, §6.4, §8.
 
-**Status:** DONE — LANDED (see the banner above) — original header read: READY TO IMPLEMENT
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Silo:** Hero / character-select / onboarding
 **PO:** Samantha (owner)
 **For:** CLAUDE CLI (sole committer, headless-verifier)
@@ -154,3 +154,5 @@ show only Knight despite the new default.
 Write `WorkOrders/WORK_ORDER_909_activate_mage_ranger_character_select.RESULT.md` on completion:
 the body-mesh decision taken (Blink base / KayKit / un-park), the stale-pref migration
 outcome, headless verify markers, and the felt-test screenshots for Mage + Ranger spawns.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `PlayableHeroes.cs; FeatureFlags.cs:67; 9a0ff548,d0c7b8fd` — mage/ranger playable. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

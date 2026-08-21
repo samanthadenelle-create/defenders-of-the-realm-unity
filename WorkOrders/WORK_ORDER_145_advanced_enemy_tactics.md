@@ -4,7 +4,7 @@
 
 # WORK ORDER 145 — Advanced Enemy Tactics: smart focus-fire, kiting, coordinated pincer, reposition
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Date:** 2026-05-30
 **Priority:** High — turns the DEFEND half of the loop from "a swarm walks at the Heart" into "a squad that picks off your healer/pet, kites your hero, and envelops your line." The visible payoff of the role/tactical scaffolding already shipped (DEF-21/DEF-72).
 **Lane:** **Combat / AI — code only.** NO scene-file edits, NO `VillageSceneBuilder.cs` (frozen, CLAUDE.md §3/§9), NO bake fired from UI. Runs in the Combat/AI parallel lane (CLAUDE.md §9 — "EnemyBrain, ATB — code only, no scene files"). Never contends with the World/Environment lane.
@@ -240,3 +240,5 @@ public float RepositionRegroupSeconds = 3f;    // time at rally before re-engage
 - [ ] WO-128 `EnemyRole`-to-Core overlap flagged for owner (not raced here).
 - [ ] Acceptance criteria 1-10 reviewed line by line.
 - [ ] CLI build-verifies in batchmode; saves `WORK_ORDER_145_advanced_enemy_tactics.RESULT.md`.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `EnemyTacticalState.cs:50,58; EnemyBrain.cs:1534-1570` — scorer + kite states. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

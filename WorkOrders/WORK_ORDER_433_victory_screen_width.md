@@ -11,7 +11,7 @@
 
 # WO-433 — P2 UI: Victory screen too wide — narrow panel + row style cleanup
 
-**Status:** READY TO IMPLEMENT  
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Priority:** P2  
 **Lane:** 4 UI/HUD  
 **Minted:** 2026-07-03
@@ -69,3 +69,5 @@ This gives a bit more breathing room at max content (5+ spoil rows).
 - [ ] All spoil rows (Experience, Wisdom, resources, gear) still visible and not clipped
 - [ ] Continue button still centered within the footer zone
 - [ ] Headless AutoPilot smoke run passes (no null refs)
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `EndStateView.cs:160,315` — 0.22/0.78 anchors. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

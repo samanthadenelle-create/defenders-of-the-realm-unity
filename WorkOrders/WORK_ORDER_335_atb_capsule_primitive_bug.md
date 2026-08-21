@@ -4,7 +4,7 @@
 
 # WORK ORDER 335 — ATB Battle Scene: Remove Stray Purple Capsule Primitive
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Lane:** 2 (Combat/AI) — code-only, parallel-safe
 **Scene:** ATBBattle
 **Priority:** HIGH — visually broken; large purple primitive visible in production game view
@@ -76,3 +76,5 @@ Screenshot shows:
 - Village.unity scene file
 - WaveManager, VillageHudController, TowerSwapService
 - Any monetization or EventTracker code
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `AtbCombatantSwapper.cs:1-16; ATBBattle.unity` — no stray capsule. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

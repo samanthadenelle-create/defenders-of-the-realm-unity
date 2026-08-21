@@ -5,7 +5,7 @@
 # WO-266: Resource economy — Wood/Food/Iron/Crystals harvestable; Magic = building-upgrade axis only
 **Linear:** [DEF-121](https://linear.app/defenders-of-the-realm/issue/DEF-121/wo-230-resource-economy-woodfoodironcrystals-harvestable-magic)
 **Lane:** Monetization/Backend
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Priority:** High
 
 ## Acceptance Criteria
@@ -27,3 +27,5 @@
 
 ## Dependencies
 - Related to WO-230
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `ResourceType.cs:28-34; GameState.cs:285-294` — magic-as-tech split landed v15. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

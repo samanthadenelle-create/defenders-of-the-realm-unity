@@ -4,7 +4,7 @@
 
 # WORK ORDER 45 — Jupiter Swap Execution (Phase 3)
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Date:** 2026-05-26
 **Priority:** High (after WO-43 + WO-44)
 **Scope:** Large / Real money — test thoroughly on devnet before mainnet
@@ -400,3 +400,5 @@ need to be created.
       applicable) — `#if` guards must be exhaustive
 - [ ] Full mainnet test passes on a real device with a real wallet before
       feature flag is enabled for players
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `JupiterSwapService.cs:52,271` — /v6/swap execution shipped. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

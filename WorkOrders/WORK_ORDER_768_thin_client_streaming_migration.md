@@ -4,7 +4,7 @@
 
 # WORK ORDER 768 — Thin-client streaming migration (finish the intended architecture)
 
-**Status:** SPEC — READY (owner 2026-07-24, "always the intent"). MASTER WO. Multi-week milestone.
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 **Lane:** Addressables / Build / Content pipeline. Scope: **LARGE** (relocate ~600 MB-1 GB, migrate ~439 load sites, stand up CDN). Sequence AFTER current polish + WO-766.
 **Full architecture + numbers:** `docs/THIN_CLIENT_STREAMING_ARCHITECTURE.md` (read first).
 
@@ -51,3 +51,5 @@ Google-at-scale. Cheaper Play-only interim: AAB + Play Asset Delivery.
 ## Reconciliation
 WO-282 (Phase 2), WO-281 (Phase 0), WO-191 (WebGL parallel), WO-767 (orthogonal cap tradeoff).
 Data source: read-only RCA 2026-07-24 (cited in the architecture doc), per §12.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

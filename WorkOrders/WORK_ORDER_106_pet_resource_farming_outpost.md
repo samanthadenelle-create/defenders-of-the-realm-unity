@@ -1,3 +1,5 @@
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
+
 > ⚠ **NUMBER COLLISION — this document does not own WO-106; `WORK_ORDER_106_xp_level_progress_hud.md` does.**
 > Referred to hereafter as **WO-106-B (pet resource farming outpost)**.
 > Flagged by the 2026-08-16 Sunday board-grooming pass (`python tools/board_build.py` → `DUPLICATE_WO_NUMBERS`);
@@ -76,3 +78,5 @@ Increment WO on next. Owner makes final creative calls on numbers (yields, multi
 
 ---
 (Generated per Claude.md §2 protocol at continuation of Village test + pet priority request.)
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

@@ -1,3 +1,5 @@
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
+
 <!-- era-sweep-2026-08-17 -->
 > ### ⚠ AGED 2026-08-17 — still READY, but unverified since 2026-06-22
 > The 2026-08-17 era sweep found **no evidence** that this WO's subject was deleted or superseded, so its **Status stays READY** and nothing else was changed. It is simply OLD (git first-add 2026-06-22) and has not been re-verified against current canon (`CANON_GROUND_TRUTH_*.md`, CLAUDE.md §7). **Re-verify before pulling it.**
@@ -67,3 +69,5 @@ doc Phase 2+) — just the data + reads.
 - [ ] ZoneState + neighbor/City-Horde graph; persisted + save round-trip
 - [ ] Consumable by WO-155/159/160; brace balance; no bake
 - [ ] `WORK_ORDER_164_zone_foundation_threatlevel.RESULT.md` when complete
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

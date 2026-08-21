@@ -4,7 +4,7 @@
 
 # WO-366: Idle Routines — Sitting, Playing Dead, Cute Animations
 
-**Status:** READY TO IMPLEMENT  
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Estimated Effort:** P1 (0.5–1 day)  
 **Priority:** Medium (polish, charm, visual feedback)  
 **Lane:** Build/Perf
@@ -360,3 +360,5 @@ Make routines feel natural, not mechanical:
 - [ ] Transitions smooth and natural
 - [ ] Disabled during active combat
 - [ ] Works in WebGL build
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `PetIdleRoutines.cs:2-13, PetDeployer.cs:719` — pet idle routines. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

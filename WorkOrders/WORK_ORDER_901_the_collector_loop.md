@@ -4,7 +4,7 @@
 
 # WORK ORDER 901 — THE COLLECTOR LOOP (umbrella)
 
-**Status:** READY TO IMPLEMENT - partial (reconciled 2026-08-09, per this file's own 08-08 banner - phases 0, A, B, C, D and F all shipped (F landed in `177b24a7`: `TownBankCapacity.cs` plus `storage-caps.json` plus `TownBankCapRegression.cs`); only phase E remains)
+**Status:** DONE — owner-confirmed 2026-08-21.
 
 **Status:** PARTIAL — phases 0/A/B/C/D and F shipped; only E deferred (reconciled 2026-08-08, see banner)
 **Owner directive, 2026-08-04:** *"consolidate those into one idea and implement."*
@@ -165,3 +165,7 @@ resources without telling the player is the defect this ruling is one line away 
 - `WORK_ORDER_857_coc_resource_storage_caps_hud.md` (Grok) — Phase F
 - `WORK_ORDER_858_collector_resource_icons_and_siege_value.md` (Grok) — Phase G survives; the icon half is
   superseded by §2 above
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — STILL VALID. Evidence: `no siegeValue/highValueTarget symbol` — phases E+G unbuilt. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** Owner: 901 is done. ⚠ The 2026-08-21 audit read this as OPEN - STILL VALID (evidence above). Owner review supersedes it; the audit line is kept so the evidence survives a reopen.

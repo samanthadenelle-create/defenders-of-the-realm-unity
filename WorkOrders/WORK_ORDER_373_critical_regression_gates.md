@@ -4,7 +4,7 @@
 
 # WO-373: CRITICAL Regression Gates — Hard Blockers Before Build Shipping
 
-**Status:** READY TO IMPLEMENT  
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Estimated Effort:** P0 (Testing/Verification Only — 0.5 day per code change)  
 **Priority:** BLOCKER (no code ships without passing these)  
 **Lane:** 0 Verify
@@ -371,3 +371,5 @@ Neither did we. But now we have a safety net. Every build ships knowing:
 - No regressions snuck in
 
 Ship with confidence. ✅
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `RegressionSuite.cs:709-774,944,960` — four pre-ship gates. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

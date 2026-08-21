@@ -4,7 +4,7 @@
 
 # WO-784 — Echo lanes: wire the consumers (all four lanes are write-only stubs)
 
-**Status:** READY TO IMPLEMENT (Phase 1); Phase 2 gated on owner copy
+**Status:** CLOSED — DEPRECATED, audit-verified obsolete (2026-08-21 backlog audit).
 **Minted:** 2026-07-30 (CLI, from the 12-agent SME fan-out — Echo/FTUE/Dialogue dossier)
 **Lane:** `Village/Harvest` + one consumer per lane. File-disjoint from the raid + dungeon lanes.
 **Supersedes the canon line** "Echo lanes 3-of-4 stub" (`CANON_GROUND_TRUTH_2026-07-22` §8) — it is worse than that: see Why.
@@ -127,3 +127,5 @@ unnoticed. New assertions must prove a READ.
 `docs/PAIN_POINTS_2026-07-26.md` · memory `echo-lane-design-rulings`, `echo-is-essence-of-guarded-person` ·
 `WORK_ORDER_738` (the model this refines) · `WORK_ORDER_752` (card copy) ·
 SME dossier: Echo/FTUE/Dialogue, 2026-07-30 fan-out.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** DEPRECATED. Evidence: `EchoAssignments.cs:95; WO-830 RESULT:5-13` — WO-830 reversed it. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

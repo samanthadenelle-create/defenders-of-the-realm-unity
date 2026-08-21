@@ -10,7 +10,7 @@
 
 # WORK ORDER 584b — Dungeon MAP GENERATOR (modular-grid: rooms → connectors → reachability)
 
-**Status:** READY TO IMPLEMENT (design only — this WO writes NO `.cs`; implementation is the gated follow-up 584c)
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 **Parent:** WORK_ORDER_584 (Dungeon / Outpost / Arena one-space consolidation) — this is the **map-creation** half of WO-584 §5 / §3b.
 **Silo:** World/Environment (editor builder + data). Combat/AI only consumes the spawn slots it emits.
 **Canon:** memory `scene-chunk-dungeon-composer-northstar`, `region-gate-crossing-primitive`,
@@ -304,3 +304,5 @@ enough to hand-tune — NOT pixel-perfect grid math.
 - `Assets/Resources/Data/Dungeons/dungeon_small_crypt.json` (small — 3-room linear, authored skeleton)
 - `Assets/Resources/Data/Dungeons/dungeon_medium_warren.json` (medium — branching, treasure + trap)
 - `Assets/Resources/Data/Dungeons/dungeon_large_keep.json` (large — multi-wing + boss, deeper budget)
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

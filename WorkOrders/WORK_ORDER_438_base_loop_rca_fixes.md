@@ -1,3 +1,5 @@
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
+
 > ⚠ **UNRESOLVED NUMBER COLLISION — WO-438 is claimed by more than one file and OWNERSHIP IS NOT DECIDED.**
 > Co-claimants: `WORK_ORDER_438_global_tech_skin_rollout.md` (06-13, first-on-disk), `WORK_ORDER_438_base_loop_rca_fixes.md` (06-17), `WORK_ORDER_438_compass_minimap_widget.md` (07-04)
 > **This is one of a four-number group (WO-437 / 438 / 439 / 440) that collided the same way.** The June
@@ -70,3 +72,5 @@ that `DisplayName`/`NameFor()` returns the exact roster names with no case/white
 - §0: CLI edits on the Windows path. Brace-check + compile-gate before commit; owner felt-test per item.
 
 *Cross-ref:* the 4 RCA agent reports (this session), WO-437 (input gate), `GRANT_DEMO_VALIDATION.md`.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

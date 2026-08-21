@@ -4,7 +4,7 @@
 
 # WORK ORDER 594 — Measure-driven castle base (bottom / top / perimeter)
 
-**Status:** CAPTURED (idea) — not yet ready to implement
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 **Date:** 2026-07-01
 **Priority:** P3 (architecture polish; follow-on to WO-593)
 **Owner:** Samantha (idea) · Author: CLI
@@ -35,3 +35,5 @@ Instead of any hardcoded castle dimensions, a **scripting editor tool** should b
 ## Prereq
 WO-593 (castle island raise via the `CastleFootprintLiftY` base variable) landed + felt-verified first.
 This WO replaces the remaining hardcoded extents with measured ones — do it once the raise is proven.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

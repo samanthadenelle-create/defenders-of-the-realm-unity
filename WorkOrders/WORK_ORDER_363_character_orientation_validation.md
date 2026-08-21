@@ -4,7 +4,7 @@
 
 # WO-363: Character Orientation Validation — Hard Deployment Gate
 
-**Status:** READY TO IMPLEMENT  
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Estimated Effort:** P0 (0.5 days — testing harness + assertion)  
 **Priority:** CRITICAL (regression prevention)  
 **Lane:** QA / Build Verification
@@ -326,3 +326,5 @@ This rule applies to:
 - [ ] Pre-deployment gate prevents bad builds
 - [ ] Works in WebGL build (no skipped frames)
 - [ ] No character can ship facing wrong direction
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `OrientationValidator.cs:2-31, OrientationGuard.cs:2` — validator+guard+tests. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

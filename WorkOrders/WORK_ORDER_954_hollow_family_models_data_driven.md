@@ -1,6 +1,6 @@
 # WORK ORDER 954 — Hollow family still wears KayKit skeletons; enemy id→model mapping goes data-driven
 
-**Status:** BLOCKED ON THE ONE OWNER PIN — which bodies the **six remaining** hollow rows wear. ⚠ The line that used to sit here said "READY TO IMPLEMENT (mechanics)" and was STALE: the mechanics half shipped 2026-08-14 (this WO's own §1 correction says so and the Status line was never flipped), and two of the pinned rows landed 2026-08-20. True state in §1b.
+**Status:** DONE — owner-confirmed 2026-08-21 (resolved 2026-08-20).
 
 > ## §1b — TRUE STATE 2026-08-20 (verified at source, not from this document)
 > **Deliverable 1 (data-driven mapping): SHIPPED.** Recorded by the 08-14 correction block below,
@@ -97,3 +97,7 @@ left. thought it was resolved."*
 
 The 08-09 troll/AccuRig wiring · EnemyFactory pooling · stat blocks (WO-772's other half) · no model
 deletions (KayKit skeletons may stay for other uses).
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — NEEDS OWNER RULING. Evidence: `enemies.json hollow-* still Skeleton_*` — six re-skins need owner bodies. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** Hollow family re-skin: owner states this was resolved yesterday. NOTE for whoever reopens it: the 08-21 audit read enemies.json as still mapping hollow-* to Skeleton_*. Owner statement is ground truth and wins; if capsule/skeleton Hollows show on device, that read is the lead.

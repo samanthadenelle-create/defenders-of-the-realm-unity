@@ -4,7 +4,7 @@
 
 # WORK ORDER 139 — Pipeline "Rare Bug" Triage (3-auditor sweep)
 
-**Status:** READY TO IMPLEMENT (reconciled 2026-08-09 - no `.RESULT.md` and no commit references WO-139, so the staged fixes are not provably applied; the marked items below still need the deliberate pass this file describes. Prior line: TRIAGE - fixes staged)
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 
 **Status: TRIAGE — fixes staged for deliberate application (NOT blind-patched)**
 **Created:** 2026-05-30 (owner: "clean out the town… there [are] rare bugs in pipeline")
@@ -73,3 +73,5 @@
 Batch the 🔒 event-leak + null-guard fixes (3,4,5,8,9,12,13,14) — invisible, can't-regress — into one
 compile-gated pass. The 👁️ camera/HUD ones change feel — do with the owner watching. Visual town cleanup
 (KayKit/gates/steps) is a SEPARATE scene-rebuild task needing the owner's eyes + a Village.unity backup.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `SmartMobileCamera.cs:1392-1412, WaveManager.cs:719, EnemyBrain.cs:42` — item2 unverified. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

@@ -4,7 +4,7 @@
 
 # WO-794 — Build-mode UPGRADE verb: pick Upgrade, carousel minimizes, tap a building to upgrade
 
-**Status:** SPEC STUB — needs full spec pass; NOTE a slice already landed out-of-band (cd661967 upgrade CTA explains itself pre-tap).
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 **Minted:** 2026-07-30 from an owner F8 (verbatim below), classified NEW-FEATURE per docs/TICKET_PIPELINE.md
 **Owner F8 (22:48 UTC, Main_Castle_Overworld):** "Can we add an upgrade button, so after selecting the
 button upgrade (if they can) will minimize the bulding selection to select what to upgrade?"
@@ -18,3 +18,5 @@ BuildingUpgrade path (do not greenfield); the "can upgrade" read comes from Buil
 ResourceBuildingProgression via CatalogRegistry.ResolveUpgradeId (mind the collector-id landmine,
 WO-783 SME notes L3); eligibility must read as symbol/label, never colour-only. Related: WO-696
 (repair-before-upgrade context), WO-739 (generic upgrade panel).
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

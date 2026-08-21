@@ -1,6 +1,6 @@
 # WO-775–777 — Dungeon-debt program (vitals · Granary-gate · door-consolidation)
 
-**Status:** PARTIALLY SHIPPED — 776 DONE (70e0f85a Granary gate-off + destroyed-structure rebuild fix); 775 + 777 READY TO IMPLEMENT.
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Minted:** 2026-07-26 (CLI, from read-only §12 RCA agent — evidence cited from HEAD)
 **Source:** the three parked dungeon-debt items (770.10a / 770.6 / 770.5) from PAIN_POINTS_2026-07-26.md §4.
 
@@ -57,3 +57,5 @@
 **Do NOT touch:** `DungeonWorldPortalSpawner` placement/discovery; in-dungeon `DungeonPortLink` (already button/[F]-only `:99-106` — the good pattern). **Related walk-by (follow-up decision, NOT this WO):** `DungeonExitInteractable.OnTriggerEnter:272-278`, `DungeonStubEncounter.cs:86-91`, `DungeonStubReturn.cs:23-45`.
 
 **Sequencing:** 776 + 777 both touch `DungeonEntranceBootstrap.cs` → do 777 before 776, or one agent for both. 775 (Dungeons module) is disjoint from both.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `DungeonController.cs:410-451; DungeonEntrance.cs deleted` — 775/776/777 landed. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

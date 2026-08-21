@@ -4,7 +4,7 @@
 
 # WORK ORDER — 756: In-Game Sales Banner + Owner Campaign-Authoring Tool
 
-**Status:** SPEC — READY
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 **Author:** Monetization/Promo Architect (design only — no `.cs` written, per CLAUDE.md §2/§13)
 **Silo:** Monetization/Backend (§9 — isolated, parallel-safe lane; no scene files, no VillageSceneBuilder)
 **Date:** 2026-07-19
@@ -368,3 +368,5 @@ window + one additive PackStore price hook; no scene files, no VillageSceneBuild
 reconciliation per §11. Composes cleanly with WO-754 (ads) and WO-755 (pack catalog) — shared only through
 `CoreServices` slots and the `packs.json` SKU FK.
 ```
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

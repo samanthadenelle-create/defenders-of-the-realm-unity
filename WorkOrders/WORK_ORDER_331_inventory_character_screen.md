@@ -1,3 +1,5 @@
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
+
 # WORK ORDER 331 — Inventory / Character / Equipment screen
 
 **Status: SPEC (design-driven).** **Lane:** 4 (UI/HUD). **Reference concept:**
@@ -51,3 +53,5 @@ A single full-screen modal, four regions:
 - Coheres with WO-307 (HUD overhaul) + the ShopPanel equip flow — share components, don't duplicate.
 - Reference image preserved at `docs/design/inventory-screen-concept.png` (converted from owner's .avif).
 - Local WO; next free 332.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

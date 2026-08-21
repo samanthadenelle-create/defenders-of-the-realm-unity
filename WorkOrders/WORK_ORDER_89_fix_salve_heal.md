@@ -4,7 +4,7 @@
 
 # WORK ORDER 89 — Fix Salve Ability (E Key): Animation Plays, No Healing
 
-**Status:** BUG FIX — READY TO IMPLEMENT
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Date:** 2026-05-28
 **Priority:** Critical
 **Scope:** Small — targeted edit to one ability script
@@ -191,3 +191,5 @@ On the Hero prefab:
 - [ ] Pressing E at full HP does not overheal (clamped to `maxHealth`)
 - [ ] `Debug.Log` in Console confirms heal amount and new HP value
 - [ ] Animation still plays correctly (not broken by this fix)
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `HeroAbilities.cs:1226-1230` — salve heals. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

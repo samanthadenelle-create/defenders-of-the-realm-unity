@@ -4,7 +4,7 @@
 
 # WO-360: Companion Introduction & Echo Auto-Deploy at Outpost Encounters
 
-**Status:** READY TO IMPLEMENT  
+**Status:** CLOSED — DEPRECATED, audit-verified obsolete (2026-08-21 backlog audit).
 **Estimated Effort:** P1–P2 (2–4 days)  
 **Priority:** High (world exploration + pet onboarding)  
 **Lane:** Narrative/Quests
@@ -331,3 +331,5 @@ public void SummonEcho(Vector3 position)
 - [ ] Tutorial teaches player Echo's role without blocking gameplay
 - [ ] Flags prevent duplicate triggers
 - [ ] Works in WebGL build with DialogueService
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** DEPRECATED. Evidence: `EchoAutoDeployTrigger.cs:23-25 (7fcb49a1b)` — WO-1108 retires outpost Echo summon. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

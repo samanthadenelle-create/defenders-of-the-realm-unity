@@ -1,3 +1,5 @@
+**Status:** DONE — owner-confirmed 2026-08-21.
+
 > ⚠ **NUMBER COLLISION — this document does not own WO-912; `WORK_ORDER_912_ad_revenue_free_path.md` does.**
 > Referred to hereafter as **WO-912-B (Unity pre-approval request)**.
 > Flagged by the 2026-08-16 Sunday board-grooming pass (`python tools/board_build.py` → `DUPLICATE_WO_NUMBERS`);
@@ -303,3 +305,5 @@ rather than blamed on the ad SDK.
 
 **File the written answer in this WO when it lands** — CLAUDE.md §15: a state change with no canon update
 is an incomplete change.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** Owner: done - Unity Growth Support (ticket #00928060, 2026-08-21) confirmed the requested option is enabled for app 27850b635, which matches LevelPlayInitializer.cs:68 exactly.

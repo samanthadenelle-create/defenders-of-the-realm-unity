@@ -87,3 +87,5 @@ Rules (binding):
 ## 5. Not in scope
 
 - Ads SDK (1120), payment rails (1121), cosmetic pass (1122), combat buffs.  
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — STILL VALID. Evidence: `no HarvestBoost/RateMultiplier` — boost engine unbuilt. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.

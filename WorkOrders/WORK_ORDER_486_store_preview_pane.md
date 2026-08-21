@@ -4,7 +4,7 @@
 
 # WORK ORDER 486 — Store Preview Pane + Per-Item Sprites (Knight gear)
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Silo:** Monetization/UI (Store) — `PartyShop` MVVM. File-disjoint from the Knight combat lane; **queue BEHIND the Knight** (this is shop polish, not the V1 north-star).
 **Feature flag:** ships behind the existing `FeatureFlags.PartyShop` (OFF). No new flag.
 **Lane note:** touches ONLY the PartyShop view + the gear catalog data — does NOT touch `VillageSceneBuilder`, combat, or any `.unity` scene. Safe to fan out as an edit-only agent; orchestrator batch-gates + commits per §11.
@@ -281,3 +281,5 @@ Add/extend a `DataRegression` (or AutoPilot store oracle) asserting:
 - Instrument per §12: a `FlowTrace.Step("Store", "preview rendered id=…")` on `RenderPreview` and a
   `FlowTrace.Warn` when the preview falls back to emoji (so headless capture can prove the never-blank
   path took which branch).
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `PartyShopPanelMvvm.cs:459,469,998` — preview pane shipped via WO-501. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

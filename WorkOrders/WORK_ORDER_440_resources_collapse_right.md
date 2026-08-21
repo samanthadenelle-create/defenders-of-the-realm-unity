@@ -14,7 +14,7 @@
 
 # WO-440 — P2 UI: Resources panel — collapsed to right edge by default, tap to expand
 
-**Status:** READY TO IMPLEMENT  
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Priority:** P2  
 **Lane:** 4 UI/HUD  
 **Minted:** 2026-07-03
@@ -76,3 +76,5 @@ the method now, logic in a future WO.
 - [ ] `SetResources()` updates values correctly whether panel is open or closed
 - [ ] `ShowBriefly(float)` stub present (no-op is fine for now)
 - [ ] Headless smoke run passes
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `HudKitController.cs:125-126,1255,1857` — res dock shipped. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

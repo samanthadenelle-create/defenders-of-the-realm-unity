@@ -4,7 +4,7 @@
 
 # WORK_ORDER_508 — normalize locomotion (slide-proof animation feed)
 
-**Status:** READY TO IMPLEMENT (deferred — do when the animation system is touched deliberately) · Animation lane · 2026-06-24
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 **Origin:** owner caught the design smell ("is that logic flawed?") during the orc-slide fix.
 
 ## The flaw
@@ -37,3 +37,7 @@ fix (1.5/3.5) holds in the meantime.
 
 ## Do NOT
 Ship blind — the hero feed is felt-sensitive. Pair with an owner felt-verify of the hero's walk.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — STILL VALID. Evidence: `ActorAnimator.cs:113-118 raw m/s` — normalized speed feed unbuilt. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict. ⚠ NOTE FOR ANYONE REOPENING: the 2026-08-21 read-only audit had classified this one OPEN - STILL VALID, with the evidence cited above. The owner's review supersedes that call (owner statements are ground truth). The audit line is left in place deliberately, so if this work turns out to be needed, the evidence for it is still here rather than erased.

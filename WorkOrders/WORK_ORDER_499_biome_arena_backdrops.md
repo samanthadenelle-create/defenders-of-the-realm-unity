@@ -1,6 +1,6 @@
 # WORK_ORDER_499 — BIOME ARENA BACKDROPS + tactical cover (THE WOW / engagement)
 
-**Status:** SPEC · Arena/Presentation lane · owner 2026-06-23 (art + vision delivered)
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 **Why it matters (owner):** "we have the quests and functions, but THIS is the wow — this is what pulls
 them in and KEEPS them, the engagement." The immersive battle is the retention driver. Make it amazing.
 Extends WO-495 (themed arena). Mobile-first, skip-safe, near-zero perf.
@@ -43,3 +43,5 @@ Extends WO-495 (themed arena). Mobile-first, skip-safe, near-zero perf.
 ## Phasing
 - **P1 (the visible wow):** backdrop plane per biome + subtle particles. Owner felt-verifies the immersion.
 - **P2 (tactical):** image-matched invisible cover + LoS-break-interrupts-cast. The depth.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

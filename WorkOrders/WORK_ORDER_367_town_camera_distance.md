@@ -4,7 +4,7 @@
 
 # WO-367: Town Camera Distance — Move 65% Closer
 
-**Status:** READY TO IMPLEMENT  
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Estimated Effort:** P0 (0.25 days — config only)  
 **Priority:** HIGH (immediate visual adjustment)  
 **Lane:** Build/Perf
@@ -78,3 +78,5 @@ _camFocus = [distance];  // Reduce by 65%
 **WO-367 broke movement — see WO-368 for fix.**
 
 Movement logic is coupled to camera angle. Changing camera distance broke hero movement direction mapping. WO-368 decouples movement from camera and validates with WO-363 (Orientation Validation Gate).
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `CameraModeController.cs:14,84-103` — town camera ~65% closer. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

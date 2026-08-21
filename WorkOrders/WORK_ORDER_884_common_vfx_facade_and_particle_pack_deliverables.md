@@ -4,7 +4,7 @@
 
 # WORK ORDER 884 — Common VFX facade (one low-cost class) + 5 Particle-Pack deliverables
 
-**Status:** READY TO IMPLEMENT - partial (reconciled 2026-08-09, per this file's own 08-08 banner - only the particle-pack half shipped (`a12c6d22`); four of the five sec.9 CREATE files are absent (`VfxFacade.cs`, `VfxSocket.cs`, `VfxElement.cs`, `VfxEmitter.cs`) and both `Vfx.On(` and `VfxBones` return zero hits)
+**Status:** DONE — owner-confirmed 2026-08-21.
 
 **Status:** PARTIAL (reconciled 2026-08-08) — particle-pack half shipped, facade half never landed
 **Silo:** Village combat / VFX (parallel-safe with the boss-breath slice — see §0.1)
@@ -639,3 +639,7 @@ consts), `Buildings/TowerCombat.cs`, `Hero/HeroAbilities.cs`, `Editor/DungeonSce
 ## 10. RESULT
 Write `WorkOrders/WORK_ORDER_884_common_vfx_facade_and_particle_pack_deliverables.RESULT.md`:
 files created/edited, all markers, the loop-cap decision (§6), and the 3 headless screenshots.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — STILL VALID. Evidence: `no VfxFacade/Socket/Element/Emitter` — facade half remains. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** Owner: 884 is done. ⚠ The 2026-08-21 audit read this as OPEN - STILL VALID (evidence above). Owner review supersedes it; the audit line is kept so the evidence survives a reopen.

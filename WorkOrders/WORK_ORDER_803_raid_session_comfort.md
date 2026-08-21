@@ -4,7 +4,7 @@
 
 # WO-803 — Raid session comfort: 2× · ghost deploy · Auto Recommend · scout stub
 
-**Status:** READY TO IMPLEMENT — **sequence AFTER WO-774**  
+**Status:** DONE — owner-confirmed 2026-08-21.
 **Minted:** 2026-07-30  
 **Program:** `docs/WC3_COC_EXPERIENCE_ANALYSIS.md` §2  
 **Lane:** Raid V1 UX (single lane — same deploy path as 774; do not parallel 774)  
@@ -39,3 +39,7 @@ CoC raids feel good because deploy is **legible** (ghost), **fast** (2×), and *
 
 ## Files
 - Raid HUD, RaidDeployController, RaidDeployScreen/VM, raid base config / selection data  
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — STILL VALID. Evidence: `RaidDeployScreen.cs:443` — 2x speed, ghost deploy, drop vfx remain. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** Owner: raid session comfort is done. ⚠ The 2026-08-21 audit had read this as OPEN - STILL VALID (evidence above). Owner review supersedes it; the audit line is kept so the evidence survives if this is ever reopened.

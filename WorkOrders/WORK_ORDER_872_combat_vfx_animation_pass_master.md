@@ -5,7 +5,7 @@
 
 # WORK ORDER 872 — Combat VFX + Animation pass — MASTER
 
-**Status:** READY TO IMPLEMENT - partial, stale index (reconciled 2026-08-09 - umbrella index for 873-883: six shipped, four never started (875, 876, 877), one held on an owner ruling (874). WARNING: do NOT plan off the index table as written - read each child WO's own reconciled banner first)
+**Status:** DONE — owner-confirmed 2026-08-21.
 
 **Status:** PARTIAL (stale index) — reconciled 2026-08-08 (master/index). Audit-backed 2026-08-04 (read-only agent).
 **Author:** UI/QA triage + audit (read-only, §13) — Claude UI
@@ -62,3 +62,7 @@ owner-tags-the-key / CLI-maps-verbatim; route via `VFXManager`; WO-753 teardown.
 Reuse owned prefabs (author none); `VFXManager` routing (never raw Instantiate); owner-tags-key/CLI-maps-verbatim
 (memory `vfx-map-owner-tags-no-creative-pick`); WO-753 one-owner teardown; ASCII/colourblind unaffected (VFX/anim);
 verify on the Seeker (headless can't judge VFX/anim). Ref: `docs/audits/AUDIT_vfx_2026-06-28.md` §2 has a ready map.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — STILL VALID. Evidence: `WO-875/876/877 no RESULT` — children unstarted. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** Owner: 872 is done. ⚠ The 2026-08-21 audit read this as OPEN - STILL VALID (evidence above). Owner review supersedes it; the audit line is kept so the evidence survives a reopen.

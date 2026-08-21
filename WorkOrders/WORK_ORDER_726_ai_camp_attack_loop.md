@@ -4,7 +4,7 @@
 
 # WORK ORDER 726 — AI Camp Attack Loop (Deploy → Clear → Return)
 
-**Status:** READY TO IMPLEMENT  
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Priority:** P0 (the CoC bite)  
 **Silo:** Combat / Raid  
 **Depends on:** WO-724, WO-725  
@@ -90,3 +90,5 @@ Trained army + hero attacks an **AI camp**, deploys on the field (CoC-style), cl
 ## RESULT
 
 `WorkOrders/WORK_ORDER_726_ai_camp_attack_loop.RESULT.md`
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `WO-932 RESULT 1-5; RaidScoring.cs` — deploy->claim loop landed. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

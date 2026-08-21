@@ -5,7 +5,7 @@
 # WO-270: ClaimableNode.DestroyNode() — cache Building list and EconomyService
 **Linear:** [DEF-139](https://linear.app/defenders-of-the-realm/issue/DEF-139/claimablenodedestroynode-findobjectsoftypebuilding-on-every-raze)
 **Lane:** Combat/AI
-**Status:** READY TO IMPLEMENT
+**Status:** CLOSED — DEPRECATED, audit-verified obsolete (2026-08-21 backlog audit).
 **Priority:** Medium
 
 ## Acceptance Criteria
@@ -26,3 +26,5 @@
 
 ## Dependencies
 - None — standalone perf fix. Can be batched with WO-250.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** DEPRECATED. Evidence: `no ClaimableNode.cs/OutpostBuildPanel.cs` — targets never existed. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

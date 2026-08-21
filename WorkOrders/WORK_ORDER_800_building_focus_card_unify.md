@@ -4,7 +4,7 @@
 
 # WO-800 — Building focus card: Level · Enhancements · active job (one door)
 
-**Status:** READY TO IMPLEMENT (Claude designs first; CLI after owner sign-off)  
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Minted:** 2026-07-30  
 **Program:** `docs/WC3_COC_EXPERIENCE_ANALYSIS.md` §2  
 **Lane:** UI / Build presentation (single lane)  
@@ -56,3 +56,5 @@ Players meet **four** upgrade-ish systems: structure **level** timers, **perk gr
 ## Files (expected)
 - `BuildingUpgradePanelMvvm` / VM, BuildMode open path, possibly thin Queue strip component  
 - `docs/UI/…` mockups under a `WO-800_*` folder when Claude delivers  
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `BuildingUpgradePanelMvvm.cs:21-24,44-46` — one panel, tabs. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

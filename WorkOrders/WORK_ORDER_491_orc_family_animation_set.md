@@ -4,7 +4,7 @@
 
 # WORK_ORDER_491 — ORC FAMILY ANIMATION SET (walk + role actions + mage casting)
 
-**Status:** SPEC / READY · Combat/Animation lane · owner-requested 2026-06-23 (felt-test in BattleArena)
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 **Goal:** the orc family in the BattleArena (and roaming overworld reps) read as ALIVE — they WALK
 (not slide), and each role uses its full motion set: **mage CASTS SPELLS**, warriors swing, tanks
 shield/taunt. This is the animated-combat centerpiece (canon: [[atb-flat-vs-overworld-animated-combat]]).
@@ -108,3 +108,5 @@ hero + HUD fixes from this session must be banked first).
 4 .controller assets + walk/cast resolved (no idle-fallback) → fleet smoke (nonzero Speed, no param-MISSING,
 mage rooted on cast, low-HP flips Injured) → owner felt-verify in the arena.
 Reference: `Assets/Editor/HeroAnimatorFactory.cs` (the proven blend-tree/Cast/override pattern).
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

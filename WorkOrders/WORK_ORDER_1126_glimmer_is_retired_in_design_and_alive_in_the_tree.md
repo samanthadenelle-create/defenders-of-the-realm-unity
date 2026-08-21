@@ -151,3 +151,5 @@ which option is chosen** — it costs nothing and removes a loaded gun.
 - Do **not** delete `GlimmerCurrencyService` without a PlayerPrefs migration — existing players hold a
   balance in `dotr-cosmetics-v1` that is not in the signed save and will not come back.
 - Do **not** leave the suites passing on a half-migrated tree.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — STILL VALID. Evidence: `CryptoPaymentManager.cs:209; GlimmerCurrencyService.cs` — purge needs owner ruling. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.

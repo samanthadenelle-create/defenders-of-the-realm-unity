@@ -1,6 +1,6 @@
 # WO-816 — Queue timer UI: progress bars that feel in-game (not text-only countdowns)
 
-**Status:** READY TO IMPLEMENT — **absorbed as Phase 2 of WO-817** (CoC/WC3 queue visual system)  
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Minted:** 2026-08-01 (CLI, code review of queue countdown display)  
 **Master:** `WorkOrders/WORK_ORDER_817_coc_wc3_queue_visual_system.md`  
 **Lane:** Queue presentation (HUD glance + WORK QUEUE modal + shared format)  
@@ -234,3 +234,5 @@ Read WorkOrders/WORK_ORDER_816_queue_timer_progress_bars.md.
 Mock one queue job row: name + gold Stat bar fill + "1m 05s", queued empty bar.
 No .cs. Match Obsidian black/gold, not HP red.
 ```
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `e03aecf6; ManageScreenVM.cs:165,456,470` — real progress bars. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

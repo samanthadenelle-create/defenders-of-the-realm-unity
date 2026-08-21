@@ -4,7 +4,7 @@
 
 # WORK ORDER 190 — Import + optimize the Orc Necromancer as an enemy (OVERNIGHT)
 
-**Status:** READY TO IMPLEMENT (reconciled 2026-08-09 from the tree - the source FBX was never imported: no orc-necromancer asset exists under `Assets/` (the only Necromancer hits are Blink spell-icon art under `Assets/Blink/Art/`), and no commit references WO-190. Prior line: QUEUED for overnight, 2026-05-31)
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 
 **Status: QUEUED for overnight** · **Date:** 2026-05-31 · **Lane:** Art/Enemy pipeline (CLI gatekeeper gates the build)
 **Source folder (NOT yet in project):** `C:\Users\Kayden-Laptop\Downloads\orc+necromancer` (~99.6 MB)
@@ -72,3 +72,7 @@ blocks it and never discards the color.
 - Do NOT commit the raw 27 MB FBX or the 14 MB rm.PNG — commit the decimated/shrunk versions only (keep git lean).
 - Relates to the hero/pet animation work: heroes = Humanoid+Mixamo (failing), enemies/Tripo = own Generic clips.
 - The orc necromancer is a PAID asset (Tripo + its own walk animation) -> it's a MAIN character, worth the harness polish.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — STILL VALID. Evidence: `no orc/necromancer FBX imported` — source asset off-repo. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict. ⚠ NOTE FOR ANYONE REOPENING: the 2026-08-21 read-only audit had classified this one OPEN - STILL VALID, with the evidence cited above. The owner's review supersedes that call (owner statements are ground truth). The audit line is left in place deliberately, so if this work turns out to be needed, the evidence for it is still here rather than erased.

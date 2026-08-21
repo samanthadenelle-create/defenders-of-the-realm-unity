@@ -119,3 +119,5 @@ wrong means rebuilding it.
 4. Owner felt-verifies. ⚠ This one is *especially* a felt judgement: the question is not "does it
    work" but **"does losing feel like it was my fault, and do I know what to change?"** If the player
    cannot answer that, the loop is still open regardless of green gates.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — STILL VALID. Evidence: `no RaidDefen*/IncomingRaid symbols` — nothing built; stakes unruled. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.

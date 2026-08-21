@@ -1,3 +1,5 @@
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
+
 > ⚠ **NUMBER COLLISION — this document does not own WO-333; `WORK_ORDER_333_village_death_no_dtt_atb_trigger.md` does.**
 > Referred to hereafter as **WO-333-B (DTT sensitivity consolidation)**.
 > Flagged by the 2026-08-16 Sunday board-grooming pass (`python tools/board_build.py` → `DUPLICATE_WO_NUMBERS`);
@@ -37,3 +39,5 @@ any reticle speed), so it's consistent across normal play AND story beats, and t
 ## Notes
 - FELT — owner playtests after. Pairs with the DTT cluster (317/318/320, just fixed) and the WO-318 aim work.
 - Local WO; next free 334.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

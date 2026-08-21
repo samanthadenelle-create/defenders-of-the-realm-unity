@@ -4,7 +4,7 @@
 
 # WORK ORDER 193 — Overworld Random Encounters
 
-**Status:** DESIGN → READY once the resolution decision is made (see §Decision)
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 **Lane:** World / Combat — `OuterWorld` + encounter system + (ATB or skirmish). Code; no village bake.
 **Source:** owner 2026-06-01 — "add overworld random encounters on the map."
 **Ties:** WO-155 (region spawning + roaming mobs — DONE), WO-164 (ThreatLevel — DONE), WO-169 (ATB party battle — DONE), WO-112 (ward-tether expedition — DONE), `DESIGN_CORE_LOOP_AND_STRUCTURE.md` §5d (expedition).
@@ -44,3 +44,5 @@ ThreatLevel** (deeper/farther = more frequent, tougher), using the region enemy 
 - Resolution model (A/B/hybrid — decide first).
 - Frequency curve + flee odds (tuning).
 - Do encounters drop loot/resources directly, or just XP? (economy tie.)
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

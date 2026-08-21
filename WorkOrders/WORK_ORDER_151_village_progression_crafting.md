@@ -4,7 +4,7 @@
 
 # WORK ORDER 151 — Village Progression & Crafting Depth (Warcraft-style: level the village → resource buildings → Forge/Armory → combat power)
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Date:** 2026-05-30
 **Priority:** High — the "BUILD-UP → MAKE SAFE" half of the North Star core loop; the depth sink that gives the harvest (WO-141/117) and the combat (HeroHealth/HeroAbilities) a reason to keep going.
 **Scope:** Large but cleanly phased + composition-based. ONE shared `BuildingUpgrade` system + ONE `VillageLevel` gate + per-building effect data + 4 thin combat/economy hookups. No new currency, no new assembly, no UXML, **no `VillageSceneBuilder` edit, no bake.**
@@ -393,3 +393,5 @@ So progression is never hard-blocked waiting on one resource, the **Store** (Mar
 ---
 
 🤖 Spec'd by the design lane (UI). Reconciled against `EconomyService.cs` (`ResourceCost`/`CanAfford`/`TrySpend`/`Grant` — reused, not forked), `GameState.cs` (Wood L58 / Stone L54 / Iron L56 / AetherCrystals L52 / Resources.Food — no net-new currency; `WallLevel`/`BuildingCooldowns`/`BuildingDamage` persist pattern mirrored), `TowerData.cs` (`upgrades[]`/`upgradeCost` tier pattern mirrored; Tower chain left as-is), `HeroAbilities.cs` (L278 outgoing-dmg product), `PlayerAttackController.cs` (L142 `_baseDamage`), `HeroHealth.cs` (L125 `TakeDamage` single incoming chokepoint), `HeroProgression`/`HeroTalentModifiers` (existing dmg multipliers — Forge stacks as one more factor), and WO-114/117/141/150, CLAUDE.md §5/§6/§9, PIPELINE_STATE.md §8. Markdown work order only — no `.cs` touched, no bake fired, `VillageSceneBuilder` not edited.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `PopulationBootstrap.cs:17, structures-catalog.json, BuildingUpgradeRegression.cs` — tier gate shipped. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

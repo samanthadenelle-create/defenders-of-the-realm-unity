@@ -4,7 +4,7 @@
 
 # WORK ORDER 112 — The Ward-Tether: Relight the Marches, Earn the Range
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Date:** 2026-05-29
 **Priority:** High — the exploration spine of Rung 3 (Defend + Explore); gates WO-110/111 node claims
 **Scope:** Medium-large — new ward-stone system in `DeNelle.Environment`, reach enforcement, save field, ZoneManager + Arcane Tower hooks
@@ -343,3 +343,5 @@ made attackable — not in this WO) needs `using DeNelle.Core.Combat;`.
 - **Do NOT duplicate CollectionPoint / mine state** (WO-110/111) — the ward only flips the claimed/active gate.
 - **Do NOT make the forgetting punishing** — no damage, no death, no timed kill, no hard wall. Gentle + reversible is canon.
 - Do not touch ATB, WalletService, monetization, or clan code.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `WardStone.cs:32-39, WardTetherService, WardContent.cs:46,111` — ward relight shipped. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

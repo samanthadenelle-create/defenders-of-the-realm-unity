@@ -4,7 +4,7 @@
 
 # WORK ORDER 144 — Regional Crystal Subtypes: Danger Gates Reward (the risk/reward spine of the build-up economy)
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Date:** 2026-05-30 (Fri)
 **Priority:** High — the **risk/reward spine** of the harvest→build economy. Owner ask (verbatim): *"should have crystals maybe sub types only in regions with more hordes or higher levels"* — rarer, more-valuable crystal **subtypes** harvestable only in the more dangerous, higher-level regions. Danger ⇄ reward.
 **Lane:** **economy / gameplay code (CLI)** — pure data + a thin grade-aware extension of the existing crystal wallet + a node-side region gate. **NOT the frozen `VillageSceneBuilder`; no bake; no `Village.unity` hand-edit.**
@@ -286,3 +286,5 @@ Rare grades buy what base Aether cannot. The sink lives in **already-planned sys
 ---
 
 🤖 Spec'd by the economy/design lane (UI). Reconciled against: `GameState.cs:52` (`AetherCrystals` — kept as the authoritative total, no fork), `CrystalEconomy.cs:106` `AddCrystals(int)` (overloaded, not changed — the project-standard award path used by `WaveManager.cs:872` / KillComboTracker / `CrystalMine.cs:160`), `NestedTypes.cs:43` (`ResourceBalance.Crystals` — name-clash flagged), `SaveSchema.cs:150/222` + `GameStateService.cs:279/332/525/674` (existing crystal round-trip — ledger rides alongside additively), WO-141 (`ResourceNode`/`HarvestNodeData` node model — grade is two additive SO fields), WO-107 `ZoneManager.cs:159` (`GetZone` region classifier — the danger gate), WO-142 (region identities + warmth-in/dread-out tiers), WO-114 (Reinforced wall = 40 Crystals — the rare-grade sink), WO-137 (apex catalog sink), NORTH_STAR (BUILD→HARVEST→DEFEND→OFFLINE + Pi utility-sink). Grade is an ORTHOGONAL `CrystalGrade` enum (NOT new `ResourceType` members) per CLAUDE.md §5 + memory *core-namespace-shadows-unityengine-statics* / *wo-batch-reconcile-not-replace*. Markdown work order only — no `.cs` touched, no bake fired.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `CrystalGrade.cs, RareCrystalSpawner.cs, CrystalMineNode.cs` — region-gated grades. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

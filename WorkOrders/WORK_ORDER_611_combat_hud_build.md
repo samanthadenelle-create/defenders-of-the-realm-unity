@@ -4,7 +4,7 @@
 
 # WORK ORDER 611 — Build the Combat HUD (WO-609 Phase 3 implementation, owner-designed)
 
-**Status:** READY TO IMPLEMENT — overnight build. Owner-designed live 2026-07-05 (interactive view iteration).
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **WO number 611 PROVISIONAL** (authority = MASTER_PIPELINES_BACKLOG; confirm on mint).
 **Lane:** HUD / Presentation (HudKit + Core UI factory + Village producers + posture).
 **Supersedes/extends:** WO-609 (prefab-first battle HUD — the data/producers already landed). This WO builds the **visual + behavior** layer the owner designed on top of it.
@@ -79,3 +79,5 @@ All 11 HUD-reachable abilities render **blank** today (producers pass the glyph 
 - Add anything beyond the spec (owner: "simple, nothing else").
 - Break the friendly/town HUD, the fill-binding contract (§1.1), or add a Village↔HUD edge.
 - Hand-edit `.unity`. Regenerate via builders.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `HudKitController.cs:107,108,299,365,465; AutoPilotDriver.cs:570` — combat HUD layer. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

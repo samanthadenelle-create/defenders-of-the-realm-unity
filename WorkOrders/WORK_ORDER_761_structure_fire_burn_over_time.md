@@ -4,7 +4,7 @@
 
 # WORK ORDER 761 — Fire leaves a lingering BURN on structures until repaired
 
-**Status:** SPEC — READY (owner-requested 2026-07-24, design idea)
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 **Lane:** Combat/AI + Structures + Repair loop (pairs with WO-757 dragon breath cone)
 **Owner intent (verbatim):** "the fire damages would be nice to continue burn over time till repaired."
 
@@ -56,3 +56,5 @@ When fire brings a structure to **50% damage (≤50% HP)**, it **catches fire an
 ## 6. Notes
 - This is a FOLLOW to the current test build (a mechanic, not a tweak) — not deployed in the 2026-07-24 test build.
 - Natural pairing: WO-757 (the breath cone that does the hit) + WO-761 (the fire it leaves behind) = "fire is a real, lingering weapon."
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

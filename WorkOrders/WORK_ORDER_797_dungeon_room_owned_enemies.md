@@ -1,3 +1,5 @@
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
+
 # WORK ORDER 797 — Dungeon rooms own their enemies (per-area seating + confinement)
 
 **Status: IMPLEMENTED pending gates** (2026-08-02 — compile gate + AutoPilot/regression run + re-bake still owed)
@@ -59,3 +61,5 @@ cases), re-bake dg_starter_loop.unity (**isolated worktree — NUL-corruption me
 - [ ] leashRadius/wakeRadius present in the re-baked scene's serialized data.
 - [ ] Do NOT touch: WO-790/791/792 outpost paths; the `_leashRadius==0` village short-circuit.
 - [ ] Fold in or defer explicitly: EW-4 stat divergence (DefFor hollow stats vs enemies.json).
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

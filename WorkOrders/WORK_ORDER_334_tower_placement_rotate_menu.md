@@ -4,7 +4,7 @@
 
 # WORK ORDER 334 — Tower Placement Rotate Menu (Preview & Rotate)
 
-**Status:** READY TO IMPLEMENT
+**Status:** CLOSED — DEPRECATED, audit-verified obsolete (2026-08-21 backlog audit).
 **Lane:** 11 (Build Mode / Player Base) — code-only, parallel-safe
 **Priority:** MEDIUM — polish; placement currently snaps towers with no rotation preview
 **Visual spec:** Interactive HTML mockup reviewed and approved by owner (2026-06-07)
@@ -178,3 +178,5 @@ Do NOT edit:
 - [ ] Reset Rotation restores all axes to `initialRotation` values
 - [ ] No UXML files referenced anywhere in the implementation
 - [ ] Brace-balance check passes on all edited .cs files
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** DEPRECATED. Evidence: `BuildModeController.cs:137-144 (WO-673)` — in-place rotate shipped instead. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

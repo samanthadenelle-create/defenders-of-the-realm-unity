@@ -4,7 +4,7 @@
 
 # WO-341 — Backend: auth token refresh + expiry handling
 
-**Status:** READY TO IMPLEMENT
+**Status:** CLOSED — DEPRECATED, audit-verified obsolete (2026-08-21 backlog audit).
 
 **Depends on:** WO-120 (backend spec done), WO-80 (Vercel + Neon set up)
 
@@ -57,3 +57,5 @@ Authentication tokens (issued at login via WO-80) have a short lifetime (15min).
 ## Notes
 
 Refresh is handled server-side (Vercel endpoint). Client just calls it when needed. Tokens should NEVER be stored in plain PlayerPrefs.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** DEPRECATED. Evidence: `BackendAuthConfig.cs:1-25` — wallet-signed headers; no token flow exists. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

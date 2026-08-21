@@ -1,6 +1,6 @@
 # WORK ORDER 1123 — The orient canon's central deliverable was never built, and its canon flag is read by nothing
 
-**Status:** READY TO IMPLEMENT (⚠ step 1 is a measurement — §4)
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Minted:** 2026-08-19 (CLI seat) — banner bumped 1123 → 1124 in the SAME edit
 **Lane:** Hero gear orientation. `Assets/_Modules/Core/Geometry/` + `Assets/_Modules/Village/Hero/`.
 No scenes, no bake, no catalog *values* changed.
@@ -158,3 +158,5 @@ row in either pose**, so today the answer for most of the wardrobe is whatever t
 A deriver does not make the owner's dials unnecessary — it makes them **rare, and permanent**: the
 geometry gets it close, she corrects what feels wrong, and `manual` protects that correction forever.
 That is the loop `ARCHITECTURE_PRINCIPLES.md` §4 describes and the one the gear path has never had.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `WeaponOrientHelper.cs (5419b106b); GearCatalog.cs:178` — manual flag read. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

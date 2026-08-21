@@ -4,7 +4,7 @@
 
 # WORK_ORDER_492 — V2 enemy cross-seam NavMesh traversal (Grok-guided)
 
-**Status:** TABLED / READY FOR BOTS · V2 · Combat/AI + World lane · captured 2026-06-23 (Grok review)
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 **Relates:** memory [[v2-enemy-seam-navmesh-traversal]], `RuntimeRegionGate.cs`, `SceneTransitionTrigger.cs`.
 **Why V2:** the V1 workaround is "castle = safe / reps spawn+roam OuterWorld-only / chase stalls at the
 seam" (OverworldEncounterSpawner). This WO makes enemies actually path ACROSS the seam so that becomes a
@@ -63,3 +63,5 @@ public static void RepathAgentsNearSeam(Vector3 seamPosition, float radius = 30f
   in OverworldEncounterSpawner until the cross-seam path is PROVEN reliable headless.
 - Confirm `_aiLinkBuilt` / existing `BuildAiLink` (RuntimeRegionGate ~527) isn't already doing a weaker
   version — extend, don't duplicate.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

@@ -1,6 +1,6 @@
 # WORK ORDER 87 — Cinemachine Camera System
 
-**Status:** PARTIAL - remaining: re-target off the DELETED Village.unity
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 
 > **PARTIAL - re-scoped 2026-08-14 (phantom sweep).** Remaining work: RE-TARGET. The Cinemachine controller exists, but its GUID is in no scene or prefab and the builder line is commented out at VillageSceneBuilder.Characters.cs:119. Remaining: re-target it off the DELETED Village.unity.
 > Everything else in this WO is present in HEAD. The named remainder IS the ticket now - do not
@@ -278,3 +278,5 @@ CinemachineCameraController.Instance?.PlayWaveClearCinematic(slowMoDuration + 0.
       they delegate to Cinemachine automatically
 - [ ] Mobile shake is scaled by 0.55× automatically
 - [ ] No camera clipping or NaN errors at any camera position
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

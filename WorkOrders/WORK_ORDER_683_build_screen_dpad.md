@@ -1,3 +1,5 @@
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
+
 # WORK ORDER 683 — Build-screen D-pad: the HUD kit d-pad shows in build mode and moves the asset
 
 **Status: READY TO IMPLEMENT** (owner rulings 2026-07-12 evening, verbatim: "we need the dpad from
@@ -78,3 +80,5 @@ Pi target is mobile web).
 *Cross-refs:* `docs/audit/input-controls.md` (the owner-directed control spec — sizing/dead-zone/
 curve law) · WO-677 (mobile build-mode verbs) · WO-611 (combat HUD v8 d-pad cross) · WO-673 L5
 (45° stepped rotation, both directions).
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

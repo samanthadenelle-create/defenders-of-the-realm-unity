@@ -1,3 +1,5 @@
+**Status:** READY TO IMPLEMENT — owner ruling 2026-08-21: leave on the to-do.
+
 # WORK ORDER 828 — Live minimap immersion (hub + overworld, cheap)
 
 **Status: READY TO IMPLEMENT**  
@@ -99,3 +101,5 @@ Replace stubs in `VillageHudController` if still live path:
 Implement WORK_ORDER_828_live_minimap_immersion.md per docs/vfx/minimap_spec_v2.md cheap path.
 HudMinimapWidget + hud-areas + providers. No RenderTexture. Complements compass.
 ```
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** Owner explicitly corrected herself from 823 to 828 and said "leave it on to do". Live minimap immersion STAYS in the queue.

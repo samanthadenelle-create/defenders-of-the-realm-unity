@@ -4,7 +4,7 @@
 
 # WO-379: Echo Auto-Summoning on Yarn Spinner Dialogue — Story Integration
 
-**Status:** READY TO IMPLEMENT  
+**Status:** CLOSED — DEPRECATED, audit-verified obsolete (2026-08-21 backlog audit).
 **Estimated Effort:** P0 (0.5 days — Yarn Spinner hooks + Echo deploy)  
 **Priority:** HIGH (narrative integration, companion introduction)  
 **Lane:** 12 Narrative/Quests
@@ -424,3 +424,5 @@ public class DialogueEchoIntegration : MonoBehaviour
 - Echo stays in world after dialogue (for tutorial/interaction)
 - Consider Echo as NPC during dialogue (can be referenced in story)
 - Optional: Add Echo dialogue reactions (head turns, animations) during NPC speech
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** DEPRECATED. Evidence: `EchoAutoDeployTrigger.cs:7-21 (7fcb49a1b)` — dialogue auto-summon not one of the three. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

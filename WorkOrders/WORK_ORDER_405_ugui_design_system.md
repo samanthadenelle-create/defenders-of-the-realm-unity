@@ -5,7 +5,7 @@
 # WORK ORDER 405 — Complete UGUI Design System for ALL Game HUDs
 
 **Priority:** P0
-**Status:** READY TO IMPLEMENT (foundation + ~50% already landed — see §7 Current State)
+**Status:** CLOSED — DEPRECATED, audit-verified obsolete (2026-08-21 backlog audit).
 **Type:** Design system + implementation (foundation)
 **Owner sign-off needed on:** the light-parchment direction (verify in a build) before the full sweep
 **WO-numbering note:** 405 minted by owner 2026-06-10; slot into MASTER_PIPELINES_BACKLOG + Notion WO DB.
@@ -167,3 +167,5 @@ possible; every HUD consumer closes with side-by-side screenshot + owner sign-of
 
 *Captures the north-star (task #23) + mockups #40/#41/#42 + the Grok 3-WO spec. The design
 direction needs an owner build-verify before the full sweep.*
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** DEPRECATED. Evidence: `docs/UI_BLINK_TEMPLATE_CANON.md:1-16` — light-parchment reversed by Obsidian canon. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

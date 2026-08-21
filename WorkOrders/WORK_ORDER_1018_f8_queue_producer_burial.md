@@ -149,3 +149,5 @@ since the restart, so the producer half is UNPROVEN in practice), `ACK.json` rea
 **The first capture after the restart is the proof** - it must appear in `QUEUE.jsonl` with no
 `WARN_UNQUEUED`. If it does, Evidence A is closed for good; if it does not, the producer has a real
 code gap and this WO becomes a code ticket.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — STILL VALID. Evidence: `f8-inbox-lib.ps1 untouched since 96100bc2d` — recovery-path burial unchanged. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.

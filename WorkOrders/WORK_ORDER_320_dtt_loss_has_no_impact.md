@@ -1,3 +1,5 @@
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
+
 # ⚠ WORK_ORDER_320 — Defend the Tower: losing has no impact (no defeat consequence) — **SUPERSEDED 2026-07-04**
 
 > **SUPERSEDED:** The Defend-the-Tower / PatriciaLight system was removed 2026-06-09.
@@ -44,3 +46,5 @@ untouched. Additive — no fork.
 
 ## Do NOT touch
 - No `.unity` edits. Reuse WO-235 screens + EconomyService (don't fork). Coordinate with WO-317/318/319 (same mode).
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

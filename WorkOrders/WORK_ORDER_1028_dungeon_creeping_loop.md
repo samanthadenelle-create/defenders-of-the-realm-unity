@@ -1,6 +1,6 @@
 # WORK ORDER 1028 — Wire the creeping loop: the dungeons are built and have no reason to exist
 
-**Status:** BLOCKED ON WO-910 — ★ §3 RULED 2026-08-17: **(b) Wisdom primary + (c) gear as the deep-run bonus**
+**Status:** CLOSED — owner ruling 2026-08-21.
 
 > Owner ruling 2026-08-17 (*"open ones follow your recommendations"*): creeping pays **Wisdom** as its
 > primary currency, with **gear** as the deep-run bonus. Dungeons become the hero-power faucet — which is
@@ -97,3 +97,5 @@ precisely why the design review ranks WO-910 above this.
 2. Headless: full descent + return, assert the payout lands in the save and survives reload
 3. Screenshots of the town-side offer and the return payoff
 4. Owner felt-verifies: *"did going down there feel worth it, and did I come back stronger?"*
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** Closed by the owner.

@@ -1,3 +1,5 @@
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
+
 # WORK ORDER 442 — Build mode: validate pay per wall segment (no free segments)
 
 **Status: READY TO IMPLEMENT** (owner 2026-06-17). Editor-closed (gate + felt-test).
@@ -45,3 +47,5 @@ segments — the red ghost IS the "you can't afford this" signal.
 
 *Cross-ref:* `BuildModeController.cs:715-752` (Place/WO-131), build-mode input drivers, F8 note "build
 broken cannot select unit to place" (separate — verify build-mode selection too).
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

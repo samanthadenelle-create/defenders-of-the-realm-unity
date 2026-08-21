@@ -4,7 +4,7 @@
 
 # WORK ORDER 94 — Fix Skeleton Enemy: Purple Capsule Placeholder + Battle Loop Bug
 
-**Status:** BUG FIX — READY TO IMPLEMENT
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Date:** 2026-05-28
 **Priority:** Critical
 **Scope:** Small — assign Skeleton prefab + fix post-battle navigation
@@ -226,3 +226,5 @@ Set `villageSceneName` to match the exact name in Build Settings.
 - [ ] Dying as hero transitions to Game Over / respawn screen (not loop)
 - [ ] `BattleResultHandler.OnVictory()` logs "[BattleResult] Victory" in Console
 - [ ] Scene transition has a brief display window (≥1.5s) before loading
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `BattleController.cs:745-753` — return-scene guard. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

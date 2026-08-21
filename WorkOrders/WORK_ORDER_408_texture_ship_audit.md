@@ -1,3 +1,5 @@
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
+
 # WORK ORDER 408 — Texture ship-vs-source audit + proposed cap plan
 
 **Status: SPEC / OWNER EYEBALL** · Lane 10 Build/Perf · P0 · 2026-06-13 · By: CLI
@@ -102,3 +104,5 @@ already-solved or non-shipping:
    sidesteps the "WebGL"/"Web" platform-name trap).
 **Projected:** 200 → ~90–110 MB. Sub-60 likely needs Tripo **mesh decimation** (separate task) +
 audio bitrate pass. Run → rebuild → measure → owner visual verify.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

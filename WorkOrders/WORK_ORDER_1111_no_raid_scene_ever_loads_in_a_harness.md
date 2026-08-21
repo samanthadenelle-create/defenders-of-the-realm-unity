@@ -1,6 +1,6 @@
 # WORK ORDER 1111 — No harness has EVER loaded a raid scene; the whole assault is code-verified only
 
-**Status:** READY TO IMPLEMENT
+**Status:** CLOSED — owner-tested 2026-08-21.
 **Minted:** 2026-08-16 (CLI seat) — banner bumped 1109 -> 1112 in the SAME edit (1109, 1110 minted alongside)
 **Lane:** Test harness / AutoPilot. Disjoint from WO-1109 and WO-1110's runtime files.
 **Provenance:** SME readiness audit of the raid pillar, 2026-08-16.
@@ -64,3 +64,7 @@ and report a false pass on "raids unreachable."
 - Registered in `DataRegression.RunAll` or the fleet, and its marker is distinct per `CLAUDE.md` §8
   (never reuse `REGRESSION_OK` — the 2026-08-02 lesson where three entry points shared one marker and
   the gate judged the wrong suite).
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — STILL VALID. Evidence: `RaidHeroCarryRegression.cs:25` — no harness loads RaidBase_*. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.
+
+> **OWNER RULING 2026-08-21 (verbal):** "1111 is closed and tested perfect." Owner has exercised the raid path directly; the harness gap is no longer the blocker it was written as.

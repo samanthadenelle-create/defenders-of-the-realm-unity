@@ -4,7 +4,7 @@
 
 # WORK ORDER 78 — Backend Transaction Verification + Staking Dashboard UI
 
-**Status:** READY TO IMPLEMENT
+**Status:** CLOSED — DEPRECATED, audit-verified obsolete (2026-08-21 backlog audit).
 **Date:** 2026-05-28
 **Priority:** High
 **Scope:** Small — two new scripts
@@ -206,3 +206,5 @@ StakingDashboardUI.Instance?.ShowDashboard();
 - [ ] Refresh button re-queries the chain and updates all four fields
 - [ ] Close button hides the panel
 - [ ] No crash if `TransactionVerifier` or `StakingBonusManager` is null
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** DEPRECATED. Evidence: `StakeRewardsPanel.cs/VM; no TransactionVerifier` — Aether-grant premise retired. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

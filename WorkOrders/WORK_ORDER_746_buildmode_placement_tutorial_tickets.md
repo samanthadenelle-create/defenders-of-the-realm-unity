@@ -4,7 +4,7 @@
 
 # WORK ORDER 746 — Build Mode felt-fix pass: post-place return · singleton palette state · tutorial spotlight anchor
 
-**Status:** READY TO IMPLEMENT (tickets BM-1 / BM-2 / BM-3, owner playtest 2026-07-18)
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Minted:** 2026-07-18 from the banner (recorded with WO-745; next-free bumps to 747)
 **Seat:** UI/QA lane — read-only RCA, no code touched. **Implemented by: Claude (CLI).**
 **Owner (PO):** Sam — sighting screenshots 2026-07-18 (Build Mode, tutorial "Place your Lumberyard (0/1)"); felt-verify + close.
@@ -131,3 +131,5 @@ any Placing-state screenshot; tab spotlight ("Town") behavior unchanged.
 `WorkOrders/WORK_ORDER_746.RESULT.md` — paste the §12 capture lines per ticket (BM-1 state pair,
 BM-2 offer/reject pair, BM-3 spotlight resolve line), CompileGate green, owner felt-verify closes
 each BM ticket; Notion row WO-746 → Done when all three verify.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `WORK_ORDER_746.RESULT.md` — build mode felt-fixes shipped. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

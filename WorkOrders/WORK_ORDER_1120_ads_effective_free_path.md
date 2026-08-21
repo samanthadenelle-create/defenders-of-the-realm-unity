@@ -78,3 +78,5 @@ Target economy (WO-912 D1 math): long jobs need **many** watches and still leave
 ## 6. Not in scope
 
 - Pack pricing (1118), payment (1121), season pass (1122).  
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — STILL VALID. Evidence: `ad-placements.json enabled but no AdGateService` — placement interpreter missing. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.

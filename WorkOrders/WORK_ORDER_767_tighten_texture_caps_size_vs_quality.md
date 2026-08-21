@@ -4,7 +4,7 @@
 
 # WORK ORDER 767 — Tighten texture caps (APK size vs quality lever)
 
-**Status:** SPEC — READY (owner size concern 2026-07-24). FOLLOW / pre-launch polish. Owner-gated (quality tradeoff).
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 **Lane:** Build/Art optimization. Scope: **SMALL** (cap-table edit + Apply + rebuild + visual verify).
 
 ---
@@ -53,3 +53,5 @@ Each step trades visible fidelity for MB. Options, least-risky first:
 - Also consider an **AAB** for Play (device-specific splits → each user downloads less than the universal APK) — a separate size win that does NOT touch quality. Pairs with the Google-Play path in `docs/PUBLISHING_STEPS.md`.
 - Sounds (5.5%), Shaders (6.2%), Meshes (6.0%) are minor vs textures — not worth the risk until textures are dialed.
 - Not urgent for Seeker sideload testing (453 MB is fine there); matters for Play polish + install conversion.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

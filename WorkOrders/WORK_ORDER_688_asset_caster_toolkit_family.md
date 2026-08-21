@@ -1,3 +1,5 @@
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
+
 # WO-688 — Asset Caster Toolkit Family (owner vision, 2026-07-12) *(renumbered from WO-677, 2026-07-13 collision cleanup)*
 
 **Status: SPEC DRAFT — gated on the SME dossier fleet (docs/SME/) completing + per-pack applicability assessment**
@@ -56,3 +58,5 @@ APPLICABLE-NOW (list the wiring) / APPLICABLE-WITH-WORK (name the gap + effort) 
 Owner can open the window, find any asset in under 30 seconds via search/filters, preview it
 correctly (animated/seated/audible as appropriate), click one action, and the asset is properly
 live in-game data with provenance — no CLI round-trip.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

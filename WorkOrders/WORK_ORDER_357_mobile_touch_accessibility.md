@@ -4,7 +4,7 @@
 
 # WO-357: Mobile Touch Gestures & Accessibility
 
-**Status:** READY TO IMPLEMENT  
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 **Estimated Effort:** P1–P2 (2–4 days)  
 **Priority:** High (mobile core experience)  
 **Lane:** Gameplay/Input (parallel to HUD work)
@@ -364,3 +364,7 @@ public sealed class AccessibilitySettings : MonoBehaviour
 - [ ] Accessibility settings functional
 - [ ] Screen reader announces key state changes
 - [ ] Works in WebGL on mobile
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — STILL VALID. Evidence: `LeanTouchBuildDriver.cs:12-18` — accessibility/first-launch/screen-reader unbuilt. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict. ⚠ NOTE FOR ANYONE REOPENING: the 2026-08-21 read-only audit had classified this one OPEN - STILL VALID, with the evidence cited above. The owner's review supersedes that call (owner statements are ground truth). The audit line is left in place deliberately, so if this work turns out to be needed, the evidence for it is still here rather than erased.

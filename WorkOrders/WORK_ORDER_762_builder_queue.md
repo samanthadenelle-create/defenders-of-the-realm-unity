@@ -4,7 +4,7 @@
 
 # WORK ORDER 762 — Work-Job Queue (the common slots/queue for Build · Upgrade · Repair · Train)
 
-**Status:** SPEC — READY (owner-designed 2026-07-25). FOLLOW feature, not a test-build fix.
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 **Lane:** BuildMode / Economy / HUD. Scope: **MODERATE** (timer engine + slot cap already exist; net-new = generalized queue + dynamic slots + HUD).
 
 ---
@@ -86,3 +86,5 @@ Pillars: **sell time, never power** (buying a builder = faster, not stronger); c
 
 ## 5. Note
 - NOT in the current test builds. Reuse everything in the table; the only real new logic is the typed queue/auto-pull + the dynamic slot count + repair-as-job. Do NOT greenfield — the timer engine exists, this generalizes it.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

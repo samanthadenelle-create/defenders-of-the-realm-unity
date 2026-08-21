@@ -1,6 +1,6 @@
 # WORK_ORDER_388 — Load the player's real castle as the Arena defender base
 
-**Status:** SPEC — implementation gated on the 2 verification questions (§3). Surgical change is small; the glue depends on the verify result.
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 **Lane:** 2 Combat/AI (+ a tiny UI toggle in ArenaPanel). Code-only; may need a NavMesh step.
 **Source:** This session (2026-06-09). Owner-relayed proposal, refined.
 
@@ -95,3 +95,5 @@ Runtime-bake CODE change in `EnemyOutpost`/`ArenaMode` + new `ArenaNavMeshBaker.
 - Do NOT wholesale-replace `SpawnOpponentBase` — change only the recipe argument + add the helper/toggle.
 - Keep `_suppressClearReward`, the `OnCleared` subscription, and the `_arenaRecipe ?? generated` fallback intact.
 - Default the toggle OFF until §3 is verified — don't break the live seeded path.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

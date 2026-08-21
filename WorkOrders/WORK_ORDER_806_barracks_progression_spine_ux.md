@@ -4,7 +4,7 @@
 
 # WO-806 — Barracks progression spine UX (unlock → train → troop L → barracks L)
 
-**Status:** READY TO IMPLEMENT (Claude designs first; CLI after owner image-pair sign-off)  
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Minted:** 2026-07-30  
 **Program:** `docs/WC3_COC_EXPERIENCE_ANALYSIS.md` §2A (army ladder)  
 **Lane:** Barracks / Army UI (single lane — owns BarracksPanel + Train tab presentation)  
@@ -56,3 +56,5 @@ Code already implements a CoC-like ladder (unlock by barracks level, train on Tr
 
 ## Files
 - `BarracksPanel*.cs`, `TroopTrainingPanel*.cs`, `BarracksService`, catalogs read-only  
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `BarracksPanel.cs:12-19; BarracksPanelVM.cs:316-329` — ladder shipped. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

@@ -4,7 +4,7 @@
 
 # WORK ORDER 870 — Tower VFX: cast → projectile → impact, by TYPE × TIER (+ fix Aether/Fire mismatch)
 
-**Status:** READY TO IMPLEMENT - partial (reconciled 2026-08-09, per this file's own 08-08 banner - T7 is delivered (`ArcaneTower.cs:82` BoltVisualElement = Aether), but T2's primitive projectile bodies remain (`DefenseTower.cs:972/991/1002/1020` still call CreatePrimitive) and T8's windup is absent; four further items are HELD pending owner VFX tags)
+**Status:** DONE — owner-confirmed 2026-08-21.
 
 **Status:** PARTIAL — child of WO-872 (VFX pass master).
 **Author:** UI/QA triage + audit (read-only, §13) — Claude UI
@@ -61,3 +61,7 @@ owner-tags-key / CLI-maps-verbatim; WO-753 teardown; keep the URP shader-proof p
 ## 5. Do NOT
 - Do NOT author new VFX (owner-tagged keys already exist). Do NOT keep primitive projectile bodies. Do NOT raw-
   Instantiate (use `VFXManager`/`ProjectileVFXCatalog`). Do NOT touch legacy System B without owner confirm.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — STILL VALID. Evidence: `DefenseTower.cs:993,1012,1023,1041 CreatePrimitive` — real projectiles remain. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** Owner: 870 is done. ⚠ The 2026-08-21 audit read this as OPEN - STILL VALID (evidence above). Owner review supersedes it; the audit line is kept so the evidence survives a reopen.

@@ -164,3 +164,5 @@ ASCII only. **Text-encoded state, never colour alone** (owner is red/green colou
 - `docs/MASTER_CATALOG/village-systems.md:130` — lists `CollectorStackView (437)` as if live; it has never
   run. Correct once wired.
 - `docs/qa/GAMEPLAY_GAPS_2026-07-26.md:79` — cites `CollectorStackView.cs:367` as if the VFX fires.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — STILL VALID. Evidence: `StructureFactory.cs:929` — S4 ambient collector chip absent. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.

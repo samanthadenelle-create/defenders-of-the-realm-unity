@@ -1,7 +1,7 @@
 # WORK ORDER 411 — Town HUD must match `hud_mobile_town.png`
 
 **Priority:** P1
-**Status:** BLOCKED — Depends On **WO-405** (design-system foundation). CLI must NOT pick up until unblocked.
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 **Lane:** 4 — UI / HUD
 **Type:** UI correctness (in-town / non-combat view → mockup parity)
 **North-star:** `docs/UI_Mockups/hud_mobile_town.png` (mockup #42)
@@ -118,3 +118,5 @@ These should be **folded into the full WO-411 implementation**, not shipped piec
 - No changes to data bindings / update logic / event semantics (skin + layout only).
 - No gameplay-object edits.
 - Do not implement while WO-405 is incomplete (this is BLOCKED on it).
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

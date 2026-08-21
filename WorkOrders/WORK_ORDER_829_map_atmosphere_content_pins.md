@@ -1,3 +1,5 @@
+**Status:** READY TO IMPLEMENT — owner ruling 2026-08-21: leave on the to-do.
+
 # WORK ORDER 829 — Map atmosphere + content pins (Withering, biomes, raids/dungeons/rumors)
 
 **Status: READY TO IMPLEMENT**  
@@ -97,3 +99,5 @@ Implement WORK_ORDER_829_map_atmosphere_content_pins.md on top of 826/827.
 Withering edge, biome node tints, content pins (raid/dungeon/rumor/army) with fog rules.
 No army-gate bypass. Elarion not Avalon.
 ```
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** Owner: leave it to do.

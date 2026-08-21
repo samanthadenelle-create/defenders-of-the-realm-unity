@@ -1,0 +1,72 @@
+#!/bin/sh
+# =============================================================================
+# pre-push - NOTHING LEAVES THIS MACHINE UNLESS R2 HOLDS THE MATCHING CONTENT.
+#
+# Owner directive 2026-08-21: "make sure anything pushed always is in sync with R2."
+#
+# WHY A HOOK AND NOT A HABIT. CLAUDE.md section 16 records the same failure three
+# times (08-18, 08-19, 08-20). Every one of them was a human being expected to
+# remember a second command. Bundle names are CONTENT-HASHED, so a push from an
+# earlier build can never cover a later one, and a build whose bundles were never
+# uploaded installs, launches and plays - showing capsule enemies and placeholder
+# buildings with NO error on screen. The only detector left is the owner's eyes,
+# which is the thing section 14 exists to never rely on.
+#
+# THE INVARIANT, and it needs no network:
+#   the R2 parity PROOF must be NEWER than the newest content it claims to prove.
+# If anything under ServerData/ changed after Builds/r2-parity.log was written,
+# that proof is about different bytes than the ones on disk, and it is refused.
+#
+# This is deliberately NOT a "did you remember?" prompt and has NO override flag -
+# an override is exactly the step that got skipped on 08-20. A docs-only push
+# passes on its own, because ServerData did not change and the existing proof
+# still postdates it. To clear a real block, run the ONE sanctioned path:
+#       powershell -File tools\r2-ship.ps1
+# Never re-inline the push or the verify (section 16); call that file.
+# =============================================================================
+
+root=$(git rev-parse --show-toplevel) || exit 1
+server="$root/ServerData"
+proof="$root/Builds/r2-parity.log"
+
+# Nothing to serve -> nothing to keep in sync.
+[ -d "$server" ] || exit 0
+newest_content=$(find "$server" -type f -printf '%T@\n' 2>/dev/null | sort -n | tail -1)
+[ -n "$newest_content" ] || exit 0
+
+fail() {
+    echo ""
+    echo "  PUSH BLOCKED - R2 IS NOT IN SYNC WITH THIS TREE."
+    echo "  $1"
+    echo ""
+    echo "  Remote art has NO local fallback. Pushing content the bucket does not hold"
+    echo "  ships capsule enemies and placeholder buildings with no error on screen."
+    echo "  Bundle names are content-hashed: an earlier push cannot cover this build."
+    echo ""
+    echo "  Fix (the one sanctioned path):  powershell -File tools\r2-ship.ps1"
+    echo ""
+    exit 1
+}
+
+[ -f "$proof" ] || fail "No parity proof at Builds/r2-parity.log - the bucket has never been proven for this content."
+
+# The proof log is UTF-16 from PowerShell's Tee-Object; strip NULs before matching.
+if ! tr -d '\000' < "$proof" | grep -q 'R2_PARITY_OK'; then
+    fail "Builds/r2-parity.log carries NO R2_PARITY_OK marker. Marker absence is a FAILURE, not an unknown."
+fi
+
+proof_time=$(find "$proof" -printf '%T@\n' 2>/dev/null | tail -1)
+if [ -z "$proof_time" ]; then
+    fail "Could not read the timestamp of Builds/r2-parity.log."
+fi
+
+if [ "$(printf '%s\n%s\n' "$proof_time" "$newest_content" | sort -n | tail -1)" != "$proof_time" ]; then
+    newest_file=$(find "$server" -type f -printf '%T@ %p\n' 2>/dev/null | sort -n | tail -1 | cut -d' ' -f2-)
+    fail "Content under ServerData/ is NEWER than the last parity proof.
+  newest content : $newest_file
+  last proof     : Builds/r2-parity.log
+  The proof describes different bytes than the ones on disk."
+fi
+
+echo "[pre-push] R2 parity proof is fresh (postdates every file under ServerData/). OK."
+exit 0

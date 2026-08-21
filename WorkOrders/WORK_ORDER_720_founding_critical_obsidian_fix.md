@@ -1,6 +1,6 @@
 # WORK ORDER 720 — Founding-critical Obsidian FIX pack
 
-**Status:** READY TO IMPLEMENT (screen list **completed from WO-716 FAIL marks**)  
+**Status:** CLOSED — OBSOLETE (owner ruling 2026-08-21: "720 is old").
 **Priority:** P0 (first 5 minutes of play)  
 **Phase:** 2 (Pillars)  
 **Effort:** M  
@@ -57,3 +57,7 @@ Any 716 FAIL outside this list → **WO-722**, not this WO.
 ## RESULT
 
 `WorkOrders/WORK_ORDER_720_founding_critical_obsidian_fix.RESULT.md`
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — NEEDS OWNER RULING. Evidence: `UI_REVIEW/PAIRWALK_716.md:28 PASS/FIX blank` — owner must mark sheet. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** Superseded by age. The founding-critical Obsidian fix pack no longer reflects the current screens; do not run the pair-walk sheet against it. Body frozen for history.

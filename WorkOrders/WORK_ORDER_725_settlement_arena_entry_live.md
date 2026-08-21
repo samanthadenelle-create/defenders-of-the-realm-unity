@@ -4,7 +4,7 @@
 
 # WORK ORDER 725 — Settlement Arena Entry Live
 
-**Status:** READY TO IMPLEMENT (after WO-723)  
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Priority:** P0  
 **Silo:** World / UI  
 **Depends on:** WO-723 (**DONE** — RESULT pins Path A + Herald entry)  
@@ -85,3 +85,5 @@ Player can **find and open** the settlement-attack flow from the hub. Entry + pa
 ## RESULT
 
 `WorkOrders/WORK_ORDER_725_settlement_arena_entry_live.RESULT.md`
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `WO-932 RESULT phases 1-2` — Path A raid entry live. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

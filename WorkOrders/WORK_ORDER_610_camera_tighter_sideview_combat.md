@@ -4,7 +4,7 @@
 
 ﻿# WORK ORDER 610 — Combat Camera: Tighter Cinematic Side / Angled Third-Person + Slower Battle Pacing
 
-**Status:** READY TO IMPLEMENT — **owner-ratified 2026-07-05** (extend-SMC · 3/4-angled start · pacing default-ON ~0.8). **WO number 610 is PROVISIONAL** (authority is `MASTER_PIPELINES_BACKLOG`, not the filesystem; confirm on mint).
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 **Lane:** Combat / Camera + Combat-feel (pacing)
 **Minted:** 2026-07-05
 **Flags:** new `ff.combatcam` (default OFF — camera seat opt-in) · new `ff.combatpacing` (**default ON at 0.8 — owner ratified**; flip OFF restores today's 1.0 tempo) · reconciles with existing `ff.lockon` (WO-512, default OFF)
@@ -149,3 +149,7 @@ These are **downstream re-tune tickets**, not part of this camera/pacing WO.
 - `ArenaDeathCam` slow-mo (deliberate death beat).
 - Cinemachine rigs (`HeroCinemachineRig`, `CinemachineCameraController`, `DungeonCameraRig`) — out of scope unless a separate migration WO is minted.
 - `.unity` hand-edits (seat is code-forced via `_forceCameraFix`).
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — STILL VALID. Evidence: `no combatcam/combatpacing flags` — side-view + tempo unbuilt. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict. ⚠ NOTE FOR ANYONE REOPENING: the 2026-08-21 read-only audit had classified this one OPEN - STILL VALID, with the evidence cited above. The owner's review supersedes that call (owner statements are ground truth). The audit line is left in place deliberately, so if this work turns out to be needed, the evidence for it is still here rather than erased.

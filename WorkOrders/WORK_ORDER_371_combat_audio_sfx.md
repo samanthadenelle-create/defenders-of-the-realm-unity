@@ -4,7 +4,7 @@
 
 # WO-371: Combat Audio SFX — Tower Fire, Clatter, Sword Clash, Impact Sounds
 
-**Status:** READY TO IMPLEMENT  
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Estimated Effort:** P1 (1–1.5 days — audio integration + tuning)  
 **Priority:** HIGH (combat feel, audio feedback layer)  
 **Lane:** 9 VFX/Audio
@@ -356,3 +356,5 @@ These can run **in parallel** — audio and VFX teams don't block each other.
 **Unblocks:** Combat feels alive and responsive
 
 **Parallel:** WO-359 (VFX) — both audio and visual feedback run simultaneously
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `TowerCombat.cs:651, GameSfx.cs, TowerAudioController.cs` — tower sfx routed. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

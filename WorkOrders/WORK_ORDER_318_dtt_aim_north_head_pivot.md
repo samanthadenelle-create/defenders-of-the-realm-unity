@@ -1,3 +1,5 @@
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
+
 # ⚠ WORK_ORDER_318 — Defend the Tower: aim stays north + head-only pivot (clamp) — **SUPERSEDED 2026-07-04**
 
 > **SUPERSEDED:** The Defend-the-Tower / PatriciaLight system was removed 2026-06-09.
@@ -42,3 +44,5 @@ OTS/turret rig, don't fork it), (2) stop the body slerp toward targets in `TickH
 
 ## Do NOT touch
 - No `.unity` edits. Don't fork the camera rig — constrain it for the DTT stance. Coordinate with WO-317 (same controller).
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

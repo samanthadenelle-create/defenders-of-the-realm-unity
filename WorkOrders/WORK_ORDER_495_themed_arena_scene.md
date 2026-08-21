@@ -4,7 +4,7 @@
 
 # WORK_ORDER_495 — THEMED BATTLEARENA SCENE ("the fight stays where you stood")
 
-**Status:** SPEC / BUILD-READY (creative agent, 2026-06-23) · Arena/Presentation lane
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 **Goal:** the isolated BattleArena reads as an EXTENSION of the source region it was called from, not a
 teleport to a void. Outside engage → grassy clearing under the same dawn sky; dungeon → cracked stone.
 Owner: "wherever the scene that calls the arena should determine how it's styled." Now a 60x48 open kite space.
@@ -54,3 +54,5 @@ junked Blink hero armor; safe to reuse).
 - Asset move: copy the 3 ground `.mat`s + the KayKit edge prefabs into `Resources/Arena/` (or Addressables) so
   the runtime arena loads them without the editor `AssetDatabase`.
 - NO edits to ExteriorTerrainBuilder (cite for paths only), OverworldEncounterSpawner (theme map already correct), or any `.unity`.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

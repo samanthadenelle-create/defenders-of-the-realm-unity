@@ -1,6 +1,6 @@
 # WORK ORDER 851 — Every-4th-wave BOSS encounters (+ statistical adaptation)
 
-**Status:** READY TO IMPLEMENT (specced 2026-08-02). **Lane:** Combat/AI + Waves + Audio/UI.
+**Status:** DONE — owner-confirmed 2026-08-21.
 **Origin:** owner design conversation 2026-08-02, sparked by a Gemini/Grok proposal for
 AI-driven adaptive enemies. **No AI library, no cloud call, no ML model — statistics only.**
 
@@ -147,3 +147,7 @@ provider seam, never in the combat loop.
 - [ ] Both `MusicTrack` enums stay in sync; a registry mix row exists for `Boss`
 - [ ] `waves.json` gains no `enemies[]` batches (gate law)
 - [ ] `COMPILE_GATE_OK` + `REGRESSION_OK` + EditMode + `UI_CAPTURE_OK` (bar PNG opened)
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — STILL VALID. Evidence: `waves.json:52-142` — every-4th cadence + boss flair remain. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** Owner: 851 is done. ⚠ The 2026-08-21 audit read this as OPEN - STILL VALID (evidence above). Owner review supersedes it; the audit line is kept so the evidence survives a reopen.

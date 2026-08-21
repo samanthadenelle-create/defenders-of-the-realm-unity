@@ -4,7 +4,7 @@
 
 # WORK ORDER 129 — Pipeline Reconciliation Against the Engine Architecture
 
-**Status:** READY — UI (planning/reconciliation pass; NOT a coding pass yet)
+**Status:** CLOSED — DEPRECATED, audit-verified obsolete (2026-08-21 backlog audit).
 **Owner directive (2026-05-30):** "ask UI to re-look at ALL items in the pipeline and refactor based
 on the architect designs." Before the engine refactor is built, the *entire existing queue* must be
 reconciled against the new architecture — or half of it gets built the old (hand/AI-driven) way.
@@ -61,3 +61,5 @@ classify and note WHY:
 - [ ] No `.cs` changed (planning pass only).
 
 🤖 Drafted by the build-connected CLI per owner directive.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** DEPRECATED. Evidence: `board_build.py + BOARD.html; era-sweep banner` — superseded by derived board. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

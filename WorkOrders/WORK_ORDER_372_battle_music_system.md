@@ -4,7 +4,7 @@
 
 # WO-372: Battle Music System — State Machine & Track Integration
 
-**Status:** READY TO IMPLEMENT  
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Estimated Effort:** P0 (0.5–1 day — audio import + state machine wiring)  
 **Priority:** HIGH (core audio experience, completes battle feel)  
 **Lane:** 9 VFX/Audio
@@ -452,3 +452,5 @@ Adjust `_crossfadeDuration` in Inspector per transition if needed.
 2. Brace balance check NOT needed (pure audio integration, no C# logic changes)
 3. Test in WebGL (audio can behave differently on web)
 4. Verify crossfade loop point (check for gaps or pops at loop boundary)
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `BattleMusicManager.cs:2-99, WaveMusicController.cs:4` — 4-state crossfade. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

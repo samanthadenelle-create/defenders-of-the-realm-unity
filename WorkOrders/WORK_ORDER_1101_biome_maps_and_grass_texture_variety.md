@@ -1,6 +1,6 @@
 # WORK ORDER 1101 — Environment variety: grass/ground texture variety -> per-area biome maps
 
-**Status:** READY TO IMPLEMENT — ★ OWNER APPROVED 2026-08-17
+**Status:** DONE — owner-confirmed 2026-08-21.
 
 > Approval recorded verbatim: *"also I approved 1101"* (owner, 2026-08-17). The spec is ratified as
 > written; it no longer awaits review. No implementation exists yet — this is a fresh READY, not a
@@ -217,3 +217,7 @@ catalog is deliberately shaped so Phase 3 is data authoring + one consumer hooku
 - WO-1101-B = Phase 1 Village2 — depends on A's layer assets, disjoint files.
 - WO-1101-C = Phase 2 catalog (Core/World + Data + tests) — disjoint from A/B, can run parallel.
 - Phase 3 = parked, pinned on WO-827.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `067adb1b8; bake 29475377d` — terrain art shipped. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.
+
+> **OWNER RULING 2026-08-21 (verbal):** "1101 was implemented".

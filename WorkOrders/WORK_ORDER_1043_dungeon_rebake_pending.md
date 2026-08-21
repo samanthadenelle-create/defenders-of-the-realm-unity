@@ -1,6 +1,6 @@
 # WORK ORDER 1043 — PENDING BAKE: the dungeon exit trim is committed but not yet on screen
 
-**Status:** READY TO IMPLEMENT (blocked on nothing but a deliberate, attended bake)
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Minted:** 2026-08-16 (CLI seat, Sunday sweep) — banner bumped in the same edit
 **Lane:** Dungeon scenes. ⚠ Bake-only; the code and data work is DONE and committed (`dd17a793`).
 
@@ -94,3 +94,5 @@ hash-identical and cases 5/6 of the egress oracle pin that.
 - **The zone seam is a documented, unbuilt hook** at the back exit (a non-null `onLeave`, or
   `DungeonPortLink` authored at runtime as `DressTraversalLinks` already does). Owner intent: the
   back door is the seam to a new zone. Re-point this exit — never add a third.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `dg_bonecrypt.unity; 520efe031,341599672` — scenes re-baked. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

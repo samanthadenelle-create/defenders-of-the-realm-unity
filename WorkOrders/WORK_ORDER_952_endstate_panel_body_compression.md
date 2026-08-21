@@ -1,6 +1,6 @@
 # WORK ORDER 952 — EndState (wave-clear) panel compresses its body below content size
 
-**Status:** READY TO IMPLEMENT (PARTIAL - the geometry fix LANDED + gated 2026-08-10; the remaining scope is the capture case, see the 2026-08-10 note at the bottom)
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Minted:** 2026-08-10 (CLI seat, main line — banner bumped 952 → 953 in the same edit)
 **Silo:** Village/UI EndState — no overlap with any live lane
 **Origin:** the panel's OWN instrumentation net (FlowTrace.Fail), captured TWICE in one session by the
@@ -107,3 +107,5 @@ gate). What exists now:
 `Builds/ui-capture/EndStateWaveClear_*.png`. A `UI_ENDSTATE_FIT_FAIL` re-opens the geometry half.
 The pre-existing `UI_GEOMETRY_FAIL x16` (WO-941 RumorBoard/RealmMap) baseline may grow by any EndState
 finding this newly-captured canvas surfaces - triage it, do not baseline it.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `UICaptureLaunch.cs:526,548` — geometry fix landed. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

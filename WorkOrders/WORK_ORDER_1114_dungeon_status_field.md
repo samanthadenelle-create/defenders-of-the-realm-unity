@@ -171,3 +171,54 @@ impression of an unfinished dungeon, so they are creative canon, not filler.
 3. Should a sealed dungeon still show its **name and depth** on the door (world-building, teases the
    content), or stay anonymous?
 
+> **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — STILL VALID. Evidence: `only IMPLEMENTATION_PLAN.md matches DungeonStatus` — remote door status unbuilt. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.
+
+---
+
+## LANE PASS 2026-08-21 (edit-only agent) — the STATUS FIELD landed. Status stays READY.
+
+Built strictly to `WORK_ORDER_1114_IMPLEMENTATION_PLAN.md`. Scope was deliberately limited to the
+**data/status half** (plan §2a, §2b, §2g, §2h) because the door/portal runtime was fenced for a
+concurrent lane. This matches the plan's own ship order: **Phase 1 client (all-open) → Phase 2 gating
+→ Phase 3 oracle → Phase 4 backend.** Phases 1 and 3 are in; Phase 2 and 4 are not.
+
+### LANDED
+| Plan | File | What |
+|---|---|---|
+| §2a | `Assets/_Modules/Core/World/DungeonStatusCatalog.cs` **(NEW)** | `DungeonDoorState` enum, `DungeonDoorInfo` readonly struct, the transport-free table. Atomic whole-table swap; `For()` never throws. |
+| §2b | `Assets/_Modules/Core/World/DungeonStatusService.cs` **(NEW)** | `AfterSceneLoad` bootstrap, synchronous cache read, fire-and-forget `RefreshAsync().Forget()`, write-after-parse cache. |
+| §2g | both copies of `canon-strings.json` | the eight `dungeon*Headline`/`dungeon*Body` keys + an authoring note. **Byte-identical** (md5 `7b8e30de…`). |
+| §2h | `Assets/Editor/Regression/DungeonStatusRegression.cs` **(NEW)** | five cases, markers `DUNGEON_STATUS_OK` / `DUNGEON_STATUS_FAIL`. |
+
+**The safety direction is one-way and it is asserted, not asserted-in-a-comment.** Unknown id, unknown
+status string, absent id, null id, garbage payload, a version mismatch, an unshipped id and a `502`
+HTML body **all resolve OPEN**, and a rejected payload provably **leaves the standing table intact**
+rather than blanking it — Case 2 drives every one of those against the real catalog, headlessly, with
+no network and no PlayMode. That is why §2a is transport-free.
+
+**Case 1 is the banned-copy gate (§7 criterion 4).** It scans the **parsed values** in both copies, so
+the authoring `_comment` stays free to name the very words it bans. `"dev"` is matched on a **word
+boundary** — the plan's warning is honoured, because an oracle that reds on "devout" gets switched off.
+
+### NOT DONE — and each one is named, not glossed
+- **§2c `DungeonSealedDoorPanel` / §2d `DungeonPortal` gating / §2e `ApplyDoorState`.** The whole
+  client-experience half. **Nothing gates a door yet** — the catalog answers, but no caller asks.
+  Fenced off this lane; the plan's §3 names the exact gating point (`DungeonPortal.cs:126`, backstop
+  at `:181`), so it is executable without re-derivation.
+- **§2f `FeatureFlags.DungeonStatus`.** `FeatureFlags.cs` was lane-fenced and `FeatureFlags.Get` is
+  `private`. The kill switch is therefore **inlined in `DungeonStatusService` with identical
+  semantics** (PlayerPrefs `ff.dungeonstatus`, 0/1/absent), and flagged in-file as a **temporary home**
+  with a ⛔ note to delete the local helper when the flag moves — two readers of one key is the
+  duplicated-state failure this repo keeps paying for. **This is a one-line hand-off to the committer.**
+- **§2i** the `DataRegression.RunAll` registration line (that file is lane-fenced, committer's job).
+- **§2j** the backend (`api/dungeon-status.js`, `api/schema.sql`) and **§2k** the dev menu.
+- **Case 5 `[door-appearance]`** stands down with a `PartialSkip` that **names the hole** rather than
+  pretending coverage; it starts asserting automatically the moment `ApplyDoorState` exists.
+- **Nothing here has been compiled** — no Unity, no `COMPILE_GATE_OK`, no `REGRESSION_OK`.
+
+### ⚠ STILL OPEN FOR THE OWNER (§9) — unchanged, and now shipped as unratified copy
+The four default copy pairs (§4c) are in `canon-strings.json` **as written in this WO**, marked
+UNRATIFIED in the file's own authoring note. They are the player's entire impression of an unfinished
+dungeon, so they are creative canon: **ratify or rewrite (§9.1)**. §9.2 (`rescue` vs `collapsed`) and
+§9.3 (does a sealed door still show its name and depth) are also still open — neither blocks the
+data layer, both block the door UI.

@@ -4,7 +4,7 @@
 
 # WORK ORDER 899 — HUD polish: analog joystick + wide compass + attack-button blend
 
-**Status:** READY — PARTIAL - remainder named by the 2026-08-14 phantom sweep
+**Status:** DONE — owner-confirmed 2026-08-21.
 
 > **PARTIAL - re-scoped 2026-08-14 (phantom sweep).** Most of this WO is present in HEAD; a named
 > remainder is outstanding. No per-WO path:line was recorded here: see the 2026-08-14 phantom sweep for the
@@ -75,3 +75,7 @@ All three are code-built HUD (no prefabs) via `HudKitController` + `ElarionUiKit
 
 ## RESULT
 `WorkOrders/WORK_ORDER_899_hud_polish_joystick_compass_attack.RESULT.md` — before/after screenshots of each element.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — STILL VALID. Evidence: `HudKitController.cs:630; HudCompassWidget.cs:222` — S4 dodge icon + add-skill placeholder absent. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** Owner: 899 is done. ⚠ The 2026-08-21 audit read this as OPEN - STILL VALID (evidence above). Owner review supersedes it; the audit line is kept so the evidence survives a reopen.

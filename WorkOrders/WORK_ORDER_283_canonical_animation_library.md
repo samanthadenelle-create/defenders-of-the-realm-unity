@@ -1,6 +1,6 @@
 # WORK ORDER 283 — Canonical Animation Library (Shared + per-type, Humanoid retarget)
 
-**Status:** ✅ **SHIPPED** — committed `27e425e` (see `WORK_ORDER_283_canonical_animation_library.RESULT.md`).
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 `Assets/Action/{Shared,Knight,Ranger,Enemies}/` exist; `ActionClipImporter` + the `HeroAnimatorFactory`
 Cleric spec landed. ⚠ **NOT done in that pass:** the live runtime enemies are still **Generic KayKit rigs**
 (the RESULT says so) — that remainder is the enemy half, not this WO.
@@ -177,3 +177,5 @@ reconcile the controller output/lookup path — call it out in that WO's RESULT.
   build out full sword-and-shield combo trees / blends.
 - This library is declared canonical for all future models — when a new model type is
   added, it gets a new `Assets/Action/<Type>/` folder + `Shared/`, nothing else changes.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

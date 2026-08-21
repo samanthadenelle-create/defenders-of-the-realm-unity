@@ -4,7 +4,7 @@
 
 # WORK ORDER 545 — Fix 8 pre-existing EditMode test failures
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Lane:** QA / data-and-tests (no scene files, no art)
 **Opened:** 2026-06-28 (surfaced during Gear Preview headless verification — these are NOT
 from that change; EditMode was 361/369 with the 8 below already red)
@@ -54,3 +54,5 @@ across unrelated subsystems. Two are confirmed pre-existing (present in the prio
 ## What NOT to touch
 - Gear Preview / talent files (EquipmentPanel, EquipVM, IEquipTarget, HeroSkillTree*).
 - No scene files; no art.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `edf1d14f7` — stale expectations reconciled. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

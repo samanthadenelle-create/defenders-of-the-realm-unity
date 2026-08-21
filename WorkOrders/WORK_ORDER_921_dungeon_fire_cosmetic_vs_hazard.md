@@ -4,7 +4,7 @@
 
 # WORK ORDER 921 — Dungeon fire: stop “encased in fire that does nothing”
 
-**Status:** READY TO IMPLEMENT - partial (reconciled 2026-08-09, per this file's own 08-08 banner - `DungeonDresser.cs:66-67` already encodes the cosmetic-versus-hazard product rule (landed in `fab50709`) and names its own Phase C, the hazard fire recipe, as remaining work)
+**Status:** DONE — owner-confirmed 2026-08-21.
 
 **Status: PARTIAL — Phase C (hazard fire recipe) outstanding** (reconciled 2026-08-08, see banner)  
 **Minted:** 2026-08-07 (CLI / Grok — owner: fire is there but does nothing; start level encased in fire)  
@@ -135,3 +135,7 @@ Shipped model: **looks like fire, is wall décor; real traps look like empty flo
 ## 6. RESULT
 
 `WorkOrders/WORK_ORDER_921_dungeon_fire_cosmetic_vs_hazard.RESULT.md`
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — STILL VALID. Evidence: `ComposedTrapHazard.cs:22 spike` — grate only. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** Owner: 921 is done. ⚠ The 2026-08-21 audit read this as OPEN - STILL VALID (evidence above). Owner review supersedes it; the audit line is kept so the evidence survives a reopen.

@@ -10,7 +10,7 @@
 
 # WORK ORDER 152 — City UI Information Architecture (which surfaces group into which buildings)
 
-**Status:** READY TO IMPLEMENT (IA decision locked; panel wiring phased)
+**Status:** CLOSED — DEPRECATED, audit-verified obsolete (2026-08-21 backlog audit).
 **Date:** 2026-05-30
 **Priority:** Medium-High — this is the *navigation spine* of the whole town. Every progression/commerce panel the project already built (talents, crafting, cosmetics, store, pet tree) is currently reached through ad-hoc per-building key presses with no consistent mental model. Locking the IA now stops the next 6 WOs from each inventing their own "where does this live" answer.
 **Lane:** **design / UX** (this WO) → wiring is HUD + Village code (CLI). NOT the architect/`VillageSceneBuilder` lane — roster *placement* is SPEC'd for a later coordinated CLI builder pass (CLAUDE.md §9).
@@ -222,3 +222,5 @@ Same rule as WO-151 §6: this WO **does not touch `VillageSceneBuilder.cs`** and
 ---
 
 🤖 Spec'd by the design/UX lane (UI). Reconciled by inspection against: `PackStore.cs`/`PackCatalog.cs` + `MarketplaceInteractor.cs` (main store — exists), `CosmeticShopPanel.cs`/`GlimmerCurrencyService.cs` (cosmetic store — exists), `PetSkillTreePanel.cs`/`PetSkillTreeCatalog.cs` (Pet Home = skill tree, NOT a store), `TalentTreePanel.cs`/`HeroTalentPanel.cs`/`HeroProgression.cs`/`PlayerProgressPanel.cs` (talents + EXP — exist), `SkillSystem.cs` (Blacksmith/Woodworking/Arcane path tracks + `SpendPoint`/`AvailablePoints` — the magic-path substrate, choice-UX missing), `HeroAbilities.cs`/`AbilityCatalog.cs` (spell kit — exists, no management panel), `VillageInventory.cs`/`VillageCraftingPanel.cs` (inventory = crafting larder, not equip bag), `Building.cs` (`BuildingType` enum) + `BuildingInteractable.cs` ([F] dispatch table), and WO-150/WO-151, CLAUDE.md §3/§5/§9/§10, PIPELINE_STATE.md §8, memory *monetization-stack-already-built* / *backend-never-connected* / *uxml-uidocuments-dont-render-in-builds*. Markdown work order only — no `.cs` touched, no bake fired, `VillageSceneBuilder` not edited.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** DEPRECATED. Evidence: `no Village.unity; CastleHubBuilder.cs; PanelRouter` — targets deleted 5-building roster. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

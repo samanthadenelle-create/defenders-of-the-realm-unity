@@ -4,7 +4,7 @@
 
 # WORK ORDER 185 — Hero Select Skips Pet Select (drops straight into village)
 
-**Status:** READY — PARTIAL - remaining: it is flag-gated OFF at FeatureFlags.cs:181
+**Status:** CLOSED — DEPRECATED, audit-verified obsolete (2026-08-21 backlog audit).
 
 > **PARTIAL - re-scoped 2026-08-14 (phantom sweep).** Remaining work: shipped but FLAG-GATED OFF at FeatureFlags.cs:181.
 > Everything else in this WO is present in HEAD. The named remainder IS the ticket now - do not
@@ -35,3 +35,5 @@ Title → hero select → **PET SELECT (missing)** → enter village with chosen
 
 ## Gate
 Brace check; green build; commit `feat: implement WO-185 — pet select screen in onboarding`. No bake.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** DEPRECATED. Evidence: `FeatureFlags BypassPetSelect (WO-473 pivot)` — pet-select step removed. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

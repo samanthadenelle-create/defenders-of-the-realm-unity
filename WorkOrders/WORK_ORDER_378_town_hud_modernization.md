@@ -4,7 +4,7 @@
 
 # WO-378: Town HUD Modernization — Replace Old UI with Clean Design
 
-**Status:** READY TO IMPLEMENT  
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Estimated Effort:** P1 (1–1.5 days — UI redesign + integration)  
 **Priority:** HIGH (visual quality, consistency)  
 **Lane:** 4 UI/HUD
@@ -401,3 +401,5 @@ When 0s: "Wave Starting!" (red)
 - Resource display always visible (critical for building)
 - Wave timer appears/disappears contextually
 - All text must be readable (contrast check required)
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `f6703eaf1, a35163e17, cbe0495a3` — town HUD on Elarion kit. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

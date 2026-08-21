@@ -1,6 +1,6 @@
 # WORK ORDER 1101 — IMPLEMENTATION PLAN (ground textures + simple aesthetics)
 
-**Status:** PLAN — READY FOR AN IMPLEMENTATION AGENT
+**Status:** DONE — owner-confirmed 2026-08-21.
 **Date:** 2026-08-17
 **Parent WO:** `WorkOrders/WORK_ORDER_1101_biome_maps_and_grass_texture_variety.md` (owner APPROVED 2026-08-17)
 **Constraining canon:** `WorkOrders/WORK_ORDER_1044_biome_identity.md` — all eleven rulings APPROVED 2026-08-17.
@@ -369,3 +369,5 @@ headless run cannot judge feel, and this is a feel feature).
 - **Phase 3 (realm-map regions)** — parked, pinned on WO-827 travel.
 
 **Attended bakes only. Never bake with the Unity editor open** (CLAUDE.md §3).
+
+> **OWNER RULING 2026-08-21 (verbal):** "1101 was implemented".

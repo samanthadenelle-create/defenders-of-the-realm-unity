@@ -4,7 +4,7 @@
 
 # WORK ORDER 56 — Full VFXManager Integration (Heroes, Towers, Pets, Environment)
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Date:** 2026-05-28
 **Priority:** High
 **Scope:** Large — touches Hero, Tower, Pet, and Environment scripts
@@ -175,3 +175,5 @@ Exact prefab paths depend on your imports. Browse the installed packs:
 - [ ] Pet auras persist and are parented to the pet (follow movement)
 - [ ] `AbilityVfxKit` has zero procedural particle instantiation in non-Editor builds
 - [ ] VFXCatalog has zero null entries (no LogWarning spam at runtime)
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `AbilityVfxKit.cs:210-231` — VFXManager bridge shipped. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

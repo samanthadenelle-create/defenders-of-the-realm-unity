@@ -4,7 +4,7 @@
 
 # WORK ORDER 63 — Hero / Pet Level-Up Celebration System
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Date:** 2026-05-28
 **Priority:** High
 **Scope:** Small-Medium — new controller, VFX hook, event bus
@@ -191,3 +191,5 @@ LevelUpVFXController.Instance?.PlayLevelUp(transform, newLevel, isPet: true);
 - [ ] Pet aura intensity spikes for 2 s after level-up (WO-58 burst)
 - [ ] `LevelUpEvents.OnLevelUp` fires and audio system plays level-up chime
 - [ ] Works in both Village and Dungeon scenes
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `LevelUpVFXController.cs:30` — celebration shipped. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

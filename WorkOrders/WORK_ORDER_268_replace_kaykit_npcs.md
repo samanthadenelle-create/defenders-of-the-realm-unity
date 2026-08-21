@@ -5,7 +5,7 @@
 # WO-268: Replace KayKit placeholder NPCs with purchased character pack
 **Linear:** [DEF-91](https://linear.app/defenders-of-the-realm/issue/DEF-91/replace-kaykit-placeholder-npcs-with-purchased-character-pack)
 **Lane:** World/Environment
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Priority:** High
 
 ## Acceptance Criteria
@@ -32,3 +32,5 @@
 - Character pack already imported at `Assets/Models/People`
 - Requires Village rebake for scene wiring (Phase 3)
 - VSB is serialization bottleneck — coordinate
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `AmbientNPC.cs:156-159; WO-1003 RESULT` — people pack landed. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

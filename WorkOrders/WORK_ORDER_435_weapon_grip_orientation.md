@@ -1,3 +1,5 @@
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
+
 # WORK ORDER 435 — Weapon grip/handle orientation on the held hero weapon (LOGGED BUG)
 
 **Status: SUPERSEDED by WO-478 (2026-07-05)** — the 2026-06-18 "FIX" inverted native pivot trust and
@@ -60,3 +62,5 @@ Key cites: EquipmentController.cs:88-144 (presets), :327-389 (attach+seat), :633
 
 *Cross-ref:* `docs/WEAPON_ARMOR_ORIENT_LOGIC.md`, `ARCHITECTURE_PRINCIPLES.md §4`, WO-434 (the
 inventory work that surfaced it). Mirror to the Notion "Work Orders" board.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

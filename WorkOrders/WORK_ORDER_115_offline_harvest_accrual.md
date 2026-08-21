@@ -4,7 +4,7 @@
 
 # WORK ORDER 115 — Offline Harvest Accrual: Come Back Richer (the idle half of the loop)
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Date:** 2026-05-29
 **Priority:** High — the idle retention hook; the OFFLINE rung of the core loop (`docs/NORTH_STAR.md`)
 **Scope:** Medium — one new service in `DeNelle.Village`, two persisted save fields, a code-built welcome-back popup
@@ -283,3 +283,5 @@ blockchain — this is a local-only off-chain currency."*).
 (no offline accrual exists today; no last-harvest timestamp persisted — `LastInboxSyncAt` is the
 pattern to mirror), `CrystalMine`, `Pet.cs` (no harvest behaviour yet), WO-111 Phase 5, WO-112
 ward-tether, and the NORTH_STAR core loop. Markdown work order only — no `.cs` touched, no bake fired.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `OfflineHarvestService.cs:62, OfflineHarvestResult.cs:20` — offline accrual shipped. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

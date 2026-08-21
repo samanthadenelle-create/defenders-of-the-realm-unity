@@ -4,7 +4,7 @@
 
 # WO-377: Dialogue Input Blocking — Prevent Hero Attacks During Yarn Spinner
 
-**Status:** READY TO IMPLEMENT  
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Estimated Effort:** P0 (0.5 days — input system fix)  
 **Priority:** CRITICAL (dialogue is broken, player can attack during story)  
 **Lane:** 4 UI/HUD
@@ -429,3 +429,5 @@ public class EventSystemSetup : MonoBehaviour
 - Third common cause: Player input not checking for dialogue state
 
 **Once fixed:** Dialogue will be fully functional and story won't be interrupted by accidental attacks. ✅
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `PlayerAttackController.cs:263, HeroAbilityInput.cs:47, BuildModeController.cs:640` — input gated in dialogue. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

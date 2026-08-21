@@ -4,7 +4,7 @@
 
 # WORK ORDER 769 — Firebase Auth (email/password) in front of the Neon backend
 
-**Status:** SPEC — READY (owner 2026-07-24). Gated on external steps (§Gates). Architecture in memory `firebase-auth-neon-architecture`.
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 **Lane:** Auth / Backend / Unity. Scope: **MODERATE** (SDK import + Unity auth layer + Neon token-verify server change).
 
 ---
@@ -53,3 +53,5 @@
 - APK (2026-07-25 15:24, 457MB, release-signed) contains libFirebaseCppAuth + libnative-googlesignin + play-services-auth — no EDM4U/Gradle conflict.
 - Test flow: new game -> login-or-guest gate -> Email/Password, Google, or Guest all work on-device.
 - STILL OPEN: Neon /api/game/save should verify the Firebase ID token + key by UID (server change, separate repo).
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

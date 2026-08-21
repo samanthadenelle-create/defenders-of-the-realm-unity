@@ -4,7 +4,7 @@
 
 # WORK ORDER 189 — Elarion City: Persistent Populate Manifest
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Lane:** A (Village Scene — SERIAL, `VillageSceneBuilder.cs`). After Batch A bug-fixes land.
 **Source:** owner — "creative city with items, very empty in here" (repeated requirement)
 **Design:** `DESIGN_ELARION_CITY.md`
@@ -52,3 +52,5 @@ and no forge**. Wardens must be **bound to their building, with the right held p
 
 ## Gate
 Brace check; green build; commit `feat: implement WO-189 — persistent city populate manifest`; folds into the Batch A village bake. Screenshots (incl. a rebake-twice comparison) for UI validation.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `CityManifest.json, VillageSceneBuilder.CityManifest.cs` — manifest at bake. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

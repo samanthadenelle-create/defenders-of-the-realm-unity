@@ -1,3 +1,7 @@
+**Status:** DONE — §7 server-anchored ad window IMPLEMENTED + gate-green 2026-08-21.
+
+> **CLI 2026-08-21:** owner ruled "do the window first". §7.2 defence (1) is implemented: ServerClock.cs anchors server time to a MONOTONIC Stopwatch (a plain offset moves with the device clock and defends nothing); TimeSource.NowUnixMs() prefers it; BuildTimerService stamps the window in unix-ms via TimeSource instead of DateTime.UtcNow (no schema bump - the existing AdSkipDayKey string holds it, and both legacy shapes still parse); api/game/load.js + save.js return serverNowMs. Tamper = refuse, never punish (§7.3). Gate: COMPILE_GATE_OK + REGRESSION_OK 231/231. KNOWN GAP, deliberate: Stopwatch resets with the process, so a cold launch is unanchored until the next round trip - that is the "reconciled on sync" shape §7.2 recommends, and it keeps offline play working. Remaining in this WO: remote config (§5) and ad-boost packs, which are NOT the window.
+
 > ## RECONCILED 2026-08-08 - true status is PARTIAL - BLOCKED ON D3
 > Audit `docs/reference/WO_TRUE_STATUS_2026-08-08.md`. Evidence: D1/D2/D4 are already RULED (D2 settled to Unity LevelPlay by eligibility; D4 reversed by the owner) and the seam SHIPPED (`IAdService.cs`, `AD_SEAM_OK`, `AD_COVENANT_OK`). D3 is the sole hard blocker, and NO IronSource/LevelPlay SDK exists under `Assets/` - only skill docs.
 > The previous Status line read "READY FOR OWNER RULING" and was wrong - most of the rulings are in; the block is D3.

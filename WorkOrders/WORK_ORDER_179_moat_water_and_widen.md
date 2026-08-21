@@ -10,7 +10,7 @@
 
 # WORK ORDER 179 — Moat: Stylized Water + Widen for Defense
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Lane:** A (Village Scene — `Fortify.cs` BuildMoat geometry + a new water material + navmesh). Freeze 2.
 **Source:** owner playtest ("water looks really bad") + design (wider moat = intentional bridges + defender distance).
 **Priority:** P1 (visible eyesore + a real defensive-gameplay improvement).
@@ -49,3 +49,5 @@ Owner: "make the water a little wider so the bridge seems intentional — adds d
 
 ## Gate
 Brace check on any `.cs`; green; folds into the freeze-2 village bake; commit `feat: implement WO-179 — stylized moat water + widen for defense`. Screenshot for UI validation.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `VillageSceneBuilder.Fortify.cs:28,164-183; MoatWater.mat` — moat widened. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

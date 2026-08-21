@@ -4,7 +4,7 @@
 
 # WORK ORDER 502 - Weapon VFX Differentiation (rarity + theme tells)
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **WO number check:** 502 is the next free file slot (495-501 used; the numbering authority
 caps "next free WO = 430" but 495-501 are already on disk as a contiguous design block, so
 502 is the real next file). Slot into Lane 9 (VFX/Audio) in the master backlog.
@@ -222,3 +222,5 @@ Expose ALL of these as serialized/inspector or a small tunables block so the own
    too busy with many weapons on screen.
 3. **Theme override vs blend:** sec 2.2 has theme HUE override the rarity spine color for rare+.
    Confirm override (cleaner, more legible) vs a blend (subtler).
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `WeaponVfxMap.cs + DataRegression.cs:3247` — absorbed into WO-504. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

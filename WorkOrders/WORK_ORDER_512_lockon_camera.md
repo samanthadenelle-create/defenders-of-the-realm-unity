@@ -4,7 +4,7 @@
 
 # WORK_ORDER_512 — soft lock-on + lock-on camera (battle)
 
-**Status:** READY TO IMPLEMENT (owner picked "highest value" 2026-06-24) · Combat/Camera lane · flag `ff.lockon` (default OFF until proven)
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Origin:** owner-approved design; architect plan grounded in the real code (SME map below). REUSE-FIRST — no new camera rig, no Cinemachine, no new reticle. Felt-sensitive (the fight already "feels amazing" — do NOT regress it; mobile-nausea is the top risk).
 
 ## Behavior (approved)
@@ -39,3 +39,5 @@ Edit: FeatureFlags.cs, HeroTargetIndicator.cs, SmartMobileCamera.cs, HeroLocomot
 
 ## Acceptance
 Per-slice gates above; final = auto-lock on engage -> framed duel, strafe-around, switch via roster/cycle, release to free-look, ZERO regression with flag off, no nausea (owner felt-call). Headless: acquire/switch/release FlowTrace lines fire.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `BattleArena.cs:2000,2139; AdminOverlay.cs:643` — lock-on shipped. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

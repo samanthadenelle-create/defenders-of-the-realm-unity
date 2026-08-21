@@ -4,7 +4,7 @@
 
 # WO-801 — Queue glance implement: icons + rings + multi-channel (build on live chip)
 
-**Status:** READY TO IMPLEMENT — **Phase 3 of WO-817** (icons + multi-channel glance)  
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Minted:** 2026-07-30 · **Programmed under 817:** 2026-08-01  
 **Master:** `WorkOrders/WORK_ORDER_817_coc_wc3_queue_visual_system.md`  
 **Blocked on:** WO-817 Phase 0 visual sign-off (and ideally Phase 2 bars landed)  
@@ -45,3 +45,5 @@ WO-798 designs the WC3 feel. This WO is the **code upgrade** of the **already sh
 
 ## Files
 - `ObsidianQueueGate.cs`, `BuildTimerService.cs` (`PublishStatus`), `HudKitController.cs`, `HudAreasHost.cs` (anchors only if needed)  
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `ObsidianQueueGate.cs:72-94; QueueRailView.cs` — icon cards shipped. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

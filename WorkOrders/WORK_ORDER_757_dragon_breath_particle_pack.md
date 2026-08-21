@@ -4,7 +4,7 @@
 
 # WORK ORDER 757 — Syndrath fire breath using Unity Particle Pack (multi-layer VFX)
 
-**Status:** SPEC — READY TO IMPLEMENT (owner validated sandbox 2026-07-23).  
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Classification:** combat VFX + boss feel (player-felt). Extends WO-66 boss phase VFX.  
 **Silo:** Village combat / VFX.  
 **PO:** Elden. Sandbox proof: `D:\flames` (Particle Pack only, URP 6000.4.8f1).  
@@ -327,3 +327,5 @@ _Agent: write `WorkOrders/WORK_ORDER_757_dragon_breath_particle_pack.RESULT.md` 
 Wire the validated multi-layer Particle Pack **FlameThrower** as a pooled, socket-parented
 `Boss_FireBreath` stream driven by `DragonBoss.FireBreath()` with timed damage — without
 flattening layers or breaking WO-66 phase VFX / flyby.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `VFXType.cs:213-216; DragonBoss.cs:312,340` — breath stream wired. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

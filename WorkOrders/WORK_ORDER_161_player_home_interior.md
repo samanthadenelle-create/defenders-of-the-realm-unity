@@ -1,3 +1,5 @@
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
+
 # WORK ORDER 161 — Player Home: a walk-in personal interior (gear display, skinning, founder identity)
 
 **Status: DRAFT — feasibility + design captured; build when prioritized**
@@ -131,3 +133,5 @@ counter, and hook skins/founder gating.
 - [ ] No new transition/cosmetic/entitlement/currency systems; brace balance; Village→Core only
 - [ ] Owner design calls (founder mechanic, "for life" meaning, gear depth, scope) resolved before final build
 - [ ] `WORK_ORDER_161_player_home_interior.RESULT.md` when complete
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

@@ -4,7 +4,7 @@
 
 # WORK ORDER 65 — Scene Transition & Portal VFX Polish
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Date:** 2026-05-28
 **Priority:** High
 **Scope:** Small-Medium — PortalVFXController + DungeonPortal edits + loading screen
@@ -206,3 +206,5 @@ In the loading screen scene/canvas, add a looping ParticleSystem:
 - [ ] Arrival in destination scene plays the exit VFX
 - [ ] Loading screen has subtle floating particles (never fully blank)
 - [ ] All portal effects respect mobile quality settings
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `PortalVFXController.cs:26` — portal vfx shipped. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

@@ -1,6 +1,6 @@
 # WORK_ORDER_389 — Arena Mode (live Attack / set-and-watch Defend)
 
-**Status:** SPEC FINALIZED 2026-06-09 (consolidated with owner). Data/core + venue + defense-setup + defender-spawn + patterns BUILT this session; Attack flow + AI-attacker + matchmaking remain.
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 **Lane:** 2 Combat/AI + 6 Economy + 4 UI.
 
 ## Goal
@@ -62,3 +62,5 @@ A fun, unique, adrenaline-filled Arena mode where the player is **ALWAYS the liv
 - No new placement system / AI / combat / path logic — reuse. No live-vs-live netcode.
 - Hardcode stats with `// TODO data-driven` comments. Defer SKR wagering + tiers-at-scale until the population/audit are ready.
 - Don't punish progression — keep reward ∝ value-tier.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

@@ -4,7 +4,7 @@
 
 # WORK ORDER 110 — Siege Warfare: Trebuchet Enemy + Wall Breach Mechanics
 
-**Status:** READY TO IMPLEMENT
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 **Date:** 2026-05-30
 **Priority:** High — late-wave escalation, core loop depth
 **Scope:** Large — new enemy type (SiegeUnit) + WallSegment HP + breach VFX
@@ -356,3 +356,7 @@ Siege unit spawns first, advances to range, deploys. Infantry follows 30 seconds
 - [ ] Wall-top tower (WO-109) can destroy trebuchet before it breaches
 - [ ] `WallSegment.Repair()` restores HP when hero uses Mending Salve on it
 - [ ] Stone wall (WO-111) survives 2.5× more hits than wood wall
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — STILL VALID. Evidence: `no trebuchet/breach logic; WallSegment HP only` — siege+breach unbuilt. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict. ⚠ NOTE FOR ANYONE REOPENING: the 2026-08-21 read-only audit had classified this one OPEN - STILL VALID, with the evidence cited above. The owner's review supersedes that call (owner statements are ground truth). The audit line is left in place deliberately, so if this work turns out to be needed, the evidence for it is still here rather than erased.

@@ -4,7 +4,7 @@
 
 # WORK ORDER 585 — Inventory equip feedback (items feel inert)
 
-**Status:** READY TO IMPLEMENT (held for owner green-light — overlaps WO-582 Gear Preview)
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Date:** 2026-06-28
 **Silo:** UI (CLI-owned per `ui-work-cli-owns-docs-first-screenshot-compare`)
 **Source:** owner felt-test 2026-06-28 ("I see the model but cannot do anything with it") + read-only RCA (gate-free agent, proven from code).
@@ -66,3 +66,5 @@ glyph. Fix later by adding sliced art / mapping ids. Unrelated to interaction.
 - Re-equipping the same item still gives visible confirmation (not silent).
 - onTap FlowTrace present so the felt-test trace is captured.
 - Does NOT pre-empt or duplicate WO-582 Gear Preview drawer.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `HeroInventoryController.cs:337,375; InventorySidebar.cs:27` — detail strip shipped. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

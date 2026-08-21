@@ -4,7 +4,7 @@
 
 # WORK ORDER 752 — Echo founding card overhaul + post-tutorial Echo interjection
 
-**Status:** SPEC — READY TO IMPLEMENT (owner rulings 2026-07-19, felt-test). Awaiting owner go + copy sign-off.
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 **Classification:** narrative + onboarding flow + UI layout. Player-felt.
 **PO:** Sam. Memory: [[echo-is-essence-of-guarded-person]], [[echo-lane-design-rulings]]. WO-738 Echo model.
 
@@ -48,3 +48,7 @@ persisted flag, like `echo_founding_taught`). ASCII-only; code-built UI; mobile-
 ## Do NOT
 - Don't reuse the level-up header for the founding awaken. Don't block the pet tutorial if the echo beat is
   dismissed (still hand off). ASCII-only; no UXML; dual-copy any dialogue JSON.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — STILL VALID. Evidence: `EchoUnlockDialogue.cs:245 done; no interjection hits` — Part B unbuilt. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict. ⚠ NOTE FOR ANYONE REOPENING: the 2026-08-21 read-only audit had classified this one OPEN - STILL VALID, with the evidence cited above. The owner's review supersedes that call (owner statements are ground truth). The audit line is left in place deliberately, so if this work turns out to be needed, the evidence for it is still here rather than erased.

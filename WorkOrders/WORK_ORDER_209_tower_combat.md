@@ -4,7 +4,7 @@
 
 # WORK ORDER 46 — Tower Combat (towers actually target, fire, and kill)
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Date:** 2026-05-26
 **Author:** Owner playtest ("never seen defend-the-tower work") + code audit
 **Priority:** CRITICAL — towers are the **PRIMARY method of defending**, not a
@@ -195,3 +195,5 @@ No scene re-bake required. Compile-check with `run-unity-method.ps1`, then
 - Per-tower target priority modes (nearest vs lowest-HP vs strongest).
 - Heart taking damage on breach (separate concern — Heart already has `Hp`/`SetHp`
   in `HeartController`; wiring breach→Heart damage is its own small WO).
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `DefenseTower.cs, ArcaneTower.cs, ProjectilePool.cs` — premise false now. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

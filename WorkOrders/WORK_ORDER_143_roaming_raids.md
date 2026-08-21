@@ -4,7 +4,7 @@
 
 # WORK ORDER 143 — Roaming Raids: a living threat layer beyond the narrow gate waves
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Date:** 2026-05-30
 **Priority:** High — the DEFEND half of the core loop's "make the world dangerous, not just the wave timer." Delivers the second clause of the owner ask ("defend then build up, make safe from invading raids").
 **Lane:** **Combat / AI — code only.** NO scene-file edits, NO `VillageSceneBuilder.cs`, NO bake fired from UI (CLAUDE.md §3/§9). Runs in the **Combat/AI parallel lane** (CLAUDE.md §9 — "EnemyBrain, ATB — code only, no scene files"), so it never contends with the World/Environment lane that owns WO-142's `OuterWorldBuilder`.
@@ -224,3 +224,5 @@ So: build up walls/towers (WO-108/137) + clear raids → region goes safe → fe
 - [ ] `WaveManager.Phase` is the ONLY `WaveManager` member touched, and read-only.
 - [ ] Acceptance criteria reviewed line by line.
 - [ ] If any `Enemy`/`EnemyBrain`/`EnemyGroupSpawner` edit turned out unavoidable, it was flagged to owner first and kept strictly additive (default expectation: zero edits to those files).
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `RegionMobSpawner.cs:1-25, OverworldEncounterSpawner.cs, ClaimableCamp.cs` — shipped under other names. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

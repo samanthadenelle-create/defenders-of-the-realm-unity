@@ -1,3 +1,5 @@
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
+
 # ⚠ WORK_ORDER_317 — Defend the Tower: player not standing on anything (grounding) — **SUPERSEDED 2026-07-04**
 
 > **SUPERSEDED:** The Defend-the-Tower / PatriciaLight system was removed 2026-06-09.
@@ -46,3 +48,5 @@ plausible DTT throw is in the spawn path (`VisualFactory.Skin` on a missing clas
 
 ## Do NOT touch
 - No `.unity` edits (DTT scene changes via its builder/controller). Don't fork HeroBodySwapper.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

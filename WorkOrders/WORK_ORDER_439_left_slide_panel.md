@@ -14,7 +14,7 @@
 
 # WO-439 — P2 UI: Left slide-out panel — collapsed to left edge, expands on click
 
-**Status:** READY TO IMPLEMENT  
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Priority:** P2  
 **Lane:** 4 UI/HUD  
 **Minted:** 2026-07-03
@@ -80,3 +80,5 @@ Owner confirms before CLI fills the content — tab slot can be stubbed in the m
 - [ ] Chat and Leaderboard tabs present (may be stubbed)
 - [ ] Third tab slot present (may be stubbed pending owner decision)
 - [ ] Headless smoke run passes (no null refs on build)
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `HudKitController.cs:173,645,1908` — slide dock shipped. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

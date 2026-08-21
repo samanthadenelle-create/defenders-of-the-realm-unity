@@ -115,3 +115,5 @@ cover this case too.
    still do
 3. Screenshot the same room — memory `screenshots-are-primary-evidence-for-visual-defects`
 4. Owner felt-verifies + closes (§13)
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — STILL VALID. Evidence: `HeroTargetIndicator.cs:752` — orange cube never instrumented. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.

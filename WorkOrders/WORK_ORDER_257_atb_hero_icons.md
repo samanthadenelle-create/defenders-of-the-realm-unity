@@ -12,7 +12,7 @@
 # WO-257: ATB battle UI — replace party pills with hero character icons
 **Linear:** [DEF-115](https://linear.app/defenders-of-the-realm/issue/DEF-115/wo-213-atb-battle-ui-replace-party-pills-with-hero-character-icons)
 **Lane:** UI/HUD
-**Status:** READY TO IMPLEMENT
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 **Priority:** Medium
 
 ## Acceptance Criteria
@@ -32,3 +32,5 @@
 
 ## Dependencies
 - Parallel-safe: disjoint from VillageSceneBuilder, DEF-109, DEF-112
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

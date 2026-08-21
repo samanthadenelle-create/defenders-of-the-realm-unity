@@ -4,7 +4,7 @@
 
 # WORK ORDER 188 — Replace Gates + Drawbridges with Solid Bridges (DESIGN CHANGE)
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Lane:** A (Village Scene — SERIAL, `VillageSceneBuilder.cs`)
 **Source:** owner playtest 2026-05-31
 **Priority:** P1 — supersedes the gate/drawbridge cluster
@@ -54,3 +54,5 @@ of closable gates — cleaner TD lanes. Defense routing/tuning is a later pass.
 
 ## Gate
 Brace check; green build; commit `feat: implement WO-188 — solid bridges replace gates/drawbridges`; folds into the Batch A village bake. Screenshot for UI validation.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `Fortify.cs:101-161,663` — stone bridges replace gates. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

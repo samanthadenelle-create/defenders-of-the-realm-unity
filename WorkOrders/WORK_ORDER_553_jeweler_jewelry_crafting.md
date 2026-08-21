@@ -1,3 +1,5 @@
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
+
 # WORK ORDER 553 — Jeweler: Gem + Jewelry Crafting Station
 
 **Status: READY TO IMPLEMENT**
@@ -336,3 +338,5 @@ The View NEVER reads game state — all data comes from the bound `JewelerVM` (M
 7. **Legendary outputs** (`ring_firstlight` / `amulet_heartstone`, set `aegis`) — include behind a
    quest gate in V1, or hold for a follow-up WO?
 ```
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

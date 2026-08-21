@@ -1,3 +1,5 @@
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
+
 # WORK_ORDER_478 — Knight sword grip: trust native Blink pivot (implementation playbook)
 
 **Status: IMPLEMENTED @ `C:\EoA` (2026-07-05)** — this doc is the **CLI replication playbook** for Claude/UI to route to CLI on any branch/worktree. Do **not** re-debug the moat or re-litigate WO-435; apply these steps verbatim.
@@ -205,3 +207,5 @@ Without this, logs will show `tripo_sword_f` + `geometry-infer` (wrong weapon fo
 ## Rollback
 
 `PlayerPrefs.SetInt("ff.weapongripinfer", 1)` — no git revert required for emergency compare.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

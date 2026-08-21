@@ -1,3 +1,5 @@
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
+
 # WORK ORDER 172 — Build/Upgrade Timers + Rewarded-Ad Speedup (the CoC time-sink)
 
 **Status: READY TO IMPLEMENT (phased)**
@@ -75,3 +77,5 @@ completes after a duration. The wait is the CoC/idle retention hook (come back w
 - [ ] Routes WO-108 placements + WO-151 upgrades; generic enough for crafting later
 - [ ] Brace balance; no bake/UXML; Village→Core only
 - [ ] `WORK_ORDER_172_build_times_and_ad_speedup.RESULT.md` when complete
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

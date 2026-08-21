@@ -1,3 +1,5 @@
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
+
 # WORK ORDER 682 — Web errors caught QUIETLY: no player-visible failure screen, ever
 
 **Status: READY TO IMPLEMENT** (owner directive 2026-07-12 evening: "those need caught quietly —
@@ -78,3 +80,5 @@ The rest of the 24h window is clean — build-mode placement chains all healthy.
 
 *Proof source: Vercel runtime logs (`[web_trace]`/`[sig]` echo from `api/trace.js`), sessions
 `wt-b085deef5b6` + `wt-370cb605d41`, 2026-07-12.*
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

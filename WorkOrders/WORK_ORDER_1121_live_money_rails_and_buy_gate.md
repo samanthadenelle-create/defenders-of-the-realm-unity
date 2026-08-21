@@ -65,3 +65,5 @@ Impulse SKUs are ready to sell; the rails are not. This WO is the **ship hygiene
 ## 5. Not in scope
 
 - Ads SDK (1120), harvest engine (1119), season pass (1122), cosmetic art.  
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — STILL VALID. Evidence: `FeatureFlags.cs:659 RealmStorePurchase off; :651 mainnet block` — buy gate open. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.

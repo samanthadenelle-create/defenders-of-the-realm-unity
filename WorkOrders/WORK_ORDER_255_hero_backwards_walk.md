@@ -12,7 +12,7 @@
 # WO-255: Hero travels backwards + walk animation not playing
 **Linear:** [DEF-155](https://linear.app/defenders-of-the-realm/issue/DEF-155/wo-174-hero-travels-backwards-walk-animation-not-playing)
 **Lane:** Combat/AI
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Priority:** Urgent
 
 ## Acceptance Criteria
@@ -32,3 +32,5 @@
 
 - VillageSceneBuilder.cs
 - Any scene files
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `HeroLocomotion.cs:27,406-414` — speed feed rebuilt. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

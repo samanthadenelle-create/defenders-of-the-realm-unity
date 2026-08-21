@@ -1,3 +1,5 @@
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
+
 # WORK ORDER 678 — Wrap the Pi SDK 120s promise timeout cleanly (mobile web)
 
 **Status: READY TO IMPLEMENT** (owner report 2026-07-12: mobile devices show a raw JS error
@@ -89,3 +91,5 @@ it). This kills the guaranteed-per-session zombie without removing any capabilit
 *Cross-refs:* `PiSignInController.cs` (:117-146 timeout design + root-cause comment) ·
 `PiBridge.jslib` · `Assets/WebGLTemplates/Pi/index.html` · WO-603 (identity binding — unaffected) ·
 `docs/TICKET_PIPELINE.md` rule 0.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

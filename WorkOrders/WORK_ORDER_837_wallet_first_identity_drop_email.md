@@ -4,13 +4,17 @@
 > ownership decided by **first-on-disk** (`git log --follow --diff-filter=A`): the winner's file was created first.
 > Banner only — nothing was renumbered or deleted.
 
-> ## COLLIDED NUMBER (4th two-seat collision, 2026-08-02) + SUPERSEDED
-> The number 837 belongs to WORK_ORDER_837_stockpiles_cap_capacity.md (committed). This spec's content
-> is SUPERSEDED by WO-847 (wallet-first Android login, IMPLEMENTED) + WO-766 (real connect). Do not implement.
+> ## COLLIDED NUMBER (4th two-seat collision, 2026-08-02)
+> The number 837 belongs to WORK_ORDER_837_stockpiles_cap_capacity.md (committed).
+> ⚠ The old "SUPERSEDED by WO-847, do not implement" banner is RETIRED — WO-847 scoped wallet-first to
+> ANDROID ONLY for a Google Play release that does not exist, and the owner reopened and closed this on
+> 2026-08-21 (see the ruling at the bottom). Phase 2 is now IMPLEMENTED.
 
 # WORK ORDER 837 — Wallet-first identity (drop email/Firebase login)
 
-**Status:** READY TO IMPLEMENT (owner decision 2026-08-02 — **REVERSES WO-769**)
+**Status:** DONE (Phase 2 — email/Firebase login removed as a player-facing path, every platform, 2026-08-21).
+Phase 1 (real Solana Mobile Wallet Adapter connect) = WO-766, unchanged. Phase 3 (backend wallet-signature
+verify) was **already shipped before this ticket** — see the correction in §2 below.
 **Author:** UI/QA triage (read-only RCA, §13) — Claude UI
 **Lane:** Monetization/Backend + Onboarding (§9, isolated). Cross-cutting: client boot login, wallet SDK, backend save-auth.
 **Depends on:** WO-766 (real Solana Mobile Wallet Adapter connect) — HARD prerequisite (see §Sequencing).
@@ -32,7 +36,21 @@ Two different Firebase products were conflated. **Keep one, remove the other:**
 So: retiring Firebase **Auth** from the game must NOT disturb App Distribution. Do not remove the App-Distribution /
 `distribute-android.ps1` / `firebase-appid.txt` delivery path — only the in-game Auth login.
 
-## 2. Read-first — current state (sourced 2026-08-02)
+## 1b. ⚠ CORRECTION — §2/§3-Phase-3 below were ALREADY STALE when this was implemented (2026-08-21)
+Read this before believing §2. The 2026-08-02 **security audit** had already corrected the claims §2 makes,
+and the file headers in-tree say so at source:
+- **Firebase NEVER keyed a save.** Nothing ever called `GetIdTokenAsync` (zero call sites) and no
+  `Authorization: Bearer` header is built anywhere. `FirebaseAuthService.cs`'s own header calls the old
+  description "EVERY CLAUSE OF THAT WAS FALSE". §2's bullet 1 and §3 Phase 3's "currently verifies a
+  Firebase Bearer ID token" are both wrong.
+- **`/api/game/save` already verifies a WALLET signature** — `X-Wallet` + `X-Nonce` + `X-Signature`, or
+  `X-Guest-Id` for the guest rail (`GameStateService.TryAttachAuthHeaders`, `api/_lib/wallet-auth.js`).
+  Phase 3 needed **no work**; it was done.
+- **Therefore removing email login orphaned ZERO saves.** Email/Google were ACCESS-only and bound nothing,
+  so an email player's save key already WAS their `guest-local-<sha256(deviceId)>` device hash — and still
+  is. Nothing on the save/backend path was touched by this implementation.
+
+## 2. Read-first — current state (sourced 2026-08-02 — SEE §1b, partly false)
 - The "SIGN IN" screen = `LoginPanelController` → `LoginViewModel` → `FirebaseAuthService.SignInWithEmailAndPasswordAsync`
   (`FirebaseAuthService.cs:176`). On success it binds the Firebase UID as the save key via
   `GameStateService.BindWallet(uid)` (`LoginViewModel.cs:110`) and attaches a Firebase **ID token** as
@@ -103,3 +121,52 @@ flag until Phase 1 is proven on-device (Seeker APK), so there is never a build w
 - Do NOT remove the email login before real wallet-connect is wired + verified on-device (§4).
 - Do NOT leave `/api/game/save` accepting saves without a pubkey ownership proof (§Phase 3).
 - Do NOT break Play-as-Guest (the always-works escape).
+
+---
+
+## 9. IMPLEMENTED 2026-08-21 (Phase 2)
+
+**Owner ruling that closed the WO-847 conflict:** *"That's only true with the Play Store, which we are not
+in. We are only in the dApp Store, which is all wallet authentication based."* WO-847's Android-only caveat
+existed to serve a Google Play release. There is none. Email/Firebase login is removed on **every** platform.
+
+**Changed:**
+- `Assets/_Modules/Core/Platform/LoginSurfacePlatform.cs` — `LoginSurfaceLayout` enum + `LoginSurfacePlatform`
+  (and its `LayoutOverride` test seam) DELETED. There is one login surface, so a one-armed layout switch was
+  removed rather than left resolving to a constant. `LoginWalletBridge` (the wallet-connect seam) is untouched.
+- `Assets/_Modules/Onboarding/LoginViewModel.cs` — `SignInAsync` / `SignUpAsync` / `SendPasswordResetAsync` /
+  `SignInWithGoogleAsync` / `NoteAccessGranted` / the `Google` plugin import + `WebClientId` all removed.
+  What remains: `ConnectWalletAsync` (binds the pubkey) and `ContinueAsGuest`.
+- `Assets/_Modules/Onboarding/LoginPanelController.cs` — `BuildEmailForm`, `OnSignIn`, `OnCreateAccount`,
+  `OnGoogleSignIn`, `OnForgotPassword`, `BeginAttempt`, `MaskEmail`, `MakeInputField`, `Bounded`, `Observe`
+  and the email/password/Google/forgot fields removed. `Build` always builds Connect Wallet + Play as Guest.
+  **`PresentOrContinue` is now synchronous** — the boot-time `FirebaseAuthService.EnsureInitializedAsync`
+  probe (a blocking, up-to-12s network await that ran *before any UI existed*) is gone, so there is no await
+  at all between app start and the first screen. `ShouldContinueWithoutLogin(bool,bool,bool)` KEEPS its
+  signature (LoginGateRegression drives a truth table against it by reflection); the third arg is renamed
+  `legacySignedIn` and is now always passed `false`.
+- `Assets/_Modules/Core/Auth/FirebaseAuthService.cs` — **kept, with a RETIRED banner. Zero callers.** Kept
+  because it declares `AuthOutcome`, which the *wallet* path resolves with; deleting the file would break
+  code unrelated to email. This is §5.2's stated default ("leave it dormant, remove the login UI only").
+- `Assets/Editor/Regression/WalletIdentityRegression.cs` — Case 5 rewritten. It used to REQUIRE the email
+  paths' `NoteAccessGranted` trace to exist (it would now fail); it asserts the stronger property instead —
+  the login VM contains no non-wallet identity path at all, and `BindPlayer` has exactly one call site.
+- `Assets/Tests/EditMode/LoginSurfacePlatformTests.cs` — the three tests pinning the platform split deleted
+  (incl. `NoOverride_OffAndroid_ResolvesEmailForm`); replaced with whole-file source-lints that no
+  email/Google/Firebase control can come back behind a `#if UNITY_ANDROID`.
+- `Assets/_Modules/Onboarding/FoundingChoiceController.cs` — comment only.
+
+**Deliberately NOT touched:** Firebase App Distribution / `distribute-android.ps1` / `firebase-appid.txt`
+(how testers get the APK — a different product, §1); `google-services.json` and the Firebase SDK in-tree;
+`BackendRequestSigner` and the guest rail; `/api/game/save`; `PiSignInController`; `GameStateService.BindWallet`.
+Promo/referral redemption still reads `BackendRequestSigner.CurrentPlayerId()`, which is unchanged.
+
+**Behaviour change worth calling out at felt-test:** a player who was Firebase-signed-in but has never
+connected a wallet is no longer "already in" at boot, so they get the connect-or-guest surface once and tap
+Play as Guest. **Their save is unaffected** — it was always keyed to the device-hash guest id (§1b).
+
+**Note for a different ticket (not acted on here):** the owner has separately said HeroSelect has no value in
+a wallet-only world. `HeroSelectController` / `PetSelectController` both route into
+`FoundingChoiceController.PresentOrContinue`, so hiding HeroSelect must not orphan that entry point.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** Owner: "I have asked you many times to remove that and get it done." Deliverable = DROP email/Firebase login, wallet-first identity. NOTE the conflict to resolve while implementing: WO-847 recorded wallet-first as ANDROID-ONLY and left Assets/_Modules/Core/Auth/FirebaseAuthService.cs live by design. The owner ask is the newer instruction and wins; whoever implements must decide what happens to non-Android surfaces rather than silently deleting the service.

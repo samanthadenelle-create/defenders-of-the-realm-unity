@@ -1,6 +1,6 @@
 # WORK ORDER 26 — Larger, More-Navigable City
 
-**Status:** DESIGN / SPEC ONLY. **Owner-gated.** Nothing here is applied yet.
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 **Applying this requires re-running the village scene builder**
 (`Defenders > Week 3 > Build Village Scene`, i.e.
 `-executeMethod DeNelle.Editor.VillageSceneBuilder.BuildVillage`). That step is a
@@ -285,3 +285,5 @@ A re-built scene passes when:
 > after the `WallLayout.cs` + `VillageSceneBuilder.cs` edits above are made and the
 > `DeNelle.Village` assembly recompiles. The build is idempotent (it nukes and
 > rebuilds `VillageRoot`), so it is safe to re-run while iterating on the numbers.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

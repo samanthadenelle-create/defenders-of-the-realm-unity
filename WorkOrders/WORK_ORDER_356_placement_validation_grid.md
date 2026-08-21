@@ -4,7 +4,7 @@
 
 # WO-356: Placement Validation Messages & Grid Toggle
 
-**Status:** READY TO IMPLEMENT  
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Estimated Effort:** P1 (1–2 days)  
 **Priority:** High (UX clarity)  
 **Lane:** HUD/UI (parallel to WO-352–355)
@@ -346,3 +346,5 @@ private void FadeOutHints()
 - [ ] Rotation display accurate
 - [ ] Hints educational & non-intrusive
 - [ ] Works in WebGL build
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `BuildModeController.cs:1142-1160, PlacementGrid.cs:315-329` — reject toast + grid overlay. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

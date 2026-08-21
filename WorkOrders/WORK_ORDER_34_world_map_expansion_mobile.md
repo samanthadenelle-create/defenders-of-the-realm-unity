@@ -1,6 +1,6 @@
 # WORK ORDER 34 — World Map Expansion (Mobile-Optimised Streaming Terrain)
 
-**Status:** ARCHITECTURE / DESIGN SPEC — Implement in Week 8+
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 **Date:** 2026-05-26
 **Author:** Architect pass — owner playtest request
 **Priority:** Medium-High — current 300×300 wu map is visually blank outside the village; owner wants a larger explorable world with memory efficiency on mobile
@@ -274,3 +274,5 @@ enemies continue using the existing baked surface.
 | Phase 4 — KayKit prop pool | Week 9 |
 | Phase 5 — Distance fog | Week 9 |
 | Phase 6 — Partial NavMesh | Week 10 |
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

@@ -1,6 +1,6 @@
 # WORK ORDER 672 — Unified Structure Damage Lifecycle + Presentation (F8-50)
 
-**Status:** SPEC — awaiting owner go (NEW feature per the QA gate; design requested by owner 2026-07-11:
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 "is there a way to visually tell what is damaged? health bar or any notification, damaged maybe on fire?
 Inoperable till repaired?" + "do we have a condition if isdamagable is true and health = 0 then destroy?")
 **Census (verified from code, 2026-07-11):** see the per-type table in the session ledger — summarized below.
@@ -81,3 +81,5 @@ vfx keys, bar offset — per-type overridable, defaults global. Dual-copy rule a
 - Touch the Gate force-field collapse or the Heart crystal states (already-good bespoke tells — the
   new system must skip types that opt out via data).
 - Instantiate VFX directly; two systems owning burn effects; color-only signaling.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

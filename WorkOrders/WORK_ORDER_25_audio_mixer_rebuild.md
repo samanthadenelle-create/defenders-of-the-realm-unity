@@ -4,7 +4,7 @@
 
 # WORK ORDER 25 — Rebuild GameAudioMixer (volume sliders dead)
 
-**Status:** READY TO IMPLEMENT (reconciled 2026-08-09 from the tree - still unfixed: `Assets/Audio/Resources/Audio/GameAudioMixer.mixer` still reads `m_ExposedParameters: []`, and no commit references WO-25)
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 
 **Date:** 2026-05-24 (filed from owner playtest triage). **Authority:** #35 + WO-025.
 **Priority:** Medium-High. **Depends on:** WO-05. **Class:** TRACKED-ASSET rebuild (needs the Audio Mixer GUI — NOT a code change).
@@ -26,3 +26,7 @@ Player.log: `[AudioMixerBridge] Mixer has no exposed parameter 'MasterVol' / 'Mu
 3. `WORK_ORDER_25_*.RESULT.md` written.
 
 Key files: `Assets/_Modules/Settings/AudioMixerBridge.cs`, `Assets/_Modules/Audio/AudioService.cs`, `Assets/Audio/Resources/Audio/GameAudioMixer.mixer`, `docs/port-notes/audio-system.md`.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — STILL VALID. Evidence: `GameAudioMixer.mixer:18 m_ExposedParameters []` — sliders dead. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict. ⚠ NOTE FOR ANYONE REOPENING: the 2026-08-21 read-only audit had classified this one OPEN - STILL VALID, with the evidence cited above. The owner's review supersedes that call (owner statements are ground truth). The audit line is left in place deliberately, so if this work turns out to be needed, the evidence for it is still here rather than erased.

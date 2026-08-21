@@ -4,7 +4,7 @@
 
 # WO-601 — NPC portrait art brief (the missing four)
 
-**Status:** READY FOR ART (owner generates; then a 5-minute data hookup)
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 **Lane:** Art/content — zero code (the speakers schema landed 2026-07-02; portraits are data)
 **Origin:** owner F8 2026-07-02: "no image — if not one, look at others and have creative generate
 or create a work order for me with a detailed idea"
@@ -51,3 +51,9 @@ retires itself per-NPC as each file lands.
 - [ ] 4 (+1) portraits in Portraits/, style-matched to the existing set
 - [ ] Speaker records point at them; mirrors identical; REGRESSION portrait check green
 - [ ] Felt-check: each card shows the face in the gold ring, no silhouettes left on named NPCs
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — NEEDS OWNER RULING. Evidence: `Portraits/ lacks companion` — art generation call. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** Portrait ART is NOT being commissioned. Keep the generic portrait for now; in the portrait slot render the NPC's TITLE as text (e.g. "Jeweler") in a font chosen to match the frame. The deliverable is a styled title plate, not art. Do not brief or generate faces.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

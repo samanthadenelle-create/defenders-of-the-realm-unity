@@ -1,6 +1,6 @@
 # WORK ORDER 1034 — Build mode: teach "tap once to place, then rotate" with a tooltip
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — owner-confirmed 2026-08-21.
 **Minted:** 2026-08-16 (UI seat) — provenance stack bumped 1034 → 1035 in the same edit
 **Lane:** Build-mode HUD / onboarding. Presentation + copy.
 **Provenance:** owner 2026-08-16: *"add tool til on build that click once to place then rotate (if
@@ -78,3 +78,7 @@ copy**, and record it in the RESULT.
    failure and only eyes catch it
 3. Device screenshot, landscape, during an actual placement
 4. Owner felt-verifies + closes (§13)
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — STILL VALID. Evidence: `no place-then-rotate copy` — tooltip unbuilt. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.
+
+> **OWNER RULING 2026-08-21 (verbal):** Owner confirms 1034 is implemented/complete.

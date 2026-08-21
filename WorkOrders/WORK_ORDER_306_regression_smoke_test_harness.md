@@ -1,3 +1,5 @@
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
+
 # WORK ORDER 306 — Regression Smoke-Test Harness (run before push / end of day)
 
 **Status: SPEC — capture now, build when ramping** (owner: "designing ≠ implementing now;
@@ -53,3 +55,5 @@ landmines were all silent regressions a scripted check would have caught instant
 ## Notes
 - This pairs with the sole-committer gate discipline: Tier-1 (compile) + Tier-2 (run) = a real
   pre-push quality bar. Local WO (Linear maxed); numbering per `MASTER_PIPELINES_BACKLOG` (next free 327).
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

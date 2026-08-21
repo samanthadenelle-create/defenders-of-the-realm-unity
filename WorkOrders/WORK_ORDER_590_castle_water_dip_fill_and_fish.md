@@ -4,7 +4,7 @@
 
 # WORK ORDER 590 — Fill the Castle-Seam Dip with Water + Fish (fix floating-castle look)
 
-**Status:** READY TO IMPLEMENT (environment lane — file-disjoint from inventory)
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Owner directive:** 2026-06-29 felt-test. Outside the castle, OuterWorld landscape bends UNDER the
 MainCastle scene landscape, leaving a DIP — the castle reads as FLOATING. Owner OK with the bend by
 design; wants WATER in the dip so it reads as a moat/lake waterfront. Owner provided a Grok spec
@@ -55,3 +55,5 @@ The castle should sit on/ beside water, not float over a void.
 - No navmesh re-bake / castle footprint change (that's the moat design note's editor-lane work).
 - No new gitignored-pack hard dependency at runtime (graceful-optional only, §4).
 - Don't touch the inventory files (parallel lane).
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `CastleMoatBuilder.cs:275,420; FishSchool.cs` — moat band + fish. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

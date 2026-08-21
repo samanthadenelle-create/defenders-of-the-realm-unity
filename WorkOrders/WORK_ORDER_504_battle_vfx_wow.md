@@ -4,7 +4,7 @@
 
 # WORK_ORDER_504 — BATTLE VFX "WOW" (wire the owned packs into the live spine)
 
-**Status:** READY TO IMPLEMENT · VFX/Combat lane · owner directive 2026-06-24 ("most wow, we do right not easy")
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Supersedes/absorbs:** WO-502 (weapon-VFX differentiation folds in as item #3 here).
 
 ## The finding (4-scout asset census, 2026-06-24)
@@ -67,3 +67,5 @@ fallback (`AbilityVfxKit`) instead of the pro VFX we own.
 ## Do NOT touch
 - The procedural `AbilityVfxKit` (keep as the fallback when a prefab is absent). The CombatFeedbackManager
   feel tuning (separate). VillageSceneBuilder. Anything gitignored as a hard dependency.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `VFXCatalogGenerator.cs + VFXCatalog.asset` — packs wired to spine. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

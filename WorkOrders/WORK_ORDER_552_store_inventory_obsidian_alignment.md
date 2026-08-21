@@ -1,3 +1,5 @@
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
+
 # WORK ORDER 552 — Store / Inventory Screens: Object-Alignment + Obsidian Styling Audit
 
 **Status: READY TO IMPLEMENT (audit complete; one fix applied this pass)**
@@ -115,3 +117,5 @@ is absent. Additive presentation only — no MVVM/data binding touched. Brace ch
 - Do not port the UI-Toolkit screens to uGUI under this WO (§4 — separate scoped WO).
 - Do not re-edit InventoryGrid / EquipmentPanel / ShopPanel — already compliant.
 - Do not alter any VM / catalog / economy logic.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

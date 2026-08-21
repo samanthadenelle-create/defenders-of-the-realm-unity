@@ -4,7 +4,7 @@
 
 # WORK_ORDER_493 — COMBAT FEEDBACK & GAME FEEL (hit juice + death cam)
 
-**Status:** SPEC / READY · Combat/Presentation lane · owner-requested 2026-06-23 (arena felt-test)
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 **Goal:** hits LAND — restore + extend the combat-feel layer so the real-time arena (and overworld)
 fights feel impactful, not flat. Pairs with [[atb-flat-vs-overworld-animated-combat]] + WO-491 (animation).
 
@@ -33,3 +33,5 @@ fights feel impactful, not flat. Pairs with [[atb-flat-vs-overworld-animated-com
   controller for shake + the death-hold; `BattleArena` death/teardown flow for the 10s hold + return.
 - ASCII logs, brace gate, §12 (instrument the death-cam timing). Build on a clean committed base.
 - Related juice already present: damage numbers (`[Flow:Feedback] damage number spawned`), `Cast_*` VFX.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

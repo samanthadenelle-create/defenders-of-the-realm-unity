@@ -5,7 +5,7 @@
 # WORK ORDER — Battle Packs + Monthly Reward Packs (Monetization Family Design)
 
 **Type:** DESIGN SPEC (ideas + data schema + sample data). **No `.cs` in this WO** — implementation is a follow-up WO.
-**Status:** DRAFT FOR OWNER REVIEW — not yet READY TO IMPLEMENT.
+**Status:** READY TO IMPLEMENT — TOP PRIORITY (owner ruling 2026-08-21).
 **Author lane:** Monetization/Backend (§9 parallel lane — fully isolated; no scene/combat files).
 **Date:** 2026-06-28
 **Supersedes nothing.** *Layers on top of* `docs/monetization-v2-spec.md` (the covenant) + `Assets/_Modules/Wallet/PackCatalog.cs` (`PackDef`) + `packs.json` + the sibling WOs `WORK_ORDER_skr_store_design.md` / `WORK_ORDER_offline_storage_logic.md` / `WORK_ORDER_economy_store_packs.md`. Does **not** replace them.
@@ -303,3 +303,7 @@ A `BattleMonthlyRegression` (future WO, mirrors the SKR `SkrStoreRegression`) as
 - Sibling WOs: `WorkOrders/WORK_ORDER_skr_store_design.md` (SKR rail + `Grant` Table D + `ISkrLedger`), `WORK_ORDER_offline_storage_logic.md`, `WORK_ORDER_economy_store_packs.md`
 - `docs/monetization-v2-spec.md` (the bent covenant §2, convenience §5.3, discovery C5, no-gacha C3)
 - Memory: `combat-pivot-single-hero-northstar`, `owner-thinks-in-data-structures`, `wardrobe-dressable-capability`, `ui-blink-template-master-frame-formula`, `data-architecture-hybrid-db-direction`
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** Owner: these need to be finished. Lifted out of DRAFT/owner-review. Blocking reality to carry into the work: RealmStorePurchase is defaultOn:false (FeatureFlags.cs:659) and the mainnet block at :651 is unlifted, so packs can be BUILT and authored but cannot reach players yet.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** Owner: "that's what I want done now." Reality to carry in: RealmStorePurchase is defaultOn:false (FeatureFlags.cs:659) and the mainnet block at :651 is unlifted, so packs can be authored and built but cannot reach players until that gate moves.

@@ -1,6 +1,6 @@
 # WORK ORDER 946 - POI node auras + Tree of Life VFX: retire the strong yellow, go subtle
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — owner-confirmed 2026-08-21.
 **Minted:** 2026-08-10 (CLI seat, main line - banner bumped 945 -> 947 in the same edit, together with WO-945)
 **Silo:** VFX policy (code gate) - Village/Vfx lane, no gameplay logic
 **Type:** owner LOOK RULING (creative direction is hers; implementation maps it verbatim)
@@ -149,3 +149,7 @@ Files: `Assets/_Modules/Village/Vfx/AmbientAuraPolicy.cs`,
   starburst emitter hunt + the flat basecolor-only tree material (DEF-267). Its section 3 emitter
   instrumentation still stands for the starburst; the GOLD glow half is answered HERE.
 - WO-890 / WO-1002 / F8 seq 2306 - the prior yellow-plume asks this policy was built for.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — NEEDS OWNER RULING. Evidence: `AmbientAuraPolicy.cs:51` — withhold vs shrink is a look pick. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** POI node auras / Tree of Life VFX: owner states this is done. Closed on her word, not on a code read - if a strong yellow aura reappears in a build, reopen and cite the screenshot.

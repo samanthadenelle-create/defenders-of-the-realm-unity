@@ -1,6 +1,6 @@
 # WORK ORDER 44 — Jupiter Quote Integration (Phase 2)
 
-**Status:** BLOCKED — PAUSED (owner ruling 2026-08-09: waiting on publish approval, then revisit)
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 **Date:** 2026-05-26
 **Priority:** Medium
 **Scope:** Medium / Network dependency
@@ -296,3 +296,5 @@ Until the SKR mint address is known, test with a known SPL token pair on mainnet
 - [ ] `RoutePlan` on the returned quote contains the full Jupiter JSON response
       (needed as input to WO-45 swap execution)
 - [ ] `MockJupiterSwapService` is NOT referenced by any scene in a Release build
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

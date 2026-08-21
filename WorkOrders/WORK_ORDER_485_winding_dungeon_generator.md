@@ -1,3 +1,5 @@
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
+
 # WORK_ORDER_485 — Winding Dungeon Generator (procedural recipe emitter for DungeonComposer)
 
 **Status: DESIGN-COMPLETE / READY TO IMPLEMENT — BUT QUEUED BEHIND THE KNIGHT.**
@@ -234,3 +236,5 @@ Deliver this as composer menu items: `Generate Winding Dungeon (seed+budget)` an
 - EDIT `Assets/Editor/DungeonComposer.cs` — add `BuildFromRecipe(string json)` (deserialize → existing build path).
 - NEW `Assets/_Dungeons/` — output recipe JSONs.
 - REUSE `Assets/Editor/Village2LayoutDump.cs` — recapture (or a thin `DungeonLayoutDump` modeled on it).
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

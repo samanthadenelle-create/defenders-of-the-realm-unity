@@ -5,7 +5,7 @@
 # WORK ORDER — Pi Browser Integration (DEEP synthesis, decision-grade)
 
 **Type:** RESEARCH SYNTHESIS + DECISION DOC + PHASED PLAN. **Legwork only — NO `.cs`, no game code.** Implementation is gated, follow-up WOs per phase.
-**Status:** DRAFT FOR OWNER REVIEW — decision-grade. Not yet READY TO IMPLEMENT.
+**Status:** PARKED — FUTURE WORK, not a priority (owner ruling 2026-08-21).
 **Author lane:** Monetization/Backend + Distribution (CLAUDE.md §9 — isolated from gameplay; no Unity gate held).
 **Date:** 2026-06-28 (Pi2Day 2026).
 **Relationship to existing canon:** This is the **deep, five-stream synthesis** that supersedes the shorter `WorkOrders/WORK_ORDER_pi_browser_integration.md` as the decision document (that draft remains valid as the quick-reference; this one is the full picture for the go/no-go call). It **layers on top of** — and does **not** duplicate — the four ratified design WOs it references:
@@ -278,3 +278,5 @@ Pi is **one more rail on the existing PackStore + on-ramp to SKR**, sitting clea
 - `WorkOrders/WORK_ORDER_economy_store_packs.md` — resource/boost/storage packs + multi-rail pricing (Pi as one more rail).
 - `WorkOrders/WORK_ORDER_pi_browser_integration.md` — the shorter precursor draft this synthesis deepens/supersedes as the decision doc.
 - Memory: `data-architecture-hybrid-db-direction`, `combat-pivot-single-hero-northstar` (V1 hub+Knight = the small build that must fit WebGL).
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** Same ruling: web-UI-only surface, no funding, 30% commission, and no web push exists to build on. Kept as THE Pi decision doc for when it is revisited - do not re-draft a third one.

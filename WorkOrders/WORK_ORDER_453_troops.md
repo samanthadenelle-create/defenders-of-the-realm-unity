@@ -1,3 +1,5 @@
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
+
 > ⚠ **NUMBER COLLISION — this document does not own WO-453; `WORK_ORDER_453_dev_capture_toolkit.md` does.**
 > Referred to hereafter as **WO-453-B (troops)**.
 > Flagged by the 2026-08-16 Sunday board-grooming pass (`python tools/board_build.py` → `DUPLICATE_WO_NUMBERS`);
@@ -236,3 +238,5 @@ maxArmySize, Train/LevelUp/GetDeployable). Persist via the existing SaveSystem.
 Train 2 troop types at a barracks (resource+timer); deploy a cap-10 squad into the Iron Bastion; deploy-point
 + rally + retreat all work; survivors persist with veterancy + partial XP on the downed; clear gives
 star-scaled XP + resources; AutoPilot fleet gets troop-deploy assertions.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

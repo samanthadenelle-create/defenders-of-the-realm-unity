@@ -4,7 +4,7 @@
 
 # WO-376: Hero Pose Initialization — Idle State on Scene Load & Dialogue
 
-**Status:** READY TO IMPLEMENT  
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Estimated Effort:** P0 (0.25 days — state initialization)  
 **Priority:** HIGH (visual polish, immersion breaking)  
 **Lane:** 4 UI/HUD
@@ -269,3 +269,5 @@ If WO-365 is partially implemented:
 - Hero defaults to last state (probably combat from dev testing)
 - Setting pose on scene load + dialogue start = safety net
 - No code complexity required — just state management
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `HeroBodySwapper.cs:809,1021,1034,1113` — relaxed idle on load. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

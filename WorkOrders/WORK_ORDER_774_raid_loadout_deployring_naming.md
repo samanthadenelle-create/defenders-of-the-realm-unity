@@ -4,7 +4,7 @@
 
 # WO-774 — Raid V1 felt-slice: loadout handoff + deploy ring + Army/Deploy naming
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Minted:** 2026-07-26 (CLI, from Grok read-only CoC systems review, relayed by owner)
 **Lane:** Raid V1 UX (single lane, no sim). Sequenced AFTER WO-771.9 integration + barracks-catalog-structure land (this lane touches the troop spawn/deploy path — do not run concurrently with 771.9 spawn-wiring).
 **Program hub:** `docs/WC3_COC_EXPERIENCE_ANALYSIS.md` (CoC invasion P0).
@@ -105,3 +105,5 @@ Add these regression oracles (wired into `DataRegression.RunAll`) + PlayMode whe
 - **P1 (next raid WOs):** scout stub + Auto Recommend recipes; ghost preview + drop VFX/SFX; 2× speed toggle; one perfect Footman + one Archer silhouette (art lane — depends on Lane B pack tooling + KayKit Phase 2); star thresholds tied to boss/gate not only full clear.
 - **P1.5 = WO-771.6 stakes:** casualties + stars + soft loot (PAIN_POINTS F1).
 - **P2 / V1.5:** breach-expands-deploy-zone; structure % destruction; favorite army presets; post-raid shields; **barracks as a real upgradable catalog building** (that's the F3 follow-on this session already queued).
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `ArmyLoadoutService.cs:20; RaidDeployController.cs:28` — deploy-ring deliberately reversed. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

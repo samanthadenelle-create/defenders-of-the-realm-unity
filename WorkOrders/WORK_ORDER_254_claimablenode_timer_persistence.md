@@ -11,7 +11,7 @@
 # WO-254: ClaimableNode repopulation timer not persisted to GameState
 **Linear:** [DEF-142](https://linear.app/defenders-of-the-realm/issue/DEF-142/claimablenode-repopulation-timer-datetime-lost-on-quit-not-persisted)
 **Lane:** Combat/AI
-**Status:** READY TO IMPLEMENT
+**Status:** CLOSED — DEPRECATED, audit-verified obsolete (2026-08-21 backlog audit).
 **Priority:** Low
 
 ## Acceptance Criteria
@@ -30,3 +30,5 @@
 
 ## Dependencies
 - Can be batched with WO-250/251 (ClaimableNode perf fixes)
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** DEPRECATED. Evidence: `no ClaimableNode/NodeStateService ever` — types never existed. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

@@ -4,7 +4,7 @@
 
 # WORK ORDER 779 — UI Spacing / Layout / Legibility Conformance Sweep
 
-**Status:** READY TO IMPLEMENT — thin slice landed (1b3b9364 Echoes-button safe area); 55-screen rubric NOT run. Overlaps WO-795 waves 1-2.
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 > ⚠ Cross-reference 2026-08-01: overlaps WO-795 (no-stacked-screens scroll standard) — 795's waves 1-2 already shipped (4461f9ee, 583bc0ac) and `docs/qa/UI_REVIEW_2026-08-01.md` carries fresh findings; reconcile with 795 before running this WO's 55-screen sweep.
 - **Lane:** 4 (UI/HUD)
 - **Minted:** 2026-07-27 (UI seat)
@@ -333,3 +333,7 @@ claim a screen fixed on faith; capture the evidence.
 _Authored by the UI seat (spec/RCA only — UI never edits `.cs`). CLI implements,
 build-verifies, and is sole committer. Full review evidence: 7-silo read-only
 fan-out, 2026-07-27._
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — STILL VALID. Evidence: `WO-795:8 waves 1-2 only` — 55-screen rubric unrun. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict. ⚠ NOTE FOR ANYONE REOPENING: the 2026-08-21 read-only audit had classified this one OPEN - STILL VALID, with the evidence cited above. The owner's review supersedes that call (owner statements are ground truth). The audit line is left in place deliberately, so if this work turns out to be needed, the evidence for it is still here rather than erased.

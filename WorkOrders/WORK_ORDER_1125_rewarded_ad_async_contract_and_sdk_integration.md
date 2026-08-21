@@ -1,6 +1,6 @@
 # WORK ORDER 1125 — The rewarded-ad contract could not survive a real SDK, and now can
 
-**Status:** PART 1 IMPLEMENTED (the async contract, gate-green 2026-08-19) — PART 2 READY TO IMPLEMENT
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 (the SDK itself, blocked on credentials + account approval)
 **Minted:** 2026-08-19 (CLI seat) — banner bumped 1125 → 1126 in the SAME edit
 **Lane:** Monetization / ads. `Core/Ads`, `Village/Monetization`, `Village/Buildings`, two UI sites.
@@ -154,3 +154,5 @@ The app is registered in LevelPlay as `com.denellestudios.ech…`, which matches
   duplicate SDKs.
 - Do **not** ship with Test Suite enabled — `SetMetaData("is_test_suite", "enable")` and
   `LaunchTestSuite()` must both come out before release.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `RewardedAdManager.cs:218-250; LevelPlayInitializer.cs:69-71` — async seam + SDK shipped. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

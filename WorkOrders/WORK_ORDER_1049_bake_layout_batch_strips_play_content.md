@@ -180,3 +180,5 @@ Minted **1048** at the owner's explicit instruction. The banner's UI-seat row re
 because the previous mint wrote its bump into the surrounding **prose** and never updated the **row**.
 That is the §2 failure mode in its quietest form: the banner was wrong in exactly the way that causes
 the next seat to collide. Row corrected to **1049** in this same edit.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — STILL VALID. Evidence: `DungeonBaker.cs:223,240 populateForPlay=false` — headless bakes without play content. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.

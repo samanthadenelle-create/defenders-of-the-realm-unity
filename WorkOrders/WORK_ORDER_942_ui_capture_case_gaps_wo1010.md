@@ -22,3 +22,5 @@
 
 - The shipped BuildHud code paths (they are correct; the CAPTURE CASES are what lag).
 - The identical-size tell in the playbook — it worked; this WO exists because of it.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — STILL VALID. Evidence: `UICaptureLaunch.cs:2525` — both capture gaps open. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.

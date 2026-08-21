@@ -4,7 +4,7 @@
 
 # WO-596 — Player-facing Bug Report (the F8 harness, skinned for players)
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Lane:** 4 (UI/HUD) + 7 (backend endpoint) — UI and API slices are file-disjoint
 **Origin:** owner design conversation 2026-07-02 ("thinking out loud" → decided shape)
 **Supersedes:** the HelpMenu "Report a bug" stub (owner: "a create-in-10-seconds and never look at")
@@ -76,3 +76,5 @@ exists and is proven (WebTrace → `api/trace` → Vercel logs → Neon). This W
 - This makes every web player an F8 reporter — the break-log queue fills from the focus group.
 - UI slice implementation is CLI-seat work per `ui-work-cli-owns-docs-first-screenshot-compare`
   (screenshot-compare against the Blink template before calling it done).
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `BugReportVM.cs, BugReportView.cs, BugReportPayloadTest.cs` — report form shipped. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

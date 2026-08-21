@@ -96,3 +96,5 @@ mitigation.
 1. `COMPILE_GATE_OK` + `REGRESSION_OK <n>/<n> suites`
 2. **Screenshots in both states** (idle vs fully loaded) + a **greyscale pass** on each
 3. Owner felt-verifies. The question is: *"after ten seconds in town, do I know what to do next?"*
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — STILL VALID. Evidence: `no peek-rail/idle-socket symbol` — empty-slot silhouette unbuilt. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.

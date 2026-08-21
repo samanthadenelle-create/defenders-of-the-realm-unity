@@ -4,7 +4,7 @@
 
 # WORK ORDER 589 — Inventory Overhaul: Doll-Default + Tab-Fold + Stackable Quantities
 
-**Status:** READY TO IMPLEMENT (CLI-owned UI pass)
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 **Owner directive:** 2026-06-29 felt-test session. The paperdoll/Gear Preview was already wired
 (only undiscoverable behind a tiny link — fixed with the big VIEW GEAR ribbon). Owner then asked
 to make the doll the *default* view ("the standard view everyone expects anyways") and to fold the
@@ -52,3 +52,7 @@ Restructure the hero Inventory/Character screen around the equipment doll, and s
 ## Notes
 - Prereq fix already shipped this session: gold-bag armor icon → real item art in slots (EquipmentPanel
   `ResolveSlotItemArt`), VIEW GEAR ribbon, Orient no-close z-order.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — STILL VALID. Evidence: `ItemVM.cs lacks Quantity` — stacking + tab-fold unbuilt. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict. ⚠ NOTE FOR ANYONE REOPENING: the 2026-08-21 read-only audit had classified this one OPEN - STILL VALID, with the evidence cited above. The owner's review supersedes that call (owner statements are ground truth). The audit line is left in place deliberately, so if this work turns out to be needed, the evidence for it is still here rather than erased.

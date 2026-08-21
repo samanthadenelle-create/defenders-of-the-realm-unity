@@ -1,6 +1,6 @@
 # WORK_ORDER_496 — GAME-FEEL RESEARCH → actionable takeaways (Fallout/Clash/WC3/SC)
 
-**Status:** SPEC (reconciled 2026-08-09 - restates this file's own RESEARCH / SEQUENCED line: a source-backed research capture that sharpens WO-491/493/494, not an implementable ship; no commit references WO-496)
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 
 **Status:** RESEARCH / SEQUENCED · Combat+Economy feel · research agent, 2026-06-23 (source-backed)
 **Use:** sharpens WO-491 (animation/telegraph), WO-493 (feel), WO-494 (combat design). Mobile-first, URP, Tripo.
@@ -67,3 +67,5 @@ and hides latency on mobile. Everything below serves it.
 5. #9/#10/#12 → death/state-feedback polish once the impact spine lands.
 Tier-1 is mostly coroutine/event/audio — little-to-no new art. Sources: PC Gamer/Krotos (Fallout),
 Deconstructor of Fun / "Juice It or Lose It" (Clash), Hive/GDC death-anim talk (WC3), GDC Browder (SC).
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

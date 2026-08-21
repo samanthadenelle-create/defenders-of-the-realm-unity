@@ -4,7 +4,7 @@
 
 # WORK ORDER 183 — Stairs Orientation (open onto the wall)
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Lane:** A (Village Scene — SERIAL, `VillageSceneBuilder.cs`)
 **Source:** playtest 2026-05-31 (owner screenshot)
 **Priority:** P1 (rampart access broken / reads as floating geometry)
@@ -51,3 +51,5 @@ Files: `VillageSceneBuilder.Fortify.cs` (Ramp L205-238), `Helpers.cs` (Normalize
 
 ## Gate
 Brace check; green build; commit `feat: implement WO-183 — stairs orientation`; folds into the next village bake (do not bake standalone). Screenshot for UI validation.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `Fortify.cs:469-507,490-496` — stairs reoriented. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

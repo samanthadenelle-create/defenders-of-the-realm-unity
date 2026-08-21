@@ -1,6 +1,6 @@
 # WORK ORDER 1007 — A real dungeon EXIT asset (retire the primitive emerald archway)
 
-**Status:** READY TO IMPLEMENT (PARTIAL - RE-BAKE DONE 2026-08-14: all 7 dungeons re-composed, COMPOSE_ALL_OK 7/7, 13 pads now bake label='Leave' and every layout emits exitRoomId. The code half landed + gated 2026-08-10. REMAINING: exitRoomId is the 'entry' FALLBACK everywhere - WHERE the one true exit sits is still an owner design pick; the per-layout one-beacon regression is still unwritten; Assets/Resources/Dungeon/Exit/ still absent so a PLAYER build takes the primitive-arch fallback. See the 2026-08-14 note at the bottom)
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Minted:** 2026-08-08 (UI seat, owner directive) — number from `CLI_LANES_WO_NUMBERS.md` banner (UI block, bumped 1007 → 1008 in the same edit)
 **Lane:** Dungeons / Art-integration. Presentation only — swap the exit's built visual for a real prop.
 **Provenance:** owner felt-test 2026-08-08, verbatim: *"in dungeons this is the exit. It needs a real asset not something stupid like this. look into full assets in docs we have a collection and design something as work order."*
@@ -218,3 +218,5 @@ BOTH dual copies, verified byte-identical and parsing. The two control fixtures 
 
 **Owner felt-verify (after the re-bake):** dark `dg_ember_deep` - the mid-floor pads read as quiet
 discs saying "Leave", exactly one arch+beam, and the beam does not stand proud of the floor above.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `DungeonExitInteractable.cs:445-469` — real kit arch shipped. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

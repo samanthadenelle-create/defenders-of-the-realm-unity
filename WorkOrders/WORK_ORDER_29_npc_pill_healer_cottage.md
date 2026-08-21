@@ -4,7 +4,7 @@
 
 # WORK ORDER 29 — NPC "Pill" Placeholder in Healer's Cottage
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Date:** 2026-05-26
 **Author:** Bug triage — playtest screenshot
 **Priority:** Medium — NPC visible but body is a white capsule
@@ -100,3 +100,5 @@ Week 7 NPC polish.
 - [ ] The Villager/Guard NPC visible body is a tinted capsule (warm brown), not white
 - [ ] NPC speech bubble still triggers on approach and reads correctly
 - [ ] Requires re-running `DungeonSceneBuilder` (Defenders > Dungeons > Build Healer's Cottage) after code change — **owner-gated re-bake**
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `DungeonSceneBuilder.cs:1282-1296` — real KayKit body, tinted fallback. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

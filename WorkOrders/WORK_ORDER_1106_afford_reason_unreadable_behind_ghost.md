@@ -59,3 +59,5 @@ carried by **words on a legible plate**, with hue as at most a redundant reinfor
 
 - The ghost's own footprint rendering / `PlacementGrid` claim math (WO-986/WO-972 territory).
 - The Done control's seat — that is the concurrent lane; land this AFTER it.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — STILL VALID. Evidence: `BuildHudController.cs:1141-1145` — opaque reason plate unbuilt. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.

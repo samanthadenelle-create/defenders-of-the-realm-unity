@@ -4,7 +4,7 @@
 
 # WORK ORDER 79 — Management War Room / Control Room
 
-**Status:** READY TO IMPLEMENT
+**Status:** CLOSED — DEPRECATED, audit-verified obsolete (2026-08-21 backlog audit).
 **Date:** 2026-05-28
 **Priority:** Critical
 **Scope:** Medium — Unity Editor window (quick start) + web architecture guide
@@ -193,3 +193,5 @@ web/
 - [ ] Refresh button calls `BackendAPI.GetWarRoomMetrics` without crashing
 - [ ] All action buttons log correctly to the Console until backend endpoints are live
 - [ ] Window is Editor-only (`#if UNITY_EDITOR`) — zero runtime overhead
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** DEPRECATED. Evidence: `site/admin.html, api/admin/stats.js:1-3` — War Room superseded by web admin. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

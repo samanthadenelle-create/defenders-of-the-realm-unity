@@ -1,3 +1,5 @@
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
+
 # WORK ORDER 445 — Remote (server-controlled) feature flags — kill-switch without a build
 
 **Status: DESIGN SPEC.** Owner (2026-06-17): "enough safety flags where you can remotely turn off a
@@ -61,3 +63,5 @@ changes where the value COMES FROM (server, runtime-fetched) — the gates, the 
 *Cross-ref:* `FeatureFlags.cs` (the demo law + gates), WO-443 (WebTrace, same backend/account tiers),
 WO-429 (Neon + security), `ARCHITECTURE_PRINCIPLES.md §0` (HP B2B zero-downtime ops). The incident triangle:
 **see it (WebTrace) → kill it (this WO) → fix it calmly** — guards keep the off-state clean throughout.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

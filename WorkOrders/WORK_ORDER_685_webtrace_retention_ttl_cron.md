@@ -1,3 +1,5 @@
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
+
 # WORK ORDER 685 — Web-trace retention / TTL cron (the 7-day sweep that does not exist)
 
 **Status: READY TO IMPLEMENT** (implemented ahead in this WO — see "Implemented in this WO" below;
@@ -87,3 +89,5 @@ DB-bloat liability that compounds every play session.
 
 *Proof source: `docs/SECURITY_AUDIT_2026-07-12.md` H1/M4; `api/trace.js`, `api/schema.sql`,
 `WebTrace.cs`, `vercel.json` as cited above.*
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

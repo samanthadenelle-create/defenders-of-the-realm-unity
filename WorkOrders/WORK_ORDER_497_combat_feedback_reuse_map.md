@@ -1,6 +1,6 @@
 # WORK_ORDER_497 — COMBAT FEEDBACK REUSE MAP (don't greenfield — it's built)
 
-**Status:** SPEC (reconciled 2026-08-09 - restates this file's own REFERENCE / BINDING line: a reuse inventory to be read BEFORE WO-493/494/496, with no ship of its own; no commit references WO-497)
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 
 **Status:** REFERENCE / BINDING before any WO-493/494/496 work · inventory agent, 2026-06-23
 **Owner directive:** "most of that already exists and is tested if you look back." CONFIRMED. The battle-feel
@@ -42,3 +42,5 @@ Defender's Call/Radiant Strike) as `AbilityDef`s in `abilities.json` + add any m
 **death-camera hold · hero injured stance · post-fight count-up reward screen · 3 cheap wires (rumble-on-hit,
 honor-screenshake-setting, tap/right-click target) · author the Knight 4-ability data.** EVERYTHING else in
 493/496 is reuse + tuning. Verify `AttentionGlow`/outline reuse before building role-readability (494 #2).
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

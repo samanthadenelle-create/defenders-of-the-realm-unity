@@ -1,3 +1,5 @@
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
+
 # WORK ORDER 449 — World layout: big terrain, distance-GATED challenge ring, content scatter, wayfinding
 
 **Status: DESIGN SPEC (do-it-right pass).** Owner-directed 2026-06-17 ("B — always do it right not fast").
@@ -71,3 +73,5 @@ toward the Heart-Tree. Keep it performant (no per-frame alloc; instanced/batched
 *Cross-ref:* WO-448 (seam fix, absorbed), `ExteriorTerrainBuilder.cs`, `CampSystem.cs`, `CastleHubBuilder.cs`,
 `CompassHud`, the Heart-Tree (`HeartController`/world-tree), `docs/BRAND_AND_PLATFORM_CANON.md` (the multi-base
 expansion this world must hold), polyperfect + Quaternius asset packs.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

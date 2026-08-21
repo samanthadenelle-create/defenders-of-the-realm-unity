@@ -12,7 +12,7 @@
 # WO-256: Remove or fix blue ring/circle around hero while walking
 **Linear:** [DEF-205](https://linear.app/defenders-of-the-realm/issue/DEF-205/blue-ringcircle-around-hero-while-walking-confusing-obscures-movement)
 **Lane:** VFX/Audio
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Priority:** High — live on itch.io, player-facing
 
 ## Acceptance Criteria
@@ -32,3 +32,5 @@
 
 - VillageSceneBuilder.cs
 - Any scene files
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `HeroLocomotion.cs:695` — debug ring removed under DEF-10. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

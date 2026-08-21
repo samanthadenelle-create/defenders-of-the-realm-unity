@@ -4,7 +4,7 @@
 
 # WORK ORDER — Duplicate "Grom" companion (second body in MainCastle_Hall)
 
-**Status:** READY TO IMPLEMENT (reconciled 2026-08-09 - this file records DIAGNOSED-PARTIAL with the root cause NOT proven and one probe still un-run; three candidate causes are ruled out with trace evidence, but no fix was written and no commit references it. Its branch context (feat/tower-core-loop, `adf1f2d9`) predates the current tree - re-confirm the symptom before working it)
+**Status:** DONE — owner-confirmed 2026-08-21.
 
 **Status: DIAGNOSED-PARTIAL — root cause NOT yet proven. Ruled-out list + one probe below.**
 **Branch:** `feat/tower-core-loop` (committed build `adf1f2d9`).
@@ -73,3 +73,5 @@ either make companion bodies DontDestroyOnLoad-consistent with the dict, or reco
 - One probe capture identifies the orphaned body's origin (scene/parent).
 - Fix makes exactly one Grom body exist in MainCastle_Hall across a full hub↔OuterWorld loop.
 - Braces balanced; COMPILE_GATE_OK; owner playtest confirms a single Grom.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** Owner: done. (Audit had called it DEPRECATED for targeting the deleted OuterWorld hub; owner says the work itself is complete.)

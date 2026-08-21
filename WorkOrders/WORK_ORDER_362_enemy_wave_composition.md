@@ -4,7 +4,7 @@
 
 # WO-362: Enemy Wave Composition System — Smart Grouping & Variety
 
-**Status:** READY TO IMPLEMENT  
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Estimated Effort:** P1 (1–2 days)  
 **Priority:** High (combat feel, strategic depth)  
 **Lane:** Combat/AI
@@ -391,3 +391,5 @@ Spawn Gate: South (rotated from previous)
 - [ ] Difficulty scaling smooth (not sudden spikes)
 - [ ] Debug features enable QA testing
 - [ ] Works in WebGL build
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `WaveCompositionBuilder.cs:1-20` — tiered composition + elite cadence. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

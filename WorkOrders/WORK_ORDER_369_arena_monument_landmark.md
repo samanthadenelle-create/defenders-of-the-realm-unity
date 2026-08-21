@@ -4,7 +4,7 @@
 
 # WO-369: Arena Monument — Iconic Endgame Economic Hub Landmark
 
-**Status:** READY TO IMPLEMENT  
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Estimated Effort:** P0 (1–1.5 days — asset placement + dressing)  
 **Priority:** HIGH (endgame hook, visual landmark)  
 **Lane:** World/Environment
@@ -250,3 +250,5 @@ Arrange siege weapons as "conquered trophies" in a semicircle:
 **BraceBalance:** If creating C# script for arena positioning, ensure all `{` matched.  
 **VillageSceneBuilder:** Coordinate monument placement with existing structure layout.  
 **No hand-editing Village.unity** — rebuild via script using provided coordinates.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `ArenaHeraldSpawner.cs:231-239,53` — arena monument replaces placeholder. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

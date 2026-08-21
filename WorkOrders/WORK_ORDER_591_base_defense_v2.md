@@ -1,6 +1,6 @@
 # WORK ORDER 591 — Base-Defense V2 Pillar (damage/repair · threat AI · anti-air · resource cost)
 
-**Status:** SPEC (reconciled 2026-08-09 - restates this file's own DESIGN CAPTURED line: a V2 pillar to be built behind `ff.basebuilding`, explicitly not V1 polish; no commit references WO-591)
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 
 **Status:** DESIGN CAPTURED — build with the V2 base-building layer (`ff.basebuilding`), NOT V1 polish.
 **Owner design stream:** 2026-06-29 felt-test. One coherent base-defense loop emerged from testing the
@@ -56,3 +56,5 @@ a defeat **damages, doesn't wipe** your base. The dragon, shrunk + lowered, beco
 ## Flags / scope
 - All behind `ff.basebuilding` (V2). Dragon size (E) + save-on-place (B last bullet) are the only
   V1-safe slices and may ship in a V1 combat pass if the owner wants the dragon fixed sooner.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

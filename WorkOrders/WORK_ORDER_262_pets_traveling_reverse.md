@@ -5,7 +5,7 @@
 # WO-262: Pets traveling in reverse along waypoint path
 **Linear:** [DEF-95](https://linear.app/defenders-of-the-realm/issue/DEF-95/pets-traveling-in-reverse)
 **Lane:** Combat/AI
-**Status:** READY TO IMPLEMENT
+**Status:** CLOSED — DEPRECATED, audit-verified obsolete (2026-08-21 backlog audit).
 **Priority:** High
 
 ## Acceptance Criteria
@@ -23,3 +23,5 @@
 
 ## Dependencies
 - Related to WO-234 (animation sweep) — coordinate if both touch pet scripts
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** DEPRECATED. Evidence: `no waypoint system; Pet.cs:743-750` — leash/harvest targets instead. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

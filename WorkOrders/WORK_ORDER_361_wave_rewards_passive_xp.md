@@ -4,7 +4,7 @@
 
 # WO-361: Wave Rewards (Resources) & Passive Defensive XP Indicators
 
-**Status:** READY TO IMPLEMENT  
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Estimated Effort:** P1 (1–2 days)  
 **Priority:** High (economy motivation + progression clarity)  
 **Lane:** Economy
@@ -398,3 +398,5 @@ public void Show(PlacedStructure structure, ...)
 - [ ] Economy feels more rewarding (diverse loot)
 - [ ] Players understand towers progress passively
 - [ ] Works in WebGL build
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `TownHudBridge.cs:65-70, RegressionSuite.cs:94-101` — passive XP badge shipped. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

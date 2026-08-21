@@ -4,7 +4,7 @@
 
 # WORK ORDER — Economy Store Packs (resource / farming-boost / offline-storage)
 
-**Status:** DESIGN — ideas + legwork (NOT ready to implement until schema-extension sign-off)
+**Status:** IN PROGRESS — owner priority 2026-08-21.
 **Type:** NEW CONTENT on an EXISTING system (PackStore) — do NOT greenfield
 **Silo:** Monetization / Backend (CLAUDE.md §9 — isolated lane)
 **Author:** design pass (no `.cs` written)
@@ -313,3 +313,5 @@ Every SKU below references an `artId` placeholder (`art.econpack.*`). Icons not 
 needs: resource-crate icons (wood/iron/grain + mixed), a boost/hourglass icon, an
 instant-fill icon, an extra-echo icon, storage-vault + offline-moon icons, and three bundle
 hero cards. Flagged for the art pass; placeholders won't block wiring/testing.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** Owner: "that's the one that we're working on now that we need done." This plus the battle/monthly reward packs are the active monetization lane.

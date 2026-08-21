@@ -5,7 +5,7 @@
 # WO-277: Tutorial + Companion Onboarding Flow
 **Linear:** [DEF-222](https://linear.app/defenders-of-the-realm/issue/DEF-222/tutorial-companion-onboarding-flow-forced-intro-dialogue-guided-tower)
 **Lane:** Combat/AI
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Priority:** High
 
 ## Overview
@@ -135,3 +135,5 @@ Scripted first-time onboarding that teaches the player everything through narrat
 - [ ] HUD objective: "Build towers at remaining gates (0/3)"
 - [ ] Skippable on subsequent playthroughs
 - [ ] Brace balance check on all .cs files
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `WO-1012 RESULT; Tutorial/V2/, TutorialAutoWalk.cs` — FTUE redesign shipped. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

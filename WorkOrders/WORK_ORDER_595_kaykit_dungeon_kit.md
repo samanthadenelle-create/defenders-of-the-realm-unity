@@ -69,3 +69,5 @@ The live Outpost1 confirms why this WO exists — the AI-generated stand-in fail
 - **Castle-style camera:** outposts/dungeons use the same camera rig/behavior as MainCastle_Hall (owner: "movement broken, partially the wall height and camera — implement camera like in castle"); wall heights authored with the camera in mind (4m walls vs camera distance).
 - **No render voids:** the space is enclosed/dressed — no skybox-void sightlines (owner flag: Outpost1 renders as empty void with a floating hero).
 - Movement/navmesh verified by bot walk before owner felt-test.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — STILL VALID. Evidence: `DungeonSceneBuilder.cs raw FBX (a3574367e)` — snappable kit unauthored. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.

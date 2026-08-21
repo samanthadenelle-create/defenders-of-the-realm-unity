@@ -1,3 +1,5 @@
+**Status:** DONE — owner-confirmed 2026-08-21.
+
 # WO-928 — Archer Tower: orientation, materials, footprint parity, and the Move path
 
 > ## ⏸ PARKED 2026-08-08 — owner ruling: "I'm not as focused on the tower... stick that aside"
@@ -165,3 +167,5 @@ must be extended before it can speak.
 - The note also carries a self-correction worth heeding: an earlier session inferred from Tripo node data
   that the FBXs "import upright on their own." That inference was **wrong** — all three carry identical node
   data yet measure differently. **Only measurement settles it.**
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** Owner: 928 is done.

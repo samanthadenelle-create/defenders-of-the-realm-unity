@@ -1,6 +1,6 @@
 # WORK ORDER 1009 — Composed-dungeon interactables: real art + a "what / how" affordance pass
 
-**Status:** SPEC — READY TO IMPLEMENT (assets verified present; one owner styling pick per slice noted inline)
+**Status:** CLOSED — owner ruling 2026-08-21.
 **Minted:** 2026-08-08 (UI seat, owner directive) — number from `CLI_LANES_WO_NUMBERS.md` banner (UI block, bumped 1009 → 1010 in the same edit)
 **Lane:** Dungeons / Art-integration. Presentation + a baker mesh-placement change. **No loot, key, lock, or economy LOGIC changes** — the triggers and grants already work; they are invisible or unreadable.
 **Provenance:** owner felt-test 2026-08-08, three reports in one session (verbatim):
@@ -148,3 +148,7 @@ the purple entry portal (WO-869).
    Recommend simple now.
 3. **Key styling:** `key_gold.fbx` (a single ornate key) vs `keyring.fbx` (a ring of keys). Recommend the
    single gold key — it reads 1:1 with "need key."
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — STILL VALID. Evidence: `BreakableContainer.cs:137 CreatePrimitive(Cube)` — chest/key art unbuilt. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.
+
+> **OWNER RULING 2026-08-21 (verbal):** "1009 close".

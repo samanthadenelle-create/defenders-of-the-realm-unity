@@ -1,6 +1,6 @@
 # WORK ORDER 1006 — Manage becomes a LAUNCHER; the upgrade catalog moves into per-category browser panels
 
-**Status:** READY TO IMPLEMENT (owner ruled §3.0 = option A, 2026-08-08)
+**Status:** DONE — owner-confirmed 2026-08-21.
 **Minted:** 2026-08-08 (UI seat, owner directive) — number from `CLI_LANES_WO_NUMBERS.md` banner (UI block, bumped 1006 → 1007 in the same edit)
 **Lane:** HUD/UI. Presentation + a read-only browse model. **No economy, timer, or catalog-data changes.**
 **Provenance:** owner ask, verbatim below. Refines the owner's words into a spec (memory `grok-authors-work-orders` flow: owner → UI refine → CLI implement).
@@ -218,3 +218,7 @@ Manage keeps its whole queue-management job; it just hands the *catalog* to the 
    `BuildingUpgradePanelMvvm` drill-in still wanted for Defense/Buildings, or does the browser row now
    carry enough that the CTA should upgrade directly? (Recommend KEEP the drill-in — it also hosts the
    perks/Skills tab and the tier art; the browser is the catalog, the panel is the deep view.)
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — STILL VALID. Evidence: `ManageScreenPanel.cs:607 one RenderList` — launcher unbuilt. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.
+
+> **OWNER RULING 2026-08-21 (verbal):** "1006 implemented".

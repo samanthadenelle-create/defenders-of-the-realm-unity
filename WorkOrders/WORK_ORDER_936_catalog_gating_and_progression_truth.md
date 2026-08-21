@@ -1,6 +1,6 @@
 # WORK ORDER 936 — Catalog gating + progression truth pass
 
-**Status:** READY — PARTIAL - remaining: Finding A only (Finding B struck as a false alarm)
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 
 > **PARTIAL - re-scoped 2026-08-14 (phantom sweep).** Remaining work: Finding A is UNTOUCHED (BuildPaletteVM.cs:183). Finding B is struck as a false alarm.
 > Everything else in this WO is present in HEAD. The named remainder IS the ticket now - do not
@@ -249,3 +249,5 @@ no log line and no symptom a playtester would file.
 **Also corrected:** §4's table says "Lumber Mill" maps to `lumbermill` (retired) and
 `collector_lumbermill` (live). True — but the retired one is where the live one's upgrades live, which
 is the whole of Finding C and is worth stating in that table rather than only in prose.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `BuildPaletteVM.cs:305-306,126` — unlock path landed via WO-964. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

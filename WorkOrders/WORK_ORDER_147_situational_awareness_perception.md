@@ -4,7 +4,7 @@
 
 # WORK ORDER 147 — Shared Situational-Awareness / Perception layer (consolidate the scattered scans into one sensor the brain READS FROM)
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Date:** 2026-05-30
 **Priority:** High — the load-bearing substrate under WO-145 (target scoring) and WO-146 (formations / "GroupPerception"). Today every `Find*` method on `EnemyBrain` runs its own `Physics.OverlapSphere`; this WO **consolidates those scattered scans into ONE throttled sensor** the existing brain reads from, then layers escalating awareness states (Unaware → Alerted → Engaged) and a single shared-group aggregate on top — so enemies "naturally become more situationally aware" with **no rewire of the brain**.
 **Lane:** **Combat / AI — code only.** NO scene-file edits, NO `VillageSceneBuilder.cs` (frozen, CLAUDE.md §3/§9), NO bake fired from UI. Runs in the Combat/AI parallel lane (CLAUDE.md §9 — "EnemyBrain, ATB — code only, no scene files"); never contends with the World/Environment lane.
@@ -232,3 +232,5 @@ Add a bool Animator param drive: when `AwarenessState >= Alerted`, set `IsAlert 
 - [ ] No asmdef reference added (Village→Core/Pets/Audio already present).
 - [ ] Acceptance criteria 1-10 reviewed line by line.
 - [ ] CLI build-verifies in batchmode; saves `WORK_ORDER_147_situational_awareness_perception.RESULT.md`.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `AwarenessSensor.cs, AwarenessState.cs` — perception consolidated. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

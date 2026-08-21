@@ -4,7 +4,7 @@
 
 # WORK ORDER — 755: Monetization Pack Catalog + Opening-Day Sales
 
-**Status:** SPEC — READY (implementation gated on the P1 GRANT-BUG FIXES in Section 2 + the OWNER PRICING/APPROVAL in Section 8)
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 **Author:** Creative Monetization Designer (design only — no `.cs` written, per CLAUDE.md Section 2/Section 13)
 **Silo:** Monetization/Backend (Section 9 — isolated, parallel-safe; no scene files, no VillageSceneBuilder)
 **Date:** 2026-07-19
@@ -500,3 +500,5 @@ Monetization/Backend lane (Section 9) — isolated, parallel-safe (JSON data + a
 `PackStoreVM` + additive `PackCatalog` fields; no scene files, no VillageSceneBuilder). `PackStoreVM.cs` is
 the only `.cs` touched — single-agent, single-committer per Section 11. Composes with WO-754 (same
 `EconomyService`/`GlimmerCurrencyService` seams; no conflict).
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

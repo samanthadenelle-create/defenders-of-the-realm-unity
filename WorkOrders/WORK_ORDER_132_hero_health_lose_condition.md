@@ -4,7 +4,7 @@
 
 # WORK ORDER 132 — Hero damage + a real village lose condition
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Priority:** P0 — without this (plus WO-125) the village is unloseable
 **Date:** 2026-05-30
 **Source:** docs/QA_player_sanity_pass_2026-05-30.md (P0-B)
@@ -131,3 +131,5 @@ retire — QA P1-G. Not required to close the P0 lose condition.)
 - **VillageSceneBuilder serialization bottleneck (CLAUDE.md §9)** — coordinate the
   scene edit with any other in-flight builder change (esp. WO-125 if it also edits
   the scene) so only one branch touches `VillageSceneBuilder.cs` at a time.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `HeroDeathEndState.cs:1-25, GameOverScreen.cs` — defeat screens shipped. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

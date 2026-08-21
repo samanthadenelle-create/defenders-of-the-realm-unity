@@ -4,7 +4,7 @@
 
 # WORK ORDER 131 — Economy Wallet Unification (single crystal source of truth)
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Priority:** P0 — blocks the core build → earn → spend loop
 **Date:** 2026-05-30
 **Source:** docs/QA_player_sanity_pass_2026-05-30.md (P0-C)
@@ -153,3 +153,5 @@ own in-memory pool.
   `CrystalEconomy.TrySpend` for consistency with this WO.
 - **WO-134(c)** (Wood/Stone fake costs) and this WO both touch EconomyService —
   coordinate: WO-131 owns crystals→GameState; WO-134(c) owns Wood/Stone deduction.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `EconomyService.cs:33-40, IEconomy.cs:24` — single ledger. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

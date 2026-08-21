@@ -36,3 +36,5 @@ During the fight (not just the approach), the orc family applies COORDINATED pre
 
 ## Acceptance
 Pulling one orc out to duel is PUNISHED by the others closing/flanking; the family encircles + applies staggered, readable pressure; Mage pokes from the back arc, Warrior flanks, Tank holds front; re-coordinates on death. Gate-clean; arena-scoped; no regression to the travel approach or the ATB.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — STILL VALID. Evidence: `BattleArena.cs:1559-1585 hard-disbands` — post-arrival coordinator unbuilt. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.

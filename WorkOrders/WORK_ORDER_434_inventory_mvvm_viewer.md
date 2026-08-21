@@ -1,3 +1,5 @@
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
+
 # WORK ORDER 434 — Inventory + Equipment on MVVM, with a live gear-apply VIEWER
 
 **Status: READY TO IMPLEMENT (phased)** · Follow-on to WO-431/432/433 (shop arc proved the pattern).
@@ -81,3 +83,5 @@ creation for raids/defenses** and (via the per-class model) **talent trees by pl
 - **Talent trees by player type** ride the same model (`AbilityCatalog`/`abilities.json` per class — confirmed in docs): a future `TalentVM` reads the per-class kit; the tree is a viewer. Separate WO.
 
 *Cross-ref:* `docs/UI_MVVM_BINDING_MAP.md §2/§3/§5`, `ARCHITECTURE_PRINCIPLES.md §2/§2b/§2c`, WO-431/432/433, `TowerPreviewCamera.cs` (viewer precedent), `WORK_ORDER_429` (store-stock-from-DB, parallel backend track).
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

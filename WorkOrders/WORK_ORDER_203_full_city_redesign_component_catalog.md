@@ -1,3 +1,5 @@
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
+
 # WORK ORDER 152 — Full City Redesign via Designer + Component Catalog (the "well-divided city")
 
 **Status: DRAFT — sequenced AFTER WO-151**
@@ -128,3 +130,5 @@ A `CityLayoutLoader` (or extend the builder) instantiates the designed layout vi
 - [ ] NavMesh rebuilt; spawn→Heart verified; gate clearance honored
 - [ ] Brace balance passed; single-writer on builder; bake with editor closed
 - [ ] `WORK_ORDER_152_full_city_redesign_component_catalog.RESULT.md` when complete
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

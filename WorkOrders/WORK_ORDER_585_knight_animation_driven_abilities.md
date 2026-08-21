@@ -6,7 +6,7 @@
 
 # WORK ORDER 585 — Knight Animation-Driven Ability Set + Skill-Tree Actives
 
-**Status:** DESIGN — owner review pending (drafted 2026-07-04)
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 **WO number:** provisional 585 — slot into the correct lane in `MASTER_PIPELINES_BACKLOG` / `CLI_LANES_WO_NUMBERS.md` before implement.
 **Lane:** Combat/AI (code) + data (`hero-talents.json`) — no scene files.
 **Owner directive it serves:** *"build the skills off what our animation can do best"* + *"passives are great but don't add a great animation sequence."* Memory: [[actives-are-animation-moments-convert-passives]], [[feel-first-combat-over-clip-depth]], [[talent-tree-v2-full-design]].
@@ -74,3 +74,5 @@ Guardian Stance block-chance (unless promoted to Shield Wall), Mending Oath heal
 
 ---
 🤖 Design spec, grounded in the real clip inventory + KnightMocap.controller + HeroAnimatorFactory. No code/scene/bake yet.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

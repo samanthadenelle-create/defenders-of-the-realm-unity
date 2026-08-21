@@ -1,3 +1,5 @@
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
+
 > ⚠ **UNRESOLVED NUMBER COLLISION — WO-440 is claimed by more than one file and OWNERSHIP IS NOT DECIDED.**
 > Co-claimants: `WORK_ORDER_440_atb_wiring.md` (06-17, first-on-disk), `WORK_ORDER_440_resources_collapse_right.md` (07-04)
 > **This is one of a four-number group (WO-437 / 438 / 439 / 440) that collided the same way.** The June
@@ -44,3 +46,5 @@ user-facing events (skip StatusTick/Skip). Files: `BattleHudUgui.cs` (new panel 
   §0: CLI edits on Windows path. ATB is a side-path (Arena is the demo loop) — this is polish, not a blocker.
 
 *Cross-ref:* ATB RCA (this session), `FeatureFlags.cs` (Arena=ON demo loop), panel audit.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

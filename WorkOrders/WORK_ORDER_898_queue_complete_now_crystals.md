@@ -4,7 +4,7 @@
 
 # WORK ORDER 898 — Queue: progress bars + "Complete now" with crystals (any item, any channel)
 
-**Status:** READY — PARTIAL - remaining: the crystal-finish pricing (crystalsPerBracket has zero hits)
+**Status:** DONE — owner-confirmed 2026-08-21.
 
 > **PARTIAL - re-scoped 2026-08-14 (phantom sweep).** Remaining work: the data-driven crystal-finish pricing — `crystalsPerBracket` has ZERO code hits repo-wide. Only the progress bars shipped.
 > Everything else in this WO is present in HEAD. The named remainder IS the ticket now - do not
@@ -108,3 +108,7 @@ Wherever a queue is shown — the **Manage screen** (WO-905, the three rails + a
 
 ## 6. RESULT
 `WorkOrders/WORK_ORDER_898_queue_complete_now_crystals.RESULT.md` — the crystal-cost curve used, the shared queue-item component, and the screenshots.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — STILL VALID. Evidence: `BuildTimerConfig.cs:276` — bracket pricing + quick-buy remain. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** Owner: 898 is done. ⚠ The 2026-08-21 audit read this as OPEN - STILL VALID (evidence above). Owner review supersedes it; the audit line is kept so the evidence survives a reopen.

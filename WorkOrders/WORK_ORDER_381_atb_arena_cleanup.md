@@ -4,7 +4,7 @@
 
 # WO-381: ATB Arena Cleanup — Remove Structures, Fix Coloring, Enemy Facing
 
-**Status:** READY TO IMPLEMENT  
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Estimated Effort:** P1 (0.5–1 day — scene setup + shader + AI)  
 **Priority:** HIGH (combat immersion breaking)  
 **Lane:** 2 Combat/AI
@@ -159,3 +159,5 @@ public class BattleController : MonoBehaviour
 
 - WO-359: Combat Feedback (screen shake, VFX)
 - BattleATB assembly integration
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `AtbCombatantSwapper.cs:61,169,338` — all three issues shipped. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

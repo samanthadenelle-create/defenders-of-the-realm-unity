@@ -123,3 +123,80 @@ fleet working file-disjoint lanes — exactly the shape CLAUDE.md §11 describes
 the way a P0 hang is, and it is not player-facing on its own. But every hour spent today on "does
 this model have art" was a tax this ticket removes permanently, and the same tax has already been
 paid more than once by more than one seat.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — STILL VALID. Evidence: `only docs commit 4c1bc21c5` — art path conventions unmerged. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.
+
+---
+
+## LANE PASS 2026-08-21 (edit-only agent) — §3.1 LANDED. Status stays READY.
+
+### ⚠ FIRST, A CORRECTION TO THE AUDIT ABOVE: **§3.4 WAS ALREADY BUILT.**
+`Assets/Editor/Regression/EnemyArtCoverageRegression.cs` (394 lines) exists and is exactly the oracle
+§3.4 asks for — four resolution tiers, fails-and-names by model, and a header that already states its
+**expected failure list** (`OgreMage`, `Orc_Berserker`, `Orc_Necromancer`, `Orc_Shaman`). The ticket
+itself predicted this (*"a sibling may already exist — check before duplicating"*); the audit missed
+it. **Do not write a second one.** It is marked `regression-registry: standalone` deliberately,
+because it fails by design today — registering it into `DataRegression.RunAll` is the committer's
+one-line job **once the orc art lands**, and that hand-off is unchanged.
+
+### WHAT LANDED THIS PASS
+
+**§3.1 — the one derived resolver: `Assets/_Modules/Core/EnemyArtPaths.cs` (NEW).**
+Sibling to `AssetRoots` and the level below it: `AssetRoots` answers *where the tree is*,
+`EnemyArtPaths` answers *where inside it a map is* — the half that was still being re-invented per
+call site. It is pure derivation (returns CANDIDATES, never touches the filesystem), which is what
+lets runtime and editor code share it. Surface: `AtlasFolders`, `NameAliases`, `ResourceCandidates`,
+`AtlasAssetCandidates`, `EmbeddedFolder`, `FbxPath`, `IsColorMapStem`, `DescribeCandidates`.
+
+**The rule, in the one sentence §3.2 asks for** (recorded in the file header, per §5.7):
+> An enemy colour map is `<AssetRoots.EnemyContent>/<AtlasFolder>/<Model>_<map>`, with the model's own
+> `<Model>.fbm/` embedded art as the fallback, and the candidate order in `AtlasFolders` is the
+> precedence — first hit wins. **TripoTex wins on collision.**
+
+That last clause answers the ticket's open question — *"which one wins at runtime is currently
+unanswerable without reading the resolver"* — by making it **one line of one array** instead.
+
+**§3.3 (partial) — the literals that mattered most are gone.**
+- `EnemyFactory.TryBasecolor` no longer types `"Enemies/TripoTex/"` / `"Enemies/OrcTex/"` /
+  `"_basecolor"`; it iterates `EnemyArtPaths.ResourceCandidates`.
+- `EnemyFactory.ResolveBasecolor`'s hand-rolled `"_NEW"` strip is **deleted** — the alias now has one
+  home. Its miss trace now names **every candidate it tried** (§3.1's "a miss says WHICH candidates it
+  tried"), which is the direct antidote to the 2026-08-20 *"no texture anywhere in the project"* report.
+- `EnemyArtCoverageRegression` lost its **re-typed `"Assets/EnemyContent"` literal**, its independent
+  `AtlasFolders` copy, its duplicate `NameCandidates` `_NEW` strip, and its own basecolor/diffuse token
+  test. It now reads the same declarations the runtime does.
+
+**The structural win, stated plainly:** the oracle and the runtime previously agreed only by a
+**comment in each file** (*"EnemyFactory.ResolveBasecolor applies the identical rule at runtime"*).
+That is the duplicated-state failure CLAUDE.md catalogues in §2, §5 and §16 — and here it was
+load-bearing, because a divergence means **the oracle passes while the enemy renders untextured**.
+They now share one array, so a pass means the same thing on screen **by construction**.
+
+**Oracle Case 3 `[new-suffix-rule]` upgraded from a source lint to a BEHAVIOURAL assert.** It used to
+grep `EnemyFactory.cs` for the literal `"_NEW"`, which proved only that a *string* was present in a
+file. It now calls `EnemyArtPaths.NameAliases("Necromancer_NEW")` and asserts it yields
+`"Necromancer"`, **plus** a delegation lint that fails if `EnemyFactory` stops routing through
+`EnemyArtPaths.ResourceCandidates` — i.e. it catches the runtime growing a second divergent copy.
+
+### 🔴 FINDING: A NAMED GATE IN CANON DOES NOT EXIST
+`AssetRoots.cs:46` states *"`AssetRootsRegression` fails the build if the string reappears."*
+**There is no such suite.** A repo-wide search finds that name only inside that comment. Nothing was
+enforcing the no-re-typed-root rule — which is precisely how a hand-typed `"Assets/EnemyContent"`
+survived inside `EnemyArtCoverageRegression`, the very file whose job is to catch art drift. The gate
+is owed. (Recorded in `EnemyArtPaths.cs` so the next reader is not misled again.)
+
+### STILL OPEN — and it is the bulk of the ticket
+- **§3.2 physical consolidation.** NOT DONE, and deliberately not attempted: moving art must go
+  through `AssetDatabase.MoveAsset` to preserve GUIDs, which needs Unity. This is the overnight
+  batchmode half the ticket asks for. **The four conventions are still all present on disk**
+  (`TripoTex/`, `OrcTex/`, `<Model>.fbm/`, `Art/Incoming_Tripo/`), with `Orc_Mage`/`Orc_Tank`/
+  `Orc_Warrior` still duplicated across `TripoTex` and `OrcTex` with different textures.
+- **§3.3 remainder.** The ~111-literal triage across `Assets/_Modules` + `Assets/Editor` is untouched
+  beyond the two files above. Known remaining art-path literal sites include
+  `Editor/BattleAnchorStageVerify.cs:41-45,135`, `Editor/ArmoredKnightVerify.cs:29-32`,
+  `Editor/CellarHollowImport.cs`, `Editor/CellarHollowProof.cs`, `Editor/EnemyBodyMaterialFixer.cs:79`
+  and the `Editor/EnemyAddressablesGrouper.cs` keep-behind list (`:131-132`). ⚠ Per §3.3, **report the
+  true count after triage — do not claim 111.**
+- **§3.5 widening** to structures/heroes/VFX. Untouched.
+- **§5 acceptance 4/5/6** (GUID-preserving moves, an `EnemyProvingHarness` render pass, the gate
+  markers) all require Unity and were **not** run by this pass. Nothing here has been compiled.

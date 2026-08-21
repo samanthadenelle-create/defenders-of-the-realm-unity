@@ -1,3 +1,5 @@
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
+
 # WORK ORDER 175 — Store / Shop Visual Polish: make it look built FOR this game
 
 **Status: READY TO IMPLEMENT**
@@ -69,3 +71,5 @@ violet/aether + warm-wood palette already in the world).
 - [ ] Re-skin only (layout/data/logic intact); code-built (no UXML); extends to PackStore
 - [ ] Brace balance; no bake
 - [ ] `WORK_ORDER_175_store_visual_polish.RESULT.md` when complete
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

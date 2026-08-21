@@ -4,7 +4,7 @@
 
 # WO-786 — Raid End: punchy star reveal + audio
 
-**Status:** READY TO IMPLEMENT
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 **Minted:** 2026-07-30 (OWNER-authored spec, transcribed verbatim below)
 **Lane:** Village / Camps / Raid **presentation** — file-disjoint from the army-settlement logic
 **Priority:** High
@@ -175,3 +175,7 @@ is reachable from a pure builder method with no live services, the way `CaptureF
 - `RaidScoring.ComputeStars` / `HighSurvivalPct` — read them, never re-derive or re-tune here.
 - `ReconcileArmy` / `ReconcileRaidEnd` ordering — settlement stays ahead of presentation.
 - Loot maths (`ComputeLoot`) — the reveal displays, it does not compute.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — STILL VALID. Evidence: `no FLAWLESS/StarSlam; RaidVictoryController.cs` — star slam unbuilt. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict. ⚠ NOTE FOR ANYONE REOPENING: the 2026-08-21 read-only audit had classified this one OPEN - STILL VALID, with the evidence cited above. The owner's review supersedes that call (owner statements are ground truth). The audit line is left in place deliberately, so if this work turns out to be needed, the evidence for it is still here rather than erased.

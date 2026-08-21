@@ -1,3 +1,5 @@
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
+
 # WORK ORDER 447 — Hero-Select: POLISH (not rebuild)
 
 **Status: READY TO IMPLEMENT** (design locked; functional verification done by agent 2026-06-17).
@@ -55,3 +57,5 @@ does not exist, so we don't chase it.
 
 *Cross-ref:* WO-446 (front-door flow this feeds), `HeroSelectController.cs`, `TitleController.cs` (the live
 surface), `HeroCatalog.cs` (the stat data), agent verification report 2026-06-17, memory `ui-mvvm-binding-seam`.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

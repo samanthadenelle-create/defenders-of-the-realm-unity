@@ -1,6 +1,6 @@
 # WORK ORDER 708 — Wall Builder: drag-to-draw wall lines (the last base-creation tool)
 
-**Status:** SPEC - NOT STARTED, parked post-V1 (reconciled 2026-08-09 - restates the owner's 2026-07-13 PARKED ruling in the canonical vocabulary; no commit references WO-708)
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 
 **Status: PARKED — POST-V1** (owner 2026-07-13: "lets figure those out after we ship v1" — pins
 + implementation wait for the V1 ship; the vision is canon now, the tool comes after).
@@ -54,3 +54,5 @@ other layouts interesting (flip-a-base, WO-673).
 *Cross-refs:* owner vision 2026-07-13 · WO-673 (player-defined map) · WO-707 (taxonomy/seed) ·
 WO-702 (founding arc) · memory `player-defined-map-pivot` · `no-seams-ever-port-around` (walls
 are placements, never scene edits).
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

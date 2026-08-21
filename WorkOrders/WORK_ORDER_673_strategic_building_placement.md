@@ -6,7 +6,7 @@
 > "new game inherits the pre-laid town" ruling — owner ruled 2026-07-12 "I want to see the blank
 > template and add buildings"; New Game is now the blank template (+ one FTUE grace-default Forge record).
 
-**Status:** RULED + IN IMPLEMENTATION (owner go 2026-07-11 "lets do it. sounds great").
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 **Owner rulings (the creative+architecture recommendations, accepted wholesale):** free position +
 walkability validity, collector yield scales with node distance (fast-follow lane), NO adjacency
 bonuses · Pillager enemy archetype for economy-targeting (fast-follow WO-673B) · guided first-Forge
@@ -93,3 +93,5 @@ makes this the natural direction — verify the shape, don't build it in V1).
 - [ ] Existing save: nothing lost (migration proves via save round-trip regression).
 - [ ] MainCastle_Hall scene file untouched (no regen).
 - [ ] COMPILE_GATE_OK + DataRegression + fleet (palette/placement probes green) + owner felt-pass.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

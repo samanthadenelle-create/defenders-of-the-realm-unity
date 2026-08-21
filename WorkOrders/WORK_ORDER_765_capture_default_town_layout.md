@@ -4,7 +4,7 @@
 
 # WORK ORDER 765 — Capture hand-placed layout → Default Town seed
 
-**Status:** SPEC — READY (owner-designed 2026-07-24). FOLLOW feature. Depends on WO-764 (height model) landing first.
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 **Lane:** BuildMode / Onboarding / Editor tooling. Scope: **SMALL-MODERATE** (record spine + replay already exist; net-new = a capture command + a 3-line founding change).
 **Owner intent (verbatim):** *"if on the next build I place all the buildings (all with the correct heights), can you do an offset from the script and save that as the prefab instance to use for default town setup?"*
 
@@ -45,3 +45,5 @@ Default Town today reads **no saved layout** — `FoundingChoiceController.OnDef
 ## 5. Notes
 - Sequence: land WO-764 (height model) → owner places the town in a build at correct heights → run capture → Default Town seeded. WO-765 depends on WO-764.
 - Data source: read-only RCA 2026-07-24 (all file:line cited), per §12.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

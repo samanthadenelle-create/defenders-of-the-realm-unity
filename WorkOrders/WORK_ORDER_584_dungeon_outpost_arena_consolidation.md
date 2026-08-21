@@ -11,7 +11,7 @@
 > the default-ON path, ATB is the OFF fallback). Source: `Assets/_Modules/Core/FeatureFlags.cs`
 > (`DungeonRealtimeBattle => Get("dungeonrealtime", defaultOn: true)`), `EncounterTrigger.cs`, `DungeonStubEncounter.cs`.
 
-**Status:** READY TO IMPLEMENT (design owner-ratified 2026-06-28)
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 **Silo:** Combat/AI + World/Environment (code + content; isolated spaces — no seam work)
 **Canon:** memory `dungeon-outpost-arena-one-space-primitive`; refines `overworld-encounter-isolated-battle`,
 `scene-chunk-dungeon-composer-northstar`, `region-gate-crossing-primitive`, `atb-flat-vs-overworld-animated-combat`.
@@ -153,3 +153,5 @@ drag-drop, reuse existing builders) and close enough for the owner to hand-tune.
 - [ ] `ownership` flips Enemy→PlayerCamp on clear; same space re-dresses in place; no scene reload.
 - [ ] KayKit structural set prefab-ified + material-fixed; chunk-composer can place them.
 - [ ] Each slice felt-verified by owner (PO closes) before the next.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

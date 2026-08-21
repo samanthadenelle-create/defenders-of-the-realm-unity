@@ -1,6 +1,6 @@
 # WORK ORDER 27 — Enemy Spawn World + Spawn→March→Attack Loop (EXTERIOR)
 
-**Status:** DESIGN / SPEC ONLY. **Owner-gated.** Nothing here is applied yet.
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 **Applying this requires re-running the village/exterior scene builder**
 (`Defenders > Week 3 > Build Village Scene`, i.e.
 `-executeMethod DeNelle.Editor.VillageSceneBuilder.BuildVillage`, which chains
@@ -345,3 +345,5 @@ A re-built scene (`BuildVillage` → chains exterior + bake) passes when:
 (NavMeshAgent march — reference, no change),
 `Assets/_Modules/Village/Waves/WaveSpawnPoint.cs` (marker — no change),
 `Assets/StreamingAssets/Data/Canonical/waves.json` (schedule — no change).
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

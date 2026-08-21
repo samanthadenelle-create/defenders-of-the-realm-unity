@@ -4,7 +4,7 @@
 
 # WO-600 — Uncraftable recipes: 5 ingredients drop from no loot table
 
-**Status:** READY TO IMPLEMENT
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 **Lane:** 6 (Economy/data) — loot-tables.json + consumable-recipes.json only
 **Origin:** DataRegression 2026-07-02 (16 failures, pre-existing — verified absent in HEAD too; surfaced
 by the first full regression run after the vendor-stock asserts were added)
@@ -26,3 +26,7 @@ REGRESSION_OK with zero uncraftable entries. Both JSON mirrors (Resources + Stre
 - [ ] REGRESSION_OK (0 uncraftable-ingredient failures)
 - [ ] Every kept recipe obtainable end-to-end (drop or purchase path exists)
 - [ ] Mirrors identical
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — STILL VALID. Evidence: `5 ingredients absent from loot-tables.json` — recipes uncraftable. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict. ⚠ NOTE FOR ANYONE REOPENING: the 2026-08-21 read-only audit had classified this one OPEN - STILL VALID, with the evidence cited above. The owner's review supersedes that call (owner statements are ground truth). The audit line is left in place deliberately, so if this work turns out to be needed, the evidence for it is still here rather than erased.

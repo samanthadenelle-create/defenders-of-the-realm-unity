@@ -4,7 +4,7 @@
 
 # WO-807 — Troop upgrade power readability (deltas, L badges, combat fidelity)
 
-**Status:** READY TO IMPLEMENT  
+**Status:** DONE — owner-confirmed 2026-08-21.
 **Minted:** 2026-07-30  
 **Program:** `docs/WC3_COC_EXPERIENCE_ANALYSIS.md` §2A  
 **Lane:** Barracks / troop combat presentation + light wiring  
@@ -46,3 +46,7 @@
 
 ## Files
 - BarracksPanel/VM detail, TroopTraining detail, RaidDeploy tray tiles, TroopDeployer/Factory, tests  
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — STILL VALID. Evidence: `BarracksPanelVM.cs:356-380; no TroopLevel` — stat deltas + Lv badges remain. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** Owner: troop upgrade power readability is done. ⚠ The 2026-08-21 audit had read this as OPEN - STILL VALID (evidence above). Owner review supersedes it; the audit line is kept so the evidence survives if this is ever reopened.

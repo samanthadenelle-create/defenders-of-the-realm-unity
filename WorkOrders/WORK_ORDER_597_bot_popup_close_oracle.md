@@ -4,7 +4,7 @@
 
 # WO-597 — Fleet oracle: every popup must have a working close trigger
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Lane:** Combat/AI-adjacent DevTools (AutoPilot) — file-disjoint from UI redo work
 **Origin:** owner directive 2026-07-02 ("with the bots, every pop up window should have a close trigger")
 
@@ -62,3 +62,5 @@ The same panel-walk, run WITH graphics (no `-nographics`), turns the oracle into
   audit found the chrome violations statically; this oracle catches the behavioral ones forever.
 - The owner is never the detector (`never-dragdrop-or-manual-playtest`): this makes closability
   self-reporting.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `AutoPilotDriver.cs:344,84` — popup-close oracle. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

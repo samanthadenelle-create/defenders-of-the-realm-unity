@@ -4,7 +4,7 @@
 
 # WO-802 — Raid CoC stakes: casualties + loot readability (PAIN F1)
 
-**Status:** READY TO IMPLEMENT  
+**Status:** DONE — owner-confirmed 2026-08-21.
 **Minted:** 2026-07-30  
 **Program:** `docs/WC3_COC_EXPERIENCE_ANALYSIS.md` §2 · `docs/PAIN_POINTS_2026-07-26.md` F1  
 **Lane:** Raid V1 stakes (single lane)  
@@ -48,3 +48,7 @@ CoC hooks players because **troops are scarce** and **stars pay**. Spine exists 
 | 1★ | 25% |
 | 2★ | 10% |
 | 3★ | 0% |
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — STILL VALID. Evidence: `RaidDeployController.cs:630-668` — star-tiered casualty table remains. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** Owner: raid stakes: casualties + loot is done. ⚠ The 2026-08-21 audit had read this as OPEN - STILL VALID (evidence above). Owner review supersedes it; the audit line is kept so the evidence survives if this is ever reopened.

@@ -4,7 +4,7 @@
 
 # PROGRAM — WO-740 → WO-743 · Room Forge into regular build
 
-**Status:** READY FOR CLAUDE / CLI  
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Date:** 2026-07-18  
 **Source branch (has the code):** `feat/room-forge-dungeon-baker`  
 **Target (regular build):** `wip/village2-and-f8-tickets` (or current mainline WIP)  
@@ -85,3 +85,5 @@ START at WO-740 only.
 - Full KayKit art-dressed rooms (placeholder shells + prop carousel is enough for mainline)  
 - Replacing healers-cottage `DungeonLayout` wall-run format  
 - Google Play / barracks CoC WOs (separate programs)  
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `Dungeons/RoomForge/ + Editor/RoomForge/` — merged to mainline. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

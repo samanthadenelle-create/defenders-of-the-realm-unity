@@ -4,7 +4,7 @@
 
 # WORK ORDER 134 — Input / HUD / reward consistency cluster
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Priority:** P1 — combat reads as broken on contact; rewards are misleading
 **Date:** 2026-05-30
 **Source:** docs/QA_player_sanity_pass_2026-05-30.md (P1-D, P1-H, P1-E)
@@ -162,3 +162,5 @@ masquerading as inventory.
   Wood/Stone only. **Serialize edits to `BuildMenu.cs` and `EconomyService.cs`** with
   WO-131 (and WO-127, which also edits BuildMenu) — one branch per shared file.
 - Sub-fix (a) is fully isolated (HUD/data/Help text) — can ship anytime.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `BuildMenu.cs:719-724, WaveManager.cs:100-357` — b+c shipped; a deliberately reversed. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

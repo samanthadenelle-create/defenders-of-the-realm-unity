@@ -4,7 +4,7 @@
 
 # WORK ORDER 609 — Battle HUD: Prefab-First Layout (data-focused combat chrome)
 
-**Status:** READY TO IMPLEMENT (Phase 1 in flight)  
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Lane:** HUD/Presentation (HudKit + Core models + Village producers)  
 **Minted:** 2026-07-05  
 **Supersedes:** WO-507 9-zone grid (retired shim); Diablo-orbs mockup is **not** this spec — bars/plates only.  
@@ -131,3 +131,5 @@ Remove `targetCycle` from top-center unless owner re-requests the 4-enemy strip.
 | `Assets/_Modules/Core/HUD/HudCommands.cs` | Assignable + mana potion |
 | `Assets/_Modules/Village/HUD/HudKitCommandBridge.cs` | Register handlers |
 | `Assets/_Modules/HUD/Kit/HudKitController.cs` | Widgets + bind |
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `HudKitController.cs:455,458,1121,1153; hud-areas.json` — battle HUD zones. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

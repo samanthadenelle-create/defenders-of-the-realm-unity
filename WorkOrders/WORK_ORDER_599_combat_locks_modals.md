@@ -4,7 +4,7 @@
 
 # WO-599 — Combat locks modals (no shopping while being killed)
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Lane:** 4 (UI/HUD) + 2 (combat signal) — PanelRouter-level, one rule for every panel
 **Origin:** owner F8 2026-07-02 flag_12: "While being attacked I can sit here and shop while I can see the enemy killing me. seems like a bug."
 
@@ -39,3 +39,5 @@ When the hero **takes damage** (HeroHealth.TakeDamage while a modal is open):
 - [ ] Rule lives in ONE place (router-level); zero per-panel special cases
 - [ ] Exceptions declared in data, not code branches
 - [ ] Fleet asserts the behavior (PANEL_COMBAT_LOCK oracle case)
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `PanelRouter.cs:274-281; PanelManager.cs:122` — battle-lock refusal. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

@@ -4,7 +4,7 @@
 
 # WORK ORDER 93 — Fix ATB Combat Scene (Last Stand): Bars Frozen, Attack No Animation, Item Does Nothing, Skills Unclear
 
-**Status:** BUG FIX — READY TO IMPLEMENT
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Date:** 2026-05-28
 **Priority:** Critical
 **Scope:** Medium — four separate fixes in the Last Stand dungeon combat scene
@@ -247,3 +247,5 @@ CombatLogUI.Instance?.Log("Blaise sets Snare Trap — enemy slowed 40%");
 - [ ] Item button shows "Empty" and is non-interactable at 0 potions
 - [ ] Every ability shows a readable line in the CombatLog for 2.5 s after use
 - [ ] `PlayerActionComplete()` is called after every player action (ends the turn)
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `BattleController.cs:189` — ATB starts on entry. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

@@ -1,3 +1,5 @@
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
+
 # ⚠ WO-221: Defend the Tower — Camera Closer to Tower for Better Sightlines — **SUPERSEDED 2026-07-04**
 
 > **SUPERSEDED:** The Defend-the-Tower / PatriciaLight system was removed 2026-06-09.
@@ -104,3 +106,5 @@ Target:  Distance=35-40, Pitch=-30 to -35°
 ---
 
 **Estimate:** 10–15 min (locate camera, adjust, test, verify)
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

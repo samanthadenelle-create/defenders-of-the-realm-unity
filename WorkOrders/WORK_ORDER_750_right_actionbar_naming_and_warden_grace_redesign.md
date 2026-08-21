@@ -4,7 +4,7 @@
 
 # WORK ORDER 750 — Right ActionBar naming + ability ids + Warden's Grace redesign + R clip rebind
 
-**Status:** SPEC — READY TO IMPLEMENT (owner rulings 2026-07-19). Awaiting owner go (needs 2 clip IDs confirmed).
+**Status:** CLOSED — DEPRECATED, audit-verified obsolete (2026-08-21 backlog audit).
 **Classification:** MIXED — naming/id-mint (mechanical) + E ability REDESIGN (new feature) + R anim rebind.
 **PO:** Sam. **Source of truth:** `docs/reference/HERO_ANIMATION_DICTIONARY.md` (the known dictionary).
 
@@ -87,3 +87,5 @@ HeroCatalog's mirrored names to match abilities.json so nothing shows stale — 
 ## Do NOT
 - No UXML; ASCII-only; do not source Grom clips from the DEAD Paladin `weaponskill-animations.json` lane.
 - Keep E's redesign behind felt-verify — combat feel is the owner's call.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** DEPRECATED. Evidence: `weaponskill-animations.json:122,146,176` — WO-614 id canon superseded. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

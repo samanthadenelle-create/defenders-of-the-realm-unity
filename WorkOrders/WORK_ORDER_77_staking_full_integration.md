@@ -4,7 +4,7 @@
 
 # WORK ORDER 77 — Staked SKR Full Integration (Shop + Lumbermill + Daily Login)
 
-**Status:** READY TO IMPLEMENT
+**Status:** CLOSED — DEPRECATED, audit-verified obsolete (2026-08-21 backlog audit).
 **Date:** 2026-05-28
 **Priority:** High
 **Scope:** Small — edits to existing scripts + one new DailyLoginBonus script
@@ -171,3 +171,5 @@ When they have staking active, replace with the live banner (see §1).
 - [ ] Lumbermill tick rate scales correctly with staking multiplier
 - [ ] Daily login also awards 200 BP XP
 - [ ] No crash if `StakingBonusManager` is null (all callers null-safe)
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** DEPRECATED. Evidence: `StakeRewardsResolver.cs:5-10; CryptoPaymentManager.cs:22-25` — Aether replaced by Glimmer. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

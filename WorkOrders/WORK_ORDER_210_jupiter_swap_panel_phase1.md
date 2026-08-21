@@ -4,7 +4,7 @@
 
 # WORK ORDER 43 — Jupiter Swap UI Panel (Phase 1)
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Date:** 2026-05-26
 **Priority:** High
 **Scope:** Small / Low Risk
@@ -848,3 +848,5 @@ Start the panel hidden (controller's `Initialise` is called on `OpenSwapPanel`).
 - [ ] No HTTP requests are made — confirmed by watching the Unity Profiler
       network section while using the panel
 - [ ] Pet-select and hero-select screens are unchanged
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `JupiterSwapPanelController.cs, SwapFeeConfig.cs, SwapVMTests.cs` — phase-1 shipped. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

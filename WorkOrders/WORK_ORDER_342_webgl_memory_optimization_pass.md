@@ -4,7 +4,7 @@
 
 # WO-342 — WebGL: memory optimization + GC pressure reduction
 
-**Status:** READY TO IMPLEMENT
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 
 **Depends on:** WO-196 (WebGL build working), WO-211 (unused assets removed)
 
@@ -61,3 +61,7 @@ Targets **50% GC.Alloc reduction** in main gameplay loop.
 ## Notes
 
 Profile on a low-end device (e.g., iPhone SE or older Android). The bottleneck is usually update-loop string allocations and physics queries.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — STILL VALID. Evidence: `ProjectilePool.cs:1-3` — alloc pass + GC target unbuilt. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict. ⚠ NOTE FOR ANYONE REOPENING: the 2026-08-21 read-only audit had classified this one OPEN - STILL VALID, with the evidence cited above. The owner's review supersedes that call (owner statements are ground truth). The audit line is left in place deliberately, so if this work turns out to be needed, the evidence for it is still here rather than erased.

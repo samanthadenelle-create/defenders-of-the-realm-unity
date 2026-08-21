@@ -4,7 +4,7 @@
 
 # WORK ORDER 721 — HUD vitals only (fill-contract + clear target)
 
-**Status:** READY TO IMPLEMENT  
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Priority:** P1 (combat trust)  
 **Phase:** 3 (Combat UI)  
 **Effort:** M  
@@ -63,3 +63,5 @@ Fix the **felt-broken vitals class** without executing the full 07-03 HUD demoli
 ## RESULT
 
 `WorkOrders/WORK_ORDER_721_hud_vitals_fill_contract.RESULT.md`
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `ElarionUiKitObsidian.cs:1751,1830` — fill contract shipped. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

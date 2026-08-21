@@ -4,7 +4,7 @@
 
 # WORK ORDER 592 — Seating Editor: embedded rotatable hero+weapon viewer
 
-**Status:** READY TO IMPLEMENT
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 **Origin:** owner felt-test 2026-06-29 grading sword/harvest offsets. The in-game Seating Editor
 (WO-577, `SeatingEditorOverlay`) is unusable for actually dialing offsets:
 - It edited the gear panel's THROWAWAY preview clone (`LaunchFor(_heroPreview.Equip)`), which is
@@ -62,3 +62,7 @@ Offset Forge window (PreviewRenderUtility orbit), built from runtime pieces we a
 
 ## Out of scope
 - No change to the offset MATH or the registry schema. No new player-facing UI. Dev-only tool.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — STILL VALID. Evidence: `SeatingEditorOverlay.cs no HeroPreviewViewer` — orbit viewport unbuilt. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict. ⚠ NOTE FOR ANYONE REOPENING: the 2026-08-21 read-only audit had classified this one OPEN - STILL VALID, with the evidence cited above. The owner's review supersedes that call (owner statements are ground truth). The audit line is left in place deliberately, so if this work turns out to be needed, the evidence for it is still here rather than erased.

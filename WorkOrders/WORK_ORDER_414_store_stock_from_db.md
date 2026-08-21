@@ -12,7 +12,7 @@ plus WO-412/406 coordination notes) is `WORK_ORDER_429_store_stock_from_db.md`.
 *(original text below, kept for history)*
 
 **Priority:** P1
-**Status:** READY (client side) — depends on a backend GET endpoint (React repo)
+**Status:** CLOSED — DEPRECATED, audit-verified obsolete (2026-08-21 backlog audit).
 **Lane:** 7 — Persistence / Backend (+ Lane 8 store)
 **Filed:** 2026-06-11 (owner). Next free WO after this = 415.
 
@@ -59,3 +59,5 @@ so bought gear never enters the live Neon sync → lost on reload. That's its ow
 ## Verification
 With the DB live: load store data → in-game shop shows it via the real call → reload/offline → shop
 still works from the local fallback. Owner-confirmed.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** DEPRECATED. Evidence: `WO_414 self-declared SUPERSEDED -> WO-429` — history only. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

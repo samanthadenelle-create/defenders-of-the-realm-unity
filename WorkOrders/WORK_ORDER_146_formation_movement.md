@@ -4,7 +4,7 @@
 
 # WORK ORDER 146 — Leader/Follower Formation Movement (first slice of "monster families")
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Date:** 2026-05-30
 **Priority:** High — the first *implementable* slice of the "monster families" pillar. Turns a loose swarm into a **coherent pack that moves as one** (leader pathfinds, followers hold dynamic slots). The visible groundwork for the family Behavior-tree brain (a *later* WO) and the readable, intimidating raid parties WO-143 spawns.
 **Lane:** **Combat / AI — code only.** NO scene-file edits, NO `VillageSceneBuilder.cs` (frozen, CLAUDE.md §3/§9), NO bake fired from UI. Runs in the Combat/AI parallel lane (CLAUDE.md §9 — "EnemyBrain, ATB — code only, no scene files"). Never contends with the World/Environment lane that owns the NavMesh bakes.
@@ -202,3 +202,5 @@ Notes:
 - [ ] Hard NavMesh dependency stated; tested in Village; open-world deferred to WO-142 bake (Acceptance #8).
 - [ ] If `docs/MONSTER_FAMILY_ARCHITECTURE.md` exists, component names conform to it (else `FamilyLeader`/`FamilyMember`/`FormationController` proposed).
 - [ ] Acceptance criteria reviewed line by line.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `FamilyLeader.cs, FamilyMember.cs, FormationController.cs` — formations shipped. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

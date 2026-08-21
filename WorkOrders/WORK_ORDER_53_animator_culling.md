@@ -4,7 +4,7 @@
 
 # WORK ORDER 53 — Animator Culling Strategies (Mobile Performance)
 
-**Status:** READY — PARTIAL - remainder named by the 2026-08-14 phantom sweep
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 
 > **PARTIAL - re-scoped 2026-08-14 (phantom sweep).** Most of this WO is present in HEAD; a named
 > remainder is outstanding. No per-WO path:line was recorded here: see the 2026-08-14 phantom sweep for the
@@ -284,3 +284,7 @@ public class EnemyBrain : MonoBehaviour
 - [ ] `PerformanceManager.ApplyAnimatorCulling()` successfully adjusts distances at runtime
 - [ ] No animation popping when enemies cross distance thresholds
 - [ ] 60 FPS maintained on a mid-range Android device during 20+ enemy waves
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — STILL VALID. Evidence: `no AnimatorCullingController; static cullingMode only` — distance culling unbuilt. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict. ⚠ NOTE FOR ANYONE REOPENING: the 2026-08-21 read-only audit had classified this one OPEN - STILL VALID, with the evidence cited above. The owner's review supersedes that call (owner statements are ground truth). The audit line is left in place deliberately, so if this work turns out to be needed, the evidence for it is still here rather than erased.

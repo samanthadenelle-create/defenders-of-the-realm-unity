@@ -10,7 +10,7 @@
 
 # WORK ORDER 613B — Outpost = PREFAB CHUNK assembly (kill freeform generation)
 
-**Status:** READY TO IMPLEMENT — owner re-ruling F8-28 (2026-07-08): *"the outpost should be
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 assembled from prefabs"* — Outpost1's generated layout *"makes no sense"*.
 **WO number 613B PROVISIONAL** (authority = MASTER_PIPELINES_BACKLOG + `CLI_LANES_WO_NUMBERS.md`;
 613B deliberately avoids colliding with WO-613 VFX moments — confirm on mint; specs run past 612).
@@ -149,3 +149,5 @@ The generator picks and places *authored chunks*; it does not invent geometry.
       (`BakeAndVerify` + the AutoPilot `NavReachable` oracle), scene registered in Build Settings.
 - [ ] `COMPILE_GATE_OK` + fleet pass; **push held for owner felt-pass** (PO closes F8-28 — the
       layout must *make sense* to her eye; expect the hand-edit → offset-capture loop before close).
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

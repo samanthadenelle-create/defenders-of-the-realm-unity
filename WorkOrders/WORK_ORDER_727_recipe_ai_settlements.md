@@ -4,7 +4,7 @@
 
 # WORK ORDER 727 — Recipe AI Settlements (Tiered BaseLayout Camps)
 
-**Status:** READY TO IMPLEMENT  
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Priority:** P1  
 **Silo:** World / Data  
 **Depends on:** WO-726 (loop works on *any* camp)  
@@ -83,3 +83,5 @@ AI camps are **data recipes** (`BaseLayout` + garrison recipe + threat), not one
 ## RESULT
 
 `WorkOrders/WORK_ORDER_727_recipe_ai_settlements.RESULT.md`
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `scene-configs.json:65,115,177` — three tiered camps. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

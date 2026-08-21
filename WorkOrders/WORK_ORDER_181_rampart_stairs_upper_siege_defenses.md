@@ -10,7 +10,7 @@
 
 # WORK ORDER 181 — Rampart Stairs + Upper-Level Siege Defenses
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Lane:** A (Village Scene — SERIAL, touches `VillageSceneBuilder.cs`)
 **Sequence:** After PIPELINE Batch A rebake (WO-137). One pass, part of the next bake.
 **Supersedes:** the remaining open piece of WO-136 (castle structure is built; this is the unfinished follow-on).
@@ -103,3 +103,5 @@ in WO-110).
 
 ## Gate
 Brace check on any `.cs`; green build; commit `feat: implement WO-181 — rampart stairs + upper siege defenses`; bake; screenshot for UI validation.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `Fortify.cs:191-202,469-507; CatalogType.cs:33; RepoProps.cs:376` — ramparts+wallwalk. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

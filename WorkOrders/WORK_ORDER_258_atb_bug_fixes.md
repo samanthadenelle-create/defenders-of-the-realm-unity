@@ -4,7 +4,7 @@
 
 # WO-258: ATB Battle — Critical Bug Fixes
 
-**Status: READY TO IMPLEMENT (CRITICAL PATH)**
+**Status:** CLOSED — OBSOLETE (owner ruling 2026-08-21): ATB was removed.
 
 **Date:** 2026-06-01  
 **Priority:** 🔴 CRITICAL (blocks WO-233 from working)  
@@ -31,7 +31,7 @@ When you open ATBBattle.unity and play, you see only capsules because the HUD bi
 
 **File:** `Assets/_Modules/BattleATB/BattleVfx.cs`
 
-**Status:** Does not exist (critical dependency)
+**Status:** CLOSED — OBSOLETE (owner ruling 2026-08-21): ATB was removed.
 
 **Code:**
 
@@ -307,3 +307,6 @@ If any of the above is missing, the corresponding log message should tell you wh
 
 **This unblocks WO-233 (FF ATB system) and makes all HUD issues visible in console output.**
 
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** Owner: "ATB was already closed out a long time ago when we got rid of ATB." The subject system is gone, so its bug list cannot apply.

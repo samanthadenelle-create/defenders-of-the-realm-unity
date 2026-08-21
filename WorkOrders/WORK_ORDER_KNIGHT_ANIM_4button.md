@@ -4,7 +4,7 @@
 
 # WORK ORDER — Knight 4-Button Always-Visible Combat Set
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — owner-confirmed 2026-08-21.
 **Minted:** 2026-07-10 (owner)
 **Project:** Defenders of the Realm (Unity 6 + URP)
 **Hero:** Knight
@@ -41,3 +41,5 @@ Wire the 4 always-visible buttons: B1→light combo (advances AttackIndex), B2�
 
 ## WO-KNIGHT-ANIM-004 — Polish & blending (P2)
 Smooth locomotion↔attack transitions, root motion where beneficial (charges), IK/hand adjust if shield looks off, feel-test attack timings, VFX hooks for impacts (pair with Hovl later).
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** Owner: the four-button knight combat is already done.

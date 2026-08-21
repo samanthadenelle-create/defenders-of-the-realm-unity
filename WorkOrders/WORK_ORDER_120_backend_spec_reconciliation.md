@@ -4,7 +4,7 @@
 
 # WORK ORDER 120 — Backend Spec ↔ Shipped-Client Reconciliation
 
-**Status:** READY TO IMPLEMENT
+**Status:** CLOSED — DEPRECATED, audit-verified obsolete (2026-08-21 backlog audit).
 **Date:** 2026-05-29
 **Priority:** High (contains a security item) — but pure docs + a few Unity URL constants; **clean of the red Unity gameplay tree**
 **Lanes:** spec/docs (this repo `docs/`) · Unity URL constants + save-auth (CLI) · actual endpoints (backend repo `defenders-of-the-realm`, Kayden)
@@ -81,3 +81,5 @@ Three hosts in client constants: `-v2.vercel.app` (most), `.vercel.app` (bug-rep
 - **Backend (Kayden):** the 4 missing endpoints + save-auth enforcement + canonical telemetry table.
 
 🤖 Drafted by the build-connected CLI from a client↔spec contract audit.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** DEPRECATED. Evidence: `api/promo,referral,tower-swap,events exist; game/save.js:37-41` — premise reversed. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

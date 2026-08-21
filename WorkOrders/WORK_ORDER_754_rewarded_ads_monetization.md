@@ -1,6 +1,6 @@
 # WORK ORDER — 754: Rewarded-Ad Monetization (IAdService seam + first live placement)
 
-**Status:** SPEC — READY (implementation blocked only on the OWNER SETUP in §7)
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 **Author:** Monetization Architect (design only — no `.cs` written, per CLAUDE.md §2/§13)
 **Silo:** Monetization/Backend (§9 — isolated, parallel-safe lane; no scene files, no VillageSceneBuilder)
 **Date:** 2026-07-19
@@ -330,3 +330,5 @@ opt-in buttons, no real ad — which is exactly the correct V1 default per "unfl
 ## 9. LANE / COORDINATION
 Monetization/Backend lane (§9) — isolated, parallel-safe (new Core interface + new leaf asmdef + one
 existing-file reroute; no scene files, no VillageSceneBuilder). Single-committer reconciliation per §11.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

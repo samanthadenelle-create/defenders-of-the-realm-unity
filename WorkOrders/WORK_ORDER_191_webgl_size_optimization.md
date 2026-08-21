@@ -4,7 +4,7 @@
 
 # WORK ORDER 191 — WebGL Build Size Optimization
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Lane:** Build/Assets — CLI (asset import settings + build config). Mostly editor/import work; some needs a rebuild.
 **Source:** owner — "optimize and make lighter." Architect assessment 2026-05-31.
 **Priority:** P1 — 186 MB is too heavy for fast web loads / Vercel.
@@ -98,3 +98,5 @@ exist, but runtime loading is **not wired** (no `Addressables.LoadAssetAsync`/`A
 ## Gate
 Build green; smoke-test; commit per step where sensible; `WORK_ORDER_191_webgl_size_optimization.RESULT.md`
 with before/after sizes per step. Coordinate with WO-190 (the rebuild produces the measurement build).
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `AddressableAssetsData/AssetGroups; WebGLPlayerSettingsConfigurator.cs` — addressables split. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

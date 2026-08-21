@@ -4,7 +4,7 @@
 
 # WORK ORDER 739 — Generic Obsidian Building-Upgrade Tier Panel (Enhancement Path)
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Minted:** 2026-07-17 from the `CLI_LANES_WO_NUMBERS.md` banner (this mint bumps next-free to 740)
 **Seat:** UI/design (Cowork session, owner-directed) — spec only, no code touched
 **Owner (PO):** Sam — felt-verify + close
@@ -143,3 +143,5 @@ references `GameObject/Image/Sprite/RectTransform`.
 
 On completion write `WorkOrders/WORK_ORDER_739.RESULT.md` (headless evidence + capture paths),
 leave push HELD for owner; canon updates (KEY_FACTS, banner) ride in the same commit.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `BuildingUpgradePanelMvvm.cs:18,511` — enhancement panel shipped. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

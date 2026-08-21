@@ -4,7 +4,7 @@
 
 # WORK ORDER 763 — Wisdom is EARNED (level-up-gated), not sprayed by combat
 
-**Status:** SPEC — READY (owner-requested 2026-07-25, live balance). EXISTING issue (tuning), CLI-implementable.
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 **Lane:** Economy / Progression tuning. Scope: **SMALL** (isolated constants + a couple of grant-site redirects; no architecture change).
 **Owner intent (verbatim):** *"every kill people are getting lots of wisdom. Wisdom should be rare, or given at level up so it takes real time and strategy to get new skills, make them feel earned not given."*
 
@@ -56,3 +56,5 @@ Owner: *"i thought i was getting wisdom on exit of win … from battle arena."* 
 ## 4. Notes
 - SMALL, isolated tuning — all cited lines. Fold into the next test build after owner picks DEFAULT/STRICT.
 - Data source: read-only RCA 2026-07-25 (all file:line cited above), per §12 (no guess — grant sites captured before touching code).
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

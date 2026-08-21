@@ -4,7 +4,7 @@
 
 # WORK ORDER 23 — Dungeon interiors are placeholder primitives (content)
 
-**Status:** READY TO IMPLEMENT (reconciled 2026-08-09 from the tree - acceptance 1 is MET: `Assets/Models/KayKit/KayKit Dungeon Remastered 1.1/` is present. Acceptance 2 is UNMET: `[PLACEHOLDER]` objects still sit in `Dungeon_HealersCottage.unity` (3) and `Dungeon_FolksGranary.unity` (7))
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 
 **Date:** 2026-05-24 (filed from owner playtest triage). **Authority:** #35 + WO-025.
 **Priority:** High. **Depends on:** WO-05. **Class:** CONTENT (missing gitignored art).
@@ -25,3 +25,7 @@ The dungeon ROUTING is correct (WO-19 entrances → `SceneRouter.LoadScene("Dung
 3. `WORK_ORDER_23_*.RESULT.md` with screenshots + the placeholder-count before/after.
 
 Key files: `Assets/Editor/DungeonSceneBuilder.cs`, `Assets/Editor/FolksGranaryBuilder.cs`, `Assets/Scenes/Dungeon_*.unity`, `.gitignore`.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — STILL VALID. Evidence: `Dungeon_HealersCottage.unity:1979,5642,81244` — 3+7 [PLACEHOLDER] objects; needs re-bake. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict. ⚠ NOTE FOR ANYONE REOPENING: the 2026-08-21 read-only audit had classified this one OPEN - STILL VALID, with the evidence cited above. The owner's review supersedes that call (owner statements are ground truth). The audit line is left in place deliberately, so if this work turns out to be needed, the evidence for it is still here rather than erased.

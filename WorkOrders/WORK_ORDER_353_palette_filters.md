@@ -4,7 +4,7 @@
 
 # WO-353: Palette Filters & Category Tabs
 
-**Status:** READY TO IMPLEMENT  
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Estimated Effort:** P1 (1–2 days)  
 **Priority:** High (QoL, reduces scroll fatigue)  
 **Lane:** HUD/UI (parallel to WO-352, WO-354)
@@ -230,3 +230,5 @@ public void Render()
 - [ ] No allocations in Render loop
 - [ ] All UI elements responsive (44px+ buttons on mobile)
 - [ ] Works in WebGL build
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `BuildPaletteUI.cs:367,505-510` — category filter via WO-1010 quick-tabs. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

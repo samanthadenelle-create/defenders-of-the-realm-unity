@@ -5,7 +5,7 @@
 # WO-271: NPC dialogue box overlaps and obscures HUD during gameplay
 **Linear:** [DEF-149](https://linear.app/defenders-of-the-realm/issue/DEF-149/npc-dialogue-box-overlaps-and-obscures-hud-during-gameplay)
 **Lane:** UI/HUD
-**Status:** READY TO IMPLEMENT
+**Status:** CLOSED — DEPRECATED, audit-verified obsolete (2026-08-21 backlog audit).
 **Priority:** Medium
 
 ## Acceptance Criteria
@@ -25,3 +25,5 @@
 
 ## Dependencies
 - None — standalone UI fix
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** DEPRECATED. Evidence: `DialogueView.cs:201-206 deliberate band` — later ruling reversed ask. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

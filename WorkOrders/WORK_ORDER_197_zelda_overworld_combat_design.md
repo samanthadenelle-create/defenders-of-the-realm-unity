@@ -4,7 +4,7 @@
 
 # WORK_ORDER_127: Zelda-Style Overworld Combat Architecture (Design)
 
-**Status:** READY FOR ARCHITECT  
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Owner:** Architecture (design phase, no code)  
 **Priority:** High (establishes combat design before WO-124 ships, informs VFX factory scope)  
 **Related:** WO-124 (VFX Factory), EnemyBrain.cs, DESIGN-DECISIONS.md, BATTLE_2D_PARTY_DESIGN.md  
@@ -274,3 +274,5 @@ Does overworld combat need full real-time control?
 **Architect (Claude):** [to be filled after design work]  
 **Owner (Samantha):** [awaiting design doc]  
 **CLI:** [awaiting owner decision]
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `BattleArena.cs:1-19` — kite arena ruled+built. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

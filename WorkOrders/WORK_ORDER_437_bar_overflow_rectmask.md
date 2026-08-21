@@ -14,7 +14,7 @@
 
 # WO-437 — P1 Bug: HP/MP bars overflow nameplate bounds — add RectMask2D
 
-**Status:** READY TO IMPLEMENT  
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Priority:** P1  
 **Lane:** 4 UI/HUD  
 **Minted:** 2026-07-03
@@ -72,3 +72,5 @@ the Obsidian frame sprite's border decoration.
 - [ ] No bar fill visible outside the dark background rect
 - [ ] Obsidian nameplate frame art not clipped
 - [ ] Headless smoke run passes
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `ElarionUiKitNameplate.cs:157 RectMask2D` — as requested. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

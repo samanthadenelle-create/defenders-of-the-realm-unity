@@ -12,7 +12,7 @@
 # WO-257: Fix Hero Select screen layout — overlaps, clipping, spacing
 **Linear:** [DEF-204](https://linear.app/defenders-of-the-realm/issue/DEF-204/hero-select-screen-layout-broken-intro-text-overlaps-titletagline)
 **Lane:** UI/HUD
-**Status:** READY TO IMPLEMENT
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 **Priority:** High — first screen players see on itch.io
 
 ## Acceptance Criteria
@@ -36,3 +36,5 @@
 - VillageSceneBuilder.cs
 - Any scene files
 - Dragon art or portrait rendering (those are fixed per DEF-134, DEF-131)
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

@@ -4,7 +4,7 @@
 
 # WORK ORDER 82 — Tower Power & Satisfaction Pass (Phase 2)
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Date:** 2026-05-28
 **Priority:** High
 **Scope:** Medium — one new script + edits to tower scripts + prefab wiring
@@ -241,3 +241,5 @@ private void OnTriggerEnter(Collider other)
 - [ ] "Level 2!" / "Level 3!" floats up and fades after upgrade
 - [ ] Upgrade glow mesh appears at Level 2+
 - [ ] No performance regression — 60 FPS during a 10-enemy wave with 4 towers firing
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `ArcaneTower.cs:434-513, DefenseTower.cs:678-686` — tower vfx inline. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

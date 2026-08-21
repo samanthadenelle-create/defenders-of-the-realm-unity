@@ -1,6 +1,6 @@
 # WORK ORDER 939 — The backend auth rail is compiled OFF in every shipped build
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — owner-confirmed 2026-08-21.
 **Minted:** 2026-08-09 (number from the `CLI_LANES_WO_NUMBERS.md` banner; banner bumped 939 → 940 in the SAME edit as this mint)
 **Lane:** Monetization/Backend (CLAUDE.md §9 — fully isolated; no gameplay, no scene, no UI)
 **Owner ruling 2026-08-09:** **OVERNIGHT, NOT A HOTFIX.** Verbatim: *"c1 can be worked overnight"*,
@@ -91,3 +91,7 @@ avoid is enabling enforcement, discovering the endpoint rejects the client's hea
 the tree in a state where **nothing** saves. If the round-trip cannot be proven overnight, stop at the
 instrumentation + the regression, write down exactly which request the server rejected, and leave the
 define OFF — a documented, still-insecure state is strictly better than a silently broken save path.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — STILL VALID. Evidence: `no BACKEND_AUTH_ENFORCED; GameStateService.cs:1647 salt literal` — auth rail compiled out. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** Owner: 939 is done. ⚠ The 2026-08-21 audit read this as OPEN - STILL VALID (evidence above). Owner review supersedes it; the audit line is kept so the evidence survives a reopen.

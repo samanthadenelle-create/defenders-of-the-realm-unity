@@ -4,7 +4,7 @@
 
 # WORK ORDER 130 — ATB: Enemies Still Render as Pills + Battle Loop Feels Broken
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Date:** 2026-05-30
 **Priority:** OWNER DECISION REQUIRED — see "Keep / Park / Cut" flag below. Spec'd because the owner reported it live; do not start CLI work until the owner confirms ATB is worth fixing now.
 **Scope:** Medium — one swapper rewrite (enemy model), two binding/UX fixes, no engine changes
@@ -298,3 +298,5 @@ necessary it is CLI-only via `BattleSceneBuilder.BuildBattleScene` with the edit
 - [ ] No new asmdef dependency added to `DeNelle.BattleATB`
 - [ ] Missing-FBX path logs `LogWarning` (not error) and falls back gracefully
 - [ ] Engine (`Engine/*.cs`, `Tests/*`) left untouched
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `AtbCombatantSwapper.cs:70,294; BattleController.cs:790` — pills->models, UXML HUD retired. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

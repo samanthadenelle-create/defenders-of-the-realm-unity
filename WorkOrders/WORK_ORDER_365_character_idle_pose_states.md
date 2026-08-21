@@ -4,7 +4,7 @@
 
 # WO-365: Character Idle Pose States — Town vs Combat Stance
 
-**Status:** READY TO IMPLEMENT  
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Estimated Effort:** P1 (0.5 days)  
 **Priority:** High (visual polish, immersion)  
 **Lane:** Build/Perf
@@ -333,3 +333,5 @@ Blend Duration: 0.3s
 - [ ] Transition smooth and natural
 - [ ] Pose state persists correctly across scenes
 - [ ] Works in WebGL build
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `HeroPoseController.cs:2-22` — town vs combat stance 0.30s blend. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

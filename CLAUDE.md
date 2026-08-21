@@ -564,6 +564,17 @@ absence on a fresh log is a **FAILURE**, not an unknown. `R2_PARITY_OK` is a pre
 **none** of the three scripts that hold the gate. That hole is residual and the rule closes it:
 **installing or distributing a build goes THROUGH THE SCRIPTS, never through raw `adb`.**
 
+**⛔ AND NOTHING LEAVES THIS MACHINE OUT OF SYNC — the `pre-push` hook (owner directive
+2026-08-21: *"make sure anything pushed always is in sync with R2"*).** `.githooks/pre-push`
+(tracked, wired by `git config core.hooksPath .githooks` — **set it once per clone**, it is
+local config and does not travel with the tree) **REFUSES `git push` whenever anything under
+`ServerData/` is NEWER than `Builds/r2-parity.log`**, or that log lacks `R2_PARITY_OK`. The
+invariant is *the proof must postdate the bytes it claims to prove* — no network needed. A
+docs-only push passes untouched, because `ServerData/` did not change and the existing proof
+still postdates it. **There is deliberately NO override flag:** every one of the three
+incidents above was a human expected to remember a second command, so a flag would restore
+the exact hole. To clear a real block, run the one sanctioned path — `tools2-ship.ps1`.
+
 **Why this is written this hard — it has now happened THREE TIMES:**
 - **2026-08-18** — an APK sat ready to install whose enemy bundle had never been uploaded. Caught **by
   hand**. Commit `16e22dba3` conceded in its own body: *"NO GATE COULD HAVE CAUGHT THIS."*

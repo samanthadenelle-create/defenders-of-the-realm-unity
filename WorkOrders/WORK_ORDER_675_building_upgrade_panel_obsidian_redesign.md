@@ -1,3 +1,5 @@
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
+
 # WORK ORDER 675 — Building Enhancement Panel: Obsidian/Talent redesign
 
 **Status: READY TO IMPLEMENT** (owner approved the mockup 2026-07-11: "yes so much clearer").
@@ -100,3 +102,5 @@ zero new architecture, likely zero new sprite imports.
 *Cross-refs:* `docs/UI_BLINK_TEMPLATE_CANON.md` · `docs/MASTER_CATALOG/BLINK.md` (mirror inventory +
 open-question-6 ruling) · HeroSkillTreePanelMvvm (FrameTalent sizing + node-state grammar precedent) ·
 WO-432/WO-476 (the perk system this View skins).
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

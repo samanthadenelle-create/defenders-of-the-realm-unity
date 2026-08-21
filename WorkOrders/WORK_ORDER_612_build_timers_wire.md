@@ -1,6 +1,6 @@
 # WORK ORDER 612 — Wire BuildTimerService into placement (owner-ratified 2026-07-06)
 
-**Status:** IMPLEMENTING (CLI, same session as ratification).
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 **WO number 612 PROVISIONAL** (authority = MASTER_PIPELINES_BACKLOG; confirm on mint).
 **Lane:** Village / BuildMode (file-disjoint from HUD + world lanes).
 
@@ -43,3 +43,5 @@ timer ALWAYS completes on its own (NORTH_STAR ad discipline — already encoded 
 - [ ] Third simultaneous placement (slots=2) completes instantly, never blocks.
 - [ ] `ff.buildtimers=0` restores instant builds.
 - [ ] `COMPILE_GATE_OK`, brace/NUL clean, `[Flow:Build]` traces on start/reveal.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

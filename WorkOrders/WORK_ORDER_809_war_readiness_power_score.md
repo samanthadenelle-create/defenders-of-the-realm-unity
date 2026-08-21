@@ -6,7 +6,7 @@
 
 > ⚠ 2026-08-01: build ATOP `Assets/_Modules/Village/Troops/ArmyReadiness.cs` (WO-823 phase A) — the single readiness truth. This WO is a presentation layer over ArmyReadiness.Compute, NEVER a second readiness engine.
 
-**Status:** READY TO IMPLEMENT  
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Minted:** 2026-07-30  
 **Program:** `docs/WC3_COC_EXPERIENCE_ANALYSIS.md` §2A  
 **Lane:** Raid selection / Army presentation  
@@ -37,3 +37,5 @@ CoC always answers “can I take this base?” with army strength feel. We have 
 
 ## Files
 - New pure helper under Village or Core, RaidSelectionVM, RaidDeployVM  
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `RaidDeployVM.cs:139,338; RaidDeployVMTests.cs:75` — power rating shipped. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

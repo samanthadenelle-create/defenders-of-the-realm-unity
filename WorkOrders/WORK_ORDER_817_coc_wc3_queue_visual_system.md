@@ -1,6 +1,6 @@
 # WO-817 — Queue system visual overhaul: **CoC channels + WC3 production glance**
 
-**Status:** READY TO IMPLEMENT (master program — phases below) · ⚠ RE-SCOPE 2026-08-01: the bar Work/Queues button was RETIRED (eb5d0710); the Keep-table row naming "RequestToggle / Work button | Keep" is stale — the right-column Builders chip is the sole Queues entry; do NOT re-add a bar button (ObsidianQueueRegression 7c fails it).  
+**Status:** DONE — owner-confirmed 2026-08-21.
 **Minted:** 2026-08-01  
 **Lane:** Queue presentation only (engine frozen)  
 **Roles:** Claude = visual pack / image pairs for phases; CLI = implement after sign-off per phase  
@@ -217,3 +217,7 @@ Engine frozen. Presentation only.
 ## 9. Owner one-liner
 
 **CoC: parallel workers + train/lab queues. WC3: production icons and progress. Us: three channels, one visual language, Obsidian chrome.**
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — STILL VALID. Evidence: `ObsidianQueueGate.cs:61-82 no Progress01` — rail progress geometry remains. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** Owner: queue visual overhaul is done. ⚠ The 2026-08-21 audit had read this as OPEN - STILL VALID (evidence above). Owner review supersedes it; the audit line is kept so the evidence survives if this is ever reopened.

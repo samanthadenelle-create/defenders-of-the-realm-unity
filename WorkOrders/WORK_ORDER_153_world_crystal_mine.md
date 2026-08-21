@@ -1,3 +1,5 @@
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
+
 # WORK ORDER 153 — World Crystal Mine (the relocated, buildable/placed crystal extractor)
 
 **Status: READY TO IMPLEMENT**
@@ -60,3 +62,5 @@
 - [ ] Renewable/rate-limited + upgradeable verified; banks grade-aware to GameState
 - [ ] Brace balance; Village→Core only; no UXML/Reflection/new currency; no bake
 - [ ] `WORK_ORDER_153_world_crystal_mine.RESULT.md` when complete
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

@@ -1,6 +1,6 @@
 # WORK ORDER 1038 — FIVE undeclared tags are used in code; each is a live `UnityException`
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Minted:** 2026-08-16 (UI seat) — provenance stack bumped 1038 → 1039 in the same edit
 **Lane:** Project settings + tag call sites + a new regression. ⚠ Touches `ProjectSettings/TagManager.asset`.
 **Priority:** **HIGH** — one is crashing in the owner's live session; the others are latent crashes
@@ -157,3 +157,5 @@ regression will.**
 2. Headless run of `Main_Castle_Overworld` through a wave + a plans drop — grep for
    `Tag:.*is not defined`, require zero
 3. Owner felt-verifies the reward actually arrives + closes (§13)
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `CastleDefensePlansService.cs:262-272; 5bc773833` — spawn throw removed. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

@@ -121,3 +121,5 @@ devalue real purchases.
 8. `COMPILE_GATE_OK` + `REGRESSION_OK <n>/<n>` (read the count off the marker — it is 222/222 as of
    2026-08-20, the first fully-green run; do not let this ticket be the one that re-reds it).
 9. Owner felt-verifies: play offline, reconnect, confirm resources are right (PO closes, §13).
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — STILL VALID. Evidence: `api/game/ only load.js,save.js` — server accrual endpoint unbuilt. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.

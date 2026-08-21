@@ -4,7 +4,7 @@
 
 # WORK ORDER 515 — Tower Target-Selection Priority (defense-smart targeting)
 
-**Status:** CAPTURED (design in hand; not yet READY — one design decision open)
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 **Date:** 2026-06-26 · **Silo:** Combat/AI (code only) · **File:** `Assets/_Modules/Village/Buildings/TowerCombat.cs`
 **Origin:** surfaced during the targeting-sweep verification — towers today are pure closest-pick. Design
 contributed by Grok (grounded in the real `FindNearestTarget`/`IDamageable` API via the sync-pack brief).
@@ -52,3 +52,5 @@ wall. Preserve the existing air/ground `CanHit` matrix and the `LiveApexBoss` se
 Enemy-side targeting (that's `Enemy.cs` ff.enemystructureaware — separate). Tuning the exact weights/colors
 (owner felt-pass after the mapping lands).
 </content>
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

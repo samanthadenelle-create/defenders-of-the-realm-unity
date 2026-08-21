@@ -10,7 +10,7 @@
 > ruled, cite this WO by FILENAME, never by bare number.
 
 # WO-280: Go-Live Blockers — Fix ALL before pushing to itch.io
-**Status:** READY TO IMPLEMENT
+**Status:** CLOSED — DEPRECATED, audit-verified obsolete (2026-08-21 backlog audit).
 **Priority:** P0 — BLOCKS DEPLOYMENT
 
 These 9 bugs must be fixed before the next WebGL build deploys. Each one has a specific file/location to investigate.
@@ -225,3 +225,5 @@ grep -rn "rotation\|Euler\|forward" Assets/_Modules/Village/Hero/HeroBodySwapper
 - Tower placement system
 - Wave manager / combat systems
 - Any .unity scene files by hand
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** DEPRECATED. Evidence: `Yarn removed (WO-557 RESULT); HubScenes.cs:54` — stale June go-live list. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

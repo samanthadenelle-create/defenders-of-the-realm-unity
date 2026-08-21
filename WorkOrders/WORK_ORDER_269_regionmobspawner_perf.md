@@ -5,7 +5,7 @@
 # WO-269: RegionMobSpawner — replace FindObjectsOfType with NodeStateService lookup
 **Linear:** [DEF-140](https://linear.app/defenders-of-the-realm/issue/DEF-140/regionmobspawner-findobjectsoftypeclaimablenode-on-every-enemy-spawn)
 **Lane:** Combat/AI
-**Status:** READY TO IMPLEMENT
+**Status:** CLOSED — DEPRECATED, audit-verified obsolete (2026-08-21 backlog audit).
 **Priority:** Medium
 
 ## Acceptance Criteria
@@ -25,3 +25,5 @@
 
 ## Dependencies
 - None — standalone perf fix
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** DEPRECATED. Evidence: `no FindObjectsOfType in RegionMobSpawner; no NodeStateService` — both absent. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

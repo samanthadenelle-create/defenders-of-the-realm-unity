@@ -4,7 +4,7 @@
 
 # WORK ORDER 76 — Staked SKR Bonus System (Solana Staking Rewards)
 
-**Status:** READY TO IMPLEMENT
+**Status:** CLOSED — DEPRECATED, audit-verified obsolete (2026-08-21 backlog audit).
 **Date:** 2026-05-28
 **Priority:** High
 **Scope:** Medium — one new script + integration hooks
@@ -207,3 +207,5 @@ and is hidden when `currentMultiplier ≤ 1.05` (i.e. less than 350 SKR staked).
       is not connected (graceful no-op)
 - [ ] No crash if `StakingBonusManager` is absent from the scene
       (all callers use `?.` null-safe)
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** DEPRECATED. Evidence: `StakeRewardsResolver.cs:1-23; FeatureFlags.cs:729` — staking canon reversed to cosmetic. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

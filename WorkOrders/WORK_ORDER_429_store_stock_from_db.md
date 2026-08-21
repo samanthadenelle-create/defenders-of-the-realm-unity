@@ -5,7 +5,7 @@
 # WORK ORDER 429 — Store stock served from the DB (the "real call")
 
 **Priority:** P1
-**Status:** READY — PARTIAL - remainder named by the 2026-08-14 phantom sweep
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 
 > **PARTIAL - re-scoped 2026-08-14 (phantom sweep).** Most of this WO is present in HEAD; a named
 > remainder is outstanding. No per-WO path:line was recorded here: see the 2026-08-14 phantom sweep for the
@@ -77,3 +77,7 @@ so bought gear never enters the live Neon sync → lost on reload. That's its ow
 - Do NOT greenfield store code (PackStore ~70% built)
 - Do NOT remove the local catalog path (`CanonicalJson`) — additive only
 - Do NOT restyle the shop UI (WO-405 gates visual design; WO-415 owns the storefront skin)
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — STILL VALID. Evidence: `StoreStockService.cs:17-24` — remote provider/backend GET unbuilt. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict. ⚠ NOTE FOR ANYONE REOPENING: the 2026-08-21 read-only audit had classified this one OPEN - STILL VALID, with the evidence cited above. The owner's review supersedes that call (owner statements are ground truth). The audit line is left in place deliberately, so if this work turns out to be needed, the evidence for it is still here rather than erased.

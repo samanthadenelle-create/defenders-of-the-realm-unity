@@ -1,6 +1,6 @@
 # WORK ORDER 106 — XP / Level Progress HUD + Gear Screen
 
-**Status:** PARTIAL - remaining: the gear progress panel (the XP bar re-shipped in the HUD kit)
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 
 > **PARTIAL - re-scoped 2026-08-14 (phantom sweep).** Remaining work: the GEAR PROGRESS PANEL. The XP bar re-shipped inside the HUD kit, but the gear progress panel never came back — `LifetimeXp` has zero UI consumers. Note this WO's RESULT names two files that are now DELETED.
 > Everything else in this WO is present in HEAD. The named remainder IS the ticket now - do not
@@ -334,3 +334,5 @@ Match exactly — the reflection calls depend on correct names.
 - [ ] Close button dismisses panel
 - [ ] No polling — driven entirely by OnXPChanged / OnLevelUp events
 - [ ] Works in builds (no UXML — if UXML unavailable, implement as IMGUI fallback)
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

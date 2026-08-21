@@ -4,7 +4,7 @@
 
 # WORK ORDER 760 — Syndrath the Devourer: complete the licensed-dragon swap + fly-in→land→burn-towers→Tree behavior
 
-**Status:** READY TO IMPLEMENT (owner-requested 2026-07-24; asset choice CONFIRMED by owner)
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 **Lane:** Combat/AI + Enemies + Resources asset swap (§9 — coordinate; touches DragonBoss + WaveManager + Resources/Enemies)
 **Owner intent (verbatim):** the dragon "flies into town, lands, and uses fire attacks to burn towers. After all towers are destroyed then targets the tree of life."
 
@@ -76,3 +76,5 @@ Wire the sustained fire-breath cone from a mouth socket. WO-757 (`WORK_ORDER_757
 3. `DataRegression.RunAll` → `REGRESSION_OK` (no new reds).
 4. AutoPilot fleet apex-boss path (note: overworld/boss coverage is fleet-capped — expect partial) + a human/F8 felt-test of the full fly→land→burn→Tree sequence.
 5. Owner felt-verify + CLOSE. Push HELD until owner authorizes.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

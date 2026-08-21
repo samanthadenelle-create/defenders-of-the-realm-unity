@@ -4,7 +4,7 @@
 
 # WORK_ORDER_587 — Population & Echo Growth System (V1)
 
-**Status:** READY TO IMPLEMENT (owner spec, drafted w/ Grok, 2026-06-29) · Economy/Workforce lane · data-driven
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Origin:** F8 felt-test flag_07 (MainCastle_Hall, 2026-06-29): *"tower count never increases, what determines
 population growth, waves cleared EXP gained? Need to determine unlock cadence of echoes."*
 **Supersedes:** `WORK_ORDER_514` **Item B** (the "Population → Saved Echoes X/10 → SP" rebrand). WO-514 **Item A**
@@ -108,3 +108,5 @@ Milestone array; each entry = a population step that grants a population increas
   growth to **workforce slots / harvest**, not SP. Decouple SP from this (keep SP on its own path), or also grant SP
   on milestone? **Owner call.** (Default if unanswered: workforce-only, no SP — SP stays on the Wisdom path.)
 - Final milestone numbers (XP / quests / outposts / village level) are placeholders → owner-tune in the JSON.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `IPopulationService.cs:3; PopulationService.cs:47` — milestone->echo slot. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

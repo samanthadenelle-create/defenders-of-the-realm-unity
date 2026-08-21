@@ -4,7 +4,7 @@
 
 # WORK ORDER 853 — Structures are targetable (the disjoint-contract seam)
 
-**Status:** READY — PARTIAL - remainder named by the 2026-08-14 phantom sweep
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 
 > **PARTIAL - re-scoped 2026-08-14 (phantom sweep).** Most of this WO is present in HEAD; a named
 > remainder is outstanding. No per-WO path:line was recorded here: see the 2026-08-14 phantom sweep for the
@@ -224,3 +224,5 @@ Gate it on faction in the same pass.
 - **`Assets/_Modules/Core/README.md:10`** repeats the stale 5-implementor claim (there are 18).
 8. Gates: `COMPILE_GATE_OK` + `REGRESSION_OK <n>/<n>` + `TESTS_OK <n>/<n>`, counts read off the markers.
 9. Owner felt-verifies. **PO closes, not CLI.**
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `WallSegment.cs:53; DefenseTower.cs:380-400` — blockers closed. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

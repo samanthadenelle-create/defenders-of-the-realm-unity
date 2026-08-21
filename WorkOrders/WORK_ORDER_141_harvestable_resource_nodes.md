@@ -4,7 +4,7 @@
 
 # WORK ORDER 141 — Harvestable Resource Nodes (the in-world extractable that feeds the build economy)
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Date:** 2026-05-30 (Fri)
 **Priority:** High — the *node* half of the HARVEST pillar. Owner ask: "harvestable nodes for building and extracting resources." This WO is the **player-extractable node** layer that the worker/pet/offline systems plug into; it makes "walk up, hold to extract, watch the wallet climb" playable on its own — before workers (WO-117 Ph2+) or pets (WO-119) exist.
 **Scope:** Medium, self-contained, additive. ONE shared enum (or consume WO-117's), one SO, one runtime MonoBehaviour, one code-built world prompt, and the GameState bank-write. No new currency, no new assembly, no UXML, no scene hand-edit, no bake.
@@ -333,3 +333,5 @@ Tiering is **pure data** (`totalDeposit` / `respawnSeconds` / `yieldPerExtract` 
 ---
 
 🤖 Spec'd by the design lane (UI). Reconciled against `GameState.cs` (Wood L58 / Stone L54 / Iron L56 / AetherCrystals L52; `ResourceBalance.Food` NestedTypes L44 — **no net-new currency**), `CrystalMine.cs` (the proximity+`[F]`+world-bubble interact pattern at L119/135–143/341–455 — mirrored, not reinvented; its `CrystalEconomy.AddCrystals` award path), the WO-86 `[CreateAssetMenu]` SO pattern, and WO-111/115/117/119/122/124, NORTH_STAR (BUILD→HARVEST→DEFEND→OFFLINE), CLAUDE.md §5/§6 (Village→Core only, `CoreServices.*?.`), PIPELINE_STATE.md §8 (no UXML in builds). **Confirmed WO-117's harvest layer is still greenfield** (`Assets/_Modules/Village/Harvest/*` and `Assets/_Modules/Core/ResourceType.cs` do not exist yet) — hence the explicit "converge on ONE `ResourceNode`" reconciliation. Markdown work order only — no `.cs` touched, no bake fired.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `MineNode.cs:1-16, ResourceType.cs, HarvestSourceRegistry.cs` — extract node shipped. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

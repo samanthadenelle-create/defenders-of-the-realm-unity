@@ -1,3 +1,5 @@
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
+
 > ⚠ **NUMBER COLLISION — this document does not own WO-430; `WORK_ORDER_430_Handover_Triage_Detailed_Work_Orders.md` does.**
 > Referred to hereafter as **WO-430-C (gear catalog from DB)**.
 > Flagged by the 2026-08-16 Sunday board-grooming pass (`python tools/board_build.py` → `DUPLICATE_WO_NUMBERS`);
@@ -67,3 +69,5 @@ the WebGL demo stable. Read §"Decision needed" before starting.
   + "don't smuggle structural changes / quality not fast," this is specced for a deliberate pass, not
   blind-built at 1am. The other three overnight items (direct-harvest mapping, base harvest nodes,
   static OuterWorld seam) WERE landed — see the session summary.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

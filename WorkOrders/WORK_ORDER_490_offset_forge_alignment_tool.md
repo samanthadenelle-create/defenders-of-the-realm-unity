@@ -4,7 +4,7 @@
 
 # WORK_ORDER_490 — OFFSET FORGE (model alignment / offset-authoring tool)
 
-**Status:** READY TO IMPLEMENT (slice 1) · DevTools/Editor lane (isolated) · owner-greenlit 2026-06-23
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Form factor (owner decision, "whatever is best"):** **Unity EditorWindow, drop-in package** — primary.
 Standalone .exe is a deferred Phase 2 (only if Asset-Store buyers ask). Same core either way.
 
@@ -60,3 +60,5 @@ clean (`COMPILE_GATE_OK`). Pure editor tool — no play mode, no game deps.
 - `Assets/_Modules/Village/BuildMode/RotationCorrectionRegistry.cs` — the persist-the-offset idiom (PlayerPrefs JSON).
 - `Assets/_Modules/Village/Hero/EquipmentController.cs` — the shield/weapon consumer (slice 2).
 - Memory: [[model-alignment-offset-tool]].
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `OffsetForgeWindow.cs + asmdef` — standalone window exists. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

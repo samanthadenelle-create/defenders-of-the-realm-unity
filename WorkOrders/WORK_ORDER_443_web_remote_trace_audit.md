@@ -1,3 +1,5 @@
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
+
 # WORK ORDER 443 — Web remote trace/audit: FlowTrace → DB sink (WebGL), 7-day TTL
 
 **Status: DESIGN SPEC.** Owner (2026-06-17): "for the web version we need some audit in place — we'll
@@ -66,3 +68,5 @@ a SECOND sink — a remote one for the web build — reusing the existing backen
 
 *Cross-ref:* `FlowTrace.cs`/`Guard.cs`/`BreakCaptureHarness.cs` (§12), `GameStateService.cs` (backend
 call + auth-header pattern), WO-429 (Neon + security model), `FeatureFlags.cs`.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

@@ -4,7 +4,7 @@
 
 # WO-355: Portrait/Vertical Layout Responsiveness
 
-**Status:** READY TO IMPLEMENT  
+**Status:** CLOSED — DEPRECATED, audit-verified obsolete (2026-08-21 backlog audit).
 **Estimated Effort:** P1 (2–3 days)  
 **Priority:** High (mobile core UX)  
 **Lane:** HUD/UI (parallel to WO-352–354)
@@ -274,3 +274,5 @@ private void ApplySafeArea()
 - [ ] Safe area respected on notched devices
 - [ ] All touch targets ≥44×44px
 - [ ] Works in WebGL on mobile (test with Android device or simulator)
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** DEPRECATED. Evidence: `ProjectSettings.asset:63-66 landscape-locked` — portrait reflow moot. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

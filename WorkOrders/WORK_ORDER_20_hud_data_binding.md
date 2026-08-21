@@ -1,3 +1,5 @@
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
+
 # WORK ORDER 20 — HUD data binding: Heart HP + Crystals runtime push
 
 **Date:** 2026-05-24 (filed as a follow-up from WO-10 smoke test; root-caused in WO-07)
@@ -36,3 +38,5 @@ This is the same class of gap WO-07 fixed for mana/ability-cooldown: the HUD set
 ## 4. Notes
 
 - Root cause documented in `WORK_ORDER_07_hero_abilities.RESULT.md` §6 and surfaced again by the WO-10 smoke test. Low-risk, well-patterned.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

@@ -1,6 +1,6 @@
 # WORK ORDER 460 — Stronghold → Player Settlement Conversion (Village2 post-clear)
 
-**Status:** READY TO IMPLEMENT (spec complete)
+**Status:** CLOSED — DEPRECATED, audit-verified obsolete (2026-08-21 backlog audit).
 **Classification:** NEW FEATURE (capability does not exist — see "What exists today")
 **Silo:** Combat/AI + World/Environment (code-only; one new runtime component + one persistence field). No `.unity` hand-edits.
 **Source:** F8 ticket (owner, Village2): *"after getting here and destroying the enemy stronghold how do you convert to a player settlement?"*
@@ -214,3 +214,5 @@ The runtime `SetEnemyOwned(false)` is lost on reload. Two correct options — **
 - The existing `Village2RaidController` already saves on claim (`GameStateService.Save()`),
   so option A needs no extra save call — the PlayerPref write in `RaidClaimService.MarkClaimed`
   is already durable.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** DEPRECATED. Evidence: `FeatureFlags.cs:70-77 default OFF, 2026-06-22 pivot` — base creation off V1. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

@@ -1,3 +1,5 @@
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
+
 > ⚠ **NUMBER COLLISION — this document does not own WO-431; `WORK_ORDER_431_raid_rewards_victory.md` does.**
 > Referred to hereafter as **WO-431-B (shop MVVM slice)**.
 > Flagged by the 2026-08-16 Sunday board-grooming pass (`python tools/board_build.py` → `DUPLICATE_WO_NUMBERS`);
@@ -109,3 +111,5 @@ This is what makes the refactor "done" — the View swap is safe only because th
 *Cross-ref:* `docs/UI_MVVM_BINDING_MAP.md §2/§4/§5`, WO-430 (seam), `ARCHITECTURE_PRINCIPLES.md
 §2/§2c/§3`. After this proves out: generalize the bound `Slot` unit (map §5 step 3), then roll
 inventory → equipment → crafting → quests.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

@@ -1,3 +1,5 @@
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
+
 # WORK ORDER 711 — HealersCottage content dressing: pills become PEOPLE (torch-teacher first)
 
 **Status: SPEC — owner walking the dungeon live 2026-07-13 evening, annotating placeholders.**
@@ -38,3 +40,5 @@ ship on placeholder-or-better bodies.
 
 *Cross-refs:* owner F8 seq-1322 · WO-584/584c (art) · AtbInventory.Torches (NestedTypes.cs) ·
 the dungeon map-in (portals -> dungeons, 2026-07-13).
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

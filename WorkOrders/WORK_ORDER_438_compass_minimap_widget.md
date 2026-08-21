@@ -14,7 +14,7 @@
 
 # WO-438 — P2 UI: Compass widget — replace broken nine-slice "SE ▲" panel
 
-**Status:** READY TO IMPLEMENT  
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Priority:** P2  
 **Lane:** 4 UI/HUD  
 **Minted:** 2026-07-03
@@ -72,3 +72,5 @@ the "SE ▲" label. Remove the current nine-sliced Panel container entirely.
 - [ ] No nine-sliced stretching artifact visible
 - [ ] Widget is visually consistent with rest of Obsidian HUD
 - [ ] Headless smoke run passes
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `HudCompassWidget.cs:28,186` — nine-slice; later reshaped WO-899. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

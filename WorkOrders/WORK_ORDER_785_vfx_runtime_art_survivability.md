@@ -4,7 +4,7 @@
 
 # WO-785 — VFX runtime-art survivability: 117 of 121 owner-tagged keys live in gitignored packs
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Minted:** 2026-07-30 (CLI, from the check-in sweep + the Web/Audio/VFX SME dossier)
 **Lane:** VFX art pipeline + `tools/art/`. File-disjoint from gameplay lanes.
 **Scope correction:** this was first framed as "the ParticlePack has no fallback". Measured, it is
@@ -118,3 +118,5 @@ three (Hovl Studio, Mirza Beig, Spells Pack) with the same honesty note: **no ru
 `.gitignore:212-219,399` · `tools/art/REQUIRED_PACKS.md` · `docs/PAIN_POINTS_2026-07-26.md` §1.2 ·
 memory `vfx-map-owner-tags-no-creative-pick`, `asset-pipeline` · `KEY_FACTS.md:162-171` (two-machine
 drift) · SME dossier: Web/Audio/VFX/Art, 2026-07-30 fan-out · commit `4780e3cc`.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `948080f5a; VfxResourceArtMirror.cs` — pack deps 183->0. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

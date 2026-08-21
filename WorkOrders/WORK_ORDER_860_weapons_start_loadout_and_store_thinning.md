@@ -1,6 +1,6 @@
 # WORK ORDER 860 — Fix start loadout (sword+shield, not axe) + thin the weapon/armor store
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Author:** UI/QA triage (read-only RCA, §13) — Claude UI
 **Lane:** Hero/Gear (Combat/economy data). `GearLoadout` + `GameStateService` (Part A) · `VendorStockResolver` + `vendors.json` (Part B).
 **WO#:** minted from the proposed UI-seat reserved block (860–899) to avoid the main-line collisions (banner note 2026-08-02); owner to ratify the block.
@@ -108,3 +108,5 @@ and an eligibility FLAG (`classOk && levelOk`) that only locks, never hides.
   blink placeholders live there for later).
 - Do NOT change `WeaponFitsClass`/`ArmorFitsClass`/`MeetsReq` (the equip gate is correct; reuse it as the show-filter).
 - Keep `vendors.json` Resources/StreamingAssets copies byte-identical.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `GearLoadout.cs:76; VendorStockResolver.cs:22-23,242` — starter + thinned shelf. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

@@ -4,7 +4,7 @@
 
 # WORK ORDER 613 — VFX moments: tower tier-up + construction complete
 
-**Status:** READY TO IMPLEMENT — overnight creative lane (owner-requested 2026-07-06,
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 "have creative for overnight add vfx on tower upgrades and on timer cooldown finish").
 **WO number 613 PROVISIONAL** (authority = MASTER_PIPELINES_BACKLOG; confirm on mint).
 **Lane:** VFX/Audio (§9 — no gameplay dependencies, safe to parallelize).
@@ -46,3 +46,5 @@
       placement should get the SMALL flourish too so placement always has feedback — CLI call).
 - [ ] `COMPILE_GATE_OK` + fleet pass; `FlowTrace.Step("VFX", ...)` on each fire.
 - [ ] Push held for owner felt-pass (ten-year-old test — it should feel GOOD, not busy).
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

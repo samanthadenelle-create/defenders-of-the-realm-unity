@@ -4,7 +4,7 @@
 
 # WORK ORDER 436 — Quest Board: a proper data-driven home for quests (repurpose the HUD "quest" click)
 
-**Status:** SPEC (READY TO GROOM — not yet READY TO IMPLEMENT; see "Open decision" below)
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 **Lane:** 12 — Narrative / Onboarding / Quests (UI surface touches Lane 4)
 **WO#:** 436 — confirmed free vs `CLI_LANES_WO_NUMBERS.md` (next-free=430; 430–435 minted by later sessions, this is the next slot after them). Slots into Lane 12 after WO-290/291/304.
 **Editor must be CLOSED for any bake; this WO is code + one HUD-wire only, no scene hand-edit.**
@@ -105,3 +105,5 @@ Add a "Daily" section to the board reading `DailyQuestService.Today.Quests`, and
 3. **Skin:** ship `RumorBoardPanel` as-is now, or gate on WO-439's Blink/MVVM dressing? (Recommend: ship reachability now, dress in 439.)
 
 *Cross-ref:* `RumorBoardPanel.cs`, `QuestService.cs`, `QuestCatalog.cs`, `NestedTypes.cs:197`, `PanelRouter.cs:37`, `VillageHudController.cs:1413`, `DialogueCommandBridge.cs:183/1044`, WO-290/291/304/339/439, memories `ui-mvvm-binding-seam`, `never-dragdrop-or-manual-playtest`.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

@@ -1,6 +1,6 @@
 # WORK ORDER 910 - Ranger + Mage talent trees have no consumers (owner design ruling needed)
 
-**Status:** READY — PARTIAL path B — stats + Hunter's Mark LIVE; remaining unlock/summon/onEvent fantasy
+**Status:** DONE — owner-confirmed 2026-08-21.
 **Date:** 2026-08-05
 **Silo:** Combat/AI + data (`hero-talents.json`, `TalentConsumerRegistry`) - no scene work
 **Raised by:** CLI regression lane, from `TalentStrategyRegression` G3 going red after the
@@ -242,3 +242,7 @@ That set is the bug that hid this for weeks. It must stay empty.
 5. Every tier of every playable tree has at least one REACHABLE node, verified by walking
    prerequisites from the tier-1 roots - not merely one visible node.
 6. `DataRegression.RunAll` emits `REGRESSION_OK <n>/<n> suites`.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — STILL VALID. Evidence: `HeroAbilities.cs:1458; HeroTalentCatalog.cs:72` — ~31 nodes lack consumers. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** Owner: 910 is done. ⚠ The 2026-08-21 audit read this as OPEN - STILL VALID (evidence above). Owner review supersedes it; the audit line is kept so the evidence survives a reopen.

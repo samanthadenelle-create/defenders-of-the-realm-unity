@@ -10,7 +10,7 @@
 
 # WO-435 — P1 Bug: Hero clips through/under bridge — NavMesh not covering bridge surface
 
-**Status:** READY TO IMPLEMENT  
+**Status:** CLOSED — DEPRECATED, audit-verified obsolete (2026-08-21 backlog audit).
 **Priority:** P1  
 **Lane:** 2 World/Environment  
 **Minted:** 2026-07-03
@@ -74,3 +74,5 @@ is confirmed present. Do not bake with the editor open.
 - [ ] NavMesh.SamplePosition above bridge center returns Y ≥ bridge deck Y (not below)
 - [ ] Hero walks across bridge without clipping through or going under
 - [ ] Headless AutoPilot smoke run: no nav exceptions near bridge zone
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** DEPRECATED. Evidence: `RuntimeRegionGate.cs deleted cc122e844` — seam gone, merged-world live. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

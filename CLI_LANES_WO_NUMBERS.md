@@ -95,7 +95,23 @@
 > PROD-003 (Realm Store permanent storefront), PROD-004 (baked-twin footprint),
 > PROD-005 (default shield renders through the hero body; survives a dungeon->town port).
 
-> ## ⚠ RECONCILED 2026-08-20 (CLI): main line next free = **1131**.
+> ## ⚠ RECONCILED 2026-08-21 (CLI): main line next free = **1133**.
+> *(CLI seat minted **WO-1132** and bumped 1132 -> 1133 in this SAME edit. **WO-1132** = THE NIGHT
+> MARKET — Realm Pack Store presentation redesign. The store works the way a RECEIPT works: five
+> browsable SKUs of 25 as 132 px text rows in one scroll column, no art, no price relationship
+> between rows, `Coming soon` in the buy rail, the treasury address as 12 px legalese and NO SKR
+> balance on screen. The WO-1118 thinning was CORRECT — you cannot price vapor — but it left a shelf
+> with nothing to look at. Two-column split (spotlight + four fixed bands: Free -> Gap -> Basket ->
+> Patronage) inside the UNCHANGED Obsidian modal. ⛔ PRESENTATION ONLY: the money path, the three
+> payment refusals and `RealmStorePurchase` defaultOn:false are NOT this WO's to soften — every lane
+> lands with the rail still CLOSED and the whole screen still renders. OWNER RULING 2026-08-21
+> *"both stacked"*: Patronage carries Founder's Vow AND Keeper's Almanac, both `anchorOnly` — priced,
+> unbuyable, so they anchor while shipping ZERO vapor, which is the only way anchoring gets past the
+> WO-1118 rule. Four additive `packs.json` fields (band/orbTint/compareTo/anchorOnly); NO sku renamed
+> (`sku` is the live OwnedItemIds key). Palette is luminance-stepped (gold 195 / verdant 177 / ember
+> 145 / aether 113) because the owner reads this build without reliable hue discrimination — colour
+> NEVER carries a message alone. File `WorkOrders/WORK_ORDER_1132_night_market_store_redesign.md`,
+> READY.)*
 > *(Docs seat minted **WO-1130** and bumped 1130 -> 1131 in this SAME edit — THE R2 PUSH IS PART OF
 > THE SHIP CHAIN. Owner ruling 2026-08-20 after playing a build in which EVERY enemy rendered as a
 > tinted capsule: *"wire the r2 push into the ship chain."* ⛔ ROOT CAUSE WAS NOT CODE: enemy and

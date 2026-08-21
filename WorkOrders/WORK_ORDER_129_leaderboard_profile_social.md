@@ -10,7 +10,7 @@
 
 # WORK ORDER 129 — Leaderboards, Player Profiles & Social Install Bonus
 
-**Status:** READY TO IMPLEMENT (design / user-story stage)
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 **Date:** 2026-05-30
 **Author:** UI (product/design)
 **Priority:** High — this is the retention + acquisition layer of the NORTH STAR competitive thesis.
@@ -201,3 +201,5 @@ New backend table(s) implied: `player_profiles` (`wallet_address PK, username UN
 ---
 
 🤖 Drafted by UI (product/design). Backend persistence is server-authoritative and blocks on WO-120; metrics instrumentation overlaps WO-121. Ready for owner routing + final number-setting.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

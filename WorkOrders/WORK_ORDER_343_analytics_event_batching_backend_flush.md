@@ -4,7 +4,7 @@
 
 # WO-343 — Analytics: event batching + periodic backend flush
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 
 **Depends on:** WO-121 (metrics dashboard exists), WO-80 (backend routing ready)
 
@@ -57,3 +57,5 @@ Reduces HTTP overhead, improves frame stability.
 ## Notes
 
 Test with a lot of concurrent events (e.g., 100 enemies spawning = 100 "enemy_spawn" events). Queue should handle it without lag.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `EventTracker.cs:6-63` — batching/retry/circuit-breaker shipped. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

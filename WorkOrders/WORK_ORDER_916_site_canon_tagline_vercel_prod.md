@@ -4,7 +4,7 @@
 
 # WORK ORDER 916 — Marketing site: ship canon tagline to production (Vercel)
 
-**Status:** READY TO IMPLEMENT - partial (reconciled 2026-08-09, per this file's own 08-08 banner - the repo is GREEN: `site/index.html:86` carries the canon tagline, landed in `f329c8d5`. Outstanding: the Vercel PROD deploy and a check of the LIVE URL - a deploy leaves no repo artifact, so this one cannot be settled from git alone)
+**Status:** DONE — owner-confirmed 2026-08-21.
 
 **Status: PARTIAL — tree green, Vercel prod deploy outstanding** (reconciled 2026-08-08, see banner)  
 **Minted:** 2026-08-07 (CLI / Grok — residual of audit finding #5)  
@@ -81,3 +81,7 @@ If Vercel SSO blocks anonymous fetch, note it and use an authenticated check —
 ## 4. RESULT
 
 `WorkOrders/WORK_ORDER_916_site_canon_tagline_vercel_prod.RESULT.md`
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — STILL VALID. Evidence: `site/index.html:86 green` — prod deploy + live URL check remains. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** Owner: 916 is done. ⚠ The 2026-08-21 audit read this as OPEN - STILL VALID (evidence above). Owner review supersedes it; the audit line is kept so the evidence survives a reopen.

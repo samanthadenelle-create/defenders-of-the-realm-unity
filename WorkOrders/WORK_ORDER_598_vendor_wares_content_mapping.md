@@ -4,7 +4,7 @@
 
 # WO-598 — Vendor wares: per-shop content mapping (the honest shelf)
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Lane:** 6 (Economy/Progression) — data + service, no scene files
 **Origin:** owner F8 sweep 2026-07-02 (flags 03, 05, 08, 11) + UI audit + monetization review "honest shelf" slice
 
@@ -37,3 +37,5 @@ Every vendor's shelf is **data-mapped to its trade**, drawn from the item catalo
 ## Do NOT touch
 - PackStore/premium packs (separate monetization lane)
 - The store chrome redo (UI audit lane — this WO is content, that one is presentation)
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `VendorStockResolver.cs:113; VendorRegistry.cs:28` — stock resolver shipped. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

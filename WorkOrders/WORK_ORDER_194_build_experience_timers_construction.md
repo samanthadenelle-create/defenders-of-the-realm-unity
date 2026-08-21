@@ -4,7 +4,7 @@
 
 # WORK ORDER 194 — Build Experience: Placement Feedback, Per-Type Timers, Construction State, Vulnerable Target
 
-**Status:** READY TO IMPLEMENT (phased)
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Lane:** Build / Buildings — `Village/Buildings` + `Core/Catalog` + DB. Code + data; no village bake required.
 **Source:** owner 2026-06-01 — build mode shows nothing; placement feedback confusing; want per-type timers,
 a construction visual, and under-construction = priority target.
@@ -62,3 +62,5 @@ before it has HP." So:
 1. ~~Part 5 model~~ — **DECIDED: fragile + destructible + priority target; destroyed mid-build = resources wasted (full loss).** (Warcraft.)
 2. **Construction HP** — how fragile? (e.g. scaffold HP ≈ 20–30% of the finished tower, or a flat low value.) Tune.
 3. Grid snap size + whether walls/ramparts use a different placement mode than towers.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `UnderConstructionVisual.cs:1-27; UnderConstructionGateRegression.cs` — ghost+timers+scaffold shipped. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

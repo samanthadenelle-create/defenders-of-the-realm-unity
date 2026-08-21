@@ -4,7 +4,7 @@
 
 # WORK ORDER 716 — Capture + image-pair sign-off gate
 
-**Status:** READY TO IMPLEMENT  
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Priority:** P0 — unlocks the rest of Grok-03 program  
 **Phase:** 0 (Gate)  
 **Effort:** S  
@@ -60,3 +60,5 @@ Stop arguing from memory. Produce a **graphics-enabled** Windows build, run the 
 ## RESULT
 
 `WorkOrders/WORK_ORDER_716_capture_pairwalk_gate.RESULT.md`
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `UI_REVIEW/PAIRWALK_716.md, INDEX.html, build-ui-review.ps1` — pair-walk pipeline shipped. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

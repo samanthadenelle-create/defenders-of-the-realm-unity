@@ -1,3 +1,5 @@
+**Status:** DONE — owner-confirmed 2026-08-21.
+
 # WORK ORDER 825 — Immersive world / realm map **program** (master)
 
 **Status: IN FLIGHT — PROGRAM / DISPATCH AUTHORITY** (826 SHIPPED 2026-08-01 eb5d0710; 827/828/829 READY).  
@@ -104,3 +106,5 @@ Read WORK_ORDER_825_immersive_world_map_program.md then ONE child (826 first).
 Realm map data already lives in realm-map.json — do not invent a second catalog.
 Elarion not Avalon. Presentation never touches Village objects from HUD.
 ```
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** Owner: immersive world/realm map program is done.

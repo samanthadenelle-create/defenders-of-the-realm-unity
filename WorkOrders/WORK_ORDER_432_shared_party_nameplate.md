@@ -11,7 +11,7 @@
 
 # WO-432 — P1 UI: Shared PartyNameplate common in ElarionUiKit (HP+MP) + HUD wiring
 
-**Status:** READY TO IMPLEMENT  
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 **Priority:** P1  
 **Lane:** 4 UI/HUD  
 **Notion:** https://app.notion.com/p/393bf190c6898137bd49c0daefdbb318  
@@ -130,3 +130,5 @@ Key facts:
 - [ ] "The village rests" label invisible when wave number == 0; shows "Wave N" when active
 - [ ] All sprite-load misses guarded with `FlowTrace.Warn` + solid-color fallback
 - [ ] Headless AutoPilot smoke run passes (no null refs, no compile errors)
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

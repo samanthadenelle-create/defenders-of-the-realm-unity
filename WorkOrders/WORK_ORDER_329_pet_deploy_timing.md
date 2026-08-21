@@ -1,3 +1,5 @@
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
+
 # WORK ORDER 329 — Pet deploy timing (pick the canonical trigger)
 
 **Status: SPEC / revisit** — stopgap shipped, root design call pending. **Lane:** 12 (Onboarding) / 6 (Pets).
@@ -30,3 +32,5 @@ Yarn click-through. Root cause: `<<spawn_starting_pet>>` lived only in `Companio
 - Idle roam is driven by `PetHeroLeash` (sets the Pet's HomePost carrot); `Pet.Update` only self-moves in
   Defend mode, so a missing/!running leash also reads as "pet not moving." Verify the leash is attached on deploy.
 - Local WO; numbering per `MASTER_PIPELINES_BACKLOG` (next free 330 after this).
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

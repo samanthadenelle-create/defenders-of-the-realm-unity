@@ -1,6 +1,6 @@
 # WORK ORDER 284 — Unified Animation Routines (event → clip, for all actors)
 
-**Status:** ⚠ **PARTIAL — hero slice SHIPPED, enemy half NEVER MIGRATED** — committed `bac3fd9`
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 (see `WORK_ORDER_284_unified_animation_routines.RESULT.md`, which states "partially met (heroes done)").
 `AnimParams.cs`, `ActorAnimator.cs`, `IActorAnimator.cs` are all present.
 **Still open:** Enemy / Pet / Dragon / DungeonHero were never migrated onto `ActorAnimator`.
@@ -181,3 +181,5 @@ null-guard makes the call a safe no-op.
   `PlayTurn` and note it; don't block the WO on it.
 - Sequencing: **283 → 284 → 282** (build clips → standardize/route → relocate to
   Addressables). See `OVERNIGHT_QUEUE_2026-06-06.md`.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

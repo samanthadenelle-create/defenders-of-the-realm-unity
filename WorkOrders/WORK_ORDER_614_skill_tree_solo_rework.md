@@ -1,3 +1,5 @@
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
+
 <!-- era-sweep-2026-08-17 -->
 > ### ⚠ AGED 2026-08-17 — still READY, but unverified since 2026-07-08
 > The 2026-08-17 era sweep found **no evidence** that this WO's subject was deleted or superseded, so its **Status stays READY** and nothing else was changed. It is simply OLD (git first-add 2026-07-08) and has not been re-verified against current canon (`CANON_GROUND_TRUTH_*.md`, CLAUDE.md §7). **Re-verify before pulling it.**
@@ -220,3 +222,5 @@ When the tree panel surfaces the new active/passive distinction: encode it by **
 3. **Convert style for the self-buff fantasies (C1 / C4-A):** accept the one small onEvent self-buff hook (keeps the Oathweld/Champion fantasies alive solo) **vs** stay 100% data-only this WO (pick the active/flat-stat options everywhere). Rules how pure this stays.
 
 (Parked V2 pin, no action: ranger Beast Companion summon vs the no-party spine — §1.3.)
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

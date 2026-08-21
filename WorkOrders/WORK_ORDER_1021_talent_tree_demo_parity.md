@@ -1,6 +1,6 @@
 # WORK ORDER 1021 — Talent tree: close the last four gaps to the Obsidian demo
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — owner-confirmed 2026-08-21.
 **Minted:** 2026-08-15 (UI seat) — provenance stack bumped 1021 → 1022 in the same edit
 **Lane:** UI presentation only (`HeroSkillTreePanelMvvm`). File-disjoint from every gameplay lane.
 **Provenance:** owner F8 **seq=2333**, `Main_Castle_Overworld`, verbatim **"look at the overcrowding"**,
@@ -432,3 +432,7 @@ Also out of scope: the retired footer/CONFIRM strip (owner retired it 2026-08-15
 6. Greyscale pass on the capture for the colourblind law
 
 **PO (owner) felt-verifies and closes** (§13) — CLI does not close this.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — STILL VALID. Evidence: `HeroSkillTreePanelMvvm.cs:1686,1556` — S2.2/2.3/2.4 remain. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.
+
+> **OWNER RULING 2026-08-21 (verbal):** "talent tree was completed".

@@ -4,7 +4,7 @@
 
 # WO-364: Companion Gear Setup — Cosmetics, Forge Visit, Auto-Equip
 
-**Status:** READY TO IMPLEMENT  
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Estimated Effort:** P1 (1–2 days)  
 **Priority:** High (narrative + visual progression)  
 **Lane:** Narrative/Quests
@@ -380,3 +380,5 @@ public class HeroEquipment : MonoBehaviour
 - [ ] Equipment visually distinct per class
 - [ ] Dialogue feels natural (companion guides hero)
 - [ ] Works in WebGL build
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `CompanionGearSetup.cs:1-20` — wave-3 gear-up beat. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

@@ -1,3 +1,5 @@
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
+
 > ⚠ **NUMBER COLLISION — this document does not own WO-334; `WORK_ORDER_334_tower_placement_rotate_menu.md` does.**
 > Referred to hereafter as **WO-334-B (asset orient/inspect tool)**.
 > Flagged by the 2026-08-16 Sunday board-grooming pass (`python tools/board_build.py` → `DUPLICATE_WO_NUMBERS`);
@@ -75,3 +77,5 @@ agent bakes** — instead of "playtest → describe → agent digs." It's also t
   so drag-rotate is live). This is the render foundation the whole tool stands on; build on it.
 - **Detailed spec authored by the Claude UI session** (owner 2026-06-07) — build to THAT spec (UI writes
   specs, CLI builds, per CLAUDE.md §2). This file is the seed/notes; the UI spec is authoritative.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

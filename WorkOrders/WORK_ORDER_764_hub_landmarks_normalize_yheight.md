@@ -4,7 +4,7 @@
 
 # WORK ORDER 764 — Hub landmarks obey the Y-height normalization (WO-751 gap)
 
-**Status:** SPEC — READY (owner F8 flag 2026-07-24, EXISTING-system gap). CLI-implementable + headless screenshot-verify.
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 **Lane:** World/Visual (hub skinning). Scope: **SMALL-MODERATE** (one injector routed to the existing fit-to-height path + per-landmark height values + a visual verify).
 **Owner intent (F8, verbatim):** *"We discussed all items being normalized by Y height of a preset ceiling correct?"* — i.e. the WO-751 normalization must apply to the Main_Castle_Overworld landmark buildings too, not just player-built structures.
 
@@ -64,3 +64,5 @@ EffectiveHeight    = YHeight_Variable * heightMultiplier
 - Root cause = an un-migrated skinning path from before WO-751, not a broken normalization system. The system works; the hub injector never adopted it.
 - Data source: read-only RCA 2026-07-24 (all file:line cited), per §12.
 - `HarvestSite.cs:293` / `MineNodeVisual.cs:161` also still use `FitLargest` — decor nodes, out of scope here but flag for a follow if they read inconsistent too.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

@@ -1,3 +1,5 @@
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
+
 # WORK_ORDER_473 — Bypass the PetSelect onboarding screen
 
 **Status: READY TO IMPLEMENT** (held until editor closed) · F8 ticket (owner): "PetSelect should be bypassed."
@@ -33,3 +35,5 @@ to MainCastle_Hall (unaffected).
 
 ## INSTRUMENT-FIRST (§12)
 Cite the captured `[Flow:Onboarding]` line showing Title→Castle with PetSelect skipped — don't claim done from code-read alone.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

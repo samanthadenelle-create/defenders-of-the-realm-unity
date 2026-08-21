@@ -6,7 +6,7 @@
 
 # 🛠️ Work Order: Wire Remaining Sword & Shield Clips (Backlog Item #4)
 
-**Status:** READY TO IMPLEMENT (reconciled 2026-08-09 from the tree - only the 11-clip owner-pick subset is extracted by `Assets/Editor/SwordShieldMovesImporter.cs` (shieldswipe01/02, shieldcharge, jump, the four slashes, stab, spin). This WO's headline asks return ZERO hits in that importer: the six directional hold-blocks, the parry chain, `atk_kick`, and the eight strafe / backward locomotion clips)
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 
 **Priority:** P1  
 **Effort:** Medium  
@@ -75,3 +75,7 @@ We currently only use ~9 of the 45 Sword & Shield mocap clips. Wire the remainin
 - Short list of any clips that still need manual animation events
 
 Keep the existing Action / keyword system intact. Just expand it.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — STILL VALID. Evidence: `SwordShieldMovesImporter.cs:18-19,59,66` — 11-clip subset only. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict. ⚠ NOTE FOR ANYONE REOPENING: the 2026-08-21 read-only audit had classified this one OPEN - STILL VALID, with the evidence cited above. The owner's review supersedes that call (owner statements are ground truth). The audit line is left in place deliberately, so if this work turns out to be needed, the evidence for it is still here rather than erased.

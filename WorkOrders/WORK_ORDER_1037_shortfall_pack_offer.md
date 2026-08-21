@@ -1,6 +1,6 @@
 # WORK ORDER 1037 — Turn "Missing resources" into a pack offer (STUBBED, flag-gated off prod)
 
-**Status:** READY TO IMPLEMENT — §3 RULED (owner, 2026-08-16: **OPTION (b)**, single-resource impulse packs)
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 
 > ⚠ THE OLD STATUS LINE WAS STALE BY A DAY. It read *"needs owner ruling on §3 (no pack can currently
 > fulfil this offer)"* — but §3 already carries `⛔ RULED 2026-08-16 — OPTION (b)` with the owner's
@@ -211,3 +211,5 @@ live legal copy is the owner's/attorney's call."**
    deserves an oracle, not a code review
 3. `UI_CAPTURE_OK` — **open the PNGs**, shortfall and affordable states, plus a greyscale pass
 4. Owner felt-verifies: *"does this help me, or is it selling at me?"* — the only test that matters here
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `ShortfallPackOffer.cs:92; BuildingUpgradeVM.cs:427` — shortfall resolver wired. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

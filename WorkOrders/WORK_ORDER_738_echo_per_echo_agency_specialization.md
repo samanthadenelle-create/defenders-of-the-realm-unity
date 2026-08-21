@@ -1,3 +1,5 @@
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
+
 <!-- era-sweep-2026-08-17 -->
 > ### ⚠ AGED 2026-08-17 — still READY, but unverified since 2026-07-17
 > The 2026-08-17 era sweep found **no evidence** that this WO's subject was deleted or superseded, so its **Status stays READY** and nothing else was changed. It is simply OLD (git first-add 2026-07-17) and has not been re-verified against current canon (`CANON_GROUND_TRUTH_*.md`, CLAUDE.md §7). **Re-verify before pulling it.**
@@ -447,3 +449,5 @@ TELL ME MORE: The Phoenix does not craft with hammer or hand; its fervor simply 
 (the picker) · WO-658 (assignment rate-split half — this WO lands it) · WO-587 (population/slots) ·
 WO-729/730 (async defense host) · `docs/ARCHITECTURE_PRINCIPLES.md` §2b/§2c ·
 `docs/LORE_FALL_AND_FOUNDING_OF_ELARION.md` (who the Echoes are).
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

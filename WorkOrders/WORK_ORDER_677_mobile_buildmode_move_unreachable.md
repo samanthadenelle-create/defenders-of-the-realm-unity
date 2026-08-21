@@ -1,3 +1,5 @@
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
+
 # WORK ORDER 677 — Build mode on mobile web: Move/Sell unreachable (touch Cancel bar never renders)
 
 **Status: READY TO IMPLEMENT** (owner report + screenshot 2026-07-12; ticket MOB-1 on the board).
@@ -96,3 +98,5 @@ palette strip (e.g. right-edge above the touch verb bar, or left of the tray) �
 land it in the SAME new uGUI bar, one touch surface) · CLAUDE.md §8 (UXML/UITK-in-builds law) ·
 `docs/TICKET_PIPELINE.md` rule 0 · WO-674 (wall drag mode will ride this same touch bar — fix
 this FIRST).
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

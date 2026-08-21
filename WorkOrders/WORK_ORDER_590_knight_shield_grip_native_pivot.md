@@ -1,3 +1,5 @@
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
+
 > ⚠ **NUMBER COLLISION — this document does not own WO-590; `WORK_ORDER_590_castle_water_dip_fill_and_fish.md` does.**
 > Referred to hereafter as **WO-590-B (knight shield grip / native pivot)**.
 > Flagged by the 2026-08-16 Sunday board-grooming pass (`python tools/board_build.py` → `DUPLICATE_WO_NUMBERS`);
@@ -268,3 +270,5 @@ Implement **both** WOs when replicating the full knight kit grip fix.
 - **Tripo shield arm position:** tune `Shield()` `gripPos` / `gripEuler` OR `offsets.json` `shield_A` (keep `fullOverride: false` unless using Seating Editor vertical baseline)
 - **Back carry:** tune `_sheatheOffHandLocalPos` / `_sheatheOffHandLocalEuler` only (owner-felt constants)
 - **Do not** re-enable geometry inference on native Blink shields — use Addressable + native path instead
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

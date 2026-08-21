@@ -1,6 +1,6 @@
 # WORK_ORDER_390 — Battle Potion Loadout (3 unlockable slots)
 
-**Status:** SPEC — design captured; build AFTER the WO-389 defense loop is playable (deliberate scope order).
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 **Lane:** 6 Economy + 2 Combat/AI.
 **Source:** Owner, 2026-06-09. Companion to WO-389 (defender pre-places troops; this is the *attacker's* pre-raid loadout).
 
@@ -27,3 +27,5 @@ Symmetry with WO-389: defender sets a plan (placed troops); attacker sets a load
 ## What NOT to do
 - No new consumable/inventory system, no new combat-effect engine — reuse what exists.
 - Don't exceed the 3-slot cap or turn it into an open potion economy (scope line).
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

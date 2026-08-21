@@ -4,7 +4,7 @@
 
 # WORK_ORDER_510 — instantiation-time attachment override (JSON-driven, rig-agnostic)
 
-**Status:** READY TO IMPLEMENT (owner greenlit 2026-06-24) · Hero/Equip lane · feeds WO-490 (Offset Forge product)
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Origin:** owner — "we don't care what the bone is called; do an override in JSON and tell it to use the
 override... applicable to everything AT INSTANTIATION, not at the model." The cheap+correct fix to the
 recurring "every new character = bone-name/count/seating pain" problem.
@@ -62,3 +62,5 @@ Data indirection is "hell to triage" ONLY if silent. Make the resolver narrate t
 ## 7. Do NOT
 Rename or modify any model/bone. Silently fall through on a dead path. Greenfield a parallel attach system —
 extend EquipmentController's existing attach path + mirror AttachmentOffsetRegistry. Hand-edit .unity scenes.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `RigAttachmentRegistry.cs:1-3; EquipmentController.cs:889,1849` — rig profiles resolve. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

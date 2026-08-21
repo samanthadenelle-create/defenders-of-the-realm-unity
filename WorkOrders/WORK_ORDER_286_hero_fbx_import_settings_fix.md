@@ -1,6 +1,6 @@
 # WORK ORDER 286 — BUG: Swapped hero FBX import settings (green T-pose + isReadable spam)
 
-**Status:** PARTIAL - remainder named by the 2026-08-14 phantom sweep
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 
 > **PARTIAL - re-scoped 2026-08-14 (phantom sweep).** Most of this WO is present in HEAD; a named
 > remainder is outstanding. No per-WO path:line was recorded here: see the 2026-08-14 phantom sweep for the
@@ -135,3 +135,5 @@ correctly. Recommend slotting at the **front** of `OVERNIGHT_QUEUE_2026-06-06.md
   `Backups/hero_fbx_20260606_005717/`.
 - Related: DEF-267 (Tripo colorless), DEF-102 (hero death pose), DEF-249 (oversized scale).
 - Linear: workspace at free-issue limit — assign from this file until a slot frees.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

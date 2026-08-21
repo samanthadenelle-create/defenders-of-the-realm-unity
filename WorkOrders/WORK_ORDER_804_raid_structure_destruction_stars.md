@@ -4,7 +4,7 @@
 
 # WO-804 — Raid structure-destruction % for CoC-style stars (later)
 
-**Status:** READY TO IMPLEMENT — **LATER**; needs owner go (R3 in program doc)  
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Minted:** 2026-07-30  
 **Program:** `docs/WC3_COC_EXPERIENCE_ANALYSIS.md` §2  
 **Lane:** Raid scoring  
@@ -39,3 +39,5 @@ True CoC stars weight **building destruction**, not only garrison kills. V1 scor
 
 ## Note
 If R3 = “stay garrison-only for V1,” mark this WO **DEFERRED** and leave READY file as backlog.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `RaidScoring.cs:206,244,344` — destruction in stars. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

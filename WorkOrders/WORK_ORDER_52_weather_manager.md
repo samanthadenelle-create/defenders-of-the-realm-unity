@@ -1,6 +1,6 @@
 # WORK ORDER 52 — WeatherManager + Shooting Stars & Atmosphere
 
-**Status:** PARTIAL - remaining: editor/scene wiring + a ShootingStar prefab (code is dead, zero scene refs)
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 
 > **PARTIAL - re-scoped 2026-08-14 (phantom sweep).** Remaining work: EDITOR/SCENE WIRING. WeatherManager is code-complete but a GUID search finds ZERO prefab/scene references, so it is dead code. Remaining: wire it in the editor + author a ShootingStar prefab.
 > Everything else in this WO is present in HEAD. The named remainder IS the ticket now - do not
@@ -248,3 +248,5 @@ And add a matching entry to `VFXCatalog` pointing at the shooting star prefab.
 - [ ] Wind zone reacts when rain is active
 - [ ] `WeatherEnabled = false` on mobile devices with `enableOnMobile = false` skips all effects
 - [ ] No shooting stars during daytime if a `DayNightCycle` system is present and exposes `IsNight`
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

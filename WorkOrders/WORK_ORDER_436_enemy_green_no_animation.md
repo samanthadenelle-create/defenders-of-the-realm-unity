@@ -10,7 +10,7 @@
 
 # WO-436 — P0 Bug: Enemy renders solid green + no animation (sliding)
 
-**Status:** READY TO IMPLEMENT  
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 **Priority:** P0  
 **Lane:** 3 Combat/AI  
 **Minted:** 2026-07-03
@@ -92,3 +92,5 @@ Run headless AutoPilot: confirm enemy animates walk cycle and displays correct m
 - [ ] `FlowTrace.Warn` fires if controller is null at runtime (permanent guard)
 - [ ] Headless run: no null AnimatorController warnings in captured log
 - [ ] FlowTrace confirms material name is NOT Unity default/fallback
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

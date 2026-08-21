@@ -4,7 +4,7 @@
 
 # WORK ORDER 186 — No Wave Timer (add visible countdown)
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Lane:** UI / HUD — code, parallel-safe
 **Source:** playtest 2026-05-31
 **Priority:** P1 (player can't read wave pacing)
@@ -25,3 +25,5 @@ The player can't tell when the next wave hits or how long until it spawns.
 
 ## Gate
 Brace check; green build; commit `feat: implement WO-186 — wave countdown timer`. No bake.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `HudKitController.cs:1602-1616, AlertIntelSystem.cs:25` — countdown + start now. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

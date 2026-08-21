@@ -4,7 +4,7 @@
 
 # WORK ORDER 125 — P0 Combat Bugs: Dragon Unhittable + Heart-Fall No-Lose
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Priority:** P0 / URGENT (core lose condition is broken — game is unloseable AND the apex boss is invincible)
 **Date:** 2026-05-30
 **Owner:** Samantha (creative calls), CLI (code + build verify)
@@ -170,3 +170,5 @@ Add a Heart-death event and a single subscriber that fires the defeat flow.
 - [ ] `using DeNelle.Core.Combat;` present in HeartController.cs (implements IDamageableStructure).
 - [ ] `?.` used on all cross-module / WaveManager / boss service lookups.
 - [ ] Acceptance criteria for all 3 bugs reviewed line by line.
+
+> **AUDIT 2026-08-21 (agent fleet, read-only):** FIXED. Evidence: `HeroAbilities.cs:2744, TowerCombat.cs:242-247, HeartController.cs:228-234` — 3 bugs landed. Status was flipped from READY by the AUDIT, not by an implementation pass. The body below is left intact; if this call is wrong, the evidence cited here is what to challenge.

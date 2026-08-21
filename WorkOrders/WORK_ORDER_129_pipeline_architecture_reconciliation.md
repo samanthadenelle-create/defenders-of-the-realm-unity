@@ -4,7 +4,7 @@
 
 # WORK ORDER 129 — Pipeline Reconciliation Against the Engine Architecture
 
-**Status:** READY — UI (planning/reconciliation pass; NOT a coding pass yet)
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 **Owner directive (2026-05-30):** "ask UI to re-look at ALL items in the pipeline and refactor based
 on the architect designs." Before the engine refactor is built, the *entire existing queue* must be
 reconciled against the new architecture — or half of it gets built the old (hand/AI-driven) way.
@@ -61,3 +61,5 @@ classify and note WHY:
 - [ ] No `.cs` changed (planning pass only).
 
 🤖 Drafted by the build-connected CLI per owner directive.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

@@ -1,6 +1,6 @@
 # WORK ORDER 790 — Outpost/garrison enemy presentation: flat green/orange + weapon not seated
 
-**Status:** BLOCKED - on the PO (reconciled 2026-08-09 - Part A, the code seam, SHIPPED in `f4f31180`, with the parking note in `a39913c2`. The remainder is not CLI-actionable: the owner has no basecolor texture source files (they auto-bind on the next run with no code change), and Part D, the weapon-pose ruling, is an open owner decision)
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
 
 **Status:** CODE LANDED · TEXTURES PARKED (owner 2026-07-30: "i dont have the texture for now")
 > Part A (code seam) SHIPPED — EnemyFactory albedo-restore via
@@ -84,3 +84,5 @@ Playing an **EnemyOutpost garrison** (screenshots: "Garrison Troll (Lv 8)" boss 
 - Non-movement/floating placement = WO-791 (off-NavMesh) — don't fix navmesh here.
 
 *Notion row pending.*
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

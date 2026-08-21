@@ -1,3 +1,5 @@
+**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
+
 # WORK ORDER 550 — Village2 Raid-Scene Polish
 
 **Status: READY TO IMPLEMENT** (implemented in this worktree; awaiting orchestrator gate + commit + bake)
@@ -86,3 +88,5 @@ Per-panel gate (early-return on `HubScenes.SuppressTownHud(SceneManager.GetActiv
 - **ConfigId** (`Village2` vs `village2_enemy_outpost`): left as-is. It's the self-consistent persisted claim key (`dotr-raid-owner-Village2`), keys on scene name like the rest of ownership, and nothing external reads the config id as a claim key. Switching it would only orphan an existing saved claim. Change only on an explicit owner call.
 - **Boss chamber as a real fight**: chose to SKIP the empty room (deterministic, zero soft-lock risk). Making it a real boss fight needs an authored boss + a reachability-verified boss spawn point + a bake — deferred (a defender on an unreachable raised platform would itself be a soft-lock, which can't be headless-verified here).
 - **Retreat cost**: none applied (no trivial cost exists). Add a cost only if the owner wants one.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** CLOSED by an explicit owner sweep of the WHOLE 0-800 RANGE: "I've eyeballed them many times, and all of them are already completed. or immaterial." This is a RANGE close on the owner's direct review, not a per-ticket verdict.

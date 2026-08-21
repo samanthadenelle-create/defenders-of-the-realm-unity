@@ -1,3 +1,5 @@
+**Status:** DONE — owner-confirmed 2026-08-21.
+
 # WORK ORDER 821 — Building perk research: timed + queued (WC3 style) + skills-tab timers
 
 **Status: READY TO IMPLEMENT** — note the Work/Queues panel is now reached via the right-column Builders chip, not a bar button (owner ruling 2026-08-01).
@@ -40,3 +42,5 @@ something about advanced workouts or something"
 ## Do NOT touch
 - Troop stat upgrades (already on Research — unchanged).
 - The queue engine itself (frozen per WO-817 note); this is a CALLER of the engine.
+
+> **OWNER RULING 2026-08-21 (verbal, this session):** Owner: timed + queued perk research is done.
