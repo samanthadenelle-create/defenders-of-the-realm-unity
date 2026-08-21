@@ -1,7 +1,8 @@
 # WO-1132 — The Night Market: Realm Pack Store presentation redesign
 
 **Status:** READY TO IMPLEMENT (presentation lanes A–E). Lane F is data-only and ships with A.
-**Minted:** 2026-08-21 (CLI seat) — banner bumped 1132 → 1133 in the SAME edit
+**Minted:** 2026-08-21 (**UI seat** — Claude UI authored this work order; corrected 2026-08-21 by the CLI committer, which had recorded "CLI seat" in error) — banner bumped 1132 → 1133 in the SAME edit.
+> ⚠ **NUMBERING NOTE:** this was minted from the **CLI main line**, not from the UI seat’s own reserved block (banner: UI seat next free = 1050). No collision resulted — 1131 (CLI) and 1132 (UI) are distinct and the banner is correct at 1133 — but the two blocks exist precisely so the seats can mint in parallel WITHOUT reading each other’s state. Minting across blocks removes that guarantee.
 **Lane:** Monetization / UI presentation (CLAUDE.md §9 — Monetization is an isolated lane)
 **Class:** PRODUCT. Not a defect. The store is functionally correct and commercially inert.
 **Owner ruling this session (2026-08-21):** the Patronage band carries **BOTH** anchors, **stacked** —

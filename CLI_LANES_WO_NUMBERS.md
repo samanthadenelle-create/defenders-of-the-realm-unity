@@ -96,7 +96,7 @@
 > PROD-005 (default shield renders through the hero body; survives a dungeon->town port).
 
 > ## ⚠ RECONCILED 2026-08-21 (CLI): main line next free = **1133**.
-> *(CLI seat minted **WO-1132** and bumped 1132 -> 1133 in this SAME edit. **WO-1132** = THE NIGHT
+> *(**UI seat (Claude UI)** minted **WO-1132** and bumped 1132 -> 1133 in this SAME edit. ⚠ minted from the CLI MAIN LINE rather than the UI block (next free 1050); no collision, but the blocks are disjoint for a reason — see the ticket. **WO-1132** = THE NIGHT
 > MARKET — Realm Pack Store presentation redesign. The store works the way a RECEIPT works: five
 > browsable SKUs of 25 as 132 px text rows in one scroll column, no art, no price relationship
 > between rows, `Coming soon` in the buy rail, the treasury address as 12 px legalese and NO SKR
