@@ -1127,7 +1127,18 @@ namespace DeNelle.Editor
                                     Quaternion.Angle(child.localRotation, importPose.Value) <= 0.5f;
 
                 bool changed;
-                if (alreadyBaked && !Mathf.Approximately(upright.sqrMagnitude, 0f))
+                // Axis-baked models legitimately carry a ZERO Offset Forge correction. If an
+                // older wrapper still has the retired quarter-turn on its child, `want = current`
+                // would call that stale pose correct forever. Zero means "use the current import
+                // pose", so explicitly rebase it. F8 2026-08-21 caught L3 upside down here.
+                if (Mathf.Approximately(upright.sqrMagnitude, 0f) && importPose.HasValue && !atImportPose)
+                {
+                    changed = true;
+                    child.localRotation = importPose.Value;
+                    report.Append("zero correction REBASED stale child '").Append(child.name)
+                          .Append("' to current import pose (axis-baked model); ");
+                }
+                else if (alreadyBaked && !Mathf.Approximately(upright.sqrMagnitude, 0f))
                 {
                     changed = false;
                     report.Append("upright ALREADY BAKED on child '").Append(child.name)
