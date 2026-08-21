@@ -35,7 +35,14 @@ namespace DeNelle.Village
     {
         // Preferred basic enemy id for the teaching wave — a plain melee walker.
         // Falls back to the first catalog entry if this id isn't present.
-        private const string PreferredEnemyId = "hollow-walker";
+        //
+        // PUBLIC since 2026-08-20 (ordered enemy warm): UpcomingWaveWarmPlanner must know which
+        // family the FTUE's "first two enemies" belong to so it can pull that bundle while the
+        // player is still placing buildings. It READS this constant rather than copying the id,
+        // so the teaching roster keeps exactly ONE authority — change it here and the warm order
+        // follows. (The catalog fallback below is deliberately not modelled by the planner: it
+        // only fires when the whole catalog is missing, in which case there is no roster to warm.)
+        public const string PreferredEnemyId = "hollow-walker";
 
         // ── Teaching-wave roster (owner directive, felt-test 2026-07-08) ──────────
         // The FIRST/teaching defend-wave must be UNLOSABLE for a first-time player:

@@ -12,8 +12,13 @@
 // GameStateService.FinishOnboarding at the FTUE hand-off; the SAME gate the FTUE
 // peace window + SylasStewardInjector.ArcIncomplete key on - no new flag).
 //
-// The feature flag ff.barracks stays DEFAULT OFF in code (owner 2026-07-10 V1 hide);
-// testers opt in via PlayerPrefs "ff.barracks" = 1. Production default-ON is WO-731.
+// ⚠ CORRECTED 2026-08-20 (PROD-013). This block used to say "the feature flag ff.barracks stays
+// DEFAULT OFF in code (owner 2026-07-10 V1 hide); testers opt in via PlayerPrefs". THAT IS STALE —
+// the flag was flipped ON by WO-771 (2026-07-26, the raid deploy loop needs the barracks-gated
+// roster in normal play). READ IT OFF THE CODE, NOT OFF THIS COMMENT:
+// FeatureFlags.Barracks => Get("barracks", defaultOn: true) — Assets/_Modules/Core/FeatureFlags.cs.
+// Set PlayerPrefs "ff.barracks" = 0 to HIDE the barracks again; the opt-in direction is reversed
+// from what this comment used to claim.
 //
 // EVERY runtime surface that decides whether the Barracks exists this session reads
 // THIS predicate - the building visual (HubStructureVisualInjector), the drillmaster

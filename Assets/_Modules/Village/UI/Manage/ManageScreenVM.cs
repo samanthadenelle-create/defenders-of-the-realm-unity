@@ -816,32 +816,128 @@ namespace DeNelle.Village.UI
                     : "CONTENT GAP: author tier rows for '" + ladderId + "' in building-tiers.json."));
         }
 
+        /// <summary>
+        /// The Troops tab's browse list — TRAIN rows, UPGRADE rows and the ARMIES/muster entry.
+        ///
+        /// ⚠ WHY THE TRAIN ROWS EXIST (PROD-013, 2026-08-20 — do not remove them). This method used
+        /// to emit UPGRADE rows ONLY. PROD-002 (commit 233613615, 2026-08-18) closed the barracks
+        /// talk-door on the stated premise that "Manage owns training" — but that premise was FALSE
+        /// when it was written: nothing on this tab could ever start a training job, so closing the
+        /// door left the player with an Upgrade-only Troops tab and NO way to train at all. The
+        /// owner reported exactly that ("under manage i see option to upgrade the troops, but i
+        /// dont se a way to train troops"). This method is what makes PROD-002's premise true.
+        ///
+        /// TRAIN and UPGRADE are DIFFERENT ACTIONS ON THE SAME TROOP and both belong here — the
+        /// labels are prefixed with the verb ("Train Footman" / "Upgrade Footman -&gt; L2") so the
+        /// two can never be mistaken for each other. Everything still routes through
+        /// BarracksService; this screen charges and enqueues nothing itself.
+        /// </summary>
         private void BuildTroopsBrowse()
         {
             var all = TroopCatalog.All;
-            if (all == null) return;
+            if (all == null)
+            {
+                // NO SILENT EMPTY LIST (§12): an empty Troops tab is read off a log, never guessed.
+                FlowTrace.Warn("Manage", "troops browse: TroopCatalog.All is null - the tab can offer nothing.");
+                return;
+            }
+
+            int trainRows = 0, upgradeRows = 0, locked = 0;
 
             for (int i = 0; i < all.Count; i++)
             {
                 var def = all[i];
-                if (def == null || string.IsNullOrEmpty(def.Id)) continue;
-                if (!BarracksService.IsTroopUnlocked(def.Id)) continue;
-
-                int level = BarracksService.TroopLevel(def.Id);
-                if (!BarracksProgression.HasNextTroopLevel(def.Id, level)) continue;
-
-                var econCost = BarracksProgression.TroopUpgradeCost(def.Id, level + 1);
-                var cost = new CoreCost
+                // Guard.TryEach semantics by hand: ONE malformed TroopDef logs and is SKIPPED
+                // rather than throwing out of the loop and blanking the whole tab (§12 step 2).
+                Guard.Try("Manage", "troops browse row " + i, () =>
                 {
-                    wood = econCost.Wood,
-                    food = econCost.Food,
-                    iron = econCost.Iron,
-                    crystals = econCost.Crystals,
-                };
-                string id = def.Id;
-                AddBrowseRow(NameOfTroop(def) + " -> L" + (level + 1), cost, "Upgrade",
-                             () => UpgradeTroop(id));
+                    if (def == null || string.IsNullOrEmpty(def.Id)) return;
+
+                    // Two authorities, both real: BarracksService.IsTroopUnlocked is the gate
+                    // EnqueueTraining itself enforces (barracks.json unlocksTroopIds); TroopUnlock
+                    // .IsTrainable is the WO-733 tier authority every other train path asks. A row
+                    // is offered only when BOTH say yes, so this tab can never show a CTA the
+                    // service will refuse. They are filters, not a defect.
+                    bool unlocked = BarracksService.IsTroopUnlocked(def.Id);
+                    bool trainable = TroopUnlock.IsTrainable(def);
+                    if (!unlocked || !trainable)
+                    {
+                        locked++;
+                        return;
+                    }
+
+                    string id = def.Id;
+                    string name = NameOfTroop(def);
+
+                    // ── TRAIN ──────────────────────────────────────────────────
+                    // Cost is the authored per-unit build cost (TroopDef.costWood/Food/Iron) —
+                    // the SAME numbers BarracksService.EnqueueTraining charges. No balance is
+                    // decided here; this only displays and routes.
+                    var trainCost = new CoreCost
+                    {
+                        wood = def.CostWood,
+                        food = def.CostFood,
+                        iron = def.CostIron,
+                        crystals = 0,
+                    };
+                    AddBrowseRow("Train " + name, trainCost, "Train", () => TrainTroop(id));
+                    trainRows++;
+
+                    // ── UPGRADE (unchanged path) ───────────────────────────────
+                    int level = BarracksService.TroopLevel(id);
+                    if (!BarracksProgression.HasNextTroopLevel(id, level)) return;
+
+                    var econCost = BarracksProgression.TroopUpgradeCost(id, level + 1);
+                    var cost = new CoreCost
+                    {
+                        wood = econCost.Wood,
+                        food = econCost.Food,
+                        iron = econCost.Iron,
+                        crystals = econCost.Crystals,
+                    };
+                    AddBrowseRow("Upgrade " + name + " -> L" + (level + 1), cost, "Upgrade",
+                                 () => UpgradeTroop(id));
+                    upgradeRows++;
+                });
             }
+
+            AddMusterRow();
+
+            FlowTrace.Step("Manage",
+                "troops browse: " + all.Count + " troop def(s) -> " + trainRows + " Train row(s), " +
+                upgradeRows + " Upgrade row(s), " + locked + " still locked, + 1 Armies/muster entry.");
+
+            if (trainRows == 0)
+                FlowTrace.Warn("Manage",
+                    "troops browse produced NO Train row - every troop is locked or the catalog is empty. " +
+                    "This is the PROD-013 defect shape: the Troops tab is the ONLY door to training.");
+        }
+
+        /// <summary>
+        /// WO-897 army muster / loadout bank entry (save schema v38, 3 named composition slots).
+        /// It ships and, until PROD-013, had no player-reachable door either — the barracks Yarn
+        /// verb &lt;&lt;ShowMusterUI&gt;&gt; was its only caller and that door is closed. Free, so the
+        /// affordable-first sort floats it to the top of the tab where an entry point belongs.
+        /// </summary>
+        private void AddMusterRow()
+        {
+            BrowseRows.Add(new BrowseRowVM
+            {
+                Label = "Armies - saved compositions",
+                CostText = "",
+                StateText = "Muster a saved army onto the Training line",
+                Affordable = true,
+                CostWeight = 0f,
+                ActionText = "Open",
+                Activate = OpenMuster,
+            });
+        }
+
+        /// <summary>Opens the WO-897 Armies/muster panel. The panel owns its own locked refusal.</summary>
+        private static void OpenMuster()
+        {
+            FlowTrace.Step("Manage", "Armies CTA - opening the muster panel.");
+            TroopDialogueCommands.ShowMusterUI();
         }
 
         private void BuildResearchBrowse()
@@ -1165,6 +1261,49 @@ namespace DeNelle.Village.UI
                 // enqueue - each of which has already left its own [Flow:Research] line naming
                 // which one it was, so this message never has to guess in the log.
                 Notice = "Could not start that research - check your gold.";
+                NoticeIsBrokeCase = false;
+            }
+            Rebuild();
+        }
+
+        /// <summary>
+        /// PROD-013 — the Troops tab's TRAIN CTA: enqueue ONE unit of <paramref name="troopId"/> on
+        /// the Train channel. Routes through <see cref="BarracksService.EnqueueTraining(string,int,out string)"/>
+        /// so the unlock gate, the army-cap check, the resource charge and the queue depth cap all
+        /// behave identically to every other train path — this screen charges and enqueues nothing
+        /// itself, exactly like <see cref="UpgradeTroop"/> and <see cref="Research"/>.
+        ///
+        /// An INSTANCE method (like Research, unlike UpgradeTroop) because a successful train puts a
+        /// row on the very line the player is looking at: it sets a Notice and rebuilds rather than
+        /// leaving the screen stale.
+        /// </summary>
+        private void TrainTroop(string troopId)
+        {
+            using var _ = FlowTrace.Enter("Manage", $"Train CTA '{troopId}'");
+
+            int enqueued = BarracksService.EnqueueTraining(troopId, 1, out string stopReason);
+            if (enqueued > 0)
+            {
+                // §12 proving line: the id, what it cost, and the job that now exists. BarracksService
+                // logs the jobId itself at enqueue ("train job enqueued 1/1 ... jobId=barracks-train:...");
+                // this line names the SCREEN the request came from so the two can be paired in a capture.
+                var def = TroopCatalog.Find(troopId);
+                string costText = def != null
+                    ? DescribeCost(new CoreCost { wood = def.CostWood, food = def.CostFood, iron = def.CostIron })
+                    : "unknown cost";
+                FlowTrace.Step("Manage",
+                    $"train enqueued from Manage: id={troopId} qty={enqueued} cost=[{costText}] " +
+                    $"channel=Train jobIdPrefix={BarracksService.TrainPrefix}{troopId}");
+                Notice = "Training started.";
+                NoticeIsBrokeCase = false;
+            }
+            else
+            {
+                // Refused: locked / army full / unaffordable / queue depth full. BarracksService
+                // hands back the ASCII sentence naming WHICH, so the notice never has to guess.
+                FlowTrace.Warn("Manage",
+                    $"train '{troopId}' refused: {(string.IsNullOrEmpty(stopReason) ? "no reason given" : stopReason)}");
+                Notice = Ascii(string.IsNullOrEmpty(stopReason) ? "Could not start that training." : stopReason);
                 NoticeIsBrokeCase = false;
             }
             Rebuild();

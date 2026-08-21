@@ -82,9 +82,9 @@ MonoBehaviour:
       m_ProfileName: Default
       m_Values:
       - m_Id: 0cf521a4ee5de1f4eb470a8e10a12000
-        m_Value: '[UnityEngine.AddressableAssets.Addressables.BuildPath]/[BuildTarget]'
+        m_Value: '[UnityEngine.AddressableAssets.Addressables.BuildPath]'
       - m_Id: 38c0a648f7e4a184181a93361c8e0132
-        m_Value: '{UnityEngine.AddressableAssets.Addressables.RuntimePath}/[BuildTarget]'
+        m_Value: '{UnityEngine.AddressableAssets.Addressables.RuntimePath}'
       - m_Id: ad0e68328bd7fd54ea79f0a9ab1dd9b1
         m_Value: 'ServerData/[BuildTarget]'
       - m_Id: cf151d4962873af43b9302d323a9d707

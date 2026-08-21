@@ -379,6 +379,12 @@ namespace DeNelle.Editor
             // --- WO-897: army composition musters the whole build-out onto the EXISTING Train queue
             //     (no second queue) and never silently drops what does not fit the five-per-line cap ---
             if (!ArmyMusterRegression.Run(out var armyMusterReason)) failures.Add(armyMusterReason); else log.AppendLine("[army-muster] " + armyMusterReason);
+            // --- PROD-013 (2026-08-20): the Manage screen's Troops tab is the ONE door to troop
+            //     training and it must actually open. PROD-002 closed the barracks talk-door on the
+            //     premise that "Manage owns training" while Manage emitted UPGRADE rows only, so the
+            //     entire (fully built, fully suite-covered) training stack became unreachable and no
+            //     existing suite noticed — every one tested a LAYER, none tested the DOOR ---
+            if (!ManageTroopsTrainDoorRegression.Run(out var manageTrainDoorReason)) failures.Add(manageTrainDoorReason); else log.AppendLine("[manage-train-door] " + manageTrainDoorReason);
             // --- 2026-08-07: two fixes that shipped WITHOUT a pin, both "must never come back":
             //     the rewarded-ad stub that GRANTED THE REWARD with no SDK (a free timer skip on
             //     every channel), and the arena home-return that lived on a UI object three paths
@@ -974,6 +980,7 @@ namespace DeNelle.Editor
             // oracle, no gate script grepping a marker nobody emits. Registered LAST so
             // it sees the fully-built registry above it (it reads SOURCE, not runtime
             // state, so its own registration line is what satisfies its self-reference).
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "enemy-warm-order suite", () => { if (!DeNelle.Editor.Regression.EnemyWarmOrderRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[enemy-warm-order] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "npc-idle-controller suite", () => { if (!DeNelle.Editor.Regression.NpcIdleControllerRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[npc-idle-controller] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "regression-marker suite", () => { if (!DeNelle.Editor.Regression.RegressionMarkerRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[regression-marker] " + r); });
 

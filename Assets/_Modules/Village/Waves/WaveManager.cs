@@ -3292,6 +3292,36 @@ namespace DeNelle.Village
         private static bool WaveHasAuthoredHeavy(WaveDef wave)
             => wave != null && (!string.IsNullOrEmpty(wave.Boss) || wave.IsApexBossWave);
 
+        /// <summary>
+        /// Everything a TOWN-SIDE look-ahead needs to compute the roster the player will meet
+        /// next, without reaching into the loop's private state (added 2026-08-20 for
+        /// <see cref="UpcomingWaveWarmPlanner"/>, which warms enemy art in encounter order while
+        /// the player is placing buildings).
+        /// <para>READ-ONLY AND SIDE-EFFECT FREE by construction: it returns cached fields and
+        /// never loads, never awaits, never advances the loop. It answers FALSE (rather than
+        /// guessing) when the schedule or the catalog has not landed yet — a caller that warms
+        /// the wrong wave's families is worse than one that warms none.</para>
+        /// <para>"Upcoming" is the wave already counting down or active when the loop is running
+        /// one, and <c>CurrentWaveId + 1</c> otherwise: during Build Mode the loop is frozen, so
+        /// the wave the player will next meet is the one after the last-known wave.</para>
+        /// </summary>
+        public bool TryDescribeUpcomingWave(out int waveId, out bool hasAuthoredHeavy, out EnemyCatalog catalog)
+        {
+            waveId = Mathf.Max(1, _currentWaveId);
+            hasAuthoredHeavy = false;
+            catalog = _enemyCatalog;
+
+            if (_schedule == null || _enemyCatalog == null) return false;
+
+            bool loopHoldingAWave = _phase == WavePhase.Countdown || _phase == WavePhase.Active;
+            waveId = Mathf.Max(1, loopHoldingAWave ? _currentWaveId : _currentWaveId + 1);
+
+            // A wave past the authored schedule (endless) has no WaveDef and therefore no
+            // authored heavy — false is the correct answer, not a failure.
+            hasAuthoredHeavy = WaveHasAuthoredHeavy(_schedule.Find(waveId));
+            return true;
+        }
+
         private WaveSpawnPoint FindSpawnPoint(string spawnId)
         {
             if (_spawnPoints == null) return null;

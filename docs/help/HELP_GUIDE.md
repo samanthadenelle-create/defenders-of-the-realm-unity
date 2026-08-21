@@ -317,10 +317,16 @@ persist between sessions.
 The raid loop is built for players who know the city-builder genre: **train an army, choose a
 target, deploy your war band, and watch the assault play out.**
 
-1. **Train an army.** At the **Barracks** you will train troops - each costs resources and takes
-   time, running through the **Training** channel (see [section 3](#3-building--upgrading))
-   alongside your building, so you can build and train at once. Trained troops wait in your army
-   housing up to a cap.
+1. **Train an army.** Training lives on the **Manage** screen, not at the Barracks building: open
+   **Manage** from the bottom bar and pick the **Troops** tab. Each troop shows a **Train** row
+   (queue one unit) and, once it has a next level, an **Upgrade** row - they are different actions,
+   so read the verb at the front of the row. The **Armies** entry at the top of the same tab opens
+   your saved compositions, so you can muster a whole war band in one action. Each unit costs
+   resources and takes time, running through the **Training** channel (see
+   [section 3](#3-building--upgrading)) alongside your building, so you can build and train at once.
+   Trained troops wait in your army housing up to a cap.
+   *(The Barracks building still stands and still sets which troops are unlocked - but you do not
+   talk to it to train. Manage is the one door.)*
 2. **Pick a target.** Open the raids screen and choose a difficulty card - each is a base to
    assault.
 3. **Deploy on the field.** Tap to place your troops on the ring outside the enemy walls, then

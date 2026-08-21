@@ -101,8 +101,23 @@ namespace DeNelle.Village
                 // once-teach toast is RETIRED (removed in BarracksNpcInjector, same change).
                 // The drillmaster's Talk opened only DialogueService.PlayStructure("barracks", …) —
                 // structure dialogue, never a training panel — so it was a dead door by this file's
-                // own rule, and the toast that advertised it ("the drillmaster at the Barracks
-                // trains them") was simply untrue: Manage owns training.
+                // own rule.
+                //
+                // ⚠ PROD-002's OTHER stated reason — "Manage owns training" — WAS NOT TRUE ON
+                //   2026-08-18, and this comment used to assert it as settled fact. It was not:
+                //   ManageScreenVM.BuildTroopsBrowse emitted UPGRADE rows only, so closing this door
+                //   removed the LAST player-reachable entrance to troop training. The owner found it
+                //   the same week ("under manage i see option to upgrade the troops, but i dont se a
+                //   way to train troops"). Keeping the wrong reason on the books is how the next seat
+                //   repeats the mistake, so it is corrected here rather than deleted.
+                //
+                //   IT IS TRUE NOW: PROD-013 (2026-08-20) added the TRAIN rows and the Armies/muster
+                //   entry to the Manage screen's Troops tab (ManageScreenVM.BuildTroopsBrowse /
+                //   TrainTroop / AddMusterRow), so Manage genuinely owns training and this door stays
+                //   closed. ⛔ Do NOT reopen it to "fix" a training complaint — canon (CLAUDE.md §7)
+                //   is ONE door, and that door is Manage. If training is unreachable again, the
+                //   defect is in ManageScreenVM, not here.
+                //
                 // ⚠ The drillmaster BODY still stands at the barracks. Only the affordance goes —
                 // same as the other two.
                 "barracks",

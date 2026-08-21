@@ -522,6 +522,25 @@ namespace DeNelle.Village
             }
 
             FreezeWaves();
+
+            // ── ORDERED ENEMY WARM (owner 2026-08-20: "set the enemies to load in order of
+            // seeing them when they are placing buildings ... they came in as pills") ─────────
+            //
+            // WHY HERE, and not anywhere else: the line above has just FROZEN the wave loop, so
+            // this is provably dead time — nothing spawning, nothing fighting, a menu's frame
+            // budget. It is also the single funnel for every town-edit verb (build / upgrade /
+            // sell / move all reach Enter), so one call covers them all, and it is literally the
+            // moment the owner described. Hooking the wave countdown instead would leave the
+            // fetch only the countdown to finish in, which is the window that was already losing.
+            //
+            // The planner computes the roster the player meets NEXT (the FTUE teaching wave first
+            // while the tutorial is unfinished, then the upcoming composed wave), maps it to
+            // enemy FAMILIES in first-appearance order, and requests them one at a time so the
+            // first body's bundle gets the bandwidth first. Non-blocking, idempotent, per-family
+            // — never the whole enemy payload. All of its own reasoning lives in
+            // UpcomingWaveWarmPlanner.cs; all of its evidence lands under [Flow:EnemyWarmOrder].
+            UpcomingWaveWarmPlanner.WarmForTown();
+
             PullCameraBack();
 
             _grid.SetGridVisible(true);
