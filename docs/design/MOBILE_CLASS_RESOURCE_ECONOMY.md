@@ -12,10 +12,10 @@ Play should feel like **Warcraft unit spells** + **StarCraft ability economy**:
 
 | Principle | WC/SC parallel | Mobile consequence |
 |-----------|----------------|--------------------|
-| Auto-attack is free | WC worker/marine fire, WC autos | **Q never costs resource** — always something to do with a thumb |
+| Physical basic is free | WC worker/marine fire, WC autos | Knight/Ranger Q stay free; Mage Fireball is a spell and spends Mana |
 | Specials cost a pool | WC mana on spells | **W/E/R drain the bar** so big buttons are decisions |
 | Identity by race/class | Race tech trees | **Mana / Vigor / Focus** — three readable names, one bar |
-| Rebuild mid-fight | WC regen, WC hunter focus | **Fast enough regen** that empty ≠ 30s of dead thumbs |
+| Rebuild mid-fight | WC regen, WC hunter focus | Regen is visible, while primary attack and consumables prevent dead thumbs |
 | Full restore at home | WC inn / fountain | **Town full restore** (already ships) |
 | Clarity over depth | SC resource counts | **Cost digit on the face** + bar that moves when you spend |
 
@@ -23,23 +23,23 @@ Not a desktop MMO spreadsheet. Not infinite spam. **CD is the primary gate; reso
 
 ---
 
-## Locked numbers (v5 economy)
+## Locked numbers (v6 economy, retuned 2026-08-21)
 
 ### Pools
 
 | Class | Name | Max | Regen | On-hit restore |
 |-------|------|----:|------:|----------------|
-| **Mage** | Mana | **24** | **1.4/s** | 0 |
+| **Mage** | Mana | **24** | **0.6/s** | 0 |
 | **Knight** | Vigor | **12** | **2.0/s** | 0 |
 | **Ranger** | Focus | **15** | **0.8/s** | **+1.5 per free basic that lands** |
 
-*Why mobile:* full Mage bar ~17s; can still W twice in a wave. Knight recovers a charge every ~1.5–2s. Ranger is **weave-to-spend** like WC hunter focus.
+*Why mobile:* a full Mage bar takes 40s to rebuild passively, while town still restores it instantly. This makes Mana a fight budget and gives Mana Draught/Manaweave real value. Knight recovers a charge every ~1.5–2s. Ranger is **weave-to-spend** like WC hunter focus.
 
-### Kit costs (Q free forever)
+### Kit costs
 
 | Class | Q | W | E | R |
 |-------|--:|--:|--:|--:|
-| Mage | 0 | **5** | **7** | **12** |
+| Mage | **3** | **5** | **7** | **12** |
 | Knight | 0 | **3** | **4** | **7** |
 | Ranger | 0 | **4** | **5** | **9** |
 
@@ -51,7 +51,7 @@ Not a desktop MMO spreadsheet. Not infinite spam. **CD is the primary gate; reso
 
 | Ruling | Decision | Why |
 |--------|----------|-----|
-| Q costs resource? | **Never** | WC autos free; mobile always has a safe press |
+| Q costs resource? | **Mage only** | Fireball is a rapid spell and must exhaust Mana; Knight/Ranger physical basics remain free |
 | Ranger Quick Shot restores Focus? | **Yes (+1.5)** | Archer fantasy = shoot to rebuild, like focus/energy |
 | Universal skills cost? | **Stay free (0)** | Shared escape/heal/dash for all classes; WC potions/hearth feel |
 | Barracks vigor structure? | **Later** | Cathedral already gives mage identity; don’t block V1 |
@@ -67,7 +67,7 @@ Leave as WO-997 authored unless a cost **> class max** (oracle fails). Mid talen
 
 1. **Bar moves on spend** (already: float fill + flash) — keep.  
 2. **Label = resource name** (Mana/Vigor/Focus) near the plate row.  
-3. **Cost digit on W/E/R faces** (shape + number; colourblind-safe). Free Q blank.  
+3. **Cost digit on every costed face** (shape + number; colourblind-safe). Free physical Q faces stay blank.
 4. **Unaffordable = dim face + non-interactable** until regen covers cost (same as CD gate).  
 5. Never gate only by hue.
 
@@ -77,14 +77,14 @@ Leave as WO-997 authored unless a cost **> class max** (oracle fails). Mid talen
 
 - Not a second pool system  
 - Not ATB mana  
-- Not “pay for every auto” (anti-mobile)  
-- Not empty-bar softlock — regen + town restore + free Q always exist  
+- Not “pay for every physical auto” (anti-mobile)
+- Not empty-bar softlock — primary attack, passive regen, Mana Draught/Manaweave, and town restore remain available
 
 ---
 
 ## Acceptance (felt)
 
-- Mage: 20s of real combat and you **choose** Shell vs Drain vs save for Poison.  
+- Mage: sustained Fireball permits eight rapid casts and refuses the ninth (~5s), then Mana becomes a visible pacing gate; W/E/R compete for the same budget.
 - Knight: Vigor is a **burst budget**, not a second HP.  
 - Ranger: holding Quick Shot **fills** Focus; dumping Storm **empties** it.  
 - Ten-year-old test: “blue bar is magic; I can’t press the big spell until it fills.”

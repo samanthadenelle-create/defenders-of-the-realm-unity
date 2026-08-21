@@ -1,5 +1,5 @@
 {
-  "version": 5,
+  "version": 6,
   "_comment_wo997": "(SUPERSEDED numbers by WO-999 / v5 \u2014 see _comment_wo999.) WO-997 class resource economy (owner-approved 2026-08-15): each PLAYABLE class block (mage/knight/ranger) now carries a 'resource' block {displayName,max,regenPerSecond,onHitRestore} \u2014 the BASE pool/r",
   "_comment": "Hero ability defs \u2014 Q/W/E/R per class. v2 foundation reads Mage (Blaise) only; Knight/Ranger ship in v2.1 per port spec Part 3. Mage values sourced VERBATIM from the React v1 repo: src/modules/village/hero/abilities/mage.ts (MAGE_ABILITIES). Field map: cd -> cooldown, mana -> manaCost, power -> damage, reach -> radius/range (strike/snare = acquire range, aoe/cleave/meteor = blast radius). The 'description' field is a concise 1-line effect blurb for the HUD ability-bar tooltip (WO-36 visual) \u2014 NOT canon React data; safe to re-author. Knight + Ranger sets are authored defensible placeholders \u2014 NOT yet in the React repo \u2014 and must be re-synced when v1 publishes data/abilities.json (port spec Part 8). OPTIONAL 'castAnim' (any ability): names the cast-ANIMATION keyword the ability plays regardless of which Q/W/E/R slot it is equipped in (cast|skill1|skill2|castHeal, or a q/w/e/r slot letter); empty/absent (the default) = derive the cast animation from the effect shape via HeroAbilities.ResolveAnimVariant \u2014 fixes a swapped/equipped ability playing the wrong slot's stock cast clip. WO-861 (2026-08-02): the mage + ranger blocks are re-authored to the owner-approved Appendix A1/A2 (Thrain + Sylas); the mage-skills / ranger-skills pools carry the learnable-spell defs their talent trees + the Cathedral of Magic reference. Knight is UNCHANGED.",
   "classes": {
@@ -8,7 +8,7 @@
       "resource": {
         "displayName": "Mana",
         "max": 24,
-        "regenPerSecond": 1.4,
+        "regenPerSecond": 0.6,
         "onHitRestore": 0
       },
       "_comment": "WO-861 A1 (owner-approved 2026-08-02) \u2014 Thrain, the RANGED glass cannon. Q Fireball (free, spammable poke) / W Arcane Shell (NEW 'shield' effect) / E Mend (self-heal) / R Meteor Strike (RETUNED 600 -> 260 per A0). All four carry an 'id' (A4) so hot-swap + the Cathedral unlock path can address them. Mana pool 10, regen 0.9/s \u2014 mana IS the survival lifeline; out of mana and engaged = death. 'shield' reads 'damage' as a PERCENT of incoming damage removed and 'seconds' as the duration, exactly the way 'gracebuff' (Warden's Grace) already does \u2014 A4 pins it to mirror that mitigation path, NOT a second system. VERIFIED 2026-08-02 against the live code lane: HeroAbilities.ResolveShield reads def.damage as the percent and def.seconds as the window, and HeroHealth.TakeDamage now multiplies by HeroAbilities.DamageTakenMultiplier - the shell is live end to end. WO-1019 PART B (owner rulings 2026-08-10, 'change mend to drain' + 'make meteor strike into poison'): Thrain's fantasy is 'as Mage you try to lure out and kill one at a time', so the bar is now pull -> soften -> finish -> sustain, single-target throughout. E: mage.heal (Mend, flat self-heal) -> mage.drain, effect 'drainshot' (the SAME shipped resolver ranger.healing-shot uses - HeroAbilities.ResolveDrainshot runs the strike then heals the caster by the damage ACTUALLY dealt, so 'steal health' is real today and NO new gameplay code was written for it). R: mage.meteor -> mage.poison, effect 'dot' (HeroAbilities.ResolveDot, the shipped knight.emberbrand-throw shape: an initial hit, then dotDamage per second for dotSeconds) - an ultimate-scale damage-over-time whose damage lives in dotDamage x dotSeconds, NOT in a single 'damage' number. NEITHER DISPLACED SPELL IS DELETED: mage.heal and mage.meteor both MOVED, definition intact, into classes.mage-skills (the learnable pool), so every existing reference to those ids still resolves - notably hero-talents.json mage.t3n1 'Cataclysm Prep' (+60% Meteor radius), which now buffs a POOL spell the player may not have equipped: FLAGGED to the owner, deliberately NOT resolved here. Defaults must be FULL defs (AbilityCatalog.Find reads classes.<class>.abilities[slot] directly, there is no id indirection), so mage.drain / mage.poison are authored HERE and NOT duplicated into the pool - one definition per id. ALL WO-1019 NUMBERS (damage/dotDamage/dotSeconds/cooldown/manaCost/range/castSeconds) AND the three NAMES are <<DRAFT - owner tuning pass>>, pending her sign-off. VFX: only mage.poison has an owner-tagged key - 'Posion_Cast' (her spelling, mapped VERBATIM per the owner-tags-VFX rule; VfxManualPicks.json manual:true -> Spells Pack/.../Nature/Spell_Nature_2_Green Variant.prefab). mage.drain's reversed target->caster beam and mage.thunder HOLD their VFX fields EMPTY pending an owner tag - CLI never creative-picks a key.",
@@ -19,12 +19,12 @@
           "key": "Q",
           "name": "Fireball",
           "verb": "Cast",
-          "description": "A snap ember at the nearest foe \u2014 30 dmg at 14m, free and near-instant (0.6s cd).",
+          "description": "A snap ember at the nearest foe \u2014 30 dmg at 14m for 3 Mana (0.6s cd).",
           "icon": "\u2739",
           "color": "#ff7043",
           "effect": "strike",
           "cooldown": 0.6,
-          "manaCost": 2,
+          "manaCost": 3,
           "damage": 30,
           "range": 14,
           "vfxCast": "Fire_Cast",
@@ -771,5 +771,5 @@
       }
     }
   },
-  "_comment_wo999": "WO-999 mobile WC/SC resource economy (owner creative lock 2026-08-15): Mana 24@1.4/s kit 0/5/7/12; Vigor 12@2.0/s kit 0/3/4/7; Focus 15@0.8/s +1.5 free-basic hit kit 0/4/5/9. Q always free. Universal skills free. See docs/design/MOBILE_CLASS_RESOURCE_ECONOMY.md."
+  "_comment_wo999": "WO-999 mobile WC/SC resource economy, retuned 2026-08-21 after owner felt report that Mana remained effectively unlimited: Mage Mana 24@0.6/s kit 3/5/7/12; Vigor 12@2.0/s kit 0/3/4/7; Focus 15@0.8/s +1.5 free-basic hit kit 0/4/5/9. Mage Q is a costed spell; Knight/Ranger physical basics and universal skills stay free. See docs/design/MOBILE_CLASS_RESOURCE_ECONOMY.md."
 }

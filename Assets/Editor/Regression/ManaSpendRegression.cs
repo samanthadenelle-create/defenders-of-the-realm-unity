@@ -33,10 +33,11 @@
 //            kit must drive its ManaFill from ManaExact. Source-lint: the fill is
 //            a runtime uGUI value no batch run can read.
 //
-// NOT IN SCOPE — BALANCE. This suite never asserts what a spell SHOULD cost.
-// A spell authored at manaCost 0 (mage.fireball, knight.q, ranger.q today) is a
-// legitimate free, cooldown-gated basic as far as this gate is concerned; the
-// zero-cost roster is reported as a NOTE for the owner, never as a failure.
+//   Case 5 — MAGE EXHAUSTION: the base Fireball cadence must spend faster than
+//            passive regen and refuse the ninth rapid cast from a fresh pool. This is
+//            the owner-felt balance contract, not a generic rule for every class.
+// Physical basics authored at manaCost 0 remain legitimate; the zero-cost roster
+// is reported as a NOTE for the owner, never as a failure.
 // =============================================================================
 
 using System;
@@ -74,6 +75,7 @@ namespace DeNelle.Editor.Regression
             Case(failures, "charge+refusal", () => Case1And2_LiveChargeAndRefusal(failures, notes));
             Case(failures, "instrumentation", () => Case3_InstrumentationIsPermanent(failures));
             Case(failures, "presentation-chain", () => Case4_PresentationChain(failures));
+            Case(failures, "mage-exhaustion", () => Case5_MageFireballExhausts(failures));
 
             string noteStr = notes.Count > 0 ? " [notes: " + string.Join("; ", notes) + "]" : "";
             if (failures.Count == 0)
@@ -81,7 +83,8 @@ namespace DeNelle.Editor.Regression
                 reason = "MANA SPEND OK - a live HeroAbilities probe charges the pool by exactly the " +
                          "effective cost on every costed wind-up ability, refuses (and charges nothing) " +
                          "when the pool is short, keeps its FlowTrace charge/refusal lines, and the " +
-                         "producer -> HeroVitalsModel.ManaExact -> kit ManaFill chain is intact" + noteStr;
+                         "producer -> HeroVitalsModel.ManaExact -> kit ManaFill chain is intact, and " +
+                         "sustained Mage Fireball exhausts its base pool" + noteStr;
                 return true;
             }
             reason = "MANA SPEND FAIL x" + failures.Count + ": " + string.Join(" | ", failures) + noteStr;
@@ -316,6 +319,47 @@ namespace DeNelle.Editor.Regression
                                  "HeroVitalsModel.ManaExact for the fill, so sub-point spend/regen " +
                                  "stops reading on the bar.");
             }
+        }
+
+        // =====================================================================
+        //  Case 5 — owner-felt Mage balance contract (2026-08-21)
+        // =====================================================================
+        private static void Case5_MageFireballExhausts(List<string> failures)
+        {
+            var resource = AbilityCatalog.ResourceFor("mage");
+            var fireball = AbilityCatalog.Find("mage", AbilitySlot.Q);
+            if (resource == null || fireball == null)
+            {
+                failures.Add("[mage-exhaustion] Mage resource or Q definition is missing.");
+                return;
+            }
+
+            if (resource.Max <= 0f || resource.RegenPerSecond < 0f || fireball.Cooldown <= 0f)
+            {
+                failures.Add("[mage-exhaustion] invalid authoring: max=" + resource.Max +
+                             " regen=" + resource.RegenPerSecond + " cooldown=" + fireball.Cooldown + ".");
+                return;
+            }
+
+            float netSpendPerCast = fireball.ManaCost - resource.RegenPerSecond * fireball.Cooldown;
+            if (netSpendPerCast <= 0f)
+            {
+                failures.Add("[mage-exhaustion] Fireball is unlimited at base cadence: cost " +
+                             fireball.ManaCost.ToString("0.##") + " <= regen between casts " +
+                             (resource.RegenPerSecond * fireball.Cooldown).ToString("0.##") + ".");
+                return;
+            }
+
+            // First cast is immediate; regen occurs only BETWEEN later casts.
+            int rapidCasts = Mathf.FloorToInt(
+                (resource.Max - resource.RegenPerSecond * fireball.Cooldown) / netSpendPerCast);
+            if (rapidCasts > 8)
+                failures.Add("[mage-exhaustion] fresh Mage can sustain about " + rapidCasts +
+                             " rapid Fireballs before exhaustion; owner contract is 8 or fewer " +
+                             "(max=" + resource.Max.ToString("0.##") + ", regen=" +
+                             resource.RegenPerSecond.ToString("0.##") + "/s, cost=" +
+                             fireball.ManaCost.ToString("0.##") + ", cd=" +
+                             fireball.Cooldown.ToString("0.##") + "s).");
         }
 
         // =====================================================================

@@ -218,7 +218,8 @@ hero component stack** — `Ensure()`:
 ## 2. Abilities (Q/W/E/R + extra bar)
 
 ### HeroAbilities — `HeroAbilities.cs` (1958) — `DeNelle.Village`
-The cast engine. Owns mana (10 max, 0.9/s regen × Aether-perk × talent `:295-300`), per-slot
+The cast engine. Class data in `abilities.json` supplies the pool and regen (Mage v6: 24 max,
+0.6/s regen; Fireball costs 3) × Aether-perk × talent × Cathedral modifier, per-slot
 cooldowns `:93`, per-id extra-bar cooldowns `:101-103`.
 - **Resolution:** `Resolve(slot)` `:172-185` = HeroLoadout-equipped id (W/E/R only; **Q is
   locked** to the class basic) → `AbilityCatalog.FindById`, else class stock def. Public facade
