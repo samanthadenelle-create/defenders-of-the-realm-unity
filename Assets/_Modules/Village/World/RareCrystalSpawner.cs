@@ -54,15 +54,15 @@ namespace DeNelle.Village
         [Tooltip("Average seconds between bloom-spawn ATTEMPTS. An attempt may still fail " +
                  "(player in the safe Village, no NavMesh point, danger roll missed) so the " +
                  "observed gap between actual blooms is a bit longer than this.")]
-        [Min(15f)] public float AttemptInterval = 150f;
+        [Min(15f)] public float AttemptInterval = 480f;
 
         [Tooltip("Random +/- jitter (seconds) applied to each interval so blooms never appear " +
                  "on a fixed metronome.")]
-        [Min(0f)] public float IntervalJitter = 45f;
+        [Min(0f)] public float IntervalJitter = 90f;
 
         [Tooltip("Hard cap on concurrent live blooms. Keeps the world from filling with bonus " +
                  "nodes if the player ignores them.")]
-        [Min(1)] public int MaxConcurrentBlooms = 2;
+        [Min(1)] public int MaxConcurrentBlooms = 1;
 
         [Header("Lifetime")]
         [Tooltip("Seconds a bloom persists before it withers and despawns if left unharvested. " +
@@ -80,12 +80,12 @@ namespace DeNelle.Village
         [Tooltip("Base crystals a bloom yields on harvest BEFORE the region danger bonus " +
                  "(MineNode applies +25% per danger tier). Richer than a routine mine extract — " +
                  "this is the occasional jackpot.")]
-        [Min(1)] public int BasePayout = 40;
+        [Min(1)] public int BasePayout = 12;
 
         [Tooltip("Extra base crystals added PER danger tier of the region the bloom spawns in " +
                  "(on top of MineNode's own per-tier multiplier) so the deadly-edge bloom is " +
                  "the real prize.")]
-        [Min(0)] public int PayoutPerTier = 20;
+        [Min(0)] public int PayoutPerTier = 6;
 
         [Tooltip("How close the player must be to harvest the bloom (passed to the MineNode).")]
         [Min(1f)] public float HarvestRadius = 3.5f;

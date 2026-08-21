@@ -58,11 +58,11 @@ namespace DeNelle.Village
 
         [Header("Loot (owner tunes by feel)")]
         [Tooltip("Crystals granted at 100% destruction, before the per-star bonus.")]
-        [SerializeField] private int _lootCrystalsBase = 40;
+        [SerializeField] private int _lootCrystalsBase = 25;
         [Tooltip("Food granted at 100% destruction, before the per-star bonus.")]
         [SerializeField] private int _lootFoodBase = 60;
         [Tooltip("Extra crystals per earned star.")]
-        [SerializeField] private int _lootCrystalsPerStar = 15;
+        [SerializeField] private int _lootCrystalsPerStar = 10;
         [Tooltip("Extra food per earned star.")]
         [SerializeField] private int _lootFoodPerStar = 20;
 
@@ -276,8 +276,8 @@ namespace DeNelle.Village
             get
             {
                 int n = 0;
-                var troops = FindObjectsByType<TroopController>(FindObjectsSortMode.None);
-                for (int i = 0; i < troops.Length; i++)
+                var troops = TroopController.ActiveTroops;
+                for (int i = 0; i < troops.Count; i++)
                     if (troops[i] != null && troops[i].IsAlive) n++;
                 return n;
             }

@@ -8,8 +8,8 @@
   "noOneGotThisFloorDays": 14,
   "noOneGotThisFloorWeightBoost": 0.30,
   "slots": [
-    { "slot": "combat",      "rewardCrystals": 80, "rewardFood":  0, "rewardGlimmer": 1, "rewardWisdom": 1, "rewardRandomItem": false },
-    { "slot": "exploration", "rewardCrystals": 60, "rewardFood": 20, "rewardGlimmer": 1, "rewardWisdom": 0, "rewardRandomItem": false },
+    { "slot": "combat",      "rewardCrystals": 25, "rewardFood":  0, "rewardGlimmer": 1, "rewardWisdom": 1, "rewardRandomItem": false },
+    { "slot": "exploration", "rewardCrystals": 15, "rewardFood": 20, "rewardGlimmer": 1, "rewardWisdom": 0, "rewardRandomItem": false },
     { "slot": "wildcard",    "rewardCrystals":  0, "rewardFood":  0, "rewardGlimmer": 1, "rewardWisdom": 1, "rewardRandomItem": true }
   ],
   "templates": [

@@ -13,7 +13,7 @@
     "authoredDefensible": "hp / maxHp and crystalCost are AUTHORED. React v1 has no per-building HP or build-cost table — its five buildings are FIXED map placements, not player-built, and only towers carry a crystal cost (TOWER_TIER_COSTS = 120 crystals build). Values below were authored: defensive structures (Arcane Tower) sit highest HP+cost; resource/economy buildings (Crystal Mine, Farm) lowest cost so the economy can bootstrap; Workshop/Pet House mid. All are tuning constants the owner may rebalance — flagged in docs/port-notes/week4-buildings.md and surfaced to the integrator. JSON wins over ScriptableObject (port spec Part 4).",
     "footprint": "hex footprint size category — 'small' (1 hex tile), 'medium' (cluster), 'large' (the tall Arcane Tower silhouette). The build menu's hex-tile validity check reads this; large footprints need more clear neighbours.",
     "displayName": "displayName is a KEY into canon-strings.json, NOT a literal — the build menu resolves it through BuildingCatalog/CanonStrings so the canon names are never typed inline (port spec Part 4). WO-840 naming inversion (re-verified 2026-08-08): the ids are NOT their nameplates — id 'workshop' is the WEAPONS shop and reads 'Forge', id 'forge' is the ARMOR shop and reads 'Armorer', id 'armorer' reads 'Blacksmith'. Every displayName key here MUST exist in canon-strings.json AND be unique across rows: a missing key renders the literal '[[missing:<key>]]' straight onto the nameplate (VillageStrings.Resolve) and a shared key gives two buildings one name. v3 fixed both at once — the armorer row duplicated the forge row's key, and 'market'/'jeweler' had no key at all.",
-    "crystalsPerWave": "WO-856: the Crystal Mine's per-wave payout CURVE, indexed by (level - 1) and clamped into range: L1=2, L2=4, L3=7. The level comes from PlacedStructure.level (the one persisted per-instance level), NOT from any field on CrystalMine. Rung count must not exceed structures-catalog.json mine_crystal repo.maxLevel: [yield-reachable-at-founding] in BuildingUpgradeRegression fails if it does, or if the first rung is 0 (a structure that delivers nothing at its founding level). A bare scalar here read-migrates to a flat curve."
+    "crystalsPerWave": "WO-856: the Crystal Mine's per-wave payout CURVE, indexed by (level - 1) and clamped into range: L1=1, L2=2, L3=4. The level comes from PlacedStructure.level (the one persisted per-instance level), NOT from any field on CrystalMine. Rung count must not exceed structures-catalog.json mine_crystal repo.maxLevel: [yield-reachable-at-founding] in BuildingUpgradeRegression fails if it does, or if the first rung is 0 (a structure that delivers nothing at its founding level). A bare scalar here read-migrates to a flat curve."
   },
   "version": 3,
   "buildings": [
@@ -30,7 +30,7 @@
       "buildMenuOrder": 0,
       "isUpgradable": true,
       "upgradeType": "resource",
-      "crystalsPerWave": [ 2, 4, 7 ]
+      "crystalsPerWave": [ 1, 2, 4 ]
     },
     {
       "id": "farm",

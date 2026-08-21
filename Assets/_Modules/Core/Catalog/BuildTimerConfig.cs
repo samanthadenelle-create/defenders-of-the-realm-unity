@@ -16,11 +16,11 @@
 // baseBuildSeconds (15s) and tierGrowth was dead tuning. The tier is now derived from
 // the structure's authored cost basket (TierForCost), and the defaults were retuned to
 // the WO-855 sec.4.6 mobile bands -- snappy early, hours-long endgame:
-//   base 15s -> 30s | upgradeMultiplier 1.25 -> 1.35 | freeBuildSlots stays 2 (scarcity)
-//   tier ladder at growth 3.0: 30s | 1.5m | 4.5m | 13.5m | 40.5m | ~2h
-// Against the live catalog that reads: founding + collectors + walls 30s, starter
-// towers/shops 1.5m, barracks + heavy towers 4.5m, fountain 13.5m; the top two bands
-// are headroom the Phase 2/3 cost retune grows into.
+//   base 45s | tierGrowth 3.2 | upgradeMultiplier 1.25 | freeBuildSlots 2
+//   tier ladder: 45s | 2.4m | 7.7m | 24.6m | 1.3h | 4.2h
+// First-time discoveries receive the separate 15s grace below. Repeat builds and
+// advanced upgrades pay the real curve, preserving early momentum without letting
+// the construction catalog evaporate in one sitting.
 // There is NO Resources/Economy/BuildTimerConfig.asset in the tree -- these C# defaults
 // ARE the live numbers. Author an asset only to override them.
 //
@@ -48,17 +48,17 @@ namespace DeNelle.Core.Catalog
 
         [Header("Hybrid duration curve (tier 0 = first build)")]
         [Tooltip("Base seconds for a tier-0 build — keep onboarding snappy (seconds–minutes).")]
-        [Min(0f)] public float baseBuildSeconds = 30f;
+        [Min(0f)] public float baseBuildSeconds = 45f;
 
         [Tooltip("Per-tier multiplier — durations scale super-linearly: tierSeconds = base * pow(growth, tier). " +
                  ">1 makes high tiers the hours-long endgame drag that drives ad-watches/spend.")]
-        [Min(1f)] public float tierGrowth = 3.0f;
+        [Min(1f)] public float tierGrowth = 3.2f;
 
-        [Tooltip("Hard ceiling on any single job's duration (seconds). Default 48h — nothing drags past this.")]
-        [Min(0f)] public float maxDurationSeconds = 48f * 3600f;
+        [Tooltip("Hard ceiling on any single job's duration (seconds). Default 24h — no multi-day lockouts.")]
+        [Min(0f)] public float maxDurationSeconds = 24f * 3600f;
 
         [Tooltip("Upgrades multiply the same tier curve by this (upgrades a touch longer than a fresh build of the same tier).")]
-        [Min(0f)] public float upgradeMultiplier = 1.35f;
+        [Min(0f)] public float upgradeMultiplier = 1.25f;
 
         [Header("Cost -> tier bands (WO-855 Phase 4)")]
         [Tooltip("Ascending resource-basket thresholds. A structure whose authored cost basket reaches " +
@@ -78,15 +78,13 @@ namespace DeNelle.Core.Catalog
         // DENTS it. Two different products, not one product at two speeds.
         //
         // THE CAP IS A CONVERSION TRIGGER, NOT A LIMIT ON REVENUE - that is the whole
-        // point and it is easy to get backwards. Her words: "if they've watched their ten
-        // videos within four hours and they're still playing, they're gonna have to spend."
-        // An impression pays cents; a crystal purchase pays dollars. Running out of free
-        // skips WHILE STILL PLAYING is the best moment in the session to show a price.
+        // point and it is easy to get backwards. The retention-first 2026-08-21 pass limits
+        // this to three voluntary watches per four hours: enough to rescue a play session,
+        // not enough to turn construction into an ad playlist or pressure a purchase.
         //
         // The numbers land on purpose: a 20-minute troop clears in 2 watches (feels free),
-        // a 2-HOUR build needs 12 and the cap stops them at 10 - within sight of done and
-        // 20 minutes short. That near-miss is the sell. An 8h upgrade takes 100 minutes off
-        // and still leaves 6h20m, so late game leans on crystals by construction.
+        // A ten-minute chunk clears a short wait and dents a long one. Late progression
+        // remains paced by planning, offline time and optional crystal use.
         [Header("Rewarded-ad skip (opt-in, store-build only)")]
         [Tooltip("Seconds knocked off the remaining timer per rewarded-ad watch.")]
         [Min(0f)] public float adSkipSeconds = 10f * 60f;
@@ -100,7 +98,7 @@ namespace DeNelle.Core.Catalog
         // decaying counter), i.e. a schema addition - not a config tweak. Reusing the day
         // fields would silently ship day-reset behaviour and quietly lose the ruling.
         [Tooltip("Max rewarded-ad skips allowed within the rolling window below. 0 = unlimited.")]
-        [Min(0)] public int adSkipsPerWindow = 10;
+        [Min(0)] public int adSkipsPerWindow = 3;
 
         [Tooltip("Length of the ROLLING window the skip allowance is counted over. Default 4 hours.")]
         [Min(0f)] public float adSkipWindowSeconds = 4f * 60f * 60f;
@@ -111,10 +109,10 @@ namespace DeNelle.Core.Catalog
         [Min(0)] public int instantFinishCrystalsPerMinute = 1;
 
         [Tooltip("Minimum crystal price for any instant-finish (so near-done jobs still cost something).")]
-        [Min(0)] public int instantFinishMinCrystals = 5;
+        [Min(0)] public int instantFinishMinCrystals = 3;
 
-        // OWNER RULING 2026-08-06: "for the free ones (first time builds, other than the pallets),
-        // can we make if free then timer is 5 seconds?"
+        // Originally 5 seconds. The retention-first 2026-08-21 pass keeps the first-build
+        // grace but raises it to 15 seconds so discovery stays quick without feeling disposable.
         //
         // WHAT THE CATALOG ACTUALLY SAYS (checked before implementing, not assumed): NOTHING in the
         // game is free. All 29 costed structures-catalog entries have a non-zero basket -- the
@@ -129,7 +127,7 @@ namespace DeNelle.Core.Catalog
         [Header("First-build grace (onboarding pace)")]
         [Tooltip("Seconds for the FIRST build of a structure id the player has never built before. " +
                  "0 disables the grace (every build pays the normal tier curve).")]
-        [Min(0f)] public float firstBuildSeconds = 5f;
+        [Min(0f)] public float firstBuildSeconds = 15f;
 
         [Header("Build slots (concurrency / scarcity)")]
         [Tooltip("How many jobs may run at once for free. CoC-style scarcity — extra slots are a future unlock/purchase.")]

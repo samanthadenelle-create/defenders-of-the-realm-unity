@@ -277,7 +277,7 @@ namespace DeNelle.Editor
                     $"[curve-monotonic] '{MineBuildingId}'.crystalsPerWave is authored as a bare SCALAR. The runtime " +
                     "read-migrates a scalar to a flat curve so a hand-edit never throws - that is a safety net, NOT " +
                     "the authored shape. The mine must author an ARRAY with one rung per reachable level " +
-                    "(WO-856 section 5: [2, 4, 7]); a flat curve means every upgrade the player pays for yields the " +
+                    "(WO-856 section 5; currently [1, 2, 4]); a flat curve means every upgrade the player pays for yields the " +
                     "same as the day it was built.");
 
             int maxLevel = ReadCatalogMaxLevel();

@@ -43,6 +43,10 @@ namespace DeNelle.Village
     [DisallowMultipleComponent]
     public sealed class TroopController : MonoBehaviour, IDamageableStructure
     {
+        private static readonly List<TroopController> Active = new List<TroopController>();
+
+        /// <summary>Allocation-free live roster used by raid towers and squad support AI.</summary>
+        public static IReadOnlyList<TroopController> ActiveTroops => Active;
         [Header("Identity (from troops.json)")]
         [Tooltip("Stable troop id — e.g. troop-footman. Set by Configure().")]
         [SerializeField] private string _troopId;
@@ -75,6 +79,7 @@ namespace DeNelle.Village
         private bool _preferStructures;
         private float _structureDamageMult = 1f;
         private float _unitDamageMult = 1f;
+        private bool _isSupport;
 
         // WO-771.9 spawn-wiring: the EFFECTIVE baseline the veterancy/perk multipliers re-base
         // from. Set to the def stats in Configure; overwritten by ApplyUpgradeStats when the
@@ -148,6 +153,16 @@ namespace DeNelle.Village
         // Dead anim play). EXPENDABLE — no pool / respawn.
         private const float DeathHoldSeconds = 3f;
         private bool _dead;
+
+        private void OnEnable()
+        {
+            if (!Active.Contains(this)) Active.Add(this);
+        }
+
+        private void OnDisable()
+        {
+            Active.Remove(this);
+        }
 
         /// <summary>Stable troop id — e.g. <c>troop-footman</c>.</summary>
         public string TroopId => _troopId;
@@ -304,6 +319,7 @@ namespace DeNelle.Village
                 _element        = ParseElement(def.Element);
                 // WO-933: role "siege" → structure-prefer hunt (WC Demolisher / CoC wall-breaker).
                 _preferStructures = string.Equals(def.Role, "siege", System.StringComparison.OrdinalIgnoreCase);
+                _isSupport = string.Equals(def.Role, "support", System.StringComparison.OrdinalIgnoreCase);
                 _structureDamageMult = def.StructureDamageMult > 0f ? def.StructureDamageMult : 1f;
                 _unitDamageMult = def.UnitDamageMult > 0f ? def.UnitDamageMult : 1f;
                 // Melee → Knight Attack; archer → Ranger Attack; mage → Mage Cast.
@@ -435,6 +451,11 @@ namespace DeNelle.Village
 
             if (!IsAlive) return;
 
+            // Support troops form the squad's sustain layer. They heal the most-injured
+            // nearby ally and follow it into range; when nobody needs healing they fall
+            // through to the normal hostile hunt so they never stand inert.
+            if (_isSupport && TryHealSquadmate(dt)) return;
+
             // THROTTLE the target-hunt scan (mirrors Pet). Drop a cached foe that died /
             // was destroyed so we never aim at a corpse. Move + attack still run per-frame.
             _huntTimer -= dt;
@@ -489,6 +510,46 @@ namespace DeNelle.Village
         {
             if (_animator != null && _hasInCombat)
                 _animator.SetBool(AnimInCombat, on);
+        }
+
+        private bool TryHealSquadmate(float dt)
+        {
+            TroopController target = null;
+            float lowestRatio = 1f;
+            float rangeSqr = _huntScanRadius * _huntScanRadius;
+            for (int i = 0; i < Active.Count; i++)
+            {
+                var ally = Active[i];
+                if (ally == null || ally == this || !ally.IsAlive || ally._hp >= ally._maxHp) continue;
+                float sqr = (ally.transform.position - transform.position).sqrMagnitude;
+                if (sqr > rangeSqr) continue;
+                float ratio = ally._maxHp > 0f ? ally._hp / ally._maxHp : 1f;
+                if (ratio < lowestRatio) { lowestRatio = ratio; target = ally; }
+            }
+            if (target == null) return false;
+
+            SetInCombat(true);
+            float distance = Vector3.Distance(transform.position, target.transform.position);
+            if (distance > _attackRange)
+            {
+                MoveToward(target.transform.position, dt);
+                return true;
+            }
+
+            FaceToward(target.transform.position);
+            if (_attackCdRemaining > 0f) return true;
+            _attackCdRemaining = _attackCooldown;
+            target.Heal(_attackDamage);
+            // A heal must read instantly in the raid scrum: warm cast at the cleric,
+            // green-gold impact on the ally. These route through the pooled VFX manager.
+            VFXManager.Play(VFXType.Cast_Heal, transform.position, transform.rotation, playSound: false);
+            VFXManager.Play(VFXType.Impact_Heal, target.transform.position, target.transform.rotation);
+            if (_animator != null)
+            {
+                if (_hasCast) _animator.SetTrigger(AnimCast);
+                else if (_hasAttack) _animator.SetTrigger(AnimAttack);
+            }
+            return true;
         }
 
         // =====================================================================

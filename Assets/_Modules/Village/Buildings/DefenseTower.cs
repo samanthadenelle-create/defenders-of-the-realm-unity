@@ -616,6 +616,15 @@ namespace DeNelle.Village
         private void RescanParty()
         {
             _partyTargets.Clear();
+            // Raid towers are the defending base's main threat. Deployed troops screen the
+            // hero and must therefore be valid targets (the previous hero/companion-only
+            // list let towers ignore the attacking army entirely).
+            var troops = TroopController.ActiveTroops;
+            for (int i = 0; i < troops.Count; i++)
+            {
+                var troop = troops[i];
+                if (troop != null && troop.IsAlive) _partyTargets.Add(troop);
+            }
             var hero = HeroHealth.Instance;
             if (hero != null) _partyTargets.Add(hero);
             foreach (var c in FindObjectsByType<StoryCompanion>())
@@ -632,6 +641,7 @@ namespace DeNelle.Village
             IDamageableStructure best = null;
             bestPos = default;
             float bestSqr = float.MaxValue;
+            bool bestIsTank = false;
             for (int i = 0; i < _partyTargets.Count; i++)
             {
                 var d = _partyTargets[i];
@@ -641,7 +651,18 @@ namespace DeNelle.Village
                 float sqr = (p - transform.position).sqrMagnitude;
                 if (sqr > Range * Range) continue;
                 if (p.y > AirThreshold && !CanHitAir) continue;
-                if (sqr < bestSqr) { bestSqr = sqr; best = d; bestPos = p; }
+                var troop = mb as TroopController;
+                bool isTank = troop != null && troop.Def != null &&
+                    string.Equals(troop.Def.Role, "tank", System.StringComparison.OrdinalIgnoreCase);
+                // Tanks deliberately draw tower fire for the formation. Among equal roles,
+                // retain nearest-target behavior so targeting stays readable.
+                if ((isTank && !bestIsTank) || (isTank == bestIsTank && sqr < bestSqr))
+                {
+                    bestSqr = sqr;
+                    best = d;
+                    bestPos = p;
+                    bestIsTank = isTank;
+                }
             }
             return best;
         }

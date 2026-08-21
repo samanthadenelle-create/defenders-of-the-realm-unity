@@ -97,7 +97,12 @@ namespace DeNelle.Village.World.Camps
             if (def == null || level <= 1) return;
             int over = level - 1;
             float hpScale  = 1f + 0.08f * over;
-            float dmgScale = 1f + 0.05f * over;
+            // Towers are the raid's primary defensive threat. Guard HP continues to scale,
+            // but their contact damage reaches a ceiling so hero-level scaling cannot make
+            // ordinary defenders instantly erase a fully upgraded army.
+            float earlyDamageLevels = Mathf.Min(over, 10);
+            float lateDamageLevels  = Mathf.Min(Mathf.Max(0, over - 10), 10);
+            float dmgScale = 1f + 0.04f * earlyDamageLevels + 0.02f * lateDamageLevels;
             def.Hp            *= hpScale;
             def.ContactDamage *= dmgScale;
             def.Height         = def.Height * (1f + 0.012f * over);

@@ -7,7 +7,7 @@
 //   * Pays from LEVEL 1. The old "return unless at max level" gate is gone - the
 //     payout scales along an AUTHORED curve instead of switching on at the top.
 //   * The per-wave yield is data, not C#: buildings.json "crystal-mine" authors
-//     "crystalsPerWave": [2, 4, 7], indexed by (level - 1) and clamped into range.
+//     "crystalsPerWave": [1, 2, 4], indexed by (level - 1) and clamped into range.
 //     A bare scalar (the pre-WO-856 shape, e.g. 1) READ-MIGRATES to a flat curve
 //     so a hand-edit back to a number degrades instead of throwing.
 //   * The LEVEL is READ, never owned. It comes from the PlacedStructure this

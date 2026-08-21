@@ -713,9 +713,20 @@ namespace DeNelle.Editor
             var outward = plan.Pos.sqrMagnitude > 0.001f ? plan.Pos.normalized : Vector3.forward;
             go.transform.rotation = Quaternion.LookRotation(new Vector3(outward.x, 0f, outward.z), Vector3.up);
             go.transform.position = plan.Pos;
-            EnsureUpright(go, $"turret art '{plan.CatalogId}' ({plan.Label})");
+            // Catapults and siege towers are intentionally low, wide machines. The generic
+            // flat-FBX heuristic sees that silhouette as a fallen building and tips it onto
+            // its side, which is exactly the raid F8 report. Their catalog art is authored
+            // upright, so preserve it and reserve auto-uprighting for architectural towers.
+            if (!IsAuthoredSiegeMachine(plan.CatalogId))
+                EnsureUpright(go, $"turret art '{plan.CatalogId}' ({plan.Label})");
             SeatOnGround(go);
             return go;
+        }
+
+        private static bool IsAuthoredSiegeMachine(string catalogId)
+        {
+            return string.Equals(catalogId, "tower_catapult", System.StringComparison.OrdinalIgnoreCase)
+                || string.Equals(catalogId, "tower_siege_tower", System.StringComparison.OrdinalIgnoreCase);
         }
 
         /// <summary>URP-safe primitive turret (never a default-material primitive).</summary>
@@ -803,16 +814,17 @@ namespace DeNelle.Editor
             float segW = Mathf.Max(MinSegmentWidth, run / n);
             int gateIndex = (n - 1) / 2;
 
-            // Four corner watchtowers via the 90-degree-around-origin mirror. The name MUST
-            // contain "Watchtower" so GarrisonTurretArmer arms them at runtime (these are the
-            // ones the builder deliberately leaves un-statted - the corner garrison turrets).
+            // Four visual corner posts via the 90-degree-around-origin mirror. They deliberately
+            // do NOT carry the "Watchtower" token: authored combat towers above are budgeted to
+            // the tier's 12/16/20 worst-case DPS, while runtime-arming these extra posts bypassed
+            // that budget and could more than double incoming fire.
             int towers = 0;
             var baseCorner = new Vector3(halfExtent, 0f, -halfExtent);
             for (int s = 0; s < 4; s++)
             {
                 var rot = Quaternion.Euler(0f, 90f * s, 0f);
                 if (PlaceCornerTower(root, towerPrefab, rot * baseCorner,
-                                     $"Watchtower_{ringName}_{SideName[s]}") != null) towers++;
+                                     $"CornerPost_{ringName}_{SideName[s]}") != null) towers++;
             }
 
             int segs = 0;
@@ -867,17 +879,22 @@ namespace DeNelle.Editor
             return half;
         }
 
-        /// <summary>Place a corner/court tower (seated, facing outward). Null on missing prefab (logged).</summary>
+        /// <summary>Place a corner/court post (seated, facing outward), with a cheap fallback when art moved.</summary>
         private static GameObject PlaceCornerTower(Transform parent, GameObject prefab, Vector3 pos, string name)
         {
-            if (prefab == null)
+            GameObject go;
+            if (prefab != null)
             {
-                Debug.LogWarning($"[RaidBaseGenerator] tower prefab missing at Resources/{FallbackTowerPath} - skipping '{name}'.");
-                return null;
+                go = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
+                if (go == null) go = Object.Instantiate(prefab);
             }
-            var go = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
-            if (go == null) go = Object.Instantiate(prefab);
-            go.name = name;                         // MUST contain "Watchtower"
+            else
+            {
+                go = BuildFallbackTurret();
+                Debug.LogWarning($"[RaidBaseGenerator] tower prefab missing at Resources/{FallbackTowerPath}; " +
+                                 $"using a lightweight fallback post for '{name}'.");
+            }
+            go.name = name;                         // visual post; combat towers are separately budgeted
             go.transform.SetParent(parent, false);
             var outward = pos.sqrMagnitude > 0.001f ? pos.normalized : Vector3.forward;
             go.transform.rotation = Quaternion.LookRotation(new Vector3(outward.x, 0f, outward.z), Vector3.up);
@@ -1152,7 +1169,7 @@ namespace DeNelle.Editor
             {
                 var diag = new Vector3((c == 0 || c == 3) ? 1f : -1f, 0f,
                                        (c == 0 || c == 1) ? 1f : -1f).normalized;
-                if (PlaceCornerTower(root, courtPrefab, diag * courtRadius, $"Watchtower_Court_{c}") != null)
+                if (PlaceCornerTower(root, courtPrefab, diag * courtRadius, $"CornerPost_Court_{c}") != null)
                     courtTowers++;
             }
 

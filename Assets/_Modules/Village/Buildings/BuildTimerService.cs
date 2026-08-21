@@ -507,7 +507,7 @@ namespace DeNelle.Village
             double durationMs = Config.DurationSecondsForTier(tier, curveKind) * 1000.0;
 
             // OWNER RULING 2026-08-06 -- first-build grace. The FIRST time the player places a
-            // given structure it builds in firstBuildSeconds (5s) instead of the tier curve, so
+            // given structure it builds in firstBuildSeconds instead of the tier curve, so
             // onboarding never stalls on a timer. Storage containers (the "pallets" -- lumberyard
             // / foundry / silo) are EXCLUDED by her explicit carve-out; the caller decides that,
             // because only it knows the catalog id (structureId here is the JOB key, which for a

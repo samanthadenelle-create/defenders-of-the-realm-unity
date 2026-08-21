@@ -58,19 +58,14 @@ namespace DeNelle.Village.World.Camps
         /// <summary>
         /// What fraction of the settled loot a REPEAT clear of an already-claimed base pays.
         ///
-        /// <para>0 = the strict first-claim gate: the base pays its loot ONCE. This is the
-        /// deliberately SAFE default, and it is the value that makes the surrounding
-        /// documentation true ("a re-cleared base never double-grants") rather than
-        /// aspirational. It cannot inflate the economy, which is the property a stop-gap
-        /// needs; whether farming a cleared base SHOULD pay a trickle (and on what decay
-        /// curve) is an economy-balance decision reserved for the owner - flagged, not
-        /// chosen here. When that ruling lands, this ONE constant is the knob: set it to the
-        /// repeat fraction and nothing else in the raid stack has to move.</para>
+        /// <para>Repeat clears pay a small fraction of ordinary resources so replay remains
+        /// useful, while <see cref="ScaleLootForClear"/> always removes crystals from that
+        /// payout. First conquest is therefore the only premium-currency reward.</para>
         ///
         /// <para>Kept as a named constant rather than a magic 0 at the call site precisely so
         /// the retune is a one-line, one-place edit with this rationale attached.</para>
         /// </summary>
-        public const float RepeatClearLootMultiplier = 0f;
+        public const float RepeatClearLootMultiplier = 0.25f;
 
         /// <summary>
         /// Scales a settled raid payout by the first-clear gate: a FIRST clear pays in full,
@@ -90,11 +85,14 @@ namespace DeNelle.Village.World.Camps
             if (m <= 0f) return default(ResourceCost);
             if (m >= 1f) return loot;   // defensive: a mis-set knob must never PAY MORE than the first clear
 
+            // Re-clears remain useful for army practice and food recovery, but premium
+            // crystals stay exclusive to the first conquest. This preserves crystal value
+            // without making an already-claimed raid feel completely pointless.
             return new ResourceCost(
                 wood:     Mathf.FloorToInt(loot.Wood     * m),
                 food:     Mathf.FloorToInt(loot.Food     * m),
                 iron:     Mathf.FloorToInt(loot.Iron     * m),
-                crystals: Mathf.FloorToInt(loot.Crystals * m),
+                crystals: 0,
                 coins:    Mathf.FloorToInt(loot.Coins    * m));
         }
 

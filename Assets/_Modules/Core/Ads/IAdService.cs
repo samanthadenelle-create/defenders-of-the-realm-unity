@@ -161,6 +161,21 @@ namespace DeNelle.Core.Ads
         void ShowRewarded(Action<AdShowResult> onComplete);
     }
 
+    /// <summary>Single provider-neutral registration point used by gameplay.</summary>
+    public static class AdServices
+    {
+        private static IAdService s_current = NullAdService.Instance;
+        public static IAdService Current => s_current ?? NullAdService.Instance;
+
+        public static void Register(IAdService service) =>
+            s_current = service ?? NullAdService.Instance;
+
+        public static void Unregister(IAdService service)
+        {
+            if (ReferenceEquals(s_current, service)) s_current = NullAdService.Instance;
+        }
+    }
+
     /// <summary>
     /// The shipping default: no network, nothing presentable, nothing granted.
     ///

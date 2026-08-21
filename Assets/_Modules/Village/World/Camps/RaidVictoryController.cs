@@ -298,7 +298,7 @@ namespace DeNelle.Village.World.Camps
         /// THE FIRST-CLEAR GATE (defect sweep 2026-08-15). A base pays its settled loot on
         /// the clear that CLAIMS it; a re-clear of an already-claimed base is scaled by
         /// <see cref="RaidClaimService.RepeatClearLootMultiplier"/> (0 by default = pays
-        /// nothing).
+        /// only reduced ordinary resources and never premium crystals).
         ///
         /// <para>THE HOLE THIS CLOSES: loot was never gated on <c>newClaim</c> at all. The
         /// claim set was written and never read, so re-entering a cleared base and razing it
@@ -325,9 +325,8 @@ namespace DeNelle.Village.World.Camps
             FlowTrace.Warn("Raid",
                 $"REPEAT CLEAR of '{configId}' (already claimed) - loot scaled by " +
                 $"x{RaidClaimService.RepeatClearLootMultiplier:0.##}: {Describe(loot)} -> {Describe(scaled)}. " +
-                "A claimed base pays its loot ONCE; farming it is not an income source. " +
-                "(What a repeat SHOULD pay, if anything, is an open owner economy ruling - " +
-                "RaidClaimService.RepeatClearLootMultiplier is the single knob.)");
+                "A claimed base never pays premium crystals again; the reduced ordinary-resource " +
+                "payout keeps practice runs useful without creating a crystal farm.");
             return scaled;
         }
 

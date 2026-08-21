@@ -932,7 +932,7 @@ namespace DeNelle.Village
 
                 // CrystalMine - passive Crystal generator. WO-856: it banks crystals on
                 // EVERY cleared wave from LEVEL 1, on the curve buildings.json authors
-                // ("crystal-mine".crystalsPerWave = [2, 4, 7], indexed by level - 1). The
+                // ("crystal-mine".crystalsPerWave = [1, 2, 4], indexed by level - 1). The
                 // level is READ off the PlacedStructure this root carries (the persisted
                 // per-instance level), never owned by the component; upgrades go through
                 // the BuildMode Upgrade verb charging mine_crystal's repo.upgradeCost.

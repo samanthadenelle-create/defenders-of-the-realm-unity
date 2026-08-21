@@ -19,11 +19,11 @@
   "version": 2,
   "global": {
     "defaultCooldownSeconds": 480,
-    "hardDailyCap": 14,
-    "adProvider": "stub",
+    "hardDailyCap": 7,
+    "adProvider": "levelplay",
     "respectDoNotSell": true,
     "covenantLine": "Ads are always optional. You are never required to watch one. Ever.",
-    "_hardDailyCapNote": "14 = the SUM of the three enabled placements' own caps (build 10 + harvest 3 + daily 1), so each placement's cap is what binds and none starves the others. It went 12 -> 10 when build.skip was the only placement, then -> 14 when the owner re-enabled harvest and daily on 2026-08-07. IF A GLOBAL BRAKE IS WANTED it must be a deliberate number BELOW the sum, and it should be the owner's, not a default: set below 14 and the placements start competing by priority, which is a product decision about which offer a player sees last."
+    "_hardDailyCapNote": "7 is the sum of the authored placement caps (build 3 + harvest 3 + daily 1). The retention-first 2026-08-21 pass cut build skips from 10 to 3 per four-hour window so ads help a session without becoming the progression loop."
   },
 
   "rewards": [
@@ -82,7 +82,7 @@
       "_adUnitNameNote": "THE ONE INCONSISTENT NAME. The other two units are named after their placement id; this one follows a <format>_<purpose>_<platform> convention I suggested before checking what the game already called the placement. Matching the placement id is better - it gives 1:1 attribution between LevelPlay revenue and our telemetry with no mapping table to drift - so this unit should be renamed to 'place.build.skip' in the dashboard. Renaming does NOT change the adUnitId, so nothing here needs editing when it happens; delete this note instead.",
       "rewardId": "reward.build.timeskip",
       "cooldownSeconds": 480,
-      "dailyCap": 10,
+      "dailyCap": 3,
       "requiresFlag": "RewardedAdSkip",
       "priority": 15,
       "prompt": { "headline": "Speed It Up", "body": "Watch a short clip to take 10 minutes off this job.", "cta": "Watch" },

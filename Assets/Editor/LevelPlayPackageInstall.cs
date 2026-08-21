@@ -94,6 +94,23 @@ namespace DeNelle.Editor
                       $"(source={req.Result.source}, resolvedPath={req.Result.resolvedPath})");
         }
 
+        [MenuItem("Defenders/Monetization/3. Enable local rewarded-ad test")]
+        public static void EnableLocalRewardedAdTest()
+        {
+            PlayerPrefs.SetInt("ff.rewardedadskip", 1);
+            PlayerPrefs.Save();
+            Debug.Log("LEVELPLAY_LOCAL_TEST_ON - enter Play Mode and look for LEVELPLAY_INIT_OK. " +
+                      "This changes Editor PlayerPrefs only; it does not enable ads in a shipped build.");
+        }
+
+        [MenuItem("Defenders/Monetization/4. Disable local rewarded-ad test")]
+        public static void DisableLocalRewardedAdTest()
+        {
+            PlayerPrefs.DeleteKey("ff.rewardedadskip");
+            PlayerPrefs.Save();
+            Debug.Log("LEVELPLAY_LOCAL_TEST_OFF - local rewarded-ad override removed.");
+        }
+
         /// <summary>
         /// Pump a package request to completion. Batchmode has no editor update loop turning these
         /// over, so a plain `while (!req.IsCompleted) {}` spins forever - the sleep yields the thread

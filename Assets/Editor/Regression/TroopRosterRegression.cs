@@ -33,7 +33,7 @@ using DeNelle.Village;
 namespace DeNelle.Editor
 {
     /// <summary>
-    /// Data/logic regression for the Barracks troop roster: exact 8-id set, the
+    /// Data/logic regression for the Barracks troop roster: exact 9-id set, the
     /// unlock-tier ladder, cost/slot sanity, the WO-735 visual keys, the WO-734
     /// barracks tier announce copy, the WO-733 unlock gate, and WO-933 siege rules.
     /// Real static game code in, asserted out. Returns true (summary) / false (detail); never throws.
@@ -47,6 +47,7 @@ namespace DeNelle.Editor
             ("troop-footman",          1, "Footman"),
             ("troop-archer",           1, "Archer"),
             ("troop-spearman",         2, "Spearman"),
+            ("troop-field-cleric",     3, "Field Cleric"),
             ("troop-shieldguard",      3, "Shieldguard"),
             ("troop-outrider",         4, "Outrider"),
             ("troop-catapult",         4, "Siege Catapult"),
@@ -69,7 +70,7 @@ namespace DeNelle.Editor
                 return false;
             }
 
-            // --- 1) exact 8-id set: no missing, no extras, no duplicates -----------
+            // --- 1) exact 9-id set: no missing, no extras, no duplicates -----------
             var seen = new Dictionary<string, TroopDef>();
             foreach (var t in all)
             {
@@ -135,7 +136,7 @@ namespace DeNelle.Editor
                 failures.Add($"at Barracks tier 1, {trainableAtT1} troop(s) train — expected exactly 2 (Footman + Archer).");
 
             int trainableAtT3 = CountTrainable(seen.Values, 3);
-            if (trainableAtT3 != 4)
+            if (trainableAtT3 != 5)
                 failures.Add($"at Barracks tier 3, {trainableAtT3} troop(s) train — expected exactly 4 (Footman/Archer/Spearman/Shieldguard).");
             if (seen.TryGetValue("troop-outrider", out var outrider) && outrider.UnlockBarracksTier <= 3)
                 failures.Add("Outrider is trainable at Barracks tier 3 — it must stay locked until tier 4.");
@@ -162,6 +163,13 @@ namespace DeNelle.Editor
             }
 
             // Animator class map: melee→Knight, archer→Ranger, battlemage→Mage (Cast).
+            if (seen.TryGetValue("troop-shieldguard", out var shieldguard) &&
+                !string.Equals(shieldguard.Role, "tank", System.StringComparison.OrdinalIgnoreCase))
+                failures.Add($"troop-shieldguard role='{shieldguard.Role}' - expected 'tank'.");
+            if (seen.TryGetValue("troop-field-cleric", out var cleric) &&
+                !string.Equals(cleric.Role, "support", System.StringComparison.OrdinalIgnoreCase))
+                failures.Add($"troop-field-cleric role='{cleric.Role}' - expected 'support'.");
+
             if (seen.TryGetValue("troop-archer", out var archerDef))
             {
                 string a = TroopFactory.ResolveRoleController(archerDef, archerDef.Model);
@@ -198,7 +206,7 @@ namespace DeNelle.Editor
             {
                 reason = $"TROOP_ROSTER_OK — {seen.Count} troops, unique ids, unlock ladder 1/1/2/3/4+catapult/5/6, " +
                          $"costs+slots sane, every troop has model+iconId (WO-735), barracks T2-6 announce their unit (WO-734), " +
-                         $"gate: 2 train @T1 / 4 @T3 (WO-733), siege maxOwned=1 (WO-933).";
+                         $"gate: 2 train @T1 / 5 @T3 (WO-733), siege maxOwned=1 (WO-933).";
                 return true;
             }
 

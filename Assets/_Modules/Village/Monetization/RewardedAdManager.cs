@@ -46,8 +46,10 @@ namespace DeNelle.Village
         private float _lastShownRealtime = -CooldownSeconds;
 
         /// <summary>True when the cooldown has elapsed and an ad may be shown.</summary>
-        public bool IsAdReady =>
+        private bool IsCooldownReady =>
             Time.realtimeSinceStartup - _lastShownRealtime >= CooldownSeconds;
+
+        public bool IsAdReady => IsCooldownReady && AdServices.Current.IsRewardedReady;
 
         /// <summary>Seconds remaining until the next ad is allowed (0 when ready).</summary>
         public float CooldownRemaining
@@ -99,7 +101,11 @@ namespace DeNelle.Village
                 return false;
             }
 
-            if (!IsAdReady) return false;
+            if (!IsCooldownReady || !AdServices.Current.IsRewardedReady)
+            {
+                AdServices.Current.PreloadRewarded();
+                return false;
+            }
 
             // The reward may ONLY be granted by a genuine completion callback, so the caller's
             // action is wrapped: we record whether it actually fired rather than assuming it did.
@@ -156,11 +162,20 @@ namespace DeNelle.Village
                 return false;
             }
 
-            if (!IsAdReady)
+            if (!IsCooldownReady)
             {
                 // CappedByGame, not NoFill: OUR cooldown said no, not the network. Telemetry
                 // must never confuse the two - that distinction is the launch metric.
                 onComplete?.Invoke(AdShowResult.Unavailable(AdUnavailableReason.CappedByGame));
+                return false;
+            }
+
+
+            if (!AdServices.Current.IsRewardedReady)
+            {
+                AdUnavailableReason why = AdServices.Current.RewardedUnavailableReason;
+                AdServices.Current.PreloadRewarded();
+                onComplete?.Invoke(AdShowResult.Unavailable(why));
                 return false;
             }
 
@@ -222,13 +237,20 @@ namespace DeNelle.Village
         /// </summary>
         protected virtual bool ShowAdInternal(Action onReward, Action<AdShowResult> onComplete)
         {
-            bool granted = false;
-            bool presented = ShowAdInternal(() => { granted = true; onReward?.Invoke(); });
-            onComplete?.Invoke(granted
-                ? AdShowResult.Earned()
-                : presented ? AdShowResult.Dismissed()
-                            : AdShowResult.Unavailable(AdUnavailableReason.NotInitialised));
-            return presented;
+            IAdService ads = AdServices.Current;
+            if (!ads.IsRewardedReady)
+            {
+                onComplete?.Invoke(AdShowResult.Unavailable(ads.RewardedUnavailableReason));
+                ads.PreloadRewarded();
+                return false;
+            }
+
+            ads.ShowRewarded(result =>
+            {
+                if (result.Rewarded) onReward?.Invoke();
+                onComplete?.Invoke(result);
+            });
+            return true;
         }
 
         /// <summary>

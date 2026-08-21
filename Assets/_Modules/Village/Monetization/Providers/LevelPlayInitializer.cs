@@ -47,9 +47,11 @@
 // =============================================================================
 
 using System;
+using System.Collections.Concurrent;
 using UnityEngine;
 using Unity.Services.LevelPlay;
 using DeNelle.Core;
+using DeNelle.Core.Ads;
 using DeNelle.Core.Diagnostics;
 using DeNelle.Core.Monetization;
 using DeNelle.Core.UI;
@@ -57,15 +59,31 @@ using DeNelle.Core.UI;
 namespace DeNelle.Village.Monetization
 {
     /// <summary>Initialises LevelPlay exactly once, after consent is resolved.</summary>
-    public sealed class LevelPlayInitializer : MonoBehaviour
+    public sealed class LevelPlayInitializer : MonoBehaviour, IAdService
     {
         private const string Sys = "LevelPlay";
 
         /// <summary>LevelPlay dashboard app key for com.denellestudios.echoesofelarion (Android).</summary>
         private const string AppKey = "27850b635";
+        private const string RewardedBuildSkipAdUnitId = "2ibxid58jat3sxyd";
+        private const float RetryFloorSeconds = 15f;
+        private const float RetryCeilingSeconds = 120f;
 
         private static LevelPlayInitializer s_instance;
         private static bool s_initStarted;
+        private readonly ConcurrentQueue<string> _impressionRevenue = new ConcurrentQueue<string>();
+        private LevelPlayRewardedAd _rewarded;
+        private Action<AdShowResult> _pendingCompletion;
+        private bool _loadingRewarded;
+        private bool _showingRewarded;
+        private float _retrySeconds = RetryFloorSeconds;
+        private AdUnavailableReason _unavailableReason = AdUnavailableReason.NotInitialised;
+
+        public string ProviderName => "UnityLevelPlay";
+        public bool IsInitialised => Ready;
+        public bool IsRewardedReady => Ready && !_showingRewarded && _rewarded != null && _rewarded.IsAdReady();
+        public AdUnavailableReason RewardedUnavailableReason =>
+            IsRewardedReady ? AdUnavailableReason.None : _unavailableReason;
 
         /// <summary>True once the SDK has reported a successful init. Ad call sites may gate on this.</summary>
         public static bool Ready { get; private set; }
@@ -152,10 +170,34 @@ namespace DeNelle.Village.Monetization
             LevelPlay.Init(AppKey);
         }
 
+        private void Update()
+        {
+            while (_impressionRevenue.TryDequeue(out string row))
+                FlowTrace.Step(Sys, row);
+        }
+
+        private void OnImpressionDataReady(LevelPlayImpressionData data)
+        {
+            if (data == null)
+            {
+                _impressionRevenue.Enqueue("ILRD received with no impression data.");
+                return;
+            }
+
+            double revenue = data.Revenue ?? 0d;
+            _impressionRevenue.Enqueue(
+                $"ILRD network={data.AdNetwork ?? "<unknown>"} format={data.AdFormat ?? "<unknown>"} " +
+                $"unit={data.MediationAdUnitId ?? "<unknown>"} placement={data.Placement ?? "<none>"} " +
+                $"revenueUsd={revenue:0.########} precision={data.Precision ?? "<unknown>"}");
+        }
+
         private void OnInitSuccess(LevelPlayConfiguration config)
         {
             Ready = true;
             FlowTrace.Step(Sys, "LEVELPLAY_INIT_OK - SDK initialised; ad units may load.");
+            AdServices.Register(this);
+            CreateRewardedAd();
+            PreloadRewarded();
         }
 
         private void OnInitFailed(LevelPlayInitError error)
@@ -168,8 +210,119 @@ namespace DeNelle.Village.Monetization
                                 "to its non-ad path rather than dangle a dead button.");
         }
 
+        private void CreateRewardedAd()
+        {
+            if (_rewarded != null) return;
+            _rewarded = new LevelPlayRewardedAd(RewardedBuildSkipAdUnitId);
+            _rewarded.OnAdLoaded += OnRewardedLoaded;
+            _rewarded.OnAdLoadFailed += OnRewardedLoadFailed;
+            _rewarded.OnAdDisplayed += OnRewardedDisplayed;
+            _rewarded.OnAdDisplayFailed += OnRewardedDisplayFailed;
+            _rewarded.OnAdRewarded += OnRewardedEarned;
+            _rewarded.OnAdClosed += OnRewardedClosed;
+            // SDK 9.5 exposes ILRD per ad instance. The callback can arrive off the main thread,
+            // so it only queues plain text; Update performs Unity logging safely.
+            _rewarded.OnAdImpressionDataReady += OnImpressionDataReady;
+        }
+
+        public void PreloadRewarded()
+        {
+            if (!Ready || _rewarded == null || _loadingRewarded || _rewarded.IsAdReady()) return;
+            CancelInvoke(nameof(PreloadRewarded));
+            _loadingRewarded = true;
+            _rewarded.LoadAd();
+            FlowTrace.Step(Sys, "rewarded preload requested.");
+        }
+
+        public void ShowRewarded(Action<AdShowResult> onComplete)
+        {
+            if (!IsRewardedReady)
+            {
+                onComplete?.Invoke(AdShowResult.Unavailable(RewardedUnavailableReason));
+                PreloadRewarded();
+                return;
+            }
+
+            if (_pendingCompletion != null)
+            {
+                onComplete?.Invoke(AdShowResult.Unavailable(AdUnavailableReason.LoadFailed));
+                return;
+            }
+
+            _pendingCompletion = onComplete;
+            _showingRewarded = true;
+            _unavailableReason = AdUnavailableReason.None;
+            _rewarded.ShowAd();
+        }
+
+        private void OnRewardedLoaded(LevelPlayAdInfo info)
+        {
+            _loadingRewarded = false;
+            _retrySeconds = RetryFloorSeconds;
+            _unavailableReason = AdUnavailableReason.None;
+            FlowTrace.Step(Sys, $"REWARDED_READY unit={info?.AdUnitId ?? RewardedBuildSkipAdUnitId}");
+        }
+
+        private void OnRewardedLoadFailed(LevelPlayAdError error)
+        {
+            _loadingRewarded = false;
+            _unavailableReason = error != null && error.ErrorCode == 509
+                ? AdUnavailableReason.NoFill
+                : AdUnavailableReason.LoadFailed;
+            FlowTrace.Warn(Sys, $"rewarded load failed code={error?.ErrorCode} " +
+                                $"reason={_unavailableReason}: {error?.ErrorMessage ?? "<none>"}; " +
+                                $"retry in {_retrySeconds:0}s.");
+            Invoke(nameof(PreloadRewarded), _retrySeconds);
+            _retrySeconds = Mathf.Min(_retrySeconds * 2f, RetryCeilingSeconds);
+        }
+
+        private void OnRewardedDisplayed(LevelPlayAdInfo info) =>
+            FlowTrace.Step(Sys, $"rewarded displayed network={info?.AdNetwork ?? "<unknown>"}.");
+
+        private void OnRewardedDisplayFailed(LevelPlayAdInfo info, LevelPlayAdError error)
+        {
+            SettleRewarded(AdShowResult.Unavailable(AdUnavailableReason.LoadFailed));
+            FlowTrace.Fail(Sys, $"rewarded display failed code={error?.ErrorCode}: " +
+                                (error?.ErrorMessage ?? "<none>"));
+            PreloadRewarded();
+        }
+
+        private void OnRewardedEarned(LevelPlayAdInfo info, LevelPlayReward reward)
+        {
+            FlowTrace.Step(Sys, $"REWARDED_EARNED network={info?.AdNetwork ?? "<unknown>"} " +
+                                $"sdkReward={reward?.Amount} {reward?.Name ?? "<unnamed>"}.");
+            SettleRewarded(AdShowResult.Earned());
+        }
+
+        private void OnRewardedClosed(LevelPlayAdInfo info)
+        {
+            if (_pendingCompletion != null) SettleRewarded(AdShowResult.Dismissed());
+            _showingRewarded = false;
+            PreloadRewarded();
+        }
+
+        private void SettleRewarded(AdShowResult result)
+        {
+            Action<AdShowResult> callback = _pendingCompletion;
+            _pendingCompletion = null;
+            _showingRewarded = false;
+            Guard.Try(Sys, "settle rewarded callback", () => callback?.Invoke(result));
+        }
+
         private void OnDestroy()
         {
+            AdServices.Unregister(this);
+            CancelInvoke();
+            if (_rewarded != null)
+            {
+                _rewarded.OnAdLoaded -= OnRewardedLoaded;
+                _rewarded.OnAdLoadFailed -= OnRewardedLoadFailed;
+                _rewarded.OnAdDisplayed -= OnRewardedDisplayed;
+                _rewarded.OnAdDisplayFailed -= OnRewardedDisplayFailed;
+                _rewarded.OnAdRewarded -= OnRewardedEarned;
+                _rewarded.OnAdClosed -= OnRewardedClosed;
+                _rewarded.OnAdImpressionDataReady -= OnImpressionDataReady;
+            }
             LevelPlay.OnInitSuccess -= OnInitSuccess;
             LevelPlay.OnInitFailed  -= OnInitFailed;
             if (s_instance == this) s_instance = null;
