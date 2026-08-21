@@ -133,7 +133,7 @@ namespace DeNelle.Village
         /// per-echo Harvest-lane specialization, scaled by the STEWARD `harvestRate` talent
         /// sum — WO-676 Provider's Bond; x1 at sum 0). The aggregate REPLACES the bare
         /// GlobalHarvestMultiplier factor (it already contains the spine — no double-apply).</summary>
-        public double RatePerSecond => EchoCount * (BaseRatePerHour / 3600.0) * EchoBonusCalculator.AggregateHarvestMultiplier() * (1.0 + HarvestRateBonus());
+        public double RatePerSecond => (EchoBonusCalculator.TotalHarvestRatePerHour() / 3600.0) * (1.0 + HarvestRateBonus());
 
         // WO-676 §2b: ONE registry read at the existing rate calc (this property feeds the
         // online Update tick AND the offline ApplyOfflineWindow integral). StatSum is internally
@@ -156,7 +156,7 @@ namespace DeNelle.Village
         /// capacity by the SAME multiplier basis as rate keeps fill-time ~= SiloCapHours as the
         /// roster/specialization grows. The STEWARD talent factor is deliberately excluded
         /// (capacity is `collectorCap`'s seam, not `harvestRate`'s -- WO-676 note above).</summary>
-        public double SiloCapacity => SiloCapHours * BaseRatePerHour * EchoCount * EchoBonusCalculator.AggregateHarvestMultiplier();
+        public double SiloCapacity => SiloCapHours * EchoBonusCalculator.TotalHarvestRatePerHour();
 
         /// <summary>Silo fill fraction 0..1 (silo / capacity). 0 when capacity is 0.</summary>
         public float FillFraction

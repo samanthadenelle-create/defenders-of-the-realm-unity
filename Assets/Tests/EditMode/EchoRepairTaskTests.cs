@@ -65,9 +65,9 @@ namespace DeNelle.Tests.EditMode
             try
             {
                 var chips = vm.TaskChips();
-                Assert.That(chips.Length, Is.EqualTo(EchoAssignments.PickableResources.Length),
+                Assert.That(chips.Length, Is.EqualTo(EchoAssignments.PickableResources.Length - 1),
                     "five WO-830 resource rows; the WO-811 repair row is retired");
-                for (int i = 0; i < EchoAssignments.PickableResources.Length; i++)
+                for (int i = 0; i < chips.Length; i++)
                 {
                     Assert.That(chips[i].Id, Is.EqualTo(EchoAssignments.PickableResources[i]));
                     Assert.That(chips[i].Id, Is.Not.EqualTo(EchoAssignments.LaneRepair));

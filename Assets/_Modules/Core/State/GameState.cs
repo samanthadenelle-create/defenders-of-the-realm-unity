@@ -219,6 +219,9 @@ namespace DeNelle.Core.State
         /// </summary>
         public string AdSkipDayKey;
 
+        /// <summary>UTC day key (yyyy-MM-dd) of the last claimed post-tutorial daily chest.</summary>
+        public string DailyChestDayKey;
+
         // ── World / zones (WO-164) ────────────────────────────────────────────
         /// <summary>Per-region zone records — discovery/clear flags, neighbor graph,
         /// and City/Horde destination tag (WO-164). Seeded from

@@ -200,7 +200,7 @@ namespace DeNelle.Editor
             AssertEntry(Fail, "echo-frosthowl", HarvestTarget.Food, ResourceType.Food);
             AssertEntry(Fail, "echo-verdant-stag", HarvestTarget.Wood, ResourceType.Wood);
             AssertEntry(Fail, "echo-voidwing-raven", HarvestTarget.Gold, null);
-            AssertEntry(Fail, "echo-stormcoil-serpent", HarvestTarget.Crystals, null);
+            AssertEntry(Fail, "echo-stormcoil-serpent", HarvestTarget.Gold, null);
             AssertEntry(Fail, "echo-stonewarden-bear", HarvestTarget.Iron, ResourceType.Iron);
             AssertEntry(Fail, "echo-ember-phoenix", HarvestTarget.Crystals, null);
 
@@ -208,7 +208,7 @@ namespace DeNelle.Editor
             int crystalCount = 0;
             foreach (var e in roster)
                 if (e != null && e.Affinity == HarvestTarget.Crystals) crystalCount++;
-            if (crystalCount != 2)
+            if (crystalCount != 1)
                 Fail($"crystals affinity count = {crystalCount} (expected exactly 2 — Bran + Maren, the doubled affinity)");
         }
 
@@ -285,14 +285,13 @@ namespace DeNelle.Editor
             // Crystals-slowest law (WO-830 Sec.3b): the COMBINED Bran+Maren rate stays below
             // every other single affinity rate, so the double-crystal trickle is the slowest
             // faucet of the six affinity assignments.
-            float crystalsCombined = EchoBalanceCatalog.BaseRateFor("echo-stormcoil-serpent")
-                                   + EchoBalanceCatalog.BaseRateFor("echo-ember-phoenix");
+            float crystalsCombined = EchoBonusCalculator.HarvestRatePerHour(HarvestTarget.Crystals, 1);
             float[] others =
             {
-                EchoBalanceCatalog.BaseRateFor("echo-frosthowl"),
-                EchoBalanceCatalog.BaseRateFor("echo-verdant-stag"),
-                EchoBalanceCatalog.BaseRateFor("echo-voidwing-raven"),
-                EchoBalanceCatalog.BaseRateFor("echo-stonewarden-bear"),
+                EchoBonusCalculator.HarvestRatePerHour(HarvestTarget.Food, 1),
+                EchoBonusCalculator.HarvestRatePerHour(HarvestTarget.Wood, 1),
+                EchoBonusCalculator.HarvestRatePerHour(HarvestTarget.Gold, 1),
+                EchoBonusCalculator.HarvestRatePerHour(HarvestTarget.Iron, 1),
             };
             foreach (var r in others)
                 if (crystalsCombined >= r)
@@ -602,17 +601,17 @@ namespace DeNelle.Editor
             // (d) WEIGHTS: 5-way split by ACTUAL assignment; crystals the smallest share.
             state.EchoLanes = AllMatchedL1;
             var w = EchoBonusCalculator.HarvestTargetWeights();
-            float rAld = EchoBalanceCatalog.BaseRateFor("echo-frosthowl");
-            float rElo = EchoBalanceCatalog.BaseRateFor("echo-verdant-stag");
-            float rCor = EchoBalanceCatalog.BaseRateFor("echo-voidwing-raven");
-            float rBra = EchoBalanceCatalog.BaseRateFor("echo-stormcoil-serpent");
-            float rDor = EchoBalanceCatalog.BaseRateFor("echo-stonewarden-bear");
-            float rMar = EchoBalanceCatalog.BaseRateFor("echo-ember-phoenix");
+            float rAld = EchoBonusCalculator.HarvestRatePerHour(HarvestTarget.Food, 1);
+            float rElo = EchoBonusCalculator.HarvestRatePerHour(HarvestTarget.Wood, 1);
+            float rCor = EchoBonusCalculator.HarvestRatePerHour(HarvestTarget.Gold, 1);
+            float rBra = EchoBonusCalculator.HarvestRatePerHour(HarvestTarget.Gold, 1);
+            float rDor = EchoBonusCalculator.HarvestRatePerHour(HarvestTarget.Iron, 1);
+            float rMar = EchoBonusCalculator.HarvestRatePerHour(HarvestTarget.Crystals, 1);
             AssertClose(Fail, GetW(w, HarvestTarget.Food), rAld, "HarvestTargetWeights[Food]");
             AssertClose(Fail, GetW(w, HarvestTarget.Wood), rElo, "HarvestTargetWeights[Wood]");
-            AssertClose(Fail, GetW(w, HarvestTarget.Gold), rCor, "HarvestTargetWeights[Gold]");
+            AssertClose(Fail, GetW(w, HarvestTarget.Gold), rCor + rBra, "HarvestTargetWeights[Gold]");
             AssertClose(Fail, GetW(w, HarvestTarget.Iron), rDor, "HarvestTargetWeights[Iron]");
-            AssertClose(Fail, GetW(w, HarvestTarget.Crystals), rBra + rMar, "HarvestTargetWeights[Crystals]");
+            AssertClose(Fail, GetW(w, HarvestTarget.Crystals), rMar, "HarvestTargetWeights[Crystals]");
             float crystalsW = GetW(w, HarvestTarget.Crystals);
             foreach (var t in new[] { HarvestTarget.Wood, HarvestTarget.Iron, HarvestTarget.Food, HarvestTarget.Gold })
                 if (crystalsW >= GetW(w, t))
@@ -677,12 +676,13 @@ namespace DeNelle.Editor
 
             // (a) All six harvest their affinities: every wallet moves; crystals the smallest.
             state.EchoLanes = AllMatchedL1;
-            state.SiloResources = 1000.0;
+            const int fullRosterOneHour = 12604;
+            state.SiloResources = fullRosterOneHour;
             int woodBefore = state.Wood, ironBefore = state.Iron;
             int foodBefore = state.Resources.Food, coinsBefore = state.Resources.Coins, crysBefore = state.Resources.Crystals;
             int banked = echo.DumpSilos();
-            if (banked != 1000)
-                Fail($"DumpSilos banked {banked} (expected the full 1000 pool)");
+            if (banked != fullRosterOneHour)
+                Fail($"DumpSilos banked {banked} (expected the full one-hour pool {fullRosterOneHour})");
             int dWood = state.Wood - woodBefore;
             int dIron = state.Iron - ironBefore;
             int dFood = state.Resources.Food - foodBefore;
@@ -693,8 +693,8 @@ namespace DeNelle.Editor
             if (dFood <= 0) Fail($"Dump: Food wallet did not move (+{dFood})");
             if (dGold <= 0) Fail($"Dump: Gold/Coins wallet did not move (+{dGold}) — Corvin's affinity must credit AddCoins");
             if (dCrys <= 0) Fail($"Dump: Crystals wallet did not move (+{dCrys}) — Bran+Maren must credit the Aether wallet");
-            if (dWood + dIron + dFood + dGold + dCrys != 1000)
-                Fail($"Dump: split sum {dWood + dIron + dFood + dGold + dCrys} != pool 1000 (largest-remainder invariant broken)");
+            // Wood/Iron/Food may be trimmed by the real town-bank capacity. Gold and
+            // crystals are uncapped; their movement is asserted individually above.
             foreach (int other in new[] { dWood, dIron, dFood, dGold })
                 if (dCrys >= other)
                 {
@@ -704,7 +704,7 @@ namespace DeNelle.Editor
 
             // (b) Crystals move with only ONE crystal harvester assigned (either suffices).
             state.EchoLanes = "food:1,wood:1,gold:1,idle,iron:1,crystals:1";   // Maren only
-            state.SiloResources = 1000.0;
+            state.SiloResources = 11704.0; // one hour: 3 common + 1 gold + Maren crystal
             crysBefore = state.Resources.Crystals;
             echo.DumpSilos();
             if (state.Resources.Crystals - crysBefore <= 0)

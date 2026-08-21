@@ -48,6 +48,7 @@
 
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using UnityEngine;
 using Unity.Services.LevelPlay;
 using DeNelle.Core;
@@ -66,6 +67,8 @@ namespace DeNelle.Village.Monetization
         /// <summary>LevelPlay dashboard app key for com.denellestudios.echoesofelarion (Android).</summary>
         private const string AppKey = "27850b635";
         private const string RewardedBuildSkipAdUnitId = "2ibxid58jat3sxyd";
+        private const string RewardedHarvestAdUnitId = "imk56dcdi5mym2wq";
+        private const string RewardedDailyChestAdUnitId = "it6izgx1flbj5rce";
         private const float RetryFloorSeconds = 15f;
         private const float RetryCeilingSeconds = 120f;
 
@@ -73,6 +76,10 @@ namespace DeNelle.Village.Monetization
         private static bool s_initStarted;
         private readonly ConcurrentQueue<string> _impressionRevenue = new ConcurrentQueue<string>();
         private LevelPlayRewardedAd _rewarded;
+        private readonly Dictionary<string, LevelPlayRewardedAd> _rewardedByPlacement = new Dictionary<string, LevelPlayRewardedAd>();
+        private readonly Dictionary<string, string> _placementByAdUnit = new Dictionary<string, string>();
+        private readonly HashSet<string> _loadingPlacements = new HashSet<string>();
+        private string _activePlacement;
         private Action<AdShowResult> _pendingCompletion;
         private bool _loadingRewarded;
         private bool _showingRewarded;
@@ -84,6 +91,12 @@ namespace DeNelle.Village.Monetization
         public bool IsRewardedReady => Ready && !_showingRewarded && _rewarded != null && _rewarded.IsAdReady();
         public AdUnavailableReason RewardedUnavailableReason =>
             IsRewardedReady ? AdUnavailableReason.None : _unavailableReason;
+        public bool IsRewardedReadyFor(string placementId) =>
+            Ready && !_showingRewarded &&
+            _rewardedByPlacement.TryGetValue(placementId ?? string.Empty, out var ad) &&
+            ad != null && ad.IsAdReady();
+        public AdUnavailableReason RewardedUnavailableReasonFor(string placementId) =>
+            IsRewardedReadyFor(placementId) ? AdUnavailableReason.None : _unavailableReason;
 
         /// <summary>True once the SDK has reported a successful init. Ad call sites may gate on this.</summary>
         public static bool Ready { get; private set; }
@@ -213,33 +226,53 @@ namespace DeNelle.Village.Monetization
         private void CreateRewardedAd()
         {
             if (_rewarded != null) return;
-            _rewarded = new LevelPlayRewardedAd(RewardedBuildSkipAdUnitId);
-            _rewarded.OnAdLoaded += OnRewardedLoaded;
-            _rewarded.OnAdLoadFailed += OnRewardedLoadFailed;
-            _rewarded.OnAdDisplayed += OnRewardedDisplayed;
-            _rewarded.OnAdDisplayFailed += OnRewardedDisplayFailed;
-            _rewarded.OnAdRewarded += OnRewardedEarned;
-            _rewarded.OnAdClosed += OnRewardedClosed;
-            // SDK 9.5 exposes ILRD per ad instance. The callback can arrive off the main thread,
-            // so it only queues plain text; Update performs Unity logging safely.
-            _rewarded.OnAdImpressionDataReady += OnImpressionDataReady;
+            AddRewarded("place.build.skip", RewardedBuildSkipAdUnitId);
+            AddRewarded("place.harvest.doubler", RewardedHarvestAdUnitId);
+            AddRewarded("place.daily.chest", RewardedDailyChestAdUnitId);
+            _rewarded = _rewardedByPlacement["place.build.skip"];
+        }
+
+        private void AddRewarded(string placementId, string adUnitId)
+        {
+            var ad = new LevelPlayRewardedAd(adUnitId);
+            ad.OnAdLoaded += OnRewardedLoaded;
+            ad.OnAdLoadFailed += OnRewardedLoadFailed;
+            ad.OnAdDisplayed += OnRewardedDisplayed;
+            ad.OnAdDisplayFailed += OnRewardedDisplayFailed;
+            ad.OnAdRewarded += OnRewardedEarned;
+            ad.OnAdClosed += OnRewardedClosed;
+            ad.OnAdImpressionDataReady += OnImpressionDataReady;
+            _rewardedByPlacement[placementId] = ad;
+            _placementByAdUnit[adUnitId] = placementId;
         }
 
         public void PreloadRewarded()
         {
-            if (!Ready || _rewarded == null || _loadingRewarded || _rewarded.IsAdReady()) return;
-            CancelInvoke(nameof(PreloadRewarded));
-            _loadingRewarded = true;
-            _rewarded.LoadAd();
-            FlowTrace.Step(Sys, "rewarded preload requested.");
+            PreloadRewarded("place.build.skip");
+            PreloadRewarded("place.harvest.doubler");
+            PreloadRewarded("place.daily.chest");
+        }
+
+        public void PreloadRewarded(string placementId)
+        {
+            if (!Ready || !_rewardedByPlacement.TryGetValue(placementId ?? string.Empty, out var ad) ||
+                ad == null || _loadingPlacements.Contains(placementId) || ad.IsAdReady()) return;
+            _loadingPlacements.Add(placementId);
+            ad.LoadAd();
+            FlowTrace.Step(Sys, $"rewarded preload requested placement={placementId}.");
         }
 
         public void ShowRewarded(Action<AdShowResult> onComplete)
         {
-            if (!IsRewardedReady)
+            ShowRewarded("place.build.skip", onComplete);
+        }
+
+        public void ShowRewarded(string placementId, Action<AdShowResult> onComplete)
+        {
+            if (!IsRewardedReadyFor(placementId))
             {
-                onComplete?.Invoke(AdShowResult.Unavailable(RewardedUnavailableReason));
-                PreloadRewarded();
+                onComplete?.Invoke(AdShowResult.Unavailable(RewardedUnavailableReasonFor(placementId)));
+                PreloadRewarded(placementId);
                 return;
             }
 
@@ -250,14 +283,16 @@ namespace DeNelle.Village.Monetization
             }
 
             _pendingCompletion = onComplete;
+            _activePlacement = placementId;
             _showingRewarded = true;
             _unavailableReason = AdUnavailableReason.None;
-            _rewarded.ShowAd();
+            _rewardedByPlacement[placementId].ShowAd();
         }
 
         private void OnRewardedLoaded(LevelPlayAdInfo info)
         {
             _loadingRewarded = false;
+            RemoveLoadingByUnit(info?.AdUnitId);
             _retrySeconds = RetryFloorSeconds;
             _unavailableReason = AdUnavailableReason.None;
             FlowTrace.Step(Sys, $"REWARDED_READY unit={info?.AdUnitId ?? RewardedBuildSkipAdUnitId}");
@@ -266,6 +301,7 @@ namespace DeNelle.Village.Monetization
         private void OnRewardedLoadFailed(LevelPlayAdError error)
         {
             _loadingRewarded = false;
+            RemoveLoadingByUnit(error?.AdUnitId);
             _unavailableReason = error != null && error.ErrorCode == 509
                 ? AdUnavailableReason.NoFill
                 : AdUnavailableReason.LoadFailed;
@@ -298,7 +334,16 @@ namespace DeNelle.Village.Monetization
         {
             if (_pendingCompletion != null) SettleRewarded(AdShowResult.Dismissed());
             _showingRewarded = false;
-            PreloadRewarded();
+            string placement = _activePlacement;
+            _activePlacement = null;
+            PreloadRewarded(placement);
+        }
+
+        private void RemoveLoadingByUnit(string adUnitId)
+        {
+            if (string.IsNullOrEmpty(adUnitId)) { _loadingPlacements.Clear(); return; }
+            if (_placementByAdUnit.TryGetValue(adUnitId, out string placement))
+                _loadingPlacements.Remove(placement);
         }
 
         private void SettleRewarded(AdShowResult result)
@@ -313,15 +358,16 @@ namespace DeNelle.Village.Monetization
         {
             AdServices.Unregister(this);
             CancelInvoke();
-            if (_rewarded != null)
+            foreach (LevelPlayRewardedAd ad in _rewardedByPlacement.Values)
             {
-                _rewarded.OnAdLoaded -= OnRewardedLoaded;
-                _rewarded.OnAdLoadFailed -= OnRewardedLoadFailed;
-                _rewarded.OnAdDisplayed -= OnRewardedDisplayed;
-                _rewarded.OnAdDisplayFailed -= OnRewardedDisplayFailed;
-                _rewarded.OnAdRewarded -= OnRewardedEarned;
-                _rewarded.OnAdClosed -= OnRewardedClosed;
-                _rewarded.OnAdImpressionDataReady -= OnImpressionDataReady;
+                if (ad == null) continue;
+                ad.OnAdLoaded -= OnRewardedLoaded;
+                ad.OnAdLoadFailed -= OnRewardedLoadFailed;
+                ad.OnAdDisplayed -= OnRewardedDisplayed;
+                ad.OnAdDisplayFailed -= OnRewardedDisplayFailed;
+                ad.OnAdRewarded -= OnRewardedEarned;
+                ad.OnAdClosed -= OnRewardedClosed;
+                ad.OnAdImpressionDataReady -= OnImpressionDataReady;
             }
             LevelPlay.OnInitSuccess -= OnInitSuccess;
             LevelPlay.OnInitFailed  -= OnInitFailed;

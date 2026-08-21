@@ -147,14 +147,14 @@ namespace DeNelle.Editor
         private static void CheckChipProjection(EchoCardVM vm, Action<string> Fail)
         {
             var chips = vm.ResourceChips();
-            if (chips == null || chips.Length != 5)
+            if (chips == null || chips.Length != 4)
             {
-                Fail($"ResourceChips length {(chips == null ? 0 : chips.Length)} (expected 5)");
+                Fail($"ResourceChips length {(chips == null ? 0 : chips.Length)} (expected 4 before final-Echo crystal unlock)");
                 return;
             }
 
             var expectedOrder = EchoAssignments.PickableResources;
-            for (int i = 0; i < 5; i++)
+            for (int i = 0; i < chips.Length; i++)
             {
                 if (chips[i].Id != expectedOrder[i])
                     Fail($"chip[{i}].Id='{chips[i].Id}' (expected '{expectedOrder[i]}' — PickableResources order)");
@@ -164,7 +164,7 @@ namespace DeNelle.Editor
 
             // Elowen assigned IRON: iron chip Selected + "(now)" text cue; wood chip is the
             // affinity (Preferred + the calling note); nothing else flagged.
-            for (int i = 0; i < 5; i++)
+            for (int i = 0; i < chips.Length; i++)
             {
                 var c = chips[i];
                 bool expectSel = c.Id == EchoAssignments.ResIron;
@@ -304,7 +304,8 @@ namespace DeNelle.Editor
             // Chip projection: EXACTLY the five WO-830 resource rows, no sixth task row.
             var all = vm.TaskChips();
             var expectedOrder = EchoAssignments.PickableResources;
-            if (all == null || all.Length != expectedOrder.Length)
+            int expectedCount = expectedOrder.Length - 1;
+            if (all == null || all.Length != expectedCount)
             {
                 Fail($"TaskChips length {(all == null ? 0 : all.Length)} (expected {expectedOrder.Length} — five resources; "
                    + "the WO-811 repair row is RETIRED, repair is passive)");

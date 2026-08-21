@@ -1411,6 +1411,7 @@ namespace DeNelle.Village
             // The SINGLE V2-path finisher (spec §2.1c): mark onboarded + kick the loop —
             // the same handoff the legacy director performs (TutorialDirector.SkipToGameplay).
             GameStateService.Instance?.FinishOnboarding();
+            DeNelle.Village.Monetization.DailyChestController.NotifyTutorialFinished();
             if (_wave == null) _wave = FindAnyObjectByType<WaveManager>();
             _wave?.BeginLoop().Forget();
         }

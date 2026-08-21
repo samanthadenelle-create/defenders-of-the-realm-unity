@@ -311,6 +311,9 @@ namespace DeNelle.Core.State
             /// <summary>Local-day key the ad-skip counter belongs to. Absent → null (counter resets on first claim).</summary>
             [JsonProperty("adSkipDayKey")] public string AdSkipDayKey;
 
+            /// <summary>UTC day key of the last daily chest claim. Additive; absent means eligible.</summary>
+            [JsonProperty("dailyChestDayKey")] public string DailyChestDayKey;
+
             // ── v14 — Player build mode base layout (WO-108) ─────────────────────
             /// <summary>
             /// The player's placed-structure base layout. Nullable per the

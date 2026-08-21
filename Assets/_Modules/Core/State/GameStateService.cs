@@ -493,6 +493,7 @@ namespace DeNelle.Core.State
                 BuildJobs = s.BuildJobs != null ? new List<BuildJobData>(s.BuildJobs) : null,
                 AdSkipsUsedToday = s.AdSkipsUsedToday,
                 AdSkipDayKey = s.AdSkipDayKey,
+                DailyChestDayKey = s.DailyChestDayKey,
                 BaseLayout = s.BaseLayout != null ? new List<PlacedStructureData>(s.BaseLayout) : null,
                 Magic = s.Magic,
                 PartyMemberIds = s.PartyMemberIds != null ? new List<string>(s.PartyMemberIds) : null,
@@ -584,6 +585,7 @@ namespace DeNelle.Core.State
             if (p.BuildJobs != null) s.BuildJobs = p.BuildJobs;
             if (p.AdSkipsUsedToday.HasValue) s.AdSkipsUsedToday = (int)p.AdSkipsUsedToday.Value;
             if (p.AdSkipDayKey != null) s.AdSkipDayKey = p.AdSkipDayKey;
+            if (p.DailyChestDayKey != null) s.DailyChestDayKey = p.DailyChestDayKey;
             if (p.BaseLayout != null) s.BaseLayout = p.BaseLayout;
             if (p.Magic.HasValue) s.Magic = (int)p.Magic.Value;   // DEF-121 — tech-axis currency
             if (p.PartyMemberIds != null) s.PartyMemberIds = p.PartyMemberIds;   // WO-301 — party roster
@@ -1017,6 +1019,7 @@ namespace DeNelle.Core.State
             s.GearLevels = new System.Collections.Generic.Dictionary<string, int>();   // WO-808 — New Game: all gear at authored baseline (level 1).
             s.AdSkipsUsedToday = 0;
             s.AdSkipDayKey = null;
+            s.DailyChestDayKey = null;
             // WO-108/WO-682/WO-707 — New Game starts on the BLANK template (owner ruling
             // 2026-07-12 "I want to see the blank template and add buildings"): authored
             // shell only, ZERO pre-placed functional buildings. The WO-682 FTUE "grace

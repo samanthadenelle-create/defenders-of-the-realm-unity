@@ -319,6 +319,10 @@ namespace DeNelle.Village
         {
             get
             {
+                // Crystal nodes are a deliberately narrow premium-currency faucet.
+                // Live harvests roll 1-2 (see RollYield); expose the safe upper bound
+                // so reserve/UI/offline callers cannot restore the old scaled payout.
+                if (Resource == MineResource.AetherCrystal) return 2;
                 int tier = Mathf.Max(0, ZoneManager.DangerTierAt(transform.position));
                 return Mathf.RoundToInt(YieldPerExtract * (1f + 0.25f * tier));
             }
@@ -346,7 +350,9 @@ namespace DeNelle.Village
 
             var site = gameObject.AddComponent<HarvestSite>();
             site.ResourceType = Resource;           // map MineResource 1:1
-            site.BaseYield = Mathf.Max(3, YieldPerExtract);
+            site.BaseYield = Resource == MineResource.AetherCrystal
+                ? 1
+                : Mathf.Max(3, YieldPerExtract);
             site.HarvestInterval = Mathf.Max(3f, ExtractCooldown * 0.7f);
             site.ApplyWorldScaling = true;
             site.Claim();
@@ -491,7 +497,7 @@ namespace DeNelle.Village
         // → BankYield, then arm the cooldown. DrainReserve handles depletion + despawn.
         private void ExtractReserve()
         {
-            int banked = DrainReserve(EffectiveYield);
+            int banked = DrainReserve(RollYield());
             if (banked > 0)
             {
                 GameSfx.PlayPetHarvest();   // same harvest "ding" as the legacy tap
@@ -510,7 +516,7 @@ namespace DeNelle.Village
             int tier = Mathf.Max(0, ZoneManager.DangerTierAt(transform.position));
             // Region danger bonus: +25% yield per danger tier (Goldfields ×1.25 …
             // Ashwood ×2.0). Danger = reward.
-            int amount = Mathf.RoundToInt(YieldPerExtract * (1f + 0.25f * tier));
+            int amount = RollYield();
 
             BankYield(amount);
             if (amount > 0)
@@ -535,6 +541,18 @@ namespace DeNelle.Village
 
             Debug.Log($"[MineNode] +{amount} {Resource} (tier {tier}) — {_extractsLeft} left" +
                       (_depleted ? ", depleted." : "."));
+        }
+
+        private int RollYield()
+        {
+            // Premium currency stays useful but scarce: every crystal-node harvest
+            // pays a visible 1 or 2, regardless of region scaling or legacy scene
+            // YieldPerExtract values (several authored nodes were reaching 8).
+            if (Resource == MineResource.AetherCrystal)
+                return UnityEngine.Random.Range(1, 3);
+
+            int tier = Mathf.Max(0, ZoneManager.DangerTierAt(transform.position));
+            return Mathf.RoundToInt(YieldPerExtract * (1f + 0.25f * tier));
         }
 
         // Route through EconomyService (the Economy class) so:

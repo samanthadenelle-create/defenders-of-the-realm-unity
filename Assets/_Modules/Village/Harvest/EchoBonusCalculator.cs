@@ -86,6 +86,9 @@ namespace DeNelle.Village
     /// </summary>
     public static class EchoBonusCalculator
     {
+        private const float CommonResourcePerHour = 3600f; // 5 every 5 seconds
+        private const float GoldPerHour = 900f;            // valuable, but not premium
+        private const float CrystalPerHour = 4f;           // exactly 1 every 15 minutes
         // Hidden tri-synergy activation edge (trace on transition, not per frame --
         // AggregateHarvestMultiplier runs every tick). Internal-only observability.
         private static bool s_triWasActive;
@@ -176,22 +179,41 @@ namespace DeNelle.Village
                 if (entry == null) continue;
 
                 int level = EchoAssignments.LevelOf(i);
-                float w = Mathf.Max(0f, EchoBalanceCatalog.BaseRateFor(entry.Id)) * Mathf.Max(1, level);
+                float w = HarvestRatePerHour(target, level);
                 if (w <= 0f) continue;
 
                 weights[target] += w;
                 total += w;
             }
 
-            if (total <= 0f)
-            {
-                // No harvest echoes -> even classic split (never divide by zero downstream).
-                weights[HarvestTarget.Wood] = 1f;
-                weights[HarvestTarget.Iron] = 1f;
-                weights[HarvestTarget.Food] = 1f;
-            }
-
             return weights;
+        }
+
+        /// <summary>Actual workforce production per hour. Ordinary materials use the
+        /// player-readable 5-per-5-seconds cadence. Gold is slower; crystals are an
+        /// intentionally tiny final-Echo drip fixed at 1 every 15 minutes.</summary>
+        public static float HarvestRatePerHour(HarvestTarget target, int level)
+        {
+            int maxLevel = Mathf.Max(1, EchoBalanceCatalog.MaxLevel);
+            int clamped = Mathf.Clamp(level, 1, maxLevel);
+            float progress = maxLevel <= 1 ? 0f : (clamped - 1f) / (maxLevel - 1f);
+            switch (target)
+            {
+                case HarvestTarget.Crystals:
+                    return CrystalPerHour;
+                case HarvestTarget.Gold:
+                    return GoldPerHour * (1f + 0.10f * (clamped - 1));
+                default:
+                    return CommonResourcePerHour * (1f + 0.10f * (clamped - 1));
+            }
+        }
+
+        public static float TotalHarvestRatePerHour()
+        {
+            var weights = HarvestTargetWeights();
+            float total = 0f;
+            foreach (float rate in weights.Values) total += Mathf.Max(0f, rate);
+            return total;
         }
 
         // =====================================================================

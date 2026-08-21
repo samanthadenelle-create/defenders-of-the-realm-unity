@@ -60,6 +60,8 @@ using DeNelle.Village.Buildings.Progression;
 // Alias rather than `using DeNelle.Village;` - that namespace declares Entry / ResourceCost /
 // UpgradeResult, all of which collide with types in Buildings.Progression above.
 using EchoBalanceCatalog = DeNelle.Village.EchoBalanceCatalog;
+using EchoBonusCalculator = DeNelle.Village.EchoBonusCalculator;
+using HarvestTarget = DeNelle.Village.HarvestTarget;
 
 namespace DeNelle.Editor
 {
@@ -624,6 +626,21 @@ namespace DeNelle.Editor
 
         private static void CheckEchoScaling(List<string> failures)
         {
+            // Owner re-balance 2026-08-21: predictable linear worker cadence replaces
+            // the old quadratic faucet. Common materials pay 5/5s, Gold is slower,
+            // and only final-Echo crystals pay exactly 1/15m at every level.
+            if (Mathf.Abs(EchoBonusCalculator.HarvestRatePerHour(HarvestTarget.Wood, 1) - 3600f) > 0.01f ||
+                Mathf.Abs(EchoBonusCalculator.HarvestRatePerHour(HarvestTarget.Iron, 1) - 3600f) > 0.01f ||
+                Mathf.Abs(EchoBonusCalculator.HarvestRatePerHour(HarvestTarget.Food, 1) - 3600f) > 0.01f)
+                failures.Add("[echo-scaling] Wood/Iron/Food must each produce 3600/hour (5 every 5 seconds) at level 1");
+            if (Mathf.Abs(EchoBonusCalculator.HarvestRatePerHour(HarvestTarget.Gold, 1) - 900f) > 0.01f)
+                failures.Add("[echo-scaling] Gold must remain slower than common materials (900/hour)");
+            if (Mathf.Abs(EchoBonusCalculator.HarvestRatePerHour(HarvestTarget.Crystals, 1) - 4f) > 0.01f ||
+                Mathf.Abs(EchoBonusCalculator.HarvestRatePerHour(HarvestTarget.Crystals, EchoBalanceCatalog.MaxLevel) - 4f) > 0.01f)
+                failures.Add("[echo-scaling] Crystals must stay fixed at 4/hour (1 every 15 minutes), unaffected by level");
+            return;
+
+#pragma warning disable CS0162
             float baseC = EchoBalanceCatalog.BaseContributionPerEcho;
             float match = EchoBalanceCatalog.PreferredLaneMatchBonus;
             float perLv = EchoBalanceCatalog.PerLevelBonus;
@@ -698,6 +715,7 @@ namespace DeNelle.Editor
                     "all-matched roster, outside [10%..25%] - below 10% the crystal-priced towers " +
                     "and every crystal-costed building tier stop being reachable; above 25% the " +
                     "WO-830 monetization guard (crystals = the slowest faucet) is gone");
+            #pragma warning restore CS0162
         }
     }
 }

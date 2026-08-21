@@ -189,10 +189,10 @@ namespace DeNelle.Village
                 Flavor = "Thunder gathers, and Bran stands within it -- the watchman who held Elarion's wall through every gale, wakened from the Heart that keeps him.",
                 Lore = "Bran stood the parapet through storms that broke lesser souls, calling every alarm in time. When he fell at his post, the Heart would not lose so steady a guard and kept his essence in its roots. His Echo drives the whole workforce on, restless as the sky that made it.",
                 EmergeLine = "Thunder rolls beneath the boughs -- the watchman takes his post.",
-                // WO-830: storm-charged aether -> Crystals (the deliberately doubled affinity,
-                // shared with Maren; routed to the Aether wallet, not the 3-way silo split).
+                // Crystal gathering is reserved for the final Echo, Maren. Bran's
+                // watchman/scout identity instead supports the Gold lane.
                 ElementType = ElementType.Storm, PreferredLane = LaneType.Harvest,
-                Affinity = HarvestTarget.Crystals, HarvestResource = null,
+                Affinity = HarvestTarget.Gold, HarvestResource = null,
             },
             new EchoRosterEntry {
                 Id = "echo-stonewarden-bear", Order = 5,

@@ -239,9 +239,11 @@ namespace DeNelle.Village
             string current = EchoAssignments.ResourceTokenOf(EchoIndex);
             var entry = EchoRosterCatalog.ByIndex(EchoIndex);
             string affinityToken = entry != null ? EchoRosterCatalog.TargetToken(entry.Affinity) : "";
-            var resources = EchoAssignments.PickableResources;
-            var chips = new ResourceChip[resources.Length];
-            for (int i = 0; i < resources.Length; i++)
+            var resources = new List<string>();
+            foreach (string resource in EchoAssignments.PickableResources)
+                if (EchoAssignments.CanHarvestResource(EchoIndex, resource)) resources.Add(resource);
+            var chips = new ResourceChip[resources.Count];
+            for (int i = 0; i < resources.Count; i++)
             {
                 string res = resources[i];
                 bool sel = res == current;

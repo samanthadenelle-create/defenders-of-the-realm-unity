@@ -98,6 +98,15 @@ namespace DeNelle.Village
         /// in display order. Identity is carried by icon + TEXT, never hue (colorblind law).</summary>
         public static readonly string[] PickableResources = { ResWood, ResIron, ResFood, ResGold, ResCrystals };
 
+        /// <summary>Crystals are the final-roster reward: only Maren (order 6) may
+        /// harvest them. This gate is enforced in reads and writes, not just hidden UI.</summary>
+        public static bool CanHarvestResource(int echoIndex, string resourceToken)
+        {
+            string norm = (resourceToken ?? "").Trim().ToLowerInvariant();
+            return IsResourceToken(norm) &&
+                   (norm != ResCrystals || echoIndex == EchoRosterCatalog.Count - 1);
+        }
+
         /// <summary>Raised after any assignment/level change (the card + HUD listen).</summary>
         public static event Action Changed;
 
@@ -123,12 +132,14 @@ namespace DeNelle.Village
         public static string ResourceTokenOf(int echoIndex)
         {
             string part = CanonicalPart(RawToken(echoIndex), echoIndex);
-            if (IsResourceToken(part)) return part;
+            if (IsResourceToken(part))
+                return CanHarvestResource(echoIndex, part) ? part : ResGold;
             if (part == LaneHarvest)
             {
                 var entry = EchoRosterCatalog.ByIndex(echoIndex);
-                return entry != null ? EchoRosterCatalog.TargetToken(entry.Affinity)
-                                     : EchoRosterCatalog.TargetToken(HarvestTarget.Wood);
+                string affinity = entry != null ? EchoRosterCatalog.TargetToken(entry.Affinity)
+                                                : EchoRosterCatalog.TargetToken(HarvestTarget.Wood);
+                return CanHarvestResource(echoIndex, affinity) ? affinity : ResGold;
             }
             return "";   // idle / crafting / defense / exploration -- no harvest resource
         }
@@ -198,9 +209,9 @@ namespace DeNelle.Village
         public static bool AssignHarvest(int echoIndex, string resourceToken)
         {
             string norm = (resourceToken ?? "").Trim().ToLowerInvariant();
-            if (!IsResourceToken(norm))
+            if (!CanHarvestResource(echoIndex, norm))
             {
-                FlowTrace.Warn("Echo", $"AssignHarvest(echo={echoIndex}, resource='{resourceToken}') -- not a harvest resource token; ignored.");
+                FlowTrace.Warn("Echo", $"AssignHarvest(echo={echoIndex}, resource='{resourceToken}') -- unavailable; Crystals unlock only with final Echo Maren; ignored.");
                 return false;
             }
             return Assign(echoIndex, norm);

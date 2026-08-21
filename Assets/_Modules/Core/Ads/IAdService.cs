@@ -159,6 +159,18 @@ namespace DeNelle.Core.Ads
         /// reward) or reports failure for an ad that is about to succeed.
         /// </summary>
         void ShowRewarded(Action<AdShowResult> onComplete);
+
+        /// <summary>Placement-aware readiness for games that use distinct rewarded ad units.</summary>
+        bool IsRewardedReadyFor(string placementId);
+
+        /// <summary>Placement-aware unavailable reason.</summary>
+        AdUnavailableReason RewardedUnavailableReasonFor(string placementId);
+
+        /// <summary>Preload the rewarded unit assigned to a gameplay placement.</summary>
+        void PreloadRewarded(string placementId);
+
+        /// <summary>Show the rewarded unit assigned to a gameplay placement.</summary>
+        void ShowRewarded(string placementId, Action<AdShowResult> onComplete);
     }
 
     /// <summary>Single provider-neutral registration point used by gameplay.</summary>
@@ -194,6 +206,9 @@ namespace DeNelle.Core.Ads
         public AdUnavailableReason RewardedUnavailableReason => AdUnavailableReason.Disabled;
 
         public void PreloadRewarded() { /* no provider - nothing to preload */ }
+        public bool IsRewardedReadyFor(string placementId) => false;
+        public AdUnavailableReason RewardedUnavailableReasonFor(string placementId) => AdUnavailableReason.Disabled;
+        public void PreloadRewarded(string placementId) { }
 
         public void ShowRewarded(Action<AdShowResult> onComplete)
         {
@@ -201,5 +216,7 @@ namespace DeNelle.Core.Ads
             // softlocked button. Silence is not a safe default for an async contract.
             onComplete?.Invoke(AdShowResult.Unavailable(AdUnavailableReason.Disabled));
         }
+
+        public void ShowRewarded(string placementId, Action<AdShowResult> onComplete) => ShowRewarded(onComplete);
     }
 }
