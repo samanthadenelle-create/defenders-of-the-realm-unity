@@ -2,6 +2,7 @@
   "version": 2,
   "graphId": "dg_ember_deep",
   "entry": "entry",
+  "exitRoomId": "warlord_keep",
   "_comment": "WO-930 CONVERSION 2026-08-08: 5 StairDown/StairUp PAIRS replaced by 5 single StairwellRoom instances. Pairs were DISCOVERED from the vertical edges, not assumed from ids. Each stairwell enters at s_upper_w and leaves at s_lower_e - ordinary Door sockets, no vertical mate. WO-1001 Phase 2C - The Ember Deep. A magma-lit deep hold seized by orcs; the hottest, deepest crawl. SIX LEVELS. Orc-group throughout, handing over to troll-group on the last floor so the final approach reads as a different threat rather than more of the same. Boss = an Ogre warlord. Oil burns fastest here by design intent, so stones are placed on levels 0, -2 and -4 - present but never generous, which is what makes the push-vs-extract call bite. Extract pads on every landing so banking is always an option. Richest loot in the game: dungeon-deepboss on the warlord plus two dungeon-chest vaults on the way down.",
   "nodes": [
     {
@@ -244,18 +245,7 @@
       "radius": 2.5
     }
   ],
-  "extracts": [
-    {
-      "id": "ed-extract-back",
-      "roomId": "warlord_keep",
-      "offset": [
-        7.0,
-        0.0,
-        0.0
-      ],
-      "label": "Leave"
-    }
-  ],
+  "extracts": [],
   "traps": [
     {
       "id": "ed-trap-l1",

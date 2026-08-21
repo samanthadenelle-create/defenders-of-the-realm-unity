@@ -196,14 +196,6 @@ namespace DeNelle.Editor.Regression
             {
                 var layout = LoadLayout(id, failures, "[egress-placement]");
                 if (layout == null) continue;
-                if (layout.extracts == null || layout.extracts.Count == 0)
-                {
-                    failures.Add($"[egress-placement] {id} authors NO extract - the back exit is missing " +
-                                 "entirely, so clearing the dungeon dead-ends and the only way out is the " +
-                                 "long walk back to the front door");
-                    continue;
-                }
-
                 string treasureRoom = null;
                 try { treasureRoom = deepest.Invoke(null, new object[] { id }) as string; }
                 catch (Exception ex)
@@ -220,6 +212,20 @@ namespace DeNelle.Editor.Regression
                     continue;
                 }
                 checkedCount++;
+
+                // A one-way expedition may designate its ONE full portal directly in the
+                // treasure room and author no secondary extract. This is Ember Deep's owner-
+                // approved shape: arrival marker only at entry, one exit after the Warlord.
+                if (layout.extracts == null || layout.extracts.Count == 0)
+                {
+                    log.AppendLine($"  {id}: single true exit in '{layout.exitRoomId}' " +
+                                   $"(treasure room = '{treasureRoom}'), no secondary extract");
+                    if (!string.Equals(layout.exitRoomId, treasureRoom, StringComparison.OrdinalIgnoreCase))
+                        failures.Add($"[egress-placement] {id} authors no back extract, but its only true exit " +
+                                     $"is in '{layout.exitRoomId}' instead of treasure room '{treasureRoom}' - " +
+                                     "clearing the dungeon would dead-end or require a long walk back");
+                    continue;
+                }
 
                 var back = layout.extracts[0];
                 log.AppendLine($"  {id}: back exit '{back?.id}' in room '{back?.roomId}' " +

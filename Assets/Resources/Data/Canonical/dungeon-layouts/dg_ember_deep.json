@@ -1,7 +1,7 @@
 {
   "version": 2,
   "dungeonId": "dg_ember_deep",
-  "exitRoomId": "entry",
+  "exitRoomId": "warlord_keep",
   "cellSize": 1.0,
   "rooms": [
     {
@@ -549,16 +549,5 @@
   ],
   "keys": [],
   "locks": [],
-  "extracts": [
-    {
-      "id": "ed-extract-back",
-      "roomId": "warlord_keep",
-      "offset": [
-        7.0,
-        0.0,
-        0.0
-      ],
-      "label": "Leave"
-    }
-  ]
+  "extracts": []
 }

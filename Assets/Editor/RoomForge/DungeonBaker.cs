@@ -1197,6 +1197,17 @@ namespace DeNelle.Editor.RoomForge
                 ? eGo.transform.position : Vector3.zero;
             Vector3 heroPos = SampleNav(entryPos, 8f) + Vector3.up * 0.9f;
 
+            // Persistent arrival contract for the carried town hero. The runtime keeps the
+            // player's real hero across a Single-load and must not depend on winning a race
+            // against this baked placeholder to discover the dungeon seat. Without a marker,
+            // a late/absent duplicate leaves the carried hero at its town coordinates (the
+            // Ember Deep device capture landed inside portal rock at z=144.68). Keep the marker
+            // separate from the disposable hero root so deduplication cannot destroy the seat.
+            var arrival = new GameObject("HeroStartPoint_PlayerSpawn");
+            arrival.transform.SetParent(root, true);
+            arrival.transform.position = heroPos;
+            arrival.transform.rotation = Quaternion.LookRotation(Vector3.forward, Vector3.up);
+
             // Hero root + "HeroBody" child (WO-796 kill-shot, audit 2026-08-01): the canonical
             // hero shape — DungeonSceneBuilder.BuildHero and HeroControlEnsurer.SpawnEmergencyHero
             // both build an EMPTY root with a child named "HeroBody". HeroBodySwapper (added
