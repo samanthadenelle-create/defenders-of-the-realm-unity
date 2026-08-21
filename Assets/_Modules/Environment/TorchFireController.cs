@@ -1,4 +1,38 @@
 // =============================================================================
+// ⚠ SUPERSEDED — DELETION PROPOSED TO THE OWNER, 2026-08-21 (WO-992). NOT YET
+//   DELETED, and an agent must not delete it unilaterally. Read the blocker.
+// -----------------------------------------------------------------------------
+// RESEARCH FINDING (the WO asked "when was it created, what touches it, was it
+// superseded"). Answers, all read at source 2026-08-21:
+//
+//   CREATED: commit 00b1662ee, 2026-05-29, under WO-55. No earlier path.
+//
+//   NOTHING SEATS IT. GUID f768c3e90b8ed5d45b9352187f637362 appears in ZERO
+//   .unity / .prefab / .asset, including a raw-byte scan of the 12 binary
+//   scenes. There is no AddComponent<TorchFireController> anywhere.
+//
+//   SUPERSEDED BY THREE INDEPENDENT LIVE PATHS, each rolling its own flicker:
+//     • Village  — NightTorchLightSystem (DEF-214) self-bootstraps via
+//       RuntimeInitializeOnLoadMethod (:93), scoped to Village2 (:50), and
+//       SPAWNS ITS OWN NightTorch point lights with its own flicker (:71-72).
+//     • Dungeons — DungeonDresser seats torch meshes + Lights directly
+//       (TorchTokens :63, TorchIntensity :73, SeatProp(torchLight:) :214).
+//     • Per-builder torch light code: DungeonComposer.cs:89-92,
+//       KayKitChallengeOutpostBuilder.DressWallTorches, EnemyStrongholdBuilder.
+//
+// ⛔ THE BLOCKER — DELETING THIS FILE BREAKS THE COMPILE. It is NOT
+//   reference-free, which is the one thing the WO's "zero callers" premise got
+//   wrong. NightTorchLightSystem.cs:191 holds a LIVE type reference:
+//       var torches = Object.FindObjectsByType<TorchFireController>();
+//   inside AttachToExistingTorches() (:189), reading tc.pointLight at :196.
+//   Because nothing ever creates one, that call ALWAYS RETURNS EMPTY — it is a
+//   defensive "don't double-light" courtesy for props that never existed.
+//
+//   SO THE DELETION IS A TWO-FILE CHANGE, not a file removal: retire
+//   AttachToExistingTorches (or its TorchFireController arm) in the SAME commit.
+//   That touches a live lighting system, so it is the owner's call, not an
+//   agent's. Left in place deliberately.
+// -----------------------------------------------------------------------------
 // TorchFireController — WO-55: dynamic fire VFX + warm point light on torches.
 // -----------------------------------------------------------------------------
 // Attach to any torch, brazier, or lantern GameObject that has a child

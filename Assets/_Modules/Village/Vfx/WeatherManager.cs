@@ -1,4 +1,32 @@
 // =============================================================================
+// ⚠ DORMANT BY DECISION — 2026-08-21 (WO-992). NOT dead code. Do NOT delete.
+// -----------------------------------------------------------------------------
+// RESERVED FOR: the ZONES ON THE REALM MAP. Owner ruling 2026-08-14, verbatim:
+//   "weather manager will play into the zones for the map"
+//
+// MEASURED STATE (2026-08-21, verified by GUID, not by name — Unity serialises
+// script refs by GUID, so a class-name grep of .unity/.prefab proves nothing):
+//   • GUID 8a7592f90f63e3e4489e92fce903ddb6 appears in ZERO .unity / .prefab /
+//     .asset — including a RAW-BYTE scan of the 12 binary scenes, in both plain
+//     and nibble-swapped order.
+//   • Zero AddComponent / new / GetComponent / Find*. `Instance` is read nowhere.
+//     The only mentions outside this file are two COMMENTS: WaveData.cs:52 and
+//     VFXType.cs:179.
+//   • 685 lines, a full implementation — not a scaffold.
+//
+// ⛔ DO NOT WIRE IT SPECULATIVELY EITHER. It should be seated by whatever
+// map/zone work claims it, so the seam gets designed ONCE against a real
+// consumer. An unwired class with a dated note is a GOOD state; a wrongly-wired
+// one is a new defect.
+//
+// ⚠ OUTSTANDING COST, so the zone work can price it: SpawnShootingStar() has NO
+// PREFAB. There is no ShootingStar asset anywhere in the tree (WO-52 never made
+// it); VFXType.ShootingStar exists as an enum member with a PROCEDURAL fallback
+// at VFXManager.cs:1337 and no SFX entry (VFXManager.cs:314).
+//
+// ⚠ This file predates the §12 instrumentation directive and carries ZERO
+// FlowTrace calls. Whoever seats it owes it instrumentation on the same commit.
+// -----------------------------------------------------------------------------
 // WeatherManager — shooting stars, rain, and extensible atmosphere. DEF-VFX-05.
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.Village   Namespace: DeNelle.Village

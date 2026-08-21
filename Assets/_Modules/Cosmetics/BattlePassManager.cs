@@ -1,4 +1,35 @@
 // =============================================================================
+// ⚠ DORMANT — 2026-08-21 (WO-992). AWAITING AN OWNER DISPOSITION. Not deleted.
+// -----------------------------------------------------------------------------
+// MEASURED STATE (2026-08-21, GUID-verified — Unity serialises script refs by
+// GUID, so a class-name grep of scenes/prefabs proves nothing either way):
+//   • GUID d098810702399d34b975dd87f38f660f: ZERO hits in .unity / .prefab /
+//     .asset, including a raw-byte scan of the 12 binary scenes.
+//   • Zero AddComponent / new / GetComponent / Find*. `Instance` is read
+//     nowhere. The only mention outside this file is a COMMENT at
+//     BattlePassData.cs:6 ("the runtime BattlePassManager (a follow-up
+//     deliverable)"). No BattlePassData .asset instance exists to feed it.
+//
+// ⚠ THE OWNER'S READ NEEDS CORRECTING, AND THAT IS THE FINDING.
+//   She recorded the WO-73 classes as "ideas not implementations yet"
+//   (2026-08-14). This is a FINISHED 311-line implementation that was merely
+//   never seated: full tier-up loop with XP carry-over (:114-120), a debit-then-
+//   grant ordering discipline with proving lines (:144 SpendGlimmer gated, :153
+//   "DEBITED ... now granting", :159-160 back-dating, :162 "COMMITTED"), free +
+//   premium reward dispatch (:171) into GameStateService.AddCrystals (:209) and
+//   GlimmerCurrencyService.GrantAchievement (:221), a guarded cross-asmdef
+//   reflection bridge to LevelUpVFXController (:261-288), and PlayerPrefs
+//   persistence (:292-308). Sixteen FlowTrace sites.
+//   ONE admitted stub: BattlePassRewardKind.Resource (:228-232).
+//
+//   THAT CHANGES THE DISPOSITION. Per the WO's own rule, a complete
+//   implementation is worth WIRING and a scaffold is worth deleting — so this
+//   should not be swept out as an "idea". It is monetization-adjacent, so the
+//   choice is the owner's: seat it (needs a BattlePassData .asset + a season) or
+//   retire it deliberately.
+//
+// ⛔ Do NOT wire it speculatively to make a dead-code sweep read clean.
+// -----------------------------------------------------------------------------
 // BattlePassManager — WO-73 battle pass runtime (reconciled).
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.Cosmetics  Namespace: DeNelle.Cosmetics

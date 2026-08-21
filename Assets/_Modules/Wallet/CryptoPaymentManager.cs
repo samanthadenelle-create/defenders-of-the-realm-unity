@@ -1,4 +1,49 @@
 // =============================================================================
+// ⛔⛔ DORMANT AND UNTOUCHABLE — 2026-08-21 (WO-992). DO NOT DELETE. DO NOT WIRE.
+//     THIS IS AN OWNER DECISION AND ONLY AN OWNER DECISION.
+// -----------------------------------------------------------------------------
+// THREE FACTS THAT TOGETHER FORBID AN AGENT ACTING ON THIS FILE:
+//   1. THE GAME IS LIVE ON THE SOLANA dAPP STORE. The next submission is an
+//      UPDATE to a shipped app, not a first listing.
+//   2. THIS IS THE PAYMENT PATH. PayWithSOL/SKR/USDC -> SendFlatPayment ->
+//      GrantGlimmer. Deleting or re-wiring a payment-adjacent class is never an
+//      agent's call, at any confidence level.
+//   3. A GLIMMER PURGE IS ALREADY PENDING AN OWNER MIGRATION RULING (WO-1126),
+//      and GrantGlimmer (:235, called from :209) is squarely inside its blast
+//      radius. Acting here would pre-empt a decision that has not been made.
+//
+// MEASURED STATE (2026-08-21, GUID-verified, not name-grepped):
+//   • GUID d675552ee54bfb2438c2c53102c0eaec: ZERO hits in .unity / .prefab /
+//     .asset, including a raw-byte scan of the 12 binary scenes.
+//   • Zero AddComponent / new / GetComponent / Find*. `Instance` is read
+//     nowhere; BuyWithSOL/SKR/USDC (:371-377) are wired to no Button. The only
+//     two mentions outside this file are COMMENTS — GlimmerCurrencyService.cs:200
+//     (inside a log STRING, not a type reference) and PackStoreVM.cs:190.
+//
+// ⚠ THE OWNER'S READ NEEDS CORRECTING, AND THAT IS THE FINDING.
+//   She recorded these WO-73/74 classes as "ideas not implementations yet"
+//   (2026-08-14). THAT IS NOT TRUE OF THIS ONE. 379 lines, heavily instrumented
+//   (22 FlowTrace sites), and the most carefully-written failure handling in the
+//   batch: a connect-retry (:172-181), an explicit THROW=INDETERMINATE branch
+//   (:188-196), the entitlement-gap block at :205-221 that logs "PLAYER CHARGED,
+//   ENTITLEMENT LOST. Needs reconciliation." and still returns true so the caller
+//   cannot double-charge, and a GrantGlimmer bridge that reads the balance BEFORE
+//   AND AFTER and asserts the delta (:267-271, :304-318) because "a true-returning
+//   invoke whose balance didn't change is still a loss". Six distinct Fail paths.
+//   This is a finished implementation that was never seated — which changes the
+//   disposition entirely: a complete implementation is worth WIRING; a scaffold
+//   is worth deleting. It is not a scaffold.
+//
+// ⚠ AND NOTE WHY IT IS ORPHANED: the shipped store path (PackStoreVM) went live
+//   and REIMPLEMENTED the same reflection bridge rather than calling this class
+//   — see its own comment at PackStoreVM.cs:190. So the live purchase path and
+//   this one are duplicate implementations of the same grant. Deduplicating them
+//   is real work with real money attached; it is a ticket, not a cleanup.
+//
+// ⚠ One dependency is genuinely absent: TryApplyStakingBonus (:335) reflects for
+//   WO-76 StakingBonusManager, which DOES NOT EXIST in the tree (referenced only
+//   by string at :342). It degrades to identity by design.
+// -----------------------------------------------------------------------------
 // CryptoPaymentManager — WO-74 Solana crypto payment bridge (reconciled).
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.Wallet  Namespace: DeNelle.Wallet

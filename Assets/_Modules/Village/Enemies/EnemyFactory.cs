@@ -582,38 +582,42 @@ namespace DeNelle.Village
             string hit = TryBasecolor(model);
             if (hit != null) return hit;
 
-            // "_NEW" DISAMBIGUATES A MESH FILE, NOT A CHARACTER. Skeleton_Golem_NEW and
-            // Necromancer_NEW carry the suffix only because a LEGACY Generic mesh of the same
-            // name already occupies Resources/Enemies — their authored maps ship under the base
-            // name (Skeleton_Golem_basecolor, Necromancer_basecolor). Without this retry the
-            // lookup misses and the model silently falls back to a solid tint, because
-            // HeroTextureLoader's optional load fails QUIETLY by design. That is the exact
-            // silent-failure shape the debugging directive forbids, so the alias is explicit
-            // rather than left to whoever notices the enemy looks flat.
-            if (model.EndsWith("_NEW", System.StringComparison.Ordinal))
-            {
-                hit = TryBasecolor(model.Substring(0, model.Length - 4));
-                if (hit != null) return hit;
-            }
-
             // NO SILENT TINT for a model we shipped art for. The caller's fallback is a solid
             // colour, which looks like a deliberate style choice rather than a missing lookup —
             // so an intake model with no resolvable skin says so ONCE, by name, in the trace.
+            // WO-1129: the miss now NAMES EVERY CANDIDATE IT TRIED. A miss that does not say
+            // what it looked for is what sent a seat to the owner with "no texture anywhere in
+            // the project" on 2026-08-20, when the art was in a folder nobody had listed.
             if (AccuRigIntake.Contains(model))
                 FlowTrace.Once("Enemy", "basecolor-miss-" + model,
-                    $"model '{model}' has NO basecolor under Enemies/TripoTex or Enemies/OrcTex — " +
-                    "falling back to a SOLID TINT. The authored skin is not being used; check the " +
-                    "map is named '<model>_basecolor' and lives in a Resources folder.");
+                    $"model '{model}' has NO resolvable basecolor — falling back to a SOLID TINT. " +
+                    "The authored skin is not being used. " +
+                    DeNelle.Core.EnemyArtPaths.DescribeCandidates(model));
             return null;
         }
 
-        /// <summary>One basecolor probe: TripoTex (2026-08-09 art) first, then the older OrcTex.</summary>
+        /// <summary>
+        /// One basecolor probe, DERIVED — never a typed path (WO-1129 §3.1/§3.3).
+        /// <para>The candidate list (atlas folder precedence, the "_NEW" alias, the "_basecolor"
+        /// suffix) lives in ONE place: <see cref="DeNelle.Core.EnemyArtPaths"/>. It used to live
+        /// here AND, independently, in EnemyArtCoverageRegression, whose agreement with this
+        /// method was asserted only by a COMMENT — the duplicated-state failure CLAUDE.md
+        /// catalogues in §2, §5 and §16. The oracle and the runtime now read the same array, so
+        /// a pass in edit mode means the same thing it means on screen BY CONSTRUCTION.</para>
+        /// <para>⚠ ORDER IS FOLDER-MAJOR: TripoTex(name), TripoTex(name-minus-_NEW),
+        /// OrcTex(name), OrcTex(name-minus-_NEW). TripoTex wins on collision because the
+        /// 2026-08-09 mesh replacement means the older OrcTex atlas no longer matches those UVs.
+        /// (This is a deliberate refinement of the previous name-major order; no live model is
+        /// affected, since no "_NEW" model has an OrcTex entry under its suffixed name.)</para>
+        /// </summary>
         private static string TryBasecolor(string name)
         {
-            string tripo = "Enemies/TripoTex/" + name + "_basecolor";
-            if (DeNelle.Core.HeroTextureLoader.Load(tripo, optional: true) != null) return tripo;
-            string orc = "Enemies/OrcTex/" + name + "_basecolor";
-            if (DeNelle.Core.HeroTextureLoader.Load(orc, optional: true) != null) return orc;
+            var candidates = DeNelle.Core.EnemyArtPaths.ResourceCandidates(name);
+            for (int i = 0; i < candidates.Count; i++)
+            {
+                string key = candidates[i];
+                if (DeNelle.Core.HeroTextureLoader.Load(key, optional: true) != null) return key;
+            }
             return null;
         }
 

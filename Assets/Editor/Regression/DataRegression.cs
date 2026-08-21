@@ -655,6 +655,27 @@ namespace DeNelle.Editor
             // GREYSCALE, and the sec.2.1b lattice solver holding the minimum pitch ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "talent-focus suite", () => { if (!DeNelle.Editor.Regression.TalentFocusSingletonRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[talent-focus] " + r); });
 
+            // --- WO-1027 SESSION SHAPE: CoC's retention engine was never the queue, it was the ACHE
+            // of an idle builder -- and CoC carries that ache on a RED BADGE, which is banned here
+            // (the owner is red/green colourblind). The ache is carried by SHAPE + NUMBER instead.
+            // Pins the ONE idle-line authority (ObsidianQueueGate.WorkQueueStatus.IdleLineCount --
+            // idle means zero ACTIVE, never Busy<Slots, which is the single most likely wrong turn),
+            // that the empty-slot SOCKET clears the same 0.45 Rec.709 luma bar the talent oracle sets
+            // (the free card shipped at 0.015 and was invisible), that a calm bar shows the BARE word
+            // so the rejected nudge cannot return as a permanent adornment, and that the bar stays 6
+            // visible / 7 identities with Map dormant at ordinal 4 ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "session-shape suite", () => { if (!DeNelle.Editor.Regression.SessionShapeRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[session-shape] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "dungeon-status suite", () => { if (!DeNelle.Editor.Regression.DungeonStatusRegression.Run(out var rDgStatus)) failures.Add(rDgStatus); else log.AppendLine("[dungeon-status] " + rDgStatus); });
+
+            // --- WO-900 COLLECTOR TELL: CollectorStackView was a complete 437-line "I am full" tell
+            // with ZERO CALLERS -- a collector filling up showed the player nothing, Accrue clamped
+            // silently and the wallet number just stopped moving. Pins BOTH halves: the diegetic view
+            // has a caller in StructureFactory, and the ambient HUD chip is built, occupied in
+            // hud-areas.json, published to by the Village side, and says "Collectors ... full" and
+            // never "Storage" (that word is the WALLET's, WO-857 -- two notions of "full" on one
+            // screen is the confusion the copy law exists to prevent) ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "collector-tell suite", () => { if (!DeNelle.Editor.Regression.CollectorTellRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[collector-tell] " + r); });
+
             // --- TALENT TREE SHAPE (owner ruling 2026-08-16): "start with three and they can
             // branch wider", "common or specialty should still start from a few simple then
             // really refine to the playstyle of the user". The shared pool was reshaped to

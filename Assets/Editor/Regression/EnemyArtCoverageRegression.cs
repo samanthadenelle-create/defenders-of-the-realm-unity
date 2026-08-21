@@ -86,6 +86,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using DeNelle.Core;
 using UnityEditor;
 using UnityEngine;
 
@@ -95,10 +96,24 @@ namespace DeNelle.Editor
     public static class EnemyArtCoverageRegression
     {
         private const string DataPath    = "Assets/Resources/Data/Canonical/enemies.json";
-        private const string ContentRoot = "Assets/EnemyContent";
         private const string FactorySrc  = "Assets/_Modules/Village/Enemies/EnemyFactory.cs";
 
-        private static readonly string[] AtlasFolders = { "TripoTex", "OrcTex" };
+        /// <summary>WO-1129: the root is DECLARED ONCE in AssetRoots, never re-typed.
+        /// This used to be a literal "Assets/EnemyContent" right here — the exact
+        /// find-and-replace-across-sixteen-files disease AssetRoots exists to end.</summary>
+        private static string ContentRoot => AssetRoots.EnemyContent;
+
+        /// <summary>WO-1129: the atlas folders, their precedence and the "_NEW" alias now come
+        /// from <see cref="EnemyArtPaths"/> — THE SAME ARRAY EnemyFactory.TryBasecolor probes.
+        /// <para>They used to be an independent copy here, and the fact that the two agreed was
+        /// asserted only by a comment in each file. That is how "the oracle passes but the enemy
+        /// renders untextured" becomes possible. Now a pass here means the same thing it means
+        /// on screen BY CONSTRUCTION, and Case 3 below is the belt to this braces.</para></summary>
+        private static string[] AtlasFolders => EnemyArtPaths.AtlasFolders;
+
+        /// <summary>Deliberately WIDER than EnemyArtPaths.ImageExtensions: this suite STATS files
+        /// (including tier-4 pack images and authoring .psd), whereas the runtime loads through
+        /// Resources and never sees an extension at all. Not an art-path literal.</summary>
         private static readonly string[] ImageExts    = { ".png", ".jpg", ".jpeg", ".tga", ".psd" };
 
         /// <summary>Batchmode entry: writes the OK/FAIL marker, exits 1 on failure.</summary>
@@ -176,22 +191,40 @@ namespace DeNelle.Editor
                .Append(" atlas=").Append(atlas).Append(" pack=").Append(pack).Append("; ");
 
             // ── 3 [new-suffix-rule] ──────────────────────────────────────────
-            if (!File.Exists(FactorySrc))
+            // WO-1129 UPGRADED THIS CASE FROM A SOURCE LINT TO A BEHAVIOURAL ASSERT.
+            // It used to grep EnemyFactory.cs for the literal "_NEW", which proved only that a
+            // STRING was present in a file. The rule now has ONE home (EnemyArtPaths.NameAliases)
+            // and both the runtime probe and this suite call it — so the honest question is no
+            // longer "does the source mention it" but "does it actually produce the alias", and
+            // that can be asked directly. The delegation lint below is what keeps the runtime
+            // from quietly growing a second, divergent copy again.
+            const string SuffixedProbe = "Necromancer_NEW";
+            const string SuffixedBase  = "Necromancer";
+            var aliases = EnemyArtPaths.NameAliases(SuffixedProbe);
+            if (aliases == null || aliases.Count < 2 || aliases[0] != SuffixedProbe || aliases[1] != SuffixedBase)
+            {
+                failures.Add("[new-suffix-rule] EnemyArtPaths.NameAliases(\"" + SuffixedProbe + "\") did not yield \"" +
+                             SuffixedBase + "\". The suffix disambiguates a MESH FILE, not a character: " +
+                             "Skeleton_Golem_NEW and Necromancer_NEW carry it while their authored atlases ship " +
+                             "under the legacy base name. Drop the strip and both bodies — the two replacements " +
+                             "the owner specifically asked for — silently fall back to a solid tint again");
+            }
+            else if (!File.Exists(FactorySrc))
             {
                 failures.Add("[new-suffix-rule] '" + FactorySrc + "' does not exist, so this suite cannot prove the " +
-                             "runtime resolver still strips a trailing '_NEW' — and a probe that disagrees with the " +
-                             "game passes models the game cannot texture");
+                             "runtime resolver still routes through EnemyArtPaths — and a probe that disagrees " +
+                             "with the game passes models the game cannot texture");
             }
             else
             {
                 string src = File.ReadAllText(FactorySrc);
-                if (src.IndexOf("\"_NEW\"", StringComparison.Ordinal) < 0)
-                    failures.Add("[new-suffix-rule] EnemyFactory.ResolveBasecolor no longer mentions the '_NEW' " +
-                                 "suffix. The suffix disambiguates a MESH FILE, not a character: Skeleton_Golem_NEW " +
-                                 "and Necromancer_NEW carry it while their authored atlases ship under the legacy " +
-                                 "base name. Drop the strip and both bodies silently fall back to a solid tint again");
+                if (src.IndexOf("EnemyArtPaths.ResourceCandidates", StringComparison.Ordinal) < 0)
+                    failures.Add("[new-suffix-rule] EnemyFactory no longer probes through " +
+                                 "EnemyArtPaths.ResourceCandidates. The runtime has grown a SECOND copy of the " +
+                                 "atlas-folder order and the '_NEW' alias, so this suite is once again asserting " +
+                                 "its own behaviour rather than the game's (WO-1129 §3.1)");
                 else
-                    log.Append("[new-suffix-rule] ok; ");
+                    log.Append("[new-suffix-rule] ok (behavioural + delegation); ");
             }
 
             if (failures.Count > 0)
@@ -219,7 +252,7 @@ namespace DeNelle.Editor
             where = "no model name";
             if (string.IsNullOrEmpty(model)) return null;
 
-            string fbx = ContentRoot + "/" + model + ".fbx";
+            string fbx = EnemyArtPaths.FbxPath(model);
             bool hasMesh = File.Exists(fbx);
 
             // ── tier 1: a material ON the FBX already carries a base map ──────
@@ -250,7 +283,7 @@ namespace DeNelle.Editor
             }
 
             // ── tier 2: the model's own extracted embedded art ────────────────
-            string fbm = ContentRoot + "/" + model + ".fbm";
+            string fbm = EnemyArtPaths.EmbeddedFolder(model);
             string ownHit = FirstAlbedoIn(fbm);
             if (ownHit != null)
             {
@@ -265,7 +298,8 @@ namespace DeNelle.Editor
                 {
                     foreach (string ext in ImageExts)
                     {
-                        string p = ContentRoot + "/" + folder + "/" + name + "_basecolor" + ext;
+                        string p = ContentRoot + "/" + folder + "/" + name +
+                                   EnemyArtPaths.BaseColorSuffix + ext;
                         if (!File.Exists(p)) continue;
                         where = "atlas at " + p + (name == model ? "" : " (matched after stripping '_NEW')");
                         return "ATLAS";
@@ -298,12 +332,14 @@ namespace DeNelle.Editor
             return null;
         }
 
-        /// <summary>The model name, then the same name with a trailing "_NEW" removed.</summary>
+        /// <summary>The model name, then the same name with a trailing "_NEW" removed.
+        /// <para>WO-1129: DELEGATED to <see cref="EnemyArtPaths.NameAliases"/>, which is the ONE
+        /// home of the "_NEW" rule. It was previously reimplemented here, and Case 3 of this very
+        /// suite exists to catch the runtime copy drifting — a rule that needs a gate to keep two
+        /// copies honest is a rule that should have had one copy.</para></summary>
         private static IEnumerable<string> NameCandidates(string model)
         {
-            yield return model;
-            if (model.EndsWith("_NEW", StringComparison.Ordinal))
-                yield return model.Substring(0, model.Length - 4);
+            return EnemyArtPaths.NameAliases(model);
         }
 
         /// <summary>First diffuse/basecolor image in a folder, or null.</summary>
@@ -313,9 +349,11 @@ namespace DeNelle.Editor
             foreach (string f in Directory.GetFiles(dir))
             {
                 if (!IsImage(f)) continue;
+                // WO-1129: the two-token colour-map test ("*basecolor*" OR "*diffuse*") is the
+                // one the 2026-08-20 sweep proved DISCOVERS rather than confirms. It lives in
+                // EnemyArtPaths so a future third convention is added in one place.
                 string stem = Path.GetFileNameWithoutExtension(f);
-                if (stem.IndexOf("Diffuse", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                    stem.IndexOf("basecolor", StringComparison.OrdinalIgnoreCase) >= 0)
+                if (EnemyArtPaths.IsColorMapStem(stem))
                     return f.Replace('\\', '/');
             }
             return null;

@@ -1,4 +1,36 @@
 // =============================================================================
+// ⚠ DORMANT — 2026-08-21 (WO-992). AWAITING AN OWNER DISPOSITION. Not deleted.
+// -----------------------------------------------------------------------------
+// MEASURED STATE (2026-08-21, GUID-verified, not name-grepped):
+//   • GUID e876a7911f864784f8eeddc32bb70f34: ZERO hits in .unity / .prefab /
+//     .asset, including a raw-byte scan of the 12 binary scenes. Since this is a
+//     [RequireComponent(MeshRenderer)] PER-OBJECT component, a prefab is the only
+//     way it could ever be live — and it is on none.
+//   • ZERO code references of any kind outside this file. Not even a comment.
+//     It is the cleanest orphan of the seven WO-992 classes.
+//
+// ⚠ AND HERE IS THE CONSEQUENCE THAT IS ACTUALLY WORTH SOMEONE'S ATTENTION:
+//   EQUIPPING A COSMETIC TODAY CHANGES A STATE FLAG AND NOTHING ELSE. Ownership
+//   and equip state live in GlimmerCurrencyService.Equip (:154) and
+//   CosmeticCatalog.cs:80 — but ApplyCosmetic is DEFINED ONLY HERE AND CALLED
+//   NOWHERE, so no applier is attached to anything the player can see. That is a
+//   player-facing gap hiding inside a dead-code ticket, and it is the reason this
+//   file should get a decision rather than a silent deletion.
+//
+// ⚠ THE OWNER'S READ NEEDS CORRECTING. She recorded the WO-73 classes as "ideas
+//   not implementations yet" (2026-08-14). This is 334 lines of finished, guarded
+//   code with 19 FlowTrace sites, and it carries a DOCUMENTED FIX to a live bug
+//   (:236-241 — the old order hid defaultModel before an unguarded Instantiate,
+//   leaving a permanently invisible object on throw; now guarded instantiate
+//   :250-268, mesh confirmation :275, hide-only-after-confirm :285-288, and
+//   RestoreDefaultModel rollback :314 on every failure path). It also reads back
+//   every applied tint (:189-197, :212-227) per the owner's 2026-06-19 directive.
+//   Somebody worked on this AFTER authoring it. It is not a scaffold.
+//   The real gap is DATA, not code: CosmeticDef carries only previewColor, so
+//   materialOverride / prefabOverride / vfxPrefab have no asset refs to bind.
+//
+// ⛔ Do NOT wire it speculatively to make a dead-code sweep read clean.
+// -----------------------------------------------------------------------------
 // CosmeticApplier — WO-73 visual applier (reconciled).
 // -----------------------------------------------------------------------------
 // Sits in DeNelle.Cosmetics (same asmdef as GlimmerCurrencyService / CosmeticCatalog).
