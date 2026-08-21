@@ -805,6 +805,23 @@ namespace DeNelle.Editor
 
             var camGo = new GameObject("~KnightProofCam");
             DontDestroyOnLoad(camGo);
+
+            // ⛔ TAGGED MainCamera ON PURPOSE, and not for rendering — this camera renders fine
+            // either way. It is tagged so HeroLocomotion.ResolveMovementBasisYaw can find a
+            // Camera.main. Without it that method emits a FlowTrace.Fail every frame-ish:
+            //   "[Flow:HeroLoco] NO MOVEMENT BASIS in scene '': there is no SmartMobileCamera and
+            //    no Camera.main with a usable planar forward"
+            // which is CORRECT for a camera-less scene and completely useless here — the harness
+            // never moves the hero with a stick. On 2026-08-20 that one line put FIVE captures into
+            // the owner's F8 triage inbox from a single night of harness runs, all of them noise
+            // she had to have surfaced to her because the passive listener cannot tell a harness
+            // scene from her device.
+            // The fix belongs HERE, in the harness, NOT in HeroLocomotion: that Fail is a real
+            // defect signal in a real scene (the stick's "forward" silently degrades to world +Z),
+            // and softening product instrumentation to quieten a test rig would trade a genuine
+            // alarm for a tidy log. Give the harness the camera it was always missing instead.
+            camGo.tag = "MainCamera";
+
             _cam = camGo.AddComponent<Camera>();
             _cam.clearFlags = CameraClearFlags.SolidColor;
             // Plain mid-grey. NOT green, NOT red — the owner is red/green colourblind, so a tinted
