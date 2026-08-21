@@ -1,6 +1,6 @@
 # WO-1118 — Honest SKU shelf: hide vapor, keep impulse, rewrite the $2/$5 ladder
 
-**Status:** READY TO IMPLEMENT after owner R1–R3 on WO-1117 §4  
+**Status:** DONE - 2026-08-21 CLI, gate-green (COMPILE_GATE_OK + REGRESSION_OK 234/234).
 **Minted:** 2026-08-17 (CLI seat) — program WO-1117  
 **Lane:** Monetization / data (`packs.json` dual-copy) + PackStore filter  
 **Depends on:** WO-1117 rulings R1–R3  
@@ -88,3 +88,5 @@ Fallback: hard allowlist in PackStore if schema change is deferred — **prefer 
 - Payment rails (1121), harvest engine (1119), ads (1120), season pass (1122), cosmetic art.  
 
 > **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — STILL VALID. Evidence: `PackCatalog.cs:103; packs.json v5 line 36` — $2/$5 ladder rewrite not done. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.
+
+> **CLI 2026-08-21:** 6798cb7d8 - vapor hidden, three curated impulse tiers, shelfCurated data flag

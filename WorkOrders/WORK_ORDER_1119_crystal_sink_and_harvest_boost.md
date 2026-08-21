@@ -1,6 +1,6 @@
 # WO-1119 — Crystal sink + 2× harvest boost (Version B only)
 
-**Status:** READY TO IMPLEMENT after WO-1117 R7 confirm (stack rule)  
+**Status:** DONE - 2026-08-21 CLI, gate-green (COMPILE_GATE_OK + REGRESSION_OK 234/234).
 **Minted:** 2026-08-17 (CLI seat) — program WO-1117  
 **Lane:** Economy / Echoes / Pack convenience  
 **Depends on:** WO-1117 R7; pairs with WO-1118 (boost lines in packs only after this lands)  
@@ -89,3 +89,5 @@ Rules (binding):
 - Ads SDK (1120), payment rails (1121), cosmetic pass (1122), combat buffs.  
 
 > **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — STILL VALID. Evidence: `no HarvestBoost/RateMultiplier` — boost engine unbuilt. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.
+
+> **CLI 2026-08-21:** 63a638a24 - HarvestBoostService, Version B rate-only, hard 2.0x ceiling

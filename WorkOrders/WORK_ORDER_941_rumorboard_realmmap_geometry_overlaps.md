@@ -1,6 +1,6 @@
 # WORK ORDER 941 — RumorBoard + RealmMap: controls overlap text (16 UI_GEOMETRY assertions)
 
-**Status:** READY TO IMPLEMENT — owner ruling 2026-08-21: still to do.
+**Status:** DONE - 2026-08-21 CLI, gate-green (COMPILE_GATE_OK + REGRESSION_OK 234/234).
 **Minted:** 2026-08-09 (number from the `CLI_LANES_WO_NUMBERS.md` banner; banner bumped 941 -> 943 in the SAME edit as this mint and WO-942's)
 **Lane:** HUD/UI (panels). No game logic, no scenes.
 **Provenance:** `UICaptureLaunch` geometry oracle, runs of 2026-08-09 20:41 (`Builds/ui-capture2.log`) and 22:04 (`Builds/ui-capture-wave2.log`) — identical failures in both, so these PRE-EXIST tonight's WO-1010 wave (attributed before ticketing, SUNDAY_HOUSEKEEPING §3.4).
@@ -32,3 +32,5 @@
 > **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — STILL VALID. Evidence: `no WO-941 marker` — 16 UI_GEOMETRY overlaps unfixed. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.
 
 > **OWNER RULING 2026-08-21 (verbal, this session):** Owner: still to do.
+
+> **CLI 2026-08-21:** a2162f17d - CloseReserveTopFraction MEASURES the Close top; captures still owed

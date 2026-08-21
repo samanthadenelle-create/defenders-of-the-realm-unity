@@ -1,6 +1,6 @@
 ﻿# WO-1114 â€” Dungeon Status: a remotely-flippable, in-world door state
 
-**Status:** READY TO IMPLEMENT
+**Status:** READY - PARTIAL - 2026-08-21 CLI, gate-green (COMPILE_GATE_OK + REGRESSION_OK 234/234).
 **Minted:** 2026-08-17 (CLI seat, main line â€” banner bumped 1113 â†’ 1114 in this same edit)
 **Owner ruling captured:** *"I want to have a line that reads if any dungeon is closed for dev work,
 that it's under construction, or states mine collapse, rescue in process, or anything that allows us
@@ -222,3 +222,5 @@ UNRATIFIED in the file's own authoring note. They are the player's entire impres
 dungeon, so they are creative canon: **ratify or rewrite (§9.1)**. §9.2 (`rescue` vs `collapsed`) and
 §9.3 (does a sealed door still show its name and depth) are also still open — neither blocks the
 data layer, both block the door UI.
+
+> **CLI 2026-08-21:** 62afe3201 - data half landed and DUNGEON_STATUS_OK ran green headlessly. REMAINING: door appearance (DungeonWorldPortalSpawner.ApplyDoorState does not exist - the oracle PARTIAL-SKIPs it by name), the backend, and the dev menu.

@@ -1,6 +1,6 @@
 # WORK ORDER 1049 — `BakeLayoutBatch` silently strips every piece of play content
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE - 2026-08-21 CLI, gate-green (COMPILE_GATE_OK + REGRESSION_OK 234/234).
 **Minted:** 2026-08-17 (CLI seat, UI block) as 1048, RENUMBERED to 1049 the same hour — see §7
 **Priority:** **HIGH.** It is a one-word defect that empties a dungeon, reports success, and exits 0.
 **Provenance:** owner F8 seq 2515 (*"[dg_bonecrypt] LEave still on all steps with an exit portal in
@@ -182,3 +182,5 @@ That is the §2 failure mode in its quietest form: the banner was wrong in exact
 the next seat to collide. Row corrected to **1049** in this same edit.
 
 > **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — STILL VALID. Evidence: `DungeonBaker.cs:223,240 populateForPlay=false` — headless bakes without play content. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.
+
+> **CLI 2026-08-21:** c436b858a - populateForPlay default REMOVED so the compiler asks at every call site

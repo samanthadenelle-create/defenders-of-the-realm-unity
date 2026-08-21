@@ -1,6 +1,6 @@
 # WORK ORDER 942 — UI capture harness: two capture-case gaps left by the WO-1010 pass
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE - 2026-08-21 CLI, gate-green (COMPILE_GATE_OK + REGRESSION_OK 234/234).
 **Minted:** 2026-08-09 (number from the `CLI_LANES_WO_NUMBERS.md` banner; banner bumped 941 -> 943 in the SAME edit as this mint and WO-941's)
 **Lane:** Editor/regression tooling only (`Assets/Editor/UICaptureLaunch.cs` + at most one regression). No player code.
 **Provenance:** found while judging the 2026-08-09 22:04 capture run against the WO-1010 wireframe.
@@ -24,3 +24,5 @@
 - The identical-size tell in the playbook — it worked; this WO exists because of it.
 
 > **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — STILL VALID. Evidence: `UICaptureLaunch.cs:2525` — both capture gaps open. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.
+
+> **CLI 2026-08-21:** a2162f17d - padon ghost moved + SetNudgePadAllowed; AssertShotsDiffer added

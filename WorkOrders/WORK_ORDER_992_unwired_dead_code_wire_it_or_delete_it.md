@@ -1,6 +1,6 @@
 # WORK ORDER 992 — Six classes ship in every build, compile clean, and are NEVER instantiated
 
-**Status:** READY TO IMPLEMENT (per-class; two await research)
+**Status:** READY - PARTIAL - 2026-08-21 CLI, gate-green (COMPILE_GATE_OK + REGRESSION_OK 234/234).
 **Minted:** 2026-08-14 (CLI)
 **Silo:** Codebase hygiene / dead code
 **Source:** the 2026-08-14 phantom sweep, plus owner dispositions the same day
@@ -188,3 +188,4 @@ ticket with real money attached, not a cleanup.
 > `WORK_ORDER_battle_and_monthly_packs`, which the owner set to TOP PRIORITY the same day —
 > deleting it would delete the work that ticket depends on.
 
+> **CLI 2026-08-21:** 62afe3201 - six dispositions recorded, ZERO deletions. BattlePassManager ruled KEEP/dormant by the owner. REMAINING: TorchFireController delete is a two-file change blocked on NightTorchLightSystem.cs:191; CosmeticApplier is a REAL defect (ApplyCosmetic called from nowhere - equipping changes a flag and nothing visible); CryptoPaymentManager escalated (two grant paths on money code).

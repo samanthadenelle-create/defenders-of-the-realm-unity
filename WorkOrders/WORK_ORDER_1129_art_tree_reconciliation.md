@@ -1,6 +1,6 @@
 # WORK ORDER 1129 — The art tree reconciliation: one derived path, no typed literals, and a coverage oracle
 
-**Status:** READY TO IMPLEMENT — **owner-requested DEDICATED OVERNIGHT SESSION**
+**Status:** READY - PARTIAL - 2026-08-21 CLI, gate-green (COMPILE_GATE_OK + REGRESSION_OK 234/234).
 **Minted:** 2026-08-20 (CLI seat) — banner bumped 1129 → 1130 in the SAME edit
 **Lane:** Asset organisation + the path-resolution seam + a new coverage gate. Touches
 `Assets/EnemyContent/**`, `Assets/Art/Incoming_Tripo/**`, the resolvers, and ~111 call sites.
@@ -200,3 +200,5 @@ is owed. (Recorded in `EnemyArtPaths.cs` so the next reader is not misled again.
 - **§3.5 widening** to structures/heroes/VFX. Untouched.
 - **§5 acceptance 4/5/6** (GUID-preserving moves, an `EnemyProvingHarness` render pass, the gate
   markers) all require Unity and were **not** run by this pass. Nothing here has been compiled.
+
+> **CLI 2026-08-21:** 62afe3201 - s3.1 EnemyArtPaths landed, literals killed in EnemyFactory + the oracle. REMAINING: s3.2 physical migration (needs AssetDatabase), the ~111-literal triage remainder, s3.5 widening. NOTE: AssetRoots.cs:46 claims an AssetRootsRegression that DOES NOT EXIST - that gate is owed.

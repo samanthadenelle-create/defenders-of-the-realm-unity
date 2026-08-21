@@ -12,7 +12,7 @@
 
 # WORK ORDER 837 — Wallet-first identity (drop email/Firebase login)
 
-**Status:** DONE (Phase 2 — email/Firebase login removed as a player-facing path, every platform, 2026-08-21).
+**Status:** DONE - 2026-08-21 CLI, gate-green (COMPILE_GATE_OK + REGRESSION_OK 234/234).
 Phase 1 (real Solana Mobile Wallet Adapter connect) = WO-766, unchanged. Phase 3 (backend wallet-signature
 verify) was **already shipped before this ticket** — see the correction in §2 below.
 **Author:** UI/QA triage (read-only RCA, §13) — Claude UI
@@ -170,3 +170,5 @@ a wallet-only world. `HeroSelectController` / `PetSelectController` both route i
 `FoundingChoiceController.PresentOrContinue`, so hiding HeroSelect must not orphan that entry point.
 
 > **OWNER RULING 2026-08-21 (verbal, this session):** Owner: "I have asked you many times to remove that and get it done." Deliverable = DROP email/Firebase login, wallet-first identity. NOTE the conflict to resolve while implementing: WO-847 recorded wallet-first as ANDROID-ONLY and left Assets/_Modules/Core/Auth/FirebaseAuthService.cs live by design. The owner ask is the newer instruction and wins; whoever implements must decide what happens to non-Android surfaces rather than silently deleting the service.
+
+> **CLI 2026-08-21:** d6123fe3a - email/Firebase removed everywhere; no save migration was needed

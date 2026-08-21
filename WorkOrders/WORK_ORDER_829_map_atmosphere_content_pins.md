@@ -1,4 +1,4 @@
-**Status:** READY TO IMPLEMENT — owner ruling 2026-08-21: leave on the to-do.
+**Status:** READY - PARTIAL - 2026-08-21 CLI, gate-green (COMPILE_GATE_OK + REGRESSION_OK 234/234).
 
 # WORK ORDER 829 — Map atmosphere + content pins (Withering, biomes, raids/dungeons/rumors)
 
@@ -101,3 +101,5 @@ No army-gate bypass. Elarion not Avalon.
 ```
 
 > **OWNER RULING 2026-08-21 (verbal, this session):** Owner: leave it to do.
+
+> **CLI 2026-08-21:** 601806082 - Core half (RealmPins + RealmAtmosphereStyle) landed. REMAINING: the parchment rendering in RealmMapPanel, and a producer for content pins (they read 0 until one publishes).

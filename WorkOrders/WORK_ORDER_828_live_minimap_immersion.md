@@ -1,4 +1,4 @@
-**Status:** READY TO IMPLEMENT — owner ruling 2026-08-21: leave on the to-do.
+**Status:** DONE - 2026-08-21 CLI, gate-green (COMPILE_GATE_OK + REGRESSION_OK 234/234).
 
 # WORK ORDER 828 — Live minimap immersion (hub + overworld, cheap)
 
@@ -103,3 +103,5 @@ HudMinimapWidget + hud-areas + providers. No RenderTexture. Complements compass.
 ```
 
 > **OWNER RULING 2026-08-21 (verbal, this session):** Owner explicitly corrected herself from 823 to 828 and said "leave it on to do". Live minimap immersion STAYS in the queue.
+
+> **CLI 2026-08-21:** 601806082 - per frame is two float decrements; 10Hz project, 4Hz poll, no Camera/RT

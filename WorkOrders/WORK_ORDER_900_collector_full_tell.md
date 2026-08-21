@@ -4,7 +4,7 @@
 
 # WORK ORDER 900 — The collector "I am full" tell
 
-**Status:** READY TO IMPLEMENT - partial (reconciled 2026-08-09, per this file's own 08-08 banner - sec.3's tell is delivered (`StructureFactory.cs:776` calls `CollectorStackView.Attach`, pinned by two regression suites); sec.4's ambient HUD collector chip is still outstanding, deliberately deferred per WO-901 line 65)
+**Status:** DONE - 2026-08-21 CLI, gate-green (COMPILE_GATE_OK + REGRESSION_OK 234/234).
 
 **Status:** PARTIAL — sec.3 shipped; sec.4 HUD chip deferred (reconciled 2026-08-08, see banner)
 **Author:** read-only RCA agent (§13), orchestrated by CLI, 2026-08-04
@@ -166,3 +166,5 @@ ASCII only. **Text-encoded state, never colour alone** (owner is red/green colou
 - `docs/qa/GAMEPLAY_GAPS_2026-07-26.md:79` — cites `CollectorStackView.cs:367` as if the VFX fires.
 
 > **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — STILL VALID. Evidence: `StructureFactory.cs:929` — S4 ambient collector chip absent. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.
+
+> **CLI 2026-08-21:** 601806082 - CollectorStatusGate + publisher + ambient chip, state in TEXT not colour

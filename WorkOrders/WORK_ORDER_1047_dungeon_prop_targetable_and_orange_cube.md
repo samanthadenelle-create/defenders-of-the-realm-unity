@@ -1,6 +1,6 @@
 # WORK ORDER 1047 — A dungeon prop is registering as a HOSTILE target, and it renders as a bare orange cube
 
-**Status:** READY TO IMPLEMENT (⚠ step 1 is instrumentation — §3)
+**Status:** READY - INSTRUMENTED - 2026-08-21 CLI, gate-green (COMPILE_GATE_OK + REGRESSION_OK 234/234).
 **Minted:** 2026-08-17 (UI seat) — provenance stack bumped 1047 → 1048 in the same edit
 **Lane:** Dungeon props + hero targeting. Disjoint from the town/UI lanes.
 **Provenance:** owner 2026-08-17: *"target attaches to this item and there is a floating key next to it.
@@ -117,3 +117,5 @@ cover this case too.
 4. Owner felt-verifies + closes (§13)
 
 > **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — STILL VALID. Evidence: `HeroTargetIndicator.cs:752` — orange cube never instrumented. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.
+
+> **CLI 2026-08-21:** c436b858a - instrumentation ONLY, no fix, per s12: the prop is still unidentified. All three admission routes now name the object. ONE dungeon run settles it.

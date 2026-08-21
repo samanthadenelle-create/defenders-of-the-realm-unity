@@ -1,6 +1,6 @@
 # WORK ORDER 1027 — The ratchet has no ache: give the session a shape
 
-**Status:** READY TO IMPLEMENT — ★ §4 RULED 2026-08-17: **(b) empty-slot silhouette + (a) count glance**
+**Status:** DONE - 2026-08-21 CLI, gate-green (COMPILE_GATE_OK + REGRESSION_OK 234/234).
 
 > Owner ruling 2026-08-17 (*"open ones follow your recommendations"*): the peek rail shows a visibly
 > **empty socket** as the resting state, with the **"2 of 3 lines idle" numeral** alongside it.
@@ -98,3 +98,5 @@ mitigation.
 3. Owner felt-verifies. The question is: *"after ten seconds in town, do I know what to do next?"*
 
 > **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — STILL VALID. Evidence: `no peek-rail/idle-socket symbol` — empty-slot silhouette unbuilt. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.
+
+> **CLI 2026-08-21:** 601806082 - idle authority, Manage "N of 3 idle" transition tell, empty socket, greyscale oracles

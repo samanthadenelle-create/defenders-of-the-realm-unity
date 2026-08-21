@@ -1,6 +1,6 @@
 # WO-1120 — Ads: effective free path (stop free grants; real SDK; placements)
 
-**Status:** READY TO IMPLEMENT after WO-912 D3 (LevelPlay account / units) — partial block is account setup  
+**Status:** DONE - 2026-08-21 CLI, gate-green (COMPILE_GATE_OK + REGRESSION_OK 234/234).
 **Minted:** 2026-08-17 (CLI seat) — program WO-1117  
 **Lane:** Monetization / Ads  
 **Depends on:** WO-912 (seam + rulings); pairs with WO-1119 harvest boost for ad reward  
@@ -80,3 +80,5 @@ Target economy (WO-912 D1 math): long jobs need **many** watches and still leave
 - Pack pricing (1118), payment (1121), season pass (1122).  
 
 > **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — STILL VALID. Evidence: `ad-placements.json enabled but no AdGateService` — placement interpreter missing. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.
+
+> **CLI 2026-08-21:** 63a638a24 - AdPlacementCatalog reader + AdGateService; the JSON had 3 placements and NO reader
