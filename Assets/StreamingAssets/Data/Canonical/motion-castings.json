@@ -1,5 +1,5 @@
 {
-  "version": 3,
+  "version": 4,
   "_comment": "KEYWORD -> ACTION registry. Targets (enemy family | hero class) x keywords -> clip (+optional vfx/sfx). Owner picks are manual:true = CANON, never overwritten (Offset Forge law, WO-490). Editor-consumed (controller bakes) in V1 - no Resources mirror until a runtime reader exists; at that point the dual-copy rule (Resources copy WINS) applies. v2 (2026-07-11): +castHeal keyword (reader = KnightPackageControllerBuilder Cast_e wrap) + the knight owner-pick rows of 2026-07-11. v3 (WO-750, 2026-07-19): knight castHeal rebound to Mage Spell Cast 5 (f-ss-magespellcast-05) for Warden's Grace; skill1/skill2 sfxId filled (Swords_Clash); castHeal sfxImpact Heal. NOTE: the R-slot 'Jump into Slash Up' (atk_slashup) clip and R cast/impact SFX are NOT wired here — atk_slashup is attack-taxonomy (would trip the cast-keyword lint) and CastVariant 4 (Cast_r) is a hardcoded HeroAnimatorFactory.MocapSpellClips[4] pick, not registry-resolved; rebinding R to atk_slashup + adding R sfx requires a factory edit + re-bake (out of this data lane).",
   "vocabulary": {
     "locomotion": [
@@ -164,8 +164,8 @@
       "inherits": "humanoid",
       "_comment": "OWNER PICKS 2026-07-11 (verbatim canon; manual:true = never overwritten). skill1 = Cast_q = Heroic Leap -> S&S 'atk_jump' (jump + stab down). skill2 = Cast_w = W action button -> plain Slash (REVISED same day from atk_slashup: 'instead of W button Put Slash'; the already-extracted Sword_And_Shield_Slash take). block = Block state -> 'atk_shieldswipe01' (chains into shieldswipe02 via the builder's Block2 second beat) for incoming attacks and spell deflection. castHeal = Cast_e heal/ward slot -> Magical Moves 'Magic Spell Cast 02' (m-ls-magespellcast-02). cast = generic/variant-0 cast (extra-bar Mend et al.) -> the same heal cast so no cast-type action ever swings a sword (F8-48 / melee-caster hard rule). Every row is NO-OP-safe: an unextracted clip falls through to the builder default at bake (run DeNelle.Editor.SwordShieldMovesImporter.Import first).",
       "skill1": {
-        "clip": "Assets/Action/Knight/Motion/studio-mocap-hero-motion/fist_flyingkick_m.fbx",
-        "guid": "e51479a72a75d7a4a9c53a4e9763068d",
+        "clip": "Assets/Action/Knight/Motion/studio-mocap-sword-and-shield-moves/atk_jump.fbx",
+        "guid": "8d75c257eb9328d41bfbcd013dfe1935",
         "vfxKey": "",
         "sfxId": "Swords_Clash",
         "vfxDelay": 0.0,
@@ -173,14 +173,14 @@
         "playOneShot": false,
         "manual": true,
         "pickedUtc": "2026-07-12T03:54:30Z",
-        "source": "motion-caster",
+        "source": "owner-approved-wo935",
         "vfxImpact": "Melee_Impact",
-        "vfxNote": "WO-750: Sword Heroic (Q). sfxId Swords_Clash = the soft leap-swing (owner ask 'SwordSwing'; only sword clip in Resources/Sfx).",
+        "vfxNote": "WO-935 Phase 2: Sword Heroic uses the purchased sword-and-shield atk_jump leap/downward strike. Existing Swords_Clash beat retained.",
         "sfxImpact": "Swords_Clash"
       },
       "skill2": {
-        "clip": "Assets/Action/Knight/Motion/studio-mocap-hero-motion/fist_whirlwindkick_m.fbx",
-        "guid": "93668007519b4c442932f42eee845399",
+        "clip": "Assets/Action/Knight/Motion/studio-mocap-sword-and-shield-moves/atk_shieldcharge.fbx",
+        "guid": "6aef29d5373a1ff44b33b2bc3db5f1d6",
         "vfxKey": "",
         "sfxId": "Swords_Clash",
         "vfxDelay": 0.0,
@@ -188,9 +188,9 @@
         "playOneShot": false,
         "manual": true,
         "pickedUtc": "2026-07-12T03:54:47Z",
-        "source": "motion-caster",
+        "source": "owner-approved-wo935",
         "vfxImpact": "Cleave_Impact",
-        "vfxNote": "WO-750: Shield Charge (W). sfxId/sfxImpact Swords_Clash = the muted metallic thud (owner ask 'SwordClash').",
+        "vfxNote": "WO-935 Phase 2: Shield Charge uses the purchased sword-and-shield atk_shieldcharge rush. Existing Swords_Clash impact retained.",
         "sfxImpact": "Swords_Clash"
       },
       "block": {

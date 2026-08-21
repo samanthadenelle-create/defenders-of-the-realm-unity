@@ -1,6 +1,6 @@
 # WORK ORDER 935 — Paid animation + VFX pack connection program
 
-**Status:** READY — PARTIAL Phase 1 LIVE: CombatCast + troop mage fireball; full pack matrix remains
+**Status:** IN PROGRESS — Phase 1 LIVE; 2026-08-21 KayKit caster animation slice implemented; full pack matrix remains
 **Lane:** Art / Combat feel / Catalog  
 **Seat:** CLI implements; UI/PO ratifies element picks and feel  
 **Banner:** main line next free after mint = **936** (this number = 935)
@@ -202,7 +202,7 @@ Rules:
 
 ### Phase 4 — Enemy codex motion + VFX parity
 - [ ] For every **live** `enemies.json` / raid garrison id: codex anim set present on controller.  
-- [ ] Casters fire Cast + cast VFX; melee Attack + impact.  
+- [x] KayKit Rig_Medium casters now bake a real Cast state; AccuRig casters already had Cast + WindUp. Runtime `Enemy.RootedCast` drives both. Cast VFX was already live.
 - [ ] Necromancer summon substitute + aura.  
 - [ ] **Do not block** on Wildlands wolf (GAP-PRIMARY) unless owner prioritizes cold dungeons.  
 **Done when:** wave + raid garrison reads as "codex animated," not capsule-with-slide.

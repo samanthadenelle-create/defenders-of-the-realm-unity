@@ -183,10 +183,13 @@ namespace DeNelle.Editor
 
             // ── Build one controller per archetype (codex §5.1 / §5.2) ───────
             // Walker / Warrior / Rogue / Caster — the Rig_Medium humanoid roster.
+            // Casters share this controller and Enemy.RootedCast drives the guarded Cast
+            // trigger at release. Building this family without Cast made that call a silent
+            // no-op on KayKit caster silhouettes while bosses and AccuRig casters animated.
             BuildHumanoidController(
-                "HumanoidEnemy", mediumLib, withCast: false,
+                "HumanoidEnemy", mediumLib, withCast: true,
                 "Standard Rig_Medium enemy — Hollow Walker / Warrior / Rogue / " +
-                "Caster, the Wildlands Caveman / Tiefling. Idle/move/attack/hit/death.");
+                "Caster, the Wildlands Caveman / Tiefling. Idle/move/attack/hit/death/cast.");
 
             // Skeleton Golem / Frost Golem — the Rig_Large heavy bodies.
             BuildHumanoidController(
