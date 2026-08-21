@@ -119,3 +119,101 @@ cover this case too.
 > **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — STILL VALID. Evidence: `HeroTargetIndicator.cs:752` — orange cube never instrumented. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.
 
 > **CLI 2026-08-21:** c436b858a - instrumentation ONLY, no fix, per s12: the prop is still unidentified. All three admission routes now name the object. ONE dungeon run settles it.
+
+---
+
+## REMAINING — named (INSTRUMENTED ≠ DONE)
+
+| # | Hole | Evidence |
+|---|---|---|
+| **R1** | **Prop still unidentified** | No RESULT names the object. Instrumentation is ready; **no capture has been read yet**. |
+| **R2** | **No fix at registration source** | Reticle can still lock a non-combat prop. Forbidden: filter-patch inside `HeroTargetIndicator`. |
+| **R3** | **Orange cube art unresolved** | Sweep still hides only `[PLACEHOLDER]` + **near-white**. Tinted (orange) placeholders are **left alone by design** and now log why. Late spawns after hydration are unreachable by the one-shot sweep. |
+| **R4** | **Combat still-works proof needed post-fix** | Non-enemy Warn lines + enemy Step lines exist; after the fix, re-prove enemies still admit. |
+
+### What already landed (keep; do not strip — §12)
+
+| Seam | What it logs |
+|---|---|
+| `HeroTargetIndicator` — 3 admit routes | `[hostile-admit]` once per object: path, implementor, owner GO, layer, components, children, mesh/shader/`_BaseColor` |
+| `SweepPlaceholderCubes` census | `[cube-census]` for every primitive Cube (cap 16) + explicit SKIP for tinted placeholders |
+
+Floating key (`ComposedPropVisuals.BuildKey`) is **not** the defect — do not ground it (WO-1112).
+
+---
+
+## SOLUTION — concrete close-out (research 2026-08-17)
+
+### S0 — Earn the edit (§12): ONE dungeon run
+
+1. Enter a dungeon; lock (or let auto-acquire) the orange cube.  
+2. F8 / harvest Player.log for:
+   - `[Flow:Reticle] [hostile-admit] …` (especially **NON-ENEMY** Warns)
+   - `[Flow:Dungeon] [cube-census] …` / `TINTED placeholder …`
+3. Write the object **name, path, implementor, admission route, rgb** into this WO’s RESULT.  
+   **No code edit until that line exists.**
+
+### S1 — Fix branch table (pick AFTER the capture)
+
+| Finding in the log | Fix at source |
+|---|---|
+| `[PLACEHOLDER]` + orange tint, sweep skipped | Widen sweep to hide tinted missing-mesh boxes **or** stop tinting KayKit fallbacks orange; optional MagentaProbe-class guard for orange |
+| Child collider admits ancestor `IDamageable` | Fix hierarchy / collider ownership on that prefab |
+| `Faction=Hostile` on a prop/structure that should be Neutral/Friendly | Change faction on the implementor component |
+| Structure-layer + Hostile from WO-853 mask | Correct layer / don’t put non-combat props on Structure+Hostile |
+| Spawned after `SweepPlaceholderCubes` (`:367`) | Re-sweep on late spawn, or move sweep later in hydration |
+
+### S2 — Prove
+
+- Headless or traced: **zero** non-Enemy props in `_candidates` in dungeon; enemies still present.  
+- Screenshot same room.  
+- Floating key still spins/bobs.  
+- Owner felt-close.
+
+### Acceptance that flips INSTRUMENTED → DONE
+
+- [ ] Object **named in RESULT** with spawner + hostile route  
+- [ ] Reticle no longer locks non-combat props  
+- [ ] Fix at **registration source**, not indicator filter  
+- [ ] Orange cube: intended art **or** confirmed stand-in with reason  
+- [ ] Floating key unchanged  
+- [ ] Real enemies still target  
+
+**Do not** mark DONE on instrumentation alone. A clean board that hides an unnamed prop is the expensive failure mode.
+
+> ## ★ THE OBJECT IS IDENTIFIED (2026-08-21) - owner device observation + source
+>
+> Owner, on the Seeker: *"when i attacked an enemy it destroyed item and left a white
+> pellet and i collected it"* / *"in dungeon but i had aggro and when killing eney i
+> destroted it"* / *"the pellet came from that hostile marked item"*.
+>
+> **It is a `BreakableContainer`.** Confirmed at source, and it is not miswired - it is
+> hostile ON PURPOSE:
+> ```
+> Assets/_Modules/Village/World/BreakableContainer.cs:65-66
+> /// Containers read as Hostile so the hero's enemy-mask sweep hits them.
+> public CombatFaction Faction => CombatFaction.Hostile;
+> ```
+> It sits on the **Enemy layer** and implements both `IDamageable` and
+> `IDamageableStructure` so any existing damage path can break it. On death it rolls a
+> drop - the white pellet is `IngredientPickup`'s primitive-sphere mote.
+>
+> **SO THE DEFECT IS NARROWER THAN THE TICKET ASSUMED.** Nothing here is a wrong faction
+> or a stray collider. TWO CONCERNS SHARE ONE FLAG:
+>   1. *may the hero DAMAGE this?*  - yes, and it must stay yes, or crates become unbreakable
+>   2. *is this a valid TARGET to lock the reticle onto?* - no
+> `HeroTargetIndicator` cannot tell them apart because `CombatFaction.Hostile` is the only
+> signal it gets.
+>
+> **THE FIX BELONGS AT THE TARGETING SEAM, NOT ON THE CONTAINER.** Do not "fix" this by
+> making containers non-hostile - that breaks the smash path the flag exists for, which is
+> the same conflation in the other direction. Give the indicator a way to exclude
+> destructible scenery (an interface/marker the container carries, or an explicit opt-out
+> the indicator checks) and leave the damage seam untouched.
+>
+> ⚠ STILL OWED: the committed `[hostile-admit]` instrumentation has NOT yet run on device -
+> the installed APK predates it. One dungeon run confirms this identification from the
+> captured line rather than from a chain of reasoning, and would also settle whether a
+> child collider or a late spawn is involved. Treat the above as a STRONG NAMED CANDIDATE
+> until that line exists.
+
