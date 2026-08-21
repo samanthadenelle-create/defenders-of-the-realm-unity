@@ -708,11 +708,10 @@ namespace DeNelle.Core
         /// Owner, verbatim: <i>"we are going to flag the start with prebuilt as it still has issues,
         /// so flag that off to unblock"</i>.
         ///
-        /// <para>Default OFF. With it off, <c>FoundingChoiceController</c> does not present the
-        /// choice at all and a new game founds as <b>Build Your Own</b> (the blank template + FTUE),
-        /// which is the path that works today. Presenting a two-option screen with one option
-        /// disabled would be worse than not presenting it: the player would be asked to make a
-        /// decision that has already been made for them.</para>
+        /// <para>Default ON. The player-facing contract is two valid starts: a movable prebuilt
+        /// town or the blank Build Your Own template. The placed-structure path now applies the
+        /// catalog's manual storefront correction before fitting, including the jeweler's
+        /// render-proven +90 degree pitch.</para>
         ///
         /// <para>Nothing is deleted. "Default Town" works by setting
         /// <c>GameState.StrategicPlacementMigrated = false</c> so the Castle-load migration writer
@@ -723,7 +722,7 @@ namespace DeNelle.Core
         /// <para>The suppression is FlowTrace'd at the decision site, so a capture shows WHY the
         /// screen is missing rather than reading as a vanished screen.</para>
         /// </summary>
-        public static bool FoundingDefaultTown => Get("defaulttown", defaultOn: false);
+        public static bool FoundingDefaultTown => Get("defaulttown", defaultOn: true);
 
         /// <summary>
         /// WO-1042 (owner ruling 2026-08-16) — gates the STAKING bonus hook on the Jeweler's polish

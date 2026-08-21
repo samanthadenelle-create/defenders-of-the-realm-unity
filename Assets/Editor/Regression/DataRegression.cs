@@ -1750,6 +1750,31 @@ namespace DeNelle.Editor
             }
             if (badField > 0)
                 failures.Add($"{badField} structure entry(ies) have null/empty id or displayName");
+
+            // The founding Default Town was previously disabled after the player-placeable
+            // jeweler rendered upside down. Pin the actual shared creation seam: +90 is the
+            // render-proven upright sign, and OptsFor must carry it into PRE-fit LocalRotation.
+            var jeweler = file.Entries.Find(e => e != null &&
+                string.Equals(e.id, "jeweler", System.StringComparison.OrdinalIgnoreCase));
+            if (jeweler == null)
+            {
+                failures.Add("structures-catalog.json: missing 'jeweler' entry (Default Town contract)");
+            }
+            else if (jeweler.orientation == null || !jeweler.orientation.manual ||
+                     Mathf.Abs(Mathf.DeltaAngle(90f, jeweler.orientation.Euler.x)) > 0.1f)
+            {
+                failures.Add("structures-catalog.json: jeweler must author manual Euler X=+90 (render-proven upright orientation)");
+            }
+            else
+            {
+                var jewelerOpts = StructureFactory.OptsFor(jeweler);
+                Quaternion appliedRotation = jewelerOpts.LocalRotation ?? Quaternion.identity;
+                float appliedX = Mathf.DeltaAngle(0f, appliedRotation.eulerAngles.x);
+                if (Mathf.Abs(appliedX - 90f) > 0.1f)
+                    failures.Add($"StructureFactory.OptsFor(jeweler) applied X={appliedX:0.0}, expected +90 before Fit");
+                else
+                    log.AppendLine("[jeweler-upright] catalog + StructureFactory pre-fit LocalRotation = +90 degrees");
+            }
         }
 
         // =====================================================================

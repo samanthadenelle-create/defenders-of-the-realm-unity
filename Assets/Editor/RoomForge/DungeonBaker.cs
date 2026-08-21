@@ -141,7 +141,9 @@ namespace DeNelle.Editor.RoomForge
         public static void BakeDefault()
         {
             string path = Path.Combine(LayoutsFolder, DefaultLayout);
-            BakeFromFile(path);
+            // Batch baking is a shipping-content operation. Omitting this flag silently stripped
+            // encounters, chests, oil and traps from the generated scene.
+            BakeFromFile(path, populateForPlay: true);
         }
 
         [MenuItem("Defenders/Dungeon/Bake Compose Layout From Selected JSON")]

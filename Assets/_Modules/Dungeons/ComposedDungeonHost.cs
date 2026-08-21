@@ -89,6 +89,7 @@ namespace DeNelle.Dungeons
                 return;
             }
             FlowTrace.Step(Sys, $"hero resolved as '{heroGo.name}' (scene='{heroGo.scene.name}') - carried hero wins the dedupe when GoDungeonScene armed the WO-1112 carry.");
+            DungeonCandleVfxInstaller.Rebind(gameObject.scene, heroGo.transform);
 
             // Collect baked oil stones (planar refill, same contract as cottage).
             var stones = CollectOilStones();

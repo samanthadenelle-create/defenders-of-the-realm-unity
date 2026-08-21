@@ -896,41 +896,12 @@ namespace DeNelle.Village
             return false;
         }
 
-        // #51 footstep loop: a dedicated 2D AudioSource that loops the walk clip while the hero
-        // moves and pauses when idle. No-op (clip stays null) until Resources/Sfx/FootstepsWalk drops.
-        private AudioSource _footstepSrc;
-        private bool _footstepTried;
-        private const float FootstepMoveThreshold = 0.6f; // m/s of XZ velocity to count as "walking"
-
-        private void DriveFootsteps()
-        {
-            if (!_footstepTried)
-            {
-                _footstepTried = true;
-                var clip = DeNelle.Core.AudioAssetLoader.LoadClip("Sfx/FootstepsWalk");
-                if (clip != null)
-                {
-                    _footstepSrc = gameObject.AddComponent<AudioSource>();
-                    _footstepSrc.clip = clip;
-                    _footstepSrc.loop = true;
-                    _footstepSrc.playOnAwake = false;
-                    _footstepSrc.spatialBlend = 0f; // 2D — it's the player's own steps
-                    _footstepSrc.volume = 0.10f;    // owner 2026-06-29: much softer (was 0.35)
-                }
-            }
-            if (_footstepSrc == null) return;
-            // Footsteps play ONLY while genuinely walking AND not in a battle — the kite-fight has the
-            // hero moving constantly, so steps under combat audio are noise (owner 2026-06-29: stop in battle).
-            bool walking = Velocity.sqrMagnitude > (FootstepMoveThreshold * FootstepMoveThreshold)
-                           && !DeNelle.Village.Arena.BattleArena.AnyBattleInProgress;
-            if (walking && !_footstepSrc.isPlaying) _footstepSrc.Play();
-            else if (!walking && _footstepSrc.isPlaying) _footstepSrc.Pause();
-        }
-
         private void Update()
         {
             TryResolveWaveManager();
-            DriveFootsteps();
+            // The legacy FootstepsWalk loop is intentionally not driven. Its leading transient
+            // sounded like a UI/load ding every time movement resumed. Footstep cadence belongs
+            // to HeroFootstepController once short, licensed one-shot clips are assigned.
 
             // WO-377: while a Yarn dialogue is on screen, the player has no control —
             // hold the hero in place (zero velocity, no input read) so a click meant for
