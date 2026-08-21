@@ -58,22 +58,14 @@ if ($apk) {
 }
 
 # --- Content: push, then PROVE it is hosted -----------------------------------
-# Push the PARENT folder. '--push ServerData/Android' flattens keys to the bucket
-# root and the game never reads them - the tool's own docstring still teaches that
-# wrong form, so it is spelled out here.
+# Delegated to tools/r2-ship.ps1 (owner ruling 2026-08-20). This block used to carry
+# its own copy of push+verify; morning-ship-chain.ps1 carried a DIFFERENT copy that
+# only verified. Same fact, two files, already drifted - so the pair now lives once.
+$parityLog = 'Builds/r2-parity.log'
 try {
-    & python (Join-Path $PSScriptRoot 'tools\r2_sync.py') --push ServerData *>&1 |
-        Tee-Object -FilePath 'Builds\r2-push.log'
+    & powershell -NoProfile -File (Join-Path $PSScriptRoot 'tools/r2-ship.ps1')
 } catch {
-    "R2_PUSH_THREW $($_.Exception.Message)" | Out-File -Encoding ascii -Append $status
-}
-
-$parityLog = 'Builds\r2-parity-overnight.log'
-try {
-    & python (Join-Path $PSScriptRoot 'tools\r2_sync.py') --verify-catalog ServerData/Android *>&1 |
-        Tee-Object -FilePath $parityLog
-} catch {
-    "R2_PARITY_THREW $($_.Exception.Message)" | Out-File -Encoding ascii -Append $status
+    "R2_SHIP_THREW $($_.Exception.Message)" | Out-File -Encoding ascii -Append $status
 }
 
 # Judge by the MARKER on a fresh log, never the exit code - the runners in this repo

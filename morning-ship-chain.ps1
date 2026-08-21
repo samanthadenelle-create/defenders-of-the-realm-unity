@@ -128,24 +128,23 @@ if (-not $SkipApk) {
 # This is that gate. It runs AFTER the APK (the Addressables content build
 # happens inside BuildSeekerApk) and BEFORE distribution.
 if (-not $SkipApk) {
-    Say "2b/4 R2 content parity ..."
-    # EXPLICIT TARGET FOLDER (2026-08-19): ServerData holds BOTH Android and StandaloneWindows64,
-    # and bare --verify-catalog refuses to guess ("FAIL: cannot pick a build target"). Bare form =
-    # no marker = this chain Dies at the parity step for a reason unrelated to parity.
-    $parityLog = Join-Path $proj 'Builds\r2-parity.log'
-    & python (Join-Path $proj 'tools\r2_sync.py') --verify-catalog ServerData/Android *>&1 | Tee-Object -FilePath $parityLog
-    # Judge by the MARKER on a fresh log, never the exit code - this project's
-    # runners exit 0 on refusals (memory: gates-report-success-without-proving-it).
-    if (-not (Test-Path $parityLog)) { Die "r2 parity produced no log - cannot prove content is hosted" 16 }
-    if (-not (Select-String -Path $parityLog -Pattern 'R2_PARITY_OK' -Quiet)) {
-        Write-Host ""
-        Write-Host "  The APK references remote bundles that are NOT in the bucket."
-        Write-Host "  Players would see placeholder buildings/enemies with no error."
-        Write-Host "  FIX:  python tools\r2_sync.py --push ServerData     <-- the PARENT folder"
-        Write-Host "        (never 'ServerData/Android' - that flattens keys to the bucket root)"
-        Write-Host "  Then re-run this chain. See Builds\r2-parity.log"
-        Die "R2 content parity FAILED - refusing to distribute a build whose content is not hosted" 16
+    Say "2b/4 R2 content ship (push + parity) ..."
+    # ⛔ THIS STEP NOW PUSHES, IT DOES NOT ONLY CHECK (owner ruling 2026-08-20:
+    # "wire the r2 push into the ship chain"). It used to verify and then print
+    # "FIX: python tools\r2_sync.py --push ServerData" for a human to run - and on
+    # 2026-08-20 that second command was the one that got skipped, so the owner
+    # played a build in which every single enemy was a tinted capsule. A gate whose
+    # remedy is "someone remembers to run another command" is not a gate.
+    #
+    # The push/verify argument asymmetry (push the PARENT, verify the EXPLICIT
+    # target) and the marker-not-exit-code rule now live in ONE place,
+    # tools\r2-ship.ps1, because this block and overnight-apk-build.ps1's copy had
+    # already drifted into doing different things.
+    & powershell -NoProfile -File (Join-Path $proj 'tools\r2-ship.ps1')
+    if ($LASTEXITCODE -ne 0) {
+        Die "R2 content ship FAILED - refusing to distribute a build whose content is not hosted" 16
     }
+    $parityLog = Join-Path $proj 'Builds\r2-parity.log'
     Say "     OK  $((Select-String -Path $parityLog -Pattern 'R2_PARITY_OK' | Select-Object -First 1).Line.Trim())"
 } else { Say "2b/4 R2 parity SKIPPED (no APK built)" }
 

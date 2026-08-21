@@ -176,6 +176,10 @@ lands on installed devices, not on this tree.
 
 ## 4. R2 shipping discipline — PROD-011
 
+> **⚠ UPDATED 2026-08-20 — the "no gate exists" line below is now CLOSED.** Push + verify live once, in
+> `tools\r2-ship.ps1` (`R2_PARITY_OK`), wired into the ship chains; the binding rule is **CLAUDE.md §16**.
+> The body below is kept as the 08-18 record — read §16 for what to do today.
+
 **Every APK build REQUIRES a fresh push:**
 
 ```

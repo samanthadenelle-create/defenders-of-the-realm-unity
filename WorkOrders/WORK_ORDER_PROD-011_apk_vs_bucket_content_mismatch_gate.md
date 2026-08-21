@@ -5,6 +5,7 @@
 **Priority:** HIGH — a mismatch ships invisible content to every player and is currently caught only by hand.
 **Silo:** Release tooling. **Lane:** `tools/r2_sync.py` + the Addressables group schemas. No gameplay code, no scenes.
 **Provenance:** 2026-08-18 release. Prior art: commit `16e22dba3`.
+**Cross-ref 2026-08-20 → WO-1130:** ⚠ **this gate WORKED and the project still shipped broken content.** It verified, failed, and printed `FIX: python tools\r2_sync.py --push ServerData` — **a command a human then had to run**, and on 2026-08-20 that is exactly the step that got skipped, so the owner played a build in which every enemy was a tinted capsule (third occurrence: 08-18, 08-19/WO-1124, 08-20). Owner ruling that day: *"wire the r2 push into the ship chain."* **WO-1130** moves push+verify into `tools/r2-ship.ps1` and makes all three ship scripts call it. Nothing in THIS ticket was wrong — the lesson is that **a gate whose remedy is a second manual command is not a gate.** The `ServerData/` two-platform edge flagged in the Status line above is now handled there too (push the PARENT, verify the EXPLICIT target).
 **Cross-ref:** **PROD-009** depends on the RETRY half of this ticket (§3) — more bundles means more
 requests, and a single dropped request was a permanent miss. **The TIMEOUT half is a closed decision
 (NO timeout), not outstanding work — read §3 before touching a schema.**

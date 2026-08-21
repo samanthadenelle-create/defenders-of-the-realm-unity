@@ -1,6 +1,43 @@
 # WORK ORDER 954 — Hollow family still wears KayKit skeletons; enemy id→model mapping goes data-driven
 
-**Status:** READY TO IMPLEMENT (mechanics) + ⚠ ONE OWNER PIN (which models the hollows wear)
+**Status:** BLOCKED ON THE ONE OWNER PIN — which bodies the **six remaining** hollow rows wear. ⚠ The line that used to sit here said "READY TO IMPLEMENT (mechanics)" and was STALE: the mechanics half shipped 2026-08-14 (this WO's own §1 correction says so and the Status line was never flipped), and two of the pinned rows landed 2026-08-20. True state in §1b.
+
+> ## §1b — TRUE STATE 2026-08-20 (verified at source, not from this document)
+> **Deliverable 1 (data-driven mapping): SHIPPED.** Recorded by the 08-14 correction block below,
+> which the Status line never caught up with.
+>
+> **Deliverable 2 (the hollow re-skin, OWNER-PINNED): TWO ROWS LANDED, SIX STILL WEAR KAYKIT.**
+> Commit `577bde576` (2026-08-20) wired two owner-delivered AccuRig bodies end to end —
+> `hollow-walker → Hollow_Walker` and `cellar-hollow → Cellar_Hollow` — retiring the
+> `Skeleton_Minion` stand-in on the only rows that were ever borrowing it. Read from
+> `Assets/Resources/Data/Canonical/enemies.json` today, the family stands at:
+>
+> | Still KayKit `Skeleton_*` (6) | Non-KayKit (4) |
+> |---|---|
+> | `hollow-warrior`, `hollow-rogue`, `hollow-acolyte`, `hollow-mage`, `hollow-reaper`, `hollow-apprentice` | `hollow-walker` (Hollow_Walker), `cellar-hollow` (Cellar_Hollow), `hollow-brute` (Skeleton_Golem_NEW), `necromancer` (Necromancer_NEW) |
+>
+> ⛔ **AND THE THING THIS WO PREDICTED WRONG: it is NOT a one-word JSON edit per row.** §1's closing
+> claim ("with 1 landed it is now a one-word JSON edit per row") did not survive contact. Pointing
+> `enemies.json` at a new model is **INERT** on a Hollow id: `EnemyFactory.ModelForEnemy` routes
+> Hollows through `EnemyResolver.TryResolveHollowModel`, which honours a data `modelKey` **only if it
+> is in `KnownHollowModels`**. A row naming art outside that set silently keeps spawning
+> `Skeleton_Minion` **while `EnemyResolverRegression` reds the tree** — inert and failing at the same
+> time. The real change is **five edits per body across four files**: `EnemyResolver.KnownHollowModels`
+> · `EnemyResolver.CommittedModels` · the `HollowTable` row (ModelKey + AnimatorRig) ·
+> `EnemyAnimatorFactory.RigFor` · `EnemyResolverRegression.ExpectedBaseModel` · plus `enemies.json`
+> (**both** copies). And the one easiest to miss: **`EnemyFactory.AccuRigIntake`** — both bodies are
+> `CC_Base` **+X-forward** exports and would have spawned turned 90°. They belong in the intake
+> **despite** routing to the SkeletonHumanoid rig, which is the distinction that set exists to draw:
+> **rig class = which CLIPS a body plays; the intake = which way its mesh FACES.** The KayKit
+> `Skeleton_*` bodies share that controller and face **+Z**; these two share it and face **+X**.
+> Judging either by the other stands a body sideways in a raid.
+>
+> Also landed in that commit: **`cellar-hollow` LOSES its `Variant "cellar"`** (the kneel-rock sorrow
+> idle). Owner's ruling for that body is *"a tanky type or barbarian ish type"* — a kneeling mourner
+> is the opposite read — so `Variant` is **null**, not carried.
+>
+> **Proof:** `REGRESSION_OK 227/227 suites — 227 green, 0 red, 0 skipped` + `COMPILE_GATE_OK`. The
+> four failures standing before it (all naming `Hollow_Walker` or `Cellar_Hollow`) are closed.
 **Minted:** 2026-08-10 (CLI seat, main line — banner bumped 954 → 955 in the same edit)
 **Silo:** Village/Enemies + enemies.json — coordinate with nothing currently in flight
 **Origin:** owner 2026-08-10: *"I am still seeing a lot of kaykat enemies and didnt think we had any

@@ -6,7 +6,28 @@
 
 # WORK ORDER 1003 — Replace town NPCs with the CraftPix medieval people pack
 
-**Status:** DONE (reconciled 2026-08-08; owner felt-verification outstanding) · **Silo:** World/characters/art · **For:** CLAUDE CLI · **Date:** 2026-08-07
+**Status:** DONE (reconciled 2026-08-08; owner felt-verification outstanding) · **Silo:** World/characters/art · **For:** CLAUDE CLI · **Date:** 2026-08-07 · ⚠ **§0's RIGGING DIRECTION WAS WRONG AND WAS CORRECTED 2026-08-20 — see the note directly below.**
+
+> ## ⚠ CORRECTION 2026-08-20 — "link through our existing animator" put civilians in a combat stance
+> §0 of this WO directs: *"retarget onto the FULL SHARED humanoid animation set … the shared NPC
+> animator, `KayKitNpcIdle.controller`/`ArmIdle`."* Followed literally, that is how **14 purchased
+> civilian bodies ended up playing the hero's clips**, on two independent paths:
+> - `KayKitNpcIdle` plays `m-standby-idle` from
+>   `Assets/Action/Knight/Motion/studio-mocap-series-magical-moves` — **the Knight's COMBAT
+>   STANDBY.** Correct for a knight, wrong for a shopkeeper. The three NPC injectors stopped arming
+>   CraftPix people with it in `79c1e61b` (suite `NpcIdleControllerRegression` `[npc-idle-controller]`).
+> - The **default** path was worse and was missed by that first commit: `AC_CraftPixTownsfolk`'s own
+>   Idle and Walk states resolved by GUID to `Assets/Action/Shared/Shared_Idle.fbx` and
+>   `Shared_Walk_Forward.fbx` — **the hero's mixamo locomotion**, the same clips Knight/Cleric/Mage/
+>   Ranger play. All 14 bodies share that one controller, so every vendor, every wandering villager
+>   and both quest NPCs stood combat-ready and walked the hero's walk. Repointed in `9a2d1faae` to
+>   the civilian Supercyan `common_people@idle` / `common_people@walk`, via the new editor entry
+>   `DeNelle.Editor.CraftPixTownsfolkAnimatorSetup` (Unity's `AnimatorController` API, never a
+>   hand-edit of the asset; it refuses a clip that is not imported Humanoid).
+>
+> **The standing rule this leaves:** *"they inherit the entire existing anim set with zero new
+> clips"* is only a virtue if the existing set is the **right** set. A civilian pack needs civilian
+> clips; sharing the hero's controller is a cost, not a saving. Related: **PROD-002 §0.2.**
 **PO:** Samantha (owner) · **Author:** UI seat · **UI-seat block:** 1000–1099
 **Owner:** picked the **CraftPix Free Medieval 3D People Low Poly** pack to replace the KayKit town NPCs with proper dressed people (the "people first, then walls" cohesion pass).
 

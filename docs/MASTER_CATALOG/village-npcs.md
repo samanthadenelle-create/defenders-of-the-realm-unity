@@ -115,9 +115,36 @@ The live chain:
 
 ### The 12-structure mapping (OWNER-ONLY retag — a swap is a one-word JSON edit, never code)
 `repo.npcModel` in `Assets/StreamingAssets/Data/Canonical/structures-catalog.json` (mirrored at
-`Assets/Resources/Data/Canonical/structures-catalog.json`); line numbers = StreamingAssets copy:
+`Assets/Resources/Data/Canonical/structures-catalog.json`).
 
-| Structure id | npcModel slug | line |
+> ## ⛔ CORRECTED 2026-08-20 — THE KAYKIT SLUGS BELOW ARE RETIRED. THE ROWS WEAR CRAFTPIX PEOPLE.
+> PROD-002 Deliverable B retagged all 12 rows on 2026-08-18 (`233613615`) to **folder-qualified**
+> CraftPix slugs. Read from the StreamingAssets copy today:
+>
+> | Structure id | `repo.npcModel` (LIVE) |
+> |---|---|
+> | `healing_caravan` | `CraftPixPeople/NPC_Peasant_5` |
+> | `pet-house` | `CraftPixPeople/NPC_Peasant_6` |
+> | `workshop` | `CraftPixPeople/NPC_RichCitizen_2` |
+> | `market` | `CraftPixPeople/NPC_Peasant_1` |
+> | `mill` | `CraftPixPeople/NPC_Peasant_2` |
+> | `forge` | `CraftPixPeople/NPC_CityDweller_1` |
+> | `armorer` | `CraftPixPeople/NPC_CityDweller_2` |
+> | `jeweler` | `CraftPixPeople/NPC_RichCitizen_1` |
+> | `arcane-tower` | `CraftPixPeople/NPC_RichCitizen_3` |
+> | `collector_farm` | `CraftPixPeople/NPC_Peasant_3` |
+> | `collector_lumbermill` | `CraftPixPeople/NPC_Peasant_4` |
+> | `barracks` | `CraftPixPeople/NPC_RichCitizen_4` |
+>
+> Note `fountain_healing` is no longer the row that carries a slug — it is **`healing_caravan`**.
+> The **QUEST CAST** is a separate injector (`QuestCastNpcInjector`) and was moved onto the same
+> contract on 2026-08-20 (`79c1e61b`): **Village Elder → `CraftPixPeople/NPC_King`** (one of only two
+> bodies no structure row claims, so the Elder's face appears nowhere else in the hub) and **Fenn
+> Wildmane → `CraftPixPeople/NPC_Peasant_4`**.
+>
+> **The old table is kept below as the record of the KayKit era — do not read it as current.**
+
+| Structure id | npcModel slug (⛔ RETIRED 2026-08-18) | line |
 |---|---|---|
 | fountain_healing | Cleric | 404 |
 | pet-house | Druid | 491 |
@@ -134,6 +161,29 @@ The live chain:
 
 Staged bodies (TRACKED, not gitignored): `Assets/Resources/NPCs/KayKit/` — 12 FBXs + textures +
 `KayKitNpcIdle.controller` all present on disk (verified this pass).
+
+### ⛔ THE TWO PATHS THAT FED TOWN NPCs THE HERO'S ANIMATION (corrected 2026-08-20)
+
+Both were live simultaneously, and fixing only the first would have looked like a fix and changed
+nothing the owner could see:
+
+1. **`KayKitNpcBody.ArmIdle` on a CraftPix body.** `KayKitNpcIdle` plays the Knight's combat standby
+   (see the next section) — right for a knight, wrong for a shopkeeper. `79c1e61b` stopped the three
+   NPC injectors arming CraftPix people with it. Pinned by `NpcIdleControllerRegression`
+   `[npc-idle-controller]`.
+2. **The DEFAULT path — `AC_CraftPixTownsfolk` itself.** Its Idle/Walk states resolved by GUID to
+   `Assets/Action/Shared/Shared_Idle.fbx` and `Shared_Walk_Forward.fbx` — **the HERO's mixamo
+   locomotion**, the same clips the Knight/Cleric/Mage/Ranger controllers play. **All 14** CraftPix
+   bodies share this one controller, so every vendor, every wandering villager and both quest NPCs
+   stood combat-ready and walked the hero's walk. Repointed in `9a2d1faae` to the civilian Supercyan
+   `common_people@idle` / `common_people@walk` by the new editor entry
+   **`DeNelle.Editor.CraftPixTownsfolkAnimatorSetup.Run`**, which drives Unity's own
+   `AnimatorController` API (never a hand-edit of the `.controller` asset) and refuses to swap in a
+   clip that is not imported Humanoid — a Generic clip cannot pose a humanoid rig.
+
+⚠ **The lesson is about evidence, and it is on the record in `9a2d1faae`'s own body:** the earlier
+commit asserted this controller "plays a Supercyan civilian clip" from a folder listing, without
+opening the GUIDs. Comments and folder listings are not the animator.
 
 ### The shared idle (WO-833)
 `Assets/Editor/KayKitNpcAnimatorSetup.cs` — `Build()` (:59) creates

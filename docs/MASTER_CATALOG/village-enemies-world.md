@@ -488,9 +488,27 @@ dependency — headless-testable. **DATA/LIVE.**
 ### EnemyResolver.cs (345 lines) `DeNelle.Core.Enemies.EnemyResolver` (static)
 THE id → family → class → DISTINCT model authority (fixes "distinct ids collapse to the same
 generic skeleton"). Key surface:
-- `HollowTable` (:64-188): walker→Skeleton_Minion, warrior→Skeleton_Warrior (Phase-2 weapon key
+- **⛔ CORRECTED 2026-08-20 (`577bde576`) — TWO HOLLOW ROWS LEFT `Skeleton_Minion`.**
+  `hollow-walker → **Hollow_Walker**` and `cellar-hollow → **Cellar_Hollow**`, both owner-delivered
+  AccuRig bodies. **`cellar-hollow` also LOST its `Variant "cellar"`** (the kneel-rock sorrow idle):
+  the owner's read for that body is *"a tanky type or barbarian ish type"*, and a kneeling mourner is
+  the opposite, so `Variant` is now **null**. Wiring a new Hollow body is **five edits in four
+  files**, not a data edit — `KnownHollowModels`, `CommittedModels`, the `HollowTable` row
+  (ModelKey + AnimatorRig), `EnemyAnimatorFactory.RigFor`, and
+  `EnemyResolverRegression.ExpectedBaseModel` — plus `enemies.json` (BOTH copies). A row naming art
+  outside `KnownHollowModels` is **inert and RED at the same time**: it silently keeps spawning
+  `Skeleton_Minion` while the regression fails the tree. **And the one easiest to miss:** both bodies
+  go into **`EnemyFactory.AccuRigIntake`** — they are `CC_Base` **+X-forward** exports and would
+  otherwise spawn turned 90°. They belong there **despite** routing to the SkeletonHumanoid rig,
+  which is exactly the distinction that set draws: **rig class = which CLIPS a body plays; the intake
+  = which way its mesh FACES.** The KayKit `Skeleton_*` bodies share that controller and face **+Z**.
+  Roster after the change: `REGRESSION_OK 227/227, 0 red`. The six rows below still on `Skeleton_*`
+  are the remainder of WO-954's owner-pinned re-skin.
+- `HollowTable` (:64-188): walker→**Hollow_Walker** *(was Skeleton_Minion)*, warrior→Skeleton_Warrior
+  (Phase-2 weapon key
   sword_A), rogue→Skeleton_Rogue, acolyte→Skeleton_Healer, mage→Skeleton_Mage,
-  reaper→Skeleton_Warrior+variant, brute→Skeleton_Golem, cellar-hollow→Skeleton_Minion+variant,
+  reaper→Skeleton_Warrior+variant, brute→Skeleton_Golem, cellar-hollow→**Cellar_Hollow**, no variant
+  *(was Skeleton_Minion+variant)*,
   necromancer→Necromancer (wave boss), hollow-apprentice→Skeleton_Mage+variant (mini-boss), the
   dungeon underscore aliases (hollow-villager-a/b, apprentice-minor, healer — `Norm()` folds
   `_`→`-`, :231), and **alduin** (Necromancer variant, `CombatSpawnable=false` — dialogue NPC).

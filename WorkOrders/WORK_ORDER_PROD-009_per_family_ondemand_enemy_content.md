@@ -7,6 +7,33 @@ then runs local — so the per-family split buys nothing and would add a second 
 maintain. Nothing here is orphaned: the honest size figure PROD-010 shows the player (~88 MB) is exactly the
 number this ticket would have reduced, and PROD-010 measures it rather than promising a shrink.
 Do not re-open without an owner ruling that reverses the 08-19 decision.
+
+> ## ⚠ NOTE 2026-08-20 (docs seat) — THIS TICKET'S TWO MECHANISMS LANDED ANYWAY, AFTER IT WAS CLOSED
+> Recording the fact, **not** re-opening the ticket — the 08-19 ruling stands until the PO says
+> otherwise. But a reader who takes the CLOSED line at face value will look for machinery that is
+> now in the tree:
+> - **Per-family enemy packing SHIPPED** — `8e072153c` *"enemies pack per FAMILY, structures pack per
+>   ASSET"* (new `Assets/Editor/ContentPackingSetup.cs`, pinned by `ContentPackingRegression`, and
+>   `docs/addressables-implementation-plan.md` rewritten to record the packing law). That is §"split
+>   enemy content per family" verbatim.
+> - **Roster lookahead SHIPPED** — `890ff5656` adds
+>   `Assets/_Modules/Village/Waves/UpcomingWaveWarmPlanner.cs`, called from
+>   `BuildModeController.Enter` one line after `FreezeWaves()`, warming enemy art in
+>   **first-appearance order**, one family at a time, lookahead capped at **1 wave**. Pinned by
+>   `EnemyWarmOrderRegression` `[enemy-warm-order]`. That is §"roster lookahead" verbatim, and it
+>   relies on the same property this ticket identified — `WaveCompositionBuilder.Build` is a pure
+>   deterministic static that re-seeds the global RNG, so `Random.state` is saved/restored — now
+>   **PINNED by the suite rather than assumed**.
+> - One thing this ticket could not have known: **the tutorial needs its OWN source.**
+>   `TutorialWaveSpawner` bypasses the wave loop entirely, so `WaveCompositionBuilder` does not
+>   describe the FTUE encounter — the exact one the owner reported. `PreferredEnemyId` was promoted
+>   to a public const so there is ONE authority, not a copy.
+>
+> **Open question for the PO:** the 08-19 ruling closed this on the reasoning that the per-family
+> split *"buys nothing"* under PROD-010's pull-the-whole-set model and *"would add a second content-
+> partitioning scheme to maintain"*. Both mechanisms now exist regardless. Someone should decide
+> whether this ticket is **superseded** (as written) or **effectively delivered by other commits** —
+> the board reads it as Closed either way, but the reasoning on file no longer matches the tree.
 **Minted:** 2026-08-18 (docs seat) — PROD series.
 **Priority:** HIGH — the freeze is on the LIVE build, and it lands inside the FTUE.
 **Silo:** Addressables / content delivery. **Lane:** `Assets/_Modules/Core/Addressables` + `AddressableAssetsData`. No scenes.

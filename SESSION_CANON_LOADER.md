@@ -433,6 +433,9 @@ binding depth lives in `CLAUDE.md`, `docs/ARCHITECTURE_PRINCIPLES.md`, `docs/HAN
 - **Instrument, don't guess — THE HARD GATE (BINDING, CLAUDE.md §12):** NO code edit on a real bug
   until CAPTURED DATA proves the cause. Loggers step IN/OUT → run HEADLESS → data pinpoints → fix THAT.
   Static reading locates candidates, never concludes. Never inference-fix; it's the OPENING move, unprompted.
+- **Content ships from the R2 CDN, not in the APK (BINDING, CLAUDE.md §16):** enemy/structure art is
+  remote with no local fallback and content-hashed names, so **every build needs its own push** —
+  `tools\r2-ship.ps1` → `R2_PARITY_OK`; never raw `adb install`. A missed push = capsule enemies, no error.
 - **One thing at a time, fully verified before the next.**
 - **Deliver complete + felt-verified. No piecemeal.**
 - **Ticket pipeline (BINDING):** QA (read-only RCA, classify NEW-feature vs EXISTING) → CLI

@@ -1509,6 +1509,7 @@ be closed.**
 | **Windows player build** | `build-windows.ps1` |
 | **AutoPilot fleet** | `run-autopilot-fleet.ps1 -Count N` (player exe; no license needed) |
 | **WebGL ship** | `ship-webgl.ps1` / `build-webgl-isolated.ps1 -Ship` → butler → itch |
+| **Content ship (R2 CDN)** | `tools\r2-ship.ps1` → `R2_PUSH_OK` + `R2_PARITY_OK` — **mandatory on every build that reaches a device or a store; full rule = CLAUDE.md §16** |
 
 - **F8 break-logs land in `break-log.jsonl`** (+ screenshots) via `BreakCaptureHarness`; fleet runs
   namespace theirs per `--run`. `Fail`/`LogError` lines are what the recorder captures.

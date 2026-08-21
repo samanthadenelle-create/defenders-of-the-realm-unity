@@ -203,6 +203,9 @@ the disagreement is filed in CONFLICTS at the bottom. Cite the source, never thi
   header · memory `desktop-build-after-android-target`
 - **QR-3.12** Wipe + rebuild the exe unprompted after a gate-green commit wave. → memory `wipe-rebuild-exe-on-ready`
 - **QR-3.13** A **"LICENSE ERROR"** line is usually a MISDIAGNOSIS — see QR-5.9.
+- **QR-3.14** ⛔ **A build is not shipped until its content is pushed:** enemy/structure art is served from
+  R2 with **no local fallback** and **content-hashed** bundle names, so every build needs its own push —
+  `tools\r2-ship.ps1` → **`R2_PARITY_OK`**. Never raw `adb install`. → **CLAUDE.md §16** (full rule)
 
 ---
 
@@ -545,7 +548,9 @@ almost always an IMPORT / CONVENTION / MATERIAL fault — not a mesh fault and n
 
 77. **Answer PREFLIGHT GATE C before you say DONE.** → `PREFLIGHT_GATE.md` Gate C
 78. **Pre-ship gates are `COMPILE_GATE_OK` + `REGRESSION_OK <n>/<n> suites` + `UI_CAPTURE_OK` — and you
-    OPEN the PNGs.** → CLAUDE.md §8
+    OPEN the PNGs — plus `R2_PARITY_OK` on any build that reaches a device or a store: enemy/structure ART
+    is remote and content-hashed, so every build needs its own push (`tools\r2-ship.ps1`, never raw
+    `adb install`). → CLAUDE.md §8 · §16 (full rule)**
 79. **The MARKER is the evidence, not the exit code.** A batchmode run can exit 0 on a refusal or a FAIL —
     verify the marker, the log's freshness, and its size. → CLAUDE.md §8 · docs/HANDOVER.md ·
     memory `gates-report-success-without-proving-it`

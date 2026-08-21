@@ -14,8 +14,11 @@ Docs index: `docs/README.md`.
 > `COMPILE_GATE_OK` + `REGRESSION_OK 120/120 suites` (⚠ read the count off the marker, never off a doc —
 > it moved 117 → 120 in eight hours on 2026-08-05).
 > **WO next-free: read the `CLI_LANES_WO_NUMBERS.md` banner — never a number copied here.** TWO
-> disjoint blocks are in use as of 2026-08-02: **main line (CLI)** and **860–899 reserved (UI seat)**;
-> each seat bumps its own banner row in the same edit as the mint.
+> disjoint blocks are in use as of 2026-08-02: **main line (CLI)** and a **reserved block (UI seat)** —
+> ⚠ **the ranges are deliberately NOT written here.** This line named "860–899" until 2026-08-20; that
+> block CLOSED at 899 and the seat moved on, so the copy sat here stale and re-seeded the very
+> collision it was meant to prevent (CLAUDE.md §2 says this in as many words). **Read both rows off
+> the banner.** Each seat bumps its own banner row in the same edit as the mint.
 > Dungeons are a functional end-to-end loop; the raid loop is locked to the
 > COC Teleport/Deploy model; **save schema `v38`** (v35 = WO-773 Obsidian queue; v36 = WO-834
 > `everBuiltStructureIds`; v37 = WO-911 the per-job paid basket; v38 = WO-934 the army loadout bank).
@@ -44,7 +47,8 @@ Docs index: `docs/README.md`.
 | `docs/qa/UI_REVIEW_2026-08-01.md` | Frozen 20-panel real-pixel readability review |
 | `SUNDAY_HOUSEKEEPING.md` | The weekly full-sweep + housekeeping ritual (BINDING) |
 | `PARALLEL_LANES.md` | Which work lanes can run simultaneously |
-| ~~`PUNCHLIST.md`~~ | ⚠ **NOT living — frozen 2026-05-27, PRE-PIVOT** (its "Defend-the-Tower transition" framing describes a module deleted 06-09). History only; the live backlog is the Notion Work Orders DB + `WorkOrders/`. |
+| ~~`PUNCHLIST.md`~~ | ⚠ **NOT living — frozen 2026-05-27, PRE-PIVOT** (its "Defend-the-Tower transition" framing describes a module deleted 06-09). History only; the live backlog is `WorkOrders/` + the DERIVED `BOARD.html`. ⚠ This row said "the Notion Work Orders DB" until 2026-08-20 — **Notion is RETIRED** (owner ruling 2026-08-08) and so is Linear (08-09). |
+| `BOARD.html` | **The live board — GENERATED from the repo** (`python tools/board_build.py`, ~2 s; parses `WorkOrders/*.md` Status lines + RESULT markers + the numbering banner). Derived view, **never hand-edit**; regenerate at session boot and before any board read. See `docs/BOARD.md` |
 | `AGENT_OPENERS.md` | Prompt openers for spawning agents |
 
 > Point-in-time session ledgers (`CLI_PREP_2026-07-08_next-session.md`, the `RESUME_*` files, etc.)
@@ -58,7 +62,9 @@ Docs index: `docs/README.md`.
 
 > **WO next-free: the `CLI_LANES_WO_NUMBERS.md` banner — the SOLE authority. Never copy a number here;
 > point at the banner.** As of 2026-08-02 **two disjoint blocks** are in use: the **main line (CLI)** and
-> the **860–899 reserved block (UI seat)**. Each seat bumps ITS OWN banner row in the SAME edit as the
+> a **reserved block (UI seat)** — ⚠ **ranges deliberately not copied here; read them off the banner**
+> (the "860–899" that used to sit on this line closed at 899 and went stale).
+> Each seat bumps ITS OWN banner row in the SAME edit as the
 > mint — skipping that bump caused FIVE collisions on 08-02 alone; collisions resolve
 > first-on-disk-and-referenced-wins.
 > Recent arc *(refreshed 2026-08-06)*: **865-870/878-883** UI rework set SHIPPED · **871** build-site
@@ -86,6 +92,24 @@ The unit of work. **Moved out of root into `WorkOrders/` 2026-06-22** to declutt
   WO-136s, two WO-129s/137s/152s/179s); WO numbers ≥182 supersede earlier
   same-topic WOs (e.g. WO-198 supersedes WO-129 pipeline reconciliation)
 - `_SUPERSEDED` suffix = dead, ignore (e.g. `WORK_ORDER_43_..._SUPERSEDED.md`)
+
+## Ship / release scripts (root + `tools/`) — added 2026-08-20
+
+The index used to cover only markdown, which is how a release step could exist with nothing pointing
+at it. These are the files that put a build in front of a player:
+
+| File | What it is |
+|---|---|
+| `morning-ship-chain.ps1` | The distribution chain (gates → APK → **R2 content ship** → distribute). **BLOCKS** if content parity fails |
+| `overnight-apk-build.ps1` | Unattended APK build; same content ship step |
+| `install-apk-to-seeker.ps1` | Sideload to the Seeker over `adb`. Content ship runs `-WarnOnly` here **on purpose** — a knowingly-offline/experimental sideload is legitimate |
+| `tools/r2-ship.ps1` | ⛔ **NEW 2026-08-20 (WO-1130) — THE one way content reaches players.** `push → verify → judge the MARKER`. The three scripts above all call it; none carries its own copy any more (they had already drifted). Switches: default = block, `-WarnOnly`, `-VerifyOnly` |
+| `tools/r2_sync.py` | The transport underneath it (PROD-011). ⚠ **Push the PARENT `ServerData`; verify the EXPLICIT `ServerData/Android`** — the docstring at `:21` still teaches the wrong push form |
+
+> ⛔ **Enemy and structure ART is served REMOTELY from R2 and there is NO local fallback.** Bundle
+> names are **content-hashed**, so **every build needs its own push** — a previous build's push can
+> never cover this one. An unpushed APK installs, launches, and shows tinted capsules with **no error
+> on screen**. That shipped three times (2026-08-18, 08-19 = WO-1124, 08-20 = WO-1130).
 
 ## Design docs (root-level; deeper specs live in `docs/`)
 

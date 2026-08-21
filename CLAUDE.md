@@ -283,7 +283,8 @@ See `KEY_FACTS.md` + the newest `CANON_GROUND_TRUTH_<date>.md` for full detail (
 - Village wave loop: WIRED — **`waves.json` `enemies[]` batches are INERT** (`_smartComposition:1` → WaveManager generates rosters). **The WO-783 D1 ruling is CLOSED** (owner, 2026-07-30): both `WaveDataTest` cases were rewritten to assert the batches are EMPTY, so a re-add now FAILS. Any doc calling this "open" is stale.
 - Save schema **v38** — read it off `SaveSchema.CurrentVersion` (`Assets/_Modules/Core/State/SaveSchema.cs:41`), never off a doc (v35 = WO-773 Obsidian queue; v36 = WO-834 `everBuiltStructureIds`, the blank-town baked standdown; v37 = WO-911 the per-job PAID BASKET — `paidWood/paidFood/paidIron/paidCrystals/paidMagic` on `BuildJobData`, the precondition for cancel refunding **100% of what was paid, flat** (ruling Q1), a pre-v37 job refunds ZERO and says so; **v38 = WO-934 the ARMY LOADOUT BANK** — `ArmyStorage.loadouts` (3 named composition presets) + `activeLoadout`, additive on the nested Army JSON, `MigrateToV38` runs `EnsureLoadouts` for empty slots); the **Obsidian multi-channel queue** (Builder/Train/Research) is the single home for ALL timed work, now with a **DEPTH cap of 5 PER LINE** (`BuildTimerConfig.queueDepthPerLine` — a different axis from `freeBuildSlots`, which stays 2; **never** implement the cap by raising concurrency) and an **Echo-gated, crystal-priced extra slot** (`BuildTimerService.TryBuySlot`, ruling Q6: each Echo above 2 unlocks the RIGHT to buy, crystals complete it); Realm Map (WO-826) shipped
 - Store / monetization: the live model = **player-built town** (strategic placement ALWAYS ON — the flag was removed; movable functional storefronts + vendor NPCs). PackStore/packs.json exist — do NOT greenfield — but the old Village.unity store scene-wiring is a dead path
-- Pre-ship gates = `COMPILE_GATE_OK` + `REGRESSION_OK <n>/<n> suites` + `UI_CAPTURE_OK` (open the PNGs).
+- Pre-ship gates = `COMPILE_GATE_OK` + `REGRESSION_OK <n>/<n> suites` + `UI_CAPTURE_OK` (open the PNGs)
+  **+ `R2_PARITY_OK` on any build that reaches a device or a store — the content-ship gate, §16.**
   **The markers are now DISTINCT per entry point (2026-08-02)** — `DataRegression.RunAll` emits
   `REGRESSION_OK <n>/<n> suites` (101 registered suites + 26 inline groups), `RegressionSuite.RunAll`
   emits `CHECKIN_SUITE_OK`, `SessionRegression.RunAll` emits `SESSION_GUARDS_OK`. Until today all three
@@ -374,6 +375,13 @@ Other sessions write + signal "ready"; the one committer reconciles. This is non
 > *Lesson forged 2026-06-21:* the castle "pink floor" was guessed at for 3 cycles (a terrain theory that
 > was WRONG); one headless FloorDiag dump then named the real cause — colorless URP/Lit floor tiles — in
 > a single read. Memory: `never-inference-fix`.
+>
+> *Forged again 2026-08-20:* every enemy in the owner's build was a capsule. **Two static theories were
+> proposed first** — a duplicated `[BuildTarget]` token in the Local path variables, then a stale content
+> build — and **both were wrong**, at the cost of an hour. One grep of the DEVICE log settled it in one
+> line: `RemoteProviderException : Unable to load asset bundle from : https://pub-...r2.dev/Android/
+> enemy_art_assets_enemyfam-hollow_....bundle` / `UnityWebRequest result : ProtocolError : HTTP/1.1 404
+> Not Found`. The bundles had never been pushed (§16). The device had the answer the whole time.
 
 Owner mandate (2026-06-13, from B2B-scale practice): **we do not guess at bugs — we
 instrument the flow and let the data tell us where it dies.** Repeated symptom-patching
@@ -509,3 +517,58 @@ again at that scale.** The standing rule, so canon updates stay 5-minute tasks:
 - **Weekly 5-minute audit:** skim the load-bearing set above against the ground-truth anchor; fix or flag.
 - **Never guess** — every canon update is sourced from HEAD commits / working tree / the live auto-memory
   index / verified summaries, never from assumption (§12 discipline applies to docs too).
+
+---
+
+## 16. Shipping Content — the art lives on the R2 CDN, not in the APK (BINDING)
+
+Owner ruling 2026-08-20: ***"wire the r2 push into the ship chain."***
+
+> ## ⛔ ENEMY AND STRUCTURE **ART** IS SERVED REMOTELY, AND A MISSING PUSH FAILS **SILENTLY**.
+> `Remote.LoadPath` = `https://pub-ab6dfaf1b3d74ca78891876611ccb832.r2.dev/[BuildTarget]`
+> (`Assets/AddressableAssetsData/AddressableAssetSettings.asset`). **There is NO local fallback** —
+> `Assets/Resources/Enemies` and `Assets/Resources/Structures` no longer exist. A build whose bundles
+> were never uploaded **installs perfectly, launches perfectly, and plays**: tinted **CAPSULE** enemies,
+> placeholder buildings, **no error on screen**. The game does not stall — that is deliberate — so the
+> only detector left is the owner's eyes, which is exactly the thing §14 exists to never rely on.
+
+**⚠ THE LOAD-BEARING SENTENCE — read it twice: BUNDLE NAMES ARE CONTENT-HASHED.** Every content build
+produces **new filenames**, so **EVERY content build needs ITS OWN push. A push from a previous build can
+never cover this one.** The bucket looking full proves nothing. The previous build still working proves
+nothing. This is the whole trap, and it is why "I pushed yesterday" is never an answer.
+
+**The sanctioned path is now ONE FILE: `tools\r2-ship.ps1`** — push + verify, marker-judged, **exit 16**
+on failure. It is called by `morning-ship-chain.ps1` and `overnight-apk-build.ps1` (both **BLOCK**) and by
+`install-apk-to-seeker.ps1` with **`-WarnOnly`** (a deliberately-offline sideload is legitimate *there and
+only there*). Before 2026-08-20 the push+verify pair was **copy-pasted into the two chains and had ALREADY
+DRIFTED**: overnight pushed *then* verified; morning **ONLY VERIFIED** and printed a "FIX: run this by
+hand" message — and a gate whose remedy is "a human remembers a second command" is not a gate. Same
+duplicated-state failure as the stale WO number block (§2) and the retired dependency table (§5). **Do not
+re-inline the push or the verify into any chain, script, doc or work order — call the one file.**
+
+**⛔ PUSH THE PARENT; VERIFY THE EXPLICIT TARGET. The asymmetry is real and it is the trap.**
+- `--push ServerData` (the **PARENT**). `--push ServerData/Android` **FLATTENS the keys to the bucket
+  root**, where the game never looks — and it reports **`R2_PUSH_OK` while uploading 103 unreadable
+  objects** (observed 2026-08-20).
+- `--verify-catalog ServerData/Android` (the **EXPLICIT** target), because `ServerData` holds both
+  `Android` and `StandaloneWindows64` and the tool refuses to guess.
+- Both forms are hardcoded **exactly once**, inside `r2-ship.ps1`. Retyping either by hand is how one of
+  them comes back wrong.
+
+**Judge by the MARKER on a FRESH log — `R2_PUSH_OK`, `R2_PARITY_OK` — NEVER the exit code.** This repo's
+runners exit 0 on refusals and FAILs (§8; memory `gates-report-success-without-proving-it`). Marker
+absence on a fresh log is a **FAILURE**, not an unknown. `R2_PARITY_OK` is a pre-ship gate — see §8.
+
+**⛔ A RAW `adb install` OF A HAND-BUILT APK BYPASSES ALL OF IT.** That is precisely what happened on
+2026-08-20: the CLI built with `run-unity-method.ps1` and installed with `adb install` directly, touching
+**none** of the three scripts that hold the gate. That hole is residual and the rule closes it:
+**installing or distributing a build goes THROUGH THE SCRIPTS, never through raw `adb`.**
+
+**Why this is written this hard — it has now happened THREE TIMES:**
+- **2026-08-18** — an APK sat ready to install whose enemy bundle had never been uploaded. Caught **by
+  hand**. Commit `16e22dba3` conceded in its own body: *"NO GATE COULD HAVE CAUGHT THIS."*
+- **2026-08-19** — a real **Android** APK shipped carrying **StandaloneWindows64** content, with every
+  other marker green (WO-1124).
+- **2026-08-20** — the owner played a build in which **EVERY enemy was a capsule**. The CLI had re-run the
+  Addressables grouper and re-applied packing that day, **re-hashing every bundle**, and never pushed. Two
+  wrong causes were theorised before the device log named it in one line (§12).

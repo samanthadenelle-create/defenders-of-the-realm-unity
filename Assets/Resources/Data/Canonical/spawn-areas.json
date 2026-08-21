@@ -8,7 +8,7 @@
       "center": { "x": 260, "z": 0 },
       "radius": 190,
       "families": [
-        { "id": "orc-warband", "weight": 3.0, "tank": "orc-tank", "dps": "orc-warrior", "healer": "orc-mage" }
+        { "id": "orc-warband", "weight": 3.0, "tank": "orc-berserker", "dps": "orc-raider", "healer": "orc-shaman" }
       ],
       "levelRange": { "min": 1, "max": 3 },
       "composition": { "tank": 1, "dps": 2, "healer": 0 },
@@ -21,8 +21,8 @@
       "center": { "x": -260, "z": 0 },
       "radius": 190,
       "families": [
-        { "id": "orc-warband", "weight": 2.0, "tank": "orc-tank", "dps": "orc-warrior", "healer": "orc-mage" },
-        { "id": "skeleton-band", "weight": 1.0, "tank": "skeleton-tank", "dps": "skeleton-warrior", "healer": "skeleton-mage" }
+        { "id": "orc-warband", "weight": 2.0, "tank": "orc-berserker", "dps": "orc-raider", "healer": "orc-shaman" },
+        { "id": "skeleton-band", "weight": 1.0, "tank": "hollow-brute", "dps": "hollow-warrior", "healer": "hollow-acolyte" }
       ],
       "levelRange": { "min": 3, "max": 6 },
       "composition": { "tank": 1, "dps": 2, "healer": 1 },
@@ -35,8 +35,8 @@
       "center": { "x": 0, "z": -260 },
       "radius": 190,
       "families": [
-        { "id": "skeleton-band", "weight": 2.0, "tank": "skeleton-tank", "dps": "skeleton-warrior", "healer": "skeleton-mage" },
-        { "id": "troll-band", "weight": 1.0, "tank": "troll", "dps": "troll-berserker", "healer": "orc-shaman" }
+        { "id": "skeleton-band", "weight": 2.0, "tank": "hollow-brute", "dps": "hollow-warrior", "healer": "hollow-acolyte" },
+        { "id": "troll-band", "weight": 1.0, "tank": "troll", "dps": "troll-overlord", "healer": "orc-shaman" }
       ],
       "levelRange": { "min": 6, "max": 10 },
       "composition": { "tank": 2, "dps": 2, "healer": 1 },
@@ -49,8 +49,8 @@
       "center": { "x": 0, "z": 260 },
       "radius": 190,
       "families": [
-        { "id": "troll-band", "weight": 2.0, "tank": "troll", "dps": "troll-berserker", "healer": "orc-shaman" },
-        { "id": "skeleton-band", "weight": 1.5, "tank": "skeleton-tank", "dps": "skeleton-warrior", "healer": "skeleton-mage" }
+        { "id": "troll-band", "weight": 2.0, "tank": "troll", "dps": "troll-overlord", "healer": "orc-shaman" },
+        { "id": "skeleton-band", "weight": 1.5, "tank": "hollow-brute", "dps": "hollow-warrior", "healer": "hollow-acolyte" }
       ],
       "levelRange": { "min": 10, "max": 16 },
       "composition": { "tank": 2, "dps": 3, "healer": 1 },

@@ -1,6 +1,7 @@
 # PROD-002 — NPCs: retire the doors that lead nowhere, cast the people we bought
 
-**Status:** DONE — **both deliverables shipped**, PENDING OWNER FELT-VERIFY (§4 boxes 4/5).
+**Status:** DONE — **both deliverables shipped**, PENDING OWNER FELT-VERIFY (§4 boxes 4/5). ⚠ **TWO 2026-08-20 FOLLOW-UPS ARE RECORDED IN §0 BELOW** — one of Deliverable A's stated reasons was FALSE when written and has since been MADE TRUE (`890ff5656`), and Deliverable B grew a second half nobody knew was missing (`79c1e61b`, `9a2d1faae`).
+
 **Deliverable A (retire the dead interact doors) is DONE** (2026-08-18, commit `233613615`, owner
 ruled **(a)**): all three doors are shut — `collector_lumbermill` + `arcane-tower` earlier, and
 **`barracks` in that commit** via `BarracksNpcInjector` + `BuildingInteractable.HasNoTalkDoor` (both
@@ -22,6 +23,66 @@ entrance is through manage which is cleaner"* · *"they dont offer any value onl
 i purchased?"*
 **Class:** inherited dev-era defect, not a launch regression — the NPCs went hollow when the Manage
 screen took over building flow, and going live is what made it visible.
+
+---
+
+## 0. ⚠ ADDENDUM 2026-08-20 — two things this ticket got half-right, corrected in the open
+
+*(Appended, not rewritten. The body below is the record of what was decided on 08-17/08-18 and stays
+exactly as it was written; this section is what later turned out to be true.)*
+
+### 0.1 Deliverable A's stated reason — *"Manage owns training"* — WAS NOT TRUE WHEN WRITTEN
+
+Commit `233613615` closed the **barracks** talk-door on the premise that the Manage screen already
+owned training. **It did not.** `ManageScreenVM.BuildTroopsBrowse` only ever emitted an **Upgrade**
+CTA — there was no Train row anywhere in it. So the door was closed against a replacement that had
+never been built, and for two days the ONLY way into troop training was to **fail** the
+army-readiness check on the Raids screen and be redirected there. The in-game help still told the
+player to train at the Barracks — an instruction that had become impossible to follow.
+
+Owner, on a live device build 2026-08-20: *"under manage i see option to upgrade the troops, but i
+dont se a way to train troops."*
+
+**FIXED in `890ff5656`, by making the premise true rather than by re-opening the door.** The
+Manage ▸ Troops tab now emits a verb-led **TRAIN** row per trainable troop beside the existing
+UPGRADE row, plus a free *"Armies — saved compositions"* entry into the muster. **The barracks
+talk-door STAYS CLOSED** — canon is ONE Queues door and this is it, so Deliverable A's *decision*
+stands; only its *justification* had to be earned after the fact. Pinned by the new suite
+`ManageTroopsTrainDoorRegression` `[manage-train-door]`, run RED-then-GREEN (reverted VM → 8
+failures naming the exact defect). The false comment at `BuildingInteractable.cs` was **corrected in
+place, not deleted** — a comment recording a wrong REASON is how the next seat repeats the mistake.
+
+> **The lesson this ticket now carries:** *"the replacement already exists"* is a claim that must be
+> read at source before a door is closed on it. It was not, and it cost the owner two days of a
+> feature that was fully built, shipped and regression-covered — and simply had no button.
+
+### 0.2 Deliverable B (the purchased bodies) had a SECOND half — the animator, not the mesh
+
+Retagging the 12 catalog rows put the right *bodies* in town. It did nothing about what those
+bodies were *doing*, and two separate paths were both feeding town NPCs the **hero's combat
+animation**:
+
+1. **`79c1e61b`** — the QUEST CAST was still on staged KayKit placeholders. `QuestCastNpcInjector`'s
+   two rows now name purchased CraftPix bodies through the same folder-qualified-slug contract the
+   catalog rows use: **Village Elder → `CraftPixPeople/NPC_King`** (one of only two bodies no
+   structure row claims, so the Elder's face appears nowhere else in the hub) and **Fenn Wildmane →
+   `CraftPixPeople/NPC_Peasant_4`**. Same commit stopped the three NPC injectors arming a CraftPix
+   person with `KayKitNpcIdle` — that controller plays the **Knight's combat standby**
+   (`m-standby-idle`), right for a knight and wrong for a shopkeeper. New suite
+   `NpcIdleControllerRegression` `[npc-idle-controller]`.
+2. **`9a2d1faae` — a CORRECTION TO 79c1e61b, stated in the open.** That commit claimed
+   `AC_CraftPixTownsfolk` already played a civilian clip. **It did not, and the claim was never
+   checked** — the GUIDs said `Assets/Action/Shared/Shared_Idle.fbx` and `Shared_Walk_Forward.fbx`,
+   i.e. the **HERO's mixamo locomotion**, and all **14** CraftPix bodies share that one controller.
+   So every vendor, every wandering villager and both quest NPCs had been standing combat-ready and
+   walking the hero's walk. Repointed to the civilian Supercyan `common_people@idle` /
+   `common_people@walk` via the new editor entry `DeNelle.Editor.CraftPixTownsfolkAnimatorSetup`,
+   which drives Unity's own `AnimatorController` API (never a hand-edit of the asset) and refuses to
+   swap in a clip that is not imported Humanoid.
+
+⚠ Both halves are **animator/appearance** work and headless gates cannot see them. The felt-verify
+this ticket is already pending now covers them too: **look at whether the townspeople stand like
+civilians.**
 
 ---
 

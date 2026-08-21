@@ -95,7 +95,21 @@
 > PROD-003 (Realm Store permanent storefront), PROD-004 (baked-twin footprint),
 > PROD-005 (default shield renders through the hero body; survives a dungeon->town port).
 
-> ## ⚠ RECONCILED 2026-08-20 (CLI): main line next free = **1130**.
+> ## ⚠ RECONCILED 2026-08-20 (CLI): main line next free = **1131**.
+> *(Docs seat minted **WO-1130** and bumped 1130 -> 1131 in this SAME edit — THE R2 PUSH IS PART OF
+> THE SHIP CHAIN. Owner ruling 2026-08-20 after playing a build in which EVERY enemy rendered as a
+> tinted capsule: *"wire the r2 push into the ship chain."* ⛔ ROOT CAUSE WAS NOT CODE: enemy and
+> structure art is served REMOTELY from R2 with NO local fallback, re-running the Addressables
+> grouper re-hashed every bundle, and the new bundles were never pushed — so the APK installed and
+> launched perfectly and showed capsules with NO error on screen. THIRD OCCURRENCE (08-18 caught by
+> hand, `16e22dba3` conceding *"NO GATE COULD HAVE CAUGHT THIS"*; 08-19 = WO-1124's wrong-target
+> content; 08-20 = this). PROD-011's gate WORKED and still lost — it printed a FIX command for a
+> human to run, and THAT is the step that got skipped: a gate whose remedy is "someone remembers to
+> run another command" is not a gate. New `tools/r2-ship.ps1` is now the ONE place the push/verify
+> rules live (push the PARENT `ServerData`, verify the EXPLICIT `ServerData/Android`, judge the
+> MARKER on a FRESH log), called by all three ship scripts — which had ALREADY drifted into doing
+> different things. ⚠ STILL OPEN: a raw `adb install` touches none of the three scripts and is
+> ungated.)*
 > *(CLI seat minted **WO-1129** and bumped 1129 -> 1130 in this SAME edit — THE ART TREE
 > RECONCILIATION, an owner-requested dedicated overnight session. Owner: *"I think we need one
 > dedicated overnight session to properly map everything into the proper structure of the tree...

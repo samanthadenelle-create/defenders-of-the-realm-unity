@@ -591,6 +591,18 @@ under `Assets/Action/<Class>/` + Shared. **DESTRUCTIVE** (controller assets).
   (`:165`, `:610`). "Bound for KnightV3 when ff.mocaploco=1" (`:373`).
   KnightMocap's calm idle is the SAME clip KayKitNpcAnimatorSetup uses (§5).
 
+### CraftPixTownsfolkAnimatorSetup — `Assets/Editor/…` (NEW 2026-08-20, `9a2d1faae`)
+`DeNelle.Editor.CraftPixTownsfolkAnimatorSetup.Run` repoints **`AC_CraftPixTownsfolk`**'s Idle and
+Walk states off the HERO's mixamo locomotion (`Assets/Action/Shared/Shared_Idle.fbx`,
+`Shared_Walk_Forward.fbx` — the same clips Knight/Cleric/Mage/Ranger play) onto the civilian
+Supercyan `common_people@idle::idle` / `common_people@walk::walk`. **All 14 CraftPix bodies share
+this one controller**, so before the repoint every vendor, every wandering villager and both quest
+NPCs stood combat-ready and walked the hero's walk. Drives Unity's own `AnimatorController` API —
+**never a hand-edit of the `.controller` asset** — and **refuses** to swap in a clip that is not
+imported Humanoid (a Generic clip cannot pose a humanoid rig). Sibling fix the same day: the three
+NPC injectors stopped arming CraftPix people with `KayKitNpcIdle` (§5), which plays the Knight's
+combat standby; pinned by `NpcIdleControllerRegression` `[npc-idle-controller]`.
+
 ### AnimatorSetup — `Assets/Editor/AnimatorSetup.cs`
 Canonical shared enemy controller factory (KayKit Character Animations rigs →
 `Assets/Generated/Animators/*.controller`; params Speed/Attack/Hit/Dead/Cast).
@@ -728,6 +740,31 @@ Deletes `Builds/Windows` first (stale-exe native-crash guard), launches
 judges success by **exe existence** → `[build] SUCCESS -> <exe> (<MB>)` exit 0.
 Memory `desktop-build-after-android-target`: after an APK build pass
 `-buildTarget Win64` or SBP/Addressables fails.
+
+### tools/r2-ship.ps1 (NEW 2026-08-20, WO-1130) + the three chains that call it
+⛔ **THE one way content reaches players.** `push → verify → judge the MARKER`. Default invocation
+**BLOCKS** (exit 16) on parity failure; `-WarnOnly` warns and continues; `-VerifyOnly` uploads
+nothing. Callers: **`morning-ship-chain.ps1`** step 2b (blocks, `Die … 16`),
+**`overnight-apk-build.ps1`** (blocks), **`install-apk-to-seeker.ps1`** (`-WarnOnly` **deliberately
+and only here** — a knowingly-offline/experimental sideload is legitimate).
+- **WHY IT EXISTS:** enemy/structure art is served **remotely from R2** with **no local fallback**
+  (`Assets/Resources/Enemies` + `.../Structures` were deleted by the CDN migration). Bundle names
+  are **content-hashed**, so **every build needs its own push**. An unpushed APK installs, launches,
+  and shows tinted capsules with **no error on screen**. Three occurrences: 2026-08-18 (caught by
+  hand; `16e22dba3` conceded *"NO GATE COULD HAVE CAUGHT THIS"*), 08-19 (WO-1124, wrong target),
+  08-20 (owner played it; device said `HTTP/1.1 404 Not Found` on
+  `enemy_art_assets_enemyfam-hollow_*.bundle`).
+- **WHY ONE FILE:** the push+verify pair had been copy-pasted into two chains and **already
+  drifted** — overnight pushed then verified; morning only verified and printed a FIX command for a
+  human. On 08-20 that manual command is the step that got skipped. **A gate whose remedy is another
+  manual command is not a gate.**
+- **THE TWO ARGUMENT RULES, now spelled exactly once:** `--push` takes the **PARENT** (`ServerData`)
+  — `--push ServerData/Android` **flattens** keys to the bucket root and reports `R2_PUSH_OK` while
+  uploading objects nobody can read; `--verify-catalog` takes the **EXPLICIT** target
+  (`ServerData/Android`) because `ServerData/` holds both platforms and the tool refuses to guess.
+  Deletes `Builds/r2-parity.log` before verifying so a **stale log can never read as a pass** (§11
+  risk 1 applies here too — judge `R2_PARITY_OK`, never the exit code).
+- ⚠ **STILL UNGATED:** a raw `adb install -r <apk>` touches none of these scripts (WO-1130 §5).
 
 ### distribute-android.ps1
 Pushes the APK to Firebase App Distribution (`firebase appdistribution:distribute`);

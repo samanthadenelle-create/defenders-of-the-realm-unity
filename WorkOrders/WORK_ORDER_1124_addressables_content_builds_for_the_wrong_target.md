@@ -1,6 +1,16 @@
 # WORK ORDER 1124 — The APK builds its Addressables content for whatever target the editor was last on
 
-**Status:** IMPLEMENTED 2026-08-20 — AWAITING PO CLOSE (§13). **All five acceptance criteria met.**
+**Status:** IMPLEMENTED 2026-08-20 — AWAITING PO CLOSE (§13). **All five acceptance criteria met.** ⚠ **THE 2026-08-20 CAPSULE-ENEMIES INCIDENT WAS *NOT* A REGRESSION OF THIS TICKET** — different cause, filed as **WO-1130**; see the note under the criteria.
+
+> ### ⚠ NOTE 2026-08-20 — do not read that day's incident as this fix failing
+> Later the same day the owner played a build in which **every enemy rendered as a tinted capsule**.
+> That is the same *symptom* this ticket's §1 describes, and it is a **different defect**: the
+> content was built for the **right** target, but re-running the Addressables grouper **re-hashed
+> every bundle** and the new bundles were **never pushed to R2** (device evidence:
+> `HTTP/1.1 404 Not Found` on `enemy_art_assets_enemyfam-hollow_*.bundle`). Recovered by hand with
+> `--push ServerData` + `--verify-catalog ServerData/Android` → `R2_PARITY_OK 42 object(s) verified`.
+> **WO-1130** wires the push into the ship chain so the remedy is no longer "a human remembers a
+> second command". This ticket's own fix held: the 08-20 build carried Android content.
 `BuildSeekerApk` now switches the active target to Android BEFORE the content build, passes
 `BuildTarget.Android` to a new `EnsureBuilt(caller, BuildTarget?)` overload that HARD-FAILS on a
 mismatch, and asserts `ServerData/Android/catalog_<bundleVersion>.bin` afterwards. §5.1 was proven by

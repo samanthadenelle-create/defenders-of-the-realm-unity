@@ -232,7 +232,24 @@ ranged-cast fields are **HovlVfxCatalog string keys** (`EnemyTypeVfxSet.cs:80-13
   to `Orc_Shaman` in `EnemyFactory`). The remaining BARE orc bodies are `Orc_Berserker`
   (worn by `orc-berserker` + `orc-raider`), `Orc_Necromancer`, and `Orc_Shaman` (via `ogre`).
 
-## 3e. `Cellar_Hollow` — imported, bound, PROVEN, and DELIBERATELY NOT WIRED (2026-08-20)
+## 3e. `Cellar_Hollow` — imported, bound, PROVEN, and ~~DELIBERATELY NOT WIRED~~ **NOW WIRED** (2026-08-20)
+
+> ### ⛔ SUPERSEDED LATER THE SAME DAY — `Cellar_Hollow` AND `Hollow_Walker` ARE WIRED.
+> Commit **`577bde576`** made the five-edit change this section says an art-import lane does not own,
+> for **both** bodies: `KnownHollowModels`, `CommittedModels`, the `HollowTable` row (ModelKey +
+> AnimatorRig), `EnemyAnimatorFactory.RigFor` → `SkeletonHumanoid`, and
+> `EnemyResolverRegression.ExpectedBaseModel`, plus `enemies.json` (both copies, now md5-identical).
+> `cellar-hollow` **lost its `Variant "cellar"`** (owner's read: *"a tanky type or barbarian ish
+> type"*, not a kneeling mourner). Both bodies were also added to **`EnemyFactory.AccuRigIntake`** —
+> `CC_Base` **+X-forward** exports that would otherwise spawn turned 90°, which is a **separate axis**
+> from rig class (the intake is which way a mesh FACES; the rig is which clips it plays).
+> Result: `REGRESSION_OK 227/227 suites, 0 red` + `COMPILE_GATE_OK`; the four failures that stood
+> before it, all naming `Hollow_Walker` or `Cellar_Hollow`, are closed.
+>
+> **The analysis below stays exactly as written — it is the reason the wiring was needed and it was
+> right.** Only the "NOT WIRED" verdict is out of date. The open question in the last bullet (⚠ *it
+> does not read as a hollow one* — a living green-skinned soldier, no exposed bone) was **NOT**
+> answered by that commit and is still an owner call.
 
 - **The body is in the tree and it is correct.** `Assets/EnemyContent/Cellar_Hollow.fbx` (AccuRig,
   94 bound bones, humanoid Avatar valid) + `Cellar_Hollow.fbm/tripo_mat_acabe1ac_Pbr_{Diffuse,Normal}.jpg`

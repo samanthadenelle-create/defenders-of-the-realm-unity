@@ -41,7 +41,13 @@ separately in `../PROJECT_INDEX.md`.
 - `ARCHITECTURE_NORTH_STAR.md`, `ENGINE_MASTER_PLAN.md`, `WORLD_ENGINE_ARCHITECTURE.md`
 - `ZONE_STREAMING_ARCHITECTURE.md`, `BUILD_MODE_ARCHITECTURE.md` (+ lowercase dup
   `build-mode-architecture.md`), `CHARACTER_ARCHITECTURE.md`, `MONSTER_FAMILY_ARCHITECTURE.md`
-- `CATALOG_SYSTEM.md`, `refactor-feature-modules-spec.md`, `addressables-implementation-plan.md`
+- `CATALOG_SYSTEM.md`, `refactor-feature-modules-spec.md`
+- `addressables-implementation-plan.md` — ⚠ **rewritten 2026-08-20** (`8e072153c`). It used to describe a
+  2026-05 plan the project never built; it now records the **live packing law** — enemies pack per
+  **FAMILY**, structures per **ASSET** — plus the derivation rule and the address invariant (authored by
+  `Assets/Editor/ContentPackingSetup.cs`, pinned by `ContentPackingRegression`). **⛔ Read it together with
+  `tools/r2-ship.ps1`**: re-running the grouper **re-hashes every bundle**, and a re-pack that is not pushed
+  to R2 puts tinted capsules in front of the player with no error on screen (WO-1130)
 - `ANIMATION_PIPELINE.md` — **canonical animation method** (Shared + per-type, Humanoid retarget; all current/future models)
 - `WARDROBE_ARCHITECTURE.md` — **Dressable capability at the rig level** (BlinkWardrobe + VisualFactory.Skin): characters start clothed not in underwear; data-driven per-character wardrobe collection that feeds the cosmetic store (foundation shipped, data layer = WO-456). Read before touching clothing/cosmetics/store.
 - `unity-decisions.md`, `UNITY_BEST_PRACTICES_AUDIT.md`
