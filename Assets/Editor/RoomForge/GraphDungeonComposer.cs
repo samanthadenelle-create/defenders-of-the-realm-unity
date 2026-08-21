@@ -138,7 +138,8 @@ namespace DeNelle.Editor.RoomForge
                     "or use 'Compose Starter Loop'.", "OK");
                 return;
             }
-            ComposeAndBake(path);
+            // WO-1049: composing a graph by hand is a content operation - populate it.
+            ComposeAndBake(path, populateForPlay: true);
         }
 
         [MenuItem("Defenders/Dungeon/Compose Starter Loop (dg_starter_loop)")]
@@ -255,7 +256,13 @@ namespace DeNelle.Editor.RoomForge
         /// fully-positioned DungeonComposeLayout JSON, and bake it through the existing
         /// <see cref="DungeonBaker"/> (mate-verify + NavMesh + save). No EditorApplication.Exit.
         /// </summary>
-        public static void ComposeAndBake(string graphAssetPath, bool populateForPlay = false)
+        /// <remarks>
+        /// ⚠ <paramref name="populateForPlay"/> HAS NO DEFAULT, DELIBERATELY (WO-1049) — it
+        /// forwards straight to <see cref="DungeonBaker.BakeFromFile"/>, where a defaulted
+        /// <c>false</c> silently emptied three shipped dungeons. Required so every call site
+        /// states its intent. Do not re-add a default value.
+        /// </remarks>
+        public static void ComposeAndBake(string graphAssetPath, bool populateForPlay)
         {
             string fsPath = ToFilesystemPath(graphAssetPath);
             if (!File.Exists(fsPath))

@@ -1933,34 +1933,91 @@ namespace DeNelle.Dungeons
         /// primitive cubes named "[PLACEHOLDER] ..." are swept; the deliberately-
         /// tinted stand-ins (hearth/rug/water) render in colour and are LEFT ALONE.
         /// Runtime-only (no scene edit); idempotent (a re-imported mesh leaves no box).
+        /// <para>
+        /// WO-1047 INSTRUMENTATION (§12 — this sweeper is the ticket's cheapest branch). The owner
+        /// reported an untextured ORANGE cube that the reticle locked onto. This sweep already
+        /// exists and did NOT hide it, and the three possible reasons are indistinguishable without
+        /// data: (1) it is a placeholder this filter MISSED, (2) it is authored/tinted and correctly
+        /// skipped, (3) it was spawned AFTER this one-shot sweep ran. So the sweep now CENSUSES every
+        /// active primitive-Cube renderer in the dungeon and NAMES the ones it does not hide, with
+        /// colour, hierarchy path, layer and component list. One run identifies the cube; nothing
+        /// about the sweep's BEHAVIOUR changes (the same boxes are hidden as before).
+        /// </para>
         /// </summary>
         private void SweepPlaceholderCubes()
         {
             using var _flow = FlowTrace.Enter("Dungeon", "SweepPlaceholderCubes");
             int hidden = 0;
+            int cubesSeen = 0;
+            int cubesLogged = 0;
+            const int CubeLogCap = 16;   // bounded: a census, not a firehose
             Guard.Try("Dungeon", "sweep placeholder cubes", () =>
             {
                 foreach (var t in Object.FindObjectsByType<Transform>(
                              FindObjectsInactive.Include, FindObjectsSortMode.None))
                 {
                     if (t == null || !t.gameObject.activeSelf) continue;
-                    if (!t.name.StartsWith("[PLACEHOLDER]", System.StringComparison.Ordinal)) continue;
+
+                    bool named = t.name.StartsWith("[PLACEHOLDER]", System.StringComparison.Ordinal);
 
                     // Only raw primitive boxes (built-in "Cube" mesh) — never a real FBX.
                     var mf = t.GetComponent<MeshFilter>();
-                    if (mf == null || mf.sharedMesh == null || mf.sharedMesh.name != "Cube") continue;
+                    bool primitiveCube = mf != null && mf.sharedMesh != null && mf.sharedMesh.name == "Cube";
 
                     // Keep the tinted stand-ins; hide only the untinted white/magenta boxes.
                     var r = t.GetComponent<Renderer>();
                     Color c = Color.white;
+                    string shader = "(no renderer)";
                     if (r != null && r.sharedMaterial != null)
                     {
                         var m = r.sharedMaterial;
+                        shader = m.shader != null ? m.shader.name : "(null shader)";
                         if (m.HasProperty("_BaseColor")) c = m.GetColor("_BaseColor");
                         else if (m.HasProperty("_Color")) c = m.color;
                     }
                     bool nearWhite = c.r > 0.85f && c.g > 0.85f && c.b > 0.85f;
-                    if (!nearWhite) continue;
+
+                    // WO-1047 census: NAME every bare primitive cube standing in the dungeon,
+                    // swept or not. The unidentified orange cube is a primitive cube by the
+                    // owner's screenshot, so whatever spawns it lands in this list.
+                    if (primitiveCube)
+                    {
+                        cubesSeen++;
+                        if (cubesLogged < CubeLogCap)
+                        {
+                            cubesLogged++;
+                            FlowTrace.Step("Dungeon",
+                                $"[cube-census] '{DescribePath(t)}' rgb=({c.r:F2},{c.g:F2},{c.b:F2}) " +
+                                $"shader='{shader}' layer='{LayerMask.LayerToName(t.gameObject.layer)}' " +
+                                $"tag='{t.gameObject.tag}' pos={t.position:F2} scale={t.lossyScale:F2} " +
+                                $"namedPlaceholder={named} willHide={(named && nearWhite)} " +
+                                $"components=[{DescribeComponents(t.gameObject)}] " +
+                                $"children=[{DescribeChildren(t)}]");
+                        }
+                    }
+
+                    if (!named) continue;
+
+                    if (!primitiveCube)
+                    {
+                        FlowTrace.Step("Dungeon",
+                            $"SweepPlaceholderCubes: SKIP '{t.name}' - named [PLACEHOLDER] but mesh is " +
+                            $"'{(mf != null && mf.sharedMesh != null ? mf.sharedMesh.name : "(none)")}', not the " +
+                            "built-in Cube (a real FBX resolved, or a non-mesh stand-in).");
+                        continue;
+                    }
+
+                    if (!nearWhite)
+                    {
+                        // WO-1047: the ORANGE cube would land HERE if it is a named placeholder —
+                        // this filter keeps tinted stand-ins ON PURPOSE. Say so out loud with the
+                        // colour, so "it survived the sweep" stops being a mystery.
+                        FlowTrace.Step("Dungeon",
+                            $"SweepPlaceholderCubes: SKIP '{DescribePath(t)}' - TINTED placeholder cube " +
+                            $"rgb=({c.r:F2},{c.g:F2},{c.b:F2}) at {t.position:F2}; the sweep hides only " +
+                            "near-white boxes, so a deliberately-tinted stand-in is LEFT ALONE by design.");
+                        continue;
+                    }
 
                     FlowTrace.Step("Dungeon",
                         $"SweepPlaceholderCubes: hiding white placeholder '{t.name}' at " +
@@ -1970,7 +2027,56 @@ namespace DeNelle.Dungeons
                 }
             });
             FlowTrace.Step("Dungeon",
-                $"SweepPlaceholderCubes: {hidden} white placeholder box(es) hidden.");
+                $"SweepPlaceholderCubes: {hidden} white placeholder box(es) hidden; " +
+                $"{cubesSeen} primitive cube(s) present in the dungeon ({cubesLogged} censused). " +
+                "NOTE (WO-1047): this sweep is ONE-SHOT at hydration - anything spawned later is " +
+                "structurally unreachable by it.");
+        }
+
+        // ── WO-1047 diagnostic formatters (§12) ──────────────────────────────
+        // Small, allocation-tolerant describers used ONLY by instrumentation. They exist so a
+        // captured line NAMES an object instead of describing it ("a prop", "an orange cube").
+
+        private static string DescribePath(Transform t)
+        {
+            if (t == null) return "(null)";
+            var sb = new System.Text.StringBuilder(t.name);
+            var p = t.parent;
+            int guard = 0;
+            while (p != null && guard++ < 12)
+            {
+                sb.Insert(0, p.name + "/");
+                p = p.parent;
+            }
+            return sb.ToString();
+        }
+
+        private static string DescribeComponents(GameObject go)
+        {
+            if (go == null) return "(null)";
+            var comps = go.GetComponents<Component>();
+            var sb = new System.Text.StringBuilder();
+            for (int i = 0; i < comps.Length; i++)
+            {
+                if (comps[i] == null) { sb.Append(sb.Length > 0 ? ", " : "").Append("(missing script)"); continue; }
+                if (sb.Length > 0) sb.Append(", ");
+                sb.Append(comps[i].GetType().Name);
+            }
+            return sb.ToString();
+        }
+
+        private static string DescribeChildren(Transform t)
+        {
+            if (t == null) return "(null)";
+            var sb = new System.Text.StringBuilder();
+            int n = Mathf.Min(t.childCount, 8);
+            for (int i = 0; i < n; i++)
+            {
+                if (sb.Length > 0) sb.Append(", ");
+                sb.Append(t.GetChild(i) != null ? t.GetChild(i).name : "(null)");
+            }
+            if (t.childCount > n) sb.Append(", +").Append(t.childCount - n).Append(" more");
+            return sb.Length == 0 ? "(none)" : sb.ToString();
         }
 
         // ── Audio ────────────────────────────────────────────────────────────

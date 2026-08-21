@@ -158,7 +158,9 @@ namespace DeNelle.Editor.RoomForge
                     "OK");
                 return;
             }
-            BakeFromFile(path);
+            // WO-1049: a bake of a CONTENT layout must contain the content. This omitted the
+            // flag and silently produced geometry-only scenes.
+            BakeFromFile(path, populateForPlay: true);
         }
 
         /// <summary>Batchmode entry: -executeMethod DeNelle.Editor.RoomForge.DungeonBaker.BakeDefault</summary>
@@ -185,19 +187,35 @@ namespace DeNelle.Editor.RoomForge
         /// ⚠ Exits NON-ZERO on a missing/unknown -dungeon rather than baking the default. Silently
         /// baking the wrong dungeon and exiting 0 is how a gate reports success without proving it.
         /// </para>
+        /// <para>
+        /// WO-1049 — THIS ENTRY POINT USED TO STRIP EVERY PIECE OF PLAY CONTENT. It called
+        /// <see cref="BakeFromFile"/> with no second argument, and that argument DEFAULTED to
+        /// <c>false</c>, so the one entry point a headless run / CI job / agent reaches was the
+        /// one that baked rooms, corridors and stairs and dropped every chest, oil stone, trap,
+        /// key and lock — while exiting 0 with nothing in the log to react to. Three shipped
+        /// dungeons were emptied by one re-bake on 2026-08-17; only the `[authored-placed]`
+        /// OUTCOME oracle caught it.
+        /// <br/>
+        /// The safe outcome is now the DEFAULT here: a batch bake POPULATES FOR PLAY. A
+        /// geometry-only bake is OPT-IN via <c>-layoutOnly</c> and says so, loudly, in the log.
+        /// ⚠ Do not "fix" a future variant of this by remembering to pass an argument — the
+        /// defect was that the correct call was not the obvious one.
+        /// </para>
         /// </summary>
         public static void BakeLayoutBatch()
         {
             string id = null;
+            bool layoutOnly = false;
             // Fully qualified: this file has no `using System;` (see the using block at the top).
             string[] args = System.Environment.GetCommandLineArgs();
-            for (int i = 0; i < args.Length - 1; i++)
+            for (int i = 0; i < args.Length; i++)
             {
-                if (string.Equals(args[i], "-dungeon", System.StringComparison.OrdinalIgnoreCase))
-                {
+                // -layoutOnly is a bare flag, so it may be the LAST arg — scan the full array.
+                if (string.Equals(args[i], "-layoutOnly", System.StringComparison.OrdinalIgnoreCase))
+                    layoutOnly = true;
+                else if (id == null && i < args.Length - 1 &&
+                         string.Equals(args[i], "-dungeon", System.StringComparison.OrdinalIgnoreCase))
                     id = args[i + 1];
-                    break;
-                }
             }
 
             if (string.IsNullOrEmpty(id))
@@ -219,8 +237,16 @@ namespace DeNelle.Editor.RoomForge
                 return;
             }
 
+            if (layoutOnly)
+                FlowTrace.Warn(Sys, $"BakeLayoutBatch: -layoutOnly requested for '{id}' - baking GEOMETRY ONLY. " +
+                                    "The resulting scene is UNPLAYABLE: no hero seat, no encounter spawners, " +
+                                    "no chests, oil stones, traps, keys, locks or extract pads. Do NOT ship or " +
+                                    "commit this scene (WO-1049).");
+            else
+                FlowTrace.Step(Sys, $"BakeLayoutBatch: baking '{id}' WITH play content (populateForPlay=true)");
+
             FlowTrace.Step(Sys, $"BakeLayoutBatch: baking '{id}' from {path}");
-            BakeFromFile(path);
+            BakeFromFile(path, populateForPlay: !layoutOnly);
             EditorApplication.Exit(0);
         }
 
@@ -237,8 +263,24 @@ namespace DeNelle.Editor.RoomForge
             return assetPath;
         }
 
-        public static void BakeFromFile(string layoutAssetPath, bool populateForPlay = false)
+        /// <summary>
+        /// Bake one compose layout into a scene.
+        /// <para>
+        /// ⚠ <paramref name="populateForPlay"/> HAS NO DEFAULT, DELIBERATELY (WO-1049). It used to
+        /// default to <c>false</c>, and every caller that took the default produced a scene with
+        /// rooms and corridors and NO chests, oil stones, traps, keys, locks or extract pads —
+        /// silently, exiting 0. The parameter is now REQUIRED so the compiler asks the question
+        /// at every call site instead of answering it wrongly. Do not re-add a default value.
+        /// </para>
+        /// </summary>
+        public static void BakeFromFile(string layoutAssetPath, bool populateForPlay)
         {
+            if (!populateForPlay)
+                FlowTrace.Warn(Sys, $"BakeFromFile('{layoutAssetPath}') populateForPlay=FALSE - producing a " +
+                                    "GEOMETRY-ONLY, UNPLAYABLE scene (no hero, no spawners, no chests/oil/traps/" +
+                                    "keys/locks/extracts). This is only ever correct for a deliberate layout-only " +
+                                    "bake; if a shipped dungeon was just baked this way, DO NOT COMMIT IT (WO-1049).");
+
             // Resolve to an absolute filesystem path (see ToFilesystemPath for the doubled-path fix).
             string fsPath = ToFilesystemPath(layoutAssetPath);
             if (!File.Exists(fsPath))

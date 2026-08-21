@@ -355,6 +355,26 @@ namespace DeNelle.Village
         private readonly List<IDamageable> _candidates = new List<IDamageable>();
         private readonly List<Enemy> _enemyBuf = new List<Enemy>(64);   // TargetManager scratch
 
+        // ── WO-1047 §3 — WHO IS IN THE HOSTILE SET, BY NAME ──────────────────────────────────
+        // The owner's report ("target attaches to this item", an untextured ORANGE cube with a
+        // shield glyph and ground ring) is unactionable while the object is unidentified, and the
+        // header's own rule — "the alive Hostile IDamageables" — says something is REGISTERING a
+        // dungeon prop as hostile. Rather than theorise which prop, every admission into
+        // _candidates is now NAMED once: hierarchy path, the concrete IDamageable implementor, the
+        // GameObject that actually OWNS that implementor (GetComponentInParent can admit a CHILD
+        // collider on behalf of an ancestor — that alone would explain a prop wearing a reticle),
+        // the layer that let it through the mask (note Awake ORs "Structure" onto _enemyMask for
+        // WO-853), the component list, the renderer/shader/colour (the orange-cube visual owner),
+        // and the child names (the shield glyph + ground ring — same object, or a separate marker
+        // sitting on top of it?).
+        //
+        // Volume control: one line per DISTINCT object per hero lifetime. Anything WITHOUT an
+        // Enemy component is a FlowTrace.Warn (the suspects); real enemies log a compact Step so
+        // the same capture also PROVES combat targeting still works (acceptance criterion 6).
+        // ⛔ Do not strip this when the ticket closes (CLAUDE.md §12) — flag it off if it is ever
+        // noisy; the registration seam it watches is exactly where the next prop will slip in.
+        private readonly HashSet<int> _admissionDumped = new HashSet<int>();
+
         // 2026-06-02 targeting fix: the scan used mask ~0 into a 64-slot buffer, but the
         // village has ~2,900 colliders — within 32 m the buffer FILLED with walls/ground
         // and the enemy collider was crowded OUT (OverlapSphere result order is arbitrary),
@@ -754,6 +774,11 @@ namespace DeNelle.Village
             // THROUGH a wall (the flagged bug). Previously WO-497/512 deliberately bypassed HasLoS;
             // now the same Structure-layer linecast that gates the AUTO scan gates the manual pick.
             if (!HasLoS(d)) return null;
+            // WO-1047: the tap/click pick is a THIRD route into the hostile set (it does not go
+            // through RebuildCandidates), so it gets the same naming. If the owner taps the cube,
+            // this is the line that identifies it.
+            TraceAdmission(d, hit.collider != null ? hit.collider.gameObject : null,
+                           "screen-point raycast pick (tap/click/middle-click)");
             return d;
         }
 
@@ -856,6 +881,7 @@ namespace DeNelle.Village
                     if (d == null || !d.IsAlive || d.Faction != CombatFaction.Hostile) continue;
                     if (!HasLoS(d)) continue;   // WO-449: additive LoS gate — no targeting through walls
                     if (!_candidates.Contains(d)) _candidates.Add(d);
+                    TraceAdmission(d, e != null ? e.gameObject : null, "TargetManager registry");
                 }
             }
 
@@ -871,12 +897,130 @@ namespace DeNelle.Village
                 if (d == null || !d.IsAlive || d.Faction != CombatFaction.Hostile) continue;
                 if (!HasLoS(d)) continue;   // WO-449: additive LoS gate — no targeting through walls
                 if (!_candidates.Contains(d)) _candidates.Add(d);
+                // WO-1047: pass the STRUCK COLLIDER's GameObject, not the damageable's — when the
+                // two differ, a child collider admitted an ancestor (or a prop is parented under a
+                // damageable root), and that difference is the finding.
+                TraceAdmission(d, c.gameObject, "physics sweep (mask=Enemy|Structure)");
             }
 
             // Stable nearest-first order so Tab cycles outward predictably.
             Vector3 me = transform.position;
             _candidates.Sort((a, b) =>
                 (a.WorldPosition - me).sqrMagnitude.CompareTo((b.WorldPosition - me).sqrMagnitude));
+        }
+
+        // ── WO-1047 §3 — NAME THE OBJECT (§12: instrument first, conclude from data) ──────────
+        /// <summary>
+        /// Log, ONCE per distinct object, exactly what just entered the HOSTILE candidate set and
+        /// by which route. A prop wearing the reticle is unfixable while it is "an orange cube";
+        /// this turns one run into a name, a spawner and a registration path.
+        /// <para>
+        /// The dump deliberately answers all three of WO-1047 §3's questions in ONE line:
+        /// (1) WHAT it is — hierarchy path, layer, tag, position, component list;
+        /// (2) HOW it got hostile — the concrete IDamageable implementor, the GameObject that owns
+        /// it (vs the collider that admitted it), the faction it reports and the source that found
+        /// it; (3) WHAT IT LOOKS LIKE — mesh, shader, base colour (the orange cube's visual owner)
+        /// and the child list (does the shield glyph / ground ring belong to this object, or is it
+        /// a separate marker parked on top of it?).
+        /// </para>
+        /// ⚠ This is a PURE OBSERVER. It changes no filter and no candidate — a guessed filter
+        /// patch here is exactly what §4 of the ticket forbids; the fix belongs at the registration
+        /// source, once the data says which source that is.
+        /// </summary>
+        private void TraceAdmission(IDamageable d, GameObject admittedVia, string source)
+        {
+            var mb = d as MonoBehaviour;
+            if (mb == null) return;                          // interface on a non-Unity object: nothing to name
+            var go = mb.gameObject;
+            if (go == null) return;
+            if (!_admissionDumped.Add(go.GetInstanceID())) return;   // once per object, ever
+
+            bool isEnemy = go.GetComponentInParent<Enemy>() != null;
+            string implementor = d.GetType().FullName;
+            string viaName = admittedVia != null ? DescribeHierarchy(admittedVia.transform) : "(unknown)";
+            bool viaDiffers = admittedVia != null && admittedVia != go;
+
+            if (isEnemy)
+            {
+                // Compact line: proves real enemies still reach the reticle after any hostile-set
+                // change (WO-1047 acceptance criterion 6 — do not only prove the prop stopped).
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Reticle",
+                    $"[hostile-admit] ENEMY '{go.name}' impl={implementor} via {source}"
+                    + (viaDiffers ? $" (collider '{viaName}' != damageable owner)" : ""));
+                return;
+            }
+
+            // NOT an enemy. This is the WO-1047 suspect — dump everything about it.
+            string mesh = "(no MeshFilter)";
+            var mf = go.GetComponentInChildren<MeshFilter>();
+            if (mf != null && mf.sharedMesh != null) mesh = mf.sharedMesh.name;
+
+            string shader = "(no renderer)";
+            string colour = "(n/a)";
+            var r = go.GetComponentInChildren<Renderer>();
+            if (r != null && r.sharedMaterial != null)
+            {
+                var m = r.sharedMaterial;
+                shader = m.shader != null ? m.shader.name : "(null shader)";
+                Color c = m.HasProperty("_BaseColor") ? m.GetColor("_BaseColor")
+                        : (m.HasProperty("_Color") ? m.color : Color.clear);
+                colour = $"({c.r:F2},{c.g:F2},{c.b:F2})";
+            }
+
+            DeNelle.Core.Diagnostics.FlowTrace.Warn("Reticle",
+                "[hostile-admit] NON-ENEMY ADMITTED TO THE HOSTILE TARGET SET (WO-1047). "
+                + $"path='{DescribeHierarchy(go.transform)}' impl={implementor} "
+                + $"faction={d.Faction} alive={d.IsAlive} pos={go.transform.position:F2} "
+                + $"layer='{LayerMask.LayerToName(go.layer)}' tag='{go.tag}' source={source} "
+                + (viaDiffers
+                    ? $"ADMITTED-VIA='{viaName}' layer='{LayerMask.LayerToName(admittedVia.layer)}' "
+                      + "(a CHILD/other collider admitted this object - the reticle rides the ancestor) "
+                    : "admittedVia=self ")
+                + $"components=[{DescribeComponents(go)}] children=[{DescribeChildren(go.transform)}] "
+                + $"mesh='{mesh}' shader='{shader}' baseColor={colour}. "
+                + "^ THIS is the object the reticle can lock onto. Fix its registration at the "
+                + "SOURCE (its IDamageable/faction or its layer), never with a filter here.");
+        }
+
+        private static string DescribeHierarchy(Transform t)
+        {
+            if (t == null) return "(null)";
+            var sb = new System.Text.StringBuilder(t.name);
+            var p = t.parent;
+            int guard = 0;
+            while (p != null && guard++ < 12)
+            {
+                sb.Insert(0, p.name + "/");
+                p = p.parent;
+            }
+            return sb.ToString();
+        }
+
+        private static string DescribeComponents(GameObject go)
+        {
+            if (go == null) return "(null)";
+            var comps = go.GetComponents<Component>();
+            var sb = new System.Text.StringBuilder();
+            for (int i = 0; i < comps.Length; i++)
+            {
+                if (sb.Length > 0) sb.Append(", ");
+                sb.Append(comps[i] != null ? comps[i].GetType().Name : "(missing script)");
+            }
+            return sb.Length == 0 ? "(none)" : sb.ToString();
+        }
+
+        private static string DescribeChildren(Transform t)
+        {
+            if (t == null) return "(null)";
+            var sb = new System.Text.StringBuilder();
+            int n = Mathf.Min(t.childCount, 8);
+            for (int i = 0; i < n; i++)
+            {
+                if (sb.Length > 0) sb.Append(", ");
+                sb.Append(t.GetChild(i) != null ? t.GetChild(i).name : "(null)");
+            }
+            if (t.childCount > n) sb.Append(", +").Append(t.childCount - n).Append(" more");
+            return sb.Length == 0 ? "(none)" : sb.ToString();
         }
 
         // ── WO-1105 R2 — RANGE MUST BE LEGIBLE (owner's SECOND shape, no new art) ────────────
