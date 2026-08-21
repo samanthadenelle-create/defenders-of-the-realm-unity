@@ -57,6 +57,7 @@ using DeNelle.Core.Diagnostics;
 using DeNelle.Core.State;
 using DeNelle.Core.UI;
 using TMPro;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -112,6 +113,11 @@ namespace DeNelle.Onboarding
 
         // Which catalog slot is on screen (index into HeroCatalog.Heroes).
         private int _shownIndex;
+
+        // Portrait JPGs import as Texture2D rather than Sprite. Convert each once so every
+        // carousel lane uses Image.preserveAspect; RawImage stretched the 2:3 art to its card.
+        private static readonly Dictionary<HeroClass, Sprite> PortraitSpriteCache =
+            new Dictionary<HeroClass, Sprite>();
 
         // WO-861 Phase 0: the playable set is no longer hardcoded HERE. It comes from the
         // ONE roster truth, DeNelle.Core.State.PlayableHeroes, which the save service and
@@ -681,7 +687,7 @@ namespace DeNelle.Onboarding
                 HeroCardInfo info = HeroCatalog.Heroes[index];
                 if (_carouselPortraits[slot] != null)
                 {
-                    _carouselPortraits[slot].sprite = Resources.Load<Sprite>($"HeroPortraits/{SlugFor(info.Hero)}");
+                    _carouselPortraits[slot].sprite = LoadPortraitSprite(info.Hero);
                     _carouselPortraits[slot].color = new Color(0.58f, 0.58f, 0.58f, 0.82f);
                     _carouselPortraits[slot].enabled = _carouselPortraits[slot].sprite != null;
                 }
@@ -765,7 +771,7 @@ namespace DeNelle.Onboarding
             string slug = SlugFor(info.Hero);
             float dim = playable ? 1f : 0.5f;   // dim a locked hero
 
-            var portraitSprite = Resources.Load<Sprite>($"HeroPortraits/{slug}");
+            var portraitSprite = LoadPortraitSprite(info.Hero);
             if (portraitSprite != null)
             {
                 var img = host.AddComponent<Image>();
@@ -904,6 +910,24 @@ namespace DeNelle.Onboarding
                 n += CountButtonsRecursive(child);
             }
             return n;
+        }
+
+        private static Sprite LoadPortraitSprite(HeroClass hero)
+        {
+            if (PortraitSpriteCache.TryGetValue(hero, out var cached) && cached != null)
+                return cached;
+
+            string path = $"HeroPortraits/{SlugFor(hero)}";
+            var sprite = Resources.Load<Sprite>(path);
+            if (sprite == null)
+            {
+                var texture = Resources.Load<Texture2D>(path);
+                if (texture != null)
+                    sprite = Sprite.Create(texture, new Rect(0f, 0f, texture.width, texture.height),
+                        new Vector2(0.5f, 0.5f), 100f);
+            }
+            if (sprite != null) PortraitSpriteCache[hero] = sprite;
+            return sprite;
         }
     }
 }

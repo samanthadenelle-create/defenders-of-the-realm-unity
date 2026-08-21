@@ -459,13 +459,13 @@ namespace DeNelle.Village
         // ⚑ THE ONE NUMBER THAT FLIPS "INVERTED" (owner ruling 2026-08-20 — read this before
         // touching anything else in the sheathe path). The owner asked for the sheathed prop
         // "inverted"; we implement that as TIP-DOWN — hilt up at the belt, blade hanging down the
-        // thigh, the way a sword hangs from a scabbard. That is -1.
+        // owner F8 on 2026-08-21 showed that authored reading as upside down on Blaise; +1 ships.
         //   -1  = tip DOWN / hilt up   (shipped default — prop-local +Y maps onto -body.up)
         //   +1  = tip UP   / hilt down (prop-local +Y maps onto +body.up)
         // If it reads upside down on the device, flip this ONE field; nothing else in the pose
         // depends on the sign. Both signs keep the long axis VERTICAL, which is the half of the
         // ruling that is not a matter of taste.
-        [SerializeField] private float _sheatheLongAxisSign = -1f;
+        [SerializeField] private float _sheatheLongAxisSign = 1f;
         // Body-space offset for the SHEATHED off-hand (shield) — see _sheatheWeaponLocalPos for the
         // frame. It sits on the OPPOSITE hip from the weapon (ResolveSheatheSocket owns which).
         //
@@ -3007,7 +3007,7 @@ namespace DeNelle.Village
         {
             Transform body = _animator != null ? _animator.transform : transform;
             // ── Long axis: VERTICAL, sign-flippable. _sheatheLongAxisSign is the single number the
-            // owner flips if "inverted" reads the other way (-1 = tip down, the shipped reading).
+            // owner flips if a particular asset's authored tip axis reads the other way.
             // _sheatheBladeDiagonalDeg survives as an optional lean off vertical (default 0), and it
             // leans across the body toward the OTHER hip, so a leaning sword still hangs off its own.
             float sign = _sheatheLongAxisSign >= 0f ? 1f : -1f;
@@ -3033,7 +3033,7 @@ namespace DeNelle.Village
             Quaternion result = localBase * Quaternion.Euler(_sheatheWeaponLocalEuler);
             // §12: the pose must PROVE itself in a capture, not be argued from source. tiltFromVertical
             // is the number that was 28 (by construction) and must now read ~0; longAxisDotUp names the
-            // inversion (-1 = tip down) so "it looks upside down" is answerable without a rebuild.
+            // inversion sign so "it looks upside down" is answerable without a rebuild.
             // Throttled: ApplyHoldPose re-asserts this every frame.
             Vector3 bladeWorld = (socket.rotation * result) * Vector3.up;
             float tiltFromVertical = Vector3.Angle(bladeWorld, vertical);
@@ -3041,7 +3041,7 @@ namespace DeNelle.Village
                 $"sheathed long axis on '{name}': tiltFromVertical={tiltFromVertical:0.#}deg " +
                 $"(must read ~{_sheatheBladeDiagonalDeg:0.#}; ~90 means it is lying across the body) " +
                 $"longAxisDotUp={Vector3.Dot(bladeWorld, body.up):0.##} " +
-                $"(sign={sign:+0;-0}: -1 = tip DOWN / hilt up, the owner's 'inverted') " +
+                $"(sign={sign:+0;-0}: +1 = shipped tip UP, -1 = tip DOWN) " +
                 $"socket='{socket.name}'.");
             return result;
         }

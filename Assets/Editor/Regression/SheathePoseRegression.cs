@@ -468,24 +468,23 @@ namespace DeNelle.Editor
 
                 // ── G2: shipped default is INVERTED (tip down) ───────────────────────
                 float dotUp = Vector3.Dot(longMain.normalized, body.up);
-                if (shippedSign >= 0f)
-                    failures.Add("G2: _sheatheLongAxisSign ships at " + shippedSign + " (tip UP). The owner asked " +
-                                 "for 'inverted', which we implement as tip-DOWN (-1). If the owner has since " +
-                                 "flipped it deliberately, update this case in the same commit as the flip.");
-                else if (dotUp > -0.99f)
-                    failures.Add("G2: the long axis is not hanging DOWN (dot(bodyUp) = " + dotUp.ToString("0.###") +
-                                 ", expected ~-1). The sign field says inverted but the pose does not.");
+                if (shippedSign <= 0f)
+                    failures.Add("G2: _sheatheLongAxisSign ships at " + shippedSign + " (tip DOWN), but the " +
+                                 "owner's 2026-08-21 F8 identified that pose as upside down. Ship +1 tip UP.");
+                else if (dotUp < 0.99f)
+                    failures.Add("G2: the long axis does not point UP (dot(bodyUp) = " + dotUp.ToString("0.###") +
+                                 ", expected ~+1). The sign field and rendered pose disagree.");
                 else
-                    log.AppendLine("  G2 inverted / tip-down (dot=" + dotUp.ToString("0.##") + ") ............ ok");
+                    log.AppendLine("  G2 owner-approved tip-up (dot=" + dotUp.ToString("0.##") + ") ........... ok");
 
                 // ── G3: the sign is the ONE number that flips it ─────────────────────
-                signField.SetValue(ec, 1f);
+                signField.SetValue(ec, -1f);
                 Vector3 flipped = LongAxisWorld(method, ec, socket, mainSide);
                 signField.SetValue(ec, shippedSign);
                 float flippedDot = Vector3.Dot(flipped.normalized, body.up);
-                if (flippedDot < 0.99f)
-                    failures.Add("G3: setting _sheatheLongAxisSign = +1 did NOT stand the prop up " +
-                                 "(dot(bodyUp) = " + flippedDot.ToString("0.###") + ", expected ~+1). The " +
+                if (flippedDot > -0.99f)
+                    failures.Add("G3: setting _sheatheLongAxisSign = -1 did NOT flip the prop down " +
+                                 "(dot(bodyUp) = " + flippedDot.ToString("0.###") + ", expected ~-1). The " +
                                  "owner was promised a one-number flip; it does not work.");
                 else
                     log.AppendLine("  G3 sign flips the carry end-for-end ..................... ok");
