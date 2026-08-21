@@ -15,16 +15,6 @@ MonoBehaviour:
   m_GroupName: Enemy_Textures
   m_GUID: cc1afdfee3880ee4783235fbbfba9732
   m_SerializeEntries:
-  - m_GUID: 23fa08f68b4879a40b700eeee4fbbf1b
-    m_Address: Enemies/_CellarHollowAB_TEMP/convert_normal
-    m_ReadOnly: 0
-    m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 378f609732f1e4e42bcea185ae0c035e
-    m_Address: Enemies/_CellarHollowAB_TEMP/convert_basecolor
-    m_ReadOnly: 0
-    m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: a297ed3b44f9a2247b7426bdf5d37259
     m_Address: Enemies/skeleton_texture_A
     m_ReadOnly: 0
