@@ -110,6 +110,20 @@ namespace DeNelle.Dungeons
                 $"lantern armed standalone: stones={stones.Count} hero='{heroGo.name}' " +
                 $"burn={_lantern.EstimatedSecondsRemaining:F0}s at full oil (WO-1112 tripled via dungeon-balance.json)");
 
+            // Every authored cache is also a one-use emergency still. It spends real persisted
+            // crafting materials for a partial refill; the free cache itself is independently
+            // one-use in Lantern, so neither path can become an infinite fountain.
+            if (_composeRoot != null)
+            {
+                foreach (var marker in _composeRoot.GetComponentsInChildren<ComposedOilStone>(true))
+                {
+                    if (marker == null) continue;
+                    var still = marker.GetComponent<ComposedOilStill>();
+                    if (still == null) still = marker.gameObject.AddComponent<ComposedOilStill>();
+                    still.Configure(heroGo.transform, _lantern);
+                }
+            }
+
             InstallOilHud();
 
             // WO-1001 slice 6: darkness ambush director (higher odds when oil critical).

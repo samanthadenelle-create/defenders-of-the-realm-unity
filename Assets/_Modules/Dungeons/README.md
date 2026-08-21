@@ -29,6 +29,11 @@ bake budgets rather than adding more runtime systems:
 - Treat visibility as gameplay. Oil provides a continuous visual gauge; its last thirty
   seconds shrink/flicker the light and pull fog inward. Empty oil leaves only a tight
   safety halo, while darkness enables the existing ambush pressure.
+- Oil caches are one-use per delve. Each composed cache also supports one emergency field
+  distillation: 1 Oil Flask plus 1 Tattered Cloth restores 40% oil. It cannot become an
+  unlimited fountain, and arriving prepared remains more reliable than hoping for drops.
+- Ordinary enemies and reward chests can yield potion materials, cloth, and scarce oil
+  flasks. These are recovery opportunities and future crafting stock, not guaranteed fuel.
 - Every content bake must prove: dual-copy layout parity, zero mate failures, a complete
   entry-to-deepest NavMesh path, no unintended stair ports/extracts, encounter seats inside
   room bounds, and declared light/enemy/prop counts in the summary.

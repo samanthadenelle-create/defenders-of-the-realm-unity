@@ -6,7 +6,7 @@
     "bossOnly": "WO-556: optional bool per drop line (default false). A bossOnly line ONLY rolls on a BOSS kill (table source 'boss', or DragonBoss). Used to gate the GEM crystals (ing_ember_crystal/ing_aether_shard/ing_heartstone_crystal) behind bosses at a low rate; ordinary mobs skip them.",
     "defaults": "Fallback table ids used when a slain enemy/boss has no table of its own."
   },
-  "version": 2,
+  "version": 3,
   "tables": [
     {
       "id": "common-grunt",
@@ -160,7 +160,8 @@
         { "materialId": "IronScrap", "chance": 0.55, "minCount": 1, "maxCount": 2 },
         { "materialId": "monster-hide", "chance": 0.45, "minCount": 1, "maxCount": 2 },
         { "materialId": "wild-herb", "chance": 0.40, "minCount": 1, "maxCount": 2 },
-        { "materialId": "tattered-cloth", "chance": 0.35, "minCount": 1, "maxCount": 1 }
+        { "materialId": "tattered-cloth", "chance": 0.35, "minCount": 1, "maxCount": 1 },
+        { "materialId": "ing_oil_flask", "chance": 0.12, "minCount": 1, "maxCount": 1 }
       ]
     },
     {
@@ -200,7 +201,10 @@
         { "materialId": "ManaCrystalShard", "chance": 0.70, "minCount": 1, "maxCount": 3 },
         { "materialId": "ArcaneDust", "chance": 0.65, "minCount": 1, "maxCount": 3 },
         { "materialId": "quench_oil", "chance": 0.30, "minCount": 1, "maxCount": 1 },
-        { "materialId": "heartwood_core", "chance": 0.25, "minCount": 1, "maxCount": 1 }
+        { "materialId": "heartwood_core", "chance": 0.25, "minCount": 1, "maxCount": 1 },
+        { "materialId": "ing_oil_flask", "chance": 0.55, "minCount": 1, "maxCount": 1 },
+        { "materialId": "tattered-cloth", "chance": 0.65, "minCount": 1, "maxCount": 2 },
+        { "materialId": "HealthHerb", "chance": 0.55, "minCount": 1, "maxCount": 2 }
       ]
     }
   ],

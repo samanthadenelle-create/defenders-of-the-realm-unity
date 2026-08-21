@@ -1,0 +1,189 @@
+{
+  "version": 2,
+  "dungeonId": "dg_hollow_roads",
+  "exitRoomId": "entry",
+  "cellSize": 1.0,
+  "rooms": [
+    {
+      "prefab": "EntryHall",
+      "instanceId": "entry",
+      "cell": [
+        0,
+        0,
+        0
+      ],
+      "yawDeg": 0.0,
+      "archetype": "hub",
+      "encounter": null,
+      "chests": null
+    },
+    {
+      "prefab": "Straight",
+      "instanceId": "approach",
+      "cell": [
+        0,
+        0,
+        10
+      ],
+      "yawDeg": 0.0,
+      "archetype": "combat",
+      "encounter": null,
+      "chests": null
+    },
+    {
+      "prefab": "Intersection",
+      "instanceId": "cross_near",
+      "cell": [
+        0,
+        0,
+        20
+      ],
+      "yawDeg": 0.0,
+      "archetype": "combat",
+      "encounter": null,
+      "chests": null
+    },
+    {
+      "prefab": "Straight",
+      "instanceId": "link",
+      "cell": [
+        0,
+        0,
+        30
+      ],
+      "yawDeg": 0.0,
+      "archetype": "combat",
+      "encounter": null,
+      "chests": null
+    },
+    {
+      "prefab": "Intersection",
+      "instanceId": "cross_far",
+      "cell": [
+        0,
+        0,
+        40
+      ],
+      "yawDeg": 0.0,
+      "archetype": "combat",
+      "encounter": null,
+      "chests": null
+    },
+    {
+      "prefab": "Straight",
+      "instanceId": "arm_goldfields",
+      "cell": [
+        10,
+        0,
+        20
+      ],
+      "yawDeg": 90.00001,
+      "archetype": "combat",
+      "encounter": null,
+      "chests": null
+    },
+    {
+      "prefab": "Straight",
+      "instanceId": "arm_stoneback",
+      "cell": [
+        -10,
+        0,
+        20
+      ],
+      "yawDeg": 270.0,
+      "archetype": "combat",
+      "encounter": null,
+      "chests": null
+    },
+    {
+      "prefab": "Straight",
+      "instanceId": "arm_ashwood",
+      "cell": [
+        0,
+        0,
+        50
+      ],
+      "yawDeg": 0.0,
+      "archetype": "combat",
+      "encounter": null,
+      "chests": null
+    },
+    {
+      "prefab": "Straight",
+      "instanceId": "arm_mirewood",
+      "cell": [
+        10,
+        0,
+        40
+      ],
+      "yawDeg": 90.00001,
+      "archetype": "combat",
+      "encounter": null,
+      "chests": null
+    }
+  ],
+  "connections": [
+    {
+      "fromInstance": "entry",
+      "fromSocket": "n_door_01",
+      "toInstance": "approach",
+      "toSocket": "s_door_01"
+    },
+    {
+      "fromInstance": "approach",
+      "fromSocket": "n_door_01",
+      "toInstance": "cross_near",
+      "toSocket": "s_door_01"
+    },
+    {
+      "fromInstance": "cross_near",
+      "fromSocket": "n_door_01",
+      "toInstance": "link",
+      "toSocket": "s_door_01"
+    },
+    {
+      "fromInstance": "cross_near",
+      "fromSocket": "w_door_01",
+      "toInstance": "arm_stoneback",
+      "toSocket": "s_door_01"
+    },
+    {
+      "fromInstance": "cross_near",
+      "fromSocket": "e_door_01",
+      "toInstance": "arm_goldfields",
+      "toSocket": "s_door_01"
+    },
+    {
+      "fromInstance": "link",
+      "fromSocket": "n_door_01",
+      "toInstance": "cross_far",
+      "toSocket": "s_door_01"
+    },
+    {
+      "fromInstance": "cross_far",
+      "fromSocket": "e_door_01",
+      "toInstance": "arm_mirewood",
+      "toSocket": "s_door_01"
+    },
+    {
+      "fromInstance": "cross_far",
+      "fromSocket": "n_door_01",
+      "toInstance": "arm_ashwood",
+      "toSocket": "s_door_01"
+    }
+  ],
+  "rules": {
+    "spineOnly": false,
+    "minShrines": 0,
+    "maxMateDistance": 1.25,
+    "sealUnmated": true,
+    "pacingCombat": 0.0,
+    "pacingLore": 0.0,
+    "pacingReward": 0.0
+  },
+  "oilStones": [],
+  "traps": [],
+  "keys": [],
+  "locks": [],
+  "extracts": []
+}

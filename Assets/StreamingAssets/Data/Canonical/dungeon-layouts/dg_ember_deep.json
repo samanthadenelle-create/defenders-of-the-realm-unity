@@ -93,7 +93,7 @@
       "encounter": {
         "kind": "orc-group",
         "min": 3,
-        "max": 5,
+        "max": 4,
         "seatMode": "ring",
         "formationRadius": 3.5,
         "confine": {
@@ -133,8 +133,8 @@
       "archetype": "combat",
       "encounter": {
         "kind": "orc-group",
-        "min": 4,
-        "max": 6,
+        "min": 3,
+        "max": 5,
         "seatMode": "ring",
         "formationRadius": 4.5,
         "confine": {
@@ -222,8 +222,8 @@
       "archetype": "combat",
       "encounter": {
         "kind": "orc-group",
-        "min": 4,
-        "max": 6,
+        "min": 3,
+        "max": 4,
         "seatMode": "ring",
         "formationRadius": 3.5,
         "confine": {
@@ -263,8 +263,8 @@
       "archetype": "combat",
       "encounter": {
         "kind": "orc-group",
-        "min": 5,
-        "max": 7,
+        "min": 3,
+        "max": 5,
         "seatMode": "ring",
         "formationRadius": 3.0,
         "confine": {

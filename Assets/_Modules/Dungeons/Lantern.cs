@@ -29,6 +29,7 @@
 using System.Collections.Generic;
 using DeNelle.Core.Diagnostics;
 using UnityEngine;
+using System.Collections.Generic;
 
 namespace DeNelle.Dungeons
 {
@@ -123,6 +124,7 @@ namespace DeNelle.Dungeons
         private DungeonController _controller;
         private Transform _hero;
         private IReadOnlyList<DungeonOilStone> _oilStones;
+        private readonly HashSet<string> _spentOilStones = new HashSet<string>();
         /// <summary>
         /// WO-1001 slice 5: composed dungeons have no full DungeonController — when true,
         /// oil drains without a cottage run state (ComposedDungeonBootstrap arms this).
@@ -190,6 +192,14 @@ namespace DeNelle.Dungeons
 
         /// <summary>The lantern's full (un-debuffed, full-oil) reach in world units.</summary>
         public float FullRange => _baseRange + (_cloakOwned ? _cloakBonusRange : 0f);
+
+        /// <summary>Adds a bounded portion of a flask. Used by scarce dungeon field stills.</summary>
+        public bool AddOilFraction(float fraction)
+        {
+            if (fraction <= 0f || _oil >= _maxOil - 0.01f) return false;
+            _oil = Mathf.Min(_maxOil, _oil + _maxOil * Mathf.Clamp01(fraction));
+            return true;
+        }
 
         // ── Lifecycle ────────────────────────────────────────────────────────
 
@@ -265,6 +275,7 @@ namespace DeNelle.Dungeons
             _controller = controller;
             _standaloneRun = false;
             _oilStones = oilStones;
+            _spentOilStones.Clear();
             _hero = hero;
             _oil = _maxOil;
             _liveRange = FullRange;
@@ -279,6 +290,7 @@ namespace DeNelle.Dungeons
             _controller = null;
             _standaloneRun = true;
             _oilStones = oilStones;
+            _spentOilStones.Clear();
             _hero = hero;
             _oil = _maxOil;
             _liveRange = FullRange;
@@ -389,12 +401,20 @@ namespace DeNelle.Dungeons
             foreach (var stone in _oilStones)
             {
                 if (stone == null) continue;
+                string stoneId = string.IsNullOrEmpty(stone.id) ? stone.GetHashCode().ToString() : stone.id;
+                if (_spentOilStones.Contains(stoneId)) continue;
                 Vector3 stonePos = stone.position.ToWorld();
                 if (planar) stonePos.y = 0f;
                 float r = stone.radius;
                 if ((heroPos - stonePos).sqrMagnitude <= r * r)
                 {
-                    _oil = _maxOil; // a stone tops the flask right off
+                    // A cache is a route-planning resource, not an infinite fountain. Consume it
+                    // only when it can actually add oil so arriving full never wastes the cache.
+                    if (_oil < _maxOil - 0.01f)
+                    {
+                        _oil = _maxOil;
+                        _spentOilStones.Add(stoneId);
+                    }
                     return;
                 }
             }

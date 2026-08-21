@@ -341,6 +341,7 @@ namespace DeNelle.Dungeons
         /// held by ONE handle and stopped in OnDestroy - the WO-893 discipline, and the WO-753
         /// one-owner rule (no aura outlives the thing it belongs to).</summary>
         private VFXHandle _thresholdVfx;
+        private GameObject _portalFace;
 
         private async UniTaskVoid SwapInPortalAsync()
         {
@@ -390,6 +391,25 @@ namespace DeNelle.Dungeons
             // is the honest scale reference - a fixed number would be lost inside a big arch and
             // would overflow a small one.
             float scale = Mathf.Max(0.5f, b.size.x * 0.9f);
+
+            // The owner's portal reference shows a visible mystical FACE in the arch, not an
+            // empty doorway with a few particles nearby. Reuse the catalogued dark-star mirror
+            // already used by overworld entrances. It is a child (no global loop slot), and the
+            // richer blue vortex remains the moving depth layer when its quality budget permits.
+            if (_portalFace == null)
+            {
+                var facePrefab = DeNelle.Core.VfxAssetLoader.LoadVfxPrefab("VFX/Portal/PortalCircleDarkStar");
+                if (facePrefab != null)
+                {
+                    float faceScale = VFXManager.ResolveFitScale(facePrefab, b.size.x * 0.82f, 0.05f, 4f);
+                    _portalFace = Instantiate(facePrefab, pos, transform.rotation * Quaternion.Euler(90f, 0f, 0f), transform);
+                    _portalFace.name = "[PortalFace_DarkStar]";
+                    _portalFace.transform.localScale = Vector3.one * faceScale;
+                    FlowTrace.Step(Sys, $"mystical portal face seated in arch: dark-star scale={faceScale:0.000}.");
+                }
+                else
+                    FlowTrace.Once(Sys, "portal-face-unresolved", "dark-star portal face unresolved; procedural glow remains as fallback.");
+            }
 
             _thresholdVfx = VFXManager.PlayKey(PortalStructure.AuraKey, pos, transform.rotation, transform,
                                                null, scale);
