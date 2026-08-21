@@ -30,10 +30,17 @@
         "scene": "HeroSelect",
         "camera": "carousel_centered",
         "subjectBinding": "rotatingHero={id}",
-        "overlays": ["logoLockup", "ctaButton", "ratingBadge"]
+        "overlays": [
+          "logoLockup",
+          "ctaButton",
+          "ratingBadge"
+        ]
       },
       "palette": "obsidian-gold",
-      "tokens": ["name", "flavor"],
+      "tokens": [
+        "name",
+        "flavor"
+      ],
       "audience": "acquisition"
     },
     {
@@ -47,10 +54,19 @@
         "scene": "PackStore",
         "camera": "store_card_focus",
         "subjectBinding": "highlightSku={sku}",
-        "overlays": ["logoLockup", "priceChip", "covenantLine"]
+        "overlays": [
+          "logoLockup",
+          "priceChip",
+          "covenantLine"
+        ]
       },
       "palette": "obsidian-gold",
-      "tokens": ["name", "tagline", "pricing.usd", "contents.cosmetics.count"],
+      "tokens": [
+        "name",
+        "tagline",
+        "pricing.usd",
+        "contents.cosmetics.count"
+      ],
       "audience": "monetization"
     },
     {
@@ -64,18 +80,36 @@
         "scene": "{captureScene}",
         "camera": "{captureCamera}",
         "subjectBinding": "feature={id}",
-        "overlays": ["logoLockup", "ctaButton"]
+        "overlays": [
+          "logoLockup",
+          "ctaButton"
+        ]
       },
       "palette": "obsidian-gold",
-      "tokens": ["name", "pitch"],
+      "tokens": [
+        "name",
+        "pitch"
+      ],
       "audience": "acquisition"
     }
   ],
   "_featureSubjects": {
     "_note": "Lightweight promo-only feature records (the only subjectType without an existing canonical catalog). Each maps a player-facing pillar to a capture scene/camera.",
     "subjects": [
-      { "id": "harvest-loop", "name": "Grow the Heart-Grove", "pitch": "Send your echoes to harvest. The World Tree grows. The realm pushes back the dark.", "captureScene": "Village2", "captureCamera": "grove_wide" },
-      { "id": "solo-combat", "name": "One Knight. Real-time duels.", "pitch": "Walk the overworld, trigger a duel, kite an orc warband in an open arena.", "captureScene": "BattleArena", "captureCamera": "combat_orbit" }
+      {
+        "id": "harvest-loop",
+        "name": "Grow the Heart-Grove",
+        "pitch": "Send your echoes to harvest. The World Tree grows. The realm pushes back the dark.",
+        "captureScene": "Village2",
+        "captureCamera": "grove_wide"
+      },
+      {
+        "id": "solo-combat",
+        "name": "One Knight. Real-time duels.",
+        "pitch": "Walk the overworld, trigger a duel, kite an orc warband in an open arena.",
+        "captureScene": "BattleArena",
+        "captureCamera": "combat_orbit"
+      }
     ]
   },
   "generated": [
@@ -87,7 +121,11 @@
       "headline": "Become the Knight",
       "body": "Forged at the Heart's edge, sworn to hold the last green sanctuary. One hero. Every choice yours.",
       "cta": "Play Free",
-      "screenshot": { "path": "Assets/Promo/Generated/ad_hero_knight_001.png", "scene": "HeroSelect", "status": "pending-capture" },
+      "screenshot": {
+        "path": "Assets/Promo/Generated/ad_hero_knight_001.png",
+        "scene": "HeroSelect",
+        "status": "pending-capture"
+      },
       "palette": "obsidian-gold",
       "audience": "acquisition",
       "generatedAtNote": "Sample — subject 'knight' from KnightOnly V1 roster; {flavor} placeholdered from canon-strings until a hero flavor field exists."
@@ -95,15 +133,19 @@
     {
       "id": "ad.pack.lanternlight.001",
       "templateId": "tmpl.pack.value.square",
-      "subjectId": "lanternlight",
+      "subjectId": "keepers-satchel",
       "format": "square_1080",
       "headline": "Lanternlight — Light carried forward, the value tier most tenders choose.",
       "body": "2 cosmetics + a resource headstart. From $4.99.",
       "cta": "Open the Store",
-      "screenshot": { "path": "Assets/Promo/Generated/ad_pack_lanternlight_001.png", "scene": "PackStore", "status": "pending-capture" },
+      "screenshot": {
+        "path": "Assets/Promo/Generated/ad_pack_lanternlight_001.png",
+        "scene": "PackStore",
+        "status": "pending-capture"
+      },
       "palette": "obsidian-gold",
       "audience": "monetization",
-      "generatedAtNote": "Sample — subject 'lanternlight' from packs.json; {contents.cosmetics.count}=2, {pricing.usd}=4.99 resolved verbatim from the record. Covenant line overlaid per brand."
+      "generatedAtNote": "STALE — REGENERATE. subject renamed lanternlight -> keepers-satchel (owner ruling 2026-08-21) and WO-1118 stripped that pack's cosmetics, so the headline still names 'Lanternlight' and the body still claims '2 cosmetics' when the pack now carries 0. Only subjectId was corrected here; ad copy is authored, not derived. NOTE: DataWebRegression declares ad-creatives.json a REMOVAL CANDIDATE with zero readers repo-wide, so this record is inert either way."
     },
     {
       "id": "ad.feature.harvest.001",
@@ -113,7 +155,11 @@
       "headline": "Grow the Heart-Grove",
       "body": "Send your echoes to harvest. The World Tree grows. The realm pushes back the dark.",
       "cta": "Install Now",
-      "screenshot": { "path": "Assets/Promo/Generated/ad_feature_harvest_001.png", "scene": "Village2", "status": "pending-capture" },
+      "screenshot": {
+        "path": "Assets/Promo/Generated/ad_feature_harvest_001.png",
+        "scene": "Village2",
+        "status": "pending-capture"
+      },
       "palette": "obsidian-gold",
       "audience": "acquisition",
       "generatedAtNote": "Sample — subject 'harvest-loop' from _featureSubjects; capture scene Village2 / camera grove_wide via the headless screenshot fleet."

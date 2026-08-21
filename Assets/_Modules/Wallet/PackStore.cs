@@ -327,14 +327,25 @@ namespace DeNelle.Wallet
                     if (pack == null || !pack.StoreVisible ||
                         !string.Equals(pack.StoreSection ?? "essentials", section, StringComparison.OrdinalIgnoreCase)) continue;
 
-                // WO-1037 / WO-947 §12c.4 — the single-resource impulse SKUs are a SHORTFALL REMEDY,
-                // NOT a storefront row. They exist to answer "I am 880 wood short" at the moment the
-                // player is blocked; on a browsable shelf, out of that context, the same twelve SKUs
-                // are a wall of resource-for-cash listings, which is the storefront the ruling
-                // explicitly is not. They are reachable ONLY through ShortfallPackOffer.
-                // ⚠ Do NOT "fix" this by showing them here because the shelf looks thin — that is the
-                // whole guardrail, and it is why the tiers 1-13 ladder is unchanged above.
-                    if (pack.Impulse) continue;
+                // ── Impulse SKUs on the shelf: THREE curated, the rest contextual ──────────────
+                // OWNER RULING 2026-08-21 ("Middle — one impulse tier per resource"). The twelve
+                // single-resource impulse SKUs split into two populations:
+                //   * shelfCurated == true  -> a browsable shelf row. Exactly THREE: the MEDIUM
+                //     rung of wood, iron and food.
+                //   * shelfCurated == false -> contextual only, reachable ONLY through
+                //     ShortfallPackOffer, exactly as before. Nine SKUs, unchanged.
+                //
+                // ⚠ THIS NARROWS THE WO-947 §12c.4 GUARDRAIL; IT DOES NOT REPEAL IT. What that
+                // ruling refused was a WALL of twelve resource-for-cash listings — a storefront
+                // whose whole shelf is "pay us for wood". Three curated tiers beside the two ladder
+                // packs is not that wall, and the wall is still prevented: the other nine cannot
+                // reach this loop. Re-tagging more rows shelfCurated walks back toward the thing
+                // WO-947 refused, so that is an OWNER call, not a code call.
+                //
+                // The decision lives in packs.json (`shelfCurated`), not in a SKU list here, so the
+                // merchandising choice can be re-ruled by editing data. Do not reintroduce a
+                // hardcoded list in this file.
+                    if (pack.Impulse && !pack.ShelfCurated) continue;
 
                     if (!sectionStarted)
                     {
@@ -517,32 +528,39 @@ namespace DeNelle.Wallet
                 var econ = c.Economy;
                 if (econ != null)
                 {
+                    // ⚠ Wood and Iron were MISSING from this list while PackStoreVM.ApplyPackContents
+                    // has granted them since ECON-01. The card therefore under-described every pack
+                    // carrying them — the WO-1118 ladder is wood/iron-forward, so the shelf would have
+                    // read "150 crystals, 500 food" for a pack that also delivers 1,500 wood + 800 iron.
+                    // Describe every key the grant seam actually pays out, in grant order.
+                    AppendAmount(sb, econ.Wood, "wood");
+                    AppendAmount(sb, econ.Iron, "iron");
                     AppendAmount(sb, econ.Crystals, "crystals");
                     AppendAmount(sb, econ.Food, "food");
                     AppendAmount(sb, econ.Coins, "coins");
                     AppendAmount(sb, econ.Glimmer, "glimmer");
                 }
 
+                // WO-1118 §2.3 — a card may only list convenience the player can actually SPEND.
+                // The redeemable set is PackCatalog.IsRedeemableConvenience (single source; the
+                // lantern-oil SKU strings used to be typed inline here FOUR times, which is how a
+                // fifth kind gets quietly counted into the "N convenience tokens" line the day
+                // someone adds one). Legal-but-unredeemable kinds are still GRANTED into
+                // GearInventory — they are simply not advertised until a redeemer ships.
                 if (c.Convenience != null && c.Convenience.Count > 0)
                 {
                     foreach (var item in c.Convenience)
                     {
                         if (item == null || item.Count <= 0 || string.IsNullOrEmpty(item.Kind)) continue;
-                        if (item.Kind == "lantern-oil-2x-expedition" || item.Kind == "lantern-oil-3x-expedition")
-                        {
-                            if (sb.Length > 0) sb.Append(", ");
+                        if (!PackCatalog.IsRedeemableConvenience(item.Kind)) continue;
+                        if (sb.Length > 0) sb.Append(", ");
+                        if (item.Kind.IndexOf("lantern", StringComparison.OrdinalIgnoreCase) >= 0)
                             sb.Append(item.Kind.Contains("3x") ? "3x" : "2x")
                               .Append(" lantern x").Append(item.Count).Append(" runs");
-                        }
-                    }
-                    var tokens = 0;
-                    foreach (var item in c.Convenience)
-                        if (item != null && item.Kind != "lantern-oil-2x-expedition" && item.Kind != "lantern-oil-3x-expedition")
-                            tokens += item.Count;
-                    if (tokens > 0)
-                    {
-                        if (sb.Length > 0) sb.Append(", ");
-                        sb.Append(tokens).Append(" convenience tokens");
+                        else
+                            // Generic fallback so a newly-redeemable kind reads honestly on day one
+                            // instead of silently borrowing the lantern phrasing.
+                            sb.Append(item.Count).Append("x ").Append(item.Kind.Replace('-', ' ').Replace('_', ' '));
                     }
                 }
             }

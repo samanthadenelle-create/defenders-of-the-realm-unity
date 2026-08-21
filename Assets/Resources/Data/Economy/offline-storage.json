@@ -96,7 +96,7 @@
     "packLinkedTiers": {
       "_note": "Offline-storage store packs grant a storageTier outright (or advance the owned tier). The pack catalogue (packs.json) references these tier ids in a future 'storage' contents slot. Buying a pack = owning that tier's cap permanently, no soft-currency spend.",
       "examples": [
-        { "packSku": "lanternlight", "grantsTierAtLeast": "silo_t3_stone" },
+        { "packSku": "keepers-satchel", "grantsTierAtLeast": "silo_t3_stone", "_renamed": "was 'lanternlight' until the owner ruling of 2026-08-21; the retired id still resolves via packs.json legacySkus" },
         { "packSku": "patron-of-elarion", "grantsTierAtLeast": "silo_t4_warded" },
         { "packSku": "founders-vow", "grantsTierAtLeast": "silo_t5_eternal" }
       ]

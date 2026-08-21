@@ -54,6 +54,25 @@ namespace DeNelle.Wallet
     }
 
     /// <summary>
+    /// A timed multiplier attached to a convenience item (WO economy_store_packs §2c).
+    /// Null on every non-timed kind, and absent from every pack authored before it existed —
+    /// additive, so nothing migrates. Wall-clock based by design (the consumer stores an
+    /// <c>endsAtUtc</c>), so a boost keeps ticking while the player is offline.
+    /// </summary>
+    [Serializable]
+    public sealed class BoostSpec
+    {
+        /// <summary>Rate multiplier, e.g. 2.0 for 2x.</summary>
+        [JsonProperty("multiplier")] public double Multiplier;
+        /// <summary>How long the boost runs, in hours.</summary>
+        [JsonProperty("durationHours")] public double DurationHours;
+        /// <summary>Which channel it applies to: "all" | "wood" | "iron" | "food" | "crystals".</summary>
+        [JsonProperty("appliesTo")] public string AppliesTo;
+        /// <summary>Re-buy behaviour while one is already running: "extend" | "refresh" | "reject" | "queue".</summary>
+        [JsonProperty("stack")] public string Stack;
+    }
+
+    /// <summary>
     /// One convenience-power item — TIME-SAVING only, never combat-power
     /// (the bent covenant, monetization-v2-spec §5.3).
     /// </summary>
@@ -66,6 +85,8 @@ namespace DeNelle.Wallet
         [JsonProperty("count")] public int Count;
         /// <summary>Player-facing description of the item.</summary>
         [JsonProperty("description")] public string Description;
+        /// <summary>Timed-multiplier spec for boost kinds; null for simple count-only kinds.</summary>
+        [JsonProperty("boost")] public BoostSpec Boost;
     }
 
     /// <summary>The contents bag of a pack — cosmetics + economy + convenience (§5).</summary>
@@ -101,6 +122,39 @@ namespace DeNelle.Wallet
         [JsonProperty("founderOnly")] public bool FounderOnly;
         /// <summary>Whether this SKU appears on the browsable Realm Store shelf.</summary>
         [JsonProperty("storeVisible")] public bool StoreVisible = true;
+
+        /// <summary>
+        /// Owner ruling 2026-08-21 ("Middle — one impulse tier per resource"): opts a SINGLE
+        /// <see cref="Impulse"/> SKU per resource onto the browsable shelf. Every other impulse SKU
+        /// stays shortfall-only. Absent = false, so the other nine rows need no edit.
+        /// <para>This is DATA, not a SKU list in PackStore.cs, deliberately: which three tiers are
+        /// curated is a merchandising decision that will be re-ruled, and a hardcoded list in the
+        /// render loop is the thing that goes stale silently. The render loop asks the row.</para>
+        /// </summary>
+        [JsonProperty("shelfCurated")] public bool ShelfCurated;
+
+        /// <summary>
+        /// Retired SKU ids that still resolve to THIS pack (WO-1118 rename migration).
+        /// <para>⚠ LOAD-BEARING. <c>sku</c> is a live save key: PackStoreVM.RecordOwned writes it
+        /// into <c>GameState.OwnedItemIds</c> and IsOwned reads it back with an ORDINAL
+        /// <c>List.Contains</c>. Renaming a SKU with money already spent against the old id
+        /// therefore ORPHANS that entitlement — the player silently un-owns what they bought.
+        /// Listing the old id here keeps it resolving, forever, with no save rewrite and no schema
+        /// bump. NEVER delete an entry from this array; a retired id must stay redeemable for as
+        /// long as any save can carry it.</para>
+        /// </summary>
+        [JsonProperty("legacySkus")] public List<string> LegacySkus = new List<string>();
+
+        /// <summary>True when <paramref name="sku"/> is this pack's current id OR one of its retired ids.</summary>
+        public bool MatchesSku(string sku)
+        {
+            if (string.IsNullOrEmpty(sku)) return false;
+            if (string.Equals(Sku, sku, StringComparison.Ordinal)) return true;
+            if (LegacySkus == null) return false;
+            for (int i = 0; i < LegacySkus.Count; i++)
+                if (string.Equals(LegacySkus[i], sku, StringComparison.Ordinal)) return true;
+            return false;
+        }
         /// <summary>Retention-oriented shelf section: featured / essentials / style / support.</summary>
         [JsonProperty("storeSection")] public string StoreSection = "essentials";
         /// <summary>Short, honest card badge such as "BEST START" or "EXPEDITION".</summary>
@@ -212,14 +266,49 @@ namespace DeNelle.Wallet
             get { EnsureLoaded(); return _data.CurrencyDisclaimer ?? "Token price moves with the market."; }
         }
 
-        /// <summary>Looks up a pack by its SKU. Returns null when not found.</summary>
+        /// <summary>
+        /// Looks up a pack by its SKU. Returns null when not found.
+        /// <para>Resolves RETIRED ids too (<see cref="PackDef.LegacySkus"/>), so a save, a promo
+        /// code (<c>reward_pack_sku</c> → RedeemCodePanel) or a dev grant written against an old id
+        /// still lands on the renamed pack. Current ids are matched FIRST across the whole
+        /// catalogue before any legacy id is considered, so a live SKU can never be shadowed by
+        /// another pack's retired alias.</para>
+        /// </summary>
         public static PackDef Find(string sku)
         {
             if (string.IsNullOrEmpty(sku)) return null;
             EnsureLoaded();
             foreach (var pack in _data.Packs)
                 if (pack != null && pack.Sku == sku) return pack;
+            foreach (var pack in _data.Packs)
+                if (pack != null && pack.MatchesSku(sku)) return pack;
             return null;
+        }
+
+        /// <summary>
+        /// Maps a possibly-retired SKU onto the id the catalogue uses TODAY. Returns the input
+        /// unchanged when it is already current or resolves to nothing — callers can apply it
+        /// unconditionally. Used by ownership checks so a pre-rename entitlement still reads owned.
+        /// </summary>
+        public static string ResolveCurrentSku(string sku)
+        {
+            var pack = Find(sku);
+            return pack != null && !string.IsNullOrEmpty(pack.Sku) ? pack.Sku : sku;
+        }
+
+        /// <summary>
+        /// Every id under which this pack may appear in a save: its current SKU plus every retired
+        /// one. An ownership check must test them ALL — a player who bought the pack before the
+        /// rename carries only the old string.
+        /// </summary>
+        public static IEnumerable<string> OwnershipKeysFor(string sku)
+        {
+            var pack = Find(sku);
+            if (pack == null) { yield return sku; yield break; }
+            if (!string.IsNullOrEmpty(pack.Sku)) yield return pack.Sku;
+            if (pack.LegacySkus == null) yield break;
+            foreach (var legacy in pack.LegacySkus)
+                if (!string.IsNullOrEmpty(legacy)) yield return legacy;
         }
 
         /// <summary>Looks up a pack by its tier (1–5). Returns null when not found.</summary>
@@ -270,6 +359,40 @@ namespace DeNelle.Wallet
         {
             if (string.IsNullOrEmpty(s)) return string.Empty;
             return s.Trim().ToLowerInvariant().Replace('-', '_').Replace(' ', '_');
+        }
+
+        // =====================================================================
+        //  Shelf honesty — REDEEMABLE-TODAY convenience (WO-1118 §0 / §2.3)
+        // ---------------------------------------------------------------------
+        //  ⚠ THIS IS A DIFFERENT AXIS FROM ConvenienceAllowList ABOVE. Do not merge them.
+        //    * ConvenienceAllowList answers "is this kind LEGAL under the covenant?" — it is the
+        //      pay-to-win firewall, and every sanctioned kind belongs in it forever.
+        //    * This set answers "does anything in the shipped game actually SPEND this token?" —
+        //      it is a statement about the CURRENT build, and it shrinks/grows as redeemers land.
+        //  A kind can be perfectly legal and still be vapor. Today exactly TWO kinds have a
+        //  redeemer: Lantern.cs:405-406 reads GearInventory["convenience:lantern-oil-3x-expedition"]
+        //  and ".../-2x-...". Every other kind (instant-build, instant-repair, harvest-auto-collect,
+        //  xp-weekend, harvest_boost, instant_fill_storage, workforce_slot, storage_tier_jump,
+        //  offline_window_extension) accumulates in GearInventory via PackStoreVM.ApplyPackContents
+        //  and is read by NOTHING — advertising it on a card the player can pay for is a refund
+        //  problem on a live store, which is the whole of WO-1118.
+        //  ⛔ WHEN YOU SHIP A REDEEMER, ADD ITS KIND HERE IN THE SAME COMMIT. Adding the kind here
+        //  without a consumer re-creates the exact lie this set exists to stop.
+        private static readonly HashSet<string> RedeemableConvenienceKinds = new HashSet<string>
+        {
+            // Lantern.cs (Dungeons) — consumed per expedition. The ONLY redeemers in the build.
+            "lantern_oil_2x_expedition", "lantern_oil_3x_expedition",
+        };
+
+        /// <summary>
+        /// True when a convenience kind has a live redeemer in THIS build — i.e. the token the
+        /// player pays for is actually spendable. The store must not advertise a kind for which
+        /// this is false (WO-1118 §2.3). Hyphen and underscore spellings compare equal.
+        /// </summary>
+        public static bool IsRedeemableConvenience(string kind)
+        {
+            var norm = NormalizeKind(kind);
+            return norm.Length > 0 && RedeemableConvenienceKinds.Contains(norm);
         }
 
         /// <summary>Drops any convenience item whose Kind is outside the sanctioned

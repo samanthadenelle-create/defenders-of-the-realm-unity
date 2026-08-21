@@ -1,5 +1,5 @@
 {
-  "_comment": "Canonical pack-store catalogue for Defenders of the Realm. Packs 1-5 (tiers 1-5) are the original pricing-ladder packs extracted VERBATIM from docs/monetization-v2-spec.md §4/§5/§8.4 — names are canon, never paraphrase. Packs 6-13 (tiers 6-13) are the STARTER STORE BUNDLES authored 2026-06-28 (WorkOrders/WORK_ORDER_store_packs_content.md) per the monetization audit (docs/audits/AUDIT_monetization_2026-06-28.md) to give the PackStore a full, compelling launch shelf. Each bundle is themed and price-anchored to an existing ladder point ($4.99/$9.99/$19.99); tier is a UNIQUE lookup key (PackCatalog.FindByTier), not the price. Every referenced cosmetic SKU has a matching entry in cosmetics.json so no granted cosmetic is dangling.",
+  "_comment": "Canonical pack-store catalogue for Defenders of the Realm. Packs 1-5 (tiers 1-5) are the original pricing-ladder packs extracted VERBATIM from docs/monetization-v2-spec.md §4/§5/§8.4 — names are canon, never paraphrase. Packs 6-13 (tiers 6-13) are the STARTER STORE BUNDLES authored 2026-06-28 (WorkOrders/WORK_ORDER_store_packs_content.md) per the monetization audit (docs/audits/AUDIT_monetization_2026-06-28.md) to give the PackStore a full, compelling launch shelf. Each bundle is themed and price-anchored to an existing ladder point ($4.99/$9.99/$19.99); tier is a UNIQUE lookup key (PackCatalog.FindByTier), not the price. Every referenced cosmetic SKU has a matching entry in cosmetics.json so no granted cosmetic is dangling. | WO-1118 (2026-08-21) HONEST SHELF PASS: the browsable shelf now carries ONLY packs whose every advertised line is grantable today. The $2/$5 ladder was rewritten to hearth-spark ($1.99, impulse basket) + starters-hand ($4.99, resource-forward), and lanternlight was re-roled to the time-forward crystal lane but held hidden until WO-1119 ships the harvest_boost redeemer. Ten over-cap / cosmetic-vapor rows are storeVisible:false with a _hiddenReason. No SKU was renamed - sku is the live OwnedItemIds entitlement key. | OWNER RULINGS 2026-08-21: (1) three curated impulse rows joined the shelf (impulse-{wood,iron,food}-medium, via shelfCurated) - the other nine stay shortfall-only; (2) lanternlight was RENAMED to keepers-satchel with 'lanternlight' preserved in legacySkus so the pre-rename entitlement survives.",
   "_sources": {
     "monetizationSpec": "defenders-unity/docs/monetization-v2-spec.md (§4 pricing, §5 contents, §8.4 PackDef schema)",
     "portSpec": "defenders-unity/docs/v2-unity-port-spec.md (Part 3 store row, Part 4 packs.json schema)",
@@ -13,7 +13,12 @@
     "convenience": "TIME-SAVING only, never combat-power (the bent covenant, §5.3). instant-build / instant-repair / harvest-auto-collect / xp-weekend / lantern-oil-2x-expedition / lantern-oil-3x-expedition. Lantern blessings are consumed per expedition. No permanent passives.",
     "economy": "In-game currency top-ups (§5.2). GameState applies crystals/food/coins; glimmer is carried for catalogue completeness (not yet applied at runtime per the audit).",
     "impulsePacks": "Packs 14-25 (tiers 14-25) are the WO-1037 SINGLE-RESOURCE IMPULSE PACKS, authored 2026-08-17 under the owner ruling of 2026-08-16 (option (b), verbatim: \"we should have small instant packs\" / \"small wood only\") and legalised by the WO-947 s12 amendment (the PURCHASE boundary is not the COST boundary). ONE family per harvestable resource (wood, iron, food, crystals) x small/medium/large. THE LOAD-BEARING RULE: each of these SKUs carries EXACTLY ONE economy key and an EMPTY cosmetics + convenience list. A multi-resource impulse bundle would re-mix the WO-947 cost baskets through the back door and is FORBIDDEN (WO-947 s12c guardrail 1) - asserted headlessly by DeNelle.Editor.Regression.ImpulsePackRegression [impulse-pack], which also pins the $5 PRICE CEILING (owner standing ruling, memory solana-store-early-access-pack-pricing) and the no-structures/no-levels/no-queue-completions rule. AMOUNTS ARE PENDING OWNER RATIFICATION - they were sized against the REAL demand curve read out of building-tiers.json (tier costWood 500..16000, costFood 300..13000, costCrystal 100..4800) and structures-catalog.json (repo.upgradeCost iron 20..1440): small closes the cheapest tier upgrade (the Lumber Mill T1 900-wood shortfall in the screenshot that prompted this WO), medium closes a mid-ladder step, large closes a late step but deliberately NOT the Barracks T6 16000-wood ceiling, so the top pack does not trivialise the game. The optional impulse/impulseResource/impulseSize fields are the machine-readable family tag ShortfallPackOffer resolves on; older packs omit them (absent = false/null, no migration break).",
-    "cosmeticGrant": "Every cosmetics[] SKU is recorded into OwnedItemIds on grant and MUST exist in cosmetics.json (id == the SKU) or it is unredeemable. Starter-bundle cosmetics live in cosmetics.json with unlockMethod 'achievement' + glimmerCost 0 (owned via entitlement, equippable, not glimmer-buyable)."
+    "cosmeticGrant": "Every cosmetics[] SKU is recorded into OwnedItemIds on grant and MUST exist in cosmetics.json (id == the SKU) or it is unredeemable. Starter-bundle cosmetics live in cosmetics.json with unlockMethod 'achievement' + glimmerCost 0 (owned via entitlement, equippable, not glimmer-buyable).",
+    "shelf": "storeVisible is the SINGLE shelf flag (PackStore.Render line ~327 filters on it). WO-1118 proposed a separate `shelf: live|hidden|legacy` string; that was NOT added, because a second flag over the same decision is duplicated state and the two would drift (see CLAUDE.md S2/S5). storeVisible:false HIDES the row from browse/Buy but KEEPS it loadable, so an existing owner's entitlement still resolves via PackCatalog.Find. Every hidden row carries _hiddenReason.",
+    "skrPeg": "ONE peg, no second SKR table: skrPerUsd ~= 12.5. $1.99 -> 25 SKR, $2.99 -> 36 SKR, $4.99 -> 60 SKR (authored figures; 2.99*12.5=37.4 is authored down to 36 to keep the rung spacing even). Early-access price ceiling is $4.99 - anything above it is storeVisible:false until the R1 graduation ruling.",
+    "convenienceRedeemers": "LEGAL != REDEEMABLE. PackCatalog.ConvenienceAllowList says a kind is covenant-legal; PackCatalog.IsRedeemableConvenience says something in THIS build actually spends it. Today only lantern-oil-2x/3x-expedition have a redeemer (Lantern.cs). instant-build / instant-repair / harvest-auto-collect / xp-weekend / harvest_boost / instant_fill_storage / workforce_slot / storage_tier_jump / offline_window_extension are granted into GearInventory and read by NOTHING. They are stripped from every storeVisible pack and must not be re-added before their redeemer.",
+    "shelfCurated": "Impulse SKUs are shortfall-only by default (WO-947 s12c.4). shelfCurated:true opts ONE row per resource onto the browsable shelf - owner ruling 2026-08-21, 'Middle - one impulse tier per resource'. Exactly three carry it today: impulse-{wood,iron,food}-medium. The flag lives here rather than as a SKU list in PackStore.cs so the merchandising choice is re-ruled by editing data. Promoting a fourth row is an OWNER decision, not a code cleanup.",
+    "legacySkus": "Retired SKU ids that must keep resolving to this pack. `sku` is a LIVE SAVE KEY (GameState.OwnedItemIds, ordinal List.Contains, never rewritten), so renaming one without an alias silently orphans a paid entitlement and re-offers the pack for sale. PackCatalog.Find matches current ids across the WHOLE catalogue first, then legacy ids, so a live SKU can never be shadowed. NEVER delete an entry - a retired id stays redeemable as long as any save can carry it."
   },
   "version": 5,
   "currencyDisclaimer": "Token price moves with the market.",
@@ -21,7 +26,7 @@
     {
       "sku": "hearth-spark",
       "tier": 1,
-      "storeSection": "essentials",
+      "storeSection": "featured",
       "name": "Hearth Spark",
       "tagline": "A tiny welcome — the Heart kindles a spark for a new tender.",
       "theme": "Tiny welcome — beginner cosmetic + small economy bump.",
@@ -32,31 +37,26 @@
         "skr": 25
       },
       "contents": {
-        "cosmetics": [
-          "cosmetic.hearth-spark.exclusive"
-        ],
+        "cosmetics": [],
         "economy": {
           "glimmer": 25,
-          "crystals": 200,
-          "food": 50,
-          "coins": 100
+          "crystals": 150,
+          "food": 500,
+          "coins": 100,
+          "wood": 1500,
+          "iron": 800
         },
-        "convenience": [
-          {
-            "kind": "instant-build",
-            "count": 1,
-            "description": "Skip the build animation for one building."
-          }
-        ]
+        "convenience": []
       },
-      "packExclusiveCosmetic": "cosmetic.hearth-spark.exclusive"
+      "storeVisible": true,
+      "storeBadge": "BEST VALUE",
+      "_shelfNote": "WO-1118: contents rewritten to the $1.99 impulse basket (1500 wood / 800 iron / 150 crystals / 500 food); the pack cosmetic was stripped because pack cosmetic art does not render yet. OWNER TODO: the canon 'theme'/'tagline' above still say 'beginner cosmetic', which is no longer true - they are verbatim monetization-v2-spec strings and were left untouched deliberately. Reword them, or restore the cosmetic when the art lands."
     },
     {
-      "sku": "lanternlight",
+      "sku": "keepers-satchel",
       "tier": 2,
       "storeSection": "essentials",
-      "storeBadge": "POPULAR",
-      "name": "Lanternlight",
+      "name": "Keeper's Satchel",
       "tagline": "Light carried forward — the value tier most tenders choose.",
       "theme": "The \"value\" tier — what most players who buy something will buy.",
       "pricing": {
@@ -66,30 +66,18 @@
         "skr": 60
       },
       "contents": {
-        "cosmetics": [
-          "cosmetic.lanternlight.hero-outfit",
-          "cosmetic.lanternlight.exclusive"
-        ],
+        "cosmetics": [],
         "economy": {
-          "glimmer": 75,
-          "crystals": 700,
-          "food": 200,
-          "coins": 400
+          "crystals": 900
         },
-        "convenience": [
-          {
-            "kind": "instant-build",
-            "count": 3,
-            "description": "Skip the build animation for three buildings."
-          },
-          {
-            "kind": "harvest-auto-collect",
-            "count": 1,
-            "description": "Resources auto-tick into inventory for 1 hour."
-          }
-        ]
+        "convenience": []
       },
-      "packExclusiveCosmetic": "cosmetic.lanternlight.exclusive"
+      "storeVisible": false,
+      "_hiddenReason": "blocked on WO-1119 (harvest_boost redeemer); would be dominated at $4.99",
+      "_shelfNote": "OWNER RULING 2026-08-21: renamed lanternlight -> keepers-satchel. MIGRATION, not a find-and-replace: `sku` is written into GameState.OwnedItemIds and read back with an ordinal List.Contains, so the retired id is preserved in `legacySkus` and resolved by PackCatalog.Find / PackCatalog.OwnershipKeysFor / PackStoreVM.IsOwned. A pre-rename owner keeps the pack and is never re-charged. NEVER remove 'lanternlight' from legacySkus. | STILL HIDDEN: blocked on WO-1119 (harvest_boost redeemer) - its only differentiator. | OWNER TODO (copy): `tagline` and `theme` above are still the verbatim monetization-v2-spec Lanternlight strings ('Light carried forward...', 'the value tier'). They read incoherently under the new name and were NOT rewritten here - authoring player-facing voice is a creative call. No player sees them while storeVisible is false. Reword before unhiding.",
+      "legacySkus": [
+        "lanternlight"
+      ]
     },
     {
       "sku": "folks-thanks",
@@ -134,7 +122,8 @@
           }
         ]
       },
-      "packExclusiveCosmetic": "cosmetic.folks-thanks.exclusive"
+      "packExclusiveCosmetic": "cosmetic.folks-thanks.exclusive",
+      "_hiddenReason": "over-cap $9.99 (early-access ceiling is $4.99)"
     },
     {
       "sku": "patron-of-elarion",
@@ -185,7 +174,8 @@
           }
         ]
       },
-      "packExclusiveCosmetic": "cosmetic.patron-of-elarion.exclusive"
+      "packExclusiveCosmetic": "cosmetic.patron-of-elarion.exclusive",
+      "_hiddenReason": "over-cap $19.99 (early-access ceiling is $4.99)"
     },
     {
       "sku": "founders-vow",
@@ -238,7 +228,8 @@
           }
         ]
       },
-      "packExclusiveCosmetic": "cosmetic.founders-vow.exclusive"
+      "packExclusiveCosmetic": "cosmetic.founders-vow.exclusive",
+      "_hiddenReason": "over-cap $49.99 (early-access ceiling is $4.99)"
     },
     {
       "sku": "frostfall-bundle",
@@ -275,7 +266,9 @@
           }
         ]
       },
-      "packExclusiveCosmetic": "cosmetic.frostfall-bundle.exclusive"
+      "packExclusiveCosmetic": "cosmetic.frostfall-bundle.exclusive",
+      "storeVisible": false,
+      "_hiddenReason": "vapor-dominant (cosmetic-led, art does not render) + over-cap $9.99"
     },
     {
       "sku": "embergrove-bundle",
@@ -312,7 +305,9 @@
           }
         ]
       },
-      "packExclusiveCosmetic": "cosmetic.embergrove-bundle.exclusive"
+      "packExclusiveCosmetic": "cosmetic.embergrove-bundle.exclusive",
+      "storeVisible": false,
+      "_hiddenReason": "vapor-dominant (cosmetic-led, art does not render) + over-cap $9.99"
     },
     {
       "sku": "bloomtide-bundle",
@@ -349,7 +344,9 @@
           }
         ]
       },
-      "packExclusiveCosmetic": "cosmetic.bloomtide-bundle.exclusive"
+      "packExclusiveCosmetic": "cosmetic.bloomtide-bundle.exclusive",
+      "storeVisible": false,
+      "_hiddenReason": "vapor-dominant (cosmetic-led, art does not render)"
     },
     {
       "sku": "starters-hand",
@@ -367,26 +364,16 @@
         "skr": 60
       },
       "contents": {
-        "cosmetics": [
-          "cosmetic.starters-hand.exclusive"
-        ],
+        "cosmetics": [],
         "economy": {
           "glimmer": 50,
-          "crystals": 900,
-          "food": 300,
-          "coins": 600
+          "crystals": 400,
+          "food": 1500,
+          "coins": 600,
+          "wood": 4000,
+          "iron": 2000
         },
         "convenience": [
-          {
-            "kind": "instant-build",
-            "count": 3,
-            "description": "Skip the build animation for three buildings."
-          },
-          {
-            "kind": "instant-repair",
-            "count": 2,
-            "description": "Skip the repair queue for two buildings."
-          },
           {
             "kind": "lantern-oil-2x-expedition",
             "count": 2,
@@ -394,13 +381,13 @@
           }
         ]
       },
-      "packExclusiveCosmetic": "cosmetic.starters-hand.exclusive"
+      "storeVisible": true,
+      "_shelfNote": "WO-1118: contents rewritten to the $4.99 resource-forward basket (4000 wood / 2000 iron / 400 crystals / 1500 food + the 2x lantern, which is the ONE convenience kind with a live redeemer). instant-build + instant-repair were stripped: nothing in the build spends them (see _schemaNotes.convenienceRedeemers). OWNER TODO: the 'theme' above still advertises 'instant-build/repair + one welcome cosmetic' - reword when those redeemers ship."
     },
     {
       "sku": "echo-patron-pack",
       "tier": 10,
       "storeSection": "featured",
-      "storeBadge": "EXPEDITION",
       "name": "Echo Patron Pack",
       "tagline": "Patron of the echoes — set the harvest loop humming and let the workforce roll.",
       "theme": "Harvest-loop economy headstart: heavy resources + harvest-auto-collect tokens + workshop palette. Built around the echo workforce.",
@@ -440,7 +427,9 @@
           }
         ]
       },
-      "packExclusiveCosmetic": "cosmetic.echo-patron-pack.exclusive"
+      "packExclusiveCosmetic": "cosmetic.echo-patron-pack.exclusive",
+      "storeVisible": false,
+      "_hiddenReason": "over-cap $19.99 (early-access ceiling is $4.99)"
     },
     {
       "sku": "hero-wardrobe-pack",
@@ -477,7 +466,9 @@
           }
         ]
       },
-      "packExclusiveCosmetic": "cosmetic.hero-wardrobe-pack.exclusive"
+      "packExclusiveCosmetic": "cosmetic.hero-wardrobe-pack.exclusive",
+      "storeVisible": false,
+      "_hiddenReason": "vapor-dominant (cosmetic-led, art does not render) + over-cap $9.99"
     },
     {
       "sku": "realm-defender-bundle",
@@ -514,7 +505,9 @@
           }
         ]
       },
-      "packExclusiveCosmetic": "cosmetic.realm-defender-bundle.exclusive"
+      "packExclusiveCosmetic": "cosmetic.realm-defender-bundle.exclusive",
+      "storeVisible": false,
+      "_hiddenReason": "vapor-dominant (cosmetic-led, art does not render) + over-cap $9.99"
     },
     {
       "sku": "builders-cache",
@@ -559,7 +552,8 @@
           }
         ]
       },
-      "packExclusiveCosmetic": "cosmetic.builders-cache.exclusive"
+      "packExclusiveCosmetic": "cosmetic.builders-cache.exclusive",
+      "_hiddenReason": "over-cap $19.99 (early-access ceiling is $4.99)"
     },
     {
       "sku": "impulse-wood-small",
@@ -607,7 +601,11 @@
           "wood": 3500
         },
         "convenience": []
-      }
+      },
+      "shelfCurated": true,
+      "storeVisible": true,
+      "storeSection": "essentials",
+      "_shelfNote": "OWNER RULING 2026-08-21 'Middle - one impulse tier per resource': this is one of exactly THREE impulse SKUs promoted to a browsable shelf row (wood/iron/food, MEDIUM rung). The medium rung was chosen because the small rung is strictly dominated by Hearth Spark at the same $1.99, and the large rung collides with Starter's Hand at $4.99. The other nine impulse SKUs keep shelfCurated absent and stay reachable ONLY via ShortfallPackOffer - that is the surviving WO-947 s12c.4 guardrail. Adding a fourth is an OWNER call."
     },
     {
       "sku": "impulse-wood-large",
@@ -679,7 +677,11 @@
           "iron": 1200
         },
         "convenience": []
-      }
+      },
+      "shelfCurated": true,
+      "storeVisible": true,
+      "storeSection": "essentials",
+      "_shelfNote": "OWNER RULING 2026-08-21 'Middle - one impulse tier per resource': this is one of exactly THREE impulse SKUs promoted to a browsable shelf row (wood/iron/food, MEDIUM rung). The medium rung was chosen because the small rung is strictly dominated by Hearth Spark at the same $1.99, and the large rung collides with Starter's Hand at $4.99. The other nine impulse SKUs keep shelfCurated absent and stay reachable ONLY via ShortfallPackOffer - that is the surviving WO-947 s12c.4 guardrail. Adding a fourth is an OWNER call."
     },
     {
       "sku": "impulse-iron-large",
@@ -751,7 +753,11 @@
           "food": 3500
         },
         "convenience": []
-      }
+      },
+      "shelfCurated": true,
+      "storeVisible": true,
+      "storeSection": "essentials",
+      "_shelfNote": "OWNER RULING 2026-08-21 'Middle - one impulse tier per resource': this is one of exactly THREE impulse SKUs promoted to a browsable shelf row (wood/iron/food, MEDIUM rung). The medium rung was chosen because the small rung is strictly dominated by Hearth Spark at the same $1.99, and the large rung collides with Starter's Hand at $4.99. The other nine impulse SKUs keep shelfCurated absent and stay reachable ONLY via ShortfallPackOffer - that is the surviving WO-947 s12c.4 guardrail. Adding a fourth is an OWNER call."
     },
     {
       "sku": "impulse-food-large",

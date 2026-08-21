@@ -81,6 +81,30 @@ namespace DeNelle.Editor.Regression
                 "sku", "tier", "name", "tagline", "theme", "founderOnly",
                 "impulse", "impulseResource", "impulseSize",
                 "pricing", "contents",
+
+                // ── REVIEWED 2026-08-21, owner shelf ruling ──────────────────────────
+                // Added in the same change that put them in the data, which is what this
+                // allowlist exists to force. All three are PRESENTATION keys: they decide
+                // WHERE a pack is shown, never WHAT it grants, so none of them can be the
+                // "grant a finished upgrade" field this gate was built to catch. The value
+                // checks above ([single-key], [ceiling], [resources-only] contents scan) are
+                // untouched and still bind.
+                //   shelfCurated  - owner ruling 2026-08-21 ("one impulse tier per resource"):
+                //                   exactly three impulse SKUs are browsable shelf rows; the
+                //                   other nine stay shortfall-only. PackStore reads this INSTEAD
+                //                   of a hardcoded SKU list, so the shelf decision lives in data.
+                //                   ⚠ [not-on-shelf] below still pins that non-curated impulse
+                //                   SKUs are skipped by the card loop - the wall WO-947 refused
+                //                   is still structurally prevented.
+                //   storeVisible  - the WO-1118 honesty flag: hides a SKU whose advertised
+                //                   contents have no redeemer yet (a pack that cannot deliver
+                //                   must not be sellable). Hiding can only ever REMOVE an offer.
+                //   storeSection  - which shelf section renders the card. Pure layout.
+                "shelfCurated", "storeVisible", "storeSection",
+                //   _shelfNote    - a leading-underscore DOCUMENTATION key (why this row is
+                //                   curated/hidden). Underscore-prefixed keys are inert notes,
+                //                   read by nobody at runtime; it grants nothing and cannot.
+                "_shelfNote",
             };
 
         private static readonly HashSet<string> AllowedContentsKeys =

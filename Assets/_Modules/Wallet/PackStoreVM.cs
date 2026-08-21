@@ -49,12 +49,27 @@ namespace DeNelle.Wallet
 
         // ── Ownership ─────────────────────────────────────────────────────────
 
-        /// <summary>True when the pack SKU is already in the player's owned items.</summary>
+        /// <summary>
+        /// True when the pack SKU is already in the player's owned items.
+        /// <para>⚠ Checks EVERY id the pack has ever shipped under, not just its current one
+        /// (PackCatalog.OwnershipKeysFor). OwnedItemIds is a plain ordinal string list that is
+        /// NEVER rewritten — a save made before a SKU was renamed still carries the OLD string, so
+        /// a bare <c>Contains(pack.Sku)</c> would report a paid-for pack as unowned and re-offer it
+        /// for sale. That is a double-charge, which is why this goes through the alias resolver.</para>
+        /// </summary>
         public bool IsOwned(string sku)
         {
             var state = State;
-            if (state == null || state.OwnedItemIds == null) return false;
-            return state.OwnedItemIds.Contains(sku);
+            if (state == null || state.OwnedItemIds == null || string.IsNullOrEmpty(sku)) return false;
+            if (state.OwnedItemIds.Contains(sku)) return true;
+            foreach (var key in PackCatalog.OwnershipKeysFor(sku))
+                if (!string.IsNullOrEmpty(key) && state.OwnedItemIds.Contains(key))
+                {
+                    FlowTrace.Step("Pack",
+                        $"IsOwned('{sku}'): matched via RETIRED id '{key}' — pre-rename entitlement honoured.");
+                    return true;
+                }
+            return false;
         }
 
         // ── Entitlement grant (money/reward path — moved VERBATIM from PackStore) ──
