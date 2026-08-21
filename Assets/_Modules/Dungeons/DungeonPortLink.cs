@@ -23,6 +23,7 @@
 
 using Cysharp.Threading.Tasks;
 using DeNelle.Core.Diagnostics;
+using DeNelle.Core.UI;
 using DeNelle.Village;
 using DeNelle.Village.UI;
 using UnityEngine;
@@ -41,6 +42,9 @@ namespace DeNelle.Dungeons
         /// <summary>Fade timings — short and cheap (owner: simple; cook later).</summary>
         private const float FadeOutSeconds = 0.15f;
         private const float FadeInSeconds = 0.2f;
+        private const float DoorAutoTraverseRadius = 1.35f;
+        private const float DoorAutoTraverseCooldown = 0.8f;
+        private const int DoorPromptPriority = 50;
 
         // ── Configured at author time (DressTraversalLinks) ─────────────────
 
@@ -65,6 +69,8 @@ namespace DeNelle.Dungeons
         private bool _inRange;
         private bool _porting;
         private bool _heroRebindTried;
+        private bool _autoCloseLastFrame;
+        private static float s_nextDoorAutoTraverseTime;
 
         /// <summary>
         /// Wires the link. <paramref name="target"/> is the paired point on the
@@ -121,6 +127,27 @@ namespace DeNelle.Dungeons
             bool nowInRange =
                 (_hero.position - transform.position).sqrMagnitude <= _radius * _radius;
 
+            // Mobile-safe ordinary doors. The shared bottom-centre interaction button can be
+            // visually crowded by dungeon HUD actions, so physically walking into an unlocked
+            // doorway must never strand the player. Trigger only on the OUTSIDE->INSIDE edge;
+            // the shared unscaled cooldown prevents the paired destination link from immediately
+            // sending the hero back. Stairs and locked ports keep their deliberate interactions.
+            bool autoClose = string.Equals(_prompt, "Open Door", System.StringComparison.Ordinal) &&
+                             (_hero.position - transform.position).sqrMagnitude <=
+                             DoorAutoTraverseRadius * DoorAutoTraverseRadius;
+            if (autoClose && !_autoCloseLastFrame && Time.unscaledTime >= s_nextDoorAutoTraverseTime &&
+                !MobileInteractButton.Suppressed && !PanelManager.AnyOpen)
+            {
+                s_nextDoorAutoTraverseTime = Time.unscaledTime + DoorAutoTraverseCooldown;
+                _autoCloseLastFrame = true;
+                FlowTrace.Step("Dungeon",
+                    $"PortLink '{name}': auto-opening ordinary door at " +
+                    $"{Vector3.Distance(_hero.position, transform.position):0.00}m (mobile-safe fallback).");
+                Port();
+                return;
+            }
+            _autoCloseLastFrame = autoClose;
+
             if (nowInRange != _inRange)
             {
                 _inRange = nowInRange;
@@ -130,7 +157,10 @@ namespace DeNelle.Dungeons
             if (!_inRange || MobileInteractButton.Suppressed) return;
 
             // Shared touch button — must be requested every frame while in range.
-            MobileInteractButton.Request(this, _prompt, Port);
+            MobileInteractButton.Request(this, _prompt, Port,
+                string.Equals(_prompt, "Open Door", System.StringComparison.Ordinal)
+                    ? DoorPromptPriority
+                    : 0);
 
             // Desktop [F] — the dungeon runs on the Input System (DungeonHero).
             var kb = Keyboard.current;
@@ -216,6 +246,7 @@ namespace DeNelle.Dungeons
         private void OnDisable()
         {
             _inRange = false;
+            _autoCloseLastFrame = false;
             MobileInteractButton.Release(this);
         }
 
