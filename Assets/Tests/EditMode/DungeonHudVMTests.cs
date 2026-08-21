@@ -95,6 +95,21 @@ namespace DeNelle.Tests.EditMode
         }
 
         [Test]
+        public void final_warning_progress_is_continuous_over_last_thirty_seconds()
+        {
+            var fake = new FakeLanternReadout { EstimatedSecondsRemaining = 45f };
+            var vm = new DungeonHudVM();
+            vm.SetLantern(fake);
+            Assert.That(vm.FinalWarningProgress, Is.EqualTo(0f), "warning is dormant above 30s");
+
+            fake.EstimatedSecondsRemaining = 15f;
+            Assert.That(vm.FinalWarningProgress, Is.EqualTo(0.5f).Within(0.001f));
+
+            fake.EstimatedSecondsRemaining = 0f;
+            Assert.That(vm.FinalWarningProgress, Is.EqualTo(1f));
+        }
+
+        [Test]
         public void set_lantern_raises_changed()
         {
             var vm = new DungeonHudVM();

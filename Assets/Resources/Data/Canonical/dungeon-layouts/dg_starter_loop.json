@@ -42,10 +42,10 @@
       "archetype": "combat",
       "encounter": {
         "kind": "hollow-group",
-        "min": 3,
-        "max": 7,
-        "seatMode": "ring",
-        "formationRadius": 3.5,
+        "min": 2,
+        "max": 3,
+        "seatMode": "staggered",
+        "formationRadius": 4.2,
         "confine": {
           "mode": "room",
           "slack": 2.0,
@@ -59,30 +59,28 @@
       "chests": null
     },
     {
-      "prefab": "StairUp",
-      "instanceId": "stair_up",
+      "prefab": "RewardVault",
+      "instanceId": "side_vault",
       "cell": [
         -10,
         0,
         20
       ],
       "yawDeg": 270.0,
-      "archetype": "hub",
+      "archetype": "reward",
       "encounter": null,
-      "chests": null
-    },
-    {
-      "prefab": "StairDown",
-      "instanceId": "stair_down",
-      "cell": [
-        10,
-        0,
-        20
-      ],
-      "yawDeg": 90.00001,
-      "archetype": "hub",
-      "encounter": null,
-      "chests": null
+      "chests": [
+        {
+          "id": "starter-side-cache",
+          "lootTableId": "dungeon-chest",
+          "visual": "chest",
+          "offset": [
+            0.0,
+            0.0,
+            1.4
+          ]
+        }
+      ]
     },
     {
       "prefab": "Straight",
@@ -95,11 +93,11 @@
       "yawDeg": 0.0,
       "archetype": "combat",
       "encounter": {
-        "kind": "hollow-group",
+        "kind": "mixed",
         "min": 3,
-        "max": 7,
-        "seatMode": "ring",
-        "formationRadius": 3.5,
+        "max": 4,
+        "seatMode": "staggered",
+        "formationRadius": 4.6,
         "confine": {
           "mode": "room",
           "slack": 2.0,
@@ -133,7 +131,7 @@
         0,
         40
       ],
-      "yawDeg": 90.00001,
+      "yawDeg": 90.0,
       "archetype": "combat",
       "encounter": null,
       "chests": null
@@ -146,7 +144,7 @@
         0,
         40
       ],
-      "yawDeg": 90.00001,
+      "yawDeg": 89.99999,
       "archetype": "combat",
       "encounter": null,
       "chests": null
@@ -162,11 +160,11 @@
       "yawDeg": 180.0,
       "archetype": "combat",
       "encounter": {
-        "kind": "hollow-group",
-        "min": 3,
-        "max": 7,
-        "seatMode": "ring",
-        "formationRadius": 3.5,
+        "kind": "orc-group",
+        "min": 2,
+        "max": 3,
+        "seatMode": "staggered",
+        "formationRadius": 4.4,
         "confine": {
           "mode": "room",
           "slack": 2.0,
@@ -191,6 +189,19 @@
       "archetype": "combat",
       "encounter": null,
       "chests": null
+    },
+    {
+      "prefab": "Straight",
+      "instanceId": "loop4",
+      "cell": [
+        10,
+        0,
+        20
+      ],
+      "yawDeg": 270.0,
+      "archetype": "combat",
+      "encounter": null,
+      "chests": null
     }
   ],
   "connections": [
@@ -207,39 +218,21 @@
       "toSocket": "s_door_01"
     },
     {
-      "fromInstance": "junction",
+      "fromInstance": "loop4",
       "fromSocket": "n_door_01",
-      "toInstance": "loop1",
-      "toSocket": "s_door_01"
+      "toInstance": "junction",
+      "toSocket": "e_door_01"
     },
     {
-      "fromInstance": "junction",
+      "fromInstance": "turn3",
       "fromSocket": "e_door_01",
-      "toInstance": "stair_down",
+      "toInstance": "loop4",
       "toSocket": "s_door_01"
     },
     {
-      "fromInstance": "junction",
-      "fromSocket": "w_door_01",
-      "toInstance": "stair_up",
-      "toSocket": "s_door_01"
-    },
-    {
-      "fromInstance": "loop1",
+      "fromInstance": "loop3",
       "fromSocket": "n_door_01",
-      "toInstance": "turn1",
-      "toSocket": "s_door_01"
-    },
-    {
-      "fromInstance": "turn1",
-      "fromSocket": "e_door_01",
-      "toInstance": "loop2",
-      "toSocket": "s_door_01"
-    },
-    {
-      "fromInstance": "loop2",
-      "fromSocket": "n_door_01",
-      "toInstance": "turn2",
+      "toInstance": "turn3",
       "toSocket": "s_door_01"
     },
     {
@@ -249,9 +242,33 @@
       "toSocket": "s_door_01"
     },
     {
-      "fromInstance": "loop3",
+      "fromInstance": "loop2",
       "fromSocket": "n_door_01",
-      "toInstance": "turn3",
+      "toInstance": "turn2",
+      "toSocket": "s_door_01"
+    },
+    {
+      "fromInstance": "turn1",
+      "fromSocket": "e_door_01",
+      "toInstance": "loop2",
+      "toSocket": "s_door_01"
+    },
+    {
+      "fromInstance": "loop1",
+      "fromSocket": "n_door_01",
+      "toInstance": "turn1",
+      "toSocket": "s_door_01"
+    },
+    {
+      "fromInstance": "junction",
+      "fromSocket": "w_door_01",
+      "toInstance": "side_vault",
+      "toSocket": "s_door_01"
+    },
+    {
+      "fromInstance": "junction",
+      "fromSocket": "n_door_01",
+      "toInstance": "loop1",
       "toSocket": "s_door_01"
     }
   ],
@@ -264,8 +281,32 @@
     "pacingLore": 0.2,
     "pacingReward": 0.2
   },
-  "oilStones": [],
-  "traps": [],
+  "oilStones": [
+    {
+      "id": "starter-vault-oil",
+      "roomId": "side_vault",
+      "offset": [
+        -1.8,
+        0.0,
+        0.8
+      ],
+      "radius": 2.5
+    }
+  ],
+  "traps": [
+    {
+      "id": "starter-loop-grate",
+      "roomId": "loop2",
+      "kind": "grate",
+      "damage": 12.0,
+      "radius": 1.25,
+      "offset": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    }
+  ],
   "keys": [],
   "locks": [],
   "extracts": []

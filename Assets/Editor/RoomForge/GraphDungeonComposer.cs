@@ -100,6 +100,7 @@ namespace DeNelle.Editor.RoomForge
     {
         private const string GraphsFolder = "Assets/StreamingAssets/Data/Canonical/dungeon-graphs";
         private const string LayoutsFolder = "Assets/StreamingAssets/Data/Canonical/dungeon-layouts";
+        private const string RuntimeLayoutsFolder = "Assets/Resources/Data/Canonical/dungeon-layouts";
         private const string StarterGraph = "dg_starter_loop.json";
         /// <summary>WO-1001 slice 1: the smallest graph that descends a floor (bake evidence).</summary>
         private const string DescentProbeGraph = "dg_descent_probe.json";
@@ -292,21 +293,27 @@ namespace DeNelle.Editor.RoomForge
             // Emit the positioned compose layout next to the hand-authored layouts so the
             // existing DungeonBaker (the single bake path) can consume it verbatim.
             EnsureFolder(LayoutsFolder);
+            EnsureFolder(RuntimeLayoutsFolder);
             string layoutAssetPath = $"{LayoutsFolder}/{layout.dungeonId}.json";
+            string runtimeLayoutAssetPath = $"{RuntimeLayoutsFolder}/{layout.dungeonId}.json";
             string outJson = JsonConvert.SerializeObject(layout, Formatting.Indented);
             // UTF8-no-BOM: Encoding.UTF8 emits a leading EF BB BF that fails the
             // static check-in gate's canonical-JSON parse (this writes into
             // StreamingAssets/Data/Canonical/dungeon-layouts).
-            bool wrote = Guard.Try(Sys, "write composed layout json", () =>
-                File.WriteAllText(ToFilesystemPath(layoutAssetPath), outJson, Utf8NoBom));
+            bool wrote = Guard.Try(Sys, "write composed layout dual copies", () =>
+            {
+                File.WriteAllText(ToFilesystemPath(layoutAssetPath), outJson, Utf8NoBom);
+                File.WriteAllText(ToFilesystemPath(runtimeLayoutAssetPath), outJson, Utf8NoBom);
+            });
             if (!wrote)
             {
                 FlowTrace.Fail(Sys, $"failed to write composed layout {layoutAssetPath} - abort");
                 return;
             }
             AssetDatabase.Refresh();
-            FlowTrace.Step(Sys, $"composed layout written id='{layout.dungeonId}' rooms={layout.rooms.Count} " +
-                                $"connections={layout.connections.Count} -> {layoutAssetPath} (cellSize={EmitCellSize})");
+            FlowTrace.Step(Sys, $"composed layout dual-written id='{layout.dungeonId}' rooms={layout.rooms.Count} " +
+                                $"connections={layout.connections.Count} -> {layoutAssetPath} + " +
+                                $"{runtimeLayoutAssetPath} (cellSize={EmitCellSize})");
 
             // Hand off to the ONE bake path: DungeonBaker mate-verifies, bakes NavMesh, saves.
             // populateForPlay seats the playable hero + enemy spawners (starter-loop only).

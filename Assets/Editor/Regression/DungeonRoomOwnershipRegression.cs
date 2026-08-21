@@ -81,6 +81,7 @@ namespace DeNelle.Editor.Regression
                 Case(failures, "exit-beacon", () => Case6_ExitBeacon(failures));
                 Case(failures, "pursuit-bound", () => Case7_PursuitBound(failures));
                 Case(failures, "exit-beacon-layouts", () => Case8_OneBeaconPerLayout(failures, notes));
+                Case(failures, "formation-spacing", () => Case9_FormationSpacing(failures));
             }
             finally
             {
@@ -92,7 +93,7 @@ namespace DeNelle.Editor.Regression
             {
                 reason = "DUNGEON ROOM OWNERSHIP OK - encounter schema + dual-copy, brain wake/confine math, " +
                          "spawner serialized fields, shared room-AABB math, runtime binder, exit beacon, " +
-                         "one beacon per composed layout" + noteStr;
+                         "one beacon per composed layout, staggered encounter spacing" + noteStr;
                 return true;
             }
             reason = "dungeon-rooms FAIL x" + failures.Count + ": " + string.Join(" | ", failures) + noteStr;
@@ -258,6 +259,34 @@ namespace DeNelle.Editor.Regression
                 failures.Add("[spawner] ConfigureRoomArea did not arm HasRoomArea");
             if (spawner.RoomId != "junction")
                 failures.Add($"[spawner] RoomId '{spawner.RoomId}' != 'junction'");
+        }
+
+        // =====================================================================
+        //  CASE 9 - deterministic encounter formation spacing
+        // =====================================================================
+        private static void Case9_FormationSpacing(List<string> failures)
+        {
+            Vector3[] a = OutpostEnemyGroupSpawner.BuildFormationOffsets(7, 4.6f, 731);
+            Vector3[] b = OutpostEnemyGroupSpawner.BuildFormationOffsets(7, 4.6f, 731);
+            if (a.Length != 7 || b.Length != 7)
+            {
+                failures.Add("[formation] expected seven deterministic offsets");
+                return;
+            }
+
+            float minimum = float.MaxValue;
+            for (int i = 0; i < a.Length; i++)
+            {
+                if ((a[i] - b[i]).sqrMagnitude > 0.000001f)
+                    failures.Add($"[formation] seed replay drifted at seat {i}: {a[i]} vs {b[i]}");
+                if (a[i].sqrMagnitude < 2.2f)
+                    failures.Add($"[formation] seat {i} collapsed into the room centre: {a[i]}");
+                for (int j = i + 1; j < a.Length; j++)
+                    minimum = Mathf.Min(minimum, Vector3.Distance(a[i], a[j]));
+            }
+
+            if (minimum < 1.75f)
+                failures.Add($"[formation] authored offsets bunch at {minimum:F2}m (want >= 1.75m)");
         }
 
         // =====================================================================

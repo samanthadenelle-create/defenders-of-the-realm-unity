@@ -110,6 +110,18 @@ namespace DeNelle.Dungeons
         /// <summary>Whether the low-oil warning pill should show.</summary>
         public bool ShowLowWarning => IsLow;
 
+        /// <summary>0..1 visual urgency during the final thirty seconds.</summary>
+        public float FinalWarningProgress
+        {
+            get
+            {
+                if (_lantern == null) return 0f;
+                float seconds = _lantern.EstimatedSecondsRemaining;
+                if (float.IsInfinity(seconds) || float.IsNaN(seconds) || seconds > 30f) return 0f;
+                return Clamp01(1f - seconds / 30f);
+            }
+        }
+
         /// <summary>The glanceable burn-time label ("Light: 1m 12s" / "Light: --" /
         /// "Light: steady").</summary>
         public string TimeLabel =>

@@ -78,15 +78,13 @@ namespace DeNelle.Dungeons
         // ── Code-built kit UI ────────────────────────────────────────────────
         private GameObject _canvasGo;
         private ElarionUiKit.BarHandle _oilBar;
-        private TMPro.TextMeshProUGUI _timeLabel;
-        private GameObject _lowPill;
+        private Image _warningGlow;
 
         // Fill tint band (secondary reinforcement — the pill's WORDS are the carrier).
         private Color _fillNormal;
         private bool _fillTintable;
 
         // Change-only repaint caches (no per-frame string/state churn).
-        private string _lastTimeText;
         private bool _lastLow;
         private bool _lastCritical;
         private bool _legacyHidden;
@@ -117,11 +115,9 @@ namespace DeNelle.Dungeons
                 Destroy(_canvasGo);
                 _canvasGo = null;
                 _oilBar = null;
-                _timeLabel = null;
-                _lowPill = null;
+                _warningGlow = null;
             }
             // Force a full repaint on the next enable.
-            _lastTimeText = null;
             _lastLow = false;
             _lastCritical = false;
         }
@@ -174,48 +170,37 @@ namespace DeNelle.Dungeons
             crt.anchorMax = new Vector2(0f, 1f);
             crt.pivot = new Vector2(0f, 1f);
             crt.anchoredPosition = new Vector2(24f, -24f);
-            crt.sizeDelta = new Vector2(460f, 180f);
+            crt.sizeDelta = new Vector2(360f, 104f);
             var cardImg = card.GetComponent<Image>();
             if (cardImg != null) cardImg.raycastTarget = false;
 
-            // Caption — gold, small caps feel via spacing (kit Label primitive).
-            ElarionUiKit.Label(card.transform, "LANTERN", 0.66f, 0.97f,
-                ElarionUi.Gold, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.MidlineLeft,
-                x0: 0.06f, x1: 0.94f, spacing: 6f, bold: true);
+            // A wick-shaped visual carrier. Oil state is deliberately not communicated as
+            // countdown text: the continuous fill + shrinking/pulsing ember is the read.
+            var glowGo = ElarionUiKit.AddImage(card.transform, "OilEmber",
+                Vector2.zero, Vector2.zero, ElarionUi.Gold, rounded: true);
+            _warningGlow = glowGo.GetComponent<Image>();
+            var grt = (RectTransform)glowGo.transform;
+            grt.anchorMin = new Vector2(0f, 0.5f);
+            grt.anchorMax = new Vector2(0f, 0.5f);
+            grt.pivot = new Vector2(0.5f, 0.5f);
+            grt.anchoredPosition = new Vector2(42f, 0f);
+            grt.sizeDelta = new Vector2(30f, 46f);
+            if (_warningGlow != null) _warningGlow.raycastTarget = false;
 
             // THE bar (kit section 1.1) — Energy kind: the gold-amber fill reads as
             // lamp oil and matches the HUD bar family art.
             _oilBar = ElarionUiKit.BuildObsidianBar(card.transform,
                 ElarionUiKit.ObsidianBarKind.Energy,
-                new Vector2(0.06f, 0.36f), new Vector2(0.94f, 0.64f),
+                new Vector2(0.18f, 0.28f), new Vector2(0.94f, 0.72f),
                 withValue: false, framed: true);
             _fillNormal = _oilBar != null && _oilBar.fill != null ? _oilBar.fill.color : Color.white;
             // A coloured pack fill stays white on purpose (kit rule) — only a
             // tintable (non-white) fill takes the amber/red band reinforcement.
             _fillTintable = _fillNormal != Color.white;
 
-            // Burn-time copy ("Light: 1m 12s") — parchment body text.
-            _timeLabel = ElarionUiKit.Label(card.transform, DungeonHudVM.FormatBurnTime(float.PositiveInfinity),
-                0.04f, 0.34f, ElarionUi.Parchment, ElarionUi.FontLabel,
-                TMPro.TextAlignmentOptions.MidlineLeft, x0: 0.06f, x1: 0.94f);
-
-            // ── Low-oil pill: the ONE shared obsidian toast chrome, Danger tone —
-            //    the WORDS carry the state (colourblind law), the accent reinforces. ──
-            var pill = ElarionUiKit.ToastCard(_canvasGo.transform, ElarionUiKit.ToastTone.Danger,
-                                              accentLeft: true, align: TextAnchor.MiddleLeft);
-            _lowPill = pill.card;
-            var prt = (RectTransform)pill.card.transform;
-            prt.anchorMin = new Vector2(0f, 1f);
-            prt.anchorMax = new Vector2(0f, 1f);
-            prt.pivot = new Vector2(0f, 1f);
-            prt.anchoredPosition = new Vector2(24f, -216f);
-            prt.sizeDelta = new Vector2(460f, 64f);
-            if (pill.label != null) pill.label.text = "LOW OIL - find an oil stone";
-            _lowPill.SetActive(false);
-
             FlowTrace.Step(Sys,
-                "kit oil HUD built (WO-1005): obsidian card 460x180 top-left @ (24,-24), " +
-                $"ObsidianBar kind=Energy fillTintable={_fillTintable}, low pill=ToastCard(Danger) " +
+                "visual oil HUD built: compact obsidian card 360x104 top-left @ (24,-24), " +
+                $"ObsidianBar kind=Energy fillTintable={_fillTintable}, ember=continuous-warning " +
                 $"sortingOrder={SortingOrder} raycast=OFF (code-built uGUI, no UXML)");
         }
 
@@ -269,19 +254,22 @@ namespace DeNelle.Dungeons
                         : _vm.IsWarning ? new Color(1f, 0.65f, 0.18f, 1f)   // amber low band
                         : _fillNormal;
                 }
-                if (_lowPill != null) _lowPill.SetActive(low);
                 FlowTrace.Step(Sys,
                     $"oil band -> {(critical ? "CRITICAL" : low ? "LOW" : "ok")} " +
-                    $"(fraction={_vm.BarFraction:F2}, pill={(low ? "shown" : "hidden")})");
+                    $"(fraction={_vm.BarFraction:F2}, visual-only=True)");
             }
 
-            // Burn-time copy (change-only — the VM string only shifts once a second).
-            string time = _vm.TimeLabel;
-            if (_timeLabel != null && !ReferenceEquals(time, _lastTimeText) && time != _lastTimeText)
+            if (_warningGlow != null)
             {
-                _lastTimeText = time;
-                _timeLabel.text = time;
-                _timeLabel.color = critical ? ElarionUi.Danger : ElarionUi.Parchment;
+                float urgency = _vm.FinalWarningProgress;
+                float pulse = urgency > 0f
+                    ? 0.72f + 0.28f * Mathf.Abs(Mathf.Sin(Time.unscaledTime * Mathf.Lerp(5f, 13f, urgency)))
+                    : 1f;
+                _warningGlow.color = critical ? ElarionUi.Danger
+                    : low ? new Color(1f, 0.65f, 0.18f, pulse)
+                    : new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.9f);
+                float scale = Mathf.Lerp(1f, 0.48f, urgency) * pulse;
+                _warningGlow.rectTransform.localScale = new Vector3(scale, scale, 1f);
             }
         }
     }

@@ -76,6 +76,16 @@ namespace DeNelle.Dungeons
                  "so an out-of-oil Keeper can still find an oil stone.")]
         [SerializeField, Range(0f, 1f)] private float _minOilLightFraction = 0.35f;
 
+        [Tooltip("Seconds before empty when the flame begins its final visible collapse.")]
+        [SerializeField] private float _finalWarningSeconds = 30f;
+
+        [Tooltip("Tight safety halo left at zero oil. It reveals the Keeper's immediate footing, " +
+                 "not the route ahead.")]
+        [SerializeField] private float _emptySafetyRange = 1.35f;
+
+        [Tooltip("Mean light intensity at zero oil. Keeps the immediate halo readable.")]
+        [SerializeField] private float _emptySafetyIntensity = 0.8f;
+
         // ── Tuning — breathing + Tincture (lanternDebuff.ts) ─────────────────
 
         [Header("Flame breathing")]
@@ -130,6 +140,11 @@ namespace DeNelle.Dungeons
 
         /// <summary>True while the equipped Lightbearer Cloak is owned (+1 tile reach).</summary>
         private bool _cloakOwned;
+        private bool _fogWasEnabled;
+        private FogMode _fogModeBeforeWarning;
+        private float _fogStartBeforeWarning;
+        private float _fogEndBeforeWarning;
+        private bool _darknessGradeApplied;
 
         // ── Read-only state ──────────────────────────────────────────────────
 
@@ -145,6 +160,14 @@ namespace DeNelle.Dungeons
         /// and the "push vs extract" tension for legendary loot gates.
         /// </summary>
         public bool IsInDarkness => OilFraction <= Mathf.Min(_lowOilFraction, 0.12f);
+
+        /// <summary>True during the final visible burn-down window.</summary>
+        public bool IsFinalWarning => EstimatedSecondsRemaining <= _finalWarningSeconds;
+
+        /// <summary>0 at the start of the final warning, 1 when the flask is empty.</summary>
+        public float FinalWarningProgress => _finalWarningSeconds > 0f
+            ? Mathf.Clamp01(1f - EstimatedSecondsRemaining / _finalWarningSeconds)
+            : (OilFraction <= 0f ? 1f : 0f);
 
         /// <summary>
         /// The oil fraction at or below which the lantern reads as "low oil" —
@@ -181,6 +204,10 @@ namespace DeNelle.Dungeons
             _oil = _maxOil;
             _liveRange = FullRange;
             _light.range = _liveRange;
+            _fogWasEnabled = RenderSettings.fog;
+            _fogModeBeforeWarning = RenderSettings.fogMode;
+            _fogStartBeforeWarning = RenderSettings.fogStartDistance;
+            _fogEndBeforeWarning = RenderSettings.fogEndDistance;
         }
 
         /// <summary>
@@ -222,6 +249,7 @@ namespace DeNelle.Dungeons
         {
             if (_flickerAudio != null && _flickerAudio.isPlaying)
                 _flickerAudio.Stop();
+            RestoreDungeonFog();
         }
 
         /// <summary>
@@ -295,7 +323,39 @@ namespace DeNelle.Dungeons
             TickTincture(Time.deltaTime);
             ApplyRange(Time.deltaTime);
             ApplyIntensity();
+            ApplyDarknessVisibility();
             DriveFlickerAudio();
+        }
+
+        /// <summary>
+        /// Pulls the dungeon fog wall inward with the dying flame. At zero oil only the
+        /// immediate safety halo remains readable; distant room torches cannot reveal the route
+        /// through the fog. Refilling restores the scene-authored fog exactly.
+        /// </summary>
+        private void ApplyDarknessVisibility()
+        {
+            if (!IsFinalWarning)
+            {
+                RestoreDungeonFog();
+                return;
+            }
+
+            float collapse = Mathf.SmoothStep(0f, 1f, FinalWarningProgress);
+            RenderSettings.fog = true;
+            RenderSettings.fogMode = FogMode.Linear;
+            RenderSettings.fogStartDistance = Mathf.Lerp(_fogStartBeforeWarning, 0.45f, collapse);
+            RenderSettings.fogEndDistance = Mathf.Lerp(_fogEndBeforeWarning, 3.2f, collapse);
+            _darknessGradeApplied = true;
+        }
+
+        private void RestoreDungeonFog()
+        {
+            if (!_darknessGradeApplied) return;
+            RenderSettings.fog = _fogWasEnabled;
+            RenderSettings.fogMode = _fogModeBeforeWarning;
+            RenderSettings.fogStartDistance = _fogStartBeforeWarning;
+            RenderSettings.fogEndDistance = _fogEndBeforeWarning;
+            _darknessGradeApplied = false;
         }
 
         /// <summary>Keeps the lantern light at the Keeper's chest height.</summary>
@@ -369,6 +429,20 @@ namespace DeNelle.Dungeons
             // Oil scales reach between minOilLightFraction (empty) and 1 (full).
             float oilScale = Mathf.Lerp(_minOilLightFraction, 1f, OilFraction);
             float target = FullRange * oilScale;
+            if (IsFinalWarning)
+            {
+                // The last thirty seconds are a distinct physical warning: the navigable pool
+                // collapses into a tight footing halo. Two incommensurate waves create an
+                // organic wick flutter without random state or frame-rate dependence.
+                float collapse = Mathf.SmoothStep(0f, 1f, FinalWarningProgress);
+                target = Mathf.Lerp(target, _emptySafetyRange, collapse);
+                if (!_reducedMotion)
+                {
+                    float flutter = 0.91f + 0.06f * Mathf.Sin(Time.time * 13.7f)
+                                           + 0.03f * Mathf.Sin(Time.time * 31.1f);
+                    target *= Mathf.Clamp(flutter, 0.82f, 1f);
+                }
+            }
             if (IsTinctureActive) target *= _tinctureRangeMul;
 
             if (_reducedMotion)
@@ -394,6 +468,11 @@ namespace DeNelle.Dungeons
             // Oil scales the mean intensity the same way it scales reach.
             float oilScale = Mathf.Lerp(_minOilLightFraction, 1f, OilFraction);
             float mean = _baseIntensity * oilScale;
+            if (IsFinalWarning)
+            {
+                float collapse = Mathf.SmoothStep(0f, 1f, FinalWarningProgress);
+                mean = Mathf.Lerp(mean, _emptySafetyIntensity, collapse);
+            }
 
             if (_reducedMotion)
             {
@@ -402,7 +481,12 @@ namespace DeNelle.Dungeons
             }
 
             float hz = IsLowOil ? _breathHz * _lowOilBreathMult : _breathHz;
-            float breath = Mathf.Sin(Time.time * hz * 2f * Mathf.PI) * _breathAmplitude;
+            float amplitude = IsFinalWarning
+                ? Mathf.Lerp(_breathAmplitude, 0.42f, FinalWarningProgress)
+                : _breathAmplitude;
+            float breath = Mathf.Sin(Time.time * hz * 2f * Mathf.PI) * amplitude;
+            if (IsFinalWarning)
+                breath += Mathf.Sin(Time.time * 23.3f) * 0.1f * FinalWarningProgress;
             _light.intensity = mean * (1f + breath);
         }
 

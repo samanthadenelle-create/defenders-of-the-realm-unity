@@ -42,6 +42,7 @@ using UnityEngine.AI;
 using Newtonsoft.Json;            // enemies.json deserialise (same as WildlandsRoster)
 using DeNelle.Core;               // CanonicalJson (WebGL-safe synchronous catalog read)
 using DeNelle.Core.Diagnostics;   // FlowTrace (TGVRU, CLAUDE.md §12)
+using System.Collections.Generic;
 
 namespace DeNelle.Village
 {
@@ -209,20 +210,16 @@ namespace DeNelle.Village
             // of the entry hero seat (data-proven cause 1 of the entrance camp).
             bool hasArea = HasRoomArea;
             Bounds area = new Bounds(areaCenter, areaSize);
+            Vector3[] formation = BuildFormationOffsets(count, formationRadius, seed);
+            var occupied = new List<Vector3>(count);
+            float minimumSeparation = Mathf.Clamp(formationRadius * 0.55f, 1.75f, 3f);
 
             int spawned = 0;
             for (int i = 0; i < count; i++)
             {
-                // Spread evenly around a ring, jittered slightly so it does not read as a clock face.
-                float ang = (i / (float)count) * Mathf.PI * 2f + (float)(rng.NextDouble() * 0.6 - 0.3);
-                float rad = formationRadius * (0.7f + (float)rng.NextDouble() * 0.6f);
-                Vector3 slot = center + new Vector3(Mathf.Cos(ang) * rad, 0f, Mathf.Sin(ang) * rad);
-                if (hasArea)
-                    slot = EnemyBrain.ConfineToArea(slot, area, -0.5f);
-
-                // Snap each slot onto the baked NavMesh so the agent can path.
-                if (NavMesh.SamplePosition(slot, out NavMeshHit hit, 6f, NavMesh.AllAreas))
-                    slot = hit.position;
+                Vector3 slot = SeatFormationSlot(center, formation, i, hasArea, area,
+                    occupied, minimumSeparation);
+                occupied.Add(slot);
 
                 string id = isBoss
                     ? ResolveBossId(kind, fixedEnemyId, rng)
@@ -268,7 +265,76 @@ namespace DeNelle.Village
             }
 
             FlowTrace.Step(Sys, $"spawned {spawned} enemies of family kind '{kind}' @ {center} seed {seed} " +
-                $"(rolled count {count}) " + (hasArea ? $"room '{roomId}'" : "NO room area"));
+                $"(rolled count {count}, formation=staggered, minSeparation={minimumSeparation:F1}m) " +
+                (hasArea ? $"room '{roomId}'" : "NO room area"));
+        }
+
+        /// <summary>
+        /// Deterministic two-rank formation used by dungeon encounters. The older random ring
+        /// regularly produced a single mob knot after NavMesh sampling. Alternating depth gives
+        /// melee and ranged roles different sight-lines while the golden-angle yaw prevents a
+        /// rigid parade-ground look.
+        /// </summary>
+        public static Vector3[] BuildFormationOffsets(int count, float radius, int seed)
+        {
+            count = Mathf.Max(0, count);
+            radius = Mathf.Max(1.5f, radius);
+            var result = new Vector3[count];
+            if (count == 0) return result;
+
+            var rng = new System.Random(seed ^ 0x51ED270B);
+            float yaw = (float)rng.NextDouble() * Mathf.PI * 2f;
+            const float GoldenAngle = 2.39996323f;
+            for (int i = 0; i < count; i++)
+            {
+                // Alternate an outer pressure rank with an inner support rank. Never seat at
+                // the exact centre: that is where room props, loot, and trigger anchors live.
+                float rank = (i & 1) == 0 ? 0.92f : 0.58f;
+                float jitter = ((float)rng.NextDouble() - 0.5f) * 0.12f;
+                float distance = radius * Mathf.Clamp(rank + jitter, 0.5f, 1.05f);
+                float angle = yaw + i * GoldenAngle;
+                result[i] = new Vector3(Mathf.Cos(angle) * distance, 0f,
+                                        Mathf.Sin(angle) * distance);
+            }
+            return result;
+        }
+
+        private static Vector3 SeatFormationSlot(Vector3 center, Vector3[] formation, int index,
+                                                 bool hasArea, Bounds area,
+                                                 List<Vector3> occupied, float minimumSeparation)
+        {
+            // Try the authored seat first, then rotate it in 45-degree steps. This matters on
+            // narrow rooms: NavMesh.SamplePosition can otherwise snap several candidates onto
+            // the same walkable point and recreate the bunching after good offsets were chosen.
+            Vector3 offset = formation[index];
+            Vector3 best = center + offset;
+            float bestClearance = -1f;
+            for (int attempt = 0; attempt < 8; attempt++)
+            {
+                Vector3 candidate = center + Quaternion.Euler(0f, attempt * 45f, 0f) * offset;
+                if (hasArea) candidate = EnemyBrain.ConfineToArea(candidate, area, -0.75f);
+                if (NavMesh.SamplePosition(candidate, out NavMeshHit hit, 2.5f, NavMesh.AllAreas))
+                    candidate = hit.position;
+
+                float clearance = float.MaxValue;
+                for (int j = 0; j < occupied.Count; j++)
+                {
+                    Vector3 delta = candidate - occupied[j];
+                    delta.y = 0f;
+                    clearance = Mathf.Min(clearance, delta.magnitude);
+                }
+
+                if (clearance > bestClearance)
+                {
+                    best = candidate;
+                    bestClearance = clearance;
+                }
+                if (clearance >= minimumSeparation) return candidate;
+            }
+
+            FlowTrace.Warn(Sys, $"formation seat {index} could only secure {bestClearance:F1}m clearance " +
+                $"(wanted {minimumSeparation:F1}m); using best candidate {best}");
+            return best;
         }
 
         // =====================================================================
