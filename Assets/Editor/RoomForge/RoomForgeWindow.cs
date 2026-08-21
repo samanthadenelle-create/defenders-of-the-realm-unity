@@ -176,6 +176,11 @@ namespace DeNelle.Editor.RoomForge
                     s.type = (RoomSocketType)EditorGUILayout.EnumPopup(s.type, GUILayout.Width(90));
                     s.facing = EditorGUILayout.TextField(s.facing, GUILayout.Width(28));
                     s.isSecret = EditorGUILayout.ToggleLeft("secret", s.isSecret, GUILayout.Width(60));
+                    if (s.type == RoomSocketType.Door)
+                    {
+                        s.commonDoor = EditorGUILayout.ToggleLeft("door", s.commonDoor, GUILayout.Width(52));
+                        s.doorPolicy = (CommonDoorPolicy)EditorGUILayout.EnumPopup(s.doorPolicy, GUILayout.Width(92));
+                    }
                     if (GUILayout.Button("X", GUILayout.Width(22)))
                     {
                         Undo.DestroyObjectImmediate(s.gameObject);
@@ -447,6 +452,8 @@ namespace DeNelle.Editor.RoomForge
                     type = s.type.ToString(),
                     facing = s.facing,
                     isSecret = s.isSecret,
+                    commonDoor = s.commonDoor,
+                    doorPolicy = s.doorPolicy.ToString(),
                     localPosition = new[] { lp.x, lp.y, lp.z },
                 });
             }

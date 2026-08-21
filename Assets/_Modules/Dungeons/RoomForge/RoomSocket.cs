@@ -35,6 +35,13 @@ namespace DeNelle.Dungeons.RoomForge
         [Tooltip("World-space half-width of the opening (KayKit door ~1–2u).")]
         public float halfWidth = 1f;
 
+        [Header("Common Door Extension")]
+        [Tooltip("Automatically supplies the shared door visual, collider, animation and traversal behavior.")]
+        public bool commonDoor = true;
+
+        [Tooltip("Proximity is the mobile default; Interaction and Locked reserve an explicit action.")]
+        public CommonDoorPolicy doorPolicy = CommonDoorPolicy.Proximity;
+
         /// <summary>World position of the socket origin.</summary>
         public Vector3 WorldPosition => transform.position;
 
@@ -43,6 +50,14 @@ namespace DeNelle.Dungeons.RoomForge
 
         /// <summary>True when baker has paired this socket.</summary>
         public bool IsMated => !string.IsNullOrEmpty(matedTo);
+
+        private void Start()
+        {
+            if (type != RoomSocketType.Door || !commonDoor || !IsMated) return;
+            var extension = GetComponent<CommonDungeonDoor>();
+            if (extension == null) extension = gameObject.AddComponent<CommonDungeonDoor>();
+            extension.Configure(this);
+        }
 
 #if UNITY_EDITOR
         private void OnDrawGizmos()

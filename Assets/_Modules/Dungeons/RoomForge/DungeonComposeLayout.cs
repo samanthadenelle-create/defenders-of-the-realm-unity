@@ -258,6 +258,8 @@ namespace DeNelle.Dungeons.RoomForge
         [JsonProperty("type")] public string type;
         [JsonProperty("facing")] public string facing;
         [JsonProperty("isSecret")] public bool isSecret;
+        [JsonProperty("commonDoor")] public bool commonDoor = true;
+        [JsonProperty("doorPolicy")] public string doorPolicy = "Proximity";
         [JsonProperty("localPosition")] public float[] localPosition = new[] { 0f, 0f, 0f };
     }
 }

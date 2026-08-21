@@ -600,6 +600,8 @@ namespace DeNelle.Editor.RoomForge
                 type = s.type.ToString(),
                 facing = s.facing,
                 isSecret = s.isSecret,
+                commonDoor = s.commonDoor,
+                doorPolicy = s.doorPolicy.ToString(),
                 localPosition = new[] { lp.x, lp.y, lp.z },
             };
         }
