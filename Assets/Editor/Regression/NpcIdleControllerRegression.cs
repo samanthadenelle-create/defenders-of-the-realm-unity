@@ -62,9 +62,17 @@
 //                      metres apart read as a bug to a player, and the pool is small
 //                      enough (14 bodies) that this is easy to do by accident.
 //
+//   8. [town-controller] The shared AC_CraftPixTownsfolk — all 14 bodies, every vendor
+//                      and every wandering villager — must source NO clip from the hero
+//                      motion tree. The quest cast is two NPCs; THIS is the town, and it
+//                      is where the owner's complaint actually lived: that controller's
+//                      Idle was Assets/Action/Shared/Shared_Idle.fbx, the same mixamo clip
+//                      Knight/Cleric/Mage/Ranger play. Repointed by
+//                      DeNelle.Editor.CraftPixTownsfolkAnimatorSetup.
+//
 // SOURCE-SCAN NOTE: cases 1-3 read the .cs text. That is deliberate and narrow — they
 // pin CONTROL FLOW and AUTHORSHIP, which no reflected value exposes. Everything that
-// can be proven against a real loaded asset (4-7) is, because a regex over source is
+// can be proven against a real loaded asset (4-8) is, because a regex over source is
 // weaker evidence than the asset itself.
 //
 // Standalone: run-unity-method.ps1
@@ -95,12 +103,22 @@ namespace DeNelle.Editor.Regression
         private const string QuestInjector = "Assets/_Modules/Village/NPCs/QuestCastNpcInjector.cs";
         private const string CatalogPath = "Assets/Resources/Data/Canonical/structures-catalog.json";
 
-        /// <summary>The combat mocap tree KayKitNpcIdle draws from. A townsperson clip must
-        /// never resolve into it.</summary>
-        private const string CombatMocapFolder = "Assets/Action/Knight/Motion";
+        /// <summary>
+        /// The HERO motion tree. A townsperson clip must never resolve into it.
+        ///
+        /// ⚠ THIS WAS "Assets/Action/Knight/Motion" AND THAT WAS TOO NARROW — the first version
+        /// of this suite passed while the defect was still live. AC_CraftPixTownsfolk's Idle is
+        /// Assets/Action/Shared/Shared_Idle.fbx, one folder up and outside the Knight subtree, so
+        /// the check waved through the exact clip the owner was complaining about. A gate that
+        /// does not fail the known-bad state is not a gate; the root is now the whole hero tree.
+        /// </summary>
+        private const string CombatMocapFolder = "Assets/Action/";
 
         /// <summary>The KayKit pack folder, as a Resources path prefix.</summary>
         private const string KayKitFolder = "NPCs/KayKit/";
+
+        /// <summary>The ONE controller all 14 CraftPix bodies share — the town's posture, in a file.</summary>
+        private const string TownsfolkControllerRes = "NPCs/CraftPixPeople/AC_CraftPixTownsfolk";
 
         [MenuItem("Defenders/Regression/NPC Idle Controller")]
         public static void RunAll()
@@ -294,6 +312,37 @@ namespace DeNelle.Editor.Regression
                         notes.Add($"no-twin {c.name}@{c.anchor} != {anchorBody}");
                 });
             }
+
+            // ── 8. The whole town's posture, at its single source ──────────────────
+            // The quest cast is TWO NPCs; AC_CraftPixTownsfolk is all fourteen bodies, every
+            // storefront vendor and every wandering villager. Checking it through the quest rows
+            // alone would leave the town's posture asserted only by accident of who happens to be
+            // cast today - so it is asserted directly, at the asset that owns it.
+            Case(failures, "town-controller", () =>
+            {
+                var ctrl = Resources.Load<RuntimeAnimatorController>(TownsfolkControllerRes);
+                if (ctrl == null)
+                {
+                    failures.Add($"[town-controller] the shared townsfolk controller does not load from " +
+                                 $"Resources/{TownsfolkControllerRes}. Every CraftPix body depends on it.");
+                    return;
+                }
+
+                var heroClips = new List<string>();
+                foreach (var clip in ctrl.animationClips ?? Array.Empty<AnimationClip>())
+                {
+                    if (clip == null) continue;
+                    string src = (AssetDatabase.GetAssetPath(clip) ?? string.Empty).Replace('\\', '/');
+                    if (src.StartsWith(CombatMocapFolder)) heroClips.Add($"{clip.name} <- {src}");
+                }
+                if (heroClips.Count > 0)
+                    failures.Add($"[town-controller] '{ctrl.name}' sources HERO clips: " +
+                                 string.Join("; ", heroClips) + ". A hero idle is a combat-ready " +
+                                 "stance, so this puts the entire town on guard in peacetime. Repoint " +
+                                 "it with DeNelle.Editor.CraftPixTownsfolkAnimatorSetup.Run.");
+                else
+                    notes.Add($"town-controller {ctrl.name} clean of {CombatMocapFolder}");
+            });
 
             if (failures.Count > 0)
             {
