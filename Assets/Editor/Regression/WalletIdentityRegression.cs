@@ -43,8 +43,9 @@
 //                        attested BindWallet overload is what the wallet path calls,
 //                        and IsRealWalletConnected requires shape AND attestation AND
 //                        currency - never the old denylist.
-//   5 [firebase-access]  LoginViewModel's email/Google paths bind NOTHING; only the
-//                        wallet path reaches BindPlayer.
+//   5 [wallet-only-identity] LoginViewModel has NO non-wallet identity path at all
+//                        (WO-837-B, owner ruling 2026-08-21 - dApp Store only), and the
+//                        wallet connect path is BindPlayer's only call site.
 //   6 [guest-escape]     No code path disables the escape hatch: SetBusy does not
 //                        touch _guest, OnPlayAsGuest is not gated on _busy, and every
 //                        await on the login surface is bounded by a Timeout.
@@ -134,7 +135,7 @@ namespace DeNelle.Editor.Regression
                 Case(failures, "server-contract",   () => Case2_ServerContract(failures, notes));
                 Case(failures, "stub-unmistakable", () => Case3_StubUnmistakable(failures, notes));
                 Case(failures, "real-wallet-gate",  () => Case4_RealWalletGate(failures));
-                Case(failures, "firebase-access",   () => Case5_FirebaseIsAccessOnly(failures));
+                Case(failures, "wallet-only-identity", () => Case5_WalletIsTheOnlyIdentity(failures));
                 Case(failures, "guest-escape",      () => Case6_GuestEscape(failures, notes));
                 Case(failures, "bug-attribution",   () => Case7_BugAttribution(failures));
             }
@@ -148,8 +149,8 @@ namespace DeNelle.Editor.Regression
             {
                 reason = "WALLET IDENTITY OK - a stub address can never pass the cloud-identity " +
                          "allowlist, that allowlist matches the server's own wallet regex, only a " +
-                         "provider-attested real signing wallet keys a cloud save, email/Google grant " +
-                         "access without re-keying, the guest escape hatch is never disabled and every " +
+                         "provider-attested real signing wallet keys a cloud save, the wallet is the " +
+                         "ONLY identity path on the login surface, the guest escape hatch is never disabled and every " +
                          "login await is bounded, and a Settings bug report carries both an identity " +
                          "and stack frames" + noteStr;
                 return true;
@@ -397,34 +398,42 @@ namespace DeNelle.Editor.Regression
         }
 
         // =====================================================================
-        //  CASE 5 - Firebase is ACCESS, never the save key
+        //  CASE 5 - the WALLET is the only identity path that exists
         // =====================================================================
-        private static void Case5_FirebaseIsAccessOnly(List<string> failures)
+        // WAS: "Firebase is ACCESS, never the save key" - it allowed the email/Google
+        // paths to exist and only policed that they bound nothing (it REQUIRED the
+        // NoteAccessGranted trace to still be there). Owner ruling 2026-08-21 removed
+        // those paths outright ("we are only in the dApp Store, which is all wallet
+        // authentication based"), so the check is now the stronger one: the login VM
+        // must contain NO non-wallet identity path at all. P0-3 (a Firebase UID used as
+        // the playerId) is unreachable by construction once nothing can produce one.
+        private static void Case5_WalletIsTheOnlyIdentity(List<string> failures)
         {
             string src = ReadSource(LoginVmSrc, failures);
             if (src == null) return;
             string code = StripComments(src);
 
-            foreach (var path in new[] { "SignInAsync", "SignUpAsync", "SignInWithGoogleCredentialAsync" })
+            foreach (var banned in new[] { "FirebaseAuthService", "SignUpAsync",
+                                           "SendPasswordResetEmailAsync", "SignInWithGoogleCredentialAsync",
+                                           "GoogleSignIn" })
             {
-                // Look at what each success branch DOES. BindPlayer there = P0-3.
-                foreach (Match m in Regex.Matches(code, Regex.Escape(path) + @"\([\s\S]{0,300}?outcome\.Success[^\r\n]*"))
-                {
-                    if (m.Value.IndexOf("BindPlayer", StringComparison.Ordinal) >= 0)
-                        failures.Add("[firebase-access] " + path + " binds a save key on success - the " +
-                                     "Firebase UID is being used as the playerId again (P0-3), which the " +
-                                     "server's base58 nonce check rejects");
-                }
+                if (code.IndexOf(banned, StringComparison.Ordinal) >= 0)
+                    failures.Add("[wallet-only-identity] " + LoginVmSrc + " references '" + banned +
+                                 "' - a non-wallet login path is back. The wallet is the sole identity " +
+                                 "(WO-837-B); email/Google/Firebase were removed as player-facing paths.");
             }
-
-            if (code.IndexOf("NoteAccessGranted", StringComparison.Ordinal) < 0)
-                failures.Add("[firebase-access] the email/Google success branches no longer record " +
-                             "ACCESS-only - either the trace was dropped or a bind was restored");
 
             // BindPlayer must survive for the WALLET path (a wallet success must not continue unbound).
             if (!Regex.IsMatch(code, @"ConnectWalletAsync\([\s\S]{0,400}?BindPlayer\s*\("))
-                failures.Add("[firebase-access] the WALLET path no longer binds the connected address - " +
+                failures.Add("[wallet-only-identity] the WALLET path no longer binds the connected address - " +
                              "a wallet sign-in would leave the save keyed to the guest id");
+
+            // ...and BindPlayer must be reachable from NOWHERE else, so no future caller can
+            // slip a non-wallet id into the save key.
+            int binds = Regex.Matches(code, @"BindPlayer\s*\(").Count;
+            if (binds > 2)   // the declaration + the one ConnectWalletAsync call site
+                failures.Add("[wallet-only-identity] BindPlayer has more than one call site in " + LoginVmSrc +
+                             " - only the wallet connect path may bind a save key (P0-3 guard)");
         }
 
         // =====================================================================

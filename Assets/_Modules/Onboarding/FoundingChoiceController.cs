@@ -104,8 +104,9 @@ namespace DeNelle.Onboarding
             // WO-769: gate the new-game founding on LOGIN-OR-GUEST first, then the founding
             // choice. This is the single new-game chokepoint (HeroSelect/PetSelect route here);
             // returning players (Title -> Continue) never pass through, so they aren't re-prompted.
-            // LoginPanelController.PresentOrContinue skips itself when already signed in, and
-            // Play-as-Guest always proceeds — the boot flow can never soft-lock.
+            // LoginPanelController.PresentOrContinue skips itself when the player is already in
+            // (connected or attested-wallet-bound — WO-837-B made that the only "already in"
+            // signal), and Play-as-Guest always proceeds — the boot flow can never soft-lock.
             LoginPanelController.PresentOrContinue(() => PresentFoundingChoice(onContinue));
         }
 

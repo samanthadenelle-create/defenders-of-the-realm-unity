@@ -1,11 +1,21 @@
 // =============================================================================
-// LoginSurfacePlatformTests (WO-847) - the platform-conditional login surface.
-// Owner ruling 2026-08-02: Android/Seeker login = "connect wallet or play as
-// guest" (wallet-first, NO email form); desktop/web keep the WO-787/845 email
-// layout. The seam (LoginSurfacePlatform) and the wallet bridge
-// (LoginWalletBridge) live in DeNelle.Core, so this asmdef tests them LIVE via
-// the static override; the Onboarding/Wallet halves (this asmdef does not
-// reference those assemblies) are pinned by source-lint, WO-845 style.
+// LoginSurfacePlatformTests (WO-847, rewritten by WO-837-B) - the login surface
+// and the wallet bridge.
+//
+// ⛔ THE PLATFORM SPLIT THESE TESTS USED TO PIN IS RETIRED. WO-847 gave
+// Android/Seeker a wallet-first surface and left desktop/web on the WO-787/845
+// email form, and three tests here asserted exactly that (including
+// "NoOverride_OffAndroid_ResolvesEmailForm"). Owner ruling 2026-08-21:
+//   "That's only true with the Play Store, which we are not in. We are only in
+//    the dApp Store, which is all wallet authentication based."
+// So LoginSurfacePlatform / LoginSurfaceLayout / LayoutOverride are DELETED and
+// those three tests are deleted with them - a test that pins a removed split is
+// how the split grows back. What replaces them is a source-lint below asserting
+// the panel has NO email/Google/reset controls left on ANY platform.
+//
+// The bridge (LoginWalletBridge) lives in DeNelle.Core, so this asmdef tests it
+// LIVE; the Onboarding/Wallet halves (this asmdef does not reference those
+// assemblies) stay pinned by source-lint, WO-845 style.
 // =============================================================================
 using System;
 using System.IO;
@@ -18,37 +28,6 @@ namespace DeNelle.Tests.EditMode
 {
     public sealed class LoginSurfacePlatformTests
     {
-        [TearDown]
-        public void ClearOverride()
-        {
-            LoginSurfacePlatform.LayoutOverride = null;
-        }
-
-        // -- The seam: override wins; live editor default is the email form ---
-
-        [Test]
-        public void Override_WalletFirst_ResolvesWalletFirst()
-        {
-            LoginSurfacePlatform.LayoutOverride = LoginSurfaceLayout.WalletFirst;
-            Assert.AreEqual(LoginSurfaceLayout.WalletFirst, LoginSurfacePlatform.Resolve());
-        }
-
-        [Test]
-        public void Override_EmailForm_ResolvesEmailForm()
-        {
-            LoginSurfacePlatform.LayoutOverride = LoginSurfaceLayout.EmailForm;
-            Assert.AreEqual(LoginSurfaceLayout.EmailForm, LoginSurfacePlatform.Resolve());
-        }
-
-        [Test]
-        public void NoOverride_OffAndroid_ResolvesEmailForm()
-        {
-            // EditMode runs on the editor platform (never RuntimePlatform.Android),
-            // so the live branch must pick the desktop email layout.
-            LoginSurfacePlatform.LayoutOverride = null;
-            Assert.AreEqual(LoginSurfaceLayout.EmailForm, LoginSurfacePlatform.Resolve());
-        }
-
         // -- The bridge: honest failure with no handler; clean pass-through ---
 
         [Test]
@@ -121,36 +100,50 @@ namespace DeNelle.Tests.EditMode
         }
 
         [Test]
-        public void Panel_BranchesOnTheSeam_AndWalletFirstHasNoEmailControls()
+        public void Panel_IsWalletAndGuestOnly_OnEveryPlatform()
         {
             string src = ReadSource("_Modules", "Onboarding", "LoginPanelController.cs");
-            StringAssert.Contains("LoginSurfaceLayout.WalletFirst", src,
-                "Build must branch on the platform seam");
 
-            string walletFirst = MethodBlock(src, "private void BuildWalletFirst(");
-            StringAssert.Contains("\"Connect Wallet\"", walletFirst, "wallet-first must present Connect Wallet");
-            StringAssert.Contains("ObsidianButtonColor.Yellow", walletFirst,
+            string surface = MethodBlock(src, "private void BuildWalletFirst(");
+            StringAssert.Contains("\"Connect Wallet\"", surface, "the surface must present Connect Wallet");
+            StringAssert.Contains("ObsidianButtonColor.Yellow", surface,
                 "Connect Wallet must be THE gold CTA (kit law: one gold button)");
-            StringAssert.Contains("\"Play as Guest\"", walletFirst, "wallet-first must keep the guest escape");
-            StringAssert.DoesNotContain("MakeInputField", walletFirst,
-                "wallet-first must build NO email/password fields");
-            StringAssert.DoesNotContain("Forgot password", walletFirst,
-                "wallet-first has no forgot-password (the wallet is its own recovery)");
+            StringAssert.Contains("\"Play as Guest\"", surface, "the surface must keep the guest escape");
 
-            string emailForm = MethodBlock(src, "private void BuildEmailForm(");
-            StringAssert.Contains("MakeInputField", emailForm, "desktop email layout must keep its fields (WO-787)");
-            StringAssert.Contains("Forgot password?", emailForm, "desktop email layout must keep forgot-password (WO-845)");
-            StringAssert.Contains("\"Play as Guest\"", emailForm, "desktop email layout must keep the guest escape");
+            // WO-837-B: the email layout is GONE, not platform-gated. Lint the whole file -
+            // a #if UNITY_ANDROID around a rebuilt email form would pass a per-method check.
+            string code = StripComments(src);
+            foreach (var banned in new[] { "BuildEmailForm", "MakeInputField", "TMP_InputField",
+                                           "Forgot password", "Create Account", "Sign in with Google",
+                                           "LoginSurfaceLayout", "FirebaseAuthService" })
+                StringAssert.DoesNotContain(banned, code,
+                    "the login surface must contain no '" + banned + "' - the wallet is the only identity " +
+                    "(owner ruling 2026-08-21: dApp Store only, wallet authentication)");
         }
 
         [Test]
-        public void ViewModel_RoutesConnectThroughTheBridge_AndRebinds()
+        public void ViewModel_RoutesConnectThroughTheBridge_AndBinds_WithNoOtherIdentityPath()
         {
             string src = ReadSource("_Modules", "Onboarding", "LoginViewModel.cs");
             StringAssert.Contains("LoginWalletBridge.ConnectAsync()", src,
                 "VM must route wallet connect through the Core bridge (no duplicate connect logic)");
             StringAssert.Contains("BindPlayer(outcome.UserId)", src,
-                "VM must idempotently bind the returned identity like the email paths");
+                "VM must idempotently bind the connected wallet address");
+
+            string code = StripComments(src);
+            foreach (var banned in new[] { "FirebaseAuthService", "SignUpAsync", "SendPasswordResetEmailAsync",
+                                           "GoogleSignIn", "SignInWithGoogleCredentialAsync" })
+                StringAssert.DoesNotContain(banned, code,
+                    "the login VM must expose no '" + banned + "' - email/Google/Firebase are removed as " +
+                    "player-facing identity paths (WO-837-B)");
+        }
+
+        /// <summary>Strips // and /* */ comments so a lint cannot be satisfied - or tripped -
+        /// by prose. The doc headers here deliberately NAME the removed APIs.</summary>
+        private static string StripComments(string src)
+        {
+            src = System.Text.RegularExpressions.Regex.Replace(src, @"/\*[\s\S]*?\*/", " ");
+            return System.Text.RegularExpressions.Regex.Replace(src, @"//[^\r\n]*", " ");
         }
 
         [Test]

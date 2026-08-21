@@ -1,11 +1,18 @@
 // =============================================================================
-// LoginSurfacePlatform + LoginWalletBridge (WO-847) - the platform seam behind
-// the login surface's Android wallet-first split.
+// LoginWalletBridge (WO-847, narrowed by WO-837-B) - the Core-side seam the
+// login surface uses to drive the wallet-connect stack.
 // -----------------------------------------------------------------------------
-// Owner ruling 2026-08-02: on Android/Seeker the login page is "connect wallet
-// or play as guest" - NO email form; desktop/web keep the WO-787/845 email
-// layout. LoginViewModel reads LoginSurfacePlatform.Resolve() to pick the
-// layout; tests/headless captures pin either layout via LayoutOverride.
+// ⛔ THE PLATFORM SPLIT IS RETIRED (owner ruling 2026-08-21). WO-847 shipped a
+// LoginSurfacePlatform / LoginSurfaceLayout seam so that ONLY Android/Seeker got
+// the wallet-first surface while desktop/WebGL kept the WO-787/845 email form.
+// That caveat existed to serve a Google Play release. The owner's ruling:
+//   "That's only true with the Play Store, which we are not in. We are only in
+//    the dApp Store, which is all wallet authentication based."
+// There is now exactly ONE login surface on every platform - Connect Wallet +
+// Play as Guest - so the enum, the platform check and the LayoutOverride test
+// seam are DELETED rather than left resolving to a constant. A "which layout"
+// switch with one arm is the duplicated-state trap CLAUDE.md §5/§2 describes:
+// the next author restores the other arm because the type still implies it.
 //
 // LoginWalletBridge is the Core-side seam the login surface uses to drive the
 // EXISTING wallet-connect stack. Assembly direction is Wallet -> Core (Core can
@@ -20,49 +27,17 @@
 
 using System;
 using System.Threading.Tasks;
-using UnityEngine;
 using DeNelle.Core.Auth;
 using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Core.Platform
 {
-    /// <summary>Which login surface a platform presents (WO-847).</summary>
-    public enum LoginSurfaceLayout
-    {
-        /// <summary>The WO-787/845 email/password form (+ forgot password, guest). Desktop/WebGL.</summary>
-        EmailForm = 0,
-        /// <summary>Wallet-first: Connect Wallet primary + Play as Guest. Android/Seeker.</summary>
-        WalletFirst = 1,
-    }
-
-    /// <summary>
-    /// Resolves the login-surface layout for the running platform. Pure and
-    /// synchronous; <see cref="LayoutOverride"/> is the test/capture seam so
-    /// EditMode tests and headless screenshot runs can pin either layout
-    /// without an Android build.
-    /// </summary>
-    public static class LoginSurfacePlatform
-    {
-        /// <summary>Test/capture seam - when set, wins over the platform check. Null = live behaviour.</summary>
-        public static LoginSurfaceLayout? LayoutOverride;
-
-        /// <summary>Android -> wallet-first; everything else -> the email form.</summary>
-        public static LoginSurfaceLayout Resolve()
-        {
-            if (LayoutOverride.HasValue) return LayoutOverride.Value;
-            return Application.platform == RuntimePlatform.Android
-                ? LoginSurfaceLayout.WalletFirst
-                : LoginSurfaceLayout.EmailForm;
-        }
-    }
-
     /// <summary>
     /// Core-side bridge from the login surface to the wallet-connect stack.
     /// <see cref="ConnectHandler"/> is registered by DeNelle.Wallet
-    /// (WalletSkinBootstrap.Install, unconditional) and resolves with the same
-    /// <see cref="AuthOutcome"/> shape the email paths use - UserId carries the
-    /// connected wallet address - so the panel's continuation logic does not
-    /// care which identity bound.
+    /// (WalletSkinBootstrap.Install, unconditional) and resolves an
+    /// <see cref="AuthOutcome"/> whose UserId carries the connected wallet
+    /// address - the ONLY identity the login surface can bind (WO-837-B).
     /// </summary>
     public static class LoginWalletBridge
     {

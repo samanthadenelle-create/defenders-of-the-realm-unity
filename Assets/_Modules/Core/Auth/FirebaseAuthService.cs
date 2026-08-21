@@ -1,4 +1,28 @@
 // =============================================================================
+// ⛔ RETIRED AS A PLAYER-FACING LOGIN PATH (WO-837-B, owner ruling 2026-08-21).
+// -----------------------------------------------------------------------------
+// THIS SERVICE HAS ZERO CALLERS. The email/password + Google sign-in surface was
+// removed from LoginPanelController / LoginViewModel, and the boot gate's Firebase
+// init probe was removed from LoginPanelController.PresentOrContinue. The owner:
+//   "That's only true with the Play Store, which we are not in. We are only in the
+//    dApp Store, which is all wallet authentication based."
+// WO-847 had kept these paths alive to serve a Google Play release; there is no such
+// release. THE WALLET IS THE IDENTITY, and guest is the local escape.
+//
+// WHY THE FILE STILL EXISTS (deliberate, not an oversight):
+//   1. It declares the AuthOutcome type, which the WALLET path resolves with
+//      (LoginWalletBridge / WalletSkinBootstrap / LoginViewModel.ConnectWalletAsync).
+//      Deleting the file breaks compilation of code that has nothing to do with email.
+//   2. AuthErrorMessages + its tests still pin the error-string mapping.
+// Do NOT wire this back into a login surface. If AuthOutcome is ever moved to its own
+// file, this service can go with no further ceremony.
+//
+// ⚠ NOT AFFECTED BY THIS RETIREMENT, and the two get conflated every time:
+//   * FIREBASE APP DISTRIBUTION - how testers receive the APK. External to the game
+//     binary, CLI-driven (distribute-android.ps1 / firebase-appid.txt). UNTOUCHED.
+//   * google-services.json + the Firebase SDK in the tree - left in place.
+//   Only in-game Firebase AUTH is retired.
+// -----------------------------------------------------------------------------
 // FirebaseAuthService (WO-769) — email/password/Google identity: ACCESS to the game.
 // -----------------------------------------------------------------------------
 // CORRECTED 2026-08-02 (security audit). This header used to claim: "Firebase issues

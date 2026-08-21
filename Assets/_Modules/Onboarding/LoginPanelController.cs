@@ -1,25 +1,29 @@
 // =============================================================================
-// LoginPanelController (WO-769) — the email/password sign-in surface, plus a
-// "Play as Guest" escape so the build always lets a player in (owner's clean-build
-// guarantee). Presented at boot before the hub, modeled on FoundingChoiceController.
-// WO-847 (owner ruling 2026-08-02): the surface is PLATFORM-CONDITIONAL - on
-// Android/Seeker it is WALLET-FIRST ("connect wallet or play as guest": gold
-// Connect Wallet primary + Play as Guest, NO email form, NO forgot-password);
-// desktop/WebGL keep the WO-787/845 email layout. Split resolved by
-// LoginSurfacePlatform (testable static override); wallet connect routes through
-// LoginWalletBridge -> WalletSkinBootstrap -> WalletService.Connect with an
-// EXPLICIT GameStateService.BindWallet (never skin-config-gated on this path).
+// LoginPanelController (WO-769, narrowed to wallet-only by WO-837-B) — the
+// "connect wallet or play as guest" surface. Presented at boot before the hub,
+// modeled on FoundingChoiceController.
+//
+// ⛔ ONE SURFACE, EVERY PLATFORM (owner ruling 2026-08-21). The player sees a gold
+// Connect Wallet primary + Play as Guest. There is NO email form, NO Create Account,
+// NO Google button and NO forgot-password, on ANY platform. WO-847 had scoped
+// wallet-first to Android/Seeker and kept the WO-787/845 email layout on
+// desktop/WebGL for a Google Play release; the owner closed that:
+//   "That's only true with the Play Store, which we are not in. We are only in the
+//    dApp Store, which is all wallet authentication based."
+// The LoginSurfacePlatform / LoginSurfaceLayout seam that carried the split is
+// DELETED (not left resolving to a constant) — a one-armed layout switch is how the
+// other arm grows back.
+//
+// Wallet connect routes through LoginWalletBridge -> WalletSkinBootstrap ->
+// WalletService.Connect with an EXPLICIT GameStateService.BindWallet (never
+// skin-config-gated on this path).
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.Onboarding   Namespace: DeNelle.Onboarding (references DeNelle.Core only).
 // UI: code-built uGUI on the Obsidian kit (ElarionUiKit) — its own overlay canvas,
 // NO UXML/UIDocument (CLAUDE.md §8). Colour never carries meaning (each control labelled).
-// PRESENTATION ONLY: all auth logic lives in DeNelle.Core.Auth.FirebaseAuthService; this
-// file builds UI + calls the service. Guest = the existing device-hash fallback
-// (GameStateService.EnsureAccount mints guest-local-* on load), so guest just continues.
-//
-// RUNTIME GATE: email/password sign-in needs the Email/Password provider ENABLED in the
-// Firebase console — until then SignIn/SignUp surface "operation not allowed" here; Guest
-// always works.
+// PRESENTATION ONLY: identity logic lives in LoginViewModel; this file builds UI.
+// Guest = the existing device-hash fallback (GameStateService.EnsureAccount mints
+// guest-local-* on load), so guest just continues.
 //
 // SOFTLOCK LAW (security audit 2026-08-02, BINDING): this is the FIRST screen an Android
 // tester sees and there is no way past it except through this file. Two invariants keep
@@ -49,9 +53,9 @@ using UnityEngine.UI;
 namespace DeNelle.Onboarding
 {
     /// <summary>
-    /// Obsidian email/password login + Play-as-Guest. Call <see cref="Present"/> with
-    /// the "enter the game" continuation; the panel invokes it once the player signs in,
-    /// creates an account, or chooses guest.
+    /// Obsidian Connect-Wallet + Play-as-Guest surface. Call <see cref="Present"/> with
+    /// the "enter the game" continuation; the panel invokes it once the player connects a
+    /// wallet or chooses guest.
     /// </summary>
     public sealed class LoginPanelController : MonoBehaviour
     {
@@ -62,20 +66,14 @@ namespace DeNelle.Onboarding
         private GameObject _canvas;
         private PanelHandle _panelHandle;
 
-        private TMP_InputField _email;
-        private TMP_InputField _password;
         private TextMeshProUGUI _status;
-        private Button _signIn;
-        private Button _createAccount;
-        private Button _google;
         private Button _guest;
-        private Button _forgot;
         private Button _connectWallet;
         private bool _busy;
 
         /// <summary>
         /// Show the login surface, then run <paramref name="onContinue"/> once the player
-        /// gets in (sign-in / create / guest). Always presents; the caller decides when to
+        /// gets in (wallet connect / guest). Always presents; the caller decides when to
         /// call it in the boot flow.
         /// </summary>
         public static void Present(Action onContinue)
@@ -85,7 +83,7 @@ namespace DeNelle.Onboarding
             var ctrl = host.AddComponent<LoginPanelController>();
             ctrl._onContinue = onContinue;
             ctrl.Build();
-            FlowTrace.Step("Auth", "login panel presented (layout=" + ctrl._vm.Layout + ").");
+            FlowTrace.Step("Auth", "login panel presented (wallet-connect + guest; the only surface).");
         }
 
         /// <summary>
@@ -94,10 +92,16 @@ namespace DeNelle.Onboarding
         /// device capture 20:21:38 "auto-resume SUCCEEDED", 20:21:43 LoginPanelController.Build).
         /// <para>
         /// ROOT CAUSE (fixed here): this gate read ONE source — <c>FirebaseAuthService.IsSignedIn</c>
-        /// — while the identity that actually keys this game is the WALLET (see the identity law in
-        /// <see cref="HandleOutcome"/>: "Firebase = ACCESS, the wallet = DATA identity"). A player who
-        /// has only ever connected a wallet is not Firebase-signed-in, so the gate presented the
-        /// login surface on TOP of an already-connected, already-bound session.
+        /// — while the identity that actually keys this game is the WALLET. A player who has only
+        /// ever connected a wallet was not Firebase-signed-in, so the gate presented the login
+        /// surface on TOP of an already-connected, already-bound session.
+        /// </para>
+        /// <para>
+        /// <paramref name="legacySignedIn"/> is RETAINED-BUT-DEAD (WO-837-B): email/Firebase login is
+        /// removed, so <see cref="PresentOrContinue"/> now always passes <c>false</c>. The parameter
+        /// stays because it is the pure seam's contract — LoginGateRegression drives a truth table
+        /// against <c>(bool,bool,bool)</c> by reflection, and a wallet-only build must still prove
+        /// "any already-in signal => CONTINUE". Do not repurpose it as a second identity source.
         /// </para>
         /// <para>
         /// <paramref name="walletIdentityBound"/> is the RACE-PROOF half: it comes from the persisted
@@ -105,49 +109,31 @@ namespace DeNelle.Onboarding
         /// reconnect finishes. That is why this fix needs no delay, no timeout and no extra await.
         /// <paramref name="walletConnected"/> is the live published state for the in-session case.
         /// </para>
-        /// <para>FIRST RUN IS PRESERVED: a genuine first run has no connected wallet, no attested
+        /// <para>FIRST RUN IS PRESERVED: a genuine first run has no connected wallet and no attested
         /// bound identity (its save key is the <c>guest-local-</c> device hash, which is not
-        /// cloud-identity-shaped) and no Firebase session — all three inputs are false, so this
-        /// returns false and the panel presents. That is its one legitimate purpose.</para>
+        /// cloud-identity-shaped) — every input is false, so this returns false and the panel
+        /// presents. That is its one legitimate purpose.</para>
         /// </summary>
         public static bool ShouldContinueWithoutLogin(bool walletConnected, bool walletIdentityBound,
-                                                      bool firebaseSignedIn)
-            => walletConnected || walletIdentityBound || firebaseSignedIn;
+                                                      bool legacySignedIn)
+            => walletConnected || walletIdentityBound || legacySignedIn;
 
         /// <summary>
-        /// Init-aware boot entry: if the player is ALREADY IN — a connected wallet, an
-        /// attested wallet-bound save, or a cached Firebase session — continue straight
-        /// through; otherwise present the login-or-guest surface. Safe if Firebase init
-        /// fails — falls through to the panel, where Play-as-Guest always works, so the
-        /// boot flow can never lock.
+        /// Boot entry: if the player is ALREADY IN — a connected wallet or an attested
+        /// wallet-bound save — continue straight through; otherwise present the
+        /// connect-or-guest surface.
         /// <para>CORRECTED 2026-08-18: this doc used to say "already signed in (Firebase caches the
-        /// session)" and the code matched it — Firebase-only. On a wallet-first Android build that
-        /// is the wrong source, and it re-prompted a player whose wallet had just auto-resumed. The
+        /// session)" and the code matched it — Firebase-only. On a wallet-first build that is the
+        /// wrong source, and it re-prompted a player whose wallet had just auto-resumed. The
         /// decision now lives in <see cref="ShouldContinueWithoutLogin"/>.</para>
+        /// <para>WO-837-B: the boot-time Firebase init probe is GONE with the email login. It was a
+        /// blocking, up-to-12s network await that ran BEFORE any UI existed — the worst softlock
+        /// site on the whole surface — in service of an identity source that binds nothing. Removing
+        /// it makes this method synchronous, so there is no longer any await between app start and
+        /// the first screen. Do not reintroduce a network call here.</para>
         /// </summary>
-        public static async void PresentOrContinue(Action onContinue)
+        public static void PresentOrContinue(Action onContinue)
         {
-            bool signedIn = false;
-            try
-            {
-                // SOFTLOCK LAW: BOUNDED. This await happens BEFORE any login UI exists, so a
-                // hang here is the WORST softlock on the surface - not "stuck on the sign-in
-                // screen" but "no sign-in screen ever appears". Firebase's
-                // CheckAndFixDependenciesAsync talks to Play services and has no ceiling of
-                // its own; on a device with a stale/updating Play services it can sit there.
-                // On expiry we simply present the panel, where Guest always works.
-                bool ready = await FirebaseAuthService.Instance.EnsureInitializedAsync()
-                    .AsUniTask().Timeout(TimeSpan.FromSeconds(InitTimeoutSeconds), DelayType.UnscaledDeltaTime);
-                signedIn = ready && FirebaseAuthService.Instance.IsSignedIn;
-            }
-            catch (TimeoutException)
-            {
-                FlowTrace.Fail("Auth",
-                    $"Firebase init did not answer within {InitTimeoutSeconds}s - presenting the login " +
-                    "surface anyway so the player is never left with no screen at all.");
-            }
-            catch (Exception e) { FlowTrace.Warn("Auth", "login init check threw: " + e.Message); }
-
             // The WALLET is the data identity, so it is sampled here and not assumed:
             //   * walletConnected      - live published state (CurrencySkinResolver.PublishWalletConnected,
             //                            raised by the Wallet assembly on connect AND on silent auto-resume);
@@ -161,7 +147,9 @@ namespace DeNelle.Onboarding
                 walletIdentityBound = svc != null && svc.HasAttestedWalletIdentity;
             });
 
-            bool continueIn = ShouldContinueWithoutLogin(walletConnected, walletIdentityBound, signedIn);
+            // Third input is permanently false in a wallet-only build (WO-837-B) — see the
+            // legacySignedIn note on ShouldContinueWithoutLogin.
+            bool continueIn = ShouldContinueWithoutLogin(walletConnected, walletIdentityBound, false);
 
             // §1.4b: the decision AND every input it was made from, so the next reader never has to
             // guess WHY the panel appeared. A trace that cannot report the wrong outcome is decoration.
@@ -170,7 +158,7 @@ namespace DeNelle.Onboarding
                 " (walletConnected=" + walletConnected +
                 " wallet=" + (walletConnected ? CurrencySkinResolver.ConnectedWalletShortAddress : "none") +
                 ", walletIdentityBound=" + walletIdentityBound +
-                ", firebaseSignedIn=" + signedIn + ").");
+                ", legacySignedIn=false [wallet-only build, WO-837-B]).");
 
             if (continueIn)
             {
@@ -214,13 +202,10 @@ namespace DeNelle.Onboarding
             // apart on the shortest live canvas, so ClampMinTouch can grow rows collision-free.
             Transform body = chrome.content.transform;
 
-            // WO-847 (owner ruling 2026-08-02): on Android/Seeker the login surface is
-            // WALLET-FIRST - "connect wallet or play as guest" - no email form, no
-            // forgot-password (the wallet is its own recovery). Desktop/WebGL keep the
-            // WO-787/845 email layout untouched. Resolved through the platform seam
-            // (LoginSurfacePlatform) so tests and headless captures can pin either.
-            if (_vm.Layout == LoginSurfaceLayout.WalletFirst) BuildWalletFirst(body);
-            else BuildEmailForm(body);
+            // WO-837-B (owner ruling 2026-08-21): ONE surface on every platform -
+            // "connect wallet or play as guest". No email form, no forgot-password
+            // (the wallet is its own recovery), no platform branch.
+            BuildWalletFirst(body);
 
             if (_panelHandle == null)
                 _panelHandle = PanelManager.Register("Login", Continue, () => !_routed && _canvas != null);
@@ -228,7 +213,7 @@ namespace DeNelle.Onboarding
         }
 
         // =====================================================================
-        //  WO-847 wallet-first layout (Android/Seeker): Connect Wallet + Guest
+        //  The login surface (every platform): Connect Wallet + Play as Guest
         // =====================================================================
         private void BuildWalletFirst(Transform body)
         {
@@ -259,151 +244,8 @@ namespace DeNelle.Onboarding
         }
 
         // =====================================================================
-        //  WO-787/845 email layout (desktop / WebGL) - preserved verbatim
+        //  Actions — presentation only; identity logic is in LoginViewModel
         // =====================================================================
-        private void BuildEmailForm(Transform body)
-        {
-            // WO-787 Part B: Google sign-in is APK-only (owner ruling + owner F8 on the exe).
-            // The GoogleSignIn native plugin's asmdef is scoped [Android, Editor] and
-            // LoginViewModel.SignInWithGoogleAsync already fails cleanly elsewhere -- the
-            // BUTTON is simply never built off the Android target, and the remaining rows
-            // reflow over the freed space.
-#if UNITY_ANDROID
-            const bool googleRow = true;
-#else
-            const bool googleRow = false;
-#endif
-
-            var intro = ElarionUiKit.Label(body,
-                "Sign in to keep your progress across devices, or play as a guest and bind an account later.",
-                googleRow ? 0.845f : 0.83f, googleRow ? 0.915f : 0.91f,
-                ElarionUi.Parchment, ElarionUi.FontLabel,
-                TextAlignmentOptions.Center, 0.06f, 0.94f);
-            intro.textWrappingMode = TextWrappingModes.Normal;
-            intro.raycastTarget = false;
-            ElarionUiKit.FitBlock(intro);
-
-            _email = MakeInputField(body, "Email address", TMP_InputField.ContentType.EmailAddress,
-                new Vector2(0.08f, googleRow ? 0.745f : 0.72f),
-                new Vector2(0.92f, googleRow ? 0.825f : 0.80f));
-            _password = MakeInputField(body, "Password", TMP_InputField.ContentType.Password,
-                new Vector2(0.08f, googleRow ? 0.645f : 0.61f),
-                new Vector2(0.92f, googleRow ? 0.725f : 0.69f));
-
-            _status = ElarionUiKit.Label(body, "",
-                googleRow ? 0.585f : 0.545f, googleRow ? 0.63f : 0.595f,
-                ElarionUi.Parchment, ElarionUi.FontMicro,
-                TextAlignmentOptions.Center, 0.06f, 0.94f);
-            _status.raycastTarget = false;
-
-            _signIn = ElarionUiKit.BuildObsidianButton(body, "Sign In",
-                ElarionUiKit.ObsidianButtonStyle.Style2, ElarionUiKit.ObsidianButtonColor.Green,
-                new Vector2(0.08f, googleRow ? 0.475f : 0.42f),
-                new Vector2(0.92f, googleRow ? 0.555f : 0.51f), OnSignIn);
-
-            _createAccount = ElarionUiKit.BuildObsidianButton(body, "Create Account",
-                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                new Vector2(0.08f, googleRow ? 0.34f : 0.27f),
-                new Vector2(0.92f, googleRow ? 0.42f : 0.36f), OnCreateAccount);
-
-#if UNITY_ANDROID
-            _google = ElarionUiKit.BuildObsidianButton(body, "Sign in with Google",
-                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                new Vector2(0.08f, 0.205f), new Vector2(0.92f, 0.285f), OnGoogleSignIn);
-#endif
-
-            // WO-845: password recovery. GEOMETRY LAW (WO-787): the stack sits at its
-            // MinTouch capacity on the shortest live canvas — googleRow button centers are
-            // only 0.135 apart vs the ~0.131 clamp floor, so a NEW row cannot fit. The
-            // "Forgot password?" control therefore SPLITS the bottom band with Play as
-            // Guest: identical y fractions to the shipped layout, so ClampMinTouch's
-            // vertical growth profile is unchanged — zero new collision risk. Both halves
-            // stay far above the 112px touch floor horizontally on any landscape canvas.
-            _guest = ElarionUiKit.BuildObsidianButton(body, "Play as Guest",
-                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                new Vector2(0.08f, googleRow ? 0.07f : 0.12f),
-                new Vector2(0.55f, googleRow ? 0.15f : 0.21f), OnPlayAsGuest);
-
-            _forgot = ElarionUiKit.BuildObsidianButton(body, "Forgot password?",
-                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                new Vector2(0.58f, googleRow ? 0.07f : 0.12f),
-                new Vector2(0.92f, googleRow ? 0.15f : 0.21f), OnForgotPassword);
-        }
-
-        // =====================================================================
-        //  Actions — presentation only; auth logic is in FirebaseAuthService
-        // =====================================================================
-        /// <summary>
-        /// Hard ceiling on the boot-time Firebase init probe (seconds). Short on purpose:
-        /// nothing is on screen while it runs, so the cost of waiting is a blank app.
-        /// </summary>
-        private const float InitTimeoutSeconds = 12f;
-
-        /// <summary>
-        /// Hard ceiling on any ONE network sign-in / reset call (seconds). Firebase's own
-        /// Task-returning calls do not promise to complete on a captive-portal or dead-cell
-        /// connection; without a ceiling the form stays greyed out with a "Signing in..."
-        /// that never resolves.
-        /// </summary>
-        private const float NetworkTimeoutSeconds = 25f;
-
-        /// <summary>
-        /// Awaits an auth attempt with a hard ceiling, turning a HANG into an ordinary
-        /// failed <see cref="AuthOutcome"/> the normal failure path can render. Never
-        /// throws, so no caller is left busy forever.
-        /// <para>
-        /// The underlying Task is NOT cancellable (Firebase owns it), so it is handed to
-        /// <see cref="Observe"/>: it may still complete later, and an unawaited faulted
-        /// Task would otherwise surface as an UnobservedTaskException.
-        /// </para>
-        /// </summary>
-        private static async UniTask<AuthOutcome> Bounded(Task<AuthOutcome> attempt, float seconds, string what)
-        {
-            try
-            {
-                return await attempt.AsUniTask()
-                    .Timeout(TimeSpan.FromSeconds(seconds), DelayType.UnscaledDeltaTime);
-            }
-            catch (TimeoutException)
-            {
-                FlowTrace.Fail("Auth", what + " did not answer within " + (int)seconds +
-                                       "s - releasing the form (Play as Guest was live throughout).");
-                Observe(attempt);
-                return AuthOutcome.Fail(what + " timed out. Check your connection and try again, " +
-                                        "or tap Play as Guest to start now.");
-            }
-            catch (Exception e)
-            {
-                FlowTrace.Fail("Auth", what + " threw: " + e.GetType().Name + ": " + e.Message);
-                return AuthOutcome.Fail(what + " failed. Try again, or tap Play as Guest to start now.");
-            }
-        }
-
-        /// <summary>Swallow-and-log a late result so an abandoned Task can never raise
-        /// UnobservedTaskException. No UI is touched - the panel has already moved on.</summary>
-        private static async void Observe(Task attempt)
-        {
-            try { await attempt; }
-            catch (Exception e) { FlowTrace.Warn("Auth", "abandoned auth attempt ended in: " + e.Message); }
-        }
-
-        private async void OnSignIn()
-        {
-            if (!BeginAttempt(out string email, out string password)) return;
-            SetStatus("Signing in... you can still tap Play as Guest.", info: true);
-            AuthOutcome outcome = await Bounded(_vm.SignInAsync(email, password), NetworkTimeoutSeconds, "Sign-in");
-            HandleOutcome(outcome);
-        }
-
-        private async void OnCreateAccount()
-        {
-            if (!BeginAttempt(out string email, out string password)) return;
-            SetStatus("Creating your account... you can still tap Play as Guest.", info: true);
-            AuthOutcome outcome = await Bounded(_vm.SignUpAsync(email, password), NetworkTimeoutSeconds,
-                                                "Account creation");
-            HandleOutcome(outcome);
-        }
-
         /// <summary>
         /// UI failsafe ceiling on the whole wallet-connect await (seconds). Sits ABOVE
         /// WalletService's own 30s provider ceiling so the honest, specific message
@@ -414,9 +256,9 @@ namespace DeNelle.Onboarding
         /// </summary>
         private const float ConnectUiTimeoutSeconds = 35f;
 
-        // WO-847: the wallet-first primary. Honest statuses on every branch; a success
-        // resolves the same AuthOutcome shape as email sign-in (UserId = wallet address),
-        // so HandleOutcome -> Continue is byte-identical downstream.
+        // The primary — and, since WO-837-B, the ONLY identity control on the surface.
+        // Honest statuses on every branch; a success resolves an AuthOutcome whose
+        // UserId is the wallet address, and HandleOutcome -> Continue takes it from there.
         //
         // SOFTLOCK LAW: this await is bounded. Guest stays interactable throughout
         // (SetBusy never touches it), so even a hung handshake leaves a way into the game.
@@ -475,52 +317,6 @@ namespace DeNelle.Onboarding
             Continue();
         }
 
-        private async void OnGoogleSignIn()
-        {
-            if (_busy || _routed) return;
-            SetBusy(true);
-            SetStatus("Opening Google sign-in... you can still tap Play as Guest.", info: true);
-            // Longer ceiling than a plain network call: a real player is picking an account
-            // in a native overlay. UNSCALED player-loop time, so while that overlay has the
-            // foreground and Unity is paused the budget does not burn (same semantic as the
-            // wallet handshake) - this only fires on an actually dead flow.
-            AuthOutcome outcome = await Bounded(_vm.SignInWithGoogleAsync(), 60f, "Google sign-in");
-            HandleOutcome(outcome);
-        }
-
-        // WO-845: password recovery — uses whatever is in the email field; honest statuses
-        // for every branch (empty field / accepted send / mapped failure). The VM owns the
-        // auth call; this is presentation + validation only.
-        private async void OnForgotPassword()
-        {
-            if (_busy || _routed) return;
-            string email = _email != null ? _email.text.Trim() : "";
-            if (string.IsNullOrEmpty(email))
-            {
-                SetStatus("Enter your email first.", info: false);
-                return;
-            }
-            FlowTrace.Step("Auth", "forgot password tapped.");
-            SetBusy(true);
-            SetStatus("Sending reset email...", info: true);
-            AuthOutcome outcome = await Bounded(_vm.SendPasswordResetAsync(email), NetworkTimeoutSeconds,
-                                                "Reset email");
-            if (_routed) return;
-            SetBusy(false);
-            if (outcome.Success)
-                SetStatus("Reset email sent to " + MaskEmail(email) + ". Check your inbox.", info: true);
-            else
-                SetStatus(outcome.Error, info: false);
-        }
-
-        // Presentation-only mask for the status line (mirrors the service's log mask —
-        // never paint the full address on a possibly-shared screen).
-        private static string MaskEmail(string email)
-        {
-            int at = email.IndexOf('@');
-            return at <= 1 ? "*" + (at >= 0 ? email.Substring(at) : "") : email[0] + "***" + email.Substring(at);
-        }
-
         // SOFTLOCK LAW: intentionally NOT gated on _busy. The escape hatch must work even
         // while a sign-in / wallet handshake is still pending - that pending await is
         // exactly the state a stuck player is trying to escape. Only _routed (already
@@ -533,29 +329,14 @@ namespace DeNelle.Onboarding
             Continue();
         }
 
-        // Validate + lock the form for an async attempt. Returns false (and messages) if invalid/busy.
-        private bool BeginAttempt(out string email, out string password)
-        {
-            email = _email != null ? _email.text.Trim() : "";
-            password = _password != null ? _password.text : "";
-            if (_busy || _routed) return false;
-            if (string.IsNullOrEmpty(email) || string.IsNullOrEmpty(password))
-            {
-                SetStatus("Enter your email and password.", info: false);
-                return false;
-            }
-            SetBusy(true);
-            return true;
-        }
-
         private void HandleOutcome(AuthOutcome outcome)
         {
             if (_routed) return;
             if (outcome.Success)
             {
-                // IDENTITY LAW: an EMAIL/GOOGLE success binds NOTHING (Firebase = access);
-                // only the wallet path re-keys the save. View just proceeds either way.
-                FlowTrace.Step("Auth", "auth OK - continuing.");
+                // IDENTITY LAW (WO-837-B): the wallet is the ONLY identity, and the VM has
+                // already bound it. View just proceeds.
+                FlowTrace.Step("Auth", "wallet connect OK - continuing.");
                 Continue();
                 return;
             }
@@ -571,10 +352,6 @@ namespace DeNelle.Onboarding
         private void SetBusy(bool busy)
         {
             _busy = busy;
-            if (_signIn != null) _signIn.interactable = !busy;
-            if (_createAccount != null) _createAccount.interactable = !busy;
-            if (_google != null) _google.interactable = !busy;
-            if (_forgot != null) _forgot.interactable = !busy;
             if (_connectWallet != null) _connectWallet.interactable = !busy;
         }
 
@@ -606,43 +383,9 @@ namespace DeNelle.Onboarding
             if (_canvas != null) Destroy(_canvas);
         }
 
-        // =====================================================================
-        //  Input field — TMP_InputField over a rounded well (mirrors ClanChatPanel)
-        // =====================================================================
-        private static TMP_InputField MakeInputField(Transform parent, string placeholder,
-            TMP_InputField.ContentType contentType, Vector2 min, Vector2 max)
-        {
-            var host = new GameObject("Input", typeof(Image), typeof(TMP_InputField));
-            host.transform.SetParent(parent, false);
-            var rt = (RectTransform)host.transform;
-            rt.anchorMin = min; rt.anchorMax = max;
-            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
-            var bg = host.GetComponent<Image>();
-            bg.color = new Color(0f, 0f, 0f, 0.45f);
-            ElarionUiKit.ApplyRounded(bg);
-
-            var areaGo = new GameObject("TextArea", typeof(RectTransform), typeof(RectMask2D));
-            areaGo.transform.SetParent(host.transform, false);
-            var art = (RectTransform)areaGo.transform;
-            art.anchorMin = Vector2.zero; art.anchorMax = Vector2.one;
-            art.offsetMin = new Vector2(16f, 6f); art.offsetMax = new Vector2(-16f, -6f);
-
-            var text = ElarionUiKit.Label(areaGo.transform, "", 0f, 1f,
-                ElarionUi.Parchment, ElarionUi.FontBody, TextAlignmentOptions.Left, 0f, 1f);
-            var ph = ElarionUiKit.Label(areaGo.transform, placeholder, 0f, 1f,
-                ElarionUi.ParchmentDim, ElarionUi.FontBody, TextAlignmentOptions.Left, 0f, 1f);
-            ph.fontStyle = FontStyles.Italic;
-
-            var field = host.GetComponent<TMP_InputField>();
-            field.targetGraphic  = bg;
-            field.textViewport   = art;
-            field.textComponent  = text;
-            field.placeholder    = ph;
-            field.lineType       = TMP_InputField.LineType.SingleLine;
-            field.contentType    = contentType;
-            field.characterLimit = 128;
-            field.text = "";
-            return field;
-        }
+        // NOTE (WO-837-B): the MakeInputField helper (a TMP_InputField over a rounded
+        // well) was deleted with the email form — this surface has no text entry at all
+        // now. The pattern still lives in ClanChatPanel / RedeemCodePanel if a future
+        // panel needs it; do not resurrect it here for an identity field.
     }
 }
