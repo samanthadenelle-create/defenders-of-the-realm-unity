@@ -95,7 +95,7 @@
 > PROD-003 (Realm Store permanent storefront), PROD-004 (baked-twin footprint),
 > PROD-005 (default shield renders through the hero body; survives a dungeon->town port).
 
-> ## ⚠ RECONCILED 2026-08-21 (CLI): main line next free = **1134**.
+> ## ⚠ RECONCILED 2026-08-21 (CLI): main line next free = **1135**.
 > *(**UI seat (Claude UI)** minted **WO-1132** and bumped 1132 -> 1133 in this SAME edit. ⚠ minted from the CLI MAIN LINE rather than the UI block (next free 1050); no collision, but the blocks are disjoint for a reason — see the ticket. **WO-1132** = THE NIGHT
 > MARKET — Realm Pack Store presentation redesign. The store works the way a RECEIPT works: five
 > browsable SKUs of 25 as 132 px text rows in one scroll column, no art, no price relationship
@@ -185,7 +185,25 @@
 > never as BUILD STATUS** -- "under construction"/"coming soon"/"dev"/"WIP" are BANNED player-facing
 > strings and get a REGRESSION ORACLE, not a comment, because that is the rule most likely to rot.
 > Status READY TO IMPLEMENT, 3 open rulings. No code yet.)*
-> ## âš  RECONCILED 2026-08-17 (UI seat): UI seat next free = **1051**.
+> ## âš  RECONCILED 2026-08-17 (UI seat): UI seat next free = **1052**.
+> *(UI seat minted **WO-1051** and bumped 1051 -> 1052 in this SAME edit. **WO-1051** = DAILY CHEST
+> PANEL LAYOUT - the two claim buttons are authored ON TOP OF the shared Close bar. Proven as
+> ARITHMETIC, not a hunch: the CTAs sit at y 0.10-0.28 (x 0.06-0.48 / 0.52-0.94) and
+> `ElarionUiKit.DefaultCloseZone` (`:297`) is (0.360, 0.050, 0.640, 0.125), so BOTH rects intersect
+> the Close in x AND y, and being later siblings they DRAW ON TOP - burying the one exit control the
+> screen has, which matters because owner canon forbids an X for close (`:858`). ROOT CAUSE IS
+> STRUCTURAL, not a wrong number: `DailyChestController.cs:92` parents to
+> `_modal.chrome.content.transform` while every other panel prefers `layout.body` - so it authors raw
+> fractions over the whole panel with no knowledge of the frame zones. ⚠ Reparenting ALONE does not
+> fix it: the DEFAULT body floor (0.10) itself sits inside the close box, so the CTA band must also
+> be RAISED - adopt the sanctioned `FrameRaid` precedent at `:418-423`, which fixed this exact
+> collision once already. Four more source-verified defects ride along: labels overhang the body well
+> (Label defaults x 0.03/0.97 vs well 0.06/0.94); `medallionIcon: "icon_chest"` resolves to NOTHING
+> (no such sprite anywhere under Resources) on a frame declaring `hasMedallion=false`; a READY ad
+> button still wears the Gray face because only `.interactable` is toggled (also a colourblind
+> failure); and the panel is 80%x64% of canvas for two sentences. Reward values, the ad gate and the
+> UTC-day gate are explicitly NOT this ticket. File
+> `WorkOrders/WORK_ORDER_1051_daily_chest_panel_layout.md`, READY.)*
 > *(⚠ THE ROW ABOVE WAS STALE. It read "next free = 1045" while WORK_ORDER_1045_* AND
 > WORK_ORDER_1046_* both existed on disk — the 1046 mint wrote its bump into the PROSE below and
 > never updated THE ROW. That is §2 in its quietest form: the banner was wrong in exactly the way
