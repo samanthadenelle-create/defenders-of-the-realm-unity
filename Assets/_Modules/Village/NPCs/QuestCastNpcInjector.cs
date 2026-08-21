@@ -79,9 +79,11 @@ namespace DeNelle.Village
             public string Name;
             /// <summary>dialogues.json id this NPC's Talk plays.</summary>
             public string DialogueId;
-            /// <summary>Staged KayKit slug under Resources/NPCs/KayKit/ (owner-revisable one-word swap).</summary>
-            public string KayKitSlug;
-            /// <summary>People-pack body used when the KayKit slug fails to load.</summary>
+            /// <summary>Body slug, resolved by the ONE rule in KayKitNpcBody.ResolveResPath:
+            /// folder-qualified ("CraftPixPeople/NPC_King") or bare (a staged KayKit body).
+            /// Owner-revisable one-word swap, exactly like repo.npcModel.</summary>
+            public string BodySlug;
+            /// <summary>People-pack body used when the body slug fails to load.</summary>
             public string FallbackBody;
             /// <summary>Building.BuildingId this NPC stands at; null/empty = anchor to the Heart.</summary>
             public string AnchorBuildingId;
@@ -103,7 +105,14 @@ namespace DeNelle.Village
             {
                 Name = "Village Elder",
                 DialogueId = "village_elder",
-                KayKitSlug = "Cleric",
+                // PROD-002 body (owner 2026-08-20: "replace the quest kaykat for a person").
+                // NPC_King is one of only TWO CraftPix bodies no structure row claims (King, Queen
+                // - the other 12 are all spoken for), so the Elder gains a face that appears
+                // NOWHERE else in the hub. Read plainly: an older robed figure with a circlet -
+                // the most authority-carrying body in the pack, which is what "Village Elder at
+                // the Heart of Elarion" wants. He is not a king and no dialogue calls him one;
+                // the prefab name is the pack's, not a title. One-word retag if you disagree.
+                BodySlug = "CraftPixPeople/NPC_King",
                 FallbackBody = "NPCs/NPC_Peasant_Tob",
                 AnchorBuildingId = null,
                 AnchorOffset = new Vector3(-6f, 0f, -8f),
@@ -117,7 +126,12 @@ namespace DeNelle.Village
             {
                 Name = "Fenn Wildmane",
                 DialogueId = "fenn_wildmane",
-                KayKitSlug = "Farmer_B",
+                // PROD-002 body. Every CraftPix peasant is already claimed by a structure row, so
+                // a beast-handler necessarily reuses one - the ONE constraint that matters is that
+                // he must not twin the NPC he stands beside. His anchor (pet-house) wears
+                // NPC_Peasant_6, so Peasant_4 (collector_lumbermill, a resource collector out on
+                // the town edge) is the furthest-away working-man body available.
+                BodySlug = "CraftPixPeople/NPC_Peasant_4",
                 FallbackBody = "NPCs/NPC_Peasant_Mevina",
                 AnchorBuildingId = "pet-house",
                 AnchorOffset = new Vector3(5f, 0f, 2f),
@@ -256,23 +270,23 @@ namespace DeNelle.Village
         {
             using var _ = FlowTrace.Enter("QuestCast", $"SpawnMember '{m.Name}'");
 
-            // KayKit FIRST (WO-818 idiom). These two slugs are staged but un-spawned by any
-            // other injector, so seating them adds no duplicate face and no new art. Loaded by
-            // path rather than KayKitNpcBody.Load because a story NPC has no catalog row to
-            // carry repo.npcModel - the resolver's ResourcesRoot/ArmIdle are still reused.
-            string kayKitRes = KayKitNpcBody.ResourcesRoot + m.KayKitSlug;
+            // Authored slug FIRST (WO-818 idiom), resolved by the ONE shared rule
+            // (KayKitNpcBody.ResolveResPath) rather than by re-typing the folder here. Loaded by
+            // path rather than KayKitNpcBody.Load because a story NPC has no catalog row to carry
+            // repo.npcModel - the resolver's path rule and ArmIdle are still reused.
+            string slugRes = KayKitNpcBody.ResolveResPath(m.BodySlug);
             GameObject prefab = null;
-            Guard.Try("QuestCast", $"load KayKit body '{kayKitRes}'",
-                () => prefab = Resources.Load<GameObject>(kayKitRes));
-            string bodyRes = kayKitRes;
+            Guard.Try("QuestCast", $"load body '{slugRes}'",
+                () => prefab = Resources.Load<GameObject>(slugRes));
+            string bodyRes = slugRes;
             if (prefab == null)
             {
                 // Authored-but-broken slug: ONE Warn (the F8 harness captures it), then the
                 // People chain keeps the character visible - never a blank NPC.
                 FlowTrace.Warn("QuestCast",
-                    $"'{m.Name}': KayKit body '{m.KayKitSlug}' loads NULL from Resources/{kayKitRes} " +
+                    $"'{m.Name}': body '{m.BodySlug}' loads NULL from Resources/{slugRes} " +
                     $"- falling back to the People prefab '{m.FallbackBody}'.");
-                kayKitRes = null;
+                slugRes = null;
                 bodyRes = m.FallbackBody;
                 Guard.Try("QuestCast", $"load People body '{m.FallbackBody}'",
                     () => prefab = Resources.Load<GameObject>(m.FallbackBody));
@@ -308,8 +322,15 @@ namespace DeNelle.Village
 
             // WO-833: a KayKit body ships an Animator + Humanoid avatar but NO controller, so it
             // renders its bind pose ("NPC Stuck in T Pose") - arm the shared retargeted idle.
-            // People-chain bodies (kayKitRes null) keep their own animator and are never armed.
-            if (kayKitRes != null) KayKitNpcBody.ArmIdle(go, kayKitRes, "QuestCast");
+            //
+            // ⛔ ONLY a KayKit body. A CraftPix person carries its own Animator + the townsfolk
+            // controller (AC_CraftPixTownsfolk -> Supercyan common_people@idle, a CIVILIAN idle),
+            // and KayKitNpcIdle plays m-standby-idle out of the Knight's COMBAT mocap set - the
+            // hero's fighting stance. Arming a person would overwrite the calm idle with that
+            // stance, which is precisely the defect the owner named on 2026-08-20 ("they need to
+            // use ide not combat idle"). The guard is on the resolved PATH, not on the row, so a
+            // future slug retag can never re-introduce it by accident.
+            if (KayKitNpcBody.IsKayKitPath(slugRes)) KayKitNpcBody.ArmIdle(go, slugRes, "QuestCast");
 
             NormalizeToHeroHeight(go);
             NpcGroundSeat.Seat(go, pos.y);

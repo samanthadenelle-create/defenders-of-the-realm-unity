@@ -373,8 +373,12 @@ namespace DeNelle.Village
 
             // WO-833: a KayKit body ships an Animator + Humanoid avatar but NO controller,
             // so it renders its bind pose (owner F8 "NPC Stuck in T Pose") - arm the shared
-            // retargeted idle. People-chain bodies (kayKitRes null) keep their own animator.
-            if (kayKitRes != null) KayKitNpcBody.ArmIdle(go, kayKitRes, "Village");
+            // retargeted idle. ⛔ ONLY a KayKit body: Load() now returns a non-null resolvedRes for
+            // a PROD-002 "CraftPixPeople/..." slug too, and a CraftPix person already carries the
+            // townsfolk controller (civilian idle) - arming it would overwrite that with
+            // KayKitNpcIdle's m-standby-idle, the Knight's COMBAT stance (owner 2026-08-20: "they
+            // need to use ide not combat idle"). Guard on the PATH so a slug retag cannot undo it.
+            if (KayKitNpcBody.IsKayKitPath(kayKitRes)) KayKitNpcBody.ArmIdle(go, kayKitRes, "Village");
 
             NormalizeToHeroHeight(go);
             NpcGroundSeat.Seat(go, pos.y);

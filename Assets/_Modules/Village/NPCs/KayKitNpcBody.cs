@@ -52,6 +52,31 @@ namespace DeNelle.Village
         internal const string IdleControllerRes = "NPCs/KayKit/KayKitNpcIdle";
 
         /// <summary>
+        /// The ONE slug -> Resources-path rule, shared by every caller that resolves an NPC body
+        /// (catalog rows via <see cref="Load"/>, and the story cast in QuestCastNpcInjector, which
+        /// has no catalog row to carry repo.npcModel).
+        ///   bare slug      -> "NPCs/KayKit/&lt;slug&gt;"        — the pre-PROD-002 staged bodies
+        ///   contains a '/' -> "NPCs/&lt;slug&gt;"               — e.g. "CraftPixPeople/NPC_King"
+        /// Extracted so the rule has exactly one home: it was about to be re-typed at the quest-cast
+        /// call site, and a second copy is how the WO number block and the dependency table in
+        /// CLAUDE.md both went stale — the same fact in two files drifts.
+        /// </summary>
+        internal static string ResolveResPath(string slug)
+        {
+            if (string.IsNullOrWhiteSpace(slug)) return null;
+            return slug.Contains("/") ? NpcResourcesRoot + slug : ResourcesRoot + slug;
+        }
+
+        /// <summary>
+        /// True when <paramref name="resPath"/> is a staged KayKit body — the ONLY bodies that need
+        /// <see cref="ArmIdle"/>. A People-pack body ships its own Animator + controller, so arming
+        /// it would REPLACE a civilian idle with the Knight's combat standby stance
+        /// (owner, 2026-08-20: "they need to use ide not combat idle").
+        /// </summary>
+        internal static bool IsKayKitPath(string resPath) =>
+            !string.IsNullOrEmpty(resPath) && resPath.StartsWith(ResourcesRoot);
+
+        /// <summary>
         /// Load the KayKit body the catalog authors for <paramref name="catalogId"/>
         /// (repo.npcModel). Null when the row/slug is absent (quiet — People chain is the
         /// authored fallback) or when an authored slug fails to load (exactly ONE
@@ -81,7 +106,7 @@ namespace DeNelle.Village
             // (RepoProps.npcModel). Making the slug folder-qualified keeps that promise intact for
             // the purchased bodies; a parallel npcModelPack field would have made every future swap
             // a two-field edit and given the same fact two homes to disagree from.
-            string res = slug.Contains("/") ? NpcResourcesRoot + slug : ResourcesRoot + slug;
+            string res = ResolveResPath(slug);
             GameObject body = null;
             Guard.Try(system, $"load KayKit npc body '{res}'", () =>
             {
