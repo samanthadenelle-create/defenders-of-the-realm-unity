@@ -58,6 +58,7 @@ using DeNelle.Core.State;
 using DeNelle.Core.UI;
 using TMPro;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 namespace DeNelle.Onboarding
@@ -96,7 +97,14 @@ namespace DeNelle.Onboarding
         private RectTransform _stageRight;                // RIGHT — specs (rebuilt per pick)
         private Button _confirmButton;                    // footer CTA (Obsidian Green)
         private TextMeshProUGUI _confirmLabel;            // the CTA's kit label (retext per pick)
-        private Image[] _classButtonFaces;                // per-class button face (selection tint)
+        private readonly Button[] _carouselCards = new Button[2];
+        private readonly Image[] _carouselPortraits = new Image[2];
+        private readonly TextMeshProUGUI[] _carouselLabels = new TextMeshProUGUI[2];
+        private RectTransform _dotRail;
+        private Image[] _pageDots;
+        private Vector2 _swipeStart;
+        private bool _trackingSwipe;
+        private const float SwipeThresholdPx = 72f;
 
         private bool _built;
         private bool _hasSelection;
@@ -140,7 +148,15 @@ namespace DeNelle.Onboarding
             _chrome = null;
             _confirmButton = null;
             _confirmLabel = null;
-            _classButtonFaces = null;
+            _dotRail = null;
+            _pageDots = null;
+            for (int i = 0; i < _carouselCards.Length; i++)
+            {
+                _carouselCards[i] = null;
+                _carouselPortraits[i] = null;
+                _carouselLabels[i] = null;
+            }
+            _trackingSwipe = false;
             _built = false;
         }
 
@@ -234,11 +250,11 @@ namespace DeNelle.Onboarding
             // horizontal breathing on its dense lore/stats/signature/skills stack — the slack is
             // taken from the center 3D-preview stage, which can afford it. Vertical layout below is
             // left intact (FitBlock/FitLine already guard overflow) to stay conservative.
-            _classColumn = MakeZone(body, "ClassColumn", new Vector2(0.000f, 0.145f), new Vector2(0.205f, 0.920f));
-            _stageCenter = MakeZone(body, "HeroStage",   new Vector2(0.245f, 0.145f), new Vector2(0.555f, 0.920f));
+            _classColumn = MakeZone(body, "HeroCarousel", new Vector2(0.000f, 0.145f), new Vector2(0.575f, 0.920f));
+            _stageCenter = MakeZone(_classColumn, "HeroStage", new Vector2(0.205f, 0.10f), new Vector2(0.795f, 0.98f));
             _stageRight  = MakeZone(body, "SpecsPanel",  new Vector2(0.595f, 0.145f), new Vector2(1.000f, 0.920f));
 
-            BuildClassColumn();
+            BuildCarousel();
 
             // ── Confirm CTA — Obsidian GREEN, the one exit. Anchored in the RESERVED
             // bottom band of the body well (not the thin filigree footer strip) so it is
@@ -272,20 +288,20 @@ namespace DeNelle.Onboarding
             // V — prove the screen built: chrome + all three stage containers + the
             // class buttons + the CTA exist. A built-but-empty hero-select is a
             // dead-end screen, so a missing piece Fails.
-            int classButtons = _classColumn != null ? CountButtons(_classColumn) : 0;
+            int carouselButtons = _classColumn != null ? CountButtonsRecursive(_classColumn) : 0;
             bool stageOk = _stageCenter != null && _stageRight != null
                            && _stageCenter.childCount > 0 && _stageRight.childCount > 0;
             bool ctaOk = _confirmButton != null;
-            if (classButtons != HeroCatalog.Heroes.Length || !stageOk || !ctaOk)
+            if (carouselButtons < 4 || !stageOk || !ctaOk)
             {
                 FlowTrace.Fail("Onboarding",
-                    $"BuildScreen VERIFY FAILED — classButtons={classButtons}/{HeroCatalog.Heroes.Length} " +
+                    $"BuildScreen VERIFY FAILED — carouselButtons={carouselButtons}/4+ " +
                     $"stageOk={stageOk} ctaOk={ctaOk}. Hero-select built but EMPTY/incomplete (dead-end screen).");
             }
             else
             {
                 FlowTrace.Step("Onboarding",
-                    $"BuildScreen VERIFY ok — classButtons={classButtons} stageOk={stageOk} ctaOk={ctaOk}.");
+                    $"BuildScreen VERIFY ok — carouselButtons={carouselButtons} pooledCards=2 stageOk={stageOk} ctaOk={ctaOk}.");
             }
         }
 
@@ -300,56 +316,84 @@ namespace DeNelle.Onboarding
         /// button is tappable (locked classes preview into the stage); only the
         /// playable class can be confirmed.
         /// </summary>
-        private void BuildClassColumn()
+        private void BuildCarousel()
         {
-            var head = ElarionUiKit.Label(_classColumn, "CLASSES",
-                0.955f, 1.00f, ElarionUi.Gilt, ElarionUi.FontMicro,
-                TextAlignmentOptions.Center, 0f, 1f, spacing: 2f, bold: true);
-            head.raycastTarget = false;
-            FitLine(head);
+            if (_classColumn == null) return;
 
+            var gesture = ElarionUiKit.AddImage(_classColumn, "SwipeSurface", Vector2.zero, Vector2.one,
+                new Color(0f, 0f, 0f, 0f), rounded: false);
+            gesture.transform.SetAsFirstSibling();
+            var trigger = gesture.AddComponent<EventTrigger>();
+            AddTrigger(trigger, EventTriggerType.BeginDrag, e => BeginSwipe((PointerEventData)e));
+            AddTrigger(trigger, EventTriggerType.EndDrag, e => EndSwipe((PointerEventData)e));
+
+            BuildPreviewCard(0, new Vector2(0.005f, 0.24f), new Vector2(0.205f, 0.79f));
+            BuildPreviewCard(1, new Vector2(0.795f, 0.24f), new Vector2(0.995f, 0.79f));
+
+            ElarionUiKit.BuildObsidianButton(_classColumn, "PREV",
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
+                new Vector2(0.015f, 0.02f), new Vector2(0.205f, 0.15f), () => StepCarousel(-1));
+            ElarionUiKit.BuildObsidianButton(_classColumn, "NEXT",
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
+                new Vector2(0.795f, 0.02f), new Vector2(0.985f, 0.15f), () => StepCarousel(1));
+            _dotRail = MakeZone(_classColumn, "PageDots", new Vector2(0.27f, 0.035f), new Vector2(0.73f, 0.125f));
             int n = HeroCatalog.Heroes.Length;
-            _classButtonFaces = new Image[n];
-
-            // Stack the buttons down the column: each row gets an equal band under
-            // the header, with a slice reserved for the locked "Coming soon" tag.
-            const float top = 0.94f;
-            const float bottom = 0.02f;
-            float rowH = (top - bottom) / Mathf.Max(1, n);
-
+            _pageDots = new Image[n];
+            const float dot = 0.08f;
+            float total = n * dot + Mathf.Max(0, n - 1) * dot;
+            float start = (1f - total) * 0.5f;
             for (int i = 0; i < n; i++)
             {
-                HeroCardInfo info = HeroCatalog.Heroes[i];
-                bool playable = IsPlayable(info.Hero);
-                float y1 = top - i * rowH;
-                float y0 = y1 - rowH;
-
-                // Button band (upper ~62% of the row); tag band beneath it.
-                var btnMin = new Vector2(0.03f, y0 + rowH * 0.34f);
-                var btnMax = new Vector2(0.97f, y1 - rowH * 0.10f);
-
-                int captured = i;   // capture the slot for the click handler
-                var btn = ElarionUiKit.BuildObsidianButton(_classColumn,
-                    ClassLabelFor(info),
-                    ElarionUiKit.ObsidianButtonStyle.Style1,
-                    playable ? ElarionUiKit.ObsidianButtonColor.Yellow
-                             : ElarionUiKit.ObsidianButtonColor.Gray,
-                    btnMin, btnMax, () => PopulateStage(captured));
-                _classButtonFaces[i] = btn != null ? btn.image : null;
-                if (btn != null)
-                    FitLine(btn.GetComponentInChildren<TextMeshProUGUI>(true));
-
-                if (!playable)
-                {
-                    var tag = ElarionUiKit.Label(_classColumn, "Coming soon",
-                        y0 + rowH * 0.16f, y0 + rowH * 0.32f,
-                        ElarionUi.ParchmentDim, ElarionUi.FontMicro,
-                        TextAlignmentOptions.Center, 0.05f, 0.95f);
-                    tag.fontStyle = FontStyles.Italic;
-                    tag.raycastTarget = false;
-                    FitLine(tag);
-                }
+                float x = start + i * dot * 2f;
+                var marker = ElarionUiKit.AddImage(_dotRail, "PageDot_" + i,
+                    new Vector2(x, 0.30f), new Vector2(x + dot, 0.70f), Color.gray, rounded: true);
+                _pageDots[i] = marker.GetComponent<Image>();
+                if (_pageDots[i] != null) _pageDots[i].raycastTarget = false;
             }
+        }
+
+        private void BuildPreviewCard(int slot, Vector2 min, Vector2 max)
+        {
+            var card = ElarionUiKit.BuildObsidianButton(_classColumn, "",
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
+                min, max, () => StepCarousel(slot == 0 ? -1 : 1));
+            _carouselCards[slot] = card;
+            if (card == null) return;
+
+            var portrait = new GameObject("Portrait", typeof(RectTransform), typeof(Image));
+            portrait.transform.SetParent(card.transform, false);
+            var rt = (RectTransform)portrait.transform;
+            rt.anchorMin = new Vector2(0.08f, 0.22f); rt.anchorMax = new Vector2(0.92f, 0.94f);
+            rt.offsetMin = rt.offsetMax = Vector2.zero;
+            _carouselPortraits[slot] = portrait.GetComponent<Image>();
+            _carouselPortraits[slot].preserveAspect = true;
+            _carouselPortraits[slot].raycastTarget = false;
+            _carouselLabels[slot] = ElarionUiKit.Label(card.transform, "", 0.03f, 0.22f,
+                ElarionUi.Parchment, ElarionUi.FontMicro, TextAlignmentOptions.Center, 0.03f, 0.97f, bold: true);
+            _carouselLabels[slot].raycastTarget = false;
+            FitLine(_carouselLabels[slot]);
+        }
+
+        private static void AddTrigger(EventTrigger trigger, EventTriggerType type, System.Action<BaseEventData> action)
+        {
+            var entry = new EventTrigger.Entry { eventID = type };
+            entry.callback.AddListener(e => action(e));
+            trigger.triggers.Add(entry);
+        }
+
+        private void BeginSwipe(PointerEventData e) { _trackingSwipe = true; _swipeStart = e.position; }
+
+        private void EndSwipe(PointerEventData e)
+        {
+            if (!_trackingSwipe) return;
+            _trackingSwipe = false;
+            float dx = e.position.x - _swipeStart.x;
+            if (Mathf.Abs(dx) >= SwipeThresholdPx) StepCarousel(dx < 0f ? 1 : -1);
+        }
+
+        private void StepCarousel(int delta)
+        {
+            if (HeroCatalog.Heroes.Length > 0) PopulateStage(_shownIndex + delta);
         }
 
         /// <summary>
@@ -401,7 +445,7 @@ namespace DeNelle.Onboarding
             }
 
             RefreshConfirm(playable);
-            RefreshClassHighlight();
+            RefreshCarouselChrome();
         }
 
         /// <summary>CENTER — the focal hero portrait in a dark well + name/role beneath.</summary>
@@ -409,6 +453,9 @@ namespace DeNelle.Onboarding
         {
             // Portrait well (dark recess) filling the upper ~78% of the stage.
             var well = ElarionUiKit.Well(_stageCenter, new Vector2(0.02f, 0.22f), new Vector2(0.98f, 1.00f));
+            var swipeTrigger = well.GetComponent<EventTrigger>() ?? well.AddComponent<EventTrigger>();
+            AddTrigger(swipeTrigger, EventTriggerType.BeginDrag, e => BeginSwipe((PointerEventData)e));
+            AddTrigger(swipeTrigger, EventTriggerType.EndDrag, e => EndSwipe((PointerEventData)e));
 
             // The hero image itself — sprite-first, texture fallback, glyph last.
             var portraitGo = new GameObject("HeroPortrait", typeof(RectTransform));
@@ -614,21 +661,39 @@ namespace DeNelle.Onboarding
         {
             if (_confirmButton == null) return;
             if (_confirmLabel != null)
-                _confirmLabel.text = playable ? FallbackLocale(DiveKey, "Enter Elarion") : "Coming Soon";
+            {
+                string heroName = HeroCatalog.Heroes.Length > 0
+                    ? CanonStrings.Locale(HeroCatalog.Heroes[_shownIndex].NameKey) : "Hero";
+                if (string.IsNullOrEmpty(heroName)) heroName = "Hero";
+                _confirmLabel.text = playable ? "Choose " + heroName : "Coming Soon";
+                FitLine(_confirmLabel);
+            }
             _confirmButton.interactable = playable && _hasSelection;
         }
 
-        /// <summary>Brightens the on-screen class's button face, dims the rest.</summary>
-        private void RefreshClassHighlight()
+        private void RefreshCarouselChrome()
         {
-            if (_classButtonFaces == null) return;
-            for (int i = 0; i < _classButtonFaces.Length; i++)
+            int n = HeroCatalog.Heroes.Length;
+            if (n == 0) return;
+            for (int slot = 0; slot < 2; slot++)
             {
-                if (_classButtonFaces[i] == null) continue;
-                _classButtonFaces[i].color = (i == _shownIndex)
-                    ? Color.white
-                    : new Color(0.62f, 0.62f, 0.62f, 1f);
+                int index = (_shownIndex + (slot == 0 ? -1 : 1) + n) % n;
+                HeroCardInfo info = HeroCatalog.Heroes[index];
+                if (_carouselPortraits[slot] != null)
+                {
+                    _carouselPortraits[slot].sprite = Resources.Load<Sprite>($"HeroPortraits/{SlugFor(info.Hero)}");
+                    _carouselPortraits[slot].color = new Color(0.58f, 0.58f, 0.58f, 0.82f);
+                    _carouselPortraits[slot].enabled = _carouselPortraits[slot].sprite != null;
+                }
+                if (_carouselLabels[slot] != null)
+                    _carouselLabels[slot].text = ClassLabelFor(info);
             }
+
+            if (_pageDots == null) return;
+            for (int i = 0; i < _pageDots.Length; i++)
+                if (_pageDots[i] != null)
+                    _pageDots[i].color = i == _shownIndex
+                        ? ElarionUi.Gilt : new Color(0.40f, 0.40f, 0.40f, 1f);
         }
 
         // =====================================================================
@@ -828,12 +893,16 @@ namespace DeNelle.Onboarding
         }
 
         /// <summary>Counts the Button components directly under a container (verify).</summary>
-        private static int CountButtons(Transform t)
+        private static int CountButtonsRecursive(Transform t)
         {
             if (t == null) return 0;
             int n = 0;
             for (int i = 0; i < t.childCount; i++)
-                if (t.GetChild(i).GetComponent<Button>() != null) n++;
+            {
+                Transform child = t.GetChild(i);
+                if (child.GetComponent<Button>() != null) n++;
+                n += CountButtonsRecursive(child);
+            }
             return n;
         }
     }

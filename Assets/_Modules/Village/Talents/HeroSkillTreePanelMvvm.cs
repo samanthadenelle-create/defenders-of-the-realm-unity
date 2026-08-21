@@ -1264,7 +1264,7 @@ namespace DeNelle.Village.Talents
             // the top band (y 0.72-0.96), the cost pip and the padlock own bottom-RIGHT
             // (x 0.68-0.98), and the art well is 0.14-0.86. Position is half the cue.
             hr.anchorMin = new Vector2(0.03f, 0.03f);
-            hr.anchorMax = new Vector2(0.29f, 0.29f);
+            hr.anchorMax = new Vector2(0.48f, 0.27f);
             hr.offsetMin = Vector2.zero; hr.offsetMax = Vector2.zero;
 
             var disc = new GameObject("Disc", typeof(Image));
@@ -1277,24 +1277,11 @@ namespace DeNelle.Village.Talents
             dImg.color = NextMarkerDisc;
             dImg.raycastTarget = false;
 
-            MarkerBar(host.transform, new Vector2(0.38f, 0.46f), new Vector2(15f, 4f), 48f, NextMarkerInk);
-            MarkerBar(host.transform, new Vector2(0.62f, 0.46f), new Vector2(15f, 4f), -48f, NextMarkerInk);
-        }
-
-        /// <summary>One rotated bar of a badge glyph (shape primitive, font-free).</summary>
-        private static void MarkerBar(Transform parent, Vector2 anchor, Vector2 size, float rotZ, Color ink)
-        {
-            var go = new GameObject("MarkerBar", typeof(Image));
-            go.transform.SetParent(parent, false);
-            var rt = (RectTransform)go.transform;
-            rt.anchorMin = rt.anchorMax = anchor;
-            rt.pivot = new Vector2(0.5f, 0.5f);
-            rt.anchoredPosition = Vector2.zero;
-            rt.sizeDelta = size;
-            rt.localRotation = Quaternion.Euler(0f, 0f, rotZ);
-            var img = go.GetComponent<Image>();
-            img.color = ink;
-            img.raycastTarget = false;
+            var label = ElarionUiKit.Label(host.transform, "NEXT", 0.08f, 0.92f,
+                NextMarkerInk, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center,
+                0.08f, 0.92f, spacing: 1f, bold: true);
+            label.raycastTarget = false;
+            ElarionUiKit.FitSingleLine(label, 0f, ElarionUi.FontMicro);
         }
 
         /// <summary>Tiny padlock in the corner — locked is "dim art + small glyph", not a wall of UI.</summary>

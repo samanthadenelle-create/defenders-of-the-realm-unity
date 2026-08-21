@@ -492,15 +492,32 @@ namespace DeNelle.Village.UI
                 bool selected = _vm != null && (int)_vm.Tab == i;
                 float x = i * (w + gap);
 
-                // Selection is carried by the LABEL as well as the face colour: a selected tab
-                // reads "[Buildings]". Colour alone would be invisible to the owner.
-                string text = selected ? "[" + labels[i] + "]" : labels[i];
-                var btn = ElarionUiKit.BuildObsidianButton(_tabsHost, text,
+                var btn = ElarionUiKit.BuildObsidianButton(_tabsHost, labels[i],
                     ElarionUiKit.ObsidianButtonStyle.Style1,
                     selected ? ElarionUiKit.ObsidianButtonColor.Yellow : ElarionUiKit.ObsidianButtonColor.Gray,
                     new Vector2(x, 0.02f), new Vector2(x + w, 0.98f),
                     () => _vm?.SelectTab((ManageTab)index));
                 ElarionUiKit.ClampMinTouch(btn);
+                if (btn != null)
+                {
+                    btn.name = "Tab_" + labels[i] + (selected ? "_Selected" : "");
+                    if (selected)
+                    {
+                        // A stable underline is the non-colour selection signal. It reads as a
+                        // conventional tab without adding brackets or another word to the label.
+                        var underline = new GameObject("SelectedUnderline", typeof(Image));
+                        underline.transform.SetParent(btn.transform, false);
+                        var ur = (RectTransform)underline.transform;
+                        ur.anchorMin = new Vector2(0.16f, 0.04f);
+                        ur.anchorMax = new Vector2(0.84f, 0.04f);
+                        ur.pivot = new Vector2(0.5f, 0f);
+                        ur.sizeDelta = new Vector2(0f, 6f);
+                        ur.anchoredPosition = Vector2.zero;
+                        var ui = underline.GetComponent<Image>();
+                        ui.color = ElarionUi.Gold;
+                        ui.raycastTarget = false;
+                    }
+                }
             }
         }
 

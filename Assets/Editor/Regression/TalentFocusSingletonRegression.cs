@@ -368,9 +368,9 @@ namespace DeNelle.Editor.Regression
                         failures.Add("[source] BuildNextTrackMarker references '" + banned + "' - the per-track " +
                                      "cue must be SHAPE and POSITION carried at normal size; it may not resize " +
                                      "the plate or grow a ring outside its bounds");
-                if (Regex.Matches(body, @"MarkerBar\s*\(").Count < 2)
-                    failures.Add("[source] BuildNextTrackMarker no longer draws its chevron from bars - a cue " +
-                                 "carried by tint alone is hue-only and fails the colourblind law");
+                if (body.IndexOf("ElarionUiKit.Label", StringComparison.Ordinal) < 0)
+                    failures.Add("[source] BuildNextTrackMarker no longer draws its explicit NEXT word badge - " +
+                                 "the frontier cue must be text/shape carried, never tint-only or arrow-only");
             }
 
             notes.Add("source laws checked on " + ViewSrc + " (comments + string literals stripped)");
