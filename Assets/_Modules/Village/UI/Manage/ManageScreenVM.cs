@@ -603,9 +603,9 @@ namespace DeNelle.Village.UI
                 string jobKey = Buildings.Progression.PlacedUpgradeKey.Compose(
                     placed.itemId, placed.cellX, placed.cellZ);
                 FlowTrace.Step("Manage", "defense row '" + placed.itemId + "' L" + level
-                    + "/" + ceiling + " -> opens placed key '" + jobKey + "'");
-                AddBrowseRow(NameOf(entry, placed.itemId) + " -> L" + (level + 1), cost, "Open",
-                             () => OpenUpgradePanel(jobKey));
+                    + "/" + ceiling + " -> inline placed key '" + jobKey + "'");
+                AddBrowseRow(NameOf(entry, placed.itemId) + " -> L" + (level + 1), cost, "Upgrade",
+                             () => UpgradePlaced(jobKey));
             }
         }
 
@@ -748,10 +748,12 @@ namespace DeNelle.Village.UI
                 var def = BuildingTierCatalog.Find(ladderId);
                 string name = (def != null && !string.IsNullOrEmpty(def.DisplayName)) ? def.DisplayName : ladderId;
                 var cost = new CoreCost { wood = next.CostWood, food = next.CostFood, crystals = next.CostCrystal };
-                // The CTA opens the panel on the LADDER id — the same id BuildingUpgradeVM would
-                // resolve the placed id to anyway, so the row and the panel can never disagree.
+                // Upgrade against the ladder id so the inline row uses the same authoritative
+                // progression identity as the detailed building-management view.
                 string rowId = ladderId;                                 // captured by the CTA closure
-                AddBrowseRow(Ascii(name) + " -> T" + next.Tier, cost, "Open", () => OpenUpgradePanel(rowId));
+                int targetTier = next.Tier;
+                AddBrowseRow(Ascii(name) + " -> T" + targetTier, cost, "Upgrade",
+                    () => UpgradeBuilding(rowId, targetTier));
                 rows++;
             }
 
@@ -1227,6 +1229,32 @@ namespace DeNelle.Village.UI
         {
             if (!PanelRouter.Open(PanelId.BuildingUpgrade, id))
                 FlowTrace.Warn("Manage", $"BuildingUpgrade opener not registered — cannot drill into '{id}'.");
+        }
+
+        private void UpgradePlaced(string jobKey)
+        {
+            using var _ = FlowTrace.Enter("Manage", $"Placed upgrade CTA '{jobKey}'");
+            var result = Buildings.Progression.PlacedStructureUpgradeService.TryStart(jobKey);
+            Notice = result.Success
+                ? (result.Outcome == Buildings.Progression.PlacedUpgradeOutcome.Queued
+                    ? "Upgrade queued."
+                    : "Upgrade started.")
+                : Ascii(string.IsNullOrEmpty(result.Message)
+                    ? "Could not start that upgrade."
+                    : result.Message);
+            NoticeIsBrokeCase = false;
+            Rebuild();
+        }
+
+        private void UpgradeBuilding(string buildingId, int targetTier)
+        {
+            using var _ = FlowTrace.Enter("Manage", $"Building upgrade CTA '{buildingId}' -> T{targetTier}");
+            bool started = Buildings.Progression.BuildingUpgradeService.TryUpgrade(buildingId, targetTier);
+            Notice = started
+                ? "Upgrade started."
+                : "Could not start that upgrade - check requirements and resources.";
+            NoticeIsBrokeCase = false;
+            Rebuild();
         }
 
         /// <summary>
