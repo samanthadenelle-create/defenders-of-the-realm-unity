@@ -467,10 +467,20 @@ namespace DeNelle.Village
         // ruling that is not a matter of taste.
         [SerializeField] private float _sheatheLongAxisSign = -1f;
         // Body-space offset for the SHEATHED off-hand (shield) — see _sheatheWeaponLocalPos for the
-        // frame. It sits on the OPPOSITE hip from the weapon (ResolveSheatheSocket owns which), and
-        // it is pushed further out (0.26) than the sword because the live default shield MEASURES
-        // 0.72 m across: at the sword's 0.15 its inner half would be inside the leg. The measured
-        // number is the reason for the number.
+        // frame. It sits on the OPPOSITE hip from the weapon (ResolveSheatheSocket owns which).
+        //
+        // ⚠ WHAT THIS NUMBER MEANS CHANGED ON 2026-08-20: since ApplyOffHandCentreOnSocket it
+        // places the plate's RENDERED CENTRE, not its grip origin. Before that it placed the origin,
+        // which for a grip-at-origin shield is the plate's bottom edge — so the plate hung upward
+        // and the same 0.26 put it at the hero's chest.
+        // ⚠ AND THE OLD JUSTIFICATION WAS MEASURED ON A STALE FIGURE. It read: "pushed further out
+        // (0.26) than the sword because the live default shield MEASURES 0.72 m across: at the
+        // sword's 0.15 its inner half would be inside the leg." The live plate measures
+        // 0.512 x 0.63 x 0.161 in mesh local and renders ~0.36 m wide on the hero (KnightGearProof
+        // capture) — the 0.72 was the SHARED-SOCKET era's world AABB of a differently seated prop.
+        // 0.26 still stands, but for the CURRENT reason: a ~0.36 m plate centred 0.26 m out has its
+        // inner edge ~0.08 m from the body axis, i.e. resting against the thigh rather than floating
+        // beside it. Re-measure before re-tuning; do not inherit either number on faith.
         [SerializeField] private Vector3 _sheatheOffHandLocalPos   = new Vector3(0.26f, 0f, -0.05f);
         // AUTHORED CORRECTION (§4 sanctioned manual nudge, owner live felt-tune 2026-07-04 — manual=true,
         // never auto-overwritten): sheathed shield-on-back rotation. Base (0,90,12); owner Z+=180 →
@@ -2521,8 +2531,9 @@ namespace DeNelle.Village
                         CompensateParentScale(offT, _offHandAuthoredScale,
                             SeatSubject("off-hand", _currentOffHandId, _currentOffHandMeshKey),
                             ref _offHandCompState);
-                    offT.localPosition = ComputeSheathLocalPosition(
+                    Vector3 offBaseLocal = ComputeSheathLocalPosition(
                         sheatheOff, _sheatheOffHandLocalPos, SheatheSideOff);
+                    offT.localPosition = offBaseLocal;
                     // DE-BAND-AID NOTE (2026-07-07): _sheatheOffHandLocalEuler (the hand-tuned magic
                     // euler, owner Z+=180 correction 2026-07-04) is now only the DEFAULT under the
                     // @sheathed offset seam — an owner-authored "<meshKey>@sheathed" registry entry
@@ -2531,6 +2542,29 @@ namespace DeNelle.Village
                     // WO-1123: DERIVED when the geometry answers, else the shipped constant — one
                     // method so this pose and the Seating Editor preview can never disagree.
                     offT.localRotation = ComputeSheathedOffHandRotation(sheatheOff);
+                    // ── CENTRE THE PLATE ON THE HIP, don't hang it BY ITS HANDLE ─────────────
+                    // MEASURED, 2026-08-20 (Builds/KnightGearProof/): every angle above read
+                    // perfect — "faceOffOutward=0deg longTiltFromVertical=0deg" — and the shield
+                    // still floated at CHEST height, clear of the body, with grey backdrop visible
+                    // between it and the torso. The angles were never the problem. The POSITION was,
+                    // for a reason no euler can express:
+                    //
+                    //   fantasy_shield localBounds c=(0, 0.315, 0.035) s=(0.512, 0.63, 0.161)
+                    //
+                    // It is a NATIVE prop, so its origin is its GRIP — and its grip is at the plate's
+                    // BOTTOM EDGE. Seating the origin at the hip therefore hangs the whole 0.63 m
+                    // plate UPWARD from the hip, putting its centre ~0.39 m up: the chest. The
+                    // capture's own numbers said it plainly, worldPos=(0.24, 0.85, -0.11) against
+                    // worldBounds c=(0.29, 1.24, -0.12).
+                    //
+                    // Grip-at-origin is exactly RIGHT for the sword — hilt at the belt, blade
+                    // hanging down the thigh IS the owner's "inverted" — which is why this shift is
+                    // deliberately applied to the OFF HAND ONLY. A shield has no hilt to hang from;
+                    // what belongs at the hip is the plate's middle. So: shift by the prop's own
+                    // origin-to-rendered-centre vector, expressed in the socket's frame. Derived per
+                    // rig from the live mesh every time, never a typed constant — a differently
+                    // pivoted shield self-corrects instead of needing a new magic number.
+                    ApplyOffHandCentreOnSocket(offT, sheatheOff, offBaseLocal);
                     ApplySheathedOffset(offT, _currentOffHandMeshKey);
                     RecordOffHandSeatWrite("ApplyHoldPose.sheathed");   // WO-994 tripwire
                 }
@@ -2631,7 +2665,28 @@ namespace DeNelle.Village
             //
             // Throttle key includes meshKey + source, so a CHANGE (different weapon, or explicit
             // flipping to fallback) still prints promptly instead of being swallowed for a second.
-            if (source == SheathedOffsetSource.Explicit)
+            if (source == SheathedOffsetSource.Explicit && fo.fullOverride)
+                // ⚠ WARN, NOT STEP — AN ABSOLUTE SHEATHED ROW DISCARDS THE DERIVED HIP POSE.
+                // Proven 2026-08-20 by the KnightGearProof capture: ComputeSheathRotation had just
+                // logged the ruled pose for the starter sword ("tiltFromVertical=0deg
+                // longAxisDotUp=-1"), and the very next line was this one applying the SHIPPED
+                // 'sword_A@sheathed' row (pos=(0.23,-0.14,0.12) rot=(180,-28,-51) full=True) — an
+                // absolute pose authored in the RETIRED spine/back socket's frame, whose -28 is
+                // literally the retired baldric diagonal. The result on screen was a sword hanging
+                // diagonally, off the body, on the WRONG hip, with nothing in the source looking
+                // wrong. Those two shipped rows were deleted; this line is why the next one will be
+                // found in one read instead of a night. Absolute means absolute: it replaces
+                // position AND rotation, so it is only ever valid in the frame it was authored in.
+                // ONCE, not Warn-every-frame: ApplyHoldPose re-asserts this method at frame rate, and
+                // the block above this one exists because a per-frame diagnostic here already blinded
+                // three of the owner's F8 captures. First hit per mesh key is all a reader needs.
+                FlowTrace.Once("Offset", $"sheathed-absolute-{meshKey}",
+                    $"⚠ sheathed ABSOLUTE override '{meshKey}{SheathedKeySuffix}' applied: " +
+                    $"pos={fo.pos} rot={fo.eulerRot} full=True — this REPLACES the derived hip pose. " +
+                    "If it was authored before the 2026-08-20 hip ruling it is expressed in the " +
+                    "retired back-socket frame and the carry will read wrong; re-author it in the " +
+                    "Seating Editor (Sheathed mode) or delete the row to let the derivation stand.");
+            else if (source == SheathedOffsetSource.Explicit)
                 FlowTrace.Throttle("Offset", $"sheathed-explicit-{meshKey}", 1f,
                     $"sheathed offset '{meshKey}{SheathedKeySuffix}' applied: " +
                     $"pos={fo.pos} rot={fo.eulerRot} full={fo.fullOverride}");
@@ -2838,6 +2893,42 @@ namespace DeNelle.Village
                  "owner-ruled hip carry. The pose math is unchanged (it is body-derived); only the " +
                  "attach height is wrong. Fix the rig's humanoid Hips mapping, not this code.");
             return go.transform;
+        }
+
+        /// <summary>
+        /// Slide the SHEATHED off-hand so its RENDERED CENTRE — not its grip origin — sits where
+        /// <see cref="ComputeSheathLocalPosition"/> just put it. See the call site for why the
+        /// off-hand needs this and the main hand must never get it.
+        ///
+        /// Uses <c>Renderer.bounds.CENTER</c>, which is a world POINT and therefore basis-safe.
+        /// It deliberately does NOT touch <c>bounds.extents</c>: re-expressing a world AABB's
+        /// extents in another frame smears a rotated box and reorders its axes — the defect fixed
+        /// in WeaponOrientHelper.TryLocalBounds on 2026-08-20.
+        ///
+        /// ⛔ IT TAKES <paramref name="baseLocalPos"/> AND *ASSIGNS*. IT MUST NEVER SUBTRACT.
+        /// The first cut did `grip.localPosition -= shiftLocal` and called itself idempotent in its
+        /// own doc comment. It is not, and the reasoning was plainly wrong: the plate is RIGIDLY
+        /// parented, so moving the grip moves the plate with it and `bounds.center - grip.position`
+        /// comes back IDENTICAL on the next call — every re-assert subtracts the same shift again.
+        /// SheathePoseRegression P1b caught it immediately (0 -> 1.303 m after two extra calls), and
+        /// ApplyHoldPose re-asserts this pose EVERY FRAME, so shipped it would have walked the
+        /// shield off the hero within a second of standing in town — a drift no screenshot taken on
+        /// frame one could ever show. Assigning from the seat's own base position is idempotent by
+        /// construction: the same inputs always produce the same result.
+        /// </summary>
+        private void ApplyOffHandCentreOnSocket(Transform grip, Transform socket, Vector3 baseLocalPos)
+        {
+            if (grip == null || socket == null) return;
+            Renderer r = grip.GetComponentInChildren<Renderer>();
+            if (r == null) { grip.localPosition = baseLocalPos; return; }
+            Vector3 originToCentreWorld = r.bounds.center - grip.position;
+            if (originToCentreWorld.sqrMagnitude < 1e-8f) { grip.localPosition = baseLocalPos; return; }
+            Vector3 shiftLocal = socket.InverseTransformVector(originToCentreWorld);
+            grip.localPosition = baseLocalPos - shiftLocal;
+            FlowTrace.Throttle("Equip", "offhand-centre-" + (_currentOffHandMeshKey ?? "?"), 5f,
+                $"sheathed off-hand centred on the hip: '{_currentOffHandMeshKey}' origin->renderedCentre " +
+                $"was {originToCentreWorld} (world), shifted {shiftLocal} in socket '{socket.name}'. " +
+                "A grip-at-origin shield otherwise hangs its whole plate UPWARD from the hip.");
         }
 
         /// <summary>

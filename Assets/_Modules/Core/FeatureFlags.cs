@@ -815,10 +815,31 @@ namespace DeNelle.Core
         /// carry arbitrarily). ON = the 0492d7dc behavior (position + rotation compose) as the
         /// BACKUP if position-only doesn't carry the town fix. Explicit @sheathed entries are
         /// identical under both. PlayerPrefs "ff.sheathdrawnrot" = 0 to flip back to pos-only.
-        /// 2026-07-07 owner A/B: default ON — pos-only preserved the exact plank pose she flagged
-        /// (felt-verdict from flag_00 10:25); trying the full compose next. Toggle lives in the
-        /// OwnerDevToolsOverlay flag list for live comparison.</summary>
-        public static bool SheathedDrawnRotFallback => Get("sheathdrawnrot", defaultOn: true);
+        /// ⛔ THE DEFAULT IS BACK TO **OFF** (2026-08-20) — and the line that used to sit here is the
+        /// reason it has to be written this loudly. It read: "2026-07-07 owner A/B: default ON —
+        /// pos-only preserved the exact plank pose she flagged (felt-verdict from flag_00 10:25);
+        /// trying the full compose next." That is an EXPERIMENT'S default, left switched on after
+        /// the experiment ended — and the pose it was being A/B'd against, the diagonal BACK carry,
+        /// was itself retired six weeks later by the owner's 2026-08-20 hip ruling. So the flag went
+        /// on defending a carry that no longer exists.
+        ///
+        /// WHAT IT COST, measured on the live Knight (Builds/KnightGearProof/, play-mode capture):
+        ///   [Flow:Equip]  sheathed long axis ... tiltFromVertical=0deg longAxisDotUp=-1   <- ruled
+        ///   [Flow:Offset] sheathed FALLBACK (drawn 'sword_A' on back pose):
+        ///                 pos=(0.01,0.03,-0.01) rot=(117.00,-2.00,110.00)                <- undone
+        /// ComputeSheathRotation had just DERIVED the exact pose the owner asked for, and this flag
+        /// composed sword_A's DRAWN euler — authored in the HAND bone's frame — straight on top of
+        /// it. Measured result: the sheathed sword sat **81 deg off vertical, TIP UP**. That is the
+        /// sword-across-the-waist in her screenshot, and no amount of reading ComputeSheathRotation
+        /// would ever have shown it, because that method is right.
+        ///
+        /// The paragraph above this one already SAID pos-only is the frame-safe answer. The default
+        /// simply disagreed with the documentation. Now it does not.
+        ///
+        /// THE FLAG ITSELF STAYS (CLAUDE.md sec 12 — never strip a seam): PlayerPrefs
+        /// "ff.sheathdrawnrot" = 1 restores the compose for an A/B, and the toggle is still in the
+        /// OwnerDevToolsOverlay list. Only the DEFAULT moved.</summary>
+        public static bool SheathedDrawnRotFallback => Get("sheathdrawnrot", defaultOn: false);
 
         /// <summary>PET COMBAT (owner 2026-07-08) — gates whether deployed pets FIGHT. When OFF (default),
         /// pets are HARVEST / COMPANION only per docs/COMBAT_PIVOT_NORTHSTAR.md ("no pets in battle"; pets =

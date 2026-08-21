@@ -14,9 +14,16 @@
 //   (a) REGISTRY ROWS - the owner-dialed shield rows load through the REAL
 //       AttachmentOffsetRegistry read path (Resources-first, the RC3b ship order):
 //       'shield_A' exists, is fullOverride (absolute seat - the WO-970 lesson),
-//       has a usable scale and a non-identity rotation; 'shield_A@sheathed'
-//       exists for the back carry. Exact euler VALUES are canon data the owner
-//       may re-dial - asserted non-degenerate, never pinned to constants.
+//       has a usable scale and a non-identity rotation. Exact euler VALUES are
+//       canon data the owner may re-dial - asserted non-degenerate, never pinned
+//       to constants.
+//       ⚠ THE '@sheathed' HALF OF THIS LINE IS RETIRED AND INVERTED (2026-08-20).
+//       It used to read "'shield_A@sheathed' exists for the back carry" and the
+//       case REQUIRED that row. The owner's hip ruling retired the back carry and
+//       made the sheathed pose DERIVED, so a shipped absolute @sheathed row now
+//       REPLACES the derivation instead of preserving a dial - proven on the live
+//       Knight in Builds/KnightGearProof/. The case now asserts the opposite; see
+//       Case1_RegistryRows for the captured trace lines.
 //
 //   (b) TRIPWIRE WIRING (comment-stripped source lint) - the WO-994 seat-drift
 //       tripwire + probes in EquipmentController must stay wired: both
@@ -136,13 +143,43 @@ namespace DeNelle.Editor.Regression
                                  "row with zero rotation means the authored delta was wiped.");
             }
 
-            if (!AttachmentOffsetRegistry.TryGetOffset("shield_A@sheathed", out _))
-                failures.Add("[registry-rows] 'shield_A@sheathed' row MISSING - the back-carry pose " +
-                             "falls to the built-in default euler; the owner's sheathed dial is lost.");
+            // ⛔ THE '@sheathed' RULE IS INVERTED, AND DELIBERATELY (2026-08-20).
+            //
+            // This line used to read: `if (!TryGetOffset("shield_A@sheathed", out _)) failures.Add(
+            // "'shield_A@sheathed' row MISSING - the back-carry pose falls to the built-in default
+            // euler; the owner's sheathed dial is lost.")` — i.e. it REQUIRED a shipped absolute
+            // sheathed row. That rule was correct while the sheathed carry was a BACK carry posed
+            // by a hand-dialed euler. The owner's 2026-08-20 ruling ("sheathed should sit inverted
+            // with the longest mesh (y) up and down attached to hip bone") retired that carry: the
+            // pose is now DERIVED from the body's own axes at a HIP socket, and an absolute row is
+            // applied by ApplySheathedOffset as pos+rot IN THE SOCKET'S FRAME — a frame that moved
+            // from spine to hip. So the surviving rows were not a preserved dial; they were a stale
+            // absolute pose that REPLACED the new derivation.
+            //
+            // MEASURED, not argued (Builds/KnightGearProof/, play-mode capture on the live Knight):
+            //   [Flow:Equip]  sheathed long axis ... tiltFromVertical=0deg longAxisDotUp=-1
+            //                 socket='SheatheSocket_HipMain'          <- the ruled pose, computed
+            //   [Flow:Offset] sheathed offset 'sword_A@sheathed' applied:
+            //                 pos=(0.23,-0.14,0.12) rot=(180,-28,-51) full=True   <- and discarded
+            // whose -28 is literally the retired baldric diagonal, and whose POSITIVE x moved the
+            // sword onto the SHIELD's hip. On screen: both props on one side, sword diagonal, off
+            // the body. Requiring that row is requiring the bug.
+            //
+            // Keeping the row asserted PRESENT would also have made this suite fight
+            // SheathePoseRegression D1, which now asserts the shipped table carries no absolute
+            // sheathed override at all. Two suites cannot hold opposite rules about one file.
+            // The owner's felt-tunes are untouched: the Seating Editor writes to
+            // persistentDataPath (AttachmentOffsetRegistry.DevPath), never to the shipped table.
+            if (AttachmentOffsetRegistry.TryGetOffset("shield_A@sheathed", out var sheathedRow) && sheathedRow.fullOverride)
+                failures.Add("[registry-rows] 'shield_A@sheathed' is back as an ABSOLUTE (fullOverride) " +
+                             "row. That REPLACES the derived hip carry the 2026-08-20 ruling installed - " +
+                             "it is the stale back-socket pose, expressed in a frame that no longer exists. " +
+                             "Delete it, or author the felt-tune through the Seating Editor so it lands in " +
+                             "persistentDataPath instead of shipping to every player.");
 
             return "registry " + rows + " rows; shield_A present" +
                    " (fullOverride=" + (AttachmentOffsetRegistry.TryGetOffset("shield_A", out var d2) && d2.fullOverride) +
-                   ") + shield_A@sheathed present";
+                   ") + no absolute shield_A@sheathed override (hip carry is derived)";
         }
 
         // =====================================================================

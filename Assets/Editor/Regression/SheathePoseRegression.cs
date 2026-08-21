@@ -221,6 +221,15 @@ namespace DeNelle.Editor
             // The one that would have caught the flat shield before the owner saw it.
             CheckSheathedShieldRendersAsAPlate(failures, log);
 
+            // ── CASE D1: no SHIPPED absolute @sheathed row can outrank the derivation ─
+            CheckNoShippedAbsoluteSheathedRow(failures, log);
+
+            // ── CASE D2: the DEFAULT flags do not un-do the derived pose ─────────────
+            CheckSheathedDefaultsDoNotOverrideDerivation(failures, log);
+
+            // ── CASE P1: a grip-at-origin shield is CENTRED on the hip, not hung by it ─
+            CheckSheathedOffHandIsCentredOnSocket(failures, log);
+
             if (failures.Count == 0)
             {
                 reason = "sheathe pose: hip anchor, one socket per slot, SWORD vertical + inverted (tip down), " +
@@ -890,6 +899,265 @@ namespace DeNelle.Editor
         private static string ReadOrEmpty(string path)
         {
             try { return File.ReadAllText(path); } catch { return string.Empty; }
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        //  CASE D2 — A FLAG DEFAULT MUST NOT UN-DO THE DERIVED POSE EITHER
+        // ─────────────────────────────────────────────────────────────────────
+        // D1's sibling, and found the same night by the same capture. With the two stale absolute
+        // rows deleted, the sheathed sword STILL read 81 deg off vertical and TIP UP. The trace:
+        //
+        //   [Flow:Equip]  sheathed long axis ... tiltFromVertical=0deg longAxisDotUp=-1
+        //   [Flow:Offset] sheathed FALLBACK (drawn 'sword_A' on back pose):
+        //                 pos=(0.01,0.03,-0.01) rot=(117.00,-2.00,110.00)
+        //
+        // With NO explicit @sheathed row, ApplySheathedOffset falls back to the DRAWN row — and
+        // ff.sheathdrawnrot decides whether that row's ROTATION composes too. That euler was
+        // authored in the HAND BONE's frame; composing it onto a hip-socket pose is a frame
+        // mismatch, which the flag's own documentation said in as many words while its DEFAULT
+        // said the opposite. It defaulted ON from a 2026-07-07 owner A/B — an experiment's setting
+        // left switched on, defending a BACK carry that the 2026-08-20 ruling then retired.
+        //
+        // THE INVARIANT: with no explicit sheathed authoring, the derived pose is the pose. A
+        // position-only nudge is fine; a rotation compose across frames is not. The flag stays
+        // (never strip a seam) — this pins its DEFAULT.
+        private static void CheckSheathedDefaultsDoNotOverrideDerivation(List<string> failures, StringBuilder log)
+        {
+            // Read the DEFAULT, not the machine's current PlayerPrefs value: a dev who flipped the
+            // flag locally must not turn this rule off for everyone. The default is the shipped
+            // literal in FeatureFlags.cs, so that is what is asserted.
+            string flagsPath;
+            try { flagsPath = Path.Combine(Application.dataPath, "_Modules/Core/FeatureFlags.cs".Replace('/', Path.DirectorySeparatorChar)); }
+            catch { failures.Add("D2: could not resolve FeatureFlags.cs — the sheathed-rotation default is UNVERIFIED."); return; }
+            string src = BlankComments(ReadOrEmpty(flagsPath));
+            if (string.IsNullOrEmpty(src))
+            {
+                failures.Add("D2: FeatureFlags.cs not readable — the sheathed-rotation default is UNVERIFIED.");
+                return;
+            }
+            const string Needle = "Get(\"sheathdrawnrot\"";
+            int at = src.IndexOf(Needle, StringComparison.Ordinal);
+            if (at < 0)
+            {
+                failures.Add("D2: no Get(\"sheathdrawnrot\", ...) in FeatureFlags.cs. The sheathed-rotation " +
+                             "seam was renamed or removed; this rule can no longer see the default it guards.");
+                return;
+            }
+            int close = src.IndexOf(')', at);
+            string call = close > at ? src.Substring(at, close - at) : src.Substring(at);
+            if (call.Replace(" ", string.Empty).IndexOf("defaultOn:true", StringComparison.OrdinalIgnoreCase) >= 0)
+                failures.Add("D2: ff.sheathdrawnrot defaults ON again. That composes the DRAWN offset row's " +
+                             "hand-frame euler onto the derived HIP pose for every player who has never " +
+                             "touched the flag — measured on the live Knight as a sheathed sword 81 deg off " +
+                             "vertical and TIP UP, i.e. exactly the carry the owner rejected on 2026-08-20. " +
+                             "Position-only is the frame-safe fallback; keep the flag, keep the default OFF.");
+            else
+                log.AppendLine("  D2 ff.sheathdrawnrot defaults OFF (frame-safe) .......... ok");
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        //  CASE P1 — THE SHEATHED SHIELD IS CENTRED ON THE HIP
+        // ─────────────────────────────────────────────────────────────────────
+        // The third defect from the same capture, and the one every ANGLE-based case in this file
+        // is blind to. G6/G8 both read perfect — "faceOffOutward=0deg longTiltFromVertical=0deg" —
+        // while the shield floated at CHEST height with backdrop visible between it and the torso.
+        //
+        // Cause: the live shield is a NATIVE prop, so its origin is its GRIP, and its grip is at the
+        // plate's BOTTOM EDGE (fantasy_shield localBounds c=(0, 0.315, 0.035) s=(0.512, 0.63,
+        // 0.161)). Seating the ORIGIN at the hip hangs the whole 0.63 m plate upward from it.
+        // EquipmentController.ApplyOffHandCentreOnSocket now shifts by the prop's own
+        // origin-to-rendered-centre vector so the plate's MIDDLE lands on the hip.
+        //
+        // This case drives that SHIPPED method (reflection) on a real renderer whose pivot is at its
+        // bottom edge — the shield's actual pathology — and asserts the rendered centre lands where
+        // the seat put the origin. It also asserts the method is IDEMPOTENT, because ApplyHoldPose
+        // re-asserts the pose every frame and a shift that accumulated would walk the shield away
+        // over a few seconds of play, which no single screenshot would ever catch.
+        private static void CheckSheathedOffHandIsCentredOnSocket(List<string> failures, StringBuilder log)
+        {
+            GameObject probe = null;
+            try
+            {
+                probe = new GameObject("SheatheOffHandCentreProbe");
+                probe.transform.rotation = Quaternion.Euler(0f, 37f, 0f);
+
+                var socket = new GameObject("SheatheSocket_HipOff").transform;
+                socket.SetParent(probe.transform, false);
+                socket.localRotation = Quaternion.Euler(23f, -47f, 61f);   // a hostile, rig-arbitrary bone frame
+                socket.localScale = Vector3.one * 1.67f;                   // the CC rig's real bone lossyScale
+
+                var gripRoot = new GameObject("EquipmentProp_OffHand").transform;
+                gripRoot.SetParent(socket, false);
+                Vector3 baseLocal = new Vector3(0.12f, 0.03f, -0.02f);   // what the seat computed
+                gripRoot.localPosition = baseLocal;
+                gripRoot.localRotation = Quaternion.Euler(11f, 200f, 349f);
+                Vector3 seatedOrigin = gripRoot.position;   // where the seat PUT the prop
+
+                // A plate whose PIVOT IS ITS BOTTOM EDGE — a cube child pushed up by half its height
+                // reproduces exactly the fantasy_shield pathology without needing the asset.
+                var plate = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                plate.name = "ShieldPlate";
+                plate.transform.SetParent(gripRoot, false);
+                plate.transform.localScale = new Vector3(PlateWidth, PlateHeight, PlateThickness);
+                plate.transform.localPosition = new Vector3(0f, PlateHeight * 0.5f, 0f);
+
+                var rend = plate.GetComponent<Renderer>();
+                float offBefore = Vector3.Distance(rend.bounds.center, seatedOrigin);
+                if (offBefore < PlateHeight * 0.3f)
+                {
+                    failures.Add("P1: the fixture's plate is already centred on its pivot (" +
+                                 offBefore.ToString("0.###") + " m) — it cannot demonstrate the bug it " +
+                                 "was built for, so a passing result here would mean nothing.");
+                    return;
+                }
+
+                var mi = typeof(EquipmentController).GetMethod("ApplyOffHandCentreOnSocket",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                if (mi == null)
+                {
+                    failures.Add("P1: EquipmentController.ApplyOffHandCentreOnSocket is GONE. Without it a " +
+                                 "grip-at-origin shield hangs its whole plate upward from the hip and reads as " +
+                                 "floating at the chest, with every angle in this suite still green.");
+                    return;
+                }
+                var holder = new GameObject("~equipHolder");
+                holder.transform.SetParent(probe.transform, false);
+                var ctrl = holder.AddComponent<EquipmentController>();   // no Awake outside play mode
+
+                mi.Invoke(ctrl, new object[] { gripRoot, socket, baseLocal });
+                float offAfter = Vector3.Distance(rend.bounds.center, seatedOrigin);
+                if (offAfter > CentreToleranceM)
+                    failures.Add("P1: after ApplyOffHandCentreOnSocket the plate's rendered centre is still " +
+                                 offAfter.ToString("0.###") + " m from the seated point (was " +
+                                 offBefore.ToString("0.###") + " m, tolerance " + CentreToleranceM.ToString("0.##") +
+                                 " m). A grip-at-origin shield is still hanging by its bottom edge — the " +
+                                 "2026-08-20 chest-float.");
+                else
+                    log.AppendLine("  P1 sheathed shield centres on the hip (" + offBefore.ToString("0.##") +
+                                   " -> " + offAfter.ToString("0.##") + " m) ...... ok");
+
+                // IDEMPOTENT: re-asserting the pose must not walk the prop away.
+                mi.Invoke(ctrl, new object[] { gripRoot, socket, baseLocal });
+                mi.Invoke(ctrl, new object[] { gripRoot, socket, baseLocal });
+                float offRepeat = Vector3.Distance(rend.bounds.center, seatedOrigin);
+                if (Mathf.Abs(offRepeat - offAfter) > CentreToleranceM)
+                    failures.Add("P1b: repeating the centring moved the plate again (" +
+                                 offAfter.ToString("0.###") + " -> " + offRepeat.ToString("0.###") + " m). " +
+                                 "ApplyHoldPose re-asserts the sheathed pose EVERY FRAME, so a shift that " +
+                                 "accumulates walks the shield off the hero during play — and no single " +
+                                 "screenshot would ever show it.");
+                else
+                    log.AppendLine("  P1b centring is idempotent across re-asserts .......... ok");
+            }
+            catch (Exception e)
+            {
+                failures.Add("P1: driving ApplyOffHandCentreOnSocket threw — " + e.GetType().Name + ": " + e.Message);
+            }
+            finally
+            {
+                if (probe != null) UnityEngine.Object.DestroyImmediate(probe);
+            }
+        }
+
+        /// <summary>Slack on the centring assertion. The live plate is 0.63 m tall, so the defect it
+        /// pins is a ~0.32 m error; 0.02 m is float noise through a scaled, rotated bone chain.</summary>
+        private const float CentreToleranceM = 0.02f;
+
+        // ─────────────────────────────────────────────────────────────────────
+        //  CASE D1 — THE SHIPPED DATA MUST NOT OUTRANK THE DERIVED HIP POSE
+        // ─────────────────────────────────────────────────────────────────────
+        // WHY THIS CASE EXISTS, and why it is a DATA lint in a maths suite.
+        //
+        // Every G-case above passed while the sheathed sword hung diagonally, off the body, on
+        // the WRONG hip — because the maths was never the thing that reached the screen. The
+        // KnightGearProof play-mode capture (2026-08-20, Builds/KnightGearProof/) caught it in
+        // two consecutive trace lines on the live Knight:
+        //
+        //   [Flow:Equip]  sheathed long axis on 'Hero (Grom)': tiltFromVertical=0deg
+        //                 longAxisDotUp=-1 ... socket='SheatheSocket_HipMain'.
+        //   [Flow:Offset] sheathed offset 'sword_A@sheathed' applied:
+        //                 pos=(0.23,-0.14,0.12) rot=(180.00,-28.00,-51.00) full=True
+        //
+        // The first line is this suite's rule, computed correctly. The second is
+        // ApplySheathedOffset REPLACING it — an `Explicit + fullOverride` row is ABSOLUTE, so it
+        // overwrites localPosition AND localRotation outright. That row shipped in
+        // Assets/Resources/OffsetForge/offsets.json (and its Assets/OffsetForge/ twin), authored
+        // against the RETIRED spine/back socket; its -28 is literally the baldric diagonal G4
+        // rejects. Its POSITIVE x also put the sword on the shield's hip, which is how both props
+        // ended up on one side while S1 proved the sides were opposite by construction.
+        //
+        // THE INVARIANT: an absolute sheathed pose is only meaningful in the frame it was
+        // authored in, and that frame moved from spine to hip. A SHIPPED one therefore cannot be
+        // trusted and silently disables the derivation for every player at once. The owner's own
+        // felt-tunes are not affected — the Seating Editor writes to persistentDataPath
+        // (AttachmentOffsetRegistry.DevPath), not to these files.
+        private static void CheckNoShippedAbsoluteSheathedRow(List<string> failures, StringBuilder log)
+        {
+            string[] rel =
+            {
+                "Resources/OffsetForge/offsets.json",   // the one the RUNTIME reads
+                "OffsetForge/offsets.json",             // the Forge's authoring twin, kept in sync
+            };
+            int checkedFiles = 0;
+            int before = failures.Count;
+            foreach (string r in rel)
+            {
+                string path;
+                try { path = Path.Combine(Application.dataPath, r.Replace('/', Path.DirectorySeparatorChar)); }
+                catch { continue; }
+                string json = ReadOrEmpty(path);
+                if (string.IsNullOrEmpty(json)) continue;
+                checkedFiles++;
+                foreach (string id in AbsoluteSheathedIds(json))
+                    failures.Add("D1: Assets/" + r + " ships an ABSOLUTE sheathed override '" + id +
+                                 "' (fullOverride=true). ApplySheathedOffset applies that as an absolute " +
+                                 "pos+rot in the sheathe SOCKET's frame, which REPLACES the derived hip " +
+                                 "carry every G-case here asserts — so this suite would stay green while " +
+                                 "the sword hangs diagonally on the wrong hip, exactly as it did on " +
+                                 "2026-08-20. Delete the row (the derivation is the pose) or, if it is a " +
+                                 "deliberate felt-tune, author it in the Seating Editor so it lands in " +
+                                 "persistentDataPath instead of shipping to every player.");
+            }
+            if (checkedFiles == 0)
+                failures.Add("D1: neither shipped offsets.json could be read — the absolute-override rule is UNVERIFIED.");
+            else if (failures.Count == before)
+                log.AppendLine("  D1 no shipped absolute @sheathed override (" + checkedFiles + " files) .. ok");
+        }
+
+        /// <summary>
+        /// Every "<c>&lt;key&gt;@sheathed</c>" row in an offsets.json whose object also carries
+        /// <c>"fullOverride": true</c>. Deliberately a scan over the raw text rather than a JSON
+        /// parse: this suite must not acquire a dependency on the table's schema to answer a
+        /// question about two literals, and a schema change must not silently switch the rule off.
+        /// </summary>
+        private static List<string> AbsoluteSheathedIds(string json)
+        {
+            var hits = new List<string>();
+            const string Marker = "@sheathed\"";
+            int i = 0;
+            while (true)
+            {
+                int at = json.IndexOf(Marker, i, StringComparison.Ordinal);
+                if (at < 0) break;
+                i = at + Marker.Length;
+                // The id, read back to its opening quote.
+                int q = json.LastIndexOf('"', at);
+                string id = q >= 0 ? json.Substring(q + 1, at + "@sheathed".Length - q - 1) : "<unknown>";
+                // The object this id belongs to ends at the next '}' that closes it. Scan forward
+                // from the id to that brace and look for fullOverride:true inside.
+                int depth = 0, j = q >= 0 ? json.LastIndexOf('{', at) : at;
+                if (j < 0) j = at;
+                int end = j;
+                for (; end < json.Length; end++)
+                {
+                    if (json[end] == '{') depth++;
+                    else if (json[end] == '}') { depth--; if (depth == 0) break; }
+                }
+                string body = json.Substring(j, Math.Min(json.Length, end + 1) - j);
+                if (body.Replace(" ", string.Empty).IndexOf("\"fullOverride\":true", StringComparison.OrdinalIgnoreCase) >= 0)
+                    hits.Add(id);
+            }
+            return hits;
         }
 
         /// <summary>
