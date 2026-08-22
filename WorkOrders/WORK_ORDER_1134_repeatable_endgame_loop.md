@@ -1,5 +1,61 @@
 **Status:** READY TO IMPLEMENT
 
+---
+
+## ⭐ OWNER RULING 2026-08-22 — CRYSTALS RESET DAILY, NOT ONCE PER BASE FOREVER
+
+Owner, verbatim: **"repeat raids same day would not pay crystals."**
+
+This settles the blocking question (was 1134a) and **rescues this ticket's arithmetic**. The premise
+audit had found the "~242 crystals/day" figure falsified by shipped code — `RaidClaimService`
+zeroes crystals on *every* clear after the first, forever, making the lifetime raid yield ~259
+crystals total rather than per-day. Under the ruling, crystal eligibility **resets each day**, so
+three camps cleared once daily pay 55 + 83 + 121 = **259 crystals/day**, which is the ~242/day the
+cooldown was ruled against. The cooldowns (4h / 8h / 12h) bound *within-day* repeats; the day
+boundary is what makes the loop renewable.
+
+### TWO INDEPENDENT AXES — and conflating them ships a live economy exploit
+
+| Axis | Scope | Governs |
+|---|---|---|
+| `IsClaimed` (`dotr-raid-owner-<id>`) | **PERMANENT** | ownership + the x0.25 repeat multiplier on wood/food/iron/coins |
+| crystal eligibility (**NEW**) | **PER DAY** | whether this clear pays crystals at all |
+
+⛔ **DO NOT IMPLEMENT THIS BY DAY-SCOPING `IsClaimed`.** That is the obvious move and it is wrong.
+`IsClaimed` carries **two meanings at two call sites**: it gates crystals at
+`RaidVictoryController.cs:229`, but `MarkClaimed` **also gates one-time progression unlocks** at
+`RaidVictoryController.cs:480` and `OutpostVictoryController.cs:193`. Day-scoping the shared flag
+would **re-grant those unlocks every single day, forever**. Ownership stays permanent; crystal
+eligibility gets its own stamp.
+
+### Implementation spec
+
+1. Add `private const string PrefCrystalDayKey = "dotr-raid-crystalday-";` to `RaidClaimService`.
+2. Add `CrystalsPaidToday(configId)` / `MarkCrystalsPaid(configId)` beside it.
+3. **Reuse the existing day authority** — `DailyChestController.cs:174`,
+   `DateTime.UtcNow.ToString("yyyy-MM-dd")`. ⛔ Do NOT author a second definition of "a day"; that
+   is the duplicated-state failure this repo keeps paying for.
+4. `ScaleLootForClear` takes a **second** flag. Keep `isRepeatClear` driving the x0.25 on ordinary
+   resources; add `crystalsAlreadyPaidToday` driving crystals to 0. They are not the same question
+   and must not share a parameter.
+5. Read both flags **before** `MarkClaimed`, for the reason the existing header already gives: by
+   the time it returns the claim flag has flipped.
+
+Resulting behaviour: first clear ever pays full loot + crystals; a same-day repeat pays x0.25 and
+**no** crystals; the next day's first clear pays x0.25 ordinary loot and **full crystals again**.
+
+### Still open on this ticket (NOT settled by the above)
+
+The clear-count ladder remains unbuilt — there is no persisted per-camp clear counter anywhere, so
+nothing can escalate difficulty or reward. Four owner questions are still live: what escalation
+actually moves (enemy level / garrison count / spire HP / tower DPS), the sub-linear reward curve as
+a concrete pair, whether the ladder resets, and whether 3 camps is the intended rotation.
+
+⚠ Also correct the copied arithmetic in `scene-configs.json:22`, which carries the pre-ruling
+per-clear figure as authored doc text.
+
+---
+
 # WORK ORDER 1134 — The repeatable endgame: give the ratchet somewhere to keep going
 
 **Minted:** 2026-08-21 (CLI, banner bumped 1134 -> 1135 in the SAME edit)
