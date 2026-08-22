@@ -140,13 +140,18 @@ namespace DeNelle.Village
 
                 if (visual == null)
                 {
-                    // U: was Debug.LogWarning — Fail-loud so a meshless (grey/invisible) structure
-                    // self-reports. R: meshless is render-broken — destroy the empty root and return
-                    // null so the caller falls back, never seats a silent invisible blocker.
+                    // WO-1142: an Addressables miss here usually means "not resident THIS FRAME".
+                    // Returning null made BaseLayoutLoader drop a paid building, its footprint and
+                    // its behaviour for the entire session. Keep a loud, renderer-bearing proxy so
+                    // the gameplay root survives, then replace only that proxy after the request
+                    // VisualFactory/StructureAssetLoader just issued has settled.
                     FlowTrace.Fail("Structure", $"'{entry.id}': visual '{entry.visualPrefabPath}' " +
-                        "not found / failed to skin — destroying empty root, returning null (caller falls back).");
-                    DestroyRoot(root);
-                    return null;
+                        "is not resident yet — retaining a visible pending-art proxy and arming one " +
+                        "WhenSettled retry (the building, footprint and behaviour remain present).");
+                    visual = BuildPendingArtProxy(root, entry);
+                    GameObject capturedProxy = visual;
+                    DeNelle.Core.StructureContentWarmer.WhenSettled(() =>
+                        TryReplacePendingArt(root, entry, capturedProxy));
                 }
 
                 if (entry.orientation != null && entry.orientation.manual)
@@ -229,6 +234,81 @@ namespace DeNelle.Village
 
             FlowTrace.Step("Structure", $"'{entry.id}' created OK -> '{root.name}'.");
             return root;
+        }
+
+        /// <summary>
+        /// Visible fail-loud body for the short interval between save replay and Addressables
+        /// residency. It intentionally owns no gameplay collider: BaseLayoutLoader installs the
+        /// catalog-derived collider/obstacle on the root after Create returns.
+        /// </summary>
+        private static GameObject BuildPendingArtProxy(GameObject root, CatalogEntry entry)
+        {
+            var proxy = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            proxy.name = "StructureArtPending-" + (entry != null ? entry.id : "unknown");
+            proxy.transform.SetParent(root.transform, false);
+            float height = EffectiveVisualHeight(entry, out _);
+            proxy.transform.localScale = new Vector3(height * 0.45f, height, height * 0.45f);
+            proxy.transform.localPosition = new Vector3(0f, height * 0.5f, 0f);
+            var primitiveCollider = proxy.GetComponent<Collider>();
+            if (primitiveCollider != null) Object.Destroy(primitiveCollider);
+            var renderer = proxy.GetComponent<Renderer>();
+            if (renderer != null)
+            {
+                renderer.material.color = new Color(0.72f, 0.28f, 0.08f, 1f);
+                renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            }
+            return proxy;
+        }
+
+        /// <summary>One-shot residency callback for the Create/save-replay caller.</summary>
+        private static void TryReplacePendingArt(GameObject root, CatalogEntry entry, GameObject proxy)
+        {
+            if (root == null || entry == null || proxy == null) return;
+            var visual = Guard.Try("Structure", $"late skin '{entry.id}' after residency settled",
+                () => VisualFactory.Skin(root.transform, entry.visualPrefabPath, OptsFor(entry)),
+                fallback: null);
+            if (visual == null)
+            {
+                FlowTrace.Fail("Structure", $"'{entry.id}': residency settled but " +
+                    $"'{entry.visualPrefabPath}' still did not resolve — retaining visible proxy; building not lost.");
+                return;
+            }
+
+            if (entry.orientation != null && entry.orientation.manual)
+            {
+                bool moved = false;
+                Vector3 off = entry.orientation.Offset;
+                if (off.sqrMagnitude > 0.0001f) { visual.transform.localPosition += off; moved = true; }
+                if (entry.orientation.HasScale)
+                {
+                    visual.transform.localScale = Vector3.Scale(visual.transform.localScale,
+                        entry.orientation.EffectiveScale);
+                    moved = true;
+                }
+                if (moved) ReseatCorrectedBottom(visual, root.transform.position.y);
+            }
+
+            if (!string.IsNullOrEmpty(entry.visualTexturePath))
+            {
+                var fixer = visual.GetComponentInChildren<DeNelle.Core.TripoMaterialFixer>(true);
+                fixer?.SetForcedTexture(entry.visualTexturePath);
+                ApplyForcedTexture(visual, entry.visualTexturePath, entry.id);
+            }
+            visual.GetComponentInChildren<DeNelle.Core.TripoMaterialFixer>(true)
+                ?.SetMissTint(new Color(0.60f, 0.58f, 0.54f, 1f));
+
+            if (!VerifyStructureRenders(visual, entry.id))
+            {
+                DestroyRoot(visual);
+                FlowTrace.Fail("Structure", $"'{entry.id}': late visual failed render verification — " +
+                    "retaining visible proxy; building not lost.");
+                return;
+            }
+
+            Object.Destroy(proxy);
+            CosmeticApplier.RefreshOn(root);
+            FlowTrace.Step("Structure", $"'{entry.id}': residency retry replaced pending-art proxy " +
+                $"with '{visual.name}' (building root and footprint never disappeared).");
         }
 
         // =====================================================================

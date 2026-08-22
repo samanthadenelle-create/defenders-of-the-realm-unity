@@ -5,14 +5,6 @@
 // Assembly: DeNelle.EditorRegression.  Markers: STRUCTURE_ORIENTATION_OK /
 // STRUCTURE_ORIENTATION_FAIL.  Editor-only asset reads. No scene, no PlayMode.
 //
-// regression-registry: standalone  <- TEMPORARY (2026-08-18). Authored on an
-// overnight lane that was forbidden to touch DataRegression.cs (two other lanes
-// were editing it the same night). The CLI seat wires the registration line; this
-// token exists ONLY so RegressionMarkerRegression RULE 2 does not red the tree in
-// the window between this file landing and that line landing. DELETE THIS TOKEN
-// in the same commit that registers the suite — an oracle that stays "standalone"
-// is an oracle that never runs, which is the failure this file was written about.
-//
 // =============================================================================
 // WHY THIS EXISTS
 // =============================================================================

@@ -368,6 +368,7 @@ namespace DeNelle.Editor
             if (!StructureSeatRegression.Run(out var seatReason)) failures.Add(seatReason); else log.AppendLine("[structure-seat] " + seatReason);
             if (!StructureCadenceRegression.Run(out var cadenceReason)) failures.Add(cadenceReason); else log.AppendLine("[structure-cadence] " + cadenceReason);
             if (!StructureLoadBoundedRegression.Run(out var loadBoundedReason)) failures.Add(loadBoundedReason); else log.AppendLine("[structure-load-bounded] " + loadBoundedReason);
+            if (!DeNelle.Editor.Regression.StructureFactoryResidencyRetryRegression.Run(out var residencyRetryReason)) failures.Add(residencyRetryReason); else log.AppendLine("[structure-factory-residency-retry] " + residencyRetryReason);
             if (!SheathePoseRegression.Run(out var sheatheReason)) failures.Add(sheatheReason); else log.AppendLine("[sheathe-pose] " + sheatheReason);
             if (!OfflinePullRegression.Run(out var offlinePullReason)) failures.Add(offlinePullReason); else log.AppendLine("[offline-pull] " + offlinePullReason);
             if (!EnemyLoadBoundedRegression.Run(out var enemyBoundedReason)) failures.Add(enemyBoundedReason); else log.AppendLine("[enemy-load-bounded] " + enemyBoundedReason);
@@ -1134,6 +1135,8 @@ namespace DeNelle.Editor
             //     the browsable shelf and the same-day "no glimmer in any pack" ruling. ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "buy-gate suite", () => { if (!DeNelle.Editor.Regression.BuyGateAndPriceLadderRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[buy-gate] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "monetization-activation suite", () => { if (!DeNelle.Editor.Regression.MonetizationActivationRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[monetization-activation] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "store-commerce-state suite", () => { if (!DeNelle.Editor.Regression.StoreCommerceStateRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[store-commerce-state] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "structure-orientation suite", () => { if (!DeNelle.Editor.StructureOrientationOracle.Run(out var r)) failures.Add(r); else log.AppendLine("[structure-orientation] " + r); });
             // --- WO-1149 (owner, on device 2026-08-22: "we need to stop game during transactions got
             //     killed while making purchase test"): a transaction freezes the world through the
             //     single WorldHold owner, and EVERY exit unfreezes it. The suite measures the clock
