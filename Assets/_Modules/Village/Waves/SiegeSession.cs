@@ -372,7 +372,11 @@ namespace DeNelle.Village
                 // one held 40s". Merge only: no row is added, removed or re-priced here.
                 DefenseReportBuilder.StampLegibility(_record, Vitals);
 
-                // ⛔ THE UNRULED SEAM. All zero, stamped with the interim rule id.
+                // THE RULED LOSS (WO-1139, ruling 2026-08-22): COLLECTOR LOOTING ONLY, NO BANK
+                // THEFT. This REPORTS what the broken collectors already lost (their own
+                // LastLootStolen, summed) -- it computes nothing and takes nothing. It must run
+                // AFTER AdaptRows above, so the ledger total and the per-collector "looted N" rows
+                // describe the same set of breaks. SiegeScheduler.Settle then SEALS it.
                 _record.ResourcesLost = DefenseReportBuilder.BuildStakes(_record);
 
                 FlowTrace.Step("Siege",

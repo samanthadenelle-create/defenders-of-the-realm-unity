@@ -86,8 +86,77 @@ namespace DeNelle.Village.Buildings.Progression
 
         /// <summary>Pending resources stolen when the collector last broke under siege
         /// (session-scoped; cleared on <see cref="Repair"/>). The wave damage report
-        /// reads it to show the "looted" line.</summary>
+        /// reads it to show the "looted" line.
+        /// <para>⭐ Since WO-1139 (ruling 2026-08-22) this is ALSO the whole loss-stakes ledger:
+        /// <c>DefenseReportBuilder.BuildStakes</c> SUMS this field across the collectors that
+        /// broke during a siege. The number the player is TOLD they lost is therefore the same
+        /// object the collector actually lost — not a second computation that agrees today.</para></summary>
         public float LastLootStolen { get; private set; }
+
+        /// <summary>
+        /// House-clock stamp (unix ms) of the break that produced <see cref="LastLootStolen"/>;
+        /// 0 = this collector has not been looted this session.
+        ///
+        /// <para>⛔ IT EXISTS TO SCOPE A LOOT TO ONE SIEGE. A destroyed collector is NOT
+        /// repairable (WO-753: it returns only via a full-cost rebuild), so it stands in the scene
+        /// as a broken shell carrying its <see cref="LastLootStolen"/> indefinitely. Without a
+        /// stamp, the NEXT siege's defence report would re-count that same loot and tell the
+        /// player they were robbed again — a report that invents a loss is exactly the failure the
+        /// whole one-number design exists to prevent. <c>BuildStakes</c> counts only breaks at or
+        /// after the record's <c>StartedAtUnixMs</c>.</para>
+        ///
+        /// <para>Session-scoped like the amount it stamps: not persisted, cleared by
+        /// <see cref="Repair"/>.</para>
+        /// </summary>
+        public double LastLootStolenAtUnixMs { get; private set; }
+
+        /// <summary>
+        /// ⛔ FALSE FOR A CRYSTAL COLLECTOR — it may break, but it is never robbed.
+        ///
+        /// <para>A player cannot tell a HARVESTED crystal from a PURCHASED one; they are the same
+        /// wallet. So a crystal loot reads as losing bought currency, which turns a gameplay loss
+        /// into a refund request on a live published title. Same reasoning as the ledger-side
+        /// exemption in <see cref="DeNelle.Core.Defense.StakeRules.IsLootable"/> — enforced in BOTH
+        /// places on purpose: here nothing is taken, there nothing could be reported, and neither
+        /// depends on the other being remembered.</para>
+        ///
+        /// <para>Reversible by ruling, not by tuning: flipping this is a design decision about
+        /// real money, and SiegeLossStakesRegression will go red the moment it moves.</para>
+        /// </summary>
+        public bool IsLootable => IsResourceLootable(Resource);
+
+        /// <summary>
+        /// ⛔ WHICH HARVEST TYPES A RAIDER MAY EVER CARRY OFF. Everything but crystals.
+        /// <para>Static and public so the oracle can drive it for EVERY enum value with no scene,
+        /// no catalog and no collector — the exemption is a rule about real money, and a rule that
+        /// can only be checked by getting a crystal collector to exist in a test is a rule nobody
+        /// checks. There is no crystal COLLECTOR authored today (the three resource buildings are
+        /// farm/lumbermill/forge), which is exactly why this must be pinned NOW rather than on the
+        /// day one is added.</para>
+        /// </summary>
+        public static bool IsResourceLootable(HarvestResource resource)
+            => resource != HarvestResource.Crystals;
+
+        /// <summary>
+        /// ⭐ THE ONE THEFT IN THE GAME, as a pure function: how much of a collector's
+        /// <paramref name="pending"/> a raider carries off when it breaks.
+        ///
+        /// <para>Half of what is still UNCOLLECTED, rounded DOWN so every rounding error favours
+        /// the player — and ZERO for a crystal collector, which breaks like any other but is never
+        /// robbed (see <see cref="IsResourceLootable"/>).</para>
+        ///
+        /// <para>⛔ <c>RaidLootFraction</c> stays 0.5 (owner ruling 2026-08-22, explicitly out of
+        /// scope for tuning). The oracle asserts hand-worked LITERALS against this — 800 wood
+        /// pending loots 400 — deliberately NOT an expression over the constant, so re-tuning it
+        /// turns the suite RED. That red is the alarm you want on a rule about player money.</para>
+        /// </summary>
+        public static int LootTakenFrom(HarvestResource resource, double pending)
+        {
+            if (!IsResourceLootable(resource)) return 0;
+            if (pending <= 0.0) return 0;
+            int taken = Mathf.FloorToInt((float)(pending * RaidLootFraction));
+            return taken > 0 ? taken : 0;
+        }
 
         public double Capacity => ComputeCapacity();
 
@@ -456,6 +525,7 @@ namespace DeNelle.Village.Buildings.Progression
             if (_broken) return;
             _hp = _maxHp;
             LastLootStolen = 0f;   // F8-45: the loot report is per-break; a repair clears it
+            LastLootStolenAtUnixMs = 0.0;   // ...and so does its siege stamp, or the pair could disagree
             SaveState();
             FlowTrace.Step("Harvest", $"collector-repair building={_buildingId}");
             // Leave the broken/scatter state — re-render the stack from live pending.
@@ -466,12 +536,24 @@ namespace DeNelle.Village.Buildings.Progression
         {
             int stepsBefore = FilledSteps;
             _broken = true;
-            float stolen = Mathf.FloorToInt((float)_pending * RaidLootFraction);
+
+            // ⛔ THE CRYSTAL EXEMPTION LIVES INSIDE LootTakenFrom, AT THE ONLY PLACE A THEFT
+            //    HAPPENS. A crystal collector BREAKS like any other — it just is not robbed, so
+            //    it keeps every point of its pending for the player to collect after a rebuild.
+            //    ⛔ RaidLootFraction is NOT the knob here and must stay 0.5 (owner ruling
+            //    2026-08-22): the exemption is a WHO, never a HOW MUCH.
+            float stolen = LootTakenFrom(Resource, _pending);
+
             _pending = System.Math.Max(0, _pending - stolen);
             LastLootStolen = stolen;   // F8-45: surfaced by the wave damage report ("looted N")
+            // Stamped even when nothing was taken: "broke this siege, lost nothing" is a real
+            // state, and BuildStakes must be able to tell it from "broke three sieges ago".
+            LastLootStolenAtUnixMs = TimeSource.NowUnixMs();
             SaveState();
             FlowTrace.Warn("Harvest",
-                $"collector-destroyed building={_buildingId} loot-stolen={stolen} pending-left={_pending:F0}");
+                $"collector-destroyed building={_buildingId} resource={Resource} " +
+                $"lootable={IsLootable} loot-stolen={stolen} pending-left={_pending:F0}" +
+                (IsLootable ? string.Empty : " (CRYSTAL COLLECTOR -- never robbed; it keeps its pending)"));
             // Fire even if the raw step count is unchanged: IsBroken flipped, and the view
             // must switch to its scatter/hidden state. StepChanged is the collector's single
             // "re-render your visual" signal, so raise it on the break edge too.

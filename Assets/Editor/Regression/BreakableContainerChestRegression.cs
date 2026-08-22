@@ -447,10 +447,31 @@ namespace DeNelle.Editor.Regression
                              "(walk-over to collect) is gone, so an opened chest gives the player nothing to see and " +
                              "nothing to walk to.");
 
-            if (code.IndexOf("ItemDropSystem.RollAndDeposit", StringComparison.Ordinal) < 0)
-                failures.Add("[chest-drop-survives] the ItemDropSystem.RollAndDeposit FALLBACK is gone. It is what keeps " +
-                             "the open PAID when world pickups are disabled or the roll produced no lines - without it " +
-                             "those two perfectly ordinary states silently swallow the reward for clearing a room.");
+            // ⚠ CORRECTED 2026-08-22. This case used to demand a literal
+            // "ItemDropSystem.RollAndDeposit" call, and it went RED against BETTER code.
+            //
+            // RollAndDeposit rolls the table a SECOND time. The chest now captures ONE roll
+            // (RollLines) and routes that same List down either delivery path - a world mote
+            // when pickups are on and the roll produced lines, DepositLines otherwise. So the
+            // player is always paid EXACTLY what was rolled, which is the property that
+            // actually matters and which the old assertion could not express.
+            //
+            // The lesson, and the reason this comment is long: the assertion named a METHOD
+            // instead of the BEHAVIOUR, so improving the implementation broke the oracle. Pin
+            // "the open is always paid from the one captured roll" -- never a call signature.
+            bool depositsCapturedRoll = code.IndexOf("DepositLines", StringComparison.Ordinal) >= 0;
+            bool rollsAndDeposits     = code.IndexOf("ItemDropSystem.RollAndDeposit", StringComparison.Ordinal) >= 0;
+            if (!depositsCapturedRoll && !rollsAndDeposits)
+                failures.Add("[chest-drop-survives] the chest has NO deposit fallback. Neither " +
+                             "ItemDropSystem.DepositLines (the captured-roll path) nor RollAndDeposit " +
+                             "(the older re-roll path) is called, so when world pickups are disabled or " +
+                             "the roll produced no lines, opening a chest silently swallows the reward " +
+                             "for clearing a room.");
+            if (rollsAndDeposits && !depositsCapturedRoll)
+                failures.Add("[chest-drop-survives] the chest fell back to ItemDropSystem.RollAndDeposit, " +
+                             "which rolls the loot table a SECOND time - the player can then be paid " +
+                             "something other than what the mote showed. Capture ONE roll with RollLines " +
+                             "and hand that same list to DepositLines.");
 
             var chest = FindType(ChestTypeName);
             if (chest == null) return;

@@ -343,6 +343,7 @@ namespace DeNelle.Editor
             if (!DefenseReportContractRegression.Run(out var defReportReason)) failures.Add(defReportReason); else log.AppendLine("[defense-report] " + defReportReason);
             if (!SiegeCadenceRegression.Run(out var siegeCadenceReason)) failures.Add(siegeCadenceReason); else log.AppendLine("[siege-cadence] " + siegeCadenceReason);
             if (!SiegeSpawnAuthorityRegression.Run(out var siegeAuthorityReason)) failures.Add(siegeAuthorityReason); else log.AppendLine("[siege-spawn-authority] " + siegeAuthorityReason);
+            if (!SiegeLossStakesRegression.Run(out var siegeStakesReason)) failures.Add(siegeStakesReason); else log.AppendLine("[siege-loss-stakes] " + siegeStakesReason);
             // --- WO-1128: every offline window must DECLARE which clock produced it and its own
             //     endpoints, so api/game/save.js can reconcile it against the server's elapsed
             //     time. The server-side clamp itself is JavaScript and is gated separately by
@@ -740,6 +741,26 @@ namespace DeNelle.Editor
             // never are), so each fire-and-forget play permanently burned one of the 20
             // slots -- six F8 captures caught the cap saturated at 20/20 ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "vfx-loop-flag suite", () => { if (!DeNelle.Editor.Regression.VfxLoopFlagRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[vfx-loop-flag] " + r); });
+
+            // --- ELITE/BOSS VFX WIRING (WO-874): the owner ruled 2026-08-04 and again
+            // 2026-08-21 that EliteVFXController must be WIRED. Commit 4c1da079 delivered
+            // the visible half via STATICS and never attached the component, so
+            // AddComponent<EliteVFXController> sat at zero hits repo-wide while the aura
+            // and OnEliteAttack had never run in the shipped game - and the ticket read as
+            // progressed. Every gate we had asked "does the effect play?", which the
+            // shortcut satisfied. This asks the question the ruling turns on: is the
+            // component attached, and is its INSTANCE api called ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "elite-vfx-wire suite", () => { if (!DeNelle.Editor.Regression.EliteVfxWiringRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[elite-vfx-wire] " + r); });
+
+            // --- SURFACE IMPACT VFX (WO-887 surface half): the owner tagged the five
+            // surfaces on 2026-08-21 and ruled the defaults. The five pack recipes carry
+            // demo geometry (mesh + SPHERE COLLIDER) on the prefab ROOT and each has one
+            // layer emitting 5/sec ON LOOP, so a straight copy would drop a physics
+            // collider at every impact and permanently burn a global loop slot per hit.
+            // This proves the shipped mirrors are stripped + forced one-shot, that the
+            // code keys still agree with her VfxManualPicks rows, and it EXERCISES the
+            // surface resolution against her defaults rather than restating a table ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "surface-impact-vfx suite", () => { if (!DeNelle.Editor.Regression.SurfaceImpactVfxRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[surface-impact-vfx] " + r); });
 
             // --- VFX SELF-CONTAINMENT (2026-08-05): the shipped Resources/VFX prefabs
             // were committed with a message claiming the tracked copy is what ships.

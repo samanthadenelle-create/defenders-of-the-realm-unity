@@ -750,20 +750,29 @@ namespace DeNelle.Core
         /// WO-1026 — the PvE SIEGE loop: scheduled attacks on the player's own town, plus the
         /// persisted, re-openable Defence Report they produce.
         ///
-        /// <para><b>Default OFF, and the reason is a DESIGN GATE, not a code gate.</b> ⛔ What the
-        /// player LOSES on a failed defence is UNRULED — the owner has not made that call, and this
-        /// build deliberately invents nothing (<see cref="DeNelle.Core.Defense.StakesLedger"/> is
-        /// all zero, stamped <c>none.interim.wo1026</c>). Shipping the loop ON before that ruling
-        /// means the owner felt-tests an attack that costs nothing and correctly reports it as
-        /// hollow — which would read as "the feature is bad" when the truth is "the stake is
-        /// missing". So the loop stays dark until the ruling lands and
-        /// <c>DefenseReportBuilder.BuildStakes</c> is filled in.</para>
+        /// <para><b>Default ON since WO-1139.</b> It was OFF for a DESIGN reason, not a code one:
+        /// what a failed defence COST the player was unruled, so the loop would have felt-tested
+        /// as an attack with no stake — hollow, and correctly reported as "the feature is bad"
+        /// when the truth was "the stake is missing". <b>The owner ruled it on 2026-08-22:
+        /// COLLECTOR LOOTING ONLY, NO BANK THEFT</b> — <i>"what you have COLLECTED is safe; what
+        /// is still sitting in the building is at risk"</i>. The stake was ALREADY SHIPPED (a
+        /// broken collector loses half its uncollected pending, WO-664); what WO-1139 added is the
+        /// REPORT of it (<c>DefenseReportBuilder.BuildStakes</c> sums the collectors' own
+        /// <c>LastLootStolen</c>, <c>DeNelle.Core.Defense.StakeRules</c> holds the buckets and the
+        /// crystal exemption), pinned by SiegeLossStakesRegression. The design gate that held this
+        /// flag down is closed, so it is on.</para>
+        ///
+        /// <para>⚠ The flag's DEFAULT was flipped to ON by an edit-only pass and has not been
+        /// gate-verified here — the CLI seat owns that proof.</para>
+        ///
+        /// <para>⛔ If this ever goes back to OFF, say WHY in this comment. "Default OFF" with no
+        /// stated blocker is how a finished loop stays dark for a month.</para>
         ///
         /// <para>When OFF, <see cref="DeNelle.Village.SiegeScheduler"/> arms nothing and calls no
         /// WaveManager entry point, so the build's behaviour is byte-identical to before WO-1026.
         /// It still logs one line saying it is off — a silent no-op is indistinguishable from a
         /// broken scheduler, and "the base is never attacked" is the exact bug class this WO
-        /// exists to close. Flip via PlayerPrefs "ff.siege" = 1.</para>
+        /// exists to close. Flip via PlayerPrefs "ff.siege" (0 = dark, 1 = on).</para>
         ///
         /// <para>This is PvE. It is NOT PvP: nothing here snapshots, exports or replays another
         /// player's base (that is WO-730, separately unbuilt). The report's
@@ -771,7 +780,7 @@ namespace DeNelle.Core
         /// later — a source swap, not a second system.</para>
         /// NOT URL-activatable (it changes game state — deliberately excluded from s_urlActivatableFlags).
         /// </summary>
-        public static bool Siege => Get("siege", defaultOn: false);
+        public static bool Siege => Get("siege", defaultOn: true);
 
         /// <summary>
         /// WO-828 — the corner minimap plate (<c>HudMinimapWidget</c>) in the calm postures.

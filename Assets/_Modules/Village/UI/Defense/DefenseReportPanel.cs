@@ -542,24 +542,45 @@ namespace DeNelle.Village.UI
         }
 
         /// <summary>
-        /// Under the interim this always reads "Nothing was taken." — an EXPLICIT statement, not a
-        /// blank the player reads as a bug. The second line names the reason so the screen is
-        /// honest about being unfinished rather than pretending the attack was consequence-free by
-        /// design. Both lines go away the day the owner's stakes ruling lands in
-        /// DefenseReportBuilder.BuildStakes.
+        /// WHAT THEY CARRIED OFF — an EXPLICIT statement either way, never a blank the player
+        /// reads as a bug.
+        ///
+        /// <para>⭐ THIS IS THE ONLY PLACE A THEFT IS EVER ANNOUNCED, and it renders the ledger
+        /// VERBATIM. The ledger holds the collectors' OWN loot figures, summed
+        /// (DefenseReportBuilder.BuildStakes), so this screen cannot tell the player a different
+        /// number than their collectors lost — there is nothing to re-derive here. An unexplained
+        /// shrinking number is the resented version of this mechanic; a report that names it is
+        /// the loop working.</para>
+        ///
+        /// <para>⛔ THE COPY MUST TEACH THE RULE, because the rule is the whole design:
+        /// <b>what you have COLLECTED is safe; what is still sitting in the building is at
+        /// risk</b>. That sentence is the reason this mechanic reads as the player's own fault and
+        /// converts into return visits instead of resentment — the bank is never touched, so the
+        /// loss is always preventable by collecting. Crystals are never listed because a crystal
+        /// collector is never robbed.</para>
+        ///
+        /// <para>⚠ The retired copy here promised a "storage floor" and that raiders "cannot dig
+        /// below a full fifth of what your storage can hold". That described the superseded
+        /// bank-theft ruling and is now a promise about a mechanic that does not exist — worse
+        /// than no copy, because it teaches the player to fear the wrong thing.</para>
         /// </summary>
         private static string StakesLine(StakesLedger s)
         {
             if (s == null || s.IsEmpty)
-                return "Nothing was taken.\n(Raiders do not carry off your stores yet -- that rule is still being decided.)";
+                return "Nothing was carried off.\n(Your stores are never touched -- only what is still " +
+                       "waiting in a collector can be looted, and none of it was.)";
 
             var parts = new List<string>();
             if (s.Wood > 0) parts.Add(s.Wood + " wood");
             if (s.Iron > 0) parts.Add(s.Iron + " iron");
             if (s.Food > 0) parts.Add(s.Food + " food");
+            // Crystals/Magic are NEVER looted -- they are listed only so that if one ever appeared
+            // it would be VISIBLE on screen rather than silently hidden by a renderer that "knows"
+            // it cannot happen.
             if (s.Crystals > 0) parts.Add(s.Crystals + " crystals");
             if (s.Magic > 0) parts.Add(s.Magic + " magic");
-            return "They took " + string.Join(", ", parts) + ".";
+            return "They looted your collectors for " + string.Join(", ", parts) +
+                   ".\n(Your stores were never touched -- collect more often and there is less to take.)";
         }
 
         private static string RelativeTime(double whenUnixMs)

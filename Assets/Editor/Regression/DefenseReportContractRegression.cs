@@ -15,11 +15,13 @@
 //     made checkable today with no PvP built. The reserved LivePvp value round-trips too,
 //     so the enum converter can never quietly drop it.
 //
-//  3. ⛔ THE STAKES GUARD. Everything the PRODUCTION builder emits has an all-zero
-//     StakesLedger stamped "none.interim.wo1026". The loss consequence is UNRULED; this
-//     case FAILS THE GATE the day someone adds an economy rule without a ruling, which is
-//     precisely what WO-1026 forbids. When the owner rules, update this case to the NEW
-//     rule id -- do not delete it.
+//  3. ⛔ THE STAKES GUARD. The WO-1026 loss ruling LANDED 2026-08-21 and WO-1139 built it,
+//     so this case asserts the parts that survive any re-tuning: the production builder
+//     stamps StakeRules.RuleId (a report always names the ruling that wrote it, so a
+//     pre-WO-1139 record is never mis-read), it never emits crystals or magic, computing
+//     the stakes never marks them APPLIED, and a HELD defence takes nothing. The
+//     arithmetic itself is measured against an authored fixture in
+//     SiegeLossStakesRegression -- on purpose NOT re-derived here from the same constants.
 //
 //  4. AC "A REDESIGN HAS A VISIBLE EFFECT", as DATA. Two layouts differing by one moved
 //     structure MUST hash differently; the same layout in a different ORDER must hash the
@@ -90,8 +92,9 @@ namespace DeNelle.Editor
             if (failures.Count == 0)
             {
                 reason = "DEFENSE REPORT OK -- record round-trips (incl. a GhostSnapshot-sourced one, " +
-                         "so model (c) needs no schema change); stakes are all-zero @ " +
-                         StakesLedger.InterimRuleId + " (UNRULED); layout hash is move-sensitive + " +
+                         "so model (c) needs no schema change); stakes are self-describing @ " +
+                         StakeRules.RuleId + " and a held defence takes nothing (crystals never); " +
+                         "layout hash is move-sensitive + " +
                          "order-independent; ring buffer drops oldest; fields are additive default-on-read; " +
                          "hold time is never fabricated (unknown stays unknown, pre-damaged rows are " +
                          "disqualified); bands collapse honestly on a wall-less base; every plate mark has a " +
@@ -250,22 +253,48 @@ namespace DeNelle.Editor
         }
 
         // ── 3. ⛔ THE STAKES GUARD ───────────────────────────────────────────────
+        //
+        // The WO-1026 ruling LANDED (owner 2026-08-21) and WO-1139 implemented it, so this case
+        // no longer asserts "zero". It asserts the two things that outlive any tuning of the
+        // ruling: the ledger is SELF-DESCRIBING about which ruling wrote it, and a HELD defence
+        // takes nothing. The arithmetic itself is measured against an authored fixture table in
+        // SiegeLossStakesRegression -- deliberately not re-derived here from the same constants.
 
         private static void StakesInterimCase(List<string> f)
         {
             var settled = Populated(AttackerSource.GeneratedPve, string.Empty);
-            settled.Outcome = DefenseOutcome.Overrun;   // the WORST outcome — still takes nothing
+            settled.Outcome = DefenseOutcome.Overrun;
             var stakes = DeNelle.Village.DefenseReportBuilder.BuildStakes(settled);
 
             if (stakes == null) { f.Add("case4 BuildStakes returned null"); return; }
-            if (!stakes.IsEmpty)
-                f.Add($"case4 THE STAKES ARE NOT ZERO (w{stakes.Wood} i{stakes.Iron} f{stakes.Food} " +
-                      $"c{stakes.Crystals} m{stakes.Magic}) -- what a failed defence COSTS is an " +
-                      "UNRULED owner decision (WO-1026). If a ruling has landed, implement it in " +
-                      "DefenseReportBuilder.BuildStakes, stamp a NEW StakesRuleId, and update THIS case.");
-            if (stakes.StakesRuleId != StakesLedger.InterimRuleId)
-                f.Add($"case4 StakesRuleId is '{stakes.StakesRuleId}', expected '{StakesLedger.InterimRuleId}' " +
-                      "-- an old report must stay self-describing about which ruling produced it");
+
+            if (stakes.StakesRuleId != StakeRules.RuleId)
+                f.Add($"case4 StakesRuleId is '{stakes.StakesRuleId}', expected '{StakeRules.RuleId}' " +
+                      "-- every report must stay self-describing about which ruling produced it, so a " +
+                      "pre-WO-1139 record is never mis-read as 'they lost nothing that day'");
+
+            if (stakes.Crystals != 0 || stakes.Magic != 0)
+                f.Add($"case4 [HARD-RULE] THE BUILDER PRODUCED CRYSTALS/MAGIC (c{stakes.Crystals} m{stakes.Magic}) -- " +
+                      "crystals are purchasable with real money and are NEVER stealable (owner ruling " +
+                      "2026-08-21). This is a hard exemption, not a balance knob.");
+
+            if (stakes.Applied)
+                f.Add("case4 BuildStakes returned an ALREADY-APPLIED ledger -- computing the stakes must " +
+                      "never charge anyone; only DefenseReportBuilder.ApplyStakes may set Applied.");
+
+            // A CLEARED defence takes nothing, whatever the bank holds.
+            var held = Populated(AttackerSource.GeneratedPve, string.Empty);
+            held.Outcome = DefenseOutcome.Held;
+            var heldStakes = DeNelle.Village.DefenseReportBuilder.BuildStakes(held);
+            if (heldStakes == null || !heldStakes.IsEmpty)
+                f.Add("case4 a HELD defence produced a non-empty stakes ledger -- the ruling governs a " +
+                      "FAILED defence only");
+
+            // A pre-WO-1139 record must keep its own rule id: the interim constant still exists and
+            // Normalize still uses it. Deleting it would silently relabel history.
+            if (StakesLedger.InterimRuleId == StakeRules.RuleId)
+                f.Add("case4 the interim rule id was collapsed into the live one -- old reports would " +
+                      "start claiming they were written under a ruling that did not exist yet");
         }
 
         // ── 4. LAYOUT SENSITIVITY (AC: a redesign has a visible effect) ──────────

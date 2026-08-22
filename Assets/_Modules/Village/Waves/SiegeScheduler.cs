@@ -182,7 +182,7 @@ namespace DeNelle.Village
             why = null;
 
             if (!FeatureFlags.Siege)
-            { why = "ff.siege OFF (loss stakes are UNRULED -- see FeatureFlags.Siege)"; return true; }
+            { why = "ff.siege OFF (turned off deliberately -- the loop is complete; see FeatureFlags.Siege)"; return true; }
 
             if (_session != null)
             { why = $"a siege for wave {_session.WaveId} is already in progress"; return true; }
@@ -294,7 +294,27 @@ namespace DeNelle.Village
             UnbindManager();
 
             var record = session.Close(outcome);
-            DefenseReportLedger.Append(record);
+
+            // ⭐ THE RULED LOSS (WO-1139, ruling 2026-08-22): COLLECTOR LOOTING ONLY, NO BANK
+            //    THEFT. Close SUMMED the broken collectors' own LastLootStolen into
+            //    record.ResourcesLost; this SEALS that ledger (rule id, crystal backstop, the
+            //    idempotence latch) so a re-filed report cannot re-count it.
+            //
+            //    ⛔ IT DEBITS NOTHING. The collector removed the resources from its own pending
+            //    when it broke; a wallet debit here would charge the player twice for one siege.
+            //
+            //    ⛔ ORDER IS STILL LOAD-BEARING: seal BEFORE Append, so the persisted record is
+            //    the sealed one and a crash cannot leave an unsealed report to be re-counted.
+            //
+            //    ⛔ OFFLINE SIEGES LOOT TOO, and they arrive HERE — an away window becomes siege
+            //    PRESSURE (ApplyOfflineWindow), the siege then fires LIVE at the gate, and it
+            //    settles through this exact path. There is no second, silent theft path that could
+            //    shrink a number while the player was away: every theft in the game is attached to
+            //    a report the player can open, which is the WO-1139 legibility constraint met by
+            //    construction rather than by a notification.
+            DefenseReportBuilder.ApplyStakes(record);
+
+            DefenseReportLedger.Append(record);   // Read=false -> the unread badge is the tell
         }
 
         /// <summary>

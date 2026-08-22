@@ -651,8 +651,10 @@ namespace DeNelle.Core.State
             ///
             /// ⚠ DELIBERATELY **NO SCHEMA BUMP**. Both WO-1026 fields are nullable on the wire
             /// per the <c>.partial()</c> convention, so an older save simply loads GameState's
-            /// empty-list / 0 initializers — which is byte-identical to today's behaviour, since
-            /// the whole feature is behind <c>FeatureFlags.Siege</c> (default OFF). This rides
+            /// empty-list / 0 initializers — an older save loads as "this town has never been
+            /// attacked", which is exactly what it means. (WO-1139 added <c>StakesLedger.Applied</c>
+            /// on the nested record by the same rule: additive, default-on-read, false on an old
+            /// wire, which is correct because nothing was ever taken under the interim.) This rides
             /// the committed v38 exactly like <c>barracksLevel</c>/<c>troopLevels</c>/
             /// <c>gearLevels</c> (WO-771.9/WO-808) and needs no migrator step. A version bump on
             /// a LIVE published game is an owner decision, and nothing here requires one:
