@@ -56,6 +56,8 @@ namespace DeNelle.Village.Talents
         private RectTransform _graphContent;     // fixed-size scroll content (nodes + edges live here)
         private TMPro.TextMeshProUGUI _headerLabel;
         private ElarionUiKit.CurrencyChipHandle _wisdomChip;   // Wisdom chip, top-right of the graph
+        private RectTransform _quickSwapHost;
+        private TMPro.TextMeshProUGUI _quickSwapStatus;
 
         // Spend popup (owner 2026-08-15): shown on node tap; Confirm spends, Cancel dismisses.
         // Chrome is BuildObsidianPanel (common kit frame + gold border) — never a bare plate.
@@ -377,6 +379,7 @@ namespace DeNelle.Village.Talents
             if (_wisdomChip != null) _wisdomChip.SetAmount(_vm.RemainingWisdom);
 
             RebuildTracks();
+            RenderQuickSwapBar();
             RenderSpendPopup();
         }
 
@@ -396,17 +399,18 @@ namespace DeNelle.Village.Talents
             if (_popupPrompt != null) _popupPrompt.text = _vm.SelectedSpendPrompt;
 
             bool canSpend = _vm.CanSpendSelected;
+            bool canEquip = _vm.SelectedIsAssignable && !_vm.SelectedAlreadyOnBar;
             if (_popupConfirmBtn != null)
             {
                 // Keep the button present so layout stays stable; dim when unaffordable.
                 _popupConfirmBtn.gameObject.SetActive(true);
-                _popupConfirmBtn.interactable = canSpend;
-                SetButtonAlpha(_popupConfirmBtn, canSpend ? 1f : 0.35f);
+                _popupConfirmBtn.interactable = canSpend || canEquip;
+                SetButtonAlpha(_popupConfirmBtn, canSpend || canEquip ? 1f : 0.35f);
             }
             if (_popupConfirmRing != null)
-                _popupConfirmRing.SetActive(canSpend);
+                _popupConfirmRing.SetActive(canSpend || canEquip);
             if (_popupConfirmLabel != null)
-                _popupConfirmLabel.text = "CONFIRM";
+                _popupConfirmLabel.text = canEquip ? "EQUIP" : "CONFIRM";
             // Cancel is always the dismiss path (owned / locked / buyable).
             if (_popupCancelBtn != null)
             {
@@ -1549,9 +1553,13 @@ namespace DeNelle.Village.Talents
             // pins touch floors; they no longer consume body height.)
             var graphWell = BandHost(panel, "GraphWell", 0f, 1f);
             PinRegion(graphWell, BodyPadPx, BodyPadPx);
+            graphWell.offsetMin = new Vector2(graphWell.offsetMin.x, AbilityRowPx + BandGapPx * 3f);
+            graphWell.offsetMax = new Vector2(graphWell.offsetMax.x, -(WisdomBandPx + BandGapPx));
             BuildScrollGraph(graphWell);
 
-            // Wisdom chip floats over the graph, top-right (demo keeps currency glanceable).
+            BuildQuickSwapBar(panel);
+
+            // Wisdom owns a header band above the graph so nodes can never render beneath it.
             _wisdomChip = ElarionUiKit.CurrencyChip(panel, ElarionUiKit.CurrencyKind.Wisdom,
                 new Vector2(0.72f, 1f), new Vector2(0.98f, 1f), tag: "WISDOM");
             if (_wisdomChip != null && _wisdomChip.root != null)
@@ -1643,7 +1651,7 @@ namespace DeNelle.Village.Talents
             // (Screenshot 191356: orphan yellow square when CONFIRM was hidden).
             _popupConfirmBtn = ElarionUiKit.ButtonPack(btnHost, "CONFIRM", ElarionUiKit.ButtonKind.Quiet,
                 new Vector2(0.54f, 0.08f), new Vector2(0.96f, 0.92f),
-                () => { if (_vm != null) _vm.SpendSelected(); },
+                OnPopupConfirm,
                 packSpriteName: RpgUiCatalog.ButtonFrame);
             _popupConfirmLabel = StyleActionLabel(_popupConfirmBtn, ElarionUi.Gilt);
 
@@ -1659,6 +1667,77 @@ namespace DeNelle.Village.Talents
             ringImg.color = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.80f);
             ringImg.raycastTarget = false;
             _popupConfirmRing = ring;
+        }
+
+        private void OnPopupConfirm()
+        {
+            if (_vm == null) return;
+            if (_vm.CanSpendSelected) _vm.SpendSelected();
+            else if (_vm.SelectedIsAssignable) _vm.ConfirmOrAssign();
+        }
+
+        /// <summary>Persistent four-slot hot-swap rail. It sits beside the discovery surface so
+        /// the player can learn an active, equip it, and recognize the same numbered slot in combat.</summary>
+        private void BuildQuickSwapBar(Transform panel)
+        {
+            var rail = new GameObject("QuickSwapRail", typeof(RectTransform), typeof(HorizontalLayoutGroup));
+            rail.transform.SetParent(panel, false);
+            _quickSwapHost = rail.GetComponent<RectTransform>();
+            _quickSwapHost.anchorMin = new Vector2(0.02f, 0f);
+            _quickSwapHost.anchorMax = new Vector2(0.98f, 0f);
+            _quickSwapHost.pivot = new Vector2(0.5f, 0f);
+            _quickSwapHost.offsetMin = new Vector2(0f, BodyPadPx + BandGapPx);
+            _quickSwapHost.offsetMax = new Vector2(0f, BodyPadPx + BandGapPx + AbilityRowPx);
+
+            var layout = rail.GetComponent<HorizontalLayoutGroup>();
+            layout.spacing = 10f;
+            layout.childControlWidth = true;
+            layout.childForceExpandWidth = true;
+            layout.childControlHeight = true;
+            layout.childForceExpandHeight = true;
+            layout.padding = new RectOffset(0, 0, 34, 0);
+
+            _quickSwapStatus = ElarionUiKit.Label(rail.transform,
+                "Select an owned active, then tap a slot.", 0.78f, 1f,
+                ElarionUi.ParchmentDim, ElarionUi.FontMicro,
+                TMPro.TextAlignmentOptions.Center, 0.02f, 0.98f);
+            _quickSwapStatus.gameObject.name = "QuickSwapHint";
+            _quickSwapStatus.transform.SetAsFirstSibling();
+            var hintLayout = _quickSwapStatus.gameObject.AddComponent<LayoutElement>();
+            hintLayout.ignoreLayout = true;
+            ElarionUiKit.FitSingleLine(_quickSwapStatus);
+        }
+
+        private void RenderQuickSwapBar()
+        {
+            if (_quickSwapHost == null || _vm == null) return;
+            for (int i = _quickSwapHost.childCount - 1; i >= 0; i--)
+            {
+                var child = _quickSwapHost.GetChild(i);
+                if (_quickSwapStatus != null && child == _quickSwapStatus.transform) continue;
+                Destroy(child.gameObject);
+            }
+            if (_quickSwapStatus != null) _quickSwapStatus.text = _vm.QuickSwapStatus;
+
+            var slots = _vm.QuickSlots;
+            for (int i = 0; i < slots.Count; i++)
+            {
+                var slot = slots[i];
+                int captured = slot.SlotIndex;
+                string label = slot.SlotKey + "  " + (slot.IsEmpty ? "Empty" : slot.AbilityName);
+                var btn = ElarionUiKit.BuildObsidianButton(_quickSwapHost, label,
+                    ElarionUiKit.ObsidianButtonStyle.Style1,
+                    slot.IsEmpty ? ElarionUiKit.ObsidianButtonColor.Gray
+                                 : ElarionUiKit.ObsidianButtonColor.Yellow,
+                    Vector2.zero, Vector2.one,
+                    () => _vm?.AssignSelectedToSlot(captured));
+                var le = btn.gameObject.GetComponent<LayoutElement>();
+                if (le == null) le = btn.gameObject.AddComponent<LayoutElement>();
+                le.minHeight = ElarionUiKit.MinTouchPx;
+                le.preferredHeight = ElarionUiKit.MinTouchPx;
+                var text = btn.GetComponentInChildren<TMPro.TextMeshProUGUI>();
+                if (text != null) ElarionUiKit.FitSingleLine(text);
+            }
         }
 
         // Retired name kept so SkillsPanelLayoutRegression [source] still finds the token.

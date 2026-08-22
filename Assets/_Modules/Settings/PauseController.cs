@@ -153,7 +153,7 @@ namespace DeNelle.Settings
             // guaranteeing disjoint, gapped, >=MinTouchPx bands that always fit inside the frame at
             // any screen size (verified headless: Builds/ui-capture/PauseMenu_<res>.png).
             _modal = ElarionUiKit.BuildObsidianModal("PauseUI", "Paused",
-                new Vector2(0.33f, 0.11f), new Vector2(0.67f, 0.89f), Resume,
+                ElarionUiKit.ModalArchetype.Compact, Resume,
                 sortingOrder: 31500,
                 frameName: RpgUiCatalog.FrameOptions, medallionIcon: "settings");
 

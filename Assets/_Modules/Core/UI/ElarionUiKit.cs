@@ -306,10 +306,12 @@ namespace DeNelle.Core.UI
         // PinCanonicalCtaSize), so they render identically on every screen.
         // =====================================================================
         /// <summary>Canonical Continue/Close CTA width in reference pixels (1080x1920 modal canvas).</summary>
-        public const float CanonCtaWidth = 360f;
+        // Compact landscape footprint; still a generous one-handed target.
+        public const float CanonCtaWidth = 300f;
         /// <summary>Canonical Continue/Close CTA height in reference pixels (1080x1920 modal canvas).
         /// Raised 120→132 (~60 dp one-handed thumb, VISUAL_TOUCH_CONTRAST_AUDIT 2026-07-14 P0).</summary>
-        public const float CanonCtaHeight = 132f;
+        // Slightly above the audited touch floor so the framed-button label keeps its clear inset.
+        public const float CanonCtaHeight = 120f;
 
         /// <summary>Kit touch floor: the SHORTEST resolved side of any kit-built button in
         /// reference px (~50 dp on the Seeker). The analogue of the FontFloor for buttons —
@@ -835,6 +837,74 @@ namespace DeNelle.Core.UI
             public GameObject canvas;
             /// <summary>The built panel chrome (content / title / close).</summary>
             public PanelChrome chrome;
+        }
+
+        /// <summary>
+        /// Reusable modal footprints. Content-heavy screens should choose by interaction pattern,
+        /// not invent per-screen anchors; this keeps title scale, breathing room, and thumb-zone
+        /// placement consistent across aspect ratios.
+        /// </summary>
+        public enum ModalArchetype
+        {
+            Compact,       // pause, confirmations, short decisions
+            Standard,      // settings, tower/build management
+            Browse,        // master-detail lists, maps, shops
+            Workspace      // dense editors and battle preparation
+        }
+
+        /// <summary>Resolve the canonical safe-area footprint for a modal archetype.</summary>
+        public static void ModalAnchors(ModalArchetype archetype,
+            out Vector2 anchorMin, out Vector2 anchorMax)
+        {
+            bool portrait = SurfaceHeight > SurfaceWidth;
+            if (portrait)
+            {
+                switch (archetype)
+                {
+                    case ModalArchetype.Compact:
+                        anchorMin = new Vector2(0.08f, 0.18f);
+                        anchorMax = new Vector2(0.92f, 0.82f);
+                        return;
+                    case ModalArchetype.Standard:
+                        anchorMin = new Vector2(0.05f, 0.10f);
+                        anchorMax = new Vector2(0.95f, 0.90f);
+                        return;
+                    default:
+                        anchorMin = new Vector2(0.025f, 0.04f);
+                        anchorMax = new Vector2(0.975f, 0.96f);
+                        return;
+                }
+            }
+
+            switch (archetype)
+            {
+                case ModalArchetype.Compact:
+                    anchorMin = new Vector2(0.35f, 0.10f);
+                    anchorMax = new Vector2(0.65f, 0.90f);
+                    break;
+                case ModalArchetype.Standard:
+                    anchorMin = new Vector2(0.20f, 0.10f);
+                    anchorMax = new Vector2(0.80f, 0.90f);
+                    break;
+                case ModalArchetype.Browse:
+                    anchorMin = new Vector2(0.06f, 0.06f);
+                    anchorMax = new Vector2(0.94f, 0.94f);
+                    break;
+                default:
+                    anchorMin = new Vector2(0.035f, 0.04f);
+                    anchorMax = new Vector2(0.965f, 0.96f);
+                    break;
+            }
+        }
+
+        /// <summary>Build a complete modal using a shared responsive footprint.</summary>
+        public static ObsidianModal BuildObsidianModal(string name, string title,
+            ModalArchetype archetype, Action onClose, int sortingOrder = 31000,
+            string frameName = null, string medallionIcon = null)
+        {
+            ModalAnchors(archetype, out var anchorMin, out var anchorMax);
+            return BuildObsidianModal(name, title, anchorMin, anchorMax, onClose,
+                sortingOrder, frameName, medallionIcon);
         }
 
         /// <summary>Build a complete Obsidian modal (canvas + scrim + chrome) in one call.</summary>

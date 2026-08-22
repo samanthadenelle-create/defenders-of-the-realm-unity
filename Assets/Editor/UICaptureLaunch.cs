@@ -105,6 +105,7 @@ using DeNelle.Dungeons;   // LoreReadingModal, LoreReadRequest, LoreFragmentSet 
 using DeNelle.Village;    // EchoUnlockDialogue, EchoRosterCatalog, EchoRosterEntry, Tower, BuildMenu
 using DeNelle.Village.Hero; // RumorBoardPanel, RumorBoardVM, IRumorBoardBackend (WO-810 board capture)
 using DeNelle.Village.UI; // TowerManagerPanel, PlacedTowerListVM (WO-795)
+using DeNelle.Village.Talents; // HeroSkillTreePanelMvvm (tree + hot-swap rail capture)
 
 namespace DeNelle.Editor
 {
@@ -520,6 +521,7 @@ namespace DeNelle.Editor
                 count += CaptureBuildMenuUpgradeTower();
                 count += CaptureRumorBoard();
                 count += CaptureRealmMap();
+                count += CaptureHeroSkillTree();
                 count += CaptureQueueRail();         // WO-864: the CoC queue card rail
                 count += CaptureBuildGhostChips();   // WO-1010 P1: chips on the ghost
                 count += CapturePaletteCollapsed();  // WO-1010 P2: dock open + collapsed w/ restore tab
@@ -1951,6 +1953,67 @@ namespace DeNelle.Editor
                 if (tempEventSystem != null) UnityEngine.Object.DestroyImmediate(tempEventSystem);
             }
 
+            return saved;
+        }
+
+        // ---------------------------------------------------------------------
+        //  Hero talent graph + persistent four-slot hot-swap rail. This is built
+        //  from the real live-class VM; the edit-mode fallback is Knight, matching
+        //  first-run behavior when no gameplay GameState exists.
+        // ---------------------------------------------------------------------
+        private static int CaptureHeroSkillTree()
+        {
+            return ForEachTarget("HeroSkillTree", CaptureHeroSkillTreeOnce);
+        }
+
+        private static int CaptureHeroSkillTreeOnce(CaptureTarget target)
+        {
+            int saved = 0;
+            GameObject tempEventSystem = null;
+            GameObject hostGo = null;
+            GameObject canvasGo = null;
+            HeroSkillTreePanelMvvm panel = null;
+            try
+            {
+                if (UnityEngine.Object.FindAnyObjectByType<UnityEngine.EventSystems.EventSystem>() == null)
+                {
+                    tempEventSystem = new GameObject("~UICapEventSystem");
+                    tempEventSystem.AddComponent<UnityEngine.EventSystems.EventSystem>();
+                }
+                hostGo = new GameObject("~UICapHeroSkillTree");
+                panel = hostGo.AddComponent<HeroSkillTreePanelMvvm>();
+                panel.Open();
+                canvasGo = GetPrivateGameObject(panel, "_ui");
+                if (canvasGo == null)
+                {
+                    Debug.LogWarning("[UICap-HL] HeroSkillTreePanelMvvm._ui null after Open -- skipped.");
+                    return 0;
+                }
+                if (RenderCanvasToPng(canvasGo,
+                    OutDir + "HeroSkillTree_" + target.Tag + ".png", target.W, target.H)) saved++;
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("[UICap-HL] hero skill tree capture threw: " + e);
+            }
+            finally
+            {
+                try
+                {
+                    if (panel != null)
+                    {
+                        var handle = GetPrivateFieldValue(panel, "_panelHandle") as PanelHandle;
+                        if (handle != null) PanelManager.NotifyClosed(handle);
+                    }
+                }
+                catch (Exception pe)
+                {
+                    Debug.LogWarning("[UICap-HL] hero skill tree arbiter release failed: " + pe.Message);
+                }
+                if (canvasGo != null) UnityEngine.Object.DestroyImmediate(canvasGo);
+                if (hostGo != null) UnityEngine.Object.DestroyImmediate(hostGo);
+                if (tempEventSystem != null) UnityEngine.Object.DestroyImmediate(tempEventSystem);
+            }
             return saved;
         }
 

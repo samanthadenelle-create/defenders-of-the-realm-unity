@@ -197,7 +197,8 @@ namespace DeNelle.Village.Hero
             StarRatingRow.Build(host, 3, 3, 0.19f, y0, 0.28f, y1, sizePx: 12f);
             // Honesty: this is the LIVE raid clock (3★ under-time), not a longer decorative target.
             var timeLbl = ElarionUiKit.Label(host, "Clock: " + FormatTime(_vm != null ? _vm.TargetTime : 0f),
-                y0, y1, ElarionUi.Gilt, ElarionUi.FontBody, TMPro.TextAlignmentOptions.Left, 0.305f, 0.75f, bold: true);
+                y0, y1, ElarionUi.Gilt, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Left, 0.305f, 0.75f, bold: true);
+            ElarionUiKit.FitSingleLine(timeLbl);
             timeLbl.raycastTarget = false;
         }
 
@@ -222,7 +223,8 @@ namespace DeNelle.Village.Hero
             float listY1   = hasSubHeader ? 0.645f : 0.615f;
 
             var lbl = ElarionUiKit.Label(body, "YOUR FORCES", forcesY0, forcesY1, ElarionUi.Gilt,
-                ElarionUi.FontHead, TMPro.TextAlignmentOptions.Left, 0.00f, LeftColX1, bold: true);
+                ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Left, 0.00f, LeftColX1, bold: true);
+            ElarionUiKit.FitSingleLine(lbl);
             lbl.raycastTarget = false;
 
             // Hero + Companions portrait row.
@@ -280,12 +282,14 @@ namespace DeNelle.Village.Hero
 
             int n = classes.Count;
             if (n == 0) return;
-            float slot = 1f / Mathf.Max(n, 1);
+            float slot = Mathf.Min(0.30f, 0.92f / Mathf.Max(n, 1));
+            float rowWidth = slot * n;
+            float rowStart = (1f - rowWidth) * 0.5f;
             for (int i = 0; i < n; i++)
             {
                 string cls = classes[i];
-                float x0 = i * slot + 0.02f;
-                float x1 = (i + 1) * slot - 0.02f;
+                float x0 = rowStart + i * slot + 0.015f;
+                float x1 = rowStart + (i + 1) * slot - 0.015f;
 
                 // Framed portrait niche.
                 var niche = ElarionUiKit.Niche(rowHost.transform, new Vector2(x0, 0.18f), new Vector2(x1, 0.98f));
@@ -378,11 +382,11 @@ namespace DeNelle.Village.Hero
             // (#29) A dark recessed Well, not a Niche — with BlinkChrome off the Niche painted an
             // opaque warm-stone (olive) slab; a dark inset reads as an empty preview panel.
             float prevTop = hasSubHeader ? 0.960f : 0.845f;
-            var preview = ElarionUiKit.Well(body, new Vector2(RightColX0, 0.42f), new Vector2(1.00f, prevTop));
+            var preview = ElarionUiKit.Well(body, new Vector2(RightColX0, 0.46f), new Vector2(1.00f, prevTop));
             preview.GetComponent<Image>().raycastTarget = false;
 
             var crest = ElarionUiKit.AddImage(preview.transform, "PreviewCrest",
-                new Vector2(0.38f, 0.44f), new Vector2(0.62f, 0.86f),
+                new Vector2(0.40f, 0.55f), new Vector2(0.60f, 0.92f),
                 new Color(1f, 1f, 1f, 0.55f));
             var crestImg = crest.GetComponent<Image>();
             var crestSprite = UiStyle.Icon("combat", "crest", "shield", "emblem");
@@ -398,40 +402,36 @@ namespace DeNelle.Village.Hero
             }
             crestImg.raycastTarget = false;
 
-            var pvTitle = ElarionUiKit.Label(preview.transform, "ENEMY BASE", 0.28f, 0.40f,
-                ElarionUi.Gilt, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f, bold: true);
-            pvTitle.raycastTarget = false;
-            var pvLbl = ElarionUiKit.Label(preview.transform, "Assault to recon — drop troops on the field", 0.14f, 0.26f,
-                ElarionUi.ParchmentDim, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f);
-            pvLbl.raycastTarget = false;
-
-            // Soft est band (never longer than the live raid clock).
+            // One owned information block is more robust than four narrow free-floating bands:
+            // the hierarchy remains intact at every aspect and TMP can fit the stack as a unit.
             string est = _vm != null ? FormatTime(_vm.EstClearTime) : "--:--";
-            var estLbl = ElarionUiKit.Label(body, "Est. clear (soft): ~" + est, 0.34f, 0.40f, ElarionUi.Gilt,
-                ElarionUi.FontBody, TMPro.TextAlignmentOptions.Center, RightColX0, 1.00f, bold: true);
-            estLbl.raycastTarget = false;
-
-            // Summary — total deployable troops + a simple power rating (VM-computed).
             int totalTroops = _vm != null ? _vm.DeployableCount : 0;
             int power = _vm != null ? _vm.PowerRating : 0;
-            var sumLbl = ElarionUiKit.Label(body, $"Troops: {totalTroops}    Power: {power}", 0.26f, 0.32f,
-                ElarionUi.Parchment, ElarionUi.FontBody, TMPro.TextAlignmentOptions.Center, RightColX0, 1.00f, bold: true);
-            sumLbl.raycastTarget = false;
+            string previewCopy = "<b><color=#E8BD45>ENEMY BASE</color></b>\n" +
+                "Assault to recon - deploy troops on the field\n" +
+                "<color=#E8BD45>Est. ~" + est + "</color>  |  Troops " + totalTroops + "  |  Power " + power;
+            var pvInfo = ElarionUiKit.Label(preview.transform, previewCopy, 0.02f, 0.54f,
+                ElarionUi.Parchment, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f);
+            pvInfo.richText = true;
+            ElarionUiKit.FitBlock(pvInfo);
+            pvInfo.raycastTarget = false;
 
             // WO-839 #3: SCOUT REPORT intel band fills the previously bare lower band.
             // Strict MVVM: the View renders vm.ScoutReport lines verbatim — honest config
             // facts only (walls / gates / garrison / boss; never the cosmetic reward
             // fields the loot math ignores).
-            var intel = ElarionUiKit.Well(body, new Vector2(RightColX0, 0.00f), new Vector2(1.00f, 0.24f));
+            var intel = ElarionUiKit.Well(body, new Vector2(RightColX0, 0.00f), new Vector2(1.00f, 0.44f));
             intel.GetComponent<Image>().raycastTarget = false;
-            var intelHdr = ElarionUiKit.Label(intel.transform, "SCOUT REPORT", 0.76f, 0.98f,
+            var intelHdr = ElarionUiKit.Label(intel.transform, "SCOUT REPORT", 0.72f, 0.96f,
                 ElarionUi.Gilt, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f, bold: true);
+            ElarionUiKit.FitSingleLine(intelHdr);
             intelHdr.raycastTarget = false;
             var report = _vm != null ? _vm.ScoutReport : null;
             string intelText = report != null && report.Count > 0
                 ? string.Join("\n", report) : "No scout intel available.";
-            var intelLbl = ElarionUiKit.Label(intel.transform, intelText, 0.04f, 0.74f,
+            var intelLbl = ElarionUiKit.Label(intel.transform, intelText, 0.06f, 0.70f,
                 ElarionUi.Parchment, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.TopLeft, 0.08f, 0.92f);
+            ElarionUiKit.FitBlock(intelLbl);
             intelLbl.raycastTarget = false;
         }
 

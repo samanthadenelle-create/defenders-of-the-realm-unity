@@ -148,7 +148,7 @@ namespace DeNelle.Village.UI
             if (_modal != null && _modal.canvas != null) return;
 
             _modal = ElarionUiKit.BuildObsidianModal("TowerManagerUI", "Towers",
-                new Vector2(0.18f, 0.12f), new Vector2(0.82f, 0.88f), Hide,
+                ElarionUiKit.ModalArchetype.Standard, Hide,
                 frameName: RpgUiCatalog.FrameCore, medallionIcon: "shield");
 
             var layout = _modal.chrome.layout;
