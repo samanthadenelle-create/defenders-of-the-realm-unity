@@ -152,7 +152,21 @@ namespace DeNelle.Village
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
         {
-            if (Instance != null) return;
+            // ── CANDIDATE-CAUSE #1 PROBE (owner device 2026-08-21 "no npc for armor") ──
+            // "Did the injector run AT ALL, and in which scene?" was previously unanswerable from a
+            // capture: Bootstrap/Awake were silent, and a NON-hub scene produced literally zero lines,
+            // so "injector never ran" and "injector ran and found nothing" read identically. Name the
+            // bootstrap + the active scene unconditionally so one run separates them.
+            string boot = SceneManager.GetActiveScene().name;
+            if (Instance != null)
+            {
+                FlowTrace.Step("Vendor",
+                    $"Bootstrap skipped — injector already up (active scene '{boot}').");
+                return;
+            }
+            FlowTrace.Step("Vendor",
+                $"Bootstrap creating CastleVendorNpcInjector (AfterSceneLoad, active scene '{boot}', " +
+                $"isCastleHub={IsCastleHubScene(boot)}).");
             new GameObject("CastleVendorNpcInjector").AddComponent<CastleVendorNpcInjector>();
         }
 
@@ -164,7 +178,25 @@ namespace DeNelle.Village
 
             SceneManager.sceneLoaded -= OnSceneLoaded;
             SceneManager.sceneLoaded += OnSceneLoaded;
-            if (IsCastleHubScene(SceneManager.GetActiveScene().name)) Inject();
+            string active = SceneManager.GetActiveScene().name;
+            bool hub = IsCastleHubScene(active);
+            // CANDIDATE #1: injector alive but the scene gate closed. Stated PLAINLY — a capture that
+            // shows this Warn and no Inject line proves the injector ran in the WRONG scene, which is a
+            // different bug from "ran in the right scene and found no armorer".
+            if (hub)
+            {
+                FlowTrace.Step("Vendor",
+                    $"Awake: injector up in castle-hub scene '{active}' — injecting now.");
+                Inject();
+            }
+            else
+            {
+                FlowTrace.Warn("Vendor",
+                    $"Awake: injector up but active scene '{active}' is NOT a castle-hub scene " +
+                    $"(expected '{TargetScene}' or '{MergedTargetScene}') — NO vendor injection this Awake. " +
+                    "The sceneLoaded hook is armed; if the hub never logs an Inject line after this, the hub " +
+                    "scene name drifted and IsCastleHubScene must be widened.");
+            }
 
             // Drain any placement that fired before Instance was set (timing race). AFTER Inject so the
             // fresh HolderName exists — draining first would parent vendors to a holder Inject then nukes.
@@ -200,7 +232,19 @@ namespace DeNelle.Village
 
         private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
         {
-            if (IsCastleHubScene(scene.name)) Inject();
+            // CANDIDATE #1 (cont.): log EVERY scene load the injector observes, hub or not. A capture
+            // that lists only non-hub loads proves the hub scene never arrived under a name this gate
+            // recognises — instead of the old total silence, which looked the same as "never ran".
+            if (IsCastleHubScene(scene.name))
+            {
+                FlowTrace.Step("Vendor", $"sceneLoaded '{scene.name}' ({mode}) IS a castle hub — injecting.");
+                Inject();
+            }
+            else
+            {
+                FlowTrace.Once("Vendor", $"nonhub-scene-{scene.name}",
+                    $"sceneLoaded '{scene.name}' ({mode}) is NOT a castle-hub scene — no vendor injection here (by design).");
+            }
         }
 
         // Holder so re-injection (idempotent) is trivial: clear the prior holder, respawn.
@@ -228,8 +272,30 @@ namespace DeNelle.Village
             // (One Model: readers query the collection, never a baked name). The old
             // marker loop + the apothecary/jeweler deferred passes were deleted with the
             // flag — AnchorVendorsToPlacedBuildings covers every role, stations included.
+            // CANDIDATE #4 PROBE (ordering) + the ROLE-COLLISION fact. Name the scene, and dump the
+            // anchor table AS THE INJECTOR SEES IT — including the fact that a ROLE can carry MORE THAN
+            // ONE anchor id (Blacksmith is listed twice: "armorer" AND "forge"). `pending` is keyed by
+            // ROLE, so the FIRST anchor to resolve SETTLES the role and every sibling anchor is
+            // abandoned. That is a live candidate for "no npc for armor": if the "forge" building seats
+            // Blacksmith first, the "armorer" anchor is never consulted again and the armorer storefront
+            // stays speaker-less with no failure anywhere. Log it up front so the read is one line.
+            var byRole = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.List<string>>();
+            foreach (var a in AnchorRoles)
+            {
+                if (!byRole.TryGetValue(a.Role, out var ids)) { ids = new System.Collections.Generic.List<string>(); byRole[a.Role] = ids; }
+                ids.Add(a.BuildingId);
+            }
+            var tableSb = new System.Text.StringBuilder();
+            foreach (var kv in byRole)
+            {
+                if (tableSb.Length > 0) tableSb.Append("; ");
+                tableSb.Append(kv.Key).Append("->[").Append(string.Join(",", kv.Value)).Append(']');
+                if (kv.Value.Count > 1) tableSb.Append("(MULTI-ANCHOR: first to resolve settles the role)");
+            }
             FlowTrace.Step("Vendor",
-                "anchoring vendors to the Building collection (strategic placement always on).");
+                $"Inject in scene '{SceneManager.GetActiveScene().name}': anchoring vendors to the Building " +
+                $"collection (strategic placement always on). {byRole.Count} distinct role(s), " +
+                $"{AnchorRoles.Length} anchor row(s): {tableSb}");
             StartCoroutine(nameof(AnchorVendorsToPlacedBuildings));
         }
 
@@ -299,16 +365,77 @@ namespace DeNelle.Village
                 // in structures-catalog.json: collector_lumbermill->"lumbermill", collector_farm->"farm",
                 // collector_forge->"forge").
                 var liveCollectors = FindObjectsByType<DeNelle.Village.Buildings.Progression.ResourceCollector>();
+
+                // ── CANDIDATE #3 + #4 PROBE: the WORLD CENSUS, per pass ───────────────────────
+                // The old poll never said what it actually SAW. Its only skip line was
+                // Once("await-<id>") — which fires on PASS 0, before BaseLayoutLoader replays the
+                // save, and then NEVER AGAIN. So a capture read "armorer awaiting building" forever
+                // even after the town had fully populated, and "the player never built an armorer"
+                // was indistinguishable from "the injector looked before anything existed".
+                // Emit the ids the injector can actually see, and state the ordering fact PLAINLY
+                // when the world is still empty — never report an empty scan as if it were the world.
+                bool censusPass = pass <= 2 || (pass % 15) == 0;
+                if (censusPass)
+                {
+                    var ids = new System.Collections.Generic.List<string>();
+                    foreach (var b in live) if (b != null && b.IsAlive) ids.Add($"B:{b.BuildingId}");
+                    foreach (var c in liveCollectors) if (c != null && c.IsAlive) ids.Add($"C:{c.BuildingId}");
+                    string idList = ids.Count == 0 ? "<none>" : string.Join(",", ids);
+                    if (live.Length == 0 && liveCollectors.Length == 0)
+                    {
+                        // THE ORDERING FACT, said out loud. Pass 0 runs synchronously inside
+                        // OnSceneLoaded — BEFORE BaseLayoutLoader.Start replays the placed buildings.
+                        // An empty scan here is NOT evidence about what the player built.
+                        FlowTrace.Warn("Vendor",
+                            $"poll pass {pass}: scanned ZERO Buildings and ZERO ResourceCollectors. " +
+                            (pass == 0
+                                ? "This is pass 0, which runs INSIDE OnSceneLoaded, BEFORE BaseLayoutLoader replays the " +
+                                  "saved structures — so this proves NOTHING about what the player has built. Read the " +
+                                  "pass-1+ census below for the real world state."
+                                : "The world is genuinely empty at this pass (replay should have finished by now) — " +
+                                  "either the save has no structures or the replay failed upstream of this injector.") +
+                            $" Still pending role(s): {string.Join(",", pending)}");
+                    }
+                    else
+                    {
+                        FlowTrace.Step("Vendor",
+                            $"poll pass {pass} census: {live.Length} Building(s) + {liveCollectors.Length} " +
+                            $"ResourceCollector(s) live -> ids [{idList}]. Pending role(s): {string.Join(",", pending)}");
+                    }
+                }
+
                 foreach (var (role, buildingId) in AnchorRoles)
                 {
-                    if (!pending.Contains(role)) continue;
+                    if (!pending.Contains(role))
+                    {
+                        // ROLE-COLLISION PROBE (candidate #3/#5): this anchor id is being SKIPPED not
+                        // because its building is missing, but because a SIBLING anchor already settled
+                        // the role. For "armorer" that is the whole bug shape — say which id won.
+                        FlowTrace.Once("Vendor", $"role-settled-skip-{buildingId}",
+                            $"anchor '{buildingId}' (role {role}) SKIPPED — the role was already settled by a " +
+                            "sibling anchor row, so this building will never be examined again this poll. " +
+                            "If this id is the one missing its NPC, the multi-anchor role table is the cause, " +
+                            "not a missing building or a missing body.");
+                        continue;
+                    }
 
+                    // GUARDED per-role seat (§12): every lookup below — the live-Building scan, the
+                    // collector scan, ResolveBakedOrStationAnchor's inactive-name walk, the spawn —
+                    // can throw on ONE malformed vendor. Un-guarded, that exception unwound the whole
+                    // coroutine and silently killed the seat pass for EVERY REMAINING ROLE, which
+                    // looks exactly like "the armorer just never got an NPC". Guard.Try logs the
+                    // failure via FlowTrace.Fail and lets the next role proceed.
+                    Guard.Try("Vendor", $"anchor vendor role '{role}' -> building id '{buildingId}' (pass {pass})", () =>
+                    {
                     // Already placed (a prior pass / re-load survivor)? Settle the role.
                     if (GameObject.Find($"CastleVendor_{role}") != null ||
                         GameObject.Find($"CastleVendor_{role}_Placeholder") != null)
                     {
                         pending.Remove(role);
-                        continue;
+                        FlowTrace.Once("Vendor", $"already-seated-{role}",
+                            $"{role} already has a live vendor body in the scene — role settled without a new spawn " +
+                            $"(anchor row '{buildingId}' not consulted).");
+                        return;
                     }
 
                     Transform anchorTf = null;
@@ -379,10 +506,19 @@ namespace DeNelle.Village
 
                     if (anchorTf == null)
                     {
-                        // Skip decision — Once per id so the poll never spams the trace.
-                        FlowTrace.Once("Vendor", $"await-{buildingId}",
-                            $"{role} awaiting building/collector '{buildingId}' — no live building AND no baked/station anchor in scene; vendor not spawned.");
-                        continue;
+                        // Skip decision. The key now carries a PASS BUCKET so the line re-reports as the
+                        // world changes instead of firing once on pass 0 and going silent forever (the
+                        // old Once("await-<id>") — the reason a capture could not distinguish "not built"
+                        // from "looked too early"). Buckets: 0 (pre-replay), 1 (post-replay), then decade.
+                        int bucket = pass == 0 ? 0 : (pass < 10 ? 1 : pass / 10 * 10);
+                        FlowTrace.Once("Vendor", $"await-{buildingId}-p{bucket}",
+                            $"{role} awaiting building/collector '{buildingId}' at poll pass {pass} — no live " +
+                            $"Building, no live ResourceCollector, and no baked/station anchor in the scene; vendor not spawned. " +
+                            (pass == 0
+                                ? "PASS 0 IS PRE-REPLAY — this is an ordering observation, NOT evidence the player lacks this building."
+                                : "Post-replay: the player genuinely has no '" + buildingId + "' placed, OR the Lever-1 baked/station " +
+                                  "fallback was withheld by the blank-town gate (look for the blank-gate line above)."));
+                        return;
                     }
 
                     // Capture BEFORE spawning: the synthetic marker (and a temp anchor) are
@@ -404,8 +540,19 @@ namespace DeNelle.Village
                     if (ok)
                     {
                         pending.Remove(role);
+                        // Name the anchors this settle ABANDONS. A role with >1 anchor row keeps only the
+                        // winner; every sibling id silently stops being watched from here on. Making the
+                        // abandonment explicit is what turns "the armorer has no NPC" from a mystery into
+                        // a one-line read.
+                        var abandoned = new System.Collections.Generic.List<string>();
+                        foreach (var a in AnchorRoles)
+                            if (a.Role == role && a.BuildingId != buildingId) abandoned.Add(a.BuildingId);
                         FlowTrace.Step("Vendor",
-                            $"{role} anchored to {anchorLabel} for '{buildingId}' @ {anchorPos}");
+                            $"{role} anchored to {anchorLabel} for '{buildingId}' @ {anchorPos} — role SETTLED." +
+                            (abandoned.Count > 0
+                                ? $" ABANDONING sibling anchor(s) [{string.Join(",", abandoned)}] for this role: those " +
+                                  "buildings will get NO poll-seated NPC (only the placement hook can still seat them)."
+                                : string.Empty));
                     }
                     else
                     {
@@ -414,13 +561,17 @@ namespace DeNelle.Village
                         FlowTrace.Fail("Vendor",
                             $"{role} spawn FAILED at {anchorLabel} for '{buildingId}' — will retry next poll.");
                     }
+                    });   // Guard.Try — a throw here is logged and the NEXT role still gets its turn
                 }
 
                 if (pending.Count == 0) break;
                 pass++;
                 yield return new WaitForSecondsRealtime(PollSeconds);
             }
-            FlowTrace.Step("Vendor", "vendor anchor poll complete — every role has its NPC.");
+            FlowTrace.Step("Vendor",
+                $"vendor anchor poll complete after {pass} pass(es) — every ROLE settled. NOTE: 'every role' " +
+                "is not 'every building': a role with multiple anchor rows settled on ONE of them (see the " +
+                "ABANDONING lines above), and the poll now stops watching entirely.");
         }
 
         // ── LEVER 1 baked/station anchor resolver (owner 2026-07-24, WWCD) ─────────────
@@ -724,14 +875,56 @@ namespace DeNelle.Village
             string bodyRes = v.BodyRes;
             string kayKitRes = null;   // WO-833: non-null marks a KayKit body -> arm the shared idle below
             GameObject prefab = null;
+            // ── CANDIDATE-CAUSE #2 PROBE: "did the body resolve, and from WHERE?" ─────────────
+            // Previously only the total MISS was logged, so a body that resolved via an unexpected
+            // source (or fell through the data-driven npcModel path silently, which is exactly what
+            // a catalog row with npcModel None does) left no line at all. Name the source AND the
+            // exact Resources path for every outcome, including the quiet not-authored fall-through.
+            string bodySource;
             if (!string.IsNullOrEmpty(catalogId))
             {
                 prefab = KayKitNpcBody.Load(catalogId, "Village", out kayKitRes);
                 if (prefab != null) bodyRes = kayKitRes;
             }
-            if (prefab == null)
-                prefab = Resources.Load<GameObject>(v.BodyRes)
-                         ?? Resources.Load<GameObject>(BodyMerchant);
+            if (prefab != null)
+            {
+                bodySource = $"catalog repo.npcModel of '{catalogId}' -> Resources/{kayKitRes}";
+            }
+            else
+            {
+                // Not authored (npcModel None / no catalog row) or the slug missed — KayKitNpcBody
+                // already Warns on a MISS, and is deliberately quiet when unauthored. Say which.
+                string why = string.IsNullOrEmpty(catalogId)
+                    ? "no catalogId supplied (baked/marker seat path)"
+                    : $"catalog row '{catalogId}' authored no usable repo.npcModel (npcModel absent/None, or the slug missed — see any KayKit Warn above)";
+                var primary = Resources.Load<GameObject>(v.BodyRes);
+                if (primary != null)
+                {
+                    prefab = primary;
+                    bodySource = $"legacy People chain -> Resources/{v.BodyRes} ({why})";
+                }
+                else
+                {
+                    var merchant = Resources.Load<GameObject>(BodyMerchant);
+                    if (merchant != null)
+                    {
+                        prefab = merchant;
+                        bodyRes = BodyMerchant;
+                        // A vendor wearing the generic merchant instead of its own body is a REAL
+                        // defect signal (the Armorer should be the smith), so Warn, not Step.
+                        FlowTrace.Warn("Village",
+                            $"vendor role '{role}' (structureId '{v.StructureId}'): its OWN body " +
+                            $"Resources/{v.BodyRes} FAILED to load — falling back to the generic " +
+                            $"Resources/{BodyMerchant}. {why}. Stage the missing prefab at " +
+                            $"Assets/Resources/{v.BodyRes}.prefab to restore this vendor's identity.");
+                        bodySource = $"GENERIC merchant fallback -> Resources/{BodyMerchant} (own body Resources/{v.BodyRes} missing)";
+                    }
+                    else bodySource = $"NONE — Resources/{v.BodyRes} and Resources/{BodyMerchant} both missing ({why})";
+                }
+            }
+            FlowTrace.Step("Village",
+                $"vendor role '{role}' (structureId '{v.StructureId}', label '{v.Label}', catalogId " +
+                $"'{catalogId ?? "<null>"}') body resolution: {bodySource}; prefabResolved={(prefab != null)}.");
             if (prefab == null)
             {
                 // T/U: load-miss — fall back to a placeholder so the storefront still gets a working

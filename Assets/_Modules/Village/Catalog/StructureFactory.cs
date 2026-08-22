@@ -28,6 +28,7 @@ using UnityEngine.AI;          // NavMeshObstacle footprint self-report (invisib
 using DeNelle.Core.Catalog;
 using DeNelle.Core.Combat;     // DamageElement literals (WO-113 ArcaneTower default element)
 using DeNelle.Core.Diagnostics; // FlowTrace / Guard — TGVRU instrumentation (§12)
+using DeNelle.Cosmetics;        // CosmeticApplier — the village-category cosmetic seam (see AttachCosmeticSeam)
 
 namespace DeNelle.Village
 {
@@ -220,11 +221,92 @@ namespace DeNelle.Village
                 }
             }
 
+            // COSMETICS — install the village-category cosmetic seam on the finished body.
+            AttachCosmeticSeam(root, entry);
+
             // BEHAVIOR — resolve the Core string id to a real Village component.
             AttachBehavior(root, entry);
 
             FlowTrace.Step("Structure", $"'{entry.id}' created OK -> '{root.name}'.");
             return root;
+        }
+
+        // =====================================================================
+        //  Village-category cosmetics seam
+        // =====================================================================
+        /// <summary>
+        /// Installs the ONE <see cref="CosmeticApplier"/> on a finished structure root, bound to the
+        /// <c>village</c> cosmetic category.
+        /// <para>⛔ ONE APPEARANCE OWNER. This method does NOT build, replace, or own the structure's
+        /// body — <see cref="VisualFactory.Skin"/> above already did that, and stays the sole body
+        /// owner. The applier only RE-DECORATES the renderers it finds under this root (material swap /
+        /// mesh override / preview tint) and re-drives itself when the player's equipped cosmetic
+        /// changes. It is deliberately attached to the ROOT, not to the skinned child: the child is
+        /// destroyed and rebuilt by <see cref="ReskinForLevel"/> on every tier upgrade, so an applier
+        /// living there would be destroyed with it. Root-hosted, it survives the reskin and is
+        /// re-driven by the RefreshOn call at the end of that method.</para>
+        /// <para>Four of the twelve shipped cosmetics are village-category and had NO consumer at all
+        /// before this seam: equipping one changed nothing anywhere in the game. Note that
+        /// <c>village</c> cosmetics carry several distinct <c>appliesTo</c> members
+        /// (building-palette / wall-tier-2 / heart-lantern / banners / emblem) and only the first two
+        /// name a placed structure. heart-lantern (the Heart of Elarion), banners and emblem have
+        /// their OWN body owners elsewhere and are deliberately NOT claimed here — binding them to
+        /// building-palette would make an unrelated cosmetic silently repaint every building.</para>
+        /// <para>With no cosmetic art staged in the tree, an equipped village cosmetic lands on the
+        /// applier's preview-tint fallback and logs a Warn naming the exact <c>Resources/...</c> path
+        /// that would replace it. That is INTENDED — it is the authoring to-do surfacing itself, not
+        /// a defect to patch by inventing art.</para>
+        /// </summary>
+        private static void AttachCosmeticSeam(GameObject root, CatalogEntry entry)
+        {
+            if (root == null || entry == null) return;
+
+            string appliesTo = VillageCosmeticMemberFor(entry.id);
+            if (string.IsNullOrEmpty(appliesTo))
+            {
+                FlowTrace.Once("Cosmetics", $"structure-no-cosmetic-member-{entry.id}",
+                    $"'{entry.id}' maps to no village cosmetic member — no applier installed (by design).");
+                return;
+            }
+
+            // G: a throwing applier install must never abort a structure create — the building is
+            // gameplay, the cosmetic is decoration. Guard logs via FlowTrace.Fail and moves on.
+            Guard.Try("Cosmetics", $"attach village cosmetic seam to '{entry.id}'", () =>
+            {
+                var applier = CosmeticApplier.Attach(root, "village", appliesTo);
+                FlowTrace.Step("Cosmetics",
+                    $"'{entry.id}' -> village cosmetic seam installed (appliesTo='{appliesTo}', " +
+                    $"equipped='{applier?.EquippedCosmeticId ?? "<none>"}', " +
+                    $"decoratedRenderers={applier?.DecoratedRendererCount ?? 0}, " +
+                    $"previewTint={applier?.UsingPreviewTint ?? false}).");
+            });
+        }
+
+        /// <summary>
+        /// The <c>village</c>-category cosmetic MEMBER (CosmeticDef.AppliesTo) a placed structure id
+        /// belongs to, or null when the structure wears no village cosmetic.
+        /// <para>Members are read off the shipped cosmetics catalog: walls are their own member
+        /// (<c>wall-tier-2</c>); every other trade/production/defence building is part of the
+        /// <c>building-palette</c>. Ids are LIVE SAVE KEYS — this matches on them, never renames them.</para>
+        /// </summary>
+        /// <remarks>PUBLIC so CosmeticApplyRegression's [village] rule asserts against the factory's
+        /// OWN mapping rather than a copy of it — a duplicated table is the drift CLAUDE.md §2/§5/§16
+        /// catalogues.</remarks>
+        public static string VillageCosmeticMemberFor(string structureId)
+        {
+            if (string.IsNullOrEmpty(structureId)) return null;
+            string id = structureId.ToLowerInvariant();
+
+            // Walls carry their own cosmetic member in cosmetics.json ("village-walls-stoneweave").
+            if (id.StartsWith("wall_") || id.StartsWith("gate_")) return "wall-tier-2";
+
+            // Pure decoration/terrain ids are not part of the building palette — a palette reskin
+            // repainting a fountain or a rock reads as a bug, not a cosmetic.
+            if (id.StartsWith("deco_") || id.StartsWith("fountain_") || id.StartsWith("rock_") ||
+                id.StartsWith("tree_")) return null;
+
+            // Everything else the player PLACES is a building: the building-palette member.
+            return "building-palette";
         }
 
         /// <summary>
@@ -390,8 +472,16 @@ namespace DeNelle.Village
             // authoring seam when that real need exists.
 
             foreach (var g in old) Object.Destroy(g);
+
+            // COSMETICS re-drive: the renderer set the root's CosmeticApplier decorated a moment ago
+            // was just DESTROYED and replaced by the tier model. Without this the upgraded building
+            // silently reverts to its bare tier look while the player still has a cosmetic equipped.
+            // RefreshOn is a no-op on a root with no applier, and the applier re-collects renderers
+            // itself — no second visual path, no re-skin from here.
+            CosmeticApplier.RefreshOn(root);
+
             FlowTrace.Step("Structure", $"'{entry.id}' reskinned to tier-{level} model '{stem}' " +
-                $"(replaced {old.Count} old visual(s)).");
+                $"(replaced {old.Count} old visual(s)); village cosmetic seam re-driven.");
             return true;
         }
 

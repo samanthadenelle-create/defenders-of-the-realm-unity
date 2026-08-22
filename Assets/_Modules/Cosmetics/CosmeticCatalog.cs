@@ -52,6 +52,22 @@ namespace DeNelle.Cosmetics
         /// <summary>Hex colour used as a swatch placeholder before real previews land.</summary>
         [JsonProperty("previewColor")] public string PreviewColor;
 
+        /// <summary>
+        /// Resources key of this cosmetic's replacement model, e.g.
+        /// <c>Cosmetics/Pets/pet-aether-twilight</c>. Optional; empty means "use the
+        /// convention path" (<see cref="CosmeticApplier.ResourceFolderFor"/> + id).
+        /// <para>⚠ THIS FIELD WAS AUTHORED IN cosmetics.json AND SILENTLY DROPPED. The
+        /// pet-aether-twilight row has carried <c>meshPath</c> since it was written, and
+        /// CosmeticDef had no property for it — Newtonsoft parsed the row, discarded the key,
+        /// and every consumer had to re-invent the path. Adding the field is the whole fix;
+        /// no JSON changed.</para>
+        /// </summary>
+        [JsonProperty("meshPath")] public string MeshPath;
+
+        /// <summary>True for a launch/special-sale row. Authored in cosmetics.json
+        /// (pet-aether-twilight) and, like <see cref="MeshPath"/>, previously discarded on load.</summary>
+        [JsonProperty("specialSale")] public bool SpecialSale;
+
         /// <summary>True for items the player must earn through gameplay.</summary>
         public bool IsAchievement =>
             string.Equals(UnlockMethod, "achievement", StringComparison.OrdinalIgnoreCase);
