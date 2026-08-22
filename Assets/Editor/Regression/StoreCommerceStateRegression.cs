@@ -48,11 +48,38 @@ namespace DeNelle.Editor.Regression
                 Require(code, "Buy - {pack.AmountLabel(rail)}", "CTA lacks verb + exact price", fail);
                 Require(code, "DEVNET - TEST TOKEN", "Devnet marker missing", fail);
                 Require(code, "PurchaseEntitlementVerifier.HasPending(pack.Sku)", "pending payment does not suppress Buy", fail);
+                Require(code, "Reconcile - no new payment", "pending receipt has no explicit recovery CTA", fail);
+                Require(code, "var reconcile = ElarionUiKit.BuildObsidianButton", "pending recovery is inert text instead of a button", fail);
+                Require(code, "() => Purchase(pack, SelectedCurrency(pack.Sku)).Forget()", "pending recovery does not re-enter the guarded purchase flow", fail);
+                if (code.Contains("MakeText(_spotlightHost, \"[PENDING] Reconcile purchase"))
+                    fail.Add("pending recovery regressed to an inert text label");
                 Require(code, "do not pay again", "delayed state lacks duplicate-charge warning", fail);
                 Require(code, "Human approval has no countdown", "approval timing is dishonest/absent", fail);
                 Require(code, "elapsed >= 60f", "confirmation delay escalation missing", fail);
                 Require(code, "Wallet did not respond", "wallet timeout recovery missing", fail);
                 Require(code, "Reopen the store to reconcile before trying another payment", "indeterminate failure invites unsafe retry", fail);
+                Require(code, "$\"{pack.Name} received\\n{DescribeGrantedContents(pack)}\"",
+                    "successful delivery has no pack-named exact-content receipt", fail);
+                Require(code, "ElarionUiKit.ShowToast(receipt, ElarionUiKit.ToastTone.Confirm",
+                    "successful delivery does not use the shared HUD feedback surface", fail);
+
+                string complete = Slice(code, "private async UniTask<bool> CompleteVerifiedPurchaseAsync",
+                    "private void ShowFulfillmentReceipt", fail);
+                int applyAt = complete.IndexOf("_vm.ApplyPackContents(pack)", StringComparison.Ordinal);
+                int ownedAt = complete.IndexOf("_vm.IsOwned(pack.Sku)", applyAt + 1, StringComparison.Ordinal);
+                int durableAt = complete.IndexOf("durableFulfillmentSucceeded = await PurchaseEntitlementVerifier.MarkFulfilledAsync", StringComparison.Ordinal);
+                int receiptAt = complete.IndexOf("ShowFulfillmentReceipt(pack, payment)", durableAt + 1, StringComparison.Ordinal);
+                if (applyAt < 0 || ownedAt < applyAt || durableAt < ownedAt || receiptAt < durableAt)
+                    fail.Add("receipt ordering is not apply -> owned proof -> durable fulfilled -> receipt");
+
+                string restore = Slice(code, "private async UniTask<bool> RestoreFulfilledOwnershipAsync",
+                    "private async UniTask<bool> CompleteVerifiedPurchaseAsync", fail);
+                if (restore.Contains("ShowFulfillmentReceipt") || restore.Contains("ShowToast"))
+                    fail.Add("fulfilled reinstall ownership restore replays the purchase receipt/reward feedback");
+                string preFulfilled = Slice(code, "private async UniTask<PaymentResult> Purchase",
+                    "private static PaymentResult Indeterminate", fail);
+                if (preFulfilled.Contains("ShowFulfillmentReceipt"))
+                    fail.Add("submitted/pending/failed purchase path can show the fulfillment receipt");
                 if (code.Contains("SetStatus($\"Purchase failed - {ex.Message}\")"))
                     fail.Add("raw exception still reaches the money screen");
             }
@@ -67,6 +94,15 @@ namespace DeNelle.Editor.Regression
         private static void Require(string haystack, string needle, string message, List<string> fail)
         {
             if (haystack.IndexOf(needle, StringComparison.Ordinal) < 0) fail.Add(message);
+        }
+
+        private static string Slice(string source, string start, string end, List<string> fail)
+        {
+            int a = source.IndexOf(start, StringComparison.Ordinal);
+            int b = a >= 0 ? source.IndexOf(end, a + start.Length, StringComparison.Ordinal) : -1;
+            if (a >= 0 && b > a) return source.Substring(a, b - a);
+            fail.Add("could not isolate commerce source block " + start);
+            return string.Empty;
         }
     }
 }

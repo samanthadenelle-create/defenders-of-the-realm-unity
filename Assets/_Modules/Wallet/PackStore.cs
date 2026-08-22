@@ -1106,8 +1106,24 @@ namespace DeNelle.Wallet
             // Rendering another Buy face here would invite a duplicate charge.
             if (PurchaseEntitlementVerifier.HasPending(pack.Sku))
             {
-                MakeText(_spotlightHost, "[PENDING] Reconcile purchase - do not pay again", 15,
-                    ElarionUi.Gold, FontStyles.Bold, TextAlignmentOptions.Center, ctaMin, ctaMax);
+                // P0 (device, 2026-08-22): this used to be plain text. The screen instructed the
+                // player to "reopen this offer to reconcile", but reopening rebuilt the same inert
+                // label, leaving a finalized payment permanently undeliverable. This is deliberately
+                // a REAL button which re-enters Purchase(). Purchase() sees HasPending before it can
+                // call SendPayment, so this path verifies the recorded receipt and cannot pay twice.
+                var reconcile = ElarionUiKit.BuildObsidianButton(_spotlightHost,
+                    "Reconcile - no new payment",
+                    ElarionUiKit.ObsidianButtonStyle.Style1,
+                    _purchaseInFlight ? ElarionUiKit.ObsidianButtonColor.Gray
+                                      : ElarionUiKit.ObsidianButtonColor.Yellow,
+                    ctaMin, ctaMax,
+                    () => Purchase(pack, SelectedCurrency(pack.Sku)).Forget());
+                if (reconcile != null) reconcile.interactable = !_purchaseInFlight;
+
+                var reconcileLabel = reconcile != null
+                    ? reconcile.GetComponentInChildren<TMP_Text>(true)
+                    : null;
+                if (reconcileLabel != null) ElarionUiKit.FitSingleLine(reconcileLabel, 18f, 24f);
                 return;
             }
 
@@ -1386,6 +1402,40 @@ namespace DeNelle.Wallet
                 }
             }
             return sb.Length > 0 ? sb.ToString() : "-";
+        }
+
+        /// <summary>Exact receipt inventory, including grants intentionally omitted from shelf copy.</summary>
+        private static string DescribeGrantedContents(PackDef pack)
+        {
+            var sb = new StringBuilder();
+            var c = pack != null ? pack.Contents : null;
+            if (c == null) return "No contents recorded";
+
+            var econ = c.Economy;
+            if (econ != null)
+            {
+                AppendAmount(sb, econ.Wood, "wood");
+                AppendAmount(sb, econ.Iron, "iron");
+                AppendAmount(sb, econ.Crystals, "crystals");
+                AppendAmount(sb, econ.Food, "food");
+                AppendAmount(sb, econ.Coins, "coins");
+                AppendAmount(sb, econ.Glimmer, "glimmer");
+            }
+            if (c.Cosmetics != null)
+                foreach (string sku in c.Cosmetics)
+                {
+                    if (string.IsNullOrWhiteSpace(sku)) continue;
+                    if (sb.Length > 0) sb.Append(", ");
+                    sb.Append("cosmetic ").Append(sku);
+                }
+            if (c.Convenience != null)
+                foreach (var item in c.Convenience)
+                {
+                    if (item == null || item.Count <= 0 || string.IsNullOrWhiteSpace(item.Kind)) continue;
+                    if (sb.Length > 0) sb.Append(", ");
+                    sb.Append(item.Count).Append("x ").Append(item.Kind.Replace('-', ' ').Replace('_', ' '));
+                }
+            return sb.Length > 0 ? sb.ToString() : "No item grants";
         }
 
         private static void AppendAmount(StringBuilder sb, int amount, string label)
@@ -1687,10 +1737,10 @@ namespace DeNelle.Wallet
             {
                 if (_vm.IsOwned(pack.Sku))
                 {
-                    await PurchaseEntitlementVerifier.MarkFulfilledAsync(
+                    bool durablyFulfilled = await PurchaseEntitlementVerifier.MarkFulfilledAsync(
                         pack.Sku, payment.TxSignature, _wallet);
-                    SetCommerceState(CommerceState.Fulfilled,
-                        $"{pack.Name} is already restored. Transaction {Shorten(payment.TxSignature)}.");
+                    if (!durablyFulfilled) return false;
+                    ShowFulfillmentReceipt(pack, payment);
                     return true;
                 }
                 PurchaseGate.ReportGrantFailed(payment.TxSignature,
@@ -1709,10 +1759,15 @@ namespace DeNelle.Wallet
             }
 
             FlowTrace.Step("Store", $"Purchase '{pack.Sku}' backend-verified; tx {payment.TxSignature}, contents applied once.");
-            await PurchaseEntitlementVerifier.MarkFulfilledAsync(
+            bool durableFulfillmentSucceeded = await PurchaseEntitlementVerifier.MarkFulfilledAsync(
                 pack.Sku, payment.TxSignature, _wallet);
-            SetCommerceState(CommerceState.Fulfilled,
-                $"{pack.Name} delivered once. Transaction {Shorten(payment.TxSignature)}.");
+            if (!durableFulfillmentSucceeded)
+            {
+                PurchaseGate.ReportGrantFailed(payment.TxSignature,
+                    $"pack '{pack.Sku}' was locally owned but durable fulfillment did not acknowledge");
+                return false;
+            }
+            ShowFulfillmentReceipt(pack, payment);
             PackPurchased?.Invoke(pack, payment);
             DeNelle.Core.Analytics.EventTracker.Track("purchase_completed", new
             {
@@ -1723,6 +1778,17 @@ namespace DeNelle.Wallet
                 authority = "server_verified_entitlement"
             });
             return true;
+        }
+
+        private void ShowFulfillmentReceipt(PackDef pack, PaymentResult payment)
+        {
+            string receipt = $"{pack.Name} received\n{DescribeGrantedContents(pack)}";
+            SetCommerceState(CommerceState.Fulfilled,
+                $"{receipt}\nTransaction {Shorten(payment.TxSignature)}.");
+            // Shared HUD feedback. Wallet cannot reference Village's world-space resource popup;
+            // ApplyPackContents already raises the established resource change notifications.
+            ElarionUiKit.ShowToast(receipt, ElarionUiKit.ToastTone.Confirm,
+                lifeSeconds: 5f, cardWidth: 760f, cardHeight: 132f);
         }
 
         /// <summary>
