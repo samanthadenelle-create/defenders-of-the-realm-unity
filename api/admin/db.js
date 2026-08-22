@@ -107,6 +107,9 @@ module.exports = async (req, res) => {
                 ['player_profiles',    'created_at',  () => sql`SELECT COUNT(*)::bigint AS rows, MAX(created_at)  AS latest FROM player_profiles`],
                 ['leaderboard_scores', 'updated_at',  () => sql`SELECT COUNT(*)::bigint AS rows, MAX(updated_at)  AS latest FROM leaderboard_scores`],
                 ['achievement_grants', 'granted_at',  () => sql`SELECT COUNT(*)::bigint AS rows, MAX(granted_at)  AS latest FROM achievement_grants`],
+                // WO-1114: the dungeon door states. Without this probe the table is
+                // invisible in the viewer, and an operator cannot see what they flipped.
+                ['dungeon_status',     'updated_at',  () => sql`SELECT COUNT(*)::bigint AS rows, MAX(updated_at)  AS latest FROM dungeon_status`],
             ];
             const rows = [];
             for (const [table, tsCol, run] of probes) {

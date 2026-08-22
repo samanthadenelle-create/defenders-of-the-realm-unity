@@ -33,6 +33,17 @@ const LEGACY_KEYS = [
     'towers', 'towerAbilities', 'pets', 'ownedPets', 'starterPetId',
 ];
 
+/**
+ * WO-1128: TIMESTAMPTZ -> unix-ms, tolerating both shapes the Neon HTTP driver
+ * returns (a Date object, or an ISO string). NaN is reported as null rather than
+ * as a number, so a client never mistakes a parse failure for "the epoch".
+ */
+function toUnixMs(ts) {
+    if (ts == null) return null;
+    const ms = ts instanceof Date ? ts.getTime() : Date.parse(String(ts));
+    return Number.isFinite(ms) ? ms : null;
+}
+
 module.exports = async (req, res) => {
     if (applyCors(req, res, 'GET, OPTIONS')) return;
 
@@ -106,6 +117,13 @@ module.exports = async (req, res) => {
             // Always send it, even on an otherwise-empty response: the handshake is
             // the valuable part, not the payload.
             serverNowMs: Date.now(),
+            // WO-1128: the server's own last_seen for this player, in the SAME unit as
+            // serverNowMs — the anchor api/game/save.js §RECONCILE measures the client's
+            // declared accrual window against. Emitted here so a capture (and any future
+            // client-side "your offline haul is provisional" copy) can show BOTH numbers
+            // without a second round trip. player_data.updated_at IS this table's
+            // last_seen: server-stamped on every accepted save, unwritable by the client.
+            serverLastSeenMs: toUnixMs(row.updated_at),
             mode: auth.mode,
             schemaVersion: row.schema_version,
             updatedAt: row.updated_at,

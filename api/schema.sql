@@ -807,5 +807,46 @@ END
 $seed_test_codes$;
 
 -- =============================================================================
+-- dungeon_status — WO-1114. One row per dungeon door. PUBLIC READ, no auth.
+--
+--   A closed dungeon must read as WORLD, never as BUILD STATUS. headline and
+--   body are AUTHORED PROSE shown to the player at the door. NEVER write
+--   "under construction", "coming soon", "disabled", "WIP" or "TODO" into them.
+--   Assets/Editor/Regression/DungeonStatusRegression.cs enforces that rule on
+--   the CLIENT's default copy, but it cannot see rows written here — so the
+--   status vocabulary is ALSO pinned below by CHECK constraint, and the prose
+--   rule is stated here because this table is outside the oracle's reach.
+--
+--   The client treats an unknown status as OPEN and warns (it never fails
+--   closed), so the CHECK is belt-and-braces on the other side of the network:
+--   there is no reason to let a typo reach the wire in the first place.
+--
+--   An EMPTY table is correct and healthy — absence means open. The seed rows
+--   below exist only so the admin DB viewer shows something.
+--   ⚠ Every seed is 'open' ON PURPOSE. Which dungeons are finished is a
+--   play-feel judgement the owner has not made yet (WO-1114 §9), and seeding
+--   the wrong pair would close FINISHED content.
+--
+-- Written by : api/admin/db.js (admin, X-Admin-Key) or the Neon SQL editor.
+-- Read by    : api/dungeon-status.js (public GET).
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS dungeon_status (
+    dungeon_id TEXT        PRIMARY KEY,
+    status     TEXT        NOT NULL DEFAULT 'open'
+                           CHECK (status IN ('open','sealed','collapsed','rescue','flooded')),
+    headline   TEXT,
+    body       TEXT,
+    sigil      TEXT,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+INSERT INTO dungeon_status (dungeon_id, status) VALUES
+    ('dg_starter_loop', 'open'),
+    ('dg_sunken_vault', 'open'),
+    ('dg_bonecrypt',    'open'),
+    ('dg_ember_deep',   'open')
+ON CONFLICT (dungeon_id) DO NOTHING;
+
+-- =============================================================================
 -- END OF SCHEMA
 -- =============================================================================

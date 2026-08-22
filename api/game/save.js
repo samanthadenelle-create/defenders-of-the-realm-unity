@@ -176,11 +176,27 @@ async function handler(req, res) {
 
     // ── SANITY-CHECK GUARDS (WO-120 §2) ────────────────────────────────────
     let prior = {};
+    // WO-1128 — player_data.updated_at IS this table's last_seen: it is stamped
+    // NOW() by the server on every ACCEPTED save and the client cannot write it.
+    // That is the whole reason it can anchor the reconciliation below. We reuse it
+    // rather than minting a second last_seen column (WO-1128 §3.1: reuse the
+    // convention, do not invent a parallel one — guest_rate_limit.last_seen is the
+    // other user of the name and means the same thing).
+    let priorSeenMs = null;
     try {
         const priorRows = await sql`
-            SELECT game_state FROM player_data WHERE player_id = ${playerId} LIMIT 1
+            SELECT game_state, updated_at FROM player_data WHERE player_id = ${playerId} LIMIT 1
         `;
-        if (priorRows.length > 0 && priorRows[0].game_state) prior = priorRows[0].game_state;
+        if (priorRows.length > 0) {
+            if (priorRows[0].game_state) prior = priorRows[0].game_state;
+            // The Neon HTTP driver returns TIMESTAMPTZ as a Date OR an ISO string
+            // depending on the column/driver path; handle both, and treat an
+            // unparseable value as "no anchor" rather than as the epoch (which would
+            // make serverElapsedSec enormous and pass every fabricated window).
+            const raw = priorRows[0].updated_at;
+            const t = raw == null ? NaN : (raw instanceof Date ? raw.getTime() : Date.parse(String(raw)));
+            if (Number.isFinite(t)) priorSeenMs = t;
+        }
     } catch (err) {
         // A read failure shouldn't block the save; skip the comparative guards
         // (the bounds checks below still apply).
@@ -188,6 +204,24 @@ async function handler(req, res) {
     }
 
     const rejects = applyGuards(delta, prior);
+
+    // ── WO-1128 §RECONCILE — time-derived accrual vs the server's OWN clock ────
+    // Runs AFTER applyGuards so it reconciles the values that actually survive to
+    // the write, never a number the guards were about to strip anyway.
+    const accrual = reconcileAccrual(delta, prior, priorSeenMs, Date.now());
+    if (accrual.clamps.length > 0) {
+        // Both numbers, always, per WO-1128 §6.2 — a clamp log that shows only the
+        // clamped figure cannot be audited after the fact.
+        console.warn('[save] accrual reconciled:', JSON.stringify(accrual));
+        await logApiEvent(sql, playerId, 'save_accrual_reconcile', {
+            ref: ref, mode: auth.mode,
+            clientWindowSec: accrual.clientWindowSec,
+            serverElapsedSec: accrual.serverElapsedSec,
+            honestFraction: accrual.honestFraction,
+            clamps: accrual.clamps,
+            observed: accrual.observed,
+        });
+    }
 
     if (rejects.length > 0) {
         await logApiEvent(sql, playerId, 'save_sanity_reject', { rejects: rejects, ref: ref, mode: auth.mode });
@@ -229,6 +263,9 @@ async function handler(req, res) {
             fields: Object.keys(delta).length,
             bytes: rawBody.length,
             rejects: rejects.length ? rejects : undefined,
+            // WO-1128: what the server refused to accept as honestly-accrued, and the
+            // two numbers it judged on. Absent when nothing was clamped.
+            accrual: accrual.clamps.length ? accrual : undefined,
             ref: ref,
             // WO-912 s7.2: authoritative server time for ServerClock. The save round trip
             // is the most frequent handshake the client makes, so this is the main way the
@@ -377,6 +414,196 @@ function applyGuards(delta, prior) {
     return rejects;
 }
 
+// =============================================================================
+//  WO-1128 — SERVER-RECONCILED OFFLINE ACCRUAL
+// -----------------------------------------------------------------------------
+//  THE PROBLEM, stated exactly: you cannot verify a client's clock, and you must
+//  not try (root detection / clock attestation is a race you lose on a rooted
+//  device — WO-1128 §4). What you CAN do is make the client's clock not matter,
+//  by never letting it claim more elapsed time than the SERVER'S OWN clock says
+//  has passed.
+//
+//  THE TWO NUMBERS, and why they are comparable:
+//    * clientWindowSec  = (incoming lastHarvestClaimMs) - (stored lastHarvestClaimMs)
+//                         — how much away-time the client says it integrated since
+//                           the last save the server ACCEPTED.
+//    * serverElapsedSec = NOW() - player_data.updated_at
+//                         — how much time actually passed since that same save,
+//                           measured by a clock the player cannot touch.
+//  Both are anchored to THE SAME EVENT (the last accepted save), which is what
+//  makes the subtraction meaningful even after days offline: if the client was
+//  unreachable for 30h, BOTH numbers grow to ~30h together. They only diverge
+//  when the device clock moved further than real time did.
+//
+//  ⛔ WHY THIS IS A RATIO AND NOT A RATE MODEL. The obvious implementation —
+//  "recompute what the player's collectors should have produced" — requires the
+//  server to model every node, settlement, Echo, container cap, level and the
+//  WO-1119 harvest boost, i.e. a second copy of the economy that drifts the day
+//  anyone retunes a number (the duplicated-state failure CLAUDE.md is littered
+//  with). Instead: the client claims a gain G over a window W, of which only H
+//  seconds honestly happened; at most G*(H/W) of that gain is honest. Scale the
+//  GAIN, do not recompute it. This is rate-model-free, retune-proof, and — the
+//  reason it is safe with WO-1119 — it CANNOT double-count the harvest boost,
+//  because the boost is already inside G and G is never rebuilt from a rate.
+//
+//  ⛔ REFUSE, DO NOT PUNISH (WO-1128 §3.2 + the standing rule for clock defences):
+//    * a clamp never takes a balance BELOW the stored prior value — the worst
+//      case is "this sync banked nothing", never "you lost what you had";
+//    * claiming LESS than the server allows is accepted verbatim (never pay a
+//      player more than they claim);
+//    * we do NOT lower the incoming lastHarvestClaimMs. Rolling that stamp back
+//      would hand the client a re-claimable window on its next launch — the exact
+//      double-grant the OfflineClaimCoordinator's advance-even-on-zero contract
+//      exists to prevent;
+//    * no account is flagged, no state is wiped, nothing is accused. The honest
+//      causes of a forward clock are DST-adjacent bugs, a dead RTC coin cell, a
+//      manual correction, and a phone that was simply wrong. All of them look
+//      identical to cheating from here and all of them deserve their resources.
+//
+//  ⛔ CRYSTALS ARE OBSERVED, NOT CLAMPED — and that is an owner call, not an
+//  oversight. Crystals are the real-money on-ramp: an IAP or a rewarded-ad grant
+//  lands as a large crystal gain with no elapsed time behind it, so a time-ratio
+//  clamp would rob paying players first and hardest. They are reported in
+//  `observed` for the audit row instead. If crystals ever become offline-farmable
+//  at scale, this decision needs re-taking WITH a purchase-aware exemption, not by
+//  quietly adding 'crystals' to the list below.
+// =============================================================================
+
+// Resources produced by TIME-DERIVED accrual (OfflineHarvestService: worker nodes,
+// settlements, pet-claimed nodes). These are the only balances a fabricated window
+// can mint, and therefore the only ones the ratio applies to.
+const TIME_DERIVED_BALANCES = ['iron', 'wood', 'food', 'stone'];
+
+// Balances watched and reported but never clamped — see the crystals note above.
+const OBSERVED_ONLY_BALANCES = ['crystals'];
+
+// Slack on the comparison, so ordinary skew never costs an honest player anything:
+// the client stamps its claim clock a moment BEFORE the request lands, network
+// latency sits between them, and both clocks drift. Generous on purpose — this
+// gate exists to stop hours, not seconds.
+const RECONCILE_GRACE_SEC = 600;          // flat 10 minutes
+const RECONCILE_GRACE_FRACTION = 0.05;    // plus 5% of the server's own window
+
+/**
+ * Compare the client's DECLARED accrual window against the server's own elapsed
+ * time and scale down any time-derived gain the device could not honestly have
+ * produced. Mutates `delta` in place (flat AND nested spellings) and returns a
+ * report for the audit row + the response body.
+ *
+ * Returns { reconciled, reason, clientWindowSec, serverElapsedSec, honestFraction,
+ *           clamps: [{field, claimed, allowed, prior}], observed: {field: gain} }
+ * `reconciled:false` + a `reason` means the guard did not apply (first save, no
+ * stored clock, no forward window) — an absence of judgement, never a pass.
+ */
+function reconcileAccrual(delta, prior, priorSeenMs, nowMs) {
+    const report = {
+        reconciled: false, reason: null,
+        clientWindowSec: null, serverElapsedSec: null, honestFraction: null,
+        clamps: [], observed: {},
+    };
+    if (!delta || typeof delta !== 'object') { report.reason = 'no_delta'; return report; }
+    prior = (prior && typeof prior === 'object') ? prior : {};
+
+    // No server anchor => nothing to measure against. First save ever, or a prior
+    // read that failed. Accept; the NEXT save has an anchor.
+    if (!Number.isFinite(priorSeenMs)) { report.reason = 'no_prior_last_seen'; return report; }
+
+    const claimClock = Number(delta.lastHarvestClaimMs);
+    const priorClock = Number(prior.lastHarvestClaimMs);
+    if (!Number.isFinite(claimClock) || claimClock <= 0) { report.reason = 'no_client_claim_clock'; return report; }
+    if (!Number.isFinite(priorClock) || priorClock <= 0) { report.reason = 'no_stored_claim_clock'; return report; }
+
+    const clientWindowSec = (claimClock - priorClock) / 1000;
+    const serverElapsedSec = (nowMs - priorSeenMs) / 1000;
+    report.clientWindowSec = round2(clientWindowSec);
+    report.serverElapsedSec = round2(serverElapsedSec);
+
+    // The client's accrual clock did not move forward (or went backwards — the
+    // OfflineClaimCoordinator already clamps that to a zero window). No accrual
+    // window is being claimed, so there is nothing to reconcile.
+    if (!(clientWindowSec > 0)) { report.reason = 'no_forward_window'; return report; }
+
+    const graceSec = RECONCILE_GRACE_SEC + Math.max(0, serverElapsedSec) * RECONCILE_GRACE_FRACTION;
+    const honestSec = Math.min(clientWindowSec, Math.max(0, serverElapsedSec) + graceSec);
+    const honestFraction = honestSec / clientWindowSec;
+    report.reconciled = true;
+    report.honestFraction = round4(honestFraction);
+
+    // The honest case, and the one that matters most: a player genuinely away for
+    // N hours reconnects and honestSec >= clientWindowSec, so the fraction is 1 and
+    // NOTHING is touched. Offline play must pay in full — that is the whole point
+    // of having the feature (WO-1128 §6.4).
+    if (honestFraction >= 1) { report.reason = 'window_honest'; return report; }
+
+    for (const key of OBSERVED_ONLY_BALANCES) {
+        const g = balanceGain(delta, prior, key);
+        if (g != null && g.gain > 0) report.observed[key] = g.gain;
+    }
+
+    for (const key of TIME_DERIVED_BALANCES) {
+        const g = balanceGain(delta, prior, key);
+        if (g == null || !(g.gain > 0)) continue;   // a drop or a flat balance is applyGuards' business
+
+        const allowedGain = Math.floor(g.gain * honestFraction);
+        const allowed = g.priorValue + allowedGain;
+        if (allowed >= g.incoming) continue;        // claiming less than allowed — accept verbatim
+
+        setBalance(delta, key, allowed);
+        report.clamps.push({
+            field: key,
+            claimed: g.incoming,
+            allowed: allowed,
+            prior: g.priorValue,
+            claimedGain: g.gain,
+            allowedGain: allowedGain,
+        });
+    }
+
+    if (report.clamps.length === 0) report.reason = 'over_window_but_no_gain_to_clamp';
+    else report.reason = 'clamped_to_server_window';
+    return report;
+}
+
+/** Read one balance from BOTH spellings (flat + nested "resources") on delta and prior. */
+function balanceGain(delta, prior, key) {
+    const nested = (delta.resources && typeof delta.resources === 'object') ? delta.resources : null;
+    const priorNested = (prior.resources && typeof prior.resources === 'object') ? prior.resources : null;
+
+    const incomingRaw = delta[key] != null ? delta[key]
+                      : (nested && nested[key] != null) ? nested[key]
+                      : null;
+    if (incomingRaw == null) return null;
+    const incoming = Number(incomingRaw);
+    if (!Number.isFinite(incoming)) return null;
+
+    const priorRaw = prior[key] != null ? prior[key]
+                   : (priorNested && priorNested[key] != null) ? priorNested[key]
+                   : null;
+    // No prior value => no gain can be measured. A first-ever balance is not
+    // evidence of anything; MAX_RESOURCE in applyGuards is what bounds it.
+    if (priorRaw == null) return null;
+    const priorValue = Number(priorRaw);
+    if (!Number.isFinite(priorValue)) return null;
+
+    return { incoming, priorValue, gain: incoming - priorValue };
+}
+
+/**
+ * Write a clamped balance back to EVERY spelling present in the payload. Both must
+ * move together: the stored row is merged shallowly (game_state || EXCLUDED), and
+ * the client reads the NESTED copy back — so lowering only the flat key would leave
+ * the fabricated number live in the copy that actually reaches the player.
+ */
+function setBalance(delta, key, value) {
+    if (delta[key] != null) delta[key] = value;
+    if (delta.resources && typeof delta.resources === 'object' && delta.resources[key] != null) {
+        delta.resources[key] = value;
+    }
+}
+
+const round2 = (n) => Math.round(n * 100) / 100;
+const round4 = (n) => Math.round(n * 10000) / 10000;
+
 // ── Normalize the client payload into the flat PascalCase shape the promotion ──
 // pass reads. The LIVE client posts a FULL camelCase snapshot with a nested
 // "resources" object; the legacy MsgPack path posted flat PascalCase fields.
@@ -434,3 +661,98 @@ module.exports = handler;
 // and leaves the runtime body parser ON — which drains the stream the raw-body
 // reader needs for signature verification. See _lib/http.readBodyExact.
 module.exports.config = { api: { bodyParser: false } };
+
+// WO-1128: exported so a harness can drive the reconciliation without a database.
+module.exports.reconcileAccrual = reconcileAccrual;
+
+// =============================================================================
+//  WO-1128 §6.7 — RUNNABLE SELF-TEST:  node api/game/save.js
+// -----------------------------------------------------------------------------
+//  The clamp lives in JavaScript, so the Unity DataRegression suite cannot execute
+//  it (its sibling, OfflineAccrualTrustRegression, pins the CLIENT half — that the
+//  window records which clock produced it). This is the server half's gate, and it
+//  asserts the clamp in BOTH directions: an over-claim must FAIL to land in full,
+//  and an honest claim must land untouched. A gate that does not fail the
+//  known-bad state is not a gate.
+//  Exit code 0 = pass, 1 = fail. No database, no network, no Unity.
+// =============================================================================
+if (require.main === module) {
+    const HOUR = 3600 * 1000;
+    const fails = [];
+    const check = (name, cond, detail) => { if (!cond) fails.push(`${name}: ${detail}`); };
+
+    // (1) HONEST OFFLINE PLAY — away 10h, server agrees 10h. Nothing is touched.
+    //     This is the case that makes the feature worth having; it is asserted FIRST
+    //     so a regression that breaks it can never be mistaken for "the gate working".
+    {
+        const now = 1_800_000_000_000;
+        const prior = { lastHarvestClaimMs: now - 10 * HOUR, wood: 1000, iron: 500, resources: { food: 200 } };
+        const delta = { lastHarvestClaimMs: now, wood: 9000, iron: 4500, resources: { food: 1800 } };
+        const r = reconcileAccrual(delta, prior, now - 10 * HOUR, now);
+        check('honest-10h', r.clamps.length === 0, `clamped an honest window: ${JSON.stringify(r.clamps)}`);
+        check('honest-10h', delta.wood === 9000 && delta.iron === 4500 && delta.resources.food === 1800,
+              `honest haul was altered -> ${JSON.stringify(delta)}`);
+    }
+
+    // (2) FORWARD-CLOCK OVER-CLAIM — device says 20h passed, server says 1h.
+    //     ~1h of the 20h is honest, so ~1/20 of the GAIN survives. Never below prior.
+    {
+        const now = 1_800_000_000_000;
+        const prior = { lastHarvestClaimMs: now - 20 * HOUR, wood: 1000, resources: { food: 200 } };
+        const delta = { lastHarvestClaimMs: now, wood: 21000, resources: { food: 4200 } };
+        const r = reconcileAccrual(delta, prior, now - 1 * HOUR, now);
+        check('overclaim', r.clamps.length === 2, `expected 2 clamps, got ${JSON.stringify(r.clamps)}`);
+        check('overclaim', delta.wood < 21000, `over-claimed wood landed in full (${delta.wood})`);
+        check('overclaim', delta.wood >= 1000, `wood clamped BELOW prior (${delta.wood}) — that is punishment, not refusal`);
+        check('overclaim', delta.resources.food < 4200 && delta.resources.food >= 200,
+              `nested food not reconciled safely (${delta.resources.food})`);
+        // ~1.05h honest of 20h => ~5.3% of a 20000 gain.
+        check('overclaim', delta.wood < 3000, `clamp far too generous (${delta.wood}) — the ratio is not being applied`);
+    }
+
+    // (3) UNDER-CLAIM — the client asks for less than the window allows. Verbatim.
+    {
+        const now = 1_800_000_000_000;
+        const prior = { lastHarvestClaimMs: now - 10 * HOUR, wood: 1000 };
+        const delta = { lastHarvestClaimMs: now, wood: 1005 };
+        const r = reconcileAccrual(delta, prior, now - 10 * HOUR, now);
+        check('underclaim', r.clamps.length === 0 && delta.wood === 1005, `under-claim was altered (${delta.wood})`);
+    }
+
+    // (4) CRYSTALS ARE OBSERVED, NOT CLAMPED (the deliberate real-money carve-out).
+    {
+        const now = 1_800_000_000_000;
+        const prior = { lastHarvestClaimMs: now - 20 * HOUR, resources: { crystals: 100 } };
+        const delta = { lastHarvestClaimMs: now, resources: { crystals: 5100 } };
+        const r = reconcileAccrual(delta, prior, now - 1 * HOUR, now);
+        check('crystals', delta.resources.crystals === 5100, `crystals were clamped (${delta.resources.crystals}) — an IAP would be robbed`);
+        check('crystals', r.observed.crystals === 5000, `crystal gain not observed for audit (${JSON.stringify(r.observed)})`);
+    }
+
+    // (5) NO ANCHOR / FIRST SAVE — an absence of judgement, and it says so.
+    {
+        const now = 1_800_000_000_000;
+        const delta = { lastHarvestClaimMs: now, wood: 999999 };
+        const r = reconcileAccrual(delta, {}, null, now);
+        check('first-save', r.reconciled === false && r.reason === 'no_prior_last_seen',
+              `first save mis-reported: ${JSON.stringify(r)}`);
+        check('first-save', delta.wood === 999999, 'first save was clamped with nothing to compare against');
+    }
+
+    // (6) BACKWARDS / STALLED CLIENT CLOCK — no forward window, nothing to reconcile.
+    {
+        const now = 1_800_000_000_000;
+        const prior = { lastHarvestClaimMs: now, wood: 1000 };
+        const delta = { lastHarvestClaimMs: now - HOUR, wood: 1000 };
+        const r = reconcileAccrual(delta, prior, now - HOUR, now);
+        check('backwards', r.reason === 'no_forward_window', `backwards clock mis-reported: ${JSON.stringify(r)}`);
+    }
+
+    if (fails.length === 0) {
+        console.log('ACCRUAL_RECONCILE_OK 6/6 cases — honest windows land in full, ' +
+                    'forward-clock over-claims are scaled to the server window, crystals observed only.');
+        process.exit(0);
+    }
+    console.error(`ACCRUAL_RECONCILE_FAIL x${fails.length}:\n  ` + fails.join('\n  '));
+    process.exit(1);
+}
