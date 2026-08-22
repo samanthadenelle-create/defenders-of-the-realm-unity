@@ -3,7 +3,7 @@
 **App:** Echoes of Elarion (a chapter of Defenders of the Realm)
 **Publisher:** DeNelle Studios
 **Contact:** support.EoA@icloud.com
-**Effective date:** 8 August 2026
+**Effective date:** 22 August 2026
 
 ---
 
@@ -135,7 +135,7 @@ You are buying entertainment. That is the whole of what you receive.
 Where the Game offers a pack for sale, the purchase works like this:
 
 - **You pay from your own wallet, on-chain.** The Game asks your wallet application to approve a
-  transfer of tokens — for example SKR, SOL or USDC — from your wallet address to ours. You approve
+  transfer of SKR from your wallet address to ours. You approve
   the transfer inside your own wallet app. There is **no app-store billing layer, no card processor
   and no subscription** involved.
 - **The token amount is the price.** A US dollar figure may be shown alongside a pack as a
@@ -233,10 +233,12 @@ write to other players.
 
 ## 13. Advertising
 
-**The Game does not currently show advertisements**, and no advertising network is contacted. If we
-introduce advertising in a future version, watching an advertisement will always be optional —
-nothing in the Game will require it — and we will update our Privacy Policy before that version
-ships.
+The monetized Android update offers **optional rewarded advertisements**. An offer states its reward before you choose
+whether to watch. No advertisement is required for ordinary play, and declining, dismissing, or being
+unable to load one does not remove ordinary access to the Game. A reward is granted only after the
+advertising provider reports completion. Advertising availability and content are supplied through
+Unity LevelPlay and may vary by device, location, consent choice, and network availability. Our Privacy
+Policy explains the related data processing.
 
 ## 14. Privacy
 
@@ -252,6 +254,8 @@ well as ours.** These include:
 - **your Solana wallet application** and the wallet provider that operates it;
 - the **Solana blockchain** and the networks, validators and RPC providers that carry your
   transaction;
+- **Unity LevelPlay and its mediated advertising partners**, when you choose to watch a rewarded
+  advertisement;
 - **Google Firebase Authentication**, if you sign in with email or with Google;
 - the **store or platform** you obtained the Game from, and the device maker;
 - our infrastructure providers, and — in the browser version inside Pi Browser only — **Pi Network**,

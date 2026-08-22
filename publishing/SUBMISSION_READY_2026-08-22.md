@@ -60,40 +60,17 @@ Exactly one of these must change before submission, and it is an owner call:
 true by disabling the gate that keeps monetization off by default, and it also carries
 `MONETIZATION_LOCAL_TEST`, which is unrelated to the store rail.
 
-### BLOCKER 3 - every listing image is missing
+### BLOCKER 3 - release screenshots are not yet captured
 
-`publishing/media/` contains **only `README.md`**. Zero of the six required assets
-exist, and the portal cannot accept a release without them:
+The existing live app may retain its current portal icon and banner; confirm they are
+still suitable rather than treating an update as a new-app media upload. Four clean
+release screenshots are still required by this submission plan and must come from the
+exact clean submission build, not today's canary. They must carry no debug overlay,
+Devnet label, test wallet, transaction signature, or private information.
 
-| Asset | Spec | Status |
-|---|---|---|
-| `icon-512.png` | exactly 512x512 | MISSING |
-| `banner-1200x600.png` | exactly 1200x600 | MISSING |
-| `screenshot-01..04.png` | >= 1080px on BOTH axes; 1920x1080 landscape suits this game | MISSING (4 of 4) |
-
-Screenshots must come from the **clean** submission build - not today's canary - and
-must carry no debug overlay, Devnet label, test wallet, or private information.
-
-### BLOCKER 4 - the short description is two different strings, and both are too long
-
-The same field is authored in two places and they have already drifted apart:
-
-| Source | Text | Length |
-|---|---|---|
-| `config.yaml` `short_description` | `Echoes of a Forgotten Civilization` | 34 |
-| this file, "Portal copy" | `Rebuild Elarion. Awaken its Echoes.` | 35 |
-
-Neither fits `dapp-store-cli` 0.15.0's 30-character ceiling; both fit the 50-character
-`releaseJsonMetadata` limit; the live portal's real limit is unverified.
-
-Two decisions, both the owner's: **which line**, and **whether to shorten it**. The
-first is the canon tagline (CLAUDE.md section 7), so it must not be silently trimmed.
-Once ruled, ⛔ **delete the losing copy** rather than correcting both - a value authored
-in two files is the duplicated-state failure this repo keeps paying for, and it is
-precisely how these two drifted.
-
-Under 30 characters, if shortening is chosen: `Rebuild Elarion.` (16),
-`Awaken the Echoes.` (18), `Echoes of Elarion` (17).
+The short description has one authority: `publishing/config.yaml`. Validate that value
+against the live portal when creating the new version. The legacy CLI's old 30-character
+pre-check is not a blocker for the current portal-backed update workflow.
 
 ### Consequence: today's APK is NOT the submission APK
 
@@ -157,7 +134,10 @@ Official sources:
 
 **Name:** Echoes of Elarion
 
-**Short description:** Rebuild Elarion. Awaken its Echoes.
+**Short description:** Use the single authoritative value in
+`publishing/config.yaml`. Do not author a second copy here. Confirm the live portal's
+length limit before submission; the canonical line currently exceeds the legacy
+CLI's 30-character pre-check but fits its 50-character metadata schema.
 
 **Long description:**
 
@@ -210,7 +190,8 @@ Provenance of each claim, so the copy can be defended in review:
 
 ## Final APK evidence gate — complete after testing
 
-**Discharged 2026-08-22 (CLI) - these carry over to the clean build unchanged:**
+**Historical canary evidence from 2026-08-22 (CLI) - none of this artifact-bound
+evidence transfers to the clean submission APK:**
 
 - [x] Regression green: `REGRESSION_OK 264/264 suites -- 264 green, 0 red, 0 skipped`,
       `Builds/reg-f7.log`, fresh. Compile gate: `COMPILE_GATE_OK`, `Builds/gate-f7.log`.
@@ -247,7 +228,9 @@ Provenance of each claim, so the copy can be defended in review:
       persists; restart reconciliation does not duplicate the grant.
 - [ ] Wallet cancellation, insufficient funds, timeout, and network failure grant
       nothing and leave a recoverable state.
-- [ ] Privacy and Terms pages deployed from the updated repo copies and return 200.
+- [x] Privacy and Terms pages deployed 2026-08-22 and verified HTTP 200. Their
+      consent-before-initialization behavior is not asserted; initialization timing
+      remains a device gate above.
 - [ ] Four clean 1920x1080 listing screenshots captured from this exact APK; no
       debug overlays, test wallets, Devnet labels, or private information.
 - [ ] Final APK copied to the submission path only after all checks above pass.

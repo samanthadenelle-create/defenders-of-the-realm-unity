@@ -3,7 +3,7 @@
 **App:** Echoes of Elarion (a chapter of Defenders of the Realm)
 **Publisher:** DeNelle Studios
 **Contact:** support.EoA@icloud.com
-**Effective date:** 4 August 2026
+**Effective date:** 22 August 2026
 
 ---
 
@@ -11,7 +11,7 @@
 
 Echoes of Elarion is a single-player game. We collect the **minimum** needed to run the game, keep your
 progress, fix bugs, and improve it. We do **not** sell your data, and we do **not** use it for advertising
-profiling. **The game shows no advertisements** — see section 4.
+profiling. The monetized Android update offers **optional rewarded advertisements** — see section 4.
 
 You can play the entire game as a **guest**. As a guest we never receive your name, email address, or phone
 number. If you choose to create an account or sign in, we receive your **email address** (or, for Google
@@ -69,27 +69,31 @@ If you play the web version inside Pi Browser and sign in with Pi, we receive yo
 from Pi's authentication service in order to establish that session. This does not apply to the Android /
 Solana dApp Store version.
 
-**We do not collect:** your phone number, your precise or GPS location, your device's contacts, your photo
-library, your camera or microphone, your biometric data, or any advertising identifier. The Android app
-requests only the INTERNET permission.
+**We do not collect directly:** your phone number, your precise or GPS location, your device's contacts,
+your photo library, your camera or microphone, or your biometric data. When the advertising SDK is active,
+Unity LevelPlay and its mediated advertising partners may process device and advertising identifiers,
+IP address, coarse location inferred from IP, app/device information, consent choices, and ad interaction
+and performance data under their own privacy notices. We do not receive your seed phrase or private keys.
 
 ## 3. How we use it
 
 To run the game, save and restore your progress, authenticate you, diagnose and fix bugs, measure and improve
 performance and features, and — if you connect a wallet — to deliver anything you purchase. We do **not**
-build advertising profiles, and we do **not** use your data to target advertising.
+build advertising profiles ourselves. Advertising partners may select or personalize ads where permitted by
+law and by your consent choices, as described in section 4.
 
 ## 4. Advertising
 
-**The game does not currently show advertisements.** No advertising SDK is integrated, no advertising network
-is contacted, and no data whatsoever is shared with any advertising network.
+The monetized Android update offers **optional, user-initiated rewarded advertisements** through Unity LevelPlay. There are no
+forced interstitial advertisements or persistent banner advertisements. The reward and the choice to watch
+are shown before an ad starts. If an ad is unavailable, fails, or is dismissed before completion, no reward
+is granted and ordinary play remains available.
 
-The game does contain an optional "Ad" button that shortens a build timer. In the current version it grants
-that time saving immediately without presenting any advertisement, because no ad provider is connected. It is
-always optional; nothing in the game requires it.
-
-If rewarded advertising is introduced in a future version, this policy will be updated **before** that version
-ships, and the advertising provider will be named in this section and in section 5.
+LevelPlay is an advertising mediation service: the ad shown may be supplied by Unity or another advertising
+network configured through LevelPlay. Those providers may process the technical and advertising data listed
+in section 2 to deliver, secure, measure, and report an ad. Where a consent choice is presented, that choice
+governs whether personalized advertising may be delivered. Declining consent does not prevent ordinary play;
+it may make an advertisement unavailable or limit it to non-personalized delivery.
 
 ## 5. Who we share it with
 
@@ -99,8 +103,12 @@ ships, and the advertising provider will be named in this section and in section
   handles that sign-in and holds your credentials. Google's own privacy policy governs its handling.
 - **Pi Network** — only in the web version inside Pi Browser, and only if you sign in with Pi, in order to
   verify that sign-in.
-- **Your Solana wallet app** — only in the sense that signing happens there; we send it nothing about you.
-- **No advertising networks and no data brokers.**
+- **Your Solana wallet app** — when you connect it or choose to buy, the Game sends the public transaction
+  details needed for your review and approval, such as the token, amount, network, and recipient. Signing stays
+  inside the wallet app; we never send it your seed phrase or private key.
+- **Unity LevelPlay and its mediated advertising partners** — only when the rewarded-ad service is active,
+  to deliver and measure an advertisement and prevent fraud, as described in sections 2 and 4.
+- **No data brokers.**
 
 We do **not** sell your data or share it for anyone else's marketing.
 
@@ -155,8 +163,8 @@ inside your wallet app. No method of transmission or storage is 100% secure.
 ## 10. Changes
 
 We may update this policy. The effective date at the top will change, and material updates will be noted
-in-app or on this page. Any change that widens what we collect — including the introduction of advertising —
-will be published here before the version that makes the change ships.
+in-app or on this page. Any material change that widens what we collect will be published here before the
+version that makes the change ships.
 
 ## 11. Contact
 
