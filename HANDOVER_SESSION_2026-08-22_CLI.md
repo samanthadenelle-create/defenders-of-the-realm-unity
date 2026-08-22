@@ -33,10 +33,25 @@ installed** — the owner had not run `install-apk-to-seeker.ps1` when the sessi
 
 ## 2. ⛔ UNRESOLVED AND TIME-SENSITIVE
 
-**An owner F8 capture is buried.** `seq 3587 — "[dg_hollow_roads] issue with portal travel"` was
-acked 48 seconds after it was raised, with no record any seat read it. The ack tool is a
-**high-water pointer**: acking one sequence implicitly closes every sequence below it, so the inbox
-now reports clean while that flag has never been triaged. **Read it and triage it.**
+**~~An owner F8 capture is buried.~~ CORRECTED 2026-08-22 — it was not.** The four newest captures
+were triaged read-only at the end of session and **all four are closed by fixes that postdate them**:
+
+| seq | capture | closed by |
+|---|---|---|
+| 3584 · 11:34 | `Sfx/TowerFire` not found (hard error) | `f03ee0dda` 12:03 — `AudioService.cs:768` now `optional: true` |
+| 3585 · 12:00 | preview RT is uniform clear colour | `9f26ad71e` 16:07 — `HeroPreviewViewer` |
+| 3586 · 12:01 | same, second occurrence | same |
+| 3587 · 12:28 | `[dg_hollow_roads]` portal travel | `59ccd9843` 12:57 |
+
+⚠ **The earlier claim in this doc that seq 3587 "was never read by any seat" was WRONG**, and is
+left visible rather than deleted because the error is instructive: `59ccd9843`'s commit message
+names *"F8 seq 3587"* explicitly. The ack was legitimate. **Check `git log` for the sequence number
+before concluding a capture was buried** — this repo's fix commits cite them.
+
+**The mechanism risk is still real, though it did not bite here.** The ack tool remains a high-water
+pointer, and **seq 2329 is a genuine orphan**: two different captures ~2.5h apart sharing one
+sequence, neither queued, so one owner flag is unrecoverable by sequence. That is WO-1018's
+consumer half, still open.
 
 Related, and the reason it happened: `WO-1018`'s producer half is fixed and proven (1,272 queued
 captures) but the **consumer half is untouched** — the scan never looks below the watermark. Also
