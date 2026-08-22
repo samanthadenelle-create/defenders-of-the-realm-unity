@@ -1,4 +1,4 @@
-**Status:** READY TO IMPLEMENT
+**Status:** IMPLEMENTED 2026-08-22 - COLLECTOR LOOTING ONLY. The bank-theft rival was deleted and made unbuildable (reflection fails the gate if its methods return). Crystal collectors exempt in two independent places. FeatureFlags.Siege is now ON and PROVEN - all four siege suites green on a fresh log.
 
 # WORK ORDER 1139 — Implement the ruled loss stakes: theft, the repair bill, and turning the siege on
 
@@ -68,3 +68,54 @@ day payments DO go live, and that day must not require anyone to remember this r
 - [ ] Nothing downgrades, nothing permanent is destroyed, no cleared-camp progress is lost
 - [ ] `FeatureFlags.Siege` ON — **last**
 - [ ] Owner felt-verify: *does losing feel like it was my fault, and do I know what to change?*
+
+---
+
+# ★★ RULING SUPERSEDED 2026-08-22 — THE THEFT ALREADY EXISTS. DO NOT BUILD A SECOND ONE.
+
+## THE FINDING
+While implementing the flat 15%-of-bank take, the mechanic the owner actually wanted was found
+**already shipped** as WO-664:
+
+- `ResourceCollector.OnSiegeDestroyed()` -> `stolen = floor(_pending * RaidLootFraction)`,
+  `RaidLootFraction = 0.5f`. **Half the UNCOLLECTED pending is carried off when a collector breaks.**
+- `ResourceCollector.LastLootStolen` - "Pending resources stolen when the collector last broke under
+  siege (session-scoped; cleared on Repair). The wave damage report reads it to show the 'looted' line."
+- `WaveDamageReport.cs:107` already surfaces it as `LootStolen`.
+- `ISiegeLootTarget` + `EnemyBrain.cs:1597` - enemies **prioritise collectors**, checked BEFORE the
+  generic structure fallback. `SiegeRoleValue => 0.85f * (1f + FillFraction * 0.75f)`, so a FULL
+  collector scores 1.49 vs an empty 0.85: raiders go for the ones worth robbing.
+
+So the flat bank take built under this WO is a **RIVAL SYSTEM** - a second theft, from a different
+pool, on a different trigger, through a different ledger. Two authorities for one concept.
+
+## THE RULING (owner 2026-08-22: *"go with your recommendation"*)
+
+> ## COLLECTOR LOOTING ONLY. `RaidLootFraction` STAYS 0.5. NO BANK THEFT.
+
+**The player-facing rule, and it must stay this teachable:**
+> **What you have COLLECTED is safe. What is still sitting in the building is at risk.**
+
+**Why, recorded so it is not re-litigated:**
+- **CoC parity.** CoC loots collectors heavily AND storages lightly - but the storage half only
+  survives because of SHIELDS, village guard, the LOOT CART, and matchmaking limits. **We have none
+  of that scaffolding**, so adding bank theft would make us HARSHER than the game we are modelling.
+- **Agency is the retention variable, not severity.** Collector loot is fully preventable by
+  collecting: it converts into return visits, the player blames themselves, resentment is low. Bank
+  loot has NO agency, especially offline - loss aversion spikes short-term logins and is a leading
+  churn cause.
+- **Do not raise the fraction.** Return-visit pressure does not scale linearly with pain; it climbs
+  until it crosses into "why bother", and that cliff is invisible until players are gone. The lever
+  with better returns is **LEGIBILITY** - a report saying "your silo broke, 400 wood carried off"
+  teaches the collect habit better than a harsher number nobody understands.
+
+## ⛔ CRYSTAL COLLECTORS ARE NOT LOOTABLE (CLI decision 2026-08-22, reversible)
+`HarvestResource` includes **`Crystals = 0`**, so a crystal collector exists and would otherwise be
+looted. A player cannot distinguish harvested crystals from PURCHASED ones - they are the same
+wallet - so any crystal loss reads as losing bought currency. Same reasoning as the bank exemption.
+Pin it with a regression, not with care.
+
+## WHAT THIS WO NOW IS
+**REPORT the loot that already happened. Compute nothing.** `StakesLedger` is populated by SUMMING
+`LastLootStolen` across collectors broken this siege - the number the player is told is the number
+the collector actually lost, because it is the same number. Delete the bank-take arithmetic.

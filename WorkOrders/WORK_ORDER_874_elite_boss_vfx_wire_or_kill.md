@@ -4,7 +4,9 @@
 
 # WORK ORDER 874 — Elite/Boss VFX: wire or kill `EliteVFXController` (+ DragonBoss spawn)
 
-**Status:** BLOCKED - NEEDS OWNER RULING (reconciled 2026-08-09 - `AddComponent<EliteVFXController>` returns zero hits repo-wide; commit `4c1da079` delivered the tell via statics called from `Enemy.cs:720` and `Enemy.cs:2701` but routed AROUND the owner's WIRE ruling with no reversal recorded, so the aura and `OnEliteAttack` have never run)
+**Status:** IMPLEMENTED 2026-08-22 - EliteVFXController is genuinely AddComponent-ed on the elite/boss spawn path (Enemy.EnsureEliteVfx from Configure); aura + OnEliteAttack + DragonBoss spawn entrance now actually run. A source-lint pins the AddComponent so the 4c1da079 static-shortcut shape cannot return. 3 keys still need an owner VFX tag (Boss_AttackImpact / Boss_PhaseTransition / Boss_Telegraph) - hooks live, art unmapped by design.
+
+> *(superseded status, kept for the record: BLOCKED - NEEDS OWNER RULING, reconciled 2026-08-09.)*
 
 **Status:** NEEDS-OWNER-RULING (reconciled 2026-08-08) — child of WO-872. **Lane:** Combat/AI VFX. **WO#:** UI-seat block; **874**.
 **Origin:** owner 2026-08-04 VFX pass. Audit-backed (WO-872 §2, E6/E8/E9). **Layer:** B/D.
@@ -49,3 +51,68 @@ controller - so the aura and `OnEliteAttack` have still never run, and the ticke
 while the ruled behaviour did not exist. Do not repeat that shape: `EliteVFXController` must be
 genuinely `AddComponent`'d on the elite/boss spawn path so its spawn / aura / attack / death fire.
 A source-lint asserting a real `AddComponent<EliteVFXController>` is part of the work.
+
+---
+
+# IMPLEMENTED 2026-08-22 — what landed, and what is still an owner call
+
+## The attach (the ruling itself)
+- `Enemy.EnsureEliteVfx()` — `Assets/_Modules/Village/Enemies/Enemy.cs`. Called from the
+  **end of `Configure`**, which is the ONE place every spawn path sets the stat block and is
+  also the pooled-reuse entry point. It does a real
+  `gameObject.AddComponent<EliteVFXController>()` when `_def` reads boss or elite, then calls
+  `ArmForTier(boss, elite)`. Nothing is attached to a plain-tier enemy.
+- `EliteVFXController.ArmForTier(bool, bool)` — new public **instance** entry point, idempotent
+  and re-armable, because a pooled body's `Start()` runs once per POOL, not once per enemy
+  life. `Start()` now stands down when `ArmForTier` already ran, so the hand-placed-prefab path
+  and the code path cannot double-fire. `OnDisable` stops the routines and restores the aura
+  light, so a body reused 100 times carries one aura coroutine, not 100.
+- **Spawn tell has ONE owner per tier.** `EnsureEliteVfx` clears `_spawnTellPending` for
+  boss/elite, so the component's `DramaticSpawnRoutine` owns the arrival for those two tiers
+  (same `VFXType` — both sides go through `SpawnVfxFor` — plus the same tier shake, after the
+  authored dramatic delay). `Enemy.FireSpawnTell` is now the STANDARD tier's tell only.
+- **Attack tell wired:** `Enemy.ExecuteContactAttack` calls `_eliteVfx?.OnEliteAttack(hitPos)`.
+  This and the aura are the two behaviours the `4c1da079` static shortcut could not deliver.
+- **Death path needed no change** — `Enemy.Die()` has always done
+  `GetComponent<EliteVFXController>()`; it now returns non-null, so `OnEliteDeath` is live.
+
+## E8 — DragonBoss entrance
+`DragonBoss.PlaySpawnEntrance()`, fired from `OnEnable` beside the loop-budget declaration
+(same reasoning that line gives: OnEnable is the boss's own lifecycle and survives a
+re-enable). New serialized fields `_spawnVfx = VFXType.Boss_Spawn`, `_spawnShakeIntensity`
+0.5 / `_spawnShakeSeconds` 0.5 — matched to the boss tier's spawn shake in
+`EliteVFXController` on purpose. DragonBoss is not an `Enemy`, so the attach seam never
+reaches it; the entrance has to be its own call.
+
+## E9 — STALE as written, and the remainder is an OWNER ART TAG
+E9 recorded "all 10 `Boss_*`/`Elite_*` rows are PROC-only (0 catalog prefabs)". **Measured
+2026-08-22 against `Assets/Editor/VFXCatalogGenerator.cs`: 8 of the 11 ladder rows now have a
+Map entry** (`Elite_Spawn`, `Elite_Death`, `Boss_Spawn`, `Boss_Death`, `Boss_Aura_Phase1/2/3`,
+`Boss_FireBreath`) — WO-886/893 closed most of it.
+
+⛔ **THREE ROWS STILL HAVE NO PREFAB AND NEED AN OWNER TAG. No prefab was chosen for them** —
+standing rule (memory `vfx-map-owner-tags-no-creative-pick`): the owner tags the key, the CLI
+maps it verbatim and never picks or substitutes art. The hooks are wired and live; each falls
+through to `VFXManager`'s procedural nova/meteor burst until tagged:
+
+| Key needing an owner tag | Where it already fires |
+|---|---|
+| `Boss_AttackImpact` | `EliteVFXController.OnEliteAttack` (boss branch) + `DragonBoss` strike/breath impact |
+| `Boss_PhaseTransition` | `DragonBoss` HP-threshold enrage burst |
+| `Boss_Telegraph` | `DragonBoss` swoop/fire wind-up tell |
+
+The `elite-vfx-wire` suite REPORTS this list in its pass reason every run so the gap stays
+visible; it deliberately never fails on it, because a red gate here would be pressure on an
+engineer to pick a prefab.
+
+## Oracle
+`Assets/Editor/Regression/EliteVfxWiringRegression.cs` — `[elite-vfx-wire]`, registered once in
+`DataRegression.RunAll`. Measures: (1) a literal `AddComponent<EliteVFXController>` exists in
+the Village source (the exact grep the 2026-08-08 audit ran when it caught the shortcut);
+(2) `OnEliteAttack(` has a caller outside its declaring file; (3) `ArmForTier` and
+`OnEliteAttack` are public INSTANCE members, by reflection on the compiled type, not by grep;
+(4) `DragonBoss.cs` references `VFXType.Boss_Spawn`; (5) ladder catalog coverage, reported.
+
+## Not done here
+- No gate, no build, no commit (edit-only lane).
+- Acceptance still needs `CompileGate` green + the PO's on-device felt-verify.

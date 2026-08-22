@@ -129,7 +129,10 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-08-21 (CLI): main line next free = **1140**.
+> ## ⚠ RECONCILED 2026-08-22 (CLI): main line next free = **1141**.
+> *(CLI seat minted **WO-1140** and bumped 1140 -> 1141 in this SAME edit. **1140** = raiders still
+> beeline for CRYSTAL collectors that can no longer be robbed - SiegeRoleValue rewards a target
+> with nothing to take. Surfaced by the WO-1139 collector-loot rewire.)*
 > *(CLI seat minted **WO-1139** and bumped 1139 -> 1140 in this SAME edit. **1139** = implement the
 > ruled loss stakes (theft 15% floor-protected, crystals exempt, offline included) + the bounded
 > repair bill; split out of WO-1026 whose own deliverable shipped 2026-08-21.)*
