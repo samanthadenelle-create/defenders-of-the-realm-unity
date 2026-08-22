@@ -9,8 +9,9 @@
 // Reuses: IDamageable (DeNelle.Core.Combat) for find+damage, EnemyBrain.Role for
 // priority, ProjectileMover for the visual bolt. All data-tunable.
 //
-// WHY IT IMPLEMENTS *TWO* DAMAGE CONTRACTS (WO-853 — mirrors RaidSpire.cs:61 and
-// BreakableContainer.cs:38, the two shipped precedents):
+// WHY IT IMPLEMENTS *TWO* DAMAGE CONTRACTS (WO-853 — mirrors RaidSpire.cs, the shipped
+// precedent. This line also cited BreakableContainer.cs:38 until WO-1132 made that
+// container an OPENABLE CHEST with neither damage contract — see IDamageableStructure.cs):
 //
 //   IDamageableStructure  is the seam ENEMIES use (Enemy.TickContactAttack /
 //                         Enemy.RangedAttack / StructureBurn -> ApplyContactDamage).
@@ -193,7 +194,8 @@ namespace DeNelle.Village
         //  THE TWO IsAlive's ARE DELIBERATELY DIFFERENT (WO-853 — DO NOT "SIMPLIFY"
         //  THESE INTO ONE PROPERTY). Both IDamageable and IDamageableStructure declare
         //  `bool IsAlive { get; }`; this type answers them differently ON PURPOSE, so it
-        //  departs from the RaidSpire/BreakableContainer precedent (one shared IsAlive).
+        //  departs from the RaidSpire precedent (one shared IsAlive). (BreakableContainer
+        //  was named here too; WO-1132 removed both its damage contracts entirely.)
         //  RaidSpire can share one because it has no friendly variant — a tower does.
         //
         //  PLAYER-facing (IDamageable, the implicit public member below) = LIVENESS ONLY.

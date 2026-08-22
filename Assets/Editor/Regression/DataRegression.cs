@@ -307,6 +307,18 @@ namespace DeNelle.Editor
 
             // --- monetization covenant gate (LB-5) + tower upgrade perks (overnight silos C/E) ---
             if (!MonetizationCovenantRegression.Run(out var covReason)) failures.Add(covReason); else log.AppendLine("[covenant] " + covReason);
+            // --- WORK_ORDER_battle_and_monthly_packs: the pay-to-win firewall of the Battle Pass +
+            //     Monthly Ledger families, as a BUILD GATE. Sits beside the covenant gate on purpose
+            //     — it is the same promise, policed over the two reward tables PackDef cannot hold.
+            //     It polices TWO OPPOSITE failures: what may not be GRANTED (combat power, a sold
+            //     tier, bought XP, a glimmer line, a randomized reward) and what cannot be DELIVERED
+            //     (a cosmetic while no cosmetic art exists in the tree, an skr credit while no
+            //     ledger exists anywhere). Plus three STRUCTURAL pins no value check could replace:
+            //     the loader actually invokes the firewall, Battle XP has exactly ONE door and it
+            //     takes a battle outcome rather than an amount, and the Monthly Ledger carries no
+            //     countdown because under the pool model nothing expires.
+            //     ⛔ REGISTERED EXACTLY ONCE. Do not add a second line for it near the end fence. ---
+            if (!DeNelle.Editor.Regression.BattleMonthlyRegression.Run(out var battleMonthlyReason)) failures.Add(battleMonthlyReason); else log.AppendLine("[battle-monthly] " + battleMonthlyReason);
             if (!TowerPerkRegression.Run(out var towerPerkReason)) failures.Add(towerPerkReason); else log.AppendLine("[tower-perks] " + towerPerkReason);
             // --- F8 open-ticket oracles (data-decidable roots, seconds-fast) ------
             if (!TowerRespawnRegression.Run(out var towerRespawnReason)) failures.Add(towerRespawnReason); else log.AppendLine("[tower-respawn] " + towerRespawnReason);
@@ -323,6 +335,19 @@ namespace DeNelle.Editor
             if (!BuildingUpgradeRegression.Run(out var buildUpgReason)) failures.Add(buildUpgReason); else log.AppendLine("[build-upgrade] " + buildUpgReason);
             if (!OfflineHarvestRegression.Run(out var offlineReason)) failures.Add(offlineReason); else log.AppendLine("[offline-harvest] " + offlineReason);
             if (!OfflineClaimFanOutRegression.Run(out var offlineFanOutReason)) failures.Add(offlineFanOutReason); else log.AppendLine("[offline-fanout] " + offlineFanOutReason);
+            // --- WO-1026 PvE siege / the defence consequence loop. Three oracles, one lane:
+            //     the record CONTRACT (incl. the model-(c) source-swap proof and the ⛔ all-zero
+            //     UNRULED stakes guard), the CADENCE (incl. the WO-1147 "never write
+            //     LastHarvestClaimMs" invariant), and the DUPLICATE-AUTHORITY lint (the siege
+            //     never spawns; WaveManager stays the single town-attack authority). ---
+            if (!DefenseReportContractRegression.Run(out var defReportReason)) failures.Add(defReportReason); else log.AppendLine("[defense-report] " + defReportReason);
+            if (!SiegeCadenceRegression.Run(out var siegeCadenceReason)) failures.Add(siegeCadenceReason); else log.AppendLine("[siege-cadence] " + siegeCadenceReason);
+            if (!SiegeSpawnAuthorityRegression.Run(out var siegeAuthorityReason)) failures.Add(siegeAuthorityReason); else log.AppendLine("[siege-spawn-authority] " + siegeAuthorityReason);
+            // --- WO-1128: every offline window must DECLARE which clock produced it and its own
+            //     endpoints, so api/game/save.js can reconcile it against the server's elapsed
+            //     time. The server-side clamp itself is JavaScript and is gated separately by
+            //     `node api/game/save.js` (marker ACCRUAL_RECONCILE_OK) — see that oracle's header.
+            if (!OfflineAccrualTrustRegression.Run(out var accrualTrustReason)) failures.Add(accrualTrustReason); else log.AppendLine("[accrual-trust] " + accrualTrustReason);
             // --- Dev queue time-skip (owner 2026-08-04): the skip is exact/additive/resettable,
             //     isolated from the WO-120 ServerOffsetMs lane, forward-only, release-stripped —
             //     and, the load-bearing one, COMBAT STILL READS NO TimeSource (so it can never
@@ -478,6 +503,10 @@ namespace DeNelle.Editor
             // --- WO-808 Option A: gear power-level ladder data integrity ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "gear-levels suite", () => { if (!GearLevelsRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[gear-levels] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "pack-cosmetic-integrity suite", () => { if (!PackCosmeticIntegrityRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[pack-cosmetic-integrity] " + r); });
+            // --- WO-992 (2026-08-21): an EQUIPPED cosmetic reaches a real renderer. The pack/catalog suites above only ever checked DATA, and data was never the problem — CosmeticApplier.ApplyCosmetic was called from NOWHERE, so a player could earn or BUY Glimmer (packs.json sells it), purchase a skin, equip it, and see nothing change. Rule 1 reads the colour back off a live Renderer. ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "cosmetic-apply suite", () => { if (!DeNelle.Editor.Regression.CosmeticApplyRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[cosmetic-apply] " + r); });
+            // --- WO-1129 (2026-08-21): the gate AssetRoots.cs:46 has claimed since 08-18 that it had ("AssetRootsRegression fails the build if the string reappears") and NEVER DID — 16 re-typed root literals were live in 14 files, two of them other regression suites. Also carries the §3.5 enemy-art token ratchet. ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "asset-roots suite", () => { if (!DeNelle.Editor.Regression.AssetRootsRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[asset-roots] " + r); });
             // --- WO-1037 single-resource impulse packs (legalised by the WO-947 §12 amendment): exactly ONE economy key per SKU, $5 ceiling, resources-only, smallest-sufficient resolver, no grant route ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "impulse-pack suite", () => { if (!DeNelle.Editor.Regression.ImpulsePackRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[impulse-pack] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "tower-wall-los suite", () => { if (!TowerWallLosRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[tower-wall-los] " + r); });
@@ -519,6 +548,8 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "terrain-layer suite", () => { if (!DeNelle.Editor.Regression.TerrainLayerRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[terrain-layer] " + r); });
             // --- WO-850 dungeon treasure cache: fixed-bundle validity against materials.json, deepest-room BFS (undirected + ordinal tie-break), per-dungeon first-clear one-shot, panel single-exit ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "dungeon-treasure suite", () => { if (!DeNelle.Editor.Regression.DungeonTreasureRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[dungeon-treasure] " + r); });
+            // --- WO-1132 loot chest: the container is OPENABLE, not attackable. Pins that BreakableContainer implements NEITHER damage interface and declares no CombatFaction, is not relayered to "Enemy" (the WO-1047 hostile-reticle defect class, removed at source rather than filtered), that opening is gated on the ONE combat authority (BattleLock.IsInBattle, re-checked inside Open) and refuses with a real canon sentence in BOTH dual copies, that the loot roll/spawn path is unchanged, that Create's reflection signature survives (DungeonBaker invokes it by name), and that WO-1047's [hostile-admit] instrumentation is still in place with both branches ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "chest suite", () => { if (!DeNelle.Editor.Regression.BreakableContainerChestRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[chest] " + r); });
             // --- WO-852 Echo card layout: chip rows at/above MinTouchPx, fixed-pixel bands (no 1f/n fraction slicing), scroll well, per-frame rebuild guard ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "echo-card-layout suite", () => { if (!DeNelle.Editor.Regression.EchoCardLayoutRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[echo-card-layout] " + r); });
             // --- WO-866 rumor board layout: every filter tab fits the list well at the touch floor (the clipped "Gear"), the tab band is X-bounded by the list column so the detail pane cannot cross it, and the detail stack + a two-line body fits the pane (the -11px culled body) ---
@@ -543,6 +574,7 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "hub-foliage suite", () => { if (!HubFoliageRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[hub-foliage] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "glossary suite", () => { if (!DeNelle.Editor.Regression.GlossaryRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[glossary] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "item-identity suite", () => { if (!DeNelle.Editor.Regression.ItemIdentityRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[item-identity] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "drop-mote suite", () => { if (!DeNelle.Editor.Regression.ItemDropMoteIdentityRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[drop-mote] " + r); });
 
             // Second wave of the 2026-08-02 program (PM spec). Each class + its declared
             // tag were read off disk before registering; tags are the ones the suite
@@ -864,6 +896,18 @@ namespace DeNelle.Editor
             // if a listed row stops violating without being removed.
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "cost-basket suite", () => { if (!DeNelle.Editor.Regression.CostBasketSeparationRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[cost-basket] " + r); });
 
+            // --- ECONOMY SINK CAP (2026-08-21 sink pass): NO AUTHORED COST MAY EXCEED THE
+            // MAXIMUM BANKABLE AMOUNT OF THAT RESOURCE. A 3,000-wood upgrade under a 2,000-wood
+            // cap is UNCOMPLETABLE -- the player can never hold enough at once, the button never
+            // lights, and nothing in the game says why. Same silent-wall shape as the day-1 daily
+            // quest that force-returned forever because it could never tick; the symptom is the
+            // ABSENCE of an event, so only a gate can see it. Also pins the two constraints the
+            // sink pass leaned on: the storage ladder must be SELF-affordable (a container upgrade
+            // is paid at the level BELOW the one it buys), and troop training -- the recurring
+            // loop -- must stay affordable at ZERO storage. Crystals/coins are UNCAPPED by design
+            // (TownBankCapacity.UncappableResources) and are deliberately out of scope.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "sink-cap suite", () => { if (!DeNelle.Editor.Regression.EconomySinkCapRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[sink-cap] " + r); });
+
             // --- VFX POOL SHAPE (WO-955, 2026-08-10): a pooled host was DESTROYED while it
             // still sat in a free list, and the next Acquire dereferenced it -- captured twice
             // in one session (HeroHpStateAura in town after arena deaths, then EnemyAuraVFX in
@@ -990,6 +1034,15 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "ranger-bow-fire suite", () => { if (!DeNelle.Editor.Regression.RangerBowFireRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[ranger-bow-fire] " + r); });
 
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "raid-repeat-clear suite", () => { if (!DeNelle.Editor.Regression.RaidRepeatClearRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[raid-repeat-clear] " + r); });
+            // WO-728: the per-camp raid COOLDOWN — the only bound on the game's one unbounded
+            // crystal faucet (raid loot is food + crystals, zero wood/iron). Pins that the window
+            // survives a real save/load cold boot, that a BACKWARDS clock can never shorten it,
+            // that the service reads TimeSource and never DateTime.UtcNow (invisible to every
+            // behavioural assertion — only a source-lint can see it), that a camp on cooldown is
+            // refused at the one door and told so in canon WORDS (the owner is colourblind; a tint
+            // is not a signal), and that the owner-ruled 4h/8h/12h + 5/20/45min numbers agree
+            // between scene-configs.json and the code fallback table.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "raid-cooldown suite", () => { if (!DeNelle.Editor.Regression.RaidCooldownRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[raid-cooldown] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "spawn-budget-vfx-warm suite", () => { if (!DeNelle.Editor.Regression.SpawnBudgetAndVfxWarmRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[spawn-budget-vfx-warm] " + r); });
 
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "forge-shelf-kind suite", () => { if (!DeNelle.Editor.Regression.ForgeShelfClassKindRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[forge-shelf-kind] " + r); });
@@ -1011,6 +1064,16 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "npc-idle-controller suite", () => { if (!DeNelle.Editor.Regression.NpcIdleControllerRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[npc-idle-controller] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "spawn-area-enemy-ids suite", () => { if (!DeNelle.Editor.Regression.SpawnAreaEnemyIdRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[spawn-area-enemy-ids] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "regression-marker suite", () => { if (!DeNelle.Editor.Regression.RegressionMarkerRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[regression-marker] " + r); });
+            // WO-838 Phase E: the raid-base wall art must be reachable from TRACKED assets,
+            // never from an FBX-embedded material. This is the ONLY detector for the
+            // white-slab class — MagentaGuard is structurally blind to a textureless-but-
+            // valid URP/Lit material on a non-ground renderer, and nothing shows on screen.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "raid-wall-material suite", () => { if (!DeNelle.Editor.Regression.RaidWallMaterialRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[raid-wall-material] " + r); });
+            // --- WO-1121 owner rulings 2026-08-21: the price ceiling is $49.99 (the $4.99 cap was
+            //     EARLY-ACCESS, not permanent) and a pack above $4.99 requires a connected wallet,
+            //     enforced on the CHARGE PATH and not in the UI alone. Also pins the vapor rule on
+            //     the browsable shelf and the same-day "no glimmer in any pack" ruling. ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "buy-gate suite", () => { if (!DeNelle.Editor.Regression.BuyGateAndPriceLadderRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[buy-gate] " + r); });
 
             // =====================================================================
             //  >>> REGISTERED ORACLE SUITES — END FENCE <<<  (new lines go ABOVE)
@@ -2790,13 +2853,31 @@ namespace DeNelle.Editor
                 SetStaticInstance(typeof(EconomyService), eco);
                 SetStaticInstance(typeof(DeNelle.Village.Crafting.VillageInventory), inv);
 
-                // Seed exactly the base + gems the recipe needs (iron/wood cost covered by the
-                // in-session EconomyService pool defaults — wood 200 / iron 80).
+                // Seed exactly the base + gems the recipe needs.
                 inv.Clear();
                 if (simRecipe.Base != null) inv.Add(simRecipe.Base.Id, simRecipe.Base.Count);
                 if (simRecipe.Gems != null)
                     foreach (var g in simRecipe.Gems)
                         if (g != null && !string.IsNullOrEmpty(g.Id)) inv.Add(g.Id, g.Count);
+
+                // WALLET SEEDING NOW FOLLOWS THE RECIPE (2026-08-21). This used to read
+                // "iron/wood cost covered by the in-session EconomyService pool defaults --
+                // wood 200 / iron 80", i.e. the sim silently depended on an AMBIENT constant
+                // in EconomyService being bigger than an AUTHORED cost in jeweler-recipes.json.
+                // The economy sink pass took 'jewel_ring_steadfast' from iron 30 to iron 150 and
+                // the craft started returning "Not enough resources." -- a GREEN oracle turning
+                // red on a deliberate, owner-ruled balance change, with nothing wrong in the game.
+                // Two independently-authored numbers that must stay ordered is the same
+                // duplicated-state trap CLAUDE.md keeps naming, so the coupling is now DERIVED:
+                // fund the wallet FROM the recipe's own basket and the sim can never go stale
+                // behind a re-price again. GrantUncapped is the sanctioned headless-harness seam
+                // (it bypasses the town bank cap, which this sim is not testing); in edit mode
+                // with no GameStateService it lands in the fallback pool that eco.Iron reads,
+                // which is exactly the wallet TrySpend will charge.
+                int seedWood = simRecipe.Cost?.Wood ?? 0;
+                int seedIron = simRecipe.Cost?.Iron ?? 0;
+                if (seedWood > 0 || seedIron > 0)
+                    eco.GrantUncapped(new DeNelle.Village.ResourceCost(seedWood, 0, seedIron, 0));
 
                 int outBefore = inv.Get(simRecipe.OutputAccessoryId);
                 int ironBefore = eco.Iron;

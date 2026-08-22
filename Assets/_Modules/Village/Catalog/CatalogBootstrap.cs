@@ -175,13 +175,18 @@ namespace DeNelle.Village
                 repo = new RepoProps
                 {
                     behaviorId = "DefenseTower",
-                    buildCost  = 100,
-                    cost       = new DeNelle.Core.Catalog.ResourceCost { wood = 90, food = 0, iron = 40, crystals = 0 },
+                    // ECONOMY SINK RESCALE 2026-08-21 (owner ruling: a committed daily player should
+                    // need 8-12 weeks to exhaust content, and the LEVER IS THE SINKS -- the faucet is
+                    // deliberately untouched). Per-ladder factors: build x4, L1->L2 x10, L2->L3 x14.
+                    // These numbers are COPIED FROM structures-catalog.json, which is the source of
+                    // truth; this table only mirrors it. Was 100 / 90+40 / 108+48 / 225+100.
+                    buildCost  = 400,
+                    cost       = new DeNelle.Core.Catalog.ResourceCost { wood = 360, food = 0, iron = 160, crystals = 0 },
                     maxLevel   = 3,
                     upgradeCost = new[]
                     {
-                        new DeNelle.Core.Catalog.ResourceCost { wood = 108, food = 0, iron =  48, crystals = 0 },   // L1â†’L2
-                        new DeNelle.Core.Catalog.ResourceCost { wood = 225, food = 0, iron = 100, crystals = 0 },   // L2â†’L3
+                        new DeNelle.Core.Catalog.ResourceCost { wood = 1080, food = 0, iron =  480, crystals = 0 },   // L1â†’L2
+                        new DeNelle.Core.Catalog.ResourceCost { wood = 3150, food = 0, iron = 1400, crystals = 0 },   // L2â†’L3
                     },
                     upgradeVisualPath = new[]
                     {
@@ -252,7 +257,11 @@ namespace DeNelle.Village
                 repo = new RepoProps
                 {
                     behaviorId = "DefenseTower",
-                    buildCost  = 150,
+                    // ECONOMY SINK RESCALE 2026-08-21: build x4, L1->L2 x10, L2->L3 x14, copied from
+                    // structures-catalog.json (the source of truth). Was 150 / 60+100 / 72+120 / 150+250.
+                    // The WO-947 SHAPE below is untouched: the fold was 1:1 and stays 1:1; only the
+                    // absolute numbers quoted in that comment are the pre-rescale ones.
+                    buildCost  = 600,
                     // WO-947 cost basket, pin 4 (OWNER 2026-08-14 verbatim: "thats a baliista
                     // mechanical"): this row is REGULAR -- wood + iron, NEVER crystals. The
                     // "wizard" in the id is stale naming, not a classification; the row's own
@@ -260,12 +269,12 @@ namespace DeNelle.Village
                     // the owner ruled on. The former crystals (70 / 84 / 175) were folded 1:1
                     // into IRON so every basket TOTAL is unchanged (160 / 192 / 400).
                     // MIRRORS structures-catalog.json v18 -- gate 12 [fallback-parity] enforces.
-                    cost       = new DeNelle.Core.Catalog.ResourceCost { wood = 60, food = 0, iron = 100, crystals = 0 },
+                    cost       = new DeNelle.Core.Catalog.ResourceCost { wood = 240, food = 0, iron = 400, crystals = 0 },
                     maxLevel   = 3,
                     upgradeCost = new[]
                     {
-                        new DeNelle.Core.Catalog.ResourceCost { wood =  72, food = 0, iron = 120, crystals = 0 },   // L1â†’L2
-                        new DeNelle.Core.Catalog.ResourceCost { wood = 150, food = 0, iron = 250, crystals = 0 },   // L2â†’L3
+                        new DeNelle.Core.Catalog.ResourceCost { wood =  720, food = 0, iron = 1200, crystals = 0 },   // L1â†’L2
+                        new DeNelle.Core.Catalog.ResourceCost { wood = 2100, food = 0, iron = 3500, crystals = 0 },   // L2â†’L3
                     },
                     // The ladder was REAL in cost and stats (maxLevel 3 + the table above) and
                     // INVISIBLE to the player: with no upgradeVisualPath every level rendered the
@@ -334,19 +343,24 @@ namespace DeNelle.Village
                 repo = new RepoProps
                 {
                     behaviorId = "ArcaneTower",
-                    buildCost  = 200,
+                    // ECONOMY SINK RESCALE 2026-08-21: build x4, L1->L2 x10, L2->L3 x14, copied from
+                    // structures-catalog.json (the source of truth). Was 200 / 40+125 / 48+150 / 100+312.
+                    // NOTE the L2->L3 crystals read 4370, not 312x14=4368: the catalog rounds that step
+                    // to the nearest 10 and the catalog is what this table mirrors -- do NOT "correct"
+                    // it to the arithmetic product or gate 12 goes red on the next run.
+                    buildCost  = 800,
                     // WO-947 cost basket, pin 1 (OWNER 2026-08-14 verbatim: "Crystals and Iron"):
                     // this row is MAGICAL (element Aether, behaviorId ArcaneTower, projectileStyle
                     // "spell"), so its basket is CRYSTALS + IRON and WOOD IS REMOVED. The former
                     // wood (40 / 48 / 100) was folded 1:1 into CRYSTALS -- the ruling calls magical
                     // structures crystal-BASED -- so every basket TOTAL is unchanged (165/198/412).
                     // MIRRORS structures-catalog.json v18 -- gate 12 [fallback-parity] enforces.
-                    cost       = new DeNelle.Core.Catalog.ResourceCost { wood = 0, food = 0, iron = 40, crystals = 125 },
+                    cost       = new DeNelle.Core.Catalog.ResourceCost { wood = 0, food = 0, iron = 160, crystals = 500 },
                     maxLevel   = 3,
                     upgradeCost = new[]
                     {
-                        new DeNelle.Core.Catalog.ResourceCost { wood = 0, food = 0, iron =  48, crystals = 150 },   // L1â†’L2
-                        new DeNelle.Core.Catalog.ResourceCost { wood = 0, food = 0, iron = 100, crystals = 312 },   // L2â†’L3
+                        new DeNelle.Core.Catalog.ResourceCost { wood = 0, food = 0, iron =  480, crystals = 1500 },   // L1â†’L2
+                        new DeNelle.Core.Catalog.ResourceCost { wood = 0, food = 0, iron = 1400, crystals = 4370 },   // L2â†’L3
                     },
                     upgradeVisualPath  = new[] { "Structures/ArcaneSpire_2",        "Structures/ArcaneSpire_3" },
                     upgradeTexturePath = new[] { "Structures/ArcaneSpire_2_Albedo", "Structures/ArcaneSpire_3_Albedo" },

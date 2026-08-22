@@ -942,6 +942,37 @@ namespace DeNelle.Village
         }
 
         /// <summary>
+        /// THE SINGLE AUTHORITY that turns one authored <c>TowerUpgrade.upgradeCost</c> int into the
+        /// resource basket a tower upgrade actually charges. Both the CHARGE (<see cref="TryUpgrade"/>)
+        /// and the DISPLAYED PRICE (BuildMenuVM.UpgradeQuoteFor) call this, so the menu can never quote
+        /// a different basket from the one the transaction takes.
+        ///
+        /// WHY IT EXISTS (2026-08-21): the wood/iron/crystals formula was WRITTEN OUT TWICE — once in
+        /// TryUpgrade and once in BuildMenuVM — so the WO-947 basket bug had to be fixed in two places
+        /// or the UI would quote a price the charge did not match. Two copies of one rule is how the
+        /// bug survived; collapsing them to one call is the fix that keeps it dead.
+        ///
+        /// Towers are REGULAR structures: wood + iron, NEVER crystals (owner ruling 2026-08-21,
+        /// WO-947). The basket TOTAL is preserved at 3 x the authored int — the crystal third is
+        /// FOLDED into wood + iron, not deleted, so removing an illegal resource does not also hand
+        /// the player a silent 33% discount. Exact for odd inputs: ceil + floor sum to 3c.
+        ///
+        /// ⚠ IT RETURNS TWO INTS, NOT A ResourceCost, AND THAT IS DELIBERATE. There are THREE
+        /// unrelated structs named ResourceCost in this solution — DeNelle.Village's (this file's,
+        /// PascalCase Wood/Iron, from EconomyService), DeNelle.Core.Catalog's (lowercase wood/iron,
+        /// no constructor, what BuildMenuVM aliases as CoreCost) and one in
+        /// ResourceBuildingProgression. Returning either concrete type would force the other caller
+        /// into a conversion and re-split the rule this method exists to unify, so the AUTHORITY is
+        /// the arithmetic and each caller builds its own struct.
+        /// </summary>
+        public static void UpgradePriceParts(int authoredCost, out int wood, out int iron)
+        {
+            if (authoredCost <= 0 || authoredCost == int.MaxValue) { wood = 0; iron = 0; return; }
+            wood = (3 * authoredCost + 1) / 2;
+            iron = (3 * authoredCost) / 2;
+        }
+
+        /// <summary>
         /// THE single, cost-enforced upgrade transaction (owner 2026-06-27 — tower-upgrade
         /// CONSOLIDATION). All upgrade callers route here, so cost can never be bypassed:
         /// reads the next level's cost from <see cref="TowerData"/>, gates on
@@ -980,20 +1011,46 @@ namespace DeNelle.Village
                 return UpgradeResult.NoEconomy;
             }
 
-            // #60: tower upgrades cost MULTI-resource (wood + iron + crystal) so the gathering
-            // economy (all three node types) feeds tower progression, not a single resource. The
-            // single TowerUpgrade.upgradeCost int drives all three amounts; CanAfford/TrySpend
-            // already enforce every ResourceCost field atomically (EconomyService).
-            var price = new ResourceCost(wood: cost, iron: cost, crystals: cost);
+            // WO-947 COST-BASKET LAW — FIXED 2026-08-21 (owner ruling: "Towers are regular
+            // structures -> wood+iron only, crystals reserved for magical ones. This is a bug,
+            // not a design.").
+            //
+            // WHAT THIS USED TO DO, and why it was wrong: the old #60 line read
+            //     new ResourceCost(wood: cost, iron: cost, crystals: cost)
+            // — the ONE authored TowerUpgrade.upgradeCost int charged as all THREE resources at
+            // once. That is the exact invariant WO-947 forbids (no basket holds wood AND iron AND
+            // crystals), and it survived because CostBasketSeparationRegression only ever scanned
+            // structures-catalog.json. A rule that inspects one file while three files author
+            // costs is not a rule — hence [cs-basket] in CostBasketSeparationRegression, which now
+            // LINTS THIS CONSTRUCTOR SHAPE in source so a three-resource basket cannot be
+            // re-introduced in C# where no data-driven oracle would ever see it.
+            //
+            // THE FOLD IS TOTAL-PRESERVING, the same discipline WO-947 used everywhere else
+            // (v18/v19 folded wood 1:1 into crystals so basket totals were unchanged). The crystal
+            // third is folded into wood + iron rather than deleted, so this fix removes an illegal
+            // RESOURCE without also handing the player a silent 33% tower discount:
+            //     before: cost W + cost I + cost C   (total 3 x cost)
+            //     after : ceil(3c/2) W + floor(3c/2) I (total 3 x cost, exact for odd c too)
+            // CanAfford/TrySpend still enforce every ResourceCost field atomically (EconomyService).
+            //
+            // ⚠ OPEN PIN, DELIBERATELY NOT GUESSED: this is ONE code path shared by EVERY TowerData
+            // asset, so it necessarily classifies them all as REGULAR. Resources/Towers holds
+            // MageTower.asset and FrostTower.asset, whose names read MAGICAL — and a magical tower
+            // should be crystals + iron (pin 1), not wood + iron. Splitting them needs a per-asset
+            // classification flag, which is a NEW mechanism and an OWNER call, so it is surfaced
+            // rather than invented here (CLAUDE.md section 12: guessing an open classification is
+            // the inference-fix that is forbidden).
+            UpgradePriceParts(cost, out int woodPart, out int ironPart);
+            var price = new ResourceCost(wood: woodPart, iron: ironPart);
             if (!economy.CanAfford(price))
             {
-                FlowTrace.Step("Tower", $"TryUpgrade: CANT-AFFORD next level (cost={cost} wood+iron+crystal, have W={economy.Wood} I={economy.Iron} C={economy.Crystals}).");
+                FlowTrace.Step("Tower", $"TryUpgrade: CANT-AFFORD next level ({woodPart} wood + {ironPart} iron, from authored cost={cost}; have W={economy.Wood} I={economy.Iron}).");
                 return UpgradeResult.CantAfford;
             }
             if (!economy.TrySpend(price))
             {
                 // Race: balance changed between CanAfford and TrySpend. No mutation occurred.
-                FlowTrace.Warn("Tower", $"TryUpgrade: TrySpend failed for cost={cost} wood+iron+crystal (balance changed) — refused.");
+                FlowTrace.Warn("Tower", $"TryUpgrade: TrySpend failed for {woodPart} wood + {ironPart} iron (balance changed) — refused.");
                 return UpgradeResult.CantAfford;
             }
 
@@ -1001,11 +1058,11 @@ namespace DeNelle.Village
             if (!leveled)
             {
                 // Should not happen (we re-checked max above), but never leave a silent spend.
-                FlowTrace.Fail("Tower", $"TryUpgrade: spent {cost} wood+iron+crystal but Upgrade() no-opped — leveled={leveled}.");
+                FlowTrace.Fail("Tower", $"TryUpgrade: spent {woodPart} wood + {ironPart} iron but Upgrade() no-opped — leveled={leveled}.");
                 return UpgradeResult.Maxed;
             }
 
-            FlowTrace.Step("Tower", $"TryUpgrade: SPENT {cost} wood+iron+crystal + LEVELED -> L{_currentLevel}/{MaxLevel}.");
+            FlowTrace.Step("Tower", $"TryUpgrade: SPENT {woodPart} wood + {ironPart} iron + LEVELED -> L{_currentLevel}/{MaxLevel}.");
             return UpgradeResult.Success;
         }
 

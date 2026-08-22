@@ -665,6 +665,76 @@ namespace DeNelle.Editor
                 int hourJob = cfg.InstantFinishPrice(3600.0);
                 if (hourJob < nearDone)
                     failures.Add($"InstantFinishPrice not monotonic: 1h job ({hourJob}) cheaper than a 1s job ({nearDone})");
+
+                // ---------------------------------------------------------------
+                //  THE SKIP CURVE'S **SHAPE** IS PINNED, NOT JUST ITS ENDPOINTS
+                //  (owner ruling 2026-08-21 — convex skip pricing).
+                //
+                //  Endpoint checks alone (floor + monotonic, above) pass PERFECTLY on a
+                //  linear curve, which is exactly the pricing the ruling replaced. So a
+                //  future seat could set instantFinishCurveExponent back to 1, silently
+                //  undo the ruling, and ship green. These three cases make that a GATE
+                //  FAILURE. The defect they protect against is not a crash — it is the
+                //  early ladder quietly becoming free again.
+                // ---------------------------------------------------------------
+                if (cfg.instantFinishCurveExponent >= 1f)
+                    failures.Add($"[skip-curve] instantFinishCurveExponent is {cfg.instantFinishCurveExponent} — at 1 the " +
+                                 "skip price is LINEAR in remaining time, which is the pricing the 2026-08-21 owner ruling " +
+                                 "replaced (it let the whole early ladder skip for 3-31 crystals, so the paid skip was a " +
+                                 "reflex rather than a decision). It must stay below 1.");
+                if (cfg.instantFinishCurveExponent <= 0f)
+                    failures.Add($"[skip-curve] instantFinishCurveExponent is {cfg.instantFinishCurveExponent} — a zero/negative " +
+                                 "exponent makes long skips cost the same as or less than short ones.");
+
+                // 0. THE FLOOR IS PART OF THE SHAPE AT THE BOTTOM OF THE LADDER, so it is
+                //    pinned too. MEASURED, not assumed: at the authored exponent the raw curve
+                //    prices a tier-0 build (45s) at FIVE crystals, so what actually makes the
+                //    bottom rung cost anything is instantFinishMinCrystals, not the exponent.
+                //    Dropping the floor back to its pre-ruling 3 restores a 5-crystal tier-0
+                //    skip — and every OTHER check in this block still passes green, because
+                //    they all sample at 10 minutes or longer. The exponent was therefore only
+                //    half the ruling's protection; this is the other half. The constant is
+                //    deliberately absolute: comparing the floor to cfg's own floor would be
+                //    self-referential and could never fail.
+                const int RuledMinSkipCrystals = 10;   // owner ruling 2026-08-21
+                if (cfg.instantFinishMinCrystals < RuledMinSkipCrystals)
+                    failures.Add($"[skip-curve] instantFinishMinCrystals is {cfg.instantFinishMinCrystals}, below the " +
+                                 $"{RuledMinSkipCrystals} the 2026-08-21 ruling authored. The curve alone prices a tier-0 " +
+                                 "build at ~5 crystals, so the FLOOR is what keeps the shortest timers from being free — " +
+                                 "lowering it undoes the ruling in exactly the zone the ruling was written about, and the " +
+                                 "exponent checks below cannot see it (they sample at 10+ minutes).");
+
+                // 1. THE PER-MINUTE RATE MUST STRICTLY FALL as the wait grows. That is the
+                //    whole ruling in one assertion: a short skip pays a premium RATE. On a
+                //    linear curve these rates are equal, so this fails there too.
+                double shortMin = 10.0, longMin = 600.0;
+                double rateShort = cfg.InstantFinishPrice(shortMin * 60.0) / shortMin;
+                double rateLong  = cfg.InstantFinishPrice(longMin * 60.0) / longMin;
+                if (rateShort <= rateLong * 1.05)
+                    failures.Add($"[skip-curve] the price PER MINUTE does not fall with wait length " +
+                                 $"({rateShort:0.00} cr/min at {shortMin:0}m vs {rateLong:0.00} at {longMin:0}m). The curve has " +
+                                 "been flattened toward linear, so short skips are cheap again and the tier ladder stops " +
+                                 "being felt.");
+
+                // 2. A MID-LENGTH SKIP MUST SIT ABOVE THE STRAIGHT LINE from origin to the
+                //    anchor -- the geometric statement of "sub-linear total / falling rate".
+                double anchorMin = Mathf.Max(1f, cfg.maxDurationSeconds) / 60.0;
+                double midMin = anchorMin * 0.25;
+                int midPrice = cfg.InstantFinishPrice(midMin * 60.0);
+                double linearAtMid = cfg.instantFinishCrystalsPerMinute * midMin;
+                if (midPrice <= linearAtMid * 1.10)
+                    failures.Add($"[skip-curve] a quarter-length skip prices at {midPrice} crystals, essentially the LINEAR " +
+                                 $"price ({linearAtMid:0}) — the convex curve is gone.");
+
+                // 3. THE ANCHOR IS UNMOVED. The owner called the long end already sane and
+                //    said to fix the shape, NOT the ceiling; this catches a "retune" that
+                //    lifts the whole curve instead of reshaping it.
+                int anchorPrice = cfg.InstantFinishPrice(cfg.maxDurationSeconds);
+                int anchorExpected = Mathf.CeilToInt((float)(cfg.instantFinishCrystalsPerMinute * anchorMin));
+                if (Mathf.Abs(anchorPrice - anchorExpected) > 1)
+                    failures.Add($"[skip-curve] a full-length ({anchorMin / 60.0:0.#}h) skip prices at {anchorPrice} crystals, " +
+                                 $"but the anchor must stay at crystalsPerMinute x minutes = {anchorExpected}. The owner ruled " +
+                                 "the long end sane and the curve must reshape BELOW it, never inflate it.");
             }
             else if (cfg.InstantFinishPrice(3600.0) != 0)
             {

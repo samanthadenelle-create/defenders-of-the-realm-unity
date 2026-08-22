@@ -1,5 +1,6 @@
 {
-  "version": 23,
+  "version": 24,
+  "_sinkPassNote": "v24 = ECONOMY SINK PASS 2026-08-21 (OWNER RULING): a committed daily player should need 8-12 WEEKS to exhaust current content, a casual ~6 months; it was ONE EVENING. THE LEVER IS THE SINKS, NOT THE FAUCET -- harvest stays exactly 5 per 5 seconds (EchoBonusCalculator CommonResourcePerHour 3600) because \" 5 wood every 5 seconds\" is legible and a player can feel it; nudging it to 3.7/tick buys nothing and costs comprehension. Scaling factors: build x4, upgrade->L2 x10, upgrade->L3 x14. The THREE STORAGE ROWS (lumberyard/foundry/silo) use their own DECREASING ladder (x16/x16/x10/x8/x6.5/x6) because a uniform multiplier on a ladder that already doubles per step walks the cost off the end of the cap ladder it is gated behind -- foundry and silo wood steps were then lowered again by hand to 2000/2700/4000/6800/12000 because they are paid in WOOD, capped by the LUMBERYARD, and must fit the MATCHED container level. HARD CONSTRAINT, pinned by DeNelle.Editor.Regression.EconomySinkCapRegression [sink-cap]: NO COST MAY EXCEED THE MAX BANKABLE AMOUNT OF THAT RESOURCE (base 2000 + one container at level 1..6 = 3k/4k/6k/10k/18k/34k). A 3000-wood cost under a 2000 cap is UNCOMPLETABLE and nothing in the game explains why. CRYSTALS AND COINS ARE UNCAPPED BY DESIGN (TownBankCapacity.UncappableResources) -- that is why the crystal-priced magical ladders run to five figures. Cost baskets are UNCHANGED in shape: scaling never moves a resource across the WO-947 regular/magical line. NOTE the knock-on: BuildTimerConfig.TierForCost derives build TIME from the authored basket, so this pass also lifts the time ladder -- which is the intended coupling (see that file: \"the whole ladder re-tunes itself for free when the JSON cost pass lands\").",
   "_costBasketRule": "WO-947 — OWNER ECONOMY RULING 2026-08-10, BINDING, and the four classification pins ANSWERED by the owner 2026-08-14: cost baskets separate by the structure's NATURE. REGULAR structures cost wood + iron (± food where already used) and NEVER crystals. MAGICAL / ETHEREAL structures are CRYSTALS + IRON (owner 2026-08-14 pin 1 verbatim: \"Crystals and Iron\") — never wood. INVARIANT: no row's build cost or upgrade step ever contains wood AND iron AND crystals together. Enforced headlessly by DeNelle.Editor.Regression.CostBasketSeparationRegression [cost-basket] — any NEW row that violates the invariant FAILS the gate. FULLY APPLIED as of v18: v17 converted 'tower_siege_tower'; v18 converts the five rows that were waiting on the pins — MAGICAL (crystals + iron, wood folded 1:1 into CRYSTALS so basket totals are unchanged): 'tower_arcane_spire', 'healing_caravan' (pin 2 verbatim: \"yes AoE healing\" — healing IS magical); REGULAR (crystals folded 1:1 into IRON, totals unchanged): 'jeweler' (pin 3 verbatim: \"Crafting (can enbue preciouus sstones future release)\" — crafting, therefore regular today; a FUTURE release may let it imbue precious stones, which would be a RE-classification then, not now) and 'tower_wall_wizard' (pin 4 verbatim: \"thats a baliista mechanical\" — the DATA reading wins over the id; displayName 'Ballista', element None, projectileStyle 'bolt' per the owner rename ruling 2026-07-08). The regression's pending-pin exemption list is now EMPTY. (v18 populated MagicalIds; v19 added 'arcane-tower'; v20 removed the retired Healer Tower row -- see the retirement note at the end.) THE LAST PIN IS SPENT (OWNER 2026-08-14, verbatim: \"cathedral of magic is where all magic upgrades anre and can unlock new teirs of spells\"): 'arcane-tower' ('Cathedral of Magic') is MAGICAL. v19 converts it — wood:60 folded 1:1 into CRYSTALS, so the basket is crystals:60 + iron:60 and the total (120) is unchanged, the same discipline used for the three v18 magical rows. This OVERRIDES the earlier agent reading that called it REGULAR by the jeweler analogy (\"a shop that DEALS IN magic is still a shop\"), which cited behaviorId 'GameplayBuilding' and the row's _heightNote (\"despite the id this is not a tower — it is the town's one civic landmark\"). THE OWNER'S DISTINCTION, recorded so nobody re-litigates it: the jeweler SELLS things that happen to be precious; the Cathedral is WHERE MAGIC UPGRADES LIVE AND WHERE NEW SPELL TIERS UNLOCK — it is the ENGINE of magical progression, not a vendor that deals in it. 'behaviorId: GameplayBuilding' describes its BEHAVIOUR (it is not a firing tower), NOT its cost class. The surface evidence genuinely points both ways, so the ruling is the tiebreak — do not re-classify it off the id, the behaviorId or the _heightNote. WO-947 IS NOW FULLY APPLIED: every classification question is closed, the regression's pending-pin exemption list is EMPTY and stays empty. v20 RETIRES the never-buildable Healer Tower row entirely (WO-990, OWNER RULING 2026-08-14, verbatim: \"i do not know what the town healer is\" -> \"retire\"). She did not recognise it because it appeared in NO build category in build-categories.json, so no player could ever build it and it had no early-economy consequence; the WO-947 pin-2 conversion had been applied to a dead row. Its BEHAVIOUR is deliberately KEPT (StructureFactory case \"HealerTower\") as the WO-891 support-FIELD pattern reference; 'healing_caravan' is the row's design successor and inherits the concept. Do not resurrect the row. MagicalIds therefore holds THREE ids at v20: 'tower_arcane_spire', 'healing_caravan', 'arcane-tower'.",
   "_displayOrder": "WO-963 (owner ask 2026-08-10, F8 seq 2302, verbatim: 'Can we order the carousel in order of how the tutorial presents them?'). 'displayOrder' is an OPTIONAL per-entry integer that sorts the build palette carousel. LOWER FIRST; ABSENT / 0 = UNAUTHORED and sorts AFTER every authored row, keeping its current relative position (the sort is STABLE on the catalog's row order, so an unauthored row never jumps). The palette is the only consumer (BuildPaletteVM.SortForDisplay); it changes NO gating, no group split and no cost. SEEDED TO THE TEACHING ORDER: 10 collector_lumbermill (tutorial step order 20, 'Place your Lumbermill'), 20 workshop (contextual nudge 1050, the weapons roof), 30 forge/'Armorer' (contextual nudge 1060). Gaps of 10 are deliberate so the owner can slot a row between two without renumbering. NO TOWER ROW IS AUTHORED ON PURPOSE: the tutorial's defense beat (step order 30) names a TAB ('build.tab_defenses'), not a tower id, and tower_ground_archer is already the first Tower row in this file, so the Defense group teaches the archer tower first with no key. It also keeps the three CatalogBootstrap.RegisterFallback tower rows field-equal to their catalog rows (BuildEconomyRegression gate 12 [fallback-parity] deep-compares EVERY public CatalogEntry/RepoProps field, so authoring a tower here would demand a mirrored edit there). The tutorial is NEVER read at runtime by the palette - the catalog carries the order and BuildCarouselTutorialOrderRegression is what keeps the two agreeing.",
   "_heightCadence": "OWNER RULING 2026-08-05 (verbatim): 'take whatever the y height that we use across the board, we're gonna take that as y and make this maybe one point five or one point two higher. It's only gonna be half as wide as the diameter of any of the houses. I want all of the other structures to stay within that cadence. I want all of them to be relatively the same size. Wide heights, all of that should be similar. Doesn't have to be exact, but it must be similar, all scaled to the same point.' ONE FAMILY, NOT ONE NUMBER. The dial is repo.heightMul against StructureFactory.YHeightVariable (4 m base). The fit is a UNIFORM scale, so heightMul moves HEIGHT AND FOOTPRINT TOGETHER: BuildModeController claims grid cells from StructureFactory.MeasureUprightFootprintMetres (the height-fitted model's XZ bounds), never from placement.footprint, which is only the prefab-missing fallback. THE OLD SENTENCE HERE - 'there is no width dial and none is needed' - WAS TRUE ONLY WHILE EVERY MODEL'S FITTED POSE WAS ROUGHLY BUILDING-SHAPED, and it is retired as of 2026-08-20. Fit-to-height is a single-axis promise: the scale is target / boundsY, so a model whose fitted pose is FLAT divides by a tiny number and takes its footprint along for the ride. There is now exactly ONE width dial, repo.maxFootprint, and it is a CEILING in metres on the fitted model's widest horizontal extent - it only ever scales DOWN, only ever uniformly, and it DEFAULTS TO 0 = DISARMED, so it changes nothing on any row that does not author it. Exactly ONE row authors it today (collector_farm 5.6); it is not a second cadence and never a place to hand-tune a building that height already handles. GROUPS: (1) BUILDING BASE 1.0 = 4.0 m: houses, production, vendors, storage containers, collectors, civic. This is the WIDTH REFERENCE the ruling measures against; House_Medieval_Medium fits to 5.562 m across = a 2x2 claim at the 3 m cell. (2) TOWER 1.2 = 4.8 m: reads 20 percent taller than a house and 2.778 m across = 49.9 percent of a house diameter, exactly the ruling's 'half as wide', and a 1x1 claim. 1.2 is the OWNER-RULED anchor from commit 0ac59581 (archer tower); on 2026-08-05 the rest of the tower class came off the old WO-764 1.25 onto it, so no tower is an outlier against the anchor any more. (3) SIEGE ENGINE 0.75 = 3.0 m: tower_catapult and tower_siege_tower. Machines, not architecture, so they sit deliberately UNDER the house line and read as equipment; it also keeps the wall-walk Sky Ballista from out-topping the towers once stacked on a wall. (4) LANDMARK 1.25 = 5.0 m: arcane-tower (Cathedral of Magic) ONLY. The single apex of the town, which the ruling's 'relatively the same size, doesn't have to be exact' allows for one building. (5) DECORATION, well under the family: deco_torch 0.35 = 1.4 m. EXCEPTION, NOT A CADENCE VALUE: collector_farm 1.4, AND IT IS NOW CAPPED ON THE OTHER AXIS (repo.maxFootprint 5.6). The 'do NOT normalize it to 1.0' half stands - that re-ships the shrunk farm the owner reported in commit 31b41d19. The half this key MISSED, and the owner felt it on 2026-08-20 ('farm seems to be much larger than anything else'), is that heightMul is a uniform scale and therefore a FOOTPRINT dial as well: Structures/farm measures 0.977 x 1.000 x 0.391 m natively and its (-90,0,0) euler stands the 0.391 axis up, so the 5.6 m height target came out as scale 14.34 and a 14.00 x 14.34 m footprint against a 2.8-5.8 m family (measured, logs/device/2026-08-20-portal.log). BOTH directions on heightMul are wrong for that - down re-shrinks the building, up widens it further - so the fix is the footprint ceiling, which lands the row back on the 5.47 x 2.19 x 5.60 m it rendered before the PRE-fit-euler change of 2026-08-19. The row's own _heightNote carries the full derivation. NOTE THE MECHANISM CORRECTION: the 'spindly silhouette / windmill blades inflate its Y bounds' explanation that used to sit here is not what the geometry says - the art is a flat square plot - but the number it defended was right for the pipeline of its day. DELIBERATELY LEFT UNAUTHORED: wall_wood, wall_stone and gate_stone stay on the 1.0 base. See their per-row _heightNote - lowering a wall narrows it by the same factor and opens pathable GAPS in already-saved wall runs, which is a save-compat break rather than a visual tweak. TIERS 2 AND 3 NEED NO KEYS: ReskinForLevel re-fits every tier model through the same OptsFor/EffectiveVisualHeight call, so an upgrade inherits its row's heightMul automatically; there are no per-level height fields anywhere in RepoProps.",
@@ -15,25 +16,25 @@
       "visualPrefabPath": "Structures/Tower_Wooden_Watchtower",
       "repo": {
         "behaviorId": "DefenseTower",
-        "buildCost": 100,
+        "buildCost": 400,
         "cost": {
-          "wood": 90,
+          "wood": 360,
           "food": 0,
-          "iron": 40,
+          "iron": 160,
           "crystals": 0
         },
         "maxLevel": 3,
         "upgradeCost": [
           {
-            "wood": 108,
+            "wood": 1080,
             "food": 0,
-            "iron": 48,
+            "iron": 480,
             "crystals": 0
           },
           {
-            "wood": 225,
+            "wood": 3150,
             "food": 0,
-            "iron": 100,
+            "iron": 1400,
             "crystals": 0
           }
         ],
@@ -89,26 +90,26 @@
       "visualPrefabPath": "Structures/Ballista_L1",
       "repo": {
         "behaviorId": "DefenseTower",
-        "buildCost": 150,
+        "buildCost": 600,
         "_costBasketNote": "WO-947 pin 4, OWNER 2026-08-14 verbatim: \"thats a baliista mechanical\". This row is REGULAR (wood + iron, NEVER crystals). The `wizard` in the id is STALE NAMING, not a classification — the row's own data is displayName 'Ballista', element None, projectileStyle 'bolt', behaviorId 'DefenseTower', per the owner rename ruling 2026-07-08 recorded in its orientation.note. The former crystals (70 / 84 / 175) were folded 1:1 into IRON so every basket TOTAL and the tier-monotonic ladder are unchanged (160 / 192 / 400); only the composition moved. Numbers stay owner-tunable. MIRRORED in CatalogBootstrap.RegisterFallback (BuildEconomyRegression gate 12 [fallback-parity] enforces).",
         "cost": {
-          "wood": 60,
+          "wood": 240,
           "food": 0,
-          "iron": 100,
+          "iron": 400,
           "crystals": 0
         },
         "maxLevel": 3,
         "upgradeCost": [
           {
-            "wood": 72,
+            "wood": 720,
             "food": 0,
-            "iron": 120,
+            "iron": 1200,
             "crystals": 0
           },
           {
-            "wood": 150,
+            "wood": 2100,
             "food": 0,
-            "iron": 250,
+            "iron": 3500,
             "crystals": 0
           }
         ],
@@ -162,26 +163,26 @@
       "visualPrefabPath": "Structures/Ballista",
       "repo": {
         "behaviorId": "DefenseTower",
-        "buildCost": 140,
+        "buildCost": 560,
         "_costBasketNote": "WO-947 (owner economy ruling 2026-08-10): REGULAR structures cost wood + iron (± food) and NEVER crystals; magical/ethereal structures are crystal-based. No basket ever holds wood AND iron AND crystals. This row is REGULAR by its own catalog data — displayName 'Sky Ballista (Anti-Air)', description 'Wall-mounted spear thrower', element None, projectileStyle 'bolt', and the top-level _heightCadence puts it in the SIEGE ENGINE group ('Machines, not architecture'). The former crystals (20 / 24 / 50) were folded 1:1 into IRON so the basket TOTAL and the tier-monotonic ladder are unchanged (270 / 324 / 675); only the composition moved. Numbers stay owner-tunable.",
         "cost": {
-          "wood": 160,
+          "wood": 640,
           "food": 0,
-          "iron": 110,
+          "iron": 440,
           "crystals": 0
         },
         "maxLevel": 3,
         "upgradeCost": [
           {
-            "wood": 192,
+            "wood": 1920,
             "food": 0,
-            "iron": 132,
+            "iron": 1320,
             "crystals": 0
           },
           {
-            "wood": 400,
+            "wood": 5600,
             "food": 0,
-            "iron": 275,
+            "iron": 3850,
             "crystals": 0
           }
         ],
@@ -227,25 +228,25 @@
       "visualPrefabPath": "Structures/Catapult",
       "repo": {
         "behaviorId": "DefenseTower",
-        "buildCost": 180,
+        "buildCost": 720,
         "cost": {
-          "wood": 100,
+          "wood": 400,
           "food": 0,
-          "iron": 80,
+          "iron": 320,
           "crystals": 0
         },
         "maxLevel": 3,
         "upgradeCost": [
           {
-            "wood": 120,
+            "wood": 1200,
             "food": 0,
-            "iron": 96,
+            "iron": 960,
             "crystals": 0
           },
           {
-            "wood": 250,
+            "wood": 3500,
             "food": 0,
-            "iron": 200,
+            "iron": 2800,
             "crystals": 0
           }
         ],
@@ -290,9 +291,9 @@
       "visualPrefabPath": "Structures/Wall_Medieval_Wood",
       "repo": {
         "behaviorId": "WallSegment",
-        "buildCost": 40,
+        "buildCost": 160,
         "cost": {
-          "wood": 20,
+          "wood": 80,
           "food": 0,
           "iron": 0,
           "crystals": 0
@@ -300,9 +301,9 @@
         "maxLevel": 2,
         "upgradeCost": [
           {
-            "wood": 20,
+            "wood": 200,
             "food": 0,
-            "iron": 20,
+            "iron": 200,
             "crystals": 0
           }
         ],
@@ -344,11 +345,11 @@
       "visualPrefabPath": "Structures/Wall_Medieval_Stone",
       "repo": {
         "behaviorId": "WallSegment",
-        "buildCost": 90,
+        "buildCost": 360,
         "cost": {
-          "wood": 30,
+          "wood": 120,
           "food": 0,
-          "iron": 60,
+          "iron": 240,
           "crystals": 0
         },
         "maxLevel": 1,
@@ -387,11 +388,11 @@
       "visualPrefabPath": "Structures/Gate_Medieval_Medium",
       "repo": {
         "behaviorId": "Gate",
-        "buildCost": 120,
+        "buildCost": 480,
         "cost": {
-          "wood": 60,
+          "wood": 240,
           "food": 0,
-          "iron": 50,
+          "iron": 200,
           "crystals": 0
         },
         "navSurface": "Blocker",
@@ -428,25 +429,25 @@
       "visualPrefabPath": "Structures/Well",
       "repo": {
         "behaviorId": "CrystalMine",
-        "buildCost": 200,
+        "buildCost": 800,
         "cost": {
-          "wood": 80,
+          "wood": 320,
           "food": 0,
-          "iron": 50,
+          "iron": 200,
           "crystals": 0
         },
         "maxLevel": 3,
         "upgradeCost": [
           {
-            "wood": 240,
+            "wood": 2400,
             "food": 0,
-            "iron": 150,
+            "iron": 1500,
             "crystals": 0
           },
           {
-            "wood": 560,
+            "wood": 7840,
             "food": 0,
-            "iron": 350,
+            "iron": 4900,
             "crystals": 0
           }
         ],
@@ -484,13 +485,13 @@
       "repo": {
         "behaviorId": "HealingFountain",
         "npcModel": "CraftPixPeople/NPC_Peasant_5",
-        "buildCost": 150,
+        "buildCost": 600,
         "_costBasketNote": "WO-947 pin 2, OWNER 2026-08-14 verbatim: \"yes AoE healing\" — healing IS magical (the ruling covered this row together with the Healer Tower row that v20 RETIRED as never-buildable -- WO-990; this row is its successor). MAGICAL basket = CRYSTALS + IRON (pin 1: \"Crystals and Iron\"), + the FOOD this row already used. WOOD REMOVED. The former wood (150) was folded 1:1 into CRYSTALS so the basket TOTAL is unchanged (350); only the composition moved. Numbers stay owner-tunable.",
         "cost": {
           "wood": 0,
-          "food": 60,
-          "iron": 100,
-          "crystals": 190
+          "food": 240,
+          "iron": 400,
+          "crystals": 760
         },
         "maxLevel": 3,
         "upgradeVisualPath": [
@@ -532,9 +533,9 @@
       "visualPrefabPath": "Structures/Torche_Wall",
       "repo": {
         "behaviorId": null,
-        "buildCost": 10,
+        "buildCost": 40,
         "cost": {
-          "wood": 5,
+          "wood": 20,
           "food": 0,
           "iron": 0,
           "crystals": 0
@@ -578,11 +579,11 @@
         "bakedTwins": [
           "EchoHollow_Pets_RoamingArea"
         ],
-        "buildCost": 120,
+        "buildCost": 480,
         "cost": {
-          "wood": 80,
+          "wood": 320,
           "food": 0,
-          "iron": 30,
+          "iron": 120,
           "crystals": 0
         },
         "navSurface": "Blocker",
@@ -621,11 +622,11 @@
       "repo": {
         "behaviorId": "GameplayBuilding",
         "npcModel": "CraftPixPeople/NPC_RichCitizen_2",
-        "buildCost": 100,
+        "buildCost": 400,
         "cost": {
-          "wood": 60,
+          "wood": 240,
           "food": 0,
-          "iron": 40,
+          "iron": 160,
           "crystals": 0
         },
         "navSurface": "Blocker",
@@ -666,11 +667,11 @@
       "repo": {
         "behaviorId": "GameplayBuilding",
         "npcModel": "CraftPixPeople/NPC_Peasant_1",
-        "buildCost": 110,
+        "buildCost": 440,
         "cost": {
-          "wood": 70,
+          "wood": 280,
           "food": 0,
-          "iron": 30,
+          "iron": 120,
           "crystals": 0
         },
         "navSurface": "Blocker",
@@ -712,11 +713,11 @@
         "behaviorId": "GameplayBuilding",
         "npcModel": "CraftPixPeople/NPC_Peasant_2",
         "singleton": true,
-        "buildCost": 100,
+        "buildCost": 400,
         "cost": {
-          "wood": 70,
+          "wood": 280,
           "food": 0,
-          "iron": 20,
+          "iron": 80,
           "crystals": 0
         },
         "navSurface": "Blocker",
@@ -752,11 +753,11 @@
       "visualPrefabPath": "Structures/Watermill_Medieval",
       "repo": {
         "behaviorId": "GameplayBuilding",
-        "buildCost": 90,
+        "buildCost": 360,
         "cost": {
-          "wood": 50,
+          "wood": 200,
           "food": 0,
-          "iron": 40,
+          "iron": 160,
           "crystals": 0
         },
         "navSurface": "Blocker",
@@ -799,11 +800,11 @@
         "bakedTwins": [
           "Forge_Armor_Storefront"
         ],
-        "buildCost": 130,
+        "buildCost": 520,
         "cost": {
-          "wood": 60,
+          "wood": 240,
           "food": 0,
-          "iron": 70,
+          "iron": 280,
           "crystals": 0
         },
         "navSurface": "Blocker",
@@ -842,11 +843,11 @@
         "behaviorId": "GameplayBuilding",
         "npcModel": "CraftPixPeople/NPC_CityDweller_2",
         "singleton": true,
-        "buildCost": 130,
+        "buildCost": 520,
         "cost": {
-          "wood": 60,
+          "wood": 240,
           "food": 0,
-          "iron": 70,
+          "iron": 280,
           "crystals": 0
         },
         "navSurface": "Blocker",
@@ -887,12 +888,12 @@
         "bakedTwins": [
           "Jeweler_Gems_Storefront"
         ],
-        "buildCost": 120,
+        "buildCost": 480,
         "_costBasketNote": "WO-947 pin 3, OWNER 2026-08-14 verbatim: \"Crafting (can enbue preciouus sstones future release)\". The Jeweler is a CRAFTING shop, therefore REGULAR (wood + iron, NEVER crystals) — it TRADES in gems, it is not built of magic. ⚠ The owner flagged that a FUTURE release may let it IMBUE precious stones; that would be a re-classification AT THAT TIME and is expressly NOT a reason to make it magical today. The former crystals (30) were folded 1:1 into IRON so the basket TOTAL is unchanged (120); only the composition moved. Numbers stay owner-tunable.",
         "cost": {
-          "wood": 50,
+          "wood": 200,
           "food": 0,
-          "iron": 70,
+          "iron": 280,
           "crystals": 0
         },
         "navSurface": "Blocker",
@@ -936,12 +937,12 @@
         "bakedTwins": [
           "ArcaneTower_MagicUpgrades"
         ],
-        "buildCost": 140,
+        "buildCost": 560,
         "cost": {
           "wood": 0,
           "food": 0,
-          "iron": 60,
-          "crystals": 60
+          "iron": 240,
+          "crystals": 240
         },
         "navSurface": "Blocker",
         "heightMul": 1,
@@ -979,27 +980,27 @@
       "visualTexturePath": "Structures/ArcaneSpire_Albedo",
       "repo": {
         "behaviorId": "ArcaneTower",
-        "buildCost": 200,
+        "buildCost": 800,
         "_costBasketNote": "WO-947 pin 1, OWNER 2026-08-14 verbatim: \"Crystals and Iron\". This row is MAGICAL beyond doubt from its own data (element 'Aether', behaviorId 'ArcaneTower', projectileStyle 'spell'); only the PAIRING was unpinned. Basket is now CRYSTALS + IRON — WOOD REMOVED. The former wood (40 / 48 / 100) was folded 1:1 into CRYSTALS (the crystal side, because the ruling calls magical structures crystal-BASED) so every basket TOTAL and the tier-monotonic ladder are unchanged (165 / 198 / 412); only the composition moved. Numbers stay owner-tunable. MIRRORED in CatalogBootstrap.RegisterFallback (BuildEconomyRegression gate 12 [fallback-parity] enforces).",
         "cost": {
           "wood": 0,
           "food": 0,
-          "iron": 40,
-          "crystals": 125
+          "iron": 160,
+          "crystals": 500
         },
         "maxLevel": 3,
         "upgradeCost": [
           {
             "wood": 0,
             "food": 0,
-            "iron": 48,
-            "crystals": 150
+            "iron": 480,
+            "crystals": 1500
           },
           {
             "wood": 0,
             "food": 0,
-            "iron": 100,
-            "crystals": 312
+            "iron": 1400,
+            "crystals": 4370
           }
         ],
         "upgradeVisualPath": [
@@ -1060,11 +1061,11 @@
         "heightMul": 1.4,
         "maxFootprint": 5.6,
         "capacity": 7500,
-        "buildCost": 90,
+        "buildCost": 360,
         "cost": {
-          "wood": 60,
+          "wood": 240,
           "food": 0,
-          "iron": 20,
+          "iron": 80,
           "crystals": 0
         },
         "navSurface": "Blocker",
@@ -1108,11 +1109,11 @@
         "npcModel": "CraftPixPeople/NPC_Peasant_4",
         "collectorBuildingId": "lumbermill",
         "capacity": 5760,
-        "buildCost": 90,
+        "buildCost": 360,
         "cost": {
-          "wood": 40,
-          "food": 20,
-          "iron": 30,
+          "wood": 160,
+          "food": 80,
+          "iron": 120,
           "crystals": 0
         },
         "navSurface": "Blocker",
@@ -1154,11 +1155,11 @@
         "behaviorId": "ResourceCollector",
         "collectorBuildingId": "forge",
         "capacity": 3456,
-        "buildCost": 120,
+        "buildCost": 480,
         "cost": {
-          "wood": 60,
+          "wood": 240,
           "food": 0,
-          "iron": 60,
+          "iron": 240,
           "crystals": 0
         },
         "navSurface": "Blocker",
@@ -1197,43 +1198,43 @@
         "behaviorId": "GameplayBuilding",
         "storageCapacity": 1000,
         "storageResource": "wood",
-        "buildCost": 80,
+        "buildCost": 1280,
         "cost": {
-          "wood": 50,
+          "wood": 800,
           "food": 0,
-          "iron": 20,
+          "iron": 320,
           "crystals": 0
         },
         "maxLevel": 6,
         "upgradeCost": [
           {
-            "wood": 150,
-            "food": 0,
-            "iron": 60,
-            "crystals": 0
-          },
-          {
-            "wood": 300,
-            "food": 0,
-            "iron": 120,
-            "crystals": 0
-          },
-          {
-            "wood": 600,
-            "food": 0,
-            "iron": 240,
-            "crystals": 0
-          },
-          {
-            "wood": 1200,
-            "food": 0,
-            "iron": 480,
-            "crystals": 0
-          },
-          {
             "wood": 2400,
             "food": 0,
             "iron": 960,
+            "crystals": 0
+          },
+          {
+            "wood": 3000,
+            "food": 0,
+            "iron": 1200,
+            "crystals": 0
+          },
+          {
+            "wood": 4800,
+            "food": 0,
+            "iron": 1920,
+            "crystals": 0
+          },
+          {
+            "wood": 7800,
+            "food": 0,
+            "iron": 3120,
+            "crystals": 0
+          },
+          {
+            "wood": 14400,
+            "food": 0,
+            "iron": 5760,
             "crystals": 0
           }
         ],
@@ -1273,43 +1274,43 @@
         "behaviorId": "GameplayBuilding",
         "storageCapacity": 1000,
         "storageResource": "iron",
-        "buildCost": 100,
+        "buildCost": 1600,
         "cost": {
-          "wood": 60,
+          "wood": 960,
           "food": 0,
-          "iron": 30,
+          "iron": 480,
           "crystals": 0
         },
         "maxLevel": 6,
         "upgradeCost": [
           {
-            "wood": 180,
-            "food": 0,
-            "iron": 90,
-            "crystals": 0
-          },
-          {
-            "wood": 360,
-            "food": 0,
-            "iron": 180,
-            "crystals": 0
-          },
-          {
-            "wood": 720,
-            "food": 0,
-            "iron": 360,
-            "crystals": 0
-          },
-          {
-            "wood": 1440,
-            "food": 0,
-            "iron": 720,
-            "crystals": 0
-          },
-          {
-            "wood": 2880,
+            "wood": 2000,
             "food": 0,
             "iron": 1440,
+            "crystals": 0
+          },
+          {
+            "wood": 2700,
+            "food": 0,
+            "iron": 1800,
+            "crystals": 0
+          },
+          {
+            "wood": 4000,
+            "food": 0,
+            "iron": 2880,
+            "crystals": 0
+          },
+          {
+            "wood": 6800,
+            "food": 0,
+            "iron": 4680,
+            "crystals": 0
+          },
+          {
+            "wood": 12000,
+            "food": 0,
+            "iron": 8640,
             "crystals": 0
           }
         ],
@@ -1349,43 +1350,43 @@
         "behaviorId": "GameplayBuilding",
         "storageCapacity": 1000,
         "storageResource": "food",
-        "buildCost": 80,
+        "buildCost": 1280,
         "cost": {
-          "wood": 60,
+          "wood": 960,
           "food": 0,
-          "iron": 15,
+          "iron": 240,
           "crystals": 0
         },
         "maxLevel": 6,
         "upgradeCost": [
           {
-            "wood": 180,
-            "food": 0,
-            "iron": 45,
-            "crystals": 0
-          },
-          {
-            "wood": 360,
-            "food": 0,
-            "iron": 90,
-            "crystals": 0
-          },
-          {
-            "wood": 720,
-            "food": 0,
-            "iron": 180,
-            "crystals": 0
-          },
-          {
-            "wood": 1440,
-            "food": 0,
-            "iron": 360,
-            "crystals": 0
-          },
-          {
-            "wood": 2880,
+            "wood": 2000,
             "food": 0,
             "iron": 720,
+            "crystals": 0
+          },
+          {
+            "wood": 2700,
+            "food": 0,
+            "iron": 900,
+            "crystals": 0
+          },
+          {
+            "wood": 4000,
+            "food": 0,
+            "iron": 1440,
+            "crystals": 0
+          },
+          {
+            "wood": 6800,
+            "food": 0,
+            "iron": 2340,
+            "crystals": 0
+          },
+          {
+            "wood": 12000,
+            "food": 0,
+            "iron": 4320,
             "crystals": 0
           }
         ],
@@ -1423,11 +1424,11 @@
       "repo": {
         "behaviorId": "GameplayBuilding",
         "npcModel": "CraftPixPeople/NPC_RichCitizen_4",
-        "buildCost": 120,
+        "buildCost": 480,
         "cost": {
-          "wood": 150,
+          "wood": 600,
           "food": 0,
-          "iron": 80,
+          "iron": 320,
           "crystals": 0
         },
         "navSurface": "Blocker",
@@ -1469,9 +1470,9 @@
         "behaviorId": null,
         "buildCost": 0,
         "cost": {
-          "wood": 30,
+          "wood": 120,
           "food": 0,
-          "iron": 15,
+          "iron": 60,
           "crystals": 0
         },
         "navSurface": "None",

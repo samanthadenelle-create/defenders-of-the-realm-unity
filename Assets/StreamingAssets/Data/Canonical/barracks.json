@@ -25,9 +25,9 @@
         "troop-spearman"
       ],
       "cost": {
-        "wood": 150,
-        "food": 40,
-        "iron": 60,
+        "wood": 300,
+        "food": 80,
+        "iron": 120,
         "crystals": 0,
         "coins": 0
       },
@@ -41,9 +41,9 @@
         "troop-field-cleric"
       ],
       "cost": {
-        "wood": 520,
-        "food": 145,
-        "iron": 260,
+        "wood": 1040,
+        "food": 290,
+        "iron": 520,
         "crystals": 0,
         "coins": 0
       },
@@ -57,10 +57,10 @@
         "troop-catapult"
       ],
       "cost": {
-        "wood": 1450,
-        "food": 430,
-        "iron": 770,
-        "crystals": 50,
+        "wood": 2900,
+        "food": 860,
+        "iron": 1540,
+        "crystals": 100,
         "coins": 0
       },
       "buildTimeSeconds": 3600
@@ -72,10 +72,10 @@
         "troop-battlemage"
       ],
       "cost": {
-        "wood": 3200,
-        "food": 1020,
-        "iron": 1790,
-        "crystals": 190,
+        "wood": 6400,
+        "food": 2040,
+        "iron": 3580,
+        "crystals": 380,
         "coins": 0
       },
       "buildTimeSeconds": 10800
@@ -87,10 +87,10 @@
         "troop-echo-legionnaire"
       ],
       "cost": {
-        "wood": 7200,
-        "food": 2240,
-        "iron": 4000,
-        "crystals": 560,
+        "wood": 14400,
+        "food": 4480,
+        "iron": 8000,
+        "crystals": 1120,
         "coins": 0
       },
       "buildTimeSeconds": 28800

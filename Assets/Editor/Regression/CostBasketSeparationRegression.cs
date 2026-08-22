@@ -99,9 +99,12 @@
 
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Text;
+using System.Text.RegularExpressions;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
+using Newtonsoft.Json.Linq;
 using UnityEngine;
 using DeNelle.Core.Catalog;
 
@@ -168,28 +171,49 @@ namespace DeNelle.Editor.Regression
             public string Why;         // the owner's own words + the catalog evidence
         }
 
+        // ⚠ TOTALS RE-BASELINED 2026-08-21 BY THE ECONOMY SINK PASS (owner ruling: a committed
+        // daily player should need 8-12 weeks to exhaust content, and the LEVER IS THE SINKS --
+        // the 5-wood-per-5-seconds faucet is deliberately untouched). Every Totals[] below was
+        // multiplied by that pass's per-ladder factor (build x4, upgrade->L2 x10, upgrade->L3 x14;
+        // the three storage rows use their own decreasing ladder). READ THE 'Why' PROSE BELOW WITH
+        // THAT IN MIND: sentences like "basket total (120) is unchanged" describe the WO-947
+        // 1:1 wood->crystal FOLD that produced the row's SHAPE, and that fold is still exactly
+        // what it says -- but the ABSOLUTE number quoted is the pre-rescale one. The fold is the
+        // load-bearing claim (which resources, in what ratio); the absolute total is not, and is
+        // now carried ONLY by the Totals[] arrays here, which are the single authority.
+        // WHAT THIS CASE STILL PINS, undiminished: a rescale must move a row's baskets TOGETHER
+        // and must never move a resource ACROSS the regular/magical line. Scaling is allowed;
+        // silently re-basketing under cover of a scale is what this case catches.
         private static readonly Dictionary<string, AppliedRow> AppliedRows =
             new Dictionary<string, AppliedRow>(StringComparer.OrdinalIgnoreCase)
             {
                 { "tower_siege_tower", new AppliedRow {
-                    Magical = false, Totals = new[] { 270, 324, 675 },
+                    Magical = false, Totals = new[] { 1080, 3240, 9450 },
                     Why = "REGULAR on the catalog's own evidence (displayName 'Sky Ballista (Anti-Air)', " +
                           "'Wall-mounted spear thrower', element None, projectileStyle 'bolt', _heightCadence " +
-                          "SIEGE ENGINE group). v17, 2026-08-14. Crystals folded 1:1 into IRON." } },
+                          "SIEGE ENGINE group). v17, 2026-08-14. Crystals folded 1:1 into IRON. " +
+                          "TOTALS RE-BASELINED 2026-08-21: this was the ONE row the economy sink pass's " +
+                          "re-baseline of this dictionary MISSED, and it read 270/324/675 while every other " +
+                          "row here had already been multiplied. PROOF it is this array that was stale and " +
+                          "NOT a double-scaled catalog: at HEAD the row authored wood 160 + iron 110 = 270, " +
+                          "192+132 = 324, 400+275 = 675; the working tree authors 640+440 = 1080, " +
+                          "1920+1320 = 3240, 5600+3850 = 9450 -- exactly 270x4, 324x10, 675x14, ONE " +
+                          "application of the pass's per-ladder factors (a double application would read " +
+                          "4320 on the build basket). Composition never moved: still wood + iron, crystals 0." } },
                 { "tower_ballista", new AppliedRow {
-                    Magical = false, Totals = new[] { 160, 192, 400 },
+                    Magical = false, Totals = new[] { 640, 1920, 5600 },
                     Why = "REGULAR by OWNER ruling 2026-08-14, verbatim: \"thats a baliista mechanical\". The " +
                           "'wizard' in the id is stale naming; the row's data (displayName 'Ballista', element " +
                           "None, projectileStyle 'bolt', owner rename 2026-07-08) is what was ruled on. v18. " +
                           "Crystals (70/84/175) folded 1:1 into IRON." } },
                 { "jeweler", new AppliedRow {
-                    Magical = false, Totals = new[] { 120 },
+                    Magical = false, Totals = new[] { 480 },
                     Why = "REGULAR by OWNER ruling 2026-08-14, verbatim: \"Crafting (can enbue preciouus sstones " +
                           "future release)\" -- it is a crafting shop, it trades in gems rather than being built " +
                           "of magic. The owner flagged a FUTURE release may let it imbue precious stones; that is " +
                           "a re-classification THEN, not now. v18. Crystals (30) folded 1:1 into IRON." } },
                 { "tower_arcane_spire", new AppliedRow {
-                    Magical = true, Totals = new[] { 165, 198, 412 },
+                    Magical = true, Totals = new[] { 660, 1980, 5770 },
                     Why = "MAGICAL (element 'Aether', behaviorId 'ArcaneTower', projectileStyle 'spell'); the " +
                           "PAIRING came from OWNER pin 1, verbatim: \"Crystals and Iron\". v18. Wood (40/48/100) " +
                           "folded 1:1 into CRYSTALS, the crystal-BASED side of the ruling." } },
@@ -198,11 +222,11 @@ namespace DeNelle.Editor.Regression
                 // removed with it -- case 4 FAILS on an entry whose row is missing, so a retirement must
                 // delete both halves. Do not restore either.
                 { "healing_caravan", new AppliedRow {
-                    Magical = true, Totals = new[] { 350 },
+                    Magical = true, Totals = new[] { 1400 },
                     Why = "MAGICAL by OWNER ruling 2026-08-14, verbatim: \"yes AoE healing\" -- healing IS magical. " +
                           "Basket is crystals + iron + food. v18. Wood (150) folded 1:1 into CRYSTALS." } },
                 { "arcane-tower", new AppliedRow {
-                    Magical = true, Totals = new[] { 120 },
+                    Magical = true, Totals = new[] { 480 },
                     Why = "MAGICAL by OWNER ruling 2026-08-14, verbatim: \"cathedral of magic is where all magic " +
                           "upgrades anre and can unlock new teirs of spells\" -- it is the ENGINE of magical " +
                           "progression, not a vendor that deals in magic (the jeweler-analogy reading, which " +
@@ -241,6 +265,11 @@ namespace DeNelle.Editor.Regression
                     CasePendingPinsStillStand(entries, failures, log);
                     CaseAppliedRowStaysConverted(entries, failures, log);
                 }
+                // WIDENED 2026-08-21 (owner ruling): "a rule that inspects one file while three
+                // files author costs is not a rule". Two WO-947 violations survived for months
+                // purely because this oracle stopped at structures-catalog.json.
+                CaseBuildingTiersBaskets(failures, log);
+                CaseCsAuthoredBaskets(failures, log);
             }
             catch (Exception ex)
             {
@@ -253,7 +282,10 @@ namespace DeNelle.Editor.Regression
                          "pinned magical set (" + MagicalIds.Count + " row(s)) carries crystals; " +
                          PendingPins.Count + " dated WO-947 pending-pin row(s) remain (0 = every owner pin " +
                          "answered and applied); all " + AppliedRows.Count + " converted row(s) stay on their " +
-                         "ruled side with their basket totals intact.";
+                         "ruled side with their basket totals intact. WIDENED 2026-08-21: " +
+                         "building-tiers.json tier baskets carry no crystals on regular buildings " +
+                         "(and no wood on the magical one), and no .cs under Assets/_Modules builds " +
+                         "a cost basket naming wood + iron + crystals together.";
                 Debug.Log("COST_BASKET_OK\n" + log);
                 return true;
             }
@@ -261,6 +293,217 @@ namespace DeNelle.Editor.Regression
             Debug.LogError("COST_BASKET_FAIL: " + failures.Count + " failure(s)\n" + log +
                            "\n - " + string.Join("\n - ", failures));
             return false;
+        }
+
+        // =====================================================================
+        //  CASE 5 [tiers-basket] -- building-tiers.json authors a SECOND cost basket
+        //  (costWood / costFood / costCrystal per tier) and this oracle never looked at
+        //  it. Five REGULAR buildings (farm, lumbermill, forge, armorer, barracks) were
+        //  charging CRYSTALS in plain sight the whole time.
+        //
+        //  Same law, same sides: REGULAR carries no crystals; the MAGICAL row carries no
+        //  wood. 'arcane-tower' is MAGICAL by the owner's spent pin 5 ("cathedral of magic
+        //  is where all magic upgrades anre and can unlock new teirs of spells") -- that
+        //  classification was already ruled for structures-catalog and is simply APPLIED
+        //  here to the same building in a second file. This file has no iron column, so a
+        //  regular basket here reads wood + food.
+        // =====================================================================
+        private const string BuildingTiersRelPath = "Data/Canonical/building-tiers.json";
+
+        private static void CaseBuildingTiersBaskets(List<string> failures, StringBuilder log)
+        {
+            string json = DeNelle.Core.CanonicalJson.Read(BuildingTiersRelPath);
+            if (string.IsNullOrEmpty(json))
+            {
+                failures.Add("[tiers-basket] " + BuildingTiersRelPath + " unreadable - a whole cost-authoring " +
+                             "file would go unchecked, which is exactly how the crystals-on-regular rows survived");
+                return;
+            }
+
+            JToken root;
+            try { root = JToken.Parse(json); }
+            catch (Exception ex)
+            {
+                failures.Add("[tiers-basket] building-tiers.json failed to parse: " + ex.Message);
+                return;
+            }
+
+            if (!(root["buildings"] is JArray buildings) || buildings.Count == 0)
+            {
+                failures.Add("[tiers-basket] building-tiers.json deserialized to 0 buildings");
+                return;
+            }
+
+            int clean = 0;
+            foreach (var b in buildings)
+            {
+                string id = (string)b["id"] ?? "?";
+                bool magical = MagicalIds.Contains(id);
+                if (!(b["tiers"] is JArray tiers)) continue;
+
+                foreach (var t in tiers)
+                {
+                    string where = "'" + id + "' tier " + (t["tier"] ?? "?");
+                    int wood    = (int?)t["costWood"]    ?? 0;
+                    int crystal = (int?)t["costCrystal"] ?? 0;
+
+                    if (magical)
+                    {
+                        if (wood != 0)
+                            failures.Add("[tiers-basket] " + where + " charges " + wood + " wood, but '" + id +
+                                         "' is MAGICAL (owner pin 5) and a magical basket is crystal-BASED, never " +
+                                         "wood. Fold the wood into crystals the way catalog v19 did for the same " +
+                                         "building in structures-catalog.json.");
+                        if (crystal <= 0 && wood == 0)
+                            failures.Add("[tiers-basket] " + where + " charges NO crystals - a magical row under " +
+                                         "WO-947 is crystal-BASED.");
+                    }
+                    else
+                    {
+                        if (crystal != 0)
+                            failures.Add("[tiers-basket] " + where + " charges " + crystal + " crystals, but '" + id +
+                                         "' is a REGULAR building and WO-947 reserves crystals for MAGICAL ones. " +
+                                         "This is the violation class that survived for months because the basket " +
+                                         "oracle only read structures-catalog.json. Fold the crystals into wood/food.");
+                    }
+                    clean++;
+                }
+            }
+            log.AppendLine("  [tiers-basket] building-tiers.json -> " + buildings.Count + " building(s), " +
+                           clean + " tier basket(s) checked");
+        }
+
+        // =====================================================================
+        //  CASE 6 [cs-basket] -- COSTS AUTHORED IN C#, WHICH NO DATA ORACLE CAN SEE.
+        //
+        //  Tower.TryUpgrade charged ONE authored int as wood AND iron AND crystals
+        //  simultaneously -- a textbook breach of the invariant -- and BuildMenuVM held a
+        //  SECOND copy of the same expression for the price it displayed. Neither is in
+        //  any JSON, so every data-driven check in this file was blind to both.
+        //
+        //  This case is a SOURCE LINT. It reads .cs as TEXT because there is no other way
+        //  to see a cost that never becomes data -- the ruling's own instruction: "if a
+        //  cost is authored in .cs rather than data, the oracle must catch that too, by
+        //  lint if it cannot be read as data."
+        //
+        //  ⚠ IT MUST DISTINGUISH **AUTHORING** A BASKET FROM **RELAYING** ONE, and getting
+        //  this wrong is what a naive version of this lint does. Simply flagging any
+        //  expression that NAMES wood, iron and crystals together produces 10+ false
+        //  positives on completely correct code -- EconomyService's own constructor
+        //  (wood, food, iron, crystals, coins), BuildModeController re-wrapping (c.wood,
+        //  c.food, c.iron, c.crystals), the crafting services forwarding
+        //  (recipe.Cost?.Wood, ... .Iron, ... .Crystals). Those COPY a basket that was
+        //  authored elsewhere; they decide nothing. A gate that cries wolf on correct code
+        //  gets muted, and a muted gate protects nothing -- so the lint targets the two
+        //  shapes that actually DECIDE a three-resource basket:
+        //
+        //    (a) SAME-EXPRESSION: wood, iron and crystals all assigned the identical
+        //        non-zero expression. This is Tower.cs's exact bug
+        //        (wood: cost, iron: cost, crystals: cost) and BuildMenuVM's copy of it
+        //        (wood = each, iron = each, crystals = each). A relay never does this,
+        //        because a relay reads three DIFFERENT source fields.
+        //    (b) ALL-LITERAL: wood, iron and crystals all assigned non-zero numeric
+        //        literals -- a basket hand-written in code that should have been data.
+        //
+        //  Scope: Assets/_Modules (runtime code). Comments are stripped before matching so
+        //  the historical note in Tower.cs -- which QUOTES the old bad line on purpose --
+        //  does not trip the gate it documents.
+        // =====================================================================
+        // NOTE the alternation covers the ALIASES as well as the type names. BuildMenuVM's copy
+        // of the bug was written as `new CoreCost { ... }` -- a `using CoreCost = DeNelle.Core.
+        // Catalog.ResourceCost;` alias -- so a pattern matching only "ResourceCost" walks straight
+        // past the second of the two sites this case exists to catch.
+        private static readonly Regex CostCtorRx = new Regex(
+            @"new\s+\w*(?:ResourceCost|CoreCost)\s*(?:\(|\{)(?<body>[^;)}]*)",
+            RegexOptions.Compiled);
+
+        /// <summary>Value assigned to <paramref name="field"/> inside a basket body, or null.</summary>
+        private static string AssignedValue(string body, string field)
+        {
+            var m = Regex.Match(body, @"\b" + field + @"s?\s*[:=]\s*(?<v>[^,]+)", RegexOptions.IgnoreCase);
+            return m.Success ? m.Groups["v"].Value.Trim() : null;
+        }
+
+        private static bool IsNonZeroLiteral(string v)
+        {
+            return v != null && Regex.IsMatch(v, @"^\d+$") && v.TrimStart('0').Length > 0;
+        }
+
+        private static void CaseCsAuthoredBaskets(List<string> failures, StringBuilder log)
+        {
+            string root = Path.Combine(Application.dataPath, "_Modules");
+            if (!Directory.Exists(root))
+            {
+                failures.Add("[cs-basket] " + root + " not found - the C#-authored-cost lint could not run, so a " +
+                             "three-resource basket in code would pass unseen");
+                return;
+            }
+
+            string[] files;
+            try { files = Directory.GetFiles(root, "*.cs", SearchOption.AllDirectories); }
+            catch (Exception ex)
+            {
+                failures.Add("[cs-basket] could not enumerate .cs under _Modules: " + ex.Message);
+                return;
+            }
+
+            int scanned = 0, sites = 0;
+            foreach (string f in files)
+            {
+                string src;
+                try { src = File.ReadAllText(f); }
+                catch { continue; }
+                scanned++;
+
+                string code = StripComments(src);
+                foreach (Match m in CostCtorRx.Matches(code))
+                {
+                    string body = m.Groups["body"].Value;
+                    if (string.IsNullOrEmpty(body)) continue;
+                    sites++;
+
+                    string vWood    = AssignedValue(body, "wood");
+                    string vIron    = AssignedValue(body, "iron");
+                    string vCrystal = AssignedValue(body, "crystal");
+                    if (vWood == null || vIron == null || vCrystal == null) continue;
+
+                    // (a) the same non-zero expression driving all three slots.
+                    bool sameExpr = vWood == vIron && vIron == vCrystal
+                                    && vWood != "0" && vWood.Length > 0;
+                    // (b) three hand-written non-zero literals.
+                    bool allLiteral = IsNonZeroLiteral(vWood) && IsNonZeroLiteral(vIron) && IsNonZeroLiteral(vCrystal);
+
+                    if (sameExpr || allLiteral)
+                    {
+                        string rel = f.Replace(Application.dataPath, "Assets").Replace('\\', '/');
+                        failures.Add("[cs-basket] " + rel + " AUTHORS a cost basket charging wood AND iron AND " +
+                                     "crystals together: \"" + Collapse(body) + "\"" +
+                                     (sameExpr ? " (one expression, '" + vWood + "', driving all three slots -- " +
+                                                 "Tower.TryUpgrade's exact bug)"
+                                               : " (three hand-written literals)") +
+                                     ". WO-947's invariant is that NO basket holds all three. A cost authored in " +
+                                     "C# is invisible to every data oracle, which is why this went unseen for " +
+                                     "months. Split by the structure's NATURE: regular = wood + iron, magical = " +
+                                     "crystals + iron.");
+                    }
+                }
+            }
+            log.AppendLine("  [cs-basket] linted " + scanned + " .cs file(s) under Assets/_Modules, " +
+                           sites + " cost-basket construction site(s)");
+        }
+
+        /// <summary>Blank out // and /* */ comments so documented history cannot trip the lint.</summary>
+        private static string StripComments(string src)
+        {
+            src = Regex.Replace(src, @"/\*.*?\*/", " ", RegexOptions.Singleline);
+            src = Regex.Replace(src, @"//[^\n]*", " ");
+            return src;
+        }
+
+        private static string Collapse(string s)
+        {
+            s = Regex.Replace(s, @"\s+", " ").Trim();
+            return s.Length > 120 ? s.Substring(0, 120) + "..." : s;
         }
 
         // =====================================================================

@@ -63,7 +63,18 @@ namespace DeNelle.Editor
         /// <summary>How many BROWSABLE packs the shelf carries: 5 price-ladder (Hearth Spark →
         /// Founder's Vow) + 8 themed bundles. Impulse SKUs are excluded by design — they are a
         /// shortfall remedy, not a storefront (WO-947 §12c.4), and PackStore skips them in its card
-        /// loop. Re-rule this number only when a genuinely browsable pack is added.</summary>
+        /// loop. Re-rule this number only when a genuinely browsable pack is added.
+        /// <para>⚠ DELIBERATELY UNCHANGED BY WO-1050 (The Night Market, 2026-08-21) — this is a
+        /// RECORDED DECISION, not an oversight, so the next seat does not "fix" it. That WO's draft
+        /// asked for a new <c>keepers-almanac</c> SKU at $9.99/120 SKR as a second Patronage anchor,
+        /// which would have made this 14. It was NOT minted: $9.99 is already the live
+        /// <c>folks-thanks</c> rung (two products at one price, one of them unbuyable, reads as
+        /// broken rather than aspirational), and an <c>anchorOnly</c> row creates no price contrast
+        /// while <c>FeatureFlags.RealmStorePurchase</c> is OFF and every card already reads "Coming
+        /// soon". The Patronage band instead carries the TWO REAL top rungs that were already on the
+        /// shelf. The redesign is presentation-only and added no browsable pack, so 13 still holds.
+        /// The owner may overrule and mint the SKU; this constant is then the one to re-rule.</para>
+        /// </summary>
         private const int CanonShelfPackCount = 13;
 
         private static readonly string[] SecretFragments =

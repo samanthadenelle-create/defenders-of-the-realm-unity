@@ -31,6 +31,7 @@
 // zero scene/asset authoring and the owner can drop an authored asset to retune.
 // =============================================================================
 
+using System;
 using UnityEngine;
 
 namespace DeNelle.Core.Catalog
@@ -63,16 +64,34 @@ namespace DeNelle.Core.Catalog
         [Header("Cost -> tier bands (WO-855 Phase 4)")]
         [Tooltip("Ascending resource-basket thresholds. A structure whose authored cost basket reaches " +
                  "thresholds[i] builds at tier i+1. Below thresholds[0] = tier 0 (the snappy early game).")]
-        // CALIBRATED against the live structures-catalog basket spread (5 .. 440 as of
-        // 2026-08-03), NOT invented: band 0 deliberately swallows EVERY founding piece and
-        // every collector/wall (pet-house 125, collector_lumbermill 105, lumberyard 80,
-        // farm 90, wall_stone 120, gate_stone 135) so the first ten minutes of a new save
-        // are never gated -- the owner's hard constraint. Band 1 takes the starter towers
-        // and shops (150-245), band 2 the barracks/heavy towers (270-335), band 3 the
-        // fountain (440). Bands 4-5 are HEADROOM: nothing reaches them today, and they are
-        // what turns the ladder into the hours-long endgame as the Phase 2/3 cost retune
-        // pushes late rows up. Re-check this table whenever catalog costs move.
-        public float[] tierCostThresholds = { 140f, 260f, 420f, 900f, 2000f };
+        // RE-CALIBRATED 2026-08-21 for the economy sink pass, which is the event the previous
+        // revision of this comment named in advance ("Bands 4-5 are HEADROOM ... what turns the
+        // ladder into the hours-long endgame as the Phase 2/3 cost retune pushes late rows up.
+        // Re-check this table whenever catalog costs move."). The costs moved; this is the re-check.
+        //
+        // The live basket spread went from 5..440 to 20..20,640, so the five old bands are a
+        // straight x4 rescale of the OWNER-CALIBRATED originals (140/260/420 -> 600/1200/2400),
+        // which preserves the hard constraint they encoded: band 0 still swallows EVERY founding
+        // piece, collector and wall (deco_torch 20, wall_wood 80, repair 180, collector_farm 320,
+        // mill/lumbermill 360, wall_stone 360, gate_stone 440, market/workshop 400), so the first
+        // ten minutes of a new save are still never gated. TWO NEW BANDS (11000, 17000) extend the
+        // ladder to tier 7, which is where the 24h maxDurationSeconds clamp finally bites.
+        //
+        // THE LADDER, at base 45s / growth 3.2 / upgrade x1.25:
+        //   T0 45s | T1 2.4m | T2 7.7m | T3 24.6m | T4 1.3h | T5 4.2h | T6 13.4h | T7 24h (clamped)
+        // Only the maxed storage ladder (lumberyard/foundry/silo top steps, 16k-20k baskets)
+        // reaches T6-T7 -- the endgame drag lands on the endgame, not on walls.
+        //
+        // ⛔ WHAT THIS TABLE CANNOT DO, measured 2026-08-21 -- READ BEFORE RETUNING IT AGAIN:
+        // it cannot deliver the owner's 8-12 week pacing target, and NO setting of these numbers
+        // can. A realistic committed town is ~196 build/upgrade actions; at 2 concurrent builders
+        // even the MAXIMUM possible ladder (every single action clamped to 24h, walls included)
+        // tops out near 98 days, and every playable curve lands at 4-7 DAYS. The binding limit is
+        // CONTENT VOLUME, not the multipliers -- 196 actions is simply not 8 weeks of game at any
+        // tolerable per-action wait. Pushing these bands down to chase the target only makes early
+        // walls take hours; it does not move the total. The gap has to be closed with more content
+        // or a repeatable endgame loop, which is an OWNER decision, not a tuning one.
+        public float[] tierCostThresholds = { 600f, 1200f, 2400f, 4200f, 7000f, 11000f, 17000f };
 
         // OWNER RULING 2026-08-06. Crystals END a wait (immediate finish); an ad only
         // DENTS it. Two different products, not one product at two speeds.
@@ -109,7 +128,50 @@ namespace DeNelle.Core.Catalog
         [Min(0)] public int instantFinishCrystalsPerMinute = 1;
 
         [Tooltip("Minimum crystal price for any instant-finish (so near-done jobs still cost something).")]
-        [Min(0)] public int instantFinishMinCrystals = 3;
+        [Min(0)] public int instantFinishMinCrystals = 10;
+
+        // ---------------------------------------------------------------------
+        //  CONVEX SKIP CURVE -- OWNER RULING 2026-08-21.
+        //
+        //  THE PROBLEM IT FIXES, measured: under the old LINEAR price (crystals =
+        //  minutes) the whole early ladder skipped for 3-31 crystals. That is
+        //  effectively free, so the paid skip stopped being a choice and became a
+        //  reflex -- and it cancelled the very tier ladder this file had just
+        //  extended. A timer nobody feels is not a pacing device.
+        //
+        //  THE SHAPE: price = crystalsPerMinute x anchorMinutes x (minutes/anchorMinutes)^e
+        //  anchored at the 24h maxDurationSeconds clamp, so:
+        //    * e = 1 reproduces TODAY'S LINEAR PRICE EXACTLY (the change is opt-in
+        //      by exponent, and the old behaviour is still reachable and testable);
+        //    * at the anchor the price is UNCHANGED at crystalsPerMinute x 1440,
+        //      so instantFinishCrystalsPerMinute keeps its exact current meaning
+        //      ("crystals for a full-length skip, per minute") and the ceiling the
+        //      owner called sane does not move;
+        //    * below the anchor, e < 1 lifts short skips toward the curve.
+        //  Effect at e = 0.75: T0 3->10, T2 8->29, T3 25->68, T4 79->163, T5 252->390,
+        //  T6 806->932 (+16%), T7 1440 UNCHANGED.
+        //
+        //  ⚠ A NAMING NOTE, because the word matters when someone retunes this later:
+        //  the ruling says "convex", and the behaviour it describes -- short waits
+        //  cheap-but-not-trivial, long waits unchanged -- is what is implemented here.
+        //  Strictly, the TOTAL-price curve that produces that behaviour is SUB-LINEAR
+        //  (concave, e < 1); it is the price PER MINUTE that is convex and falling, so
+        //  a short skip pays a premium RATE (13.3 cr/min at T0 vs 1.0 at T7). A
+        //  genuinely convex TOTAL curve (e > 1) would do the OPPOSITE of the ruling --
+        //  it would drive short skips toward zero, which is the exact defect being
+        //  fixed. Hence the exponent is clamped to (0, 1] and the oracle FAILS at
+        //  e >= 1. Do not "correct" this to e > 1 on the strength of the word alone.
+        //
+        //  ONE WALLET, DELIBERATELY (owner ruling, same day): skips and the crystal-
+        //  priced content ladders share one currency, so skipping a timer really does
+        //  defund the Cathedral. That tension is the product, not a bug to design out
+        //  -- the curve exists to make it read as a decision rather than a reflex. A
+        //  separate skip currency was explicitly REJECTED, on the same day the store
+        //  pass removed glimmer for not being real. Do not reintroduce one here.
+        [Tooltip("Exponent of the instant-finish price curve, anchored at the maxDurationSeconds " +
+                 "clamp. 1 = the old linear price. Below 1 makes SHORT skips cost relatively more " +
+                 "while leaving a full-length skip's price untouched. Must stay in (0, 1].")]
+        [Range(0.1f, 1f)] public float instantFinishCurveExponent = 0.75f;
 
         // Originally 5 seconds. The retention-first 2026-08-21 pass keeps the first-build
         // grace but raises it to 15 seconds so discovery stays quick without feeling disposable.
@@ -272,13 +334,32 @@ namespace DeNelle.Core.Catalog
             return Mathf.Min(seconds, Mathf.Max(0f, maxDurationSeconds));
         }
 
-        /// <summary>Crystal price to instant-finish a job with <paramref name="remainingSeconds"/> left.</summary>
+        /// <summary>
+        /// Crystal price to instant-finish a job with <paramref name="remainingSeconds"/> left.
+        /// Prices the WAIT along the convex skip curve documented at
+        /// <see cref="instantFinishCurveExponent"/> — it never decides how LONG anything takes.
+        /// <see cref="TierForCost"/> remains the single duration authority; this reads the
+        /// remaining time it produced and charges for cutting it short.
+        /// </summary>
         public int InstantFinishPrice(double remainingSeconds)
         {
             if (instantFinishCrystalsPerMinute <= 0) return 0;   // paid skip disabled
             double minutes = Mathf.Max(0f, (float)remainingSeconds) / 60.0;
-            int price = Mathf.CeilToInt((float)minutes * instantFinishCrystalsPerMinute);
-            return Mathf.Max(price, instantFinishMinCrystals);
+            if (minutes <= 0.0) return instantFinishMinCrystals;
+
+            // Anchor at the 24h clamp so a full-length skip keeps its old linear price and
+            // instantFinishCrystalsPerMinute keeps its old meaning. Guarded so a zeroed or
+            // negative maxDurationSeconds degrades to the linear price instead of dividing by
+            // zero / NaN-ing the store: a broken config must never make a skip FREE.
+            double anchorMinutes = Mathf.Max(1f, maxDurationSeconds) / 60.0;
+            double e = Mathf.Clamp(instantFinishCurveExponent, 0.1f, 1f);
+
+            double price = instantFinishCrystalsPerMinute * anchorMinutes
+                         * Math.Pow(minutes / anchorMinutes, e);
+            if (double.IsNaN(price) || double.IsInfinity(price))
+                price = minutes * instantFinishCrystalsPerMinute;   // linear fallback, never free
+
+            return Mathf.Max(Mathf.CeilToInt((float)price), instantFinishMinCrystals);
         }
 
         // Code-default fallback so the system runs with no authored asset.
