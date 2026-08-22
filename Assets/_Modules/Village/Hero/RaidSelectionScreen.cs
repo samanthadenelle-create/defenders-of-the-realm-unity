@@ -228,6 +228,14 @@ namespace DeNelle.Village.Hero
             string id = item.Id;
             Color tint = DifficultyColor(_vm.DifficultyFor(id));
 
+            // WO-728 — is this camp still recovering from its last clear? Read ONCE per card
+            // build (the service prunes/re-stamps as a side effect; calling it per-label would
+            // repeat that work three times for one card). Cards are rebuilt on every Open, so
+            // the countdown refreshes each time the screen is entered.
+            double cooldownRemaining =
+                DeNelle.Village.World.Camps.RaidCooldownService.RemainingSeconds(id);
+            bool onCooldown = cooldownRemaining > 0d;
+
             // Card root: a Cell tile (LayoutElement-sized for the scroll layout) with a
             // difficulty-tinted inner rim, and a Button so the whole plaque taps.
             var card = new GameObject("RaidCard_" + id, typeof(Image), typeof(Button));
@@ -284,11 +292,36 @@ namespace DeNelle.Village.Hero
                 ElarionUi.Parchment, ElarionUi.FontBody, TMPro.TextAlignmentOptions.Left, 0.22f, 0.95f);
             timeLabel.raycastTarget = false;
 
-            // Reward hint — resource multiplier + Echo-Shard drop, bottom band.
+            // Bottom band — the reward hint when the camp is available, the RECOVERY SENTENCE
+            // when it is not.
+            //
+            // ⛔ THE STATE IS CARRIED BY THE WORDS, NOT BY THE COLOUR (WO-728). The owner is
+            // red/green colourblind, so a card that signalled "on cooldown" by going grey or
+            // by tinting the badge red would say NOTHING to her — and a card that just stops
+            // responding to taps reads as a frozen game (the WO-1110 §2 dead-tap defect, found
+            // on this very screen). So a recovering camp SAYS it is recovering and NAMES the
+            // wait; the dimming below is decoration on top of a sentence that already stands
+            // on its own in greyscale.
+            string bottomLine = onCooldown
+                ? DeNelle.Village.World.Camps.RaidCooldownService.DescribeState(id)
+                : RewardHint(_vm.RewardMultiplierFor(id), _vm.ShardChanceFor(id));
             var rewardLabel = ElarionUiKit.Label(card.transform,
-                RewardHint(_vm.RewardMultiplierFor(id), _vm.ShardChanceFor(id)), 0.10f, 0.32f,
-                ElarionUi.Affordable, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Left, 0.05f, 0.95f, bold: true);
+                bottomLine, 0.10f, 0.32f,
+                onCooldown ? ElarionUi.ParchmentDim : ElarionUi.Affordable,
+                ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Left, 0.05f, 0.95f, bold: true);
             rewardLabel.raycastTarget = false;
+            // §1.14 fit-never-truncate: "Recovering - raidable in 12h 45m" must never clip.
+            ElarionUiKit.FitSingleLine(rewardLabel);
+
+            if (onCooldown)
+            {
+                // Decoration only — the sentence above is the signal. The card stays TAPPABLE
+                // on purpose: OnCardTapped answers with the refusal + the remaining time, which
+                // is strictly more useful than an inert button (and is what makes the state
+                // discoverable for a player who did not read the line).
+                cardImg.color = new Color(0.05f, 0.05f, 0.055f, 0.98f);
+                nameLabel.color = ElarionUi.ParchmentDim;
+            }
         }
 
         private void OnCardTapped(string id)
@@ -307,6 +340,25 @@ namespace DeNelle.Village.Hero
                     ElarionUiKit.ToastTone.Danger);
                 return;
             }
+
+            // WO-728 — THE ENTRY GATE. A camp still recovering from its last clear cannot be
+            // entered, and the refusal SAYS SO and NAMES THE WAIT. Never a silent no-op: a
+            // card that depresses and does nothing is the dead-tap defect this screen already
+            // shipped once. Kept here, at the ONE door into RaidDeployScreen, rather than
+            // inside the deploy screen — refusing after the player has committed a warband
+            // would be a worse moment to say no.
+            if (DeNelle.Village.World.Camps.RaidCooldownService.IsOnCooldown(id))
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Raid",
+                    "raid card tap REFUSED - '" + id + "' is on cooldown for another " +
+                    DeNelle.Village.World.Camps.RaidCooldownService.RemainingSeconds(id).ToString("F0") +
+                    "s. The player was told, with the remaining time.");
+                ElarionUiKit.ShowToast(
+                    DeNelle.Village.World.Camps.RaidCooldownService.BlockedMessage(id),
+                    ElarionUiKit.ToastTone.Info);
+                return;
+            }
+
             RaidDeployScreen.Open(def);
             // UIF-01: the deploy screen registers with the single-modal arbiter, so opening it
             // now CLOSES this grid (one modal at a time — the Echo roster->card precedent). The

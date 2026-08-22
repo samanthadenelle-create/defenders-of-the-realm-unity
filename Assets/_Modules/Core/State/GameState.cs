@@ -313,7 +313,7 @@ namespace DeNelle.Core.State
         // ── Arena — async-PvP raid record (ARENA MVP) ─────────────────────────
         /// <summary>
         /// The Arena (async-PvP) win/loss ledger — the SKR-wager raid loop's record
-        /// (ARENA MVP). A small append-only struct (Wins/Losses/Streak/TotalPurse),
+        /// (ARENA MVP). A small append-only struct (Wins/Rows/Streak/TotalPurse),
         /// mirroring the "small serializable record on GameState" shape that Zones /
         /// Tribes / BaseLayout use. Append-only field at the END so older saves load
         /// with a zeroed record. Round-trips through SaveSchema (v34, REDS #4):
@@ -531,6 +531,41 @@ namespace DeNelle.Core.State
         /// Append-only field at the END.
         /// </summary>
         public List<string> EverBuiltStructureIds = new List<string>();
+
+        // ── WO-1026 — PvE siege / the defence consequence loop ────────────────
+        /// <summary>
+        /// The ring-buffered defence-report ledger (WO-1026): one record per attack ON THE
+        /// PLAYER'S TOWN, newest last, capped at <c>DefenseReportLedger.MaxRetained</c>.
+        /// <see cref="DeNelle.Core.Defense.DefenseReportLedger"/> is the ONE writer — never
+        /// mutate this list directly.
+        /// Additive default-on-read, NO schema bump (nullable on the wire; absent → this
+        /// initializer = today's exact behaviour, since the loop is FeatureFlags.Siege-gated).
+        /// </summary>
+        public List<DeNelle.Core.Defense.DefenseOutcomeRecord> DefenseReports
+            = new List<DeNelle.Core.Defense.DefenseOutcomeRecord>();
+
+        /// <summary>
+        /// WO-1026 — Unix-ms of the last siege. The siege CADENCE clock, deliberately separate
+        /// from <see cref="LastHarvestClaimMs"/>: the offline coordinator owns that one and a
+        /// second writer on it is the WO-1147 bug (three systems sharing the clock made offline
+        /// Echo repair never accrue). 0 = never sieged; the first evaluation seeds it forward
+        /// and produces NO retroactive assault.
+        /// </summary>
+        public double LastSiegeUnixMs;
+
+        // ── WO-728 — per-camp raid cooldown (the repeatable-raid gate) ────────
+        /// <summary>
+        /// One record per raid camp currently RECOVERING from a clear (WO-728). A camp with
+        /// no record here is raidable right now; the list is pruned as windows elapse, so it
+        /// never grows a tail of dead entries.
+        /// <see cref="DeNelle.Village.World.Camps.RaidCooldownService"/> is the ONE writer —
+        /// never mutate this list directly, because it is also the one place that reads the
+        /// SERVER-ANCHORED clock (a second writer stamping DateTime.UtcNow would silently
+        /// re-open the device-clock exploit the service exists to close).
+        /// Additive default-on-read, NO schema bump (nullable on the wire; absent → this
+        /// initializer = every camp raidable, which is exactly today's behaviour).
+        /// </summary>
+        public List<RaidCooldownRecord> RaidCooldowns = new List<RaidCooldownRecord>();
 
         /// <summary>
         /// WO-834 — record that <paramref name="itemId"/> has been player-built at least

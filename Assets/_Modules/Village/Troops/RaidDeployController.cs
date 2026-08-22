@@ -70,8 +70,9 @@ namespace DeNelle.Village
         [Header("Retreat")]
         [Tooltip("If true, the first Retreat tap asks for confirm (second tap evacs); false = evac immediately.")]
         [SerializeField] private bool _retreatConfirm = true;
-        [Tooltip("Recovery seconds applied to every troop that was deployed but did NOT survive the raid.")]
-        [SerializeField] private float _recoverySeconds = 120f;
+        [Tooltip("FALLBACK recovery seconds, used only when the camp's difficulty cannot be resolved. " +
+                 "The live value SCALES WITH CAMP DIFFICULTY - see RecoveryForDifficulty.")]
+        [SerializeField] private float _recoverySeconds = 300f;
 
         // ── Runtime UI ────────────────────────────────────────────────────────
         private GameObject _ui;
@@ -627,6 +628,77 @@ namespace DeNelle.Village
         /// wounded (never deleted); on a 3-star clear each survivor gains one veterancy rank.
         /// LATCHED - the second call is a logged no-op.
         /// </summary>
+        // =====================================================================
+        //  ATTRITION — recovery scales with camp difficulty (owner ruling 2026-08-21)
+        // =====================================================================
+        //      Regular  5 min   Hard  20 min   Extreme  45 min
+        //
+        //  WHY THESE ARE "MEANINGFULLY CHEAPER THAN RETRAINING BUT NEVER FREE":
+        //  recovery costs TIME ONLY. Retraining the same unit costs its authored
+        //  buildSeconds (270-600s for the units you take into a Hard/Extreme camp) PLUS
+        //  the full wood+iron+food basket PLUS a Train queue slot you cannot spend on
+        //  anything else. Recovery consumes no slot, no resources, and runs unattended
+        //  in parallel across the whole wounded warband. So even the 45-minute Extreme
+        //  figure is the cheap option - it just stops a wipe from being a free retry.
+        //
+        //  ⛔ DO NOT flatten this back to one number. A flat rate is what made a failed
+        //  Extreme assault cost exactly as much as a failed practice run.
+        // =====================================================================
+
+        /// <summary>Recovery for a Regular-difficulty camp: 5 min (seconds).</summary>
+        public const float RecoveryRegularSeconds = 5f * 60f;
+        /// <summary>Recovery for a Hard-difficulty camp: 20 min (seconds).</summary>
+        public const float RecoveryHardSeconds = 20f * 60f;
+        /// <summary>Recovery for an Extreme-difficulty camp: 45 min (seconds).</summary>
+        public const float RecoveryExtremeSeconds = 45f * 60f;
+
+        /// <summary>
+        /// Recovery seconds for a camp of this difficulty. PURE + static (no scene, no save,
+        /// no catalog) so an oracle can assert the table with nothing loaded. An unknown or
+        /// blank difficulty resolves to Regular — the FORGIVING direction: a mis-authored
+        /// camp must never inflict the 45-minute penalty.
+        /// </summary>
+        public static float RecoveryForDifficulty(string difficulty)
+        {
+            switch ((difficulty ?? "Regular").Trim().ToLowerInvariant())
+            {
+                case "extreme": return RecoveryExtremeSeconds;
+                case "hard":    return RecoveryHardSeconds;
+                default:        return RecoveryRegularSeconds;
+            }
+        }
+
+        /// <summary>
+        /// The recovery this raid charges: the live camp's difficulty through
+        /// <see cref="RecoveryForDifficulty"/>. Falls back to the serialized
+        /// <c>_recoverySeconds</c> only when no camp can be resolved (a bare test scene),
+        /// and SAYS SO in the trace rather than silently charging the fallback.
+        /// </summary>
+        private float ResolveRecoverySeconds()
+        {
+            string configId = null;
+            DeNelle.Core.Diagnostics.Guard.Try("Raid", "resolve camp id for attrition", () =>
+            {
+                var spawner = FindFirstObjectByType<DeNelle.Village.World.Camps.RaidGarrisonSpawner>();
+                if (spawner != null) configId = spawner.ConfigId;
+            });
+
+            SceneConfigDef def = null;
+            if (!string.IsNullOrEmpty(configId))
+                DeNelle.Core.Diagnostics.Guard.Try("Raid", "resolve camp difficulty for attrition",
+                    () => { def = SceneConfigCatalog.Find(configId); });
+
+            if (def == null)
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("Raid",
+                    "attrition: could not resolve the camp's scene-config (configId='" +
+                    (configId ?? "(null)") + "') - charging the serialized fallback " +
+                    _recoverySeconds.ToString("F0") + "s instead of the difficulty-scaled rate.");
+                return _recoverySeconds;
+            }
+            return RecoveryForDifficulty(def.difficulty);
+        }
+
         public void ReconcileRaidEnd(int starsEarned)
         {
             if (_reconciled)
@@ -657,12 +729,20 @@ namespace DeNelle.Village
                     survivorIds.Add(d.OwnedId);
             }
 
+            // WO-728 / owner ruling 2026-08-21 - ATTRITION SCALES WITH CAMP DIFFICULTY.
+            // This was a flat 120s for every camp, which made raiding effectively FREE: two
+            // minutes of recovery is no cost at all next to a 4-12h camp cooldown, so a failed
+            // Extreme assault and a failed practice run charged the player identically and
+            // there was no loop, only a faucet with a pause in front of it.
+            float recovery = ResolveRecoverySeconds();
+
             DeNelle.Core.Diagnostics.Guard.Try("Raid", "reconcile army after raid",
-                () => army.ReconcileAfterRaid(deployedIds, survivorIds, _recoverySeconds));
+                () => army.ReconcileAfterRaid(deployedIds, survivorIds, recovery));
 
             DeNelle.Core.Diagnostics.FlowTrace.Step("Raid",
                 $"raid-end reconcile - deployed {deployedIds.Count}, survivors {survivorIds.Count}, " +
-                $"wounded {deployedIds.Count - survivorIds.Count} (stars {starsEarned}).");
+                $"wounded {deployedIds.Count - survivorIds.Count} (stars {starsEarned}, " +
+                $"recovery {recovery:F0}s).");
 
             GrantVeterancy(army, survivorIds, starsEarned);
         }

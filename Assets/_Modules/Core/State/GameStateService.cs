@@ -526,6 +526,9 @@ namespace DeNelle.Core.State
                 TroopLevels = s.TroopLevels != null ? new Dictionary<string, int>(s.TroopLevels) : null,   // WO-771.9 — per-troop upgrade levels (additive default-on-read)
                 GearLevels = s.GearLevels != null ? new Dictionary<string, int>(s.GearLevels) : null,   // WO-808 — per-instance gear power levels (additive default-on-read)
                 EverBuiltStructureIds = s.EverBuiltStructureIds != null ? new List<string>(s.EverBuiltStructureIds) : null,   // WO-834 — ever-player-built ledger (v36; monotonic — the blank-town baked-twin gate input)
+                DefenseReports = s.DefenseReports != null ? new List<DeNelle.Core.Defense.DefenseOutcomeRecord>(s.DefenseReports) : null,   // WO-1026 — defence-report ring buffer (additive default-on-read; NO schema bump)
+                LastSiegeUnixMs = s.LastSiegeUnixMs,   // WO-1026 — siege cadence clock (SEPARATE from LastHarvestClaimMs by design — WO-1147)
+                RaidCooldowns = s.RaidCooldowns != null ? new List<RaidCooldownRecord>(s.RaidCooldowns) : null,   // WO-728 — per-camp raid cooldown windows (additive default-on-read; NO schema bump)
             };
         }
 
@@ -618,6 +621,26 @@ namespace DeNelle.Core.State
             if (p.TroopLevels != null) s.TroopLevels = p.TroopLevels;   // WO-771.9 — per-troop upgrade levels; absent → keep the fresh empty dict (all baseline)
             if (p.GearLevels != null) s.GearLevels = p.GearLevels;   // WO-808 — per-instance gear levels; absent → keep the fresh empty dict (all baseline)
             if (p.EverBuiltStructureIds != null) s.EverBuiltStructureIds = p.EverBuiltStructureIds;   // WO-834 — ever-built ledger (v36); absent → keep the fresh empty list (MigrateToV36 seeds real pre-v36 saves before this runs)
+            if (p.DefenseReports != null)
+            {
+                // WO-1026 — defence reports; absent → keep the fresh empty list (a pre-WO-1026
+                // save simply has no attack history, which is literally true). NORMALISED on read
+                // so no panel/oracle ever meets a null sub-object from a partial or older wire.
+                for (int i = 0; i < p.DefenseReports.Count; i++)
+                    p.DefenseReports[i] = DeNelle.Core.Defense.DefenseOutcomeRecord.Normalize(p.DefenseReports[i]);
+                s.DefenseReports = p.DefenseReports;
+            }
+            if (p.LastSiegeUnixMs.HasValue) s.LastSiegeUnixMs = p.LastSiegeUnixMs.Value;   // WO-1026 — siege cadence clock; absent → 0 = seed forward, no retroactive siege
+            if (p.RaidCooldowns != null)
+            {
+                // WO-728 — per-camp raid cooldowns; absent → keep the fresh empty list (a
+                // pre-WO-728 save simply has no camp recovering, which is literally true).
+                // NORMALISED on read so no card/oracle ever meets a null id or a NaN stamp
+                // from a partial, older, or hand-edited wire.
+                for (int i = 0; i < p.RaidCooldowns.Count; i++)
+                    p.RaidCooldowns[i] = RaidCooldownRecord.Normalize(p.RaidCooldowns[i]);
+                s.RaidCooldowns = p.RaidCooldowns;
+            }
             EnsureZoneGraph(s);                       // backfill a pre-v17 / empty save's zone graph
         }
 
@@ -1050,6 +1073,9 @@ namespace DeNelle.Core.State
             s.EchoLanes = "harvest:1";                        // WO-738 — New Game: the starter Echo (Frosthowl, index 0) is assigned to the Harvest lane at level 1, so it visibly gathers from turn one (its PREFERRED lane is the stubbed Exploration, but the owner ruling is the first echo must gather). Later Echoes idle until assigned. Richer "lane:level" token grammar.
             s.PartyMemberIds = new List<string>();            // WO-301 — start alone; the first companion joins on tutorial complete.
             s.FreeBuildsUsed = new List<string>();            // v32 — New Game: every catalog id's one-time FREE first build is live again (per-save flags; they replace the retired wood/iron founding seed).
+            s.DefenseReports = new List<DeNelle.Core.Defense.DefenseOutcomeRecord>();   // WO-1026 — New Game: no attack history.
+            s.LastSiegeUnixMs = 0;                            // WO-1026 — New Game: reseed the siege cadence clock on first evaluation (no retroactive assault).
+            s.RaidCooldowns = new List<RaidCooldownRecord>();  // WO-728 — New Game: no camp is recovering, every raid is available. AUDIT NOTE: this line is what stops "Start New" inheriting the previous save's lockouts — exactly the Settlements defect found 2026-08-02 directly below.
             s.EverBuiltStructureIds = new List<string>();     // WO-834 (v36) — New Game: nothing ever built. With StrategicPlacementMigrated=true (above) this makes every baked twin's surface gate CLOSED = the truly blank Build-Your-Own town; choosing Default Town clears the marker and the migration writer then grants the template ids.
             s.Tribes = new List<DeNelle.Core.World.TribeState>();          // WO-160 (v34) — New Game: no claimed tribe progress (managers re-seed from defs).
             s.Wards = new List<DeNelle.Core.World.WardStoneState>();       // WO-112 (v34) — New Game: no relit wards (base reach only).

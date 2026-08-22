@@ -231,6 +231,15 @@ namespace DeNelle.Village.World.Camps
             // STEP 2 — claim the base (persist + flip ownership PLAYER-owned).
             bool newClaim = ClaimBase(configId);
 
+            // STEP 2.5 (WO-728) — OPEN THE COOLDOWN. A clear is what starts the wait; this
+            // runs on EVERY clear, first or repeat, because the entry gate is a different
+            // question from the loot gate (RaidClaimService answers "have I ever taken this
+            // camp"; the cooldown answers "may I raid it again yet"). Stamped from the
+            // SERVER-ANCHORED clock inside the service — never DateTime.UtcNow here.
+            // Placed before the presentation so a screen throw can never skip the wait, which
+            // is the same reason STEP 3.6 settles the army before ShowVictoryScreen.
+            RaidCooldownService.BeginAfterClear(configId);
+
             // STEP 3 — on a NEW claim, unlock the next companion (the rescue beat).
             string joined = newClaim ? UnlockNextCompanion() : null;
 

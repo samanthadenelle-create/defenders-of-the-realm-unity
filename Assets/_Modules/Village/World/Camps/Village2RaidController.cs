@@ -225,6 +225,12 @@ namespace DeNelle.Village.World.Camps
                 FlowTrace.Warn("Raid", $"REPEAT CLEAR of '{ConfigId}' - it was already claimed. No re-grant: " +
                                        "no companion, no resources (this raid pays no resource loot at all).");
 
+            // WO-728 — open the per-camp cooldown on EVERY clear, first or repeat. Village2
+            // pays no resource loot, so the cooldown is the only thing that makes re-clearing
+            // it a paced beat rather than a free re-run. Stamped from the server-anchored
+            // clock inside the service; before the banner so a presentation throw cannot skip it.
+            RaidCooldownService.BeginAfterClear(ConfigId);
+
             bool newClaim = ClaimBase();
             string joined = newClaim ? UnlockNextCompanion() : null;
 

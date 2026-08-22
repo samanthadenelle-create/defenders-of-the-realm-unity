@@ -643,6 +643,55 @@ namespace DeNelle.Core.State
             /// Append-only field at the END so older saves stay loadable.
             /// </summary>
             [JsonProperty("everBuiltStructureIds")] public List<string> EverBuiltStructureIds;
+
+            // ── WO-1026 — PvE siege / defence reports (additive, NO schema bump) ──
+            /// <summary>
+            /// The ring-buffered defence-report ledger (WO-1026) — one record per attack ON
+            /// THE PLAYER'S TOWN, capped at <c>DefenseReportLedger.MaxRetained</c>.
+            ///
+            /// ⚠ DELIBERATELY **NO SCHEMA BUMP**. Both WO-1026 fields are nullable on the wire
+            /// per the <c>.partial()</c> convention, so an older save simply loads GameState's
+            /// empty-list / 0 initializers — which is byte-identical to today's behaviour, since
+            /// the whole feature is behind <c>FeatureFlags.Siege</c> (default OFF). This rides
+            /// the committed v38 exactly like <c>barracksLevel</c>/<c>troopLevels</c>/
+            /// <c>gearLevels</c> (WO-771.9/WO-808) and needs no migrator step. A version bump on
+            /// a LIVE published game is an owner decision, and nothing here requires one:
+            /// there is no field to rewrite and no old shape to reinterpret.
+            /// Append-only field at the END so older saves stay loadable.
+            /// </summary>
+            [JsonProperty("defenseReports")] public List<DeNelle.Core.Defense.DefenseOutcomeRecord> DefenseReports;
+
+            /// <summary>
+            /// Unix-ms of the last siege (WO-1026) — the siege cadence clock.
+            ///
+            /// ⛔ This is a SEPARATE clock from <c>lastHarvestClaimMs</c> ON PURPOSE, and the
+            /// siege scheduler MUST NOT read or write that one. WO-1147 recorded what happens
+            /// when three systems share the offline clock: a frame-order coin-flip in which
+            /// offline Echo repair never accrued once. SiegeScheduler registers as an
+            /// <c>IOfflineClaimConsumer</c> and converts the coordinator's window into siege
+            /// PRESSURE, stamping only this field. Guarded finite below, next to
+            /// <c>lastHarvestClaimMs</c>. Nullable; absent → GameState's 0 (a fresh cadence
+            /// clock that seeds forward on first evaluation and produces NO retroactive siege).
+            /// </summary>
+            [JsonProperty("lastSiegeUnixMs")] public double? LastSiegeUnixMs;
+
+            // ── WO-728 — per-camp raid cooldown (additive, NO schema bump) ────────
+            /// <summary>
+            /// One record per raid camp currently RECOVERING from a clear (WO-728): the
+            /// scene-config id, the instant the window opened (unix-ms from the SERVER-ANCHORED
+            /// clock seam, never DateTime.UtcNow), and how long it runs. Absence of a record =
+            /// the camp is raidable now.
+            ///
+            /// ⚠ DELIBERATELY **NO SCHEMA BUMP**, exactly like the WO-1026 pair above and the
+            /// <c>barracksLevel</c>/<c>troopLevels</c>/<c>gearLevels</c> precedent: nullable on
+            /// the wire per the <c>.partial()</c> convention, so an older save loads GameState's
+            /// empty-list initializer — every camp raidable, which is byte-identical to the
+            /// behaviour before the cooldown existed. There is no field to rewrite and no old
+            /// shape to reinterpret, so no migrator step is needed. A version bump on a LIVE
+            /// published game is an OWNER decision and nothing here requires one.
+            /// Append-only field at the END so older saves stay loadable.
+            /// </summary>
+            [JsonProperty("raidCooldowns")] public List<RaidCooldownRecord> RaidCooldowns;
         }
 
         // =====================================================================
@@ -791,6 +840,11 @@ namespace DeNelle.Core.State
                     raw.LastInboxSyncAt = FiniteInt(raw.LastInboxSyncAt.Value, "lastInboxSyncAt");
                 if (raw.LastHarvestClaimMs.HasValue)
                     raw.LastHarvestClaimMs = FiniteInt(raw.LastHarvestClaimMs.Value, "lastHarvestClaimMs");
+                // WO-1026 — the siege cadence clock rides the SAME finite guard as the harvest
+                // clock (a NaN here would make every cadence comparison false forever = "the base
+                // is never attacked", silently, which is the exact bug this WO closes).
+                if (raw.LastSiegeUnixMs.HasValue)
+                    raw.LastSiegeUnixMs = FiniteInt(raw.LastSiegeUnixMs.Value, "lastSiegeUnixMs");
 
                 // ── Echo Workforce (v25) → counts nonNegInt; silo finite (float pool) ─
                 if (raw.EchoCount.HasValue)

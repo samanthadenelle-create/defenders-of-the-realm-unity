@@ -106,6 +106,20 @@ namespace DeNelle.Village
         public int eliteCount;
         public float shardDropChance;
 
+        /// <summary>
+        /// WO-728 — per-camp raid cooldown, in seconds: how long this camp stays un-raidable
+        /// after a clear. Authored per camp in scene-configs.json (owner ruling 2026-08-21:
+        /// Regular 14400 / Hard 28800 / Extreme 43200 = 4h / 8h / 12h). 0 / absent falls back
+        /// to the identical difficulty table in <c>RaidCooldownService.DurationForDifficulty</c>.
+        ///
+        /// <para>⛔ THIS IS THE CRYSTAL BOUND, NOT A PACING KNOB. Raid loot is food + crystals
+        /// only, so crystals are the one unbounded faucet in the game and this window is the
+        /// only thing bounding them — and crystals buy instant-finish, so shortening it defunds
+        /// the timer ladder the whole game is paced by. Read the ruling recorded in
+        /// RaidCooldownService before changing a value here.</para>
+        /// </summary>
+        public float raidCooldownSeconds;
+
         // ── Modifier override (WO-430) — "all scene creations accept an override JSON" ──
         /// <summary>
         /// Optional GameModifiers JSON applied as the active perk override BEFORE this scene
