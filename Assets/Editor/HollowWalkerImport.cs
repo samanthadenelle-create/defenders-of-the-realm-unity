@@ -61,7 +61,7 @@ namespace DeNelle.Editor
     {
         public const string Model = "Hollow_Walker";
 
-        private const string ContentRoot = "Assets/EnemyContent";
+        private const string ContentRoot = DeNelle.Core.AssetRoots.EnemyContent;
         private const string FbxPath     = ContentRoot + "/" + Model + ".fbx";
         private const string FbmDir      = ContentRoot + "/" + Model + ".fbm";
         private const string MatRoot     = ContentRoot + "/Materials";

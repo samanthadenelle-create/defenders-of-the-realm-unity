@@ -69,7 +69,7 @@ namespace DeNelle.Editor
         private const float MoveEpsilonMetres = 0.0015f;
         private const float MoveEpsilonDegrees = 0.35f;
 
-        private const string EC = "Assets/EnemyContent/";
+        private const string EC = DeNelle.Core.AssetRoots.EnemyContent + "/";
         private const string TMP = EC + "_OrcMageAB_TEMP/";
 
         private sealed class Subject

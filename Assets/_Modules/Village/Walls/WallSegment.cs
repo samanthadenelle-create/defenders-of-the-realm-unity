@@ -27,8 +27,12 @@
 // Both entry points funnel into the single private ApplyDamage() so the enemy path and
 // the player path can never diverge.
 //
-// LAYER — DELIBERATELY *NOT* THE RaidSpire TRICK. RaidSpire/BreakableContainer make
-// themselves findable by moving onto the "Enemy" layer. A wall MUST NOT: "Structure" is
+// LAYER — DELIBERATELY *NOT* THE RaidSpire TRICK. RaidSpire makes itself findable by
+// moving onto the "Enemy" layer. (BreakableContainer used to do the same and was named
+// here; WO-1132 removed that relayer when the container became an openable chest —
+// precisely because it made every crate a hostile-reticle target, WO-1047. So the trick
+// now has ONE user, not two, which is itself the argument against it.)
+// A wall MUST NOT copy it: "Structure" is
 // the line-of-sight BLOCKER mask every tower linecasts against (DefenseTower.
 // BlockedByWall, TowerCombat, ArcaneTower, PlayerAttackController, HeroTargetIndicator).
 // Relayering a wall would make towers shoot through walls again. Walls stay on

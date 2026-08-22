@@ -69,8 +69,8 @@ namespace DeNelle.Editor
 {
     public static class EnemyBodyMaterialFixer
     {
-        private const string EnemyContent = "Assets/EnemyContent";
-        private const string MaterialsDir = "Assets/EnemyContent/Materials";
+        private const string EnemyContent = DeNelle.Core.AssetRoots.EnemyContent;
+        private const string MaterialsDir = EnemyContent + "/Materials";
 
         /// <summary>The FBX material name every AccuRig skeleton body carries (read out of the FBX binaries).</summary>
         private const string BodyMaterialName = "Material_Pbr";

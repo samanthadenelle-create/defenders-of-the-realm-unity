@@ -44,6 +44,13 @@ namespace DeNelle.Core
         /// Addressable group served remotely from Cloudflare R2.
         /// <para>⛔ CHANGE THIS ONE LINE to relocate the tree. Do NOT reintroduce the literal
         /// anywhere — <c>AssetRootsRegression</c> fails the build if the string reappears.</para>
+        /// <para>⚠ THAT SENTENCE WAS FALSE FROM 2026-08-18 UNTIL 2026-08-21. The suite it names
+        /// DID NOT EXIST — a repo-wide search found the name only inside this comment — so
+        /// nothing enforced the rule and SIXTEEN re-typed root literals accumulated across
+        /// fourteen files, two of them other regression suites. The suite is real now
+        /// ([asset-roots], registered in DataRegression.RunAll) and its rule 2 asserts exactly
+        /// THIS PAIRING: a file that promises a gate, and a gate that is actually registered.
+        /// The warning is kept standing, because a rule enforced by a sentence is not enforced.</para>
         /// </summary>
         public const string StructureContent = "Assets/StructureContent";
 

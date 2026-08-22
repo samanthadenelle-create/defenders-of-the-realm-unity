@@ -64,7 +64,7 @@ namespace DeNelle.Editor.Regression
         // genuine failure and must still red. This resolves WHERE to look; it never weakens WHAT
         // is asserted.
         private const string EnemyResourcesRoot = DeNelle.Core.AssetRoots.EnemyContent;
-        private const string EnemyContentRoot   = "Assets/EnemyContent";
+        private const string EnemyContentRoot   = DeNelle.Core.AssetRoots.EnemyContent;
 
         /// <summary>
         /// The folder that actually holds the enemy models right now: the migrated

@@ -57,9 +57,13 @@
 //
 //  5. REAL PROPS (PlaceBreakables). Was: 1 m brown `_crate` cubes. Now real
 //     barrel_large / crates_stacked / chest_gold meshes on a bounds-fitted
-//     BoxCollider, still on the "Enemy" layer with the BreakableContainer +
-//     lootTableId wiring untouched (that collider IS the hero's hit seam —
-//     Assets/_Modules/Village/World/BreakableContainer.cs L143-170).
+//     BoxCollider, with the BreakableContainer + lootTableId wiring untouched.
+//     ⛔ UPDATED BY WO-1132: these are NO LONGER on the "Enemy" layer, and that
+//     collider is NO LONGER a hit seam — the container became an OPENABLE chest
+//     (owner ruling 2026-08-21), so the collider is just the prop's physical body
+//     and the interaction is a proximity prompt. The old Enemy relayer is what let
+//     the hostile reticle lock onto a crate (WO-1047). See
+//     Assets/_Modules/Village/World/BreakableContainer.cs.
 //
 // DELIBERATELY NOT DONE HERE (reported, not faked):
 //  • WO-1000 §2.3 asks for an "Env_Candle VfxEmitter". There is NO VfxEmitter type
@@ -835,18 +839,27 @@ namespace DeNelle.Editor
         }
 
         /// <summary>
-        /// Real KayKit loot props. The hit seam is preserved EXACTLY: a solid
-        /// BoxCollider on the "Enemy" layer carrying the BreakableContainer with its
-        /// lootTableId — that is what the hero's enemy-mask OverlapSphere sweeps
-        /// (BreakableContainer.cs L143-170). Only the visual changed: the collider is
-        /// now fitted to the real mesh bounds instead of being a 1 m cube, and a small
-        /// collider-free companion prop clusters beside each one so the yard reads as
-        /// dressed rather than dotted.
+        /// Real KayKit loot props: a solid bounds-fitted BoxCollider carrying the
+        /// BreakableContainer with its lootTableId, plus a small collider-free companion
+        /// prop clustered beside each one so the yard reads as dressed rather than dotted.
+        /// <para>
+        /// ⛔ WO-1132: the "Enemy" layer assignment is REMOVED. It used to be here so the
+        /// hero's enemy-mask OverlapSphere could sweep the prop and damage it, but owner
+        /// ruling 2026-08-21 made the container an OPENABLE chest, not an attackable one -
+        /// and that same relayer is what let the HOSTILE RETICLE lock onto a crate (WO-1047)
+        /// and what made the combat camera frame one. The chest is now driven by a proximity
+        /// prompt, so it needs no layer trick. Do not re-add one.
+        /// </para>
+        /// <para>
+        /// The BoxCollider stays: it is now the prop's physical body (it stops the hero
+        /// walking through the crate), not a hit seam. The real KayKit models are left
+        /// intact - BreakableContainer.EnsureChest detects authored art and skips its own
+        /// runtime coffer body, so these props keep their proper KayKit look.
+        /// </para>
         /// </summary>
         private static void PlaceBreakables(Transform root, (Vector3 pos, string token, string table)[] spots)
         {
             var bcType = FindType("DeNelle.Village.BreakableContainer");
-            int layer = LayerMask.NameToLayer("Enemy");
             var holder = NewChild(root, "Breakables");
 
             for (int i = 0; i < spots.Length; i++)
@@ -857,7 +870,7 @@ namespace DeNelle.Editor
                 go.transform.localPosition = pos;
                 // Deterministic per-index yaw — varied, but the same on every bake.
                 go.transform.localRotation = Quaternion.Euler(0f, (i * 47f) % 360f, 0f);
-                if (layer >= 0) go.layer = layer;
+                // WO-1132: deliberately left on the DEFAULT layer - see the summary above.
 
                 string modelName = BreakableModel(token);
                 var model = LoadKay(modelName);
@@ -883,9 +896,9 @@ namespace DeNelle.Editor
                 }
 
                 // A degenerate measurement (no MeshFilter under the asset) must NOT
-                // shrink the hit box to nothing — this collider IS the hero's only way
-                // to strike the container, so it falls back to the 1 m cube the old
-                // builder shipped rather than to zero.
+                // shrink the box to nothing — this collider is the prop's physical body
+                // (WO-1132: no longer a hit seam), so it falls back to the 1 m cube the
+                // old builder shipped rather than to zero and letting the hero walk through.
                 if (b.size.y < 0.2f) b = new Bounds(new Vector3(0f, 0.5f, 0f), Vector3.one);
 
                 var box = go.AddComponent<BoxCollider>();
@@ -915,8 +928,8 @@ namespace DeNelle.Editor
                         Quaternion.Euler(0f, (i * 33f) % 360f, 0f));
                 }
             }
-            FlowTrace.Step(Sys, $"BREAKABLES {_props} real KayKit props (bounds-fitted BoxCollider on layer " +
-                                $"'Enemy', BreakableContainer={(bcType != null ? "wired" : "TYPE MISSING")})");
+            FlowTrace.Step(Sys, $"BREAKABLES {_props} real KayKit props (bounds-fitted BoxCollider, DEFAULT " +
+                                $"layer - NOT Enemy, WO-1132; BreakableContainer={(bcType != null ? "wired" : "TYPE MISSING")})");
         }
 
         private static string BreakableModel(string token)

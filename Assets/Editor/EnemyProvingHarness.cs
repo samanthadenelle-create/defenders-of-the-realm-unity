@@ -93,7 +93,7 @@ namespace DeNelle.Editor
             "Assets/Blink/",
             "Assets/Art/TripoStructures/",
             "Assets/Models/KayKit/",
-            "Assets/Resources/Structures/",
+            DeNelle.Core.AssetRoots.StructureContentLegacyResources + "/",
         };
 
         // ── one row of the report ────────────────────────────────────────────────

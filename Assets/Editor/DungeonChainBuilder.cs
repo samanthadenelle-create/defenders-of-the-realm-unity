@@ -514,23 +514,29 @@ namespace DeNelle.Editor
         // attached BY REFLECTION; the Editor asmdef cannot reference DeNelle.Village).
         // =====================================================================
 
-        /// <summary>Scatter breakable loot crates: a NavigationStatic cube on the "Enemy" layer
-        /// (so the hero's enemy-mask OverlapSphere hits it) carrying a reflection-attached
-        /// DeNelle.Village.BreakableContainer with its lootTableId set.</summary>
+        /// <summary>Scatter loot chests: a NavigationStatic box carrying a reflection-attached
+        /// DeNelle.Village.BreakableContainer with its lootTableId set.
+        /// <para>
+        /// ⛔ WO-1132: these are NO LONGER placed on the "Enemy" layer. Owner ruling
+        /// 2026-08-21 made the loot container an OPENABLE chest rather than an attackable
+        /// prop. The old relayer existed so the hero's enemy-mask OverlapSphere would hit
+        /// the crate and damage it - but it also made every crate a valid target for the
+        /// HOSTILE RETICLE, which is the whole of WO-1047, and it made the combat camera
+        /// frame a crate. The chest is now interacted with by proximity prompt, so it needs
+        /// no layer trick at all. Do not re-add one.
+        /// </para></summary>
         private static void PlaceBreakables(Transform root, (Vector3 pos, string token, string table)[] spots)
         {
             var bcType = FindType("DeNelle.Village.BreakableContainer");
             if (bcType == null)
                 FlowTrace.Warn(Sys, "BreakableContainer type unresolved — crates placed as inert cubes (re-run after compile to attach behaviour).");
 
-            int enemyLayer = LayerMask.NameToLayer("Enemy");
             for (int i = 0; i < spots.Length; i++)
             {
                 var (pos, token, table) = spots[i];
-                // Cube sits ON the floor (centre lifted +0.5 so a 1m cube rests at pos.y).
+                // Box sits ON the floor (centre lifted +0.5 so a 1m box rests at pos.y).
                 var go = MakeBox(root, $"Breakable_{token}_{i}",
                                  pos + new Vector3(0f, 0.5f, 0f), Vector3.one, _crateMat, navStatic: true);
-                if (enemyLayer >= 0) go.layer = enemyLayer;
 
                 if (bcType != null)
                 {
@@ -538,7 +544,7 @@ namespace DeNelle.Editor
                     SetPrivateField(bcType, comp, "lootTableId", string.IsNullOrEmpty(table) ? "crate-common" : table);
                 }
             }
-            FlowTrace.Step(Sys, $"BREAKABLES placed {spots.Length} crates (Enemy layer, navStatic).");
+            FlowTrace.Step(Sys, $"BREAKABLES placed {spots.Length} chests (default layer - NOT Enemy, WO-1132; navStatic).");
         }
 
         /// <summary>Place a "SkeletonGroup_Spawn" marker carrying a reflection-attached

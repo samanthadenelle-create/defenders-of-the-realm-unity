@@ -45,7 +45,7 @@ namespace DeNelle.Editor
         private const int IsolationLayer = 31;
         private const float BlankCoverageFloor = 0.005f;
 
-        private const string EC = "Assets/EnemyContent/";
+        private const string EC = DeNelle.Core.AssetRoots.EnemyContent + "/";
         private const string INC = "Assets/Art/Incoming_Tripo/Enemies/Orcs/";
 
         private sealed class Subject

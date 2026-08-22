@@ -66,7 +66,7 @@ namespace DeNelle.Editor
         // Same resolve rule as EnemyAddressablesGrouper.ResolveActiveRoot and
         // EnemyRigControllerCoherenceRegression.EnemyRoot — one rule, three call sites, no drift.
         private const string StageResourcesDir = DeNelle.Core.AssetRoots.EnemyContent + "/Blink";
-        private const string StageContentDir   = "Assets/EnemyContent/Blink";
+        private const string StageContentDir   = DeNelle.Core.AssetRoots.EnemyContent + "/Blink";
 
         /// <summary>
         /// Where freshly-imported Blink orc art is staged: the migrated

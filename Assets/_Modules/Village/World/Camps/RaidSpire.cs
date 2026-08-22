@@ -21,10 +21,15 @@
 //
 // So a spire that implemented ONLY IDamageableStructure would be UNKILLABLE by the
 // hero and by every deployed troop - i.e. the raid would be unwinnable. Both are
-// implemented here, mirroring the ONE existing precedent for a player-destructible
-// world object: BreakableContainer (Assets/_Modules/Village/World/BreakableContainer.cs,
-// ":38 MonoBehaviour, IDamageable, IDamageableStructure" + ":145 Enemy layer"). The
-// single public IsAlive satisfies both contracts, exactly as it does there.
+// implemented here. The single public IsAlive satisfies both contracts.
+//
+// ⚠ THE PRECEDENT THIS USED TO CITE IS GONE. This paragraph named BreakableContainer
+// as "the ONE existing precedent for a player-destructible world object" (dual-contract
+// + Enemy layer). WO-1132 (owner ruling 2026-08-21) turned that container into an
+// OPENABLE CHEST: it implements neither damage interface now and is not on the Enemy
+// layer. The spire is a genuine combat target and KEEPS both contracts — but it is now
+// the precedent, not the follower, and a seat reading BreakableContainer.cs for the
+// pattern will not find it there any more.
 //
 // LAYER (equally load-bearing): the hero's sweep is MASKED to the "Enemy" layer, so
 // the spire's solid collider is moved onto it in Awake. Without that the hero's
@@ -154,8 +159,10 @@ namespace DeNelle.Village.World.Camps
         /// Guarantees the spire is reachable by the hero's melee/ability sweep: at least
         /// one SOLID collider, sized from the visual, sitting on the "Enemy" physics
         /// layer (the mask PlayerAttackController._enemyLayer and TroopController's
-        /// _enemyMask are set to). Mirrors BreakableContainer.Create's layer move and
-        /// DefenseTower.EnsureContactCollider's bounds sizing. Idempotent.
+        /// _enemyMask are set to). Mirrors DefenseTower.EnsureContactCollider's bounds
+        /// sizing. (It used to also cite BreakableContainer.Create's layer move; that
+        /// move was REMOVED by WO-1132 when the container became an openable chest.)
+        /// Idempotent.
         /// </summary>
         private void EnsureHittable()
         {

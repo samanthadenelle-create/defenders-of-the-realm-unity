@@ -38,7 +38,7 @@ namespace DeNelle.Editor
     /// <summary>Moves Resources/Enemies to a remote Addressable group.</summary>
     public static class EnemyContentMigrator
     {
-        private const string ResourcesRoot = "Assets/Resources/Enemies";
+        private const string ResourcesRoot = DeNelle.Core.AssetRoots.EnemyContentLegacyResources;
         private const string ContentRoot   = DeNelle.Core.AssetRoots.EnemyContent;
         private const string GroupName     = "Enemy_Art";
         private const string OkMarker      = "ENEMY_MIGRATE_OK";

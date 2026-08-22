@@ -57,7 +57,7 @@ namespace DeNelle.Editor
 {
     public static class EnemyBodyTextureRegression
     {
-        private const string EnemyContent = "Assets/EnemyContent";
+        private const string EnemyContent = DeNelle.Core.AssetRoots.EnemyContent;
 
         /// <summary>
         /// Proves every embedded-media enemy body renders with its OWN diffuse and that

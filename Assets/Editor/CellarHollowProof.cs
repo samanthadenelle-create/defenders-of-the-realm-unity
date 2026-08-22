@@ -47,7 +47,7 @@ namespace DeNelle.Editor
     /// <summary>Rig/animation/texture-fork/appearance proof for the new Cellar Hollow body.</summary>
     public static class CellarHollowProof
     {
-        private const string ContentRoot = "Assets/EnemyContent";
+        private const string ContentRoot = DeNelle.Core.AssetRoots.EnemyContent;
         private const string OutDir      = "Builds/CellarHollowProof";
         private const string Controller  = ContentRoot + "/SkeletonHumanoid.controller";
 

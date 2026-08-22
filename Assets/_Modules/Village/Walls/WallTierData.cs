@@ -82,7 +82,12 @@ namespace DeNelle.Village.Walls
             // Reinforced Steel — rune-tempered. Iron + Crystals (the magic-temper arc).
             new WallTierDef(WallTier.ReinforcedSteel, "Reinforced Steel",
                             upWood: 0, upIron: 200, upCrystals: 40,
-                            prefabPath: "Walls/steel_wall"),     // PENDING owner art (runic steel)
+                            // ⚠ THIS COMMENT USED TO READ "PENDING owner art (runic steel)" AND WAS
+                            // STALE (corrected 2026-08-21, WO-838). steel_wall.fbx landed 2026-07-14
+                            // alongside Walls/Textures/steel_*.JPEG; a seat reading the old note would
+                            // have treated 86 white wall slabs in RaidBase_mage_enclave as "art not
+                            // delivered yet" instead of the import-wiring defect it actually is.
+                            prefabPath: "Walls/steel_wall"),     // owner art, imported 2026-07-14
         };
 
         /// <summary>The tier def for a 1..3 index (clamped).</summary>

@@ -92,7 +92,7 @@ namespace DeNelle.Editor
     /// <summary>Binds a real albedo onto the "_NEW" enemy meshes, at import time.</summary>
     public static class NewBodyAlbedoBinder
     {
-        private const string ContentRoot = "Assets/EnemyContent";
+        private const string ContentRoot = DeNelle.Core.AssetRoots.EnemyContent;
         private const string TexRoot     = ContentRoot + "/TripoTex";
         private const string MatRoot     = ContentRoot + "/Materials";
         private const string OkMarker    = "NEW_BODY_ALBEDO_OK";

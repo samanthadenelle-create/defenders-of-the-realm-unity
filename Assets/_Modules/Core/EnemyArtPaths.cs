@@ -183,12 +183,15 @@ namespace DeNelle.Core
         /// precedence order (atlas folder x name alias x extension).
         /// <para>Root comes from <see cref="AssetRoots.EnemyContent"/> — ⛔ never
         /// re-type the literal.</para>
-        /// <para>⚠ FINDING, 2026-08-21: AssetRoots.cs:46 claims "AssetRootsRegression
-        /// fails the build if the string reappears". THERE IS NO SUCH SUITE — a
-        /// repo-wide search finds that name only inside that comment and this one.
-        /// Nothing was enforcing the rule, which is precisely why a re-typed
-        /// "Assets/EnemyContent" was still sitting in EnemyArtCoverageRegression
-        /// until WO-1129 removed it. Do not trust the claim; the gate is owed.</para>
+        /// <para>✅ RESOLVED 2026-08-21 (this used to read "AssetRoots.cs:46 claims
+        /// AssetRootsRegression fails the build if the string reappears — THERE IS NO SUCH
+        /// SUITE"). The gate now exists: AssetRootsRegression [asset-roots], registered in
+        /// DataRegression.RunAll. Writing it found SIXTEEN re-typed root literals across
+        /// fourteen files — two of them other regression suites — all repointed in the same
+        /// change. It also carries the WO-1129 §3.5 ratchet on THIS file's naming tokens: the
+        /// SET of files allowed to spell "TripoTex" / "OrcTex" / the map suffixes is frozen, so
+        /// the ~111-literal debt cannot grow a new home even though migrating it needs a Unity
+        /// run this seat could not do.</para>
         /// </summary>
         public static IReadOnlyList<string> AtlasAssetCandidates(string model, EnemyArtMap map = EnemyArtMap.BaseColor)
         {

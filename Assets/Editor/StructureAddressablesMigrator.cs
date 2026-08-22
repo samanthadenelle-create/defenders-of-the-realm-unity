@@ -46,7 +46,7 @@ namespace DeNelle.Editor
     /// <summary>Catalog-driven Resources -> Addressables migrator for structure art.</summary>
     public static class StructureAddressablesMigrator
     {
-        private const string ResourcesRoot = "Assets/Resources/Structures";
+        private const string ResourcesRoot = DeNelle.Core.AssetRoots.StructureContentLegacyResources;
         // ⛔ A DEDICATED TOP-LEVEL FOLDER, NOT Assets/Art/Structures.
         // The first attempt targeted Assets/Art/Structures, and during its revert a cleanup step
         // resolved 'Assets/Art' instead of 'Assets/Art/Structures' and recursively deleted the

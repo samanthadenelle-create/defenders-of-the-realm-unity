@@ -108,7 +108,7 @@ namespace DeNelle.Editor
         internal const string EnemiesRoot = DeNelle.Core.AssetRoots.EnemyContent;
 
         // Post-migration destination (NOT under any Resources/ folder).
-        internal const string EnemyContentRoot = "Assets/EnemyContent";
+        internal const string EnemyContentRoot = DeNelle.Core.AssetRoots.EnemyContent;
 
         // Address prefix — MUST match DeNelle.Core.EnemyAssetLoader.EnemyAddrPrefix.
         internal const string EnemyAddrPrefix = "Enemies/";

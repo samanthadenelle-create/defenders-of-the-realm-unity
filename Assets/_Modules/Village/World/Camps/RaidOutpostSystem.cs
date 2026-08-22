@@ -47,9 +47,17 @@ namespace DeNelle.Village.World.Camps
             false;
 #endif
 
-        // Routed through the central FeatureFlags gate: raid is OFF until victory/return is built
-        // (2026-06-16 demo audit — a cleared raid currently soft-locks). Flip via FeatureFlags /
-        // PlayerPrefs "ff.raid", not here, so every raid entry point gates from one switch.
+        // Routed through the central FeatureFlags gate. Flip via FeatureFlags / PlayerPrefs
+        // "ff.raid", not here, so every raid entry point gates from one switch.
+        // ⚠ THE REASON THIS LINE USED TO GIVE IS RETIRED (corrected 2026-08-21, WO-932 audit
+        // G-copy-2). It read: "raid is OFF until victory/return is built (2026-06-16 demo audit
+        // — a cleared raid currently soft-locks)". Victory/return HAS been built:
+        // RaidVictoryController owns claim → loot → companion → GoCastle, and
+        // RaidDeployController.SettlePartialLoot pays retreat/timeout/hero-death alike
+        // (WO-932 phases 3b/5, WO-1110). FeatureFlags.Raid is ON. Left as-is except the reason,
+        // because the flag is still the one switch — but a seat reading the old sentence would
+        // conclude the raid loop is unfinished and re-implement a victory controller that
+        // already exists.
         // WO-449: ALSO gated on RaidContinuousWalk — the walk-to OuterWorld outpost only exists in
         // the continuous-walk loop. When raidwalk is OFF the legacy RaidSelectionScreen->Deploy->GoRaid
         // teleport path owns the raid, so this open-world outpost must NOT spawn (else both loops live).

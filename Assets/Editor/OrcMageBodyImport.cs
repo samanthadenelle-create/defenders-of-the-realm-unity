@@ -58,7 +58,7 @@ namespace DeNelle.Editor
 {
     public static class OrcMageBodyImport
     {
-        private const string EC = "Assets/EnemyContent/";
+        private const string EC = DeNelle.Core.AssetRoots.EnemyContent + "/";
 
         private const string FbxPath = EC + "Orc_Mage.fbx";
         private const string SentinelPath = FbxPath + ".tripo-extracted";
