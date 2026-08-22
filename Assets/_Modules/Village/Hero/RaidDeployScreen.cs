@@ -251,11 +251,20 @@ namespace DeNelle.Village.Hero
         // left column. The hero's class = GameState.HeroClass; companions = the class
         // strings in PartyMemberIds. (Hero is added explicitly so the row always shows
         // the player even before any companion has joined.)
-        // WO-774.0 FORWARD NOTE (spectator-model ruling PENDING — RAID_BATTLEFIELD_
-        // ANATOMY_2026-08-02 §7): when the owner/Grok ruling lands, the hero leaves raid
-        // scenes entirely and this hero+companion party row is expected to be REPLACED by
-        // a troop-loadout row (folds into WO-774 §2). Kept deliberately minimal here —
-        // do NOT deepen hero-in-raid coupling on this screen.
+        // ⚠ THE OLD NOTE HERE WAS RETIRED BY THE RULING IT WAS WAITING ON (2026-08-21).
+        // It read: "WO-774.0 FORWARD NOTE (spectator-model ruling PENDING …): when the
+        // owner/Grok ruling lands, the hero LEAVES RAID SCENES ENTIRELY and this
+        // hero+companion party row is expected to be REPLACED by a troop-loadout row."
+        // The ruling landed the OTHER WAY. WO-1109 (2026-08-16, commit 256fa9ee3) shipped
+        // Option A — CARRY: SceneRouter.GoRaid now detaches the REAL hero, DontDestroyOnLoad's
+        // it across the load and re-homes it at the raid's baked HeroStartPoint_PlayerSpawn.
+        // (Before that, every raid silently ran the EMERGENCY pill-hero, which had no
+        // HeroAbilities at all — Q/W/E/R were dead in every raid ever played.) So the hero
+        // is IN the raid, with its real class body and abilities, and this party row is
+        // CORRECT rather than provisional. A seat acting on the retired note would have
+        // deleted a row that now reflects who actually fights.
+        // Still true, and still the reason this stays thin: do NOT deepen hero-in-raid
+        // coupling on this SCREEN — the carry is SceneRouter's, not the deploy UI's.
         private void BuildPartyRow(Transform body, float rowY0, float rowY1)
         {
             var classes = _vm != null ? _vm.PartyClasses : new List<string>();

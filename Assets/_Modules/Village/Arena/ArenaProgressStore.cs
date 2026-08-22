@@ -19,6 +19,7 @@
 using UnityEngine;
 using DeNelle.Core.State;
 using DeNelle.Core.Diagnostics;
+using DeNelle.Wallet;
 
 namespace DeNelle.Village.Arena
 {
@@ -49,6 +50,7 @@ namespace DeNelle.Village.Arena
             SetLive(a);
             Persist(a);
             FlowTrace.Step("ArenaProgress", $"RecordWin purse={purseWon} -> {a.Wins}W/{a.Losses}L streak={a.Streak}");
+            BattlePassService.OnArenaResult(win: true, streak: a.Streak);
             Debug.Log($"[ArenaProgressStore] WIN recorded - {a.Wins}W/{a.Losses}L, streak {a.Streak}, purse {a.TotalPurse}.");
         }
 
@@ -62,6 +64,7 @@ namespace DeNelle.Village.Arena
             SetLive(a);
             Persist(a);
             FlowTrace.Step("ArenaProgress", $"RecordLoss -> {a.Wins}W/{a.Losses}L streak reset");
+            BattlePassService.OnArenaResult(win: false, streak: 0);
             Debug.Log($"[ArenaProgressStore] LOSS recorded - {a.Wins}W/{a.Losses}L, streak reset.");
         }
 

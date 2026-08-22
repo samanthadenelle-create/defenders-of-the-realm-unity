@@ -9,10 +9,14 @@
 // AMBIENT floor a touch so the ground is never pure black — while preserving the
 // night MOOD (night is still clearly darker than day).
 // -----------------------------------------------------------------------------
-// Assembly: Assembly-CSharp (the _Modules/Environment folder has no asmdef, same
-//   as TorchFireController which this attaches to). Global namespace to match it
-//   and to keep the cross-asmdef story simple — no DeNelle.* asmdef can see
-//   TorchFireController, so this MUST live in the predefined assembly.
+// Assembly: Assembly-CSharp (the _Modules/Environment folder has no asmdef).
+//   ⚠ UPDATED 2026-08-21 (WO-992): this used to read "same as TorchFireController
+//   which this attaches to ... so this MUST live in the predefined assembly". That
+//   constraint is GONE — TorchFireController was deleted (provably dead: zero GUID
+//   references in any scene/prefab/asset, no AddComponent anywhere) along with the
+//   AttachToExistingTorches sweep that was its only caller. This file no longer
+//   references any predefined-assembly type; the placement is now inertia, not a
+//   requirement, and moving it into an asmdef is a free follow-up.
 //
 // WHY POLL AMBIENT (not subscribe to a specific day/night system):
 //   The "darkness" in this build is driven by RenderSettings.ambientLight being
@@ -30,8 +34,8 @@
 //   * Restores the ambient floor it raised on scene unload / destroy so it never
 //     permanently overrides project lighting.
 //   * Idempotent: a single DDOL instance; re-runs placement on (re)load of the
-//     target scene. If real torch PROPS exist (TorchFireController), it attaches
-//     its night-ramp to them instead of spawning duplicate lights.
+//     target scene. (The "attach to existing torch props instead of duplicating"
+//     arm was removed 2026-08-21 — the prop type it looked for never existed.)
 // =============================================================================
 
 using System.Collections.Generic;
@@ -41,7 +45,7 @@ using UnityEngine.SceneManagement;
 /// <summary>
 /// Runtime warm point-light system that brightens key spots (gates, plaza,
 /// hero) as the night cycle darkens ambient light, for mobile readability.
-/// Global namespace (Assembly-CSharp) to match <see cref="TorchFireController"/>.
+/// Global namespace (Assembly-CSharp); the _Modules/Environment folder has no asmdef.
 /// </summary>
 public sealed class NightTorchLightSystem : MonoBehaviour
 {
@@ -137,9 +141,26 @@ public sealed class NightTorchLightSystem : MonoBehaviour
 
             var spots = CollectSpots();
 
-            // Prefer attaching to real torch props if any exist, so we never
-            // double-light a spot the env already authored.
-            AttachToExistingTorches();
+            // ── REMOVED 2026-08-21 (WO-992): AttachToExistingTorches() ────────────────────
+            // It called Object.FindObjectsByType<TorchFireController>() to avoid double-lighting
+            // a spot the env layer had already authored. That courtesy was answering a question
+            // NOTHING could ever say yes to: TorchFireController's GUID
+            // (f768c3e90b8ed5d45b9352187f637362) appeared in ZERO .unity / .prefab / .asset —
+            // including a raw-byte scan of the binary scenes — and there was no
+            // AddComponent<TorchFireController> anywhere in the tree, so the array was ALWAYS
+            // empty and the method was ALWAYS a no-op. Re-verified at source before removal.
+            //
+            // That dead lookup was also the ONLY thing keeping TorchFireController.cs compiling
+            // into the build, and the only reason this file's header says it "MUST live in the
+            // predefined assembly" to see it. Both files were superseded by three independent
+            // live torch paths, each rolling its own flicker: this system's own NightTorch lights
+            // (below), DungeonDresser's seated torch meshes + Lights, and the per-builder torch
+            // code in DungeonComposer / KayKitChallengeOutpostBuilder / EnemyStrongholdBuilder.
+            //
+            // ⛔ IF A REAL TORCH PROP COMPONENT IS EVER AUTHORED, do not restore this as a
+            // FindObjectsByType sweep — have the prop REGISTER itself with this system. The sweep
+            // could not tell "no props exist" from "the prop type is dead", which is exactly why
+            // it survived unnoticed for three months.
 
             int budget = MaxLights - _lights.Count;
             int i = 0;
@@ -183,30 +204,9 @@ public sealed class NightTorchLightSystem : MonoBehaviour
             return spots;
         }
 
-        /// <summary>If the env layer authored torch props (TorchFireController),
-        /// register their child Light so our night-ramp drives them too instead of
-        /// spawning a competing light at the same place.</summary>
-        private void AttachToExistingTorches()
-        {
-            var torches = Object.FindObjectsByType<TorchFireController>();
-            if (torches == null) return;
-            int i = 1000;
-            foreach (var tc in torches)
-            {
-                if (tc == null) continue;
-                var lt = tc.pointLight != null ? tc.pointLight : tc.GetComponentInChildren<Light>();
-                if (lt == null) continue;
-                if (_lights.Count >= MaxLights) break;
-                // No shadows — keep it mobile-cheap even on pre-existing props.
-                lt.shadows = LightShadows.None;
-                _lights.Add(new TorchLight
-                {
-                    light     = lt,
-                    phase     = (i++ * 0.137f) % 6.283f,
-                    baseScale = 0.9f
-                });
-            }
-        }
+        // AttachToExistingTorches() lived here until 2026-08-21 (WO-992). See the tombstone at
+        // its former call site in Build() for why it was removed and what to do instead if a real
+        // torch prop component is ever authored.
 
         private void SpawnTorchLight(Vector3 pos, int index)
         {

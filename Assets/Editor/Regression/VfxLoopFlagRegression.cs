@@ -136,6 +136,46 @@ namespace DeNelle.Editor.Regression
             // vfx-aura-diff oracle already encodes this ruling and correctly failed the
             // first run of the derivation - that failure is why this table exists.
             { "UpgradeStructureComplete_Aura", false },
+
+            // The Realm Store landmark ring (WO-1052; owner tagged this key to
+            // Assets/Resources/VFX/Markers/Marker8_SafeZoneLoop.prefab on 2026-08-21 as the store's
+            // persistent near-field signature -- see HovlVfxCatalogGenerator's Map entry).
+            //
+            // WHAT THE ART ACTUALLY DOES, read from the prefab: root Marker8_SafeZoneLoop is
+            // looping:1, lengthInSec:1, emission ENABLED, rateOverTime Constant 0, and ONE burst of
+            // 1 at t=0.1. So `rootLoop && byRate` derives FALSE purely on the zero rate.
+            // (The `minScalar: 10` sitting next to `scalar: 0` is Unity's vestigial default in the
+            // unused TwoConstants slot -- every prefab in Resources/VFX carries it. The derivation
+            // reads `scalar`, which is correct; this is NOT a mis-read field.)
+            //
+            // WHY THE DERIVATION'S PREMISE DOES NOT HOLD HERE: the "rate 0 + bursts only" clause is
+            // justified above as the explosion shape that "spits everything out at t=0 and idles".
+            // That is true of a system whose main.loop is FALSE. This one loops, and a LOOPING
+            // system re-fires its bursts every duration cycle -- the ring genuinely repeats forever
+            // and never self-terminates. It is a persistent landmark exactly as the owner intended.
+            //
+            // WHY A PIN AND NOT A WIDER DERIVATION: seven other prefabs on disk share this exact
+            // shape (Buff_Light, PortalCircleDarkStar, Casting_Fire, Casting_Fire_2, BigExplosion,
+            // TalentNodePointer, Cast_MuzzleFlash) and EVERY one is stored IsLoop:0 and passes.
+            // Widening the rule to (loop && bursts) would flip all seven to expected-loop and
+            // re-open the pool leak for the muzzle-flash/explosion rows -- the precise bug this
+            // oracle exists to stop. Emission alone cannot separate the two cases; only the CALL
+            // SITE can, which is what a pin is for.
+            //
+            // WHY True IS SAFE HERE (the leak cannot occur): RealmStoreBeacon RETAINS the handle in
+            // _nearAura and releases it on four paths -- leaving the 20m proximity ring, scene
+            // unload, OnDisable, OnDestroy. It is not fire-and-forget (which is where the documented
+            // leak comes from), poolSize is 1, and it only runs while the hero stands at the store.
+            // Stamping False instead would send it down the oneshot branch, whose reclaim deadline
+            // would return the ring to the pool while the player is still standing there: the
+            // landmark vanishes and _nearAura is left holding a stale handle.
+            //
+            // NOTE for the owner: the ruling pointed at here is her 2026-08-21 pick of this key as a
+            // PERSISTENT landmark, not a felt-play ruling on the flag itself. The pin is also the
+            // only durable home for it -- HovlVfxCatalogGenerator overrides its own Map literal with
+            // TryResolveExpected, so without this entry the next regenerate silently flips the row
+            // back to 0 and the beacon starts despawning under the player.
+            { "store.beacon.near", true },
         };
 
         /// <summary>

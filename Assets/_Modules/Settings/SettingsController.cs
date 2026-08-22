@@ -251,6 +251,33 @@ namespace DeNelle.Settings
                 new Vector2(0.52f, y - Frac(120f)), new Vector2(0.94f, y), OnResetClicked);
             y -= Frac(120f);   // step PAST the Help row - Caption only advances 54, a button row is 120
 
+            // -- Defence reports (WO-1026) -----------------------------------
+            // WHY SETTINGS AND NOT THE ACTION BAR: CLAUDE.md §7 caps the calm(town) bar at SIX
+            // visible faces and spends paragraphs on why; a seventh face would silently undo that
+            // ruling. This is the SAME answer WO-588 reached for the Game Guide - a secondary
+            // screen that must be reachable without eating a bar face lives behind Settings.
+            // The row is only BUILT when the player has reports (the panel is registered
+            // scene-independently either way), so a fresh save shows no dead button, and the
+            // unread count rides in the LABEL TEXT - never a coloured dot, which the owner
+            // cannot see.
+            // ⚠ REACHABLE, NOT YET DISCOVERABLE. Settings is two taps from town and that clears
+            // the acceptance bar, but a player who never opens Settings will not learn the report
+            // exists. A discoverable surface (an unread badge in town) is an owner felt-call, and
+            // is flagged in the WO rather than minted here.
+            int unread = DeNelle.Core.Defense.DefenseReportLedger.UnreadCount();
+            int reportCount = DeNelle.Core.Defense.DefenseReportLedger.All().Count;
+            if (reportCount > 0)
+            {
+                y = Caption(body, "Your Town", y);
+                string label = unread > 0
+                    ? "Defence Reports (" + unread + " new)"
+                    : "Defence Reports";
+                ElarionUiKit.BuildObsidianButton(body, label,
+                    ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
+                    new Vector2(0.06f, y - Frac(120f)), new Vector2(0.48f, y), OnDefenseReportsClicked);
+                y -= Frac(120f);
+            }
+
             // -- Legal (store-readiness 2026-08-19) --------------------------
             // Most app stores require the privacy policy to be reachable FROM INSIDE the app, not
             // only from the listing. publishing/config.yaml already declares both URLs (:52 license,
@@ -531,6 +558,19 @@ namespace DeNelle.Settings
         {
             Close();
             PanelRouter.Open(PanelId.GameGuide);
+        }
+
+        /// <summary>WO-1026: the town door onto the Defence Report. Closes Settings first so the
+        /// modal arbiter swaps cleanly (the Game Guide route's rule, same reason).
+        /// If nothing registered the panel the route returns false and we say so rather than
+        /// leaving the player tapping a dead button in silence.</summary>
+        private void OnDefenseReportsClicked()
+        {
+            Close();
+            if (!PanelRouter.Open(PanelId.DefenseReport))
+                FlowTrace.Warn("Siege",
+                    "Settings: PanelRouter.Open(PanelId.DefenseReport) returned FALSE - " +
+                    "DefenseReportPanelBootstrap did not register the opener.");
         }
 
         // Store listing declares these two (publishing/config.yaml:52 license_url, :65

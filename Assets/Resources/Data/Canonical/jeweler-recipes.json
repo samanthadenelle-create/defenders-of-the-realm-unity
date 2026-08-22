@@ -8,7 +8,7 @@
       "base": { "id": "ring_iron", "count": 1 },
       "gems": [ { "id": "ing_ember_crystal", "count": 2 } ],
       "outputAccessoryId": "ring_steadfast",
-      "cost": { "wood": 0, "food": 0, "iron": 30, "crystals": 0 },
+      "cost": { "wood": 0, "food": 0, "iron": 150, "crystals": 0 },
       "requiresQuestId": "",
       "saga": "Sable seats two ember crystals in a plain iron band — and it remembers a purpose."
     },
@@ -18,7 +18,7 @@
       "base": { "id": "ring_steadfast", "count": 1 },
       "gems": [ { "id": "ing_ember_crystal", "count": 2 }, { "id": "ing_aether_shard", "count": 1 } ],
       "outputAccessoryId": "ring_embercoil",
-      "cost": { "wood": 0, "food": 0, "iron": 60, "crystals": 10 },
+      "cost": { "wood": 0, "food": 0, "iron": 300, "crystals": 50 },
       "requiresQuestId": "",
       "saga": "Emberhand's coil is wound while the iron still sings; an aether shard keeps it from cooling."
     },
@@ -28,7 +28,7 @@
       "base": { "id": "ring_embercoil", "count": 1 },
       "gems": [ { "id": "ing_aether_shard", "count": 2 }, { "id": "ing_heartstone_crystal", "count": 1 } ],
       "outputAccessoryId": "ring_heartward",
-      "cost": { "wood": 0, "food": 0, "iron": 100, "crystals": 25 },
+      "cost": { "wood": 0, "food": 0, "iron": 500, "crystals": 120 },
       "requiresQuestId": "",
       "saga": "A heartstone shard cut flush to silver — it dims slightly every time it turns a blow."
     },
@@ -38,7 +38,7 @@
       "base": { "id": "amulet_travelers", "count": 1 },
       "gems": [ { "id": "ing_ember_crystal", "count": 2 } ],
       "outputAccessoryId": "amulet_oathward",
-      "cost": { "wood": 0, "food": 0, "iron": 40, "crystals": 0 },
+      "cost": { "wood": 0, "food": 0, "iron": 200, "crystals": 0 },
       "requiresQuestId": "",
       "saga": "An Oathweld medallion set with ember crystal — the ward holds because the smith believed in it."
     },
@@ -48,7 +48,7 @@
       "base": { "id": "amulet_oathward", "count": 1 },
       "gems": [ { "id": "ing_aether_shard", "count": 2 }, { "id": "ing_ember_crystal", "count": 1 } ],
       "outputAccessoryId": "amulet_lastpressing",
-      "cost": { "wood": 0, "food": 0, "iron": 0, "crystals": 20 },
+      "cost": { "wood": 0, "food": 0, "iron": 0, "crystals": 100 },
       "requiresQuestId": "",
       "saga": "A teardrop of pressed aether in silver filigree — the light inside was caught before the Heart went quiet."
     },
@@ -58,7 +58,7 @@
       "base": { "id": "amulet_lastpressing", "count": 1 },
       "gems": [ { "id": "ing_aether_shard", "count": 2 }, { "id": "ing_heartstone_crystal", "count": 1 } ],
       "outputAccessoryId": "amulet_elarion",
-      "cost": { "wood": 0, "food": 0, "iron": 80, "crystals": 40 },
+      "cost": { "wood": 0, "food": 0, "iron": 400, "crystals": 200 },
       "requiresQuestId": "",
       "saga": "City-mark work of the Bright Centuries, bound around a heartstone — the old glyph for the Heart, before anyone thought it needed protecting."
     }

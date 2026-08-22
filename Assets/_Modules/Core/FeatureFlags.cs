@@ -462,6 +462,26 @@ namespace DeNelle.Core
         /// Kill switch: PlayerPrefs "ff.dungeonportals" = 0.</summary>
         public static bool DungeonPortals => Get("dungeonportals", defaultOn: true);
 
+        /// <summary>WO-1114 DUNGEON DOOR STATUS. Default ON. When ON, the remotely-flippable
+        /// door state (<c>DeNelle.Core.World.DungeonStatusCatalog</c> / <c>DungeonStatusService</c>)
+        /// is fetched at boot and a non-<c>open</c> dungeon reads as a SEALED DOOR in the world —
+        /// authored prose at the portal, no entry, no scene load, no error styling.
+        /// <para>
+        /// ⛔ KILL SWITCH: PlayerPrefs "ff.dungeonstatus" = 0 forces EVERY door OPEN with no
+        /// rebuild, and suppresses the fetch entirely. That is the escape hatch if a bad payload
+        /// ever locks content — every other failure path in the system already resolves toward
+        /// OPEN by design, so this flag is the last line, not the first.
+        /// </para>
+        /// ⛔ Do NOT add "dungeonstatus" to the URL-activatable allow-list. That list is
+        /// deliberately restricted to read-only presentation flags; a URL-flippable CONTENT gate
+        /// is a security regression.
+        /// <para>
+        /// This is the SINGLE authority for the key. <c>DungeonStatusService</c> reads it through
+        /// here (its 2026-08-21 inlined copy was deleted in the same edit that added this line) —
+        /// never re-inline a second reader of "ff.dungeonstatus".
+        /// </para></summary>
+        public static bool DungeonStatus => Get("dungeonstatus", defaultOn: true);
+
         /// <summary>WORLD FEEL (owner felt-test 2026-07-01: "world feels empty / very flat / not polished").
         /// When ON (default), <c>DeNelle.Village.World.WorldFeelInjector</c> applies the world-aesthetics
         /// pass at runtime on the outdoor scenes (MainCastle_Hall / Main_Castle_Overworld / Village2), WITHOUT
@@ -702,6 +722,56 @@ namespace DeNelle.Core
         /// "ff.maptab" = 1 (or the Defenders/Debug menu). The suppression is FlowTrace'd at the build
         /// site so a UI capture shows WHY the tab is missing instead of reading as a vanished tab.</summary>
         public static bool MapTab => Get("maptab", defaultOn: false);
+
+        /// <summary>
+        /// WO-1050 — the player's REDUCED-MOTION preference. Turn it ON and every decorative
+        /// animation is not merely paused, it is <b>never built</b>: The Night Market's four motion
+        /// moments (the spotlight aurora drift, the 400 ms light crossfade on selection, the CTA
+        /// specular sweep, the patronage sheen) fall back to their flat lights.
+        ///
+        /// <para><b>Default OFF — i.e. motion is on by default; flipping this ON reduces it.</b> The
+        /// flag name states the PREFERENCE, not the animation, so "on" always means "the player asked
+        /// for less". PlayerPrefs "ff.reducedmotion" = 1.</para>
+        ///
+        /// <para>⛔ THE ACCEPTANCE TEST IS THAT THIS FLAG CHANGES NOTHING BUT THE MOTION. Rolling
+        /// colour never carries meaning — band identity lives in the 3 px mark, the text eyebrow and
+        /// the step in greyscale value; every card state carries a WORD. With this ON the store must
+        /// still be completely readable, because nothing was ever encoded in movement. If turning
+        /// this on loses information, the information was in the wrong place.</para>
+        ///
+        /// <para>It is written as a first-class preference rather than a store-local field because
+        /// the Dungeons surfaces already carry per-component <c>SetReducedMotion</c> hooks
+        /// (Checkpoint, CraftingPedestal, IngredientPickup) with no shared switch to drive them —
+        /// this is the switch they should eventually read, so the preference is asked ONCE.</para>
+        /// </summary>
+        public static bool ReducedMotion => Get("reducedmotion", defaultOn: false);
+
+        /// <summary>
+        /// WO-1026 — the PvE SIEGE loop: scheduled attacks on the player's own town, plus the
+        /// persisted, re-openable Defence Report they produce.
+        ///
+        /// <para><b>Default OFF, and the reason is a DESIGN GATE, not a code gate.</b> ⛔ What the
+        /// player LOSES on a failed defence is UNRULED — the owner has not made that call, and this
+        /// build deliberately invents nothing (<see cref="DeNelle.Core.Defense.StakesLedger"/> is
+        /// all zero, stamped <c>none.interim.wo1026</c>). Shipping the loop ON before that ruling
+        /// means the owner felt-tests an attack that costs nothing and correctly reports it as
+        /// hollow — which would read as "the feature is bad" when the truth is "the stake is
+        /// missing". So the loop stays dark until the ruling lands and
+        /// <c>DefenseReportBuilder.BuildStakes</c> is filled in.</para>
+        ///
+        /// <para>When OFF, <see cref="DeNelle.Village.SiegeScheduler"/> arms nothing and calls no
+        /// WaveManager entry point, so the build's behaviour is byte-identical to before WO-1026.
+        /// It still logs one line saying it is off — a silent no-op is indistinguishable from a
+        /// broken scheduler, and "the base is never attacked" is the exact bug class this WO
+        /// exists to close. Flip via PlayerPrefs "ff.siege" = 1.</para>
+        ///
+        /// <para>This is PvE. It is NOT PvP: nothing here snapshots, exports or replays another
+        /// player's base (that is WO-730, separately unbuilt). The report's
+        /// <c>AttackerIdentity.Source</c> field is the seam a ghost-PvP source would plug into
+        /// later — a source swap, not a second system.</para>
+        /// NOT URL-activatable (it changes game state — deliberately excluded from s_urlActivatableFlags).
+        /// </summary>
+        public static bool Siege => Get("siege", defaultOn: false);
 
         /// <summary>
         /// WO-828 — the corner minimap plate (<c>HudMinimapWidget</c>) in the calm postures.
