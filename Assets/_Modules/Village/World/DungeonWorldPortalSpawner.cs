@@ -200,6 +200,12 @@ namespace DeNelle.Village.World
         private Transform _root;
         private Transform _hero;
 
+        // WO-1114: how often the door-state poll re-asks DungeonStatusCatalog. Slow on
+        // purpose - the payload lands once, a live flip is a human operation, and this is
+        // a dictionary lookup per portal, not work.
+        private const float DoorStateCheckInterval = 0.5f;
+        private float _nextDoorStateCheck;
+
         // One placed portal + its discovery bookkeeping.
         private sealed class Portal
         {
@@ -225,6 +231,13 @@ namespace DeNelle.Village.World
             // released on teardown and so the discovery dim can retarget onto the real renderers.
             public PortalStructure.SwapResult Swap;
             public bool ArtStanding;
+            // WO-1114: which dungeon this door leads to, and the door state that is
+            // currently DRESSED on it. The id is needed because the appearance owner
+            // (ApplyDoorState) asks DungeonStatusCatalog per portal; the applied state
+            // is held so a live flip re-dresses once and only once.
+            public string DungeonId;
+            public DungeonDoorState DoorState;
+            public bool DoorStateApplied;
         }
 
         private readonly List<Portal> _portals = new List<Portal>();
@@ -599,6 +612,7 @@ namespace DeNelle.Village.World
                 Key = MakeKey(pos),
                 Renderers = renderers,
                 BaseColors = colors,
+                DungeonId = def.DungeonId,   // WO-1114: the key ApplyDoorState resolves the door with
             };
             entry.Discovered = PlayerPrefs.GetInt(entry.Key, 0) == 1;
             entry.FadeT = entry.Discovered ? 1f : 0f;
@@ -611,6 +625,13 @@ namespace DeNelle.Village.World
             // load; a fresh (undiscovered) portal blooms it on when the hero finds it
             // (Discover()), preserving the fog-of-war reveal.
             if (entry.Discovered) { AttachGateVfx(entry); AttachThresholdAura(entry); AttachPortalCircle(entry); }
+
+            // WO-1114 CALL SITE 1 of 2 — dress the door for its status the moment it is built,
+            // so a sealed dungeon is never bright-and-inviting for a frame. The second call
+            // site is inside SwapInSharedStructureAsync (the re-seat), and it is the one that
+            // is easy to forget: without it the real portal art loads over the top and the
+            // closed treatment silently reverts.
+            ApplyDoorState(entry, DungeonStatusCatalog.For(entry.DungeonId));
 
             // Owner 2026-08-14: wear the SAME structure as the dungeon exit. Kicked async and
             // deliberately AFTER the cube arch is already standing, so the portal is never
@@ -798,6 +819,14 @@ namespace DeNelle.Village.World
             float revealSqr = DiscoverRadius * DiscoverRadius;
             bool heroValid = _hero != null;
 
+            // WO-1114: the status payload lands asynchronously, so it can arrive AFTER the
+            // portals are built. Re-ask the catalog on a slow throttle and let the one
+            // appearance owner re-dress anything that changed - that is what makes a flip
+            // land in the world within a cache period with no rebuild. Cheap: a dictionary
+            // lookup per portal, twice a second, and ApplyDoorState no-ops when nothing moved.
+            bool checkDoors = Time.time >= _nextDoorStateCheck;
+            if (checkDoors) _nextDoorStateCheck = Time.time + DoorStateCheckInterval;
+
             for (int i = _portals.Count - 1; i >= 0; i--)
             {
                 var p = _portals[i];
@@ -816,6 +845,8 @@ namespace DeNelle.Village.World
                     _portals.RemoveAt(i);
                     continue;
                 }
+
+                if (checkDoors) ApplyDoorState(p, DungeonStatusCatalog.For(p.DungeonId));
 
                 if (!p.Discovered)
                 {
@@ -846,6 +877,11 @@ namespace DeNelle.Village.World
             AttachGateVfx(p);
             AttachThresholdAura(p);
             AttachPortalCircle(p);
+            // WO-1114: discovery just lit the full treatment. If this door is closed, the one
+            // appearance owner takes it straight back off - a sealed door must not bloom open
+            // the instant the hero finds it.
+            p.DoorStateApplied = false;
+            ApplyDoorState(p, DungeonStatusCatalog.For(p.DungeonId));
             Debug.Log($"[DungeonWorldPortals] Hero discovered a hidden dungeon portal (key {p.Key}).");
         }
 
@@ -1004,6 +1040,14 @@ namespace DeNelle.Village.World
             if (p.CircleVfx != null) { Destroy(p.CircleVfx); p.CircleVfx = null; }
             if (p.Discovered) AttachPortalCircle(p);
 
+            // WO-1114 CALL SITE 2 of 2 — THE RE-SEAT. Both measured VFX were just
+            // re-attached against the real art's bounds; if this door is closed they must
+            // come straight back off, or the sigil treatment is silently undone every time
+            // the shared structure finishes loading. It is async, so missing this reads as
+            // "correct in the editor, wrong on device".
+            p.DoorStateApplied = false;
+            ApplyDoorState(p, DungeonStatusCatalog.For(p.DungeonId));
+
             FlowTrace.Step("Portal",
                 $"overworld gate now wears the shared portal structure at {PortalHeight:0.#}m - " +
                 $"{real.Length} real renderer(s), cube arch retired, discovery dim retargeted.");
@@ -1079,6 +1123,75 @@ namespace DeNelle.Village.World
         // so a missing mirror costs one Resources.Load per session, not one per portal.
         private static GameObject _circlePrefab;
         private static bool _circleLooked;
+
+        // =====================================================================
+        // WO-1114 — THE ONE APPEARANCE OWNER FOR DOOR STATE.
+        // ---------------------------------------------------------------------
+        // This method is the ONLY thing that decides how a dungeon door LOOKS for
+        // its status. It adds no spawner, no holder GameObject and no teardown
+        // path: everything it touches is the existing per-portal Portal record, so
+        // the WO-753 one-owner teardown at TickDiscovery still owns every handle it
+        // leaves behind. ⛔ Do not add a rival visual path for a closed door.
+        //
+        // CLOSED reads as DARK AND INERT: the threshold aura and the owner's
+        // dark-star circle come off, and the procedural glow surfaces stand down.
+        // That is already correct world-language for "this does not open", and it
+        // is the DEFAULT treatment for every closed state today.
+        //
+        // ⛔ SIGIL ART IS NOT INVENTED HERE. The payload may carry a sigil key
+        // ("seal" / "rubble" / "water"), but no VFX prefab is tagged for one yet and
+        // the CLI never picks or substitutes an effect (owner directive: the owner
+        // tags the key, the CLI maps it verbatim). Until then an unresolved key logs
+        // ONCE and the default treatment ships. The seat is MEASURED here and now —
+        // MeasurePortalBounds -> OpeningCentre -> OpeningTargetSize, the same three
+        // helpers the aura and circle use - so when the art is tagged it drops into
+        // a proven, already-logged position instead of a guessed one.
+        // =====================================================================
+        private void ApplyDoorState(Portal p, DungeonDoorInfo info)
+        {
+            if (p == null || p.Root == null) return;
+
+            bool changed = !p.DoorStateApplied || p.DoorState != info.State;
+            p.DoorState = info.State;
+            p.DoorStateApplied = true;
+
+            if (info.IsOpen)
+            {
+                // OPEN is the ground state and every failure path resolves to it. Restore
+                // the discovered treatment if a previous closed pass took it off - a door
+                // that re-opens must not stay dark until the next boot.
+                if (p.Discovered) { AttachThresholdAura(p); AttachPortalCircle(p); }
+                if (changed)
+                    FlowTrace.Step("Portal",
+                        $"door '{p.DungeonId}' is OPEN - standard portal treatment stands.");
+                return;
+            }
+
+            // Closed: take the invitation off. Same calls, same fields, same owner as the
+            // WO-753 teardown - no second path.
+            if (p.ThresholdVfx != null) { p.ThresholdVfx.Stop(true); p.ThresholdVfx = null; }
+            if (p.CircleVfx != null) { Destroy(p.CircleVfx); p.CircleVfx = null; }
+            var vfx = p.Root.GetComponent<PortalVFXController>();
+            if (vfx != null) vfx.SuppressProceduralSurfaces("WO-1114: the door is closed - dark and inert");
+
+            // Measure the seat the sigil WILL take, and say so in the log, so the art
+            // hand-off is numbers rather than another guess (CLAUDE.md section 12).
+            Bounds b = MeasurePortalBounds(p, out string src);
+            Vector3 centre = OpeningCentre(p, b);
+            float target = OpeningTargetSize(b);
+
+            if (!string.IsNullOrEmpty(info.Sigil))
+                FlowTrace.Once("Portal", "sigil-unresolved-" + info.Sigil,
+                    $"ApplyDoorState: sigil key '{info.Sigil}' has no tagged VFX yet - shipping the " +
+                    "DEFAULT closed treatment (aura + circle removed). The key is mapped verbatim " +
+                    "once the owner tags art for it; nothing is substituted.");
+
+            if (changed)
+                FlowTrace.Step("Portal",
+                    $"door '{p.DungeonId}' is {info.State} - aura + circle removed, portal reads dark and inert. " +
+                    $"Sigil seat measured at ({centre.x:0.0},{centre.y:0.0},{centre.z:0.0}) target={target:0.00}m " +
+                    $"{BoundsLine(b, src)} sigil='{(string.IsNullOrEmpty(info.Sigil) ? "none" : info.Sigil)}'.");
+        }
 
         private void AttachPortalCircle(Portal p)
         {

@@ -30,10 +30,12 @@
 // Travel is a DISABLED stub until WO-827 (the CTA slot is reserved).
 // =============================================================================
 
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using DeNelle.Core.Diagnostics;
 using DeNelle.Core.UI;
+using DeNelle.Core.World;   // RealmPin / RealmPinKind — the shared content-pin taxonomy (WO-829 §3)
 
 namespace DeNelle.Village.Hero
 {
@@ -142,6 +144,39 @@ namespace DeNelle.Village.Hero
         /// <inheritdoc cref="LandscapeMinPlateHeightPx"/>
         public const float LandscapeMinPlateWidthPx = 880f;
 
+        // =====================================================================
+        //  WO-829 §1 -- THE WITHERING EDGE + THE BIOME RINGS (the parchment paint)
+        // -----------------------------------------------------------------------------
+        //  The tables landed with WO-829 and NOTHING READ THEM: the map drew a flat tan
+        //  plate with four hard-coded disc colours, so it "felt like a flat menu". This
+        //  block is the wiring, and it is deliberately painted INSIDE the WO-941 geometry:
+        //    * The Withering band is INSET bars on the parchment's own rim + a cartouche in
+        //      the TOP strip. It cannot move a node: the bars are raycast-off siblings
+        //      BEFORE the "Nodes" host, and the cartouche sits above every authored
+        //      mapPoint (the highest is y=30 -> ~99 ref px of headroom on the contract
+        //      plate, against a 22 px strip).
+        //    * The biome treatment rides on rect that ALREADY EXISTS -- the disc's trim
+        //      Ring and its Glyph. No new rect, no growth, so RequiredPitchPx /
+        //      RequiredCorridorPx are untouched and regression case (e) still holds.
+        //    * The content-pin strip is drawn INSIDE the disc's lower band. Contained by
+        //      construction: it is anchored to the disc rect and never exceeds it.
+        //  A node's FOOTPRINT is the contract; its PAINT is free. That is the whole seam.
+        // =====================================================================
+
+        /// <summary>Outer (soft) Withering bar thickness on the parchment rim, ref px.</summary>
+        private const float WitheringOuterPx = 20f;
+        /// <summary>Inner (dense) Withering bar thickness, ref px. Two steps of falloff read
+        /// as creep rather than as a picture frame, at two Images per side.</summary>
+        private const float WitheringInnerPx = 8f;
+        /// <summary>Height of the inked cartouche strip along the parchment's top edge.</summary>
+        private const float WitheringCartouchePx = 22f;
+
+        /// <summary>Size of one content-pin glyph in a node's in-disc pin strip, ref px.</summary>
+        private const float PinGlyphPx = 18f;
+        /// <summary>How many pin glyphs a disc shows before it collapses the rest into "+N".
+        /// Three 18 px glyphs plus an overflow tag fit inside a 96 px disc with margin.</summary>
+        private const int MaxPinGlyphsPerNode = 3;
+
         // Aged-parchment map colours (the map plate is parchment, text on it is Ink).
         private static readonly Color ParchmentPlate = new Color(0.851f, 0.780f, 0.639f, 1f);
         private static readonly Color FogDisc        = new Color(0.10f, 0.09f, 0.11f, 0.94f);
@@ -154,6 +189,7 @@ namespace DeNelle.Village.Hero
         private TMPro.TextMeshProUGUI _detailTitle;
         private TMPro.TextMeshProUGUI _detailGate;
         private TMPro.TextMeshProUGUI _detailBody;
+        private TMPro.TextMeshProUGUI _detailPins;
         private RectTransform _detailPane;
         private GameObject _travelCtaGo;
 
@@ -170,6 +206,7 @@ namespace DeNelle.Village.Hero
         private void OnDestroy()
         {
             PanelRouter.Unregister(PanelId.RealmMap, (System.Action)Open);
+            RealmPinBoard.Changed -= Repaint;
             if (_vm != null) { _vm.Changed -= Repaint; _vm.Dispose(); _vm = null; }
             if (_ui != null) Destroy(_ui);
         }
@@ -189,6 +226,10 @@ namespace DeNelle.Village.Hero
             // never touches RealmMapCatalog / GameStateService (strict MVVM).
             _vm = RealmMapVM.CreateDefault(Close);
             _vm.Changed += Repaint;
+            // WO-829 §3: a producer that publishes while the map is OPEN must show up. The
+            // board is the one registry the minimap also watches, so both surfaces move on
+            // the same event and cannot fall out of step.
+            RealmPinBoard.Changed += Repaint;
 
             var modal = ElarionUiKit.BuildObsidianModal("RealmMapPanelUI", _vm.Title,
                 new Vector2(0.06f, PanelAnchorMinY), new Vector2(0.94f, PanelAnchorMaxY), Close, sortingOrder: 1000,
@@ -244,6 +285,11 @@ namespace DeNelle.Village.Hero
             mapImg.color = ParchmentPlate;
             mapImg.raycastTarget = false;
 
+            // ── The Withering: a corrupted band creeping in from the parchment's rim ──
+            // Built BEFORE the node host so it is an EARLIER sibling and can never paint
+            // over a node or eat a tap (every piece is raycast-off besides).
+            BuildWithering(mapGo.transform, _vm);
+
             // Node layer (full stretch of the parchment; rebuilt every Repaint).
             var hostGo = new GameObject("Nodes", typeof(RectTransform));
             hostGo.transform.SetParent(mapGo.transform, false);
@@ -281,8 +327,16 @@ namespace DeNelle.Village.Hero
             _detailGate.textWrappingMode = TMPro.TextWrappingModes.Normal;
 
             // Scrollable description well (WO-795 law: long copy scrolls, never clips).
+            // Floor raised 0.24 -> 0.29 to seat the content-pin sentence under it.
             _detailBody = BuildScrollText(detailGo.transform,
-                new Vector2(0.06f, 0.24f), new Vector2(0.94f, 0.70f));
+                new Vector2(0.06f, 0.29f), new Vector2(0.94f, 0.70f));
+
+            // WO-829 §3: the published content pins IN WORDS. The map's in-disc glyph strip
+            // is the glance; this is the half that survives full desaturation, so it is not
+            // optional decoration. Gilt, one line, between the body well and the Travel CTA.
+            _detailPins = MakeDetailLabel(detailGo.transform, "DetailPins",
+                new Vector2(0.06f, 0.215f), new Vector2(0.94f, 0.275f),
+                ElarionUi.Gilt, 12, bold: false);
 
             Repaint();
 
@@ -295,6 +349,7 @@ namespace DeNelle.Village.Hero
         public void Close()
         {
             bool wasOpen = _ui != null;
+            RealmPinBoard.Changed -= Repaint;
             if (_vm != null) { _vm.Changed -= Repaint; _vm.Dispose(); _vm = null; }
             if (_ui != null) Destroy(_ui);
             _ui = null;
@@ -303,6 +358,7 @@ namespace DeNelle.Village.Hero
             _detailTitle = null;
             _detailGate = null;
             _detailBody = null;
+            _detailPins = null;
             _detailPane = null;
             _travelCtaGo = null;
             PanelManager.NotifyClosed(_handle);
@@ -388,6 +444,87 @@ namespace DeNelle.Village.Hero
             return Mathf.Clamp(closeTop + CloseReserveGapFrac, CloseReserveFloorY, CloseReserveMaxFrac);
         }
 
+        // ── WO-829 §1: the Withering edge band + its inked cartouche ──────────────
+
+        /// <summary>
+        /// Paint the Withering on the parchment: two nested rims (soft then dense) creeping
+        /// in from all four edges, plus one inked line of canon across the top strip.
+        ///
+        /// Gated on realm-map.json's own <c>withering.edgeBorder</c> through the VM, so the
+        /// DATA decides whether the realm looks besieged — this View authors no such state.
+        /// The band is ATMOSPHERE and nothing else: no timer, no countdown, no "threatened"
+        /// week (the file's own comment forbids FOMO, and <c>weeklyRealmThreat</c> is false).
+        ///
+        /// Everything here is <c>raycastTarget = false</c>: the band must never steal a tap
+        /// meant for a node whose disc reaches the rim.
+        /// </summary>
+        private static void BuildWithering(Transform parchment, RealmMapVM vm)
+        {
+            if (parchment == null || vm == null || !vm.ShowWithering) return;
+
+            var edge = RealmAtmosphereStyle.WitheringEdge;
+            // Outer bar is the same hue at roughly half weight: two steps of falloff read as
+            // creep. A single hard bar reads as a picture frame, which is the opposite mood.
+            var soft = new Color(edge.r, edge.g, edge.b, edge.a * 0.45f);
+
+            MakeRimBand(parchment, "WitheringOuter", WitheringOuterPx, soft);
+            MakeRimBand(parchment, "WitheringInner", WitheringInnerPx, edge);
+
+            string lore = vm.WitheringLore;
+            if (string.IsNullOrEmpty(lore)) return;
+
+            // The cartouche sits in the TOP strip, above every authored mapPoint (highest is
+            // y=30). Ink on parchment, centred, single line — the atmosphere the band gives
+            // by colour, this gives by WORDS, which is what makes it survive desaturation.
+            var go = new GameObject("WitheringCartouche", typeof(TMPro.TextMeshProUGUI));
+            go.transform.SetParent(parchment, false);
+            var rt = (RectTransform)go.transform;
+            rt.anchorMin = new Vector2(0f, 1f);
+            rt.anchorMax = new Vector2(1f, 1f);
+            rt.pivot = new Vector2(0.5f, 1f);
+            rt.offsetMin = new Vector2(WitheringOuterPx, -(WitheringOuterPx + WitheringCartouchePx));
+            rt.offsetMax = new Vector2(-WitheringOuterPx, -WitheringOuterPx);
+            var t = go.GetComponent<TMPro.TextMeshProUGUI>();
+            ElarionUiKit.EnsureFont(t);
+            t.text = lore;
+            t.fontSize = 12;
+            t.color = new Color(ElarionUi.Ink.r, ElarionUi.Ink.g, ElarionUi.Ink.b, 0.72f);
+            t.alignment = TMPro.TextAlignmentOptions.Center;
+            t.textWrappingMode = TMPro.TextWrappingModes.NoWrap;
+            t.overflowMode = TMPro.TextOverflowModes.Ellipsis;
+            t.raycastTarget = false;
+
+            FlowTrace.Step("RealmMap", "withering band painted (edgeBorder=true, atmosphere only)");
+        }
+
+        /// <summary>One nested rim of four bars at <paramref name="thickness"/> ref px.
+        /// Four stretched Images rather than a nine-slice, because the parchment must show
+        /// THROUGH the middle — a single full-rect Image would tint the whole map.</summary>
+        private static void MakeRimBand(Transform parent, string name, float thickness, Color color)
+        {
+            MakeBar(parent, name + "_Top",    new Vector2(0f, 1f), new Vector2(1f, 1f),
+                    new Vector2(0f, -thickness), Vector2.zero, color);
+            MakeBar(parent, name + "_Bottom", new Vector2(0f, 0f), new Vector2(1f, 0f),
+                    Vector2.zero, new Vector2(0f, thickness), color);
+            MakeBar(parent, name + "_Left",   new Vector2(0f, 0f), new Vector2(0f, 1f),
+                    Vector2.zero, new Vector2(thickness, 0f), color);
+            MakeBar(parent, name + "_Right",  new Vector2(1f, 0f), new Vector2(1f, 1f),
+                    new Vector2(-thickness, 0f), Vector2.zero, color);
+        }
+
+        private static void MakeBar(Transform parent, string name, Vector2 aMin, Vector2 aMax,
+                                    Vector2 offMin, Vector2 offMax, Color color)
+        {
+            var go = new GameObject(name, typeof(Image));
+            go.transform.SetParent(parent, false);
+            var rt = (RectTransform)go.transform;
+            rt.anchorMin = aMin; rt.anchorMax = aMax;
+            rt.offsetMin = offMin; rt.offsetMax = offMax;
+            var img = go.GetComponent<Image>();
+            img.color = color;
+            img.raycastTarget = false;
+        }
+
         // ── Paint ───────────────────────────────────────────────────────────────
 
         private void Repaint()
@@ -451,6 +588,15 @@ namespace DeNelle.Village.Hero
             var disc = discGo.GetComponent<Image>();
             ElarionUiKit.ApplyRounded(disc);
 
+            // WO-829 §1: the node's BIOME decides its glyph and its trim ring, but only
+            // once the fog is off it. node.RevealsDetail is the VM's read of the ONE shared
+            // predicate (RealmPinBoard.RevealsDetail) — the View adds no fog rule of its own,
+            // it just obeys the answer. A locked region therefore stays an anonymous "?"
+            // disc: no ring tint, no biome letter, nothing that whispers what is out there.
+            var biome = node.RevealsDetail
+                ? RealmAtmosphereStyle.Biome(node.Biome)
+                : default(RealmBiomeStyle);
+
             string glyph;
             Color glyphColor;
             switch (node.State)
@@ -461,11 +607,15 @@ namespace DeNelle.Village.Hero
                     break;
                 case RealmMapVM.NodeState.Cleared:
                     disc.color = ClearedDisc;
-                    glyph = "*"; glyphColor = ElarionUi.Ink;
+                    // Cleared land keeps its identity: the biome letter, not a generic star.
+                    glyph = string.IsNullOrEmpty(biome.Glyph) ? "*" : biome.Glyph;
+                    glyphColor = ElarionUi.Ink;
                     break;
                 case RealmMapVM.NodeState.Discovered:
                     disc.color = DiscoveredDisc;
-                    glyph = ""; glyphColor = ElarionUi.Ink;
+                    // Was BLANK before WO-829 — a discovered region was an empty tan circle,
+                    // the single biggest reason the map read as a menu rather than a place.
+                    glyph = biome.Glyph ?? ""; glyphColor = ElarionUi.Ink;
                     break;
                 default:   // Locked — dark fog disc, "?", no title on the map
                     disc.color = FogDisc;
@@ -473,16 +623,24 @@ namespace DeNelle.Village.Hero
                     break;
             }
 
-            // Gold trim ring for non-locked discs (a thin inset frame line).
+            // Trim ring for non-locked discs (a thin inset frame line). Revealed regions
+            // take the BIOME tint; home keeps gold. Third channel only — the same identity
+            // is already carried by the glyph above and by the epithet in the detail pane.
             if (node.State != RealmMapVM.NodeState.Locked)
             {
+                Color ringBase = (!node.IsHome && node.RevealsDetail && !string.IsNullOrEmpty(biome.Token))
+                    ? biome.Ring
+                    : ElarionUi.Gold;
+
                 var ring = new GameObject("Ring", typeof(Image));
                 ring.transform.SetParent(discGo.transform, false);
                 var rrt = (RectTransform)ring.transform;
                 rrt.anchorMin = Vector2.zero; rrt.anchorMax = Vector2.one;
                 rrt.offsetMin = new Vector2(4f, 4f); rrt.offsetMax = new Vector2(-4f, -4f);
                 var ri = ring.GetComponent<Image>();
-                ri.color = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.35f);
+                // Alpha is up from 0.35 for a biome ring: at 0.35 over a near-parchment disc
+                // the six biome tints collapse into one another and the ring stops informing.
+                ri.color = new Color(ringBase.r, ringBase.g, ringBase.b, node.IsHome ? 0.35f : 0.70f);
                 ri.raycastTarget = false;
                 ElarionUiKit.ApplyRounded(ri);
             }
@@ -503,6 +661,12 @@ namespace DeNelle.Village.Hero
                 gt.alignment = TMPro.TextAlignmentOptions.Center;
                 gt.raycastTarget = false;
             }
+
+            // WO-829 §3: the region's published CONTENT PINS, as a glyph strip INSIDE the
+            // disc's lower band. Inside is the whole point — the node's footprint is the
+            // WO-941 contract regression case (e) re-derives, so content may not grow it.
+            // vm.PinsFor is already fog-filtered and returns EMPTY for a locked region.
+            BuildPinStrip(discGo.transform, _vm.PinsFor(node.Id), size);
 
             // Title inked BELOW the disc for home + revealed regions (never for fog).
             if (node.State != RealmMapVM.NodeState.Locked)
@@ -534,6 +698,78 @@ namespace DeNelle.Village.Hero
             btn.onClick.AddListener(() => { if (_vm != null) _vm.Select(id); });
         }
 
+        /// <summary>
+        /// Draw a region's content pins as a row of ASCII silhouette glyphs across the
+        /// INSIDE of its node disc, capped at <see cref="MaxPinGlyphsPerNode"/> with a "+N"
+        /// tail (the WO-829 §3 "cap visible pins; overflow +N" rule, applied per node).
+        ///
+        /// GLYPHS, NOT SHAPES: the minimap draws real silhouettes because it has 14 px of
+        /// clear plate to do it in; a node disc has ~18 px of already-busy interior, where a
+        /// squashed triangle is a smudge. Both surfaces still read ONE table — the glyph
+        /// comes from <c>RealmAtmosphereStyle.PinAscii</c>, keyed off the same Shape the
+        /// minimap draws — so the vocabularies cannot drift apart. The strip is the GLANCE;
+        /// the detail pane's <c>DetailPins</c> sentence is the half that carries the meaning
+        /// in words, which is what makes the pair legible in full greyscale.
+        ///
+        /// <paramref name="pins"/> is the VM's REUSED buffer: consume it here and do not
+        /// hold it past this call.
+        /// </summary>
+        private static void BuildPinStrip(Transform disc, IReadOnlyList<RealmPin> pins, float discSize)
+        {
+            if (disc == null || pins == null || pins.Count == 0) return;
+
+            int shown = Mathf.Min(pins.Count, MaxPinGlyphsPerNode);
+            int overflow = pins.Count - shown;
+
+            var strip = new GameObject("Pins", typeof(RectTransform));
+            strip.transform.SetParent(disc, false);
+            var srt = (RectTransform)strip.transform;
+            // Bottom-inside band of the disc. Anchored to the disc rect, so the strip is
+            // contained BY CONSTRUCTION -- it cannot reach past the published footprint.
+            srt.anchorMin = new Vector2(0.5f, 0f);
+            srt.anchorMax = new Vector2(0.5f, 0f);
+            srt.pivot = new Vector2(0.5f, 0f);
+            srt.anchoredPosition = new Vector2(0f, discSize * 0.12f);
+            srt.sizeDelta = new Vector2(discSize * 0.78f, PinGlyphPx);
+
+            var row = strip.AddComponent<HorizontalLayoutGroup>();
+            row.childAlignment = TextAnchor.MiddleCenter;
+            row.spacing = 2f;
+            row.childForceExpandWidth = false;
+            row.childForceExpandHeight = false;
+            row.childControlWidth = false;
+            row.childControlHeight = false;
+
+            for (int i = 0; i < shown; i++)
+                MakePinGlyph(strip.transform, RealmAtmosphereStyle.PinAscii(pins[i].Kind),
+                             RealmAtmosphereStyle.Pin(pins[i].Kind).Tint, PinGlyphPx);
+
+            if (overflow > 0)
+                MakePinGlyph(strip.transform, "+" + overflow, ElarionUi.Ink, PinGlyphPx * 1.4f);
+        }
+
+        private static void MakePinGlyph(Transform parent, string text, Color tint, float width)
+        {
+            var go = new GameObject("Pin", typeof(TMPro.TextMeshProUGUI), typeof(LayoutElement));
+            go.transform.SetParent(parent, false);
+            var le = go.GetComponent<LayoutElement>();
+            le.preferredWidth = width;
+            le.preferredHeight = PinGlyphPx;
+            var t = go.GetComponent<TMPro.TextMeshProUGUI>();
+            ElarionUiKit.EnsureFont(t);
+            t.text = text;
+            t.fontSize = 13;
+            t.fontStyle = TMPro.FontStyles.Bold;
+            // Darkened toward Ink so a pale pin tint (Parchment "Raid camp") still has
+            // contrast against a pale disc -- the strip must read on parchment, not on the
+            // minimap's obsidian plate the tints were picked against.
+            t.color = Color.Lerp(tint, ElarionUi.Ink, 0.45f);
+            t.alignment = TMPro.TextAlignmentOptions.Center;
+            t.textWrappingMode = TMPro.TextWrappingModes.NoWrap;
+            t.overflowMode = TMPro.TextOverflowModes.Overflow;
+            t.raycastTarget = false;   // the DISC is the tap target, not the decoration on it
+        }
+
         // ── Detail pane (always bound to the selection) ─────────────────────────
 
         private void RenderDetail()
@@ -542,11 +778,29 @@ namespace DeNelle.Village.Hero
 
             if (_travelCtaGo != null) { Destroy(_travelCtaGo); _travelCtaGo = null; }
 
-            _detailTag.text = _vm.DetailState;
+            // WO-829 §1: the biome EPITHET rides on the state line rather than taking a rect
+            // of its own — the detail pane is fully allocated and a new band would have to
+            // come out of the description well. It is fog-gated at the VM (SelectedBiome is
+            // "" for a locked selection), so this can never name a region the player has not
+            // reached. ASCII separator; the bundled SDF font tofus an en dash.
+            string tag = _vm.DetailState;
+            var selBiome = _vm.SelectedBiome;
+            if (!string.IsNullOrEmpty(selBiome))
+            {
+                var style = RealmAtmosphereStyle.Biome(selBiome);
+                if (!string.IsNullOrEmpty(style.Epithet)) tag += "  -  " + style.Epithet;
+            }
+            _detailTag.text = tag;
+
             _detailTitle.text = _vm.DetailTitle;
             ElarionUiKit.FitSingleLine(_detailTitle);
             _detailGate.text = _vm.DetailGate;
             _detailBody.text = _vm.DetailBody;
+
+            // "Here: 1 dungeon, 2 raid camps." — empty when nothing is published or the
+            // selection is fogged. A raid camp listed here is a MARKER: tapping through to
+            // Raids still meets the full-army gate, so this line never promises an action.
+            if (_detailPins != null) _detailPins.text = _vm.DetailPins;
 
             if (!_vm.ShowTravel) return;
 

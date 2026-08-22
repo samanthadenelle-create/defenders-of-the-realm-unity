@@ -73,12 +73,33 @@ namespace DeNelle.Village.Hero
             /// text carries the state, never colour alone.</summary>
             public readonly string StateLabel;
             public readonly bool IsHome;
+            /// <summary>
+            /// The region's authored <c>biome</c> token from realm-map.json ("forest",
+            /// "swamp", "ice", "fire", "cosmic"), or "home" for Elarion. Never null.
+            ///
+            /// WO-829 §1: the View needs this to look the node's treatment up in
+            /// <c>RealmAtmosphereStyle</c> — the biome ring tint, the node glyph and the
+            /// epithet. It is the RAW TOKEN, not a colour: the VM stays free of
+            /// UnityEngine.UI types (strict MVVM), and the ONE presentation table is the
+            /// only thing that turns a token into a look, so the parchment and the minimap
+            /// cannot render the same swamp two different ways.
+            /// </summary>
+            public readonly string Biome;
+            /// <summary>
+            /// Whether this node may show SPOILERY detail (biome, epithet, content pins).
+            /// Derived through <c>RealmPinBoard.RevealsDetail</c> — the ONE fog predicate,
+            /// never a second rule. Fail-closed: a locked or unrecognised state hides.
+            /// </summary>
+            public readonly bool RevealsDetail;
 
             public NodeRow(string id, string title, float x, float y,
-                           NodeState state, string stateLabel, bool isHome)
+                           NodeState state, string stateLabel, bool isHome,
+                           string biome, bool revealsDetail)
             {
                 Id = id; Title = title; XPercent = x; YPercent = y;
                 State = state; StateLabel = stateLabel; IsHome = isHome;
+                Biome = biome ?? "";
+                RevealsDetail = revealsDetail;
             }
         }
 
@@ -188,6 +209,119 @@ namespace DeNelle.Village.Hero
             }
         }
 
+        // ── WO-829 §1/§3: atmosphere + content the View paints ────────────────
+
+        /// <summary>The selected node's biome token, or "" when the selection is fogged.
+        /// FOG-GATED HERE, once: a locked region must not leak "this one is the fire one"
+        /// through its ring tint or glyph. Goes through NodeRow.RevealsDetail, which is
+        /// itself the shared RealmPinBoard predicate.</summary>
+        public string SelectedBiome
+        {
+            get
+            {
+                var n = FindNode(SelectedId);
+                if (!n.HasValue || !n.Value.RevealsDetail) return "";
+                return n.Value.Biome;
+            }
+        }
+
+        /// <summary>True when the Withering edge band should be painted on the parchment
+        /// (realm-map.json's <c>withering.edgeBorder</c>). ATMOSPHERE ONLY — the data's own
+        /// <c>weeklyRealmThreat</c> stays false and nothing here starts a timer.</summary>
+        public bool ShowWithering
+        {
+            get
+            {
+                var w = RealmMapCatalog.Withering;
+                return w != null && w.EdgeBorder;
+            }
+        }
+
+        /// <summary>The one-line Withering cartouche inked across the top of the parchment.
+        /// Empty when the band is off, so the View never draws a caption for nothing.</summary>
+        public string WitheringLore
+            => ShowWithering ? DeNelle.Core.UI.RealmAtmosphereStyle.WitheringLore : "";
+
+        /// <summary>
+        /// The published content pins that belong to <paramref name="regionId"/>, already
+        /// FOG-FILTERED. Returns an EMPTY list for a region that does not reveal detail —
+        /// so a locked node can never show "2 raid camps" and give away what is waiting.
+        ///
+        /// Reads <c>RealmPinBoard</c>, the ONE registry the corner minimap also reads: the
+        /// map does not scan the world for content, it mirrors what producers published.
+        ///
+        /// Returns a REUSED buffer (the View consumes it before the next call) — a Repaint
+        /// walks every node, and a fresh List per node per repaint is garbage for nothing.
+        /// </summary>
+        public IReadOnlyList<RealmPin> PinsFor(string regionId)
+        {
+            _pinScratch.Clear();
+            if (string.IsNullOrEmpty(regionId)) return _pinScratch;
+
+            var node = FindNode(regionId);
+            if (!node.HasValue || !node.Value.RevealsDetail) return _pinScratch;
+
+            var pins = RealmPinBoard.Pins;
+            if (pins == null) return _pinScratch;
+            for (int i = 0; i < pins.Count; i++)
+                if (string.Equals(pins[i].RegionId, regionId, StringComparison.OrdinalIgnoreCase))
+                    _pinScratch.Add(pins[i]);
+            return _pinScratch;
+        }
+
+        private readonly List<RealmPin> _pinScratch = new List<RealmPin>();
+
+        /// <summary>
+        /// The selection's content pins as ONE plain sentence for the detail pane
+        /// ("Here: 1 dungeon, 2 raid camps."), or "" when there is nothing to say.
+        ///
+        /// The map's in-disc pin strip is a glyph cluster; THIS is the half that survives
+        /// full desaturation and a small screen, which is why the words are not optional
+        /// decoration (colourblind law, CLAUDE.md §7). A raid camp named here is still only
+        /// a MARKER — the army gate is checked when the player actually taps through.
+        /// </summary>
+        public string DetailPins
+        {
+            get
+            {
+                var pins = PinsFor(SelectedId);
+                if (pins == null || pins.Count == 0) return "";
+
+                var counts = new Dictionary<RealmPinKind, int>();
+                for (int i = 0; i < pins.Count; i++)
+                {
+                    counts.TryGetValue(pins[i].Kind, out int c);
+                    counts[pins[i].Kind] = c + (pins[i].Count > 0 ? pins[i].Count : 1);
+                }
+
+                var sb = new System.Text.StringBuilder("Here: ");
+                bool first = true;
+                foreach (var kv in counts)
+                {
+                    if (!first) sb.Append(", ");
+                    first = false;
+                    sb.Append(kv.Value).Append(' ').Append(PinNoun(kv.Key, kv.Value));
+                }
+                return sb.Append('.').ToString();
+            }
+        }
+
+        private static string PinNoun(RealmPinKind kind, int count)
+        {
+            string one;
+            switch (kind)
+            {
+                case RealmPinKind.Dungeon:    one = "dungeon";    break;
+                case RealmPinKind.RaidTarget: one = "raid camp";  break;
+                case RealmPinKind.Threat:     one = "threat";     break;
+                case RealmPinKind.Army:       one = "muster";     break;
+                case RealmPinKind.Rumor:      one = "rumor";      break;
+                case RealmPinKind.Objective:  one = "objective";  break;
+                default:                      one = "marker";     break;
+            }
+            return count == 1 ? one : one + "s";
+        }
+
         /// <summary>True when the selection is a region (the Travel CTA slot renders).
         /// Home shows no CTA — the player is already here.</summary>
         public bool ShowTravel
@@ -230,7 +364,8 @@ namespace DeNelle.Village.Hero
                 float hy = _home.MapPoint != null ? _home.MapPoint.Y : 50f;
                 _nodes.Add(new NodeRow(_home.Id,
                     string.IsNullOrEmpty(_home.Title) ? "Elarion" : _home.Title,
-                    hx, hy, NodeState.Home, "Home", isHome: true));
+                    hx, hy, NodeState.Home, "Home", isHome: true,
+                    biome: HomeBiomeToken, revealsDetail: true));
             }
 
             foreach (var r in _regions)
@@ -239,28 +374,79 @@ namespace DeNelle.Village.Hero
                 var state = StateFor(r);
                 float x = r.MapPoint != null ? r.MapPoint.X : 50f;
                 float y = r.MapPoint != null ? r.MapPoint.Y : 50f;
+                // Fog goes through the ONE shared predicate (RealmPinBoard.RevealsDetail),
+                // fed the same state literal a pin producer would use. No second fog rule.
+                bool reveals = RealmPinBoard.RevealsDetail(StateLiteral(state));
                 _nodes.Add(new NodeRow(r.Id, r.Title ?? r.Id, x, y,
-                    state, StateWord(state), isHome: false));
+                    state, StateWord(state), isHome: false,
+                    biome: r.Biome ?? "", revealsDetail: reveals));
             }
         }
 
-        private NodeState StateFor(RealmRegionDef region)
+        /// <summary>The biome token the home base renders as (it carries no authored
+        /// <c>biome</c> field — it is not a region).</summary>
+        public const string HomeBiomeToken = "home";
+
+        private NodeState StateFor(RealmRegionDef region) => DeriveState(_source, region);
+
+        // ── THE SINGLE derivation site (see RegionStateFor) ────────────────────
+        // Both the panel's own projection and the out-of-panel pin producers resolve a
+        // region's state THROUGH here. A producer that re-derived "is this discovered?"
+        // from the save ledger itself would be a second copy of the gate rules, and the
+        // day a gate kind changes the map and the pins would disagree about the same
+        // region -- WO-829 §6's "no duplicate game logic", applied to state and not just
+        // to projection helpers.
+        private static NodeState DeriveState(ISource source, RealmRegionDef region)
         {
-            if (_source != null && _source.IsCleared(region.Id)) return NodeState.Cleared;
-            if (_source != null && _source.IsDiscovered(region.Id)) return NodeState.Discovered;
-            if (GateSatisfied(region.Gate)) return NodeState.Discovered;
+            if (region == null || string.IsNullOrEmpty(region.Id)) return NodeState.Locked;
+            if (source != null && source.IsCleared(region.Id)) return NodeState.Cleared;
+            if (source != null && source.IsDiscovered(region.Id)) return NodeState.Discovered;
+            if (GateSatisfied(source, region.Gate)) return NodeState.Discovered;
             return NodeState.Locked;
         }
 
-        private bool GateSatisfied(RealmRegionGate gate)
+        /// <summary>
+        /// The live region state as the LITERAL <c>RealmPinBoard.RevealsDetail</c> accepts
+        /// ("locked" | "discovered" | "cleared"), derived from the real save ledger.
+        /// This is what a pin producer calls so a locked region's content never leaks.
+        /// An unknown region id answers "locked" — fail-closed, same as the predicate.
+        /// </summary>
+        public static string RegionStateFor(string regionId)
         {
-            if (gate == null || _source == null) return false;
+            var def = RealmMapCatalog.Find(regionId);
+            if (def == null)
+            {
+                var home = RealmMapCatalog.Home;
+                if (home != null && !string.IsNullOrEmpty(regionId) && home.Id == regionId)
+                    return StateLiteral(NodeState.Home);
+                return StateLiteral(NodeState.Locked);
+            }
+            return StateLiteral(DeriveState(new StateSource(), def));
+        }
+
+        /// <summary>The lowercase wire literal for a node state (the RegionState vocabulary
+        /// realm-map.json documents). Home is "cleared" — the player is standing in it, so
+        /// it can never be fogged.</summary>
+        public static string StateLiteral(NodeState s)
+        {
+            switch (s)
+            {
+                case NodeState.Home:       return "cleared";
+                case NodeState.Cleared:    return "cleared";
+                case NodeState.Discovered: return "discovered";
+                default:                   return "locked";
+            }
+        }
+
+        private static bool GateSatisfied(ISource source, RealmRegionGate gate)
+        {
+            if (gate == null || source == null) return false;
             switch (gate.Kind)
             {
                 case RealmRegionGate.KindBestWave:
-                    return _source.BestWave >= gate.Value;
+                    return source.BestWave >= gate.Value;
                 case RealmRegionGate.KindRegionCleared:
-                    return !string.IsNullOrEmpty(gate.RegionId) && _source.IsCleared(gate.RegionId);
+                    return !string.IsNullOrEmpty(gate.RegionId) && source.IsCleared(gate.RegionId);
                 default:
                     FlowTrace.Warn("RealmMap", "unknown gate kind '" + (gate.Kind ?? "<null>") + "' — treated as locked");
                     return false;

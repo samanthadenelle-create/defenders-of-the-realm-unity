@@ -54,6 +54,17 @@
 // crystal node would be a currency printer. The exclusion is asked of
 // HarvestBoostService.IsBoostable rather than tested inline, so no accrual path
 // can half-apply it.
+//
+// WO-1128 -- THE CLOCK IS NO LONGER ASSUMED HONEST, AND THIS FILE STOPPED PRETENDING
+// TO POLICE IT. We do exactly two things here: (a) read "now" through TimeSource,
+// which PREFERS the monotonic ServerClock anchor when this process has synced, and
+// (b) RECORD on the result which clock produced the window (OfflineHarvestResult
+// .ServerAnchored / WindowStartUnixMs / NowUnixMs). The actual refusal happens on the
+// server (api/game/save.js §RECONCILE), which compares the client's DECLARED window
+// against its OWN elapsed time since the last accepted save.
+// ⛔ DO NOT add a client-side penalty for an unanchored clock. A cold launch is ALWAYS
+// unanchored (ServerClock's Stopwatch dies with the process) and offline play is the
+// feature, not the exploit. Refuse server-side; never punish client-side.
 // =============================================================================
 using System.Collections.Generic;
 using UnityEngine;
@@ -207,7 +218,27 @@ namespace DeNelle.Village
             {
                 AwaySeconds = elapsedSec,
                 WasCapped = wasCapped,
+
+                // WO-1128 — RECORD WHICH CLOCK PRODUCED THIS WINDOW, and the window's own
+                // endpoints, so the next backend round trip can reconcile the DECLARED
+                // window against the server's OWN elapsed time (api/game/save.js
+                // §RECONCILE). We record; we never reduce. An unanchored clock is the
+                // NORMAL state on a cold launch (ServerClock's Stopwatch dies with the
+                // process) and offline play must keep paying honestly — see the
+                // refuse-don't-punish note in OfflineHarvestResult.
+                ServerAnchored = TimeSource.IsServerAnchored,
+                WindowStartUnixMs = window.WindowStartUnixMs,
+                NowUnixMs = window.NowUnixMs,
             };
+
+            // The one line a capture needs to answer "was this window forgeable?".
+            FlowTrace.Step("Offline",
+                $"claim #{window.Sequence}: clock = {result.ClockSource} " +
+                $"(ServerClock.IsTrusted={TimeSource.IsServerAnchored}); window {window.WindowStartUnixMs:0} -> " +
+                $"{window.NowUnixMs:0}. " +
+                (result.IsProvisional
+                    ? "PROVISIONAL — the server reconciles this window on the next save."
+                    : "server-anchored — a wall-clock edit could not have moved it."));
 
             // WO-1119 Version B: the boost's OVERLAP with this window becomes extra integration
             // seconds, clamped to the SAME 10h away-cap we already enforced. Crystal nodes keep
@@ -352,6 +383,21 @@ namespace DeNelle.Village
         // an away pool banks hours of production in a single frame. Clamp-and-warn (owner ruling
         // 2026-08-04) — TownBankCapacity.ClampGrant raises the [Flow:Bank] warn and the on-screen
         // toast for us. Crystals are UNCAPPED by design and pass through untouched.
+        // ⛔ WO-1128 §3.5 — THE CONTAINER CAP IS DOING SECURITY WORK. SAY SO OUT LOUD.
+        // The remaining client-side exposure to a FORWARDS device clock (set the phone
+        // ahead, relaunch, collect) is bounded HERE, and by nothing else: our 10h
+        // away-cap bounds the WINDOW, and TownBankCapacity.ClampGrant below bounds the
+        // AMOUNT to what the player's containers can physically hold. The ceiling on a
+        // fabricated window is therefore "one full container", not unbounded resources.
+        // That is a DELIBERATE property as of WO-1128, no longer an accident:
+        //   * a ticket that raises storage capacity widens this hole in proportion
+        //     (WO-1108b already took a maxed container from 2000 -> 34000);
+        //   * a ticket that makes any resource UNCAPPED removes the bound entirely.
+        //     Crystals are already uncapped by design and pass through untouched below —
+        //     which is exactly why crystals are excluded from the boost (see the header)
+        //     and are the resource the server-side reconciler logs most loudly.
+        // If you change either, the server-side reconciliation in api/game/save.js
+        // (§RECONCILE) becomes the ONLY line of defence. Do not silently rely on it.
         private void Grant(OfflineHarvestResult result, GameState state)
         {
             int iron = TownBankCapacity.ClampGrant(BankResource.Iron, state.Iron, result.Iron, "OfflineHarvest", out _);
@@ -385,6 +431,7 @@ namespace DeNelle.Village
                       $"+{food} food, +{result.AetherCrystals} crystals over " +
                       $"{Mathf.RoundToInt((float)result.AwaySeconds)}s away" +
                       (result.WasCapped ? " (away-cap)." : ".") +
+                      $" clock={result.ClockSource}{(result.IsProvisional ? " (provisional until sync)" : "")}." +
                       (bankTruncated
                           ? $" BANK FULL - accrued {result.Iron} iron / {result.Wood} wood / {result.Food} food; the surplus was LOST."
                           : ""));

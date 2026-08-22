@@ -71,10 +71,23 @@ namespace DeNelle.Core.World
         public readonly string Label;
         /// <summary>Optional multiplicity ("3 camps"). 0 when the pin is singular.</summary>
         public readonly int Count;
+        /// <summary>
+        /// True when <see cref="WorldX"/>/<see cref="WorldZ"/> are a REAL position in the
+        /// live scene, so a world-projecting surface (the corner minimap) may draw it.
+        ///
+        /// FALSE for a REGION-ANCHORED pin — a dungeon or a raid camp that exists on the
+        /// parchment at <see cref="RegionId"/> but has no metres in the town scene. Those
+        /// carry (0,0), and without this flag the minimap would faithfully project them onto
+        /// the WORLD ORIGIN: every region pin stacked on one spot near the Heart, reading as
+        /// "there is a dungeon right there". A pin that lies about WHERE is worse than a pin
+        /// that is absent, which is the same reasoning behind the fail-closed
+        /// <see cref="RealmPinBoard.RevealsDetail"/>.
+        /// </summary>
+        public readonly bool WorldAnchored;
 
         /// <summary>Constructs an immutable pin from all fields.</summary>
         public RealmPin(RealmPinKind kind, float worldX, float worldZ, string label,
-                        string regionId = "", int count = 0)
+                        string regionId = "", int count = 0, bool worldAnchored = true)
         {
             Kind = kind;
             WorldX = worldX;
@@ -82,7 +95,37 @@ namespace DeNelle.Core.World
             Label = string.IsNullOrEmpty(label) ? kind.ToString() : label;
             RegionId = regionId ?? "";
             Count = count < 0 ? 0 : count;
+            WorldAnchored = worldAnchored;
         }
+
+        /// <summary>A pin that lives on the parchment map only: anchored to a region id,
+        /// with no world metres. Reads better at every call site than passing (0f, 0f).</summary>
+        public static RealmPin InRegion(RealmPinKind kind, string regionId, string label, int count = 0)
+            => new RealmPin(kind, 0f, 0f, label, regionId, count, worldAnchored: false);
+    }
+
+    /// <summary>
+    /// THE stable source ids the shipped producers publish under (WO-829 §3).
+    ///
+    /// <see cref="RealmPinBoard.Publish"/> is per-source REPLACE, so a stable id is exactly
+    /// what makes a producer IDEMPOTENT: re-publishing overwrites that producer's own bucket
+    /// instead of stacking a second copy of every pin. That is the whole reason the board is
+    /// keyed by source and not a flat list — and it only holds if the id is a CONSTANT and
+    /// not a string literal retyped at each call site (one typo = two buckets = duplicates
+    /// that no clear can ever reach).
+    /// </summary>
+    public static class RealmPinSources
+    {
+        /// <summary>The player's own position ("You").</summary>
+        public const string Hero = "realm.hero";
+        /// <summary>Known dungeon portals / dungeon regions.</summary>
+        public const string Dungeons = "realm.dungeons";
+        /// <summary>Available raid camps — MARKERS ONLY; the army gate is re-checked on tap.</summary>
+        public const string Raids = "realm.raids";
+        /// <summary>Built barracks / muster points in town.</summary>
+        public const string Army = "realm.army";
+        /// <summary>Legacy IVillageHud.SetMinimapPoi forwarding (VillageHudController).</summary>
+        public const string VillageHud = "villageHud";
     }
 
     /// <summary>

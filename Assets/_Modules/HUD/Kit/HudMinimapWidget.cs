@@ -389,6 +389,17 @@ namespace DeNelle.HUD.Kit
                     continue;
                 }
 
+                // REGION-ANCHORED pins belong to the parchment map, not to this widget: they
+                // carry a region id and (0,0) for metres. Projecting one would plant it on
+                // the WORLD ORIGIN — every such pin stacked next to the Heart, reading as
+                // "there is a dungeon right there". A pin that lies about WHERE is worse
+                // than a pin that is absent, so this widget declines to draw them at all.
+                if (!pin.WorldAnchored)
+                {
+                    if (dot.gameObject.activeSelf) dot.gameObject.SetActive(false);
+                    continue;
+                }
+
                 var world = new Vector3(pin.WorldX, centre.y, pin.WorldZ);
                 if (SqrPlanarDistance(world, centre) > RadiusWorld * RadiusWorld)
                 {

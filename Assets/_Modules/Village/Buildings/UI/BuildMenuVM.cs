@@ -614,9 +614,12 @@ namespace DeNelle.Village
         }
 
         /// <summary>
-        /// The REAL price of the selected placed tower's next level: Tower.TryUpgrade charges
-        /// <c>NextUpgradeCost</c> of wood AND iron AND crystals (Tower.cs), so the menu shows exactly
-        /// that instead of the deleted variant table's invented upgrade numbers. Zero when the tower
+        /// The REAL price of the selected placed tower's next level. Tower.TryUpgrade and this quote
+        /// both derive the basket from <c>Tower.UpgradePriceParts(NextUpgradeCost, ...)</c>, so the
+        /// menu shows exactly what the transaction charges instead of the deleted variant table's
+        /// invented upgrade numbers. (Until 2026-08-21 that basket was wood AND iron AND crystals,
+        /// written out separately here and in Tower.cs; towers are REGULAR structures, so it is now
+        /// wood + iron only per WO-947, computed in ONE place.) Zero when the tower
         /// is null / maxed / free / has no authored cost — callers that need to tell those apart
         /// must use <see cref="UpgradeQuoteFor"/>, which is the authority this delegates to.
         /// </summary>
@@ -735,7 +738,14 @@ namespace DeNelle.Village
                 return new UpgradeQuote(UpgradeAvailability.Free, level, max, default,
                     nowDamage, nowRange, nextDamage, nextRange, true);
 
-            var cost = new CoreCost { wood = each, iron = each, crystals = each };
+            // WO-947 basket law (owner ruling 2026-08-21): towers are REGULAR -> wood + iron, never
+            // crystals. This line used to write the formula out a SECOND time as
+            //     new CoreCost { wood = each, iron = each, crystals = each }
+            // — a duplicate of Tower.TryUpgrade's basket. Two copies of one pricing rule is how the
+            // three-resource bug survived, and fixing only the charge would have made the menu QUOTE
+            // a price the transaction did not take. Both now call the one authority.
+            Tower.UpgradePriceParts(each, out int quoteWood, out int quoteIron);
+            var cost = new CoreCost { wood = quoteWood, iron = quoteIron };
             return new UpgradeQuote(UpgradeAvailability.Priced, level, max, cost,
                 nowDamage, nowRange, nextDamage, nextRange, CanAfford(cost));
         }

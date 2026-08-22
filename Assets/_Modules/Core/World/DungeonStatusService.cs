@@ -76,38 +76,26 @@ namespace DeNelle.Core.World
         private const int FirstYieldDelayMs = 200;
 
         // ─────────────────────────────────────────────────────────────────────
-        //  Kill switch
+        //  Kill switch — ONE authority, and it is FeatureFlags
         // ─────────────────────────────────────────────────────────────────────
         //
-        // ⚠ TEMPORARY HOME — WO-1114 lane note, 2026-08-21.
-        // The sanctioned home for this is `FeatureFlags.DungeonStatus =>
-        // Get("dungeonstatus", defaultOn: true)` (FeatureFlags.cs, house pattern
-        // at :137/:873). FeatureFlags.cs was lane-fenced when this landed, and
-        // FeatureFlags.Get is private, so the read is inlined here with IDENTICAL
-        // semantics: PlayerPrefs "ff.dungeonstatus" — 0 = off, 1 = on, -1/absent =
-        // the compiled default (FeatureFlags.cs:8-14).
-        // ⛔ When the flag moves to FeatureFlags, DELETE this helper — do not leave
-        // two readers of the same key (the duplicated-state failure CLAUDE.md
-        // catalogues three times over).
-        // ⛔ Do NOT add "dungeonstatus" to FeatureFlags.s_urlActivatableFlags. That
-        // allow-list is deliberately restricted to read-only presentation flags; a
-        // URL-flippable content gate is a security regression.
+        // 2026-08-21: the flag reached its sanctioned home. This file used to carry
+        // an INLINED PlayerPrefs read of "ff.dungeonstatus" because FeatureFlags.cs
+        // was lane-fenced and FeatureFlags.Get is private. That copy is DELETED —
+        // two readers of one key is the duplicated-state failure CLAUDE.md
+        // catalogues three times over (the stale WO block, the retired dependency
+        // table, the hardcoded repo root). ⛔ Never re-inline it.
+        //
+        // Semantics are unchanged: PlayerPrefs "ff.dungeonstatus" — 0 = off,
+        // 1 = on, -1/absent = the compiled default (ON).
 
+        /// <summary>Name of the key, for logs only. The VALUE is read through
+        /// <see cref="FeatureFlags.DungeonStatus"/> and nowhere else.</summary>
         private const string FlagKey = "ff.dungeonstatus";
-        private const bool FlagDefaultOn = true;
 
         /// <summary>False forces every door OPEN with no rebuild — the kill switch
         /// if a bad payload ever locks content.</summary>
-        public static bool Enabled
-        {
-            get
-            {
-                int v = PlayerPrefs.GetInt(FlagKey, -1);
-                if (v == 0) return false;
-                if (v == 1) return true;
-                return FlagDefaultOn;
-            }
-        }
+        public static bool Enabled => FeatureFlags.DungeonStatus;
 
         /// <summary>Absolute path of the last-good payload cache.</summary>
         public static string CachePath => Path.Combine(Application.persistentDataPath, CacheFileName);

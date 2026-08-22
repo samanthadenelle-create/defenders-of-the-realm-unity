@@ -1131,7 +1131,11 @@ namespace DeNelle.Dungeons
                     var placement = _craftingData.IngredientPlacements[i];
                     if (placement == null) continue;
                     Color tint = TintForIngredient(placement.IngredientId);
-                    IngredientPickup.CreateRuntime(_ingredientRoot, placement, _dungeonInventory, _hero, tint);
+                    // WO-1132 d5: the authored glyph picks the mote's SHAPE FAMILY, so
+                    // ingredients are told apart by silhouette rather than by pastel hue
+                    // (colourblind law — see the IngredientPickup file header).
+                    string glyph = GlyphForIngredient(placement.IngredientId);
+                    IngredientPickup.CreateRuntime(_ingredientRoot, placement, _dungeonInventory, _hero, tint, glyph);
                 }
                 if (total > n)
                     FlowTrace.Step("DungeonLoot",
@@ -1167,6 +1171,20 @@ namespace DeNelle.Dungeons
                 && ColorUtility.TryParseHtmlString("#" + ing.Tint, out Color c))
                 return c;
             return new Color(0.95f, 0.82f, 0.35f);   // loot-gold fallback
+        }
+
+        /// <summary>
+        /// The single-char <c>glyph</c> authored for an ingredient in
+        /// crafting-recipes.json, or <c>null</c> when the ingredient (or its glyph) does
+        /// not resolve. The scatter mote turns this into a SHAPE FAMILY so the
+        /// silhouette carries identity — the authored tints are mostly pastels and read
+        /// as the same white pellet in a dark dungeon. Null-safe in the same shape as
+        /// <see cref="TintForIngredient"/>; a null simply keeps the plain sphere mote.
+        /// </summary>
+        private string GlyphForIngredient(string ingredientId)
+        {
+            var ing = _craftingData?.FindIngredient(ingredientId);
+            return string.IsNullOrEmpty(ing?.Glyph) ? null : ing.Glyph;
         }
 
         /// <summary>

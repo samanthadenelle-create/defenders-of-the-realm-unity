@@ -157,6 +157,29 @@ namespace DeNelle.Core.UI
             return def != null ? Biome(def.Biome) : Unknown;
         }
 
+        /// <summary>
+        /// Every biome token that resolves to a REAL style row (i.e. everything
+        /// <see cref="Biome"/> answers without falling back to neutral parchment).
+        /// Exposed so <c>RealmMapRegression</c> can assert the other direction: that every
+        /// token AUTHORED in realm-map.json is in here. Without that check a new region
+        /// ships as a grey "?" node and nothing fails — the FlowTrace.Once fires into a log
+        /// nobody is reading at authoring time.
+        /// </summary>
+        public static readonly string[] KnownBiomeTokens =
+            { "forest", "swamp", "ice", "fire", "cosmic", "home", "avalon" };
+
+        /// <summary>True when <paramref name="token"/> has an authored style row (see
+        /// <see cref="KnownBiomeTokens"/>). Case/whitespace-insensitive, matching
+        /// <see cref="Biome"/>'s own normalisation so the two can never disagree.</summary>
+        public static bool IsKnownBiome(string token)
+        {
+            var t = (token ?? "").Trim().ToLowerInvariant();
+            if (t.Length == 0) return false;
+            for (int i = 0; i < KnownBiomeTokens.Length; i++)
+                if (KnownBiomeTokens[i] == t) return true;
+            return false;
+        }
+
         // ── Pin table (WO-829 §3) ─────────────────────────────────────────────
         /// <summary>The style for a pin kind. Total — every enum member has a row, so a
         /// new kind cannot silently render as nothing.</summary>
@@ -182,6 +205,36 @@ namespace DeNelle.Core.UI
                     return new RealmPinStyle(RealmPinShape.Circle, ElarionUi.ParchmentDim, kind.ToString());
             }
         }
+
+        /// <summary>
+        /// The pin silhouette as a single ASCII character, for a surface that draws TEXT
+        /// rather than geometry (the parchment map's in-disc pin strip).
+        ///
+        /// WHY ASCII AND WHY HERE: the minimap draws real shapes because it has the room;
+        /// the map's node discs do NOT — a marker there is ~16 ref px and must live INSIDE
+        /// the node's published WO-941 footprint, where a squashed triangle is a smudge.
+        /// One glyph per SHAPE (not per kind) keeps the two surfaces speaking the same
+        /// vocabulary from one table, instead of the map growing a private shape library
+        /// that drifts from <see cref="Pin"/>. ASCII only — the build's LiberationSans SDF
+        /// tofus everything else.
+        /// </summary>
+        public static string PinAscii(RealmPinShape shape)
+        {
+            switch (shape)
+            {
+                case RealmPinShape.Circle:        return "o";
+                case RealmPinShape.Diamond:       return "+";
+                case RealmPinShape.TriangleUp:    return "^";
+                case RealmPinShape.Ring:          return "O";
+                case RealmPinShape.Square:        return "#";
+                case RealmPinShape.BarHorizontal: return "=";
+                case RealmPinShape.BarVertical:   return "|";
+                default:                          return ".";
+            }
+        }
+
+        /// <summary>Convenience: <see cref="PinAscii(RealmPinShape)"/> for a pin KIND.</summary>
+        public static string PinAscii(RealmPinKind kind) => PinAscii(Pin(kind).Shape);
 
         // ── Withering / danger edge (WO-829 §1) ───────────────────────────────
         /// <summary>The corrupted edge-band tint for the parchment border, and the same

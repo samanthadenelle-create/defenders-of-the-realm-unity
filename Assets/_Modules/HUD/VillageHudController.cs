@@ -200,7 +200,10 @@ namespace DeNelle.HUD
         // Contract note for callers: this is an ACCUMULATING setter, matching the historical
         // ClearMinimapPois-then-SetMinimapPoi-per-POI call shape. Pins reach the board on the
         // next Clear or on the first Set after a Clear, under the source id below.
-        private const string MinimapPoiSource = "villageHud";
+        // The literal used to live here. It now points at the shared constant so this bucket
+        // and RealmPinProducers.ClearAll can never name it differently (WO-829 §3: a stable
+        // source id is the ONLY thing that makes per-source replace idempotent).
+        private const string MinimapPoiSource = RealmPinSources.VillageHud;
         private readonly List<RealmPin> _minimapPois = new List<RealmPin>();
 
         public void SetMinimapPoi(string kind, float worldX, float worldZ)

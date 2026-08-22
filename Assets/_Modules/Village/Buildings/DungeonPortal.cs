@@ -14,6 +14,7 @@
 
 using Cysharp.Threading.Tasks;
 using DeNelle.Core;
+using DeNelle.Core.World;
 using UnityEngine;
 
 namespace DeNelle.Village
@@ -32,6 +33,17 @@ namespace DeNelle.Village
 
         [SerializeField] private string _dungeonId = "Dungeon_HealersCottage";
         [SerializeField] private string _displayName = "Healer's Cottage";
+
+        /// <summary>The scene this portal loads ("Dungeon_HealersCottage"). Read-only —
+        /// <see cref="Configure"/> stays the only writer. Exposed for RealmPinProducers
+        /// (WO-829 §3), which pins the live portals on the map/minimap rather than keeping
+        /// a second list of where the dungeons are.</summary>
+        public string DungeonId => _dungeonId;
+
+        /// <summary>Player-facing portal name ("Healer's Cottage"), falling back to the id
+        /// so a pin is never labelled with an empty string (colourblind law: the WORD is
+        /// what carries a pin's meaning, so it may not be blank).</summary>
+        public string DisplayName => string.IsNullOrEmpty(_displayName) ? _dungeonId : _displayName;
 
         public void Configure(string dungeonId, string displayName)
         {
@@ -52,6 +64,17 @@ namespace DeNelle.Village
         private bool _isInRange;
         private float _nextProximityCheck;
         private const float CheckInterval = 0.15f;
+
+        // WO-1114 — the remotely-flippable door state, re-read on the EXISTING 0.15 s
+        // proximity tick (no second timer). Two properties fall out of reading it HERE,
+        // at the door, rather than caching it once at spawn:
+        //   • a status flip lands within a cache period with NO rebuild, and
+        //   • a hero already inside a dungeon scene has no DungeonPortal in scope, so a
+        //     mid-run flip can never eject an active delve.
+        // Ground state is OPEN and every failure path in DungeonStatusCatalog resolves
+        // back to it — a network blip must never lock finished content.
+        private DungeonDoorInfo _door = DungeonDoorInfo.OpenDefault;
+        private DungeonDoorState _lastLoggedDoorState = DungeonDoorState.Open;
 
         private void Start()
         {
@@ -110,6 +133,19 @@ namespace DeNelle.Village
             if (Time.time >= _nextProximityCheck)
             {
                 _nextProximityCheck = Time.time + CheckInterval;
+
+                // WO-1114: re-read the door on the tick that is already running.
+                _door = DungeonStatusCatalog.For(_dungeonId);
+                if (_door.State != _lastLoggedDoorState)
+                {
+                    _lastLoggedDoorState = _door.State;
+                    DeNelle.Core.Diagnostics.FlowTrace.Step(DungeonStatusCatalog.Sys,
+                        $"door state for id='{_dungeonId}' is now {_door.State} " +
+                        $"(provenance={DungeonStatusCatalog.Provenance}).");
+                    // A door that closed while the prompt was up must not keep offering entry.
+                    if (_isInRange) { HidePrompt(); ShowPrompt(); }
+                }
+
                 float distSqr = (_hero.position - transform.position).sqrMagnitude;
                 bool nowInRange = distSqr <= ActivateRadius * ActivateRadius;
                 if (nowInRange != _isInRange)
@@ -122,8 +158,20 @@ namespace DeNelle.Village
 
             // DEF-203: register the shared on-screen Interact button while in range so
             // touch/mobile (no keyboard) can enter too. Desktop F + walk-in unchanged.
+            //
+            // WO-1114 — THE GATE. A closed door NEVER hands EnterDungeon to the button, so
+            // no scene load is ever started and there is categorically no load-then-eject
+            // (which is indistinguishable from a crash). The sealed door IS the content:
+            // the button reads the authored headline and opens the prose dialogue.
+            // Since WO-777 removed the walk-in auto-route (OnTriggerEnter arms VFX only)
+            // and this button is the SOLE entry path, this one branch closes the door.
             if (_isInRange)
-                MobileInteractButton.Request(this, "Enter: " + _displayName, EnterDungeon);
+            {
+                if (_door.IsOpen)
+                    MobileInteractButton.Request(this, "Enter: " + _displayName, EnterDungeon);
+                else
+                    MobileInteractButton.Request(this, DoorHeadline(), ShowSealedDoor);
+            }
             else
                 MobileInteractButton.Release(this);
 
@@ -165,11 +213,40 @@ namespace DeNelle.Village
 
         private void ShowPrompt()
         {
+            // WO-1114: a closed door says its authored line instead of offering entry.
+            // The bubble is deliberately NOT rewritten in TMP here — it is legacy TextMesh,
+            // which is outside the UiObsidianConformance StrongSmells regex. Rewriting it
+            // would hard-fail [ui-obsidian]. The prose dialogue is the Obsidian surface.
+            string label = _door.IsOpen
+                ? "〔 Tap / F 〕 " + _displayName
+                : DoorHeadline();
+
             _promptGo = BuildBubble(
-                "〔 Tap / F 〕 " + _displayName,
+                label,
                 PromptHeight,
                 new Color(0.10f, 0.04f, 0.20f, 0.96f),
                 new Color(0.78f, 0.55f, 1f, 1f));
+        }
+
+        /// <summary>
+        /// The one-line prose for the closed door: the payload's authored headline when it
+        /// has one, else the per-status default from canon-strings.json. Copy resolution has
+        /// exactly ONE owner (DungeonSealedDoorPanel) — never type a player sentence here.
+        /// </summary>
+        private string DoorHeadline()
+        {
+            string s = DungeonSealedDoorPanel.DoorHeadline(_door);
+            return string.IsNullOrWhiteSpace(s) ? _displayName : s;
+        }
+
+        /// <summary>
+        /// Open the sealed-door prose. If the dialogue cannot open the door STILL does not
+        /// open — the gate lives here, never in the UI.
+        /// </summary>
+        private void ShowSealedDoor()
+        {
+            HidePrompt();
+            DungeonSealedDoorPanel.Show(_door, _displayName);
         }
 
         private void HidePrompt()
@@ -181,6 +258,23 @@ namespace DeNelle.Village
         private void EnterDungeon()
         {
             if (_loading) return;
+
+            // WO-1114 BACKSTOP. The registration branch above is the player experience;
+            // THIS is the invariant. It runs before the scene-name resolution and long
+            // before SceneRouter.GoDungeonScene, so a closed dungeon never starts a load.
+            // Note the _loading reset - the same dead-latch discipline as the
+            // CanStreamedLevelBeLoaded guard below: a later flip back to open must leave
+            // the portal live, not permanently dead.
+            if (!DungeonStatusCatalog.IsOpen(_dungeonId))
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Warn(DungeonStatusCatalog.Sys,
+                    $"EnterDungeon blocked at the door: id='{_dungeonId}' state={_door.State} " +
+                    $"(provenance={DungeonStatusCatalog.Provenance}). No scene load attempted.");
+                _loading = false;
+                _door = DungeonStatusCatalog.For(_dungeonId);
+                ShowSealedDoor();
+                return;
+            }
 
             // Resolve the target scene name. Legacy portals pass a bare dungeon id
             // ("HealersCottage") and the scene is "Dungeon_" + id. Composed dungeons

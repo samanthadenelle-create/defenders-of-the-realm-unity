@@ -33,6 +33,45 @@ namespace DeNelle.Village
         /// <summary>True when <see cref="AwaySeconds"/> exceeded the offline cap (the gentle nudge).</summary>
         public bool WasCapped;
 
+        // =====================================================================
+        //  WO-1128 — WHICH CLOCK PRODUCED THIS WINDOW (the reconciliation half)
+        // ---------------------------------------------------------------------
+        //  The device clock cannot be verified and we do not try (WO-1128 §1).
+        //  What we CAN do is record, per window, whether "now" came from the
+        //  monotonic server anchor (ServerClock, unforgeable by a wall-clock edit)
+        //  or from the raw device clock, and carry the window's own endpoints so
+        //  the server can compare the client's DECLARED window against its OWN
+        //  elapsed time on the next round trip (api/game/save.js §RECONCILE).
+        //
+        //  These fields are DIAGNOSTIC + DECLARATIVE, never punitive. Nothing in
+        //  the client reduces a haul because the clock was unanchored — a cold
+        //  launch is ALWAYS unanchored (Stopwatch dies with the process), and a
+        //  player on a plane is not a cheater. Refuse server-side, never punish
+        //  client-side.
+        // =====================================================================
+
+        /// <summary>
+        /// True when <c>TimeSource.NowUnixMs()</c> was server-anchored for THIS claim
+        /// (<see cref="DeNelle.Core.State.ServerClock.IsTrusted"/>). False on any cold
+        /// launch before the first backend round trip — an expected, honest state.
+        /// </summary>
+        public bool ServerAnchored;
+
+        /// <summary>Unix-ms this window started at (the persisted claim clock, or the pause edge).</summary>
+        public double WindowStartUnixMs;
+
+        /// <summary>Unix-ms "now" that closed this window — the value the clock advanced to.</summary>
+        public double NowUnixMs;
+
+        /// <summary>
+        /// True when this haul rests on an unverifiable device clock and is therefore
+        /// subject to server reconciliation on the next sync. Display/telemetry only.
+        /// </summary>
+        public bool IsProvisional => !ServerAnchored;
+
+        /// <summary>Short trace/telemetry name of the clock this window trusted.</summary>
+        public string ClockSource => ServerAnchored ? "server-anchored" : "device";
+
         /// <summary>Total units banked across every resource (popup-trigger gate: show only when &gt; 0).</summary>
         public int Total => Iron + Wood + Food + AetherCrystals;
 

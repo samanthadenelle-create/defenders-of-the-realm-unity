@@ -28,6 +28,22 @@
 //       "ELARION" title by 18.3 ref px because the plate resolved 84 px shorter than
 //       the fixed footprints need -- a purely arithmetic failure that only a PNG was
 //       catching. Now it fails at gate speed on any mapPoint / region / footprint edit.
+//   (f) WO-829 BIOME STYLE COVERAGE: every biome token AUTHORED in realm-map.json
+//       resolves a real RealmAtmosphereStyle row. The runtime lookup is total (an
+//       unknown token falls back to neutral parchment), which is correct on screen
+//       and useless at authoring time -- a new region would ship as a grey "?" node
+//       and say so only in a log. This asserts it from the data instead.
+//   (g) WO-829 PIN-BOARD IDEMPOTENCE + FAIL-CLOSED FOG: the producers re-publish on
+//       a 1 Hz tick forever, so per-source REPLACE is the only thing keeping the
+//       board from growing without bound and burying every real pin behind "+N".
+//       Publishes the same set three times and asserts the board did not move; also
+//       pins that a second source is additive, that a source can retract itself, and
+//       that RevealsDetail still fails closed on locked/null/typo -- including
+//       through RealmMapVM's own state literals, which are the other half of that
+//       contract and live in a different file.
+//       NOTE: (g) MUTATES the live RealmPinBoard (it starts from ClearAll and ends
+//       with its test sources cleared). That is safe in an editor gate run -- nothing
+//       is publishing -- but do not move this check into a play-mode suite.
 //
 // Wire (DataRegression.RunAll):
 //   Guard.Try("Regression", "realm-map suite", () => { if (!RealmMapRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[realm-map] " + r); });
@@ -38,7 +54,8 @@ using System.Text;
 using Newtonsoft.Json.Linq;
 using UnityEngine;
 using DeNelle.Core;          // CanonicalJson -- the runtime loader's Resources-first read
-using DeNelle.Core.World;    // RealmMapCatalog / RealmRegionGate -- the real typed loader
+using DeNelle.Core.UI;       // RealmAtmosphereStyle -- the shared biome/pin presentation table (WO-829)
+using DeNelle.Core.World;    // RealmMapCatalog / RealmRegionGate / RealmPinBoard -- the real typed loader
 using DeNelle.Village.Hero;  // RealmMapPanel -- the published node-footprint budget (WO-941)
 
 namespace DeNelle.Editor
@@ -214,6 +231,106 @@ namespace DeNelle.Editor
                 }
                 log.AppendLine($"node footprint: {nodeIds.Count} node(s), {corridorPairs} corridor-sharing pair(s) " +
                                $"checked on the {plateW}x{plateH} contract plate");
+            }
+
+            // -- (f) WO-829 §1: EVERY AUTHORED BIOME RESOLVES A REAL STYLE ROW --
+            // RealmAtmosphereStyle.Biome is TOTAL by design: an unknown token falls back to
+            // neutral parchment and logs a FlowTrace.Once. That is the right RUNTIME
+            // behaviour (never an invisible node) and a terrible AUTHORING signal -- adding
+            // a "marsh" region ships a grey "?" disc with no epithet and no ring tint, and
+            // the only complaint is one line in a log nobody opens at authoring time. This
+            // asserts the other direction, from the DATA: every biome token realm-map.json
+            // actually carries must have a style row. Add the region, forget the row, fail
+            // here at gate speed.
+            {
+                var biomesSeen = new HashSet<string>();
+                foreach (var r in regions)
+                {
+                    if (r == null) continue;
+                    if (string.IsNullOrEmpty(r.Biome))
+                    {
+                        failures.Add($"[biome] region '{r.Id}' carries no 'biome' token -- it would render " +
+                                     "as a neutral parchment node with no glyph and no epithet");
+                        continue;
+                    }
+                    biomesSeen.Add(r.Biome);
+                    if (!RealmAtmosphereStyle.IsKnownBiome(r.Biome))
+                        failures.Add($"[biome] region '{r.Id}' biome '{r.Biome}' has NO row in " +
+                                     "RealmAtmosphereStyle.Biome -- it will render as a grey '?' node. " +
+                                     "Add the row (ring tint + ASCII glyph + epithet) next to the others.");
+                }
+
+                // The home base carries no authored biome field; the View passes this token.
+                if (!RealmAtmosphereStyle.IsKnownBiome(RealmMapVM.HomeBiomeToken))
+                    failures.Add($"[biome] the home token '{RealmMapVM.HomeBiomeToken}' has no style row " +
+                                 "-- Elarion would lose its gilt crest treatment");
+
+                log.AppendLine($"biome styles: {biomesSeen.Count} authored token(s) checked against " +
+                               $"{RealmAtmosphereStyle.KnownBiomeTokens.Length} style row(s)");
+            }
+
+            // -- (g) WO-829 §3: A PRODUCER CANNOT DUPLICATE ITS OWN SOURCE ------
+            // RealmPinBoard is per-source publish/REPLACE, and that is the ONLY thing making
+            // the producers idempotent -- they re-publish on a 1 Hz tick forever. If Publish
+            // ever appended instead of replacing (or if two source ids collided), the board
+            // would grow without bound, hit MaxVisiblePins within seconds, and every real pin
+            // would vanish behind an ever-climbing "+N". Nothing about that failure is
+            // visible in a compile, and on screen it looks like "the pins stopped working".
+            // So: publish the same set three times and assert the board did not move.
+            {
+                RealmPinBoard.ClearAll();
+
+                var set = new List<RealmPin>
+                {
+                    RealmPin.InRegion(RealmPinKind.Dungeon, "thornwood", "Test dungeon"),
+                    RealmPin.InRegion(RealmPinKind.RaidTarget, "thornwood", "Test camp"),
+                };
+
+                RealmPinBoard.Publish(RealmPinSources.Dungeons, set);
+                int afterOne = RealmPinBoard.Pins.Count;
+                RealmPinBoard.Publish(RealmPinSources.Dungeons, set);
+                RealmPinBoard.Publish(RealmPinSources.Dungeons, set);
+                int afterThree = RealmPinBoard.Pins.Count;
+
+                if (afterOne != set.Count)
+                    failures.Add($"[pins] one publish of {set.Count} pins left {afterOne} on the board");
+                if (afterThree != afterOne)
+                    failures.Add($"[pins] re-publishing source '{RealmPinSources.Dungeons}' STACKED instead of " +
+                                 $"replacing: {afterOne} pin(s) after one publish, {afterThree} after three. " +
+                                 "Per-source replace is what makes every producer idempotent -- restore it.");
+
+                // A SECOND source must be additive, or one producer would silently erase another
+                // (the retired TownHudBridge.PushMinimapPois bug, from the other direction).
+                RealmPinBoard.Publish(RealmPinSources.Army, new List<RealmPin>
+                    { RealmPin.InRegion(RealmPinKind.Army, "thornwood", "Test muster") });
+                if (RealmPinBoard.Pins.Count != afterThree + 1)
+                    failures.Add($"[pins] a second source did not add to the board " +
+                                 $"({afterThree} + 1 expected, got {RealmPinBoard.Pins.Count}) -- one producer " +
+                                 "is clobbering another's bucket.");
+
+                // And a source must be able to fully retract itself.
+                RealmPinBoard.Clear(RealmPinSources.Dungeons);
+                RealmPinBoard.Clear(RealmPinSources.Army);
+                if (RealmPinBoard.Pins.Count != 0)
+                    failures.Add($"[pins] clearing every test source left {RealmPinBoard.Pins.Count} pin(s) " +
+                                 "on the board -- a stale pin can outlive the thing it pointed at.");
+
+                // FOG: the shared predicate is fail-closed. If this ever flips, every producer
+                // that gates on it starts leaking locked-region content at once.
+                if (RealmPinBoard.RevealsDetail("locked")) failures.Add("[pins] RevealsDetail(\"locked\") returned TRUE");
+                if (RealmPinBoard.RevealsDetail(null))     failures.Add("[pins] RevealsDetail(null) returned TRUE (must fail closed)");
+                if (RealmPinBoard.RevealsDetail("typo"))   failures.Add("[pins] RevealsDetail on an unrecognised state returned TRUE (must fail closed)");
+                if (!RealmPinBoard.RevealsDetail("discovered")) failures.Add("[pins] RevealsDetail(\"discovered\") returned FALSE");
+                if (!RealmPinBoard.RevealsDetail("cleared"))    failures.Add("[pins] RevealsDetail(\"cleared\") returned FALSE");
+
+                // The VM's state literals must be exactly the vocabulary that predicate accepts --
+                // they are the two halves of one contract and live in different files.
+                if (RealmPinBoard.RevealsDetail(RealmMapVM.StateLiteral(RealmMapVM.NodeState.Locked)))
+                    failures.Add("[pins] RealmMapVM's 'Locked' literal reveals detail -- fog is open on locked regions");
+                if (!RealmPinBoard.RevealsDetail(RealmMapVM.StateLiteral(RealmMapVM.NodeState.Home)))
+                    failures.Add("[pins] RealmMapVM's 'Home' literal is fogged -- Elarion would hide its own content");
+
+                log.AppendLine("pin board: per-source replace idempotent, sources additive, fog fail-closed");
             }
 
             // -- verdict --------------------------------------------------------
