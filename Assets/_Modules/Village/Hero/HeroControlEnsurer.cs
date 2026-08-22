@@ -110,7 +110,43 @@ namespace DeNelle.Village
         // continuity; else the first) and destroy the extra root(s). Ensure() re-applies tag/components/
         // loadout to the kept hero, so keeping either is functionally safe. Runs on every sceneLoaded.
         //
-        // WO-1112 — RETURNS THE DISPLACED SEAT. When this destroys an IN-SCENE hero in favour
+        /// <summary>
+        /// What the ONE hero query resolved: the hero that SURVIVED the dedupe, plus the seat
+        /// freed by whatever it displaced. Both are read off the SAME snapshot, which is the
+        /// whole point — see DedupeHeroes' header (WO-1131).
+        /// </summary>
+        private readonly struct HeroDedupeResult
+        {
+            public readonly HeroLocomotion Survivor;
+            public readonly Vector3? DisplacedSeat;
+            public HeroDedupeResult(HeroLocomotion survivor, Vector3? displacedSeat)
+            {
+                Survivor = survivor;
+                DisplacedSeat = displacedSeat;
+            }
+        }
+
+        // WO-1131 — RETURNS THE SURVIVOR, NOT JUST THE SEAT, AND THAT IS THE FIX.
+        // Ensure() used to call DedupeHeroes() and then FindLoco() — asking the world for the
+        // hero a SECOND time, one line after mutating it. UnityEngine.Object.Destroy is
+        // DEFERRED to end of frame, so FindObjectsByType still returns the object this method
+        // just destroyed, and FirstOrDefault has unspecified ordering: on the owner's
+        // dg_hollow_roads entry (F8 seq 3587) the two lines read
+        //     [Flow:Hero] Duplicate hero removed — destroying 'Hero (Blaise)' (scene=dg_hollow_roads)
+        //     [Flow:Hero] Ensure: found existing hero 'Hero (Blaise)' (via HeroLocomotion)
+        // i.e. Ensure went on to operate on the DOOMED object. Its root scene is the dungeon,
+        // not "DontDestroyOnLoad", so the carried-hero guard below evaluated FALSE and
+        // TryRecoverCarriedHero — the ONLY code that seats a carried hero — never ran. The
+        // real (carried) hero kept its TOWN world pose, x≈-143 at the hub's portal mouth,
+        // while the dungeon spans x∈[-10,10]: the hero arrived ~130m outside the composition
+        // and the camera honestly reported room=none size=(0x0).
+        // The cure is NOT to change how Destroy behaves (DestroyImmediate would alter
+        // destruction semantics project-wide) nor to scene-filter the second query (that
+        // leaves the second query, and the race shape, intact). It is to STOP ASKING TWICE:
+        // this method already computed the survivor as its local `keep`, so hand that back.
+        // One query, one owner, no window in which a mid-mutation world can be re-read.
+        //
+        // WO-1112 — ALSO RETURNS THE DISPLACED SEAT. When this destroys an IN-SCENE hero in favour
         // of a carried one, the position it destroyed is the only record of where THAT SCENE
         // wanted a hero to stand, and the carried hero still holds its TOWN world pose. A
         // composed dungeon bakes NO HeroStartPoint_PlayerSpawn marker (DungeonBaker seats its
@@ -118,16 +154,23 @@ namespace DeNelle.Village
         // its town coordinates inside the dungeon — outside the shell, in the dark, with the
         // exit unreachable. Returns null when nothing was displaced (the overwhelmingly common
         // case), which leaves every existing caller's behaviour byte-for-byte unchanged.
-        private static Vector3? DedupeHeroes()
+        private static HeroDedupeResult DedupeHeroes()
         {
             var heroes = FindObjectsByType<HeroLocomotion>(FindObjectsInactive.Include, FindObjectsSortMode.None);
-            if (heroes == null || heroes.Length <= 1) return null;
+            if (heroes == null || heroes.Length == 0) return new HeroDedupeResult(null, null);
 
             HeroLocomotion keep = null;
             foreach (var h in heroes)
                 if (h != null && h.gameObject.scene.name == "DontDestroyOnLoad") { keep = h; break; }
-            if (keep == null) keep = heroes[0];
-            if (keep == null) return null;
+            if (keep == null)
+                foreach (var h in heroes)
+                    if (h != null) { keep = h; break; }
+            if (keep == null) return new HeroDedupeResult(null, null);
+
+            // Nothing to destroy — but STILL return the survivor. This is the single hero query
+            // of the frame; a caller that re-queried here would re-open the very window this
+            // method exists to close.
+            if (heroes.Length == 1) return new HeroDedupeResult(keep, null);
 
             Vector3? displacedSeat = null;
             var keepRoot = keep.transform.root.gameObject;
@@ -144,7 +187,10 @@ namespace DeNelle.Village
                     $"Duplicate hero removed — destroying '{root.name}' (scene={h.gameObject.scene.name}); kept '{keepRoot.name}'.");
                 Destroy(root);
             }
-            return displacedSeat;
+            // `keep` is never one of the roots destroyed above (the loop skips keepRoot), so the
+            // survivor handed back here is guaranteed to be a live object — unlike anything a
+            // post-Destroy FindObjectsByType would hand back this frame.
+            return new HeroDedupeResult(keep, displacedSeat);
         }
 
         // A1 (recover, don't fabricate): re-home a REAL hero that survived a Single-scene load parked
@@ -235,8 +281,16 @@ namespace DeNelle.Village
             // WO-1112: the seat a destroyed in-scene hero was standing on, if the dedupe just
             // kept a carried hero over this scene's own baked one. It is the composed dungeon's
             // only entry seat (no HeroStartPoint_PlayerSpawn is baked there).
-            Vector3? displacedSeat = DedupeHeroes();
-            var loco = FindLoco();
+            //
+            // WO-1131: take BOTH the survivor and the seat from the ONE dedupe query. There is
+            // deliberately NO FindLoco() call after this line — Destroy is deferred to end of
+            // frame, so a second query here returns the hero DedupeHeroes just destroyed, and
+            // Ensure then runs the whole rest of this method (including the DontDestroyOnLoad
+            // carried-hero test) against a doomed object in the WRONG scene. That is exactly
+            // how the dg_hollow_roads portal dropped the player 130m outside the dungeon.
+            var dedupe = DedupeHeroes();
+            Vector3? displacedSeat = dedupe.DisplacedSeat;
+            var loco = dedupe.Survivor;
             GameObject hero = loco != null ? loco.gameObject : FindHeroByName();
 
             // ── WO-1109: RE-HOME THE HERO GoRaid CARRIED ─────────────────────────────

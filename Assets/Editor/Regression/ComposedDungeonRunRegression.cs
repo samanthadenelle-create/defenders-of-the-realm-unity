@@ -189,10 +189,15 @@ namespace DeNelle.Editor
             // (e) A composed dungeon bakes NO HeroStartPoint_PlayerSpawn, so the seat must come
             //     from the hero the dedupe displaced. Without it the carried hero keeps its town
             //     coordinates and arrives outside the dungeon.
-            if (TryExtractMethodBody(ensurer, "Vector3? DedupeHeroes()", out _))
+            //     WO-1131 widened DedupeHeroes' return from a bare Vector3? to a result that
+            //     ALSO carries the survivor, so this no longer matches on the old signature.
+            //     The seat half is what this case is about; the survivor half is measured for
+            //     real (by reflection + a driven fixture) in HeroDedupeSurvivorRegression.
+            if (TryExtractMethodBody(ensurer, "HeroDedupeResult DedupeHeroes()", out string dedupeBody)
+                && dedupeBody.IndexOf("displacedSeat", StringComparison.Ordinal) >= 0)
                 log.AppendLine("OK: DedupeHeroes returns the displaced seat (the composed dungeon's only entry position)");
             else
-                failures.Add("[hero-abilities] HeroControlEnsurer.DedupeHeroes no longer returns the displaced seat (Vector3?). A composed dungeon bakes no HeroStartPoint_PlayerSpawn marker, so the destroyed baked hero's position is the ONLY record of where that scene wanted a hero - without it the carried hero keeps its TOWN world pose and arrives outside the dungeon shell, in the dark, unable to reach the exit");
+                failures.Add("[hero-abilities] HeroControlEnsurer.DedupeHeroes no longer returns the displaced seat. A composed dungeon bakes no HeroStartPoint_PlayerSpawn marker, so the destroyed baked hero's position is the ONLY record of where that scene wanted a hero - without it the carried hero keeps its TOWN world pose and arrives outside the dungeon shell, in the dark, unable to reach the exit");
         }
 
         // =====================================================================

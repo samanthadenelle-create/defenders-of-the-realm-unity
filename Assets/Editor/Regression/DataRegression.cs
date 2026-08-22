@@ -395,6 +395,13 @@ namespace DeNelle.Editor
             //     hard — that the Fail alarm and its fallback both SURVIVED the fix. ---
             if (!RaidHeroCarryRegression.Run(out var raidHeroCarryReason)) failures.Add(raidHeroCarryReason); else log.AppendLine("[raid-hero-carry] " + raidHeroCarryReason);
             if (!ComposedDungeonRunRegression.Run(out var composedRunReason)) failures.Add(composedRunReason); else log.AppendLine("[composed-dungeon-run] " + composedRunReason);
+            // --- WO-1131: the hero Ensure() operates on is the SURVIVOR of the dedupe, never an
+            //     object it just destroyed. Destroy is DEFERRED to end of frame, so the old
+            //     "DedupeHeroes(); then FindLoco();" pair re-read a mid-mutation world and handed
+            //     Ensure the doomed hero — whose root scene is the destination, not DDOL, so the
+            //     carried-hero guard went FALSE, TryRecoverCarriedHero never ran, and the real
+            //     hero kept its TOWN pose ~130m outside dg_hollow_roads (owner F8 seq 3587). ---
+            if (!HeroDedupeSurvivorRegression.Run(out var heroDedupeReason)) failures.Add(heroDedupeReason); else log.AppendLine("[hero-dedupe-survivor] " + heroDedupeReason);
             if (!ArtResourceRegression.Run(out var artResReason)) failures.Add(artResReason); else log.AppendLine("[art-resource] " + artResReason);
             // --- WO-682: Sfx WebGL import invariant (no divergent WebGL overrides -> no FSB decode failures) ---
             if (!SfxWebglAudioRegression.Run(out var sfxWebglReason)) failures.Add(sfxWebglReason); else log.AppendLine("[sfx-webgl] " + sfxWebglReason);
