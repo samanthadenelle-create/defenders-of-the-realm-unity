@@ -50,7 +50,7 @@ namespace DeNelle.Village
             // Prefer an authored CC0 clip if one is dropped in (drop-in upgrade
             // path, same convention as ProceduralSfx); otherwise generate.
             if (s_hitClip == null)
-                s_hitClip = DeNelle.Core.AudioAssetLoader.LoadClip("Sfx/EnemyHit") ?? GenerateHit();
+                s_hitClip = DeNelle.Core.AudioAssetLoader.LoadClip("Sfx/EnemyHit", optional: true) ?? GenerateHit();
             CoreServices.Audio?.PlaySfx(s_hitClip, 0.5f);
         }
 
@@ -69,14 +69,14 @@ namespace DeNelle.Village
         public static void PlayDeath()
         {
             if (s_deathClip == null)
-                s_deathClip = DeNelle.Core.AudioAssetLoader.LoadClip("Sfx/EnemyDeath") ?? GenerateDeath();
+                s_deathClip = DeNelle.Core.AudioAssetLoader.LoadClip("Sfx/EnemyDeath", optional: true) ?? GenerateDeath();
 
             AudioClip clip = s_deathClip;
             if (DeNelle.Core.FeatureFlags.CombatFeel)
             {
                 if (!s_deathClip2Tried)
                 {
-                    s_deathClip2 = DeNelle.Core.AudioAssetLoader.LoadClip("Sfx/EnemyDeath2");
+                    s_deathClip2 = DeNelle.Core.AudioAssetLoader.LoadClip("Sfx/EnemyDeath2", optional: true);
                     s_deathClip2Tried = true;
                 }
                 if (s_deathClip2 != null && Random.value < 0.5f) clip = s_deathClip2;

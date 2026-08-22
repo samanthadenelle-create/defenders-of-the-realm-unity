@@ -15,8 +15,22 @@
 //     • Achievement cosmetic unlock (optional) — free achievement-gated items
 //       that the player can't buy; granted via GlimmerCurrencyService.GrantAchievement
 //
-//   A "TIER UP!" label pops at the hero's world position (DamageNumberSpawner),
-//   and OnTierReached fires for any HUD banner / fanfare that wants to react.
+//   A "TIER UP!" STAMP pops near the hero (CombatText, the §1.8 screen-space
+//   layer), and OnTierReached fires for any HUD banner / fanfare that wants to
+//   react.
+//
+//   ⚠ IT USED TO USE DamageNumberSpawner.SpawnLabel AT SCALE 1.6, AND THAT WAS
+//   THE WO-1144 DEFECT. That is a WORLD-SPACE TextMesh: its on-screen size is a
+//   function of camera distance, and this label spawns at the HERO, who in town
+//   stands a few metres from the camera. The 2026-08-22 headed fleet captured the
+//   result in all 8 runs — "TIER UP!  Initiate" painted across the whole world
+//   tree at screen centre, unreadable against the scene. It is exactly the defect
+//   class CombatTextLayer's own header already names ("pooled but UNCAPPED,
+//   UN-DEDUPED world-space TextMesh at 1.4-1.6x scale"); the parry/riposte call
+//   sites were migrated then and this one was simply missed. CombatText is the
+//   single writer: screen-space, font capped at 44 reference px, dark outline for
+//   legibility over any scene, pooled, deduped and self-expiring.
+//   ⛔ Do not route a celebration back through SpawnLabel to make it "bigger".
 //
 // MILESTONES:
 //   Lv 5   Initiate  — +5 Wisdom, +10 Glimmer
@@ -38,6 +52,7 @@
 // =============================================================================
 
 using DeNelle.Cosmetics;
+using DeNelle.Core.UI;
 using DeNelle.Village.Talents;
 using UnityEngine;
 
@@ -117,7 +132,10 @@ namespace DeNelle.Village
         private bool _subscribed;
         private int  _lastGrantedLevel;   // guard: never grant the same level twice
 
-        private static readonly Color TierLabelColor = new Color(1f, 0.84f, 0.2f, 1f); // gold
+        // WO-1144: the tier stamp's TINT is no longer chosen here — CombatTextLayer.TintFor owns
+        // every stamp colour, so the celebration cannot drift away from the rest of the layer.
+        // (It never carried meaning anyway: the owner is red/green colourblind, so the words
+        // "TIER UP!" plus the tier's own title are the whole message, and the hue is decoration.)
 
         // ── Bootstrap ─────────────────────────────────────────────────────────
 
@@ -196,13 +214,16 @@ namespace DeNelle.Village
             var hp = HeroProgression.Instance;
             if (hp != null)
             {
-                // Gold label floats above the hero — bigger scale (1.6f) so it's
-                // clearly a bigger moment than the regular "LEVEL UP!" pop.
-                DamageNumberSpawner.SpawnLabel(
+                // WO-1144: the screen-space stamp layer, NOT the world-space damage-number pool.
+                // What makes this a bigger moment than the regular "LEVEL UP!" pop is the WORDS
+                // (the tier's own title rides in the text) — never a 1.6x world scale, which is
+                // what painted it across the world tree at screen centre in the 2026-08-22
+                // capture. CombatText caps the font, outlines it dark so it survives any
+                // backdrop, dedupes and expires itself. See the file header.
+                CombatText.Show(
+                    CombatTextKind.Status,
                     $"TIER UP!  {milestone.Title}",
-                    hp.WorldPosition + Vector3.up * 0.5f,
-                    TierLabelColor,
-                    1.6f);
+                    hp.WorldPosition + Vector3.up * 0.5f);
             }
 
             OnTierReached?.Invoke(milestone);

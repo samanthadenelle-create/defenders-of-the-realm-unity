@@ -416,6 +416,8 @@ namespace DeNelle.Editor
             //     every channel), and the arena home-return that lived on a UI object three paths
             //     destroy without firing - which stranded the owner 7km out on BOTH platforms ---
             if (!AdGateAndArenaReturnRegression.Run(out var adArenaReason)) failures.Add(adArenaReason); else log.AppendLine("[ad-gate-arena] " + adArenaReason);
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "arena-return-music suite", () => { if (!DeNelle.Editor.Regression.ArenaReturnMusicRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[arena-return-music] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "addressable-troop-visual suite", () => { if (!DeNelle.Editor.Regression.AddressableTroopVisualRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[addressable-troop-visual] " + r); });
             // --- WO-781: wounded-troop recovery advance (TickRecovery live+offline callers) ---
             if (!ArmyRecoveryRegression.Run(out var troopRecoveryReason)) failures.Add(troopRecoveryReason); else log.AppendLine("[troop-recovery] " + troopRecoveryReason);
             if (!DataWebRegression.Run(out var dataWebReason)) failures.Add(dataWebReason); else log.AppendLine("[data-web] " + dataWebReason);
@@ -530,12 +532,19 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "promo-redeem-entry suite", () => { if (!PromoRedeemEntryRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[promo-redeem-entry] " + r); });
             // --- WO-835 action bar: Core applicability model invariants + View purity ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "hud-actionbar suite", () => { if (!HudActionBarRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[hud-actionbar] " + r); });
+            // WO-1144: measured label fit (real glyph advances vs the authored box) at two
+            // landscape aspects. RE-ADDED 2026-08-22 after a wholesale file copy from a
+            // sibling worktree clobbered it - the registration lived only in the working
+            // tree, so git had no record to conflict on. Copy HUNKS from another lane, never
+            // a whole shared file.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "hud-label-fit suite", () => { if (!DeNelle.Editor.Regression.HudLabelFitRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[hud-label-fit] " + r); });
             // --- WO-1008 raids discoverability: a built Barracks ALWAYS shows the Raids face. She played a save with a Barracks and an empty army, the face was absent entirely, and she reported "I do not see a way to start a raid" - a feature that hides itself is indistinguishable from a broken one. Zero troops is now a greyed face with a WORDED reason (she is red/green colourblind, so hue carries nothing), and the full-army gate underneath is untouched. ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "raids-discoverability suite", () => { if (!RaidsDiscoverabilityRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[raids-discoverability] " + r); });
             // --- WO-830 echo resource picker: picker/token/affinity contract (sibling to the echo-spec suite) ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "echo-picker suite", () => { if (!EchoResourcePickerRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[echo-picker] " + r); });
             // --- WO-797 dungeon room ownership: encounter schema + wake/confine math + exit beacon (F8 seq 622) ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "dungeon-room-ownership suite", () => { if (!DeNelle.Editor.Regression.DungeonRoomOwnershipRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[dungeon-room-ownership] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "dungeon-kit suite", () => { if (!DeNelle.Editor.Regression.DungeonKitRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[dungeon-kit] " + r); });
             // --- WO-854 quest completability: EVERY story stage must have a reachable completion. This suite existed for four days and was registered NOWHERE - its own header carried this exact line as un-applied text, QUEST_REACH_OK appears in no log on disk, and four commits ratcheted MinCompletableStages up to 63 while nothing checked it. A ratchet defended by nothing is worse than no ratchet: it reads as proof. ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "quest-reach suite", () => { if (!DeNelle.Editor.Regression.QuestCompletabilityRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[quest-reach] " + r); });
             // --- WO-1001 slices 1b-8 composed pillars: the baker places EVERY pillar through FindType reflection (Editor cannot reference DeNelle.Dungeons), so a rename WARNs and places nothing while the bake still says saved=True; plus the bake-time-Configure-must-survive-SaveScene pin, authored-vs-placed parity in the baked scenes, the key bag, darkness actually feeding the roll, and a lock whose key is never granted (an unwinnable run) ---

@@ -194,6 +194,7 @@ namespace DeNelle.Core.HudModel
         private RaidDimReason _raidsDimReason = RaidDimReason.None;
         private string _raidsFaceLabel = RaidsBaseLabel;
         private string _manageFaceLabel = ManageBaseLabel;
+        private string _manageFaceBadge = "";
         private int _manageStatusVersion = int.MinValue;   // change-detect on the published snapshot
 
         /// <summary>The base (undimmed) Raids face word. The View builds with this exact string.</summary>
@@ -218,6 +219,34 @@ namespace DeNelle.Core.HudModel
         /// adornment on a calm bar is that nag sneaking back in by another door.
         /// </summary>
         public string ManageFaceLabel => _manageFaceLabel;
+
+        /// <summary>
+        /// WO-1144 — the SAME session-shape tell, split into the half that can actually be
+        /// PAINTED ON A BAR FACE.
+        ///
+        /// PROVEN CAUSE (2026-08-22 headed fleet, break_24_error.png, identical in all 8 runs):
+        /// the Manage face rendered "Manag..." while Build/Bag/Raids/Quests all fit. It is not a
+        /// font fault and not a missing fit call — <see cref="ManageFaceLabel"/> is a SENTENCE
+        /// ("Manage - 2 of 3 idle", up to 20 characters) and a bar face is one
+        /// <see cref="MaxVisibleFaces"/>-th of a 46 %-wide ActionBar zone, about 144 reference px
+        /// of label rect. At ElarionUiKit's 30 px legibility FLOOR that seats roughly ten
+        /// characters, so FitSingleLine did the only thing left to it and ellipsised. No layout
+        /// number was wrong; the string was four times its box.
+        ///
+        /// So the numeral moves to a SECOND LINE on the face (the face is ~110 ref px tall — two
+        /// lines cost nothing) and the badge carries ONLY the count:
+        ///   3 idle  -> "3 idle"     (the denominator is noise when it equals the numerator)
+        ///   1-2     -> "2/3 idle"   (the denominator is what makes it legible; "of" does not fit)
+        ///   0       -> ""           (the calm state IS the bare word; silence is the reward)
+        ///
+        /// <see cref="ManageFaceLabel"/> is DELIBERATELY UNCHANGED — it stays the one-line
+        /// sentence WO-1027 authored, for traces, tooltips and anything with room for it. The
+        /// View paints <see cref="ManageBaseLabel"/> + newline + this badge.
+        /// ⛔ Still never a colour, a glyph badge or a tint: if it does not read, the WORDS get
+        /// shorter — and now they can, because they live in canon-strings.json
+        /// (<see cref="DeNelle.Core.UI.HudStrings"/>) rather than inline here.
+        /// </summary>
+        public string ManageFaceBadge => _manageFaceBadge;
 
         /// <summary>
         /// WHY the Raids face is greyed (WO-1008). The owner is red/green colourblind — a grey tint
@@ -402,7 +431,17 @@ namespace DeNelle.Core.HudModel
                     : ManageBaseLabel + " - " + idle + " of " +
                       DeNelle.Core.UI.ObsidianQueueGate.WorkQueueStatus.LineCount + " idle";
 
-            if (string.Equals(label, _manageFaceLabel, StringComparison.Ordinal)) return;
+            // WO-1144: the FACE half of the same tell — the count with no verb and no "of", short
+            // enough to seat on a ~144 ref px face at the legibility floor. Words from canon.
+            string badge =
+                idle <= 0 ? "" :
+                idle >= DeNelle.Core.UI.ObsidianQueueGate.WorkQueueStatus.LineCount
+                    ? DeNelle.Core.UI.HudStrings.Format(DeNelle.Core.UI.HudStrings.KeyManageIdleAll, idle)
+                    : DeNelle.Core.UI.HudStrings.Format(DeNelle.Core.UI.HudStrings.KeyManageIdleSome,
+                        idle, DeNelle.Core.UI.ObsidianQueueGate.WorkQueueStatus.LineCount);
+
+            if (string.Equals(label, _manageFaceLabel, StringComparison.Ordinal) &&
+                string.Equals(badge, _manageFaceBadge, StringComparison.Ordinal)) return;
 
             // Step on the EDGE only. A permanent/recurring condition logged per frame buries the
             // owner's real F8 signals — and an idle line is a NORMAL player state, so it is never
@@ -411,6 +450,7 @@ namespace DeNelle.Core.HudModel
                            "' (idle " + idle + "/" + DeNelle.Core.UI.ObsidianQueueGate.WorkQueueStatus.LineCount +
                            ", statusVer=" + st.Version + ")");
             _manageFaceLabel = label;
+            _manageFaceBadge = badge;
             ManageFaceChanged?.Invoke();
         }
 

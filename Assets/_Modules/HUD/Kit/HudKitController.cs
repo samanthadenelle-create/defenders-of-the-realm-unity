@@ -157,6 +157,14 @@ namespace DeNelle.HUD.Kit
         private const float BarSlotW =
             (1f - BarGap * (HudActionBarModel.MaxVisibleFaces - 1)) / HudActionBarModel.MaxVisibleFaces;
         private const float BarY0 = 0.10f, BarY1 = 0.95f;
+        /// <summary>WO-1144 — the wave block's OWN band, in FIXED reference px, hung below the
+        /// Status crown so it can never share a rect with the compass again (see BuildWaveBlock).
+        /// 128 = MinTouchPx(112) for the Start Wave CTA + 16 px of margin, so the 0.03..0.93 CTA
+        /// band resolves to 115 px - clear OF the touch floor rather than exactly on it (a band
+        /// authored to land on the floor to the decimal fails the moment anyone nudges either
+        /// number). Fixed pixels, never a fraction: the whole defect was a fraction band that
+        /// collapses to ~140 ref px in landscape.</summary>
+        public const float WaveBandHeightPx = 128f;
         // Raids dim visuals (WO-820 semantics preserved: dim toward Disabled, never
         // uninteractable — the tap still reaches the drillmaster redirect). The DECISION
         // (RaidsDimmed) comes from the model; only the built-colour restore lives here.
@@ -637,6 +645,13 @@ namespace DeNelle.HUD.Kit
                 slot0Min, slot0Max, OnManageAction);
             RegisterBarButton(ActionBarButtonId.Upgrade, "upgradeButton", manage);
             _manageButtonLabel = manage != null ? manage.GetComponentInChildren<TMP_Text>(true) : null;
+            // WO-1144: this is the ONE bar face that carries a second line (the WO-1027 idle
+            // numeral). BuildObsidianButton armed FitSingleLine, which is right for every other
+            // face and WRONG here — no-wrap + ellipsis is exactly what produced the captured
+            // "Manag...". The face is ~110 ref px tall, so two lines at the 30 px legibility
+            // floor cost nothing; FitBlock keeps the same bounded auto-size and the same floor
+            // and uses the height already reserved. The BuildRailChip precedent, same reasoning.
+            if (_manageButtonLabel != null) ElarionUiKit.FitBlock(_manageButtonLabel);
 
             // ── moveCluster -> HudMoveInput ──
             if (FeatureFlags.CombatHud611)
@@ -832,23 +847,56 @@ namespace DeNelle.HUD.Kit
             _waveBlockRoot = new GameObject("WaveBlock", typeof(RectTransform));
             _waveBlockRoot.transform.SetParent(pool, false);
             var wbrt = (RectTransform)_waveBlockRoot.transform;
-            wbrt.anchorMin = Vector2.zero; wbrt.anchorMax = Vector2.one;
-            wbrt.offsetMin = Vector2.zero; wbrt.offsetMax = Vector2.zero;
-            // BUTTON/LABEL HEIGHT FIX (F8 2026-07-08): the Start Wave button was authored at only
-            // 17% of the block (y 0.01-0.18) → a ~25px label rect that CULLED its glyphs (guard
-            // FAIL "0 visible glyphs, rect 333x25"). The stack is re-flowed UPWARD so the button
-            // gets ~33% of the block (a ~48px label rect that seats the readable font); the labels
-            // + progress bar shift up proportionally so nothing overlaps.
-            _waveLabel = ElarionUiKit.Label(_waveBlockRoot.transform, "", 0.70f, 0.99f,
-                ElarionUi.Parchment, ElarionUi.FontHead, TextAlignmentOptions.Center, 0.04f, 0.96f, bold: true);
-            _waveCountdown = ElarionUiKit.Label(_waveBlockRoot.transform, "", 0.49f, 0.68f,
-                ElarionUi.Gilt, ElarionUi.FontLabel, TextAlignmentOptions.Center, 0.04f, 0.96f, bold: true);
+            // ── WO-1144: THE WAVE BLOCK GETS ITS OWN BAND, HUNG BELOW THE STATUS CROWN ──
+            //
+            // PROVEN CAUSE (2026-08-22 headed fleet, break_24_error.png, all 8 runs): "Wave 1" and
+            // "Next wave in 45s" were painted THROUGH the compass strip, with "Start Now" jammed
+            // against its bottom edge. Nothing was mis-anchored. hud-areas.json puts BOTH
+            // "compass" AND "waveBlock" in the calm(town) `status` area, this root stretched
+            // 0..1 across that mount, and HudCompassWidget's strip occupies y 0.34-1.00 of the
+            // SAME mount — so the two widgets were authored into one rect and the wave labels
+            // (0.49-0.99) landed inside the strip by construction. Two live elements, one band.
+            //
+            // And the band cannot hold both: HudArea.Status is a HEIGHT FRACTION (0.845-0.990),
+            // which is 278 ref px on the 1080x1920 portrait reference but collapses to ~140 ref
+            // px in landscape (at 2670x1200 the scaler resolves the canvas to 2148x965). A
+            // compass strip plus two label rows plus a bar plus a MinTouchPx(112) CTA has never
+            // fitted in 140 px — which is also why the old Start Wave button resolved to ~46 ref
+            // px tall, 66 px UNDER the touch floor, invisibly (ClampMinTouch no-ops pre-layout,
+            // when rect.height is still 0).
+            //
+            // So: the compass keeps the Status mount to itself, and the wave stack hangs from the
+            // mount's BOTTOM EDGE in FIXED REFERENCE PIXELS — disjoint from the crown by
+            // construction, at every aspect, rather than by two fraction stacks agreeing. The
+            // band it hangs into is free in calm(town): HudArea.TargetInfo (0.660-0.840) has no
+            // occupants in that posture, and x stays inside the Status column (0.34-0.66), clear
+            // of Vitals/HeartStatus/Minimap on the left and System/QueueStatus on the right.
+            //
+            // The stack inside it is LANDSCAPE-SHAPED (labels left, CTA right) because that is
+            // where the room is: a vertical stack would need ~230 ref px of height it does not
+            // have, while the Status column is 688 ref px WIDE at the capture aspect.
+            wbrt.anchorMin = new Vector2(0f, 0f);
+            wbrt.anchorMax = new Vector2(1f, 0f);
+            wbrt.pivot = new Vector2(0.5f, 1f);          // top edge pinned to the mount's bottom edge
+            wbrt.sizeDelta = new Vector2(0f, WaveBandHeightPx);
+            wbrt.anchoredPosition = Vector2.zero;
+            // Labels + progress occupy the LEFT ~58% of the band; the CTA owns the right ~37%.
+            // (F8 2026-07-08 lesson kept: every label band below is tall enough to seat its line —
+            // the guard FAIL that started this stack was "0 visible glyphs, rect 333x25".)
+            _waveLabel = ElarionUiKit.Label(_waveBlockRoot.transform, "", 0.50f, 0.96f,
+                ElarionUi.Parchment, ElarionUi.FontHead, TextAlignmentOptions.Center, 0.02f, 0.60f, bold: true);
+            _waveCountdown = ElarionUiKit.Label(_waveBlockRoot.transform, "", 0.16f, 0.48f,
+                ElarionUi.Gilt, ElarionUi.FontLabel, TextAlignmentOptions.Center, 0.02f, 0.60f, bold: true);
             _waveProgress = ElarionUiKit.BuildObsidianBar(_waveBlockRoot.transform,
-                ElarionUiKit.ObsidianBarKind.Stat, new Vector2(0.08f, 0.38f), new Vector2(0.92f, 0.46f),
+                ElarionUiKit.ObsidianBarKind.Stat, new Vector2(0.03f, 0.04f), new Vector2(0.59f, 0.13f),
                 withValue: false, framed: false);
+            // y 0.03-0.93 of the 128 px band == 115 ref px, clear of ElarionUiKit.MinTouchPx (112),
+            // so the CTA is authored ABOVE the floor rather than relying on ClampMinTouch to rescue
+            // it after layout (it cannot: rect.height is still 0 when the button is built, which is
+            // exactly how the old ~46 px Start Wave button shipped un-flagged).
             _startWaveButton = ElarionUiKit.BuildObsidianButton(_waveBlockRoot.transform, "Start Wave",
                 ElarionUiKit.ObsidianButtonStyle.Style2, ElarionUiKit.ObsidianButtonColor.Green,
-                new Vector2(0.22f, 0.01f), new Vector2(0.78f, 0.34f),
+                new Vector2(0.63f, 0.03f), new Vector2(1.00f, 0.93f),
                 () => { if (_owner != null) _owner.StartWaveRequested?.Invoke(); });
             // Carry-over (WO-T2 working-tree intent): the tutorial spotlight target.
             TutorialHighlightRegistry.Register("hud.wave_button", (RectTransform)_startWaveButton.transform);
@@ -1018,23 +1066,37 @@ namespace DeNelle.HUD.Kit
         /// the word carry it. Two short lines, matching the sibling rail chip (the chip is
         /// MinTouchPx tall, so the second line costs nothing and survives a narrow face far
         /// better than one wrapped line would).
-        /// ASCII only. Never the word "Storage" (WO-900 §4 copy law).
+        /// Never the word "Storage" (WO-900 §4 copy law).
+        ///
+        /// WO-1144 — THE WORDS MOVED TO canon-strings.json AND GOT SHORTER, and the reason is a
+        /// measurement, not taste. The 2026-08-22 headed fleet captured this chip reading
+        /// "Tap to collec" — a word sliced mid-glyph, in all 8 runs. The chip is 220 ref px wide
+        /// by law (== EchoUnlockFeedback.EchoChipWidthPx; three rail chips share one right edge),
+        /// so its label rect is ~202 ref px, and "Tap to collect" measures ~214 ref px at
+        /// ElarionUiKit.FontFloor (30). It could not fit at ANY legible size, and the old 85 %
+        /// branch ("85% - tap to collect", 20 chars) was worse. Line 1 already wraps to two lines
+        /// inside the 112 px chip, so the action line has exactly ONE line of ~202 px to live in.
+        /// ⛔ The fix is never a smaller font (FontFloor is a floor) and never a wider chip (the
+        /// shared rail edge is canon) — it is FEWER CHARACTERS, authored in canon-strings.json
+        /// where HudLabelFitRegression can measure them against this exact box.
         /// </summary>
         private static string FormatCollectorChip(CollectorStatusGate.CollectorStatus s)
         {
-            if (!s.Available || s.TotalCount <= 0) return "Collectors";
+            if (!s.Available || s.TotalCount <= 0) return HudStrings.Get(HudStrings.KeyCollectorsTitle);
 
-            string line = "Collectors " + s.FullCount + "/" + s.TotalCount + " full";
+            string line = HudStrings.Format(HudStrings.KeyCollectorsCount, s.FullCount, s.TotalCount);
             if (s.FullCount > 0)
-                // The load-bearing sentence: a full collector has STOPPED EARNING, and the fix is
-                // one tap. (Cross-WO: once the bank gets a headroom check, WO-857 replaces this
-                // line with "Bank full" when the collect cannot bank — flagged in both WOs so
-                // neither surface ships a lie.)
-                line += "\nTap to collect";
+                // The load-bearing tell: a full collector has STOPPED EARNING, and the fix is one
+                // tap. Line 1 has already said "N/M full", so the bare imperative is the whole of
+                // what is left to say — which is fortunate, because it is also all that fits.
+                // (Cross-WO: once the bank gets a headroom check, WO-857 replaces this line with
+                // a "bank full" variant when the collect cannot bank — flagged in both WOs so
+                // neither surface ships a lie. Keep that variant SHORT too.)
+                line += "\n" + HudStrings.Get(HudStrings.KeyCollectorsFullLine);
             else if (s.MaxFillPct >= 85)
-                line += "\n" + s.MaxFillPct + "% - tap to collect";
+                line += "\n" + HudStrings.Format(HudStrings.KeyCollectorsNearlyLine, s.MaxFillPct);
             else if (s.TotalPending > 0)
-                line += "\n" + s.TotalPending + " waiting";
+                line += "\n" + HudStrings.Format(HudStrings.KeyCollectorsWaitingLine, s.TotalPending);
             return line;
         }
 
@@ -1593,12 +1655,22 @@ namespace DeNelle.HUD.Kit
             Guard.Try("HudKit", "apply manage face tell", () =>
             {
                 if (_manageButtonLabel == null) return;
-                string face = _barModel != null ? _barModel.ManageFaceLabel : HudActionBarModel.ManageBaseLabel;
+                // WO-1144: the model's ManageFaceLabel is the one-line SENTENCE ("Manage - 2 of 3
+                // idle"). A bar face is ~144 ref px of label rect — about ten characters at the
+                // legibility floor — so painting the sentence is what the fleet captured as
+                // "Manag...". The face paints the WORD and the model's short BADGE on a second
+                // line instead; the sentence keeps its home in the model (and in this trace).
+                string badge = _barModel != null ? _barModel.ManageFaceBadge : "";
+                string face = string.IsNullOrEmpty(badge)
+                    ? HudActionBarModel.ManageBaseLabel
+                    : HudActionBarModel.ManageBaseLabel + "\n" + badge;
                 if (string.IsNullOrEmpty(face) ||
                     string.Equals(_manageButtonLabel.text, face, StringComparison.Ordinal)) return;
                 _manageButtonLabel.text = face;
-                FlowTrace.Step("HudKit", "Manage face text -> '" + face +
-                               "' (the idle-line ache is carried in WORDS + a NUMBER, never hue).");
+                FlowTrace.Step("HudKit", "Manage face text -> '" + face.Replace("\n", " / ") +
+                               "' (model sentence: '" +
+                               (_barModel != null ? _barModel.ManageFaceLabel : HudActionBarModel.ManageBaseLabel) +
+                               "'; the idle-line ache is carried in WORDS + a NUMBER, never hue).");
             });
         }
 

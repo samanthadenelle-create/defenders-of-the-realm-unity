@@ -590,7 +590,7 @@ namespace DeNelle.Audio
         {
             if (_uiClickClip == null)
                 _uiClickClip = Guard.Try("Audio", "load UiClick clip",
-                    () => AudioAssetLoader.LoadClip("Sfx/UiClick"), fallback: null) ?? GenerateUiClick();
+                    () => AudioAssetLoader.LoadClip("Sfx/UiClick", optional: true), fallback: null) ?? GenerateUiClick();
             PlayUiSfx(_uiClickClip, 0.5f);
         }
 

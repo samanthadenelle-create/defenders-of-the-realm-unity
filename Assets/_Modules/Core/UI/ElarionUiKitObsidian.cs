@@ -2742,6 +2742,73 @@ namespace DeNelle.Core.UI
             return ch.glyph.metrics.width;
         }
 
+        /// <summary>Horizontal ADVANCE of one character's glyph in the asset's own point space,
+        /// or -1 when the character is absent / has no glyph. Advance (not ink width) is what TMP
+        /// steps the pen by, so this is the number a line's width is actually made of.</summary>
+        private static float GlyphAdvance(TMP_FontAsset fa, char c)
+        {
+            if (fa == null) return -1f;
+            var table = fa.characterLookupTable;
+            if (table == null) return -1f;
+            if (!table.TryGetValue(c, out var ch) || ch == null || ch.glyph == null) return -1f;
+            return ch.glyph.metrics.horizontalAdvance;
+        }
+
+        /// <summary>
+        /// WO-1144 — the MEASURED single-line width, in canvas REFERENCE px, of
+        /// <paramref name="text"/> drawn at <paramref name="fontSizePx"/> with the font the
+        /// <paramref name="role"/> EFFECTIVELY renders with (the role asset when it passed the
+        /// numeral gate, otherwise the default chain it falls back to — one resolution path, so
+        /// this can never report on a font different from the one that draws).
+        ///
+        /// It sums the same per-glyph horizontal ADVANCES TMP steps the pen by, scaled by
+        /// fontSize / faceInfo.pointSize * faceInfo.scale. That makes it a MEASUREMENT, not a
+        /// character-count heuristic: lengthen a string, or swap in a wider face, and the number
+        /// moves. It deliberately ignores kerning and character spacing (both 0 on kit labels)
+        /// and does NOT wrap — callers that need wrapping ask about one line at a time.
+        ///
+        /// STRING/FLOAT-ONLY SIGNATURE ON PURPOSE (the NumeralLegibilityReport precedent): the
+        /// regression assembly can measure a label without referencing TMP.
+        /// Returns -1 when no font is resolvable at all, with the reason in
+        /// <paramref name="detail"/> — never 0, which a caller could mistake for "it fits".
+        /// </summary>
+        public static float MeasureLineWidthPx(FontRole role, string text, float fontSizePx, out string detail)
+        {
+            var fa = FontFor(role) ?? ResolveDefaultFont();
+            if (fa == null)
+            {
+                detail = "no font resolvable at all (role asset absent AND TMP default chain empty) - " +
+                         "nothing can be measured";
+                return -1f;
+            }
+            if (string.IsNullOrEmpty(text)) { detail = "'" + fa.name + "': empty string"; return 0f; }
+
+            var face = fa.faceInfo;
+            float pointSize = face.pointSize > 0 ? face.pointSize : 1f;
+            float scale = face.scale > 0f ? face.scale : 1f;
+            float unitToPx = fontSizePx / pointSize * scale;
+
+            // Missing glyphs must not silently measure as ZERO (that is how a too-long string
+            // reads as "it fits"). Fall back to the widest advance we DID resolve, and say so.
+            float widest = 0f;
+            int missing = 0;
+            float unitsWide = 0f;
+            var chars = text.ToCharArray();
+            for (int i = 0; i < chars.Length; i++)
+            {
+                float a = GlyphAdvance(fa, chars[i]);
+                if (a >= 0f) { unitsWide += a; if (a > widest) widest = a; }
+                else missing++;
+            }
+            if (missing > 0) unitsWide += widest * missing;
+
+            float px = unitsWide * unitToPx;
+            detail = "'" + fa.name + "' @" + fontSizePx.ToString("0.#") + "px: " + chars.Length +
+                     " chars = " + px.ToString("0.0") + " ref px" +
+                     (missing > 0 ? " (" + missing + " glyph(s) absent - charged at the widest resolved advance)" : "");
+            return px;
+        }
+
         /// <summary>True when <paramref name="fa"/> draws the numeral 1 distinguishably from a
         /// bare stroke. <paramref name="why"/> carries the measurements either way. Undecidable
         /// (a glyph missing, an unpopulated table) NEVER rejects — we do not fail a font on

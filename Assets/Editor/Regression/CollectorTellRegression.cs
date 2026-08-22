@@ -188,16 +188,39 @@ namespace DeNelle.Editor.Regression
                              "unpinned and 'Storage' could drift back in");
                 return;
             }
-            if (region.IndexOf("Storage", StringComparison.OrdinalIgnoreCase) >= 0)
-                failures.Add("[copy-law] the collector chip copy says 'Storage' - that word belongs to " +
-                             "the WALLET (WO-857). Two different notions of 'full' on one screen is the " +
-                             "exact confusion the copy law exists to prevent");
-            if (region.IndexOf("Collectors ", StringComparison.Ordinal) < 0)
-                failures.Add("[copy-law] the chip no longer says 'Collectors'");
-            if (region.IndexOf("full", StringComparison.Ordinal) < 0)
-                failures.Add("[copy-law] the chip no longer states FULLNESS in words - the owner is " +
+
+            // WO-1144: THE WORDS MOVED, SO THE PIN MOVED WITH THEM. FormatCollectorChip no longer
+            // types its sentences - it names canon keys (HudStrings), because the old inline
+            // "Tap to collect" was ~214 ref px in a ~202 ref px chip and shipped CUT mid-word in
+            // the 2026-08-22 capture. A copy pin that still grepped the method body would have
+            // failed on a correct fix, so it reads the same three laws off the CANON VALUES
+            // instead. The method must still resolve those keys, and the words must still obey
+            // the law - both are asserted, so neither half can drift.
+            if (region.IndexOf("HudStrings.", StringComparison.Ordinal) < 0)
+                failures.Add("[copy-law] FormatCollectorChip no longer resolves its lines through " +
+                             "HudStrings - a sentence typed inline at this call site is how a label " +
+                             "gets longer than its box with nothing measuring it (WO-1144)");
+
+            string title = HudStrings.Get(HudStrings.KeyCollectorsTitle);
+            string count = HudStrings.Format(HudStrings.KeyCollectorsCount, 2, 3);
+            foreach (var line in new[] { title, count,
+                                         HudStrings.Get(HudStrings.KeyCollectorsFullLine),
+                                         HudStrings.Format(HudStrings.KeyCollectorsNearlyLine, 85),
+                                         HudStrings.Format(HudStrings.KeyCollectorsWaitingLine, 4) })
+                if (line != null && line.IndexOf("Storage", StringComparison.OrdinalIgnoreCase) >= 0)
+                    failures.Add("[copy-law] the collector chip copy says 'Storage' ('" + line +
+                                 "') - that word belongs to the WALLET (WO-857). Two different notions " +
+                                 "of 'full' on one screen is the exact confusion the copy law exists to " +
+                                 "prevent");
+
+            if (title == null || title.IndexOf("Collectors", StringComparison.Ordinal) < 0)
+                failures.Add("[copy-law] the chip no longer says 'Collectors' (canon '" +
+                             HudStrings.KeyCollectorsTitle + "' is '" + title + "')");
+            if (count == null || count.IndexOf("full", StringComparison.Ordinal) < 0)
+                failures.Add("[copy-law] the chip no longer states FULLNESS in words (canon '" +
+                             HudStrings.KeyCollectorsCount + "' is '" + count + "') - the owner is " +
                              "red/green colourblind; state is text-encoded here, never colour");
-            notes.Add("chip copy: 'Collectors N/M full', never 'Storage'");
+            notes.Add("chip copy from canon: '" + count + "', never 'Storage'");
         }
 
         // =====================================================================

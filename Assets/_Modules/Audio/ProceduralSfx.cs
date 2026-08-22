@@ -61,7 +61,7 @@ namespace DeNelle.Audio
             // GameSfx): the audio key "Sfx/Sfx_<Id>", resolved through
             // DeNelle.Core.AudioAssetLoader (Addressables-first, Resources-fallback).
             // Missing -> fall through to synth.
-            AudioClip clip = DeNelle.Core.AudioAssetLoader.LoadClip("Sfx/" + ResourceName(id)) ?? Generate(id);
+            AudioClip clip = DeNelle.Core.AudioAssetLoader.LoadClip("Sfx/" + ResourceName(id), optional: true) ?? Generate(id);
             s_cache[id] = clip;
             return clip;
         }
