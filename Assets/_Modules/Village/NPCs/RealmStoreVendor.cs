@@ -45,6 +45,14 @@ namespace DeNelle.Village
         private Transform _hero;
         private bool _registered;
 
+        private void Awake()
+        {
+            // Existing baked scenes predate WO-1052. Keep the scene-builder attachment as the
+            // authored path, but self-heal old baked furniture so a fresh player build cannot
+            // silently ship the store door without its landmark.
+            if (GetComponent<RealmStoreBeacon>() == null) gameObject.AddComponent<RealmStoreBeacon>();
+        }
+
         private void Update()
         {
             if (_hero == null)

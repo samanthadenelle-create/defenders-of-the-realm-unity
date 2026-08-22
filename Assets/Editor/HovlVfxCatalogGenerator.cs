@@ -255,6 +255,11 @@ namespace DeNelle.Editor
             // stands until the outpost is cleared. Verticality is the read (not hue). Scale up so it
             // towers over the fort silhouette.
             { "Poi_Landmark",           new Pick(MAP + "Marker 4 Pillar Loop.prefab", poolSize: 3, scale: 4f, recolorable: false, isLoop: true) },
+            // OWNER PICK 2026-08-21: the Realm Store's near-field signature. Marker8 is the
+            // strongest greyscale-safe ground read in the tracked set: a regular safe-zone ring
+            // plus shockwave, distinct from the Heart's organic mass and portal thresholds.
+            { "store.beacon.near",       new Pick("Assets/Resources/VFX/Markers/Marker8_SafeZoneLoop.prefab",
+                                                   poolSize: 1, scale: 2.4f, recolorable: false, isLoop: true) },
         };
 
         // ── Manual picks overlay (owner tags from VfxCasterWindow) ────────────

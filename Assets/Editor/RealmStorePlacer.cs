@@ -351,6 +351,8 @@ namespace DeNelle.Editor
             // component only has to call it.
             if (root.GetComponent<DeNelle.Village.RealmStoreVendor>() == null)
                 root.AddComponent<DeNelle.Village.RealmStoreVendor>();
+            if (root.GetComponent<DeNelle.Village.RealmStoreBeacon>() == null)
+                root.AddComponent<DeNelle.Village.RealmStoreBeacon>();
 
             EditorUtility.SetDirty(root);
             EditorSceneManager.MarkSceneDirty(scene);

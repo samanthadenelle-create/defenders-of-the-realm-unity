@@ -132,6 +132,13 @@ MonoBehaviour:
     DefaultLifetime: 0
     Recolorable: 0
     IsLoop: 0
+  - Key: store.beacon.near
+    Prefab: {fileID: 5800148741275645713, guid: 563917eb4e2c8ee459583f49b3e9c7e5, type: 3}
+    PoolSize: 1
+    DefaultScale: 2.4
+    DefaultLifetime: 0
+    Recolorable: 0
+    IsLoop: 1
   - Key: ARcaneTower_Projectile
     Prefab: {fileID: 1171190231128718, guid: d9467a10b94fb3b428cc539326c9579b, type: 3}
     PoolSize: 6
