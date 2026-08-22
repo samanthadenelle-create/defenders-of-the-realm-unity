@@ -306,12 +306,37 @@ namespace DeNelle.Core.UI
         // PinCanonicalCtaSize), so they render identically on every screen.
         // =====================================================================
         /// <summary>Canonical Continue/Close CTA width in reference pixels (1080x1920 modal canvas).</summary>
-        // Compact landscape footprint; still a generous one-handed target.
-        public const float CanonCtaWidth = 300f;
+        // Generous one-handed target. RESTORED 300 -> 360 on 2026-08-22, see the height note below.
+        public const float CanonCtaWidth = 360f;
         /// <summary>Canonical Continue/Close CTA height in reference pixels (1080x1920 modal canvas).
-        /// Raised 120→132 (~60 dp one-handed thumb, VISUAL_TOUCH_CONTRAST_AUDIT 2026-07-14 P0).</summary>
+        /// Raised 120 -> 132 (~60 dp one-handed thumb, VISUAL_TOUCH_CONTRAST_AUDIT 2026-07-14 P0).</summary>
+        // =====================================================================
+        // ⛔ DO NOT LOWER THIS. Restored 120 -> 132 on 2026-08-22 after a UI pass
+        // shrank it (with CanonCtaWidth 360 -> 300) as an undeclared side effect of an
+        // unrelated modal-geometry refactor. The doc line above was left in place while the
+        // value moved, so the comment documented a raise that had been undone.
+        //
+        // SOURCE OF RECORD (owner, 2026-08-22): this value was derived from APPLE's published
+        // touch-target guidance (2026), whose minimum is 44 x 44 pt - NOT from Android's 48 dp
+        // Material figure, which is a different and slightly larger standard. Both are cleared
+        // comfortably at 132; cite Apple when this number is questioned, because that is where
+        // it actually came from.
+        //
+        // WHY 132 AND NOT 120 - the reasoning is about SMALL PHONES specifically:
+        // these are REFERENCE px on a 1080x1920 ScaleWithScreenSize canvas
+        // (MatchWidthOrHeight 0.5), so they track RESOLUTION, not PHYSICAL size. Two phones at
+        // the same resolution but different physical sizes get the same pixel count - so the
+        // button is physically SMALLER on the small phone, and that is the case this protects.
+        //   112 (MinTouchPx) ~= 50 dp / ~44 pt - the hard floor, right AT Apple's minimum
+        //   120              ~= 54 dp / ~47 pt - legal, but the one-handed margin is gone
+        //   132              ~= 60 dp / ~53 pt - the audited one-handed thumb target  <-- THIS
+        // 120 is not UNSAFE; it is merely legal. The 2026-07-14 P0 raised it for one-handed
+        // reach, and one-handed reach on the smallest supported phone is exactly where those
+        // 6 dp get spent. Roughly 25 files derive layout from these two constants, so moving
+        // them silently resizes screens nobody looked at.
+        // =====================================================================
         // Slightly above the audited touch floor so the framed-button label keeps its clear inset.
-        public const float CanonCtaHeight = 120f;
+        public const float CanonCtaHeight = 132f;
 
         /// <summary>Kit touch floor: the SHORTEST resolved side of any kit-built button in
         /// reference px (~50 dp on the Seeker). The analogue of the FontFloor for buttons —
