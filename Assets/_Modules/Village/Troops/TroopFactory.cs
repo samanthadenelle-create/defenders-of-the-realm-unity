@@ -138,21 +138,48 @@ namespace DeNelle.Village
             if (vis != null && def != null && !isSiege)
                 TroopGearApplier.Apply(vis, def);
 
+            GameObject fallbackVisual = null;
             if (vis == null)
             {
-                // Model missing → tinted-capsule fallback (mirrors EnemyFactory ~139-153)
-                // so the troop is still visible + damageable, just without a silhouette.
+                // A body must remain visible while remote art arrives (or is unavailable).
+                // Siege cannot use the humanoid capsule: that vertical oversized silhouette
+                // was the apparent "catapult standing on end" captured for WO-1143.
                 Debug.LogWarning($"[TroopFactory] model '{resourcesPath ?? model}' " +
                                  $"(id '{(def != null ? def.Id : "?")}') had no loadable mesh — " +
-                                 "FALLBACK to a tinted capsule.");
-                var cap = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-                if (cap.TryGetComponent(out Collider cc)) Object.Destroy(cc);
-                cap.transform.SetParent(go.transform, false);
-                cap.transform.localPosition = new Vector3(0f, bodyHeight * 0.5f, 0f);
-                cap.transform.localScale = isSiege
-                    ? new Vector3(1.4f, bodyHeight * 0.5f, 1.8f)
-                    : Vector3.one;
-                TintCapsule(cap.GetComponent<Renderer>());
+                                 $"FALLBACK to a {(isSiege ? "siege-machine proxy" : "tinted capsule")}.");
+                fallbackVisual = isSiege
+                    ? BuildSiegeFallback(go.transform)
+                    : BuildHumanoidFallback(go.transform, bodyHeight);
+
+                // A synchronous Addressables miss means "not resident this frame". Reapply after
+                // the shared warmer settles for every path-form troop model, not just Catapult.
+                // The readable fallback stays until a verified renderer replaces it.
+                if (IsAddressableModelPath(resourcesPath))
+                {
+                    GameObject capturedFallback = fallbackVisual;
+                    DeNelle.Core.StructureContentWarmer.WhenSettled(() =>
+                    {
+                        if (go == null || capturedFallback == null) return;
+                        var retryOpts = isSiege
+                            ? SkinOptions.Structure(bodyHeight)
+                            : SkinOptions.Enemy(bodyHeight);
+                        retryOpts.StripColliders = true;
+                        if (def != null)
+                            retryOpts.LocalRotation = Quaternion.Euler(0f, def.ModelYaw, 0f);
+                        GameObject arrived = VisualFactory.Skin(go.transform, resourcesPath, retryOpts);
+                        if (arrived == null)
+                        {
+                            FlowTrace.Warn("TroopVisual",
+                                $"id={troopId}: addressable retry settled but '{resourcesPath}' still " +
+                                "has no verified renderer; retaining the readable fallback.");
+                            return;
+                        }
+
+                        Object.Destroy(capturedFallback);
+                        FlowTrace.Step("TroopVisual",
+                            $"id={troopId}: addressable body arrived; replaced fallback with '{arrived.name}'.");
+                    });
+                }
             }
 
             // NavMeshAgent — share the hero's agent type (0) so the troop traverses the
@@ -217,6 +244,62 @@ namespace DeNelle.Village
             if (model.IndexOf('/') >= 0 || model.IndexOf('\\') >= 0)
                 return model.Replace('\\', '/');
             return "Heroes/" + model;
+        }
+
+        private static bool IsAddressableModelPath(string resourcesPath)
+            => !string.IsNullOrEmpty(resourcesPath) && resourcesPath.IndexOf('/') >= 0;
+
+        private static GameObject BuildHumanoidFallback(Transform host, float bodyHeight)
+        {
+            var capsule = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+            capsule.name = "TroopFallback_Humanoid";
+            StripPrimitiveCollider(capsule);
+            capsule.transform.SetParent(host, false);
+            capsule.transform.localPosition = new Vector3(0f, bodyHeight * 0.5f, 0f);
+            TintCapsule(capsule.GetComponent<Renderer>());
+            return capsule;
+        }
+
+        /// <summary>Low, horizontal, collision-free siege silhouette used only while art is absent.</summary>
+        private static GameObject BuildSiegeFallback(Transform host)
+        {
+            var root = new GameObject("TroopFallback_SiegeMachine");
+            root.transform.SetParent(host, false);
+
+            AddSiegePart(root.transform, PrimitiveType.Cube, "Chassis",
+                new Vector3(0f, 0.72f, 0f), new Vector3(1.35f, 0.36f, 1.75f), Quaternion.identity);
+            AddSiegePart(root.transform, PrimitiveType.Cube, "ThrowingArm",
+                new Vector3(0f, 1.18f, 0.08f), new Vector3(0.20f, 0.20f, 1.75f),
+                Quaternion.Euler(-24f, 0f, 0f));
+            AddSiegePart(root.transform, PrimitiveType.Sphere, "Counterweight",
+                new Vector3(0f, 1.48f, -0.62f), Vector3.one * 0.48f, Quaternion.identity);
+
+            for (int side = -1; side <= 1; side += 2)
+            for (int end = -1; end <= 1; end += 2)
+                AddSiegePart(root.transform, PrimitiveType.Cylinder, $"Wheel_{side}_{end}",
+                    new Vector3(side * 0.76f, 0.48f, end * 0.62f),
+                    new Vector3(0.58f, 0.16f, 0.58f), Quaternion.Euler(0f, 0f, 90f));
+
+            return root;
+        }
+
+        private static void AddSiegePart(Transform parent, PrimitiveType type, string name,
+            Vector3 position, Vector3 scale, Quaternion rotation)
+        {
+            var part = GameObject.CreatePrimitive(type);
+            part.name = name;
+            StripPrimitiveCollider(part);
+            part.transform.SetParent(parent, false);
+            part.transform.localPosition = position;
+            part.transform.localRotation = rotation;
+            part.transform.localScale = scale;
+            TintCapsule(part.GetComponent<Renderer>());
+        }
+
+        private static void StripPrimitiveCollider(GameObject primitive)
+        {
+            if (primitive != null && primitive.TryGetComponent(out Collider collider))
+                Object.Destroy(collider);
         }
 
         // THE FIX binds a controller whose parameters ARE the vocabulary TroopController already

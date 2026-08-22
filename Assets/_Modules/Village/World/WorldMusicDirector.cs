@@ -66,7 +66,8 @@ namespace DeNelle.Village
             // A live BattleArena warps the hero to ArenaCentre (classified OuterWorld),
             // so re-asserting zone music here would stomp the Arena track StageRoutine set.
             // Let the poll timer advance (above) but skip the zone-music re-assertion until
-            // the battle resolves (RestoreAmbientAfter restores Overworld on Resolve).
+            // the battle resolves (BattleArena asks ReapplyCurrentContext to restore the
+            // track for the hero's actual return position).
             if (BattleArena.Instance != null && BattleArena.Instance.BattleInProgress) return;
 
             var hero = ResolveHero();
@@ -90,6 +91,28 @@ namespace DeNelle.Village
                 _lastInWorld = inWorld;
                 Apply(inWorld);
             }
+        }
+
+        /// <summary>
+        /// Re-evaluate and immediately apply the ambient track for the hero's current
+        /// position. BattleArena calls this after its result cue because arena returns
+        /// are additive: no scene-music callback fires when the hero lands back in town.
+        /// Returns false when no live hero can be resolved.
+        /// </summary>
+        public bool ReapplyCurrentContext()
+        {
+            var hero = ResolveHero();
+            if (hero == null)
+            {
+                _initialised = false;
+                return false;
+            }
+
+            bool inWorld = ZoneManager.GetZone(hero.position) != RegionId.Village;
+            _initialised = true;
+            _lastInWorld = inWorld;
+            Apply(inWorld);
+            return true;
         }
 
         private static void Apply(bool inWorld)

@@ -2332,8 +2332,7 @@ namespace DeNelle.Village.Arena
 
             // Arena BGM must not outlive the arena; and a StageRoutine stopped mid-fade would leave the
             // screen BLACK in the scene the player actually landed in, so reveal explicitly.
-            Guard.Try("BattleArena", "restore ambient after abandon",
-                () => CoreServices.Audio?.PlayMusic(MusicTrack.Overworld));
+            Guard.Try("BattleArena", "restore ambient context after abandon", RestoreAmbientContext);
             Guard.Try("BattleArena", "clear fade after abandon", () =>
             {
                 var fader = ScreenFader.EnsureInstalled();
@@ -2721,7 +2720,28 @@ namespace DeNelle.Village.Arena
         private System.Collections.IEnumerator RestoreAmbientAfter(float seconds)
         {
             yield return new WaitForSecondsRealtime(Mathf.Max(0f, seconds));
-            CoreServices.Audio?.PlayMusic(MusicTrack.Overworld);
+            RestoreAmbientContext();
+        }
+
+        /// <summary>
+        /// Arena scenes are additive, so returning the hero does not retrigger scene music.
+        /// Delegate to the position-aware world director instead of assuming every arena
+        /// exit lands in the overworld. The fallback is only for bootstrap/teardown races
+        /// where the director has not installed yet; it derives from the same zone source.
+        /// </summary>
+        private static void RestoreAmbientContext()
+        {
+            var director = WorldMusicDirector.Instance;
+            if (director != null && director.ReapplyCurrentContext()) return;
+
+            var hero = GameObject.FindGameObjectWithTag("Player");
+            bool inWorld = hero != null &&
+                           DeNelle.Core.World.ZoneManager.GetZone(hero.transform.position) !=
+                           DeNelle.Core.World.RegionId.Village;
+            CoreServices.Audio?.PlayMusic(inWorld ? MusicTrack.Overworld : MusicTrack.Village);
+            FlowTrace.Warn("BattleArena",
+                "WorldMusicDirector unavailable during arena ambient restore; derived " +
+                (inWorld ? "Overworld" : "Village") + " directly from the return position.");
         }
 
         // WO-560: celebratory VFX burst on a WIN. A single WaveClear_Celebration at the
