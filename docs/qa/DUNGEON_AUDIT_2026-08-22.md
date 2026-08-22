@@ -1,5 +1,9 @@
 # Dungeon systems audit — 2026-08-22
 
+## Closure status
+
+**COMPLETE — OWNER ACCEPTED 2026-08-22.** The final implementation was covered by a fresh `COMPILE_GATE_OK` and DataRegression `248/250`; both remaining failures are separately ticketed non-dungeon asset gaps. The Windows rebuild and six-dungeon runtime matrix were not executed. The owner explicitly accepted that remaining felt-test coverage as owner-owned and will reopen this work or create focused tickets for any defects found in player testing. This records a waiver, not fabricated runtime evidence.
+
 ## Verdict
 
 The initial audit found a healthy structural fleet but an incomplete composed boss/difficulty contract. The authorized follow-up implements those missing contracts; final full-gate and per-portal player evidence is recorded below as it completes.

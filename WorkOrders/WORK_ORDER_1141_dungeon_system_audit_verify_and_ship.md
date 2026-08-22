@@ -1,10 +1,21 @@
 # WORK ORDER 1141 — Dungeon system audit: verify and ship the cohesive runtime pass
 
-**Status:** READY FOR CLI VERIFICATION AND PUSH  
+**Status:** COMPLETE — OWNER ACCEPTED 2026-08-22
 **Date:** 2026-08-22  
 **Owner:** CLI  
 **Implementation state:** Changes are present in the working tree but are intentionally uncommitted.  
 **Scope rule:** Verify and commit only the explicit dungeon allowlist in this document. The working tree contains concurrent siege/loss-stakes and VFX work that does not belong to this work order.
+
+## Closure — owner ruling, 2026-08-22
+
+The owner marked this work order complete. The implementation was committed after a fresh compile gate and full DataRegression run that included the dungeon changes. Evidence reported by the CLI:
+
+- fresh `COMPILE_GATE_OK`;
+- DataRegression `248/250`;
+- neither failing suite belongs to the dungeon lane; both are separately ticketed asset gaps;
+- the dungeon allowlist was staged and committed independently from the concurrent siege and VFX lanes.
+
+The Windows rebuild and six-target runtime matrix described below were not run as part of this closure. This is an explicit owner acceptance, not a claim that those probes passed. The owner is the sole player/felt-test authority and will reopen this WO or create focused follow-up tickets for defects found during playtesting. Accordingly, those deferred probes are no longer acceptance blockers for WO-1141.
 
 ## Intent
 
@@ -260,4 +271,3 @@ Stop and report rather than improvising if:
 - the runtime probe reaches the wrong dungeon despite `-Dungeon`;
 - the proposed commit contains any non-allowlisted path;
 - the upstream branch is ambiguous or pushing would require force.
-
