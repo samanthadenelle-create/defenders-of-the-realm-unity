@@ -13,6 +13,19 @@ Writes: BOARD.html (repo root) - open in any browser; links open the md files.
 """
 import os, re, glob, html, time, datetime, sys, subprocess
 
+# Windows consoles default to cp1252, which cannot encode the characters this repo's
+# work orders actually use (the U+26D4 no-entry sign, box drawing, arrows). On
+# 2026-08-22 that raised UnicodeEncodeError from a print() AFTER BOARD.html had been
+# written successfully -- so the board was fine and the run still looked like a hard
+# failure, which is the worst of both: a false alarm that also hides real check output
+# (BOARD_CHECK_OK / DUPLICATE_WO_NUMBERS / BANNER_OK all print after that point).
+# Judge the board by its own check markers, not by this script's exit code.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass  # older Python, or a stream that is not reconfigurable; prints degrade, not die
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WO_DIR = os.path.join(ROOT, "WorkOrders")
 OUT = os.path.join(ROOT, "BOARD.html")
