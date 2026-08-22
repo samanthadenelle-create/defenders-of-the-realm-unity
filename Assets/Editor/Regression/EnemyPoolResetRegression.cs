@@ -131,6 +131,14 @@ namespace DeNelle.Editor.Regression
             // Re-stamped by the spawner's Configure(instanceId, def, heart) on every spawn,
             // fresh or reused - resetting them here would only blank a value that is about
             // to be overwritten one line later.
+            // WO-874: re-FETCHED (GetComponent) and re-ARMED (ArmForTier) by
+            // Enemy.EnsureEliteVfx, which Configure calls at its end on EVERY spawn -
+            // fresh or reused. Nulling it here would only blank a reference that is about
+            // to be re-read one line later. The pooled-DOWNGRADE case (an elite body reused
+            // as a plain mob) is handled inside ArmForTier(false,false), which stands the
+            // aura down explicitly rather than leaving it running - that Stop() was a real
+            // leak until 2026-08-22, so do not assume the component self-clears.
+            { "_eliteVfx",       "re-fetched + re-armed by Configure -> EnsureEliteVfx; downgrade handled in ArmForTier" },
             { "_enemyId",        "re-stamped by Configure" },
             { "_enemyDefId",     "re-stamped by Configure" },
             { "_maxHp",          "re-seeded from the def by Configure" },

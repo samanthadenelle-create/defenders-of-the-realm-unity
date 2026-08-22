@@ -283,6 +283,27 @@ namespace DeNelle.Village
         [Tooltip("Oneshot burst at the boss on death.")]
         [SerializeField] private VFXType _deathVfx = VFXType.Boss_Death;
 
+        // WO-874 E8: THE ENTRANCE. Audited 2026-08-04 as a hard gap - this boss played a
+        // burst on every other beat it has (phase transition, telegraph, strike, death,
+        // three auras, the breath cone) and NOTHING on arrival. There was no Boss_Spawn
+        // call anywhere in this file; grep it and the only Boss_Spawn in the tree is the
+        // one EliteVFXController returns from SpawnVfxFor, which this boss does not go
+        // through - DragonBoss is its own controller, not an Enemy, so Enemy.Configure's
+        // attach seam never touches it. Hence a call here rather than a shared one.
+        //
+        // Fired from OnEnable, beside the loop-budget declaration, for the same reason
+        // that line gives: OnEnable is the boss's own lifecycle and it runs on every
+        // entrance including a re-enable, so the entrance cannot go missing when the
+        // encounter is started by a path that does not construct a fresh boss.
+        [Tooltip("Oneshot ENTRANCE burst played at the boss the moment it enters the fight (WO-874 E8).")]
+        [SerializeField] private VFXType _spawnVfx = VFXType.Boss_Spawn;
+
+        [Tooltip("Camera shake intensity/duration for the entrance burst. Matches the " +
+                 "boss tier's spawn shake in EliteVFXController (0.5 / 0.5) on purpose - " +
+                 "one boss arriving must feel the same however it was spawned.")]
+        [SerializeField] private float _spawnShakeIntensity = 0.5f;
+        [SerializeField] private float _spawnShakeSeconds   = 0.5f;
+
         [Tooltip("Persistent phase aura for Phase 1 (Circling) - calm.")]
         [SerializeField] private VFXType _phase1Aura = VFXType.Boss_Aura_Phase1;
 
@@ -538,7 +559,34 @@ namespace DeNelle.Village
         // way. This dragon alone holds two loops (the phase aura below plus the
         // _breathHandle stream), and the arena keeps its own dressing, which is why the
         // boss tier raises the ceiling at all.
-        private void OnEnable() => VfxLoopBudget.SetBossActive(true);
+        private void OnEnable()
+        {
+            VfxLoopBudget.SetBossActive(true);
+            PlaySpawnEntrance();
+        }
+
+        /// <summary>
+        /// WO-874 E8 — the boss's ARRIVAL burst. Guarded because a VFX failure must never
+        /// stop a boss from entering the fight; the Guard logs through FlowTrace.Fail, so
+        /// this is not a swallowing catch.
+        /// </summary>
+        private void PlaySpawnEntrance()
+        {
+            if (!_phaseVfxEnabled || _spawnVfx == VFXType.None) return;
+
+            DeNelle.Core.Diagnostics.Guard.Try("DragonBoss", "spawn entrance vfx", () =>
+            {
+                VFXManager.Play(_spawnVfx, transform.position);
+                if (_spawnShakeIntensity > 0f)
+                    CameraShakeBridge.Shake(_spawnShakeIntensity, _spawnShakeSeconds);
+            });
+
+            DeNelle.Core.Diagnostics.FlowTrace.Step("DragonBoss",
+                $"ENTRANCE '{_spawnVfx}' played at {transform.position} " +
+                $"(shake {_spawnShakeIntensity:0.##}/{_spawnShakeSeconds:0.##}s) - WO-874 E8. " +
+                "Before this the boss was the only combat actor with a burst on every beat " +
+                "EXCEPT its arrival.");
+        }
 
         private void Update()
         {

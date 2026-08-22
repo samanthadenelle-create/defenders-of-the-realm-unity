@@ -6,10 +6,13 @@
 // Add to any enemy prefab alongside EnemyBrain to give it elite/boss visuals.
 // Set isElite or isBoss in the Inspector.
 //
-// INTEGRATION:
+// INTEGRATION (WO-874 wired it; before that this component was on NO prefab):
+//   • Enemy.Configure() AddComponent's this on any enemy whose enemies.json stat block
+//     reads boss or elite, then calls ArmForTier(). That is the attach seam - the
+//     ruling was "wire it", and a static shortcut is what routed around it once.
 //   • Enemy.Die() checks for EliteVFXController and calls OnEliteDeath() instead
 //     of the normal death VFX path (see Enemy.cs edit, WO-66).
-//   • EnemyBrain.TryAttack() (if implemented) calls OnEliteAttack(hitPos).
+//   • Enemy.ExecuteContactAttack() calls OnEliteAttack(hitPos) — WO-874.
 //   • CameraShakeBridge.Shake() is used — same pattern as the rest of the project.
 //     No CameraShakeManager / ShakeTier exists; those references are mapped to
 //     CameraShakeBridge intensity floats (Heavy ≈ 0.5, Medium ≈ 0.3).
@@ -42,15 +45,110 @@ namespace DeNelle.Village
         private Light _auraLight;
         private float _baseAuraIntensity;
 
-        private void Start()
+        // WO-874: set by ArmForTier. Start() then stands down, because the CODE path
+        // already decided this instance's tier and started its routines - a second
+        // start would double the spawn burst and the spawn shake on the same frame.
+        private bool _armedByCode;
+
+        // WO-874: true between ArmForTier and OnDisable. The two coroutines below are
+        // started from exactly one place each so a pooled body cannot accumulate a
+        // second aura pulse on every reuse (that is a per-reuse coroutine leak, and it
+        // shows up as an aura that pulses faster the longer the session runs).
+        private bool _running;
+
+        /// <summary>
+        /// WO-874 - THE ATTACH SEAM, and the reason this component stopped being dead code.
+        /// <para>
+        /// The owner's 2026-08-04 ruling (RECONFIRMED 2026-08-21) was WIRE IT: attach this
+        /// controller on the elite/boss spawn path so its spawn / aura / attack / death
+        /// actually fire. Commit <c>4c1da079</c> instead lifted two STATICS out of this file
+        /// and called them from <c>Enemy</c>, which delivered the death/spawn tell while
+        /// routing around the ruling - so the aura and <see cref="OnEliteAttack"/> had still
+        /// never run in the shipped game. This method is what closes that: it is called from
+        /// <c>Enemy.Configure</c>, the ONE place every spawn path sets the stat block and
+        /// also the pooled-reuse entry point.
+        /// </para>
+        /// <para>
+        /// It must be idempotent and re-armable, because a pooled body's
+        /// <see cref="Start"/> runs exactly once for the lifetime of the POOL, not of the
+        /// enemy. Re-arming stops whatever the previous life left running and starts fresh.
+        /// </para>
+        /// </summary>
+        public void ArmForTier(bool boss, bool elite)
         {
+            isBoss = boss;
+            isElite = elite;
+            _armedByCode = true;
+
+            CacheAuraLight();
+            StopRoutines();
+
+            if (!isBoss && !isElite)
+            {
+                // Neither flag: nothing tier-specific to drive. Deliberately NOT an error -
+                // a caller may arm-then-clear when an enemy is re-Configured to a plain tier
+                // on pool reuse, and silently doing nothing is the correct outcome there.
+                //
+                // ⛔ THE Stop() IS LOAD-BEARING, AND IT USED TO BE A LEAK (fixed 2026-08-22).
+                // auraParticles.Play() used to run ABOVE this early return, so a body that had
+                // lived as an elite and was reused as a PLAIN mob started its aura and never
+                // stopped it: a trash enemy wearing an elite's glow, on a pooled body, which is
+                // the hardest class of bug to reproduce because it depends on what the body WAS
+                // in a previous life. The component survives Release/Get, so anything it was
+                // driving must be explicitly stood down here rather than assumed fresh.
+                if (auraParticles != null) auraParticles.Stop();
+                DeNelle.Core.Diagnostics.FlowTrace.Throttle("EliteVFX", "arm-plain", 5f,
+                    $"ArmForTier on '{name}' with neither boss nor elite set - aura/spawn drama " +
+                    "stood down for this life (pooled reuse as a plain-tier enemy).");
+                return;
+            }
+
+            if (auraParticles != null) auraParticles.Play();
+
+            _running = true;
+            StartCoroutine(PulseAura());
+            StartCoroutine(DramaticSpawnRoutine());
+
+            DeNelle.Core.Diagnostics.FlowTrace.Step("EliteVFX",
+                $"armed '{name}' boss={isBoss} elite={isElite} - aura pulse + dramatic spawn running " +
+                $"(delay {spawnDramaticDelay:0.##}s); death/attack tells now route through this component.");
+        }
+
+        private void CacheAuraLight()
+        {
+            if (_auraLight != null) return;
             _auraLight = GetComponentInChildren<Light>();
             _baseAuraIntensity = _auraLight != null ? _auraLight.intensity : 1f;
+        }
+
+        private void StopRoutines()
+        {
+            if (!_running) return;
+            _running = false;
+            StopAllCoroutines();
+            // Leave the light where the ladder floor is, not wherever the sine happened to
+            // stop: a pooled body reused as a plain enemy would otherwise keep a boss-bright
+            // light forever, with nothing left running to bring it down.
+            if (_auraLight != null) _auraLight.intensity = _baseAuraIntensity;
+        }
+
+        private void OnDisable() => StopRoutines();
+
+        private void Start()
+        {
+            // WO-874: the HAND-PLACED prefab path. When ArmForTier already ran (the code
+            // path, which is now every elite and boss in the game), this is a no-op - the
+            // routines are already running and re-starting them here would fire the spawn
+            // burst and the camera shake twice on the same frame.
+            if (_armedByCode) return;
+
+            CacheAuraLight();
 
             if (auraParticles != null) auraParticles.Play();
 
             if (isBoss || isElite)
             {
+                _running = true;
                 StartCoroutine(PulseAura());
                 StartCoroutine(DramaticSpawnRoutine());
             }
@@ -108,14 +206,23 @@ namespace DeNelle.Village
         // WO-886 asks for as a felt criterion therefore never fired either; every kill,
         // boss included, got the flat 0.18 regular shake.
         //
-        // The fix is NOT to auto-attach this component. Its Start() also drives an aura
-        // light pulse and a DramaticSpawnRoutine (Boss_Spawn VFX + a spawn shake) —
-        // attaching it to every elite would ship three unrequested felt changes under a
-        // death-VFX work order. Instead the tier rule is lifted into the two statics
-        // below, Enemy drives them straight off its enemies.json stat block (which is the
-        // only species signal the pool/factory spawn path actually sets), and this
-        // component delegates to them. One rule, two call sites, zero drift — and a
-        // hand-placed prefab that DOES carry this component still behaves identically.
+        // WO-886's ANSWER was to lift the tier rule into the two statics below rather than
+        // auto-attach, on the grounds that attaching would ship the aura + spawn drama as
+        // unrequested felt changes under a death-VFX work order. That reasoning was sound
+        // FOR WO-886's scope and it is now SUPERSEDED, not reversed by accident:
+        //
+        // ⚠ WO-874 (owner ruling 2026-08-04, RECONFIRMED VERBATIM 2026-08-21 "874 wire
+        //   ruling stands") makes the aura + spawn drama the REQUESTED change. The
+        //   component is now genuinely AddComponent'd on the elite/boss spawn path
+        //   (Enemy.Configure -> EnsureEliteVfx -> ArmForTier), so from here on
+        //   GetComponent<EliteVFXController>() returns NON-NULL for every elite and boss
+        //   and the OnEliteDeath branch above is live. The statics below are NOT dead:
+        //   they remain the ONE home of the tier rule, called by both this component and
+        //   the plain-tier path in Enemy that has no component to consult.
+        //
+        // So: one rule, two call sites, zero drift — and a hand-placed prefab that carries
+        // this component still behaves identically (Start() stands down when ArmForTier
+        // already ran, so the two entry points cannot double-fire).
 
         /// <summary>
         /// The death VFXType for a tier. Boss outranks elite; a plain enemy returns

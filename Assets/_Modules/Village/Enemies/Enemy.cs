@@ -700,6 +700,77 @@ namespace DeNelle.Village
             // give for reading _def here), and it is also the pooled-reuse entry point, so
             // a recycled enemy re-announces itself exactly as a fresh one does.
             _spawnTellPending = true;
+
+            // WO-874 - THE ATTACH. Same reasoning as the line above, which is why it sits
+            // here and not in Awake: _def is the only tier signal the pool/factory spawn
+            // path sets, and it is set by Configure.
+            EnsureEliteVfx();
+        }
+
+        // ---------------------------------------------------------------------
+        // WO-874 - ELITE / BOSS VFX: THE COMPONENT IS ATTACHED, NOT SHORTCUT
+        // ---------------------------------------------------------------------
+        //
+        // OWNER RULING 2026-08-04, RECONFIRMED VERBATIM 2026-08-21 ("874 wire ruling
+        // stands"): WIRE EliteVFXController - do not kill it, and do not deliver its
+        // effect some other way.
+        //
+        // ⛔ THE FAILURE MODE THIS REPLACES ALREADY HAPPENED ONCE. Commit 4c1da079
+        //    promoted SpawnVfxFor / PlayDeathShake to STATICS and called them from this
+        //    file instead of attaching the component. That delivered the spawn tell and
+        //    the tiered kill shake - so the ticket READ as progressed - while
+        //    AddComponent<EliteVFXController> stayed at zero hits repo-wide and the two
+        //    behaviours the component alone owns, the PULSING AURA and OnEliteAttack, had
+        //    still never run in the shipped game. Routing around a ruling with no reversal
+        //    recorded is the shape; the fix is the attach itself.
+        //
+        // WHY A COMPONENT AND NOT MORE STATICS: the aura is STATEFUL and PER-BODY - a
+        // sine over a cached base light intensity, running for as long as that enemy
+        // lives. A static cannot hold that, and OnEliteAttack likewise needs the instance
+        // to know its own tier at the moment the blow lands.
+        //
+        // POOL-SAFE BY CONSTRUCTION: AddComponent runs at most ONCE per pooled body (the
+        // GetComponent below adopts it on every later reuse), and ArmForTier re-arms it
+        // for the life that is starting - stopping whatever the previous life left
+        // running, so a body reused a hundred times carries one aura coroutine, not a
+        // hundred. A body re-Configured to a PLAIN tier keeps the component but is armed
+        // with both flags false, which stands its routines down.
+
+        /// <summary>Cached for the frame-rate paths (attack/death); re-resolved on Configure.</summary>
+        private EliteVFXController _eliteVfx;
+
+        /// <summary>
+        /// WO-874: attach + arm <see cref="EliteVFXController"/> when this enemy's
+        /// enemies.json stat block reads elite or boss. Returns the component, or null for
+        /// a plain-tier enemy that has never been an elite (nothing is attached
+        /// speculatively - a trash mob must not carry a component it will never use).
+        /// </summary>
+        private EliteVFXController EnsureEliteVfx()
+        {
+            bool boss  = IsBossTier();
+            bool elite = IsEliteTier();
+
+            _eliteVfx = GetComponent<EliteVFXController>();
+
+            if (_eliteVfx == null)
+            {
+                if (!boss && !elite) return null;   // plain tier: nothing to attach.
+                _eliteVfx = gameObject.AddComponent<EliteVFXController>();
+                DeNelle.Core.Diagnostics.FlowTrace.Step("EliteVFX",
+                    $"attached EliteVFXController to '{_enemyId}' (boss={boss} elite={elite}) - " +
+                    "WO-874 wire ruling; aura + OnEliteAttack now have an owner on this body.");
+            }
+
+            _eliteVfx.ArmForTier(boss, elite);
+
+            // The component now owns the arrival tell for this tier: its DramaticSpawnRoutine
+            // plays EXACTLY the type FireSpawnTell would have played (both go through
+            // EliteVFXController.SpawnVfxFor) and fires the same tier shake, but after the
+            // authored dramatic delay. Leaving both armed would double the burst and the
+            // shake on the same spawn - ONE owner, and for an elite it is the component.
+            if (boss || elite) _spawnTellPending = false;
+
+            return _eliteVfx;
         }
 
         // ---------------------------------------------------------------------
@@ -711,6 +782,15 @@ namespace DeNelle.Village
         // WO-886 already established, by grepping every .prefab/.unity/.asset in the tree,
         // that EliteVFXController is attached to NOTHING, so Elite_Spawn and Boss_Spawn had
         // never played either. All three tiers arrived in silence.
+        //
+        // ⚠ THAT LAST CLAUSE IS NO LONGER TRUE, and the difference is load-bearing here.
+        //   WO-874 (owner ruling, reconfirmed 2026-08-21) attaches EliteVFXController on
+        //   the elite/boss spawn path, so for those two tiers the component's
+        //   DramaticSpawnRoutine IS the arrival tell - the same VFXType (both sides call
+        //   SpawnVfxFor) and the same tier shake, after the authored dramatic delay.
+        //   EnsureEliteVfx therefore CLEARS _spawnTellPending for boss and elite, and this
+        //   method is now the STANDARD tier's tell only. Two owners would mean two bursts
+        //   and two shakes on one spawn.
         //
         // The fix mirrors WO-886's exactly rather than inventing a second pattern: the tier
         // rule lives in ONE place (EliteVFXController.SpawnVfxFor, beside the death rule it
@@ -1727,10 +1807,33 @@ namespace DeNelle.Village
             // played by PlayTypeSound above; VFXManager must not layer a second cue.
             if (targetMb != null)
             {
+                Vector3 hitPos = targetMb.transform.position + Vector3.up * 1.0f;
+
                 DeNelle.Core.Diagnostics.Guard.Try("Enemy", "melee connect vfx", () =>
-                    VFXManager.Play(VFXType.Impact_Physical,
-                                    targetMb.transform.position + Vector3.up * 1.0f,
+                    VFXManager.Play(VFXType.Impact_Physical, hitPos,
                                     Quaternion.identity, playSound: false));
+
+                // WO-887 (surface half) - WHAT THE BLOW LANDED ON, layered ON TOP of the
+                // generic Impact_Physical above rather than replacing it. The generic slash
+                // arc is the CONTACT read (it fires no matter what, so a hit is never
+                // silent); the surface burst is the MATERIAL read - splatter vs spark vs
+                // chip vs splinter, carried by debris shape and motion, not by hue.
+                // HitSurfaceVfx.Resolve returns None rather than guessing when it cannot
+                // tell, and Play no-ops on None, so an unrecognised target degrades to
+                // exactly today's behaviour.
+                DeNelle.Core.Diagnostics.Guard.Try("Enemy", "melee surface impact", () =>
+                    HitSurfaceVfx.ResolveAndPlay(targetMb, hitPos));
+
+                // WO-874 - the elite/boss ATTACK tell. This is one of the two behaviours
+                // that the 4c1da079 static shortcut could not deliver (the other is the
+                // aura): OnEliteAttack needs the INSTANCE to know its own tier at the
+                // moment the blow lands. _eliteVfx is null for every plain-tier enemy, so
+                // this is a null check on the hot path and nothing more.
+                if (_eliteVfx != null)
+                {
+                    DeNelle.Core.Diagnostics.Guard.Try("Enemy", "elite attack vfx", () =>
+                        _eliteVfx.OnEliteAttack(hitPos));
+                }
             }
         }
 
