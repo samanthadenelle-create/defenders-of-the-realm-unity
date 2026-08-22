@@ -22,6 +22,106 @@ hero warp (→Village HeroLocomotion, `SceneRouter.cs:350,383`).
 
 ---
 
+## DELTA 2026-08-21 — new Core surfaces (Defense data model, DefenseMapPlate, RaidStrings, RaidCooldownRecord, `AddRawImage`)
+
+Read from source 2026-08-21. Where this block and the 08-02 body disagree, this block wins.
+
+**HEADLINE CORRECTION: `PanelId` no longer stops at 15.** Verified in `Core/UI/PanelRouter.cs` (the
+enum lives in that file, not in a `PanelId.cs`): `DefenseReport = 18`, `BattlePass = 19`,
+`MonthlyLedger = 20`. The 08-02 header line "PanelId 0-15 (RealmMap=15)" is stale.
+Read the save-schema version off `SaveSchema.CurrentVersion` as always — the header line above says
+v36 and is likewise a copied number; the const is the authority.
+
+### ⛔ NEW DIRECTORY `Core/Defense/` — **UNTRACKED IN GIT AS OF THIS WRITE.** See the P1 ledger entry in `docs/MASTER_CATALOG.md`.
+
+- **`Defense/DefenseReport.cs` (576)** `DeNelle.Core.Defense` — the pure persisted data model for one
+  attack on the player's town. Enums `AttackerSource` · `DefenseOutcome` · `DefenseResolution` ·
+  `StructureState` · `DefenseBand`. Records `AttackerUnitRecord` · `AttackerIdentity` ·
+  `DefenderSnapshot` · `BreachRecord` · `AttackPathPoint` · `StructureOutcome` · `StakesLedger`
+  (with `StakesLedger.Interim()`) · `DefenseOutcomeRecord` (`NewEmpty()`, `Normalize()`), plus
+  `static class LayoutFingerprint` (`Compute(IEnumerable<string>)`).
+  `DefenseResolution.ResolvedInAbsentia` and `DefenderSnapshot.Garrison` exist **unused today on
+  purpose** — they are the shape a future offline fast-forward drops into with no data change.
+- **`Defense/DefenseReportLedger.cs` (159)** — static store: `Append(record)` · `All()` ·
+  `NewestFirst()` · `TryGet(reportId)` · `UnreadCount()` · `MarkRead(reportId)` · `Clear()`.
+
+### `Core/UI/DefenseMapPlate.cs` (390) `DeNelle.Core.UI` — static, + nested `sealed class Plate`
+
+The FROZEN "where it went wrong" diagram. `Build(Transform parent, DefenseOutcomeRecord)` ->
+`Plate` (`Relayout()`, internal segment list) · `DescribeMarks(record)` · `Compass(dx, dz)`.
+⭐ **Why it is not `HudMinimapWidget`, asked and answered at source:** the minimap (WO-828) is a LIVE
+hero-centred widget fed by `Func<>` providers wired by `HudKitController`. This plate draws
+positions captured minutes or days ago, of structures that may no longer exist, in a town since
+rebuilt — there is no live world to read, so feeding it would mean stubbing every provider with a
+constant. It is also mechanically impossible: `DeNelle.HUD` references Core + Data ONLY (CLAUDE.md
+§5's one enforced invariant), so `DeNelle.Village` cannot reach it.
+**Reuse is deliberate, not incidental:** marks resolve through `RealmAtmosphereStyle.PinAscii`, so a
+triangle means "threat" on every map surface in the game — this is the THIRD reader of that table,
+not a third vocabulary. It also keeps the WO-828 cost rule verbatim: **no Camera, no RenderTexture,
+no render pass, nothing ticks** — static Images + TMP labels built once and destroyed with the
+detail view.
+⛔ **Colourblind law, structural:** every mark is a distinct GLYPH first (`^` breach, `#` destroyed,
+`O` damaged, `o` the Heart), the FIRST breach carries the literal text label "1st BREACH" plus a
+ring, later breaches carry their ordinal as text, the attack path is a LINE, and a legend spells
+every glyph out in words. Desaturate the plate and every fact survives.
+
+### `Core/UI/RaidStrings.cs` (158) `DeNelle.Core.UI` — static
+
+Keys-only accessor for the per-camp raid cooldown copy: `Get(key)` · `Format(key, args)` ·
+`Humanise(double remainingSeconds)` · `Reload()`. Sentences live in `canon-strings.json` in BOTH
+canonical copies, ASCII-only. Loader mirrors `PromoStrings` verbatim (flat string->string map via
+`CanonicalJson`, Resources first, StreamingAssets fallback, WebGL-safe); a missing key returns the
+visible `[[missing:key]]` marker AND self-reports through `FlowTrace` — never a silent blank.
+⛔ Every cooldown state has a SENTENCE and the sentence is the primary signal; a tint is decoration
+on top of it. Do not "simplify" a card by dropping the label and keeping the colour.
+
+### `Core/State/RaidCooldownRecord.cs` (105) `DeNelle.Core.State` — pure data
+
+One record per cleared raid camp: `ConfigId`, `StartedUnixMs`, `DurationSeconds`, `ServerAnchored`;
+ctors + `static Normalize(r)`. It lives in Core because it is a field on
+`SaveSchema.PersistedState` (a Village type could never be persisted there) — the
+`DefenseOutcomeRecord` precedent. **No UnityEngine types on a persisted field.**
+⛔ **The clock is NOT stored here and that is the point** — `StartedUnixMs` is written by
+`RaidCooldownService` from `TimeSource.NowUnixMs()`, so exactly one place decides what "now" means
+for a raid cooldown.
+⚠ **Duration is persisted, not re-derived**, so retuning the balance table cannot silently lengthen
+a cooldown a player already paid to start — the same reasoning as WO-911's persisted PAID BASKET.
+**No schema bump:** nullable on the wire, absent on an older save falls to `GameState`'s empty-list
+initializer, which is byte-identical to today's behaviour.
+
+### `Core/UI/ElarionUiKit.cs` — NEW primitive `AddRawImage` (`ElarionUiKit.cs:2338`)
+
+`public static RawImage AddRawImage(Transform parent, string name, Vector2 anchorMin,
+Vector2 anchorMax, Texture texture, Color color, bool raycastTarget = false)`.
+The kit previously had **zero** `RawImage` references. It returns the typed component rather than
+the GameObject that `AddImage` returns, because the entire reason to reach for the primitive is to
+animate `uvRect`. `raycastTarget` defaults **false**: a textured surface built this way is
+decoration over content, and swallowing the tap on the card underneath is the default bug.
+First caller: The Night Market's aurora (WO-1050 Lane G). The law it satisfies — presentation is
+constructed in the one file sanctioned to touch raw uGUI, never hand-rolled in a feature module
+(`ARCHITECTURE_PRINCIPLES` §2; `UiObsidianConformanceRegression`).
+
+### `Core/Geometry/WeaponOrientHelper.cs` (1395) — grew the per-mesh sheathe derivation
+
+New `TryResolveSheathedTipSign(GameObject prop, Transform gripRoot, out SheathedTipResolution)`
+(`:889`) plus the resolution/extent reporting types (`SeatSource` precedence ladder: authored row >
+`manual: true` catalog row > MEASURED > hand-typed archetype constant).
+⛔ **It reads `mesh.bounds`, not vertices, and that is load-bearing:** the shipped props have
+Read/Write **OFF**, which makes every vertex-based approach silently inert **on device** while
+appearing to work in the editor.
+Decision margins are explicit and DECLINE rather than guess: `GripEndDecisionMargin` 0.15,
+`ShieldDecisionMargin` 0.10, `ShieldFaceBand` 0.25, `CrossGuardSpikeRatio` 1.6, `ShieldDishMargin`
+0.05. Below a margin it `Warn`s and keeps existing behaviour.
+⚠ **Deliberate non-members:** axe / hammer / mace / wand / crossbow all resolve to
+`WeaponArchetype.Unknown` and DERIVE NOTHING — the owner's 2026-08-19 spec covers bow, sword, staff
+and shield only, and each of those rules leans on a property the excluded families lack.
+⚠ **A comment-vs-doc conflict is recorded IN the code and is worth repeating:** the STAFF grip is
+"three quarters of the way up Y" (owner ruling 2026-08-19), which **supersedes**
+`docs/WEAPON_ARMOR_ORIENT_LOGIC.md`'s older "staff -> grip lower third". Both values are kept in the
+source so a reader who finds the old third in an older doc copy can tell which is current.
+
+---
+
 ## ROOT FILES
 
 | Class | Path | Responsibility (verified) | Bootstrap |

@@ -87,7 +87,25 @@ if ($Install) {
     }
 
     Write-Host "=== Checking for connected devices ===" -ForegroundColor Cyan
-    $devices = & $adb devices
+    # ---------------------------------------------------------------------
+    # START THE DAEMON FIRST, AND SWALLOW ITS STDERR. (fixed 2026-08-21)
+    # When no adb daemon is running, `adb devices` prints "* daemon not
+    # running; starting now at tcp:5037" TO STDERR. Windows PowerShell 5.1
+    # wraps a native command's stderr in an ErrorRecord, which under this
+    # script's error preference is TERMINATING - so the whole install aborted
+    # on a purely informational line, AFTER a 5-15 minute APK build. This bit
+    # twice (2026-08-21, both times at line ~90).
+    # start-server is idempotent; 2>$null keeps its chatter out of $devices.
+    # 2>$null is NOT enough - PS 5.1 still raises the ErrorRecord. The only
+    # reliable fix is to relax the preference around the native calls.
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        cmd /c "`"$adb`" start-server" 2>&1 | Out-Null
+        $devices = cmd /c "`"$adb`" devices" 2>&1
+    } finally {
+        $ErrorActionPreference = $prevEap
+    }
     Write-Host ($devices -join "`n")
     if (($devices | Select-String -Pattern '\sdevice$').Count -eq 0) {
         Write-Error @"

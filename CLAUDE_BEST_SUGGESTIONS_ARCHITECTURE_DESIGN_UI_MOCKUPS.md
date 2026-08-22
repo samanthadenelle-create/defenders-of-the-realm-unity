@@ -25,7 +25,7 @@ These address recurring friction from tickets, mount sync, brace gates, doc drif
 - Before grepping/exploring code: Read the README system (PROJECT_INDEX + module/docs/Assets READMEs). Then targeted reads of MASTER_CATALOG areas.
 - For every `.cs` touched: Run the exact brace python (CLAUDE.md §1) immediately after edit. Log "Braces balanced (N) ✓" in your RESULT. CLI will revert mismatches.
 - Mount rule (CLAUDE.md §0): UI **never** writes/edits `.cs` via bash/Linux mount. Only use Write/Edit tools (Windows paths). If you see garble (brace ok on mount but not Windows), stop and signal the committer.
-- Numbering: Always consult CLI_LANES_WO_NUMBERS.md + MASTER_CATALOG/docs-wo-state.md for next free (currently 430+). Never mint from filesystem max. Slot into lanes. Update the lanes file when minting.
+- Numbering: Always consult CLI_LANES_WO_NUMBERS.md + MASTER_CATALOG/docs-wo-state.md for next free (READ IT OFF THE BANNER - do not trust any number written here or in any other doc). Never mint from filesystem max. Slot into lanes. Update the lanes file when minting.
 - Work orders: Every non-trivial task gets (or extends) a root `WORK_ORDER_NNN_*.md` with Status: READY TO IMPLEMENT, files, acceptance (brace + compile + regression + owner playtest), NOT touch. On done: CLI produces `.RESULT.md`.
 - Trust rule: "Never mark a WO/fix DONE on a green gate alone — only the owner's playtest is the verdict."
 
@@ -43,7 +43,7 @@ These address recurring friction from tickets, mount sync, brace gates, doc drif
   - CLI_LANES_WO_NUMBERS.md (status/lane)
   - This suggestions file
   - PIPELINE_STATE top block if BUILT/WIRED state changes
-  - Indices lag (e.g. "next free 384" vs 430) — fix them.
+  - Indices lag whenever they RESTATE a number instead of pointing at the banner - fix them by removing the number, not by updating it.
 - **Mockups & visuals:** For any UI/UX ticket (HUD, vendor, hero select, build, settings, dialogue), **generate or reference styled mockups** (see §4). Use image_gen with precise ElarionUiKit + reference mockup language. Embed paths + textual spec in the WO or this doc. Owner approval on visuals before coding.
 - **Low-battery / "3% left" sessions:** Batch every possible read + image_gen + grep in the first message. Produce the file/deliverable in one write. Defer non-critical exploration.
 - **Orchestration (CLAUDE.md §11):** You are the orchestrator/lead. Route focused tasks to subagents. Batch-gate the tree. Sole committer on Windows. Reconcile multi-session diffs by explicit path only (never `git add -A`).

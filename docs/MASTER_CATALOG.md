@@ -1,5 +1,49 @@
 # MASTER CATALOG — Project Index
 
+> # ▶ DELTA 2026-08-21 — read this FIRST; it supersedes every dated block below it
+> **Live anchor = `../CANON_GROUND_TRUTH_2026-08-21.md`.** Read HEAD, push state, the save-schema
+> version (`SaveSchema.CurrentVersion`), the suite counts (the marker line on a FRESH log) and the
+> next free WO (the `CLI_LANES_WO_NUMBERS.md` banner) **off their sources, never off this file**.
+>
+> **What landed tonight, and which area file now carries it:**
+> - **PvE SIEGE + the persisted Defense Report (WO-1026)** — a new `Village/Siege/` directory
+>   (`SiegeClock`), five new files in `Village/Waves/` (`SiegeScheduler`, `SiegeSession`,
+>   `SiegeSchedulerBootstrap`, `DefenseReportBuilder`, `StructureVitalsWatch`), the
+>   `Core/Defense/` data model + ledger, `Core/UI/DefenseMapPlate`, and `Village/UI/Defense/`
+>   (report panel + bootstrap). ⛔ **NOTHING in the cluster spawns anything** — `WaveManager` stays
+>   the single attack authority and the whole integration is one call to `ForceBeginNextWave()`.
+>   ⛔ **`Village/Siege/` exists specifically to sit OUTSIDE the `Village/Waves/` sweep** that
+>   `DevTimeSkipRegression` case 6 lints for `TimeSource`; do not move it back.
+>   → `MASTER_CATALOG/village-enemies-world.md` + `core.md`.
+> - **Per-camp raid COOLDOWN (WO-728)** — `Village/World/Camps/RaidCooldownService` +
+>   `Core/State/RaidCooldownRecord` + `Core/UI/RaidStrings`, **no schema bump**.
+>   → `village-enemies-world.md` + `core.md`.
+> - **Battle Pass + Monthly Ledger + The Night Market** — 11 new/moved files under
+>   `Assets/_Modules/Wallet/` and a new canonical `battle_monthly.json`. ⚠ **There are now TWO
+>   battle-pass runtimes in the tree and the conflict is declared in the code as needing an owner
+>   decision.** `PurchaseGate.cs` MOVED from `Village/Monetization/` into `Wallet/`.
+>   → `economy-meta.md` + `data-catalogs.md`.
+> - **Realm map pins actually publish** — `Village/World/RealmPinProducers` closes a hole where the
+>   board, the pin vocabulary and both map surfaces all shipped and **nothing ever published**.
+>   → `village-enemies-world.md`.
+> - **The crate is a CHEST** — `BreakableContainer` is no longer `IDamageable` /
+>   `IDamageableStructure` / `Hostile` and no longer rewrites its layer to "Enemy"; it is opened,
+>   out of combat, and its class name is load-bearing (baked into every composed dungeon by GUID +
+>   name). Drops now read by SILHOUETTE (`Village/Items/ItemMoteShapes`).
+>   → `village-enemies-world.md` + `village-systems.md`.
+> - **Sheathe orientation is DERIVED PER MESH** from `mesh.bounds` — the shipped props have
+>   Read/Write OFF, so vertex-based approaches are silently inert ON DEVICE. 11 of 12 meshes
+>   resolve. → `village-hero.md`.
+> - **11 new oracles + `SourceLint` + `HeadlessState`** under `Assets/Editor/Regression/`.
+>   → `editor-tools.md`.
+> - **`Assets/_Modules/Environment/TorchFireController.cs` is DELETED** (WO-992, provably dead) —
+>   already recorded in `misc-modules.md`.
+> - **`ElarionUiKit` gained `AddRawImage`**, its first `RawImage` primitive. → `core.md`.
+> - **`PanelId` now runs to 20** (`DefenseReport = 18`, `BattlePass = 19`, `MonthlyLedger = 20`) —
+>   the enum lives in `Core/UI/PanelRouter.cs`. Any doc saying "PanelId 0-15" is stale.
+> - **Four new risk-ledger entries: WO-1135 / 1136 / 1137 / 1138, plus an UNTRACKED-FILES P1.**
+>   See §3 P1 items 10-14.
+
 > # ▶ DELTA 2026-08-16 — read this before the banners below
 > **Live anchor = `../CANON_GROUND_TRUTH_2026-08-16.md`** (every "live anchor" reference further down this
 > file naming 08-02, 08-03, 08-06 or 08-09 is stale). **Read HEAD and push state off `git`, never off a
@@ -433,6 +477,75 @@ P3 = dead/stale, cleanup.**
    PauseController+SettingsController per gameplay scene + the on-screen pause chip that calls
    RequestBack. (ATBBattle `BattleHUD.uxml`, dungeon panels, PromoCodeUI/InviteFriendsUI/
    WalletConnectDialog/JupiterSwapPanel remain the outstanding UXML-in-build risks.)
+
+---
+
+### P1 — ADDED 2026-08-21 (items 10-14). Verified at source the day they were written.
+
+10. **⛔ THE SIEGE CLUSTER'S DATA MODEL AND ITS UI ARE UNTRACKED IN GIT.** Verified with
+    `git status --porcelain`: `Assets/_Modules/Core/Defense/` (`DefenseReport.cs` 576 +
+    `DefenseReportLedger.cs` 159), `Assets/_Modules/Village/UI/Defense/` (`DefenseReportPanel.cs`
+    621 + `DefenseReportPanelBootstrap.cs` 43), plus the `Core/Defense.meta`, `Village/Siege.meta`
+    and `Village/UI/Defense.meta` folder metas, are **all `??` — never committed** — while the
+    files that `using DeNelle.Core.Defense;` (`SiegeScheduler`, `SiegeSession`,
+    `DefenseReportBuilder`, `SiegeClock`, `DefenseMapPlate`, `DefenseReportContractRegression`)
+    **were committed** in `0bc68df71`. **A fresh clone of HEAD therefore does not compile**, and
+    it fails as a missing-namespace error that names none of this. It works perfectly on this
+    machine, which is the entire failure shape CLAUDE.md §16 exists about: the local tree proves
+    nothing about what shipped. **Fix = commit the four files + the three folder metas by explicit
+    path** (§11 sole-committer rule). Until then, treat any green gate on this machine as
+    unrepresentative of the repo.
+    ⚠ Also uncommitted and part of the same wave: the `DeNelle.EditorRegression.asmdef`
+    modification the new oracles need, and the two deleted `.meta` files for
+    `Environment/TorchFireController.cs` and `Village/Monetization/PurchaseGate.cs`.
+
+11. **WO-1137 — `CatalogBootstrap.RegisterFallback` covers 3 of 28 catalog rows and has DRIFTED
+    FOUR TIMES.** Verified by count: `Assets/Resources/Data/Canonical/structures-catalog.json`
+    holds **28 `entries`**; `RegisterFallback()` constructs **three** (`tower_ground_archer`,
+    `tower_ballista`, `tower_arcane_spire`). If the JSON ever fails to load, the player does not
+    get an error — **they get a silent, different, 3-row game**, with no tell on screen. That is
+    the same shape as §16's missing-bundle trap: it installs, it launches, it plays, and only the
+    owner's eyes can detect it. `BuildEconomyRegression` gate 12 (`[fallback-parity]`) now guards
+    the three rows against divergence, which stops the drift but does **not** close the 25-row hole.
+    The 2026-08-21 rescale had to fix **21 cost fields** in this table.
+
+12. **WO-1138 — the hollow-pass ratchet inspects only a ~4-LINE WINDOW, so its coverage is a
+    function of CODE FORMATTING.** A "hollow pass" is a regression case that returns GREEN while
+    asserting nothing (`if (dependencyMissing) { notes.Add("SKIPPED..."); return; }` — the caller's
+    only channel is the bool, so a skip IS a pass). `FindHollowPassLines` (RULE 4) caught **one**
+    site in `CosmeticApplyRegression.cs`; manual review of the same file found **five more, all
+    real**, invisible to the ratchet only because their guarding `if` sat further than four lines
+    from the `return`. On 2026-08-21 alone hollow passes were found in **two** suites
+    (`CosmeticApplyRegression` 6 sites, `RaidCooldownRegression` case 5 vacuous against a null
+    fixture — found only because case 6 failed loudly for an unrelated reason and a human read it).
+    ⛔ **This is the most expensive defect class in this repo** (memory
+    `gates-report-success-without-proving-it`; §8's marker-not-exit-code law; §16). A gate that
+    reports success without proving it does not merely miss a bug — it **actively asserts the bug is
+    absent**, and work proceeds on that strength. Fix = match the CONTROL-FLOW relationship, not
+    textual proximity.
+
+13. **WO-1135 — `Assets/Resources/Walls/Materials/` DOES NOT EXIST, and never has.** All three wall
+    tiers (`WallTier { Wood = 1, Iron = 2, ReinforcedSteel = 3 }`,
+    `Assets/_Modules/Village/Walls/WallTierData.cs:29`) render from **materials embedded in each
+    FBX**, which import with `externalObjects: {}` and bind their textures by **absolute path into a
+    `.fbm` folder on the original author's machine** — a folder this repo does not contain.
+    Verified on disk: `Assets/Resources/Walls/` holds `Textures/` and the FBXes only.
+    ⚠ **This is NOT new breakage from the 2026-08-21 work** — it is pre-existing debt that the new
+    `RaidWallMaterialRegression` made visible by failing on its first ever run. Do not go looking
+    for what "broke" it. The tier ladder is a real gameplay + cost progression the player pays for,
+    so the art must be reachable from TRACKED assets.
+
+14. **WO-1136 — `staff_A` is geometrically symmetrical, so no sheathe orientation is derivable.**
+    After the per-mesh derivation landed, 11 of 12 shipped meshes resolve. The twelfth measures
+    identical at both ends to four decimal places on the taper test (relGap 0.001) and on the
+    grip-proximity test (**relGap 0**). ⚠ **This is not a bug in the deriver** — the mesh genuinely
+    does not encode which end is up, which is reasonable for a staff. It falls back to the global
+    `_sheatheLongAxisSign` and says so in a `FlowTrace.Warn`. The recommendation on the ticket is to
+    LOOK at it on device first, since a staff may have no upside down. **Do not "fix" this by
+    flipping the global field** — that only moves the defect to the other heroes, which is the
+    original WO-1123 defect restated.
+
+---
 
 ### P2 — wrong behavior, contained
 

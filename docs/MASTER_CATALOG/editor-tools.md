@@ -16,6 +16,49 @@ or writes only reports/markers.
 
 ---
 
+## DELTA 2026-08-21 — 11 new oracles + 2 new shared harness helpers under `Assets/Editor/Regression/`
+
+Read from source 2026-08-21. All are edit-mode, `NEVER throws`, registered ONCE in
+`DataRegression.RunAll`, and emit their own `_OK` / `_FAIL` marker. **Read the suite COUNT off the
+marker line on a fresh log — never off this file** (CLAUDE.md §8).
+`DeNelle.EditorRegression.asmdef` was modified in the same wave to carry the new references.
+
+### Two SHARED helpers — new, and both exist to stop a whole class of false result
+
+- **`SourceLint.cs` (176)** `DeNelle.Editor.Regression` — reads a runtime `.cs` as **CODE ONLY**,
+  with comments AND string literals stripped. ⛔ **That stripping is the entire point:** these files
+  DOCUMENT the very symbols the pins look for, so an unstripped grep is satisfied by a comment or a
+  log message and the pin passes while the call site is absent. Use it for invariants about WHERE
+  and in WHAT ORDER a call happens — no runtime assertion can see call order.
+- **`HeadlessState.cs` (82)** `DeNelle.Editor` — installs a throwaway `GameState` for an edit-mode
+  oracle. ⭐ **Editmode batchmode NEVER runs `GameStateService.Awake`** (Awake fires only in play
+  mode / `ExecuteAlways`), so a bare `AddComponent<GameStateService>()` leaves both `Instance` and
+  `State` null — the historic cause of the false-FAIL "no GameStateService/State available". It sets
+  the private static `_instance` and the `[SerializeField] _state` by reflection, exactly as Awake
+  would. Pattern lifted verbatim from `OfflineHarvestRegression` / `CoreSaveContractRegression`.
+
+### New oracles
+
+| File (lines) | Tag / markers | What it pins |
+|---|---|---|
+| `SiegeCadenceRegression.cs` (205) | `[siege-cadence]` | Drives `SiegeScheduler` against a CONTROLLED clock, no scene: a fresh cadence clock (`<= 0`) SEEDS FORWARD and banks nothing; a long absence CLAMPS to `_maxPendingSieges`; the HARVEST clock (`LastHarvestClaimMs`) is untouched across a window. |
+| `SiegeSpawnAuthorityRegression.cs` (288) | `[siege-spawn-authority]` | SOURCE-SCANNING lint (precedent: `HubSceneLiteralRegression`, `BannedVfxRegression`). Fails the gate if a spawn call appears in the siege files, or if a SECOND file writes `AttackerSource.GeneratedPve`. Exists because two systems that both attack the town look fine in isolation and drift apart forever. |
+| `DefenseReportContractRegression.cs` (722) | `[defense-report]` | Five pins, headline two: a fully-populated `DefenseOutcomeRecord` round-trips through `SaveSchema.JsonSettings` field-for-field (a report that loses its breaches on reload is worse than none — the player redesigns against a lie); and the **model-(c) proof** — the same record with `Attacker.Source = GhostSnapshot` renders identically, so the ghost path needs no reader change. |
+| `RaidCooldownRegression.cs` (622) | `[raid-cooldown]` | Part BEHAVIOURAL (drives the real `DeNelle.Village` statics through a real save/load round trip) and part SOURCE-LINT via `SourceLint`, so a symbol named only in a comment or a log string can never satisfy a pin. |
+| `BattleMonthlyRegression.cs` (1182) | `[battle-monthly]` | The pay-to-win firewall of the Battle Pass + Monthly Ledger families, AS A BUILD GATE rather than a review checklist. |
+| `ItemDropMoteIdentityRegression.cs` (437) | `[drop-mote]` | Every dropped id resolves a DISTINCT silhouette. Pins the defect that `ItemPickupSpawner` spawned one hardcoded gold sphere for every drop, and enforces the colourblind law (identity rides SHAPE, never tint). |
+| `BreakableContainerChestRegression.cs` (720) | `CHEST_OK` / `CHEST_FAIL` | The chest is OPENED, never attacked: no `IDamageable`/`IDamageableStructure`, no `Hostile` faction, no "Enemy" layer rewrite, and the open is gated out of combat. |
+| `CosmeticApplyRegression.cs` (669) | `COSMETIC_APPLY_OK/_FAIL` | An equipped cosmetic REACHES A RENDERER. Written because `CosmeticApplier.ApplyCosmetic` was **called from nowhere** and the component's GUID sat on ZERO prefabs and ZERO scenes while every part of the economy around it worked (WO-992). ⚠ **This is the suite in which 6 hollow passes were found — 1 caught by the ratchet, 5 missed. See WO-1138 in the master risk ledger.** |
+| `RaidWallMaterialRegression.cs` (226) | `RAID_WALL_MATERIAL_OK/_FAIL` | Asset-lint: raid-base wall art must be reachable from TRACKED assets, not from an FBX-embedded material bound by ABSOLUTE PATH into a `.fbm` folder on the original author's machine. **It FAILED on its first ever run — that failure is real, pre-existing debt, and is now WO-1135.** |
+| `AssetRootsRegression.cs` (415) | `ASSET_ROOTS_OK/_FAIL` | The gate `AssetRoots.cs:46` had CLAIMED it had since 2026-08-18 ("change this one line to relocate the tree; do NOT reintroduce the literal") but nothing enforced. |
+| `OfflineAccrualTrustRegression.cs` (218) | — | WO-1128's CLIENT half: every offline window records WHICH CLOCK produced it and its own endpoints, so a server can reconcile it. ⚠ **The REFUSAL is server-side** (`api/game/save.js` §RECONCILE, self-tested by `node api/game/save.js`, marker `ACCRUAL_RECONCILE_OK`). Unity cannot execute JavaScript, so the clamp is deliberately NOT asserted here — pretending otherwise would be a gate that proves nothing. |
+| `EconomySinkCapRegression.cs` | — | WO-1129 convex Finish-Now pricing; hard-FAILs at exponent `e >= 1` so the word "convex" cannot be used to undo the ruling. |
+
+Also new this wave: `Assets/Editor/RaidBaseMatDiag.cs`, `Assets/Editor/WallTools/RaidWallMaterialFixer.cs`,
+`Assets/Editor/DungeonStatusDevMenu.cs`.
+
+---
+
 ## 1. THE GATE CHAIN (how a change gets proven)
 
 Canonical cycle (`.claude/skills/run-defenders/SKILL.md:31-38`); every step runs

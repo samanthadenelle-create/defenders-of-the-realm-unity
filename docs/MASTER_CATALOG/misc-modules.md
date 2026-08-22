@@ -255,7 +255,14 @@ premium pass 2 400 Glimmer, LevelUpVFX via reflection — Cosmetics→Village no
 `BattlePassData` SO asset is assigned in the Inspector** (`:21-22`) — verify an asset exists before calling this
 LIVE) · `CosmeticCatalog` · `CosmeticApplier`.
 
-### Wallet — asmdef `DeNelle.Wallet` (11 files + Tests/)
+### Wallet — asmdef `DeNelle.Wallet` ~~(11 files + Tests/)~~ **(27 `.cs` at root + `UI/` + `Tests/` as of 2026-08-21)**
+
+> ⚠ **UPDATED 2026-08-21.** The module roughly doubled in one night: the Season Track / Monthly
+> Ledger runtime (`BattleMonthlyCatalog`, `BattlePassService`, `MonthlyCardService`,
+> `RewardGrantWriter`, `BattleMonthlyPanelsBootstrap`, `UI/SeasonTrackPanel`, `UI/MonthlyLedgerPanel`)
+> and The Night Market presentation pass (`StoreAurora`, `StoreStrings`, `NightMarketPalette`).
+> **`PurchaseGate.cs` MOVED here from `Assets/_Modules/Village/Monetization/`** — any path pointing
+> at the old location is now wrong. Full inventory: `docs/MASTER_CATALOG/economy-meta.md`, DELTA 2026-08-21.
 `WalletService` over `IWalletProvider`; **`SolanaWalletProvider` compiles with or without the SDK — all real SDK
 code is behind `#if SOLANA_SDK`, a define the project must set once the Solana Unity SDK package resolves;
 without it every method fails cleanly and WalletService falls back to `StubWalletProvider`** (`:10-21`).

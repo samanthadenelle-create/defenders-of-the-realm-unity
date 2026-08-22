@@ -175,6 +175,51 @@ NOT a damage model — never reads HP (:27-29).
 
 ---
 
+## DELTA 2026-08-21 — the fallback-catalog rescale, and `Village/Items/` (a folder no area file owned)
+
+Read from source 2026-08-21.
+
+### `Catalog/CatalogBootstrap.cs` is now **393 lines** (the §4 row says 228) — 21 fallback cost fields rescaled
+
+The WO-1129 economy-sink rescale moved `structures-catalog.json` and left the hardcoded fallback
+mirror stale. **21 fallback cost fields** were brought back to parity; every divergence was exactly
+the documented per-ladder factor (build x4, L1->L2 x10, L2->L3 x14) — a uniform deliberate rescale,
+not corruption. `BuildEconomyRegression` gate 12 (`[fallback-parity]`) reflects over the constructed
+rows and fails the build on ANY field divergence.
+⛔ **VERIFIED BY COUNT, and it is the reason WO-1137 exists: `RegisterFallback()` constructs THREE
+rows** — `tower_ground_archer`, `tower_ballista`, `tower_arcane_spire` — **against 28 `entries` in
+`structures-catalog.json`.** It has now drifted FOUR times. See the master risk ledger.
+
+### `Village/Items/` — NEW `ItemMoteShapes.cs` (383), ns `DeNelle.Village.Items`
+
+⚠ **This folder was not in any `MASTER_CATALOG/<area>.md` scope line before today.** Catalogued here.
+
+The SHAPE FAMILY table for world drop motes: `TintFor(id)` · `HasAuthoredIdentity(id)` ·
+`ResolveGlyph(id)` · `IsDrawn(glyph)` · `StableHash(s)` · `FamilyName(glyph)` ·
+`SignatureFor(glyph)` / `SignatureForId(id)` · `PartsFor(glyph)`, plus `struct MotePartSpec`.
+- **The defect it closes:** `ItemPickupSpawner` spawned ONE hardcoded gold sphere for EVERY drop, so
+  a chest that rolled Iron Scrap and one that rolled a Heartwood Bough left byte-identical objects
+  on the floor. The drop had no identity at all.
+- ⭐ **THE LESSON, proven the same day on `IngredientPickup`:** the sibling defect LOOKED like "the
+  tint is broken". It was not — every tint parsed fine, but the authored tints were PASTELS on a
+  **non-emissive URP/Lit sphere**, so under light they all washed to the same white pellet. Colour
+  was never going to carry identity, and for this owner (red/green colourblind) it could not carry
+  it in principle. **Identity rides SHAPE.**
+- **It is not a new parallel identity table.** Every `consumables.json` / `materials.json` row
+  already carries a `glyph` char and `ItemIdentity.GlyphOf` already surfaced it; this file is the
+  missing half, glyph -> silhouette.
+- **Unauthored ids** (`loot-tables.json` drops four ids no catalog owns: `monster-hide`, `wild-herb`,
+  `tattered-cloth`, `rare-essence` — a PO content gap the `[item-identity]` oracle reports) resolve a
+  family by a stable FNV-1a hash of the id, so each still gets a distinct deterministic silhouette
+  and is still NAMED from `ItemIdentity.DisplayName`. The right fix is authoring the rows; this file
+  refuses to hide the gap behind an identical pellet.
+- The spec side (`ResolveGlyph` / `PartsFor` / `SignatureFor` / `TintFor`) constructs no GameObject
+  and never throws, so an EditMode oracle can read the silhouette of every dropped id without
+  entering play mode. Construction stays in `ItemPickupSpawner`. Oracle:
+  `ItemDropMoteIdentityRegression`.
+
+---
+
 ## 4. Catalog/ — the data-driven structure buckets
 
 | Class | File (lines) | Responsibility |

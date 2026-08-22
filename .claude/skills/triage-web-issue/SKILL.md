@@ -126,7 +126,7 @@ machine session where it slots.
 ## STEP 3 - write the Work Order (the deliverable)
 
 1. **Mint the number.** Open `CLI_LANES_WO_NUMBERS.md`, read the banner's **next free WO**
-   (currently **688**), and **bump it in the SAME edit** (change "next free = 688" to the next
+   (read it OFF THE BANNER - never restate it here; a copied number is exactly what goes stale), and **bump it in the SAME edit** (change the banner's "next free" value to the next
    number and note what you minted, per the file's own rule). Never mint from filesystem max.
 
 2. **Write `WorkOrders/WORK_ORDER_NNN_short_name.md`** in the house format (match WO-678 / WO-682

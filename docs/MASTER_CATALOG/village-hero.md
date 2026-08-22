@@ -12,6 +12,45 @@ realm map (WO-826), vendor shops, inventory/equip screens. **Assembly:** `DeNell
 (`DeNelle.Village.asmdef`). Namespace split: gameplay components = `DeNelle.Village`; the
 MVVM UI cluster (shops/inventory/raid/rumor/realm-map/barracks VMs + views) = `DeNelle.Village.Hero`.
 
+## DELTA 2026-08-21 — sheathe orientation is DERIVED PER MESH, not decided by one global sign
+
+Read from source 2026-08-21 (`EquipmentController.cs`, now **4,453 lines**;
+`Core/Geometry/WeaponOrientHelper.cs`, now **1,395**).
+
+**THE DEFECT WAS STRUCTURAL, NOT A TUNING MISS.** One serialized field
+`_sheatheLongAxisSign` decided sheathed orientation for the ENTIRE catalogue, so it was correct for
+at most half of it **by construction** and flipping it only moved the defect to the other half. Two
+F8 captures proved it from opposite directions: Blaise wanted -1 (2026-08-20), the Flameblade wanted
++1 (2026-08-21).
+
+**WHAT IT IS NOW.** `EquipmentController.ResolveSheathedTipSign` (around `:3160`) calls
+`WeaponOrientHelper.TryResolveSheathedTipSign(prop, gripRoot, out _sheathedTipScratch)` **once per
+attach**, inside `Guard.Try`, and caches `_sheatheTipSign` + a human-readable `_sheatheTipWhy`.
+`ComputeSheathRotation` (`:3246`) then reads the measured sign and falls back to the global field
+only when nothing could be measured:
+`float sign = _sheatheTipSign != 0f ? ... : (_sheatheLongAxisSign >= 0f ? 1f : -1f);`
+
+- ⛔ **The derivation reads `mesh.bounds`, NOT vertices.** The shipped props have Read/Write **OFF**,
+  so every vertex-based approach is silently inert **on device** while appearing to work in the
+  editor. This is the single most mis-diagnosable property in the area.
+- ⛔ **`_sheatheLongAxisSign` is NOT deleted** (§12: instrumentation and documented fallbacks stay).
+  It is the last-resort path for a prop that cannot answer, and the fallback emits a `FlowTrace.Warn`
+  that names the prop, the reason, and — explicitly — that flipping the field is the WRONG cure.
+- Shield and Bow return early ("no tip to invert / own derived carry"); the sheathe pose is
+  sword-class only. `HeroArmorVisual`, `GearAura` and `HeroBodySwapper` took small supporting edits
+  in the same change.
+- A second `FlowTrace.Warn` fires when the measured long axis is not Y: the sheathe pose maps
+  grip-root-local +Y onto the vertical, so a non-Y long axis breaks the pose's premise in a way no
+  SIGN can repair (it would hang the prop's WIDTH vertically). It says so rather than shipping a
+  confident number about the wrong direction.
+- **11 of 12 shipped meshes resolve.** The twelfth is `staff_A` and it is **not a bug**: both ends
+  measure identical to four decimal places on the taper test (relGap 0.001) and on the
+  grip-proximity test (**relGap 0**). The mesh genuinely does not encode which end is up. Ticketed
+  as **WO-1136** — see the risk ledger in `docs/MASTER_CATALOG.md`.
+- Oracle: `Assets/Editor/Regression/SheathePoseRegression.cs` grew ~500 lines in the same change.
+
+---
+
 ## LIVE CANON (what is actually true at HEAD)
 
 - **Hero = ONE Tripo/CC Knight, "Grom".** `HeroBodySwapper` routes the Knight through

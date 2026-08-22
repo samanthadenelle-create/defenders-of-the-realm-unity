@@ -95,6 +95,40 @@
 > PROD-003 (Realm Store permanent storefront), PROD-004 (baked-twin footprint),
 > PROD-005 (default shield renders through the hero body; survives a dungeon->town port).
 
+> ## AUDITED 2026-08-21 (docs seat) - BOTH ROWS VERIFIED CONSISTENT WITH DISK.
+> `python tools/board_build.py` prints **`BANNER_OK next mint - CLI: 1140, UI seat: 1054`**, and both
+> rows below match what is on disk: the CLI main line is consumed through **WO-1139**
+> (`WORK_ORDER_113{5,6,7,8,9}_*.md` all present, minted across three separate mints tonight
+> 1135 -> 1137 -> 1139 -> 1140), and the UI block is consumed through **WO-1053**. No edit was needed;
+> this is the audit record, not a rewrite.
+>
+> ### THE TWO BLOCKS ARE DISJOINT ON PURPOSE. NEVER MERGE THEM.
+> The CLI main line and the UI seat's reserved block are separate so both seats can mint in parallel
+> **without reading each other's state**. Each seat bumps **its own row in the SAME edit as the mint**
+> - a mint written to disk without bumping its row IS the collision (five of them on 2026-08-02).
+>
+> ### 61 DUPLICATE WO NUMBERS EXIST ON DISK. THEY ARE HISTORICAL. DO NOT "FIX" THEM.
+> `board_build.py` reports **`DUPLICATE_WO_NUMBERS 61 number(s) claimed by more than one file`**.
+> Every one of them predates this banner being the sole authority - they are what the banner exists
+> to prevent, not evidence that it is failing now. **Resolution is first-on-disk-and-referenced-wins**
+> (CLAUDE.md sec.2). STOP - **renumbering them is forbidden**: a live WO number is cited from RESULT files,
+> commit messages, other tickets and the owner's own notes, so renumbering breaks every reference to
+> buy tidiness nobody asked for. The board FLAGS them by design (WO-937) and never renumbers.
+> NOTE that a chunk of the 61 are not real collisions at all - they are companion files sharing one
+> ticket's number (`WORK_ORDER_1026_IMPLEMENTATION_PLAN.md` beside
+> `WORK_ORDER_1026_raid_defense_consequence_loop.md`, same for 1027 / 1038 / 1101 / 1114). Those are
+> correct as they stand.
+>
+> ### NO OTHER DOC MAY STATE A NEXT-FREE NUMBER. Several still do, and every one is stale.
+> Found 2026-08-21 outside this file - **do not mint from any of them**:
+> `.claude/skills/triage-web-issue/SKILL.md` and `docs/ASYNC_DEBUG_LOOP.md` (both teach "next free =
+> **688**", ~450 stale); `docs/HANDOVER.md` ("main line 853 / UI seat 863"); `docs/MASTER_CATALOG.md`
+> and `docs/MASTER_CATALOG/docs-wo-state.md` ("412" and "836"); `AGENT_OPENERS.md` and
+> `CLAUDE_BEST_SUGGESTIONS_ARCHITECTURE_DESIGN_UI_MOCKUPS.md` ("430+"). Dated
+> `CANON_GROUND_TRUTH_*.md` files also carry numbers, but those are frozen ledger entries and are
+> fine as history. A copied number is the bug **even when it was right the day it was written** -
+> that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
+
 > ## ⚠ RECONCILED 2026-08-21 (CLI): main line next free = **1140**.
 > *(CLI seat minted **WO-1139** and bumped 1139 -> 1140 in this SAME edit. **1139** = implement the
 > ruled loss stakes (theft 15% floor-protected, crystals exempt, offline included) + the bounded

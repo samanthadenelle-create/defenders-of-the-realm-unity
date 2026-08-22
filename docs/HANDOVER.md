@@ -1,7 +1,20 @@
-> ## ▶ REFRESHED 2026-08-18 — read `CANON_GROUND_TRUTH_2026-08-18.md` FIRST
+> ## ▶ REFRESHED 2026-08-21 — read `CANON_GROUND_TRUTH_2026-08-21.md` FIRST
 >
-> The **★★ SESSION HANDOVER — 2026-08-18 ★★** block below is the current one. Every banner and block
+> The **★★ SESSION HANDOVER — 2026-08-21 ★★** block below is the current one. Every banner and block
 > beneath it is history, kept, not guidance.
+>
+> ⛔ **One correction big enough to sit in the banner: the game is PUBLISHED on the Solana dApp Store,
+> but the PAY PATH HAS NEVER BEEN ACTIVATED — nobody has ever bought anything.** "Published on a
+> store" and "taking money" are different facts, and this repo's canon has stated the first loudly for
+> weeks while the second has never been true. Practical consequence: a currency/economy REMOVAL is a
+> **clean purge**, not a balance-preserving migration — there is nobody to grandfather or compensate.
+> Still read-migrate a removed save field so existing dev/test saves LOAD (ordinary defensive
+> deserialisation, not value preservation). ⚠ This does **NOT** license flipping any payment flag.
+>
+> ## ⚠ (previous) REFRESHED 2026-08-18 — SUPERSEDED 2026-08-21 — read `CANON_GROUND_TRUTH_2026-08-21.md` FIRST
+>
+> The **★★ SESSION HANDOVER — 2026-08-18 ★★** block was the current one until 2026-08-21. It is kept
+> below as history, not as guidance.
 >
 > ⚠ **Note for anyone tracing the chain:** the **2026-08-16 anchor never got a handover block** — the
 > newest block before tonight was **08-09**, seven days behind the anchor it pointed at. If you are
@@ -35,8 +48,8 @@
 # HANDOVER — the one sheet a new session reads to be productive now
 
 > **Read order for a new session:** the newest ★★ SESSION HANDOVER block immediately below (currently
-> **2026-08-18**) → this sheet → `../CANON_GROUND_TRUTH_2026-08-18.md` (the live reality anchor; it deltas
-> 08-16 → 08-09 → 08-08 → 08-07 → 08-06 → 08-05 → 08-03 → 08-02 → 08-01 → 07-26 → 07-22) →
+> **2026-08-21**) → this sheet → `../CANON_GROUND_TRUTH_2026-08-21.md` (the live reality anchor; it deltas
+> 08-18 → 08-16 → 08-09 → 08-08 → 08-07 → 08-06 → 08-05 → 08-03 → 08-02 → 08-01 → 07-26 → 07-22) →
 > `MASTER_CATALOG.md` (mandatory, be the SME) → `ARCHITECTURE.md` (the architecture hub) → the relevant
 > `MASTER_CATALOG/<area>.md` for what you're about to touch. **ALSO** skim the auto-memory index
 > `MEMORY.md` (index lines are pointers — read the file before asserting). The code wins on truth —
@@ -50,7 +63,166 @@
 
 ---
 
-## ★★ SESSION HANDOVER — 2026-08-18 (the overnight loop: the correction pass that corrected the wrong file) ★★
+## ★★ SESSION HANDOVER — 2026-08-21 (the gate-sweep night: gates that passed while asserting nothing) ★★
+
+**Anchor:** **`../CANON_GROUND_TRUTH_2026-08-21.md`** — minted tonight, supersedes the 08-18 anchor
+(bannered/frozen). Read it before this block; it carries the owner rulings verbatim and the file:line
+citations. This block is the **operator's manual half**: how you work here, and why each rule exists.
+
+### Where every number actually lives — do not copy one into a doc, including this one
+
+This repo's most repeated failure is a number written down twice. It has now produced the stale WO
+number block (CLAUDE.md §2), the retired assembly dependency table (§5), the hardcoded repo root (§0),
+the drifted R2 push (§16) and — tonight — a fallback cost table covering 3 of 28 rows that has drifted
+four times (**WO-1137**). So, every time:
+
+| You want | Read it off | Never off |
+|---|---|---|
+| Save schema version | `SaveSchema.CurrentVersion` (`Assets/_Modules/Core/State/SaveSchema.cs`) | any doc |
+| Next free WO number | the `CLI_LANES_WO_NUMBERS.md` banner row **for your seat** | the filesystem max, a backlog doc, this file |
+| Suite counts / gate result | the MARKER on a **fresh** log under `Builds/` | a remembered count |
+| Board / ticket status | `python tools/board_build.py` -> `BOARD.html`, derived from `WorkOrders/*.md` | Notion, Linear, a task list (all retired) |
+| HEAD, ahead-count, tree state | `git status` / `git log` / `git rev-list --count origin/<branch>..HEAD` | a snapshot in a handover |
+
+**The rule that makes the WO banner work: bump YOUR seat's banner row in the SAME edit as the mint.**
+A mint on disk without a banner bump *is* the collision. Two disjoint blocks exist (main line and the
+UI seat) precisely so both seats can mint in parallel without reading each other's state.
+
+### State tonight, in the only form that cannot go stale
+
+Branch `wip/village2-and-f8-tickets`. **Nothing is pushed** — the owner felt-verifies first, and the
+standing cadence is *commit local, push only after she retests (felt/gameplay) or a regression proves it
+(data/logic)*. Count the unpushed commits with `git rev-list --count`, do not trust a number here.
+
+Gate on a fresh log: **`COMPILE_GATE_OK` present**; `DataRegression` reports **`REGRESSION_FAIL: 2
+failure(s)`**, so **`REGRESSION_OK` is ABSENT — and absence of the marker is a FAILURE, never an
+unknown.** Both failures are ticketed ASSET gaps that no code change can close: **WO-1135** (no tracked
+material exists for any of the three wall tiers — the art has always ridden each FBX's embedded
+material, which binds to a `.fbm` folder that is not in this repo, so a paid tier upgrade renders as
+untextured white slabs with no error on screen) and **WO-1136** (`staff_A` is geometrically symmetrical
+— `relGap 0` on both the taper and the grip test — so no sheathe orientation is derivable at all).
+**Both oracles were committed RED on purpose: a gap nothing checks is a gap nobody fixes.**
+
+Build: Seeker APK at `Builds/Android/DefendersOfTheRealm.apk` with **`R2_PARITY_OK`** stamped in
+`Builds/overnight-apk-status.txt` — content is proven hosted, so no capsule enemies.
+
+### The build / gate / ship cycle — the actual order, and what each step is for
+
+1. **Be the SME first.** `docs/MASTER_CATALOG.md` + the `docs/MASTER_CATALOG/<area>.md` for what you
+   are about to touch. The code wins on truth; comments lie.
+2. **Instrument before you edit** (CLAUDE.md §12). No code edit on a non-trivial bug until you can cite
+   CAPTURED DATA. Static reading LOCATES candidates; it never CONCLUDES. Never strip a `FlowTrace` or a
+   `Guard` afterwards — flag it off if you must, the calls stay.
+3. **Compile gate:** `powershell tools\run-unity-method.ps1 -Method DeNelle.Editor.CompileGate.Run
+   -LogName <name>.log`. Judge by `COMPILE_GATE_OK` on that fresh log — **never by the exit code**;
+   this repo's runners exit 0 on refusals and FAILs.
+4. **Data regression:** `DeNelle.Editor.DataRegression.RunAll` -> `REGRESSION_OK <n>/<n> suites`. The
+   three entry points emit **DISTINCT** markers on purpose (`REGRESSION_OK` / `CHECKIN_SUITE_OK` /
+   `SESSION_GUARDS_OK`) so a small suite's pass can never read as the full suite's.
+5. **Eyes, for anything visual.** Headless gates cannot see orientation, layout or colour. Run the UI
+   capture pass and **open the PNGs**, or take a device screencap. A screenshot is primary evidence for
+   a visual defect: FlowTrace shows what the code believes, the screenshot shows what the player sees.
+6. **Never bake with the Unity editor open** (project lock), and **never hand-edit a curated `.unity`**
+   — rebuild through the builder method.
+7. **Ship through the scripts, never by hand** (§16, below).
+
+### Shipping content: the one file, and the one per-clone setup step
+
+Enemy and structure **art is served from the R2 CDN and there is no local fallback**. A build whose
+bundles were never uploaded installs, launches and plays — with tinted capsule enemies and no error on
+screen. **Bundle names are content-hashed, so EVERY content build needs ITS OWN push**; "I pushed
+yesterday" is never an answer, and a full-looking bucket proves nothing.
+
+- The sanctioned path is **one file: `tools\r2-ship.ps1`** (push + verify, marker-judged, exit 16 on
+  failure). `morning-ship-chain.ps1` and `overnight-apk-build.ps1` call it and BLOCK;
+  `install-apk-to-seeker.ps1` calls it `-WarnOnly` (a deliberately-offline sideload is legitimate there
+  and only there). **Do not re-inline the push or the verify anywhere** — that duplication had already
+  drifted between the two chains once.
+- ⛔ **A raw `adb install` of a hand-built APK bypasses all of it.** Installing or distributing goes
+  through the scripts.
+- **`.githooks/pre-push` refuses any push whose `ServerData/` bytes are newer than the
+  `R2_PARITY_OK` proof in `Builds/r2-parity.log`.** There is deliberately no override flag. It is wired
+  by `git config core.hooksPath .githooks` — **local config, so it does NOT travel with the tree: set it
+  once per clone.** (Verified set on this machine.) A docs-only push passes untouched.
+
+### THE LESSON OF THE NIGHT — a gate that passes while asserting nothing
+
+**Hollow passes were found in TWO separate suites in one run.** A hollow pass is a case that returns
+GREEN while asserting nothing — typically `if (dependencyMissing) { notes.Add("SKIPPED ..."); return; }`
+where the notes feed the SUCCESS string, so **the caller's only channel is the bool and a skip IS a
+pass**. Six in the cosmetic suite, plus a silently vacuous raid-cooldown case. **Only ONE of the six was
+caught by the existing ratchet**; the other five escaped because its detection window is about **four
+lines**, i.e. its coverage is a function of code formatting — the least reliable signal available
+(**WO-1138**).
+
+> **The taxonomy that came out of it — apply it to every regression case you write:**
+> - **fixture-absent -> FAIL**, naming the missing path.
+> - **harness-capability-absent -> a VISIBLE stand-down** that can never be read as a pass.
+> - **content/art-absent -> assert THROUGH it** — the proven fallback path becomes the assertion.
+
+Why this class is the most expensive one here: a gate that reports success without proving it does not
+merely fail to catch a bug — it **actively asserts the bug is absent**, and work then proceeds on that
+assertion. That is strictly worse than having no gate at all.
+
+### Four more transferable rules, each paid for tonight
+
+1. **Check the fixture's health before believing a failure.** The harness `DestroyImmediate`'d a state
+   while it was still installed; Unity fake-null then made every read return null, producing a
+   regression failure that looked *exactly* like a real product defect (a cooldown window of 0) — and a
+   silent vacuous green in the neighbouring case. `HeadlessState` now re-installs a live state before
+   teardown and asserts its own health, so a demolished fixture can never masquerade as either again.
+   **A red that describes a plausible product bug is still, first, a claim about the harness.**
+2. **When you relocate code, check what was asserting against its old location.** Moving the siege
+   cadence and ledger stamps out of a swept directory (into `SiegeClock.cs`, one directory outside the
+   sweep, to keep skippable queue/economy time separate from never-skippable combat time) would have
+   **silently disarmed two rules** in the sibling `SiegeSpawnAuthority` lint. The fix extended that
+   lint's single-file guard into a file ARRAY covering both homes. **A fix that quietly removes a guard
+   is the failure this repo keeps paying for** — the oracle must follow the code.
+3. **When reconciling parallel seats, PRESERVE before you delete.** Two agents independently built the
+   same two screens because neither could see the other. The canon-compliant pair survived; the retired
+   half was **uncommitted work with no commit to fall back to**, so its full text was pasted verbatim
+   into its work order *before* deletion (see WO-1053's "RETIRED DUPLICATE" section). Losing seat, wired
+   or not: nothing is unrecoverable only if you preserve it first. (This is also why there is exactly
+   ONE committer, staging by EXPLICIT PATH — never `git add -A`.)
+4. **Never let an oracle be weakened to make a change fit.** Tonight's pattern held in both directions:
+   a genuinely-correct exception was **pinned in the existing owner-pinned table with its reason** (the
+   store beacon's loop flag) rather than by widening a derivation that would have flipped seven
+   siblings and re-opened a real leak; and a convex-pricing exponent is **hard-failed at `e >= 1`** so
+   the word cannot be used to undo the owner's ruling. Pin the exception, never soften the rule.
+
+### What is still OFF, and why (do not flip these)
+
+- **`FeatureFlags.Siege` OFF** (`Assets/_Modules/Core/FeatureFlags.cs`, `defaultOn: false`) until
+  **WO-1139** lands the ruled loss stakes. The cadence would otherwise open sieges that resolve and
+  report but take nothing.
+- **`FeatureFlags.RealmStorePurchase` OFF**, mainnet block unlifted. Monetization stays off until the
+  owner rules; see the banner at the top of this file.
+- **No cosmetic or SKR rows are authored in the battle pass**, and a regression **fails the build** if
+  either is authored before its gate opens (no art; no `ISkrLedger`).
+- ⚠ **A default flip is not a state change on a machine that already answered the question** —
+  `FeatureFlags.Get` reads PlayerPrefs FIRST. Clear the pref when testing a default.
+
+### Resume points
+
+1. **Owner felt-test of tonight's APK** — that is the gate on pushing any of it.
+2. **WO-1139** loss stakes (ruled; note the stakes ruling reversed twice inside one exchange — read all
+   three in WO-1026, the third is live), then **WO-1126** (glimmer purge + `BattlePassManager`
+   retirement), **WO-874** (wire elite VFX), **WO-887** (map the five owner-tagged surface impacts),
+   **WO-1133** (inventory redesign — half of it is removal), **WO-1134** (endgame loop, fully ruled).
+3. **The four tickets minted tonight, all READY:** 1135, 1136, 1137, 1138. **1138 is the leveraged one**
+   — widen the ratchet to a control-flow relationship instead of a line window, then re-run it across
+   every registered suite and triage what it surfaces. Two suites were read by hand in one day and both
+   were dirty; expect more.
+4. **Still owner-owed:** WO-823 first-raid softness, WO-1029/PROD-012 backend + online-required, R5/R6
+   buy button and season pass.
+
+⛔ **One trap worth naming before you touch the raid ladder:** the ruled terminus (12/18/24 clears)
+deliberately **DIVERGES** from `TribeManager.ClearsUntilGone`. Copy the shape of a terminating ladder,
+**never the vanishing** — camps PLATEAU and remain repeatable. A camp that disappears deletes the loop.
+
+---
+
+## ★★ SESSION HANDOVER — 2026-08-18 (the overnight loop: the correction pass that corrected the wrong file) — SUPERSEDED (see 2026-08-21 above) ★★
 
 **Anchor:** **`../CANON_GROUND_TRUTH_2026-08-18.md`** — minted tonight, supersedes the 08-16 anchor
 (bannered/frozen). Read it before this block; it carries the file:line citations.

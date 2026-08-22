@@ -1,13 +1,13 @@
-> ## ▶ LIVE ANCHOR = `CANON_GROUND_TRUTH_2026-08-18.md` — read it FIRST (refreshed here 2026-08-18)
+> ## ▶ LIVE ANCHOR = `CANON_GROUND_TRUTH_2026-08-21.md` — read it FIRST (re-stamped here 2026-08-21)
 >
-> The `Latest (2026-08-18)` section immediately below is current. **Older dated `Latest (...)` sections
+> The `Latest (2026-08-21)` section immediately below is current. **Older dated `Latest (...)` sections
 > are history — where one disagrees with a newer section or with the anchor, the newer wins.**
-> The 08-16 and 08-08 anchors are bannered SUPERSEDED. The 08-08 one is additionally **INVERTED** on
-> its two headline sections (the machine block is resolved; the dungeon-stair hunt is closed) — do not
-> act on it.
+> The 08-18, 08-16 and 08-08 anchors are bannered SUPERSEDED. The 08-08 one is additionally
+> **INVERTED** on its two headline sections (the machine block is resolved; the dungeon-stair hunt is
+> closed) — do not act on it.
 >
-> *(This pointer read `CANON_GROUND_TRUTH_2026-08-09.md` until 2026-08-18 — it sat nine days stale and
-> skipped the 08-16 anchor entirely. Re-stamp it in the same change as any new anchor.)*
+> *(This pointer has twice sat days stale behind a newer anchor. Re-stamp it in the SAME change as any
+> new anchor.)*
 >
 > Per CLAUDE.md §15 THIS file is LIVING — edited in place, never snapshotted. The `CANON_GROUND_TRUTH_*`
 > anchors are the dated snapshots.
@@ -35,12 +35,74 @@
 - **The economy direction:** V1 ships ZERO crypto; soft currency client-owned now, flips
   server-authoritative (auth scaffolding already built) when currency carries real value; SKR is a
   later, separate arc. Monetization = rewarded-ad income paths, never a wall.
+  **⛔ THE APP IS PUBLISHED, BUT THE PAY PATH HAS NEVER BEEN ACTIVATED (owner, 2026-08-21):
+  nobody has ever bought anything.** "Published on a store" and "taking money" are DIFFERENT facts,
+  and only the first has ever been true here (`FeatureFlags.RealmStorePurchase` is
+  `defaultOn:false`, verified at `Assets/_Modules/Core/FeatureFlags.cs`; the mainnet block in
+  `SolanaWalletProvider.SendPayment` is unlifted). So an economy/currency REMOVAL is a **clean
+  purge**, not a balance-preserving migration — there is nobody to grandfather or compensate. Still
+  read-migrate a removed save field so existing dev/test saves LOAD (ordinary defensive
+  deserialisation, not value preservation). ⚠ This does NOT license flipping the payment flags.
 - **The architecture:** HP B2B — bounded contexts, presentation never touches objects, the One
   Model (entries + capabilities), data-only content ("data only always"), pooled by default.
   Deep-dives: `docs/NORTH_STAR.md` (vision/GTM) · `docs/COMBAT_PIVOT_NORTHSTAR.md` (combat) ·
   `docs/ARCHITECTURE_NORTH_STAR.md` (does the foundation grow into the dream).
 - **The operating dream:** the owner plays and rules; agents build in parallel lanes; every bug is
   a captured line; every system self-reports; the fleet + web bots verify before she ever has to.
+
+## Latest (2026-08-21) — siege cadence, the Night Market, and the pay-path correction
+
+*Anchor: `CANON_GROUND_TRUTH_2026-08-21.md` (file:line citations and the full ruling table live there).*
+
+- **⛔ THE CORRECTION THAT CHANGES HOW YOU PRICE RISK: the game is PUBLISHED on the Solana dApp
+  Store, but the PAY PATH HAS NEVER BEEN ACTIVATED — nobody has ever bought anything.** See the
+  North Star economy bullet above for what that licenses (clean purges) and what it does NOT
+  (flipping the payment flags). Canon states the "live game" half loudly and has never stated the
+  other half; every risk estimate that assumed paying players was wrong.
+- **Branch `wip/village2-and-f8-tickets`, NOTHING PUSHED.** Save schema **UNCHANGED** by tonight's
+  wave — read it off `SaveSchema.CurrentVersion` (`Assets/_Modules/Core/State/SaveSchema.cs`),
+  never off a doc. Commits-ahead: `git rev-list origin/<branch>..HEAD`.
+- **Gate: `COMPILE_GATE_OK` fresh; `REGRESSION_OK` is ABSENT and that is EXPECTED tonight.**
+  `DataRegression` ends 2 short, and **both failures are ticketed ASSET gaps that no code change can
+  close** — **WO-1135** (wall tier materials were never tracked; `Assets/Resources/Walls/Materials/`
+  does not exist) and **WO-1136** (`staff_A` is geometrically symmetrical, relGap 0, so no sheathe
+  orientation is derivable). Read the counts off the newest `Builds/reg-*.log`, never from here.
+- **Build: Seeker APK under `Builds/Android/`, with `R2_PARITY_OK` on a fresh `Builds/r2-parity.log`**
+  — content is proven hosted, so no capsule enemies (CLAUDE.md §16).
+- **Shipped (13 commits):** Night Market store redesign (WO-1050) · PvE siege cadence + the persisted
+  Defense Report (**WO-1026 DONE**) · per-camp raid cooldown + difficulty-scaled attrition (WO-728) ·
+  battle pass season track + monthly cards (WO-1053) · chest drops read by SILHOUETTE (WO-1132) ·
+  convex Finish-Now curve + rescale parity (WO-1129) · per-mesh sheathed-weapon seating · village
+  cosmetic seam + armorer instrumentation · realm map pins, dungeon status, offline accrual trust ·
+  enemy art pipeline + a new wall-material oracle.
+- **STILL OFF:** `FeatureFlags.Siege` (**OFF until WO-1139 lands the ruled stakes** — the cadence
+  would otherwise open sieges that resolve and report but TAKE NOTHING) ·
+  `FeatureFlags.RealmStorePurchase` OFF, mainnet block unlifted. No cosmetic or SKR rows are authored
+  in the battle pass, and a regression FAILS THE BUILD if either is authored before its gate opens.
+- **Owner rulings 2026-08-21** (values live in the anchor's table — do not re-copy them):
+  per-difficulty raid cooldown; per-difficulty attrition windows; **sub-linear** reward escalation;
+  a ladder that TERMINATES in clears and then **PLATEAUS — the camps REMAIN repeatable**; loss
+  stakes = **theft ALLOWED** on banked wood/food/iron with a floor, **crystals NEVER stealable**,
+  offline sieges included; WO-874 WIRE ruling STANDS; WO-1126 purge glimmer + retire
+  `BattlePassManager`; WO-887 unblocked by the owner's own VFX tags. **WO-838 CLOSED** (felt-verified:
+  raids render correctly, not white).
+  - ⛔ The ladder terminus deliberately **DIVERGES from `TribeManager`'s vanishing camps** — copy the
+    shape of a terminating ladder, NEVER the disappearance. A camp that vanishes deletes the loop.
+  - ⚠ The stakes ruling **reversed TWICE inside one exchange**; the third is live. WO-1026 records
+    all three with the superseded block struck through — read it there before implementing WO-1139.
+- **THE LESSON OF THE NIGHT — gates that report success without proving anything, found in TWO
+  separate suites in one run.** A missing dependency did `note + return`, and notes feed the SUCCESS
+  string, so a SKIP READ AS A PASS. Only one of six was caught by the existing ratchet; the other
+  five escaped because its detection window is **four lines**, i.e. its coverage depends on code
+  FORMATTING (**WO-1138**). A gate that reports success without proving it does not merely fail to
+  catch a bug — it **actively asserts the bug is absent**, and work proceeds on that assertion. That
+  is strictly worse than no gate. Related: **WO-1137** (a fallback catalog covering 3 of 28 rows,
+  drifted four times, would hand the player a silent 3-row different game).
+- **OWED:** owner felt-test of tonight's APK, then WO-1139 (stakes) · WO-1126 (glimmer purge +
+  `BattlePassManager` retirement) · WO-874 (wire elite VFX) · WO-887 (map the 5 tagged surface
+  impacts) · WO-1133 (inventory redesign — half of it is removal) · WO-1134 (endgame loop, fully
+  ruled). Still owner-owed: 823 first-raid softness · 1029/PROD-012 backend + online-required ·
+  R5/R6 buy button and season pass.
 
 ## Latest (2026-08-18) — the overnight loop: orientation, the sign-in forever-bug, CDN + R2 discipline
 

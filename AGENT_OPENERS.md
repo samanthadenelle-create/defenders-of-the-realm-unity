@@ -178,7 +178,7 @@ Full spec: docs/TICKET_PIPELINE.md
 | `docs/INSTRUMENTATION_STANDARD.md` | How to write observable code (BINDING) |
 | `docs/TICKET_PIPELINE.md` | QA→CLI→PO lifecycle (BINDING) |
 | `WorkOrders/WORK_ORDER_NNN_*.md` | Unit-of-work specs |
-| `CLI_LANES_WO_NUMBERS.md` | WO numbering authority (next free = 430+) |
+| `CLI_LANES_WO_NUMBERS.md` | WO numbering authority - READ the next free off the banner, never restate it |
 | `Assets/_Modules/Core/Diagnostics/` | FlowTrace · Guard · BreakCaptureHarness |
 | `region-gates.json` | RuntimeRegionGate warp-gate config |
 | `echo-workforce.json` | Echo offline workforce config |

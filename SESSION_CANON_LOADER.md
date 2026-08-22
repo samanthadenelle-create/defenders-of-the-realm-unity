@@ -1,22 +1,81 @@
-> ## ▶ REFRESHED 2026-08-18 — the live anchor is `CANON_GROUND_TRUTH_2026-08-18.md`
+> ## ▶ REFRESHED 2026-08-21 — the live anchor is `CANON_GROUND_TRUTH_2026-08-21.md`
 >
-> The **08-18 LIVE THREAD** below is current; every thread under it is SUPERSEDED and kept as history.
-> *(This banner read "REFRESHED 2026-08-09 / anchor 08-09" until tonight — nine days stale, and it
-> disagreed with the LIVE THREAD directly beneath it, which had been re-anchored to 08-16. Re-stamp
-> both in the same change as any new anchor.)*
->
-> ## ⚠ (previous) REFRESHED 2026-08-09 — SUPERSEDED 2026-08-18
->
-> The **08-09 LIVE THREAD** below is current; every thread under it is SUPERSEDED and kept as history.
-> The 08-08 anchor is bannered and is **INVERTED** on its two headline sections (the machine block is
-> resolved; the dungeon-stair hunt is closed) — do not act on it.
+> The **08-21 LIVE THREAD** below is current; every thread under it is SUPERSEDED and kept as history.
+> The 08-18, 08-16 and 08-08 anchors are bannered/frozen; the 08-08 one is additionally **INVERTED**
+> on its two headline sections (the machine block is resolved; the dungeon-stair hunt is closed) — do
+> not act on it. *(This banner has twice sat days stale behind a newer anchor. Re-stamp the banner AND
+> the top LIVE THREAD in the SAME change as any new anchor.)*
 >
 > Per CLAUDE.md §15 the newest `CANON_GROUND_TRUTH_<date>.md` wins on any conflict with this file.
 # DeNelle Studios — Project Canon Loader
 
-> ## ▶ LIVE THREAD (2026-08-18) — READ BEFORE WORKING
-> **Reality anchor = `CANON_GROUND_TRUTH_2026-08-18.md`** (minted tonight; the 08-16 anchor is now
-> bannered/frozen). Branch `wip/village2-and-f8-tickets`. **This block records NO HEAD sha, NO
+> ## ▶ LIVE THREAD (2026-08-21) — READ BEFORE WORKING
+> **Reality anchor = `CANON_GROUND_TRUTH_2026-08-21.md`** (the 08-18 anchor is now bannered/frozen).
+> Branch `wip/village2-and-f8-tickets`, **NOTHING PUSHED**. **This block records NO HEAD sha, NO
+> commits-ahead, NO suite count, NO APK size and NO next-free WO number** — read them off `git status`
+> / `git rev-list origin/<branch>..HEAD`, the newest MARKER logs under `Builds/`, and the
+> `CLI_LANES_WO_NUMBERS.md` banner (sole authority, two disjoint blocks). Save schema version -> read
+> `SaveSchema.CurrentVersion` at `Assets/_Modules/Core/State/SaveSchema.cs`; **tonight did not bump
+> it.** One committer, staged by explicit path, never `git add -A`.
+>
+> **⛔ THE ONE LINE TO CARRY OUT OF THIS BLOCK: the game is PUBLISHED on the Solana dApp Store, but
+> the PAY PATH HAS NEVER BEEN ACTIVATED — nobody has ever bought anything** (owner, 2026-08-21).
+> "Published on a store" and "taking money" are DIFFERENT facts; this canon has stated the first
+> loudly for weeks and the second has never been true. So a currency/economy REMOVAL is a **clean
+> purge**, not a balance-preserving migration — nobody to grandfather or compensate; still
+> read-migrate a removed save field so dev/test saves LOAD. ⚠ This does NOT license flipping the
+> payment flags: `FeatureFlags.RealmStorePurchase` stays OFF and the mainnet block stays unlifted.
+> *(The 08-18 thread's "blast radius lands on installed devices" framing is true for CONTENT and
+> false for MONEY — read it that way.)*
+>
+> **Gate posture tonight: `COMPILE_GATE_OK` fresh, and `REGRESSION_OK` is ABSENT ON PURPOSE.**
+> `DataRegression` ends two short and **both failures are ticketed ASSET gaps no code change can
+> close** — **WO-1135** (wall tier materials were never tracked; `Assets/Resources/Walls/Materials/`
+> does not exist) and **WO-1136** (`staff_A` is geometrically symmetrical, so no sheathe orientation
+> is derivable). A Seeker APK built with **`R2_PARITY_OK` on a fresh `Builds/r2-parity.log`** — content
+> proven hosted, no capsule enemies (CLAUDE.md §16).
+>
+> **Shipped tonight (13 commits):** Night Market store redesign (WO-1050) · PvE siege cadence + the
+> persisted Defense Report (**WO-1026 DONE**) · per-camp raid cooldown + scaled attrition (WO-728) ·
+> battle pass season track + monthly cards (WO-1053) · chest drops by SILHOUETTE (WO-1132) · convex
+> Finish-Now curve + rescale parity (WO-1129) · per-mesh sheathed-weapon seating · village cosmetic
+> seam + armorer instrumentation · realm map pins, dungeon status, offline accrual trust · enemy art
+> pipeline. **WO-838 CLOSED** (owner felt-verified: raids render correctly, not white).
+>
+> **STILL OFF:** `FeatureFlags.Siege` **until WO-1139 lands the ruled loss stakes** — the cadence
+> would otherwise open sieges that resolve and report but TAKE NOTHING. `RealmStorePurchase` OFF. No
+> cosmetic or SKR rows are authored in the battle pass, and a regression FAILS THE BUILD if either is
+> authored before its gate opens.
+>
+> **Owner rulings 2026-08-21 — the VALUES live in the anchor's table; do not re-copy them here.**
+> Per-difficulty raid cooldown + attrition windows · **sub-linear** reward escalation · a ladder that
+> terminates in clears and then **PLATEAUS, the camps REMAIN repeatable** · loss stakes = **theft
+> ALLOWED** on banked wood/food/iron with a floor, **crystals NEVER stealable**, offline sieges
+> included · WO-874 WIRE ruling STANDS · WO-1126 purge glimmer + retire `BattlePassManager` · WO-887
+> unblocked by the owner's own VFX tags.
+> ⛔ The ladder terminus deliberately **DIVERGES from `TribeManager`'s vanishing camps** — copy the
+> shape of a terminating ladder, NEVER the disappearance; a camp that vanishes deletes the loop.
+> ⚠ The stakes ruling **reversed TWICE inside one exchange**; the third is live. WO-1026 records all
+> three with the superseded block struck through — read it there before implementing WO-1139.
+>
+> **THE LESSON OF THE NIGHT:** gates that report success without proving anything were found in TWO
+> separate suites in one run — a missing dependency did `note + return`, and notes feed the SUCCESS
+> string, so **a SKIP READ AS A PASS**. Only one of six was caught by the existing ratchet; the other
+> five escaped because its detection window is four lines, i.e. its coverage depends on code
+> FORMATTING (**WO-1138**). A hollow gate does not merely fail to catch a bug — it **actively asserts
+> the bug is absent**, and work proceeds on that assertion. Strictly worse than no gate. Related:
+> **WO-1137** (a fallback catalog covering 3 of 28 rows, drifted four times, would hand the player a
+> silent 3-row different game).
+>
+> **OWED:** owner felt-test of tonight's APK, then WO-1139 · WO-1126 · WO-874 · WO-887 · WO-1133
+> (inventory redesign, half of it removal) · WO-1134 (endgame loop, fully ruled). Still owner-owed:
+> 823 first-raid softness · 1029/PROD-012 backend + online-required · R5/R6 buy button and season pass.
+>
+> **The 08-18 thread below is SUPERSEDED.**
+
+> ## ▶ LIVE THREAD (2026-08-18) — SUPERSEDED (see 08-21 above)
+> **Reality anchor = `CANON_GROUND_TRUTH_2026-08-18.md`** (minted 2026-08-18, now SUPERSEDED by the
+> 08-21 anchor). Branch `wip/village2-and-f8-tickets`. **This block records NO HEAD sha, NO
 > commits-ahead, NO suite count and NO next-free WO number** — read them off `git status` /
 > `git rev-list origin/..HEAD`, the MARKER files under `Builds/`, and the `CLI_LANES_WO_NUMBERS.md`
 > banner (sole authority, two disjoint blocks). Save schema version → read
@@ -24,7 +83,9 @@
 > by explicit path, never `git add -A`.
 >
 > **Current state, in one breath.** This is a LIVE game on the Solana dApp Store, so the blast radius
-> of a content change lands on installed devices, not on this tree. Tonight's overnight loop turned on
+> of a **content** change lands on installed devices, not on this tree. ⚠ **Corrected 2026-08-21: that
+> is true for CONTENT and FALSE for MONEY — the pay path has never been activated, nobody has ever
+> bought anything, so an economy removal has nobody to compensate.** See the 08-21 thread. Tonight's overnight loop turned on
 > one lesson: **a correction pass corrected the wrong file, twice.** `f995c4706` baked ten structure
 > FBXs upright and zeroed ten rows in `Assets/OffsetForge/offsets.json` — **but those rows are INERT
 > for structures** (`AttachmentOffsetRegistry` is keyed by hero/enemy attachment mesh ids). The live
@@ -439,26 +500,28 @@ binding depth lives in `CLAUDE.md`, `docs/ARCHITECTURE_PRINCIPLES.md`, `docs/HAN
 - **One thing at a time, fully verified before the next.**
 - **Deliver complete + felt-verified. No piecemeal.**
 - **Ticket pipeline (BINDING):** QA (read-only RCA, classify NEW-feature vs EXISTING) → CLI
-  (implement + headless-verify) → PO (felt-verify + close). Shared board = the Task list; log
-  every hand-off. Full spec: `docs/TICKET_PIPELINE.md`.
+  (implement + headless-verify) → PO (felt-verify + close). **Shared board = `BOARD.html`, DERIVED
+  from `WorkOrders/*.md` via `python tools/board_build.py`** — the Task list, Notion and Linear are
+  ALL RETIRED; nothing to mirror. Log every hand-off in the WO markdown itself. Full spec:
+  `docs/TICKET_PIPELINE.md` · `docs/BOARD.md`.
 
-## Current State (anchored to `CANON_GROUND_TRUTH_2026-08-09.md`; the bullets below carry earlier detail — where they disagree with the LIVE THREAD above, the thread wins)
+## Current State (anchored to `CANON_GROUND_TRUTH_2026-08-21.md`; the bullets below are OLDER detail kept for depth — where they disagree with the LIVE THREAD above, the thread wins)
 
-> **Fast reconciliation (corrected 2026-08-09 — trust these over the older bullets):** home hub =
+> **Fast reconciliation (re-checked 2026-08-21 — trust these over the older bullets):** home hub =
 > `Main_Castle_Overworld` (MergedWorld ON, one navmesh; `Village.unity` and `OuterWorld.unity` are
-> DELETED — the "MainCastle_Hall + OuterWorld streams additively" bullet below is stale). Save schema =
-> **v37** (`SaveSchema.cs:36`; v35 = WO-773 Obsidian queue, v36 = WO-834 `everBuiltStructureIds`,
-> **v37 = WO-911 the per-job PAID BASKET** — cancel refunds 100% of what was paid, flat; a pre-v37 job
-> refunds ZERO and says so). **HEAD = `c8320434`, PUSHED, local == origin** (the `e60b19e5` bullet below
-> is stale). Dungeon real-time gate is `ff.dungeonrealtime` (there is no `ff.atbdungeon`). Raid loop =
+> DELETED — the "MainCastle_Hall + OuterWorld streams additively" bullet below is stale).
+> **Save schema: read `SaveSchema.CurrentVersion` at `Assets/_Modules/Core/State/SaveSchema.cs` —
+> never a number from a doc** (the "v37" that stood here was already one bump stale). **HEAD /
+> pushed-state: read `git status`** — as of 2026-08-21 the branch is AHEAD of origin and NOT pushed,
+> so the old "PUSHED, local == origin" line is false. Dungeon real-time gate is
+> `ff.dungeonrealtime` (there is no `ff.atbdungeon`). Raid loop =
 > COC Teleport/Deploy (WO-771). Dungeons are a functional end-to-end loop — and as of 2026-08-08 the
 > **multi-level stairs work**: all 4 content dungeons bake `PathComplete` (WO-930).
 - **Strategic placement = ALWAYS ON (2026-07-13, WO-695 ex-682):** `ff.strategicplacement` is REMOVED —
   Build → Town/Defenses/Walls tabs, movable functional storefronts and the 260w/210i core-kit seed are
   the unconditional path; New Game = the BLANK template (+ one FTUE grace-default Forge record);
   existing saves migrate once via the v30 one-shot writer.
-- **Branch:** `wip/village2-and-f8-tickets` (NOT `feat/tower-core-loop` — stale). **HEAD = `e60b19e5` (the 2026-08-02 marathon-day-2 arc: Echo program + tester wallet + dungeon/gear evening), pushed, local==origin.** Save schema **v36** *(FROZEN HISTORY — true on 2026-08-02 only; the live schema is
-  **v38**, read `SaveSchema.CurrentVersion` at `SaveSchema.cs:41`)*. Fresh headless gates = `COMPILE_GATE_OK` + DataRegression **`REGRESSION_OK` — 0 reds** (all 5 long-standing baseline reds fixed 2026-07-19: arena texture, dual-wallet, pet-slot persist, Tribes/Wards/Arena persist, orc-raider SSOT) + the `[ui-mvvm]`/`[room-forge]` ratchets at 0 NEW.
+- **Branch:** `wip/village2-and-f8-tickets` (NOT `feat/tower-core-loop` — stale). *(FROZEN HISTORY: the HEAD sha, push state, save version and "0 reds" gate posture that stood in this bullet were a 2026-08-02 snapshot and are no longer true. Read HEAD/push state off `git status`, the schema off `SaveSchema.CurrentVersion`, and the gate posture off the newest marker log under `Builds/` — see the LIVE THREAD.)*
 - **Pi Hackathon WON (2026-07-17)** — the "July-31 deadline / build mode IS the demo" framing is **RETIRED**; there is NO upcoming demo and the roadmap is OPEN. The quality bar (feel-arc/F8, ten-year-old test) still governs. **Prod untouched** (promotion stays the owner's separate call at `defenders-of-the-realm-v2.vercel.app`). **Highest-leverage open lane = the CoC offense loop (WO-724→726, Path A convergence)** now the MVVM + Room Forge foundations have landed; WO-739 generic upgrade panel is the parallel-safe start.
 - **Title:** **"Echoes of Elarion"** (chapter) within the **"Defenders of the Realm"** series; tagline **"Echoes of a Forgotten Civilization"** (owner 2026-07-24; "Hold the last light" retired).
 - **Combat space:** WO-584 consolidation (READY) — one warp-in space primitive, 3 skins (dungeon/outpost/arena), ownership flip; replaces flat ATB dungeon.
@@ -475,9 +538,10 @@ binding depth lives in `CLAUDE.md`, `docs/ARCHITECTURE_PRINCIPLES.md`, `docs/HAN
   `OuterWorld.unity` DELETED — `MainCastle_Hall.unity` exists on disk but is NOT the hub); `Village2` =
   raid target. Castle↔outer world is one merged scene; moat + drawbridges (`ff.castlemoat`); tree aura +
   tower glow (`ff.hubambientvfx`).
-- **Economy:** Echo workforce wired (offline real-clock, WO-587 Population & Echo growth; save **v36**); gold on kills; research costs. **Echo harvest affinity is a MATCH BONUS, never a lock** (WO-830: the player picks each Echo's resource; matching its affinity doubles the yield; token grammar `<resource>:<level>`; Maren = Crystals).
+- **Economy:** Echo workforce wired (offline real-clock, WO-587 Population & Echo growth); gold on kills; research costs. **Echo harvest affinity is a MATCH BONUS, never a lock** (WO-830: the player picks each Echo's resource; token grammar `<resource>:<level>`; Maren = Crystals). ⚠ **"doubles the yield" was FALSE and is RETIRED** (WO-1108): the match is an **additive term inside a spec-SUM** (`EchoBonusCalculator.LaneContribution`), with the live values in `echoes-balance.json` — implementing "doubles" literally ships a ~20x buff. **Echo REPAIR is PASSIVE and COUNT-DRIVEN**, never an assignment.
 ## Key Files to Remember
-- `CANON_GROUND_TRUTH_2026-08-09.md` (the single live anchor of current reality — read FIRST; a delta over 08-08 → 08-07 → 08-06 → 08-05 → 08-03 → 08-02 → 08-01 → 07-26 → the deep `CANON_GROUND_TRUTH_2026-07-22.md` module anchor. All earlier anchors are SUPERSEDED/frozen — and the **08-08 one is INVERTED** on its machine-blocked and dungeon-stair sections, so do not act on it)
+- `CANON_GROUND_TRUTH_2026-08-21.md` (**the single live anchor of current reality — read FIRST**; a delta over 08-18 → 08-16 → 08-09 → ... → the deep `CANON_GROUND_TRUTH_2026-07-22.md` module anchor. All earlier anchors are SUPERSEDED/frozen — and the **08-08 one is INVERTED** on its machine-blocked and dungeon-stair sections, so do not act on it)
+- `KEY_FACTS.md` (the LIVING fact sheet — its newest `Latest (...)` section tracks this anchor)
 - `docs/reference/WO_TRUE_STATUS_2026-08-08.md` (the WO audit that found **52 of ~91 statuses wrong**; frozen, dated)
 - `docs/reference/SESSION_INDEX_2026-08-06.md` (tonight as a known dictionary: every defect with its proving line, every REFUTED belief with the evidence that killed it, the owner rulings, the open items) · `docs/reference/DEFECT_INDEX_2026-08-05.md` (the same for the earlier half of 08-05; frozen)
 - `docs/qa/UI_REVIEW_2026-08-01.md` (frozen 20-panel real-pixel readability review) · `docs/GROK_MEMORY.md` (Grok fast path)

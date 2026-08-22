@@ -16,6 +16,147 @@ Legend: **[LIVE]** wired & functional · **[STUB]** scaffolded/inert · **[DEAD]
 
 ---
 
+## DELTA 2026-08-21 — the Season Track + Monthly Ledger runtime, The Night Market, and PurchaseGate's move into `DeNelle.Wallet`
+
+Read from source 2026-08-21. Where this block and the 08-02 body disagree, this block wins.
+**Note first: §9's "WO-830 PENDING — spec only, NOT in code" is stale; that work shipped.**
+
+### ⛔ TWO BATTLE PASSES NOW EXIST IN THE TREE, AND THE CONFLICT IS DECLARED IN THE CODE
+
+`Assets/_Modules/Cosmetics/BattlePassManager.cs` (§5 below) is untouched and still dormant.
+`Assets/_Modules/Wallet/BattlePassService.cs` is a NEW, independent, data-driven runtime. The new
+file's own header (`:51-82`) declares the conflict and says it **needs an owner decision — "do not
+let it sit"**, offering (a) retire `BattlePassManager`, lifting its guarded LevelUpVFX reflection
+bridge across first, or (b) keep it dormant deliberately and record why. What must not happen is
+both surviving unruled. Reasons the old one could not be built on, verified at source: it is driven
+by a `BattlePassData` ScriptableObject that **does not exist as an asset** (and an SO cannot be
+validated by a JSON-reading build gate); its premium track costs **2400 Glimmer**, and the owner's
+2026-08-21 ruling retired Glimmer as a paid reward line; and it has one flat `xpPerLevel` with no
+concept of a season, calendar month, per-tier reward pair, claim state or monthly card.
+
+### NEW canonical data — `battle_monthly.json` (BOTH copies: Resources + StreamingAssets)
+
+A **sibling** of `packs.json`, not a block inside it: `PackDef` describes one purchasable bag of
+goods, a season is a TIERED TRACK climbed by playing, and a monthly card is a THIRTY-CLAIM POOL.
+Neither shape fits `PackDef`. `packs.json` is untouched.
+
+### `Wallet/BattleMonthlyCatalog.cs` (690) — typed model + loader, and the FIREWALL lives at LOAD
+
+Types: `enum RewardKind` · `RewardEconomy` · `RewardConvenience` · `RewardGrant` (`ParseKind`,
+`Describe`) · `BattlePassTier` · `BattlePassXpRules` · `BattlePassSeason` (`XpRequiredScaled`,
+`DaysInSeasonMonth`, `SeasonStart`, `DaysRemainingInSeason`) · `MonthlyDailyDrip` · `MonthlyCard`
+(`Day(int)`) · `BattleMonthlyData`, plus the static `BattleMonthlyCatalog` (`Seasons`, `Cards`,
+`DroppedGrants`, `FindCard(sku)`, `Reload()`, `ResetSkrProbe()`). Loaded WebGL-safe through
+`CanonicalJson.Read` (Resources first, StreamingAssets fallback).
+Three **separate axes** the loader enforces — do not merge them: **LEGALITY** (a grant kind outside
+`{economy, convenience_token, cosmetic_sku, skr, bundle}` is REJECTED; there is no `combat` kind, so
+adding one is a code edit this file refuses, and a convenience kind outside `PackCatalog`'s
+sanctioned allowlist is rejected by ASKING `PackCatalog.EnforceCovenant` rather than re-listing it,
+so the two cannot drift); **REDEEMABILITY** (legal is not redeemable); and deliverability.
+`DroppedGrants` is the visible count of what the firewall ate.
+
+### `Wallet/BattlePassService.cs` (536) — static
+
+`enum TierState` · `Xp` · `PremiumLaneOwned` · `XpFor(tier)` · `FreeState`/`PremiumState` ·
+`OnArenaResult(win, streak, perfect)` · `ClaimAllReady()` · `AutoClaimAll()` ·
+`UnlockPremiumLane(bypassPurchaseCheckForTesting)` · `ResetForTests()`.
+⛔ **XP is earned by playing. There is exactly ONE public way it enters — `OnArenaResult`, which
+takes an OUTCOME, not an amount.** No reward kind credits XP, no SKU credits XP, and there is no
+`AddXp(int)` on the public surface. Owner ruling Q4 (2026-08-21) went further: **never sell tiers** —
+no catch-up, no partial-season pricing. Buying the pass unlocks the LANE; the TIERS are earned.
+The XP source is the existing arena ledger (`ArenaProgressStore.RecordWin/RecordLoss` in
+`DeNelle.Village` notifies this service), so the pass adds **no combat surface at all**.
+⚠ **One declared divergence from the WO pseudocode:** a crossed tier moves to **READY** and is
+granted on CLAIM, not auto-granted on crossing — auto-granting deletes the only state the UI spec
+lets animate.
+Persistence is **PlayerPrefs**, deliberately: `SaveSchema.CurrentVersion` is on a live published
+game and a bump is an OWNER decision, not a side effect of a monetization feature. `ArenaProgressStore`,
+`GlimmerCurrencyService` and `BattlePassManager` all use PlayerPrefs for the same reason. **This is
+a FOURTH unreconciled persistence store — see §7.**
+
+### `Wallet/MonthlyCardService.cs` (272) — static
+
+`enum MonthlyDayState` · `IsActive(sku)` · `ClaimsRemaining(sku)` · `NextDay(sku)` ·
+`CanClaimToday(sku)` · `DayState(sku, day)` · `ActivateCard(sku)` · `Claim(sku)` ·
+`ResetCardForTests(sku)`.
+⭐ **THE POOL MODEL IS THE PRODUCT DECISION.** `durationDays` counts **CLAIMS, not calendar days**.
+A missed day is never lost; nothing expires, so **nothing counts down and there must be no timer on
+the screen** — a ticking clock over a pool that cannot lapse manufactures urgency the spec promises
+not to apply. No streak, no streak penalty. Re-buying while active **EXTENDS** the pool, never
+overwrites. The drip is a BONUS ON TOP OF the free daily system: nothing here reads or writes
+`DailyQuestRewardBridge` state, and claiming one never consumes the other.
+One claim per UTC day, **latched** — the stamp is written BEFORE the grant is attempted, mirroring
+`DailyQuestRewardBridge.ClaimedAtUnix`.
+
+### `Wallet/RewardGrantWriter.cs` (350) — static, the ONE fulfillment writer
+
+`enum GrantOrigin` · `Grant(RewardGrant, GrantOrigin, string where)` · `Save(where)`. It dispatches
+on the reward's **KIND** and never on a SKU, season id, tier index or day number — which is what
+makes a new reward a data edit. It cannot grant combat power because no `RewardKind` expresses it.
+⚠ **CAPPED vs PURCHASED is a real distinction, not a copy-paste slip:** EARNED rewards (every
+battle-pass tier) route through the town-bank-capped `GrantSpendable` — a season tier is income and
+income obeys storage. PAID rewards (every monthly-card drip) route through
+`GrantSpendablePurchased`, the same uncapped seam `PackStoreVM` uses; silently shaving a paid drip
+against a full store is a refund problem. The caller states which it is.
+⚠ **Declared duplication:** the AppDomain reflection bridges are duplicated from `PackStoreVM`'s
+private copies. No DECISION lives in either copy, which is the test the file applies.
+
+### `Wallet/UI/SeasonTrackPanel.cs` (592) + `Wallet/UI/MonthlyLedgerPanel.cs` (501)
+
+Code-built uGUI (**not UXML** — UXML renders empty in player builds; the dead `PackStore.uxml`/`.uss`
+sitting next to them are the fossils of that lesson). Each registers a `PanelHandle` in `Awake`,
+calls `NotifyOpened` in `OnEnable` and **closes itself when that returns false** (the WO-437
+battle-lock refusal), and calls `NotifyClosed` in `OnDisable`.
+- **Season Track** is TWO PARALLEL ROWS (free top, premium bottom), one column per tier, scrolling
+  horizontally with the current tier centred on open — read DOWN a column to compare lanes at one
+  tier, ACROSS a row to see a lane's arc. Four column states, each printing its **word** from
+  canon-strings; READY is the only state that animates.
+- **Monthly Ledger** is a 10x3 grid drawing **all thirty days at once, before the player has paid
+  anything** — the "no hidden mystery day" promise made structural: there is no code path in the
+  file that omits a cell. ⛔ **No countdown anywhere**; the header reads "N claims left".
+
+### `Wallet/BattleMonthlyPanelsBootstrap.cs` (161) — the runtime DOOR
+
+`OpenSeasonTrack()` · `OpenMonthlyLedger()` / `OpenMonthlyLedger(sku)`. Exists because two seats
+built these screens independently: the surviving canon-compliant pair had exactly one defect —
+**nothing registered them**, so `PanelRouter.Open(PanelId.BattlePass)` returned false and the
+screens shipped unopenable. The retired rival (`BattleMonthlyPanels.cs`, 145 lines) was wired but
+typed player-facing sentences INLINE and derived on-screen state words from `enum.ToString()`,
+putting the developer identifier "PremiumLocked" on a player's screen — two CLAUDE.md §7 violations.
+Its text is preserved under "RETIRED DUPLICATE" in the WO. New `PanelId`s: `BattlePass = 19`,
+`MonthlyLedger = 20` (`Core/UI/PanelRouter.cs`).
+
+### The Night Market (WO-1050) — store presentation redesign
+
+- **`Wallet/NightMarketPalette.cs` (103)** — `For(StoreBand)` · `AllBandLights()` ·
+  `Luma255(Color)` · `ParseTint(hex, fallback)`. It is a FILE and not four `new Color(...)` literals
+  inside `PackStore` precisely so something can CHECK the colourblind rule: `NightMarketRegression`
+  asserts the four band lights step apart in rec.709 greyscale and that every band also carries a
+  text eyebrow and a mark. Identification order is **eyebrow > mark > greyscale value > hue**, and
+  hue is the first thing allowed to be lost.
+- **`Wallet/StoreAurora.cs` (403)** — `MonoBehaviour`; `AddDrift` / `AddSweep` (both return
+  `RawImage`, via the new `ElarionUiKit.AddRawImage`) · `CrossfadeTo(Color)` ·
+  `SetLightImmediate(Color)`. Exactly four motion moments: aurora drift (~22 s), a 400 ms light
+  crossfade on selection, a 700 ms specular sweep across the CTA every 6 s, and a ~14 s patronage
+  sheen. Three enforceable rules: **motion never carries meaning** (set `FeatureFlags.ReducedMotion`
+  and nothing but movement is lost — that is the acceptance test); **nothing a player reads to
+  decide ever moves** (no motion on prices, quantities, ledger bars, badges, the balance chip or the
+  trust strip); and the budget stays on the spotlight, off the shelf's information.
+- **`Wallet/StoreStrings.cs` (306)** — `Get` / `Format` / `Reload`, keys only; every buy-gate refusal
+  gets its own sentence in `canon-strings.json` (both copies, ASCII-only), each saying what the
+  player CAN still do, none of them saying "the flag is off". A missing key returns the visible
+  `[[missing:key]]` marker and self-reports through `FlowTrace`. It is the FOURTH module-local
+  strings twin (`CanonStrings`/Onboarding, `VillageStrings`/Village, `PromoStrings`/Core) — the
+  asmdefs do not let one module reach another's reader, and the SENTENCE is not duplicated, only the
+  twenty-line loader.
+- **`Wallet/PurchaseGate.cs` (406) — MOVED** from `Village/Monetization/` (git rename, 57% similarity)
+  into `DeNelle.Wallet`. Any doc or grep pointing at `Assets/_Modules/Village/Monetization/PurchaseGate.cs`
+  is now wrong.
+- New oracle `BuyGateAndPriceLadderRegression`; `ImpulsePackRegression` and
+  `WalletProviderSelectionRegression` updated.
+
+---
+
 ## 1. THE CURRENCY MAP (the one table to know)
 
 | Currency | Backing store | Earn seam | Spend seam | Persists? |
@@ -169,6 +310,10 @@ ticket lands here.
 
 ## 5. Battle pass — `Assets/_Modules/Cosmetics/BattlePassManager.cs`  [LIVE code, INERT without SO]
 
+> ⚠ **STILL TRUE, BUT NO LONGER THE ONLY BATTLE PASS (2026-08-21).** `DeNelle.Wallet.BattlePassService`
+> is a second, data-driven runtime and the two are UNRECONCILED by an explicit owner-decision flag in
+> its header. See the DELTA at the top of this file before treating either as "the" battle pass.
+
 - Singleton MonoBehaviour, DDOL (`:81-95`). **Persists to raw PlayerPrefs ints:** `BP_Level`,
   `BP_XP`, `BP_HasPremium` (`:292-294`, save/load `:296-309`) — the third unreconciled store
   (§7).
@@ -205,6 +350,9 @@ time-saving convenience — never combat power, never a stat, never RNG.
 ---
 
 ## 7. [FLAG 3/5] The three unreconciled persistence stores
+
+> ⚠ **THREE IS NOW FOUR (2026-08-21):** `BattlePassService` + `MonthlyCardService` add PlayerPrefs
+> state of their own (deliberately, to avoid a schema bump on a live published game). See the DELTA.
 
 | Store | Holds | Owner |
 |---|---|---|

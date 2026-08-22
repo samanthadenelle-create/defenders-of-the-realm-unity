@@ -35,7 +35,7 @@ Created 2026-07-12. ASCII-only. Keep in sync with KEY_FACTS.md (Backend/web sect
   logs** (`DATABASE_URL` is sensitive/unpullable). See `api/trace.js`.
 - **db-viewer** (secondary read): `tools/db-viewer/index.html` + `api/admin/db.js`,
   key-gated by `ADMIN_DASH_KEY` (Vercel env). A Traces read view.
-- **WO numbering**: mint from the `CLI_LANES_WO_NUMBERS.md` banner. **Next free = 688**
+- **WO numbering**: mint from the `CLI_LANES_WO_NUMBERS.md` banner. **Next free: READ IT OFF THE BANNER** (read it OFF THE BANNER - never restate it here; a copied number is exactly what goes stale)
   (as of 2026-07-12); bump the banner in the same edit.
 
 ---
@@ -113,8 +113,8 @@ For each inbox row AND each notable error-class from step 2:
 
 When triage says a WO is warranted (EXISTING bug with RCA, or a NEW-FEATURE spec):
 
-1. **Mint the number** from the `CLI_LANES_WO_NUMBERS.md` banner (next free = **688**).
-   Bump the banner's "next free" in the SAME edit (688 -> 689). Never mint from the
+1. **Mint the number** from the `CLI_LANES_WO_NUMBERS.md` banner (next free: read it off the banner).
+   Bump the banner's "next free" in the SAME edit (N -> N+1). Never mint from the
    filesystem max (collisions on record: 677, 678).
 2. **Write** `WorkOrders/WORK_ORDER_NNN_short_name.md` with:
    - **Symptom** (the dropped message and/or the `[sig]` line, verbatim).
@@ -224,4 +224,4 @@ one-line summary per inbox row + per WO minted.
 - `NOTION_SOURCE_OF_TRUTH.md` - Work Orders board conventions + numbering authority.
 - `KEY_FACTS.md` (Backend/web) - the WebTrace read path + db-viewer, kept in sync.
 - `api/trace.js` - the sink + the exact signal regex quoted above.
-- `CLI_LANES_WO_NUMBERS.md` - the WO numbering banner (next free = 688).
+- `CLI_LANES_WO_NUMBERS.md` - the WO numbering banner - THE SOLE AUTHORITY for the next free number.

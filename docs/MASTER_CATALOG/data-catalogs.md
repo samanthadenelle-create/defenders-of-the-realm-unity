@@ -11,6 +11,30 @@ non-canonical `Resources/Data` stragglers.
 
 ---
 
+## DELTA 2026-08-21 — one new canonical file, and two catalogs that grew rows
+
+Verified on disk 2026-08-21.
+
+- **NEW: `battle_monthly.json`** — present in **both** canonical trees and **byte-identical**
+  (`cmp` clean). Top-level keys: `_comment`, `_firewall`, `_noGlimmer`, `_grantSchema`, `version`,
+  `battlePassSeasons` (**1** row), `monthlyCards` (**2** rows). Read through `CanonicalJson` by
+  `DeNelle.Wallet.BattleMonthlyCatalog`. It is a **sibling** of `packs.json`, deliberately not a
+  block inside it — a season is a tiered track and a monthly card is a thirty-claim pool, and
+  neither shape fits `PackDef`. `packs.json` is untouched.
+- **`canon-strings.json`** (both copies) grew the raid-cooldown lines (read by
+  `DeNelle.Core.UI.RaidStrings`), The Night Market's buy-gate refusal lines (`DeNelle.Wallet.StoreStrings`),
+  the Season Track / Monthly Ledger state words, and the chest refusal sentence
+  (`VillageStrings.Canon`, read by `BreakableContainer`).
+- **`scene-configs.json`** (both copies) grew the per-camp raid cooldown durations
+  (`RaidCooldownService.DurationFor(SceneConfigDef)`).
+- **`structures-catalog.json`**, `barracks.json`, `troops.json`, `building-tiers.json`,
+  `gear-levels.json`, `jeweler-recipes.json` all moved in the WO-1129 economy-sink rescale.
+  ⛔ **`structures-catalog.json` holds 28 `entries`; `CatalogBootstrap.RegisterFallback()`
+  hardcodes THREE of them.** If the JSON ever fails to load, the player gets a silent, different,
+  3-row game. See **WO-1137** in the master risk ledger.
+
+---
+
 ## 1. THE LAW — dual copies, Resources WINS
 
 ### Loader seam

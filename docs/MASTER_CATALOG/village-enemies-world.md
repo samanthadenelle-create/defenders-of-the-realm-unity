@@ -17,6 +17,158 @@ Village → Cosmetics stays a reflection bridge (Enemy.cs:2578-2609 Glimmer).
 
 ---
 
+## DELTA 2026-08-21 — the PvE SIEGE cluster, the per-camp raid COOLDOWN, map PIN producers, and the crate that became a CHEST
+
+Read from source on 2026-08-21 (branch `wip/village2-and-f8-tickets`), not from headers or a summary.
+Everything in this block postdates the 08-02 body below; where the two disagree, this block wins.
+
+### NEW DIRECTORY — `Village/Siege/` (1 file). It exists to be OUTSIDE `Village/Waves/`.
+
+- **`Siege/SiegeClock.cs` (162)** `DeNelle.Village.SiegeClock` — **static.** The siege system's ONLY
+  read of the persisted wall clock (`TimeSource.NowUnixMs`). Four members:
+  `NowUnixMs()` · `StampFired(GameState)` (writes `state.LastSiegeUnixMs`) ·
+  `CadenceDefer(state, intervalMs, out why)` · `BankOfflinePressure(state, now, cappedSeconds,
+  intervalMs, out note)`.
+  ⭐ **WHY THE DIRECTORY EXISTS, verified at source:** `DevTimeSkipRegression` case 6 is a
+  FILE-LEVEL source lint — no file anywhere under `Village/Waves`, `BattleATB`, `Village/Enemies`
+  or `Dungeons` may reference `TimeSource` **at all**. `SiegeScheduler`/`SiegeSession` sit in that
+  swept tree and legitimately need cadence-class (queue) time, so the class-1 reads were MOVED one
+  directory over rather than the lint being narrowed. **Do not move this file into `Waves/` and do
+  not inline these calls back** — either re-breaches the firewall at the next gate run.
+  Two clock-hygiene cases self-heal rather than latch: an unseeded clock (`<= 0`) **seeds forward**
+  (a fresh save otherwise reads as 1970 = infinite elapsed = a retroactive assault as the player's
+  first act), and a clock in the FUTURE is re-stamped to now (otherwise the cadence stalls forever).
+  ⛔ It never writes `GameState.LastHarvestClaimMs` — `OfflineClaimCoordinator` owns that clock
+  (WO-1147 precedent).
+
+### NEW in `Village/Waves/` (5 files) — a SCHEDULER + a RECORDER. Neither spawns anything.
+
+- **`SiegeScheduler.cs` (323)** `DeNelle.Village.SiegeScheduler` — `MonoBehaviour`,
+  `[DisallowMultipleComponent]`, `IOfflineClaimConsumer`, static `Instance`. Decides WHEN a siege
+  arrives, opens the recorder, files the report. Members: `ApplyOfflineWindow(OfflineClaimWindow)` ·
+  `Evaluate()` · `Defer(out why)` · `Arm()` · `BindManager/UnbindManager(WaveManager)` ·
+  `HandleWaveCleared(int)` / `HandleDefeat()` · `Settle(DefenseOutcome)` · `ForceSiegeNow()`.
+  Cadence is **CONFIG, not save state**: serialized `_siegeIntervalHours` (6), `_maxPendingSieges`
+  (1), an away-window cap in hours.
+  ⛔ **VERIFIED: there is no `Instantiate` in the file.** The entire spawn integration is one call to
+  `WaveManager.Instance.ForceBeginNextWave()` — WaveManager remains the single attack authority, and
+  `SiegeSpawnAuthorityRegression` fails the gate if a spawn call ever appears here.
+  ⚠ **The offline path is deliberately NOT a simulation.** `ApplyOfflineWindow` converts an away
+  window into siege PRESSURE; the siege then happens LIVE at the gate with the player watching.
+  Resolving in absentia today would write a report whose Rows and ResourcesLost are both empty.
+  `DefenseResolution.ResolvedInAbsentia` + `DefenderSnapshot.Garrison` exist in the data model so a
+  future fast-forward drops in at this method with no data change.
+- **`SiegeSession.cs` (398)** `DeNelle.Village.SiegeSession` — plain class, static `Current` (exactly
+  one open session). `Open(waveId, AttackerIdentity, DefenderSnapshot)` ·
+  `ObserveTick(heartPos, innerRingRadius, breachArmed, ...)` (ONE null-safe line from
+  `WaveManager.TickActiveWave`) · `SamplePath` · `RecordBreach(Enemy)` ·
+  `ResolveNearestBarrier` · `Close(DefenseOutcome) -> DefenseOutcomeRecord` · `Abandon(why)`.
+  Caps: `MaxBreachRows = 8` (total preserved in `TotalBreachCrossings`, truncation traced),
+  `MaxPathPoints = 24` at a 2 s sample interval (long fights THIN rather than truncate),
+  `BreachNameRadius = 14f` (beyond it a row honestly reads "Open ground" instead of blaming a gate
+  the attacker never touched).
+  ⭐ **A DELIBERATE DEVIATION, recorded so nobody "fixes" it back:** the WO plan said to hook the
+  existing breach detector. Verified at source — that detector's whole body sits inside
+  `if (FeatureFlags.WaveBreachToAtb && _breachArmed && _heart != null)` in
+  `WaveManager.TickActiveWave`, and **that flag is default OFF** (WO-579 turned it off because
+  crossing the ring yanked the player into an ATB scene). Hooking it would have recorded nothing,
+  forever, silently. `ObserveTick` does its own ring test using WaveManager's OWN heart/radius/armed
+  flag passed in — an observer, not a second detector.
+  ⚠ **The roster is a UNION OVER TIME, not a census** (WO-1113): the spawn budget releases a wave in
+  slices with reinforcement drips, so an instantaneous scene census undercounts the force.
+- **`SiegeSchedulerBootstrap.cs` (73)** — static, `[RuntimeInitializeOnLoadMethod(AfterSceneLoad)]`.
+  Scene-free install (CLAUDE.md §3 forbids hand-editing `.unity`); mirrors `ManageScreenBootstrap` /
+  `RealmMapPanelBootstrap`. Installs on every hub load (`HubScenes.IsHub`), destroys on leaving,
+  idempotent, `Guard.Try`-wrapped. **Installs even when `FeatureFlags.Siege` is OFF** — a scheduler
+  saying "deferred: ff.siege OFF" is diagnosable; an absent one is indistinguishable from a broken
+  install. The flag gates ARMING, not existence.
+- **`DefenseReportBuilder.cs` (400)** — static. The ONLY adapter between live Village objects and
+  `DeNelle.Core.Defense` data: `AdaptRows` (`WaveDamageReport.Entry[]` -> `StructureOutcome[]`,
+  `Guard.TryEach` per row) · `StampLegibility(record, StructureVitalsWatch)` ·
+  `ResolveBreachOrdinal` · `ComputeDefenseScore` / `DefenseScoreWord` · `ClassifyBand` ·
+  `FirstBreach` · `CaptureDefender()` · `ComputeLayoutHash(IReadOnlyList<PlacedStructureData>)` ·
+  `BuildPveAttacker(int waveId)` · `BuildStakes(settled)`.
+  ⛔ **It is the ONLY file that writes `AttackerSource.GeneratedPve`** — every reader branches on the
+  record's `Source` field, so a future ghost-snapshot producer writes `GhostSnapshot` here and
+  nothing downstream changes. Enforced by `SiegeSpawnAuthorityRegression`.
+  ⛔ **It re-aggregates NOTHING.** `WaveDamageReport.Collect()` stays the one authority on what was
+  damaged and what it costs; a second aggregator would give the player two accounts of one attack.
+  ⚠ `BuildStakes` is the seam for the (still unruled) loss stakes — split out to **WO-1139**.
+- **`StructureVitalsWatch.cs` (350)** — `sealed class` + nested `struct Timing`. Answers WHEN a
+  structure was first hit and WHEN it fell, and nothing else: `Build(Vector3 corePosition)` ·
+  `AddRepairables<T>` · `Add(...)` · `ComputeFrontRadius()` · `Poll(float elapsedSeconds)` ·
+  `Resolve(string name, float assaultSeconds)`.
+  ⛔ **A TIMER, NOT A SECOND DAMAGE AGGREGATOR** — its output is MERGED INTO the rows `Collect()`
+  produced; it never emits, prices, or selects a row.
+  Cost model verified: the watch list is built ONCE at session open and then polled at **4 Hz** (the
+  same throttle `HudMinimapWidget` uses), because the player cannot build during a wave and a
+  destroyed structure persists as a scannable shell. Name collisions are handled EXPLICITLY: rows
+  are keyed by display NAME (WaveDamageReport's existing shape) and a base legitimately has twenty
+  things called "Wall", so the merge takes the EARLIEST first-hit and the EARLIEST fall.
+- **`WaveManager.cs`** — modified: gains the single null-safe `SiegeSession.Current?.ObserveTick(...)`
+  line in `TickActiveWave`. No composition, roster or phase change.
+
+### `World/Camps/` — NEW `RaidCooldownService.cs` (381), static, `DeNelle.Village.World.Camps`
+
+The ENTRY gate for a raid camp; a **sibling of, not a replacement for, `RaidClaimService`** (which
+answers "have I EVER taken this camp?" = the LOOT gate). Folding them into one flag would make the
+first clear's permanent record expire. Members: `DurationForDifficulty(string)` ·
+`DurationFor(SceneConfigDef)` · `DurationForConfigId(string)` · `RemainingSeconds(configId)` ·
+`IsOnCooldown` · `DescribeState` / `BadgeFor` / `BlockedMessage` · `BeginAfterClear(configId)` ·
+`Begin(configId, durationSeconds)` · `ClearCooldown(configId)`.
+⛔ **Clock discipline, verified line by line:** every "now" is `TimeSource.NowUnixMs()` — never
+`DateTime.UtcNow`, never `Time.time`. When the clock is NOT server-anchored (cold launch, offline)
+the cooldown still runs off the device fallback and the fact is RECORDED
+(`RaidCooldownRecord.ServerAnchored`); it is never refused and never lengthened — the WO-1128
+ruling: refuse server-side, never punish client-side. A BACKWARDS clock refuses rather than punishes
+(the `BuildTimerService.RollWindowIfNeeded` pattern).
+Callers wired the same night: `RaidSelectionScreen`, `RaidDeployController`,
+`RaidVictoryController`, `Village2RaidController`, `SceneConfigCatalog`.
+
+### `World/` — NEW `RealmPinProducers.cs` (270), static + `RealmPinProducerHost : MonoBehaviour`
+
+Closes a hole where `RealmPinBoard`, `RealmPins` and `RealmAtmosphereStyle` all shipped, both map
+surfaces read the board, and **nothing ever published** — the board sat at zero pins forever, so the
+parchment map and the corner minimap were faithfully rendering an empty registry. The seam existed;
+the producers did not. `PublishAll()` / `ClearAll()` / `PublishHero()` / `PublishDungeons()` /
+`PublishRaids()` / `PublishArmy()`.
+Three rules each producer obeys, because `RealmPinBoard.Publish` is per-source REPLACE: (1) ONE
+source id, taken from the `DeNelle.Core.World.RealmPinSources` constants, used for both Publish and
+Clear — a half-renamed producer would land in a second bucket and duplicate every pin it owns with
+no way to clear the orphan; (2) publish the COMPLETE current set every time, never append; (3)
+nothing to show => Clear. Fog/spoilers reuse the EXISTING fail-closed predicate
+`RealmPinBoard.RevealsDetail` fed from `RealmMapVM.RegionStateFor` — no second fog rule.
+⚠ A RaidTarget pin is a MARKER, not permission: the full-army gate is re-checked on the Raids flow.
+
+### CORRECTION — `BreakableContainer.cs` is NO LONGER a hostile (supersedes the line in "World support")
+
+The 08-02 entry ("155 lines, destructible loot props on the Enemy-layer sweep") **is now wrong.**
+Verified at source 2026-08-21: the file is **482 lines** and is a **loot CHEST the hero OPENS**
+(owner ruling 2026-08-21, WO-1132). It no longer implements `IDamageable` or `IDamageableStructure`,
+no longer declares `Faction => CombatFaction.Hostile`, and no longer rewrites its own layer to
+"Enemy". That layer rewrite existed so the hero's enemy-mask `OverlapSphere` would find and
+`TakeDamage()` it — which is precisely the WO-1047 defect ("a dungeon prop is registering as a
+HOSTILE target"). Two concerns were sharing one flag; removing the damage concern makes the
+targeting one unambiguous, so the bug stops existing rather than being filtered.
+⛔ **DO NOT "fix" a future prop-targeting report with an exclusion list in `HeroTargetIndicator`** —
+that is the inferior fix this ruling replaced.
+⛔ **THE CLASS NAME IS LOAD-BEARING.** "Breakable" is now a misnomer, but every composed dungeon
+(`DungeonBaker.PlaceComposeChests`) and every KayKit outpost baked this component into its `.unity`
+by script GUID + class name; a rename orphans it on every baked scene. The misnomer is the cheap
+half.
+It is now a proximity interactable in the shape of `DungeonTreasureCache` /
+`DungeonExitInteractable` (ActivateRadius 4.5; proximity TESTED on an interval, the button
+`Request`ed every frame because Request is a per-frame claim). The out-of-combat gate consults
+`DeNelle.Core.Combat.BattleLock.IsInBattle()` and **only** that — the HUD's hostile(activebattle)
+posture is deliberately not used (it is a laggy 0.20 s derivative of the same lock, and lives in
+`DeNelle.HUD`, which `DeNelle.Village` may not reach). A refused open is never a dead tap: the
+prompt itself becomes the refusal sentence, sourced from `canon-strings.json` via
+`VillageStrings.Canon`. **No re-bake required** — `EnsureChest()` normalises the legacy primitive
+cube, the "Enemy" layer and the missing chest art on `Awake` (and from `Create()`, because Awake
+does not fire on `AddComponent` in edit mode).
+
+---
+
 ## ENEMIES — core combat actors (`Village/Enemies/`, 24 files)
 
 ### Enemy.cs (2,664 lines) `DeNelle.Village.Enemy`
@@ -422,7 +574,9 @@ on their side is retired, :54-58), else builds a distinct procedural silhouette 
 - **Scene plumbing:** SceneConfigCatalog.cs (181, scene-configs.json reader),
   SceneLinkResolverHost.cs (200, ISceneLinkResolver host), WorldMusicDirector.cs (101),
   GateIntelHud.cs (235, DEF-152 gate intel label), SafeZoneRecovery.cs (134, full HP+MP in safe
-  zones), BreakableContainer.cs (155, destructible loot props on the Enemy-layer sweep). **LIVE.**
+  zones), ~~BreakableContainer.cs (155, destructible loot props on the Enemy-layer sweep)~~
+  **[SUPERSEDED 2026-08-21 — see the DELTA at the top of this file: it is a 482-line loot CHEST,
+  not a hostile, and the Enemy-layer rewrite is gone]**. **LIVE.**
 
 ---
 
