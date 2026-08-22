@@ -362,6 +362,110 @@ namespace DeNelle.Village.Hero
                 return;
             }
 
+            int diff, total;
+            float minLum, maxLum;
+            Color clear;
+            string error;
+            if (!TryMeasureDrawn(out diff, out total, out minLum, out maxLum, out clear, out error))
+            {
+                // Never swallow: a probe that cannot run must say so, or the next reader assumes
+                // the absence of a probe line means the probe passed.
+                FlowTrace.Warn(system, "RT PROBE threw (" + error +
+                                       ") - the readback is unavailable on this platform/pipeline; " +
+                                       "the blank-vs-drawn question stays open.");
+                return;
+            }
+
+            {
+                string verdict = diff == 0
+                    ? "NOTHING WAS DRAWN - every sampled pixel is the camera clear colour. The rig " +
+                      "built fine, so the dead step is the MODEL (layer vs. cullingMask, all " +
+                      "renderers disabled, clone outside the frustum, or null materials) - read the " +
+                      "'camera rig:' line and the per-renderer enumeration above."
+                    : "CONTENT PRESENT - the hero is in the render texture. If the screen still " +
+                      "shows a flat plate, the dead step is DOWNSTREAM in the panel (RawImage " +
+                      "disabled / zero rect / covered / alpha 0), not in this rig.";
+
+                FlowTrace.Step(system, string.Format(
+                    "RT PROBE {0}x{1}->16x16: {2}/{3} px differ from clear ({4:F3},{5:F3},{6:F3}); " +
+                    "lum min={7:F3} max={8:F3}. {9}",
+                    _rt.width, _rt.height, diff, total,
+                    clear.r, clear.g, clear.b, minLum, maxLum, verdict));
+
+                if (diff == 0)
+                    FlowTrace.Fail(system, "RT PROBE: the preview render texture is a UNIFORM clear " +
+                                           "colour - the preview box is blank at the SOURCE, not at " +
+                                           "the panel. Fix the model/culling, not the RawImage.");
+            }
+        }
+
+        /// <summary>
+        /// WO-1133 — THE EVIDENCE GATE. Same readback as <see cref="ProbeRenderedContent"/>
+        /// (deliberately the SAME private measurement, so the number a caller acts on can never
+        /// drift from the number the trace reports), but returned as a decision instead of logged
+        /// as a verdict.
+        ///
+        /// WHY A CALLER NEEDS THIS AND NOT JUST THE TRACE: the camera clears to a colour
+        /// byte-identical to the panel plate behind it, so a rig that drew NOTHING and a rig that
+        /// drew a hero are the same pixels to a screenshot AND to the player. A surface that mounts
+        /// the RawImage unconditionally therefore cannot tell that it is presenting an empty box —
+        /// which is precisely the defect WO-1133 exists to remove (the owner's "empty navy
+        /// rectangle"). Ask this BEFORE mounting, and fall back to a portrait when it answers
+        /// false: an honest 2D portrait is strictly better than a plate that reads as broken.
+        ///
+        /// Returns false when the rig is invalid, when the readback cannot run on this
+        /// platform/pipeline, or when every sampled pixel is the clear colour. The reason is in
+        /// <paramref name="detail"/> either way — a false is never silent.
+        /// </summary>
+        public bool DrewContent(out string detail, string system = "Preview")
+        {
+            if (!IsValid)
+            {
+                detail = "the rig is not valid (no texture to read)";
+                FlowTrace.Warn(system, "DrewContent: " + detail + " - the caller must not mount a RawImage.");
+                return false;
+            }
+
+            int diff, total;
+            float minLum, maxLum;
+            Color clear;
+            string error;
+            if (!TryMeasureDrawn(out diff, out total, out minLum, out maxLum, out clear, out error))
+            {
+                // A readback that cannot RUN is not evidence that the rig drew. Treat it as
+                // "unproven" and answer false: the fallback portrait is always safe, whereas
+                // mounting on an unproven texture is how the empty box shipped in the first place.
+                detail = "the readback could not run (" + error + ") - drawn-ness is UNPROVEN";
+                FlowTrace.Warn(system, "DrewContent: " + detail +
+                                       " - answering false so the caller uses its 2D fallback rather " +
+                                       "than mounting a texture nothing has verified.");
+                return false;
+            }
+
+            bool drew = diff > 0;
+            detail = string.Format("{0}/{1} sampled px differ from the clear colour (lum {2:F3}..{3:F3})",
+                                   diff, total, minLum, maxLum);
+            FlowTrace.Step(system, "DrewContent=" + drew + ": " + detail +
+                (drew ? " - mounting the live preview."
+                      : " - the rig drew NOTHING, so the caller falls back to the 2D portrait " +
+                        "instead of presenting a flat plate the player reads as broken."));
+            return drew;
+        }
+
+        /// <summary>
+        /// The ONE readback both <see cref="ProbeRenderedContent"/> and <see cref="DrewContent"/>
+        /// measure with: blit the render texture down to 16x16, read it back, and count how many
+        /// pixels differ from the camera's clear colour. Returns false with the reason in
+        /// <paramref name="error"/> when the readback cannot run (unsupported platform/pipeline) —
+        /// never throws, and never reports a false zero, which a caller could mistake for "blank".
+        /// </summary>
+        private bool TryMeasureDrawn(out int diff, out int total, out float minLum, out float maxLum,
+                                     out Color clear, out string error)
+        {
+            diff = 0; total = 0; minLum = 0f; maxLum = 0f;
+            clear = _cam != null ? _cam.backgroundColor : Color.black;
+            error = null;
+
             RenderTexture small = null;
             Texture2D readback = null;
             var prevActive = RenderTexture.active;
@@ -377,10 +481,9 @@ namespace DeNelle.Village.Hero
                 readback.ReadPixels(new Rect(0, 0, N, N), 0, 0, false);
                 readback.Apply(false, false);
 
-                Color clear = _cam.backgroundColor;
                 var px = readback.GetPixels();
-                int diff = 0;
-                float minLum = 1f, maxLum = 0f;
+                total = px.Length;
+                minLum = 1f; maxLum = 0f;
                 for (int i = 0; i < px.Length; i++)
                 {
                     var c = px[i];
@@ -391,34 +494,12 @@ namespace DeNelle.Village.Hero
                         Mathf.Abs(c.g - clear.g) > 0.02f ||
                         Mathf.Abs(c.b - clear.b) > 0.02f) diff++;
                 }
-
-                string verdict = diff == 0
-                    ? "NOTHING WAS DRAWN - every sampled pixel is the camera clear colour. The rig " +
-                      "built fine, so the dead step is the MODEL (layer vs. cullingMask, all " +
-                      "renderers disabled, clone outside the frustum, or null materials) - read the " +
-                      "'camera rig:' line and the per-renderer enumeration above."
-                    : "CONTENT PRESENT - the hero is in the render texture. If the screen still " +
-                      "shows a flat plate, the dead step is DOWNSTREAM in the panel (RawImage " +
-                      "disabled / zero rect / covered / alpha 0), not in this rig.";
-
-                FlowTrace.Step(system, string.Format(
-                    "RT PROBE {0}x{1}->16x16: {2}/{3} px differ from clear ({4:F3},{5:F3},{6:F3}); " +
-                    "lum min={7:F3} max={8:F3}. {9}",
-                    _rt.width, _rt.height, diff, px.Length,
-                    clear.r, clear.g, clear.b, minLum, maxLum, verdict));
-
-                if (diff == 0)
-                    FlowTrace.Fail(system, "RT PROBE: the preview render texture is a UNIFORM clear " +
-                                           "colour - the preview box is blank at the SOURCE, not at " +
-                                           "the panel. Fix the model/culling, not the RawImage.");
+                return true;
             }
             catch (System.Exception ex)
             {
-                // Never swallow: a probe that cannot run must say so, or the next reader assumes
-                // the absence of a probe line means the probe passed.
-                FlowTrace.Warn(system, "RT PROBE threw (" + ex.GetType().Name + ": " + ex.Message +
-                                       ") - the readback is unavailable on this platform/pipeline; " +
-                                       "the blank-vs-drawn question stays open.");
+                error = ex.GetType().Name + ": " + ex.Message;
+                return false;
             }
             finally
             {
@@ -522,6 +603,58 @@ namespace DeNelle.Village.Hero
             Vector3 dir = new Vector3(0.35f, 0.22f, -1f).normalized;
             _cam.transform.position = bounds.center - dir * dist;
             _cam.transform.LookAt(bounds.center);
+
+            // ── WO-1133 §12 — THE LINE THAT SEPARATES THE LAST TWO BLANK-PREVIEW CAUSES ──
+            // The RT PROBE (captured 2026-08-21 F8 seq 3585, and again at seq 2833) reports
+            // "NOTHING WAS DRAWN". That verdict has exactly two survivors once the layer
+            // masks are read: either the camera is AIMED AT EMPTY SPACE, or the clone has no
+            // drawable renderers. Nothing printed either number, so the two were
+            // indistinguishable in every capture so far.
+            //
+            // WHY AIM CAN BE WRONG AND LOOK RIGHT: FrameCamera aims at ComputeBounds, which
+            // sums Renderer.bounds — the WORLD-space AABB. A SkinnedMeshRenderer with
+            // updateWhenOffscreen=false (the default) derives that AABB from its root bone
+            // plus local bounds, and the clone is instantiated at RigOrigin (-5000,-5000,0)
+            // in the SAME frame this runs. If the bounds still describe the SOURCE body near
+            // the world origin, the camera is aimed ~7000 units away from the model it is
+            // supposed to frame, renders an empty frustum, and the RawImage shows the clear
+            // colour — which is byte-identical to the panel's own plate fill. That is the
+            // owner's navy box exactly, and no screenshot can tell it from "no renderers".
+            //
+            // READ IT AS: aimVsModel is the distance from the aim point to where the clone
+            // ACTUALLY is. Near zero => the aim is sound and the cause is the MODEL (read the
+            // rend[i] enumeration above for enabled=False / MESH-NULL / NULL-material).
+            // Large (hundreds or thousands) => the aim is the dead step and the bounds are
+            // stale — fix the bounds source, NOT the renderers.
+            try
+            {
+                Vector3 modelPos = _model != null ? _model.transform.position : RigOrigin;
+                float aimVsModel = Vector3.Distance(bounds.center, modelPos);
+                FlowTrace.Step("Preview", string.Format(
+                    "camera framing: aim=({0:F1},{1:F1},{2:F1}) modelPos=({3:F1},{4:F1},{5:F1}) " +
+                    "aimVsModel={6:F1} camDist={7:F2} radius={8:F2} rigOrigin=({9:F0},{10:F0},{11:F0}) " +
+                    "aimLooksStale={12}",
+                    bounds.center.x, bounds.center.y, bounds.center.z,
+                    modelPos.x, modelPos.y, modelPos.z,
+                    aimVsModel, dist, radius,
+                    RigOrigin.x, RigOrigin.y, RigOrigin.z,
+                    aimVsModel > radius * 4f + 1f));
+
+                if (aimVsModel > radius * 4f + 1f)
+                    FlowTrace.Warn("Preview", string.Format(
+                        "camera framing: the aim point is {0:F0} units from the cloned model " +
+                        "(model radius {1:F2}). The camera is framing EMPTY SPACE, so the render " +
+                        "texture will read as a uniform clear colour no matter how healthy the " +
+                        "renderers are. The bounds handed to FrameCamera do not describe the " +
+                        "clone at RigOrigin.", aimVsModel, radius));
+            }
+            catch (System.Exception ex)
+            {
+                // Never swallow (§12): a diagnostic that cannot run says so, or its absence
+                // reads as a pass.
+                FlowTrace.Warn("Preview", "camera framing trace threw (" + ex.GetType().Name +
+                                          ": " + ex.Message + ") - the aim-vs-model question stays open.");
+            }
         }
 
         private static Bounds ComputeBounds(GameObject go)

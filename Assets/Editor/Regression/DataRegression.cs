@@ -869,6 +869,13 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "endstate-handoff suite", () => { if (!DeNelle.Editor.Regression.EndStateTransitionHandoffRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[endstate-handoff] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "town-suspend-floor suite", () => { if (!DeNelle.Editor.Regression.TownSuspendSceneFloorRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[town-suspend-floor] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "equipment-screen-layout suite", () => { if (!DeNelle.Editor.Regression.EquipmentScreenLayoutRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[equipment-screen-layout] " + r); });
+            // --- WO-1133: the Bag is "The Armory Rail" - three abutting zones matching the ratified
+            //     D3 ratios, every sentence in BOTH canon copies and MEASURED to fit its real box at
+            //     the legibility floor, nothing interactive under MinTouchPx, the deleted preview box
+            //     / VIEW GEAR ribbon / tab row still deleted, and the hero preview mounted ONLY
+            //     through the DrewContent evidence gate (a blank RT and a drawn hero are the same
+            //     pixels, which is how the owner's empty navy rectangle shipped). ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "inventory-armory-rail suite", () => { if (!DeNelle.Editor.Regression.InventoryArmoryRailRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[inventory-armory-rail] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "dungeon-mover-ownership suite", () => { if (!DeNelle.Editor.Regression.DungeonMoverOwnershipRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[dungeon-mover-ownership] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "hero-bar-rebind suite", () => { if (!DeNelle.Editor.Regression.HeroBarClassRebindRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[hero-bar-rebind] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "mage-spell-kit suite", () => { if (!DeNelle.Editor.Regression.MageSpellKitAuthoringRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[mage-spell-kit] " + r); });
@@ -1104,6 +1111,7 @@ namespace DeNelle.Editor
             //     enforced on the CHARGE PATH and not in the UI alone. Also pins the vapor rule on
             //     the browsable shelf and the same-day "no glimmer in any pack" ruling. ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "buy-gate suite", () => { if (!DeNelle.Editor.Regression.BuyGateAndPriceLadderRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[buy-gate] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "monetization-activation suite", () => { if (!DeNelle.Editor.Regression.MonetizationActivationRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[monetization-activation] " + r); });
 
             // =====================================================================
             //  >>> REGISTERED ORACLE SUITES — END FENCE <<<  (new lines go ABOVE)

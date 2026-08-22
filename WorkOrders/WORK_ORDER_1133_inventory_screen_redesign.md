@@ -182,6 +182,33 @@ anywhere in the bag, through the same `PanelRouter` call that exists today. What
 without naming how the render is produced. **No new viewport is specified.** The render is
 `HeroPreviewViewer`, already built, already proven at five other call sites.
 
+### ✅ ANSWERED 2026-08-22 by F8 seq=3585 — EquipmentPanel's preview is ALSO blank
+
+D1 asked which of the two preview paths actually produces pixels. **The probe fired on the
+EquipmentPanel path**, so the question is closed and the answer is the bad one:
+
+```
+HeroPreviewViewer:ProbeRenderedContent   (HeroPreviewViewer.cs:411)
+EquipmentPanel:BeginOrRetargetPreview    (EquipmentPanel.cs:1243)
+EquipmentPanel:RenderPreview -> Render -> Bind -> Open
+HeroInventoryController:OpenGearPreview  (InventoryUIBuilder.cs:341)   <- the VIEW GEAR ribbon
+```
+
+> *"RT PROBE: the preview render texture is a UNIFORM clear colour — the preview box is blank at the
+> SOURCE, not at the panel. Fix the model/culling, not the RawImage."*
+
+**What this does and does not change:**
+
+- **Does NOT change the design.** Promoting Gear to rail entry one is still right: the room is better
+  than the door either way, and `EquipmentPanel` remains the only surface with worn-slot plates and a
+  per-slot drawer.
+- **DOES block the Gear section** exactly as D1 predicted. Rail entries 2-7, the stage, the compare
+  pane and every other part of this ticket are **unblocked and can proceed**.
+- **The blank RT is a SEPARATE defect** — filed as **WO-1059**. Do not attempt to fix it inside this
+  redesign; the probe's own text points at the model/culling, not at any panel this WO touches.
+- ⛔ **Do not ship the Gear section over a blank box.** A second empty preview would be worse than
+  the first, which is the whole reason D1 exists.
+
 ### The one thing to instrument BEFORE any layout work (CLAUDE.md §12)
 
 F8 seq 2833 probed the **paper-doll's** render texture as a uniform clear colour. That is

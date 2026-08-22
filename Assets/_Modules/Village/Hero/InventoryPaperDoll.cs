@@ -1,9 +1,33 @@
 // =============================================================================
-// InventoryPaperDoll — paper-doll rendering (split from HeroInventoryController).
+// InventoryPaperDoll — the Bag's HEADER strip (rewritten for WO-1133).
 // -----------------------------------------------------------------------------
-// Exact extraction for zero behavior change. RebuildPaperDoll, rows, bars.
-// Heavy Tech for W/A medallion/slots as per current (Profile tabs, Healing, Sword icons).
-// Matches ElarionUiKit dark-wood + gold (Forge shop look). No layout/func change.
+// Assembly: DeNelle.Village   Namespace: DeNelle.Village
+//
+// ⚠ THE FILE KEPT ITS NAME; ITS JOB CHANGED. There is no paper-doll card any more.
+// What this file used to build was the gold hero CARD down the left of the bag —
+// and that card was the ticket. Item by item, WO-1133 D8 removals, all gone:
+//
+//   * THE EMPTY PREVIEW BOX. A dark rectangle where a hero should be. Not a
+//     mystery: the RT probe reports the preview render texture is a uniform clear
+//     colour, and the camera's clear colour is byte-identical to the plate behind
+//     it, so "drew a hero" and "drew nothing" were the same pixels. An empty box is
+//     worse than no box - it reads as broken, and it was the single biggest reason
+//     the gear view "had no benefit".
+//   * THE GOLD "VIEW GEAR" RIBBON painted across that box. It called
+//     PanelRouter.Open(PanelId.EquipmentPanel) - so the broken preview was sitting
+//     directly on top of a button that opened the real gear screen. The route lives
+//     on as rail entry one (D1: PROMOTE the gear view, cut the door not the room).
+//   * THE CARD ITSELF, which overlapped the panel's own ornate frame (defect 7),
+//     and its saturated green/blue/magenta bar stack (defect 9).
+//
+// ⛔ DO NOT RE-ADD ANY OF THE THREE. A second empty box would be worse than the
+// first. If a hero render belongs anywhere on this screen it goes in the Gear
+// section's niche, through TryMountHeroPreview's evidence gate, which refuses to
+// mount a texture nothing has verified drew.
+//
+// WHAT IT BUILDS NOW (D3): the full-width header band - who you are, and your
+// vitals, on ONE row, freeing the entire left band for the rail. The hero portrait
+// helpers stay here because the frame's medallion socket still uses them.
 // =============================================================================
 
 using System.Collections.Generic;
@@ -17,116 +41,40 @@ namespace DeNelle.Village
 {
     public sealed partial class HeroInventoryController : MonoBehaviour
     {
-        private void RebuildPaperDoll()
+        /// <summary>
+        /// The header band: hero name, class + level, and the HP / MP / XP vitals, in one row.
+        ///
+        /// D5 (the owner is red/green colourblind): every vital carries its VALUE AS TEXT
+        /// alongside the bar, so the reading survives a greyscale pass - the bar's LENGTH and
+        /// the written number both mean the same thing and neither is a hue. The kit's
+        /// BuildObsidianBar with withValue:true is the §1.1 fill-binding contract (bar and
+        /// "cur/max" label written atomically), so the number can never drift from the fill.
+        /// </summary>
+        private void RebuildHeader()
         {
-            if (_paperDoll == null) return;
-            for (int i = _paperDoll.transform.childCount - 1; i >= 0; i--)
-                Destroy(_paperDoll.transform.GetChild(i).gameObject);
+            if (_headerRoot == null) return;
+            for (int i = _headerRoot.transform.childCount - 1; i >= 0; i--)
+                Destroy(_headerRoot.transform.GetChild(i).gameObject);
 
             string job = HeroJob;
             int level = HeroLevel();
 
-            // ── WO-573 FIX (owner felt-bug: "giant gold OVAL blob").
-            // The card used to load a Tech/Rpg medallion sprite as its FULL-CARD background;
-            // on the live build the chain fell through to RpgUiCatalog.PanelProfile ("profile_frame"
-            // = a gold sunburst portrait medallion) which, stretched across this narrow/tall card,
-            // read as a giant gold oval — and NO real portrait art was ever loaded (just a tinted
-            // disc + gold AddCircleRim + a class glyph). Now: a flat OBSIDIAN card (black + thin gold
-            // inner rim — the WO-554 chrome), with the REAL hero portrait art framed cleanly inside
-            // (fixed region, preserveAspect → never an ellipse). No portrait on disk → a clean dark
-            // placeholder + class crest, never a raw gold blob.
-            var medBand = AddImage(_paperDoll.transform, "MedBand",
-                                   new Vector2(0.0f, 0.04f), new Vector2(1.0f, 0.99f),
-                                   new Color(0.03f, 0.03f, 0.045f, 0.96f));
-            var mbImg = medBand.GetComponent<Image>();
-            if (mbImg != null)
-            {
-                ApplyRounded(mbImg);
-                mbImg.raycastTarget = false;
-                AddInnerRim(medBand, new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.55f));
-            }
+            // LEFT — identity. Name on top, class + level beneath, both fit-or-ellipsize inside
+            // their own band so neither can bleed into the vitals (§1.14).
+            var nameLbl = AddLabel(_headerRoot.transform, HeroDisplayName(job), 0.46f, 1f, GiltInk,
+                     ElarionUi.FontHead, TMPro.TextAlignmentOptions.MidlineLeft, 0.00f, 0.24f,
+                     spacing: 1f, bold: true);
+            ElarionUiKit.FitSingleLine(nameLbl, 0f, ElarionUi.FontHead);
 
-            // Real hero portrait — TOP of the card, full width, in a thin gold-rimmed obsidian frame.
-            // preserveAspect keeps the bust un-stretched; the frame clips letterbox to the rounded card.
-            var portraitFrame = AddImage(medBand.transform, "PortraitFrame",
-                                         new Vector2(0.08f, 0.52f), new Vector2(0.92f, 0.97f),
-                                         new Color(0.015f, 0.015f, 0.02f, 1f));
-            NoRaycast(portraitFrame);
-            AddInnerRim(portraitFrame, new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.70f));
-
-            // LIVE 3D dressed hero FIRST (REUSE the Gear screen's proven HeroPreviewViewer): renders
-            // the active hero with the equipped weapon/shield/armor into this frame. Falls back to the
-            // static 2D portrait / class crest when there is no hero body or the viewer can't build —
-            // so the niche is never the empty transparent container it used to be.
-            if (!TryMountHeroPreview(portraitFrame.transform))
-            {
-                var artSprite = LoadHeroPortrait(job);
-                if (artSprite != null)
-                {
-                    var art = AddImage(portraitFrame.transform, "PortraitArt",
-                                       new Vector2(0.05f, 0.05f), new Vector2(0.95f, 0.95f), Color.white);
-                    var aImg = art.GetComponent<Image>();
-                    if (aImg != null)
-                    {
-                        aImg.sprite = artSprite;
-                        aImg.type = Image.Type.Simple;
-                        aImg.preserveAspect = true;     // <- the fix: never stretch into an ellipse/blob
-                        aImg.raycastTarget = false;
-                    }
-                }
-                else
-                {
-                    // Clean framed placeholder (NOT a raw gold ellipse): a class crest on the dark frame.
-                    AddLabel(portraitFrame.transform, ClassCrest(job), 0f, 1f, GiltInk,
-                             ElarionUi.FontTitle + 30, TMPro.TextAlignmentOptions.Center, 0.1f, 0.9f, bold: true);
-                }
-            }
-
-            // Tappable hero portrait → open the full Character / Gear Preview paper-doll (EquipmentPanel).
-            // A transparent overlay button covers the WHOLE portrait region (the preview RawImage + frame
-            // are NoRaycast, so the tap lands here). Owner ask: the old micro "View Gear" tag read as a tiny
-            // dead link, so the large tap target was undiscoverable — make it OBVIOUS: a visible gold ribbon
-            // button across the portrait's bottom edge with a large label. Added LAST so it sits on top of
-            // the live preview. Null-safe.
-            var gearTapGo = AddImage(medBand.transform, "ViewGearTap",
-                                     new Vector2(0.08f, 0.52f), new Vector2(0.92f, 0.97f), new Color(0, 0, 0, 0));
-            var gearTapImg = gearTapGo.GetComponent<Image>();
-            var gearTapBtn = gearTapGo.AddComponent<Button>();
-            gearTapBtn.targetGraphic = gearTapImg;
-            StyleButtonColors(gearTapBtn);
-            gearTapBtn.onClick.AddListener(OpenGearPreview);
-
-            // Visible gold "VIEW GEAR" ribbon along the portrait's bottom edge — large, unmistakable.
-            var gearRibbon = AddImage(gearTapGo.transform, "ViewGearRibbon",
-                                      new Vector2(0.0f, 0.0f), new Vector2(1.0f, 0.16f),
-                                      new Color(ElarionUi.Gold.r * 0.55f, ElarionUi.Gold.g * 0.42f, 0.06f, 0.92f));
-            var ribImg = gearRibbon.GetComponent<Image>();
-            if (ribImg != null) { ApplyRounded(ribImg); ribImg.raycastTarget = false; }
-            AddInnerRim(gearRibbon, new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.85f));
-            var gearTag = AddLabel(gearRibbon.transform, "VIEW GEAR", 0.0f, 1.0f, Color.white,
-                                   ElarionUi.FontHead, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f,
-                                   spacing: 2f, bold: true);
-            gearTag.raycastTarget = false;
-            // Eyes-sweep 2026-07-06: "VIEW GEAR" painted over "Grom Ironhand / KNIGHT LV1" —
-            // FontHead text overflowed the thin ribbon down into the name band. Fit inside (§1.14).
-            ElarionUiKit.FitSingleLine(gearTag, 0f, ElarionUi.FontHead);
-
-            // Name + class • level — centered band just under the portrait (no overlap with the art).
-            // Both labels fit-or-ellipsize inside their own band so they never bleed into the
-            // ribbon above or the bars below.
-            var heroNameLbl = AddLabel(medBand.transform, HeroDisplayName(job), 0.44f, 0.515f, Ink,
-                     ElarionUi.FontHead, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, spacing: 1f, bold: true);
-            ElarionUiKit.FitSingleLine(heroNameLbl, 0f, ElarionUi.FontHead);
-            var classLbl = AddLabel(medBand.transform, Cap(job).ToUpperInvariant() + "   LV " + level, 0.385f, 0.44f,
-                     InkMicro, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, spacing: 2f);
+            var classLbl = AddLabel(_headerRoot.transform,
+                     Cap(job).ToUpperInvariant() + "   LV " + level, 0.02f, 0.46f,
+                     InkMicro, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.MidlineLeft,
+                     0.00f, 0.24f, spacing: 2f);
             ElarionUiKit.FitSingleLine(classLbl, 0f, ElarionUi.FontMicro);
 
-            // WO-713 A.3 — HP and MP are KIT bars WITH values (BuildObsidianBar, the §1.1
-            // fill-binding contract: bar + "cur/max" label written atomically); the old
-            // decorative LVL bar becomes the badge_level chip + a THIN XP strip. Values are
-            // presentation reads of the live hero's components (same resolve family the
-            // portrait/preview already uses); a missing hero leaves full quiet bars with the
-            // labels blank — never a fake number (ResetLabel), never a blank column.
+            // Vitals are a presentation read of the live hero's components (the same resolve
+            // family the medallion portrait uses). A missing hero leaves quiet full bars with
+            // BLANK labels — never a fake number (ResetLabel), never a blank column.
             var vitalsHero = GameObject.FindWithTag("Player");
             if (vitalsHero == null) vitalsHero = SafeFindByTag("HeroTarget");
             var hh = vitalsHero != null ? vitalsHero.GetComponentInChildren<HeroHealth>() : null;
@@ -134,20 +82,21 @@ namespace DeNelle.Village
             var prog = _loadout != null ? _loadout.GetComponent<HeroProgression>()
                      : (vitalsHero != null ? vitalsHero.GetComponentInChildren<HeroProgression>() : null);
 
-            var hpBar = ElarionUiKit.BuildObsidianBar(medBand.transform, ElarionUiKit.ObsidianBarKind.Health,
-                new Vector2(0.08f, 0.27f), new Vector2(0.92f, 0.36f), withValue: true);
+            var hpBar = ElarionUiKit.BuildObsidianBar(_headerRoot.transform, ElarionUiKit.ObsidianBarKind.Health,
+                new Vector2(0.28f, 0.52f), new Vector2(0.62f, 0.94f), withValue: true);
             if (hh != null) hpBar.SetImmediate(hh.Hp, hh.MaxHp);
             else { hpBar.SetImmediate(1f, 1f); hpBar.ResetLabel(); }
 
-            var mpBar = ElarionUiKit.BuildObsidianBar(medBand.transform, ElarionUiKit.ObsidianBarKind.Mana,
-                new Vector2(0.08f, 0.165f), new Vector2(0.92f, 0.255f), withValue: true);
+            var mpBar = ElarionUiKit.BuildObsidianBar(_headerRoot.transform, ElarionUiKit.ObsidianBarKind.Mana,
+                new Vector2(0.28f, 0.06f), new Vector2(0.62f, 0.48f), withValue: true);
             if (ha != null) mpBar.SetImmediate(ha.Mana, ha.MaxMana);
             else { mpBar.SetImmediate(1f, 1f); mpBar.ResetLabel(); }
 
-            // Level badge (badge_level art; text "LV n" always carries the value) + thin XP strip.
+            // Level badge (badge_level art; the text "LV n" always carries the value, so the
+            // badge is never the only place the number lives) + a thin XP strip beside it.
             var badgeSp = RpgUiCatalog.Get(RpgUiCatalog.RoleBadge, RpgUiCatalog.BadgeLevel);
-            var badgeGo = AddImage(medBand.transform, "LevelBadge",
-                                   new Vector2(0.08f, 0.055f), new Vector2(0.24f, 0.155f),
+            var badgeGo = AddImage(_headerRoot.transform, "LevelBadge",
+                                   new Vector2(0.66f, 0.10f), new Vector2(0.735f, 0.90f),
                                    badgeSp != null ? Color.white : new Color(0f, 0f, 0f, 0.35f),
                                    rounded: badgeSp == null);
             NoRaycast(badgeGo);
@@ -160,20 +109,21 @@ namespace DeNelle.Village
                      ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0f, 1f, bold: true);
             ElarionUiKit.FitSingleLine(lvLbl, 0f, ElarionUi.FontMicro);
 
-            var xpBar = ElarionUiKit.BuildObsidianBar(medBand.transform, ElarionUiKit.ObsidianBarKind.Xp,
-                new Vector2(0.27f, 0.075f), new Vector2(0.92f, 0.135f), withValue: false);
+            var xpBar = ElarionUiKit.BuildObsidianBar(_headerRoot.transform, ElarionUiKit.ObsidianBarKind.Xp,
+                new Vector2(0.75f, 0.30f), new Vector2(1.00f, 0.70f), withValue: false);
             if (prog != null) xpBar.SetImmediate(prog.Xp, prog.XpToNext);
             else xpBar.SetImmediate(0f, 1f);
 
-            // No EQUIPMENT list / slots in left panel — portrait + name + bars only. Equipped status
-            // is shown via grid cell highlights/marks. Equipping is preserved (tap a grid cell).
+            FlowTrace.Step("Inventory",
+                $"Header built: job='{job}' lv={level} hero={(vitalsHero != null ? "found" : "MISSING")} " +
+                $"hp={(hh != null ? "live" : "none")} mp={(ha != null ? "live" : "none")} xp={(prog != null ? "live" : "none")}");
         }
 
-        // WO-573 — load the active hero's portrait art for the inventory card. The portraits in
-        // Resources/HeroPortraits are imported as DEFAULT textures (spriteMode:0), so
-        // Resources.Load<Sprite> returns NULL — we try Sprite first (future-proof if the import flips)
-        // then load the Texture2D and wrap it in a Sprite (mirrors TitleController.FramePortrait's
-        // Texture2D fallback). Returns null when no art exists for the class (caller shows a crest).
+        // WO-573 — load the active hero's portrait art for the frame's medallion socket. The
+        // portraits in Resources/HeroPortraits are imported as DEFAULT textures (spriteMode:0),
+        // so Resources.Load<Sprite> returns NULL — we try Sprite first (future-proof if the
+        // import flips) then load the Texture2D and wrap it in a Sprite. Returns null when no
+        // art exists for the class (caller shows a crest).
         private static Sprite LoadHeroPortrait(string job)
         {
             string slug = PortraitSlug(job);
@@ -193,7 +143,7 @@ namespace DeNelle.Village
         }
 
         // Map a hero class to its portrait file slug (the first token of the canon display name:
-        // Grom / Thrain / Sylas / Elara), so the inventory card stays in sync with HeroDisplayName.
+        // Grom / Thrain / Sylas / Elara), so the card stays in sync with HeroDisplayName.
         private static string PortraitSlug(string job)
         {
             switch ((job ?? "").ToLowerInvariant())
@@ -208,20 +158,18 @@ namespace DeNelle.Village
         }
 
         /// <summary>
-        /// The portrait slug for the hero the player actually picked. The persisted-class
-        /// half of the resolve lives in <see cref="InventoryVM.ActiveHeroJobKey"/> (class ->
-        /// job key, sourced from GameState.HeroClass); this View only maps that job key onto
-        /// the ART FILE name via <see cref="PortraitSlug"/>.
+        /// The portrait slug for the hero the player actually picked. The persisted-class half of
+        /// the resolve lives in <see cref="InventoryVM.ActiveHeroJobKey"/> (class -> job key,
+        /// sourced from GameState.HeroClass); this View only maps that job key onto the ART FILE
+        /// name via <see cref="PortraitSlug"/>.
         ///
         /// WHY the indirection (strict-MVVM, UI-MVVM conformance oracle): this partial builds
         /// uGUI, so it is a VIEW — and a View must never read game state. The first cut of this
         /// method called GameStateService.Instance directly and tripped the oracle. Routing it
-        /// through the bound VM is the SAME idiom the sibling partial already uses for the
-        /// wallet (InventoryUIBuilder.cs: "int coins = _vm != null ? _vm.Coins : 0") and that
-        /// RaidDeployScreen uses throughout. The value is unchanged — only its path.
+        /// through the bound VM is the SAME idiom the sibling partial uses for the wallet.
         ///
-        /// Never returns null/empty: no bound VM (ConstructViewModel threw) falls back to the
-        /// roster default's slug rather than blanking the medallion.
+        /// Never returns null/empty: no bound VM falls back to the roster default's slug rather
+        /// than blanking the medallion.
         /// </summary>
         private string ActiveHeroPortraitSlug()
         {
@@ -237,10 +185,5 @@ namespace DeNelle.Village
             }
             return PortraitSlug(_vm.ActiveHeroJobKey) ?? DefaultSlug;
         }
-
-        // (PaperDollRow + PaperDollBarTech retired in WO-713: the equipment-row column was
-        //  already dead code [zero callers], and the decorative Tech bars are replaced by the
-        //  kit BuildObsidianBar HP/MP-with-values + badge_level + XP strip above. Verified
-        //  zero remaining references before deletion.)
     }
 }

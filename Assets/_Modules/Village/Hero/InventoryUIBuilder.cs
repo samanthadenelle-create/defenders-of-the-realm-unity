@@ -1,13 +1,33 @@
 // =============================================================================
-// InventoryUIBuilder — UI construction for the inventory modal (split from HeroInventoryController).
+// InventoryUIBuilder — UI construction for the Bag ("The Armory Rail", WO-1133).
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.Village   Namespace: DeNelle.Village
 //
-// Extracted exactly from the original for behavior preservation. All construction
-// (root, chrome, tabs, footer, shared helpers) lives here. The controller coordinates
-// by calling these. Light polish: consistent ElarionUiKit dark-wood + gold (Forge shop
-// look) via the kit; Tech pack overrides for W/A where present in original.
-// No functionality, layout or behavior changes.
+// WHAT THIS SCREEN IS FOR (WO-1133 D0, the one sentence everything justifies itself
+// against): it tells you what you are carrying, what you are wearing, whether a thing
+// is better than the thing it would replace - and where else you can go from here.
+//
+// THE SHAPE (D2/D3): a LEFT RAIL of sections replaces the top tab strip, a STAGE holds
+// the selected section, and a PANE is always present for detail/compare. In landscape
+// that is not a style preference: a vertical entry owns the full rail width so a
+// selected-state mark can never eat its own label (the captured defect 2), each entry
+// can carry its COUNT so the player sees what is worth opening BEFORE opening it, and
+// the column fills the exact left band that was dead black (defect 1).
+//
+// WHAT WAS DELETED HERE AND MUST NOT COME BACK (D8 - roughly half this ticket is
+// removal):
+//   * The tab ROW (the old BuildTabs + RebuildTabsRow host). The rail is the navigation.
+//   * The left hero CARD with its EMPTY preview box and its gold "VIEW GEAR" ribbon
+//     (InventoryPaperDoll). That ribbon opened EquipmentPanel via PanelRouter - so the
+//     owner was looking at a broken preview box sitting directly on top of a button that
+//     opened the real one. The door was the defect, not the room: the route survives as
+//     rail entry one, the box and the ribbon are gone.
+//   * The full-width gold hint bar ("Tap an item to inspect it.") - the pane says
+//     something useful instead of narrating the interface.
+//
+// ⛔ NO NEW 3D VIEWPORT IS INTRODUCED (D1). The only renderer is HeroPreviewViewer, the
+// rig already proven at five other call sites - and it is mounted ONLY through the
+// evidence gate below. See TryMountHeroPreview.
 // =============================================================================
 
 using System.Collections.Generic;
@@ -23,42 +43,89 @@ namespace DeNelle.Village
 {
     public sealed partial class HeroInventoryController : MonoBehaviour
     {
-        // --- ROOT + CHROME (moved from original BuildRoot) ---
+        // =====================================================================
+        // D3 GEOMETRY — the authored numbers, in ONE place, so nothing is invented
+        // at a call site and the regression has something to measure against.
+        // ---------------------------------------------------------------------
+        // The design states its zones as device px on a 2670x1200 canvas: rail 374,
+        // stage 1496, pane 800 (14% / 56% / 30%). Those RATIOS are what survive a
+        // resolution change, so they are what is authored here - applied across the
+        // panel's interior x band. The three bands abut exactly and sum to the whole
+        // interior; InventoryArmoryRailRegression asserts that against the design's
+        // own ratios rather than recomputing them from these same constants.
+        // =====================================================================
+
+        /// <summary>Panel interior, left edge (fraction of the framed panel).</summary>
+        private const float ZoneX0 = 0.035f;
+        /// <summary>Panel interior, right edge.</summary>
+        private const float ZoneX1 = 0.965f;
+        /// <summary>Rail | Stage seam. ZoneX0 + 0.930 * (374/2670).</summary>
+        private const float RailX1 = 0.165270f;
+        /// <summary>Stage | Pane seam. RailX1 + 0.930 * (1496/2670).</summary>
+        private const float StageX1 = 0.686349f;
+
+        /// <summary>Header band (hero identity + vitals) - D3's full-width x 120 strip.</summary>
+        private const float HeaderY0 = 0.885f, HeaderY1 = 0.985f;
+
+        /// <summary>
+        /// The STAGE and PANE floor. The kit seats the ONE shared Close as a fixed
+        /// CanonCtaHeight box growing up from the default bottom-CENTRE band, so any
+        /// full-width content below this line would be painted over. The rail escapes it
+        /// horizontally (it is far left of the centred Close), which is why RailY0 is
+        /// lower - exactly the dodge the previous layout's left column already used.
+        /// </summary>
+        private const float BodyY0 = 0.300f, BodyY1 = 0.875f;
+
+        /// <summary>The rail column's band. Lower than the body because it clears the Close in X.</summary>
+        private const float RailY0 = 0.155f, RailY1 = 0.875f;
+
+        /// <summary>Purse strip - above the reserved Close band, below the stage.</summary>
+        private const float PurseY0 = 0.222f, PurseY1 = 0.288f;
+
+        /// <summary>Grid columns across the stage (D3).</summary>
+        private const int GridColumns = 6;
+
+        /// <summary>
+        /// Rail entries, in order. Seven today; the count is a constant so the touch-floor
+        /// arithmetic below and the regression both read the SAME number.
+        /// </summary>
+        private const int RailEntryCount = 7;
+
+        /// <summary>Rail entry height, in canvas REFERENCE px, authored AT the kit touch floor.</summary>
+        private const float RailEntryHeightPx = ElarionUiKit.MinTouchPx;
+
+        /// <summary>Gap between rail entries, reference px.</summary>
+        private const float RailEntryGapPx = 8f;
+
+        // --- ROOT + CHROME ---------------------------------------------------
         private void BuildRoot()
         {
-            // Route the canvas through the kit's ONE standard modal canvas builder (same
-            // 1080x1920 reference / 0.5 match / 31000 band the other Obsidian modals use)
-            // instead of hand-rolling it, so this modal matches the rest. overrideSorting
-            // (not set by the kit) is applied after, preserving the prior behaviour.
+            // The kit's ONE standard modal canvas (1080x1920 reference / 0.5 match / 31000
+            // band), same as every other Obsidian modal. overrideSorting is applied after,
+            // preserving the prior behaviour.
             _ui = ElarionUiKit.BuildModalCanvas("HeroInventoryUI", 31000);
             var canvas = _ui.GetComponent<Canvas>();
             if (canvas != null) canvas.overrideSorting = true;
 
             ElarionUiKit.Scrim(_ui.transform, Close);
 
-            // SHARED Obsidian chrome (WO-554): black panel + gold trim + gold header +
-            // the ONE standard Close button. Replaces the old backdrop + brown PanelFramed +
-            // dark solidFill + ember glow + rune strip + per-panel "X".
-            // Cosmetic flag B (owner 2026-07-24): the medallion "bag" glyph is REMOVED — the
-            // hero portrait is seated into the socket below instead (no medallionIcon here).
+            // SHARED Obsidian chrome (WO-554): black panel + gold trim + gold header + the ONE
+            // standard Close. D4 asked for the Close to move to a top-right button_exit; that is
+            // NOT done here and the reason is recorded rather than silently ignored - the shared
+            // Close is a kit-wide invariant ("every Close is the SAME pixel size on every screen",
+            // owner F8 x3) that ~19 panels share, and re-seating it for one screen is a kit change,
+            // not a Bag change. The layout instead RESPECTS the band: BodyY0/PurseY0 sit above it
+            // and the rail clears it horizontally.
             var panelChrome = ElarionUiKit.BuildObsidianPanel(_ui.transform, "INVENTORY",
                 new Vector2(0.04f, 0.03f), new Vector2(0.96f, 0.97f),
                 Close, headerX0: 0.05f, headerX1: 0.80f,
                 frameName: RpgUiCatalog.FrameInventory);
             var panel = panelChrome.content;
 
-            // Cosmetic flag B — drop the ACTIVE hero's portrait into the medallion socket.
-            // FIX 2026-08-05: this hardcoded "HeroPortraits/Grom", so a player who picked Sylas or
-            // Thrain still saw Grom's face in his own inventory. The slug now comes from the
-            // persisted class through the TWO maps that already exist — PlayableHeroes.JobKey
-            // (Core: class -> "ranger") then PortraitSlug (InventoryPaperDoll.cs: "ranger" ->
-            // "Sylas"). Deliberately NOT a third copy of the map: duplicated slug tables are exactly
-            // how the portrait drifted from the hero in the first place.
-            // The portraits are imported as plain Texture2D (spriteMode:0), so they MUST load as
-            // Texture2D into a RawImage, not as a Sprite (mirrors HeroSelectController.ApplyPortrait).
-            // preserveAspect=false via a full stretch fills the oval. FALLBACK: an ASCII name label
-            // if the texture is missing (zero-risk floor). Canon note: Resources/HeroPortraits/ DOES
-            // exist (Grom/Elara/Thrain/Sylas .jpg) — any stale doc claiming otherwise is wrong.
+            // The frame's own medallion socket keeps the active hero's portrait. This is the
+            // FRAME's socket, not the deleted hero card - leaving it empty would punch a hole in
+            // the frame art. The slug comes from the persisted class through the two maps that
+            // already exist (PlayableHeroes.JobKey -> PortraitSlug); deliberately not a third copy.
             var medallion = panelChrome.layout != null ? panelChrome.layout.medallion : null;
             if (medallion != null)
             {
@@ -86,54 +153,53 @@ namespace DeNelle.Village
                 }
             }
 
-            // Left: Narrow portrait area to match mockup exactly - ornate gold frame with hero portrait, Lvl, name, colored bars, stats.
-            // Matches the mockup's left panel width and style.
-            // Eyes-sweep 2026-07-06 rule 2: all content columns end ABOVE the shared bottom-centre
-            // Close band (SeatSharedCloseInside seats a fixed 360x120 box there) — bottom 0.12 -> 0.165.
-            var niche = ElarionUiKit.Niche(panel.transform, new Vector2(0.04f, 0.165f), new Vector2(0.26f, 0.78f));
-            _paperDoll = AddImage(niche.transform, "PaperDollArea", new Vector2(0.02f, 0.01f), new Vector2(0.98f, 0.99f), new Color(0, 0, 0, 0));
-            NoRaycast(_paperDoll);
+            // ── HEADER: hero identity + vitals, one luminance-separated row (D3/D5). The old
+            //    saturated green/blue/magenta bar stack on a left card is gone with the card.
+            _headerRoot = AddImage(panel.transform, "HeaderBand",
+                                   new Vector2(ZoneX0, HeaderY0), new Vector2(ZoneX1, HeaderY1),
+                                   new Color(0f, 0f, 0f, 0f));
+            NoRaycast(_headerRoot);
 
-            // Tabs above the grid on the right, gold-trimmed to match mockup.
-            _tabsRoot = AddImage(panel.transform, "TabsRow", new Vector2(0.28f, 0.82f), new Vector2(0.95f, 0.90f), new Color(0, 0, 0, 0));
-            NoRaycast(_tabsRoot);
-            BuildTabs(_tabsRoot.transform);
+            // ── RAIL: the navigation. A carved niche column (D4: Well / panel_grid).
+            _railRoot = ElarionUiKit.Well(panel.transform,
+                                          new Vector2(ZoneX0, RailY0), new Vector2(RailX1, RailY1));
+            _railRoot.name = "RailColumn";
 
-            // Right: Large grid filling most of the screen (5 cols landscape, ornate frames from pack, items fit with margins, scroll for more).
-            // No sidebar/detail panel in main layout to match the mockup's full grid view (selection highlights in grid, equip on tap).
-            // Grid extends lower for the big area in the mockup.
-            // WO-582 frame pass: the grid sits in the Blink frame's own dark well now, so the grid
-            // root is TRANSPARENT (no grey Well sub-frame, no old PanelInventory gold-grid sprite that
-            // double-framed the middle). Items render directly on the frame's central well.
-            // Eyes-sweep 2026-07-06: the right column re-stacked so NOTHING sits under the shared
-            // bottom-centre Close band — grid 0.30–0.80, detail strip 0.240–0.295, footer 0.165–0.235.
-            _gridRoot = AddImage(panel.transform, "GridRoot",
-                                 new Vector2(0.30f, 0.30f), new Vector2(0.93f, 0.80f), new Color(0f, 0f, 0f, 0f));
-            NoRaycast(_gridRoot);
+            // ── STAGE: the selected section.
+            _stageRoot = AddImage(panel.transform, "Stage",
+                                  new Vector2(RailX1, BodyY0), new Vector2(StageX1, BodyY1),
+                                  new Color(0f, 0f, 0f, 0f));
+            NoRaycast(_stageRoot);
 
-            // WO-585 — selection DETAIL strip: a thin host between the grid bottom (0.16) and the
-            // footer top (0.10). Empty/transparent until an item is tapped; RebuildSidebar then drops
-            // the selected item's name + stats + an explicit Equip/Use CTA + the equip Status line
-            // into it, so a tap has a visible, separate-from-equip response (was the inert feel).
-            // (was 0.103–0.156 — the "Tap an item to inspect it." bar painted over the shared Close)
-            _sidebarRoot = AddImage(panel.transform, "DetailStrip",
-                                    new Vector2(0.30f, 0.240f), new Vector2(0.93f, 0.295f), new Color(0f, 0f, 0f, 0f));
-            NoRaycast(_sidebarRoot);
+            // ── PANE: detail / compare, ALWAYS present (D3). Never the old thin strip that
+            //    could only say "Tap an item to inspect it."
+            _paneRoot = AddImage(panel.transform, "Pane",
+                                 new Vector2(StageX1, BodyY0), new Vector2(ZoneX1, BodyY1),
+                                 new Color(0f, 0f, 0f, 0f));
+            NoRaycast(_paneRoot);
 
-            BuildFooterBar(panel.transform);
+            // ── PURSE STRIP: wallet + the next-step hint (D3).
+            _purseRoot = AddImage(panel.transform, "PurseStrip",
+                                  new Vector2(ZoneX0, PurseY0), new Vector2(ZoneX1, PurseY1),
+                                  new Color(0f, 0f, 0f, 0f));
+            NoRaycast(_purseRoot);
 
-            // WO-713 — the ONE shared open ease (kit PanelOpenCloseFx, WO-714 P8): scale
-            // target = the chrome panel rect (never the overlay canvas root). Attach-only
-            // when inactive (headless-safe); Close stays instant (controller destroys _ui).
+            // §12: the zone arithmetic, stated as numbers on every build. A capture that shows a
+            // collapsed or overlapping band names the offending edge here instead of leaving the
+            // next reader to measure a screenshot with a ruler.
+            FlowTrace.Step("Inventory", string.Format(
+                "Bag layout: rail x[{0:F3}..{1:F3}] stage x[{1:F3}..{2:F3}] pane x[{2:F3}..{3:F3}] " +
+                "| header y[{4:F3}..{5:F3}] body y[{6:F3}..{7:F3}] rail y[{8:F3}..{9:F3}] purse y[{10:F3}..{11:F3}]",
+                ZoneX0, RailX1, StageX1, ZoneX1,
+                HeaderY0, HeaderY1, BodyY0, BodyY1, RailY0, RailY1, PurseY0, PurseY1));
+
+            BuildPurseStrip(_purseRoot.transform);
+
+            // The ONE shared open ease (kit PanelOpenCloseFx). Close stays instant.
             if (panelChrome.root != null)
                 ElarionUiKit.AttachPanelOpenFx(_ui, panelChrome.root.GetComponent<RectTransform>());
 
-            // Modal arbiter registration: THIS file builds the top-band (31000) inventory modal, so
-            // it routes the panel through the single-modal PanelManager arbiter here (back-button /
-            // battle-lock / one-modal-at-a-time). Shared _panelHandle with HeroInventoryController's
-            // Open()/Close(); the calls are idempotent (Register is guarded by the null check,
-            // NotifyOpened/NotifyClosed no-op when already applied). The close delegate releases the
-            // arbiter slot and then hides the modal via Close().
+            // Modal arbiter registration (shared _panelHandle with Open()/Close(); idempotent).
             if (_panelHandle == null)
                 _panelHandle = PanelManager.Register("Inventory",
                     () => { if (_panelHandle != null) PanelManager.NotifyClosed(_panelHandle); Close(); },
@@ -141,43 +207,221 @@ namespace DeNelle.Village
             PanelManager.NotifyOpened(_panelHandle);
         }
 
-        // ── Footer bar (mockup #41 bottom) ---
-        private void BuildFooterBar(Transform panel)
+        // =====================================================================
+        //  THE RAIL (D2) — sections down the left, each with its count.
+        // =====================================================================
+        //
+        // ⚠ THE TOUCH FLOOR IS WHY THIS SCROLLS, AND THAT IS NOT A STYLE CHOICE.
+        // D3 authors seven entries at 374x132 device px and asserts every target is above
+        // MinTouchPx. At the design's own 2670x1200 the CanvasScaler (1080x1920, match 0.5)
+        // resolves to ~965 reference px of canvas height, so the whole panel is ~907 ref px
+        // and 132 device px is ~106 ref px - BELOW the 112 floor. Seven entries at the real
+        // floor need 7*112 + 6*8 = 832 ref px, which is more height than the panel has once
+        // the header exists at all. The numbers simply do not close.
+        //
+        // The two ways out are: let the entries sit sub-floor (D3 itself forbids relying on
+        // ClampMinTouch - a sub-floor element inflates and stacks into its neighbour, the
+        // 2026-07-16 grey-plate defect class), or author AT the floor and let the column
+        // scroll. This takes the second. Every entry is exactly RailEntryHeightPx, so the
+        // clamp is the no-op D3 asked for, and roughly five of the seven are visible at once
+        // with the selected entry scrolled into view.
+        private void BuildRail(Transform host)
         {
-            // WO-582 frame pass: the footer sits on the Blink frame's ornate base now, so the tray is
-            // a transparent layout host (no Track fill / rim / rule that boxed the bottom over the art).
-            // Eyes-sweep 2026-07-06 rule 2 (was 0.035–0.100): the wallet tray now ends above the
-            // shared bottom-centre Close band instead of sitting underneath it.
-            var tray = AddImage(panel, "FooterTray",
-                                new Vector2(0.30f, 0.165f), new Vector2(0.93f, 0.235f), new Color(0f, 0f, 0f, 0f));
-            NoRaycast(tray);
+            if (host == null) return;
 
-            // WO-1015 E1: the dev-gated "Orient" button that used to seat here is REMOVED (see the
-            // note at BuildGenericWalletChip's sibling comment below). The freed left of the footer
-            // tray simply stays clear; the wallet wells keep their right-aligned positions.
+            // Caption: the column says what it is (D9 invRailHeader).
+            var caption = ElarionUiKit.Label(host, InventoryStrings.Get(InventoryStrings.KeyRailHeader),
+                0.945f, 1f, InkMicro, ElarionUi.FontMicro,
+                TextAlignmentOptions.Center, 0.06f, 0.94f, spacing: 2f);
+            caption.raycastTarget = false;
+            ElarionUiKit.FitSingleLine(caption, 0f, ElarionUi.FontMicro);
 
-            // WO-565: the Sort + Filter buttons were wired to EMPTY lambdas — visible controls
-            // that silently did nothing. HIDDEN rather than ship a half-feature: category Filter
-            // is already provided by the tab row (Weapons/Armor/Accessories/Consumables), and a
-            // real Sort needs VM-level ordering + grid re-bind (non-trivial). Re-add here only
-            // once InventoryVM exposes a sort/filter the grid can project. The wallet wells below
-            // keep their right-aligned positions; the freed left of the footer simply stays clear.
+            // Scroll host for the entries (see the touch-floor note above).
+            var viewport = AddImage(host, "RailViewport",
+                                    new Vector2(0.04f, 0.01f), new Vector2(0.96f, 0.935f),
+                                    new Color(0f, 0f, 0f, 0f));
+            viewport.AddComponent<RectMask2D>();
+            var scroll = viewport.AddComponent<ScrollRect>();
+            scroll.horizontal = false;
+            scroll.vertical = true;
+            scroll.movementType = ScrollRect.MovementType.Clamped;
+            scroll.scrollSensitivity = 24f;
 
-            // Wallet balances come from the bound VM (InventoryVM.Coins/Crystals, sourced from the
-            // injected IEconomy which reads GameState.Resources) — this View never reads
-            // GameStateService directly (strict-MVVM). Null-safe: a missing VM shows 0/0.
+            var content = new GameObject("RailContent", typeof(RectTransform));
+            content.transform.SetParent(viewport.transform, false);
+            var crt = content.GetComponent<RectTransform>();
+            crt.anchorMin = new Vector2(0f, 1f);
+            crt.anchorMax = new Vector2(1f, 1f);
+            crt.pivot = new Vector2(0.5f, 1f);
+            crt.anchoredPosition = Vector2.zero;
+            crt.sizeDelta = Vector2.zero;
+            scroll.content = crt;
+            scroll.viewport = viewport.GetComponent<RectTransform>();
+
+            var layout = content.AddComponent<VerticalLayoutGroup>();
+            layout.spacing = RailEntryGapPx;
+            layout.childForceExpandWidth = true;
+            layout.childForceExpandHeight = false;
+            layout.childControlWidth = true;
+            layout.childControlHeight = true;
+            layout.childAlignment = TextAnchor.UpperCenter;
+
+            var fitter = content.AddComponent<ContentSizeFitter>();
+            fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+            // The entries. Counts come from vm.Tabs (.Label and .Count BOTH already exist on
+            // InventoryTab) - the rail is a projection, never a second source of truth.
+            var counts = new Dictionary<InventoryTabKind, int>();
+            if (_vm != null && _vm.Tabs != null)
+                foreach (var t in _vm.Tabs) counts[t.Kind] = t.Count;
+
+            bool mapOn = DeNelle.Core.FeatureFlags.MapTab;
+
+            BuildRailEntry(content.transform, RailGear,     InventoryStrings.KeyRailGear,     -1, false);
+            AddRailSeparator(content.transform);
+            BuildRailEntry(content.transform, RailWeapons,  InventoryStrings.KeyRailWeapons,
+                           CountOf(counts, InventoryTabKind.Weapons), false);
+            BuildRailEntry(content.transform, RailArmor,    InventoryStrings.KeyRailArmor,
+                           CountOf(counts, InventoryTabKind.Armor), false);
+            BuildRailEntry(content.transform, RailTrinkets, InventoryStrings.KeyRailTrinkets,
+                           CountOf(counts, InventoryTabKind.Outfits), false);
+            BuildRailEntry(content.transform, RailPotions,  InventoryStrings.KeyRailPotions,
+                           CountOf(counts, InventoryTabKind.Consumables), false);
+            BuildRailEntry(content.transform, RailSkills,   InventoryStrings.KeyRailSkills,   -1, false);
+            AddRailSeparator(content.transform);
+            BuildRailEntry(content.transform, RailMap,      InventoryStrings.KeyRailMap,      -1, !mapOn);
+
+            if (!mapOn)
+            {
+                // §12: the DORMANCY must be readable in a capture, or the next person hunts a dead
+                // entry instead of finding the flag that dimmed it. D8 says render it dimmed and
+                // inert rather than hiding it - "inert" is read here as "does not open the map",
+                // not "cannot be selected", because the section still has an authored sentence
+                // (invEmptyMapLocked) that exists precisely so the lock is never a surprise.
+                FlowTrace.Step("UI",
+                    "Bag rail: Map entry DORMANT (FeatureFlags.MapTab OFF - realm travel is a WO-827 " +
+                    "stub). It is drawn dimmed with the 'soon' badge and selects to its locked copy; " +
+                    "it does not route.");
+            }
+
+            Canvas.ForceUpdateCanvases();
+            LayoutRebuilder.ForceRebuildLayoutImmediate(crt);
+        }
+
+        private static int CountOf(Dictionary<InventoryTabKind, int> counts, InventoryTabKind kind)
+        {
+            int n;
+            return counts != null && counts.TryGetValue(kind, out n) ? n : 0;
+        }
+
+        /// <summary>One of D3's two rail separators — a thin rule that groups Gear / sections / Map.</summary>
+        private void AddRailSeparator(Transform content)
+        {
+            var go = AddImage(content, "RailSeparator", Vector2.zero, Vector2.one,
+                              new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.30f),
+                              rounded: false);
+            NoRaycast(go);
+            var le = go.AddComponent<LayoutElement>();
+            le.preferredHeight = 3f;
+            le.minHeight = 3f;
+        }
+
+        /// <summary>
+        /// One rail entry: a kit button carrying its LABEL, its COUNT and (when it holds the
+        /// worn item) the word "worn". D5: selection is a border plus a 3 px mark plus the pane
+        /// changing - never a hue. Dormant entries carry the WORD "soon", not a grey tint alone.
+        /// </summary>
+        private void BuildRailEntry(Transform content, int railIndex, string labelKey,
+                                    int count, bool dormant)
+        {
+            bool selected = _railIndex == railIndex;
+
+            // The kit builds the button AND its label (never an empty label — a 0-glyph label
+            // trips the TextFitGuard, owner F8 2026-07-10). The label is then RE-ANCHORED to the
+            // entry's upper band so the count has its own row underneath, the same technique
+            // BuildTabRow uses when it seats an icon beside a tab's label.
+            var btn = ElarionUiKit.ButtonPack(content, InventoryStrings.Get(labelKey),
+                ElarionUiKit.ButtonKind.Quiet,
+                Vector2.zero, Vector2.one, () => SelectRail(railIndex));
+            if (btn == null) return;
+            btn.gameObject.name = "RailEntry_" + railIndex;
+
+            var le = btn.gameObject.AddComponent<LayoutElement>();
+            le.preferredHeight = RailEntryHeightPx;
+            le.minHeight = RailEntryHeightPx;
+            // Authored AT the floor, so this is the no-op D3 asked for. It stays because a future
+            // resolution change must inflate the entry rather than ship a sub-floor tap target.
+            ElarionUiKit.ClampMinTouch(btn);
+
+            var root = btn.gameObject;
+
+            // The label owns the full rail width, which is the whole point of a rail: no
+            // selected-state mark can overlap it (the captured defect 2).
+            var lbl = btn.GetComponentInChildren<TMP_Text>();
+            if (lbl != null)
+            {
+                var lrt = lbl.rectTransform;
+                lrt.anchorMin = new Vector2(0.16f, 0.42f);
+                lrt.anchorMax = new Vector2(0.98f, 0.92f);
+                lrt.offsetMin = Vector2.zero; lrt.offsetMax = Vector2.zero;
+                lbl.alignment = TextAlignmentOptions.MidlineLeft;
+                lbl.color = selected ? GiltInk : (dormant ? InkDim : Ink);
+                ElarionUiKit.FitSingleLine(lbl, 0f, ElarionUi.FontLabel);
+            }
+
+            // The COUNT is the reason to go, shown ahead of going (D2). A section with nothing
+            // in it shows nothing rather than a "0" that reads as a broken counter.
+            if (count > 0)
+            {
+                var cnt = ElarionUiKit.Label(root.transform, count.ToString(),
+                    0.08f, 0.44f, InkMicro, ElarionUi.FontMicro,
+                    TextAlignmentOptions.MidlineLeft, 0.16f, 0.98f);
+                cnt.raycastTarget = false;
+                ElarionUiKit.FitSingleLine(cnt, 0f, ElarionUi.FontMicro);
+            }
+
+            if (dormant)
+            {
+                var soon = ElarionUiKit.Label(root.transform,
+                    InventoryStrings.Get(InventoryStrings.KeyRailMapSoon),
+                    0.08f, 0.44f, InkMicro, ElarionUi.FontMicro,
+                    TextAlignmentOptions.MidlineLeft, 0.16f, 0.98f);
+                soon.raycastTarget = false;
+                ElarionUiKit.FitSingleLine(soon, 0f, ElarionUi.FontMicro);
+            }
+
+            if (selected)
+            {
+                // SHAPE + POSITION, never colour alone (D5): a gold inner rim on the plate plus a
+                // 3 px mark on the rail's inner edge. Both survive a greyscale pass.
+                AddInnerRim(root, new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.95f));
+                var mark = AddImage(root.transform, "SelectedMark",
+                                    new Vector2(0f, 0.10f), new Vector2(0.022f, 0.90f),
+                                    ElarionUi.Gilt, rounded: false);
+                NoRaycast(mark);
+            }
+        }
+
+        // ── PURSE STRIP (D3) ─────────────────────────────────────────────────
+        // The wallet, plus the screen's next-step hint. The hint REUSES the emptiest section's
+        // own invEmpty* sentence (D9) so one string sits in two placements and the wording can
+        // never drift between them.
+        private void BuildPurseStrip(Transform host)
+        {
             int coins    = _vm != null ? _vm.Coins : 0;
             int crystals = _vm != null ? _vm.Crystals : 0;
 
-            // WO-713 A.6 + the appended owner ruling (2026-07-13): the footer is the STANDARD
-            // kit chip row (CurrencyChip owns ALL currency presentation — CompactNumber,
-            // icon-first identity, no flash), never hand-rolled wells. Gold + Crystals ride
-            // the ONE wallet strip (WO-714 P2 BuildWalletRow); the third chip is the GENERIC
-            // WALLET — icon + plain amount, NO Pi/SKR symbol. CurrencySkinResolver.Active
-            // still drives the wallet chip's identity text (never a symbol typed inline), so
-            // the Pi/SKR skins render correctly when the later crypto arc re-activates them.
-            var chipHost = AddImage(tray.transform, "WalletChips",
-                                    new Vector2(0.40f, 0.10f), new Vector2(0.985f, 0.90f),
+            // Left: the plain-words next step. This is what replaces the full-width gold hint bar
+            // that shouted "Tap an item to inspect it." louder than the two items it described.
+            _purseHint = ElarionUiKit.Label(host, "", 0.05f, 0.95f, InkDim, ElarionUi.FontMicro,
+                TextAlignmentOptions.MidlineLeft, 0.01f, 0.56f);
+            _purseHint.raycastTarget = false;
+            ElarionUiKit.FitSingleLine(_purseHint, 0f, ElarionUi.FontMicro);
+
+            // Right: the standard kit chip row (CurrencyChip owns ALL currency presentation —
+            // CompactNumber, icon-first identity, no flash), never hand-rolled wells.
+            var chipHost = AddImage(host, "WalletChips",
+                                    new Vector2(0.58f, 0.05f), new Vector2(0.995f, 0.95f),
                                     new Color(0f, 0f, 0f, 0f));
             NoRaycast(chipHost);
             var softHost = AddImage(chipHost.transform, "SoftCurrency",
@@ -192,12 +436,45 @@ namespace DeNelle.Village
             BuildGenericWalletChip(chipHost.transform);
         }
 
-        // The premium/wallet chip — GENERIC under the V1 "wallet" skin (owner ruling appended
-        // to WO-713: "remove the Pi symbol on inventory screen ... leave generic as wallet").
-        // Built on the SAME kit CurrencyChip as the soft currencies (no hand-rolled well),
+        /// <summary>Repaint the purse hint from the current section (called on every Render).</summary>
+        private void RefreshPurseHint()
+        {
+            if (_purseHint == null) return;
+            _purseHint.text = NextStepLine();
+            ElarionUiKit.FitSingleLine(_purseHint, 0f, ElarionUi.FontMicro);
+        }
+
+        /// <summary>
+        /// The pane footer / purse hint sentence — the screen always naming the next step in
+        /// plain words (D2). Sourced from canon, never typed here.
+        /// </summary>
+        private string NextStepLine()
+        {
+            switch (_railIndex)
+            {
+                case RailGear:  return InventoryStrings.Get(InventoryStrings.KeyNextRailHint);
+                case RailSkills: return InventoryStrings.Get(InventoryStrings.KeyEmptySkills);
+                case RailMap:   return InventoryStrings.Get(InventoryStrings.KeyEmptyMapLocked);
+            }
+            // A content section: if it is empty, say what fills it; otherwise teach the rail.
+            int count = SectionCount(RailTab(_railIndex));
+            if (count <= 0) return InventoryStrings.EmptyLineFor(RailTab(_railIndex));
+            return _vm != null && _vm.SelectedId != null
+                ? InventoryStrings.Get(InventoryStrings.KeyNextCompareHint)
+                : InventoryStrings.Get(InventoryStrings.KeyNextCountHint);
+        }
+
+        /// <summary>Owned count in a section, read off vm.Tabs (the VM stays the source of truth).</summary>
+        private int SectionCount(InventoryTabKind kind)
+        {
+            if (_vm == null || _vm.Tabs == null) return 0;
+            foreach (var t in _vm.Tabs) if (t.Kind == kind) return t.Count;
+            return 0;
+        }
+
+        // The premium/wallet chip — GENERIC under the V1 "wallet" skin (owner ruling appended to
+        // WO-713). Built on the SAME kit CurrencyChip as the soft currencies (no hand-rolled well),
         // then re-iconed to the wallet/bag art: icon + plain amount, zero symbol glyphs.
-        // Identity text comes from the active skin's CurrencyName (colorblind law: when no
-        // icon art resolves the chip still carries a text identifier, never a naked number).
         private void BuildGenericWalletChip(Transform host)
         {
             var skin = DeNelle.Core.Platform.CurrencySkinResolver.Active;
@@ -211,15 +488,14 @@ namespace DeNelle.Village
             var bag = RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, RpgUiCatalog.IconInventory);
             if (bag != null && chip.icon != null)
             {
-                // Wallet ICON (the bronze chest/bag) replaces the kind icon — generic read.
                 chip.icon.sprite = bag;
                 chip.icon.gameObject.SetActive(true);
                 if (chip.tag != null) chip.tag.text = tagText;
             }
             else
             {
-                // No wallet art: never let the GOLD kind icon mislabel the wallet — drop the
-                // icon and make sure a text identifier carries the chip's identity instead.
+                // No wallet art: never let the GOLD kind icon mislabel the wallet — drop the icon
+                // and make sure a text identifier carries the chip's identity instead.
                 if (chip.icon != null) chip.icon.gameObject.SetActive(false);
                 if (chip.tag != null) chip.tag.text = tagText;
                 else
@@ -237,100 +513,42 @@ namespace DeNelle.Village
         }
 
         // ── WO-1015 E1: the in-panel "Orient" word-button is GONE from this screen ──────────
-        // Same strand removed from EquipmentPanel and (by WO-1010 D1) from BuildPaletteUI. It was
-        // dev-gated, which is NOT the same as invisible — the owner's felt-test builds are
-        // development builds, so it rendered on every screen she looked at and overlapped the
-        // content it was pinned beside. The seating editor keeps its ONE sanctioned entry point,
-        // AdminOverlay (Assets/_Modules/HUD/AdminOverlay.cs:361 "Orient Asset" / :608 "Seating
-        // Editor") — a dev screen, not a gameplay screen. Do not re-add a per-screen launcher.
+        // The seating editor keeps its ONE sanctioned entry point, AdminOverlay. Do not re-add
+        // a per-screen launcher.
 
-        // ── TABS ---
-        // WO-713 A.2 — the ONE uniform kit tab row (WO-714 P1 BuildTabRow): element_tab
-        // plates, one size class, labels renamed so they FIT (owner spec): Weapons / Armor /
-        // Trinkets / Potions / Skills (was "Accessories"/"Consumables" — the truncating pair).
-        // Selected state = the kit's lit plate + bold, never color-only. "Skills" stays the
-        // pseudo-tab: it isn't a content category — tapping it OPENS the MVVM skill tree via
-        // PanelRouter (PanelManager swaps the inventory out, one-modal-at-a-time). The row is
-        // rebuilt from the VM's active tab on every Render (RebuildTabsRow), so the VM stays
-        // the source of truth for selection.
-        // WO-911 (ruling Q10+Q13, 2026-08-06) adds a SIXTH entry: "Map". The Realm Map left the
-        // bottom action bar (that is half of how the bar went 7 -> 6 faces) and lives here now.
-        // Like "Skills" it is a PSEUDO-tab — not a content category, it just routes out via
-        // PanelRouter — so it needs no InventoryTabKind and no VM change.
-        //
-        // ⚠ FEATURE-FLAGGED OFF (owner 2026-08-06, "we can ff map for now since those dont
-        // connect right?"). RealmMapPanel's own header records travel as a DISABLED STUB until
-        // WO-827: the realm's areas do not connect, so a visible tab would promise a journey the
-        // game cannot take. When the flag is off the tab is ABSENT, never a greyed dead entry —
-        // ElarionUiKit.BuildTabRow divides the width by the tab COUNT, so the remaining five
-        // reflow with no gap. PlayerPrefs "ff.maptab" = 1 turns it back on with no rebuild.
-        private void BuildTabs(Transform host)
-        {
-            bool mapTab = DeNelle.Core.FeatureFlags.MapTab;
-
-            var labelList = new System.Collections.Generic.List<string>
-                { "Weapons", "Armor", "Trinkets", "Potions", "Skills" };
-            var tabList = new System.Collections.Generic.List<Tab>
-                { Tab.Weapons, Tab.Armor, Tab.Outfits, Tab.Consumables, Tab.Weapons };
-            const int skillsIndex = 4;
-            int mapIndex = -1;
-
-            if (mapTab)
-            {
-                mapIndex = labelList.Count;
-                labelList.Add("Map");
-                tabList.Add(Tab.Weapons);       // never selected; the route fires first
-            }
-            else
-            {
-                // §12: the absence must be READABLE in a capture, or the next person hunts a
-                // vanished tab instead of finding the flag that hid it.
-                FlowTrace.Step("UI",
-                    "Bag: Map tab SUPPRESSED by FeatureFlags.MapTab (default OFF — realm travel is a " +
-                    "WO-827 stub). Tab row reflows to " + labelList.Count + " tabs with no gap.");
-            }
-
-            int captureMapIndex = mapIndex;
-            ElarionUiKit.BuildTabRow(host, labelList.ToArray(),
-                idx =>
-                {
-                    if (idx == skillsIndex) { OpenSkillTree(); return; }
-                    if (captureMapIndex >= 0 && idx == captureMapIndex) { OpenRealmMap(); return; }
-                    SelectTab(tabList[idx]);
-                },
-                initial: (int)_tab);
-        }
-
-        // The "Map" pseudo-tab (WO-911): open the Realm Map parchment overworld. Routes through
-        // PanelRouter so the inventory needs NO reference to RealmMapPanel; PanelManager swaps this
-        // modal out (one-panel-at-a-time). Never a dead-end tap — an unregistered opener closes the
-        // bag and reports, exactly like the Skills route above.
+        // The "Map" section (WO-911): open the Realm Map parchment overworld. Routes through
+        // PanelRouter so the inventory needs NO reference to RealmMapPanel. Reached only when
+        // FeatureFlags.MapTab is ON — the dormant entry never calls this.
         private void OpenRealmMap()
         {
             if (DeNelle.Core.UI.PanelRouter.Open(DeNelle.Core.UI.PanelId.RealmMap))
                 return;
             Close();
-            FlowTrace.Warn("UI", "Map tab: PanelId.RealmMap has no registered opener — nothing to open.");
+            FlowTrace.Warn("UI", "Map section: PanelId.RealmMap has no registered opener — nothing to open.");
         }
 
-        // The "Skills" pseudo-tab: open the code-built MVVM skill tree (HeroSkillTreePanelMvvm).
-        // Routes through PanelRouter so the inventory needs NO reference to the Talents panel type;
-        // PanelManager swaps this modal out for the skill tree (one-panel-at-a-time). When the
-        // panel isn't registered (e.g. no hero), Close the inventory and log — never silently nothing.
+        // The "Skills" section: open the code-built MVVM skill tree (HeroSkillTreePanelMvvm).
+        // Routes through PanelRouter so the inventory needs NO reference to the Talents panel type.
         private void OpenSkillTree()
         {
             if (DeNelle.Core.UI.PanelRouter.Open(DeNelle.Core.UI.PanelId.HeroSkillTree))
                 return;
-            // Not registered — close the inventory so the tap isn't a dead end, and report.
             Close();
-            FlowTrace.Warn("UI", "Skills tab: HeroSkillTree panel not registered (no hero?) — nothing to open.");
+            FlowTrace.Warn("UI", "Skills section: HeroSkillTree panel not registered (no hero?) — nothing to open.");
         }
 
-        // Tapping the hero portrait opens the full Character / Gear Preview paper-doll
-        // (EquipmentPanel). Prefer the registered PanelRouter route (PanelManager swaps the
-        // inventory out, one-modal-at-a-time). If no panel host exists yet (nothing has opened
-        // it this session), lazily create the host — its Awake registers it — then open directly,
-        // mirroring the dialogue "OpenEquip" command. Null-safe; never a dead-end tap.
+        // ── THE PROMOTED GEAR ROUTE (D1) ─────────────────────────────────────
+        // The full Character / Gear panel (EquipmentPanel — 1,452 lines of bound MVVM with
+        // labelled per-slot drawers) already exists and this is the SAME PanelRouter call the
+        // deleted "VIEW GEAR" ribbon made. It is now reached from the Gear section's own action
+        // instead of from a ribbon painted across a broken preview box.
+        //
+        // ⚠ WHAT THAT PANEL SHOWS TODAY, on captured evidence, not inference: F8 seq 3585 caught
+        // its RT PROBE reporting "the preview render texture is a UNIFORM clear colour - the
+        // preview box is blank at the SOURCE". Its slot plates and its drawers work; its 3D hero
+        // does not draw. So this route is deliberately NOT the Gear section's only content - the
+        // worn-slot column in the stage answers "what am I wearing" from pure model data whether
+        // or not the render is fixed.
         private void OpenGearPreview()
         {
             if (DeNelle.Core.UI.PanelRouter.Open(DeNelle.Core.UI.PanelId.EquipmentPanel))
@@ -341,24 +559,29 @@ namespace DeNelle.Village
             panel.Open();   // NotifyOpened closes this inventory (it is the registered open panel)
         }
 
-        // (TabPackIcon retired with the WO-713 kit tab row — BuildTabRow tabs are label-first;
-        //  CreamLabel was already dead. Verified zero remaining references before deletion.)
-
-        // ── Live 3D dressed-hero preview in the paper-doll niche ─────────────────────
-        // REUSE (no new system): the SAME proven HeroPreviewViewer the Character / Gear screen
-        // (EquipmentPanel.BuildPreviewWidget + BeginOrRetargetPreview) drives — it renders the
-        // active hero, with the equipped weapon / shield / armor tier, into a RenderTexture a UI
-        // RawImage shows. The viewer is PERSISTED across paper-doll rebuilds (the RT is reused and
-        // RefreshGear mirrors equip changes) and disposed on Close (DisposeHeroPreview) so there is
-        // no RenderTexture leak. Null-safe per §12: any failure leaves the niche to the 2D portrait/
-        // crest fallback — no crash, no error spam (one FlowTrace line, never a silent swallow).
+        // ── Live 3D dressed-hero preview in the Gear section's niche ─────────────────
+        // REUSE (no new system, D1): the SAME HeroPreviewViewer the Character / Gear screen
+        // drives. The viewer is PERSISTED across rebuilds (the RT is reused and RefreshGear
+        // mirrors equip changes) and disposed on Close (DisposeHeroPreview) so there is no
+        // RenderTexture leak.
         private DeNelle.Village.Hero.HeroPreviewViewer _heroPreview;
-        private RawImage _paperDollPreview;
+        private RawImage _heroPreviewImage;
 
-        // Mount the live hero into <paramref name="parent"/> via a child RawImage. Returns true when
-        // a live preview is showing; false when there is no hero body or the viewer can't build — the
-        // caller then falls back to the static 2D portrait. Called from RebuildPaperDoll (first call
-        // happens on Open via Bind->Render, so the preview begins when the panel opens).
+        /// <summary>
+        /// Mount the live hero into <paramref name="parent"/> — but ONLY on evidence that it
+        /// actually drew.
+        ///
+        /// ⛔ THIS GATE IS THE POINT OF THE TICKET. The preview camera clears to a colour
+        /// byte-identical to the plate behind it, so "the rig drew a hero" and "the rig drew
+        /// nothing" are the same pixels: a flat navy rectangle that reads as broken. That
+        /// rectangle is what the owner photographed, and mounting unconditionally is how it
+        /// shipped. HeroPreviewViewer.DrewContent runs the probe readback and answers the
+        /// question, so a rig that drew nothing falls through to the 2D portrait instead of
+        /// presenting an empty box. An honest portrait is strictly better than a plate the
+        /// player has to guess about.
+        ///
+        /// Returns true only when a VERIFIED-NON-BLANK preview is showing.
+        /// </summary>
         private bool TryMountHeroPreview(Transform parent)
         {
             if (parent == null) return false;
@@ -367,7 +590,7 @@ namespace DeNelle.Village
                 var body = ResolvePreviewBody();
                 if (body == null)
                 {
-                    FlowTrace.Step("Inventory", "Paper-doll: no hero body — using 2D portrait fallback.");
+                    FlowTrace.Step("Inventory", "Gear niche: no hero body — using 2D portrait fallback.");
                     return false;
                 }
 
@@ -388,8 +611,8 @@ namespace DeNelle.Village
                 }
                 else
                 {
-                    // Persisted across rebuilds: mirror the latest equipped look (weapon+shield+armor),
-                    // reusing the existing RenderTexture — no re-Begin, no RT churn.
+                    // Persisted across rebuilds: mirror the latest equipped look, reusing the
+                    // existing RenderTexture — no re-Begin, no RT churn.
                     _heroPreview.RefreshGear(weaponId, offHandId, armorTier);
                 }
 
@@ -399,16 +622,31 @@ namespace DeNelle.Village
                     return false;
                 }
 
+                // §12 — PROBE THIS CALL SITE. WO-1133 D1 required BOTH preview paths to be
+                // probed, because until now only EquipmentPanel called ProbeRenderedContent
+                // (tagging its lines "Equip"), so a blank capture could not be attributed to a
+                // path. This one tags "Inventory". Two tags, two answers, no more guessing which
+                // surface a probe line came from.
+                string drewDetail;
+                if (!_heroPreview.DrewContent(out drewDetail, "Inventory"))
+                {
+                    FlowTrace.Warn("Inventory",
+                        "Gear niche: the preview rig drew NOTHING (" + drewDetail + ") — mounting the " +
+                        "2D portrait instead. A flat plate here is the exact defect WO-1133 was raised " +
+                        "for; the render itself is a separate CLI ticket (see the RT PROBE lines).");
+                    return false;
+                }
+
                 var imgGo = new GameObject("HeroPreviewRawImage", typeof(RectTransform), typeof(RawImage));
                 imgGo.transform.SetParent(parent, false);
                 var rt = imgGo.GetComponent<RectTransform>();
                 rt.anchorMin = new Vector2(0.05f, 0.05f);
                 rt.anchorMax = new Vector2(0.95f, 0.95f);
                 rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
-                _paperDollPreview = imgGo.GetComponent<RawImage>();
-                _paperDollPreview.raycastTarget = false;
-                _paperDollPreview.color = Color.white;
-                _paperDollPreview.texture = _heroPreview.Texture;
+                _heroPreviewImage = imgGo.GetComponent<RawImage>();
+                _heroPreviewImage.raycastTarget = false;
+                _heroPreviewImage.color = Color.white;
+                _heroPreviewImage.texture = _heroPreview.Texture;
                 return true;
             }
             catch (System.Exception ex)
@@ -455,11 +693,10 @@ namespace DeNelle.Village
         {
             _heroPreview?.Dispose();
             _heroPreview = null;
-            _paperDollPreview = null;
+            _heroPreviewImage = null;
         }
 
-        // (Shared UI primitives Add*/Dress*/AddCircle*/Rarity*/glyphs/Has/Cap/Hero* live once in the main partial file.
-        // High-level builder chrome (root/tabs/footer) live here as the UIBuilder concern.
-        // This guarantees single definition for the merged partial class.)
+        // (Shared UI primitives Add*/Dress*/AddCircle*/Rarity*/glyphs/Has/Cap/Hero* live once in the
+        // main partial file. High-level builder chrome (root/rail/purse) lives here.)
     }
 }

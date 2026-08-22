@@ -38,6 +38,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using DeNelle.Core.UI;
 using DeNelle.Core.UI.Mvvm;
+using DeNelle.Core.Diagnostics;   // FlowTrace — WO-1133 instruments rail selection (§12)
 using DeNelle.Village.Hero;
 using DeNelle.Village.Items;
 
@@ -53,16 +54,41 @@ namespace DeNelle.Village
         private enum Tab { Weapons, Armor, Outfits, Consumables }
 
         private GameObject _ui;
-        private GameObject _gridRoot;     // re-built per tab
-        private GameObject _sidebarRoot;  // re-built per selection
-        private GameObject _paperDoll;    // rebuilt on equip-change
-        private GameObject _tabsRoot;     // tab row host (rebuilt on tab change)
+        private GameObject _stageRoot;    // the selected section's contents (re-built per section)
+        private GameObject _paneRoot;     // detail / compare, ALWAYS present (re-built per selection)
+        private GameObject _headerRoot;   // hero identity + vitals strip (rebuilt on equip-change)
+        private GameObject _railRoot;     // the LEFT RAIL of sections (rebuilt on section change)
+        private GameObject _purseRoot;    // wallet + the next-step hint
+        private TMPro.TextMeshProUGUI _purseHint;   // the one sentence naming the next step
+
+        // ── THE RAIL (WO-1133 D2) ────────────────────────────────────────────
+        // The top tab strip is GONE; sections live in a left rail. These ordinals are the
+        // rail's order on screen and nothing else indexes by them, so they are safe to read
+        // literally — but they are named because "3" is not a section and "RailTrinkets" is.
+        /// <summary>Rail entry one — the gear section (D1: the gear view is PROMOTED, not cut).</summary>
+        private const int RailGear     = 0;
+        /// <summary>Rail — loose weapons.</summary>
+        private const int RailWeapons  = 1;
+        /// <summary>Rail — loose armor.</summary>
+        private const int RailArmor    = 2;
+        /// <summary>Rail — trinkets (InventoryTabKind.Outfits under the hood).</summary>
+        private const int RailTrinkets = 3;
+        /// <summary>Rail — potions (InventoryTabKind.Consumables under the hood).</summary>
+        private const int RailPotions  = 4;
+        /// <summary>Rail — the talent tree. A PSEUDO-section: it routes out via PanelRouter.</summary>
+        private const int RailSkills   = 5;
+        /// <summary>Rail — realm travel. DORMANT behind FeatureFlags.MapTab (WO-827 stub).</summary>
+        private const int RailMap      = 6;
+
+        /// <summary>The selected rail entry. Weapons is the landing section, as before.</summary>
+        private int _railIndex = RailWeapons;
         // _profileFrameSprite removed in heavy Tech cleanup — W/A medallion now uses direct pack Profile tabs P1/fill.png (no Rpg legacy).
 
         // WO-434 Phase C — the bound ViewModel + the model seams injected at the open-site.
         // ALL inventory state/logic now lives in InventoryVM; this View only renders vm.* and
-        // routes taps to vm commands. _tab MIRRORS vm.ActiveTab so the existing tab-row chrome
-        // (BuildTabs / SelectTab) is unchanged; the VM is the source of truth.
+        // routes taps to vm commands. _tab MIRRORS vm.ActiveTab; _railIndex mirrors it back onto
+        // the rail (WO-1133) for the four CONTENT sections, and holds its own value for the three
+        // pseudo-sections (Gear / Skills / Map) that have no VM tab. The VM is the source of truth.
         private InventoryVM _vm;
         private InventoryStore _store;
         private GearLoadoutEquipTarget _equipTarget;
@@ -175,7 +201,7 @@ namespace DeNelle.Village
                     Debug.LogError("[HeroInventoryController] BuildRoot FAILED — inventory could not open. "
                                    + DescribeState() + "\n" + e);
                     if (_ui != null) { Destroy(_ui); _ui = null; }
-                    _gridRoot = _sidebarRoot = _paperDoll = _tabsRoot = null;
+                    ClearRoots();
                     return;
                 }
             }
@@ -201,6 +227,7 @@ namespace DeNelle.Village
             //    state. Render() isolates each section (paperdoll / tabs / grid) so a failure in
             //    one leaves the rest of the modal rendered, not blank.
             _tab = _vm != null ? (Tab)_vm.ActiveTabIndex : Tab.Weapons;
+            _railIndex = RailIndexForTab(_tab);
             SafeRun(() => Bind(_vm), "Bind");
 
             // A loud, single success line so the next playtest console PROVES the modal
@@ -254,9 +281,17 @@ namespace DeNelle.Village
             DisposeViewModel();
             if (_ui != null) Destroy(_ui);
             _ui = null;
-            _gridRoot = _sidebarRoot = _paperDoll = _tabsRoot = null;
+            ClearRoots();
             // Release the modal slot so no invisible backdrop lingers / traps input.
             if (_panelHandle != null) DeNelle.Core.UI.PanelManager.NotifyClosed(_panelHandle);
+        }
+
+        /// <summary>Drop every cached host after a teardown, so a half-built root can never be
+        /// re-activated broken on the next Open(). One place, so a new zone cannot be forgotten.</summary>
+        private void ClearRoots()
+        {
+            _stageRoot = _paneRoot = _headerRoot = _railRoot = _purseRoot = null;
+            _purseHint = null;
         }
 
         public void Toggle() { if (IsOpen) Close(); else Open(); }
@@ -329,52 +364,95 @@ namespace DeNelle.Village
         {
             if (_vm == null) return;
             _tab = (Tab)_vm.ActiveTabIndex;        // mirror the VM's active tab for the chrome
-            SafeRun(RebuildPaperDoll, "RebuildPaperDoll");
-            SafeRun(RebuildTabsRow,   "RebuildTabsRow");   // reflect active-tab highlight from the VM
-            SafeRun(RebuildGrid,      "RebuildGrid");
-            // WO-585 — restore the selection detail strip: a tapped item now shows a detail
-            // pane + an explicit Equip/Use CTA + the equip Status line (was the inert feel).
-            SafeRun(RebuildSidebar,   "RebuildSidebar");
+            // A rail entry that maps to a content section follows the VM; the two PSEUDO-sections
+            // (Gear, Skills, Map) have no VM tab, so they hold their own selection.
+            if (_railIndex != RailGear && _railIndex != RailSkills && _railIndex != RailMap)
+                _railIndex = RailIndexForTab(_tab);
+
+            SafeRun(RebuildHeader, "RebuildHeader");
+            SafeRun(RebuildRail,   "RebuildRail");
+            SafeRun(RebuildStage,  "RebuildStage");
+            SafeRun(RebuildPane,   "RebuildPane");
+            SafeRun(RefreshPurseHint, "RefreshPurseHint");
         }
 
-        // ── Paper-doll: a CLEAN, READABLE equipment column (T-022 "this layout is awful").
-        // The previous look was a gimmicky six-socket RING with four loud red "Locked"
-        // cosmetic placeholders that read as broken. This is the standard RPG paperdoll:
-        //   [ hero name + class • LV ]            banner
-        //   [   ◯ class-crest medallion   ]       portrait niche (RawImage-ready)
-        //   ── EQUIPMENT ──                        section caption
-        //   [ ⬚ WEAPON  | item name ]             live slot row (GearLoadout)
-        //   [ ⬚ ARMOR   | item name ]             live slot row (GearLoadout)
-        //   [ ⬚ HELM    | Empty     ]             quiet empty slots (cosmetics later)
-        //   [ ⬚ TRINKET | Empty     ]
-        // Two slots are LIVE (WEAPON + ARMOR, driven by GearLoadout / ResolveDisplayArmor);
-        // the rest are tidy EMPTY slots (no alarming red), so the column always reads full
-        // without pretending to be broken. When cosmetics/accessories land they fill the
-        // empty rows in place.
+        // ── RAIL SELECTION (WO-1133 D2) ──────────────────────────────────────
+        // Content sections route to the VM (it owns Slots + selection); the two pseudo-sections
+        // route OUT through PanelRouter exactly as the old pseudo-tabs did. The dormant Map
+        // entry selects to its authored locked sentence and does NOT route — the flag stays off.
+        private void SelectRail(int railIndex)
+        {
+            FlowTrace.Step("Inventory", "Rail select index=" + railIndex + " (was " + _railIndex + ")");
+
+            if (railIndex == RailSkills) { OpenSkillTree(); return; }
+            if (railIndex == RailMap)
+            {
+                if (DeNelle.Core.FeatureFlags.MapTab) { OpenRealmMap(); return; }
+                _railIndex = RailMap;
+                Render();
+                return;
+            }
+
+            _railIndex = railIndex;
+            if (railIndex == RailGear) { Render(); return; }
+            SelectTab(RailTab(railIndex));   // raises vm.Changed -> Render
+        }
+
+        /// <summary>The VM tab a content rail entry projects. Gear/Skills/Map have none.</summary>
+        private static InventoryTabKind RailTab(int railIndex)
+        {
+            switch (railIndex)
+            {
+                case RailArmor:    return InventoryTabKind.Armor;
+                case RailTrinkets: return InventoryTabKind.Outfits;
+                case RailPotions:  return InventoryTabKind.Consumables;
+                default:           return InventoryTabKind.Weapons;
+            }
+        }
+
+        /// <summary>The rail ordinal a VM tab lands on — the inverse of <see cref="RailTab"/>.</summary>
+        private static int RailIndexForTab(Tab tab)
+        {
+            switch (tab)
+            {
+                case Tab.Armor:       return RailArmor;
+                case Tab.Outfits:     return RailTrinkets;
+                case Tab.Consumables: return RailPotions;
+                default:              return RailWeapons;
+            }
+        }
+
+        private void SelectTab(InventoryTabKind kind) => SelectTab((Tab)(int)kind);
+
+        // ── SECTION SELECTION ───────────────────────────────────
+        // Section taps route to the VM; vm.SelectTab rebuilds Slots + resets selection and
+        // raises Changed -> Render repaints the rail, the stage and the pane. No local state
+        // mutation here — the VM stays the source of truth for which section is open.
         //
-        // (RebuildPaperDoll / PaperDoll* provided by InventoryPaperDoll partial)
-        // (BuildTabs / TabPackIcon provided by InventoryUIBuilder partial)
-        // Tab taps route to the VM; vm.SelectTab rebuilds Slots + resets selection and raises
-        // Changed -> Render repaints the tab row + grid. No local state mutation here.
+        // (RebuildHeader provided by the InventoryPaperDoll partial — which builds the header
+        //  band now; the hero CARD, its empty preview box and its VIEW GEAR ribbon were deleted
+        //  in WO-1133 and must not come back. See that file's header for why.)
+        // (BuildRoot / BuildRail / BuildPurseStrip provided by the InventoryUIBuilder partial)
         private void SelectTab(Tab t)
         {
             if (_vm == null) { _tab = t; return; }
             _vm.SelectTab((int)t);
         }
 
-        private void RebuildTabsRow()
+        private void RebuildRail()
         {
-            if (_tabsRoot == null) return;
-            for (int i = _tabsRoot.transform.childCount - 1; i >= 0; i--)
-                Destroy(_tabsRoot.transform.GetChild(i).gameObject);
-            BuildTabs(_tabsRoot.transform);
+            if (_railRoot == null) return;
+            for (int i = _railRoot.transform.childCount - 1; i >= 0; i--)
+                Destroy(_railRoot.transform.GetChild(i).gameObject);
+            BuildRail(_railRoot.transform);
         }
 
-        // (RebuildGrid + Build*Cells + BuildGearCell + NoRaycast + BuildEmptyNote provided by InventoryGrid partial)
+        // (RebuildStage + BuildGearSection + BuildItemGrid + BuildGearCell + NoRaycast provided by the InventoryGrid partial)
 
-        // (RebuildSidebar + BuildEquipAction — the WO-585 selection detail strip — provided by the InventorySidebar partial)
+        // (RebuildPane + BuildEquipAction — the always-present detail/compare pane — provided by the InventorySidebar partial)
 
-        private const float SbMidX0 = 0.250f, SbMidX1 = 0.690f;
+        // (SbMidX0/SbMidX1 deleted with the thin detail STRIP they positioned — WO-1133 replaced
+        //  that strip with the always-present pane, which owns its own 30% column.)
 
         // (HELPERS — hero data / rarity / glyphs / uGUI low-levels live in this file as the canonical single definition for the merged partial type)
         private int HeroLevel()
