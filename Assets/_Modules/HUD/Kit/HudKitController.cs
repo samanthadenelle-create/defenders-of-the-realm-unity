@@ -2191,7 +2191,7 @@ namespace DeNelle.HUD.Kit
             // AddDockTab's rows resolve to EXACTLY 112px (0.16 * 700), so any smaller panel puts
             // them under the floor and ClampMinTouch would grow them about their centres into each
             // other — the documented WO-852/865/868 overlap trap.
-            dockPanelRt.sizeDelta = new Vector2(400f, 700f);
+            dockPanelRt.sizeDelta = new Vector2(400f, DockPanelHeightPx);
             var dockTabRt = (RectTransform)_slideDock.tab.transform;
             dockTabRt.anchorMin = new Vector2(0f, 0.5f);
             dockTabRt.anchorMax = new Vector2(0f, 0.5f);
@@ -2208,6 +2208,15 @@ namespace DeNelle.HUD.Kit
             // door. PauseController/SettingsController stay installed by PauseHudBootstrap; this
             // tab is the caller that opens Pause/Quit-to-Title via PauseGate.RequestBack().
             AddDockTab(_slideDock.panel, 4, "Pause",       () => PauseGate.RequestBack());
+            // Owner, 2026-08-22: "the only entrance to the Realm shop is from an interaction
+            // with a person in town" - so the store was unreachable without walking to the
+            // vendor, and unreachable at all outside town. This is a SECOND CALLER of the
+            // door that already exists (PanelRouter.Open(PanelId.RealmStore), registered by
+            // PackStoreBootstrap and used by RealmStoreVendor); it is not a second opener.
+            // It lives here rather than on the bottom action bar deliberately: that bar is
+            // capped at MaxVisibleFaces = 6 and a seventh face would re-open the "8th face"
+            // problem WO-911 dissolved on purpose.
+            AddDockTab(_slideDock.panel, 5, "Realm Store", OpenRealmStore);
 
             Register("chatDock", WrapAsWidget("chatDock", _slideDock.root));
         }
@@ -2228,11 +2237,31 @@ namespace DeNelle.HUD.Kit
         //     on colour" half of the report.
         // The menu's one gear is now the drawer HANDLE (BuildSlideTab), which carries the same
         // sprite on the kit's gilt plate. Rows are uniformly label-only — ONE treatment.
+        // ── dock sizing is DERIVED, never authored twice (2026-08-22) ──────────
+        // The row count used to be a `const int n = 5` in here while the panel height
+        // was a separate literal 700f up in BuildSlideDock, tuned so that
+        // 700 * (1/5 - 2*0.02) = EXACTLY MinTouchPx. Two numbers, one invariant,
+        // in two methods - so adding a sixth tab silently drove rows to 106px, under
+        // the floor, where ClampMinTouch grows them about their centres INTO each
+        // other. That is the documented WO-852/865/868 overlap trap, and it would
+        // have been re-entered by the edit that adds a tab, which is the worst
+        // possible time to discover it.
+        //
+        // Both numbers now come from DockTabCount. Add a tab -> the panel grows to
+        // keep every row at the touch floor, automatically. Do NOT re-introduce a
+        // literal height.
+        private const int DockTabCount = 6;   // Chat/Leaderboard/Music/Settings/Pause/Realm Store
+        private const float DockRowGapFrac = 0.02f;   // gap above AND below each row
+
+        // Height that keeps a row at exactly the kit touch floor for DockTabCount rows.
+        private static float DockPanelHeightPx =>
+            ElarionUiKit.MinTouchPx / ((1f / DockTabCount) - (2f * DockRowGapFrac));
+
         private void AddDockTab(RectTransform panel, int i, string label, Action onTap)
         {
-            const int n = 5;   // Chat/Leaderboard/Music/Settings/Pause (Pause folded in, flag A)
-            float y1 = 1f - (i / (float)n) - 0.02f;
-            float y0 = 1f - ((i + 1) / (float)n) + 0.02f;
+            const int n = DockTabCount;
+            float y1 = 1f - (i / (float)n) - DockRowGapFrac;
+            float y0 = 1f - ((i + 1) / (float)n) + DockRowGapFrac;
             ElarionUiKit.BuildObsidianButton(panel, label,
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
                 new Vector2(0.06f, y0), new Vector2(0.94f, y1), onTap);
@@ -2245,6 +2274,25 @@ namespace DeNelle.HUD.Kit
                 DeNelle.HUD.HelpMenu.Instance.ToggleOverlay();
             else if (!PanelRouter.Open(PanelId.GameGuide))
                 FlowTrace.Warn("HudKit", "dock: neither HelpMenu nor GameGuide available for Settings");
+        }
+
+        // Realm Store tab -> the same PanelId the world vendor opens.
+        //
+        // Shaped after RealmStoreVendor.Open deliberately: PanelRouter.Open returns
+        // FALSE when no opener is registered, and an unchecked call would look to the
+        // player like the store is broken and to us like nothing happened. A refusal is
+        // reported, never swallowed.
+        private void OpenRealmStore()
+        {
+            Guard.Try("RealmStore", "open the Realm Store from the dock", () =>
+            {
+                if (PanelRouter.Open(PanelId.RealmStore))
+                    FlowTrace.Step("RealmStore", "dock tab opened PanelId.RealmStore.");
+                else
+                    FlowTrace.Fail("RealmStore",
+                        "PanelRouter.Open(PanelId.RealmStore) returned FALSE from the dock - the " +
+                        "opener is not registered (PackStoreBootstrap did not run in this scene).");
+            });
         }
 
         // ── dock intents (parity with the retired SocialAccessCluster) ──────
