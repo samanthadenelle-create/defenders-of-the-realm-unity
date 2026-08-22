@@ -209,8 +209,13 @@ ingredient floor-scatter placements beyond the scene bake) · `lore-fragments.js
 
 - `Environment/NightTorchLightSystem.cs` — unchanged: self-bootstrap DDOL, **hard-gated to scene "Village2"**
   (`TargetScene`, `:50`, `:105-125`); warm night light ramp, mobile-cheap.
-- `Environment/TorchFireController.cs` — unchanged: scene-placed per-torch flame VFX + combat-intensify
-  (OverlapSphere/Update, fine ≤8 torches).
+- `Environment/TorchFireController.cs` — **DELETED 2026-08-21 (WO-992).** The 08-02 entry called it
+  "scene-placed per-torch flame VFX" — it was never placed in any scene: its GUID hit ZERO
+  `.unity`/`.prefab`/`.asset` and nothing ever `AddComponent`ed it, so the `OverlapSphere`-in-`Update`
+  cost this catalog and `docs/UNITY_BEST_PRACTICES_AUDIT.md:55` both flagged was never actually paid.
+  Superseded by `NightTorchLightSystem` + `DungeonDresser` + the per-builder torch code. Its one
+  reference — `NightTorchLightSystem.AttachToExistingTorches()`, an always-empty `FindObjectsByType`
+  sweep — was removed in the same commit (a deletion here is a two-file change, never a file removal).
 - `Data/MasterAssetCatalog.cs` — unchanged SO catalog; the 2026-06-12 "no consumer found" flag was NOT re-audited
   this pass — still treat as possibly dormant.
 - `UI/` — **`GameOverUI.cs` is GONE** (folder now holds only README.md). The old "duplicate death-screen path"

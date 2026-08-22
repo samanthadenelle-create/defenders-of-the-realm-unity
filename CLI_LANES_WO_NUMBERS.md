@@ -95,7 +95,19 @@
 > PROD-003 (Realm Store permanent storefront), PROD-004 (baked-twin footprint),
 > PROD-005 (default shield renders through the hero body; survives a dungeon->town port).
 
-> ## ⚠ RECONCILED 2026-08-21 (CLI): main line next free = **1135**.
+> ## ⚠ RECONCILED 2026-08-21 (CLI): main line next free = **1139**.
+> *(CLI seat minted **WO-1137** + **WO-1138** and bumped 1137 -> 1139 in this SAME edit.
+> **1137** = the hardcoded fallback catalog palette covers 3 of 28 rows, has drifted 4x, and
+> presents a silent wrong-game as success - delete it and fail loud, or generate it.
+> **1138** = the hollow-pass ratchet only inspects a 4-line window, so 5 of 6 hollow passes in
+> one suite escaped it. Both found during the 2026-08-21 gate sweep.)*
+
+> *(CLI seat minted **WO-1135** + **WO-1136** and bumped 1135 -> 1137 in this SAME edit.
+> **1135** = WALL TIER MATERIALS ARE NOT TRACKED (all three tiers resolve only via embedded
+> FBX materials; `Assets/Resources/Walls/Materials/` does not exist). **1136** = staff_A has no
+> decidable sheathe orientation (symmetrical taper, relGap=0). Both surfaced by NEW oracles on
+> 2026-08-21 - pre-existing debt newly made visible, not new breakage.)*
+
 > *(**UI seat (Claude UI)** minted **WO-1132** and bumped 1132 -> 1133 in this SAME edit. ⚠ minted from the CLI MAIN LINE rather than the UI block (next free 1050); no collision, but the blocks are disjoint for a reason — see the ticket. **WO-1132** = THE NIGHT
 > MARKET — Realm Pack Store presentation redesign. The store works the way a RECEIPT works: five
 > browsable SKUs of 25 as 132 px text rows in one scroll column, no art, no price relationship
@@ -185,7 +197,39 @@
 > never as BUILD STATUS** -- "under construction"/"coming soon"/"dev"/"WIP" are BANNED player-facing
 > strings and get a REGRESSION ORACLE, not a comment, because that is the rule most likely to rot.
 > Status READY TO IMPLEMENT, 3 open rulings. No code yet.)*
-> ## âš  RECONCILED 2026-08-17 (UI seat): UI seat next free = **1052**.
+> ## âš  RECONCILED 2026-08-17 (UI seat): UI seat next free = **1054**.
+> *(UI seat minted **WO-1053** and bumped 1053 -> 1054 in this SAME edit. **WO-1053** = BATTLE PACKS +
+> MONTHLY REWARD PACKS - a RENUMBER, not a new ticket: `WORK_ORDER_battle_and_monthly_packs.md` had no
+> number in its filename, so `board_build.py` keyed it **WO-?** and bucketed the owner's TOP PRIORITY
+> item with the unnumbered parked tickets, where nothing could cite it. `git mv` so history follows;
+> content unchanged. Also assigned a real seat: CLI implements, UI seat authored the design pass.
+> ⛔ RE-VERIFIED 2026-08-21 per its own aged banner, and FOUR THINGS HAD MOVED since 2026-06-28: (1)
+> glimmer is stripped from every pack (owner ruling, pinned by BuyGateAndPriceLadderRegression) and a
+> pass tier is pack contents by another name; (2) **THE COSMETIC RENDER SEAM IS LANDING RIGHT NOW** -
+> `HeroBodySwapper.cs:1058` Attach + `HeroArmorVisual.cs:371/889` RefreshOn now exist and
+> `CosmeticApplier.cs` is modified-uncommitted, so the ruling's "called from nowhere" premise was true
+> when written and is being repaired; both families pay out mostly in COSMETICS, and a pack
+> disappoints once where a season disappoints for a month; (3) **`ISkrLedger` DOES NOT EXIST** - the
+> only hit in the tree is a doc comment at `IPiPlatform.cs:8`, and neither does `LocalSkrLedger`, so
+> every `skr` Grant has no writer and §9's V1 acceptance line cannot be met; (4) the price ceiling
+> moved $4.99 -> $49.99 (WO-1121), so a pass/card can price on the full ladder. OWNER RULINGS closed
+> four open questions: calendar-month seasons ~30 tiers; pass buyable with EARNED SKR; NEVER sell
+> tiers; free lane drips no SKR. File `WorkOrders/WORK_ORDER_1053_battle_and_monthly_packs.md`, READY.)*
+> *(UI seat minted **WO-1052** and bumped 1052 -> 1053 in this SAME edit. **WO-1052** = REALM STORE
+> LANDMARK BEACON, owner request *"some special aura around the realm store so they always know where
+> it is"*. ⛔ THE OBVIOUS BUILD HAS ALREADY FAILED ON RECORD: a persistent Family-A loop is exactly
+> what `VfxLoopBudget.cs:8-25` documents saturating, and TWO of the six cited captures name the POI
+> markers themselves - `Poi_Landmark` and `Poi_NodeAura` SKIPPED at cap. Village tier is 24 and it is
+> where a phone spends the most wall-clock. So the layer that GUARANTEES findability costs ZERO loop
+> slots: Layer A = geometry + a real Light (mast above the roofline), Layer B = the near aura,
+> proximity-gated via VfxAuraProximityCuller with GearAura single-seat handle discipline, Layer C =
+> a compass bearing via HudCompassWidget.ObjectiveProvider - WITHOUT C the request is unmet, since an
+> aura shows nothing to a player facing away. Greyscale is the acceptance channel per EnemyAuraVFX:
+> the store is a metronomic vertical MAST against the Heart-as-mass and the portal-as-doorway. ⛔ The
+> store stays baked hub furniture with NO catalog row (PROD-003: a row makes it sellable/movable/
+> damageable and *"a raid takes revenue OFFLINE"*). ⛔ THE VFX KEY IS HELD FOR AN OWNER TAG per the
+> standing no-creative-pick rule - Layers A and C are unblocked and can start now. File
+> `WorkOrders/WORK_ORDER_1052_realm_store_landmark_beacon.md`, READY.)*
 > *(UI seat minted **WO-1051** and bumped 1051 -> 1052 in this SAME edit. **WO-1051** = DAILY CHEST
 > PANEL LAYOUT - the two claim buttons are authored ON TOP OF the shared Close bar. Proven as
 > ARITHMETIC, not a hunch: the CTAs sit at y 0.10-0.28 (x 0.06-0.48 / 0.52-0.94) and

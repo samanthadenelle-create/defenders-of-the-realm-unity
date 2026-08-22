@@ -94,3 +94,129 @@ above — pick and argue, do not build all of them:
 
 Async PvP, matchmaking, trophies, shields, base snapshot export (WO-730). Ghost-PvP remains
 a later SOURCE SWAP on WO-1026's record, not a system to build here.
+
+---
+
+# THE PROPOSAL — delivered 2026-08-21 (read-only design agent)
+
+## RECOMMENDATION: shape 1 (troop attrition + per-camp cooldown)
+
+Chosen because it is the only shape whose sink and reward are **already disjoint in shipped
+code**, so the bound needs no invention:
+
+> `RaidScoring.ComputeLoot` returns `new ResourceCost(food, crystals)` and nothing else.
+> **Raids pay ZERO wood and ZERO iron.** Every troop costs wood + iron + food (`troops.json`).
+> The loop therefore CANNOT FUND ITS OWN INPUT. That is the structural bound, and it shipped.
+
+**The one-sentence acceptance answer:** *"My town is finished, so I raid - because raiding is
+the renewable source of the crystals that buy the Cathedral and the queue slots, and my warband
+is the thing that gets spent to get them."*
+
+Satisfies the covenant exactly: the loop pays into CONVENIENCE (the Echo-gated 250-crystal queue
+slot) and BEAUTY (the crystal-priced ladders the sink-cap oracle exempts) - never power.
+Veterancy (max x1.30) is earned by playing well and is not for sale.
+
+## THE BOUND - three layers, two already true
+
+1. **Structural (shipped):** raids pay no wood/iron; training costs both. Net-negative by design.
+2. **Already capped:** food is one of the three capped resources; 34,000 with a L6 container.
+3. **MUST BE BUILT: the crystal bound.** Crystals are uncapped by design. With no cooldown,
+   three camps at ~3 min each is an unbounded crystal faucet - and crystals buy instant-finish,
+   which **defunds the very timer ladder that paces the game**. This is why the WO-728 cooldown
+   is a PREREQUISITE, not a nicety: clears/day x loot/clear is the daily crystal ceiling.
+
+## THE TREADMILL FAILURE MODE - named, so it can be avoided deliberately
+
+**Escalation that scales reward in lockstep with difficulty.** Garrisons already scale to the
+player (`enemyLevel = max(baseEnemyLevel, playerLevel + levelOffset)`). If the clear ladder also
+lifts `rewardMultiplier` proportionally, day 200 is arithmetically identical to day 30 with
+bigger numbers on both sides. **This is the DEFAULT outcome if nobody decides otherwise.**
+
+Two guards:
+- **Reward escalation sub-linear to difficulty, and the ladder TERMINATES.** `TribeManager`
+  already has the terminating precedent (`ClearsUntilGone`, `RespawnReductionPerClear`) - a
+  cleared tribe returns smaller and eventually stops. Without a terminal rung the loop ends by
+  becoming unwinnable, which is worse than ending.
+- **The ratchet lives OUTSIDE the loop.** Stars and loot are the loop's FUEL; they cannot also
+  be its PROGRESS. Day 30 feels like progress only if the player can point at a building or a
+  queue slot that raiding bought.
+
+## REJECTED
+
+- **Shape 2 (repairs) - REJECT as the loop, ADOPT as the stake.** It pays nothing ("you don't
+  lose your town" is a stake, not a reward), and its sink is already drained PASSIVELY by
+  `EchoRepairService` with no player decision in it. But once loss stakes are ruled, the repair
+  bill becomes the consequence half of shape 1 at zero extra design cost.
+- **Shape 3 (prestige) - REJECT.** No supporting machinery; would need an owner ruling on what
+  resets on a LIVE published game where a wrong answer invalidates a real player's build, and
+  would likely force a schema bump. Not costed.
+
+## CORRECTIONS TO THIS TICKET'S OWN NUMBERS
+
+- "26 research perks" is wrong: `building-tiers.json` is 6 buildings / **26 TIERS** / **17 PERKS**.
+  Magnitude unchanged; say it correctly next time.
+- "WO-728 is unbuilt" was true when the audit ran and is **now FALSE** - `RaidCooldownService.cs`
+  + `RaidCooldownRecord.cs` are in the tree as of 2026-08-21, server-anchored via `TimeSource`.
+
+## OWNER-OWED NUMBERS (nothing below is invented)
+
+1. Cooldown hours per camp: Regular / Hard / Extreme. **This IS the crystal bound.**
+2. Attrition: `_recoverySeconds` is **120s flat** today. At 120s attrition is effectively free
+   and there is no loop. Does it scale with camp difficulty, and to what?
+3. Does the clear ladder terminate, and where?
+4. Does reward escalate with the ladder at all? Linear = treadmill by construction.
+5. Loss stakes (parked from WO-1026) - not needed to ship, but shape 1 is better with it.
+
+**No schema bump requested. No new currency. Nothing here sells power.**
+
+---
+
+# OWNER RULINGS — 2026-08-21 (answering the five open numbers above)
+
+**1. COOLDOWN: Regular 4h / Hard 8h / Extreme 12h.** This is THE crystal bound. At
+Extreme/3-star/100% razed a clear pays 121 crystals, so 12h = ~2 clears/day = ~242 crystals/day,
+sitting alongside the 200-350/day committed income the WO-1129 model measured. Roughly DOUBLES
+endgame crystal income without trivialising the 45,690-crystal content ladder. ⛔ Do not shorten
+this without re-deriving the daily ceiling - crystals buy instant-finish, so a shorter cooldown
+defunds the timer ladder that paces the entire game.
+
+**2. ATTRITION SCALES WITH CAMP DIFFICULTY** - Regular ~5min / Hard ~20min / Extreme ~45min,
+replacing the flat 120s at `RaidDeployController.cs:74`. Derived from authored troop
+`buildSeconds` (270-600s/unit) so recovery is meaningfully cheaper than retraining but never
+free. At 120s flat there is no sink and therefore no loop.
+
+**3. REWARD ESCALATION: SUB-LINEAR, AND THE LADDER TERMINATES.** Difficulty may climb faster
+than reward, never in lockstep. Copy `TribeManager`'s terminating precedent (`ClearsUntilGone`,
+`RespawnReductionPerClear`): after N clears a camp stops escalating, so the loop can never become
+unwinnable. ⛔ Linear escalation is a treadmill BY CONSTRUCTION and is the default outcome if
+nobody decides otherwise - it is now decided otherwise.
+
+**4 + 5 (ladder terminus, loss stakes)** remain owner-owed but neither blocks shipping shape 1.
+Loss stakes stay parked from WO-1026; shape 1 is better with them and does not need them.
+
+**Prerequisite status:** WO-728 is IN FLIGHT as of this ruling - `RaidCooldownService.cs` +
+`RaidCooldownRecord.cs` are in the tree, server-anchored through `TimeSource` (never
+`DateTime.UtcNow`), with the backwards-clock refuse-don't-punish pattern from WO-912 §7.3.
+
+---
+
+# OWNER RULING — the ladder terminus (2026-08-21, verbatim)
+
+**PER-CAMP TERMINUS, not a flat count:**
+
+| Camp | Cooldown | Escalates for | Days to master at max engagement |
+|---|---|---|---|
+| Regular | 4h (6 clears/day) | **12 clears** | ~2 days |
+| Hard | 8h (3 clears/day) | **18 clears** | ~6 days |
+| Extreme | 12h (2 clears/day) | **24 clears** | ~12 days |
+
+- **After the terminus, camps REMAIN REPEATABLE at capped difficulty. They do NOT disappear.**
+  ⛔ This is where the design diverges from `TribeManager`'s `ClearsUntilGone`: copy the SHAPE of a
+  terminating ladder, NOT the vanishing. A camp that disappears removes the loop the ticket exists
+  to create.
+- **Rewards grow MUCH SLOWER than difficulty and STOP GROWING AT THE SAME TERMINUS.** Both curves
+  stop on the same clear count, so there is never a rung where difficulty has moved and reward has not.
+
+Owner's stated intent: *"a visible accomplishment without creating an endless stat treadmill."*
+The 2 / 6 / 12-day mastery arc is the deliberate product of the ruled cooldowns above - if a
+cooldown is ever retuned, the mastery arc moves with it and the terminus counts must be re-derived.

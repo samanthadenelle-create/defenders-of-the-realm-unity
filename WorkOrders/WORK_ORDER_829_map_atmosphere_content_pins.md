@@ -103,3 +103,50 @@ No army-gate bypass. Elarion not Avalon.
 > **OWNER RULING 2026-08-21 (verbal, this session):** Owner: leave it to do.
 
 > **CLI 2026-08-21:** 601806082 - Core half (RealmPins + RealmAtmosphereStyle) landed. REMAINING: the parchment rendering in RealmMapPanel, and a producer for content pins (they read 0 until one publishes).
+
+---
+
+## REMAINING — named (do NOT flip DONE until both land)
+
+| # | Hole | Evidence |
+|---|---|---|
+| **R1** | **Parchment never paints atmosphere** | `RealmMapPanel` has **zero** refs to `RealmPin` / `RealmAtmosphereStyle` / `Withering`. `BuildNode` still tints by `NodeState` only (gold/cleared/fog). Plate is flat parchment + gold trim — no Withering edge band. |
+| **R2** | **VM has no biome field** | `RealmMapVM.NodeRow` omits `Biome` even though `RealmRegionDef.Biome` exists in catalog. |
+| **R3** | **Pin board stays empty** | Only publish path is `VillageHudController.SetMinimapPoi`; **no callers**. `TownHudBridge.PushMinimapPois` was deleted. Minimap + parchment read 0 pins until a producer publishes. |
+
+Core that already landed (keep; do not rebuild): `RealmPins` / `RealmPinBoard`, `RealmAtmosphereStyle`, `RealmMapCatalog.Withering`, minimap `LayoutPins` consumer.
+
+---
+
+## SOLUTION — concrete close-out (research 2026-08-17)
+
+### S1 — Wire parchment to the tables that already exist
+
+1. **`RealmMapVM.NodeRow`** — add `Biome` (+ optional epithet) from `RealmRegionDef` via `RealmAtmosphereStyle.Biome(...)`.
+2. **`RealmMapPanel.BuildNode`** — for non-locked nodes: ring = `Biome(…).Ring`, glyph = style glyph; home → `Biome("home")`. Locked/fog: no spoiler tint.
+3. **Open/BuildUI** — if `RealmMapCatalog.Withering.EdgeBorder`, add darkened rim `Image` using `RealmAtmosphereStyle.WitheringEdge`; detail line = `WitheringLore`. Never invent weekly threat.
+4. **Pin layer** — subscribe `RealmPinBoard.Changed`; draw ≤ `MaxVisiblePins` with `RealmAtmosphereStyle.Pin(kind)`; respect `RevealsDetail(regionState)`; show `+N` overflow.
+
+### S2 — Named pin producers (board stays empty without these)
+
+Publish under **stable source ids** (replace-by-source, never rebuild one flat list every tick — that bug is documented in `RealmPins.cs`):
+
+| sourceId | Kind | Data |
+|---|---|---|
+| `"hero"` | You | hero world XZ |
+| `"dungeons"` | Dungeon | AuthoredPortal seats from `DungeonWorldPortalSpawner` |
+| `"raids"` | RaidTarget | available camps — **marker only**; tap re-checks army gate |
+| `"army"` | Army | barracks built |
+| `"rumors"` | Rumor | tracked rumor with world anchor (if any) |
+
+Ship static/authored pins first; live discovery writer still depends on WO-827.
+
+### S3 — Acceptance (closes PARTIAL)
+
+- [ ] Parchment shows Withering edge + biome-tinted nodes  
+- [ ] ≥3 pin kinds live when content exists (You + one other + one threat/army/dungeon)  
+- [ ] Locked regions hide spoilery pin detail  
+- [ ] Raid pin never bypasses army gate  
+- [ ] No Avalon copy; `COMPILE_GATE_OK`
+
+**Do not** mark DONE on core-only. R1+R2+R3 are the player-felt half.

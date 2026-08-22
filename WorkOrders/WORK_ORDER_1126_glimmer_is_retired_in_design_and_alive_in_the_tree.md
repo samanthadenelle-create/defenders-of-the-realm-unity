@@ -153,3 +153,44 @@ which option is chosen** — it costs nothing and removes a loaded gun.
 - Do **not** leave the suites passing on a half-migrated tree.
 
 > **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — STILL VALID. Evidence: `CryptoPaymentManager.cs:209; GlimmerCurrencyService.cs` — purge needs owner ruling. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.
+
+
+---
+
+# ★★ OWNER RULING 2026-08-21 - **PURGE GLIMMER. FULL REMOVAL.**
+
+Owner verbatim: *"purge glimmer"*. This unblocks §3 and closes the ticket's one open ruling.
+Consistent with the same day's stripping of glimmer from every pack (*"nothing real and money has
+never been active"*) and with the standing canon *"we removed glimmer long time ago, we use crystals"*.
+
+## AND: **RETIRE `BattlePassManager`** (same ruling breath: *"retire battlepassmanager"*)
+This SUPERSEDES the earlier KEEP/dormant ruling. The KEEP was granted because
+`WORK_ORDER_battle_and_monthly_packs` was thought to depend on it; that ticket has since been
+implemented on a NEW runtime (`BattlePassService` + `MonthlyCardService`), so the dependency that
+justified keeping it no longer exists. It is now a SECOND battle-pass runtime whose premium purchase
+costs **2400 Glimmer** - i.e. it is part of the glimmer surface being purged, not a bystander.
+⚠ **Lift its `LevelUpVFX` bridge before deleting** - that bridge is the one live thing it owns.
+
+## HOW MUCH CARE THIS ACTUALLY NEEDS - OWNER CORRECTION 2026-08-21
+
+Owner verbatim: **"there are no live games as pay path has never been activated"**.
+
+⚠ An earlier draft of this section (written minutes before, and WRONG) called this a "live-game
+constraint" and demanded a careful balance-preserving MIGRATION with an owner ruling on what happens
+to banked glimmer. **That caution was misplaced and is retired.** The app is published on the Solana
+dApp Store, but **the payment path was never activated - nobody has ever bought anything, so no
+player holds a purchased glimmer balance.** There is no real value to protect and no owner ruling
+owed on conversion rates.
+
+**So this is a CLEAN PURGE, not a migration:**
+- Delete the glimmer surface outright - service, currency kind, pack pricing, cosmetic prices, quest
+  and kill rewards, HUD readouts, the 11 data files.
+- **Still read-migrate the save field so an existing dev/test save LOADS** rather than throwing on an
+  unknown field. That is ordinary defensive deserialisation, not balance preservation - an absent or
+  present `glimmer` field must simply be ignored.
+- **No schema bump.** v38 stands (`SaveSchema.CurrentVersion`).
+- No conversion to crystals, no grandfathering, no compensation flow. There is nothing to compensate.
+
+**The general lesson, recorded so it does not recur:** "published on a store" and "taking money" are
+DIFFERENT facts, and this repo's canon says the first loudly while the second was never true. Check
+which one actually applies before pricing a change's risk.

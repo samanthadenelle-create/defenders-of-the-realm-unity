@@ -4,7 +4,7 @@
 
 # WORK ORDER 728 — Repeatable Raid Economy (Cooldown, Stars, Loot)
 
-**Status:** CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial.
+**Status:** IMPLEMENTED 2026-08-21 - per-camp cooldown 4h/8h/12h + attrition 5/20/45min, server-anchored via TimeSource. NOTE: this WO was marked CLOSED by the 2026-08-21 owner range sweep (WO 0-800) while its own same-day audit read OPEN and UNBUILT; the audit was correct and it is now built.
 **Priority:** P1  
 **Silo:** Economy / Meta  
 **Depends on:** WO-727  

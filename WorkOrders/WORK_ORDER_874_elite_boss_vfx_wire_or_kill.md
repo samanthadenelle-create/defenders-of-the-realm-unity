@@ -33,3 +33,19 @@
 
 ## 4. Do NOT
 - Leave a fully-written-but-never-attached controller in the tree. Author no new VFX (Mirza Beig owned). WO-872 §4.
+
+
+---
+
+# OWNER RULING RECONFIRMED 2026-08-21 - **WIRE IT. THE 2026-08-04 RULING STANDS.**
+
+Owner verbatim: *"874 wire ruling stands"*. This closes the BLOCKED status. Execute §2's "Wire it"
+path exactly as originally ruled - this is not a new decision, it is the same one, restated because
+a later commit routed AROUND it with no reversal recorded.
+
+⛔ **THE FAILURE MODE TO AVOID IS THE ONE THAT ALREADY HAPPENED HERE.** Commit `4c1da079` delivered
+the "tell" via statics called from `Enemy.cs:720` / `Enemy.cs:2701` INSTEAD of attaching the
+controller - so the aura and `OnEliteAttack` have still never run, and the ticket read as progressed
+while the ruled behaviour did not exist. Do not repeat that shape: `EliteVFXController` must be
+genuinely `AddComponent`'d on the elite/boss spawn path so its spawn / aura / attack / death fire.
+A source-lint asserting a real `AddComponent<EliteVFXController>` is part of the work.

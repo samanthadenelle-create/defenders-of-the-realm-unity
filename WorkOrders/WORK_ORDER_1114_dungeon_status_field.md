@@ -224,3 +224,130 @@ dungeon, so they are creative canon: **ratify or rewrite (§9.1)**. §9.2 (`resc
 data layer, both block the door UI.
 
 > **CLI 2026-08-21:** 62afe3201 - data half landed and DUNGEON_STATUS_OK ran green headlessly. REMAINING: door appearance (DungeonWorldPortalSpawner.ApplyDoorState does not exist - the oracle PARTIAL-SKIPs it by name), the backend, and the dev menu.
+
+---
+
+## REMAINING — named (PARTIAL stays until these land)
+
+| # | Hole | Evidence |
+|---|---|---|
+| **R1** | **Nothing gates a door** | `DungeonPortal` still always `EnterDungeon` — catalog answers, no caller asks (`:126` / backstop `:181`). |
+| **R2** | **No sealed dialogue** | `DungeonSealedDoorPanel` does not exist. |
+| **R3** | **No door appearance** | `DungeonWorldPortalSpawner.ApplyDoorState` **absent**. Oracle Case 5 `[door-appearance]` emits `PartialSkip` by name until the symbol exists — then auto-asserts measurement helpers + `SwapInSharedStructureAsync` re-seat. |
+| **R4** | **FeatureFlags home** | Kill switch still inlined in `DungeonStatusService` (`ff.dungeonstatus`). Move to `FeatureFlags.DungeonStatus`; delete the duplicate helper. |
+| **R5** | **No backend** | No `api/dungeon-status.js` / schema table. |
+| **R6** | **No dev menu** | Cannot flip statuses without a rebuild (needed to prove AC-2). |
+| **R7** | **Owner §9 open** | Copy UNRATIFIED; `rescue` vs `collapsed`; sealed door shows name+depth? |
+
+Data half that landed (keep): `DungeonStatusCatalog`, `DungeonStatusService`, canon-strings keys, `DungeonStatusRegression` (Cases 1–4 green; Case 5 honest skip).
+
+---
+
+## SOLUTION — concrete close-out (research 2026-08-17)
+
+Follow `WORK_ORDER_1114_IMPLEMENTATION_PLAN.md` Phase 2 → 4. Sites are already named — no re-derivation.
+
+### S1 — Client experience (closes R1–R3; shippable without backend)
+
+1. **Create** `Assets/_Modules/Village/Buildings/DungeonSealedDoorPanel.cs`  
+   Pattern = `JewelPolishConfirmPanel` (`BuildObsidianModal` + `PanelManager`). Headline/body only — no error chrome.
+
+2. **Edit** `DungeonPortal.cs` (four surgical points from plan §2d):
+   - Each proximity tick: `_door = DungeonStatusCatalog.For(_dungeonId)`
+   - Interact: if open → `EnterDungeon`; else → sealed panel
+   - Prompt text uses sealed headline when closed
+   - First line of `EnterDungeon`: `if (!IsOpen) { ShowSealedDoor(); return; }`
+
+3. **Add** `DungeonWorldPortalSpawner.ApplyDoorState(Portal, DungeonDoorInfo)`  
+   Call from **`BuildPortal` and after `SwapInSharedStructureAsync` re-seat**.  
+   Default closed look: strip threshold aura + circle (dark/inert). **Do not invent sigil art** until owner tags keys (`seal`/`rubble`/`water`).  
+   → Case 5 stops PartialSkip the moment the symbol exists.
+
+### S2 — Hygiene + prove without network (closes R4, R6)
+
+4. Move kill switch to `FeatureFlags.DungeonStatus => Get("dungeonstatus", defaultOn: true)`; delete inline helper.  
+5. **Create** `Assets/Editor/DungeonStatusDevMenu.cs` — write/delete `persistentDataPath/dungeon-status-cache.json` stub so a sealed door is provable headlessly / in-editor with **no** backend.
+
+### S3 — Backend last (closes R5)
+
+6. `api/dungeon-status.js` public GET + `dungeon_status` table + admin write. Client is correct after S1+S2 with cache stub alone.
+
+### S4 — Owner before “felt done” (R7)
+
+- Ratify or rewrite the four default copy pairs in `canon-strings.json`.  
+- Rule `rescue` as own enum vs `collapsed` body variant.  
+- Rule: sealed door still shows **name + depth**? (recommend: yes — teases world, does not hide the door).
+
+### Acceptance that flips PARTIAL → DONE
+
+- [ ] Sealed stub visibly changes door + dialogue; open still enters  
+- [ ] Mid-run status flip never kicks an active delve  
+- [ ] Case 5 `[door-appearance]` asserts (no PartialSkip)  
+- [ ] Dev menu can flip without rebuild  
+- [ ] Backend optional for first ship; required for remote ops  
+
+**Do not** hide portals or gate in `SceneRouter`. **Do not** mark DONE on data-only.
+
+---
+
+## LANE PASS 2026-08-21 (edit-only agent) — R1–R6 CLOSED. Not gated, not committed.
+
+Built to the owner's stated order: sealed panel + the four surgical `DungeonPortal` edits, then
+`ApplyDoorState`, then the dev menu, then the backend last. Nothing here has been compiled — no
+Unity, no `COMPILE_GATE_OK`, no `REGRESSION_OK`. Brace-balance + NUL check ran clean on every `.cs`.
+
+| Hole | Now | Where |
+|---|---|---|
+| **R1** gating | **CLOSED** | `DungeonPortal.cs` — four edits, listed below. `EnterDungeon` is never handed to the interact button while the door is closed, and a backstop refuses it anyway. |
+| **R2** dialogue | **CLOSED** | `Assets/_Modules/Village/Buildings/DungeonSealedDoorPanel.cs` **(NEW)** — `BuildObsidianModal` + the null-guard-and-destroy + `PanelManager` Register/NotifyOpened/NotifyClosed. Also the SINGLE owner of the per-status canon-copy fallback. |
+| **R3** appearance | **CLOSED** | `DungeonWorldPortalSpawner.ApplyDoorState(Portal, DungeonDoorInfo)` — the one appearance owner. Case 5 `[door-appearance]` now ASSERTS instead of PartialSkipping. |
+| **R4** flag home | **CLOSED** | `FeatureFlags.DungeonStatus => Get("dungeonstatus", defaultOn: true)`. The inlined PlayerPrefs copy in `DungeonStatusService` was **deleted in the same edit** — there is never a second authority. |
+| **R5** backend | **WRITTEN** | `api/dungeon-status.js` **(NEW)**, `dungeon_status` table + all-open seed in `api/schema.sql`, probe row in `api/admin/db.js`. ⚠ NOT DEPLOYED — `vercel.json` disables git deploys, so someone must run `vercel --prod`, and the SQL must be run by hand in the Neon editor. |
+| **R6** dev menu | **CLOSED** | `Assets/Editor/DungeonStatusDevMenu.cs` **(NEW)** — writes the REAL cache file, so a sealed door is demonstrable with no server. |
+| **R7** owner §9 | **STILL OPEN** | unchanged, see below. |
+
+### The four surgical `DungeonPortal` edits (nothing else in that file changed)
+1. **Door state on the existing 0.15 s proximity tick** — `_door = DungeonStatusCatalog.For(_dungeonId)`.
+   No second timer. A state change re-renders a showing prompt so a door that closes stops offering entry.
+2. **The gate, at the interact registration.** Open → `Request(..., "Enter: " + name, EnterDungeon)`.
+   Closed → `Request(..., DoorHeadline(), ShowSealedDoor)`. `EnterDungeon` is never handed over.
+3. **`ShowPrompt()` prints the authored headline when closed.** The bubble stays legacy `TextMesh`
+   ON PURPOSE — rewriting it in TMP would hard-fail `[ui-obsidian]`.
+4. **The backstop, first statement of `EnterDungeon()`** — `if (!DungeonStatusCatalog.IsOpen(...))`
+   warns with id/state/provenance, resets `_loading` (dead-latch discipline: a flip back to open must
+   leave the portal live), shows the prose and returns. It runs before the scene-name resolution and
+   long before `SceneRouter.GoDungeonScene`, so **no scene load is ever started**.
+
+### `ApplyDoorState` — one owner, and where it is called
+Open → the standard treatment stands (and is re-attached if a previous closed pass took it off).
+Closed → threshold aura stopped, dark-star circle destroyed, procedural glow surfaces suppressed:
+the portal reads **dark and inert**, which is already correct world-language for "this does not open".
+The sigil seat is **measured** (`MeasurePortalBounds` → `OpeningCentre` → `OpeningTargetSize`) and
+logged with numbers, but **no sigil art is invented** — an un-tagged key logs `FlowTrace.Once` and the
+default treatment ships (owner tags the key, the CLI maps it verbatim).
+Call sites: **`BuildPortal`**, **the `SwapInSharedStructureAsync` re-seat** (the easy one to forget —
+without it the real art silently reverts the closed look), **`Discover`** (a sealed door must not bloom
+open the moment the hero finds it), and a **0.5 s poll in `TickDiscovery`** — the payload lands
+asynchronously and can arrive after the portals are built, so without the poll a flip would never reach
+the world. All four go through the same single method; no second spawner, no rival visual path.
+
+### What a player gets
+Walk up to a closed dungeon: the prompt reads its authored line ("The way is barred.") instead of
+"Enter". Tap it and the ordinary Obsidian frame opens with the dungeon's NAME and two sentences of
+world prose in the parchment body palette — no red, no warning glyph, no dev vocabulary, and the frame's
+usual labelled Close (never an X). Nothing loads. The door is dark and inert behind it.
+
+### STILL OWNER-OWED (R7 / §9) — none of it blocks the code
+1. **The eight canon copy values are UNRATIFIED** (§9.1). They ship marked as such in
+   `canon-strings.json`'s own authoring note. Ratify or rewrite — data-only, no code, no schema bump.
+2. **`rescue` vs `collapsed`** (§9.2) — still five states in the enum, per the plan's position.
+3. **Name + depth on a sealed door** (§9.3) — the panel **shows the NAME** (plan's recommendation).
+   **Depth is not shown** and is not surfaced anywhere in the game today. Owner's word still needed.
+4. **Which dungeons are the "two real ones"** — every seed row is `open` on purpose; seeding the wrong
+   pair would close finished content.
+
+### Left for the committer / next gate
+- `DataRegression.RunAll` registration line for `[dungeon-status]` (that file is lane-fenced) — §2i.
+- `COMPILE_GATE_OK` + `REGRESSION_OK` + `DUNGEON_STATUS_OK`, and a `RunCaptureHeadless` screenshot of
+  the sealed-door dialogue (compile-green never proves a panel looks right).
+- Backend deploy: run `api/schema.sql` in Neon, then `vercel --prod`. AC-7 cannot be shown without it.

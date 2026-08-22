@@ -1,6 +1,6 @@
 # WO-1050 — The Night Market: Realm Pack Store presentation redesign
 
-**Status:** READY TO IMPLEMENT (presentation lanes A–E). Lane F is data-only and ships with A.
+**Status:** IMPLEMENTED 2026-08-21 - lanes A-E + G shipped; aurora routed through a new ElarionUiKit primitive. Gate-green (COMPILE_GATE_OK; DataRegression 245/247, the 2 failures are ticketed asset gaps WO-1135/1136). Owner felt-verify owed.
 **Minted:** 2026-08-21 (**UI seat** - Claude UI authored The Night Market)
 > **RENUMBERED 1132 -> 1050 on 2026-08-21 (owner instruction).** It was first minted from the CLI
 > MAIN LINE; CLAUDE.md s2 gives the UI seat its own reserved block so the two seats can mint in
@@ -14,6 +14,14 @@
 Founder's Vow (locked, anchors) above Keeper's Almanac (converts). Verbatim: *"both stacked"*.
 **Design source:** the Night Market brief + interactive landscape wireframe —
 https://claude.ai/code/artifact/1af66c5d-e41f-480e-a842-ece9772c9c78
+> ## PROVENANCE — this spec's SHAPE came from GROK, and it was refined, not executed
+> **Owner, 2026-08-21 (verbatim): *"these are suggestions from Grok, you are the CLI to mold the
+> parts that work."*** Per CLAUDE.md's three-seat flow (Grok suggests -> UI/CLI refines -> CLI
+> implements), §§0–9 below are a **draft to be molded**, not a ruling. What IS owner-binding and was
+> kept absolutely: **greyscale-first, because she is red/green colourblind, and colour is never the
+> sole carrier of meaning**; **`FeatureFlags.RealmStorePurchase` stays OFF**; **no money path is
+> touched**; **`MinTouchPx` = 112**; **landscape only**. See §11 for what the CLI changed and why.
+
 **Reads before implementing:** `WORK_ORDER_1117_monetization_profitability_program.md` (program,
 BLOCKED — this WO is **not** one of its phases and is not blocked by it),
 `WORK_ORDER_1118_honest_sku_shelf_and_ladder.md` (the honest-shelf rule this must not walk back),
@@ -360,6 +368,46 @@ its gradient texture (new, Lane G)
 
 **Read, do not edit:** `ShortfallPackOffer.cs` (one new caller only) · `PackStoreVM.cs` ·
 `DailyChestController.cs` · `RedeemCodePanel.cs` · `WalletService.cs` · `FeatureFlags.cs`
+
+---
+
+## 11. CLI refinement record (2026-08-21) — what was molded and why
+
+Every item is a deviation from §§0–9 above. Each is a change to the DRAFT, never to an owner ruling;
+where a call is genuinely the owner's, it is flagged **OWNER MAY OVERRULE**.
+
+### Dropped or changed because the code cannot honestly do it
+
+| # | Draft said | Shipped instead | Why |
+|---|---|---|---|
+| 1 | Header chip `[1,204 SKR ~ $96.32]` | A **read-only mirror of the player's own wallet**, with FOUR distinct states: no wallet / reading / **unavailable** / a real number, plus an approximate fiat half from a **live Jupiter quote** or nothing at all | The SKR read is real (`SolanaWalletProvider.GetBalance` -> `ReadSplBalance`), and SKR is **Solana Mobile's own governance token — the game never holds it**, so the copy says "your wallet" and there is no in-game SKR ledger anywhere. But `WalletEndpoints.SkrMint` ships **EMPTY on both networks**, so a returned `0` can mean *genuinely none* / *mint unprovisioned* / *RPC failed* — three different facts. An unconfigured mint is caught **before** the call and a zero renders as **unavailable**, never as "you have none". Fiat comes from `CoreServices.Jupiter.GetQuoteAsync(USDC, 1)`, keeps its `~`, is dropped after **120 s** staleness, and is silently absent when Jupiter (mainnet) cannot answer a devnet wallet. |
+| 2 | Mint **`keepers-almanac`** ($9.99 / 120 SKR) as a second Patronage anchor | **NOT minted.** Patronage carries the two REAL top rungs already on the shelf — `patron-of-elarion` ($19.99) above `founders-vow` ($49.99), stacked | $9.99 is **already** the live `folks-thanks` rung: two products at one price, one unbuyable, reads broken not aspirational. And an `anchorOnly` row creates **no contrast** while the purchase flag is OFF and every card already reads "Coming soon". Side effect: `EconomyMetaCatalogRegression.CanonShelfPackCount` **stays 13**, and that decision is now recorded at the constant. **OWNER MAY OVERRULE.** |
+| 3 | `founders-vow` ships `anchorOnly: true` | **No row carries `anchorOnly`.** The field, the render path and the regression all ship | **WO-1121 is the SAME-DAY owner ruling** that un-hid the $9.99/$19.99/$49.99 ladder and made those rows buyable behind `PurchaseGate`'s wallet rule. Flagging one `anchorOnly` by an authoring edit would walk that ruling back. Setting it is an **owner call**; the mechanism is ready for it. |
+| 4 | Free band = daily chest + rewarded lantern + promo door | **The promo door only** | `DailyChestController` lives in **`DeNelle.Village`** and the dependency runs Village -> Wallet, **one way**. This file cannot read the chest's claim state, cannot ask if it is claimable and cannot claim it — a chest card would be a control that reports nothing and does nothing. Reflection is banned (§10) and widening the asmdef for one MonoBehaviour is the dependency the port spec forbids. Surfacing the chest needs a **Core-level status seam** (an interface + a `CoreServices` registration, the `IVillageHud` shape). Real work; not smuggled into a presentation pass. |
+| 5 | Spotlight resolves "the player's live shortfall" on open | **`PackStore.FocusShortfall(label, missing)`**, called by whoever HAS the gap; unset -> `starters-hand` | There is no live shortfall to read. A shortfall exists only relative to a thing the player is blocked ON, and that context lives with the caller. `ShortfallPackOffer` gains **exactly one new caller and no new capability**. |
+| 6 | The free band's claimable card gets a slow breath | **Dropped** | It would be a **fifth** motion moment past a budget of four, and there is no claim-state to stop it at (item 4). |
+
+### Refined for this codebase
+
+| # | Draft said | Shipped instead | Why |
+|---|---|---|---|
+| 7 | Cards "three to a row at 2400 px wide" | **Two to a row**, `flex 1 1 0` | The modal is `StorePanelAnchorMin/Max` = **0.325–0.675** of the screen — a tall narrow panel (~840 px on a 2400-wide device), and that size is the owner's 2026-07-15 felt-test ruling, so it does not move. The shelf column is ~470 px: three up would be ~150 px cards; two up is ~225 px. |
+| 8 | Patronage sheen on each anchor row | **On the patronage band head** | One strip instead of one per card keeps the draw-call budget honest, and it still does its only job: the sole motion anywhere on the shelf. |
+| 9 | "the shared aurora material + its gradient texture (new)" | **Two tiny textures generated at runtime** (a 64x64 blob, a 64x4 strip), shared by all four moments | A `.mat`/`.png` pair cannot be authored without Unity, and a store that needs an asset import to draw its own background renders wrong on a fresh clone. |
+| 10 | Free band rendered as band 1 of the shelf | Built **once in `EnsureBuilt`**, preserved across every `Render()` | `PromoRedeemEntryRegression` pins the promo door to `EnsureBuilt`, and it is right: rebuilding it with the priced bands would let an empty catalogue, an early `Render` bail or one failed card take the promo system's only entry point down with it. Free is still FIRST — it occupies the first children and the priced bands append after. |
+| 11 | Bar ledger on one scale "shared across all packs" | Shared **per good**, plus the exact number printed beside every bar | One scale across all goods makes every crystals bar a sliver beside a wood bar and loses the comparison it exists to make. The **number is the truth; the bar is the comparison.** |
+
+### Added beyond the draft
+
+- **`NightMarketPalette` + a `[band-greyscale]` regression case.** The colourblind rule was going to be
+  four `new Color(...)` literals and a comment. It is now a named table with a rec.709 luma function and
+  an oracle asserting the four lights step **>= 16/255** apart AND that every band carries a word. The
+  house rule now runs without the owner having to look at anything.
+- **`FeatureFlags.ReducedMotion`** (default OFF = motion on; PlayerPrefs `ff.reducedmotion`). No global
+  reduced-motion preference existed — the Dungeons surfaces each carry a `SetReducedMotion` hook with no
+  switch to drive them. This is that switch, asked once.
+- **`[visible-grantable]`** additionally fails a browsable row carrying **glimmer** (owner's 2026-08-21
+  strip), which nothing else pinned per-row.
 
 **Canon to update in the same commit (§15):** `docs/MASTER_CATALOG/` store section, and the
 `_comment` header in both `packs.json` copies naming this WO and the both-stacked ruling.

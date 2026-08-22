@@ -1,4 +1,4 @@
-**Status:** READY — UI (design pass; hand to the UI seat, CLI implements after the design lands)
+**Status:** READY TO IMPLEMENT — the design pass is DELIVERED (see "THE DESIGN" below, added 2026-08-21 by the UI seat). CLI implements from it.
 
 # WORK ORDER 1133 — Inventory screen: redesign the Bag, and justify the gear view or cut it
 
@@ -137,6 +137,326 @@ tap that opened it.
 
 Captures required before it is called done (greyscale pass included): the near-empty bag,
 a bag with 20+ items, and each tab.
+
+---
+
+---
+
+# THE DESIGN — delivered 2026-08-21 (UI seat)
+
+**Interactive wireframe + full brief:** https://claude.ai/code/artifact/5aebbd7f-9cdb-4883-9f1a-88ab812348dd
+**Name:** The Armory Rail. **Sibling:** WO-1050 (The Night Market) — same four-light palette and
+greyscale ladder so the two screens read as one game; layouts stay separate, per this WO's scope rule.
+
+## D0. The stated purpose (the one sentence everything justifies itself against)
+
+> **This screen tells you what you are carrying, what you are wearing, whether a thing is better
+> than the thing it would replace — and where else you can go from here.**
+
+The last clause is the owner's steer of 2026-08-21, verbatim: *"we need a clean way to display and
+let the player know how to intuitively get to each next section."* It is not a nice-to-have bolted
+onto a bag redesign; it is the failure the screen is actually exhibiting, and it drives the layout.
+
+## D1. THE FINDING THAT SETTLES THE GEAR-VIEW QUESTION — read before designing or building anything
+
+**The good gear screen ALREADY EXISTS, and the bag has a hidden door to it.**
+
+| Verified at source | Where |
+|---|---|
+| A large live 3D hero with equipped gear visible, framed by labelled Obsidian slot plates — Full Armor Set, Shield (Off Hand), Weapon (Main Hand), Amulet, Ring — with a per-slot drawer of compatible owned items | `EquipmentPanel.cs` (1,452 lines, bound MVVM over `EquipVM`) |
+| The render rig that produces it: clones the actor, strips gameplay components, mirrors weapon + shield + armour tier through a real `EquipmentController`, disposes cleanly | `HeroPreviewViewer.cs` (570 lines) |
+| Called from **six** sites | EquipmentPanel, PartyShopPanelMvvm, BuildingUpgradePanelMvvm, BuildPreviewModal, InventoryPaperDoll, MotionCasterWindow |
+| The bag's gold `VIEW GEAR` ribbon | `InventoryPaperDoll.cs:99-110` |
+| ...which routes to that very panel | `InventoryUIBuilder.cs:336` — `PanelRouter.Open(PanelId.EquipmentPanel)` |
+
+**So the empty navy rectangle the owner is looking at is a preview box sitting directly above a
+button that opens the real preview.**
+
+### The answer to (a) make the gear view useful / (b) cut it
+
+**Neither — PROMOTE it.** The gear view becomes **rail entry one**, reachable in one tap from
+anywhere in the bag, through the same `PanelRouter` call that exists today. What gets cut is the
+**empty box and the ribbon** — the door, not the room.
+
+**This also discharges the pricing requirement.** The WO forbids specifying a live 3D orbit viewport
+without naming how the render is produced. **No new viewport is specified.** The render is
+`HeroPreviewViewer`, already built, already proven at five other call sites.
+
+### The one thing to instrument BEFORE any layout work (CLAUDE.md §12)
+
+F8 seq 2833 probed the **paper-doll's** render texture as a uniform clear colour. That is
+`InventoryPaperDoll`'s path, **not** `EquipmentPanel`'s. Probe **both** call sites and capture which
+one produces pixels before touching layout. If `EquipmentPanel`'s preview is also blank on device
+that is a **separate CLI defect**, and it blocks the Gear section only — not the rest of the screen.
+**No edit until a captured line names the cause.** A second empty box would be worse than the first.
+
+## D2. The navigation model — the top tab strip becomes a LEFT RAIL
+
+In landscape this is not a style preference. It is the only shape that fits the sections without
+clipping, sits under the left thumb, and fills the exact band that is dead black today — so the fix
+to navigation is also the fix to the wasted 40%.
+
+| What a rail buys | Why tabs cannot |
+|---|---|
+| Labels never clip | A vertical entry owns the full rail width; no selected-state chevron can eat its own word (problem 2) |
+| **Counts fit** | Each entry carries its item count. The player sees Armor is empty and Weapons has 2 **before** tapping — the reason to go, ahead of going |
+| Gear joins the model | Rail entry one instead of a ribbon painted on a card. Always visible, never hidden (problem 3) |
+| It scales | Six sections today, seven when `FeatureFlags.MapTab` ships. A top strip at this width already cannot |
+| It fills the void | Occupies the left band that is currently black (problem 1) |
+
+**Three more wayfinding devices, none of them a tutorial:**
+
+1. The pane footer always names the next step in plain words — *"Armor is empty — the Armorer sells plate."*
+2. An empty section says **what fills it**, never shows nothing.
+3. The rail mark stays put while the stage scrolls, so "where am I" never leaves the screen.
+
+## D3. Geometry — exact values, so nothing is invented at build time
+
+Canvas **2670 x 1200** landscape. Three zones, summing exactly to width.
+
+| Zone | Size | Holds |
+|---|---:|---|
+| Header bar | full width x **120** | hero name, class/level, HP/MP/XP vitals, Close (top-right `button_exit`) |
+| **Rail** | **374** wide (14%) | 7 entries, each **374 x 132**, 8 px gap, 2 separators |
+| **Stage** | **1496** wide (56%) | the selected section |
+| **Pane** | **800** wide (30%) | detail / compare, always present |
+| Purse strip | full width x **84** | gold / crystals / flasks + the next-step hint |
+
+- Body height = `1200 - 120 - 84` = **996**. Rail content = `7 x 132 + gaps + 2 separators` is about 980. Fits.
+- **Grid:** stage padding 28 each side gives 1440 usable. **6 columns**, 16 px gaps, so cell = **226 x 226**.
+  Rows scroll. This replaces the literal `new Vector2(78f, 72f)` at `InventoryGrid.cs:83`.
+- **Every interactive element is authored above `MinTouchPx = 112` on its short side**, so
+  `ClampMinTouch` is a **no-op**. Do not rely on the clamp being kind — a sub-floor element inflates
+  and stacks into its neighbour, which is the 2026-07-16 grey-plate defect class.
+
+### Gear section (stage contents when rail entry one is active)
+
+Left: hero niche (`slot_character`) holding the `HeroPreviewViewer` RawImage, full stage height.
+Right: a column of five worn slots — Main Hand, Off Hand, Armour, Amulet, Ring — each a `slot_armor`
+plate with an icon, an uppercase slot key and the worn item's name; vacant reads *"empty"* in italic
+dim, never a blank plate.
+
+### Pane states
+
+- **Nothing selected:** what is worn, the aggregate stat contribution, and the highest-value gap
+  (*"Two slots are empty. An amulet and a ring are the cheapest points of defence you can add."*).
+- **Item selected:** three columns — **Worn | delta | This** — one row per stat, then a one-line
+  plain-words verdict (*"Hits harder, swings slower."*), then the action button and a line naming
+  what the action replaces.
+
+## D4. Obsidian / Blink mapping — every id VERIFIED present on disk
+
+**The 2026-06-27 spec's "art not yet mirrored" list is STALE — it has since been imported.**
+Globbed `Assets/Resources/RpgUi/` this session; the two paper-doll plates this design needs are there.
+
+| Region | Builder | Sprite id | Note |
+|---|---|---|---|
+| Window frame | `ElarionUiKit.PanelFramed` | `panel_window_dark` | already correct — keep. Replaces the grey ornate chrome (problem 9) |
+| Rail ground | `ElarionUiKit.Well` | `panel_grid` | reads as a carved niche column |
+| Rail entry | `ElarionUiKit.Slot` | `slot_action` | on disk. Selected = plate + 3 px mark, never colour alone |
+| Grid cell | `ElarionUiKit.Slot` | `slot_item` | keep the existing cell path; change only the SIZE |
+| Rarity frame | overlay on the cell | `rarity_1`..`rarity_5` | **all five on disk**. Border weight escalates with tier |
+| Worn-gear slot | `ElarionUiKit.Slot` | `slot_armor`, `slot_armor_2` | **mirrored since the spec** |
+| Hero niche | `ElarionUiKit.Niche` | `slot_character` | **mirrored**. Frames the RawImage |
+| Live hero | `HeroPreviewViewer` | RenderTexture to RawImage | the existing rig — see D1 |
+| Primary action | `ElarionUiKit.ButtonPack` | `button_gold` / `button_confirm` | ROLE, not sprite — the chrome branch resolves it |
+| Close | `ElarionUiKit.ButtonPack` | `button_exit` | top-right X; kills the bottom-centre button colliding with the frame ornament |
+| Item icons | `ConceptIconResolver.ResolveAny` | `icon_sword`, `icon_shield`... | keys, never sprites, in the View |
+
+**Still to mirror (both fall back cleanly until then — not a blocker):** `icon_helmet`,
+`icon_spellbook` from `Icons_Obsidian/`, via `BlinkUiImporter.BuildTable()` at icon border 0.
+
+**Do not hand-roll 9-slice and do not write an `ObsidianUiHelper`** — `RpgUiCatalog` +
+`ElarionUiKit` ARE that helper. Feed the kit ids; it applies `Image.Type.Sliced` with a procedural
+fallback on null.
+
+**Style comes from ONE authority.** Every value above is requested as a semantic token —
+`UiStyle.Frame.Window`, `UiStyle.Slot(state)`, `UiStyle.Button(role)`, `UiStyle.StatePlate(state)` —
+per the owner's singleton directive (`docs/UI/OBSIDIAN_UI_DESIGN_skilltree_inventory.md` §6). No raw
+hex in the View, no `RpgUiCatalog.PanelX` named at a call site, and **the `ff.blinkchrome` branch
+lives in exactly one place** instead of the four it is spread across today
+(`HeroSkillTreePanelMvvm.cs:165,198`; `InventoryUIBuilder.cs:52`; `InventoryGrid.cs:253`).
+**Verify in BOTH flag states** — the existing `InventoryUIBuilder.cs:52` alpha-neutralisation handles it.
+
+## D5. Colour never carries meaning (owner is red/green colourblind)
+
+Four lights, luminance-stepped, shared with WO-1050: **gold 195 / verdant 177 / ember 145 / aether
+113** (rec.709 of 255). Ground is violet-biased near-black (`#0A0810` / `#16111F`), not neutral grey.
+
+| Thing | Encoded as | NOT as |
+|---|---|---|
+| Rarity | letter (`U`/`C`) at legible size **plus `rarity_n` border weight** | a colour tint. The letters were the right instinct and only too small (problem 4) |
+| Stat delta | glyph + sign + number: up +3, down -0.2, or a dash | a green number beside a red one |
+| Worn | the **word** `WORN` plus a border | a green tint |
+| Selected | border + 3 px rail mark + the pane changing | colour alone |
+| Vitals | one header row, luminance-separated | the saturated green/blue/magenta bars (problem 9) — those go |
+
+**The greyscale pass is the gate.** Strip hue: every state must still be readable from its word or
+its shape. Do not ask the owner to approve hues; ask about behaviour.
+
+## D6. Touch
+
+- **Every target at least 112 px on its short side** (D3). Cells 226, rail entries 374 x 132.
+- **Thumb zones:** landscape thumbs rest bottom-left and bottom-right — rail under the left, the
+  pane's action button under the right, grid in the middle where a finger sweeps.
+- **No hover states.** Selected / worn / vacant are the only states, and each is drawn.
+- **Nothing critical in the top corners** except Close, which belongs there.
+
+## D7. Answers to "WHAT THE DESIGN MUST DELIVER", item by item
+
+| # | Required | Answered in |
+|---:|---|---|
+| 1 | A stated purpose | **D0** |
+| 2 | The gear-view decision, argued + the render priced | **D1** — promote, not cut; render is the existing `HeroPreviewViewer` |
+| 3 | A layout that uses the screen | **D3** — 374 / 1496 / 800, no dead band |
+| 4 | Comparison, not enumeration | **D3 pane states** — Worn / delta / This |
+| 5 | Empty-state design | **D8** — the normal case, designed and captured FIRST |
+| 6 | Rarity that survives greyscale | **D5** |
+| 7 | Mockups / precise geometry | **D3** plus the interactive wireframe linked above |
+| + | Exact player-facing strings with key names | **D9** — flat camelCase keys, ASCII-only, both canon-strings copies |
+
+## D8. Build order (roughly half of this ticket is REMOVAL)
+
+1. **Instrument both preview paths and capture** (D1). Nothing else starts until this reads.
+2. **Delete:** the empty preview box + the `VIEW GEAR` ribbon (`InventoryPaperDoll.cs:99-110`), the
+   second hero card, the full-width hint bar, the bottom-centre Close.
+3. **Rail** replaces the tab row (`InventoryUIBuilder.cs:185-225`, which hardcodes an inactive colour
+   and a `Resources.Load` path). Entries bind `vm.Tabs` — `.Label` and `.Count` **both already exist**
+   on `InventoryTab` — plus Gear and Map. **Do not turn `FeatureFlags.MapTab` on**; render it dimmed
+   and inert.
+4. **Stage** — grid resize + carved empty cells; Gear section hosts niche + worn slots.
+5. **Pane** binds `vm.Selected` (`InventoryDetail`: Name / Stats / Rarity / CanEquip / CanUse — all
+   present today).
+6. **Empty states + greyscale captures.**
+
+### The one thing the model does not expose (a SEPARATE CLI ticket, per this WO's OUT OF SCOPE rule)
+
+The delta column needs **the equipped item's stats alongside the candidate's**. `InventoryVM` already
+resolves `equippedId` at `:451` (weapons) and `:482` (armor), so the seam exists — but exposing a
+comparison on `InventoryDetail` is a MODEL change. **Name it, do not assume it.** Until it ships, the
+pane renders the candidate's stats and the verdict line, with the delta column absent (never faked).
+
+### Captures required before done
+
+Near-empty bag / a bag with 20+ items / **every rail section** / **both `ff.blinkchrome` states** /
+**a greyscale pass**. Open the PNGs — compile-green never proved a panel looked right.
+
+### Acceptance, extended
+
+The ticket's test stands — *what do I have, what is worn, is this one better?* — **plus the owner's
+steer: what else is in here, and how do I get to it?** The rail answers that last one **before she
+taps anything**, which is the point of the redesign.
+
+---
+
+## D9. String table — exact keys and exact text (added for the implementing seat)
+
+Every player-facing sentence on this screen, with the key it goes in. **ASCII-only** (non-ASCII
+renders as tofu in TMP). Keys follow the file's existing convention: **flat camelCase, no dot
+namespacing** — verified against the 133 live keys in `canon-strings.json`.
+
+⛔ **Both copies, byte-identical:** `Assets/Resources/Data/Canonical/canon-strings.json` **and**
+`Assets/StreamingAssets/Data/Canonical/canon-strings.json`.
+
+### Rail entries
+
+| Key | Text |
+|---|---|
+| `invRailGear` | `Gear` |
+| `invRailWeapons` | `Weapons` |
+| `invRailArmor` | `Armor` |
+| `invRailTrinkets` | `Trinkets` |
+| `invRailPotions` | `Potions` |
+| `invRailSkills` | `Skills` |
+| `invRailMap` | `Map` |
+| `invRailMapSoon` | `soon` |
+| `invRailWorn` | `worn` |
+| `invRailHeader` | `Sections` |
+
+### Worn-slot keys (Gear section)
+
+| Key | Text |
+|---|---|
+| `invSlotMainHand` | `Main Hand` |
+| `invSlotOffHand` | `Off Hand` |
+| `invSlotArmor` | `Armor` |
+| `invSlotAmulet` | `Amulet` |
+| `invSlotRing` | `Ring` |
+| `invSlotEmpty` | `empty` |
+
+### Empty-section lines (the NORMAL early-game case)
+
+Each names **what fills it**, never shows nothing.
+
+| Key | Text |
+|---|---|
+| `invEmptyWeapons` | `Nothing here yet. The Market sells blades, and Hollow raiders drop them.` |
+| `invEmptyArmor` | `Nothing here yet. The Armorer in town sells plate, and Hollow captains drop it.` |
+| `invEmptyTrinkets` | `Nothing here yet. Trinkets come from dungeon chests below the Ember Deep.` |
+| `invEmptyPotions` | `Nothing here yet. Brew flasks at the Healer's Cottage, or buy them at the Market.` |
+| `invEmptySkills` | `The Knight tree opens here. Ranged, Heal and Sustain, Control.` |
+| `invEmptyMapLocked` | `Realm travel is still being built. This section stays visible so it is never a surprise when it opens.` |
+
+### Pane — nothing selected
+
+| Key | Text |
+|---|---|
+| `invPaneNoSelection` | `Nothing selected` |
+| `invPaneGearGaps` | `Two slots are empty. An amulet and a ring are the cheapest points of defence you can add.` |
+| `invPaneNothingToCompare` | `There is nothing here to compare yet.` |
+
+⚠ `invPaneGearGaps` is written for the two-empty-slot case. **If the count is dynamic, this becomes
+a format string with one `{0}` and the slot names composed by the VM** — that is an implementing
+call, not a design call. Flagging it rather than pretending one sentence covers every state.
+
+### Pane — item selected
+
+| Key | Text |
+|---|---|
+| `invPaneColumnWorn` | `Worn` |
+| `invPaneColumnThis` | `This` |
+| `invPaneWornBadge` | `WORN` |
+| `invActionEquip` | `Equip` |
+| `invActionUse` | `Use` |
+| `invActionWorn` | `Worn` |
+| `invActionGoTo` | `Go to {0}` |
+| `invNextReplaces` | `replaces {0}` |
+| `invNextCompareHint` | `tap another item to compare it` |
+| `invNextRailHint` | `the rail keeps every section one tap away` |
+| `invNextCountHint` | `sections with items show a count on the rail` |
+
+### Verdict lines (the one-line plain-words judgement under the deltas)
+
+These are **per-comparison**, so they are composed, not stored whole. The composed shape:
+
+| Key | Text |
+|---|---|
+| `invVerdictTradeoff` | `{0}, {1}.` |
+| `invVerdictBetter` | `Better than what you are carrying.` |
+| `invVerdictWorse` | `Worse than what you are carrying.` |
+| `invVerdictSame` | `No change to your stats.` |
+| `invVerdictWearing` | `This is what you are carrying now.` |
+
+Example composition: `invVerdictTradeoff` with `Hits harder` + `swings slower` gives
+*"Hits harder, swings slower."* The clause fragments come from the stat deltas, not from a
+hand-written sentence per item.
+
+### Purse strip
+
+| Key | Text |
+|---|---|
+| `invPurseGold` | `GOLD` |
+| `invPurseCrystals` | `CRYSTALS` |
+| `invPurseFlasks` | `FLASKS` |
+
+The right-hand hint on the purse strip **reuses the `invEmpty*` line** for the emptiest section —
+one string, two placements, so the wording can never drift between them.
+
+### Not a string
+
+The rarity marks (`U`, `C`, and the rest of the tier letters) are **not** canon-strings rows — they
+are single-glyph tier codes drawn from the item's own rarity field, and translating them would break
+the greyscale read they exist for.
 
 ---
 

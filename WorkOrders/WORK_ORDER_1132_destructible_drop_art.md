@@ -1,4 +1,4 @@
-**Status:** READY TO IMPLEMENT
+**Status:** IMPLEMENTED 2026-08-21 - crate became a chest (Hostile/IDamageable removed after auditing every caller); drop identity is 100% silhouette, 16 distinct across 24 live ids, hue demoted to a luma-separated kind cue. Owner felt-verify owed.
 
 # WORK ORDER 1132 — The chest: destructibles become OPENABLE, not attackable
 
