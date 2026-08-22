@@ -129,7 +129,10 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-08-22 (CLI): main line next free = **1148**.
+> ## ⚠ RECONCILED 2026-08-22 (CLI): main line next free = **1149**.
+> *(CLI seat minted **WO-1148** and bumped 1148 -> 1149 in this SAME edit. **1148** = EVERY HUD
+> label must fit its box - WO-1144 fixed the two it measured and did not generalise; the device
+> shows "Raids ..." and "SK... 209" still truncated.)*
 > *(**WO-1147** consumed by the MON lane split - the combined monetization ticket became
 > **WO-1146 MON (rewarded ads)** + **WO-1147 MON (purchasing)**, owner ruling "split it".)*
 > *(**WO-1146** consumed by the MON lane - `WORK_ORDER_1146_MON_monetization_activation_purchases_and_ads.md`.)*
