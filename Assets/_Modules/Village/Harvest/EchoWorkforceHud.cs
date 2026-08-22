@@ -21,6 +21,8 @@ using UnityEngine.EventSystems;
 using TMPro;
 using DeNelle.Core.UI;
 using DeNelle.Core.Diagnostics;
+using DeNelle.Core.Ads;
+using DeNelle.Village.Monetization;
 
 namespace DeNelle.Village
 {
@@ -35,6 +37,11 @@ namespace DeNelle.Village
         private TextMeshProUGUI _siloLabel;
         private Image _fill;
         private TextMeshProUGUI _dumpLabel;
+        private Button _boostButton;
+        private TextMeshProUGUI _boostButtonLabel;
+        private TextMeshProUGUI _boostStatusLabel;
+        private bool _adInFlight;
+        private float _nextBoostRefreshAt;
         private bool _open;
         private PanelHandle _panelHandle;   // HUD-1: modal arbiter registration (one Echo modal at a time)
 
@@ -51,6 +58,7 @@ namespace DeNelle.Village
             _vm = EchoWorkforceVM.CreateDefault(Hide);
             _vm.Changed += Refresh;
             _vm.EchoUnlocked += OnEchoUnlocked;
+            HarvestBoostService.Changed += RefreshBoostOffer;
 
             Refresh();
             HarvestPanelGate.ToggleRequested += Toggle;
@@ -67,6 +75,7 @@ namespace DeNelle.Village
                 _vm = null;
             }
             HarvestPanelGate.ToggleRequested -= Toggle;
+            HarvestBoostService.Changed -= RefreshBoostOffer;
         }
 
         // -- open / close (button-driven) -----------------------------------------
@@ -93,6 +102,7 @@ namespace DeNelle.Village
                 return;
             }
             Refresh();
+            RefreshBoostOffer();
             FlowTrace.Step("HUD", "EchoWorkforceHud OPEN");
         }
 
@@ -112,7 +122,7 @@ namespace DeNelle.Village
 
             var built = ElarionUiKit.BuildObsidianModal(
                 "EchoHarvestPanel", "ECHO HARVEST",
-                new Vector2(0.30f, 0.28f), new Vector2(0.70f, 0.72f),
+                new Vector2(0.30f, 0.24f), new Vector2(0.70f, 0.76f),
                 onClose: Hide, sortingOrder: 31000,   // canon MODAL band (was 4600: full-screen scrim modal drew UNDER runtime HUD overlays)
                 frameName: RpgUiCatalog.FrameCore);
             _modal = built.canvas;
@@ -136,8 +146,27 @@ namespace DeNelle.Village
 
             // Collect All (CoC pipe-home): collectors pending + echo silo.
             var dumpBtn = ElarionUiKit.Button(content, "Collect All", ElarionUiKit.ButtonKind.Confirm,
-                new Vector2(0.22f, 0.25f), new Vector2(0.78f, 0.42f), OnCollectAllTapped);
+                new Vector2(0.22f, 0.30f), new Vector2(0.78f, 0.47f), OnCollectAllTapped);
             _dumpLabel = dumpBtn != null ? dumpBtn.GetComponentInChildren<TextMeshProUGUI>() : null;
+
+            // The free collection action stays primary and immediate. This separate, optional
+            // placement starts a TIME boost only after AdGateService receives the SDK's genuine
+            // earned-reward callback; dismiss/no-fill can never intercept or alter Collect All.
+            var boostGo = ElarionUiKit.Button(content, "Watch Ad - 2x speed for 1 hour",
+                ElarionUiKit.ButtonKind.Quiet,
+                new Vector2(0.16f, 0.09f), new Vector2(0.84f, 0.26f), OnBoostAdTapped);
+            _boostButton = boostGo != null ? boostGo.GetComponent<Button>() : null;
+            _boostButtonLabel = boostGo != null ? boostGo.GetComponentInChildren<TextMeshProUGUI>() : null;
+            _boostStatusLabel = ElarionUiKit.Label(content, "Optional time boost", 0.035f, 0.085f,
+                new Color(0.76f, 0.78f, 0.82f, 1f), ElarionUi.FontBody,
+                TextAlignmentOptions.Center, 0.08f, 0.92f, bold: false);
+        }
+
+        private void Update()
+        {
+            if (!_open || Time.unscaledTime < _nextBoostRefreshAt) return;
+            _nextBoostRefreshAt = Time.unscaledTime + 1f;
+            RefreshBoostOffer();
         }
 
         // -- view refresh (VM -> view, one direction) -----------------------------
@@ -164,6 +193,72 @@ namespace DeNelle.Village
         private void ResetDumpLabel()
         {
             if (_dumpLabel != null) _dumpLabel.text = "Collect All";
+        }
+
+        private void OnBoostAdTapped()
+        {
+            if (_adInFlight) return;
+
+            AdOffer offer = AdGateService.Offer("place.harvest.doubler");
+            if (!offer.Available)
+            {
+                RefreshBoostOffer();
+                return;
+            }
+
+            _adInFlight = true;
+            RefreshBoostOffer();
+            bool started = AdGateService.Present("place.harvest.doubler", contextGrant: null,
+                onComplete: OnBoostAdCompleted);
+            if (!started)
+            {
+                _adInFlight = false;
+                RefreshBoostOffer();
+            }
+        }
+
+        private void OnBoostAdCompleted(AdShowResult result)
+        {
+            _adInFlight = false;
+            if (_boostStatusLabel != null)
+            {
+                _boostStatusLabel.text = result.Rewarded
+                    ? "2x harvest speed is active"
+                    : result.Reason == AdUnavailableReason.Abandoned
+                        ? "Ad closed early - no boost granted"
+                        : new AdOffer(false, result.Reason, null, null, null, null, 0, 0).RefusalText();
+            }
+            _nextBoostRefreshAt = Time.unscaledTime + 1.5f;
+            RefreshBoostOffer(updateStatus: result.Rewarded);
+        }
+
+        private void RefreshBoostOffer() => RefreshBoostOffer(updateStatus: true);
+
+        private void RefreshBoostOffer(bool updateStatus)
+        {
+            if (_boostButton == null) return;
+
+            AdOffer offer = AdGateService.Offer("place.harvest.doubler");
+            _boostButton.interactable = !_adInFlight && offer.Available;
+            if (_boostButtonLabel != null)
+                _boostButtonLabel.text = _adInFlight
+                    ? "Playing ad..."
+                    : HarvestBoostService.IsActive
+                        ? "Watch Ad - add 1 hour of 2x speed"
+                        : "Watch Ad - 2x speed for 1 hour";
+
+            if (!updateStatus || _boostStatusLabel == null) return;
+            if (HarvestBoostService.IsActive)
+            {
+                int minutes = Mathf.Max(1, Mathf.CeilToInt((float)(HarvestBoostService.SecondsRemaining / 60.0)));
+                _boostStatusLabel.text = $"2x speed active - {minutes} min remaining";
+            }
+            else
+            {
+                _boostStatusLabel.text = offer.Available
+                    ? "Optional: fills the same silo twice as fast"
+                    : offer.RefusalText();
+            }
         }
 
         private void OnEchoUnlocked(int newCount)

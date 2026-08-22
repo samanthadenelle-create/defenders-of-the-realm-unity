@@ -674,7 +674,9 @@ namespace DeNelle.Core
         //   4. THEN this default, with the WO-931 seam refusal left exactly as it is.
         // Flipping this one first only ever produces a Buy button in front of free goods.
 #if STORE_RAIL_LOCAL_TEST
-        public static bool RealmStorePurchase => Get("realmstorepurchase", defaultOn: true);
+        // An explicit owner-test build must win over a stale production PlayerPrefs value.
+        // The symbol is command-line-only and is never present in a distributed build.
+        public static bool RealmStorePurchase => true;
 #else
         public static bool RealmStorePurchase => Get("realmstorepurchase", defaultOn: false);
 #endif
@@ -709,7 +711,15 @@ namespace DeNelle.Core
         /// adSkipsPerWindow, the cap logic and the UI rows all stay. This is a gate, not a deletion.
         /// NOT URL-activatable (monetization surface — deliberately excluded from s_urlActivatableFlags).
         /// Local testing only: PlayerPrefs "ff.rewardedadskip" = 1.</summary>
+#if MONETIZATION_LOCAL_TEST
+        // Owner-device sideload only. AndroidBuild production paths never define this symbol.
+        // It exists so the physical-device LevelPlay matrix can run without weakening the public
+        // default or making monetization URL-activatable. It deliberately overrides a stale
+        // PlayerPrefs value written by an earlier production-gated APK on the same test device.
+        public static bool RewardedAdSkip => true;
+#else
         public static bool RewardedAdSkip => Get("rewardedadskip", defaultOn: false);
+#endif
 
         /// <summary>WO-911 (owner 2026-08-06) — gates the MAP TAB inside the Bag/Inventory panel.
         /// The Q10+Q13 ruling moved Map OFF the bottom action bar and INTO Bag as a tab (net 7 -> 6

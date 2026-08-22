@@ -9,8 +9,15 @@
 // WHAT IT DOES (unchanged):
 //   * Pause via the HUD PAUSE/BACK button through Core PauseGate
 //     (PauseToggleRequested when no modal is open) + public TogglePause().
-//   * On pause: Time.timeScale = 0 (freezes wave timers, the ATB tick, enemy
-//     movement) + show. On resume: restore the captured pre-pause timeScale.
+//   * On pause: the world freezes (wave timers, the ATB tick, enemy movement) + show.
+//     On resume: the captured pre-pause timeScale is restored.
+//     ⚠ WO-1149: the freeze is no longer PERFORMED here. Time.timeScale has exactly one
+//     owner now — DeNelle.Core.UI.WorldHold — and this controller is a client that takes
+//     a named, reference-counted hold. The move was forced by the money path: the code
+//     that charges the player (DeNelle.Wallet) must be able to stop the world during a
+//     transaction and cannot reference this assembly. Behaviour for the pause MENU is
+//     unchanged, with one deliberate exception: Resume closes the menu but leaves the
+//     world frozen while a TRANSACTION hold is still outstanding.
 //   * Settings opens SettingsController over the top; the pause panel hides
 //     and re-shows on SettingsClosed. Quit restores timeScale FIRST, then
 //     SceneRouter.GoTitle().
@@ -32,6 +39,7 @@ namespace DeNelle.Settings
     /// Drives the pause overlay: PauseGate-driven toggle, <see cref="Time.timeScale"/>
     /// freeze, and the Resume / Settings / Quit menu (code-built kit modal).
     /// </summary>
+    [DefaultExecutionOrder(32000)]
     public sealed class PauseController : MonoBehaviour
     {
         [Header("Settings screen")]
@@ -56,10 +64,19 @@ namespace DeNelle.Settings
         // rejected + force-closed by the battle-lock). Close delegate = Resume; isOpen = _paused.
         private PanelHandle _panelHandle;
 
-        // The timeScale captured at the moment of pausing — restored on resume.
-        // Captured (rather than assumed 1) so pausing during a slow-motion or
-        // fast-forward effect restores that, not a hard 1.0.
-        private float _timeScaleBeforePause = 1f;
+        // WO-1149: THE FREEZE IS NO LONGER PERFORMED HERE. Time.timeScale has exactly one owner
+        // now — DeNelle.Core.UI.WorldHold — and the pause menu is a CLIENT of it, holding this
+        // token while the menu is up. It moved because the money path (PackStore.Purchase, in
+        // DeNelle.Wallet) must be able to stop the world during a transaction and cannot reference
+        // this assembly; the alternative was a SECOND owner of Time.timeScale, which is exactly the
+        // shape of the WO-1016 permanent-invisible-freeze bug. The capture-the-pre-pause-scale rule
+        // and its "<= 0 means somebody else already froze it" guard moved into WorldHold verbatim,
+        // so they now protect every caller instead of only this one.
+        //
+        // Consequence worth knowing: with a purchase hold outstanding, Resume() closes the MENU but
+        // deliberately does NOT unfreeze the world — that would drop the player back into a live
+        // battle in the middle of a signed transaction.
+        private WorldHold.Handle _hold;
 
         /// <summary>True while the game is paused and the overlay is showing.</summary>
         public bool IsPaused => _paused;
@@ -113,9 +130,12 @@ namespace DeNelle.Settings
 
         private void OnDestroy()
         {
-            // Safety net: never leave the engine frozen if this object dies
-            // (scene unload, domain reload) while paused.
-            if (_paused) Time.timeScale = _timeScaleBeforePause > 0f ? _timeScaleBeforePause : 1f;
+            // Safety net: never leave the engine frozen if this object dies (scene unload, domain
+            // reload) while paused. Releasing the HOLD rather than stamping the clock keeps any
+            // other outstanding hold (a live transaction) intact — dying must not unfreeze the
+            // world under a purchase, and must not leave it frozen under nothing.
+            if (_hold != null) { _hold.Dispose(); _hold = null; }
+            _paused = false;
             // Don't leak the arbiter slot if destroyed while paused (scene unload).
             if (_panelHandle != null) PanelManager.NotifyClosed(_panelHandle);
             if (_modal != null && _modal.canvas != null) Destroy(_modal.canvas);
@@ -202,24 +222,16 @@ namespace DeNelle.Settings
             if (_paused) return;
             EnsureBuilt();
 
-            // WO-1016/P0 (owner F8 seq 2319, 2026-08-10 — "No locomotioonj in town"): capture the
-            // pre-pause scale, but NEVER capture a FROZEN one. Two independent systems freeze the
-            // world (this controller, and BreakCaptureHarness.FlagHere's F8 note freeze at
-            // BreakCaptureHarness.cs:474). If the OS backgrounds the app while the F8 note box is up,
-            // Time.timeScale is ALREADY 0 here, so the old line captured 0 and Resume() below restored
-            // 0 — a PERMANENT, INVISIBLE freeze: the pause modal closes, input is still read, the
-            // camera still orbits (unscaled), build mode still works (its own input path), and the
-            // hero cannot move because Time.deltaTime is 0. That is exactly the captured signature
-            // (live input in [Flow:HeroDrift] with vel=(0.000,0.000) and a frozen animator baseNt).
-            // A capture of <=0 is never meaningful to restore, so it degrades to 1.
-            float observed = Time.timeScale;
-            _timeScaleBeforePause = observed > 0f ? observed : 1f;
-            Time.timeScale = 0f;
+            // WO-1149: take a NAMED HOLD instead of writing the clock here. WorldHold is now the
+            // single owner of Time.timeScale (see the _hold field's note). The WO-1016/P0 capture
+            // guard — "capture the pre-pause scale, but NEVER capture a FROZEN one", the fix for the
+            // permanent-invisible-freeze the owner hit on 2026-08-10 when the OS backgrounded the app
+            // over an F8 note box — moved into WorldHold.Acquire verbatim and still applies here.
+            _hold = WorldHold.Acquire(WorldHold.ReasonPauseMenu);
             _paused = true;
             DeNelle.Core.Diagnostics.FlowTrace.Step("Pause",
-                $"PAUSE -> timeScale 0 (captured {observed:F2}" +
-                (observed > 0f ? "" : " <= 0, ALREADY FROZEN by another owner — restoring to 1 instead") +
-                $"). Resume will restore {_timeScaleBeforePause:F2}.");
+                $"PAUSE MENU -> WorldHold taken. Outstanding: [{WorldHold.Describe()}]. " +
+                $"Resume will restore {WorldHold.CapturedScale:F2}.");
 
             if (_modal != null && _modal.canvas != null) _modal.canvas.SetActive(true);
             // Announce the pause modal opened so the arbiter arms the back button + closes any prior panel.
@@ -227,19 +239,29 @@ namespace DeNelle.Settings
             PauseStateChanged?.Invoke(true);
         }
 
+        // WO-1149: the clock-reassert that lived here (several combat/VFX effects also write the
+        // engine-global timeScale, and an unscaled cleanup can finish after Pause() and stamp 1,
+        // leaving a Paused screen over live gameplay) MOVED WITH THE OWNERSHIP, into
+        // WorldHold.ReassertTick — driven by WorldHold's own hidden ticker. It is not lost and it is
+        // not weaker: it now guards the TRANSACTION hold as well as the pause menu, in every scene,
+        // including the ones with no PauseController in them. Leaving a copy here would have been a
+        // second writer racing the first for the same frame's clock.
+
         /// <summary>Resumes: restores the pre-pause <see cref="Time.timeScale"/> and
         /// hides the overlay (and the settings screen, if open). Idempotent.</summary>
         public void Resume()
         {
             if (!_paused) return;
 
-            // Belt-and-braces with the capture guard above: a restore is the LAST place a frozen
-            // world may be re-armed, so it can never write a non-positive scale (the same guard
-            // OnQuitClicked has always had — it was simply missing on the path players use).
-            Time.timeScale = _timeScaleBeforePause > 0f ? _timeScaleBeforePause : 1f;
+            // Release THIS menu's hold. The world unfreezes only if no other hold is outstanding —
+            // deliberately: resuming the menu during a signed transaction must not drop the player
+            // back into a live battle (WO-1149). The restore itself, and its never-write-a-
+            // non-positive-scale guard, live in WorldHold.
             _paused = false;
+            if (_hold != null) { _hold.Dispose(); _hold = null; }
             DeNelle.Core.Diagnostics.FlowTrace.Step("Pause",
-                $"RESUME -> timeScale {Time.timeScale:F2} (captured {_timeScaleBeforePause:F2}).");
+                $"RESUME -> timeScale {Time.timeScale:F2} (captured {WorldHold.CapturedScale:F2}); " +
+                $"remaining holds [{WorldHold.Describe()}].");
 
             if (_settings != null && _settings.IsOpen)
                 _settings.Close();
@@ -278,8 +300,12 @@ namespace DeNelle.Settings
         /// next scene must never load frozen — then routes via SceneRouter.</summary>
         private void OnQuitClicked()
         {
-            Time.timeScale = _timeScaleBeforePause <= 0f ? 1f : _timeScaleBeforePause;
+            // The next scene must NEVER load frozen, so this is the one path that drops EVERY hold,
+            // not just the menu's own — abandoning a transaction by quitting to title is already a
+            // bad outcome; abandoning it into a frozen title screen is a worse one.
+            _hold = null;
             _paused = false;
+            WorldHold.ForceReleaseAll("quit to title");
 
             if (_settings != null && _settings.IsOpen)
                 _settings.Close();

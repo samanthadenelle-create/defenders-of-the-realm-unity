@@ -56,6 +56,7 @@ using DeNelle.Core.Ads;
 using DeNelle.Core.Diagnostics;
 using DeNelle.Core.Monetization;
 using DeNelle.Core.UI;
+using DeNelle.Core.Analytics;
 
 namespace DeNelle.Village.Monetization
 {
@@ -74,17 +75,39 @@ namespace DeNelle.Village.Monetization
 
         private static LevelPlayInitializer s_instance;
         private static bool s_initStarted;
-        private readonly ConcurrentQueue<string> _impressionRevenue = new ConcurrentQueue<string>();
+        private readonly ConcurrentQueue<ImpressionEvent> _impressionRevenue = new ConcurrentQueue<ImpressionEvent>();
         private LevelPlayRewardedAd _rewarded;
         private readonly Dictionary<string, LevelPlayRewardedAd> _rewardedByPlacement = new Dictionary<string, LevelPlayRewardedAd>();
         private readonly Dictionary<string, string> _placementByAdUnit = new Dictionary<string, string>();
         private readonly HashSet<string> _loadingPlacements = new HashSet<string>();
         private string _activePlacement;
         private Action<AdShowResult> _pendingCompletion;
+        private bool _presentationSettled;
         private bool _loadingRewarded;
         private bool _showingRewarded;
         private float _retrySeconds = RetryFloorSeconds;
         private AdUnavailableReason _unavailableReason = AdUnavailableReason.NotInitialised;
+
+        private readonly struct ImpressionEvent
+        {
+            public readonly string Network;
+            public readonly string Format;
+            public readonly string Unit;
+            public readonly string Placement;
+            public readonly double RevenueUsd;
+            public readonly string Precision;
+
+            public ImpressionEvent(string network, string format, string unit, string placement,
+                                   double revenueUsd, string precision)
+            {
+                Network = network;
+                Format = format;
+                Unit = unit;
+                Placement = placement;
+                RevenueUsd = revenueUsd;
+                Precision = precision;
+            }
+        }
 
         public string ProviderName => "UnityLevelPlay";
         public bool IsInitialised => Ready;
@@ -185,23 +208,43 @@ namespace DeNelle.Village.Monetization
 
         private void Update()
         {
-            while (_impressionRevenue.TryDequeue(out string row))
-                FlowTrace.Step(Sys, row);
+            // LevelPlay may raise ILRD away from Unity's main thread. Drain primitives here before
+            // touching FlowTrace/EventTracker, both of which are Unity-facing infrastructure.
+            while (_impressionRevenue.TryDequeue(out ImpressionEvent row))
+            {
+                FlowTrace.Step(Sys,
+                    $"ILRD network={row.Network} format={row.Format} unit={row.Unit} " +
+                    $"placement={row.Placement} revenueUsd={row.RevenueUsd:0.########} " +
+                    $"precision={row.Precision}");
+                EventTracker.Track("rewarded_ad_impression", new
+                {
+                    network = row.Network,
+                    format = row.Format,
+                    adUnit = row.Unit,
+                    placement = row.Placement,
+                    revenueUsd = row.RevenueUsd,
+                    precision = row.Precision
+                });
+            }
         }
 
         private void OnImpressionDataReady(LevelPlayImpressionData data)
         {
             if (data == null)
             {
-                _impressionRevenue.Enqueue("ILRD received with no impression data.");
+                _impressionRevenue.Enqueue(new ImpressionEvent(
+                    "<unknown>", "<unknown>", "<unknown>", "<none>", 0d, "<unknown>"));
                 return;
             }
 
             double revenue = data.Revenue ?? 0d;
-            _impressionRevenue.Enqueue(
-                $"ILRD network={data.AdNetwork ?? "<unknown>"} format={data.AdFormat ?? "<unknown>"} " +
-                $"unit={data.MediationAdUnitId ?? "<unknown>"} placement={data.Placement ?? "<none>"} " +
-                $"revenueUsd={revenue:0.########} precision={data.Precision ?? "<unknown>"}");
+            _impressionRevenue.Enqueue(new ImpressionEvent(
+                data.AdNetwork ?? "<unknown>",
+                data.AdFormat ?? "<unknown>",
+                data.MediationAdUnitId ?? "<unknown>",
+                data.Placement ?? "<none>",
+                revenue,
+                data.Precision ?? "<unknown>"));
         }
 
         private void OnInitSuccess(LevelPlayConfiguration config)
@@ -284,6 +327,7 @@ namespace DeNelle.Village.Monetization
 
             _pendingCompletion = onComplete;
             _activePlacement = placementId;
+            _presentationSettled = false;
             _showingRewarded = true;
             _unavailableReason = AdUnavailableReason.None;
             _rewardedByPlacement[placementId].ShowAd();
@@ -317,14 +361,24 @@ namespace DeNelle.Village.Monetization
 
         private void OnRewardedDisplayFailed(LevelPlayAdInfo info, LevelPlayAdError error)
         {
+            if (!IsCallbackForActivePresentation(info, "display-failed")) return;
+            string placement = _activePlacement;
             SettleRewarded(AdShowResult.Unavailable(AdUnavailableReason.LoadFailed));
+            EndRewardedPresentation();
             FlowTrace.Fail(Sys, $"rewarded display failed code={error?.ErrorCode}: " +
                                 (error?.ErrorMessage ?? "<none>"));
-            PreloadRewarded();
+            PreloadRewarded(placement);
         }
 
         private void OnRewardedEarned(LevelPlayAdInfo info, LevelPlayReward reward)
         {
+            if (!IsCallbackForActivePresentation(info, "earned")) return;
+            if (_presentationSettled)
+            {
+                FlowTrace.Warn(Sys, $"duplicate rewarded callback ignored unit={info?.AdUnitId ?? "<unknown>"} " +
+                                    $"placement={_activePlacement ?? "<none>"}. One presentation may settle once.");
+                return;
+            }
             FlowTrace.Step(Sys, $"REWARDED_EARNED network={info?.AdNetwork ?? "<unknown>"} " +
                                 $"sdkReward={reward?.Amount} {reward?.Name ?? "<unnamed>"}.");
             SettleRewarded(AdShowResult.Earned());
@@ -332,11 +386,35 @@ namespace DeNelle.Village.Monetization
 
         private void OnRewardedClosed(LevelPlayAdInfo info)
         {
-            if (_pendingCompletion != null) SettleRewarded(AdShowResult.Dismissed());
-            _showingRewarded = false;
+            if (!IsCallbackForActivePresentation(info, "closed")) return;
+            if (!_presentationSettled) SettleRewarded(AdShowResult.Dismissed());
             string placement = _activePlacement;
-            _activePlacement = null;
+            EndRewardedPresentation();
             PreloadRewarded(placement);
+        }
+
+        private bool IsCallbackForActivePresentation(LevelPlayAdInfo info, string callbackName)
+        {
+            if (!_showingRewarded || string.IsNullOrEmpty(_activePlacement))
+            {
+                FlowTrace.Warn(Sys, $"stale rewarded {callbackName} callback ignored " +
+                                    $"unit={info?.AdUnitId ?? "<unknown>"}; no presentation is active.");
+                return false;
+            }
+
+            string callbackPlacement = null;
+            if (info == null || string.IsNullOrEmpty(info.AdUnitId) ||
+                !_placementByAdUnit.TryGetValue(info.AdUnitId, out callbackPlacement) ||
+                !string.Equals(callbackPlacement, _activePlacement, StringComparison.Ordinal))
+            {
+                FlowTrace.Warn(Sys, $"cross-unit rewarded {callbackName} callback ignored " +
+                                    $"unit={info?.AdUnitId ?? "<unknown>"} " +
+                                    $"callbackPlacement={callbackPlacement ?? "<unknown>"} " +
+                                    $"activePlacement={_activePlacement}.");
+                return false;
+            }
+
+            return true;
         }
 
         private void RemoveLoadingByUnit(string adUnitId)
@@ -348,10 +426,24 @@ namespace DeNelle.Village.Monetization
 
         private void SettleRewarded(AdShowResult result)
         {
+            if (_presentationSettled)
+            {
+                FlowTrace.Warn(Sys, $"duplicate rewarded settlement ignored outcome={result} " +
+                                    $"placement={_activePlacement ?? "<none>"}.");
+                return;
+            }
+            _presentationSettled = true;
             Action<AdShowResult> callback = _pendingCompletion;
             _pendingCompletion = null;
-            _showingRewarded = false;
             Guard.Try(Sys, "settle rewarded callback", () => callback?.Invoke(result));
+        }
+
+        private void EndRewardedPresentation()
+        {
+            _pendingCompletion = null;
+            _showingRewarded = false;
+            _presentationSettled = false;
+            _activePlacement = null;
         }
 
         private void OnDestroy()

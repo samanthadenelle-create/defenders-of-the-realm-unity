@@ -129,6 +129,7 @@ namespace DeNelle.Village.Hero
             _model.SetActive(true);                 // the live child may be inactive mid-build; the clone must render
             SetLayerRecursive(_model, _previewLayer);
             StripGameplayBehaviours(_model);
+            NeutralizeEffectRenderers(_model);   // WO-1059 — MUST precede ComputeBounds below
 
             // --- INSTRUMENTATION (WO preview cube-head RCA): enumerate every renderer on the
             // cloned preview body so the trace proves WHY the head renders as a cube here while
@@ -263,6 +264,12 @@ namespace DeNelle.Village.Hero
             // poll never run on the off-screen clone.
             AttachWeaponDriver(weaponId, offHandId, armorTier);
 
+            // WO-1059: the driver attaches the weapon mesh AFTER framing, and a KayKit weapon prop
+            // can bring its own TrailRenderer with it. That one starts empty (it is created here,
+            // at RigOrigin) so it cannot poison the aim — but it WOULD emit a streak the moment
+            // SetRotation spins the model. Neutralize the newcomers too; framing is untouched.
+            NeutralizeEffectRenderers(_model);
+
             // First draw so the texture isn't blank before the first repaint.
             _cam.Render();
             return true;
@@ -288,9 +295,11 @@ namespace DeNelle.Village.Hero
             _model.SetActive(true);
             SetLayerRecursive(_model, _previewLayer);
             StripGameplayBehaviours(_model);
+            NeutralizeEffectRenderers(_model);   // WO-1059 — MUST precede ComputeBounds below
 
             FrameCamera(ComputeBounds(_model));
             AttachWeaponDriver(weaponId, offHandId, armorTier);
+            NeutralizeEffectRenderers(_model);   // WO-1059 — see the note in Begin
             _cam.Render();
             return true;
         }
@@ -657,16 +666,130 @@ namespace DeNelle.Village.Hero
             }
         }
 
+        // ── WO-1059 — THE FIX. Frame from MODEL GEOMETRY ONLY. ────────────────────────────
+        // CAPTURED PROOF (Player.log 2026-08-22, the run behind F8 seq 3585/3586):
+        //
+        //   rend[1] 'WeaponTrail' TrailRenderer enabled=True MESH-NULL bounds=5001.20x5000.52x1.11
+        //   camera rig: ... bounds center=(-2500.27,-2500.03,-0.05) size=(5001.54,5001.06,2.11)
+        //   -> RT PROBE 512x512->16x16: 0/256 px differ from clear.   BLANK.
+        //
+        // and the control, later in the SAME log, on a weapon that carries no trail:
+        //
+        //   PreviewActor cloned from 'HeroBody': 2 renderers (1 skinned)
+        //   camera rig: ... bounds center=(-5000.03,-4999.53,-0.06) size=(1.92,2.19,2.02)
+        //   -> no probe failure.                                       DRAWS.
+        //
+        // WHY: this summed EVERY Renderer.bounds, and a TrailRenderer's AABB is the hull of its
+        // accumulated WORLD-space trail POINTS. Instantiate copies those points, so the clone's
+        // trail still spans from the live hero near (0,0,0) to the clone at RigOrigin
+        // (-5000,-5000,0) — a 5001-unit box. Encapsulating it put the aim point at the MIDPOINT
+        // (-2500,-2500) with radius ~3536, which FrameCamera turned into a ~13,800-unit pullback
+        // (past farClipPlane=5000 as well). The hero sat 3,536 units outside the frustum and
+        // nothing rasterized. The SkinnedMeshRenderer was never the problem — its own bounds read
+        // 2.05x1.80x2.11, correct, in the very same trace.
+        //
+        // THE RULE: only MeshRenderer and SkinnedMeshRenderer describe where the MODEL is.
+        // Trail/Line/Particle/Billboard renderers are world-space effect buffers and must never
+        // steer framing. This is stated as a type allowlist, not a distance heuristic, so a
+        // future effect renderer is excluded by default rather than by luck.
         private static Bounds ComputeBounds(GameObject go)
         {
             var renderers = go.GetComponentsInChildren<Renderer>(true);
             if (renderers == null || renderers.Length == 0)
                 return new Bounds(go.transform.position, Vector3.one);
 
-            Bounds b = renderers[0].bounds;
-            for (int i = 1; i < renderers.Length; i++)
-                b.Encapsulate(renderers[i].bounds);
+            bool have = false;
+            Bounds b = default(Bounds);
+            int excluded = 0;
+            string excludedNames = null;
+
+            for (int i = 0; i < renderers.Length; i++)
+            {
+                var r = renderers[i];
+                if (r == null) continue;
+
+                if (!(r is MeshRenderer) && !(r is SkinnedMeshRenderer))
+                {
+                    excluded++;
+                    if (excludedNames == null)
+                        excludedNames = r.gameObject.name + "(" + r.GetType().Name + ")";
+                    else if (excluded <= 4)
+                        excludedNames += ", " + r.gameObject.name + "(" + r.GetType().Name + ")";
+                    continue;
+                }
+
+                if (!have) { b = r.bounds; have = true; }
+                else b.Encapsulate(r.bounds);
+            }
+
+            if (excluded > 0)
+                FlowTrace.Step("Preview", string.Format(
+                    "ComputeBounds: EXCLUDED {0} non-mesh renderer(s) from framing [{1}] - their " +
+                    "world-space point buffers are not model geometry and would aim the camera at " +
+                    "empty space (WO-1059).", excluded, excludedNames));
+
+            if (!have)
+            {
+                // Honest empty state (§12): say so rather than silently framing a unit cube.
+                FlowTrace.Warn("Preview",
+                    "ComputeBounds: the clone has NO MeshRenderer or SkinnedMeshRenderer - there is " +
+                    "no model geometry to frame. Falling back to a unit box at the clone's transform; " +
+                    "the preview will be blank because the MODEL is empty, not because of the aim.");
+                return new Bounds(go.transform.position, Vector3.one);
+            }
+
             return b;
+        }
+
+        // ── WO-1059 — the other half of the same defect. ──────────────────────────────────
+        // The cloned WeaponTrail is on the preview layer, so the rig camera can SEE it: even with
+        // framing fixed it would draw a 5,000-unit ribbon streaking across the portrait from the
+        // world origin. StripGameplayBehaviours cannot catch it — TrailRenderer and LineRenderer
+        // are Renderers, not MonoBehaviours, so the "disable every MonoBehaviour" pass walks
+        // straight past them.
+        //
+        // A still showcase portrait has no use for a motion trail by definition, so these are
+        // disabled outright (never destroyed — [RequireComponent] safety, same conservatism as
+        // StripGameplayBehaviours) and their stale world-space points cleared.
+        //
+        // SkinnedMeshRenderers are additionally switched to updateWhenOffscreen=true. The clone is
+        // instantiated and measured in the SAME frame at RigOrigin, and the default (false) derives
+        // the AABB from the root bone's last-known transform. On an off-screen rig that is exactly
+        // the wrong trade — it is a clone-only cost of one bounds recompute, and it makes the
+        // number FrameCamera reads describe where the clone actually is.
+        private static void NeutralizeEffectRenderers(GameObject go)
+        {
+            int trails = 0, lines = 0, skinned = 0;
+
+            foreach (var tr in go.GetComponentsInChildren<TrailRenderer>(true))
+            {
+                if (tr == null) continue;
+                tr.Clear();
+                tr.emitting = false;
+                tr.enabled  = false;
+                trails++;
+            }
+
+            foreach (var lr in go.GetComponentsInChildren<LineRenderer>(true))
+            {
+                if (lr == null) continue;
+                lr.positionCount = 0;
+                lr.enabled = false;
+                lines++;
+            }
+
+            foreach (var smr in go.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+            {
+                if (smr == null) continue;
+                smr.updateWhenOffscreen = true;
+                skinned++;
+            }
+
+            if (trails > 0 || lines > 0)
+                FlowTrace.Step("Preview", string.Format(
+                    "NeutralizeEffectRenderers: disabled {0} trail(s) + {1} line(s) on the clone and " +
+                    "forced updateWhenOffscreen on {2} skinned renderer(s) (WO-1059).",
+                    trails, lines, skinned));
         }
 
         // Make the clone a pure visual: disable colliders, kinematic rigidbodies, and disable

@@ -1119,7 +1119,7 @@ namespace DeNelle.Wallet
                 return;
             }
 
-            var rail = SelectedCurrency(pack.Sku);   // SKR by default (_defaultCurrency)
+            var rail = SelectedCurrency(pack.Sku);   // SKR canary by default (MON-1147)
             var buy = ElarionUiKit.BuildObsidianButton(_spotlightHost,
                 $"Buy {pack.AmountLabel(rail)}",
                 ElarionUiKit.ObsidianButtonStyle.Style1,
@@ -1358,6 +1358,31 @@ namespace DeNelle.Wallet
         /// </summary>
         public async UniTask<PaymentResult> Purchase(PackDef pack, CurrencyKind currency)
         {
+            // ⛔ WO-1149 — STOP THE WORLD FOR THE WHOLE TRANSACTION. Owner, on device 2026-08-22:
+            // "we need to stop game during transactions got killed while making purchase test."
+            // A purchase is not instant (wallet signs -> chain confirms -> server verifies ->
+            // entitlement recorded -> grant -> save verifies), and for all of it the player could
+            // neither defend themselves nor cancel without abandoning a transaction that may already
+            // have been signed. That is the worst possible moment to force a choice between dying
+            // and losing money.
+            //
+            // ⛔ THIS LINE IS FIRST IN THE METHOD ON PURPOSE, AND IT IS A `using` ON PURPOSE.
+            // A hold that fails to release is WORSE than no hold — a frozen game after a completed
+            // purchase is a support ticket AND a refund. Placed here, the C# compiler covers EVERY
+            // exit below without anyone remembering to: the null-pack guard, the PurchaseGate
+            // refusal, the devnet-canary refusal, the already-in-flight and already-owned returns,
+            // the wallet-connect cancellation, all four verification outcomes, the pay failure, the
+            // catch, and any branch added after this comment was written. Do not convert it to a
+            // paired Acquire()/Dispose() — that is exactly the shape that leaves three branches out.
+            //
+            // (The one exit a `using` cannot cover — the app backgrounded mid-flight and an await
+            // that never resumes — is covered by WorldHold's stuck-hold watchdog.)
+            //
+            // Whole-simulation scope, not combat-only: WorldHold zeroes Time.timeScale, which is the
+            // proven, already-wired freeze the pause menu uses. It also stops build/queue timers the
+            // player may be watching — accepted, because a transaction is short and bounded while
+            // "killed mid-purchase" is unrecoverable.
+            using var worldHold = DeNelle.Core.UI.WorldHold.Acquire(DeNelle.Core.UI.WorldHold.ReasonPurchase);
             using var _ = FlowTrace.Enter("Store", $"Purchase pack='{pack?.Sku ?? "<null>"}' {currency}");
 
             if (pack == null)
@@ -1379,6 +1404,14 @@ namespace DeNelle.Wallet
                 FlowTrace.Warn("Store", $"Purchase '{pack.Sku}' REFUSED at PurchaseGate — \"{gateReason}\" (nothing charged).");
                 SetStatus(gateReason);
                 return PaymentResult.Failure(pack.Sku, currency, gateReason);
+            }
+
+            if (_wallet.Network == WalletNetwork.Devnet && currency != CurrencyKind.Skr)
+            {
+                const string skrCanaryOnly = "Today's verified devnet purchase uses test SKR. No other rail was charged.";
+                FlowTrace.Warn("Store", $"Purchase '{pack.Sku}' refused: MON-1147 devnet canary is SKR-only.");
+                SetStatus(skrCanaryOnly);
+                return PaymentResult.Failure(pack.Sku, currency, skrCanaryOnly);
             }
 
             if (_purchaseInFlight)
@@ -1410,11 +1443,50 @@ namespace DeNelle.Wallet
                     }
                 }
 
+                // Ask the durable authority before a new charge. This is the reinstall/new-device
+                // restore path: local PlayerPrefs may be empty while the server still owns proof.
+                if (!PurchaseEntitlementVerifier.HasPending(pack.Sku))
+                {
+                    SetStatus("Checking this wallet for an existing purchase...");
+                    var durable = await PurchaseEntitlementVerifier.ReconcileAsync(pack, _wallet);
+                    if (durable.State == EntitlementVerificationState.Verified)
+                    {
+                        var restored = PaymentResult.Success(pack.Sku, currency,
+                            pack.AmountFor(currency), durable.TransactionSignature);
+                        if (await CompleteVerifiedPurchaseAsync(pack, restored)) return restored;
+                        return Indeterminate(restored,
+                            "Your purchase was found, but delivery is pending. Reopen the store to retry.");
+                    }
+                }
+
+                // Recovery is checked before a new charge. A submitted signature survives process
+                // death; reconnecting the paying wallet resumes verification instead of paying twice.
+                if (PurchaseEntitlementVerifier.HasPending(pack.Sku))
+                {
+                    SetStatus("Recovering your pending purchase...");
+                    var recovered = await PurchaseEntitlementVerifier.VerifyPendingAsync(pack, _wallet);
+                    if (recovered.State == EntitlementVerificationState.Verified)
+                    {
+                        var restored = PaymentResult.Success(pack.Sku, currency,
+                            pack.AmountFor(currency), recovered.TransactionSignature);
+                        if (await CompleteVerifiedPurchaseAsync(pack, restored)) return restored;
+                        return Indeterminate(restored,
+                            "Payment verified, but delivery is pending. Reopen the store to retry.");
+                    }
+
+                    string recoveryMessage = recovered.State == EntitlementVerificationState.Pending
+                        ? "Payment found; waiting for final verification. No second charge was made."
+                        : "The pending payment needs support review. No second charge was made.";
+                    SetStatus(recoveryMessage);
+                    return PaymentResult.Failure(pack.Sku, currency, recoveryMessage);
+                }
+
                 SetStatus($"Confirming {pack.AmountLabel(currency)} on {_wallet.NetworkLabel}...");
                 var result = await _wallet.Pay(pack, currency);
 
                 if (result.Ok)
                 {
+#if false
                     // Payment confirmed -> the player IS charged. ApplyPackContents MUST land the
                     // entitlement; it self-reports if GameState is unavailable (paid-for content lost).
                     _vm.ApplyPackContents(pack);
@@ -1430,6 +1502,27 @@ namespace DeNelle.Wallet
                         currency = currency.ToString(),
                         txSig    = result.TxSignature,
                     });
+#endif
+                    // Chain confirmation alone is not entitlement authority. Persist first so a
+                    // crash cannot strand the charge, then require independent backend proof.
+                    PurchaseEntitlementVerifier.Remember(pack, result, _wallet);
+                    SetStatus("Payment submitted - verifying your entitlement...");
+                    var verified = await PurchaseEntitlementVerifier.VerifyPendingAsync(pack, _wallet);
+                    if (verified.State == EntitlementVerificationState.Verified)
+                    {
+                        if (!await CompleteVerifiedPurchaseAsync(pack, result))
+                            return Indeterminate(result,
+                                "Payment verified, but delivery is pending. Reopen the store to retry.");
+                    }
+                    else
+                    {
+                        string pending = verified.State == EntitlementVerificationState.Pending
+                            ? "Payment submitted; verification is pending. Reopen the store to resume - do not pay again."
+                            : "Payment recorded but could not be verified. Contact support with the transaction receipt.";
+                        FlowTrace.Warn("Store", $"Purchase '{pack.Sku}' tx {Shorten(result.TxSignature)}: {pending}");
+                        SetStatus(pending);
+                        return Indeterminate(result, pending);
+                    }
                 }
                 else
                 {
@@ -1451,6 +1544,56 @@ namespace DeNelle.Wallet
                 Render();
                 RefreshWalletMirror().Forget();
             }
+        }
+
+        private static PaymentResult Indeterminate(PaymentResult paid, string error)
+        {
+            paid.Ok = false;
+            paid.Error = error;
+            return paid;
+        }
+
+        /// <summary>Exactly-once local fulfilment after the backend created a durable entitlement.</summary>
+        private async UniTask<bool> CompleteVerifiedPurchaseAsync(PackDef pack, PaymentResult payment)
+        {
+            if (pack == null || string.IsNullOrEmpty(payment.TxSignature)) return false;
+
+            if (!PurchaseGate.TryClaimGrant(payment.TxSignature))
+            {
+                if (_vm.IsOwned(pack.Sku))
+                {
+                    await PurchaseEntitlementVerifier.MarkFulfilledAsync(
+                        pack.Sku, payment.TxSignature, _wallet);
+                    SetStatus($"{pack.Name} is already restored - tx {Shorten(payment.TxSignature)}.");
+                    return true;
+                }
+                PurchaseGate.ReportGrantFailed(payment.TxSignature,
+                    $"ledger claimed but pack '{pack.Sku}' is not owned");
+                return false;
+            }
+
+            _vm.ApplyPackContents(pack);
+            if (!_vm.IsOwned(pack.Sku))
+            {
+                PurchaseGate.ReportGrantFailed(payment.TxSignature,
+                    $"pack '{pack.Sku}' was not owned after ApplyPackContents");
+                return false;
+            }
+
+            FlowTrace.Step("Store", $"Purchase '{pack.Sku}' backend-verified; tx {payment.TxSignature}, contents applied once.");
+            await PurchaseEntitlementVerifier.MarkFulfilledAsync(
+                pack.Sku, payment.TxSignature, _wallet);
+            SetStatus($"{pack.Name} unlocked - tx {Shorten(payment.TxSignature)}.");
+            PackPurchased?.Invoke(pack, payment);
+            DeNelle.Core.Analytics.EventTracker.Track("purchase_completed", new
+            {
+                packId = pack.Sku,
+                packName = pack.Name,
+                currency = payment.Currency.ToString(),
+                txSig = payment.TxSignature,
+                authority = "server_verified_entitlement"
+            });
+            return true;
         }
 
         /// <summary>

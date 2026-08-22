@@ -61,6 +61,12 @@ namespace DeNelle.Wallet
     /// </summary>
     public static class PurchaseGate
     {
+        /// <summary>
+        /// MON-1147 devnet launch allowlist. The backend currently has one independently pinned
+        /// SKU/price contract; charging any other row would create a transaction the verifier must
+        /// reject after the player paid. Expand client and server allowlists in the same reviewed WO.
+        /// </summary>
+        public const string DevnetCanarySku = "hearth-spark";
         private const string GrantedPrefix = "purchase.granted.";
         private const string GrantedIndex = "purchase.granted.index";
 
@@ -178,6 +184,16 @@ namespace DeNelle.Wallet
                 reason = StoreStrings.Get(StoreStrings.KeyBuyRailNotReady);
                 FlowTrace.Fail("Store", "PurchaseGate.CanBuy(pack): pack is NULL - refusing. A charge with no SKU " +
                                         "could not be granted, refunded or supported.");
+                return false;
+            }
+
+            if (WalletService.DefaultNetwork == WalletNetwork.Devnet &&
+                !string.Equals(pack.Sku, DevnetCanarySku, StringComparison.Ordinal))
+            {
+                reason = "This pack is not in today's verified devnet canary. Hearth Spark is the active test purchase.";
+                FlowTrace.Step("Store",
+                    $"PurchaseGate: '{pack.Sku}' refused because the MON-1147 backend contract currently " +
+                    $"authorizes only '{DevnetCanarySku}' on devnet.");
                 return false;
             }
 

@@ -932,11 +932,19 @@ namespace DeNelle.Village
         /// Watch a rewarded ad to knock a fixed chunk (Config.adSkipSeconds) off the remaining
         /// timer. Opt-in, store-build only, capped per day. The timer always finishes on its own.
         /// </summary>
+        [Obsolete("MON-1146: use the asynchronous WatchAdToSkip overload with onComplete.")]
         public bool WatchAdToSkip(string structureId) => WatchAdToSkip(ChannelId.Builder, structureId);
 
         /// <summary>WO-911 — ad-skip on ANY channel (running jobs only; see <see cref="CanWatchAdToSkip(ChannelId,string)"/>).</summary>
+        [Obsolete("MON-1146: synchronous rewarded ads are permanently refused; use the onComplete overload.")]
         public bool WatchAdToSkip(ChannelId channel, string structureId)
         {
+            DeNelle.Core.Diagnostics.FlowTrace.Fail("Obsidian",
+                $"WatchAdToSkip('{structureId}' on {channel}) sync overload REFUSED (WO-1146). " +
+                "It cannot represent a later SDK reward callback and it bypasses the placement " +
+                "ledger. No ad was shown, no time was skipped, and no allowance was consumed.");
+            return false;
+#if false
             // Same gate as CanWatchAdToSkip — the ACT is refused too, not just the affordance, so a
             // stale UI reference or a direct caller can never reach the reward while the flag is OFF.
             if (!DeNelle.Core.FeatureFlags.RewardedAdSkip)
@@ -960,6 +968,7 @@ namespace DeNelle.Village
                 RecordAdSkipUsed();
                 ApplySkipSeconds(channel, structureId, Config.adSkipSeconds);
             });
+#endif
         }
 
         /// <summary>

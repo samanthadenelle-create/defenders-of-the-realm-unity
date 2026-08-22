@@ -129,6 +129,7 @@ namespace DeNelle.Village
             ElarionUiKit.FitSingleLine(nmLbl, 0f, ElarionUi.FontBody);
 
             bool isWorn = SelectedIsEquipped();
+            bool comparisonContext = CanOfferComparisonGuidance(isWorn);
             if (isWorn)
             {
                 // The WORD carries the state (D5), plus a plate — never a green tint.
@@ -158,18 +159,21 @@ namespace DeNelle.Village
                      TMPro.TextAlignmentOptions.MidlineLeft, 0.06f, 0.48f, spacing: 2f);
             hWorn.raycastTarget = false;
             ElarionUiKit.FitSingleLine(hWorn, 0f, ElarionUi.FontMicro);
+            hWorn.gameObject.SetActive(comparisonContext);
 
             var hThis = AddLabel(host, InventoryStrings.Get(InventoryStrings.KeyPaneColumnThis),
                      0.70f, 0.77f, InkMicro, ElarionUi.FontMicro,
                      TMPro.TextAlignmentOptions.MidlineRight, 0.52f, 0.94f, spacing: 2f);
             hThis.raycastTarget = false;
             ElarionUiKit.FitSingleLine(hThis, 0f, ElarionUi.FontMicro);
+            hThis.gameObject.SetActive(comparisonContext);
 
             ElarionUiKit.Rule(host, 0.685f, 0.06f, 0.94f);
 
             // "This" — the candidate's own stats, which the model DOES expose.
             var stLbl = AddLabel(host, d.Stats ?? "", 0.44f, 0.67f, Ink, ElarionUi.FontMicro,
-                     TMPro.TextAlignmentOptions.TopRight, 0.52f, 0.94f);
+                     comparisonContext ? TMPro.TextAlignmentOptions.TopRight : TMPro.TextAlignmentOptions.TopLeft,
+                     comparisonContext ? 0.52f : 0.06f, 0.94f);
             stLbl.raycastTarget = false;
 
             // "Worn" — stated as absent, never faked. See the file header.
@@ -177,13 +181,14 @@ namespace DeNelle.Village
                      0.44f, 0.67f, InkDim, ElarionUi.FontMicro,
                      TMPro.TextAlignmentOptions.TopLeft, 0.06f, 0.48f);
             wornLbl.raycastTarget = false;
+            wornLbl.gameObject.SetActive(comparisonContext);
 
             // The one-line plain-words verdict. Only the claims we can actually support are made:
             // "this is what you are carrying now" is knowable from the equipped flag; "better" and
             // "worse" are NOT knowable without the worn item's stats, so they are not asserted.
             string verdict = isWorn
                 ? InventoryStrings.Get(InventoryStrings.KeyVerdictWearing)
-                : InventoryStrings.Get(InventoryStrings.KeyNextCompareHint);
+                : (comparisonContext ? InventoryStrings.Get(InventoryStrings.KeyNextCompareHint) : "");
             var vLbl = AddLabel(host, verdict, 0.30f, 0.42f, InkDim, ElarionUi.FontMicro,
                      TMPro.TextAlignmentOptions.TopLeft, 0.06f, 0.94f);
             vLbl.raycastTarget = false;
@@ -202,16 +207,22 @@ namespace DeNelle.Village
 
             string ctaKey = isWorn ? InventoryStrings.KeyActionWorn
                           : (isConsumable ? InventoryStrings.KeyActionUse : InventoryStrings.KeyActionEquip);
-            bool ctaEnabled = !isWorn && (isConsumable ? d.CanUse : d.CanEquip);
-
-            var cta = ElarionUiKit.ButtonPack(host, InventoryStrings.Get(ctaKey),
-                ctaEnabled ? ElarionUiKit.ButtonKind.Gold : ElarionUiKit.ButtonKind.Quiet,
-                new Vector2(0.06f, 0.06f), new Vector2(0.94f, 0.20f),
-                ctaEnabled ? BuildEquipAction(isConsumable) : null);
-            if (cta != null)
+            if (isWorn)
             {
-                cta.interactable = ctaEnabled;
-                ElarionUiKit.ClampMinTouch(cta);
+                // Already equipped is a status, not a disabled CTA. Device testing showed the
+                // button-shaped Worn control looked tappable and made its correct no-op feel broken.
+                var state = AddLabel(host, InventoryStrings.Get(InventoryStrings.KeyActionWorn),
+                    0.06f, 0.20f, GiltInk, ElarionUi.FontLabel,
+                    TMPro.TextAlignmentOptions.Center, 0.06f, 0.94f, bold: true);
+                state.raycastTarget = false;
+            }
+            else
+            {
+                var cta = ElarionUiKit.ButtonPack(host, InventoryStrings.Get(ctaKey),
+                    ElarionUiKit.ButtonKind.Gold,
+                    new Vector2(0.06f, 0.06f), new Vector2(0.94f, 0.20f),
+                    BuildEquipAction(isConsumable));
+                if (cta != null) ElarionUiKit.ClampMinTouch(cta);
             }
 
             // The line naming what the action REPLACES (D3). Only drawn when we actually know the
@@ -227,6 +238,13 @@ namespace DeNelle.Village
                 rep.raycastTarget = false;
                 ElarionUiKit.FitSingleLine(rep, 0f, ElarionUi.FontMicro);
             }
+        }
+
+        private bool CanOfferComparisonGuidance(bool isWorn)
+        {
+            if (isWorn || _vm == null || _vm.Slots == null) return false;
+            if (_railIndex != RailWeapons && _railIndex != RailArmor) return false;
+            return _vm.Slots.Count > 1;
         }
 
         /// <summary>

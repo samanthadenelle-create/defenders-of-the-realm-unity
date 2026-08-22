@@ -73,6 +73,7 @@ namespace DeNelle.Editor.Regression
     {
         private const string DungeonCtrlSrc = "Assets/_Modules/Dungeons/DungeonController.cs";
         private const string PauseSrc       = "Assets/_Modules/Settings/PauseController.cs";
+        private const string WorldHoldSrc = "Assets/_Modules/Core/UI/WorldHold.cs";
         private const string BreakSrc       = "Assets/_Modules/Core/Diagnostics/BreakCaptureHarness.cs";
         private const string HeroLocoSrc    = "Assets/_Modules/Village/Hero/HeroLocomotion.cs";
 
@@ -201,16 +202,34 @@ namespace DeNelle.Editor.Regression
 
             // PauseController: neither the capture nor the restore may pass a non-positive scale
             // through unguarded. The guard reads as a "> 0f ?" ternary at both ends.
-            if (!Regex.IsMatch(pause, @"_timeScaleBeforePause\s*=\s*[A-Za-z_][A-Za-z0-9_.]*\s*>\s*0f\s*\?"))
-                failures.Add("[world-clock] " + PauseSrc + " captures the pre-pause timeScale without a " +
-                             "'> 0f' guard. Pausing while another owner (the F8 note freeze) already " +
-                             "froze the world captures 0, and Resume then re-arms a PERMANENT invisible " +
-                             "freeze - the hero cannot move, with no pause menu on screen.");
+            // ⛔ RE-POINTED 2026-08-22 - THE INVARIANT MOVED, IT DID NOT DISAPPEAR.
+            // WO-1149 made WorldHold the SINGLE writer of Time.timeScale: PauseController is now a
+            // CLIENT that takes a ref-counted hold instead of zeroing the clock itself, and the
+            // "never capture an already-frozen clock" guard moved into WorldHold.Acquire where it
+            // protects EVERY caller instead of just the pause menu.
+            //
+            // This case used to regex PauseController for `_timeScaleBeforePause > 0f ?`. Left as it
+            // was it would go RED ON A CORRECT TREE, and the obvious way to "fix" that red is to put
+            // a second Time.timeScale writer back into PauseController - which is exactly the WO-1016
+            // defect this case exists to prevent. Same invariant, new address.
+            string hold = File.Exists(WorldHoldSrc) ? StripComments(File.ReadAllText(WorldHoldSrc)) : "";
+            if (hold.Length == 0)
+                failures.Add("[world-clock] " + WorldHoldSrc + " is missing. It owns the world clock " +
+                             "since WO-1149; without it nothing guards the freeze.");
+            else
+            {
+                if (!Regex.IsMatch(hold, @">\s*0f\s*\?") && !Regex.IsMatch(hold, @"<=\s*0f"))
+                    failures.Add("[world-clock] " + WorldHoldSrc + " captures/restores a timeScale " +
+                                 "without a non-positive guard. Acquiring a hold while the clock is " +
+                                 "ALREADY frozen would capture 0, and the final release would then " +
+                                 "re-arm a PERMANENT invisible freeze - the hero cannot move, with no " +
+                                 "pause menu on screen (WO-1016).");
 
-            if (!Regex.IsMatch(pause, @"Time\s*\.\s*timeScale\s*=\s*_timeScaleBeforePause\s*>\s*0f\s*\?"))
-                failures.Add("[world-clock] " + PauseSrc + " restores _timeScaleBeforePause without a " +
-                             "'> 0f' guard on a resume path. A restore is the LAST place a frozen world " +
-                             "can be re-armed.");
+                if (Regex.IsMatch(pause, @"Time\s*\.\s*timeScale\s*="))
+                    failures.Add("[world-clock] " + PauseSrc + " assigns Time.timeScale directly. Since " +
+                                 "WO-1149 there is exactly ONE writer (" + WorldHoldSrc + "); a second " +
+                                 "owner is how a captured-zero freeze gets re-armed behind the first.");
+            }
 
             // BreakCaptureHarness: same contract on the F8 note freeze.
             if (!Regex.IsMatch(brk, @"_prevTimeScale\s*=\s*[A-Za-z_][A-Za-z0-9_.]*\s*>\s*0f\s*\?"))

@@ -88,8 +88,15 @@ namespace DeNelle.Village
         /// because it dispatched: callers toast "skipped" off this bool, so a true here with no ad
         /// shown is the exact free-reward bug this replaces.
         /// </summary>
+        [Obsolete("MON-1146: synchronous rewarded ads cannot represent an asynchronous SDK outcome. Use AdGateService.Present/RequestAd.")]
         public bool TryShowAd(Action onReward)
         {
+            DeNelle.Core.Diagnostics.FlowTrace.Fail("Ads",
+                "TryShowAd(sync) is permanently refused (WO-1146). A synchronous return cannot " +
+                "report a real network's later earned-reward callback and bypasses AdGateService's " +
+                "placement ledger. Move the caller to AdGateService.Present/RequestAd.");
+            return false;
+#if false
             // RELEASE BLOCKER GATE (2026-08-07): the whole rewarded-ad path is flag-gated OFF
             // until a real SDK + WO-912 server-side window validation land. Refusing HERE as well
             // as at every UI build site means a stale caller can never reach the reward.
@@ -126,6 +133,7 @@ namespace DeNelle.Village
             if (presented) _lastShownRealtime = Time.realtimeSinceStartup;
 
             return granted;
+#endif
         }
 
         /// <summary>
@@ -152,6 +160,10 @@ namespace DeNelle.Village
         /// lock the player out of retrying.</para>
         /// </summary>
         public bool RequestAd(Action onReward, Action<AdShowResult> onComplete)
+            => RequestAd("place.build.skip", onReward, onComplete);
+
+        /// <summary>Placement-aware live contract. Each placement uses its own readiness and unit.</summary>
+        public bool RequestAd(string placementId, Action onReward, Action<AdShowResult> onComplete)
         {
             if (!DeNelle.Core.FeatureFlags.RewardedAdSkip)
             {
@@ -162,19 +174,10 @@ namespace DeNelle.Village
                 return false;
             }
 
-            if (!IsCooldownReady)
+            if (!AdServices.Current.IsRewardedReadyFor(placementId))
             {
-                // CappedByGame, not NoFill: OUR cooldown said no, not the network. Telemetry
-                // must never confuse the two - that distinction is the launch metric.
-                onComplete?.Invoke(AdShowResult.Unavailable(AdUnavailableReason.CappedByGame));
-                return false;
-            }
-
-
-            if (!AdServices.Current.IsRewardedReady)
-            {
-                AdUnavailableReason why = AdServices.Current.RewardedUnavailableReason;
-                AdServices.Current.PreloadRewarded();
+                AdUnavailableReason why = AdServices.Current.RewardedUnavailableReasonFor(placementId);
+                AdServices.Current.PreloadRewarded(placementId);
                 onComplete?.Invoke(AdShowResult.Unavailable(why));
                 return false;
             }
@@ -216,10 +219,13 @@ namespace DeNelle.Village
 
             bool presented = false;
             DeNelle.Core.Diagnostics.Guard.Try("Ads", "RewardedAdManager.ShowAdInternal(async)",
-                () => { presented = ShowAdInternal(onRewardEarned, onSettled); });
+                () => { presented = ShowAdInternal(placementId, onRewardEarned, onSettled); });
 
-            if (presented) _lastShownRealtime = Time.realtimeSinceStartup;
-            else if (!settled) onSettled(AdShowResult.Unavailable(AdUnavailableReason.LoadFailed));
+            // MON-1146: the placement catalog/AdGateService is the sole cooldown authority for
+            // the live async path. A second fixed 480s timer here used to override daily chest's
+            // authored 0s and harvest's 3600s, coupling unrelated placements together.
+            if (!presented && !settled)
+                onSettled(AdShowResult.Unavailable(AdUnavailableReason.LoadFailed));
 
             return presented;
         }
@@ -236,16 +242,22 @@ namespace DeNelle.Village
         /// what a real SDK must NOT do - which is why the SDK override goes here, not there.</para>
         /// </summary>
         protected virtual bool ShowAdInternal(Action onReward, Action<AdShowResult> onComplete)
+            => ShowAdInternal("place.build.skip", onReward, onComplete);
+
+        /// <summary>Placement-aware SDK seam; never substitutes one placement's loaded unit.</summary>
+        protected virtual bool ShowAdInternal(string placementId, Action onReward,
+                                              Action<AdShowResult> onComplete)
         {
             IAdService ads = AdServices.Current;
-            if (!ads.IsRewardedReady)
+            if (!ads.IsRewardedReadyFor(placementId))
             {
-                onComplete?.Invoke(AdShowResult.Unavailable(ads.RewardedUnavailableReason));
-                ads.PreloadRewarded();
+                onComplete?.Invoke(AdShowResult.Unavailable(
+                    ads.RewardedUnavailableReasonFor(placementId)));
+                ads.PreloadRewarded(placementId);
                 return false;
             }
 
-            ads.ShowRewarded(result =>
+            ads.ShowRewarded(placementId, result =>
             {
                 if (result.Rewarded) onReward?.Invoke();
                 onComplete?.Invoke(result);

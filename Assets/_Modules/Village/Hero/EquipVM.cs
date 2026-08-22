@@ -427,17 +427,49 @@ namespace DeNelle.Village.Hero
                 string equippedId = offhand
                     ? (t?.EquippedOffHand != null ? t.EquippedOffHand.id : null)
                     : (t?.EquippedWeapon != null ? t.EquippedWeapon.id : null);
+
+                // WO-1061 §2 — THE MEASUREMENT LINE. A weapon drawer that lists nothing has three
+                // causes and reading the code cannot tell them apart; this line can, in ONE read:
+                //   owned=0                      -> the GRANT path (equipped != owned). Not a UI bug.
+                //   owned>0, rejectedClass=owned -> the class gate (D): item job never equals this class.
+                //   owned>0, rejectedHand=owned  -> the hand split (C): everything owned is/isn't a shield.
+                // The View's existing trace only classifies "data-empty vs built-but-broken"; it stops
+                // exactly where this begins, which is why the empty drawer stayed un-diagnosable.
+                // PERMANENT (CLAUDE.md §12) — flag it off one day, never strip it.
+                int ownedCount = 0, rejectedHand = 0, rejectedClass = 0;
+                var perItem = new System.Text.StringBuilder();
+
                 foreach (var (w, qty) in _store.OwnedWeapons())
                 {
                     if (w == null) continue;
-                    if (offhand != w.IsOffHandItem) continue;   // shields ⇄ off-hand only
-                    if (!string.IsNullOrEmpty(job) && !_store.WeaponFitsClass(w, job)) continue;
+                    ownedCount++;
+                    bool handOk = offhand == w.IsOffHandItem;
+                    bool fits = string.IsNullOrEmpty(job) || _store.WeaponFitsClass(w, job);
+                    if (perItem.Length > 0) perItem.Append("; ");
+                    perItem.Append("id=").Append(w.id)
+                           .Append(" job='").Append(w.job ?? "<null>")
+                           .Append("' offHand=").Append(w.IsOffHandItem)
+                           .Append(" fits=").Append(fits);
+
+                    if (!handOk) { rejectedHand++; continue; }   // shields ⇄ off-hand only
+                    if (!fits) { rejectedClass++; continue; }
                     bool equipped = !string.IsNullOrEmpty(equippedId) &&
                                     string.Equals(equippedId, w.id, StringComparison.OrdinalIgnoreCase);
                     string name = string.IsNullOrEmpty(w.name) ? w.id : w.name;
                     _compatible.Add(new ItemVM(w.id, name + (qty > 1 ? " x" + qty : ""),
                         IconRoleWeapon, w.id, 0, "gold", true, w.rarity, equipped: equipped));
                 }
+
+                string verdict = ownedCount == 0
+                    ? "CAUSE=grant-path (owned=0: the store holds no weapons at all - an EQUIPPED item that is not OWNED never reaches this list)"
+                    : _compatible.Count > 0 ? "ok"
+                    : rejectedClass >= rejectedHand
+                        ? "CAUSE=class-gate (every owned weapon's job fails this wearer's class - DATA authoring, do NOT loosen the gate)"
+                        : "CAUSE=hand-split (every owned weapon sits in the other hand - may be genuinely correct)";
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Equip",
+                    $"drawer slot={_selectedSlotKey} job='{job ?? "<null>"}' owned={ownedCount} " +
+                    $"-> listed={_compatible.Count} rejectedHand={rejectedHand} rejectedClass={rejectedClass} " +
+                    $"equippedHere='{equippedId ?? "<none>"}' {verdict} :: {(perItem.Length > 0 ? perItem.ToString() : "<no owned weapons>")}");
             }
             else if (_selectedSlotKey == SlotRing || _selectedSlotKey == SlotAmulet)
             {
@@ -460,16 +492,40 @@ namespace DeNelle.Village.Hero
             else
             {
                 string equippedId = t?.EquippedArmor != null ? t.EquippedArmor.id : null;
+
+                // WO-1061 §2 — the armor drawer's twin of the weapon measurement above. Same three
+                // causes, same one-read discrimination (armor has no hand split, so the only two
+                // rejections are "nothing owned" and the WEIGHT-class gate). PERMANENT (§12).
+                int ownedArmor = 0, rejectedWeight = 0;
+                var perArmor = new System.Text.StringBuilder();
+
                 foreach (var (a, qty) in _store.OwnedArmor())
                 {
                     if (a == null) continue;
-                    if (!string.IsNullOrEmpty(job) && !_store.ArmorFitsClass(a, job)) continue;
+                    ownedArmor++;
+                    bool fits = string.IsNullOrEmpty(job) || _store.ArmorFitsClass(a, job);
+                    if (perArmor.Length > 0) perArmor.Append("; ");
+                    perArmor.Append("id=").Append(a.id)
+                            .Append(" job='").Append(a.job ?? "<null>")
+                            .Append("' weight='").Append(a.weight ?? "<null>")
+                            .Append("' fits=").Append(fits);
+
+                    if (!fits) { rejectedWeight++; continue; }
                     bool equipped = !string.IsNullOrEmpty(equippedId) &&
                                     string.Equals(equippedId, a.id, StringComparison.OrdinalIgnoreCase);
                     string name = string.IsNullOrEmpty(a.name) ? a.id : a.name;
                     _compatible.Add(new ItemVM(a.id, name + (qty > 1 ? " x" + qty : ""),
                         IconRoleArmor, a.id, 0, "gold", true, a.rarity, equipped: equipped));
                 }
+
+                string armorVerdict = ownedArmor == 0
+                    ? "CAUSE=grant-path (owned=0: no armor in the store)"
+                    : _compatible.Count > 0 ? "ok"
+                    : "CAUSE=weight-gate (every owned piece fails this class's weight - DATA authoring)";
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Equip",
+                    $"drawer slot={_selectedSlotKey} job='{job ?? "<null>"}' owned={ownedArmor} " +
+                    $"-> listed={_compatible.Count} rejectedWeight={rejectedWeight} " +
+                    $"equippedHere='{equippedId ?? "<none>"}' {armorVerdict} :: {(perArmor.Length > 0 ? perArmor.ToString() : "<no owned armor>")}");
             }
         }
 

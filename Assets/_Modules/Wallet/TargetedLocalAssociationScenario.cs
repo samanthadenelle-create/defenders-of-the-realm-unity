@@ -188,10 +188,15 @@ namespace DeNelle.Wallet
             };
             _webSocket.OnClose += _ =>
             {
-                // The SDK reconnects here unconditionally once _didConnect is
-                // set, with no "we meant to close" latch. Guard it.
-                if (!_didConnect || _closed) return;
-                _webSocket.Connect(awaitConnection: false);
+                // A local-association wallet owns a one-shot loopback endpoint. Once it
+                // closes that endpoint, reconnecting to the same port can never resume the
+                // request. NativeWebSocket invokes OnClose again for each refused reconnect,
+                // producing an unbounded ThreadPoolWorkQueue.Dispatch loop on IL2CPP.
+                // Initial connection retries already belong to TryConnectWs; after an open,
+                // let the pending MWA request complete/fail and let the caller decide whether
+                // to begin a fresh association.
+                if (!_closed)
+                    FlowTrace.Warn("Wallet", "MWA wallet closed its one-shot association endpoint; not reconnecting to the retired port.");
             };
             _webSocket.OnError += e => FlowTrace.Warn("Wallet", $"MWA socket error: {e}");
             _webSocket.OnMessage += ReceivePublicKeyHandler;
@@ -308,6 +313,50 @@ namespace DeNelle.Wallet
                 // SignedPayloadsBytes is a List<byte[]> (verified at source) and
                 // is NULL — not empty — when the wallet returned no payloads.
                 if (signed == null || signed.SignedPayloadsBytes == null || signed.SignedPayloadsBytes.Count == 0)
+                    return null;
+                return signed.SignedPayloadsBytes[0];
+            }
+            finally
+            {
+                await CloseAssociation();
+            }
+        }
+
+        /// <summary>
+        /// Runs a targeted MWA association, restores the existing authorization grant, and asks
+        /// that exact wallet to sign one serialized transaction. The game never receives a key;
+        /// only the wallet-returned signed wire payload crosses this seam.
+        /// </summary>
+        public async Task<byte[]> SignTransaction(
+            string identityUri, string iconUri, string identityName, string cluster,
+            string authToken, byte[] serializedTransaction)
+        {
+            if (serializedTransaction == null || serializedTransaction.Length == 0)
+                throw new ArgumentException("A serialized transaction is required.", nameof(serializedTransaction));
+
+            LogIdentity(string.IsNullOrEmpty(authToken)
+                    ? "authorize+sign_transactions"
+                    : "reauthorize+sign_transactions",
+                identityUri, iconUri, identityName);
+
+            var client = await StartAssociation();
+            try
+            {
+                if (string.IsNullOrEmpty(authToken))
+                {
+                    await client.Authorize(
+                        new Uri(identityUri), new Uri(iconUri, UriKind.Relative), identityName, cluster);
+                }
+                else
+                {
+                    await client.Reauthorize(
+                        new Uri(identityUri), new Uri(iconUri, UriKind.Relative), identityName, authToken);
+                }
+
+                var signed = await client.SignTransactions(
+                    new List<byte[]> { serializedTransaction });
+                if (signed == null || signed.SignedPayloadsBytes == null ||
+                    signed.SignedPayloadsBytes.Count == 0)
                     return null;
                 return signed.SignedPayloadsBytes[0];
             }

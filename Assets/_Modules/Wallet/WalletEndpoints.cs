@@ -51,14 +51,14 @@ namespace DeNelle.Wallet
         // SKR (Solana Seeker token) mints. SKR has no published devnet mint in
         // any doc the agent can read — INTEGRATOR MUST FILL THIS (week7-wallet.md).
         // Left empty so an SKR transfer fails loudly instead of sending wrongly.
-        public const string SkrMintDevnet = "";
+        public const string SkrMintDevnet = "3BwWSAUZmyngXDSZiCawEnP7iLgY5ANNopBDz94AB77N";
         // SKR mainnet mint — owner-gated; not the agent's to provision.
         public const string SkrMintMainnet = "";
 
         // Decimals — SOL is 9 (lamports); USDC and SKR are 6 by SPL convention.
         public const int SolDecimals = 9;
         public const int UsdcDecimals = 6;
-        public const int SkrDecimals = 6;
+        public const int SkrDecimals = 9;
 
         /// <summary>The HTTP RPC URL for a network.</summary>
         public static string RpcUrl(WalletNetwork network)

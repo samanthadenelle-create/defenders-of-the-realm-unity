@@ -22,6 +22,7 @@
 //      AndroidPlayer\SDK\platform-tools\adb.exe.)
 // =============================================================================
 
+using System;
 using System.IO;
 using System.Linq;
 using UnityEditor;
@@ -100,7 +101,14 @@ namespace DeNelle.Editor
                 target = BuildTarget.Android,
                 targetGroup = BuildTargetGroup.Android,
                 options = BuildOptions.None,
+                // A custom -executeMethod build owns BuildPlayerOptions, so Unity's command-line
+                // symbols do not automatically reach the player compilation. Forward them
+                // explicitly; with no -extraScriptingDefines argument this remains an empty array.
+                extraScriptingDefines = CommandLineScriptingDefines(),
             };
+
+            if (options.extraScriptingDefines.Length > 0)
+                Debug.Log($"[AndroidBuild] Extra scripting defines: {string.Join(";", options.extraScriptingDefines)}");
 
             // WO-974: build Addressables content EXPLICITLY. Without this the bundles are rebuilt
             // only if an uncommitted per-machine Editor preference happens to say so — so a fresh
@@ -154,6 +162,25 @@ namespace DeNelle.Editor
                                $"errors={summary.totalErrors}. See log for Gradle output.");
                 EditorApplication.Exit(1);
             }
+        }
+
+        private static string[] CommandLineScriptingDefines()
+        {
+            string[] args = Environment.GetCommandLineArgs();
+            for (int i = 0; i < args.Length - 1; i++)
+            {
+                if (!string.Equals(args[i], "-extraScriptingDefines", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                return args[i + 1]
+                    .Split(new[] { ';', ',' }, StringSplitOptions.RemoveEmptyEntries)
+                    .Select(value => value.Trim())
+                    .Where(value => value.Length > 0)
+                    .Distinct(StringComparer.Ordinal)
+                    .ToArray();
+            }
+
+            return Array.Empty<string>();
         }
 
         /// <summary>

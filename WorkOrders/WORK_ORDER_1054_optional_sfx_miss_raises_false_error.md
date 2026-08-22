@@ -1,4 +1,4 @@
-**Status:** READY TO IMPLEMENT — RCA complete; the fix is one argument at each of FOUR call sites (§4)
+**Status:** DONE 2026-08-22 (CLI) - fixed BEFORE this triage was written. The RCA named FOUR call sites; the sweep found and fixed EIGHT. Zero AudioAssetLoader call sites now lack `optional:`. Gate-green, committed, pushed.
 
 # WORK ORDER 1054 — An OPTIONAL sfx override miss raises a FALSE error and trips F8
 
@@ -166,3 +166,36 @@ the bug detector, and she especially must not be the detector for bugs that are 
 
 **Read, do not edit:** `Assets/_Modules/Core/Addressables/AudioAssetLoader.cs` — the loader and its
 default are correct as written.
+
+
+---
+
+# DONE 2026-08-22 - AND THE RCA UNDERCOUNTED
+
+The diagnosis was exactly right: `ProceduralSfx` reads `LoadClip(...) ?? Generate(id)` with the line
+above it saying *"Missing -> fall through to synth"*, and `LoadClip`'s own `optional` parameter doc
+names *"a synth-fallback SFX key"* as the canonical case. The call site never passed it, so the
+loader took its safe-loud default and logged `FlowTrace.Fail` claiming the clip was **"REQUIRED by
+its caller"** - a sentence that was simply false.
+
+**But there were EIGHT call sites, not four.** The first pass fixed five (a `head -6` truncated the
+grep and hid the rest), then `Sfx/TowerFire` fired from `AudioService.PrewarmCombatSfx` - a site built
+dynamically inside a loop, invisible to a literal-string grep. A full sweep found the remainder.
+
+Each site declares itself optional for ITS OWN reason, not by a blanket edit:
+- **synth fallback** - `ProceduralSfx`, `EnemyCombatAudio` (x3), `AbilityAudioBridge`
+- **prewarm** - `AudioService.PrewarmCombatSfx`
+- **candidate-list probe** - `BattleMusicManager` (walks a list, first hit wins; a miss on an early
+  candidate is EXPECTED)
+- **caller logs it better** - `AudioBootstrap`, `HeroAbilities`, `ActionBundlePlayer` (these already
+  name which track goes silent; the loader's Fail was a redundant SECOND report at error level)
+
+⚠ One trap worth recording: the patch script's "already done?" check tested whether the NEW string
+appeared anywhere in the file. `AudioBootstrap` had one call already optional and one not, so it
+reported "already" and skipped a needed edit. A per-file check for a per-SITE change is the wrong
+granularity.
+
+**Why this outranked prettier work:** a false error is worse than no log. It trips F8, reaches the
+owner's inbox, and repeated often enough it trains every seat to skim past errors - the exact
+instinct CLAUDE.md sections 12 and 14 exist to build in the opposite direction. It fired again
+mid-session and interrupted a real investigation to report a non-bug.

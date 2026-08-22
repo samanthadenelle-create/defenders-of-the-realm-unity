@@ -459,7 +459,10 @@ namespace DeNelle.Village
             // A content section: if it is empty, say what fills it; otherwise teach the rail.
             int count = SectionCount(RailTab(_railIndex));
             if (count <= 0) return InventoryStrings.EmptyLineFor(RailTab(_railIndex));
-            return _vm != null && _vm.SelectedId != null
+            bool compare = (_railIndex == RailWeapons || _railIndex == RailArmor)
+                           && _vm != null && _vm.SelectedId != null
+                           && SectionCount(RailTab(_railIndex)) > 1;
+            return compare
                 ? InventoryStrings.Get(InventoryStrings.KeyNextCompareHint)
                 : InventoryStrings.Get(InventoryStrings.KeyNextCountHint);
         }

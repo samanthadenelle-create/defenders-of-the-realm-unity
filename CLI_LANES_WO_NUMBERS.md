@@ -129,7 +129,9 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-08-22 (CLI): main line next free = **1149**.
+> ## ⚠ RECONCILED 2026-08-22 (CLI): main line next free = **1150**.
+> *(CLI seat minted **WO-1149 - MON** and bumped 1149 -> 1150 in this SAME edit. **1149** = the
+> world keeps running during a purchase - the owner was KILLED mid purchase-test. MON lane.)*
 > *(CLI seat minted **WO-1148** and bumped 1148 -> 1149 in this SAME edit. **1148** = EVERY HUD
 > label must fit its box - WO-1144 fixed the two it measured and did not generalise; the device
 > shows "Raids ..." and "SK... 209" still truncated.)*

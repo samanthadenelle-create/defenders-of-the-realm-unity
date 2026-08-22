@@ -874,6 +874,7 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "hud-class-fallback suite", () => { if (!DeNelle.Editor.Regression.HudHeroClassFallbackRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[hud-class-fallback] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "tutorial-guide-identity suite", () => { if (!DeNelle.Editor.Regression.TutorialGuideIdentityRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[tutorial-guide-identity] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "endstate-handoff suite", () => { if (!DeNelle.Editor.Regression.EndStateTransitionHandoffRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[endstate-handoff] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "wave-modal-safety suite", () => { if (!DeNelle.Editor.Regression.WaveModalSafetyRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[wave-modal-safety] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "town-suspend-floor suite", () => { if (!DeNelle.Editor.Regression.TownSuspendSceneFloorRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[town-suspend-floor] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "equipment-screen-layout suite", () => { if (!DeNelle.Editor.Regression.EquipmentScreenLayoutRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[equipment-screen-layout] " + r); });
             // --- WO-1133: the Bag is "The Armory Rail" - three abutting zones matching the ratified
@@ -883,6 +884,12 @@ namespace DeNelle.Editor
             //     through the DrewContent evidence gate (a blank RT and a drawn hero are the same
             //     pixels, which is how the owner's empty navy rectangle shipped). ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "inventory-armory-rail suite", () => { if (!DeNelle.Editor.Regression.InventoryArmoryRailRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[inventory-armory-rail] " + r); });
+            // --- WO-1059: the hero preview must frame the MODEL. The captured defect was
+            //     ComputeBounds summing a cloned WeaponTrail's world-space AABB, which aimed the
+            //     preview camera at the midpoint between the world origin and the rig origin and
+            //     rendered an empty frustum (F8 seq 3585/3586). Case A measures the mechanism,
+            //     Case B drives the real rig, Case C pins the neutralise-then-frame ordering. ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "hero-preview-framing suite", () => { if (!DeNelle.Editor.Regression.HeroPreviewFramingRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[hero-preview-framing] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "dungeon-mover-ownership suite", () => { if (!DeNelle.Editor.Regression.DungeonMoverOwnershipRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[dungeon-mover-ownership] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "hero-bar-rebind suite", () => { if (!DeNelle.Editor.Regression.HeroBarClassRebindRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[hero-bar-rebind] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "mage-spell-kit suite", () => { if (!DeNelle.Editor.Regression.MageSpellKitAuthoringRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[mage-spell-kit] " + r); });
@@ -1036,6 +1043,14 @@ namespace DeNelle.Editor
             // every runtime file for a second PetDeployer.SummonAt caller.
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "echo-world-presence suite", () => { if (!DeNelle.Editor.Regression.EchoWorldPresenceRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[echo-world-presence] " + r); });
 
+            // --- EQUIP DRAWER CONTENTS (WO-1061, 2026-08-22): the equip drawer listed NOTHING,
+            // so the player could not change weapons — and an item the hero was WEARING was
+            // absent from its own slot's list. Measures the ROW COUNT the drawer produces for
+            // known fixtures (grant path through the real InventoryStore, hand split, class
+            // gate, and a true-zero anti-tautology case), because a suite that merely asserted
+            // the builder runs would have passed on every day this defect shipped.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "equip-drawer-contents suite", () => { if (!DeNelle.Editor.Regression.EquipDrawerContentsRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[equip-drawer-contents] " + r); });
+
             // WO-1110: the raid's three non-victory exits must PAY THE SAME (death used to
             // forfeit razing credit that retreat paid), Start must bind the clock-expiry exit
             // BEFORE it builds the HUD (an unguarded presentation throw was the raid's only
@@ -1119,6 +1134,12 @@ namespace DeNelle.Editor
             //     the browsable shelf and the same-day "no glimmer in any pack" ruling. ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "buy-gate suite", () => { if (!DeNelle.Editor.Regression.BuyGateAndPriceLadderRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[buy-gate] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "monetization-activation suite", () => { if (!DeNelle.Editor.Regression.MonetizationActivationRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[monetization-activation] " + r); });
+            // --- WO-1149 (owner, on device 2026-08-22: "we need to stop game during transactions got
+            //     killed while making purchase test"): a transaction freezes the world through the
+            //     single WorldHold owner, and EVERY exit unfreezes it. The suite measures the clock
+            //     after driving real paths rather than grepping for a Resume() call, because the only
+            //     failure that matters is the branch that returns without releasing. ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "world-hold suite", () => { if (!DeNelle.Editor.Regression.TransactionWorldHoldRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[world-hold] " + r); });
 
             // =====================================================================
             //  >>> REGISTERED ORACLE SUITES — END FENCE <<<  (new lines go ABOVE)
@@ -1157,7 +1178,19 @@ namespace DeNelle.Editor
                              expectDetail + "). The denominator is therefore UNPINNED: a suite that throws " +
                              "inside Guard.Try would vanish from the total and the marker would still read green.");
             }
-            else if (expectedSuites != suitesTotal)
+            // ⛔ SHORTFALL, NOT INEQUALITY (2026-08-22). The hazard this guards is a suite that
+            // THROWS inside Guard.Try: it emits neither a [tag] line nor a failure, so it silently
+            // leaves the total. That is EXCLUSIVELY a shortfall (actual < expected) -- arithmetic,
+            // not judgement. The old `!=` also fired on a SURPLUS and printed the vanish message at
+            // it, which is unreachable by the failure mode described: on 2026-08-22 it reported
+            // "SUITE VANISHED" at 264 accounted vs 261 registered, with 264 green and 0 red. A
+            // by-name reconciliation that day confirmed EVERY registered suite reported.
+            // The two sides measure different quantities on purpose -- expected counts registration
+            // call-sites, actual counts emitted tag lines, and one suite may legitimately emit more
+            // than one line -- so equality was never the right assertion. Shortfall keeps 100% of
+            // the detection. Residual, ticketed: a vanish MASKED by a co-occurring surplus still
+            // slips, which the old `!=` did not catch either (it just fired the wrong message).
+            else if (suitesTotal < expectedSuites)
             {
                 failures.Add("[suite-count] SUITE VANISHED FROM THE DENOMINATOR: source registers " +
                              expectedSuites + " oracle suite(s) between the fences, but this run only " +
@@ -1537,7 +1570,7 @@ namespace DeNelle.Editor
                 if (knightWeapon != null && ItemIconCatalog.ForWeapon(knightWeapon) == null)
                     failures.Add($"icon: Knight starting weapon '{knightWeapon.id}/{knightWeapon.name}' falls to GLYPH — sword art should resolve (real bug, not the by-design staff/censer glyph)");
                 else
-                    log.AppendLine($"[icon-coverage] Knight start weapon '{(knightWeapon?.id ?? "null")}' -> {(knightWeapon != null && ItemIconCatalog.ForWeapon(knightWeapon) != null ? "REAL art OK" : "no weapon/glyph")}");
+                    log.AppendLine($"  [icon-coverage] Knight start weapon '{(knightWeapon?.id ?? "null")}' -> {(knightWeapon != null && ItemIconCatalog.ForWeapon(knightWeapon) != null ? "REAL art OK" : "no weapon/glyph")}");
             }
             catch (System.Exception e) { log.AppendLine("[icon-coverage] knight-weapon probe threw: " + e.Message); }
         }
@@ -2680,7 +2713,7 @@ namespace DeNelle.Editor
             // 0/N is EXPECTED and must NOT fail (the foundation is additive, no behavior change).
             log.AppendLine($"[item-model] capability invariants checked on " +
                            $"{weapons.Count}W + {armors.Count}A + {consumables.Count}C entries");
-            log.AppendLine($"[item-model] SOFT prefabPath coverage: {prefabResolved}/{carriableTotal} " +
+            log.AppendLine($"  [item-model] SOFT prefabPath coverage: {prefabResolved}/{carriableTotal} " +
                            $"Carriable entries resolve a non-null prefabPath (WO-Item-2 fills the rest)");
         }
 
@@ -2796,7 +2829,7 @@ namespace DeNelle.Editor
             log.AppendLine($"[crafting] chain checked: {recipes.Count} recipe(s), {materialIds.Count} material(s), " +
                            $"{droppable.Count} droppable id(s); {chainOk} recipe(s) fully craftable drops->craft->consumable");
             if (orphan > 0)
-                log.AppendLine($"[crafting] SOFT: {orphan} ing_* material(s) used by no recipe (dead-end drop)");
+                log.AppendLine($"  [crafting] SOFT: {orphan} ing_* material(s) used by no recipe (dead-end drop)");
         }
 
         // =====================================================================
@@ -2954,7 +2987,7 @@ namespace DeNelle.Editor
                 if (inv.Get(simRecipe.OutputAccessoryId) != outAfterClear)
                     failures.Add($"[jeweler] sim '{simRecipe.Id}': failed craft still granted output (no rollback)");
 
-                log.AppendLine($"[jeweler] sim '{simRecipe.Id}' -> consume base+gems, grant '{simRecipe.OutputAccessoryId}', " +
+                log.AppendLine($"  [jeweler] sim '{simRecipe.Id}' -> consume base+gems, grant '{simRecipe.OutputAccessoryId}', " +
                                "debit wallet; no-funds craft rejected (rollback) OK");
             }
             catch (System.Exception ex)

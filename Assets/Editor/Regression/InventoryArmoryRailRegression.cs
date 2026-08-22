@@ -97,6 +97,7 @@ namespace DeNelle.Editor.Regression
                 Case(failures, "touch-floor",    () => Case4_TouchFloor(failures, notes));
                 Case(failures, "removals",       () => Case5_RemovalsStayRemoved(failures, notes));
                 Case(failures, "preview-gate",   () => Case6_PreviewEvidenceGate(failures, notes));
+                Case(failures, "device-ux",      () => Case7_DeviceUxRulings(failures, notes));
             }
             catch (Exception ex)
             {
@@ -474,15 +475,14 @@ namespace DeNelle.Editor.Regression
                     failures.Add("[removals] " + Path.GetFileName(b.File) + ": " + b.Why);
             }
 
-            // And the positive half: the route the ribbon used must STILL exist, just relocated.
-            string builder = ReadSrc(BuilderSrc);
-            if (builder != null && !Regex.IsMatch(StripComments(builder),
-                    @"PanelRouter\.Open\(\s*DeNelle\.Core\.UI\.PanelId\.EquipmentPanel\s*\)"))
-                failures.Add("[removals] the Bag no longer routes to PanelId.EquipmentPanel at all. The design " +
-                             "PROMOTES the gear view rather than cutting it - deleting the door was the point, " +
-                             "deleting the room was not");
+            // Device ruling 2026-08-22: the EquipmentPanel remains blank at source. The Bag's
+            // useful worn summary stays, but it must not present an action into that known-empty room.
+            string grid = ReadSrc(GridSrc);
+            if (grid != null && Regex.IsMatch(StripComments(grid), @"OpenGearPreview\s*\("))
+                failures.Add("[removals] the Gear summary again offers the known-blank EquipmentPanel " +
+                             "as an action. Device evidence ruled that empty destination non-interactive");
 
-            notes.Add(banned.Length + " removed constructions still absent; the EquipmentPanel route still present");
+            notes.Add(banned.Length + " removed constructions still absent; Gear is a summary, not a blank-panel action");
         }
 
         // =====================================================================
@@ -531,6 +531,25 @@ namespace DeNelle.Editor.Regression
                              "say which one was blank, which is the ambiguity that cost this ticket a day");
 
             notes.Add("preview mount is evidence-gated and tagged per call site");
+        }
+
+        private static void Case7_DeviceUxRulings(List<string> failures, List<string> notes)
+        {
+            string pane = ReadSrc(PaneSrc);
+            if (pane == null) { failures.Add("[device-ux] cannot read " + PaneSrc); return; }
+            string code = StripComments(pane);
+            if (!Regex.IsMatch(code, @"_railIndex\s*!=\s*RailWeapons\s*&&\s*_railIndex\s*!=\s*RailArmor"))
+                failures.Add("[device-ux] comparison guidance is no longer restricted to Weapons/Armor");
+            if (!Regex.IsMatch(code, @"_vm\.Slots\.Count\s*>\s*1"))
+                failures.Add("[device-ux] comparison guidance can appear when there is no second item to compare");
+            if (!Regex.IsMatch(code, @"if\s*\(isWorn\)[\s\S]*?AddLabel\([^;]*KeyActionWorn"))
+                failures.Add("[device-ux] already-equipped state is no longer rendered as a non-button label");
+
+            string trinkets = Copy(failures, InventoryStrings.KeyEmptyTrinkets) ?? "";
+            foreach (string word in new[] { "rough stones", "dungeons", "Jeweler", "polish", "Rings of Power" })
+                if (trinkets.IndexOf(word, StringComparison.OrdinalIgnoreCase) < 0)
+                    failures.Add("[device-ux] trinket empty copy no longer explains '" + word + "'");
+            notes.Add("device rulings pinned: honest trinket loop, scoped compare hint, Worn is status");
         }
 
         // =====================================================================

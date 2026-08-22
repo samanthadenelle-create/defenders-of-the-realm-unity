@@ -79,39 +79,10 @@ namespace DeNelle.Village
         // worn slots answer "what am I wearing" from pure model data and always render,
         // the niche mounts the live hero ONLY through TryMountHeroPreview's evidence gate
         // (and shows the honest 2D portrait when the rig drew nothing), and the action
-        // routes to EquipmentPanel for the per-slot drawers, which do work.
+        // Device testing later ruled the blank EquipmentPanel destination non-interactive.
         private void BuildGearSection(Transform stage)
         {
-            // LEFT — the hero niche, full stage height (D4: ElarionUiKit.Niche / slot_character).
-            var niche = ElarionUiKit.Niche(stage, new Vector2(0.00f, 0.14f), new Vector2(0.44f, 1.00f));
-            niche.name = "HeroNiche";
-
-            if (!TryMountHeroPreview(niche.transform))
-            {
-                // The gate said the rig drew nothing (or there is no hero). Show the real portrait
-                // art rather than a plate the player has to guess about.
-                var artSprite = LoadHeroPortrait(HeroJob);
-                if (artSprite != null)
-                {
-                    var art = AddImage(niche.transform, "PortraitArt",
-                                       new Vector2(0.06f, 0.06f), new Vector2(0.94f, 0.94f), Color.white);
-                    var aImg = art.GetComponent<Image>();
-                    if (aImg != null)
-                    {
-                        aImg.sprite = artSprite;
-                        aImg.type = Image.Type.Simple;
-                        aImg.preserveAspect = true;   // never stretch a bust into an ellipse
-                        aImg.raycastTarget = false;
-                    }
-                }
-                else
-                {
-                    AddLabel(niche.transform, ClassCrest(HeroJob), 0f, 1f, GiltInk,
-                             ElarionUi.FontTitle + 30, TMPro.TextAlignmentOptions.Center, 0.1f, 0.9f, bold: true);
-                }
-            }
-
-            // RIGHT — the five worn slots. A vacant slot reads "empty", never a blank plate (D3).
+            // The five worn slots use the full stage. A vacant slot reads "empty", never a blank plate.
             var slots = new[]
             {
                 new WornSlot(InventoryStrings.KeySlotMainHand, WornName(_loadout != null ? _loadout.EquippedWeapon  : null)),
@@ -121,28 +92,18 @@ namespace DeNelle.Village
                 new WornSlot(InventoryStrings.KeySlotRing,     WornAccessoryName(_loadout != null ? _loadout.EquippedRing   : null)),
             };
 
-            const float top = 1.00f, bottom = 0.14f, gap = 0.018f;
+            const float top = 1.00f, bottom = 0.00f, gap = 0.018f;
             float h = ((top - bottom) - gap * (slots.Length - 1)) / slots.Length;
             int filled = 0;
             for (int i = 0; i < slots.Length; i++)
             {
                 float y1 = top - i * (h + gap);
-                BuildWornSlot(stage, slots[i], new Vector2(0.47f, y1 - h), new Vector2(1.00f, y1));
+                BuildWornSlot(stage, slots[i], new Vector2(0.04f, y1 - h), new Vector2(0.96f, y1));
                 if (slots[i].ItemName != null) filled++;
             }
 
-            // The section's own action: the full Character / Gear panel and its per-slot drawers.
-            // This is the SAME PanelRouter call the deleted "VIEW GEAR" ribbon made — the route
-            // survived the removal, the broken box it was painted on did not.
-            var open = ElarionUiKit.ButtonPack(stage,
-                InventoryStrings.Format(InventoryStrings.KeyActionGoTo,
-                                        InventoryStrings.Get(InventoryStrings.KeyRailGear)),
-                ElarionUiKit.ButtonKind.Gold,
-                new Vector2(0.00f, 0.00f), new Vector2(0.44f, 0.12f), OpenGearPreview);
-            ElarionUiKit.ClampMinTouch(open);
-
             FlowTrace.Step("Inventory",
-                $"Gear section built: {filled}/{slots.Length} worn slots filled, loadout={(_loadout != null ? "present" : "NULL")}.");
+                $"Gear summary built: {filled}/{slots.Length} worn slots filled; no blank EquipmentPanel action.");
         }
 
         /// <summary>One worn-slot row: the slot's own name in caps, and what is in it.</summary>

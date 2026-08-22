@@ -73,6 +73,8 @@ namespace DeNelle.Village.Talents
         public readonly string LockReason;   // why it's locked (shown instead of bare "LOCKED")
         public readonly int WisdomCost;
         public readonly bool IsEquipped;
+        /// <summary>One-based quick-swap slot for an equipped active; 0 for passive/unassigned.</summary>
+        public readonly int EquippedSlot;
         public readonly bool IsPending;      // staged in the current plan (not yet committed)
         public readonly float X;             // node-graph canvas position (0..1; -1 = unset/auto)
         public readonly float Y;             // 0=top, 1=bottom
@@ -85,6 +87,7 @@ namespace DeNelle.Village.Talents
                            IReadOnlyList<string> prereqs, SkillNodeKind kind, string abilityId,
                            string iconPath, bool isCapstone, bool isShared,
                            bool owned, bool canUnlock, string lockReason, int wisdomCost, bool isEquipped,
+                           int equippedSlot,
                            bool isPending, float x, float y, bool effectLive = true)
         {
             Id = id;
@@ -103,6 +106,7 @@ namespace DeNelle.Village.Talents
             LockReason = lockReason ?? "";
             WisdomCost = wisdomCost;
             IsEquipped = isEquipped;
+            EquippedSlot = equippedSlot;
             IsPending = isPending;
             X = x;
             Y = y;
@@ -1008,6 +1012,7 @@ namespace DeNelle.Village.Talents
             bool equipped = kind == SkillNodeKind.Skill
                             && !string.IsNullOrEmpty(abilityId)
                             && AssignableSkillBarAccess.IsAssigned(abilityId);
+            int equippedSlot = equipped ? AssignableSkillBarAccess.SlotOf(abilityId) + 1 : 0;
 
             int tier = isShared ? 0 : TierIndex(n.Tier);
 
@@ -1037,6 +1042,7 @@ namespace DeNelle.Village.Talents
                 reason,
                 n.Cost,
                 equipped,
+                equippedSlot,
                 isPending,
                 n.X,
                 n.Y,
@@ -1226,7 +1232,9 @@ namespace DeNelle.Village.Talents
             }
         }
 
-        /// <summary>Popup Confirm: spend Wisdom on the selected node immediately, then dismiss.</summary>
+        /// <summary>Popup Confirm: spend Wisdom on the selected node immediately. Active skills stay
+        /// selected so the same popup advances to its explicit quick-swap assignment step; passives
+        /// dismiss because they are always active and have no slot action.</summary>
         public void SpendSelected()
         {
             if (!CanSpendSelected)
@@ -1237,7 +1245,10 @@ namespace DeNelle.Village.Talents
             string id = _selectedId;
             FlowTrace.Step("SkillTree", "popup spend '" + id + "' cost=" + SelectedWisdomCost);
             Unlock(id);
-            _selectedId = "";
+            var learned = HeroTalentCatalog.FindNode(id);
+            bool active = learned != null && !string.IsNullOrEmpty(AbilityIdOf(learned));
+            if (!active) _selectedId = "";
+            else QuickSwapStatus = SelectedNodeName + " learned - assign it to a numbered quick-swap slot.";
             Raise();
         }
 
@@ -1314,6 +1325,14 @@ namespace DeNelle.Village.Talents
 
         /// <summary>True when the selected node is an owned skill that can be assigned to the quick-swap bar.</summary>
         public bool SelectedIsAssignable => !string.IsNullOrEmpty(SelectedAssignAbilityId);
+
+        /// <summary>One-based destination used by the popup assignment action. An empty slot is
+        /// preferred; when all four are occupied, slot 1 is named explicitly as the replacement.</summary>
+        public int SelectedSuggestedSlot => SelectedIsAssignable ? FirstAssignSlot() + 1 : 0;
+
+        /// <summary>One-based current slot for the selected active, or 0 when not assigned.</summary>
+        public int SelectedAssignedSlot => SelectedIsAssignable
+            ? AssignableSkillBarAccess.SlotOf(SelectedAssignAbilityId) + 1 : 0;
 
         // Best-available text when a node carries no authored description string.
         private static string DescribeFallback(HeroTalentNodeDef n)

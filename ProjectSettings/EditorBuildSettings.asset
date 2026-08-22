@@ -95,6 +95,12 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Scenes/DungeonCompose/dg_hollow_roads.unity
     guid: f97be33ae4935c442892bcad052e2e24
+  - enabled: 1
+    path: Assets/Scenes/DungeonCompose/dg_folks_granary.unity
+    guid: 37ebb2fd3ba4acd4eabee1bc4faa623c
+  - enabled: 1
+    path: Assets/Scenes/DungeonCompose/dg_healers_cottage.unity
+    guid: 2e6422be7c9a916478fd6302407da1dc
   m_configObjects:
     com.unity.addressableassets: {fileID: 11400000, guid: 16d06bc18dab1cd408b1472b0382cf8a, type: 2}
     com.unity.dt.app-ui: {fileID: 11400000, guid: 1b1c20d82303e4b5781c3ef50ac1449f, type: 2}

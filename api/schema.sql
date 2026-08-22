@@ -848,5 +848,34 @@ INSERT INTO dungeon_status (dungeon_id, status) VALUES
 ON CONFLICT (dungeon_id) DO NOTHING;
 
 -- =============================================================================
+-- 15. purchase_entitlements — MON-1147 durable, replay-safe purchase authority.
+-- A row exists only after the backend independently verifies the finalized chain
+-- transaction against its own SKU/amount/recipient contract.
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS purchase_entitlements (
+    entitlement_id      BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    tx_signature        TEXT NOT NULL UNIQUE,
+    wallet              TEXT NOT NULL,
+    sku                 TEXT NOT NULL,
+    rail                TEXT NOT NULL CHECK (rail IN ('solana')),
+    network             TEXT NOT NULL CHECK (network IN ('devnet','mainnet')),
+    currency            TEXT NOT NULL CHECK (currency IN ('SOL','USDC','SKR')),
+    expected_lamports   BIGINT NOT NULL CHECK (expected_lamports > 0),
+    observed_lamports   BIGINT NOT NULL CHECK (observed_lamports > 0),
+    recipient           TEXT NOT NULL,
+    observed_recipient  TEXT NOT NULL,
+    chain_slot          BIGINT,
+    status              TEXT NOT NULL CHECK (status IN ('verified','fulfilled','manual_review')),
+    verified_at         TIMESTAMPTZ NOT NULL,
+    fulfilled_at        TIMESTAMPTZ,
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (wallet, tx_signature, sku)
+);
+
+CREATE INDEX IF NOT EXISTS idx_purchase_entitlements_wallet
+    ON purchase_entitlements (wallet, created_at DESC);
+
+-- =============================================================================
 -- END OF SCHEMA
 -- =============================================================================

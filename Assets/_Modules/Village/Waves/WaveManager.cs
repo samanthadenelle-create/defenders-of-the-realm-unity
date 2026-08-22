@@ -41,6 +41,8 @@ using DeNelle.Core;
 using DeNelle.Core.Diagnostics;   // FlowTrace — wave-start flow instrumentation (§12)
 using DeNelle.Core.Adaptive;    // DynamicDifficulty — encounter telemetry + spawn-time multipliers
 using DeNelle.Core.State;
+using DeNelle.Core.Combat;
+using DeNelle.Core.UI;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.SceneManagement;   // singleton "active-scene wins" rule (TriggerWave RCA)
@@ -628,6 +630,10 @@ namespace DeNelle.Village
         // Find when Instance is null (pre-Awake / between scene loads) for safety.
         public static WaveManager Instance { get; private set; }
 
+        // A live village siege is combat even though it is not an ATB/Arena session.
+        // Keep one cached delegate because BattleLock unregisters by delegate identity.
+        private Func<bool> _waveBattleProbe;
+
         /// <summary>
         /// Claims <see cref="Instance"/> per the "active-scene wins" rule above.
         /// Idempotent + safe to call from both Awake and OnEnable (a scene becoming
@@ -646,10 +652,17 @@ namespace DeNelle.Village
         }
 
         private void Awake()  => ClaimInstanceIfCanonical();
-        private void OnEnable() => ClaimInstanceIfCanonical();
+        private void OnEnable()
+        {
+            ClaimInstanceIfCanonical();
+            if (_waveBattleProbe == null)
+                _waveBattleProbe = () => isActiveAndEnabled && Instance == this && _phase == WavePhase.Active;
+            BattleLock.RegisterProbe(_waveBattleProbe);
+        }
 
         private void OnDestroy()
         {
+            if (_waveBattleProbe != null) BattleLock.UnregisterProbe(_waveBattleProbe);
             // Only relinquish if we still hold it — never clobber a newer claimant.
             if (Instance == this) Instance = null;
         }
@@ -718,6 +731,7 @@ namespace DeNelle.Village
         // the breach->reload loop. Mirrors the subs in SpawnEnemy/SpawnApexBoss.
         private void OnDisable()
         {
+            if (_waveBattleProbe != null) BattleLock.UnregisterProbe(_waveBattleProbe);
             foreach (Enemy e in _liveEnemies)
             {
                 if (e == null) continue;
@@ -1517,6 +1531,13 @@ namespace DeNelle.Village
 
             _phase = WavePhase.Active;
             FlowTrace.Step("Wave", $"StartWave({waveId}) -> phase=Active (spawning begins)");
+
+            // Prep screens may be open during the countdown. At Active they must yield
+            // before the first spawn: the siege keeps damaging the Heart behind a modal.
+            // The probe above then rejects ordinary panels until the wave is over; Pause
+            // and EndState remain available through RegisterBattleAllowed.
+            PanelManager.CloseAll();
+            FlowTrace.Step("Wave", $"StartWave({waveId}) -> ordinary modals closed before spawn");
 
             // ENCOUNTER TELEMETRY: stamp COMBAT start + reset the four measurements HERE — the
             // frame the phase turns Active — NOT at EnterCountdown. The countdown is the build

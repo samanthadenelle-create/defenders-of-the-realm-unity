@@ -204,6 +204,14 @@ namespace DeNelle.Wallet
         private async UniTask<bool> SendFlatPayment(
             CurrencyKind currency, double amount, int glimmerReward, string txId)
         {
+            // WO-1149 — the SECOND charge path gets the same world-stop as the first. This one has
+            // no live callers today (Glimmer's only sink is cosmetics, and no CosmeticApplier runs),
+            // so it is easy to argue the line is unnecessary. It is here precisely BECAUSE of that:
+            // the day somebody revives this path, the player must not be able to die mid-transaction
+            // just because the rule was only enforced where it was first needed. One `using`, first
+            // statement, so every branch below — the no-wallet abort, the connect failure, the
+            // PayFlat throw, the failure return, the success return — releases by construction.
+            using var worldHold = DeNelle.Core.UI.WorldHold.Acquire(DeNelle.Core.UI.WorldHold.ReasonPurchase);
             using var _ = FlowTrace.Enter("CryptoPay",
                 $"SendFlatPayment {currency} amount={amount} reward={glimmerReward} tx='{txId}'");
 

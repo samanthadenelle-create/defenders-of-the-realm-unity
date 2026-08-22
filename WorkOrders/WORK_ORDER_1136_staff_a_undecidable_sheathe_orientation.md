@@ -176,3 +176,54 @@ built-in cube; the mesh is destroyed with the fixture), and each fixture **asser
 via new `FixtureShapeHolds` — the pre-seat measured size must match the authored size, or the case fails
 loudly instead of rendering a verdict about the wrong object. That guard is the durable part: it would
 have caught this in the first gate, and it catches the next seat change that invalidates a fixture.
+
+---
+
+# ★★ OWNER RULING 2026-08-22 (LATER) — THE DECOR END IS THE TOP
+
+Owner, verbatim: **"for staff seating, the ball or visual decor of staff is always highest Y point"**.
+
+## THIS IS STRICTER THAN WHAT SHIPPED, AND THE DIFFERENCE MATTERS
+
+What shipped treats a symmetrical staff as **SIGN-AGNOSTIC** — "either way up is correct, assert
+VERTICALITY only". This ruling says there IS a correct way up: **the ornamented end points UP.**
+
+Both can be true at once (a staff must be vertical AND ball-up), but the current implementation
+cannot deliver the second, and the reason is worth stating precisely:
+
+> ### `mesh.bounds` IS AN AXIS-ALIGNED BOX. A decorative ball that does not WIDEN the silhouette is
+> ### INVISIBLE to it. `staff_A` measures identical at both ends (taper relGap 0.001, grip-origin
+> ### relGap 0.000) not because the mesh is featureless, but because the FEATURE THAT DISTINGUISHES
+> ### ITS ENDS IS NOT ONE BOUNDS CAN SEE.
+
+So the ruling is unambiguous and the current MEASUREMENT cannot satisfy it. That gap is the ticket.
+
+## WHAT WOULD ACTUALLY FIND THE BALL — in order of preference
+
+1. **VERTEX DENSITY / MASS DISTRIBUTION per half.** A ball is a cluster of vertices; a shaft end is
+   not. Split the mesh at its long-axis midpoint and compare vertex COUNT or centroid offset. This
+   distinguishes a decorated end from a bare one even when the two ends are the same WIDTH.
+   ⛔ **BUT: shipped props have Read/Write OFF**, which makes every vertex-based approach INERT ON
+   DEVICE while appearing to work in the editor. That is the trap this whole lane already hit once.
+   Any vertex approach must therefore run at IMPORT/BAKE time and persist its answer as data - never
+   at runtime.
+2. **SUBMESH / MATERIAL SLOT.** If the ball is a separate submesh or carries its own material, that
+   is readable without Read/Write and settles it immediately. **CHECK THIS FIRST — it is cheap.**
+3. **A CHILD TRANSFORM.** If the prop has a named child at the ornament, its local Y sign answers the
+   question directly.
+4. **AN AUTHORED PER-ASSET FIELD**, last resort — see the warning in the original options above about
+   duplicated state; it must be a FALLBACK consulted only when derivation declines, never a parallel
+   source of truth.
+
+## WHAT NOT TO DO
+- ⛔ Do NOT flip the global `_sheatheLongAxisSign`. Correct for at most half the catalogue by
+  construction; flipping moves the defect.
+- ⛔ Do NOT weaken the verticality assertion that shipped. It is correct and independent - a staff
+  must be vertical whether or not we can find its ball.
+- ⛔ Do NOT resolve this with a runtime vertex read. Read/Write is OFF on device.
+
+## ACCEPTANCE
+- [ ] The decor/ball end of a staff resolves as the TOP, by measurement, not by an id table
+- [ ] The method works with Read/Write OFF on device (i.e. it is import-time or non-vertex)
+- [ ] The verticality assertion still holds and is unchanged
+- [ ] Device screenshot of a sheathed staff, ball uppermost

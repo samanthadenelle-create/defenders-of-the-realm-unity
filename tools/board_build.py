@@ -194,10 +194,18 @@ def parse_wos():
         #
         # `prod` is carried alongside `num` (never merged into it) so PROD-001 can
         # never collide with legacy WO-1 in any downstream count or dedup.
-        prod_m = re.match(r"WORK_ORDER_PROD-(\d+)", base, re.IGNORECASE)
-        num_m  = re.match(r"WORK_ORDER_(\d+)", base)
-        prod   = int(prod_m.group(1)) if prod_m else None
-        num    = int(num_m.group(1)) if (num_m and not prod_m) else None
+        # MON is a LANE TAG, not a number series (owner ruling 2026-08-22: "add as a
+        # tag WO XX - MON"). It rides on an ORDINARY banner-minted WO number, so there
+        # stays exactly ONE numbering authority and the duplicate guard keeps working on
+        # it - the thing that would have been silently off for a private series. The tag
+        # only sets the DISPLAY label and the priority sort.
+        # Matches WORK_ORDER_<num>_MON_<slug> and WORK_ORDER_<num>_MON-<slug>.
+        mon_tag = bool(re.match(r"WORK_ORDER_\d+[_-]MON[_-]", base, re.IGNORECASE))
+        prod_m  = re.match(r"WORK_ORDER_PROD-(\d+)", base, re.IGNORECASE)
+        num_m   = re.match(r"WORK_ORDER_(\d+)", base)
+        mon     = None
+        prod    = int(prod_m.group(1)) if prod_m else None
+        num     = int(num_m.group(1)) if (num_m and not prod_m) else None
         title_m = re.search(r"^#\s+(.+)$", text, re.MULTILINE)
         title = title_m.group(1).strip() if title_m else base
         title = re.sub(r"[*`]", "", title)
@@ -212,7 +220,7 @@ def parse_wos():
         except ValueError:
             age_days = 0
         rows.append({
-            "num": num, "prod": prod, "file": base, "title": title, "status": status,
+            "num": num, "prod": prod, "mon_tag": mon_tag, "file": base, "title": title, "status": status,
             "bucket": bucket_of(status, has_result, is_wo), "result": has_result,
             "is_wo": is_wo, "mtime": mtime,
             "created": created, "created_est": created_est, "age_days": max(0, age_days),
@@ -235,6 +243,11 @@ def build_html(rows):
             num = f"WO-{r['num']}"
         else:
             num = "DOC" if not r["is_wo"] else "WO-?"
+        # LANE TAG appended to the number, so the board reads "WO-1146 - MON" exactly as
+        # the owner asked. It is a SUFFIX on the real number, never a replacement - the
+        # banner stays the one numbering authority and the duplicate guard keeps working.
+        if r.get("mon_tag"):
+            num += " - MON"
         # CREATED date + age in days (WO-940) - never mtime. '~' marks an mtime-estimated
         # date so nobody mistakes a guess for a creation date.
         est = "~" if r["created_est"] else ""
@@ -262,6 +275,7 @@ def build_html(rows):
     # legacy rows.
     rows_sorted = sorted(rows, key=lambda r: (
         BUCKET_ORDER.index(r["bucket"]),
+        0 if r.get("mon_tag") else 1,              # MON is the priority lane (owner 2026-08-22)
         0 if r.get("prod") is not None else 1,
         -(r.get("prod") or 0),
         -(r["num"] or 0)))
@@ -269,6 +283,15 @@ def build_html(rows):
     filters = "".join(
         f'<button class="fbtn" data-f="{b}" style="border-color:{BUCKET_COLOR[b]}">'
         f'{b} <span class="cnt">{counts[b]}</span></button>' for b in BUCKET_ORDER)
+    # LANE CHIP (owner 2026-08-22): MON is a dedicated, prioritised lane, so it gets its
+    # own filter beside the buckets. It filters on the row TEXT containing "- mon", which
+    # is the same suffix row_html writes into the number cell - one source, so the chip
+    # and the label can never disagree. It composes with the bucket chips and the search
+    # box via the existing AND, and is deliberately NOT a bucket: a MON ticket is still
+    # Ready or Done like any other.
+    mon_count = sum(1 for r in rows if r.get("mon_tag"))
+    lane_filters = (f'<button class="lbtn" data-l="- mon" style="border-color:#d98f2b">'
+                    f'MON <span class="cnt">{mon_count}</span></button>') if mon_count else ""
 
     # "Opened within" filter (WO-940): by CREATED age in days, composing with the
     # bucket chips and the search box (AND), never replacing them.
@@ -305,6 +328,7 @@ def build_html(rows):
  .sub{{color:#888;margin-bottom:14px}} .sub b{{color:#bbb}}
  .canon a{{color:#7fa8d9;margin-right:14px;text-decoration:none}} .canon{{margin-bottom:16px}}
  #q{{background:#1e2027;border:1px solid #333;color:#ddd;padding:8px 12px;width:340px;border-radius:6px}}
+ .lbtn{{background:#1e2027;border:1px solid #d98f2b;color:#e8c07a;padding:6px 12px;margin-left:10px;border-radius:14px;cursor:pointer;font-weight:600}} .lbtn.off{{opacity:.35}}
  .fbtn{{background:#1e2027;border:1px solid #555;color:#ccc;padding:6px 12px;margin-left:6px;
         border-radius:14px;cursor:pointer}} .fbtn.off{{opacity:.35}}
  .cnt{{color:#888}}
@@ -326,7 +350,7 @@ def build_html(rows):
  truth, this page is a view. Regenerate: <b>python tools/board_build.py</b>
  &nbsp;|&nbsp; {mint_html}</div>
 <div class="canon">{canon_links}</div>
-<input id="q" placeholder="Search number / title / status...">{filters}{age_filters}
+<input id="q" placeholder="Search number / title / status...">{filters}{lane_filters}{age_filters}
 <table><tbody id="tb">
 {body_rows}
 </tbody></table>
@@ -334,13 +358,17 @@ def build_html(rows):
 const q=document.getElementById('q'), rows=[...document.querySelectorAll('.row')];
 const active=new Set({BUCKET_ORDER!r});
 let ageMax=Infinity; // "opened within" (WO-940): ANDs with buckets + search
+let lane=''; // LANE chip (MON): ANDs with buckets + search + age. '' = every lane.
 function apply(){{const t=q.value.toLowerCase();
  rows.forEach(r=>{{r.style.display=(active.has(r.dataset.bucket)&&r.dataset.text.includes(t)
-  &&(+r.dataset.ageDays<=ageMax))?'':'none'}})}}
+  &&(+r.dataset.ageDays<=ageMax)&&(lane===''||r.dataset.text.includes(lane)))?'':'none'}})}}
 q.addEventListener('input',apply);
 document.querySelectorAll('.fbtn').forEach(b=>b.addEventListener('click',()=>{{
  const f=b.dataset.f; if(active.has(f)){{active.delete(f);b.classList.add('off')}}
  else{{active.add(f);b.classList.remove('off')}} apply()}}));
+document.querySelectorAll('.lbtn').forEach(b=>b.addEventListener('click',()=>{{
+ const l=b.dataset.l; if(lane===l){{lane='';b.classList.add('off')}}
+ else{{lane=l;b.classList.remove('off')}} apply()}}));
 document.querySelectorAll('.abtn').forEach(b=>b.addEventListener('click',()=>{{
  ageMax=(b.dataset.a==='all')?Infinity:+b.dataset.a;
  document.querySelectorAll('.abtn').forEach(x=>x.classList.remove('on'));

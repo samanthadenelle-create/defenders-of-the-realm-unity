@@ -44,6 +44,7 @@ using System.Globalization;
 using DeNelle.Core;
 using DeNelle.Core.Ads;
 using DeNelle.Core.Diagnostics;
+using DeNelle.Core.Analytics;
 using UnityEngine;
 
 namespace DeNelle.Village.Monetization
@@ -213,6 +214,11 @@ namespace DeNelle.Village.Monetization
             if (!offer.Available)
             {
                 FlowTrace.Step("Ads", $"Present('{placementId}') refused before presentation: {offer.Reason}.");
+                EventTracker.Track("rewarded_ad_unavailable", new
+                {
+                    placement = placementId,
+                    reason = offer.Reason.ToString()
+                });
                 onComplete?.Invoke(AdShowResult.Unavailable(offer.Reason));
                 return false;
             }
@@ -227,16 +233,28 @@ namespace DeNelle.Village.Monetization
                 return false;
             }
 
-            return mgr.RequestAd(
+            bool rewardApplied = false;
+            return mgr.RequestAd(placementId,
                 // ── THE ONLY PLACE ANYTHING IS EVER GRANTED ──────────────────
                 // RequestAd invokes this from the SDK's genuine earned-reward callback and from
                 // nowhere else, and it is one-shot even if the SDK double-fires.
                 () =>
                 {
                     if (!ApplyReward(placement, reward, contextGrant)) return;
+                    rewardApplied = true;
                     RecordWatch(placement);
                 },
-                onComplete);
+                result =>
+                {
+                    EventTracker.Track("rewarded_ad_completed", new
+                    {
+                        placement = placementId,
+                        outcome = result.Outcome.ToString(),
+                        reason = result.Reason.ToString(),
+                        rewardApplied
+                    });
+                    onComplete?.Invoke(result);
+                });
         }
 
         /// <summary>

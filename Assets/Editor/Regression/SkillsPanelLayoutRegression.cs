@@ -74,6 +74,7 @@ namespace DeNelle.Editor.Regression
     public static class SkillsPanelLayoutRegression
     {
         private const string ViewSrc = "Assets/_Modules/Village/Talents/HeroSkillTreePanelMvvm.cs";
+        private const string VmSrc = "Assets/_Modules/Village/Talents/HeroSkillTreeVM.cs";
         private const string TalentsJson = "Assets/Resources/Data/Canonical/hero-talents.json";
         private const string AbilitiesJson = "Assets/Resources/Data/Canonical/abilities.json";
 
@@ -572,6 +573,26 @@ namespace DeNelle.Editor.Regression
             Law(failures, code, "BuildActionRow",
                 "BuildActionRow token missing (retired stub still required so the source-law oracle " +
                 "keeps a stable anchor while the spend popup owns the buttons)");
+            Law(failures, code, "BuildNodeTypeBadge",
+                "skill nodes no longer state ACTIVE/PASSIVE/SLOT N in words, so hot-swappability " +
+                "and the assigned quick-swap position cannot be read without opening every node");
+            Law(failures, code, "SelectedSuggestedSlot",
+                "the learn-to-assign flow no longer names its destination/replacement slot");
+
+            string vmSrc = ReadText(VmSrc, failures, "[source-flow]");
+            if (vmSrc != null)
+            {
+                string vmCode = StripComments(vmSrc);
+                Law(failures, vmCode, "EquippedSlot",
+                    "the VM no longer exposes the numbered quick-swap seat for an assigned active");
+                Law(failures, vmCode, "SelectedSuggestedSlot",
+                    "the VM no longer exposes the explicit assign/replace destination");
+                if (!Regex.IsMatch(vmCode,
+                        "bool\\s+active\\s*=.*AbilityIdOf\\s*\\(\\s*learned\\s*\\).*if\\s*\\(\\s*!active\\s*\\)\\s*_selectedId\\s*=\\s*\"\"",
+                        RegexOptions.Singleline))
+                    failures.Add("[source-flow] SpendSelected no longer preserves selection for a newly learned " +
+                                 "active - the player must find and tap the node again before assigning it");
+            }
 
             // The content rect must be TOP-LEFT pivoted. Centre-pivoting a content rect wider
             // than its mask is what sliced a node off BOTH frame edges.

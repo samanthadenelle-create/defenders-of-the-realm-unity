@@ -410,7 +410,21 @@ namespace DeNelle.Village.Talents
             if (_popupConfirmRing != null)
                 _popupConfirmRing.SetActive(canSpend || canEquip);
             if (_popupConfirmLabel != null)
-                _popupConfirmLabel.text = canEquip ? "EQUIP" : "CONFIRM";
+            {
+                if (canEquip)
+                {
+                    int slot = _vm.SelectedSuggestedSlot;
+                    bool replacing = slot > 0 && slot <= _vm.QuickSlots.Count
+                                     && !_vm.QuickSlots[slot - 1].IsEmpty;
+                    _popupConfirmLabel.text = replacing
+                        ? "REPLACE SLOT " + slot
+                        : "ASSIGN SLOT " + slot;
+                }
+                else if (_vm.SelectedAlreadyOnBar)
+                    _popupConfirmLabel.text = "IN SLOT " + _vm.SelectedAssignedSlot;
+                else
+                    _popupConfirmLabel.text = "LEARN";
+            }
             // Cancel is always the dismiss path (owned / locked / buyable).
             if (_popupCancelBtn != null)
             {
@@ -1104,6 +1118,14 @@ namespace DeNelle.Village.Talents
             rankLbl.raycastTarget = false;
             ElarionUiKit.FitSingleLine(rankLbl);
 
+            // Type is stated in WORDS, not inferred from colour. Assigned actives name the
+            // same numbered seat shown in the persistent quick-swap rail.
+            string typeBadge = node.Kind == SkillNodeKind.Skill
+                ? (node.EquippedSlot > 0 ? "SLOT " + node.EquippedSlot : "ACTIVE")
+                : "PASSIVE";
+            BuildNodeTypeBadge(go.transform, typeBadge,
+                node.Kind == SkillNodeKind.Skill ? ElarionUi.Gilt : ElarionUi.Parchment);
+
             if (inert) BuildNodeSlash(go.transform, size);
 
             // Quiet state badges only — never a padlock the size of the icon.
@@ -1245,6 +1267,27 @@ namespace DeNelle.Village.Talents
                 lbl.raycastTarget = false;
                 ElarionUiKit.FitSingleLine(lbl);
             }
+        }
+
+        /// <summary>Top-left word badge: ACTIVE/PASSIVE/SLOT N survives greyscale and makes
+        /// hot-swappability readable without opening every node.</summary>
+        private static void BuildNodeTypeBadge(Transform nodeRoot, string text, Color ink)
+        {
+            var badge = new GameObject("TypeBadge", typeof(Image));
+            badge.transform.SetParent(nodeRoot, false);
+            var rt = (RectTransform)badge.transform;
+            rt.anchorMin = new Vector2(0.02f, 0.72f);
+            rt.anchorMax = new Vector2(0.68f, 0.98f);
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+            var image = badge.GetComponent<Image>();
+            ElarionUiKit.ApplyRounded(image);
+            image.color = new Color(0.04f, 0.035f, 0.05f, 0.90f);
+            image.raycastTarget = false;
+            var label = ElarionUiKit.Label(badge.transform, text, 0.06f, 0.94f, ink,
+                ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f,
+                spacing: 0.5f, bold: true);
+            label.raycastTarget = false;
+            ElarionUiKit.FitSingleLine(label, 0f, ElarionUi.FontMicro);
         }
 
         /// <summary>Per-track NEXT badge ink / disc (WO-1021 sec 2.1d). PUBLIC so the oracle can
@@ -1621,11 +1664,11 @@ namespace DeNelle.Village.Talents
 
             // Body: description + spend prompt (chrome-less labels into the frame well).
             const float tx0 = 0.06f, tx1 = 0.94f;
-            _popupDesc = ElarionUiKit.Label(body, "", 0.42f, 0.96f, ElarionUi.Parchment,
+            _popupDesc = ElarionUiKit.Label(body, "", 0.46f, 0.96f, ElarionUi.Parchment,
                 ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Top, tx0, tx1);
             ElarionUiKit.FitBlock(_popupDesc);
 
-            _popupPrompt = ElarionUiKit.Label(body, "", 0.06f, 0.36f, ElarionUi.Affordable,
+            _popupPrompt = ElarionUiKit.Label(body, "", 0.16f, 0.34f, ElarionUi.Affordable,
                 ElarionUi.FontBody, TMPro.TextAlignmentOptions.Center, tx0, tx1, bold: true);
             ElarionUiKit.FitBlock(_popupPrompt);
 
