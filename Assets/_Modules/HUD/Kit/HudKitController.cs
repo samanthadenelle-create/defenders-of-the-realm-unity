@@ -2181,11 +2181,13 @@ namespace DeNelle.HUD.Kit
             // handle therefore never moves on toggle (the owner taps the same spot to close), never
             // covers a row, and nothing overhangs the frame. Fixed px, never a parent fraction.
             const float dockTabPx = ElarionUiKit.MinTouchPx;   // 112 - the kit touch floor, verbatim
+            const float dockGapPx = 12f;
+            float safeLeftPx = SafeAreaInset.EdgeMarginPx;
             var dockPanelRt = _slideDock.panel;
             dockPanelRt.anchorMin = new Vector2(0f, 0.5f);
             dockPanelRt.anchorMax = new Vector2(0f, 0.5f);
             dockPanelRt.pivot = new Vector2(0f, 0.5f);
-            dockPanelRt.anchoredPosition = new Vector2(dockTabPx, 0f);   // clear of the handle column
+            dockPanelRt.anchoredPosition = new Vector2(safeLeftPx + dockTabPx, 0f);
             // Height carries FIVE tabs now (Pause folded in — cosmetic flag A) at ~112px
             // touch targets each: 700 / 5 = 140px slot, well above MinTouchPx. Do NOT shrink 700:
             // AddDockTab's rows resolve to EXACTLY 112px (0.16 * 700), so any smaller panel puts
@@ -2196,8 +2198,29 @@ namespace DeNelle.HUD.Kit
             dockTabRt.anchorMin = new Vector2(0f, 0.5f);
             dockTabRt.anchorMax = new Vector2(0f, 0.5f);
             dockTabRt.pivot = new Vector2(0f, 0.5f);
-            dockTabRt.anchoredPosition = Vector2.zero;
+            // The left column is now two deliberate 112px controls: Menu above, Store below.
+            // Both sit inside the shared safe-area breathing margin and the drawer begins after
+            // their column, so neither can overlap a row when it opens.
+            dockTabRt.anchoredPosition = new Vector2(safeLeftPx, (dockTabPx + dockGapPx) * 0.5f);
             dockTabRt.sizeDelta = new Vector2(dockTabPx, dockTabPx);   // was 84 - under the 112 floor
+
+            var storeButton = ElarionUiKit.BuildObsidianButton(_slideDock.root.transform, "Store",
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
+                Vector2.zero, Vector2.one, OpenRealmStore);
+            if (storeButton != null)
+            {
+                storeButton.gameObject.name = "RealmStoreHudButton";
+                var storeRt = (RectTransform)storeButton.transform;
+                storeRt.anchorMin = storeRt.anchorMax = new Vector2(0f, 0.5f);
+                storeRt.pivot = new Vector2(0f, 0.5f);
+                storeRt.anchoredPosition = new Vector2(safeLeftPx, -(dockTabPx + dockGapPx) * 0.5f);
+                storeRt.sizeDelta = new Vector2(dockTabPx, dockTabPx);
+                ElarionUiKit.ClampMinTouch(storeButton);
+            }
+            else
+            {
+                FlowTrace.Fail("RealmStore", "dedicated HUD Store button failed to build.");
+            }
 
             AddDockTab(_slideDock.panel, 0, "Chat",        OpenClanChat);
             AddDockTab(_slideDock.panel, 1, "Leaderboard", OpenLeaderboard);
@@ -2216,8 +2239,6 @@ namespace DeNelle.HUD.Kit
             // It lives here rather than on the bottom action bar deliberately: that bar is
             // capped at MaxVisibleFaces = 6 and a seventh face would re-open the "8th face"
             // problem WO-911 dissolved on purpose.
-            AddDockTab(_slideDock.panel, 5, "Realm Store", OpenRealmStore);
-
             Register("chatDock", WrapAsWidget("chatDock", _slideDock.root));
         }
 
@@ -2250,7 +2271,7 @@ namespace DeNelle.HUD.Kit
         // Both numbers now come from DockTabCount. Add a tab -> the panel grows to
         // keep every row at the touch floor, automatically. Do NOT re-introduce a
         // literal height.
-        private const int DockTabCount = 6;   // Chat/Leaderboard/Music/Settings/Pause/Realm Store
+        private const int DockTabCount = 5;   // Chat/Leaderboard/Music/Settings/Pause; Store owns the persistent button
         private const float DockRowGapFrac = 0.02f;   // gap above AND below each row
 
         // Height that keeps a row at exactly the kit touch floor for DockTabCount rows.
@@ -2276,7 +2297,7 @@ namespace DeNelle.HUD.Kit
                 FlowTrace.Warn("HudKit", "dock: neither HelpMenu nor GameGuide available for Settings");
         }
 
-        // Realm Store tab -> the same PanelId the world vendor opens.
+        // Persistent Store face -> the same PanelId the world vendor opens.
         //
         // Shaped after RealmStoreVendor.Open deliberately: PanelRouter.Open returns
         // FALSE when no opener is registered, and an unchecked call would look to the
@@ -2284,13 +2305,13 @@ namespace DeNelle.HUD.Kit
         // reported, never swallowed.
         private void OpenRealmStore()
         {
-            Guard.Try("RealmStore", "open the Realm Store from the dock", () =>
+            Guard.Try("RealmStore", "open the Realm Store from the HUD", () =>
             {
                 if (PanelRouter.Open(PanelId.RealmStore))
-                    FlowTrace.Step("RealmStore", "dock tab opened PanelId.RealmStore.");
+                    FlowTrace.Step("RealmStore", "HUD Store face opened PanelId.RealmStore.");
                 else
                     FlowTrace.Fail("RealmStore",
-                        "PanelRouter.Open(PanelId.RealmStore) returned FALSE from the dock - the " +
+                        "PanelRouter.Open(PanelId.RealmStore) returned FALSE from the HUD - the " +
                         "opener is not registered (PackStoreBootstrap did not run in this scene).");
             });
         }

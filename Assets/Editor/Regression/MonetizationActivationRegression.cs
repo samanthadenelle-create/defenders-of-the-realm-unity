@@ -1,6 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Globalization;
+using System.Linq;
+using System.Text.RegularExpressions;
+using Newtonsoft.Json.Linq;
 using UnityEngine;
 
 namespace DeNelle.Editor.Regression
@@ -32,6 +36,8 @@ namespace DeNelle.Editor.Regression
                                   "/api/purchases/verify.js", failures);
                 string catalog = Read(Directory.GetParent(Application.dataPath).FullName.Replace('\\', '/') +
                                       "/api/_lib/purchase-catalog.js", failures);
+                string streamingPacks = Read(root + "/StreamingAssets/Data/Canonical/packs.json", failures);
+                string resourcePacks = Read(root + "/Resources/Data/Canonical/packs.json", failures);
 
                 Require(rewarded, "TryShowAd(sync) is permanently refused", "ads sync seam is not a permanent refusal", failures);
                 Require(timers, "sync overload REFUSED (WO-1146)", "build timer sync overload is not pinned shut", failures);
@@ -46,16 +52,46 @@ namespace DeNelle.Editor.Regression
 
                 Require(scenario, "client.SignTransactions", "targeted MWA transaction signing is absent", failures);
                 Require(solana, "scenario.SignTransaction", "payment still bypasses targeted MWA signing", failures);
+                Require(solana, "tx.Sign(new Account(string.Empty, from))",
+                    "MWA transaction omits the fee-payer signature placeholder and is malformed", failures);
+                RequireOrder(solana, "tx.Sign(new Account(string.Empty, from))", "scenario.SignTransaction",
+                    "MWA transaction is serialized before its required signature placeholder is added", failures);
+                Require(solana, "method = \"sendTransaction\"",
+                    "signed purchase does not use the transparent JSON-RPC submission seam", failures);
+                Require(solana, "skipPreflight = false",
+                    "signed purchase bypasses Solana preflight simulation", failures);
+                Require(solana, "TryReadPrimarySignature(signedWire",
+                    "signed receipt is not derived before ambiguous RPC transport", failures);
+                RequireOrder(solana, "TryReadPrimarySignature(signedWire", "SubmitSignedTransaction(",
+                    "signed receipt is derived only after transport, leaving a double-charge window", failures);
+                Forbid(solana, "var confirmed = await ConfirmTransaction",
+                    "submitted signature is delayed behind client confirmation before durable pending storage", failures);
+                Require(store, "PurchaseEntitlementVerifier.Remember(pack, result, _wallet)",
+                    "submitted signature is not persisted before entitlement handling", failures);
+                RequireOrder(store, "if (!string.IsNullOrEmpty(result.TxSignature))", "if (result.Ok)",
+                    "ambiguous signed receipt is persisted only on the success branch", failures);
                 Forbid(solana, "var wallet = Web3.Wallet", "payment revived the dead/implicit Web3 wallet path", failures);
                 Require(store, "PurchaseEntitlementVerifier.VerifyPendingAsync", "charge path has no backend entitlement verification", failures);
                 Require(store, "CompleteVerifiedPurchaseAsync", "verified exactly-once fulfilment seam is absent", failures);
                 Require(store, "MarkFulfilledAsync", "local ownership does not acknowledge server fulfilment", failures);
                 Require(store, "await PurchaseEntitlementVerifier.MarkFulfilledAsync", "fulfilment acknowledgement is not awaited", failures);
+                Require(store, "EntitlementVerificationState.Fulfilled",
+                    "server fulfilled state is collapsed into verified and can replay consumables", failures);
+                Require(store, "RestoreFulfilledOwnershipAsync",
+                    "fulfilled recovery has no ownership-only delivery path", failures);
 
                 string verifier = Read(root + "/_Modules/Wallet/PurchaseEntitlementVerifier.cs", failures);
                 Require(verifier, "/api/purchases/fulfill", "fulfilment endpoint is not wired", failures);
                 Require(verifier, "req.responseCode != 200", "pending purchase can clear without HTTP 200", failures);
                 Require(verifier, "response.State != \"fulfilled\"", "pending purchase can clear without fulfilled state", failures);
+                Require(verifier, "pending.sku, pack.Sku",
+                    "pending receipt is not strictly bound to the requested SKU", failures);
+                Require(verifier, "pending.network, expectedNetwork",
+                    "pending receipt is not strictly bound to the active network", failures);
+                Require(verifier, "pending.currency, expectedCurrency",
+                    "pending receipt is not strictly bound to the selected currency", failures);
+                Require(verifier, "response.Sku, pack.Sku",
+                    "verified response SKU is not bound before local grant", failures);
                 RequireOrder(verifier, "response.State != \"fulfilled\"", "PlayerPrefs.DeleteKey(PendingPrefix + sku)",
                     "pending purchase clears before server fulfilment acknowledgement", failures);
                 Require(store, "PurchaseGate.TryClaimGrant(payment.TxSignature)", "fulfilment does not claim the tx idempotently", failures);
@@ -68,9 +104,8 @@ namespace DeNelle.Editor.Regression
                 // COMPARISON rather than the field name, so this proves exact equality against the
                 // server's own figure instead of merely proving a token appears somewhere in the file.
                 Require(api, "=== String(contract.amountBaseUnits)", "backend does not verify the server-owned amount", failures);
-                Require(catalog, "'hearth-spark'", "server canary SKU is absent", failures);
-                Require(catalog, "currency: 'SKR'", "server canary is not the ruled SKR rail", failures);
-                Require(catalog, "amountBaseUnits: 20_000_000_000", "server canary drifted from 20 SKR at 9 decimals", failures);
+                Require(catalog, "PRICE-PARITY LAW", "server catalog does not document the no-build/no-deploy parity law", failures);
+                VerifyPriceParity(streamingPacks, resourcePacks, catalog, failures);
                 Require(catalog, "SOLANA_DEVNET_SKR_MINT", "server has no independent Devnet SKR mint authority", failures);
                 Require(api, "parsed.type === 'transferChecked'", "backend accepts an unchecked token transfer", failures);
                 Require(api, "contract.recipientAta", "backend does not pin the ruled recipient ATA", failures);
@@ -98,6 +133,60 @@ namespace DeNelle.Editor.Regression
             if (File.Exists(path)) return File.ReadAllText(path);
             failures.Add("missing " + path);
             return string.Empty;
+        }
+
+        private static void VerifyPriceParity(string streaming, string resources, string server,
+            List<string> failures)
+        {
+            if (!string.Equals(streaming, resources, StringComparison.Ordinal))
+                failures.Add("canonical packs.json mirrors differ");
+            try
+            {
+                JObject canon = JObject.Parse(streaming);
+                Match canary = Regex.Match(server, @"DEVNET_CANARY_SKU\s*=\s*'([^']+)'", RegexOptions.CultureInvariant);
+                Match row = Regex.Match(server,
+                    @"\[DEVNET_CANARY_SKU\].*?currency:\s*'([^']+)'.*?amountBaseUnits:\s*([0-9_]+).*?decimals:\s*([0-9]+)",
+                    RegexOptions.Singleline | RegexOptions.CultureInvariant);
+                if (!canary.Success || !row.Success)
+                {
+                    failures.Add("server canary catalog is not decidable by the parity oracle");
+                    return;
+                }
+
+                MatchCollection serverRows = Regex.Matches(server, @"Object\.freeze\(\{\s*currency:",
+                    RegexOptions.CultureInvariant);
+                if (serverRows.Count != 1)
+                    failures.Add("missing or extra Devnet server canary");
+
+                string sku = canary.Groups[1].Value;
+                if (!string.Equals(sku, "hearth-spark", StringComparison.Ordinal))
+                    failures.Add("ruled hearth-spark canary is missing");
+                if (!string.Equals(row.Groups[1].Value, "SKR", StringComparison.Ordinal))
+                    failures.Add("server canary currency is not SKR");
+
+                JToken pack = canon["packs"]?.FirstOrDefault(p =>
+                    string.Equals((string)p["sku"], sku, StringComparison.Ordinal));
+                if (pack == null)
+                {
+                    failures.Add("server canary is absent from canonical client packs");
+                    return;
+                }
+
+                int decimals = int.Parse(row.Groups[3].Value, CultureInfo.InvariantCulture);
+                decimal skr = pack["pricing"]?["skr"]?.Value<decimal>() ?? -1m;
+                decimal scale = 1m;
+                for (int i = 0; i < decimals; i++) scale *= 10m;
+                decimal scaled = skr * scale;
+                if (scaled != decimal.Truncate(scaled))
+                    failures.Add("canonical SKR price requires forbidden base-unit rounding");
+                decimal backend = decimal.Parse(row.Groups[2].Value.Replace("_", ""), CultureInfo.InvariantCulture);
+                if (scaled != backend)
+                    failures.Add($"client/backend SKR price mismatch for {sku}: client={scaled} backend={backend}");
+            }
+            catch (Exception ex)
+            {
+                failures.Add("price parity oracle threw " + ex.GetType().Name + ": " + ex.Message);
+            }
         }
 
         private static void Require(string source, string token, string failure, List<string> failures)

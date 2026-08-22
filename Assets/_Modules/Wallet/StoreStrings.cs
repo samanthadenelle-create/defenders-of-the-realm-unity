@@ -121,6 +121,19 @@ namespace DeNelle.Wallet
         /// <summary>{0}=approximate USD, from a LIVE Jupiter quote. Keeps its tilde; dropped if stale.</summary>
         public const string KeyBalanceFiat        = "storeBalanceFiat";
 
+        // UI-002 commerce lifecycle. ASCII state words are deliberately distinct so
+        // pending/success/failure remain legible with every colour removed.
+        public const string KeyCommerceReady             = "storeCommerceReady";
+        public const string KeyCommerceOpeningWallet     = "storeCommerceOpeningWallet";
+        public const string KeyCommerceAwaitingApproval  = "storeCommerceAwaitingApproval";
+        public const string KeyCommerceSubmitted         = "storeCommerceSubmitted";
+        public const string KeyCommerceVerifying         = "storeCommerceVerifying";
+        public const string KeyCommerceDelivering        = "storeCommerceDelivering";
+        public const string KeyCommerceFulfilled         = "storeCommerceFulfilled";
+        public const string KeyCommerceCancelled         = "storeCommerceCancelled";
+        public const string KeyCommerceFailed            = "storeCommerceFailed";
+        public const string KeyCommerceDelayed           = "storeCommerceDelayed";
+
         // Trust strip — four claims, each verifiable, covenant last.
         public const string KeyTrustFee        = "storeTrustFee";
         /// <summary>{0}=the shortened on-chain Rewards Distributor address.</summary>
@@ -138,6 +151,10 @@ namespace DeNelle.Wallet
             KeyCardOwned, KeyCardAnchor, KeyCardGap,
             KeyBalanceNoWallet, KeyBalanceChecking, KeyBalanceUnavailable,
             KeyBalanceValue, KeyBalanceFiat,
+            KeyCommerceReady, KeyCommerceOpeningWallet, KeyCommerceAwaitingApproval,
+            KeyCommerceSubmitted, KeyCommerceVerifying, KeyCommerceDelivering,
+            KeyCommerceFulfilled, KeyCommerceCancelled, KeyCommerceFailed,
+            KeyCommerceDelayed,
             KeyTrustFee, KeyTrustTreasury, KeyTrustNeverPower, KeyCovenant,
         };
 

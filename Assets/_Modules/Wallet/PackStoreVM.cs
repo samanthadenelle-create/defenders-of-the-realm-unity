@@ -177,6 +177,27 @@ namespace DeNelle.Wallet
             });
         }
 
+        /// <summary>Restores only durable ownership for an already-fulfilled server entitlement.
+        /// Economy and convenience consumables are deliberately never replayed.</summary>
+        public void RestoreFulfilledOwnership(PackDef pack)
+        {
+            var state = State;
+            if (state == null || pack == null) return;
+            if (state.OwnedItemIds == null) state.OwnedItemIds = new List<string>();
+            RecordOwned(state.OwnedItemIds, pack.Sku);
+            if (pack.Contents != null && pack.Contents.Cosmetics != null)
+                foreach (var sku in pack.Contents.Cosmetics)
+                {
+                    RecordOwned(state.OwnedItemIds, sku);
+                    if (!string.IsNullOrEmpty(sku)) TryGrantCosmeticOwnership(sku, pack.Sku);
+                }
+            FlowTrace.Try("Store", $"save restored fulfilled ownership '{pack.Sku}'", () =>
+            {
+                var svc = GameStateService.Instance;
+                if (svc != null) svc.Save();
+            });
+        }
+
         private static void RecordOwned(List<string> owned, string sku)
         {
             if (owned == null || string.IsNullOrEmpty(sku)) return;

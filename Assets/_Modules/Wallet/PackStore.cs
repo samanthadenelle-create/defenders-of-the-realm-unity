@@ -83,18 +83,25 @@ namespace DeNelle.Wallet
         // post-open VerifyOpenedVisible sees a panel actually recorded open.
         private PanelHandle _panelHandle;
 
-        // ── Layout, in body-normalised anchors. Sized so no control lands under the
-        //    MinTouchPx(112) floor — see the CARD/CTA notes at their build sites.
-        private static readonly Vector2 HeaderMin    = new Vector2(0.015f, 0.955f);
-        private static readonly Vector2 HeaderMax    = new Vector2(0.985f, 1.000f);
-        private static readonly Vector2 StatusMin    = new Vector2(0.015f, 0.913f);
-        private static readonly Vector2 StatusMax    = new Vector2(0.985f, 0.952f);
-        private static readonly Vector2 SpotlightMin = new Vector2(0.015f, 0.105f);
-        private static readonly Vector2 SpotlightMax = new Vector2(0.395f, 0.905f);
-        private static readonly Vector2 ShelfMin     = new Vector2(0.415f, 0.105f);
-        private static readonly Vector2 ShelfMax     = new Vector2(0.985f, 0.905f);
-        private static readonly Vector2 TrustMin     = new Vector2(0.015f, 0.005f);
-        private static readonly Vector2 TrustMax     = new Vector2(0.985f, 0.095f);
+        // UI-001: one responsive landscape composition. These values live in one component-style
+        // table rather than being scattered through individual card builders.
+        private static class NightMarketLayout
+        {
+            internal static readonly Vector2 PanelMin     = new Vector2(0.055f, 0.045f);
+            internal static readonly Vector2 PanelMax     = new Vector2(0.945f, 0.955f);
+            internal static readonly Vector2 HeaderMin    = new Vector2(0.018f, 0.925f);
+            internal static readonly Vector2 HeaderMax    = new Vector2(0.982f, 0.995f);
+            internal static readonly Vector2 StatusMin    = new Vector2(0.018f, 0.865f);
+            internal static readonly Vector2 StatusMax    = new Vector2(0.982f, 0.920f);
+            internal static readonly Vector2 SpotlightMin = new Vector2(0.018f, 0.135f);
+            internal static readonly Vector2 SpotlightMax = new Vector2(0.365f, 0.855f);
+            internal static readonly Vector2 ShelfMin     = new Vector2(0.382f, 0.135f);
+            internal static readonly Vector2 ShelfMax     = new Vector2(0.982f, 0.855f);
+            internal static readonly Vector2 TrustMin     = new Vector2(0.018f, 0.012f);
+            internal static readonly Vector2 TrustMax     = new Vector2(0.982f, 0.118f);
+            internal const float CardHeightPx = 240f;
+            internal const int CardsPerRow = 2;
+        }
 
         /// <summary>
         /// Card height in reference px. ⛔ BOTH SIDES OF A CARD MUST CLEAR
@@ -104,17 +111,14 @@ namespace DeNelle.Wallet
         /// precise defect that produced the grey-plate shelf the owner saw clip the frame on
         /// 2026-07-16. Author above the floor; never rely on the clamp being kind.
         /// </summary>
-        private const float CardHeightPx = 168f;
+        private const float CardHeightPx = NightMarketLayout.CardHeightPx;
 
         /// <summary>
-        /// Cards per shelf row. TWO, not Grok's three: the store modal is
-        /// <c>StorePanelAnchorMin/Max</c> = 0.325–0.675 of the screen (a TALL NARROW panel, ~840 px
-        /// on a 2400-wide device, and that size is the owner's 2026-07-15 "all stores same size"
-        /// felt-test ruling, so it does not move). The shelf column is ~470 px of that; three up
-        /// would be ~150 px cards carrying a name, a goods line AND a price block. Two up is ~225 px
-        /// — comfortably over the touch floor and actually legible.
+        /// Cards per shelf row. Two is the device-verified readability ruling: the earlier three-up
+        /// pass cleared the touch floor but made names, contents and prices illegible at play distance.
+        /// Readability outranks catalogue density; the shelf scrolls.
         /// </summary>
-        private const int CardsPerRow = 2;
+        private const int CardsPerRow = NightMarketLayout.CardsPerRow;
 
         // Kit modal (lazy-built on first open) + the surfaces Render() fills.
         private ElarionUiKit.ObsidianModal _modal;
@@ -133,6 +137,16 @@ namespace DeNelle.Wallet
         // Per-pack currency selection (SKU → chosen rail).
         private readonly Dictionary<string, CurrencyKind> _selectedCurrency = new Dictionary<string, CurrencyKind>();
         private bool _purchaseInFlight;
+
+        private enum CommerceState
+        {
+            Ready, OpeningWallet, AwaitingApproval, Submitted, Verifying,
+            Delivering, Fulfilled, Cancelled, Failed, Delayed
+        }
+
+        private CommerceState _commerceState = CommerceState.Ready;
+        private string _commerceDetail = string.Empty;
+        private float _commerceStateSince;
 
         // ── Focus (the spotlight) ────────────────────────────────────────────
         private string _focusSku;
@@ -182,6 +196,7 @@ namespace DeNelle.Wallet
                 _modal.canvas.SetActive(true);
             Render();
             RefreshWalletMirror().Forget();
+            RestorePendingPresentation();
 
             if (_panelHandle != null) PanelManager.NotifyOpened(_panelHandle);
         }
@@ -198,6 +213,17 @@ namespace DeNelle.Wallet
         {
             if (_modal != null && _modal.canvas != null)
                 Destroy(_modal.canvas);
+        }
+
+        private void Update()
+        {
+            if (!_purchaseInFlight) return;
+            float elapsed = Time.realtimeSinceStartup - _commerceStateSince;
+            if (_commerceState == CommerceState.OpeningWallet && elapsed >= 5f)
+                RenderCommerceStatus("Wallet is taking longer than usual. Check the wallet app; the request times out at 30 seconds.");
+            else if (_commerceState == CommerceState.Verifying && elapsed >= 60f)
+                SetCommerceState(CommerceState.Delayed,
+                    "Your payment may still settle. It is recorded for reconciliation; do not pay again.");
         }
 
         /// <summary>
@@ -243,11 +269,10 @@ namespace DeNelle.Wallet
             if (_modal != null && _modal.canvas != null) return;
             using var _ = FlowTrace.Enter("Store", "EnsureBuilt (Night Market)");
 
-            // Shared store size (owner felt-test 2026-07-15: all stores same size / matching Y).
-            // ⛔ UNCHANGED BY WO-1050: the modal, its frame, its medallion, the ONE shared Close and
-            // the StorePanelAnchor pair are the same objects at the same size as every other store.
+            // UI-001: the Night Market is a browse surface, not a portrait vendor card. It keeps
+            // the shared Obsidian chrome and ONE shared Close while using a landscape footprint.
             _modal = ElarionUiKit.BuildObsidianModal("PackStoreUI", StoreStrings.Get(StoreStrings.KeyWordmark),
-                ElarionUiKit.StorePanelAnchorMin, ElarionUiKit.StorePanelAnchorMax, CloseStore,
+                NightMarketLayout.PanelMin, NightMarketLayout.PanelMax, CloseStore,
                 frameName: RpgUiCatalog.FrameMerchant, medallionIcon: "coin");
 
             if (_modal == null || _modal.canvas == null)
@@ -270,15 +295,15 @@ namespace DeNelle.Wallet
 
             // Purchase status banner — the only purchase-feedback surface. It holds STILL: it is
             // read to make a decision, so nothing animates near it (Lane G rule 2).
-            _statusBanner = MakeText(_body, string.Empty, 13, ElarionUi.Gold,
-                FontStyles.Normal, TextAlignmentOptions.Center, StatusMin, StatusMax);
+            _statusBanner = MakeText(_body, string.Empty, 20, ElarionUi.Gold,
+                FontStyles.Normal, TextAlignmentOptions.Center, NightMarketLayout.StatusMin, NightMarketLayout.StatusMax);
 
             // Left column — the spotlight. Rebuilt whole on each focus change.
-            _spotlightHost = ZoneRect(_body, "Spotlight", SpotlightMin, SpotlightMax);
+            _spotlightHost = ZoneRect(_body, "Spotlight", NightMarketLayout.SpotlightMin, NightMarketLayout.SpotlightMax);
             Plate(_spotlightHost, NightMarketPalette.GroundRaised);
 
             // Right column — the banded shelf.
-            var shelfHost = ZoneRect(_body, "Shelf", ShelfMin, ShelfMax);
+            var shelfHost = ZoneRect(_body, "Shelf", NightMarketLayout.ShelfMin, NightMarketLayout.ShelfMax);
             _shelfContent = BuildScrollColumn(shelfHost);
 
             // ── BAND 1 — FREE TONIGHT, built HERE and never rebuilt ──────────
@@ -312,9 +337,7 @@ namespace DeNelle.Wallet
         /// <summary>Wordmark on the left, the read-only wallet mirror on the right.</summary>
         private void BuildHeader(Transform body)
         {
-            var host = ZoneRect(body, "Header", HeaderMin, HeaderMax);
-            MakeText(host, StoreStrings.Get(StoreStrings.KeyWordmark), 17, ElarionUi.Parchment,
-                FontStyles.Bold, TextAlignmentOptions.Left, new Vector2(0f, 0f), new Vector2(0.5f, 1f));
+            var host = ZoneRect(body, "StoreHeader", NightMarketLayout.HeaderMin, NightMarketLayout.HeaderMax);
 
             // ── The wallet mirror ────────────────────────────────────────────
             // ⛔ THE GAME NEVER HOLDS SKR AND MUST NEVER READ AS IF IT DOES. SKR is Solana Mobile's
@@ -324,8 +347,8 @@ namespace DeNelle.Wallet
             // never be one. This label is a READ-ONLY MIRROR of the player's OWN wallet, read
             // through the existing SolanaWalletProvider.GetBalance path. Never written, never
             // granted, never deducted in-game. The copy says "your wallet" for exactly that reason.
-            _balanceLabel = MakeText(host, string.Empty, 12, ElarionUi.ParchmentDim,
-                FontStyles.Normal, TextAlignmentOptions.Right, new Vector2(0.5f, 0f), new Vector2(1f, 1f));
+            _balanceLabel = MakeText(host, string.Empty, 20, ElarionUi.Parchment,
+                FontStyles.Normal, TextAlignmentOptions.Right, new Vector2(0.35f, 0f), new Vector2(1f, 1f));
         }
 
         /// <summary>
@@ -334,7 +357,7 @@ namespace DeNelle.Wallet
         /// </summary>
         private void BuildTrustStrip(Transform body)
         {
-            var host = ZoneRect(body, "TrustStrip", TrustMin, TrustMax);
+            var host = ZoneRect(body, "StoreLegalFooter", NightMarketLayout.TrustMin, NightMarketLayout.TrustMax);
             Plate(host, new Color(0f, 0f, 0f, 0.30f));
 
             string treasury = Shorten(WalletService.RewardsDistributorAddress);
@@ -345,15 +368,15 @@ namespace DeNelle.Wallet
                 StoreStrings.Get(StoreStrings.KeyTrustNeverPower),
             });
 
-            MakeText(host, claims, 10, ElarionUi.ParchmentDim, FontStyles.Bold,
+            MakeText(host, claims, 16, ElarionUi.Parchment, FontStyles.Bold,
                 TextAlignmentOptions.Center, new Vector2(0.01f, 0.52f), new Vector2(0.99f, 0.98f));
 
             // The covenant is VERBATIM, italic, right-anchored and the LAST thing read.
-            MakeText(host, StoreStrings.Get(StoreStrings.KeyCovenant), 11, ElarionUi.Gold,
+            MakeText(host, StoreStrings.Get(StoreStrings.KeyCovenant), 16, ElarionUi.Gold,
                 FontStyles.Italic, TextAlignmentOptions.Right, new Vector2(0.01f, 0.06f), new Vector2(0.99f, 0.50f));
 
             // The market disclaimer keeps its place beneath the claims.
-            _disclaimerLabel = MakeText(host, PackCatalog.CurrencyDisclaimer, 9, ElarionUi.ParchmentDim,
+            _disclaimerLabel = MakeText(host, PackCatalog.CurrencyDisclaimer, 15, ElarionUi.Parchment,
                 FontStyles.Normal, TextAlignmentOptions.Left, new Vector2(0.01f, 0.06f), new Vector2(0.55f, 0.50f));
         }
 
@@ -517,9 +540,9 @@ namespace DeNelle.Wallet
                 rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
             }
 
-            MakeText(host, BandEyebrow(band), 13, ElarionUi.Parchment, FontStyles.Bold,
+            MakeText(host, BandEyebrow(band), 15, ElarionUi.Parchment, FontStyles.Bold,
                 TextAlignmentOptions.BottomLeft, new Vector2(0.03f, 0.10f), new Vector2(0.55f, 0.92f));
-            MakeText(host, BandSubLabel(band), 10, ElarionUi.ParchmentDim, FontStyles.Italic,
+            MakeText(host, BandSubLabel(band), 12, ElarionUi.ParchmentDim, FontStyles.Italic,
                 TextAlignmentOptions.BottomRight, new Vector2(0.55f, 0.10f), new Vector2(0.99f, 0.80f));
 
             // G4 — the patronage sheen. A slow iridescent roll along the band head's top edge.
@@ -581,10 +604,11 @@ namespace DeNelle.Wallet
         {
             if (_shelfContent == null) return;
             BuildBandHead(StoreBand.Free);
-            var strip = BuildCardRow();
+            // Keep every free-door row genuinely two-up, matching the priced shelf.
+            var firstStrip = BuildCardRow();
 
             var slot = new GameObject("free-redeem", typeof(RectTransform), typeof(LayoutElement));
-            slot.transform.SetParent(strip, false);
+            slot.transform.SetParent(firstStrip, false);
             var le = slot.GetComponent<LayoutElement>();
             le.preferredHeight = CardHeightPx;
             le.flexibleWidth = 1f;
@@ -594,10 +618,10 @@ namespace DeNelle.Wallet
             var light = NightMarketPalette.For(StoreBand.Free);
             Orb(slot.transform, light);
 
-            MakeText(slot.transform, PromoStrings.Get(PromoStrings.KeyTitle), 13, ElarionUi.Parchment,
+            MakeText(slot.transform, PromoStrings.Get(PromoStrings.KeyTitle), 15, ElarionUi.Parchment,
                 FontStyles.Bold, TextAlignmentOptions.TopLeft,
                 new Vector2(0.24f, 0.70f), new Vector2(0.96f, 0.92f));
-            MakeText(slot.transform, PromoStrings.Get(PromoStrings.KeyBlurb), 9, ElarionUi.ParchmentDim,
+            MakeText(slot.transform, PromoStrings.Get(PromoStrings.KeyBlurb), 11, ElarionUi.ParchmentDim,
                 FontStyles.Italic, TextAlignmentOptions.TopLeft,
                 new Vector2(0.06f, 0.54f), new Vector2(0.96f, 0.70f));
 
@@ -609,19 +633,22 @@ namespace DeNelle.Wallet
                 entryLabel,
                 ElarionUiKit.ObsidianButtonStyle.Style1,
                 ElarionUiKit.ObsidianButtonColor.Yellow,
-                new Vector2(0.06f, 0.06f), new Vector2(0.94f, 0.52f),
+                new Vector2(0.06f, 0.04f), new Vector2(0.94f, 0.54f),
                 OpenRedeemPanel);
             if (redeemBtn == null)
                 FlowTrace.Fail("Store", "BuildFreeBand: Redeem-a-Code button failed to build — the promo system has NO player entry point again.");
             else
             {
                 var redeemLabel = redeemBtn.GetComponentInChildren<TMP_Text>(true);
-                if (redeemLabel != null) ElarionUiKit.FitSingleLine(redeemLabel, 18f, 24f);
+                if (redeemLabel != null) ElarionUiKit.FitSingleLine(redeemLabel, 20f, 28f);
                 FlowTrace.Step("Store", "BuildFreeBand: Redeem-a-Code entry built (ungated by design — the purchase flag gates BUYING only).");
             }
 
-            BuildFreeDoor(strip, "SEASON TRACK", "Play battles. Earn every tier.", PanelId.BattlePass);
-            BuildFreeDoor(strip, "MONTHLY LEDGER", "Thirty claims. Missed days stay yours.", PanelId.MonthlyLedger);
+            BuildFreeDoor(firstStrip, "SEASON TRACK", "Play battles. Earn every tier.", PanelId.BattlePass);
+
+            var secondStrip = BuildCardRow();
+            BuildFreeDoor(secondStrip, "MONTHLY LEDGER", "Thirty claims. Missed days stay yours.", PanelId.MonthlyLedger);
+            Spacer(secondStrip);
         }
 
         private void BuildFreeDoor(Transform strip, string title, string blurb, PanelId panel)
@@ -631,13 +658,13 @@ namespace DeNelle.Wallet
             var le = slot.GetComponent<LayoutElement>(); le.preferredHeight = CardHeightPx; le.flexibleWidth = 1f; le.minWidth = ElarionUiKit.MinTouchPx;
             Plate(slot.transform, NightMarketPalette.GroundRaised);
             Orb(slot.transform, NightMarketPalette.For(StoreBand.Free));
-            MakeText(slot.transform, title, 13, ElarionUi.Parchment, FontStyles.Bold,
+            MakeText(slot.transform, title, 15, ElarionUi.Parchment, FontStyles.Bold,
                 TextAlignmentOptions.TopLeft, new Vector2(0.24f, 0.70f), new Vector2(0.96f, 0.92f));
-            MakeText(slot.transform, blurb, 9, ElarionUi.ParchmentDim, FontStyles.Italic,
+            MakeText(slot.transform, blurb, 11, ElarionUi.ParchmentDim, FontStyles.Italic,
                 TextAlignmentOptions.TopLeft, new Vector2(0.06f, 0.54f), new Vector2(0.96f, 0.70f));
             ElarionUiKit.BuildObsidianButton(slot.transform, "OPEN",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                new Vector2(0.06f, 0.06f), new Vector2(0.94f, 0.52f), () => PanelRouter.Open(panel));
+                new Vector2(0.06f, 0.04f), new Vector2(0.94f, 0.54f), () => PanelRouter.Open(panel));
         }
 
         /// <summary>One horizontal strip of <see cref="CardsPerRow"/> flex cards.</summary>
@@ -722,29 +749,29 @@ namespace DeNelle.Wallet
 
             Orb(card, orbTint);
 
-            MakeText(card, pack.Name, 13, ElarionUi.Parchment, FontStyles.Bold,
-                TextAlignmentOptions.TopLeft, new Vector2(0.24f, 0.70f), new Vector2(0.97f, 0.95f));
+            MakeText(card, pack.Name, 24, ElarionUi.Parchment, FontStyles.Bold,
+                TextAlignmentOptions.TopLeft, new Vector2(0.24f, 0.58f), new Vector2(0.97f, 0.82f));
 
             // ONE goods line, sourced from the same describer the spotlight ledger draws from, so
             // the card and the spotlight can never disagree about what a pack contains.
-            MakeText(card, DescribeContents(pack), 10, new Color(0.78f, 0.82f, 0.90f, 1f),
+            MakeText(card, DescribeContents(pack), 18, new Color(0.90f, 0.93f, 0.98f, 1f),
                 FontStyles.Normal, TextAlignmentOptions.TopLeft,
                 new Vector2(0.06f, 0.30f), new Vector2(0.97f, 0.66f));
 
             // Price block: SKR large, USD small. HOLDS STILL — it is read to decide (Lane G rule 2).
-            MakeText(card, pack.AmountLabel(_defaultCurrency), 15, ElarionUi.Gilt, FontStyles.Bold,
+            MakeText(card, pack.AmountLabel(_defaultCurrency), 26, ElarionUi.Gilt, FontStyles.Bold,
                 TextAlignmentOptions.BottomLeft, new Vector2(0.06f, 0.04f), new Vector2(0.60f, 0.28f));
-            MakeText(card, pack.UsdReference, 10, ElarionUi.ParchmentDim, FontStyles.Normal,
+            MakeText(card, pack.UsdReference, 18, ElarionUi.Parchment, FontStyles.Normal,
                 TextAlignmentOptions.BottomRight, new Vector2(0.60f, 0.04f), new Vector2(0.97f, 0.24f));
 
             // ── EVERY STATE CARRIES A WORD ───────────────────────────────────
             string flag = CardStateWord(pack);
             if (!string.IsNullOrEmpty(flag))
-                MakeText(card, flag, 10, ElarionUi.Gold, FontStyles.Bold,
-                    TextAlignmentOptions.TopRight, new Vector2(0.50f, 0.74f), new Vector2(0.97f, 0.97f));
+                MakeText(card, flag, 15, ElarionUi.Gold, FontStyles.Bold,
+                    TextAlignmentOptions.TopRight, new Vector2(0.24f, 0.83f), new Vector2(0.97f, 0.97f));
             else if (!string.IsNullOrEmpty(pack.StoreBadge))
-                MakeText(card, pack.StoreBadge, 10, ElarionUi.Gold, FontStyles.Bold,
-                    TextAlignmentOptions.TopRight, new Vector2(0.50f, 0.74f), new Vector2(0.97f, 0.97f));
+                MakeText(card, pack.StoreBadge, 15, ElarionUi.Gold, FontStyles.Bold,
+                    TextAlignmentOptions.TopRight, new Vector2(0.24f, 0.83f), new Vector2(0.97f, 0.97f));
 
             // Tapping the card moves the spotlight. It NEVER buys — the only Buy control on this
             // screen is the spotlight CTA, which runs through PurchaseGate.
@@ -885,16 +912,16 @@ namespace DeNelle.Wallet
             Orb(_spotlightHost, orbTint, new Vector2(0.08f, 0.79f), new Vector2(0.30f, 0.95f));
 
             if (!string.IsNullOrEmpty(pack.StoreBadge))
-                MakeText(_spotlightHost, pack.StoreBadge, 10, ElarionUi.Gold, FontStyles.Bold,
+                MakeText(_spotlightHost, pack.StoreBadge, 15, ElarionUi.Gold, FontStyles.Bold,
                     TextAlignmentOptions.TopRight, new Vector2(0.40f, 0.90f), new Vector2(0.94f, 0.97f));
 
-            MakeText(_spotlightHost, pack.Name, 18, ElarionUi.Parchment, FontStyles.Bold,
+            MakeText(_spotlightHost, pack.Name, 26, ElarionUi.Parchment, FontStyles.Bold,
                 TextAlignmentOptions.BottomLeft, new Vector2(0.06f, 0.70f), new Vector2(0.94f, 0.80f));
-            MakeText(_spotlightHost, pack.Tagline, 11, ElarionUi.ParchmentDim, FontStyles.Italic,
+            MakeText(_spotlightHost, pack.Tagline, 17, ElarionUi.Parchment, FontStyles.Italic,
                 TextAlignmentOptions.TopLeft, new Vector2(0.06f, 0.575f), new Vector2(0.94f, 0.695f));
 
             // ── The bar ledger ───────────────────────────────────────────────
-            MakeText(_spotlightHost, StoreStrings.Get(StoreStrings.KeyLedgerHeading), 10,
+            MakeText(_spotlightHost, StoreStrings.Get(StoreStrings.KeyLedgerHeading), 15,
                 ElarionUi.ParchmentDim, FontStyles.Bold, TextAlignmentOptions.BottomLeft,
                 new Vector2(0.06f, 0.535f), new Vector2(0.94f, 0.575f));
             float ledgerTop = 0.525f, rowH = 0.052f;
@@ -920,7 +947,7 @@ namespace DeNelle.Wallet
             string compare = BuildComparisonLine(pack);
             if (!string.IsNullOrEmpty(compare))
             {
-                MakeText(_spotlightHost, compare, 10, ElarionUi.ParchmentDim, FontStyles.Normal,
+                MakeText(_spotlightHost, compare, 15, ElarionUi.Parchment, FontStyles.Normal,
                     TextAlignmentOptions.TopLeft, new Vector2(0.06f, cursor - 0.055f), new Vector2(0.94f, cursor));
                 cursor -= 0.065f;
             }
@@ -933,7 +960,7 @@ namespace DeNelle.Wallet
             {
                 double after = _balanceSkr - pack.AmountFor(CurrencyKind.Skr);
                 MakeText(_spotlightHost, StoreStrings.Format(StoreStrings.KeyBalanceAfter, after.ToString("N0")),
-                    10, ElarionUi.ParchmentDim, FontStyles.Normal, TextAlignmentOptions.TopLeft,
+                    15, ElarionUi.Parchment, FontStyles.Normal, TextAlignmentOptions.TopLeft,
                     new Vector2(0.06f, cursor - 0.05f), new Vector2(0.94f, cursor));
             }
 
@@ -955,9 +982,9 @@ namespace DeNelle.Wallet
             rt.anchorMin = new Vector2(0.06f, y0); rt.anchorMax = new Vector2(0.94f, y1);
             rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
 
-            MakeText(go.transform, key, 9, ElarionUi.ParchmentDim, FontStyles.Normal,
+            MakeText(go.transform, key, 14, ElarionUi.Parchment, FontStyles.Normal,
                 TextAlignmentOptions.Left, new Vector2(0f, 0f), new Vector2(0.26f, 1f));
-            MakeText(go.transform, amount.ToString("N0"), 10, ElarionUi.Parchment, FontStyles.Bold,
+            MakeText(go.transform, amount.ToString("N0"), 15, ElarionUi.Parchment, FontStyles.Bold,
                 TextAlignmentOptions.Right, new Vector2(0.72f, 0f), new Vector2(1f, 1f));
 
             var track = Plate(go.transform, new Color(1f, 1f, 1f, 0.10f));
@@ -1051,8 +1078,8 @@ namespace DeNelle.Wallet
             // ⛔ THE CTA IS AUTHORED AT ~115 px TALL AND FULL COLUMN WIDTH, both over
             // MinTouchPx(112), so ClampMinTouch is a NO-OP. That is the same discipline the 2026-07-16
             // buy-column fix landed: a sub-112 control does not fail, it INFLATES and overlaps.
-            var ctaMin = new Vector2(0.06f, 0.035f);
-            var ctaMax = new Vector2(0.94f, 0.195f);
+            var ctaMin = new Vector2(0.06f, 0.025f);
+            var ctaMax = new Vector2(0.94f, 0.245f);
 
             // ── anchorOnly: NO BUY CONTROL IS EVER BUILT ─────────────────────
             // On EITHER side of the purchase flag. The row renders fully priced and simply has no
@@ -1072,6 +1099,15 @@ namespace DeNelle.Wallet
                 MakeText(_spotlightHost, StoreStrings.Get(StoreStrings.KeyCardOwned), 18,
                     new Color(0.55f, 0.90f, 0.55f, 1f), FontStyles.Bold,
                     TextAlignmentOptions.Center, ctaMin, ctaMax);
+                return;
+            }
+
+            // A durable submitted payment owns the CTA until reconciliation resolves it.
+            // Rendering another Buy face here would invite a duplicate charge.
+            if (PurchaseEntitlementVerifier.HasPending(pack.Sku))
+            {
+                MakeText(_spotlightHost, "[PENDING] Reconcile purchase - do not pay again", 15,
+                    ElarionUi.Gold, FontStyles.Bold, TextAlignmentOptions.Center, ctaMin, ctaMax);
                 return;
             }
 
@@ -1120,8 +1156,12 @@ namespace DeNelle.Wallet
             }
 
             var rail = SelectedCurrency(pack.Sku);   // SKR canary by default (MON-1147)
+            if (_wallet != null && _wallet.Network == WalletNetwork.Devnet)
+                MakeText(_spotlightHost, "DEVNET - TEST TOKEN", 12, ElarionUi.Gold,
+                    FontStyles.Bold, TextAlignmentOptions.Center,
+                    new Vector2(0.06f, 0.245f), new Vector2(0.94f, 0.285f));
             var buy = ElarionUiKit.BuildObsidianButton(_spotlightHost,
-                $"Buy {pack.AmountLabel(rail)}",
+                $"Buy - {pack.AmountLabel(rail)}",
                 ElarionUiKit.ObsidianButtonStyle.Style1,
                 _purchaseInFlight ? ElarionUiKit.ObsidianButtonColor.Gray
                                   : ElarionUiKit.ObsidianButtonColor.Yellow,
@@ -1271,7 +1311,12 @@ namespace DeNelle.Wallet
             switch (_balanceState)
             {
                 case BalanceState.NoWallet:
-                    _balanceLabel.text = StoreStrings.Get(StoreStrings.KeyBalanceNoWallet);
+                    if (_wallet != null && _wallet.Account.IsValid)
+                        _balanceLabel.text = $"Wallet {Shorten(_wallet.Account.Address)} bound - authorize to purchase";
+                    else if (PurchaseGate.HasDurableIdentity)
+                        _balanceLabel.text = "Wallet identity bound - authorize to purchase";
+                    else
+                        _balanceLabel.text = StoreStrings.Get(StoreStrings.KeyBalanceNoWallet);
                     return;
                 case BalanceState.Checking:
                     _balanceLabel.text = StoreStrings.Get(StoreStrings.KeyBalanceChecking);
@@ -1281,7 +1326,10 @@ namespace DeNelle.Wallet
                     return;
             }
 
-            string text = StoreStrings.Format(StoreStrings.KeyBalanceValue, _balanceSkr.ToString("N0"));
+            string identity = _wallet != null && _wallet.Account.IsValid
+                ? Shorten(_wallet.Account.Address) + "  " + _wallet.NetworkLabel + "  SKR"
+                : (_wallet != null ? _wallet.NetworkLabel + "  SKR" : "SKR");
+            string text = identity + "\n" + StoreStrings.Format(StoreStrings.KeyBalanceValue, _balanceSkr.ToString("N0"));
             bool fresh = _hasFiat && (Time.realtimeSinceStartup - _fiatAtRealtime) < FiatStaleSeconds;
             if (fresh)
                 text += "  " + StoreStrings.Format(StoreStrings.KeyBalanceFiat, _fiatUsd.ToString("N2"));
@@ -1416,13 +1464,13 @@ namespace DeNelle.Wallet
 
             if (_purchaseInFlight)
             {
-                SetStatus("A purchase is already in progress...");
+                SetCommerceState(CommerceState.Delayed, "A purchase is already in progress. Do not pay again.");
                 return PaymentResult.Failure(pack.Sku, currency, "Purchase already in progress.");
             }
 
             if (_vm.IsOwned(pack.Sku))
             {
-                SetStatus($"{pack.Name} is already in your collection.");
+                SetCommerceState(CommerceState.Fulfilled, $"{pack.Name} is already in your collection.");
                 return PaymentResult.Failure(pack.Sku, currency, "Already owned.");
             }
 
@@ -1433,22 +1481,52 @@ namespace DeNelle.Wallet
                 // The USDC / SOL flow (§7.4): wallet must be connected first.
                 if (!_wallet.IsConnected)
                 {
-                    SetStatus("Connecting wallet...");
+                    SetCommerceState(CommerceState.OpeningWallet);
                     var account = await _wallet.Connect();
                     if (!account.IsValid)
                     {
                         FlowTrace.Warn("Store", $"Purchase '{pack.Sku}': wallet connect cancelled/failed — aborted (player NOT charged).");
-                        SetStatus("Wallet connection cancelled.");
+                        SetCommerceState(CommerceState.Cancelled,
+                            "Wallet did not respond. Check that it is installed, then retry.");
                         return PaymentResult.Failure(pack.Sku, currency, "Wallet not connected.");
                     }
                 }
+
+#if STORE_RAIL_LOCAL_TEST
+                // One-time recovery of the owner's first successful Devnet canary. The transfer
+                // finalized while the old client was frozen in scaled-time confirmation, before it
+                // could persist the returned signature. Production builds do not compile this block.
+                // /verify still re-checks the full finalized transaction contract and remains the
+                // entitlement authority; this only restores the receipt the client failed to save.
+                if (!PurchaseEntitlementVerifier.HasPending(pack.Sku) &&
+                    string.Equals(pack.Sku, PurchaseGate.DevnetCanarySku, StringComparison.Ordinal) &&
+                    string.Equals(_wallet.Account.Address,
+                        "CHKKFkPGz8VZfjpsZjJTqfAUW7vMpdNkkqCVuCcZsfkC", StringComparison.Ordinal))
+                {
+                    const string recoveredSignature =
+                        "5FA9ygfVAiDQKywjM7WaZADGhjA6QJCUhGdKgDGNCBKWhfuxtjpBRDpFnrQzSpAsx72HT9LvdT9vLn9NLZJyyGGX";
+                    var recoveredPayment = PaymentResult.Success(pack.Sku, CurrencyKind.Skr,
+                        pack.AmountFor(CurrencyKind.Skr), recoveredSignature);
+                    PurchaseEntitlementVerifier.Remember(pack, recoveredPayment, _wallet);
+                    FlowTrace.Warn("Store", "Recovered finalized Devnet canary receipt 5FA9...yyGGX; verifying without a second payment.");
+                }
+#endif
 
                 // Ask the durable authority before a new charge. This is the reinstall/new-device
                 // restore path: local PlayerPrefs may be empty while the server still owns proof.
                 if (!PurchaseEntitlementVerifier.HasPending(pack.Sku))
                 {
-                    SetStatus("Checking this wallet for an existing purchase...");
+                    SetCommerceState(CommerceState.Verifying,
+                        $"Checking {_wallet.NetworkLabel} for an existing entitlement. No new payment is being requested.");
                     var durable = await PurchaseEntitlementVerifier.ReconcileAsync(pack, _wallet);
+                    if (durable.State == EntitlementVerificationState.Fulfilled)
+                    {
+                        var restored = PaymentResult.Success(pack.Sku, currency,
+                            pack.AmountFor(currency), durable.TransactionSignature);
+                        if (await RestoreFulfilledOwnershipAsync(pack, restored)) return restored;
+                        return Indeterminate(restored,
+                            "Your fulfilled purchase was found, but ownership restore is pending.");
+                    }
                     if (durable.State == EntitlementVerificationState.Verified)
                     {
                         var restored = PaymentResult.Success(pack.Sku, currency,
@@ -1463,8 +1541,17 @@ namespace DeNelle.Wallet
                 // death; reconnecting the paying wallet resumes verification instead of paying twice.
                 if (PurchaseEntitlementVerifier.HasPending(pack.Sku))
                 {
-                    SetStatus("Recovering your pending purchase...");
-                    var recovered = await PurchaseEntitlementVerifier.VerifyPendingAsync(pack, _wallet);
+                    SetCommerceState(CommerceState.Delayed,
+                        "Recovering the recorded payment. Do not pay again.");
+                    var recovered = await PurchaseEntitlementVerifier.VerifyPendingAsync(pack, currency, _wallet);
+                    if (recovered.State == EntitlementVerificationState.Fulfilled)
+                    {
+                        var restored = PaymentResult.Success(pack.Sku, currency,
+                            pack.AmountFor(currency), recovered.TransactionSignature);
+                        if (await RestoreFulfilledOwnershipAsync(pack, restored)) return restored;
+                        return Indeterminate(restored,
+                            "Your fulfilled purchase was found, but ownership restore is pending.");
+                    }
                     if (recovered.State == EntitlementVerificationState.Verified)
                     {
                         var restored = PaymentResult.Success(pack.Sku, currency,
@@ -1477,12 +1564,18 @@ namespace DeNelle.Wallet
                     string recoveryMessage = recovered.State == EntitlementVerificationState.Pending
                         ? "Payment found; waiting for final verification. No second charge was made."
                         : "The pending payment needs support review. No second charge was made.";
-                    SetStatus(recoveryMessage);
+                    SetCommerceState(CommerceState.Delayed, recoveryMessage);
                     return PaymentResult.Failure(pack.Sku, currency, recoveryMessage);
                 }
 
-                SetStatus($"Confirming {pack.AmountLabel(currency)} on {_wallet.NetworkLabel}...");
+                SetCommerceState(CommerceState.AwaitingApproval,
+                    $"{pack.Name}: {pack.AmountLabel(currency)} on {_wallet.NetworkLabel}. Human approval has no countdown.");
                 var result = await _wallet.Pay(pack, currency);
+
+                // A wallet-signed receipt exists before RPC transport completes. Persist it even
+                // when submission response is ambiguous; any retry must reconcile, never pay again.
+                if (!string.IsNullOrEmpty(result.TxSignature))
+                    PurchaseEntitlementVerifier.Remember(pack, result, _wallet);
 
                 if (result.Ok)
                 {
@@ -1505,10 +1598,17 @@ namespace DeNelle.Wallet
 #endif
                     // Chain confirmation alone is not entitlement authority. Persist first so a
                     // crash cannot strand the charge, then require independent backend proof.
-                    PurchaseEntitlementVerifier.Remember(pack, result, _wallet);
-                    SetStatus("Payment submitted - verifying your entitlement...");
-                    var verified = await PurchaseEntitlementVerifier.VerifyPendingAsync(pack, _wallet);
-                    if (verified.State == EntitlementVerificationState.Verified)
+                    SetCommerceState(CommerceState.Submitted, $"Transaction {Shorten(result.TxSignature)}.");
+                    SetCommerceState(CommerceState.Verifying,
+                        $"Transaction {Shorten(result.TxSignature)}. Do not pay again.");
+                    var verified = await PurchaseEntitlementVerifier.VerifyPendingAsync(pack, currency, _wallet);
+                    if (verified.State == EntitlementVerificationState.Fulfilled)
+                    {
+                        if (!await RestoreFulfilledOwnershipAsync(pack, result))
+                            return Indeterminate(result,
+                                "Fulfilled payment found, but ownership restore is pending.");
+                    }
+                    else if (verified.State == EntitlementVerificationState.Verified)
                     {
                         if (!await CompleteVerifiedPurchaseAsync(pack, result))
                             return Indeterminate(result,
@@ -1520,14 +1620,23 @@ namespace DeNelle.Wallet
                             ? "Payment submitted; verification is pending. Reopen the store to resume - do not pay again."
                             : "Payment recorded but could not be verified. Contact support with the transaction receipt.";
                         FlowTrace.Warn("Store", $"Purchase '{pack.Sku}' tx {Shorten(result.TxSignature)}: {pending}");
-                        SetStatus(pending);
+                        SetCommerceState(CommerceState.Delayed,
+                            $"Transaction {Shorten(result.TxSignature)}. {pending}");
                         return Indeterminate(result, pending);
                     }
                 }
                 else
                 {
+                    if (!string.IsNullOrEmpty(result.TxSignature))
+                    {
+                        SetCommerceState(CommerceState.Delayed,
+                            $"Transaction {Shorten(result.TxSignature)} has an unknown submission outcome. " +
+                            "It is recorded for reconciliation; do not pay again.");
+                        return result;
+                    }
                     FlowTrace.Fail("Store", $"Purchase '{pack.Sku}' ({currency}) FAILED: {result.Error}");
-                    SetStatus($"Purchase failed - {result.Error}");
+                    SetCommerceState(CommerceState.Failed,
+                        "Reopen the store to reconcile before trying another payment.");
                 }
                 return result;
             }
@@ -1535,7 +1644,8 @@ namespace DeNelle.Wallet
             {
                 FlowTrace.Fail("Store",
                     $"Purchase '{pack.Sku}' ({currency}) THREW: {ex.GetType().Name}: {ex.Message} — outcome indeterminate; if a charge settled the entitlement may be lost.");
-                SetStatus($"Purchase failed - {ex.Message}");
+                SetCommerceState(CommerceState.Failed,
+                    "Reopen the store to reconcile before trying another payment.");
                 return PaymentResult.Failure(pack.Sku, currency, ex.Message);
             }
             finally
@@ -1553,6 +1663,21 @@ namespace DeNelle.Wallet
             return paid;
         }
 
+        private async UniTask<bool> RestoreFulfilledOwnershipAsync(PackDef pack, PaymentResult payment)
+        {
+            if (pack == null || string.IsNullOrEmpty(payment.TxSignature)) return false;
+            // The server says consumables were already delivered. Restore only durable ownership;
+            // replaying economy/convenience here would make reinstall an infinite-grant exploit.
+            _vm.RestoreFulfilledOwnership(pack);
+            if (!_vm.IsOwned(pack.Sku)) return false;
+            PurchaseGate.TryClaimGrant(payment.TxSignature);
+            await PurchaseEntitlementVerifier.MarkFulfilledAsync(
+                pack.Sku, payment.TxSignature, _wallet);
+            SetCommerceState(CommerceState.Fulfilled,
+                $"{pack.Name} ownership restored. Transaction {Shorten(payment.TxSignature)}.");
+            return true;
+        }
+
         /// <summary>Exactly-once local fulfilment after the backend created a durable entitlement.</summary>
         private async UniTask<bool> CompleteVerifiedPurchaseAsync(PackDef pack, PaymentResult payment)
         {
@@ -1564,7 +1689,8 @@ namespace DeNelle.Wallet
                 {
                     await PurchaseEntitlementVerifier.MarkFulfilledAsync(
                         pack.Sku, payment.TxSignature, _wallet);
-                    SetStatus($"{pack.Name} is already restored - tx {Shorten(payment.TxSignature)}.");
+                    SetCommerceState(CommerceState.Fulfilled,
+                        $"{pack.Name} is already restored. Transaction {Shorten(payment.TxSignature)}.");
                     return true;
                 }
                 PurchaseGate.ReportGrantFailed(payment.TxSignature,
@@ -1572,6 +1698,8 @@ namespace DeNelle.Wallet
                 return false;
             }
 
+            SetCommerceState(CommerceState.Delivering,
+                $"Transaction {Shorten(payment.TxSignature)}.");
             _vm.ApplyPackContents(pack);
             if (!_vm.IsOwned(pack.Sku))
             {
@@ -1583,7 +1711,8 @@ namespace DeNelle.Wallet
             FlowTrace.Step("Store", $"Purchase '{pack.Sku}' backend-verified; tx {payment.TxSignature}, contents applied once.");
             await PurchaseEntitlementVerifier.MarkFulfilledAsync(
                 pack.Sku, payment.TxSignature, _wallet);
-            SetStatus($"{pack.Name} unlocked - tx {Shorten(payment.TxSignature)}.");
+            SetCommerceState(CommerceState.Fulfilled,
+                $"{pack.Name} delivered once. Transaction {Shorten(payment.TxSignature)}.");
             PackPurchased?.Invoke(pack, payment);
             DeNelle.Core.Analytics.EventTracker.Track("purchase_completed", new
             {
@@ -1607,7 +1736,7 @@ namespace DeNelle.Wallet
         private async UniTaskVoid ConnectForWalletGate(string reason)
         {
             using var _ = FlowTrace.Enter("Store", "ConnectForWalletGate");
-            SetStatus(reason);
+            SetCommerceState(CommerceState.OpeningWallet, reason);
             try
             {
                 if (_wallet != null && !_wallet.IsConnected)
@@ -1616,7 +1745,8 @@ namespace DeNelle.Wallet
                     if (!account.IsValid)
                     {
                         FlowTrace.Warn("Store", "wallet-gate connect cancelled/failed — pack stays gated (nothing charged).");
-                        SetStatus(reason);
+                        SetCommerceState(CommerceState.Cancelled,
+                            "Wallet did not respond. Check that it is installed, then retry. No payment was requested.");
                         return;
                     }
                 }
@@ -1624,7 +1754,7 @@ namespace DeNelle.Wallet
                 if (PurchaseGate.HasDurableIdentity)
                     FlowTrace.Step("Store", "wallet-gate satisfied — the higher tiers are now buyable on this save.");
                 else
-                    SetStatus(reason);
+                    SetCommerceState(CommerceState.Failed, reason);
             }
             catch (Exception ex)
             {
@@ -1632,7 +1762,8 @@ namespace DeNelle.Wallet
                 // that does nothing, on the one screen where that reads as dishonest.
                 FlowTrace.Fail("Store", $"ConnectForWalletGate THREW: {ex.GetType().Name}: {ex.Message} — " +
                                         "nothing was charged; the pack stays gated.");
-                SetStatus(reason);
+                SetCommerceState(CommerceState.Failed,
+                    "Wallet authorization failed before any payment request. Retry authorization when ready.");
             }
             finally
             {
@@ -1645,6 +1776,51 @@ namespace DeNelle.Wallet
         {
             if (_statusBanner != null) _statusBanner.text = message;
             else FlowTrace.Warn("Store", $"SetStatus (no banner element): {message}");
+        }
+
+        private void SetCommerceState(CommerceState state, string detail = null)
+        {
+            _commerceState = state;
+            _commerceDetail = detail ?? string.Empty;
+            _commerceStateSince = Time.realtimeSinceStartup;
+            RenderCommerceStatus();
+        }
+
+        private void RenderCommerceStatus(string temporaryDetail = null)
+        {
+            string key;
+            switch (_commerceState)
+            {
+                case CommerceState.OpeningWallet: key = StoreStrings.KeyCommerceOpeningWallet; break;
+                case CommerceState.AwaitingApproval: key = StoreStrings.KeyCommerceAwaitingApproval; break;
+                case CommerceState.Submitted: key = StoreStrings.KeyCommerceSubmitted; break;
+                case CommerceState.Verifying: key = StoreStrings.KeyCommerceVerifying; break;
+                case CommerceState.Delivering: key = StoreStrings.KeyCommerceDelivering; break;
+                case CommerceState.Fulfilled: key = StoreStrings.KeyCommerceFulfilled; break;
+                case CommerceState.Cancelled: key = StoreStrings.KeyCommerceCancelled; break;
+                case CommerceState.Failed: key = StoreStrings.KeyCommerceFailed; break;
+                case CommerceState.Delayed: key = StoreStrings.KeyCommerceDelayed; break;
+                default: key = StoreStrings.KeyCommerceReady; break;
+            }
+
+            string headline = _commerceState == CommerceState.Verifying
+                ? StoreStrings.Format(key, _wallet != null ? _wallet.NetworkLabel : "network")
+                : StoreStrings.Get(key);
+            string detail = temporaryDetail ?? _commerceDetail;
+            SetStatus(string.IsNullOrEmpty(detail) ? headline : headline + "\n" + detail);
+        }
+
+        private void RestorePendingPresentation()
+        {
+            foreach (var pack in PackCatalog.Packs)
+            {
+                if (pack == null || !PurchaseEntitlementVerifier.HasPending(pack.Sku)) continue;
+                SetCommerceState(CommerceState.Delayed,
+                    $"{pack.Name} has a recorded payment. Reopen this offer to reconcile; do not pay again.");
+                return;
+            }
+            if (!_purchaseInFlight && _commerceState == CommerceState.Ready)
+                RenderCommerceStatus();
         }
 
         private static string Shorten(string signature)
