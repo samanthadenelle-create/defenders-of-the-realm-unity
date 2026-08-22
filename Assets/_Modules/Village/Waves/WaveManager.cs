@@ -2547,6 +2547,20 @@ namespace DeNelle.Village
                 _liveEnemies.RemoveAll(e => e == null);
             }
 
+            // WO-1026 — SIEGE OBSERVER. One null-safe line: when a SiegeSession is open (the
+            // scheduler opened it just before ForceBeginNextWave), it unions the fielded roster
+            // and records inner-ring crossings for the persisted Defence Report. It is an
+            // OBSERVER of this loop, not a second detector: it changes no phase, cancels nothing,
+            // and spawns nothing. It is passed THIS manager's own heart/radius/armed flag so the
+            // breach geometry has exactly one source of truth.
+            //   Why not hook the detector below instead? Because that whole block is behind
+            //   FeatureFlags.WaveBreachToAtb, which WO-579 turned OFF by default — on the live
+            //   path it never runs, so hooking it would have recorded nothing, forever, silently.
+            //   (Full reasoning in SiegeSession.cs's header. Do not "simplify" this back.)
+            if (SiegeSession.Current != null && _heart != null)
+                SiegeSession.Current.ObserveTick(_heart.transform.position, _innerRingRadius,
+                                                 _breachArmed, _liveEnemies);
+
             // WO-579 (#4 — owner felt-test 2026-06-28): the village wave resolves IN-HUB (towers + hero
             // auto-defend; enemies contact-attack the Heart : IDamageableStructure; Heart at 0 = defeat).
             // The legacy breach-ring → ATBBattle hand-off (the "wave ~3 auto-launches ATB" symptom — an
