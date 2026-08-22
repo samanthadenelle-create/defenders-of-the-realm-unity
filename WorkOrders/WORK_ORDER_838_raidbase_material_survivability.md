@@ -1,6 +1,6 @@
 # WORK ORDER 838 — Raid-base material survivability: white walls, flat towers, magenta troops (F8 seq 606)
 
-**Status: READY TO IMPLEMENT** (Phase A probe is the MANDATORY first step — it captures the §12 proof
+**Status:** CLOSED - owner felt-verified 2026-08-21: *"close 838 its done, raids work and not white"*. The white-walls / flat-towers / magenta-troops symptom is gone on device. Phase A probe is MOOT - the defect it was to instrument no longer reproduces, so do not run it.
 line for the one remaining INFERRED link before any material edit lands)
 **Minted:** 2026-08-02 (RCA agent, from owner F8 seq 606 + follow-up observations, RaidBase_mage_enclave desktop player build)
 **Silo:** Art pipeline / raid-base bake. File-disjoint from gameplay lanes (§9).
@@ -219,3 +219,25 @@ that scale" guard for the whole class, not just these three scenes.
 - `WallSegment` gameplay stats / tier toughness (cosmetic path only).
 - Stale-flag, don't rewrite: `WallTierData.cs:85` comment "PENDING owner art (runic steel)" is stale
   (steel_wall.fbx landed 07-14) — fix the comment in the same commit as Phase B.
+
+
+---
+
+# CLOSED BY OWNER FELT-VERIFY 2026-08-21
+
+Owner verbatim: **"close 838 its done, raids work and not white"**.
+
+This ticket demanded a Phase A instrumentation probe as a MANDATORY first step before any fix
+(canon 12: no edit until captured data proves the cause). That gate is now moot - the raid bases
+render correctly on device and the symptom does not reproduce, so there is no live defect left to
+instrument. **Do not run the probe and do not re-open on the strength of the old F8 seq 606
+capture** - that capture is a point-in-time record of a state that no longer exists.
+
+Related work that landed in the same era and plausibly resolved it (recorded as context, NOT as a
+proven cause - nobody bisected this): the raid-base material diagnostic + wall-material fixer
+(`Assets/Editor/RaidBaseMatDiag.cs`, `Assets/Editor/WallTools/RaidWallMaterialFixer.cs`) and the
+enemy/structure art migration onto the R2 content pipeline.
+
+NOTE for whoever reads this next: a SEPARATE and still-open gap was found on 2026-08-21 - the
+three wall TIERS have no tracked materials at all and render from embedded FBX materials
+(**WO-1135**). That is a different defect from this one and closing 838 does not close it.

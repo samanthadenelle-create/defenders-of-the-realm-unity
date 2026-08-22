@@ -1,3 +1,6 @@
+> # ⚠ SUPERSEDED 2026-08-21 by `CANON_GROUND_TRUTH_2026-08-21.md`.
+> Frozen point-in-time record - do NOT rewrite the body, do NOT read as current state.
+
 # CANON GROUND TRUTH — 2026-08-18
 
 **Supersedes `CANON_GROUND_TRUTH_2026-08-16.md`** (now bannered/frozen). Per CLAUDE.md §15 this is

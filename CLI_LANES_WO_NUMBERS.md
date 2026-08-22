@@ -95,7 +95,10 @@
 > PROD-003 (Realm Store permanent storefront), PROD-004 (baked-twin footprint),
 > PROD-005 (default shield renders through the hero body; survives a dungeon->town port).
 
-> ## ⚠ RECONCILED 2026-08-21 (CLI): main line next free = **1139**.
+> ## ⚠ RECONCILED 2026-08-21 (CLI): main line next free = **1140**.
+> *(CLI seat minted **WO-1139** and bumped 1139 -> 1140 in this SAME edit. **1139** = implement the
+> ruled loss stakes (theft 15% floor-protected, crystals exempt, offline included) + the bounded
+> repair bill; split out of WO-1026 whose own deliverable shipped 2026-08-21.)*
 > *(CLI seat minted **WO-1137** + **WO-1138** and bumped 1137 -> 1139 in this SAME edit.
 > **1137** = the hardcoded fallback catalog palette covers 3 of 28 rows, has drifted 4x, and
 > presents a silent wrong-game as success - delete it and fail loud, or generate it.

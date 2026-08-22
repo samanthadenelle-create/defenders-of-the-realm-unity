@@ -1,6 +1,6 @@
 # WORK ORDER 1026 — The base is never attacked: close the CoC consequence loop
 
-**Status:** PARTIAL 2026-08-21 - siege cadence + persisted Defense Report SHIPPED and gate-green; combat firewall breach fixed by relocating cadence to SiegeClock. STAKES ARE NOW RULED (theft 15%, floor-protected, crystals exempt, offline included) but NOT YET IMPLEMENTED - FeatureFlags.Siege stays OFF until they are.
+**Status:** DONE 2026-08-21 - the ticket's OWN deliverable (PvE siege cadence + the persisted, data-shaped Defense Report) SHIPPED and is gate-green. The loss-stakes IMPLEMENTATION is split out to WO-1139; the RULING for it is recorded in this file and is the input to that ticket.
 
 > Owner ruling 2026-08-17 (*"open ones follow your recommendations"*): **model (a)** — scripted/generated
 > attackers assault the base on a cadence, reusing `WaveManager`, no backend.
@@ -321,3 +321,31 @@ Never "temporarily" enable crystal theft for a test build - the payment path is 
   never by noticing a number is smaller. An unexplained loss is the resented version of this mechanic.
 - Respect the storage caps (`stockpiles-cap-capacity`) and the WO-947 basket separation; theft reads
   the cap to compute the floor, it does not invent a second capacity notion.
+
+
+---
+
+# DONE 2026-08-21 - WHAT SHIPPED, AND WHY THE STAKES ARE A SEPARATE TICKET
+
+Owner, 2026-08-21: *"1026 was the defensive report didnt you do that?"* - yes. Closing it.
+
+## SHIPPED (this ticket's section 4 deliverable)
+- **Siege cadence** - `SiegeScheduler` / `SiegeSession` / `SiegeSchedulerBootstrap`, driving
+  `WaveManager.ForceBeginNextWave()`. `WaveManager` stays the SINGLE attacker authority.
+- **The persisted Defense Report** - `DefenseReportBuilder` + `StructureVitalsWatch` +
+  `DefenseMapPlate`: what attacked, where it broke through, what held, how long each structure
+  survived. **Shaped as DATA from the first line**, with the attacker source as a FIELD, which was
+  the structural condition of the 2026-08-17 ruling - so ghost-PvP later is a SOURCE SWAP, not a
+  rebuild.
+- **The combat firewall**, fixed properly: the cadence and ledger wall-clock stamps moved OUT of
+  the swept combat directories into `SiegeClock.cs`, so queue-time stays skippable and battle-time
+  never is. Three oracles pin it (`DefenseReportContract`, `SiegeCadence`, `SiegeSpawnAuthority`).
+
+## NOT SHIPPED, AND DELIBERATELY SPLIT OUT -> **WO-1139**
+The loss stakes were ruled TODAY (theft 15%, floor-protected, crystals exempt, offline included -
+see the ruling block above). They are a distinct piece of work touching the wallet and the repair
+bill, and holding this ticket open for them would misreport a shipped subsystem as unbuilt.
+
+⛔ **`FeatureFlags.Siege` STAYS OFF until WO-1139 lands.** The cadence would otherwise open sieges
+that resolve and report but take nothing - the "safe interim" this ticket named, which is fine to
+sit in the tree and wrong to ship as the finished loop.
