@@ -21,6 +21,25 @@ using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Wallet
 {
+    /// <summary>
+    /// The four shelf bands of The Night Market (WO-1050), in their FIXED render order.
+    /// <para>⛔ THE ORDER IS NOT A PREFERENCE AND IS NOT SORTED AT RENDER TIME — it is the enum
+    /// order, and the shelf walks the enum. <see cref="Free"/> is first because nothing is asked for
+    /// before something is given; <see cref="Patronage"/> is last so it is the read on the way out.
+    /// Renumbering these values re-orders the store.</para>
+    /// </summary>
+    public enum StoreBand
+    {
+        /// <summary>Costs nothing, ever. Never rendered in a colour that also appears on a priced row.</summary>
+        Free = 0,
+        /// <summary>One resource, nothing else — the curated single-resource impulse rows.</summary>
+        Gap = 1,
+        /// <summary>Baskets: everything at once.</summary>
+        Basket = 2,
+        /// <summary>Status, never power.</summary>
+        Patronage = 3,
+    }
+
     /// <summary>Per-currency price of a pack — mirrors PackDef.pricing (§8.4).</summary>
     [Serializable]
     public sealed class PackPricing
@@ -156,7 +175,77 @@ namespace DeNelle.Wallet
             return false;
         }
         /// <summary>Retention-oriented shelf section: featured / essentials / style / support.</summary>
+        /// <remarks>
+        /// ⛔ NOT DELETED BY WO-1050, deliberately. <see cref="Band"/> supersedes it as the GROUPING
+        /// key, but this field is still the FALLBACK a row without a band resolves through
+        /// (<see cref="PackCatalog.BandOf"/>), so deleting it would silently drop any un-migrated row
+        /// into the wrong band. Two fields over one decision is duplicated state ONLY when both are
+        /// authoritative; here one is authored and the other is a documented fallback.
+        /// </remarks>
         [JsonProperty("storeSection")] public string StoreSection = "essentials";
+
+        // ── WO-1050 "The Night Market" PRESENTATION fields (additive; absent = null/false) ──
+        // ⚠ EVERY FIELD IN THIS BLOCK DECIDES WHERE OR HOW A PACK IS SHOWN, AND NONE OF THEM CAN
+        // CHANGE WHAT IT GRANTS. That distinction is why ImpulsePackRegression's AllowedPackKeys
+        // gate accepts them (they cannot be the "grant a finished upgrade" field it exists to catch)
+        // and it is the line to hold if this block ever grows: a key that touches contents, pricing
+        // or entitlement does NOT belong here.
+
+        /// <summary>
+        /// The shelf band this pack lives in: <c>free</c> | <c>gap</c> | <c>basket</c> |
+        /// <c>patronage</c>. Replaces <see cref="StoreSection"/>'s mood names as the grouping key.
+        /// Absent → resolved from <see cref="StoreSection"/> by <see cref="PackCatalog.BandOf"/>.
+        /// </summary>
+        [JsonProperty("band")] public string Band;
+
+        /// <summary>
+        /// Hex tint (<c>#RRGGBB</c>) for the card's gem. Authored in DATA so a merchandising change
+        /// is a data edit, never a code edit. Absent → the band's own light is used.
+        /// <para>⚠ DECORATION ONLY. The owner is red/green colourblind: band identity is carried by
+        /// the 3 px mark, the text eyebrow and the step in greyscale value, NEVER by this tint. A
+        /// card whose meaning depends on its orb colour is a defect.</para>
+        /// </summary>
+        [JsonProperty("orbTint")] public string OrbTint;
+
+        /// <summary>
+        /// The SKU this pack's spotlight comparison line is drawn against. Absent → no line.
+        /// <para>The line is PURE ARITHMETIC over two real SKUs (a goods ratio and a price ratio) or
+        /// it is not drawn at all — no adjectives, no invented "value index". If the named SKU does
+        /// not exist, or the two rows share no economy key, the line is ABSENT.</para>
+        /// </summary>
+        [JsonProperty("compareTo")] public string CompareTo;
+
+        /// <summary>
+        /// A price ANCHOR: the card renders fully priced and <b>no Buy control is ever built</b>, on
+        /// either side of the purchase flag. It cannot be bought, so it cannot disappoint.
+        /// <para>⚠ NO ROW CARRIES THIS TODAY (WO-1050). The mechanism ships ahead of its data on
+        /// purpose: WO-1121 is the SAME-DAY owner ruling that un-hid the $9.99/$19.99/$49.99 ladder
+        /// and made those rows buyable behind <c>PurchaseGate</c>'s wallet rule, so flagging any of
+        /// them <c>anchorOnly</c> now would walk that ruling back by an authoring edit. Setting this
+        /// on a row is an OWNER call.</para>
+        /// </summary>
+        [JsonProperty("anchorOnly")] public bool AnchorOnly;
+
+        /// <summary>
+        /// How much of one economy key this pack grants. Read straight off the contents bag — the
+        /// SAME bag <c>PackStoreVM.ApplyPackContents</c> pays out — so the ledger and the comparison
+        /// line can never advertise a figure the grant seam does not deliver.
+        /// </summary>
+        public int EconomyAmount(string key)
+        {
+            var e = Contents != null ? Contents.Economy : null;
+            if (e == null || string.IsNullOrEmpty(key)) return 0;
+            switch (key.Trim().ToLowerInvariant())
+            {
+                case "wood":     return e.Wood;
+                case "iron":     return e.Iron;
+                case "crystals": return e.Crystals;
+                case "food":     return e.Food;
+                case "coins":    return e.Coins;
+                case "glimmer":  return e.Glimmer;
+                default:         return 0;
+            }
+        }
         /// <summary>Short, honest card badge such as "BEST START" or "EXPEDITION".</summary>
         [JsonProperty("storeBadge")] public string StoreBadge;
         /// <summary>Per-currency pricing.</summary>
@@ -309,6 +398,62 @@ namespace DeNelle.Wallet
             if (pack.LegacySkus == null) yield break;
             foreach (var legacy in pack.LegacySkus)
                 if (!string.IsNullOrEmpty(legacy)) yield return legacy;
+        }
+
+        // =====================================================================
+        //  WO-1050 — band resolution + the ledger key list
+        // =====================================================================
+
+        /// <summary>
+        /// Every economy key <c>PackStoreVM.ApplyPackContents</c> actually pays out, in grant order.
+        /// <para>⛔ THIS LIST IS THE HONESTY CONTRACT OF THE SPOTLIGHT LEDGER. The ledger draws one
+        /// bar per key here that the pack carries a non-zero amount of, so a good that IS granted can
+        /// never be un-drawn, and a good that is NOT granted can never appear. If the grant seam ever
+        /// learns a new currency, add it here in the SAME commit — the same rule that governs
+        /// <c>RedeemableConvenienceKinds</c> above.</para>
+        /// <para><c>glimmer</c> is listed because the seam still routes it, even though the owner's
+        /// 2026-08-21 ruling stripped it from every pack (so every row is 0 and no bar draws). Listing
+        /// it costs nothing and removing it would re-open the drift this list exists to close.</para>
+        /// </summary>
+        public static readonly string[] LedgerEconomyKeys =
+            { "wood", "iron", "crystals", "food", "coins", "glimmer" };
+
+        /// <summary>
+        /// The band a pack renders in. Reads the authored <c>band</c> first and falls back to the
+        /// legacy <c>storeSection</c> mapping, so a row that predates WO-1050 still lands somewhere
+        /// sane instead of vanishing off the shelf.
+        /// </summary>
+        public static StoreBand BandOf(PackDef pack)
+        {
+            if (pack == null) return StoreBand.Basket;
+
+            switch ((pack.Band ?? string.Empty).Trim().ToLowerInvariant())
+            {
+                case "free":      return StoreBand.Free;
+                case "gap":       return StoreBand.Gap;
+                case "basket":    return StoreBand.Basket;
+                case "patronage": return StoreBand.Patronage;
+            }
+
+            // Fallback: the retired mood-named sections. "support" was where the two top rungs of
+            // the ladder already lived, so it maps to Patronage; everything else is a basket.
+            // An impulse row that somehow lost its band is a Gap row by construction — it grants
+            // exactly one resource, which is the definition of the band.
+            if (pack.Impulse) return StoreBand.Gap;
+            return string.Equals(pack.StoreSection, "support", StringComparison.OrdinalIgnoreCase)
+                ? StoreBand.Patronage
+                : StoreBand.Basket;
+        }
+
+        /// <summary>True when the row carries an explicitly authored, recognised band.</summary>
+        public static bool HasAuthoredBand(PackDef pack)
+        {
+            if (pack == null) return false;
+            switch ((pack.Band ?? string.Empty).Trim().ToLowerInvariant())
+            {
+                case "free": case "gap": case "basket": case "patronage": return true;
+                default: return false;
+            }
         }
 
         /// <summary>Looks up a pack by its tier (1–5). Returns null when not found.</summary>

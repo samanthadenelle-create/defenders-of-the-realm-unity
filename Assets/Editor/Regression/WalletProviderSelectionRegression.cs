@@ -161,10 +161,36 @@ namespace DeNelle.Editor
                     failures.Add("transfer construction OUTSIDE SolanaWalletProvider.cs: " +
                                  file.Substring(modulesRoot.Length + 1).Replace('\\', '/'));
             }
+            // ⚠ REWORDED 2026-08-21 (WO-1121). This used to assert, verbatim, that PackStore.cs
+            // CONTAINS the string "FeatureFlags.RealmStorePurchase". That check no longer measures
+            // what it was written to measure, for two separate reasons:
+            //   (a) PackStore now consults PurchaseGate.CanBuy(pack, ...) instead of reading the flag
+            //       itself. PurchaseGate reads the flag, and adds two conditions the raw flag cannot
+            //       express (an ON flag over a rail with no resolvable mint; the owner's wallet rule
+            //       above $4.99). The gate got STRONGER while the old literal disappeared.
+            //   (b) it was a raw Contains over the WHOLE file, comments included - so a source file
+            //       that merely NAMES the flag in prose satisfied it. A gate an explanatory comment
+            //       can satisfy is not a gate.
+            // The invariant it protects is unchanged and is asserted properly now: the purchase rail
+            // is guarded, the guard is on the CHARGE path (not just the button), and the guard still
+            // bottoms out in FeatureFlags.RealmStorePurchase - whose default 4b pins separately.
             if (!File.Exists(packStorePath))
                 failures.Add("PackStore.cs missing");
-            else if (!File.ReadAllText(packStorePath).Contains("FeatureFlags.RealmStorePurchase"))
-                failures.Add("PackStore lost the FeatureFlags.RealmStorePurchase gate (purchase rail unguarded)");
+            else
+            {
+                string storeSrc = File.ReadAllText(packStorePath);
+                if (!storeSrc.Contains("PurchaseGate.CanBuy(pack"))
+                    failures.Add("PackStore no longer consults PurchaseGate.CanBuy(pack, ...) - the purchase rail is " +
+                                 "unguarded on the charge path, and StubWalletProvider would grant packs for free.");
+
+                string gatePath = Path.Combine(Application.dataPath, "_Modules/Wallet/PurchaseGate.cs");
+                if (!File.Exists(gatePath))
+                    failures.Add("PurchaseGate.cs missing - PackStore delegates its purchase gate to it, so the rail " +
+                                 "has no guard at all.");
+                else if (!File.ReadAllText(gatePath).Contains("FeatureFlags.RealmStorePurchase"))
+                    failures.Add("PurchaseGate no longer reads FeatureFlags.RealmStorePurchase - the flag 4b pins the " +
+                                 "default of is not actually consulted by anything on the purchase path.");
+            }
 
             // -- 4b. ...and that gate must still DEFAULT OFF -------------------
             //

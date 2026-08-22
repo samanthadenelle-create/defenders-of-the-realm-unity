@@ -1,24 +1,42 @@
 // =============================================================================
 // PurchaseGate — WO-1121. The honest Buy gate + the idempotent-grant ledger.
 // -----------------------------------------------------------------------------
-// Assembly: DeNelle.Village   Namespace: DeNelle.Village.Monetization
+// Assembly: DeNelle.Wallet   Namespace: DeNelle.Wallet
 //
 // WO-1121 sec.0: "A live store that cannot take money, or takes money and grants
 // nothing, is worse than no store." Most of that ticket is a SHIP CHECKLIST -
 // a mainnet decision, an SKR mint, a settled test transfer - and none of those
-// are code. This file is the part that IS code, and it is exactly two things:
+// are code. This file is the part that IS code, and it is exactly three things:
 //
-//   1. ONE PLACE that answers "may this build take money?", with a PLAYER-READABLE
-//      reason attached. Today the answer is no, and the reason is not "the flag is
-//      off" - it is that the flag is off BECAUSE the rails underneath it are not
-//      finished. A dead Buy button with no explanation is the failure mode
-//      WO-1121 sec.3.5 names; so is a silent no-op on a broke-case Finish Now.
+//   1. ONE PLACE that answers "may this build take money for THIS pack?", with a
+//      PLAYER-READABLE reason attached. Today the answer is no, and the reason is
+//      not "the flag is off" - it is that the flag is off BECAUSE the rails
+//      underneath it are not finished. A dead Buy button with no explanation is the
+//      failure mode WO-1121 sec.3.5 names; so is a silent no-op on a broke-case
+//      Finish Now.
 //
-//   2. AN IDEMPOTENT GRANT LEDGER keyed by paymentId, so a retried or duplicated
+//   2. THE WALLET RULE (owner ruling 2026-08-21). A pack priced ABOVE $4.99 needs a
+//      connected, ATTESTED wallet; $4.99 and under stays guest-buyable. See
+//      WalletRequiredAboveUsd for the reasoning, which is about DURABILITY of the
+//      entitlement, not about trust.
+//
+//   3. AN IDEMPOTENT GRANT LEDGER keyed by paymentId, so a retried or duplicated
 //      settlement can NEVER grant a pack twice. This is the half of "charged and
 //      granted" that has no owner today: the charge is the wallet's, the contents
 //      are PackStore's, and nothing sat between them remembering what had already
 //      been paid out.
+//
+// ⚠ WHY THIS FILE LIVES IN DeNelle.Wallet AND NOT IN DeNelle.Village (moved
+// 2026-08-21, WO-1121). It was authored earlier the same day in
+// Village/Monetization, which reads fine until you ask the only question that
+// matters for a money gate: CAN THE CODE THAT CHARGES THE PLAYER CALL IT? It could
+// not. The charge happens in PackStore.Purchase (DeNelle.Wallet), and the asmdef
+// dependency runs Village -> Wallet, one way (read the .asmdef - CLAUDE.md sec.5).
+// A gate the payment path cannot reach is a UI gate, and a UI gate is bypassed by
+// any other call path - which is precisely what the owner's ruling forbids. Moving
+// it here costs one namespace and buys the guarantee: BOTH the card builder and the
+// Purchase() entry now call the same CanBuy. Village callers still reach it, because
+// Village references Wallet.
 //
 // ⛔ WHAT THIS FILE DELIBERATELY DOES NOT DO. It does NOT flip
 // FeatureFlags.RealmStorePurchase, and no future edit here should. That default is
@@ -32,14 +50,14 @@
 using System;
 using DeNelle.Core;
 using DeNelle.Core.Diagnostics;
-using DeNelle.Wallet;
+using DeNelle.Core.State;
 using UnityEngine;
 
-namespace DeNelle.Village.Monetization
+namespace DeNelle.Wallet
 {
     /// <summary>
-    /// The single authority on whether this build may take money, and the memory that stops one
-    /// payment from granting twice.
+    /// The single authority on whether this build may take money for a given pack, and the memory
+    /// that stops one payment from granting twice.
     /// </summary>
     public static class PurchaseGate
     {
@@ -56,19 +74,63 @@ namespace DeNelle.Village.Monetization
         private const int LedgerCapacity = 64;
 
         // =====================================================================
+        //  The wallet rule (owner ruling 2026-08-21)
+        // =====================================================================
+
+        /// <summary>
+        /// Above this USD price a purchase requires a connected, provider-ATTESTED wallet. At or
+        /// below it, a guest may buy.
+        ///
+        /// <para>THIS IS ABOUT DURABILITY, NOT TRUST. A guest's save key is
+        /// <c>guest-local-&lt;sha256(deviceId)&gt;</c> (GameStateService.EnsureAccount) - derived from
+        /// the device, with no proven restore path after a reinstall or a new phone. At $4.99 a lost
+        /// entitlement is an annoyance we can eat. At $49.99 it is a chargeback on a LIVE dApp Store
+        /// listing, and the player is right to file it. A connected wallet is a durable key that
+        /// survives both, which is why the line sits exactly where the old early-access ceiling
+        /// used to: everything that was already guest-buyable stays guest-buyable.</para>
+        ///
+        /// <para>⛔ THE THRESHOLD LIVES HERE AND NOWHERE ELSE. It is deliberately NOT a
+        /// <c>requiresWallet</c> field on the pack: that would be a second copy of a decision the
+        /// price already makes, and the two would drift the first time a pack is repriced (the same
+        /// duplicated-state failure as the stale WO-number block and the retired dependency table,
+        /// CLAUDE.md sec.2/sec.5). The player-facing sentence formats this same number, so the copy
+        /// cannot drift from the rule either.</para>
+        /// </summary>
+        public const double WalletRequiredAboveUsd = 4.99d;
+
+        /// <summary>
+        /// True when <paramref name="priceUsd"/> is above the guest ceiling. A tiny epsilon guards
+        /// the binary-float representation of 4.99 so an exactly-$4.99 pack can never tip over the
+        /// line by a rounding hair and refuse a purchase the ruling allows.
+        /// </summary>
+        public static bool RequiresWallet(double priceUsd) => priceUsd > WalletRequiredAboveUsd + 0.0001d;
+
+        /// <summary>
+        /// True when this device has a REAL, provider-attested wallet keying the save - the same
+        /// test cloud sync uses, read at source rather than re-derived here.
+        /// <para>Not "a wallet object exists": an unattested or wallet-SHAPED string is exactly what
+        /// GameStateService's allowlist was written to reject, and accepting one here would hand a
+        /// $49.99 entitlement to a key the backend will 401.</para>
+        /// </summary>
+        public static bool HasDurableIdentity =>
+            GameStateService.Instance?.HasAttestedWalletIdentity ?? false;
+
+        // =====================================================================
         //  The gate
         // =====================================================================
 
         /// <summary>
-        /// May this build present a working Buy CTA? Returns false with a PLAYER-READABLE
+        /// May this build present a working Buy CTA at all? Returns false with a PLAYER-READABLE
         /// <paramref name="reason"/> - never null, never "flag off", never blank. A caller that
         /// gets false shows the reason instead of a dead button.
+        /// <para>This is the BUILD-WIDE half only. Anything that names a specific pack must call
+        /// <see cref="CanBuy(PackDef, out string)"/>, which adds the price-gated wallet rule.</para>
         /// </summary>
         public static bool CanBuy(out string reason)
         {
             if (!FeatureFlags.RealmStorePurchase)
             {
-                reason = "Purchases are not open yet. Everything here is still earned in-game.";
+                reason = StoreStrings.Get(StoreStrings.KeyBuyClosed);
                 FlowTrace.Once("Store", "buy-gated",
                     "PurchaseGate: Buy is CLOSED (ff.realmstorepurchase OFF). This is the shipping state - " +
                     "the payment rails underneath are not finished (see PurchaseGate.ChecklistReport). " +
@@ -81,7 +143,7 @@ namespace DeNelle.Village.Monetization
             // factual check must be able to veto an optimistic flag.
             if (!SkrMintResolvable() && !string.Equals(PrimaryRail(), "USDC/SOL", StringComparison.Ordinal))
             {
-                reason = "The payment rail is not ready on this build. Nothing was charged.";
+                reason = StoreStrings.Get(StoreStrings.KeyBuyRailNotReady);
                 FlowTrace.Fail("Store",
                     "PurchaseGate: Buy is ON but the default rail has NO RESOLVABLE MINT " +
                     "(WalletEndpoints.SkrMint is empty for this network). Refusing at the gate rather " +
@@ -93,9 +155,74 @@ namespace DeNelle.Village.Monetization
             return true;
         }
 
+        /// <summary>
+        /// May this build take money for THIS pack? The build-wide gate PLUS the owner's wallet rule
+        /// (<see cref="WalletRequiredAboveUsd"/>).
+        ///
+        /// <para>⛔ EVERY PATH THAT CHARGES MUST CALL THIS, not just the button builder. A gate the
+        /// UI alone enforces is bypassed by any other caller - a deep link, a shortfall offer, a
+        /// future server-driven promo - and the whole point of the ruling is that the $49.99 tier
+        /// cannot be bought onto a key that cannot survive a reinstall.</para>
+        ///
+        /// <para>The refusal is ACTIONABLE and never implies the player cannot buy at all: it names
+        /// the wallet as the remedy and says what is still buyable without one.</para>
+        /// </summary>
+        public static bool CanBuy(PackDef pack, out string reason)
+        {
+            if (!CanBuy(out reason)) return false;
+
+            if (pack == null)
+            {
+                // Not a player error, so it does not get a player sentence dressed as one - but it
+                // must still refuse rather than fall through into a charge with no SKU.
+                reason = StoreStrings.Get(StoreStrings.KeyBuyRailNotReady);
+                FlowTrace.Fail("Store", "PurchaseGate.CanBuy(pack): pack is NULL - refusing. A charge with no SKU " +
+                                        "could not be granted, refunded or supported.");
+                return false;
+            }
+
+            double usd = pack.Pricing != null ? pack.Pricing.Usd : 0d;
+            if (RequiresWallet(usd) && !HasDurableIdentity)
+            {
+                reason = StoreStrings.Format(StoreStrings.KeyBuyWalletRequired, FormatUsd(WalletRequiredAboveUsd));
+                FlowTrace.Warn("Store",
+                    $"PurchaseGate: '{pack.Sku}' is ${usd:0.00}, above the ${WalletRequiredAboveUsd:0.00} guest " +
+                    "ceiling, and this save has NO attested wallet identity (it is a guest/device key with no " +
+                    "proven restore path). Refusing BEFORE any charge, with the connect-a-wallet remedy named. " +
+                    "This is the owner ruling of 2026-08-21, not a rail failure.");
+                return false;
+            }
+
+            reason = null;
+            return true;
+        }
+
+        /// <summary>
+        /// The right-rail BUTTON FACE for a pack the player may not currently buy - a short label,
+        /// not a sentence. Returns "Connect Wallet" when the wallet rule is the blocker (an action
+        /// the player can take right now) and "Coming soon" when the whole rail is closed.
+        /// <para>Text, never colour: the owner is red/green colourblind, so the state must be
+        /// readable from the words alone.</para>
+        /// </summary>
+        public static string BlockedCtaLabel(PackDef pack) =>
+            StoreStrings.Get(WalletIsTheBlocker(pack)
+                ? StoreStrings.KeyBuyWalletRequiredCta
+                : StoreStrings.KeyBuyComingSoon);
+
+        /// <summary>
+        /// True when the ONLY thing standing between this player and this pack is a connected
+        /// wallet - i.e. the refusal has a remedy the player can act on right now.
+        /// <para>ONE predicate, asked by both the label and the shelf, so a card can never show
+        /// "Connect Wallet" over a rail that is closed anyway (a promise we could not keep) or
+        /// "Coming soon" over a pack that connecting would unlock (a door we hid).</para>
+        /// </summary>
+        public static bool WalletIsTheBlocker(PackDef pack) =>
+            FeatureFlags.RealmStorePurchase &&
+            pack != null && pack.Pricing != null &&
+            RequiresWallet(pack.Pricing.Usd) && !HasDurableIdentity;
+
         /// <summary>Player-readable line for a shelf that is browsable but not buyable.</summary>
-        public static string ClosedShelfLine() =>
-            "Coming soon - purchases are not open in this build. Nothing here is required to play.";
+        public static string ClosedShelfLine() => StoreStrings.Get(StoreStrings.KeyShelfClosed);
 
         // =====================================================================
         //  Idempotent grant ledger
@@ -207,6 +334,9 @@ namespace DeNelle.Village.Monetization
                 $"  Declared primary rail                : {rail}\n" +
                 $"  Idempotent grant by paymentId        : YES (PurchaseGate.TryClaimGrant)\n" +
                 $"  Mainnet policy                       : blocked in SolanaWalletProvider.SendPayment (deliberate)\n" +
+                $"  Price ceiling                        : ${49.99d:0.00} (owner 2026-08-21 - the ${WalletRequiredAboveUsd:0.00} cap was EARLY-ACCESS, not permanent)\n" +
+                $"  Wallet required above                : ${WalletRequiredAboveUsd:0.00}\n" +
+                $"  This save has an attested wallet     : {(HasDurableIdentity ? "YES" : "NO - guest/device key, so only <= $" + WalletRequiredAboveUsd.ToString("0.00") + " is buyable")}\n" +
                 "  NOT VERIFIABLE FROM CODE (owner actions): one settled transfer test, the mainnet\n" +
                 "  decision itself, and the pay -> grant -> save -> relaunch device proof.";
         }
@@ -236,6 +366,11 @@ namespace DeNelle.Village.Monetization
         /// what the storefront copy says.
         /// </summary>
         private static string PrimaryRail() => SkrMintResolvable() ? "SKR" : "USDC/SOL";
+
+        /// <summary>Invariant-culture "$4.99" for the refusal sentence's {0}. Never the device
+        /// locale: the price on the card is authored in USD, so the threshold must read the same.</summary>
+        private static string FormatUsd(double usd) =>
+            "$" + usd.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture);
 
         // Bounded ring so the ledger cannot grow without limit on a device.
         private static void RememberInIndex(string key)

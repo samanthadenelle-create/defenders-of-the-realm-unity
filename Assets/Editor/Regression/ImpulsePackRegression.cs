@@ -105,6 +105,35 @@ namespace DeNelle.Editor.Regression
                 //                   curated/hidden). Underscore-prefixed keys are inert notes,
                 //                   read by nobody at runtime; it grants nothing and cannot.
                 "_shelfNote",
+
+                // ── REVIEWED 2026-08-21, WO-1050 "The Night Market" ──────────────────
+                // Added in the SAME change that put them in the data - which is the whole
+                // point of this allowlist: a new key does not reach the shelf until a human
+                // has said what it does. All four are PRESENTATION keys. Each one decides
+                // WHERE or HOW a pack is SHOWN and NONE of them can change WHAT IT GRANTS,
+                // so none can be the "grant a finished upgrade" field this gate exists to
+                // catch. The value checks above ([single-key], [ceiling], [resources-only]
+                // contents scan) are untouched and still bind on every impulse row.
+                //   band       - free|gap|basket|patronage. The shelf GROUPING key, replacing
+                //                storeSection's mood names. The three curated impulse rows
+                //                carry band:"gap"; the other nine are still skipped by the
+                //                card loop entirely ([not-on-shelf] below still pins that).
+                //                Pure layout: it moves a card between headings.
+                //   orbTint    - hex tint of the card gem. DECORATION ONLY, and deliberately
+                //                so: the owner is red/green colourblind, so band identity is
+                //                carried by the mark + the text eyebrow + the greyscale step
+                //                ([band-greyscale] asserts that), never by a hue. A tint can
+                //                make a card prettier; it cannot make it mean anything.
+                //   compareTo  - the SKU the spotlight comparison line is drawn against. It
+                //                selects an EXISTING row to do arithmetic against and grants
+                //                nothing; [compare-arithmetic] proves the arithmetic is real
+                //                or the line is absent.
+                //   anchorOnly - renders fully priced with NO Buy control ever built. It can
+                //                only ever REMOVE the ability to buy, which is the safe
+                //                direction. NO ROW CARRIES IT TODAY (see the packs.json
+                //                _schemaNotes) - the key is admitted here so the mechanism and
+                //                its review land together rather than the day someone needs it.
+                "band", "orbTint", "compareTo", "anchorOnly",
             };
 
         private static readonly HashSet<string> AllowedContentsKeys =
@@ -142,6 +171,13 @@ namespace DeNelle.Editor.Regression
                 CaseResolverPicksSmallestSufficient(failures, log);
                 CaseSurfaceHasNoGrantRoute(failures, log);
                 CaseNotOnTheShelf(failures, log);
+
+                // ── WO-1050 The Night Market ──────────────────────────────────────
+                CaseAnchorBuildsNoBuy(failures, log);
+                CaseBandIsKnown(failures, log);
+                CaseCompareIsArithmetic(failures, log);
+                CaseVisibleIsGrantable(failures, log);
+                CaseBandGreyscale(failures, log);
             }
             catch (Exception ex)
             {
@@ -154,7 +190,11 @@ namespace DeNelle.Editor.Regression
                          "granting EXACTLY ONE economy key, none above the $" + PriceCeilingUsd.ToString("0.00") +
                          " ceiling, none granting a structure/level/queue completion; the dual JSON copies are " +
                          "byte-identical; and the resolver returns the SMALLEST SUFFICIENT pack (and nothing at " +
-                         "all when the upgrade is affordable).";
+                         "all when the upgrade is affordable). NIGHT MARKET (WO-1050): every browsable row " +
+                         "carries an authored band, the free band is priceless, every comparison resolves to real " +
+                         "arithmetic over two real SKUs, every advertised line is grantable today, an anchorOnly " +
+                         "row provably builds NO Buy control, and the four band lights step apart in rec.709 " +
+                         "greyscale with a word on every band.";
                 Debug.Log("IMPULSE_PACK_OK\n" + log);
                 return true;
             }
@@ -657,6 +697,330 @@ namespace DeNelle.Editor.Regression
                              "storefront the ruling is not. Reach them through ShortfallPackOffer.");
             else
                 log.AppendLine("  [not-on-shelf] PackStore's card loop still skips impulse SKUs (shortfall-only)");
+        }
+
+        // =====================================================================
+        //  CASE 9 [anchor-no-buy] -- WO-1050. A row flagged anchorOnly must produce
+        //  NO Buy control, on EITHER side of the RealmStorePurchase flag.
+        //
+        //  WHY IT IS ASSERTED ON THE SOURCE AND NOT ON A RENDER: the rule is not
+        //  "the button currently happens to be absent", it is "the code path that
+        //  builds a button is UNREACHABLE for an anchor row". That is a structural
+        //  claim, and the structure is what is checked -- the anchorOnly branch must
+        //  RETURN before the CTA builder can reach any BuildObsidianButton call. A
+        //  headless render would prove today's data (no row carries the flag, so it
+        //  would pass vacuously and prove nothing at all).
+        // =====================================================================
+        private static void CaseAnchorBuildsNoBuy(List<string> failures, StringBuilder log)
+        {
+            string path = Application.dataPath + "/_Modules/Wallet/PackStore.cs";
+            if (!File.Exists(path))
+            {
+                failures.Add("[anchor-no-buy] PackStore.cs not found at " + path +
+                             " - cannot verify that an anchor row builds no Buy control.");
+                return;
+            }
+            string src = File.ReadAllText(path);
+
+            if (!ContainsOutsideComments(src, "pack.AnchorOnly"))
+            {
+                failures.Add("[anchor-no-buy] PackStore.cs no longer tests 'pack.AnchorOnly' in CODE. A row " +
+                             "authored anchorOnly:true would then render a TAPPABLE Buy over a rail that " +
+                             "refuses - which is the WO-931 defect exactly. The flag must remove the button, " +
+                             "not merely label it.");
+                return;
+            }
+
+            // The branch must return before any button is built. Scope to the CTA BUILDER — the one
+            // method that can construct a Buy control. Scanning the whole file would find the first
+            // AnchorOnly read anywhere (the card's state WORD, which correctly returns a string) and
+            // pass on an occurrence that was never the risk.
+            int cta = src.IndexOf("private void BuildSpotlightCta", StringComparison.Ordinal);
+            if (cta < 0)
+            {
+                failures.Add("[anchor-no-buy] PackStore.BuildSpotlightCta not found. If the CTA builder was " +
+                             "renamed, RE-POINT THIS ORACLE IN THE SAME CHANGE - otherwise the anchor rule " +
+                             "silently stops being checked, which is worse than never having had it.");
+                return;
+            }
+            int guard = IndexOfOutsideComments(src.Substring(cta), "pack.AnchorOnly");
+            if (guard < 0)
+            {
+                failures.Add("[anchor-no-buy] PackStore.BuildSpotlightCta does not test 'pack.AnchorOnly'. The CTA " +
+                             "builder is the ONLY place a Buy control is constructed, so an anchor row would get one.");
+                return;
+            }
+            guard += cta;
+            int nextReturn = src.IndexOf("return;", guard, StringComparison.Ordinal);
+            int nextButton = src.IndexOf("BuildObsidianButton", guard, StringComparison.Ordinal);
+            if (nextReturn < 0 || (nextButton >= 0 && nextButton < nextReturn))
+                failures.Add("[anchor-no-buy] in PackStore.cs the 'pack.AnchorOnly' branch reaches a " +
+                             "BuildObsidianButton call before it returns. An anchor row must build NO Buy " +
+                             "control AT ALL - showing a price with no button is the entire mechanism, and it " +
+                             "is what lets the row anchor while shipping zero vapor.");
+            else
+                log.AppendLine("  [anchor-no-buy] the anchorOnly branch returns before any button is built");
+
+            // Data side: an anchor row is still a normal, fully-priced row. If one is ever authored,
+            // it must carry a real price on every rail or it renders an anchor of nothing.
+            var packs = AllPacks(failures);
+            if (packs == null) return;
+            int anchors = 0;
+            foreach (var p in packs)
+            {
+                var tok = p["anchorOnly"];
+                if (tok == null || tok.Type != JTokenType.Boolean || !tok.Value<bool>()) continue;
+                anchors++;
+                string sku = (string)p["sku"] ?? "<no sku>";
+                var pricing = p["pricing"] as JObject;
+                double usd = pricing != null && pricing["usd"] != null ? pricing["usd"].Value<double>() : 0d;
+                if (usd <= 0d)
+                    failures.Add("[anchor-no-buy] '" + sku + "' is anchorOnly with no positive usd price. An " +
+                                 "anchor works by SHOWING a price it will not take; with no price it is just a " +
+                                 "locked card.");
+            }
+            log.AppendLine("  [anchor-no-buy] " + anchors + " anchorOnly row(s) authored " +
+                           "(0 is expected today - WO-1121 made the top rungs buyable behind the wallet rule)");
+        }
+
+        // =====================================================================
+        //  CASE 10 [band] -- every browsable row lands in one of the four bands,
+        //  and lands there BY AUTHORING rather than by falling through the legacy
+        //  storeSection fallback. The fallback exists so an un-migrated row is not
+        //  lost; a shelf that RELIES on it is a shelf whose grouping is an accident.
+        // =====================================================================
+        private static void CaseBandIsKnown(List<string> failures, StringBuilder log)
+        {
+            PackCatalog.Reload();
+            int checkedRows = 0;
+            foreach (var pack in PackCatalog.Packs)
+            {
+                if (pack == null || !pack.StoreVisible) continue;
+                if (pack.Impulse && !pack.ShelfCurated) continue;   // shortfall-only; never on the shelf
+                checkedRows++;
+
+                if (!PackCatalog.HasAuthoredBand(pack))
+                    failures.Add("[band] browsable row '" + pack.Sku + "' has no authored `band` (it reads '" +
+                                 (pack.Band ?? "<absent>") + "') and is only on the shelf because BandOf fell " +
+                                 "back to storeSection='" + (pack.StoreSection ?? "<absent>") + "'. The fallback " +
+                                 "is a safety net for un-migrated rows, not the shelf's grouping rule - author " +
+                                 "the band.");
+            }
+
+            // The Free band must never contain something that costs money. It is the one band whose
+            // meaning is absolute, and its colour is reserved to it for the same reason.
+            foreach (var pack in PackCatalog.Packs)
+            {
+                if (pack == null || !pack.StoreVisible) continue;
+                if (PackCatalog.BandOf(pack) != StoreBand.Free) continue;
+                double usd = pack.Pricing != null ? pack.Pricing.Usd : 0d;
+                if (usd > 0d)
+                    failures.Add("[band] '" + pack.Sku + "' is in the FREE band at $" + usd.ToString("0.00") +
+                                 ". Free means free. A priced row in that band makes the one promise on this " +
+                                 "screen that carries no asterisk into a lie.");
+            }
+            log.AppendLine("  [band] " + checkedRows + " browsable row(s) carry an authored band; the free band is priceless");
+        }
+
+        // =====================================================================
+        //  CASE 11 [compare-arithmetic] -- the comparison line is arithmetic over
+        //  two REAL SKUs, or it is absent. No adjectives, no invented value index.
+        // =====================================================================
+        private static void CaseCompareIsArithmetic(List<string> failures, StringBuilder log)
+        {
+            PackCatalog.Reload();
+            int lines = 0;
+            foreach (var pack in PackCatalog.Packs)
+            {
+                if (pack == null || string.IsNullOrEmpty(pack.CompareTo)) continue;
+
+                var other = PackCatalog.Find(pack.CompareTo);
+                if (other == null)
+                {
+                    failures.Add("[compare-arithmetic] '" + pack.Sku + "' compares against '" + pack.CompareTo +
+                                 "', which is not a SKU in this catalogue. The store would either draw nothing " +
+                                 "(silently losing an authored line) or - worse, if someone 'fixes' it by " +
+                                 "guessing - compare against the wrong pack.");
+                    continue;
+                }
+                if (ReferenceEquals(other, pack))
+                {
+                    failures.Add("[compare-arithmetic] '" + pack.Sku + "' compares against itself. Every ratio " +
+                                 "would be 1x, which is a sentence that says nothing while looking like a claim.");
+                    continue;
+                }
+
+                bool sharesKey = false;
+                foreach (string key in PackCatalog.LedgerEconomyKeys)
+                    if (pack.EconomyAmount(key) > 0 && other.EconomyAmount(key) > 0) { sharesKey = true; break; }
+
+                if (!sharesKey)
+                    failures.Add("[compare-arithmetic] '" + pack.Sku + "' and '" + other.Sku + "' share NO economy " +
+                                 "key, so there is no arithmetic to do and the line must be absent. Authoring a " +
+                                 "compareTo that cannot resolve is how an adjective gets written into the gap " +
+                                 "later - point it at a row that grants the same good, or remove it.");
+
+                double a = pack.Pricing != null ? pack.Pricing.Usd : 0d;
+                double b = other.Pricing != null ? other.Pricing.Usd : 0d;
+                if (a <= 0d || b <= 0d)
+                    failures.Add("[compare-arithmetic] '" + pack.Sku + "' vs '" + other.Sku + "': one of them has " +
+                                 "no positive usd price, so the price ratio is undefined (or a divide by zero).");
+                lines++;
+            }
+            log.AppendLine("  [compare-arithmetic] " + lines + " authored comparison(s), each resolvable to real ratios");
+        }
+
+        // =====================================================================
+        //  CASE 12 [visible-grantable] -- the WO-1118 honest-shelf rule, now
+        //  enforced per row on the WHOLE browsable shelf rather than only on the
+        //  ladder. A visible card may only advertise lines that are grantable today.
+        // =====================================================================
+        private static void CaseVisibleIsGrantable(List<string> failures, StringBuilder log)
+        {
+            PackCatalog.Reload();
+            int rows = 0;
+            foreach (var pack in PackCatalog.Packs)
+            {
+                if (pack == null || !pack.StoreVisible) continue;
+                if (pack.Impulse && !pack.ShelfCurated) continue;
+                rows++;
+
+                // 1. Convenience it advertises must have a redeemer IN THIS BUILD.
+                var conv = pack.Contents != null ? pack.Contents.Convenience : null;
+                if (conv != null)
+                {
+                    foreach (var item in conv)
+                    {
+                        if (item == null || item.Count <= 0 || string.IsNullOrEmpty(item.Kind)) continue;
+                        if (!PackCatalog.IsRedeemableConvenience(item.Kind))
+                            failures.Add("[visible-grantable] browsable row '" + pack.Sku + "' carries convenience '" +
+                                         item.Kind + "', which NOTHING in this build spends (PackCatalog." +
+                                         "IsRedeemableConvenience). It is granted into GearInventory and read by " +
+                                         "nobody. WO-1118: a pack that cannot deliver a line it advertises must " +
+                                         "not be sellable. Ship the redeemer, or strip the line.");
+                    }
+                }
+
+                // 2. It must actually give SOMETHING the ledger can draw.
+                bool grantsSomething = false;
+                foreach (string key in PackCatalog.LedgerEconomyKeys)
+                    if (pack.EconomyAmount(key) > 0) { grantsSomething = true; break; }
+                if (!grantsSomething && (conv == null || conv.Count == 0) &&
+                    (pack.Contents == null || pack.Contents.Cosmetics == null || pack.Contents.Cosmetics.Count == 0))
+                    failures.Add("[visible-grantable] browsable row '" + pack.Sku + "' grants NOTHING at all. The " +
+                                 "spotlight ledger would draw an empty box beside a real price.");
+
+                // 3. ⛔ NO GLIMMER ON A PACK (owner ruling 2026-08-21). Its only sink is cosmetics and
+                //    no CosmeticApplier runs, so it is a line on a paid card that buys nothing visible.
+                if (pack.EconomyAmount("glimmer") > 0)
+                    failures.Add("[visible-grantable] browsable row '" + pack.Sku + "' carries a glimmer amount. " +
+                                 "The owner stripped glimmer from every pack on 2026-08-21 (\"its nothing real\"); " +
+                                 "the ledger would draw a bar for a currency the player cannot spend on anything " +
+                                 "that renders.");
+            }
+            log.AppendLine("  [visible-grantable] " + rows + " browsable row(s): every advertised line is grantable today");
+        }
+
+        // =====================================================================
+        //  CASE 13 [band-greyscale] -- THE COLOURBLIND GATE.
+        //
+        //  The owner is RED/GREEN COLOURBLIND. The house rule is that colour is
+        //  never the SOLE carrier of meaning, and a rule nothing checks is a rule
+        //  that quietly stops being true. So: the four band lights must STEP APART
+        //  in rec.709 greyscale, and every band must additionally carry a TEXT
+        //  EYEBROW. Strip every hue from the shelf and the bands are still ordered
+        //  and still named -- which is the acceptance criterion, not a preference.
+        //
+        //  ⛔ THIS IS ALSO WHY NOBODY ASKS HER TO APPROVE A PALETTE (memory
+        //  `owner-colorblind-delegate-visual-creative`). The gate runs without her.
+        // =====================================================================
+        private static void CaseBandGreyscale(List<string> failures, StringBuilder log)
+        {
+            var bands = new[] { StoreBand.Free, StoreBand.Gap, StoreBand.Basket, StoreBand.Patronage };
+            var lumas = new float[bands.Length];
+            for (int i = 0; i < bands.Length; i++)
+                lumas[i] = NightMarketPalette.Luma255(NightMarketPalette.For(bands[i]));
+
+            for (int i = 0; i < bands.Length; i++)
+            {
+                for (int j = i + 1; j < bands.Length; j++)
+                {
+                    float step = Math.Abs(lumas[i] - lumas[j]);
+                    if (step < NightMarketPalette.MinGreyscaleStep)
+                        failures.Add("[band-greyscale] the " + bands[i] + " and " + bands[j] + " lights are only " +
+                                     step.ToString("0.0") + "/255 apart in rec.709 greyscale (floor is " +
+                                     NightMarketPalette.MinGreyscaleStep.ToString("0") + "). On a monochrome read " +
+                                     "- which is how the owner reads this build - those two bands become the same " +
+                                     "band. Re-pick a VALUE, not a hue.");
+                }
+            }
+
+            // Every band also carries a word. A mark and a colour without a word is still colour-only
+            // to anyone who cannot separate the two hues involved.
+            foreach (var band in bands)
+            {
+                string eyebrow = EyebrowFor(band);
+                if (string.IsNullOrEmpty(eyebrow) || eyebrow.StartsWith("[[missing:", StringComparison.Ordinal))
+                    failures.Add("[band-greyscale] the " + band + " band has no eyebrow sentence (canon-strings " +
+                                 "returned '" + eyebrow + "'). Without the word, band identity is carried by the " +
+                                 "colour alone, which is the one thing this screen may never do.");
+            }
+
+            log.AppendLine("  [band-greyscale] four band lights step >= " +
+                           NightMarketPalette.MinGreyscaleStep.ToString("0") + "/255 apart (" +
+                           string.Join(", ", Array.ConvertAll(lumas, v => v.ToString("0"))) +
+                           ") and every band carries a word");
+        }
+
+        private static string EyebrowFor(StoreBand band)
+        {
+            switch (band)
+            {
+                case StoreBand.Free:      return StoreStrings.Get(StoreStrings.KeyBandFree);
+                case StoreBand.Gap:       return StoreStrings.Get(StoreStrings.KeyBandGap);
+                case StoreBand.Patronage: return StoreStrings.Get(StoreStrings.KeyBandPatronage);
+                default:                  return StoreStrings.Get(StoreStrings.KeyBandBasket);
+            }
+        }
+
+        /// <summary>Every pack object in packs.json, raw. Null (with a failure logged) when unreadable.</summary>
+        private static List<JObject> AllPacks(List<string> failures)
+        {
+            string json = DeNelle.Core.CanonicalJson.Read(PacksRelPath);
+            if (string.IsNullOrEmpty(json))
+            {
+                failures.Add("[night-market] " + PacksRelPath + " unreadable - no row is verifiable.");
+                return null;
+            }
+            JObject root;
+            try { root = JObject.Parse(json); }
+            catch (Exception ex)
+            {
+                failures.Add("[night-market] packs.json failed to parse: " + ex.Message);
+                return null;
+            }
+            var arr = root["packs"] as JArray;
+            if (arr == null) { failures.Add("[night-market] packs.json holds no 'packs' array"); return null; }
+            var list = new List<JObject>();
+            foreach (var el in arr) { var o = el as JObject; if (o != null) list.Add(o); }
+            return list;
+        }
+
+        /// <summary>First index of <paramref name="needle"/> on a non-comment line, or -1.</summary>
+        private static int IndexOfOutsideComments(string src, string needle)
+        {
+            int pos = 0;
+            while (true)
+            {
+                int idx = src.IndexOf(needle, pos, StringComparison.Ordinal);
+                if (idx < 0) return -1;
+                int lineStart = src.LastIndexOf('\n', Math.Max(0, idx - 1)) + 1;
+                string before = src.Substring(lineStart, idx - lineStart);
+                if (before.IndexOf("//", StringComparison.Ordinal) < 0 &&
+                    !before.TrimStart().StartsWith("*", StringComparison.Ordinal))
+                    return idx;
+                pos = idx + needle.Length;
+            }
         }
 
         /// <summary>

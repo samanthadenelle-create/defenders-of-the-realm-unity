@@ -2315,6 +2315,41 @@ namespace DeNelle.Core.UI
             return go;
         }
 
+        /// <summary>
+        /// A fraction-anchored <see cref="RawImage"/> over a RAW TEXTURE — the sibling of
+        /// <see cref="AddImage"/> for the one surface a sprite cannot serve: one whose UV RECT is
+        /// SCROLLED or TILED at runtime.
+        /// <para>WHY THIS EXISTS AS A KIT PRIMITIVE (and is not a caller's business): <c>uvRect</c>
+        /// is declared on RawImage and on nothing else. An <see cref="Image"/> can only scroll by
+        /// swapping sprites or by driving a per-frame material/Color, which is precisely the
+        /// "4 ms a frame on a Seeker" shape decorative motion must avoid. So a drifting gradient
+        /// ground has no expression through AddImage — but it is still PRESENTATION, and the law
+        /// (ARCHITECTURE_PRINCIPLES §2; UiObsidianConformanceRegression) is that presentation is
+        /// constructed HERE, in the one file sanctioned to touch raw uGUI, never hand-rolled in a
+        /// feature module. The first caller was The Night Market's aurora (WO-1050 Lane G).</para>
+        /// <para>Returns the RawImage itself rather than the GameObject that AddImage returns: the
+        /// entire reason to reach for this primitive is to animate <c>uvRect</c>, so handing back
+        /// the typed component removes a GetComponent every caller would otherwise have to make
+        /// (and could get wrong).</para>
+        /// <para><paramref name="raycastTarget"/> defaults to FALSE. A textured surface built by
+        /// this primitive is decoration sitting over content; swallowing the tap on the card
+        /// underneath is the default bug, so the safe value is the default one.</para>
+        /// </summary>
+        public static RawImage AddRawImage(Transform parent, string name, Vector2 anchorMin, Vector2 anchorMax,
+            Texture texture, Color color, bool raycastTarget = false)
+        {
+            var go = new GameObject(name, typeof(RectTransform));
+            go.transform.SetParent(parent, false);
+            var r = go.GetComponent<RectTransform>();
+            r.anchorMin = anchorMin; r.anchorMax = anchorMax;
+            r.offsetMin = Vector2.zero; r.offsetMax = Vector2.zero;
+            var img = go.AddComponent<RawImage>();
+            img.texture = texture;
+            img.color = color;
+            img.raycastTarget = raycastTarget;
+            return img;
+        }
+
         /// <summary>Apply the shared rounded 9-slice sprite to an Image (no-op if build failed).</summary>
         public static void ApplyRounded(Image img)
         {
