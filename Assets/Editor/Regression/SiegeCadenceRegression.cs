@@ -136,8 +136,9 @@ namespace DeNelle.Editor
                 { failures.Add($"case5 Evaluate() THREW with the flag off: {ex.GetType().Name}: {ex.Message}"); }
                 if (SiegeSession.Current != null)
                 {
-                    failures.Add("case5 a siege session was OPENED with ff.siege OFF -- the loop must be " +
-                                 "byte-identical to pre-WO-1026 until the owner rules the loss stakes");
+                    failures.Add("case5 a siege session was OPENED with ff.siege OFF -- the kill switch " +
+                                 "must be absolute (the flag now defaults ON, so this is the ONLY way " +
+                                 "back to a no-siege build)");
                     SiegeSession.Abandon("oracle cleanup");
                 }
 

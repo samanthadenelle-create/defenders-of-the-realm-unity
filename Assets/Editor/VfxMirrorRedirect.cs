@@ -46,8 +46,9 @@
 // the pack path is what makes it resolve to nothing on a fresh clone.
 //
 // SINGLE HOME OF THE PAIRS. This file DECLARES NO PATHS OF ITS OWN. It reads the
-// source->mirror pairs off the three builders that create them
-// (PortalCircleVfxMirror, TalentPointerVfxMirror, StatusVfxMirrors.Mirrors), for
+// source->mirror pairs off the builders that create them (PortalCircleVfxMirror,
+// TalentPointerVfxMirror, StatusVfxMirrors.Mirrors, and - WO-887 surface half -
+// SurfaceImpactVfxMirrors.Mirrors), for
 // the reason CLAUDE.md keeps re-learning at project scale: a second, hand-copied
 // table is how a tool and its consumer come to disagree while both report
 // success. Add a mirror to a builder and this resolver picks it up for free.
@@ -91,6 +92,15 @@ namespace DeNelle.Editor
             var status = StatusVfxMirrors.Mirrors;
             for (int i = 0; i < status.Length; i++)
                 Add(map, status[i].src, status[i].dst);
+
+            // WO-887 surface half: the owner's five 2026-08-21 surface-impact tags. Her
+            // VfxManualPicks rows point at the gitignored Particle Pack, so without this
+            // declaration all five resolve to NOTHING on a fresh clone / the laptop / CI.
+            // Declaring the pairs is the entire wiring - SurfaceImpactVfxMirrors owns the
+            // paths and this file still declares none of its own.
+            var surfaces = SurfaceImpactVfxMirrors.Mirrors;
+            for (int i = 0; i < surfaces.Length; i++)
+                Add(map, surfaces[i].src, surfaces[i].dst);
 
             _map = map;
             return _map;

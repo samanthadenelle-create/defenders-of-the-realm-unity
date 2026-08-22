@@ -522,12 +522,140 @@
             "mirror": "Assets/Resources/VFX/_Shared/Textures/wispySmoke.tif"
         },
         {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Weapon Effects/Materials/BulletDecalMetal.mat",
+            "mirror": "Assets/Resources/VFX/_Shared/Materials/BulletDecalMetal.mat"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Weapon Effects/Materials/BulletDecalSand.mat",
+            "mirror": "Assets/Resources/VFX/_Shared/Materials/BulletDecalSand.mat"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Weapon Effects/Materials/BulletDecalStone.mat",
+            "mirror": "Assets/Resources/VFX/_Shared/Materials/BulletDecalStone.mat"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Weapon Effects/Materials/BulletDecalWood.mat",
+            "mirror": "Assets/Resources/VFX/_Shared/Materials/BulletDecalWood.mat"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Weapon Effects/Materials/BulletFleshDecal.mat",
+            "mirror": "Assets/Resources/VFX/_Shared/Materials/BulletFleshDecal.mat"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Weapon Effects/Materials/DustPuffParticle.mat",
+            "mirror": "Assets/Resources/VFX/_Shared/Materials/DustPuffParticle.mat"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Weapon Effects/Materials/GoopMist.mat",
+            "mirror": "Assets/Resources/VFX/_Shared/Materials/GoopMist.mat"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Weapon Effects/Materials/GoopStreak.mat",
+            "mirror": "Assets/Resources/VFX/_Shared/Materials/GoopStreak.mat"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Weapon Effects/Materials/MetalSparks.mat",
+            "mirror": "Assets/Resources/VFX/_Shared/Materials/MetalSparks.mat"
+        },
+        {
             "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Weapon Effects/Materials/MuzzleFlash.mat",
             "mirror": "Assets/Resources/VFX/_Shared/Materials/MuzzleFlash.mat"
         },
         {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Weapon Effects/Materials/TinyStonesParticle.mat",
+            "mirror": "Assets/Resources/VFX/_Shared/Materials/TinyStonesParticle.mat"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Weapon Effects/Materials/WoodSplintersParticle.mat",
+            "mirror": "Assets/Resources/VFX/_Shared/Materials/WoodSplintersParticle.mat"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Weapon Effects/Textures/BulletHoleMetalThroughAlbedo.tif",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/BulletHoleMetalThroughAlbedo.tif"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Weapon Effects/Textures/BulletHoleMetalThroughNormal.tif",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/BulletHoleMetalThroughNormal.tif"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Weapon Effects/Textures/BulletHoleRockAlbedo.tif",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/BulletHoleRockAlbedo.tif"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Weapon Effects/Textures/BulletHoleRockHeight.tif",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/BulletHoleRockHeight.tif"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Weapon Effects/Textures/BulletHoleRockNormal.tif",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/BulletHoleRockNormal.tif"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Weapon Effects/Textures/DustPuffSmallParticleSheet.png",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/DustPuffSmallParticleSheet.png"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Weapon Effects/Textures/FleshBulletHoleAlbedo.tif",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/FleshBulletHoleAlbedo.tif"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Weapon Effects/Textures/FleshBulletHoleHeight.tif",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/FleshBulletHoleHeight.tif"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Weapon Effects/Textures/FleshBulletHoleNormal.tif",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/FleshBulletHoleNormal.tif"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Weapon Effects/Textures/GoopStreakAlbedo.tif",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/GoopStreakAlbedo.tif"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Weapon Effects/Textures/GoopStreakNormal.tif",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/GoopStreakNormal.tif"
+        },
+        {
             "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Weapon Effects/Textures/MuzzleFlashFront.tif",
             "mirror": "Assets/Resources/VFX/_Shared/Textures/MuzzleFlashFront.tif"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Weapon Effects/Textures/SandDecalAlbedo.tif",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/SandDecalAlbedo.tif"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Weapon Effects/Textures/SandDecalNormal.tif",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/SandDecalNormal.tif"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Weapon Effects/Textures/SparkParticle.tif",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/weaponeffects__SparkParticle.tif"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Weapon Effects/Textures/TinyStones.png",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/weaponeffects__TinyStones.png"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Weapon Effects/Textures/TinyStonesNormals.tif",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/TinyStonesNormals.tif"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Weapon Effects/Textures/WoodBulletHoleAlbedo.tif",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/WoodBulletHoleAlbedo.tif"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Weapon Effects/Textures/WoodBulletHoleDepth.tif",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/WoodBulletHoleDepth.tif"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Weapon Effects/Textures/WoodBulletHoleNormal.tif",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/WoodBulletHoleNormal.tif"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Weapon Effects/Textures/woodSplintersAlbedo.tif",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/woodSplintersAlbedo.tif"
+        },
+        {
+            "source": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Weapon Effects/Textures/woodSplintersNormal.tif",
+            "mirror": "Assets/Resources/VFX/_Shared/Textures/woodSplintersNormal.tif"
         }
     ]
 }
