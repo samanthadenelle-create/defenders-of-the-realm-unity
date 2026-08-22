@@ -39,7 +39,7 @@ app:
   # Source: owner-supplied verified metadata.
   name: Echoes of Elarion
 
-  # Filled in BY THE CLI after the App NFT is minted. Leave empty.
+  # Existing live App NFT. Preserve it for every update; never mint a replacement.
   address: "5MG4atMRDSVn9t75oFz1KVxKdUkyz2wPi2MeunT8yFe6"   # App NFT, owner-provided 2026-08-19
 
   # Source: VERIFIED at Assets/Editor/AndroidBuild.cs:46 —
@@ -51,15 +51,9 @@ app:
     # Terms of Use. Source: owner-supplied; probed live 2026-08-08 -> HTTP 200.
     license_url: https://echoes-of-elarion.vercel.app/terms
 
-    # TODO(OWNER) — no verified copyright URL exists.
-    #   Probed 2026-08-08: /copyright -> 404, /license -> 404. Only /privacy and
-    #   /terms return 200. The CLI template says "Don't put placeholder urls."
-    #   RECOMMENDED FILL: https://echoes-of-elarion.vercel.app/terms
-    #     — the Terms carry the IP/licence grant (section 4, "Your licence to
-    #       play", docs/TERMS_OF_USE.md:53) and the URL is live.
-    #   ALTERNATIVE: publish a /copyright page on the marketing site first.
-    #   NOT FILLED HERE because the owner must choose; a wrong URL goes on-chain.
-    copyright_url: "TODO_OWNER_SEE_COMMENT_ABOVE"
+    # Terms is the live copyright/licence authority: section 4 reserves the game,
+    # code, art, music, names and trademarks to DeNelle Studios or its licensors.
+    copyright_url: https://echoes-of-elarion.vercel.app/terms
 
     # Privacy Policy. Source: owner-supplied; probed live 2026-08-08 -> HTTP 200.
     privacy_policy_url: https://echoes-of-elarion.vercel.app/privacy
@@ -73,7 +67,8 @@ app:
       uri: media/icon-512.png
 
 release:
-  # Filled in BY THE CLI after the Release NFT is minted. Leave empty.
+  # Filled with the NEW Release NFT/version for this update after submission. This
+  # does not replace or modify the existing App NFT above.
   address: ""
 
   media:
@@ -116,14 +111,9 @@ release:
     #   uri: media/trailer.mp4
 
   files:
-    # ⚠⚠ THE APK CURRENTLY AT THIS PATH IS THE **TESTER** BUILD ⚠⚠
-    #   Builds/Android/DefendersOfTheRealm.apk — 572,202,298 bytes, mtime
-    #   2026-08-08 14:41 (checked this session).
-    #   It was built BEFORE FeatureFlags.RealmStorePurchase was gated off.
-    #   REBUILD (Defenders/Build/Android APK (Seeker)) AFTER that flag change
-    #   lands, and re-verify, BEFORE any release is created. Shipping the wrong
-    #   binary here mints an on-chain release NFT pointing at it, which is
-    #   expensive and slow to undo.
+    # This path is mutable build output, never submission proof by itself. Before
+    # publishing, discharge every evidence item in SUBMISSION_READY_2026-08-22.md
+    # and record the final APK hash/version. Never publish a local-test build.
     - purpose: install
       uri: ../Builds/Android/DefendersOfTheRealm.apk
 
@@ -150,14 +140,21 @@ release:
         towers where they matter, and hold the line as the waves come. Awaken the
         Echoes - the essences of the people the Heart still guards - and take them
         down into the dungeons beneath the realm. Play the whole game free; nothing
-        is gated behind a purchase, nothing is tradable, and there are no ads.
+        is gated behind a purchase and nothing is tradable. Optional rewarded ads
+        and non-transferable cosmetic/convenience packs support continued development.
 
-      # TODO(OWNER) — REQUIRED field, and it is release-specific, so it cannot be
-      # written until the final submission build exists. One or two sentences on
-      # what is new/notable in THIS version. For a first release, something like
-      # "First public release." is normal — but the owner writes it.
+      # ⚠ STALE FOR THIS RELEASE (flagged 2026-08-22). The text below predates the
+      #   2026-08-22 work and describes none of it. The rewritten candidate, with
+      #   per-claim provenance, is in SUBMISSION_READY_2026-08-22.md under
+      #   "What's new - candidate rewritten for THIS release". Paste the approved
+      #   wording here once the owner signs off, and delete this banner.
+      # ⚠ If BLOCKER 2 is ruled as (b) - purchases stay OFF in the production build -
+      #   the purchase sentence must come out of this text AND out of long_description
+      #   AND out of testing_instructions, or the listing declares a feature the
+      #   reviewer cannot reach.
       new_in_version: >-
-        TODO_OWNER_WHATS_NEW_IN_THIS_VERSION
+        Expanded dungeon adventures, a redesigned inventory and skill experience,
+        optional rewarded bonuses, and wallet-approved SKR packs.
 
       # saga_features is OPTIONAL (not in the schema's `required` list) and is
       # deliberately OMITTED — no Saga/Seeker-exclusive feature has been verified.
@@ -184,24 +181,27 @@ solana_mobile_dapp_publisher_portal:
     landscape-only and built for ARM64 (Seeker/Saga). Launch the app and play from
     the title screen; the tutorial starts automatically on a new save.
 
-    NO ADVERTISEMENTS. The build contains no advertising SDK of any kind and
-    contacts no ad network.
+    CONTAINS ADS. Only user-initiated rewarded ads are offered. There are no
+    forced interstitials or banners. A declined, unavailable, failed, or dismissed
+    ad grants no reward and never blocks ordinary play. Provider: Unity LevelPlay.
 
-    NO WORKING IN-APP PURCHASE. The real-money purchase path is feature-gated OFF
-    in this build, so no purchase can be initiated or completed. Pack listings may
-    render as cosmetic previews only.
+    CONTAINS ON-CHAIN PURCHASES. Optional packs are paid in SKR through the user's
+    Solana wallet. The wallet shows the token, exact amount, network, and recipient
+    before approval. Purchased content is non-transferable, cannot be cashed out,
+    and is not required to complete the game. Reviewers can play as a guest without
+    connecting a wallet or purchasing anything.
 
     NO NFT MINTING, NO AIRDROP, NO TRADING, NO SECONDARY MARKET, NO CASH-OUT. All
     in-game items and currency are non-transferable and stay inside the account.
     Value flows one way only.
 
-    A Solana wallet, if connected, is used ONLY as an identity for cloud save
-    (message signing). It moves no funds and constructs no transfer transaction.
+    A connected Solana wallet provides cloud-save identity and, only after an
+    explicit Buy action and wallet approval, signs an SKR token transfer. The game
+    never receives a seed phrase or private key.
 
     Minimum age 13, per the Terms of Use and Privacy Policy linked above.
 
-    TODO_OWNER: confirm whether a reviewer needs a login/test account, or whether
-    guest play is enough, and paste any test credentials here.
+    Guest play is sufficient for review. No test credentials are required.
 
   # alpha_testers is OPTIONAL and deliberately OMITTED — no Genesis-token
   # reviewer wallet addresses have been supplied. Max 10 if ever added
@@ -221,26 +221,15 @@ solana_mobile_dapp_publisher_portal:
 #   The answers below are pre-written so the owner can paste them into the portal.
 #   They are also folded into `testing_instructions` above, which IS a real field.
 #
-# ADS -> NO. Verified three ways this session:
-#   * Packages/manifest.json contains no ad SDK (no ironsource / admob /
-#     levelplay / unity-ads / applovin entry).
-#   * NullAdService (Assets/_Modules/Core/Ads/IAdService.cs:172) is the shipping
-#     default implementation.
-#   * docs/TERMS_OF_USE.md:236 — "The Game does not currently show
-#     advertisements, and no advertising network is contacted."
+# ADS -> YES. Unity LevelPlay 9.5.1 is integrated for optional rewarded ads only.
+#   Device proof already captured for Daily Chest: a completed ad granted exactly
+#   one reward. Final submission evidence for every enabled placement remains a
+#   post-build checklist item in SUBMISSION_READY_2026-08-22.md.
 #
-# IN-APP PURCHASES -> NO (see the flag caveat below).
-#   ⚠ CAVEAT THE OWNER MUST CLEAR BEFORE SUBMITTING: as read this session,
-#     Assets/_Modules/Core/FeatureFlags.cs:594 still says
-#         public static bool RealmStorePurchase => Get("realmstorepurchase", defaultOn: true);
-#     i.e. purchases default **ON**. A separate agent is flipping this to
-#     default OFF. If that change does NOT land and the APK is not rebuilt, a
-#     "no purchases" declaration would be FALSE.
-#   Two independent hard blocks survive the flag regardless (both read at source):
-#     * SolanaWalletProvider.SendPayment hard-blocks WalletNetwork.Mainnet
-#       (FeatureFlags.cs:588) — a mainnet build cannot take money.
-#     * WalletEndpoints.SkrMintDevnet is "" (FeatureFlags.cs:590), so the default
-#       SKR currency cannot even resolve a mint.
+# IN-APP PURCHASES -> YES. Optional packs use an exact SPL-token SKR transfer
+#   approved in the user's wallet. Devnet integration uses a 9-decimal test mint;
+#   production MUST use the official 9-decimal mainnet SKR mint recorded in
+#   SUBMISSION_READY_2026-08-22.md. Never paste test-wallet details into listing copy.
 #
 # AGE RATING -> 13+ / "Teen".
 #   Source: docs/PRIVACY_POLICY.md:117-124 ("not directed to children under 13",

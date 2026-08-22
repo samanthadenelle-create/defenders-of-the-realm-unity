@@ -1,5 +1,12 @@
 # Solana dApp Store — submit checklist (Echoes of Elarion)
 
+> **SUPERSEDED FOR THE 2026-08-22 MONETIZED UPDATE.** This file documents the
+> earlier unmonetized submission posture and contains deliberately preserved
+> historical evidence. Do not use its “no ads” or “no purchases” declarations.
+> Execute [SUBMISSION_READY_2026-08-22.md](SUBMISSION_READY_2026-08-22.md), which
+> reflects Unity LevelPlay rewarded ads, SKR purchases, and the current official
+> portal-backed submission workflow.
+
 **Written 2026-08-08. Every claim below was read at source this session; provenance is cited inline.**
 
 ---

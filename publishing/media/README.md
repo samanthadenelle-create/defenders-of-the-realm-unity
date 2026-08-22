@@ -95,12 +95,11 @@ by 4. The current web portal's limit is UNVERIFIED. It is left verbatim in
 `config.yaml` points `release.files[install]` at
 `../Builds/Android/DefendersOfTheRealm.apk`.
 
-⚠ **The APK sitting there right now is the TESTER build** — 572,202,298 bytes,
-built 2026-08-08 14:41, i.e. *before* `FeatureFlags.RealmStorePurchase` was gated
-off. **It must be rebuilt** (`Defenders/Build/Android APK (Seeker)`) after that
-flag change lands, and re-verified, before any release is created. Publishing
-mints an on-chain release NFT pointing at that exact binary — undoing it is
-expensive and slow.
+⚠ The APK at that path is mutable build output, not submission evidence. Use it
+only after every final-device and signing check in
+`publishing/SUBMISSION_READY_2026-08-22.md` is discharged and its exact SHA-256,
+version, certificate and commit are recorded. Never submit an APK carrying local
+test defines, Devnet payment configuration, or the LevelPlay Test Suite.
 
 Note also: that APK is **~546 MiB**. Permanent-storage upload cost (ArDrive /
 Turbo / Arweave) scales with size and is **not** covered by the ~0.2 SOL figure
