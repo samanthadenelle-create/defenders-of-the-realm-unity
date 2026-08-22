@@ -1,0 +1,1794 @@
+{
+  "_comment": "battle_monthly.json - the Battle Pass season track and the Monthly Ledger cards (WORK_ORDER_battle_and_monthly_packs). ADDITIVE AND SEPARATE FROM packs.json ON PURPOSE: packs.json is the PackDef shelf and this file carries the two shapes PackDef lacks (a tiered season, a 30-day claim table). Neither file's loader reads the other.",
+  "_firewall": "ZERO COMBAT POWER, and it is a BUILD GATE, not a comment. No revive, no mid-battle heal or shield, no damage/armor/crit/attack-speed/cooldown modifier of any duration, no permanent passive, no stat or level-cap raise, no extra arena entry, no loot box or randomized reward, and NOTHING that references a tier index for sale. There is no 'combat' grant kind and BattleMonthlyRegression rejects one. Battle XP is EARNED BY PLAYING ONLY - no grant in this file may credit XP and no SKU may sell a tier (owner ruling Q4: NEVER SELL TIERS).",
+  "_noGlimmer": "There is deliberately no 'glimmer' key anywhere in this schema. Owner ruling 2026-08-21 stripped glimmer from every pack ('nothing real and money has never been active') and a pass tier is pack contents by another name. Glimmer the CURRENCY is untouched and is still earned and spent elsewhere - do not 'fix' a failure here by deleting the currency.",
+  "_grantSchema": "Grant.kind is one of: economy | convenience_token | cosmetic_sku | skr | bundle. economy carries wood/iron/food/crystals/coins. convenience_token carries {kind,count} and the kind must pass PackCatalog.IsRedeemableConvenience - LEGAL is not REDEEMABLE. cosmetic_sku and skr are declared so the shape is complete, and NO ROW IN THIS FILE USES EITHER: cosmetics cannot render (G1) and there is no SKR ledger (G2). bundle nests grants.",
+  "version": 1,
+  "battlePassSeasons": [
+    {
+      "seasonId": "season-emberwake",
+      "name": "Emberwake",
+      "tagline": "The first light of the month is the one you earn.",
+      "_cadenceNote": "OWNER RULING 2026-08-21 (Q1): CALENDAR MONTH. A season starts on the 1st and runs the length of that month (28-31 days). startUtc/endUtc below are a TEMPLATE month; the interpreter derives the live window from the calendar and scales every xpRequired by actualDays/lengthDays, so a 28-day February and a 31-day March are equally completable (BattlePassSeason.XpRequiredScaled). Never re-author the curve per month.",
+      "startUtc": "2026-09-01T00:00:00Z",
+      "endUtc": "2026-10-01T00:00:00Z",
+      "lengthDays": 30,
+      "premiumPassSku": "",
+      "_premiumPassSkuUnauthored": "DELIBERATELY EMPTY, and this is the honest state, not an oversight. Owner ruling Q3 makes the Season Pass buyable with EARNED SKR - and there is no SKR ledger in this build (ISkrLedger / LocalSkrLedger do not exist anywhere in the tree; the only occurrence of the name is a doc comment in IPiPlatform.cs), FeatureFlags.SkrPreview is defaultOn:false, and FeatureFlags.RealmStorePurchase is defaultOn:false with the mainnet block unlifted. Authoring a SKU here would put a Buy control on the Season Track screen that cannot complete, which is the WO-1118 vapor rule. While this is empty the track renders the premium lane as PREMIUM-LOCKED - rewards shown plainly, never hidden - and the footer says the lane is not purchasable yet. Fill this in the SAME change that lands the SKR writer and a real PackDef row; BattleMonthlyRegression asserts a non-empty value resolves to a real pack.",
+      "xp": {
+        "perWin": 100,
+        "perLoss": 25,
+        "perStreakStep": 10,
+        "streakStepCap": 10,
+        "perfectBonus": 0,
+        "dailySoftCap": 1500,
+        "softCapTaperPct": 0.5
+      },
+      "_perfectBonusNote": "0 AT LAUNCH by the re-verification default (Q5). The no-hit / flawless signal is not tracked anywhere yet, so a non-zero value here would be XP the player can never earn. Raise it in the same change that lands the signal.",
+      "_rewardTableNote": "RESOURCE-ONLY, BY OWNER RULING 2026-08-21: 'DESIGN NOW, REWARD TABLES LATER'. Every reward in both lanes is wood/iron/food/crystals/coins, plus the ONE convenience kind that has a live redeemer in this build (lantern-oil-2x-expedition, consumed by Lantern.cs). NO cosmetic_sku row and NO skr row is authored anywhere in this file. Cosmetics land on a preview-tint fallback because no cosmetic art exists in the tree, and skr has nowhere to land at all. A 30-tier season that pays out invisible flags disappoints for a whole month instead of once. Author those lines on G1 (cosmetic art shipped) and G2 (SKR ledger written) - BattleMonthlyRegression FAILS the build if either kind is authored before its gate is open.",
+      "_capstoneUnauthored": "Tier 30 is flagged isCapstone and pays a resource capstone. The season's PRESTIGE COSMETIC - the thing a capstone is actually for - is UNAUTHORED for the reason above. This row is the one most worth revisiting the moment G1 lands.",
+      "tiers": [
+        {
+          "tier": 1,
+          "xpRequired": 100,
+          "free": {
+            "kind": "economy",
+            "economy": {
+              "wood": 128,
+              "iron": 64,
+              "food": 53,
+              "coins": 22
+            }
+          },
+          "premium": {
+            "kind": "economy",
+            "economy": {
+              "wood": 320,
+              "iron": 160,
+              "food": 128,
+              "coins": 55
+            }
+          },
+          "isCapstone": false
+        },
+        {
+          "tier": 2,
+          "xpRequired": 210,
+          "free": {
+            "kind": "economy",
+            "economy": {
+              "wood": 136,
+              "iron": 68,
+              "food": 56,
+              "coins": 24
+            }
+          },
+          "premium": {
+            "kind": "economy",
+            "economy": {
+              "wood": 340,
+              "iron": 170,
+              "food": 136,
+              "coins": 60
+            }
+          },
+          "isCapstone": false
+        },
+        {
+          "tier": 3,
+          "xpRequired": 330,
+          "free": {
+            "kind": "economy",
+            "economy": {
+              "wood": 144,
+              "iron": 72,
+              "food": 59,
+              "coins": 26
+            }
+          },
+          "premium": {
+            "kind": "economy",
+            "economy": {
+              "wood": 360,
+              "iron": 180,
+              "food": 144,
+              "coins": 65
+            }
+          },
+          "isCapstone": false
+        },
+        {
+          "tier": 4,
+          "xpRequired": 460,
+          "free": {
+            "kind": "economy",
+            "economy": {
+              "wood": 152,
+              "iron": 76,
+              "food": 62,
+              "coins": 28
+            }
+          },
+          "premium": {
+            "kind": "economy",
+            "economy": {
+              "wood": 380,
+              "iron": 190,
+              "food": 152,
+              "coins": 70
+            }
+          },
+          "isCapstone": false
+        },
+        {
+          "tier": 5,
+          "xpRequired": 600,
+          "free": {
+            "kind": "bundle",
+            "bundle": [
+              {
+                "kind": "economy",
+                "economy": {
+                  "wood": 160,
+                  "iron": 80,
+                  "food": 65,
+                  "coins": 30
+                }
+              },
+              {
+                "kind": "economy",
+                "economy": {
+                  "crystals": 40
+                }
+              }
+            ]
+          },
+          "premium": {
+            "kind": "bundle",
+            "bundle": [
+              {
+                "kind": "economy",
+                "economy": {
+                  "wood": 400,
+                  "iron": 200,
+                  "food": 160,
+                  "coins": 75
+                }
+              },
+              {
+                "kind": "economy",
+                "economy": {
+                  "crystals": 100
+                }
+              }
+            ]
+          },
+          "isCapstone": false
+        },
+        {
+          "tier": 6,
+          "xpRequired": 750,
+          "free": {
+            "kind": "economy",
+            "economy": {
+              "wood": 168,
+              "iron": 84,
+              "food": 68,
+              "coins": 32
+            }
+          },
+          "premium": {
+            "kind": "economy",
+            "economy": {
+              "wood": 420,
+              "iron": 210,
+              "food": 168,
+              "coins": 80
+            }
+          },
+          "isCapstone": false
+        },
+        {
+          "tier": 7,
+          "xpRequired": 910,
+          "free": {
+            "kind": "economy",
+            "economy": {
+              "wood": 176,
+              "iron": 88,
+              "food": 71,
+              "coins": 34
+            }
+          },
+          "premium": {
+            "kind": "economy",
+            "economy": {
+              "wood": 440,
+              "iron": 220,
+              "food": 176,
+              "coins": 85
+            }
+          },
+          "isCapstone": false
+        },
+        {
+          "tier": 8,
+          "xpRequired": 1080,
+          "free": {
+            "kind": "economy",
+            "economy": {
+              "wood": 184,
+              "iron": 92,
+              "food": 74,
+              "coins": 36
+            }
+          },
+          "premium": {
+            "kind": "economy",
+            "economy": {
+              "wood": 460,
+              "iron": 230,
+              "food": 184,
+              "coins": 90
+            }
+          },
+          "isCapstone": false
+        },
+        {
+          "tier": 9,
+          "xpRequired": 1260,
+          "free": {
+            "kind": "economy",
+            "economy": {
+              "wood": 192,
+              "iron": 96,
+              "food": 77,
+              "coins": 38
+            }
+          },
+          "premium": {
+            "kind": "economy",
+            "economy": {
+              "wood": 480,
+              "iron": 240,
+              "food": 192,
+              "coins": 95
+            }
+          },
+          "isCapstone": false
+        },
+        {
+          "tier": 10,
+          "xpRequired": 1450,
+          "free": {
+            "kind": "bundle",
+            "bundle": [
+              {
+                "kind": "economy",
+                "economy": {
+                  "wood": 200,
+                  "iron": 100,
+                  "food": 80,
+                  "coins": 40
+                }
+              },
+              {
+                "kind": "economy",
+                "economy": {
+                  "crystals": 40
+                }
+              }
+            ]
+          },
+          "premium": {
+            "kind": "bundle",
+            "bundle": [
+              {
+                "kind": "economy",
+                "economy": {
+                  "wood": 500,
+                  "iron": 250,
+                  "food": 200,
+                  "coins": 100
+                }
+              },
+              {
+                "kind": "economy",
+                "economy": {
+                  "crystals": 100
+                }
+              },
+              {
+                "kind": "convenience_token",
+                "convenience": {
+                  "kind": "lantern-oil-2x-expedition",
+                  "count": 1
+                }
+              }
+            ]
+          },
+          "isCapstone": false
+        },
+        {
+          "tier": 11,
+          "xpRequired": 1650,
+          "free": {
+            "kind": "economy",
+            "economy": {
+              "wood": 208,
+              "iron": 104,
+              "food": 83,
+              "coins": 42
+            }
+          },
+          "premium": {
+            "kind": "economy",
+            "economy": {
+              "wood": 520,
+              "iron": 260,
+              "food": 208,
+              "coins": 105
+            }
+          },
+          "isCapstone": false
+        },
+        {
+          "tier": 12,
+          "xpRequired": 1860,
+          "free": {
+            "kind": "economy",
+            "economy": {
+              "wood": 216,
+              "iron": 108,
+              "food": 86,
+              "coins": 44
+            }
+          },
+          "premium": {
+            "kind": "economy",
+            "economy": {
+              "wood": 540,
+              "iron": 270,
+              "food": 216,
+              "coins": 110
+            }
+          },
+          "isCapstone": false
+        },
+        {
+          "tier": 13,
+          "xpRequired": 2080,
+          "free": {
+            "kind": "economy",
+            "economy": {
+              "wood": 224,
+              "iron": 112,
+              "food": 89,
+              "coins": 46
+            }
+          },
+          "premium": {
+            "kind": "economy",
+            "economy": {
+              "wood": 560,
+              "iron": 280,
+              "food": 224,
+              "coins": 115
+            }
+          },
+          "isCapstone": false
+        },
+        {
+          "tier": 14,
+          "xpRequired": 2310,
+          "free": {
+            "kind": "economy",
+            "economy": {
+              "wood": 232,
+              "iron": 116,
+              "food": 92,
+              "coins": 48
+            }
+          },
+          "premium": {
+            "kind": "economy",
+            "economy": {
+              "wood": 580,
+              "iron": 290,
+              "food": 232,
+              "coins": 120
+            }
+          },
+          "isCapstone": false
+        },
+        {
+          "tier": 15,
+          "xpRequired": 2550,
+          "free": {
+            "kind": "bundle",
+            "bundle": [
+              {
+                "kind": "economy",
+                "economy": {
+                  "wood": 240,
+                  "iron": 120,
+                  "food": 95,
+                  "coins": 50
+                }
+              },
+              {
+                "kind": "economy",
+                "economy": {
+                  "crystals": 40
+                }
+              }
+            ]
+          },
+          "premium": {
+            "kind": "bundle",
+            "bundle": [
+              {
+                "kind": "economy",
+                "economy": {
+                  "wood": 600,
+                  "iron": 300,
+                  "food": 240,
+                  "coins": 125
+                }
+              },
+              {
+                "kind": "economy",
+                "economy": {
+                  "crystals": 100
+                }
+              }
+            ]
+          },
+          "isCapstone": false
+        },
+        {
+          "tier": 16,
+          "xpRequired": 2800,
+          "free": {
+            "kind": "economy",
+            "economy": {
+              "wood": 248,
+              "iron": 124,
+              "food": 98,
+              "coins": 52
+            }
+          },
+          "premium": {
+            "kind": "economy",
+            "economy": {
+              "wood": 620,
+              "iron": 310,
+              "food": 248,
+              "coins": 130
+            }
+          },
+          "isCapstone": false
+        },
+        {
+          "tier": 17,
+          "xpRequired": 3060,
+          "free": {
+            "kind": "economy",
+            "economy": {
+              "wood": 256,
+              "iron": 128,
+              "food": 101,
+              "coins": 54
+            }
+          },
+          "premium": {
+            "kind": "economy",
+            "economy": {
+              "wood": 640,
+              "iron": 320,
+              "food": 256,
+              "coins": 135
+            }
+          },
+          "isCapstone": false
+        },
+        {
+          "tier": 18,
+          "xpRequired": 3330,
+          "free": {
+            "kind": "economy",
+            "economy": {
+              "wood": 264,
+              "iron": 132,
+              "food": 104,
+              "coins": 56
+            }
+          },
+          "premium": {
+            "kind": "economy",
+            "economy": {
+              "wood": 660,
+              "iron": 330,
+              "food": 264,
+              "coins": 140
+            }
+          },
+          "isCapstone": false
+        },
+        {
+          "tier": 19,
+          "xpRequired": 3610,
+          "free": {
+            "kind": "economy",
+            "economy": {
+              "wood": 272,
+              "iron": 136,
+              "food": 107,
+              "coins": 58
+            }
+          },
+          "premium": {
+            "kind": "economy",
+            "economy": {
+              "wood": 680,
+              "iron": 340,
+              "food": 272,
+              "coins": 145
+            }
+          },
+          "isCapstone": false
+        },
+        {
+          "tier": 20,
+          "xpRequired": 3900,
+          "free": {
+            "kind": "bundle",
+            "bundle": [
+              {
+                "kind": "economy",
+                "economy": {
+                  "wood": 280,
+                  "iron": 140,
+                  "food": 110,
+                  "coins": 60
+                }
+              },
+              {
+                "kind": "economy",
+                "economy": {
+                  "crystals": 40
+                }
+              }
+            ]
+          },
+          "premium": {
+            "kind": "bundle",
+            "bundle": [
+              {
+                "kind": "economy",
+                "economy": {
+                  "wood": 700,
+                  "iron": 350,
+                  "food": 280,
+                  "coins": 150
+                }
+              },
+              {
+                "kind": "economy",
+                "economy": {
+                  "crystals": 100
+                }
+              },
+              {
+                "kind": "convenience_token",
+                "convenience": {
+                  "kind": "lantern-oil-2x-expedition",
+                  "count": 1
+                }
+              }
+            ]
+          },
+          "isCapstone": false
+        },
+        {
+          "tier": 21,
+          "xpRequired": 4200,
+          "free": {
+            "kind": "economy",
+            "economy": {
+              "wood": 288,
+              "iron": 144,
+              "food": 113,
+              "coins": 62
+            }
+          },
+          "premium": {
+            "kind": "economy",
+            "economy": {
+              "wood": 720,
+              "iron": 360,
+              "food": 288,
+              "coins": 155
+            }
+          },
+          "isCapstone": false
+        },
+        {
+          "tier": 22,
+          "xpRequired": 4510,
+          "free": {
+            "kind": "economy",
+            "economy": {
+              "wood": 296,
+              "iron": 148,
+              "food": 116,
+              "coins": 64
+            }
+          },
+          "premium": {
+            "kind": "economy",
+            "economy": {
+              "wood": 740,
+              "iron": 370,
+              "food": 296,
+              "coins": 160
+            }
+          },
+          "isCapstone": false
+        },
+        {
+          "tier": 23,
+          "xpRequired": 4830,
+          "free": {
+            "kind": "economy",
+            "economy": {
+              "wood": 304,
+              "iron": 152,
+              "food": 119,
+              "coins": 66
+            }
+          },
+          "premium": {
+            "kind": "economy",
+            "economy": {
+              "wood": 760,
+              "iron": 380,
+              "food": 304,
+              "coins": 165
+            }
+          },
+          "isCapstone": false
+        },
+        {
+          "tier": 24,
+          "xpRequired": 5160,
+          "free": {
+            "kind": "economy",
+            "economy": {
+              "wood": 312,
+              "iron": 156,
+              "food": 122,
+              "coins": 68
+            }
+          },
+          "premium": {
+            "kind": "economy",
+            "economy": {
+              "wood": 780,
+              "iron": 390,
+              "food": 312,
+              "coins": 170
+            }
+          },
+          "isCapstone": false
+        },
+        {
+          "tier": 25,
+          "xpRequired": 5500,
+          "free": {
+            "kind": "bundle",
+            "bundle": [
+              {
+                "kind": "economy",
+                "economy": {
+                  "wood": 320,
+                  "iron": 160,
+                  "food": 125,
+                  "coins": 70
+                }
+              },
+              {
+                "kind": "economy",
+                "economy": {
+                  "crystals": 40
+                }
+              }
+            ]
+          },
+          "premium": {
+            "kind": "bundle",
+            "bundle": [
+              {
+                "kind": "economy",
+                "economy": {
+                  "wood": 800,
+                  "iron": 400,
+                  "food": 320,
+                  "coins": 175
+                }
+              },
+              {
+                "kind": "economy",
+                "economy": {
+                  "crystals": 100
+                }
+              }
+            ]
+          },
+          "isCapstone": false
+        },
+        {
+          "tier": 26,
+          "xpRequired": 5850,
+          "free": {
+            "kind": "economy",
+            "economy": {
+              "wood": 328,
+              "iron": 164,
+              "food": 128,
+              "coins": 72
+            }
+          },
+          "premium": {
+            "kind": "economy",
+            "economy": {
+              "wood": 820,
+              "iron": 410,
+              "food": 328,
+              "coins": 180
+            }
+          },
+          "isCapstone": false
+        },
+        {
+          "tier": 27,
+          "xpRequired": 6210,
+          "free": {
+            "kind": "economy",
+            "economy": {
+              "wood": 336,
+              "iron": 168,
+              "food": 131,
+              "coins": 74
+            }
+          },
+          "premium": {
+            "kind": "economy",
+            "economy": {
+              "wood": 840,
+              "iron": 420,
+              "food": 336,
+              "coins": 185
+            }
+          },
+          "isCapstone": false
+        },
+        {
+          "tier": 28,
+          "xpRequired": 6580,
+          "free": {
+            "kind": "economy",
+            "economy": {
+              "wood": 344,
+              "iron": 172,
+              "food": 134,
+              "coins": 76
+            }
+          },
+          "premium": {
+            "kind": "economy",
+            "economy": {
+              "wood": 860,
+              "iron": 430,
+              "food": 344,
+              "coins": 190
+            }
+          },
+          "isCapstone": false
+        },
+        {
+          "tier": 29,
+          "xpRequired": 6960,
+          "free": {
+            "kind": "economy",
+            "economy": {
+              "wood": 352,
+              "iron": 176,
+              "food": 137,
+              "coins": 78
+            }
+          },
+          "premium": {
+            "kind": "economy",
+            "economy": {
+              "wood": 880,
+              "iron": 440,
+              "food": 352,
+              "coins": 195
+            }
+          },
+          "isCapstone": false
+        },
+        {
+          "tier": 30,
+          "xpRequired": 7350,
+          "free": {
+            "kind": "bundle",
+            "bundle": [
+              {
+                "kind": "economy",
+                "economy": {
+                  "wood": 360,
+                  "iron": 180,
+                  "food": 140,
+                  "coins": 80
+                }
+              },
+              {
+                "kind": "economy",
+                "economy": {
+                  "crystals": 40
+                }
+              }
+            ]
+          },
+          "premium": {
+            "kind": "bundle",
+            "bundle": [
+              {
+                "kind": "economy",
+                "economy": {
+                  "wood": 900,
+                  "iron": 450,
+                  "food": 360,
+                  "coins": 200
+                }
+              },
+              {
+                "kind": "economy",
+                "economy": {
+                  "crystals": 100
+                }
+              },
+              {
+                "kind": "convenience_token",
+                "convenience": {
+                  "kind": "lantern-oil-2x-expedition",
+                  "count": 1
+                }
+              }
+            ]
+          },
+          "isCapstone": true
+        }
+      ]
+    }
+  ],
+  "monthlyCards": [
+    {
+      "sku": "monthly-wayfarer",
+      "tier": 1,
+      "name": "Wayfarer's Ledger",
+      "tagline": "Thirty days of steady supply, claimed at your own pace.",
+      "pricing": {
+        "usd": 4.99,
+        "usdc": 4.99,
+        "sol": 0.0,
+        "skr": 60.0
+      },
+      "durationDays": 30,
+      "exclusiveCosmetic": "",
+      "_exclusiveCosmeticUnauthored": "exclusiveCosmetic is DELIBERATELY EMPTY. The month-exclusive cosmetic is the headline of a monthly card and it is exactly what cannot render today: no cosmetic art exists in the tree, so an equipped cosmetic lands on CosmeticApplier's preview-tint fallback and logs a Warn naming the Resources path that would replace it. Selling a card on a cosmetic that shows as a tint is the vapor rule. Author this on G1; the regression FAILS any authored cosmetic while the art is absent.",
+      "claimModel": "pool",
+      "_claimModelNote": "POOL CLAIM MODEL (Q2 default, taken): durationDays is a count of CLAIMS, not a calendar expiry. A missed day is never lost - the card simply lives until all 30 claims are spent. That is the only model under which the non-predatory promise in the WO's own 3.2 is literally true, and it is why the Monthly Ledger screen shows 'N claims left' and carries no countdown timer anywhere.",
+      "stackable": true,
+      "dailyTable": [
+        {
+          "day": 1,
+          "grant": {
+            "kind": "economy",
+            "economy": {
+              "wood": 250,
+              "iron": 120,
+              "food": 90,
+              "coins": 30
+            }
+          },
+          "highlight": false
+        },
+        {
+          "day": 2,
+          "grant": {
+            "kind": "economy",
+            "economy": {
+              "wood": 250,
+              "iron": 120,
+              "food": 90,
+              "coins": 30
+            }
+          },
+          "highlight": false
+        },
+        {
+          "day": 3,
+          "grant": {
+            "kind": "economy",
+            "economy": {
+              "wood": 250,
+              "iron": 120,
+              "food": 90,
+              "coins": 30
+            }
+          },
+          "highlight": false
+        },
+        {
+          "day": 4,
+          "grant": {
+            "kind": "economy",
+            "economy": {
+              "wood": 250,
+              "iron": 120,
+              "food": 90,
+              "coins": 30
+            }
+          },
+          "highlight": false
+        },
+        {
+          "day": 5,
+          "grant": {
+            "kind": "economy",
+            "economy": {
+              "wood": 250,
+              "iron": 120,
+              "food": 90,
+              "coins": 30
+            }
+          },
+          "highlight": false
+        },
+        {
+          "day": 6,
+          "grant": {
+            "kind": "economy",
+            "economy": {
+              "wood": 250,
+              "iron": 120,
+              "food": 90,
+              "coins": 30
+            }
+          },
+          "highlight": false
+        },
+        {
+          "day": 7,
+          "grant": {
+            "kind": "bundle",
+            "bundle": [
+              {
+                "kind": "economy",
+                "economy": {
+                  "wood": 250,
+                  "iron": 120,
+                  "food": 90,
+                  "coins": 30
+                }
+              },
+              {
+                "kind": "economy",
+                "economy": {
+                  "crystals": 60
+                }
+              }
+            ]
+          },
+          "highlight": true
+        },
+        {
+          "day": 8,
+          "grant": {
+            "kind": "economy",
+            "economy": {
+              "wood": 250,
+              "iron": 120,
+              "food": 90,
+              "coins": 30
+            }
+          },
+          "highlight": false
+        },
+        {
+          "day": 9,
+          "grant": {
+            "kind": "economy",
+            "economy": {
+              "wood": 250,
+              "iron": 120,
+              "food": 90,
+              "coins": 30
+            }
+          },
+          "highlight": false
+        },
+        {
+          "day": 10,
+          "grant": {
+            "kind": "economy",
+            "economy": {
+              "wood": 250,
+              "iron": 120,
+              "food": 90,
+              "coins": 30
+            }
+          },
+          "highlight": false
+        },
+        {
+          "day": 11,
+          "grant": {
+            "kind": "economy",
+            "economy": {
+              "wood": 250,
+              "iron": 120,
+              "food": 90,
+              "coins": 30
+            }
+          },
+          "highlight": false
+        },
+        {
+          "day": 12,
+          "grant": {
+            "kind": "economy",
+            "economy": {
+              "wood": 250,
+              "iron": 120,
+              "food": 90,
+              "coins": 30
+            }
+          },
+          "highlight": false
+        },
+        {
+          "day": 13,
+          "grant": {
+            "kind": "economy",
+            "economy": {
+              "wood": 250,
+              "iron": 120,
+              "food": 90,
+              "coins": 30
+            }
+          },
+          "highlight": false
+        },
+        {
+          "day": 14,
+          "grant": {
+            "kind": "bundle",
+            "bundle": [
+              {
+                "kind": "economy",
+                "economy": {
+                  "wood": 250,
+                  "iron": 120,
+                  "food": 90,
+                  "coins": 30
+                }
+              },
+              {
+                "kind": "economy",
+                "economy": {
+                  "crystals": 60
+                }
+              }
+            ]
+          },
+          "highlight": true
+        },
+        {
+          "day": 15,
+          "grant": {
+            "kind": "economy",
+            "economy": {
+              "wood": 250,
+              "iron": 120,
+              "food": 90,
+              "coins": 30
+            }
+          },
+          "highlight": false
+        },
+        {
+          "day": 16,
+          "grant": {
+            "kind": "economy",
+            "economy": {
+              "wood": 250,
+              "iron": 120,
+              "food": 90,
+              "coins": 30
+            }
+          },
+          "highlight": false
+        },
+        {
+          "day": 17,
+          "grant": {
+            "kind": "economy",
+            "economy": {
+              "wood": 250,
+              "iron": 120,
+              "food": 90,
+              "coins": 30
+            }
+          },
+          "highlight": false
+        },
+        {
+          "day": 18,
+          "grant": {
+            "kind": "economy",
+            "economy": {
+              "wood": 250,
+              "iron": 120,
+              "food": 90,
+              "coins": 30
+            }
+          },
+          "highlight": false
+        },
+        {
+          "day": 19,
+          "grant": {
+            "kind": "economy",
+            "economy": {
+              "wood": 250,
+              "iron": 120,
+              "food": 90,
+              "coins": 30
+            }
+          },
+          "highlight": false
+        },
+        {
+          "day": 20,
+          "grant": {
+            "kind": "economy",
+            "economy": {
+              "wood": 250,
+              "iron": 120,
+              "food": 90,
+              "coins": 30
+            }
+          },
+          "highlight": false
+        },
+        {
+          "day": 21,
+          "grant": {
+            "kind": "bundle",
+            "bundle": [
+              {
+                "kind": "economy",
+                "economy": {
+                  "wood": 250,
+                  "iron": 120,
+                  "food": 90,
+                  "coins": 30
+                }
+              },
+              {
+                "kind": "economy",
+                "economy": {
+                  "crystals": 60
+                }
+              }
+            ]
+          },
+          "highlight": true
+        },
+        {
+          "day": 22,
+          "grant": {
+            "kind": "economy",
+            "economy": {
+              "wood": 250,
+              "iron": 120,
+              "food": 90,
+              "coins": 30
+            }
+          },
+          "highlight": false
+        },
+        {
+          "day": 23,
+          "grant": {
+            "kind": "economy",
+            "economy": {
+              "wood": 250,
+              "iron": 120,
+              "food": 90,
+              "coins": 30
+            }
+          },
+          "highlight": false
+        },
+        {
+          "day": 24,
+          "grant": {
+            "kind": "economy",
+            "economy": {
+              "wood": 250,
+              "iron": 120,
+              "food": 90,
+              "coins": 30
+            }
+          },
+          "highlight": false
+        },
+        {
+          "day": 25,
+          "grant": {
+            "kind": "economy",
+            "economy": {
+              "wood": 250,
+              "iron": 120,
+              "food": 90,
+              "coins": 30
+            }
+          },
+          "highlight": false
+        },
+        {
+          "day": 26,
+          "grant": {
+            "kind": "economy",
+            "economy": {
+              "wood": 250,
+              "iron": 120,
+              "food": 90,
+              "coins": 30
+            }
+          },
+          "highlight": false
+        },
+        {
+          "day": 27,
+          "grant": {
+            "kind": "economy",
+            "economy": {
+              "wood": 250,
+              "iron": 120,
+              "food": 90,
+              "coins": 30
+            }
+          },
+          "highlight": false
+        },
+        {
+          "day": 28,
+          "grant": {
+            "kind": "economy",
+            "economy": {
+              "wood": 250,
+              "iron": 120,
+              "food": 90,
+              "coins": 30
+            }
+          },
+          "highlight": false
+        },
+        {
+          "day": 29,
+          "grant": {
+            "kind": "economy",
+            "economy": {
+              "wood": 250,
+              "iron": 120,
+              "food": 90,
+              "coins": 30
+            }
+          },
+          "highlight": false
+        },
+        {
+          "day": 30,
+          "grant": {
+            "kind": "bundle",
+            "bundle": [
+              {
+                "kind": "economy",
+                "economy": {
+                  "wood": 250,
+                  "iron": 120,
+                  "food": 90,
+                  "coins": 30
+                }
+              },
+              {
+                "kind": "economy",
+                "economy": {
+                  "crystals": 60
+                }
+              }
+            ]
+          },
+          "highlight": true
+        }
+      ]
+    },
+    {
+      "sku": "monthly-keeper",
+      "tier": 2,
+      "name": "Keeper's Ledger",
+      "tagline": "The deeper stores, opened one day at a time.",
+      "pricing": {
+        "usd": 9.99,
+        "usdc": 9.99,
+        "sol": 0.0,
+        "skr": 120.0
+      },
+      "durationDays": 30,
+      "exclusiveCosmetic": "",
+      "_exclusiveCosmeticUnauthored": "exclusiveCosmetic is DELIBERATELY EMPTY. The month-exclusive cosmetic is the headline of a monthly card and it is exactly what cannot render today: no cosmetic art exists in the tree, so an equipped cosmetic lands on CosmeticApplier's preview-tint fallback and logs a Warn naming the Resources path that would replace it. Selling a card on a cosmetic that shows as a tint is the vapor rule. Author this on G1; the regression FAILS any authored cosmetic while the art is absent.",
+      "claimModel": "pool",
+      "_claimModelNote": "POOL CLAIM MODEL (Q2 default, taken): durationDays is a count of CLAIMS, not a calendar expiry. A missed day is never lost - the card simply lives until all 30 claims are spent. That is the only model under which the non-predatory promise in the WO's own 3.2 is literally true, and it is why the Monthly Ledger screen shows 'N claims left' and carries no countdown timer anywhere.",
+      "stackable": true,
+      "dailyTable": [
+        {
+          "day": 1,
+          "grant": {
+            "kind": "economy",
+            "economy": {
+              "wood": 550,
+              "iron": 260,
+              "food": 200,
+              "coins": 70
+            }
+          },
+          "highlight": false
+        },
+        {
+          "day": 2,
+          "grant": {
+            "kind": "economy",
+            "economy": {
+              "wood": 550,
+              "iron": 260,
+              "food": 200,
+              "coins": 70
+            }
+          },
+          "highlight": false
+        },
+        {
+          "day": 3,
+          "grant": {
+            "kind": "economy",
+            "economy": {
+              "wood": 550,
+              "iron": 260,
+              "food": 200,
+              "coins": 70
+            }
+          },
+          "highlight": false
+        },
+        {
+          "day": 4,
+          "grant": {
+            "kind": "economy",
+            "economy": {
+              "wood": 550,
+              "iron": 260,
+              "food": 200,
+              "coins": 70
+            }
+          },
+          "highlight": false
+        },
+        {
+          "day": 5,
+          "grant": {
+            "kind": "economy",
+            "economy": {
+              "wood": 550,
+              "iron": 260,
+              "food": 200,
+              "coins": 70
+            }
+          },
+          "highlight": false
+        },
+        {
+          "day": 6,
+          "grant": {
+            "kind": "economy",
+            "economy": {
+              "wood": 550,
+              "iron": 260,
+              "food": 200,
+              "coins": 70
+            }
+          },
+          "highlight": false
+        },
+        {
+          "day": 7,
+          "grant": {
+            "kind": "bundle",
+            "bundle": [
+              {
+                "kind": "economy",
+                "economy": {
+                  "wood": 550,
+                  "iron": 260,
+                  "food": 200,
+                  "coins": 70
+                }
+              },
+              {
+                "kind": "economy",
+                "economy": {
+                  "crystals": 120
+                }
+              }
+            ]
+          },
+          "highlight": true
+        },
+        {
+          "day": 8,
+          "grant": {
+            "kind": "economy",
+            "economy": {
+              "wood": 550,
+              "iron": 260,
+              "food": 200,
+              "coins": 70
+            }
+          },
+          "highlight": false
+        },
+        {
+          "day": 9,
+          "grant": {
+            "kind": "economy",
+            "economy": {
+              "wood": 550,
+              "iron": 260,
+              "food": 200,
+              "coins": 70
+            }
+          },
+          "highlight": false
+        },
+        {
+          "day": 10,
+          "grant": {
+            "kind": "economy",
+            "economy": {
+              "wood": 550,
+              "iron": 260,
+              "food": 200,
+              "coins": 70
+            }
+          },
+          "highlight": false
+        },
+        {
+          "day": 11,
+          "grant": {
+            "kind": "economy",
+            "economy": {
+              "wood": 550,
+              "iron": 260,
+              "food": 200,
+              "coins": 70
+            }
+          },
+          "highlight": false
+        },
+        {
+          "day": 12,
+          "grant": {
+            "kind": "economy",
+            "economy": {
+              "wood": 550,
+              "iron": 260,
+              "food": 200,
+              "coins": 70
+            }
+          },
+          "highlight": false
+        },
+        {
+          "day": 13,
+          "grant": {
+            "kind": "economy",
+            "economy": {
+              "wood": 550,
+              "iron": 260,
+              "food": 200,
+              "coins": 70
+            }
+          },
+          "highlight": false
+        },
+        {
+          "day": 14,
+          "grant": {
+            "kind": "bundle",
+            "bundle": [
+              {
+                "kind": "economy",
+                "economy": {
+                  "wood": 550,
+                  "iron": 260,
+                  "food": 200,
+                  "coins": 70
+                }
+              },
+              {
+                "kind": "economy",
+                "economy": {
+                  "crystals": 120
+                }
+              }
+            ]
+          },
+          "highlight": true
+        },
+        {
+          "day": 15,
+          "grant": {
+            "kind": "economy",
+            "economy": {
+              "wood": 550,
+              "iron": 260,
+              "food": 200,
+              "coins": 70
+            }
+          },
+          "highlight": false
+        },
+        {
+          "day": 16,
+          "grant": {
+            "kind": "economy",
+            "economy": {
+              "wood": 550,
+              "iron": 260,
+              "food": 200,
+              "coins": 70
+            }
+          },
+          "highlight": false
+        },
+        {
+          "day": 17,
+          "grant": {
+            "kind": "economy",
+            "economy": {
+              "wood": 550,
+              "iron": 260,
+              "food": 200,
+              "coins": 70
+            }
+          },
+          "highlight": false
+        },
+        {
+          "day": 18,
+          "grant": {
+            "kind": "economy",
+            "economy": {
+              "wood": 550,
+              "iron": 260,
+              "food": 200,
+              "coins": 70
+            }
+          },
+          "highlight": false
+        },
+        {
+          "day": 19,
+          "grant": {
+            "kind": "economy",
+            "economy": {
+              "wood": 550,
+              "iron": 260,
+              "food": 200,
+              "coins": 70
+            }
+          },
+          "highlight": false
+        },
+        {
+          "day": 20,
+          "grant": {
+            "kind": "economy",
+            "economy": {
+              "wood": 550,
+              "iron": 260,
+              "food": 200,
+              "coins": 70
+            }
+          },
+          "highlight": false
+        },
+        {
+          "day": 21,
+          "grant": {
+            "kind": "bundle",
+            "bundle": [
+              {
+                "kind": "economy",
+                "economy": {
+                  "wood": 550,
+                  "iron": 260,
+                  "food": 200,
+                  "coins": 70
+                }
+              },
+              {
+                "kind": "economy",
+                "economy": {
+                  "crystals": 120
+                }
+              }
+            ]
+          },
+          "highlight": true
+        },
+        {
+          "day": 22,
+          "grant": {
+            "kind": "economy",
+            "economy": {
+              "wood": 550,
+              "iron": 260,
+              "food": 200,
+              "coins": 70
+            }
+          },
+          "highlight": false
+        },
+        {
+          "day": 23,
+          "grant": {
+            "kind": "economy",
+            "economy": {
+              "wood": 550,
+              "iron": 260,
+              "food": 200,
+              "coins": 70
+            }
+          },
+          "highlight": false
+        },
+        {
+          "day": 24,
+          "grant": {
+            "kind": "economy",
+            "economy": {
+              "wood": 550,
+              "iron": 260,
+              "food": 200,
+              "coins": 70
+            }
+          },
+          "highlight": false
+        },
+        {
+          "day": 25,
+          "grant": {
+            "kind": "economy",
+            "economy": {
+              "wood": 550,
+              "iron": 260,
+              "food": 200,
+              "coins": 70
+            }
+          },
+          "highlight": false
+        },
+        {
+          "day": 26,
+          "grant": {
+            "kind": "economy",
+            "economy": {
+              "wood": 550,
+              "iron": 260,
+              "food": 200,
+              "coins": 70
+            }
+          },
+          "highlight": false
+        },
+        {
+          "day": 27,
+          "grant": {
+            "kind": "economy",
+            "economy": {
+              "wood": 550,
+              "iron": 260,
+              "food": 200,
+              "coins": 70
+            }
+          },
+          "highlight": false
+        },
+        {
+          "day": 28,
+          "grant": {
+            "kind": "economy",
+            "economy": {
+              "wood": 550,
+              "iron": 260,
+              "food": 200,
+              "coins": 70
+            }
+          },
+          "highlight": false
+        },
+        {
+          "day": 29,
+          "grant": {
+            "kind": "economy",
+            "economy": {
+              "wood": 550,
+              "iron": 260,
+              "food": 200,
+              "coins": 70
+            }
+          },
+          "highlight": false
+        },
+        {
+          "day": 30,
+          "grant": {
+            "kind": "bundle",
+            "bundle": [
+              {
+                "kind": "economy",
+                "economy": {
+                  "wood": 550,
+                  "iron": 260,
+                  "food": 200,
+                  "coins": 70
+                }
+              },
+              {
+                "kind": "economy",
+                "economy": {
+                  "crystals": 120
+                }
+              },
+              {
+                "kind": "convenience_token",
+                "convenience": {
+                  "kind": "lantern-oil-2x-expedition",
+                  "count": 1
+                }
+              }
+            ]
+          },
+          "highlight": true
+        }
+      ]
+    }
+  ]
+}

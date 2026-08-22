@@ -108,6 +108,21 @@ namespace DeNelle.Core.UI
         /// (ff.devresourcetool now defaults OFF everywhere); this id is the replacement door, so
         /// access survives without anything sitting in shot. Append-only: values are load-bearing.</summary>
         DevPanel = 17,
+        /// <summary>WO-1026 — the DEFENCE REPORT: the re-openable record of attacks on the
+        /// player's own town (who came, where they broke through, what broke, what it cost).
+        /// Registered scene-independently by DefenseReportPanel (spawned by
+        /// DefenseReportPanelBootstrap).
+        ///
+        /// DELIBERATELY **NOT** an action-bar face: CLAUDE.md §7 caps the calm(town) bar at
+        /// SIX visible faces and spends paragraphs on why. The panel ships REGISTERED and
+        /// openable via PanelRouter.Open + the DevPanel while the owner picks the town door
+        /// (a badge on the Heart interaction and a Manage-screen tab are the two candidates).
+        /// Append-only: values are load-bearing.</summary>
+        DefenseReport = 18,
+        /// <summary>Calendar-month Battle Pass track. Append-only route.</summary>
+        BattlePass = 19,
+        /// <summary>Non-expiring pool-model Monthly Ledger. Append-only route.</summary>
+        MonthlyLedger = 20,
     }
 
     /// <summary>
