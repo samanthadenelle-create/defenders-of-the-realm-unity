@@ -45,15 +45,28 @@
 //           the gate can never pass. Two owners = the gate cannot tell which
 //           suite passed, which is the 2026-08-02 bug itself.
 //
-//   RULE 4  [hollow-pass ratchet]  A registered suite must be ABLE to go red,
-//           and must not answer OK out of a null/missing guard without having
-//           asserted anything ("no-op and report OK"). Many of the new suites
-//           need runtime state (GameStateService.Instance, GearLoadout.Current,
-//           the economy ledger) that is NULL in editor batchmode; the tempting
-//           shape is `if (x == null) { reason = "skipped"; return true; }`, which
-//           green-passes forever and defeats the oracle. Pre-existing named skips
-//           are baselined in KnownHollowPassFiles; this rule is a RATCHET - it
-//           fails on a NEW one only. Legit cases opt out with `hollow-pass-ok`.
+//   RULE 4  [hollow-pass ratchet]  A registered suite must be ABLE to go red, and
+//           must not answer OK out of a dependency-missing guard without having
+//           asserted anything ("no-op and report OK"). Many suites need runtime
+//           state (GameStateService.Instance, GearLoadout.Current, the economy
+//           ledger) that is NULL in editor batchmode; the tempting shape is
+//           `if (x == null) { reason = "skipped"; return true; }`, which
+//           green-passes forever and defeats the oracle.
+//
+//           ⚠ REWRITTEN 2026-08-21 (WO-1138). The detector used to inspect a
+//           ~4-LINE WINDOW around the `return`. On 2026-08-21 it caught ONE hollow
+//           pass in CosmeticApplyRegression.cs; a human then read the SAME FILE and
+//           found FIVE MORE, all real, all invisible for one reason - their guarding
+//           `if` sat further than four lines from the return. Coverage was a function
+//           of CODE FORMATTING. Detection now lives in HollowPassScanner and walks
+//           CONTROL FLOW (brace depth + statement boundaries), so guard-to-return
+//           distance is irrelevant; and HollowPassFixtures.SelfTest runs FIRST, on
+//           the real 2026-08-21 evidence, because a sweep by an unproven detector is
+//           a hollow pass with the whole tree inside it.
+//
+//           Pre-existing debt is ledgered PER SITE in KnownHollowSites - never per
+//           FILE, which is what made the old baseline hide new hollow passes too.
+//           Legit cases opt out with `hollow-pass-ok` INSIDE the guard block.
 //
 // Self-reference: this file is EXCLUDED from the RULE 1 emitter scan (it names
 // other suites' markers in its own allowlists, which would read as emitting them)
@@ -145,7 +158,116 @@ namespace DeNelle.Editor.Regression
         {
         };
 
-        private const string HollowPassOptOut = "hollow-pass-ok";
+        private const string HollowPassOptOut = HollowPassScanner.OptOutToken;
+
+        // ---------------------------------------------------------------------
+        //  RULE 4b LEDGER  --  PER-SITE, NEVER PER-FILE (WO-1138, 2026-08-21)
+        // ---------------------------------------------------------------------
+        // When the ratchet was widened from a 4-line window to a control-flow walk, the
+        // sweep surfaced 26 pre-existing hollow passes that the window had never been able
+        // to see. They are recorded HERE, one row each, and every row names the SITE.
+        //
+        // ⛔ THIS IS NOT KnownHollowPassFiles WEARING A NEW HAT, AND THE DIFFERENCE IS THE
+        // WHOLE POINT. A FILE-level baseline made every hollow pass in that file invisible
+        // - including ones added afterwards. A SITE row excuses exactly one guard: add a
+        // second hollow pass to any file below and it fails on the next run.
+        //
+        // The key is (file, arm, CONDENSED GUARD CONDITION) - deliberately NOT a line
+        // number, because a line number rots on the first reformat and would hand this rule
+        // back the formatting-dependence WO-1138 exists to delete. Editing the guard's own
+        // condition drops the row, which is correct: a changed guard is a site that must be
+        // looked at again.
+        //
+        // EVERY ROW IS OWED A RESOLUTION under the three-way rule. Rows are removed by
+        // FIXING the site, never by editing this table to match reality:
+        //   fixture-absent            -> FAIL, naming the missing path
+        //   harness-capability-absent -> RegressionOutcome.PartialSkip (the visible third column)
+        //   content/art-absent        -> assert THROUGH the proven fallback
+        // A row whose site is gone is reported in the reason line as owed removal.
+        //
+        // Dungeon rows are flagged: those files were under an active bake lane on
+        // 2026-08-21 and were deliberately not edited by this work order.
+        private struct HollowSite
+        {
+            public string File, Arm, Guard, Owed;
+        }
+
+        private static HollowSite L(string file, string arm, string guard, string owed)
+        {
+            return new HollowSite { File = file, Arm = arm, Guard = guard, Owed = owed };
+        }
+
+        private static int IndexOfSite(List<HollowSite> sites, string file, string arm, string guard)
+        {
+            for (int i = 0; i < sites.Count; i++)
+            {
+                if (string.Equals(sites[i].File, file, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(sites[i].Arm, arm, StringComparison.Ordinal) &&
+                    string.Equals(sites[i].Guard, guard, StringComparison.Ordinal)) return i;
+            }
+            return -1;
+        }
+
+        private static readonly HollowSite[] KnownHollowSites =
+        {
+            L("AdPlacementCovenantRegression.cs", "A-missing-dependency", "string.IsNullOrEmpty(v)",
+              "an empty JSON string value silently ends the walk"),
+            L("BarracksBlankTownRegression.cs", "A-missing-dependency", "instField == null || stateField == null",
+              "reflection seam moved -> fixture-absent, owes a FAIL"),
+            L("BattleMonthlyRegression.cs", "A-missing-dependency", "cards == null",
+              "no monthlyCards array -> the anti-inflation invariant is unmeasured"),
+            L("BattleMonthlyRegression.cs", "A-missing-dependency", "!File.Exists(path)",
+              "INVERTED: absence is the pass here; owes a per-site hollow-pass-ok naming that"),
+            L("BreakableContainerChestRegression.cs", "A-missing-dependency", "chest == null",
+              "chest type not resolved -> fixture-absent, owes a FAIL"),
+            L("BuildMenuRealEconomyRegression.cs", "A-missing-dependency", "options == null || options.Count == 0",
+              "the FUNDED-SPEND positive control asserts nothing with no options"),
+            L("CollectorIncomeRegression.cs", "A-missing-dependency", "entries == null",
+              "structures.json parsed but carried no entries -> fixture-absent"),
+            L("CombatAtbRegression.cs", "B-says-skip", "float.IsNaN(regionHp) || float.IsNaN(garrisonBaseHp)",
+              "divergence case stands down in words only -> owes PartialSkip"),
+            L("DataWebRegression.cs", "A-missing-dependency", "!File.Exists(picksPath)",
+              "opt-in editor tooling -> likely a legitimate per-site hollow-pass-ok"),
+            L("DialogueRegression.cs", "A-missing-dependency", "entry == null",
+              "a dialogue with NO entry node is skipped silently; that is itself a defect"),
+            L("DungeonComposedPillarsRegression.cs", "A-missing-dependency", "arr == null",
+              "DUNGEON LANE - not touched by WO-1138"),
+            L("DungeonComposedPillarsRegression.cs", "A-missing-dependency", "t == null",
+              "DUNGEON LANE - not touched by WO-1138"),
+            L("DungeonRoomOwnershipRegression.cs", "A-missing-dependency", "layout?.rooms == null",
+              "DUNGEON LANE - not touched by WO-1138"),
+            L("ItemIdentityRegression.cs", "D-vacuous-against-absent-fixture", "vm != null",
+              "every assertion hangs off the VM source loading -> owes a fixture-health assert"),
+            L("ManaSpendRegression.cs", "D-vacuous-against-absent-fixture", "prod != null",
+              "every assertion hangs off the producer source loading"),
+            L("ManageTroopsTrainDoorRegression.cs", "D-vacuous-against-absent-fixture", "vm != null",
+              "every assertion hangs off the VM source loading"),
+            L("PromoRedeemEntryRegression.cs", "A-missing-dependency", "dead == null",
+              "a tracked source file at a hardcoded path -> fixture-absent, owes a FAIL"),
+            L("QuestCompletabilityRegression.cs", "A-missing-dependency", "isLive == null",
+              "reflected member absent -> fixture-absent, owes a FAIL"),
+            L("ShippedSurfaceGateRegression.cs", "D-vacuous-against-absent-fixture", "flags != null",
+              "every assertion hangs off the flags source loading"),
+            L("ShippedSurfaceGateRegression.cs", "D-vacuous-against-absent-fixture", "flags != null",
+              "second section, same shape"),
+            L("StructureTargetableRegression.cs", "A-missing-dependency", "setter == null",
+              "SceneOwnership.SetEnemyOwned renamed -> owes PartialSkip or a FAIL"),
+            L("TownBankCapRegression.cs", "A-missing-dependency", "arr == null",
+              "packs.json parsed but carried no array -> fixture-absent"),
+            L("TownBankCapRegression.cs", "A-missing-dependency", "!Directory.Exists(modules)",
+              "the module root is tracked; its absence is a broken gate, not an option"),
+            L("TutorialStepReachabilityRegression.cs", "A-missing-dependency", "kitBlock.Length == 0",
+              "an empty extracted block skips the kit assertions silently"),
+            L("UiCaptureCoverageRegression.cs", "D-vacuous-against-absent-fixture", "driver != null",
+              "every assertion hangs off the capture driver resolving"),
+            L("WalletIdentityRegression.cs", "A-missing-dependency", "js == null",
+              "api/ auth source absent -> the note SAYS it is not silently passing, and it is"),
+            L("VfxLoopFlagRegression.cs", "A-missing-dependency", "string.IsNullOrEmpty(path)",
+              "a prefab with no asset path bumps stats.Unresolvable and returns - the SKIP IS " +
+              "COUNTED, which is more honest than silence, but nothing asserts the count is small, " +
+              "so a catalog that resolves NOTHING still reads green. Owes a zero/ratio guard on " +
+              "stats.Unresolvable. (Surfaced by a concurrent lane's 2026-08-21 edit to this file.)"),
+        };
 
         // ---------------------------------------------------------------------
         //  Regexes
@@ -297,14 +419,34 @@ namespace DeNelle.Editor.Regression
             //  RULE 2 - every Run(out string) oracle is registered
             //  RULE 4 - and can actually go red / does not answer OK from a guard
             // -----------------------------------------------------------------
+            // RULE 4 SELF-TEST, and it runs FIRST. A sweep performed by an unproven
+            // detector is a hollow pass with the whole tree inside it - which is exactly
+            // what the retired 4-line window was, silently, until 2026-08-21.
+            string detectorDetail;
+            bool detectorOk = HollowPassFixtures.SelfTest(out detectorDetail);
+            if (!detectorOk) failures.Add(detectorDetail);
+
             int registered = 0, optedOut = 0, hollowBaseline = 0;
             int emptyIterationAdvisories = 0, emptyIterationFiles = 0;   // RULE 5 (advisory)
             var newHollow = new List<string>();
+            var ledger = new List<HollowSite>(KnownHollowSites);
             foreach (var p in Directory.GetFiles(regressionDir, "*.cs", SearchOption.AllDirectories))
             {
                 string name = Path.GetFileName(p);
                 string code = codeByPath.ContainsKey(p) ? codeByPath[p] : StripLineComments(ReadOrEmpty(p));
                 string raw = rawByPath.ContainsKey(p) ? rawByPath[p] : ReadOrEmpty(p);
+                // ⛔ FIXTURE FILES HOLD FAKE ORACLE SOURCE AS TEST DATA (added 2026-08-22).
+                // HollowPassFixtures.cs stores sample suites - including a deliberately CLEAN one -
+                // as verbatim string constants, so this text scan reads "public static class
+                // CleanSuite { ... Run(out string ...) }" and demands it be registered. It is not an
+                // oracle; it is the control the hollow-pass detector is measured against.
+                //
+                // A DECLARATION INSIDE A STRING LITERAL IS NOT A DECLARATION - the same class as
+                // counting braces that live inside quoted source. The general fix is to strip
+                // verbatim string literals before this scan; that is a wider change to a
+                // load-bearing gate, so this is a NARROW, NAMED exclusion of one file and the
+                // general case is left flagged rather than silently absorbed.
+                if (name.Equals("HollowPassFixtures.cs", StringComparison.OrdinalIgnoreCase)) continue;
                 if (!RunSignature.IsMatch(code)) continue;
 
                 // Which class in this file owns the Run(out string) entry point?
@@ -327,15 +469,27 @@ namespace DeNelle.Editor.Regression
                 if (!canFail && !optedOutHollow && !KnownHollowPassFiles.Contains(name))
                     newHollow.Add(name + " has no failing path at all (no 'return false', no 'return <list>.Count == 0') - it can only ever report OK");
 
-                // RULE 4b - does it answer OK straight out of a null/missing guard?
-                var hollowLines = FindHollowPassLines(code);
-                if (hollowLines.Count > 0)
+                // RULE 4b - does it answer OK out of a dependency-missing guard, ANYWHERE
+                // in the enclosing block? Delegated to HollowPassScanner, which walks the
+                // CONTROL FLOW (brace depth + statement boundaries) instead of a line
+                // window. RAW source is passed deliberately: the scanner does its own
+                // comment/literal masking, and it needs the comments intact to honour the
+                // per-SITE opt-out and an "already reported elsewhere" note at the site.
+                string scanErr;
+                var hollow = HollowPassScanner.Scan(raw, name, out scanErr);
+                if (!string.IsNullOrEmpty(scanErr))
                 {
-                    if (KnownHollowPassFiles.Contains(name)) hollowBaseline++;
-                    else if (!optedOutHollow)
-                        newHollow.Add(name + " returns TRUE out of a null/missing guard (line " + hollowLines[0] +
-                                      ") - a suite that green-passes on a null singleton asserts nothing. " +
-                                      "Fail (or make the state install), or mark the line '" + HollowPassOptOut + "'.");
+                    // A detector that cannot read its input has proven NOTHING. Reporting
+                    // clean here would make this rule the very thing it hunts.
+                    failures.Add("hollow-pass scan REFUSED " + name + ": " + scanErr +
+                                 " - an unscannable oracle cannot be certified, so this is a FAILURE, " +
+                                 "never a silent skip.");
+                }
+                foreach (var hp in hollow)
+                {
+                    int idx = IndexOfSite(ledger, name, hp.Arm, hp.Guard);
+                    if (idx >= 0) { ledger.RemoveAt(idx); hollowBaseline++; continue; }
+                    newHollow.Add(name + ":" + hp.Line + " [" + hp.Arm + "] guard '" + hp.Guard + "' - " + hp.Detail);
                 }
 
                 // RULE 5 - ADVISORY ONLY (see CountUnguardedDiscoveryLoops). Counted, never failed.
@@ -391,12 +545,18 @@ namespace DeNelle.Editor.Regression
                 return false;
             }
 
+            string ledgerNote = ledger.Count == 0
+                ? "all " + KnownHollowSites.Length + " ledgered hollow-pass sites still present"
+                : ledger.Count + " of " + KnownHollowSites.Length + " ledgered hollow-pass site(s) NO LONGER " +
+                  "FOUND (fixed, or the guard was edited) - delete those rows: " + DescribeSites(ledger);
+
             reason = "REGRESSION MARKER OK -- " + oracleFileCount + " oracle files, " + markerOwners.Count +
                      " distinct _OK markers (0 undeclared collisions), " + registered +
                      " Run(out) oracles registered in DataRegression.RunAll (" + optedOut +
                      " declared standalone), " + gateGreps +
                      " gate-script marker grep(s) all resolve to exactly one emitter; hollow-pass ratchet " +
-                     hollowBaseline + " baselined / 0 new; RULE 5 advisory: " + emptyIterationAdvisories +
+                     "(CONTROL-FLOW, no line window -- WO-1138) " + hollowBaseline + " ledgered / 0 new, " +
+                     ledgerNote + "; " + detectorDetail + "; RULE 5 advisory: " + emptyIterationAdvisories +
                      " unguarded discovered-collection loop(s) across " + emptyIterationFiles +
                      " suite(s) could report OK having checked ZERO items (Shape B - see CountUnguardedDiscoveryLoops " +
                      "for why this is counted and not failed)";
@@ -579,81 +739,27 @@ namespace DeNelle.Editor.Regression
             return result;
         }
 
-        /// <summary>
-        /// Lines where the suite answers TRUE straight out of a guard - the "no-op and
-        /// report OK" shape. Narrow window (the guard and the return within 4 lines) to
-        /// keep false positives near zero.
-        ///
-        /// TWO ARMS, and the second one exists because the first had a VOCABULARY, and a
-        /// vocabulary is a list of the shapes somebody already thought of:
-        ///
-        ///   ARM A  the original - a null / IsNullOrEmpty / missing-file / missing-dir
-        ///          guard, a reason assignment, and `return true`.
-        ///
-        ///   ARM B  (2026-08-16) SEVEN suites EVADED arm A by guarding on a NEGATED CALL
-        ///          instead of a null test - `if (!InstallState(gss, throwaway))`,
-        ///          `if (!DevClock.Available)`. Identical damage, invisible to the
-        ///          ratchet, because the detector was matching TOKENS rather than the
-        ///          SHAPE. UpgradeFamilyPrecedence evaded it twice over: its stand-down
-        ///          was a bare `return;` out of a void case, so there was no `return true`
-        ///          to see at all. Arm B keys on the thing every one of them has in
-        ///          common and that no legitimate verdict block has: a guarding `if` plus
-        ///          the WORD "skip", ending in an unqualified return.
-        ///
-        /// THE ESCAPE HATCH IS NOW HONEST. A suite that genuinely must stand down
-        /// declares it with RegressionOutcome.Skip / PartialSkip, which stamps the reason
-        /// so DataRegression counts it in the THIRD column instead of the green one. That
-        /// declaration is what clears this ratchet - not a silent `return true`, and not
-        /// a baseline entry. `hollow-pass-ok` remains for the rare legitimate case.
-        /// </summary>
-        private static List<int> FindHollowPassLines(string code)
+        // =====================================================================
+        //  WHERE THE OLD DETECTOR WENT (WO-1138, 2026-08-21)
+        // =====================================================================
+        // `FindHollowPassLines` used to live here: a ~4-LINE WINDOW ending at each
+        // `return`. It has NOT been deleted - deleting it would have thrown away the only
+        // measurement of what the widening bought. It now lives, frozen and executable, as
+        // HollowPassFixtures.NarrowWindowFind, where the RULE 4 self-test RUNS it against
+        // the six real CosmeticApplyRegression sites of 2026-08-21 and asserts it still
+        // finds exactly ONE of them while HollowPassScanner finds all SIX.
+        //
+        // Detection now lives in HollowPassScanner and walks CONTROL FLOW - brace depth and
+        // statement boundaries - so a guard 400 lines above its `return` is as visible as
+        // one three lines above it. See that file's header for the arms, the exonerations,
+        // and why none of it can rot the way a line count did.
+
+        /// <summary>Ledger rows still unmatched after a sweep, for the reason line.</summary>
+        private static string DescribeSites(List<HollowSite> sites)
         {
-            var hits = new List<int>();
-            if (string.IsNullOrEmpty(code)) return hits;
-            string[] lines = code.Replace("\r\n", "\n").Split('\n');
-            for (int i = 0; i < lines.Length; i++)
-            {
-                string line = lines[i];
-                bool returnsTrue = line.IndexOf("return true", StringComparison.Ordinal) >= 0;
-                bool bareReturn = Regex.IsMatch(line, @"^\s*return\s*;\s*$");
-                if (!returnsTrue && !bareReturn) continue;
-
-                int from = Math.Max(0, i - 3);
-                var window = new System.Text.StringBuilder();
-                for (int j = from; j <= i; j++) window.Append(lines[j]).Append('\n');
-                string w = window.ToString();
-
-                // A declared stand-down is the CORRECT answer, not a hollow pass.
-                if (w.IndexOf("RegressionOutcome.Skip", StringComparison.Ordinal) >= 0 ||
-                    w.IndexOf("RegressionOutcome.PartialSkip", StringComparison.Ordinal) >= 0 ||
-                    w.IndexOf(RegressionOutcome.SkipToken, StringComparison.Ordinal) >= 0 ||
-                    w.IndexOf(RegressionOutcome.PartialSkipToken, StringComparison.Ordinal) >= 0) continue;
-
-                // The window can go red on its own - not a hollow pass. `failures.Add` is
-                // the void-section equivalent of `return false`: a section that RECORDS a
-                // failure and then returns has asserted, and asserted loudly.
-                if (w.Contains("return false") || w.Contains("failures.Add")) continue;
-
-                // ARM A - the classic null/missing guard answering OK.
-                bool guardedByToken = w.Contains("== null")
-                                   || w.Contains("IsNullOrEmpty")
-                                   || w.Contains("!File.Exists")
-                                   || w.Contains("!Directory.Exists");
-                if (returnsTrue && guardedByToken && w.Contains("reason")) { hits.Add(i + 1); continue; }
-
-                // ARM B - ANY guarding `if` whose stand-down says so in words. Keyed on
-                // "skip" rather than on a guard vocabulary so a novel guard form cannot
-                // evade it the way the negated-call form did. A verdict block
-                // (`if (failures.Count == 0) { reason = "... OK"; return true; }`) does
-                // not contain the word, so it is not swept up.
-                bool hasGuardIf = Regex.IsMatch(w, @"\bif\s*\(") &&
-                                  (w.Contains("!") || w.Contains("== null") || w.Contains("== 0"));
-                bool saysSkip = w.IndexOf("skip", StringComparison.OrdinalIgnoreCase) >= 0
-                             || w.IndexOf("stand down", StringComparison.OrdinalIgnoreCase) >= 0
-                             || w.IndexOf("stand-down", StringComparison.OrdinalIgnoreCase) >= 0;
-                if (hasGuardIf && saysSkip) hits.Add(i + 1);
-            }
-            return hits;
+            var parts = new List<string>();
+            foreach (var s in sites) parts.Add(s.File + " [" + s.Arm + "] '" + s.Guard + "'");
+            return string.Join(", ", parts.ToArray());
         }
 
         // =====================================================================
