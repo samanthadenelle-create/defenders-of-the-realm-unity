@@ -1,4 +1,4 @@
-**Status:** READY TO IMPLEMENT
+**Status:** LATENT GUARD - NOT AN ACTIVE DEFECT (corrected 2026-08-22). No crystal collector is authored today, so this cannot fire. Implement only if/when one is authored.
 
 # WORK ORDER 1140 — Raiders beeline for crystal collectors that can no longer be robbed
 
@@ -65,3 +65,34 @@ line references above rather than trusting them.
       does NOT. ⚠ MEASURE, do not restate - do not derive the expectation from `SiegeRoleValue`'s own
       expression, or the suite cannot fail.
 - [ ] Owner felt-check: raiders visibly go for the silo and the lumbermill, not the crystal building
+
+
+---
+
+# ⚠ CORRECTED 2026-08-22 - THIS IS LATENT, NOT LIVE
+
+The owner asked the right question: **"is there a crystal collector? Or just an assumption"** -
+and it was an assumption. Verified at source afterwards:
+
+- `HarvestResource.Crystals = 0` exists as an ENUM VALUE, which is what this ticket was built on.
+- **No building yields it.** `Assets/Editor/CollectorStackPropCatalogBuilder.cs:104` authors picks
+  for Wood / Food / Iron only and states outright: *"HarvestResource.Crystals: deliberately absent"*.
+  `CollectorIncomeRegression.cs:753` branches on it defensively, which is prudence about a value
+  that can be authored later - not evidence that one IS.
+
+**So the defect described above cannot occur today.** Raiders cannot beeline an unrobbable crystal
+collector because there is no crystal collector to beeline. The claim that it would read as a bug on
+a felt-test was WRONG and is retracted.
+
+**Why the ticket survives instead of being deleted:** WO-1139 made crystal collectors unlootable in
+code, and `SiegeRoleValue` does NOT consult that exemption. The day anyone authors a crystal
+collector, the mismatch is live and silent - a building advertising itself as a prize that can never
+be robbed. Keeping this ticket is cheaper than rediscovering it then.
+
+⛔ **Do NOT implement this speculatively.** The fix touches `SiegeRoleValue`, which is shipped and
+tuned. Wire it in the SAME change that authors the first crystal collector, so the guard and the
+thing it guards arrive together.
+
+**The general lesson, recorded because it nearly cost a felt-test:** an ENUM VALUE is not a FEATURE.
+A defensive branch on a value proves someone anticipated it, not that anything produces it. Check
+for an authored instance before writing a ticket about behaviour around it.

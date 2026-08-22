@@ -129,7 +129,12 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-08-22 (CLI): main line next free = **1141**.
+> ## ⚠ RECONCILED 2026-08-22 (CLI): main line next free = **1142**.
+> *(**WO-1141 was minted by the Codex seat WITHOUT bumping this banner in the same edit** -
+> `WORK_ORDER_1141_dungeon_system_audit_verify_and_ship.md` is on disk while the banner still
+> read 1141, so the NEXT mint by either seat would have collided on 1141. Reconciled by the CLI
+> seat after verifying the file exists. THE RULE (CLAUDE.md s2): mint and bump in the SAME edit,
+> or the banner stops being the authority the moment two seats are live.)*
 > *(CLI seat minted **WO-1140** and bumped 1140 -> 1141 in this SAME edit. **1140** = raiders still
 > beeline for CRYSTAL collectors that can no longer be robbed - SiegeRoleValue rewards a target
 > with nothing to take. Surfaced by the WO-1139 collector-loot rewire.)*
