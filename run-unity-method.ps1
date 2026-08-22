@@ -47,7 +47,18 @@ param(
     # text rather than a marker, it reads as a generic failure rather than a target
     # mismatch. Pass -BuildTarget Win64 after any Android build. Omitted => whatever the
     # project's active target happens to be, i.e. today's behaviour, unchanged.
-    [string]$BuildTarget = ''
+    [string]$BuildTarget = '',
+    # Scripting define symbols forwarded to the PLAYER compilation (semicolon- or
+    # comma-separated). WHY THIS EXISTS (2026-08-22): a custom -executeMethod build owns
+    # its own BuildPlayerOptions, so Unity's command-line defines do NOT automatically
+    # reach the player -- AndroidBuild.CommandLineScriptingDefines() reads this argument
+    # back off the command line and forwards it explicitly. Without this passthrough the
+    # owner-test symbols (STORE_RAIL_LOCAL_TEST / MONETIZATION_LOCAL_TEST) are
+    # unreachable from the sanctioned ship chain, and the only way to get them into an
+    # APK would be a raw run-unity-method call that BYPASSES the s16 R2 push+verify --
+    # exactly the hole that shipped capsule enemies on 2026-08-20. Omitted => empty
+    # array => today's behaviour, monetization OFF, unchanged.
+    [string]$ExtraScriptingDefines = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -90,6 +101,10 @@ if ($judgeOnly) {
 
     $unityArgs = @('-batchmode', '-quit', '-projectPath', $proj, '-executeMethod', $Method, '-logFile', $log)
     if ($BuildTarget -ne '') { $unityArgs = @('-buildTarget', $BuildTarget) + $unityArgs }
+    if ($ExtraScriptingDefines -ne '') {
+        $unityArgs += @('-extraScriptingDefines', $ExtraScriptingDefines)
+        Write-Host "[run] extraScriptingDefines=$ExtraScriptingDefines (forwarded to the PLAYER compilation)"
+    }
     Write-Host "[run] editor=$($chosen.Name)  method=$Method  buildTarget=$(if ($BuildTarget -ne '') { $BuildTarget } else { '(project active)' })"
     Write-Host "[run] log=$log"
     # WO-984: the instant the run began. Any log older than this is a leftover from a

@@ -25,6 +25,15 @@
 # content is actually hosted. R2_PUSH_OK is NOT that proof: on 2026-08-19 it reported
 # "6 uploaded (175.9 MB)" for 175 MB of the WRONG PLATFORM's bundles.
 # =============================================================================
+#
+# -Defines (2026-08-22): owner-test scripting symbols forwarded to the PLAYER
+# compilation, e.g. -Defines 'STORE_RAIL_LOCAL_TEST;MONETIZATION_LOCAL_TEST' for the
+# Devnet purchase canary. Omitted => empty => monetization stays OFF, unchanged. This
+# passthrough exists so an owner-test APK can be produced WITHOUT leaving the sanctioned
+# chain: the alternative was a raw run-unity-method call, which skips the s16 R2
+# push+verify that this script carries. Never add a second build path instead.
+# =============================================================================
+param([string]$Defines = '')
 Set-Location $PSScriptRoot
 $status = 'Builds\overnight-apk-status.txt'
 New-Item -ItemType Directory -Force -Path 'Builds' | Out-Null
@@ -32,7 +41,7 @@ $startedAt = Get-Date
 "APK_START $(Get-Date -Format o)" | Out-File -Encoding ascii $status
 
 try {
-    & '.\run-unity-method.ps1' -Method DeNelle.Editor.AndroidBuild.BuildSeekerApk -LogName apk-build.log -TimeoutMin 120 -BuildTarget Android
+    & '.\run-unity-method.ps1' -Method DeNelle.Editor.AndroidBuild.BuildSeekerApk -LogName apk-build.log -TimeoutMin 120 -BuildTarget Android -ExtraScriptingDefines $Defines
 } catch {
     "APK_THREW $($_.Exception.Message)" | Out-File -Encoding ascii -Append $status
 }
