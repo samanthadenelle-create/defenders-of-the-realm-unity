@@ -1039,6 +1039,25 @@ namespace DeNelle.Village
             // a story line is on screen.
             HookDialogueIdle();
 
+            // ── COSMETICS (WO-992 fix, 2026-08-21) ────────────────────────────────────────
+            // THE SEAM THAT DID NOT EXIST. Until today a hero skin bought with Glimmer — a
+            // currency that is earned in play AND SOLD FOR REAL MONEY (packs.json grants 25
+            // with Hearth Spark, 50 with Starter's Hand) — changed a save flag and NOTHING the
+            // player could see: CosmeticApplier.ApplyCosmetic was called from nowhere and its
+            // GUID sat on zero prefabs. This is the call that makes the purchase land.
+            //
+            // Bound to the hero ROOT, not to `body`, and deliberately: HeroArmorVisual can swap
+            // the entire visible mesh out from under us on an armour equip, and the applier
+            // re-resolves its renderer set on every Refresh. One appearance owner still owns the
+            // BODY (this class / HeroArmorVisual); the applier only re-decorates what it finds.
+            //
+            // appliesTo is the LOWERCASE class name because that is what cosmetics.json authors
+            // ("mage" / "knight" / "ranger") — NOT SlugFor(), whose values are Pascal-case and
+            // whose Cleric→Mage ability routing would put the wrong skin on the wrong hero.
+            Guard.Try("HeroBody", "attach cosmetic applier",
+                () => DeNelle.Cosmetics.CosmeticApplier.Attach(
+                          gameObject, "hero", cls.ToString().ToLowerInvariant()));
+
             FlowTrace.Step("HeroBody",
                 $"Hero body wired complete: class={cls} slug={slug} isBlink={isBlink} body='{body.name}'.");
             Debug.Log($"[HeroBodySwapper] Hero body ready ({(isBlink ? "Blink base" : "legacy " + slug + ".fbx")}).");

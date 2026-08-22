@@ -616,7 +616,8 @@ namespace DeNelle.Village
         /// The equipped weapon prop. Under the hand first (the normal held case); otherwise the
         /// whole rig, so a SHEATHED weapon - which EquipmentController re-seats under
         /// 'SheatheSocket_HipMain' (renamed from 'SheatheSocket_Back' by the owner's 2026-08-20 hip
-        /// ruling; the off-hand now has its own 'SheatheSocket_HipOff' on the other hip) - still
+        /// ruling; the off-hand has its own anchor, moved from the hip to the off-hand FOREARM as
+        /// 'SheatheSocket_ArmOff' by her 2026-08-21 F8, "the shield on arm or arm bone") - still
         /// carries its flame instead of leaving it on an empty hand. NOTE THIS IS ONLY A COMMENT:
         /// the search below is a rig-wide walk by PROP name, never by socket name, which is exactly
         /// why the socket rename could not break it.

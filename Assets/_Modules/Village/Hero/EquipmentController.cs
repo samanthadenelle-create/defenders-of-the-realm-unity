@@ -456,16 +456,40 @@ namespace DeNelle.Village
         // the hang a few degrees off the leg without a recompile. The regression asserts the
         // SHIPPED DEFAULT is vertical, so a re-introduced diagonal fails loudly rather than quietly.
         [SerializeField] private float _sheatheBladeDiagonalDeg = 0f;
-        // ⚑ THE ONE NUMBER THAT FLIPS "INVERTED" (owner ruling 2026-08-20 — read this before
-        // touching anything else in the sheathe path). The owner asked for the sheathed prop
-        // "inverted"; we implement that as TIP-DOWN — hilt up at the belt, blade hanging down the
-        // owner F8 on 2026-08-21 showed that authored reading as upside down on Blaise; +1 ships.
-        //   -1  = tip DOWN / hilt up   (shipped default — prop-local +Y maps onto -body.up)
+        // ⛔ THIS FIELD IS NO LONGER THE AUTHORITY — IT IS THE FALLBACK (owner F8 2026-08-21).
+        //
+        // It used to be described here as "THE ONE NUMBER THAT FLIPS 'INVERTED' ... if it reads
+        // upside down on the device, flip this ONE field". THAT INSTRUCTION IS RETIRED, AND
+        // FOLLOWING IT IS THE BUG:
+        //   • 2026-08-20, F8 on Blaise: -1 reads upside down.  → +1 shipped.
+        //   • 2026-08-21, F8 on the owner's Flameblade: +1 reads upside down.
+        // Both captures are correct. Which end of a prop is the TIP is a property of the MESH —
+        // NormalizeInto + SeatHiltLowerHalf put the tip at prop-local +Y, while a NATIVE prop
+        // (SeatNative, "trust grip-at-origin") keeps whatever the artist authored, which is often
+        // the other way round. One global number therefore CANNOT be right for both heroes: every
+        // flip of this field simply moves the defect to whoever carries the other mesh, which is
+        // exactly the ping-pong the two captures above record.
+        //
+        // The authority is now PER MESH and DERIVED FROM GEOMETRY:
+        // WeaponOrientHelper.TryResolveSheathedTipSign, resolved once at attach into
+        // _sheatheTipSign (see ResolveSheathedTipSign below) and consumed by ComputeSheathRotation.
+        //
+        // THE FIELD IS KEPT, DELIBERATELY (§12: never strip a tuning seam). It is what stands when
+        // a prop cannot answer — no renderer, a degenerate long axis, or a grip that sits mid-mesh
+        // with Read/Write off so neither the taper nor the origin test can decide. Those cases log
+        // a Warn naming themselves, so "the global fallback is driving this prop" is readable in a
+        // capture instead of being inferred.
+        //   -1  = tip DOWN / hilt up   (prop-local +Y maps onto -body.up)
         //   +1  = tip UP   / hilt down (prop-local +Y maps onto +body.up)
-        // If it reads upside down on the device, flip this ONE field; nothing else in the pose
-        // depends on the sign. Both signs keep the long axis VERTICAL, which is the half of the
-        // ruling that is not a matter of taste.
+        // Both signs keep the long axis VERTICAL, which is the half of the 08-20 ruling that is not
+        // a matter of taste and is not affected by any of this.
         [SerializeField] private float _sheatheLongAxisSign = 1f;
+        // The per-mesh answer for the CURRENTLY EQUIPPED main-hand prop. 0 = nothing decidable was
+        // measured, and only then does _sheatheLongAxisSign above speak. Resolved once per attach
+        // (never per frame — ApplyHoldPose re-asserts the pose at frame rate) and cleared on
+        // unequip so a stale sign can never outlive the mesh it was measured from.
+        private float  _sheatheTipSign;
+        private string _sheatheTipWhy;
         // Body-space offset for the SHEATHED off-hand (shield) — see _sheatheWeaponLocalPos for the
         // frame. It sits on the OPPOSITE hip from the weapon (ResolveSheatheSocket owns which).
         //
@@ -487,6 +511,18 @@ namespace DeNelle.Village
         // (0,90,192) for the face-on-back read. Y+=180 is NOT baked here — ApplyGlobalWeaponYaw
         // composes the same universal flip weapons use (owner 2026-07-05).
         [SerializeField] private Vector3 _sheatheOffHandLocalEuler = new Vector3(0f, 90f, 192f);
+        // ── THE SHIELD IS STRAPPED TO THE ARM, NOT HUNG ON THE HIP (owner F8 2026-08-21) ─────────
+        // Owner, verbatim: "shield is attaching to hip not wrist or arm" / "the shield on arm or arm
+        // bone". The device capture is unambiguous about what she was looking at — every frame:
+        //   key='ShieldWithItemLogic' ... parent='SheatheSocket_HipOff' parentLossy=(1.67,1.67,1.67)
+        // Body-space offset for the shield at the FOREARM mount. It is small on purpose: the plate's
+        // rendered CENTRE is placed here (ApplyOffHandCentreOnSocket), and a shield strapped to a
+        // forearm is centred ON the arm, pushed out only far enough that the plate rides outside the
+        // limb instead of intersecting it. The hip figure (0.26, above) is a HIP number — it is the
+        // half-width of a hero's stance, and re-using it on the arm would float the shield a
+        // quarter-metre off the elbow. Both fields survive: the hip one is still what a rig with no
+        // mapped forearm falls back to (§12).
+        [SerializeField] private Vector3 _armOffHandLocalPos = new Vector3(0.05f, 0f, 0f);
 
         // Resolved attach targets + the DRAWN local transform, so the carry-state can move each prop
         // between its hand (drawn) and the back socket (sheathed) with no re-equip. _baseGripRot holds
@@ -502,13 +538,27 @@ namespace DeNelle.Village
         // parented to the single 'SheatheSocket_Back' transform at the same origin. Two transforms
         // on opposite hips make that failure mode structurally impossible, not merely tuned around.
         private Transform  _sheatheSocketMain;   // main-hand weapon — the hip OPPOSITE the weapon hand
-        private Transform  _sheatheSocketOff;    // off-hand / shield — the weapon-hand-side hip
+        private Transform  _sheatheSocketOff;    // off-hand / shield — the OFF-HAND FOREARM (see below)
+        // True when _sheatheSocketOff actually landed on an ARM bone. False = this rig has no mapped
+        // forearm and the socket fell back to the hips chain, in which case the HIP offset and the
+        // HIP side are the correct pair to use — the pose numbers must follow the anchor that was
+        // really resolved, never the anchor that was asked for. (docs/ARCHITECTURE.md: a derived
+        // value can be arithmetically perfect and land one transform out.)
+        private bool       _sheatheSocketOffIsArm;
         // Which way each slot's hip offset points, as a multiplier on body.right. The weapon hangs
         // on the hip OPPOSITE the drawing hand (a right-handed hero draws across the body from the
         // left hip) and the shield takes the other one. Constants, not fields: this is the invariant
         // "they are never on the same side", and a field could be set to make them collide again.
         private const float SheatheSideMain = -1f;   // -body.right → the hero's LEFT hip
-        private const float SheatheSideOff  = +1f;   // +body.right → the hero's RIGHT hip
+        private const float SheatheSideOff  = +1f;   // +body.right → the hero's RIGHT hip (fallback mount)
+        // ⚠ AND THE ARM MOUNT IS ON THE OTHER SIDE FROM THE HIP MOUNT — that is not an inconsistency,
+        // it is the anatomy. The off-hand prop seats on the LEFT HAND in every drawn pose
+        // (AttachOffHandProp resolves HumanBodyBones.LeftHand unconditionally), so its forearm is the
+        // LEFT forearm and "outward, away from the player" there is the hero's LEFT: -body.right.
+        // SheatheSideOff above stays +1 because it belongs to the HIP fallback, which is the
+        // weapon-hand-side hip. Both constants are consumed through OffHandSheatheSide(), so no call
+        // site can pick the wrong one for the anchor it actually got.
+        private const float SheatheSideArmOff = -1f; // -body.right → the hero's LEFT (off-hand) arm
 
         // ── SWORD GRIP ORIENTATION (rig-relative) ────────────────────────────────────
         // THE FIX (task #36 follow-up): the grip POINT (handle below the crossguard) is
@@ -766,9 +816,12 @@ namespace DeNelle.Village
             if (anim == null || !anim.isHuman) return;   // need a humanoid rig to seat on bones
             _animator = anim;
             _cachedHeroHeightM = 0f;   // new rig proportions → re-measure for heldLength scale
-            // New body → both hip-anchored sheathe sockets are stale; re-create under the new hips.
+            // New body → both sheathe sockets are stale; re-create under the new rig's bones. The
+            // arm flag goes with them: the next rig may map a forearm where this one did not, and a
+            // carried-over `true` would pair ARM numbers with a HIP anchor.
             _sheatheSocketMain = null;
             _sheatheSocketOff  = null;
+            _sheatheSocketOffIsArm = false;
             FlowTrace.Step("Equip", $"ReseatForBody: re-seating equipped props onto '{body.name}' bones (animator='{anim.name}').");
             EquipBestForHero();
         }
@@ -1162,6 +1215,13 @@ namespace DeNelle.Village
             _currentWeaponGripEuler  = vis.gripEuler;
             _currentWeaponNative     = vis.native;
 
+            // WHICH END HANGS DOWN, measured off THIS mesh (owner F8 2026-08-21). Resolved here,
+            // once, because the answer belongs to the prop and not to the game: see the ⛔ note on
+            // _sheatheLongAxisSign for the two contradictory captures that proved a global sign
+            // cannot serve both a normalized prop and a native one. Runs AFTER NormalizeInto /
+            // SeatHiltLowerHalf above, so it measures the frame the sheathe pose will actually use.
+            ResolveSheathedTipSign(prop, gripRoot.transform, offsetKey, vis.kind);
+
             // Base orientation:
             //  • ALL melee (sword/dagger/axe/hammer/staff/wand — WO-435): build the grip-root
             //    rotation FROM the hand bone's own axes so the primary axis extends forward from
@@ -1475,6 +1535,8 @@ namespace DeNelle.Village
             FlowTrace.Fail("Equip", $"RollbackWeaponProp on '{name}': {reason} — destroying half-attached prop.");
             if (_currentWeaponProp == gripRoot) _currentWeaponProp = null;
             if (_gripRoot != null && gripRoot != null && _gripRoot == gripRoot.transform) _gripRoot = null;
+            // The per-mesh sheathe sign was measured off THIS prop; it must not outlive it.
+            _sheatheTipSign = 0f; _sheatheTipWhy = null;
             if (gripRoot != null) Destroy(gripRoot);
             ReleaseWeaponHandle();
         }
@@ -1762,6 +1824,10 @@ namespace DeNelle.Village
             ReleaseWeaponHandle();
             _currentWeaponId = null;
             _gripRoot = null;
+            // Per-mesh sheathe sign belongs to the prop that has just been destroyed. Clearing it
+            // makes the NEXT prop's attach the only thing that can set it — a stale sign surviving
+            // an unequip would hang a normalized sword by whatever the previous native one measured.
+            _sheatheTipSign = 0f; _sheatheTipWhy = null;
         }
 
         // ── OFF-HAND (shield) attach ─────────────────────────────────────────────────
@@ -2389,14 +2455,45 @@ namespace DeNelle.Village
                 bool sameWriter = _offSeatHas && _offSeatWriter == writer;
                 string parentNow  = t.parent != null ? t.parent.name : "<null>";
                 string parentPrev = _offSeatParentT != null ? _offSeatParentT.name : "<null>";
-                FlowTrace.Step("Equip",
+                string line =
                     $"WO-994 seatWrite by={writer} key='{_currentOffHandMeshKey}' " +
                     $"pos={t.localPosition} rot={t.localEulerAngles} scale={t.localScale} " +
                     $"parent='{parentNow}' parentLossy={pLossy}" +
                     (sameWriter
                         ? $" PREV pos={_offSeatPos} rot={_offSeatRot.eulerAngles} scale={_offSeatScale} " +
                           $"parent='{parentPrev}' parentLossy={_offSeatParentLossy}"
-                        : $" (prev writer={(_offSeatHas ? _offSeatWriter : "<none>")})"));
+                        : $" (prev writer={(_offSeatHas ? _offSeatWriter : "<none>")})");
+
+                // ⚠ "CHANGE-ONLY" IS NOT THE SAME AS "RARE", AND THIS LINE PROVED IT ON A SHIPPED
+                // DEVICE BUILD (owner capture 2026-08-21). The comment above this method reasons that
+                // the tripwire is "silent while numbers repeat" — true, and the numbers DO NOT repeat:
+                // ApplyOffHandCentreOnSocket derives its shift from Renderer.bounds, a WORLD AABB,
+                // which changes shape as the hero turns and animates. So the seat legitimately
+                // re-solves a few millimetres different EVERY FRAME, `moved` is true every frame, and
+                // the capture is dozens of identical-shaped lines with the position walking
+                // 0.03 -> 0.06. The F8 harness harvests only the last ~60 signal lines, so this one
+                // diagnostic evicted the evidence window for every other system — the exact failure
+                // ApplySheathedOffset and CompensateParentScale in this same file were both already
+                // fixed for, and the known repo trap where a post-hoc `adb logcat -d` reads as "the
+                // feature never ran".
+                //
+                // ⛔ IT IS THROTTLED, NOT REMOVED (§12 forbids stripping instrumentation) — AND THE
+                // STRUCTURAL HALF IS NOT THROTTLED AT ALL. A change of PARENT or of WRITER is the
+                // signal this tripwire exists for (it is how "the shield is on the hip" was proven);
+                // that is rare by nature and goes out immediately. Only the numeric drift under an
+                // unchanged parent+writer — the part that is per-frame by construction — is rate
+                // limited, keyed by mesh+writer so a different prop or a different writer still
+                // prints promptly instead of sharing one bucket (the mistake that hid the shield's
+                // compensate line behind the sword's for a whole capture).
+                bool structural = !sameWriter || !ReferenceEquals(t.parent, _offSeatParentT);
+                if (structural)
+                    FlowTrace.Step("Equip", line);
+                else
+                    FlowTrace.Throttle("Equip",
+                        $"seatwrite-{writer}-{_currentOffHandMeshKey ?? "?"}", 5f, line +
+                        " [THROTTLED 1/5s: same writer, same parent — only the numbers moved. Sub-cm " +
+                        "drift here is ApplyOffHandCentreOnSocket re-solving off a rotation-sensitive " +
+                        "world AABB, not a second writer.]");
             }
             _offSeatHas = true; _offSeatWriter = writer;
             _offSeatPos = t.localPosition; _offSeatRot = t.localRotation; _offSeatScale = t.localScale;
@@ -2548,8 +2645,16 @@ namespace DeNelle.Village
                         CompensateParentScale(offT, _offHandAuthoredScale,
                             SeatSubject("off-hand", _currentOffHandId, _currentOffHandMeshKey),
                             ref _offHandCompState);
+                    // THE OFFSET FOLLOWS THE ANCHOR THAT WAS ACTUALLY RESOLVED (owner F8 2026-08-21).
+                    // Arm mount → the small arm-hugging offset on the LEFT (off-hand) side; hip
+                    // fallback → the original hip offset on the hip side. Pairing an arm anchor with
+                    // the 0.26 m hip figure floats the shield a quarter-metre off the elbow, and
+                    // pairing it with the +1 hip side puts it on the wrong side of the body — two
+                    // ways to be "posed perfectly about a lie", which is this file's oldest lesson.
                     Vector3 offBaseLocal = ComputeSheathLocalPosition(
-                        sheatheOff, _sheatheOffHandLocalPos, SheatheSideOff);
+                        sheatheOff,
+                        _sheatheSocketOffIsArm ? _armOffHandLocalPos : _sheatheOffHandLocalPos,
+                        OffHandSheatheSide());
                     offT.localPosition = offBaseLocal;
                     // DE-BAND-AID NOTE (2026-07-07): _sheatheOffHandLocalEuler (the hand-tuned magic
                     // euler, owner Z+=180 correction 2026-07-04) is now only the DEFAULT under the
@@ -2882,35 +2987,94 @@ namespace DeNelle.Village
         // spine/chest chain is KEPT BELOW it, never stripped (§12), for a rig with no mapped Hips.
         // A rig that falls back logs a Warn, because on that rig the pose is NOT the ruled one and
         // the next reader must be able to see that from the capture instead of re-deriving it.
+        // ── AND THE OFF-HAND ANCHOR MOVED AGAIN: HIP → FOREARM (owner F8 2026-08-21) ─────────────
+        // Owner, verbatim: "shield is attaching to hip not wrist or arm" ... "the shield on arm or
+        // arm bone". The capture named the parent on every frame — parent='SheatheSocket_HipOff' —
+        // so this was never a pose question; the shield was on the anchor she is telling us is wrong.
+        //
+        // ⚠ ONLY THE OFF-HAND MOVES. The 2026-08-20 hip ruling was about the SHEATHED SWORD ("the
+        // longest mesh (y) up and down attached to hip bone") and it still stands, unaltered, for
+        // the main hand. Generalising one prop's ruling to the other prop is the mistake this file
+        // has already recorded twice (the shield taking the sword's "inverted"; the shield sharing
+        // the sword's socket). Two slots, two anchors, two rulings.
+        //
+        // ⛔ AND ASKING FOR A BONE IS NOT GETTING IT. GetBoneTransform(Chest) resolved to
+        // CC_Base_Spine01 on this rig — that is the whole reason the "back" carry was at the waist.
+        // So the resolved bone's REAL NAME is logged every time, and the trace states which of the
+        // three tiers actually answered. Read the capture, never the enum in this source.
         private Transform ResolveSheatheSocket(bool offHand)
         {
             Transform cached = offHand ? _sheatheSocketOff : _sheatheSocketMain;
             if (cached != null) return cached;            // a destroyed Unity object compares == null → re-created
             if (_animator == null || !_animator.isHuman) return null;
-            Transform anchor = _animator.GetBoneTransform(HumanBodyBones.Hips);
-            bool onHips = anchor != null;
-            if (anchor == null) anchor = _animator.GetBoneTransform(HumanBodyBones.Spine);
-            if (anchor == null) anchor = _animator.GetBoneTransform(HumanBodyBones.Chest);
-            if (anchor == null) anchor = _animator.GetBoneTransform(HumanBodyBones.UpperChest);
+
+            Transform anchor = null;
+            bool onArm = false, onHips = false;
+            string tier;
+            if (offHand)
+            {
+                // The off-hand prop seats on the LEFT hand in every drawn pose (AttachOffHandProp),
+                // so the strap goes on the LEFT forearm. LowerArm first — that is the forearm the
+                // owner asked for; UpperArm is a poorer but still ARM answer; the hand itself is the
+                // last arm-tier option (a wrist mount) before we fall out of the limb entirely.
+                anchor = _animator.GetBoneTransform(HumanBodyBones.LeftLowerArm);
+                if (anchor == null) anchor = _animator.GetBoneTransform(HumanBodyBones.LeftUpperArm);
+                if (anchor == null) anchor = _animator.GetBoneTransform(HumanBodyBones.LeftHand);
+                onArm = anchor != null;
+            }
+            if (anchor == null)
+            {
+                anchor = _animator.GetBoneTransform(HumanBodyBones.Hips);
+                onHips = anchor != null;
+                if (anchor == null) anchor = _animator.GetBoneTransform(HumanBodyBones.Spine);
+                if (anchor == null) anchor = _animator.GetBoneTransform(HumanBodyBones.Chest);
+                if (anchor == null) anchor = _animator.GetBoneTransform(HumanBodyBones.UpperChest);
+            }
             if (anchor == null) return null;
+            tier = onArm ? "arm" : onHips ? "hips" : "spine/chest";
+
             // Names carry the slot AND the anchor's intent, so a capture line names which prop it is
             // talking about. The old shared name said "Back" while sitting on the spine — a name that
-            // lies is how a reader concludes the pose is right when the transform says otherwise.
-            var go = new GameObject(offHand ? "SheatheSocket_HipOff" : "SheatheSocket_HipMain");
+            // lies is how a reader concludes the pose is right when the transform says otherwise. The
+            // off-hand name now says Arm because that is where it goes; if a rig falls back to the
+            // hips the name still says Arm, which is why the WARN below exists and the trace prints
+            // the real bone.
+            var go = new GameObject(offHand ? "SheatheSocket_ArmOff" : "SheatheSocket_HipMain");
             go.transform.SetParent(anchor, false);
             go.transform.localPosition = Vector3.zero;
             go.transform.localRotation = Quaternion.identity;
-            if (offHand) _sheatheSocketOff = go.transform; else _sheatheSocketMain = go.transform;
+            if (offHand) { _sheatheSocketOff = go.transform; _sheatheSocketOffIsArm = onArm; }
+            else _sheatheSocketMain = go.transform;
+            float side = offHand ? (onArm ? SheatheSideArmOff : SheatheSideOff) : SheatheSideMain;
             string msg = $"ResolveSheatheSocket({(offHand ? "off-hand" : "main-hand")}) on '{name}': " +
                          $"anchor '{go.name}' under bone '{anchor.name}' " +
-                         $"(hips={onHips}; side={(offHand ? SheatheSideOff : SheatheSideMain):+0;-0} * body.right).";
-            if (onHips) FlowTrace.Step("Equip", msg);
+                         $"(tier={tier}; side={side:+0;-0} * body.right).";
+            if (offHand)
+            {
+                if (onArm) FlowTrace.Step("Equip", msg + " Shield rides the OFF-HAND ARM (owner F8 " +
+                    "2026-08-21). If this line ever names a hip bone again, that is the reported defect.");
+                else FlowTrace.Warn("Equip", msg + " ⛔ NOT AN ARM BONE — this rig maps no Left" +
+                    "LowerArm/UpperArm/Hand, so the shield fell back to the retired HIP carry the owner " +
+                    "rejected on 2026-08-21. The pose numbers follow the anchor that was really " +
+                    "resolved (hip offset + hip side), so it is seated sanely — but it is the wrong " +
+                    "mount. Fix the rig's humanoid arm mapping, not this code.");
+            }
+            else if (onHips) FlowTrace.Step("Equip", msg);
             else FlowTrace.Warn("Equip", msg + " ⛔ NOT THE HIPS BONE — this rig has no mapped Hips, so " +
                  "the sheathed prop is hanging off a spine/chest bone and will sit HIGHER than the " +
                  "owner-ruled hip carry. The pose math is unchanged (it is body-derived); only the " +
                  "attach height is wrong. Fix the rig's humanoid Hips mapping, not this code.");
             return go.transform;
         }
+
+        /// <summary>
+        /// The body.right multiplier for the off-hand's CURRENT anchor: the left-arm side when the
+        /// forearm resolved, the right-hip side when it did not. One accessor so the position offset
+        /// and the rotation's `outward` can never disagree about which side the prop is on — they
+        /// disagreeing is a shield posed face-first into the hero with every angle reading 0.
+        /// </summary>
+        private float OffHandSheatheSide() =>
+            _sheatheSocketOffIsArm ? SheatheSideArmOff : SheatheSideOff;
 
         /// <summary>
         /// Slide the SHEATHED off-hand so its RENDERED CENTRE — not its grip origin — sits where
@@ -2943,9 +3107,12 @@ namespace DeNelle.Village
             Vector3 shiftLocal = socket.InverseTransformVector(originToCentreWorld);
             grip.localPosition = baseLocalPos - shiftLocal;
             FlowTrace.Throttle("Equip", "offhand-centre-" + (_currentOffHandMeshKey ?? "?"), 5f,
-                $"sheathed off-hand centred on the hip: '{_currentOffHandMeshKey}' origin->renderedCentre " +
-                $"was {originToCentreWorld} (world), shifted {shiftLocal} in socket '{socket.name}'. " +
-                "A grip-at-origin shield otherwise hangs its whole plate UPWARD from the hip.");
+                $"sheathed off-hand centred on its mount: '{_currentOffHandMeshKey}' origin->renderedCentre " +
+                $"was {originToCentreWorld} (world), shifted {shiftLocal} in socket '{socket.name}' " +
+                $"(arm={_sheatheSocketOffIsArm}). A grip-at-origin shield otherwise hangs its whole " +
+                "plate UPWARD from the anchor. NOTE: this shift is re-derived from a WORLD AABB, so " +
+                "it moves a few mm as the hero turns — that drift is why the seat tripwire is " +
+                "throttled, and it is the seam to fix if the plate ever visibly swims.");
         }
 
         /// <summary>
@@ -2972,6 +3139,79 @@ namespace DeNelle.Village
             }
             return socket.InverseTransformVector(world);
         }
+
+        /// <summary>
+        /// Measure, ONCE per attach, which way THIS mesh has to hang so its tip points at the
+        /// ground. Writes <see cref="_sheatheTipSign"/> (0 = undecidable → the serialized fallback
+        /// stands) and the reason, which <see cref="ComputeSheathRotation"/> prints in its throttled
+        /// pose line so a capture answers "derived or guessed?" without a rebuild.
+        ///
+        /// WHY IT IS CALLED AT ATTACH AND NOT IN THE POSE: ApplyHoldPose re-asserts the sheathe pose
+        /// EVERY FRAME. A bounds walk there is the per-frame allocation this file has already had to
+        /// fix twice (CompensateParentScale's change gate, ApplySheathedOffset's throttle). The
+        /// answer cannot change while the same prop is on the same grip root, so it is resolved with
+        /// the prop and cleared with it.
+        ///
+        /// SLOT SCOPE: main hand only. A SHIELD has no tip and takes no inversion rule (see
+        /// ComputeSheathedOffHandRotation's ⛔ note), and a BOW keeps its own derived carry
+        /// (ComputeBowHeldRotation) in both states by the owner's 2026-08-16 ruling — neither reads
+        /// this sign, so measuring one for them would be a number nothing consumes.
+        /// </summary>
+        private void ResolveSheathedTipSign(GameObject prop, Transform gripRoot,
+                                            string meshKey, WeaponClass kind)
+        {
+            _sheatheTipSign = 0f;
+            _sheatheTipWhy  = null;
+            // Clear the scratch too: Guard.Try swallows a throw and returns the fallback, and a
+            // stale struct from the PREVIOUS prop would then be read as this prop's answer.
+            _sheathedTipScratch = default;
+            if (prop == null || gripRoot == null) return;
+            if (kind == WeaponClass.Shield || kind == WeaponClass.Bow)
+            {
+                _sheatheTipWhy = $"not applicable to {kind} (no tip to invert / own derived carry)";
+                return;
+            }
+
+            bool ok = Guard.Try("Equip", $"TryResolveSheathedTipSign '{meshKey}'",
+                () => WeaponOrientHelper.TryResolveSheathedTipSign(
+                          prop, gripRoot, out _sheathedTipScratch),
+                false);
+            if (!ok || !_sheathedTipScratch.Valid)
+            {
+                _sheatheTipWhy = _sheathedTipScratch.Why;
+                FlowTrace.Warn("Equip",
+                    $"sheathe sign for '{meshKey}' on '{name}': NOT DERIVABLE — " +
+                    $"{(string.IsNullOrEmpty(_sheatheTipWhy) ? "the prop could not be measured" : _sheatheTipWhy)}. " +
+                    $"Falling back to the GLOBAL _sheatheLongAxisSign ({_sheatheLongAxisSign:+0;-0}), " +
+                    "which is a guess shared with every other weapon in the game. If this prop reads " +
+                    "upside down at the hip, the fix is to make it measurable (a renderer with a " +
+                    "non-degenerate long axis, or a grip that is not at the mesh's midpoint) — NOT to " +
+                    "flip the field, which only moves the defect to the other heroes.");
+                return;
+            }
+
+            _sheatheTipSign = _sheathedTipScratch.BodyUpSign;
+            _sheatheTipWhy  = $"{_sheathedTipScratch.Source}/{_sheathedTipScratch.Why}";
+            // The sheathe pose maps GRIP-ROOT-LOCAL +Y onto the vertical. If the measured long axis
+            // is not Y, the pose's premise is broken in a way no SIGN can repair (it would hang the
+            // prop's WIDTH vertically), so say it out loud rather than shipping a confident number
+            // about the wrong direction — the flat-shield failure mode, restated for the main hand.
+            if (_sheathedTipScratch.LongAxis != 1)
+                FlowTrace.Warn("Equip",
+                    $"sheathe sign for '{meshKey}' on '{name}': the measured long axis is " +
+                    $"{(_sheathedTipScratch.LongAxis == 0 ? "X" : "Z")}, NOT Y, in the grip root's frame. " +
+                    "ComputeSheathRotation hangs prop-local +Y on the vertical, so this prop will " +
+                    "sheathe sideways no matter which sign is used. The sign below is correct about " +
+                    "the wrong axis — fix the seat (NormalizeInto / the authored native frame), not " +
+                    "the sign.");
+            FlowTrace.Step("Equip",
+                $"sheathe sign for '{meshKey}' on '{name}': {_sheatheTipSign:+0;-0} " +
+                $"(tip at {(_sheathedTipScratch.TipAtPositiveEnd ? "+" : "-")}long-axis) via {_sheatheTipWhy}.");
+        }
+
+        // Scratch for the out-parameter above: a lambda cannot carry an `out`, and Guard.Try is the
+        // §12-mandated wrapper. One field, written only inside ResolveSheathedTipSign.
+        private WeaponOrientHelper.SheathedTipResolution _sheathedTipScratch;
 
         // ── DERIVED SHEATHE ROTATION (owner F8 fix 2026-07-04 — "the secret is on battle") ──────────
         // The DRAWN (battle) seat is correct because it is DERIVED from the rig, never guessed:
@@ -3006,11 +3246,22 @@ namespace DeNelle.Village
         private Quaternion ComputeSheathRotation(Transform socket, float sideSign)
         {
             Transform body = _animator != null ? _animator.transform : transform;
-            // ── Long axis: VERTICAL, sign-flippable. _sheatheLongAxisSign is the single number the
-            // owner flips if a particular asset's authored tip axis reads the other way.
+            // ── Long axis: VERTICAL, and the sign comes from THE MESH, not from a global field.
+            //
+            // ⛔ THE RETIRED LINE READ: `float sign = _sheatheLongAxisSign >= 0f ? 1f : -1f;` with
+            // the comment "_sheatheLongAxisSign is the single number the owner flips if a particular
+            // asset's authored tip axis reads the other way". The sentence names the defect while
+            // prescribing the wrong cure: if the tip axis is a property of the ASSET, then ONE
+            // number shared by every asset is wrong for some of them no matter what it is set to,
+            // and flipping it just trades which hero reports the bug. That is precisely what the two
+            // F8s recorded — Blaise at -1 on 08-20, the Flameblade at +1 on 08-21.
+            // _sheatheTipSign is measured per mesh at attach (ResolveSheathedTipSign); the field is
+            // the documented fallback for a prop that cannot answer, and is NOT deleted (§12).
+            float sign = _sheatheTipSign != 0f
+                ? (_sheatheTipSign >= 0f ? 1f : -1f)
+                : (_sheatheLongAxisSign >= 0f ? 1f : -1f);
             // _sheatheBladeDiagonalDeg survives as an optional lean off vertical (default 0), and it
             // leans across the body toward the OTHER hip, so a leaning sword still hangs off its own.
-            float sign = _sheatheLongAxisSign >= 0f ? 1f : -1f;
             Vector3 vertical = body.up * sign;
             float rad = _sheatheBladeDiagonalDeg * Mathf.Deg2Rad;
             Vector3 worldBlade = (vertical * Mathf.Cos(rad) + body.right * (-sideSign) * Mathf.Sin(rad)).normalized;
@@ -3041,8 +3292,13 @@ namespace DeNelle.Village
                 $"sheathed long axis on '{name}': tiltFromVertical={tiltFromVertical:0.#}deg " +
                 $"(must read ~{_sheatheBladeDiagonalDeg:0.#}; ~90 means it is lying across the body) " +
                 $"longAxisDotUp={Vector3.Dot(bladeWorld, body.up):0.##} " +
-                $"(sign={sign:+0;-0}: +1 = shipped tip UP, -1 = tip DOWN) " +
-                $"socket='{socket.name}'.");
+                $"(sign={sign:+0;-0} maps prop+Y onto body.up*sign) " +
+                $"src={(_sheatheTipSign != 0f ? "PER-MESH derived" : "GLOBAL fallback field")} " +
+                $"why={(string.IsNullOrEmpty(_sheatheTipWhy) ? "<none measured>" : _sheatheTipWhy)} " +
+                $"socket='{socket.name}'. " +
+                "⚠ 'GLOBAL fallback field' here means this mesh could not be measured and is hanging " +
+                "on a guess shared with every other prop — that is the 08-20/08-21 upside-down defect, " +
+                "and the fix is to make the mesh measurable, NEVER to flip the field.");
             return result;
         }
 
@@ -3096,7 +3352,8 @@ namespace DeNelle.Village
                     FlowTrace.Throttle("Equip", $"sheath-shield-fallback-{_currentOffHandMeshKey}", 5f,
                         $"sheathed shield '{_currentOffHandMeshKey}': NOT derived (sheathDerivable=" +
                         $"{_currentOffHandSheathDerivable} frameValid={_currentOffHandShieldFrame.Valid}) — " +
-                        "falling back to the retired BACK-carry constant on a HIP socket. Expect the " +
+                        $"falling back to the retired BACK-carry constant on a {(_sheatheSocketOffIsArm ? "FOREARM" : "HIP")} " +
+                        "socket, a mount it was never dialled against. Expect the " +
                         "face to read wrong; the cause is upstream (no measurable bounds, or an " +
                         "authored '@sheathed' row).");
                 return shipped;
@@ -3133,7 +3390,17 @@ namespace DeNelle.Village
             // `up` is still passed, because LookRotation needs a second axis to resolve the roll;
             // it is plain body.up, so the shield stands the way a shield stands.
             // _sheatheLongAxisSign is SWORD-ONLY and is not read here.
-            Vector3 outward = body.right * SheatheSideOff;
+            // OUTWARD FOLLOWS THE ANCHOR, NOT A CONSTANT (owner F8 2026-08-21). On the ARM mount the
+            // prop is on the hero's LEFT, so "away from the player" is -body.right; on the hip
+            // fallback it is the right hip and +body.right. OffHandSheatheSide() is the same call the
+            // POSITION above uses, so the plate cannot be pushed out one side while facing the other.
+            Vector3 outward = body.right * OffHandSheatheSide();
+            // longUp stays plain body.up even on the forearm. A standing hero's forearm hangs
+            // roughly vertical, so this reads as a shield standing the way a shield stands, and it
+            // keeps the felt-approved WO-1123 rule intact rather than opening a second creative
+            // question in a defect fix. If the owner later wants the plate to track the forearm
+            // through animation, THIS is the seam — swap in the arm bone's own long axis here, and
+            // nowhere else.
             Vector3 longUp  = body.up;
             Quaternion derived = WeaponOrientHelper.ComputeShieldMountRotation(
                 _currentOffHandShieldFrame, socket, outward, longUp);
@@ -3615,7 +3882,12 @@ namespace DeNelle.Village
             // THIS SLOT's socket (2026-08-20). Previewing the shield in the WEAPON's socket would
             // dial a nudge against a pose on the other hip — the WO-994 lesson, one hip over.
             Transform socket = ResolveSheatheSocket(offHand);
-            float sideSign = offHand ? SheatheSideOff : SheatheSideMain;
+            // ⚠ RESOLVE THE SIDE **AFTER** THE SOCKET, NEVER BEFORE. ResolveSheatheSocket is what
+            // decides (and records) whether the off-hand landed on the ARM or fell back to the HIP,
+            // and the side + offset pair must follow the anchor that was really resolved. Reading
+            // OffHandSheatheSide() first would sample a stale flag on the very first preview of a
+            // session — a preview dialled in the wrong frame is the WO-994 lesson restated.
+            float sideSign = offHand ? OffHandSheatheSide() : SheatheSideMain;
             if (socket == null)
             {
                 FlowTrace.Warn("Offset", $"ApplySheathedSeatingPreview: no sheathe socket on '{name}' for the " +
@@ -3640,7 +3912,12 @@ namespace DeNelle.Village
             {
                 // The SAME body-space → socket-local conversion the runtime uses, or the preview
                 // sits somewhere the game never puts it.
-                basePos = ComputeSheathLocalPosition(socket, _sheatheOffHandLocalPos, sideSign);
+                // The SAME anchor-dependent offset the runtime picks (arm vs hip fallback) — a
+                // preview using the hip's 0.26 m against an ARM anchor would render a quarter-metre
+                // from where the game seats it, which is exactly the WYSIWYG break this method exists
+                // to prevent.
+                basePos = ComputeSheathLocalPosition(socket,
+                    _sheatheSocketOffIsArm ? _armOffHandLocalPos : _sheatheOffHandLocalPos, sideSign);
                 // WO-1123: the SAME base the runtime sheathe uses (derived when the geometry answers,
                 // the shipped constant otherwise). If these two ever diverge again the owner dials a
                 // nudge against a sheathed pose the game never renders — the WO-994 lesson.

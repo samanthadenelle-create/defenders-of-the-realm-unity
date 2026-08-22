@@ -1,6 +1,8 @@
 // =============================================================================
-// SheathePoseRegression — the SHEATHED carry hangs from the HIPS, one socket per
-// slot, long axis vertical and inverted.  Marker: SHEATHE_POSE_OK / SHEATHE_POSE_FAIL
+// SheathePoseRegression — the SHEATHED carry: the SWORD hangs from the HIP, the
+// SHIELD rides the off-hand FOREARM, one socket per slot, long axis vertical, and the
+// "which end is down" sign is measured PER MESH — never a global constant.
+// Marker: SHEATHE_POSE_OK / SHEATHE_POSE_FAIL
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.EditorRegression (references DeNelle.Core + DeNelle.Village).
 // Standalone entry: DeNelle.Editor.SheathePoseRegression.RunAll (Exits 1 on failure).
@@ -60,6 +62,34 @@
 //       a hostile attach rotation, apply the shipped pose and assert the RENDERED WORLD
 //       VOLUME. Added 2026-08-20 second pass, after every angle in this suite read
 //       perfect while the shield rendered flat on the owner's device.
+//
+// ─────────────────────────────────────────────────────────────────────────────
+//  THE 2026-08-21 F8 — TWO MORE DEFECTS, AND ONE OF THEM WAS IN THIS SUITE
+// ─────────────────────────────────────────────────────────────────────────────
+//   4. THE SWORD HANGS UPSIDE DOWN. Owner: "sword upside down (sheathed)".
+//      ⛔ AND THE OLD CASE G2 HAD PINNED IT THERE. G2 asserted a GLOBAL DEFAULT for
+//      _sheatheLongAxisSign — "ship +1 tip UP" — written on 08-20 after an F8 on
+//      Blaise read -1 as upside down. On 08-21 an F8 on the Flameblade read +1 as
+//      upside down. Both captures are correct: which end is the tip is a property of
+//      the MESH (NormalizeInto puts it at prop +Y; a NATIVE prop keeps the artist's
+//      axes), so ANY single global value is wrong for part of the catalogue and
+//      flipping it only chooses which hero ships broken. An oracle that pins a global
+//      constant here does not guard the pose — it ratifies whichever hero was
+//      photographed last. G2/G3 are rebuilt around the PER-MESH derivation
+//      (WeaponOrientHelper.TryResolveSheathedTipSign), M1 proves two mirror-image
+//      meshes get OPPOSITE signs, M2 lints that the pose actually reads the
+//      measurement, and M3 requires every SHIPPED weapon mesh to be able to answer —
+//      because a mesh that declines falls back to exactly the global guess that
+//      caused this.
+//   5. THE SHIELD IS ON THE HIP, NOT THE ARM. Owner: "shield is attaching to hip not
+//      wrist or arm" / "the shield on arm or arm bone". Proving line, every frame of
+//      the capture:
+//        key='ShieldWithItemLogic' ... parent='SheatheSocket_HipOff' parentLossy=(1.67,1.67,1.67)
+//      The STOWED pose was the wrong one — the drawn pose was already on the LeftHand
+//      bone. A1 pins the off-hand anchor to a LEFT ARM bone (asked for BEFORE any hip,
+//      and gated on the slot so the SWORD keeps its 08-20 hip ruling); A2 pins that a
+//      DRAWN prop still cannot reach any stow anchor, so a fix to one pose can never
+//      quietly move the other.
 //
 // ⚠ THE SHIELD DOES NOT TAKE THE SWORD'S "INVERTED" RULE (owner ruling scope, 2026-08-20).
 // The instruction "sheathed should sit inverted with the longest mesh (y) up and down" is
@@ -145,6 +175,46 @@ namespace DeNelle.Editor
         }
 ";
 
+        // The off-hand resolver as it stood BEFORE the 2026-08-21 F8: hips-first for BOTH slots, so
+        // the shield hung on 'SheatheSocket_HipOff' — the parent the owner's capture printed on
+        // every frame while she wrote "shield is attaching to hip not wrist or arm".
+        private const string TombstoneHipOnlyOffHand = @"
+        private Transform ResolveSheatheSocket(bool offHand)
+        {
+            Transform cached = offHand ? _sheatheSocketOff : _sheatheSocketMain;
+            if (cached != null) return cached;
+            if (_animator == null || !_animator.isHuman) return null;
+            Transform anchor = _animator.GetBoneTransform(HumanBodyBones.Hips);
+            bool onHips = anchor != null;
+            if (anchor == null) anchor = _animator.GetBoneTransform(HumanBodyBones.Spine);
+            if (anchor == null) anchor = _animator.GetBoneTransform(HumanBodyBones.Chest);
+            if (anchor == null) anchor = _animator.GetBoneTransform(HumanBodyBones.UpperChest);
+            if (anchor == null) return null;
+            var go = new GameObject(NAME);
+            go.transform.SetParent(anchor, false);
+            if (offHand) _sheatheSocketOff = go.transform; else _sheatheSocketMain = go.transform;
+            return go.transform;
+        }
+";
+
+        // The sheathe sign as it stood on the morning of 2026-08-21: ONE serialized number for every
+        // weapon in the game. Not a typo and not carelessness — it was deliberate, documented, and
+        // wrong, and it was FLIPPED twice in two days chasing two heroes carrying two differently
+        // authored meshes. Any future body of ComputeSheathRotation that looks like this must fail.
+        private const string TombstoneGlobalSignOnly = @"
+        private Quaternion ComputeSheathRotation(Transform socket, float sideSign)
+        {
+            Transform body = _animator != null ? _animator.transform : transform;
+            float sign = _sheatheLongAxisSign >= 0f ? 1f : -1f;
+            Vector3 vertical = body.up * sign;
+            float rad = _sheatheBladeDiagonalDeg * Mathf.Deg2Rad;
+            Vector3 worldBlade = (vertical * Mathf.Cos(rad) + body.right * (-sideSign) * Mathf.Sin(rad)).normalized;
+            Vector3 worldFlat = body.right * sideSign;
+            Quaternion worldTarget = Quaternion.LookRotation(worldFlat, worldBlade);
+            return Quaternion.Inverse(socket.rotation) * worldTarget;
+        }
+";
+
         public static bool Run(out string reason)
         {
             var failures = new List<string>();
@@ -185,8 +255,14 @@ namespace DeNelle.Editor
             // Checked against comment-blanked source (string literals KEPT) so it reads the
             // real GameObject names, and so the retired name surviving only in a tombstone
             // comment cannot trip it.
+            // ⚠ THE OFF-HAND NAME CHANGED ON 2026-08-21: HipOff -> ArmOff. The owner's F8 —
+            // "shield is attaching to hip not wrist or arm" — moved the shield's mount to the
+            // off-hand FOREARM, and the anchor's NAME has to move with it. A socket called
+            // 'SheatheSocket_HipOff' sitting on an arm bone is the same class of lie as the old
+            // 'SheatheSocket_Back' sitting on CC_Base_Spine01: it is how a reader concludes the
+            // mount is right when the transform says otherwise.
             int beforeL2b = failures.Count;
-            foreach (var socketName in new[] { "SheatheSocket_HipMain", "SheatheSocket_HipOff" })
+            foreach (var socketName in new[] { "SheatheSocket_HipMain", "SheatheSocket_ArmOff" })
                 if (codeOnly.IndexOf(socketName, StringComparison.Ordinal) < 0)
                     failures.Add("L2b: no sheathe socket named " + socketName + " is created. Two slots need " +
                                  "two named anchors; one shared anchor is what buried the shield in the body.");
@@ -208,8 +284,31 @@ namespace DeNelle.Editor
             else
                 log.AppendLine("  L3 sheathed derivability is its own flag ................ ok");
 
+            // ── CASE A1: the OFF-HAND sheathe anchor is an ARM bone, first ────────────
+            // (Owner F8 2026-08-21, verbatim: "shield is attaching to hip not wrist or arm".
+            //  The proving line was in every frame of the capture:
+            //    key='ShieldWithItemLogic' ... parent='SheatheSocket_HipOff')
+            RunPredicate(failures, log, "A1 off-hand=arm",
+                OffHandAnchorIsArm, codeNoStrings, TombstoneHipOnlyOffHand,
+                "the off-hand sheathe socket resolves to a LEFT ARM bone before any hip fallback");
+
+            // ── CASE A2: and the DRAWN shield never reaches a sheathe socket at all ───
+            CheckDrawnOffHandGoesToTheHand(failures, log, codeNoStrings);
+
             // ── CASE S1: the two hip sides are opposite, by construction ──────────────
             CheckSidesAreOpposite(failures, log);
+
+            // ── CASE M1: the sheathed sign is MEASURED off the mesh, both ways ────────
+            CheckPerMeshTipSignIsDerived(failures, log);
+
+            // ── CASE M2: and the shipped pose actually consults that measurement ──────
+            RunPredicate(failures, log, "M2 pose reads the mesh",
+                SheathRotationConsultsPerMeshSign, codeNoStrings, TombstoneGlobalSignOnly,
+                "ComputeSheathRotation takes its sign from the per-mesh measurement, with the " +
+                "serialized field as the fallback — not from the field alone");
+
+            // ── CASE M3: every SHIPPED weapon mesh can actually answer ────────────────
+            CheckShippedWeaponMeshesResolveASign(failures, log);
 
             // ── CASES G1-G4: the SHIPPED ComputeSheathRotation, driven for real ───────
             CheckShippedRotation(failures, log);
@@ -232,9 +331,12 @@ namespace DeNelle.Editor
 
             if (failures.Count == 0)
             {
-                reason = "sheathe pose: hip anchor, one socket per slot, SWORD vertical + inverted (tip down), " +
-                         "SHIELD face-outward and still rendering as a plate — every rule proven to REJECT " +
-                         "the pre-2026-08-20 state and the flat-shield state.";
+                reason = "sheathe pose: SWORD on the hip anchor, vertical, and hung tip-down by a sign " +
+                         "MEASURED off each mesh (never one global constant); SHIELD on the off-hand " +
+                         "FOREARM, face-outward, still rendering as a plate, and still seating in the HAND " +
+                         "when drawn — every rule proven to REJECT the pre-2026-08-20 back carry, the " +
+                         "flat-shield state, the 2026-08-21 hip-mounted shield, and the global-sign state " +
+                         "that made 'upside down' true for one hero and false for the other.";
                 Debug.Log(log + "SHEATHE_POSE_OK - " + reason);
                 return true;
             }
@@ -378,9 +480,318 @@ namespace DeNelle.Editor
             return true;
         }
 
+        /// <summary>
+        /// A1 — the off-hand slot's sheathe anchor must be an ARM bone, asked for BEFORE any hip.
+        /// The bone ENUM is the only structural fact available to a lint here; the bone that is
+        /// actually RESOLVED is printed by the runtime trace, because on this CC rig asking for
+        /// Chest famously returned CC_Base_Spine01. Both halves are needed and neither substitutes
+        /// for the other.
+        /// </summary>
+        private static bool OffHandAnchorIsArm(string source, out string why)
+        {
+            string body = ExtractMethodBody(source, "Transform ResolveSheatheSocket")
+                       ?? ExtractMethodBody(source, "Transform ResolveBackSocket");
+            if (body == null)
+            {
+                why = "no sheathe-socket resolver found (looked for ResolveSheatheSocket / ResolveBackSocket).";
+                return false;
+            }
+
+            int arm = body.IndexOf("HumanBodyBones.LeftLowerArm", StringComparison.Ordinal);
+            if (arm < 0)
+            {
+                why = "the resolver never asks for HumanBodyBones.LeftLowerArm. The owner's 2026-08-21 " +
+                      "F8 names the ARM — 'the shield on arm or arm bone' — and the capture proves the " +
+                      "shield was parented to 'SheatheSocket_HipOff' on every frame.";
+                return false;
+            }
+
+            int hips = body.IndexOf("HumanBodyBones.Hips", StringComparison.Ordinal);
+            if (hips >= 0 && hips < arm)
+            {
+                why = "the resolver asks for HumanBodyBones.Hips BEFORE the arm, so on any rig that " +
+                      "maps both — i.e. every rig in this game — the arm branch is unreachable and the " +
+                      "shield goes back on the hip.";
+                return false;
+            }
+
+            // The arm branch must be GATED on the slot. An ungated arm lookup would move the SWORD
+            // off the hip too, silently un-doing the owner's separate 2026-08-20 ruling. Two props,
+            // two rulings: this file has already been burned twice by generalising one to the other.
+            int gate = body.IndexOf("offHand", StringComparison.Ordinal);
+            if (gate < 0 || gate > arm)
+            {
+                why = "the arm lookup is not gated on the offHand slot, so the MAIN-hand weapon would " +
+                      "take it too — silently retiring the owner's 2026-08-20 hip ruling for the sword.";
+                return false;
+            }
+
+            why = null;
+            return true;
+        }
+
+        /// <summary>
+        /// M2 — the sheathe rotation must consult the PER-MESH measurement. A body that reads only
+        /// <c>_sheatheLongAxisSign</c> is the state that shipped two contradictory F8s in two days.
+        /// </summary>
+        private static bool SheathRotationConsultsPerMeshSign(string source, out string why)
+        {
+            string body = ExtractMethodBody(source, "Quaternion ComputeSheathRotation");
+            if (body == null)
+            {
+                why = "ComputeSheathRotation not found — cannot verify where its sign comes from.";
+                return false;
+            }
+            if (body.IndexOf("_sheatheTipSign", StringComparison.Ordinal) < 0)
+            {
+                why = "the sheathe rotation never reads _sheatheTipSign, so its sign is ONE global " +
+                      "number shared by every weapon. That number was flipped on 2026-08-20 (Blaise " +
+                      "read -1 as upside down) and flipped back on 2026-08-21 (the Flameblade read +1 " +
+                      "as upside down). Both reports were true; a global sign cannot satisfy both.";
+                return false;
+            }
+            if (body.IndexOf("_sheatheLongAxisSign", StringComparison.Ordinal) < 0)
+            {
+                why = "the serialized _sheatheLongAxisSign fallback is gone from the rotation. §12: a " +
+                      "tuning seam is never stripped — an unmeasurable prop would then have no " +
+                      "correction available at all.";
+                return false;
+            }
+            why = null;
+            return true;
+        }
+
         // =====================================================================
         //  BEHAVIOURAL CASES
         // =====================================================================
+
+        /// <summary>
+        /// A2 — while DRAWN, the off-hand must land on the HAND, never on a sheathe socket. The
+        /// owner's report distinguishes the two poses ("not wrist or arm"), so an oracle that only
+        /// checked the stowed anchor could pass while the in-combat shield sat on a hip.
+        /// </summary>
+        private static void CheckDrawnOffHandGoesToTheHand(List<string> failures, StringBuilder log,
+                                                           string codeNoStrings)
+        {
+            string body = ExtractMethodBody(codeNoStrings, "void ApplyHoldPose");
+            if (body == null)
+            {
+                failures.Add("A2: ApplyHoldPose not found — cannot verify where the DRAWN shield seats.");
+                return;
+            }
+            int before = failures.Count;
+
+            // Both sheathe sockets must be null while drawn. This is the single line that keeps the
+            // in-combat prop off every stow anchor, hip or arm, without enumerating them.
+            foreach (var slot in new[] { "false", "true" })
+                if (body.IndexOf("drawn ? null : ResolveSheatheSocket(offHand: " + slot + ")",
+                                 StringComparison.Ordinal) < 0)
+                    failures.Add("A2: the " + (slot == "true" ? "off-hand" : "main-hand") + " sheathe " +
+                                 "socket is no longer resolved as `drawn ? null : ResolveSheatheSocket(...)`. " +
+                                 "That expression is what guarantees a DRAWN prop cannot reach a stow " +
+                                 "anchor; without it the in-combat shield can sit on the hip while the " +
+                                 "stowed one looks correct in a screenshot.");
+
+            if (body.IndexOf("offT.SetParent(_offHandHand", StringComparison.Ordinal) < 0)
+                failures.Add("A2: the drawn off-hand branch no longer parents to _offHandHand (the " +
+                             "LeftHand bone AttachOffHandProp resolved). The drawn shield belongs in the " +
+                             "hand — the owner's 'not wrist or arm' is about the STOWED pose.");
+
+            if (failures.Count == before)
+                log.AppendLine("  A2 drawn off-hand seats on the HAND, not a stow anchor . ok");
+        }
+
+        // =====================================================================
+        //  M1 — WHICH END IS THE TIP IS A PROPERTY OF THE MESH
+        // =====================================================================
+        //
+        // The two captures this case exists for, in one place:
+        //   2026-08-20  F8 on Blaise            -> _sheatheLongAxisSign = -1 reads UPSIDE DOWN
+        //   2026-08-21  F8 on the Flameblade    -> _sheatheLongAxisSign = +1 reads UPSIDE DOWN
+        // Both are true. So the case is not "which sign is correct" — that question has no answer —
+        // it is "does the shipped derivation give the two meshes OPPOSITE answers, and does it
+        // DECLINE rather than guess when a mesh genuinely cannot say".
+        //
+        // The fixtures are cubes on purpose: a cube has no taper, so the taper branch cannot decide
+        // and the case exercises the GRIP-AT-ORIGIN branch — which is the one that carries the
+        // device, because the live props ship with Read/Write OFF and every vertex-reading
+        // derivation in this codebase is inert there.
+        private static void CheckPerMeshTipSignIsDerived(List<string> failures, StringBuilder log)
+        {
+            GameObject probe = null;
+            try
+            {
+                probe = new GameObject("SheatheTipSignProbe");
+                Transform gripRoot = probe.transform;
+
+                // Tip at +Y: a 1 m bar whose grip origin sits 0.1 m from its LOW end.
+                float tipUpSign = 0f, tipDownSign = 0f;
+                if (!TryProbeTipSign(gripRoot, 0.4f, out tipUpSign, out string whyUp))
+                    failures.Add("M1a: a bar with its grip 0.1 m from the low end could not resolve a " +
+                                 "sheathed sign (" + whyUp + "). If the shipped derivation declines on " +
+                                 "geometry this unambiguous, every real prop falls back to the ONE " +
+                                 "global number and the 08-20/08-21 ping-pong resumes.");
+                else if (tipUpSign > 0f)
+                    failures.Add("M1a: a bar whose TIP is at +Y resolved bodyUpSign=" + tipUpSign +
+                                 ". Mapping prop +Y onto +body.up points the tip at the SKY — that is " +
+                                 "the literal 'sword upside down (sheathed)' the owner reported.");
+                else
+                    log.AppendLine("  M1a tip-at-+Y mesh hangs tip DOWN (sign=-1) ............. ok");
+
+                if (!TryProbeTipSign(gripRoot, -0.4f, out tipDownSign, out string whyDown))
+                    failures.Add("M1b: the MIRRORED bar (grip 0.1 m from the high end — a native prop " +
+                                 "authored the other way up) could not resolve a sheathed sign (" +
+                                 whyDown + ").");
+                else if (tipDownSign < 0f)
+                    failures.Add("M1b: the mirrored bar resolved bodyUpSign=" + tipDownSign + ", the " +
+                                 "same direction as its mirror image. The derivation is not reading the " +
+                                 "mesh at all.");
+                else
+                    log.AppendLine("  M1b mirrored mesh hangs tip DOWN too (sign=+1) .......... ok");
+
+                // TEETH. This is the whole argument in one assertion: the two meshes need OPPOSITE
+                // signs, therefore no single global value can serve both, therefore flipping the
+                // field can never be the fix — it can only choose which hero ships broken.
+                if (tipUpSign != 0f && tipDownSign != 0f && tipUpSign * tipDownSign > 0f)
+                    failures.Add("M1c: two mirror-image meshes resolved the SAME sign (" + tipUpSign +
+                                 " and " + tipDownSign + "). A derivation that cannot distinguish a " +
+                                 "prop from its mirror is a global constant wearing a measurement's " +
+                                 "clothes, and the reported defect survives it.");
+                else if (tipUpSign != 0f && tipDownSign != 0f)
+                    log.AppendLine("  M1c mirror-image meshes get OPPOSITE signs .............. ok");
+
+                // And it must DECLINE on a prop that genuinely cannot answer, rather than guessing —
+                // a guess here would be indistinguishable from the global constant while looking
+                // like a measurement in the trace, which is strictly worse than the bug.
+                if (TryProbeTipSign(gripRoot, 0f, out float centred, out _))
+                    failures.Add("M1d: a bar whose grip sits at its MIDPOINT still returned a sign (" +
+                                 centred + "). Neither end is nearer the grip and a cube has no taper, " +
+                                 "so there is nothing to measure — returning a number here launders a " +
+                                 "guess as a derivation and hides it from the fallback Warn.");
+                else
+                    log.AppendLine("  M1d an undecidable mesh DECLINES (fallback stands) ...... ok");
+            }
+            catch (Exception e)
+            {
+                failures.Add("M1: the per-mesh tip-sign probe threw — " + e.GetType().Name + ": " + e.Message);
+            }
+            finally
+            {
+                if (probe != null) UnityEngine.Object.DestroyImmediate(probe);
+            }
+        }
+
+        /// <summary>Builds a 1 m bar offset along Y under <paramref name="gripRoot"/> and asks the
+        /// SHIPPED derivation which way it hangs. The bar is destroyed before returning so the next
+        /// probe measures only its own geometry.</summary>
+        private static bool TryProbeTipSign(Transform gripRoot, float localY, out float sign, out string why)
+        {
+            sign = 0f;
+            var bar = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            try
+            {
+                bar.name = "TipSignBar";
+                bar.transform.SetParent(gripRoot, false);
+                bar.transform.localPosition = new Vector3(0f, localY, 0f);
+                bar.transform.localScale = new Vector3(0.05f, 1f, 0.05f);
+                bool ok = WeaponOrientHelper.TryResolveSheathedTipSign(bar, gripRoot, out var r);
+                why = r.Why;
+                if (!ok || !r.Valid) return false;
+                sign = r.BodyUpSign;
+                return true;
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(bar);
+            }
+        }
+
+        // =====================================================================
+        //  M3 — EVERY SHIPPED WEAPON MESH MUST BE ABLE TO ANSWER
+        // =====================================================================
+        //
+        // M1 proves the derivation works on geometry we built. M3 asks the question that actually
+        // matters: do the meshes THIS GAME SHIPS answer it? A prop that declines falls back to the
+        // one global number, and the owner's report is what that looks like on a phone. So this case
+        // walks the shipped weapon props, runs the SHIPPED resolver on each, and FAILS by name on
+        // any that cannot decide — turning "some weapon somewhere hangs upside down" into a list.
+        private const string ShippedWeaponDir = "Assets/Resources/Heroes/Props/Weapons";
+
+        private static void CheckShippedWeaponMeshesResolveASign(List<string> failures, StringBuilder log)
+        {
+            GameObject probe = null;
+            try
+            {
+                if (!Directory.Exists(ShippedWeaponDir))
+                {
+                    // NOT a hollow pass — say the coverage is absent rather than implying it passed.
+                    log.AppendLine("  M3 shipped weapon meshes .............. SKIPPED (" +
+                                   ShippedWeaponDir + " not present in this checkout)");
+                    return;
+                }
+
+                probe = new GameObject("ShippedWeaponSignProbe");
+                var undecided = new List<string>();
+                int checked_ = 0;
+
+                foreach (var path in Directory.GetFiles(ShippedWeaponDir))
+                {
+                    string ext = Path.GetExtension(path).ToLowerInvariant();
+                    if (ext != ".fbx" && ext != ".prefab") continue;
+                    string file = Path.GetFileNameWithoutExtension(path);
+                    // Backups (_tripobak_*) are not shipped, and a BOW/SHIELD reads no sheathe sign
+                    // at all (the bow keeps its own derived carry, a shield has no tip to invert).
+                    if (file.StartsWith("_", StringComparison.Ordinal)) continue;
+                    string lower = file.ToLowerInvariant();
+                    if (lower.StartsWith("bow") || lower.StartsWith("shield")) continue;
+
+                    var asset = AssetDatabase.LoadAssetAtPath<GameObject>(path.Replace('\\', '/'));
+                    if (asset == null) continue;
+
+                    GameObject inst = null;
+                    try
+                    {
+                        inst = UnityEngine.Object.Instantiate(asset, probe.transform);
+                        inst.transform.localPosition = Vector3.zero;
+                        inst.transform.localRotation = Quaternion.identity;
+                        checked_++;
+                        if (!WeaponOrientHelper.TryResolveSheathedTipSign(inst, probe.transform, out var r)
+                            || !r.Valid)
+                            undecided.Add(file + " (" + (string.IsNullOrEmpty(r.Why) ? "no reason given" : r.Why) + ")");
+                        else
+                            log.AppendLine("    M3 " + file.PadRight(20) + " sign=" +
+                                           r.BodyUpSign.ToString("+0;-0") + " via " + r.Source);
+                    }
+                    finally
+                    {
+                        if (inst != null) UnityEngine.Object.DestroyImmediate(inst);
+                    }
+                }
+
+                if (checked_ == 0)
+                    failures.Add("M3: no shipped melee weapon meshes were found under " + ShippedWeaponDir +
+                                 " to test. This case is the one that asks whether the REAL props can " +
+                                 "answer; measuring none of them is not a pass.");
+                else if (undecided.Count > 0)
+                    failures.Add("M3: " + undecided.Count + " of " + checked_ + " shipped weapon meshes " +
+                                 "cannot resolve a sheathed orientation — " + string.Join("; ", undecided.ToArray()) +
+                                 ". Each of these hangs on the ONE global _sheatheLongAxisSign, which is " +
+                                 "correct for at most half the catalogue by construction. That is the " +
+                                 "owner's 'sword upside down (sheathed)', and flipping the field only " +
+                                 "moves it to the other half.");
+                else
+                    log.AppendLine("  M3 all " + checked_ + " shipped weapon meshes resolve a sign ... ok");
+            }
+            catch (Exception e)
+            {
+                failures.Add("M3: walking the shipped weapon meshes threw — " + e.GetType().Name +
+                             ": " + e.Message);
+            }
+            finally
+            {
+                if (probe != null) UnityEngine.Object.DestroyImmediate(probe);
+            }
+        }
 
         private static void CheckSidesAreOpposite(List<string> failures, StringBuilder log)
         {
@@ -466,28 +877,76 @@ namespace DeNelle.Editor
                 else
                     log.AppendLine("  G1 long axis vertical (" + tilt.ToString("0.#") + " deg off) ......... ok");
 
-                // ── G2: shipped default is INVERTED (tip down) ───────────────────────
-                float dotUp = Vector3.Dot(longMain.normalized, body.up);
-                if (shippedSign <= 0f)
-                    failures.Add("G2: _sheatheLongAxisSign ships at " + shippedSign + " (tip DOWN), but the " +
-                                 "owner's 2026-08-21 F8 identified that pose as upside down. Ship +1 tip UP.");
-                else if (dotUp < 0.99f)
-                    failures.Add("G2: the long axis does not point UP (dot(bodyUp) = " + dotUp.ToString("0.###") +
-                                 ", expected ~+1). The sign field and rendered pose disagree.");
+                // ── G2: THE PER-MESH SIGN OUTRANKS THE GLOBAL FIELD ──────────────────
+                //
+                // ⛔ THIS CASE USED TO ASSERT A GLOBAL DEFAULT, AND THAT ASSERTION WAS THE BUG,
+                // RESTATED AS AN ORACLE. It read: "_sheatheLongAxisSign ships at -1 (tip DOWN), but
+                // the owner's 2026-08-21 F8 identified that pose as upside down. Ship +1 tip UP." —
+                // written the same day an F8 on Blaise had said the OPPOSITE about the OTHER sign.
+                // Both captures were true, because which end is the tip is a property of the MESH:
+                // NormalizeInto + SeatHiltLowerHalf put the tip at prop +Y, a NATIVE prop keeps
+                // whatever the artist authored. A suite that pins ANY single global value therefore
+                // ratifies whichever hero was photographed last and guarantees the other one ships
+                // broken. The rule that can actually hold is: the measured, per-mesh sign WINS, and
+                // the field survives only as the fallback for a prop that cannot answer.
+                var tipSignField = t.GetField("_sheatheTipSign", BindingFlags.NonPublic | BindingFlags.Instance);
+                if (tipSignField == null)
+                {
+                    failures.Add("G2: EquipmentController has no _sheatheTipSign — the per-mesh sheathe " +
+                                 "sign is gone and the pose is back on ONE global number for every weapon " +
+                                 "in the game. That number cannot be right for both a normalized prop and " +
+                                 "a native one; shipping it is the 08-20/08-21 upside-down ping-pong.");
+                }
                 else
-                    log.AppendLine("  G2 owner-approved tip-up (dot=" + dotUp.ToString("0.##") + ") ........... ok");
+                {
+                    // Derived says DOWN while the field says UP: the mesh must win.
+                    signField.SetValue(ec, 1f);
+                    tipSignField.SetValue(ec, -1f);
+                    float downDot = Vector3.Dot(LongAxisWorld(method, ec, socket, mainSide).normalized, body.up);
+                    // Derived says UP while the field says DOWN: the mesh must win again — asserted
+                    // in BOTH directions so a one-way short-circuit (e.g. `sign = min(field, tip)`)
+                    // cannot pass by accident.
+                    signField.SetValue(ec, -1f);
+                    tipSignField.SetValue(ec, 1f);
+                    float upDot = Vector3.Dot(LongAxisWorld(method, ec, socket, mainSide).normalized, body.up);
+                    signField.SetValue(ec, shippedSign);
+                    tipSignField.SetValue(ec, 0f);
 
-                // ── G3: the sign is the ONE number that flips it ─────────────────────
+                    if (downDot > -0.99f)
+                        failures.Add("G2: a MEASURED sign of -1 did not hang the prop tip-down " +
+                                     "(dot(bodyUp) = " + downDot.ToString("0.###") + ", expected ~-1) while " +
+                                     "the global field said +1. The per-mesh answer is being ignored, so " +
+                                     "every prop still hangs by one shared guess.");
+                    else if (upDot < 0.99f)
+                        failures.Add("G2: a MEASURED sign of +1 did not hang the prop tip-up " +
+                                     "(dot(bodyUp) = " + upDot.ToString("0.###") + ", expected ~+1) while " +
+                                     "the global field said -1. The per-mesh answer only wins in one " +
+                                     "direction, which is not winning.");
+                    else
+                        log.AppendLine("  G2 the MEASURED per-mesh sign outranks the field ........ ok");
+                }
+
+                // ── G3: the global field is still the FALLBACK, and still flips ──────
+                // §12: the tuning seam is not deleted just because it stopped being the authority.
+                // With NO measurement available (_sheatheTipSign = 0) the field must still decide,
+                // and must still flip the carry end-for-end — otherwise an unmeasurable prop has no
+                // way to be corrected at all.
+                if (tipSignField != null) tipSignField.SetValue(ec, 0f);
                 signField.SetValue(ec, -1f);
                 Vector3 flipped = LongAxisWorld(method, ec, socket, mainSide);
+                signField.SetValue(ec, 1f);
+                Vector3 unflipped = LongAxisWorld(method, ec, socket, mainSide);
                 signField.SetValue(ec, shippedSign);
                 float flippedDot = Vector3.Dot(flipped.normalized, body.up);
-                if (flippedDot > -0.99f)
-                    failures.Add("G3: setting _sheatheLongAxisSign = -1 did NOT flip the prop down " +
-                                 "(dot(bodyUp) = " + flippedDot.ToString("0.###") + ", expected ~-1). The " +
-                                 "owner was promised a one-number flip; it does not work.");
+                float unflippedDot = Vector3.Dot(unflipped.normalized, body.up);
+                if (flippedDot > -0.99f || unflippedDot < 0.99f)
+                    failures.Add("G3: with no measured sign, _sheatheLongAxisSign no longer flips the carry " +
+                                 "(dot at -1 = " + flippedDot.ToString("0.###") + ", at +1 = " +
+                                 unflippedDot.ToString("0.###") + "; expected ~-1 / ~+1). The fallback seam " +
+                                 "was stripped or short-circuited, so a prop the geometry cannot answer for " +
+                                 "has no correction left.");
                 else
-                    log.AppendLine("  G3 sign flips the carry end-for-end ..................... ok");
+                    log.AppendLine("  G3 the fallback field still flips when nothing is measured  ok");
 
                 // ── G4: TEETH. Re-introduce the diagonal; G1's rule must now FAIL ────
                 diagonalField.SetValue(ec, 28f);

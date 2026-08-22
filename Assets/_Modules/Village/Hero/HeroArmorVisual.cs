@@ -363,6 +363,13 @@ namespace DeNelle.Village
             // out of phase — the owner-reported "head and armor not in sync / parts not joined".
             HideBaseBody(baseBody, instance);
 
+            // WO-992 (2026-08-21): the VISIBLE BODY JUST CHANGED, so the equipped cosmetic has to be
+            // re-applied to it. CosmeticApplier decorates whatever renderers it finds and re-resolves
+            // that set on every Refresh — without this call an armour equip would silently strip the
+            // skin the player PAID for (Glimmer is sold for real money, packs.json). One line, no new
+            // owner: this class still owns the body, the applier only re-decorates it.
+            DeNelle.Cosmetics.CosmeticApplier.RefreshOn(gameObject);
+
             // RE-SEAT EQUIPPED PROPS onto the ARMORED body's hands. The off-hand/weapons were seated on
             // the now-hidden BASE hand; a Blink full-body set has slightly different rig proportions, so
             // the visible armor hand sits elsewhere -> the owner-reported "shield hangs off the arm".
@@ -875,6 +882,11 @@ namespace DeNelle.Village
                 var equip = GetComponentInParent<EquipmentController>();
                 if (equip != null) equip.ReseatForBody(baseBody.gameObject);
             }
+
+            // WO-992: the armour came off and the BASE body is visible again — re-apply the equipped
+            // cosmetic to it. Same reason as the equip side above: the applier's renderer set went
+            // away with the armour instance, and an un-refreshed applier leaves the paid-for skin off.
+            DeNelle.Cosmetics.CosmeticApplier.RefreshOn(gameObject);
         }
 
         // Resolve the BASE body to hide/seat/retarget against. The player hero names it

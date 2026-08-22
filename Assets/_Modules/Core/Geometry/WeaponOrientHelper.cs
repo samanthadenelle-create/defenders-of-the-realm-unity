@@ -156,6 +156,13 @@ namespace DeNelle.Core.Geometry
         /// allowed to decide. Below this the mesh does not answer the owner's "find the edge that
         /// is NOT sharp" — so we Warn and keep the existing behaviour instead of guessing.</summary>
         private const float TaperDecisionMargin = 0.15f;
+        /// <summary>Minimum relative gap (as a fraction of the long axis) between the two ends'
+        /// distances from the GRIP ORIGIN before the grip-at-origin test is allowed to decide which
+        /// end is the hilt. A prop whose origin sits mid-length answers nothing, and guessing there
+        /// is how a global sign got shipped in the first place — so below this we decline and say so.
+        /// Used by <see cref="TryResolveSheathedTipSign"/>, which is the device-side path because it
+        /// reads bounds, not vertices (the live props ship with Read/Write OFF).</summary>
+        private const float GripEndDecisionMargin = 0.15f;
         /// <summary>Outer band of a shield half, as a fraction of that half's extent, used to score
         /// "is this face a broad flat surface (smooth) or a small cluster (the handle)".</summary>
         private const float ShieldFaceBand = 0.25f;
@@ -826,6 +833,168 @@ namespace DeNelle.Core.Geometry
                 $"(+Y)={maxEndWidth:0.#####} relGap={rel:0.###} -> hilt at " +
                 (hiltAtMinY ? "-Y (blade points +Y, correct)" : "+Y (blade points -Y — the prop is " +
                  "seated BLADE-DOWN, i.e. the hand is on the sharp end)"));
+            return true;
+        }
+
+        // =====================================================================
+        //  WHICH WAY IS "INVERTED" — PER MESH, NOT PER GAME  (owner F8 2026-08-21)
+        // =====================================================================
+        //
+        // THE DEFECT THIS EXISTS TO END: EquipmentController._sheatheLongAxisSign is ONE serialized
+        // number that decides whether prop-local +Y maps onto +body.up or -body.up at the hip. On
+        // 2026-08-20 an F8 on Blaise read -1 as upside down, so +1 shipped; on 2026-08-21 an F8 on
+        // the owner's Flameblade read +1 as upside down. Both reports are true. A sword's tip is at
+        // prop +Y on a mesh that went through NormalizeInto + SeatHiltLowerHalf and at prop -Y on a
+        // NATIVE prop whose artist authored it the other way round (SeatNative deliberately skips
+        // the normalize and keeps the authored frame). So the correct sign is a property of the
+        // MESH, and any single global value is guaranteed to be wrong for half the catalogue —
+        // flipping it does not fix the bug, it only moves it to whoever carries the other prop.
+        //
+        // ⛔ AND IT MUST NOT BE VERTEX-BASED. The live props ship with Read/Write DISABLED
+        // (KnightGearProofCapture's standing finding: "only 0 readable vertices"), so every
+        // vertex-reading derivation in this file — TryResolveSwordHiltEnd included — is INERT ON
+        // THE DEVICE. A fix that only works in the editor is not a fix. The taper test is therefore
+        // tried FIRST (it is the owner's own rule, "find the pointy edge that goes farthest away",
+        // and it is exact where it runs) and the BOUNDS test carries the device: mesh.bounds needs
+        // no Read/Write, and the NATIVE seat's own shipped contract is "trust grip-at-origin", so
+        // the end of the prop nearest the grip root's ORIGIN is the hilt and the far end is the tip.
+        //
+        // AXIS-AGNOSTIC ON PURPOSE. The long axis is MEASURED, never assumed to be Y: a native prop
+        // keeps its authored axes, and asking a Z-long prop about its Y span reports a healthy
+        // number about the wrong direction — the class of mistake that produced the flat shield.
+        // The caller gets the axis back and can say so when it is not the axis the pose assumes.
+
+        /// <summary>What the mesh itself says about which end hangs DOWN when it is sheathed.</summary>
+        public struct SheathedTipResolution
+        {
+            /// <summary>False = nothing decidable was measured; the caller keeps its own fallback.</summary>
+            public bool Valid;
+            /// <summary>Multiplier for body.up that puts this prop's TIP toward the ground:
+            /// the value <c>EquipmentController._sheatheLongAxisSign</c> should have carried.</summary>
+            public float BodyUpSign;
+            /// <summary>0 = X, 1 = Y, 2 = Z — the MEASURED long axis, in the grip root's frame.</summary>
+            public int LongAxis;
+            /// <summary>True when the tip sits at the POSITIVE end of <see cref="LongAxis"/>.</summary>
+            public bool TipAtPositiveEnd;
+            /// <summary>"taper" (owner's pointy-edge rule) or "grip-origin" (the native contract).</summary>
+            public string Source;
+            public string Why;
+        }
+
+        /// <summary>
+        /// Resolve, from THIS mesh's own geometry, the sign that hangs its tip downward at the hip.
+        /// Never throws; returns false with a stated reason when the prop cannot answer, in which
+        /// case the caller must keep its serialized tuning value (§12: the fallback is not stripped).
+        /// </summary>
+        public static bool TryResolveSheathedTipSign(GameObject prop, Transform gripRoot,
+                                                     out SheathedTipResolution resolution)
+        {
+            resolution = default;
+            if (prop == null || gripRoot == null)
+            {
+                resolution.Why = "sheathe-sign: no prop / no grip root to measure in.";
+                return false;
+            }
+            if (!TryLocalBounds(prop, gripRoot, out Bounds b))
+            {
+                resolution.Why = "sheathe-sign: no measurable bounds (no renderer, or no readable mesh).";
+                return false;
+            }
+
+            Vector3 s = b.size;
+            int a = (s.x >= s.y && s.x >= s.z) ? 0 : (s.y >= s.z ? 1 : 2);
+            int p = (a + 1) % 3, q = (a + 2) % 3;
+            float length = s[a];
+            if (length < 1e-4f)
+            {
+                resolution.Why = $"sheathe-sign: degenerate long axis ({length:0.#####} m on " +
+                                 $"{AxisName(a)}) — nothing to hang either way up.";
+                return false;
+            }
+
+            float lo = b.center[a] - b.extents[a];
+            float hi = b.center[a] + b.extents[a];
+            bool decided = false, hiltAtMin = true;
+            string source = null, why = null;
+
+            // ── 1. THE OWNER'S RULE, where the vertices can be read: the end that does NOT taper
+            //       is the hilt. Exact, and it is the rule she stated in her own words.
+            var verts = new List<Vector3>();
+            CollectLocalVerts(prop, gripRoot, verts);
+            if (verts.Count >= 12)
+            {
+                float loEdge = lo + length * EndBand;
+                float hiEdge = hi - length * EndBand;
+                float wLo = 0f, wHi = 0f;
+                for (int i = 0; i < verts.Count; i++)
+                {
+                    Vector3 v = verts[i];
+                    float w = new Vector2(v[p], v[q]).magnitude;
+                    if (v[a] <= loEdge && w > wLo) wLo = w;
+                    if (v[a] >= hiEdge && w > wHi) wHi = w;
+                }
+                float bigger = Mathf.Max(wLo, wHi);
+                float rel = bigger > 1e-5f ? Mathf.Abs(wLo - wHi) / bigger : 0f;
+                if (rel >= TaperDecisionMargin)
+                {
+                    hiltAtMin = wLo > wHi;          // the WIDER (non-tapering) end is the hilt
+                    decided = true;
+                    source = "taper";
+                    why = $"taper on {AxisName(a)}: endWidth(-)={wLo:0.#####} (+)={wHi:0.#####} " +
+                          $"relGap={rel:0.###} -> hilt at {(hiltAtMin ? "-" : "+")}{AxisName(a)}";
+                }
+                else
+                {
+                    why = $"taper AMBIGUOUS on {AxisName(a)} (relGap={rel:0.###} < " +
+                          $"{TaperDecisionMargin:0.##}) — neither end reads as the pointy one";
+                }
+            }
+            else
+            {
+                why = $"taper unavailable ({verts.Count} readable vertices — Read/Write is OFF on " +
+                      "this prop, which is the SHIPPED state of the live weapons)";
+            }
+
+            // ── 2. THE DEVICE PATH: grip-at-origin. The grip root's origin sits at the grip, so the
+            //       nearer end along the long axis is the hilt and the far end is the tip. Needs no
+            //       vertices at all — mesh.bounds is always available.
+            if (!decided)
+            {
+                float dLo = Mathf.Abs(lo), dHi = Mathf.Abs(hi);
+                float rel = Mathf.Abs(dLo - dHi) / length;
+                if (rel < GripEndDecisionMargin)
+                {
+                    resolution.Why = why + $"; and the grip origin sits mid-prop on {AxisName(a)} " +
+                        $"(|-end|={dLo:0.####} |+end|={dHi:0.####} relGap={rel:0.###} < " +
+                        $"{GripEndDecisionMargin:0.##}), so neither end is the hilt by proximity either. " +
+                        "NOTHING DECIDABLE — the caller's serialized sign stands and this prop may " +
+                        "hang upside down.";
+                    FlowTrace.Warn("Equip", $"SheatheSign '{prop.name}': {resolution.Why}");
+                    return false;
+                }
+                hiltAtMin = dLo < dHi;
+                source = "grip-origin";
+                why += $"; grip-origin on {AxisName(a)}: |-end|={dLo:0.####} |+end|={dHi:0.####} " +
+                       $"relGap={rel:0.###} -> hilt at {(hiltAtMin ? "-" : "+")}{AxisName(a)}";
+            }
+
+            // Tip is the end OPPOSITE the hilt. To hang it downward, prop-local +axis must map onto
+            // -body.up when the tip is at +axis, and onto +body.up when the tip is at -axis.
+            bool tipAtPositive = hiltAtMin;
+            resolution = new SheathedTipResolution
+            {
+                Valid = true,
+                BodyUpSign = tipAtPositive ? -1f : 1f,
+                LongAxis = a,
+                TipAtPositiveEnd = tipAtPositive,
+                Source = source,
+                Why = why
+            };
+            FlowTrace.Step("Equip",
+                $"SheatheSign '{prop.name}': size={s:0.####} longest={AxisName(a)}({length:0.####}m) " +
+                $"src={source} {why} -> tip at {(tipAtPositive ? "+" : "-")}{AxisName(a)}, " +
+                $"bodyUpSign={resolution.BodyUpSign:+0;-0} (the sign that hangs the TIP DOWN). " +
+                "This is PER MESH: a single global sign is wrong for half the catalogue by construction.");
             return true;
         }
 
