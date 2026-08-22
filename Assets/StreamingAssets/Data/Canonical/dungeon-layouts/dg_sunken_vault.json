@@ -1,6 +1,8 @@
 {
   "version": 2,
   "dungeonId": "dg_sunken_vault",
+  "recommendedLevel": 5,
+  "tier": 2,
   "exitRoomId": "entry",
   "cellSize": 1.0,
   "rooms": [
@@ -300,7 +302,7 @@
           "wakeRadius": 9.0
         },
         "isBoss": true,
-        "enemyType": "hollow-warrior",
+        "enemyType": "hollow-brute",
         "displayName": "The Hollow Warden"
       },
       "chests": [

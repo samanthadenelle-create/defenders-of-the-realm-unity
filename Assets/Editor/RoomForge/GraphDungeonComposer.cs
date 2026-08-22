@@ -46,6 +46,8 @@ namespace DeNelle.Editor.RoomForge
     public sealed class DungeonGraph
     {
         [JsonProperty("graphId")] public string graphId = "untitled_graph";
+        [JsonProperty("recommendedLevel")] public int recommendedLevel = 1;
+        [JsonProperty("tier")] public int tier = 1;
         /// <summary>Node id placed at world origin/identity. Empty => first node in the list.</summary>
         [JsonProperty("entry")] public string entry = "";
         /// <summary>
@@ -511,6 +513,8 @@ namespace DeNelle.Editor.RoomForge
                 var layout = new DungeonComposeLayout
                 {
                     dungeonId = graph.graphId,
+                    recommendedLevel = Mathf.Max(1, graph.recommendedLevel),
+                    tier = Mathf.Max(1, graph.tier),
                     // WO-957: the ONE true exit. An unauthored exitRoomId falls back to the
                     // entry node - the pre-multi-floor behavior the runtime spawner defaults
                     // to anyway, so the data and the fallback agree on the same room.

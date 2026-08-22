@@ -1,6 +1,8 @@
 {
   "version": 2,
   "graphId": "dg_bonecrypt",
+  "recommendedLevel": 9,
+  "tier": 3,
   "entry": "entry",
   "_comment": "WO-930 CONVERSION 2026-08-08: 4 StairDown/StairUp PAIRS replaced by 4 single StairwellRoom instances. Pairs were DISCOVERED from the vertical edges, not assumed from ids. Each stairwell enters at s_upper_w and leaves at s_lower_e - ordinary Door sockets, no vertical mate. WO-1001 Phase 2B - The Bonecrypt. An undead crypt where a Hollow necromancer raises the old dead. FIVE LEVELS. The deep floor is GATED: the crypt-key sits in a SecretAlcove side branch on level -2, and the lock spans the level -4 landing, so the player must take the optional branch before the descent will let them through. Undead are authored as the hollow family in enemies.json, so every encounter is hollow-group - depth does the work through the group roll rather than a separate family. Boss = the Necromancer (enemies.json marks it boss:true) carrying dungeon-deepboss, the ONLY legendary-component table in the game. Oil is DELIBERATELY SCARCE - stones on level 0 and level -3 only, so the middle of the descent is the tense stretch.",
   "nodes": [

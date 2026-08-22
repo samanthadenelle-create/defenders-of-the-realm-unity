@@ -100,28 +100,25 @@ namespace DeNelle.Dungeons
             // Resources (synchronous everywhere). Missing file/blocks => confinement defaults.
             string dungeonId = composeRoot.name.Substring(ComposeRootPrefix.Length);
             var encounters = LoadEncounters(dungeonId);
+            int dungeonTier = LoadTier(dungeonId);
 
-            int bound = 0, skipped = 0;
+            int bound = 0;
             foreach (var spawner in spawners)
             {
                 if (spawner == null) continue;
-                if (spawner.HasRoomArea)
-                {
-                    // Bake-time fields already in the scene (re-baked path) - the bake owns it.
-                    skipped++;
-                    FlowTrace.Step(Sys, $"spawner '{spawner.gameObject.name}' already room-bound " +
-                        $"(bake-time, room '{spawner.RoomId}') - skip");
-                    continue;
-                }
 
                 // Owning room = the room whose footprint contains the spawner (XZ);
                 // nearest footprint as fallback (a nav-snap can nudge a seat past an edge).
                 Vector3 pos = spawner.transform.position;
-                string roomId = null;
+                string roomId = spawner.HasRoomArea && rooms.ContainsKey(spawner.RoomId)
+                    ? spawner.RoomId
+                    : null;
                 Bounds roomBounds = default;
-                float best = float.MaxValue;
+                if (roomId != null) roomBounds = rooms[roomId];
+                float best = roomId != null ? 0f : float.MaxValue;
                 foreach (var kv in rooms)
                 {
+                    if (roomId != null) break;
                     float d = DungeonRoomBounds.SqrDistanceXZ(kv.Value, pos);
                     if (d < best) { best = d; roomId = kv.Key; roomBounds = kv.Value; }
                     if (d <= 0f) break; // strictly inside - owned
@@ -138,6 +135,8 @@ namespace DeNelle.Dungeons
                 float wake = 6f, slack = 2f;
                 int min = -1, max = -1;
                 float formation = -1f;
+                int threat = 1;
+                string displayName = null;
                 // WO-1001 slice 2: the authored ENEMY FAMILY travels with the encounter block
                 // so a scene baked BEFORE the encounterKind field existed still fields the
                 // family its layout asks for. null = leave the serialized kind alone.
@@ -153,9 +152,14 @@ namespace DeNelle.Dungeons
                     max = enc.max;
                     if (enc.formationRadius > 0f) formation = enc.formationRadius;
                     if (!string.IsNullOrEmpty(enc.kind)) kind = enc.kind.Trim();
+                    int floorDepth = Mathf.RoundToInt(Mathf.Abs(roomBounds.center.y) /
+                        DungeonBakerChecks.FloorSeparationY);
+                    threat = enc.threat > 0 ? enc.threat : dungeonTier + floorDepth;
+                    displayName = enc.displayName;
                 }
 
-                spawner.ConfigureRoomArea(roomId, roomBounds, wake, slack, min, max, formation, kind);
+                spawner.ConfigureRoomArea(roomId, roomBounds, wake, slack, min, max, formation,
+                    kind, threat, displayName);
                 bound++;
                 FlowTrace.Step(Sys, $"bound spawner '{spawner.gameObject.name}' -> room '{roomId}' " +
                     $"bounds c{roomBounds.center} s{roomBounds.size} wake {wake:F1} slack {slack:F1} " +
@@ -163,7 +167,7 @@ namespace DeNelle.Dungeons
             }
 
             FlowTrace.Step(Sys, $"'{scene.name}': room binding done - rooms={rooms.Count} " +
-                $"spawners={spawners.Count} bound={bound} bakeBound={skipped}");
+                $"spawners={spawners.Count} bound={bound}");
         }
 
         private static List<OutpostEnemyGroupSpawner> CollectSpawners(Scene scene)
@@ -221,6 +225,15 @@ namespace DeNelle.Dungeons
             }
             FlowTrace.Step(Sys, $"layout '{dungeonId}': {map.Count} encounter block(s) loaded");
             return map;
+        }
+
+        private static int LoadTier(string dungeonId)
+        {
+            var text = Resources.Load<TextAsset>(LayoutsResourcePath + dungeonId);
+            if (text == null) return 1;
+            var layout = Guard.Try(Sys, $"parse layout '{dungeonId}' for tier",
+                () => JsonConvert.DeserializeObject<DungeonComposeLayout>(text.text), null);
+            return layout != null ? Mathf.Max(1, layout.tier) : 1;
         }
     }
 }

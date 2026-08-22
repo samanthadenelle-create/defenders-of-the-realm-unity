@@ -182,18 +182,25 @@ namespace DeNelle.Dungeons.RoomForge
         public static bool RoomsOverlap(RoomPrefabMeta a, Vector3 aPos, float aYaw,
                                         RoomPrefabMeta b, Vector3 bPos, float bYaw, float tolerance)
         {
-            // WO-1001 slice 1: rooms on DIFFERENT FLOORS never overlap, however completely their
-            // footprints coincide - a stacked stairwell is total XZ penetration by design. Tested
-            // first, because without it the XZ test below fail-gates every correct vertical stack
-            // as an overlap and aborts the bake. Half a floor is the discriminator: same-floor
-            // rooms sit at dy ~ 0, stacked rooms at dy = FloorSeparationY.
-            if (Mathf.Abs(aPos.y - bPos.y) > FloorSeparationY * 0.5f) return false;
+            Vector2 ay = VerticalInterval(a, aPos.y);
+            Vector2 by = VerticalInterval(b, bPos.y);
+            float penY = Mathf.Min(ay.y, by.y) - Mathf.Max(ay.x, by.x);
+            if (penY <= tolerance) return false;
 
             Vector2 ha = HalfExtents(a, aYaw);
             Vector2 hb = HalfExtents(b, bYaw);
             float penX = (ha.x + hb.x) - Mathf.Abs(aPos.x - bPos.x);
             float penZ = (ha.y + hb.y) - Mathf.Abs(aPos.z - bPos.z);
             return penX > tolerance && penZ > tolerance;
+        }
+
+        private static Vector2 VerticalInterval(RoomPrefabMeta meta, float worldY)
+        {
+            Vector2 local = meta != null
+                ? meta.VerticalInterval
+                : new Vector2(-RoomForgeCanon.FloorSlabThickness,
+                    RoomForgeCanon.WallHeight + RoomForgeCanon.CeilingThickness);
+            return new Vector2(worldY + local.x, worldY + local.y);
         }
 
         // World half-extents on XZ, accounting for a 90/270 yaw that swaps width/depth.

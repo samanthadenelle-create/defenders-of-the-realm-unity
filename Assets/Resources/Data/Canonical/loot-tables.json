@@ -177,11 +177,11 @@
       ]
     },
     {
-      "_comment": "WO-749 — deep-boss / deep-vault table: the ONLY source of the 5 LEGENDARY reforge components (gear-recipes.json), gated bossOnly at a LOW rate so a legendary weapon is a 5+ deep-delve payoff (epic by design). Master-gear components (heartwood_core/quench_oil) + a gem always-eligible.",
+      "_comment": "WO-749 — deep-boss / deep-vault table: the ONLY source of the 5 LEGENDARY reforge components (gear-recipes.json), gated bossOnly at a LOW rate so a legendary weapon is a 5+ deep-delve payoff (epic by design). One heartwood_core is guaranteed so a deep-boss hoard can never be empty; all other master/legendary lines remain independent rolls.",
       "id": "dungeon-deepboss",
       "source": "boss",
       "drops": [
-        { "materialId": "heartwood_core", "chance": 0.40, "minCount": 1, "maxCount": 1 },
+        { "materialId": "heartwood_core", "chance": 1.00, "minCount": 1, "maxCount": 1 },
         { "materialId": "quench_oil", "chance": 0.40, "minCount": 1, "maxCount": 1 },
         { "materialId": "ing_heartstone_crystal", "chance": 0.30, "minCount": 1, "maxCount": 1 },
         { "materialId": "reforged_steel", "chance": 0.20, "minCount": 1, "maxCount": 1, "bossOnly": true },

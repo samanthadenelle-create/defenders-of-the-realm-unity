@@ -219,6 +219,8 @@ namespace DeNelle.Dungeons
         // around an invisible dialog. Register lazily; NotifyOpened can REJECT (WO-437) and
         // invokes the handle's Close on its way out (the DungeonTreasurePanel precedent).
         private PanelHandle _confirmHandle;
+        private DungeonRuntimeState _bossGateState;
+        private GameObject _bossSealVisual;
 
         // WO-770.1: a RICH dungeon (DungeonController) supplies a leave action so the exit routes
         // through ExitToVillage (banks the run's crafting scatter + ends the run cleanly) instead
@@ -745,6 +747,51 @@ namespace DeNelle.Dungeons
             _heroFound = true;
         }
 
+        /// <summary>Require the composed run's authored boss to be defeated before this exit works.</summary>
+        public void SetBossGate(DungeonRuntimeState state)
+        {
+            if (_bossGateState != null) _bossGateState.RunStateChanged.RemoveListener(RefreshBossGateVisual);
+            _bossGateState = state;
+            if (_bossGateState != null) _bossGateState.RunStateChanged.AddListener(RefreshBossGateVisual);
+            BuildBossSealVisual();
+            RefreshBossGateVisual();
+            FlowTrace.Step(Sys, $"boss gate armed on exit '{name}' (unlocked={state != null && state.BossDefeated})");
+        }
+
+        public bool IsBossGated => _bossGateState != null;
+        public bool IsBossGateUnlocked => _bossGateState == null || _bossGateState.BossDefeated;
+
+        private void BuildBossSealVisual()
+        {
+            if (_bossSealVisual != null) return;
+            _bossSealVisual = new GameObject("BossGateSeal_X");
+            _bossSealVisual.transform.SetParent(transform, false);
+            Color seal = new Color(0.82f, 0.62f, 0.18f, 1f);
+            AddDecor("BossGateSlash_A", new Vector3(0f, 1.35f, 0.1f),
+                new Vector3(0.22f, 3.1f, 0.22f), seal, false);
+            AddDecor("BossGateSlash_B", new Vector3(0f, 1.35f, 0.1f),
+                new Vector3(0.22f, 3.1f, 0.22f), seal, false);
+            Transform a = transform.Find("BossGateSlash_A");
+            Transform b = transform.Find("BossGateSlash_B");
+            if (a != null) a.localRotation = Quaternion.Euler(0f, 0f, 48f);
+            if (b != null) b.localRotation = Quaternion.Euler(0f, 0f, -48f);
+            if (a != null) a.SetParent(_bossSealVisual.transform, true);
+            if (b != null) b.SetParent(_bossSealVisual.transform, true);
+        }
+
+        private void RefreshBossGateVisual()
+        {
+            bool locked = !IsBossGateUnlocked;
+            if (_bossSealVisual != null) _bossSealVisual.SetActive(locked);
+            var labels = GetComponentsInChildren<TextMesh>(true);
+            for (int i = 0; i < labels.Length; i++)
+            {
+                if (labels[i] == null) continue;
+                if (labels[i].name.IndexOf("Label", StringComparison.OrdinalIgnoreCase) < 0) continue;
+                labels[i].text = locked ? "SEALED\nDEFEAT BOSS" : (_isTrueExit ? "EXIT" : "LEAVE");
+            }
+        }
+
         private void ResolveHero()
         {
             if (_heroFound) return;
@@ -822,7 +869,8 @@ namespace DeNelle.Dungeons
             }
             // Optional secondary: in-range button also opens the SAME confirm (not a raw Leave).
             if (_isInRange)
-                MobileInteractButton.Request(this, _label, RequestExitConfirm);
+                MobileInteractButton.Request(this,
+                    IsBossGateUnlocked ? _label : "Defeat the boss to unlock", RequestExitConfirm);
             else
                 MobileInteractButton.Release(this);
         }
@@ -927,6 +975,11 @@ namespace DeNelle.Dungeons
         /// <summary>WO-995: walk-in / button leave is only legal once armed past boot grace.</summary>
         private bool CanLeave(out string refuseReason)
         {
+            if (!IsBossGateUnlocked)
+            {
+                refuseReason = "boss gate locked (defeat the dungeon boss first)";
+                return false;
+            }
             if (Time.timeSinceLevelLoad < BootGraceSeconds)
             {
                 refuseReason = $"boot grace ({Time.timeSinceLevelLoad:F2}s < {BootGraceSeconds:0.#}s)";
@@ -1026,6 +1079,7 @@ namespace DeNelle.Dungeons
 
         private void OnDisable()
         {
+            if (_bossGateState != null) _bossGateState.RunStateChanged.RemoveListener(RefreshBossGateVisual);
             MobileInteractButton.Release(this);
             DismissConfirmUi();
         }

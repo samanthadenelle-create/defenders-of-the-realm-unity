@@ -29,6 +29,9 @@
 using System.Collections;
 using System.Collections.Generic;
 using DeNelle.Core.Diagnostics;
+using DeNelle.Dungeons.RoomForge;
+using DeNelle.Village;
+using Newtonsoft.Json;
 using UnityEngine;
 
 namespace DeNelle.Dungeons
@@ -49,6 +52,9 @@ namespace DeNelle.Dungeons
         private Transform _composeRoot;
         private Lantern _lantern;
         private DungeonHudController _hud;
+        private DungeonComposeLayout _layout;
+        private OutpostEnemyGroupSpawner _bossSpawner;
+        private readonly List<BreakableContainer> _bossHoard = new List<BreakableContainer>();
 
         /// <summary>The live run record for this dungeon. Null only if StartRun never ran.</summary>
         public DungeonRuntimeState RunState => _state;
@@ -67,6 +73,7 @@ namespace DeNelle.Dungeons
 
         private void OnDestroy()
         {
+            if (_bossSpawner != null) _bossSpawner.BossCleared -= HandleBossCleared;
             if (Current == this) Current = null;
         }
 
@@ -127,12 +134,17 @@ namespace DeNelle.Dungeons
 
             InstallOilHud();
 
+            _layout = LoadLayout();
+
             // WO-1001 slice 6: darkness ambush director (higher odds when oil critical).
             ComposedKeyBag.Clear();
             var ambush = gameObject.GetComponent<ComposedAmbushDirector>();
             if (ambush == null) ambush = gameObject.AddComponent<ComposedAmbushDirector>();
-            ambush.Configure(_lantern, heroGo.transform, _state, tier: 1);
-            FlowTrace.Step(Sys, "ComposedAmbushDirector armed (slice 6 darkness ambush)");
+            int tier = _layout != null ? Mathf.Max(1, _layout.tier) : 1;
+            ambush.Configure(_lantern, heroGo.transform, _state, tier);
+            FlowTrace.Step(Sys, $"ComposedAmbushDirector armed (slice 6 darkness ambush, tier={tier})");
+
+            InstallBossContract();
 
             // WO-1001 1b/7: count what the bake actually left in the scene. These are the pillars
             // whose bake-time Configure used to be discarded by SaveScene, so a zero here on a
@@ -147,6 +159,88 @@ namespace DeNelle.Dungeons
                     $"pillars present in '{gameObject.scene.name}': stairPorts={ports} lockedPorts={locks} " +
                     $"keys={keys} traps={traps} oilStones={stones.Count}");
             }
+        }
+
+        private DungeonComposeLayout LoadLayout()
+        {
+            if (_composeRoot == null) return null;
+            const string prefix = "DungeonCompose_";
+            string id = _composeRoot.name.StartsWith(prefix, System.StringComparison.Ordinal)
+                ? _composeRoot.name.Substring(prefix.Length)
+                : gameObject.scene.name;
+            var text = Resources.Load<TextAsset>("Data/Canonical/dungeon-layouts/" + id);
+            if (text == null)
+            {
+                FlowTrace.Warn(Sys, $"difficulty/boss contract: layout '{id}' not found");
+                return null;
+            }
+            return Guard.Try(Sys, $"parse layout '{id}' for difficulty/boss contract",
+                () => JsonConvert.DeserializeObject<DungeonComposeLayout>(text.text), null);
+        }
+
+        private void InstallBossContract()
+        {
+            if (_composeRoot == null || _state == null || _layout == null) return;
+
+            var spawners = FindObjectsByType<OutpostEnemyGroupSpawner>(
+                FindObjectsInactive.Include, FindObjectsSortMode.None);
+            for (int i = 0; i < spawners.Length; i++)
+            {
+                var candidate = spawners[i];
+                if (candidate != null && candidate.gameObject.scene == gameObject.scene && candidate.IsBossGroup)
+                {
+                    _bossSpawner = candidate;
+                    break;
+                }
+            }
+            if (_bossSpawner == null)
+            {
+                FlowTrace.Step(Sys, "no authored boss spawner - boss gate contract not needed");
+                return;
+            }
+
+            _bossSpawner.BossCleared += HandleBossCleared;
+            if (_bossSpawner.IsBossCleared) HandleBossCleared(_bossSpawner);
+
+            Transform bossRoom = _composeRoot.Find(_bossSpawner.RoomId);
+            if (bossRoom == null)
+            {
+                FlowTrace.Warn(Sys, $"boss room '{_bossSpawner.RoomId}' not found - exits cannot be gated by room");
+                return;
+            }
+            Bounds roomBounds = DungeonRoomBounds.Compute(bossRoom.gameObject);
+            var containers = FindObjectsByType<BreakableContainer>(
+                FindObjectsInactive.Include, FindObjectsSortMode.None);
+            for (int i = 0; i < containers.Length; i++)
+            {
+                var chest = containers[i];
+                if (chest == null || chest.gameObject.scene != gameObject.scene) continue;
+                if (DungeonRoomBounds.SqrDistanceXZ(roomBounds, chest.transform.position) > 0.25f) continue;
+                _bossHoard.Add(chest);
+                chest.gameObject.SetActive(_state.BossDefeated);
+            }
+            var exits = FindObjectsByType<DungeonExitInteractable>(
+                FindObjectsInactive.Include, FindObjectsSortMode.None);
+            int gated = 0;
+            for (int i = 0; i < exits.Length; i++)
+            {
+                var exit = exits[i];
+                if (exit == null || exit.gameObject.scene != gameObject.scene) continue;
+                if (DungeonRoomBounds.SqrDistanceXZ(roomBounds, exit.transform.position) > 0.25f) continue;
+                exit.SetBossGate(_state);
+                gated++;
+            }
+            FlowTrace.Step(Sys, $"boss contract armed: room='{_bossSpawner.RoomId}' gatedExits={gated} " +
+                $"sealedHoard={_bossHoard.Count}");
+        }
+
+        private void HandleBossCleared(OutpostEnemyGroupSpawner source)
+        {
+            if (_state == null || _state.BossDefeated) return;
+            _state.MarkBossDefeated();
+            for (int i = 0; i < _bossHoard.Count; i++)
+                if (_bossHoard[i] != null) _bossHoard[i].gameObject.SetActive(true);
+            FlowTrace.Step(Sys, $"boss clear recorded once for '{gameObject.scene.name}' - boss-room exits unlocked");
         }
 
         private List<DungeonOilStone> CollectOilStones()

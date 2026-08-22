@@ -1,6 +1,8 @@
 {
   "version": 2,
   "graphId": "dg_starter_loop",
+  "recommendedLevel": 1,
+  "tier": 1,
   "entry": "entry",
   "_comment": "OWNER'S FIRST DUNGEON, authored as a pure room graph. Version 2 removes the misleading single-floor stair dead ends, closes the rectangular route back into the junction, adds a west reward vault, and uses smaller escalating mixed-role encounters. Difficulty comes from composition and pressure, not a seven-enemy centre pile.",
   "nodes": [

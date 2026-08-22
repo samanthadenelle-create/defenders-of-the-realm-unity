@@ -915,6 +915,13 @@ namespace DeNelle.DevTools
                 (preSampleClean ? "." : " — A FIGHT WAS ALREADY LIVE on the first hero frame (the spawn point IS an encounter trigger), " +
                                         "so the D baseline is arena-contaminated and E falls back to the arena's EncounterParams.ReturnPosition, which carries the true pre-fight pose."));
 
+            if (dungeonScene.StartsWith("dg_", StringComparison.OrdinalIgnoreCase))
+            {
+                yield return AssertComposedDungeonRuntime(dungeonScene, heroGo, failA1, tapped);
+                yield return ReturnToHub(hubScene);
+                yield break;
+            }
+
             // ── link 4: REACH A SCRIPTED ENCOUNTER ───────────────────────────
             // Healer's Cottage authors 4 scripted encounters + a mini-boss. Their triggers live
             // in DeNelle.Dungeons (unreferenced here), so locate them by GetType().Name and warp
@@ -1259,6 +1266,93 @@ namespace DeNelle.DevTools
             yield return ReturnToHub(hubScene);
         }
 
+        private IEnumerator AssertComposedDungeonRuntime(string dungeonScene, GameObject heroGo,
+                                                         bool entryCombatFailed, bool tapped)
+        {
+            const string Tag = "Auto";
+            yield return Wait(2f);
+
+            var spawners = UnityEngine.Object.FindObjectsByType<OutpostEnemyGroupSpawner>(
+                FindObjectsSortMode.None);
+            int sceneSpawners = 0, unbound = 0, living = 0;
+            OutpostEnemyGroupSpawner boss = null;
+            foreach (var spawner in spawners)
+            {
+                if (spawner == null || spawner.gameObject.scene.name != dungeonScene) continue;
+                sceneSpawners++;
+                if (!spawner.HasRoomArea) unbound++;
+                if (spawner.IsBossGroup) boss = spawner;
+                foreach (var enemy in spawner.LiveEnemies)
+                    if (enemy != null) living++;
+            }
+
+            bool expectsCombat = dungeonScene != "dg_hollow_roads";
+            bool expectsBoss = dungeonScene == "dg_sunken_vault" ||
+                               dungeonScene == "dg_bonecrypt" ||
+                               dungeonScene == "dg_ember_deep";
+            bool failRooms = unbound > 0 || (expectsCombat && (sceneSpawners == 0 || living == 0));
+            bool failBoss = expectsBoss && boss == null;
+            if (failRooms)
+                FlowTrace.Fail(Tag, $"AssertDungeonLoop: COMPOSED FAIL rooms/spawns scene='{dungeonScene}' " +
+                    $"spawners={sceneSpawners} unbound={unbound} living={living}");
+            else
+                FlowTrace.Step(Tag, $"AssertDungeonLoop: COMPOSED rooms/spawns PASS scene='{dungeonScene}' " +
+                    $"spawners={sceneSpawners} living={living} allRoomBound=true");
+            if (failBoss)
+                FlowTrace.Fail(Tag, $"AssertDungeonLoop: COMPOSED FAIL '{dungeonScene}' has no live authored boss spawner");
+
+            bool bossCleared = !expectsBoss;
+            if (boss != null)
+            {
+                int killed = 0;
+                var snapshot = new List<Enemy>(boss.LiveEnemies);
+                for (int i = 0; i < snapshot.Count; i++)
+                {
+                    if (snapshot[i] == null) continue;
+                    snapshot[i].Kill();
+                    killed++;
+                }
+                float wait = 0f;
+                while (wait < 5f && !boss.IsBossCleared) { wait += Time.deltaTime; yield return null; }
+                bossCleared = boss.IsBossCleared;
+                if (!bossCleared)
+                    FlowTrace.Fail(Tag, $"AssertDungeonLoop: COMPOSED FAIL boss clear signal did not fire after {killed} boss kill(s)");
+                else
+                    FlowTrace.Step(Tag, $"AssertDungeonLoop: COMPOSED boss lifecycle PASS killed={killed} clearSignal=true");
+            }
+
+            float moveBest = 0f;
+            Vector3 start = heroGo != null ? heroGo.transform.position : Vector3.zero;
+            Vector2[] dirs = { Vector2.up, Vector2.right, Vector2.down, Vector2.left };
+            foreach (var dir in dirs)
+            {
+                DeNelle.HUD.Kit.HudMoveInput.Set(dir);
+                float hold = 0f;
+                while (hold < 1.4f)
+                {
+                    hold += Time.deltaTime;
+                    if (heroGo != null)
+                        moveBest = Mathf.Max(moveBest, HorizontalDistance(heroGo.transform.position, start));
+                    yield return null;
+                }
+                DeNelle.HUD.Kit.HudMoveInput.Set(Vector2.zero);
+                if (moveBest >= DungeonMoveDeltaMeters) break;
+            }
+            DeNelle.HUD.Kit.HudMoveInput.Set(Vector2.zero);
+            bool failMove = moveBest < DungeonMoveDeltaMeters;
+            if (failMove)
+                FlowTrace.Fail(Tag, $"AssertDungeonLoop: COMPOSED FAIL hero moved only {moveBest:0.00}m on real D-pad input");
+
+            bool pass = !entryCombatFailed && !failRooms && !failBoss && bossCleared && !failMove;
+            string verdict = $"DUNGEON_LOOP_PROBE :: dungeon='{dungeonScene}' entered=" +
+                $"{(tapped ? "real-tap" : "fallback-load")} mode=composed spawners={sceneSpawners} " +
+                $"living={living} roomOwnership={(failRooms ? "FAIL" : "PASS")} " +
+                $"bossLifecycle={(bossCleared && !failBoss ? "PASS" : "FAIL")} " +
+                $"movement={(failMove ? "FAIL" : "PASS")}(delta={moveBest:0.00}m) verdict={(pass ? "PASS" : "FAIL")}";
+            FlowTrace.Step(Tag, verdict);
+            _lastDetail = verdict;
+        }
+
         // Return the bot to the hub after the dungeon excursion so the phases queued behind
         // this one (and WriteSummary) see the scene they expect. Mirrors the popup-recovery reload.
         private IEnumerator ReturnToHub(string hubScene)
@@ -1283,17 +1377,30 @@ namespace DeNelle.DevTools
         {
             var all = UnityEngine.Object.FindObjectsByType<DungeonPortal>(FindObjectsSortMode.None);
             if (all == null || all.Length == 0) return null;
+            string requested = CommandLineValue("--dungeon=");
             DungeonPortal preferred = null, nearest = null;
             float bestDist = float.MaxValue;
             foreach (var p in all)
             {
                 if (p == null) continue;
+                if (!string.IsNullOrEmpty(requested) &&
+                    p.gameObject.name.IndexOf(requested, StringComparison.OrdinalIgnoreCase) >= 0)
+                    return p;
                 if (preferred == null && p.gameObject.name.IndexOf("Healer", StringComparison.OrdinalIgnoreCase) >= 0)
                     preferred = p;
                 float d = HorizontalDistance(heroPos, p.transform.position);
                 if (d < bestDist) { bestDist = d; nearest = p; }
             }
             return preferred != null ? preferred : nearest;
+        }
+
+        private static string CommandLineValue(string prefix)
+        {
+            var args = Environment.GetCommandLineArgs();
+            for (int i = 0; i < args.Length; i++)
+                if (args[i] != null && args[i].StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                    return args[i].Substring(prefix.Length);
+            return string.Empty;
         }
 
         // Resolve the scene a portal routes to from its GameObject name, replicating

@@ -1,6 +1,8 @@
 {
   "version": 2,
   "dungeonId": "dg_hollow_roads",
+  "recommendedLevel": 1,
+  "tier": 1,
   "exitRoomId": "entry",
   "cellSize": 1.0,
   "rooms": [

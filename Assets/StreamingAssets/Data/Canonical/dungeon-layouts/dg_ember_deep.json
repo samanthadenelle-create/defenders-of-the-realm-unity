@@ -1,6 +1,8 @@
 {
   "version": 2,
   "dungeonId": "dg_ember_deep",
+  "recommendedLevel": 13,
+  "tier": 4,
   "exitRoomId": "warlord_keep",
   "cellSize": 1.0,
   "rooms": [
@@ -343,7 +345,7 @@
           "wakeRadius": 10.0
         },
         "isBoss": true,
-        "enemyType": "ogre",
+        "enemyType": "troll-overlord",
         "displayName": "The Ember Warlord"
       },
       "chests": [

@@ -21,7 +21,7 @@
 //   ONLY to the literal "none"; every other value fell through to the same hollow
 //   spawn. Authoring "orc-group" SILENTLY SPAWNED HOLLOWS. Silent is the bug.
 //
-// The 7 cases:
+// The 8 cases:
 //   1  catalog          enemies.json parses from BOTH dual copies, same id set
 //   2  ids-exist        every id the family tables emit is a real, non-boss roster id
 //   3  hollow-compat    hollow-group is byte-identical to the retired hardcoded picker
@@ -29,6 +29,7 @@
 //   5  kind-fallback    unknown kind -> hollow-group AND is flagged, never silent
 //   6  wiring           the serialized field exists and the baker/binder write it
 //   7  authoring        every kind authored in a shipped layout/graph is a known kind
+//   8  difficulty-boss  tier progression, elite boss ids, threat curve, gate state, guaranteed hoard
 //
 // Reads only JSON + source text + the DeNelle.Village family tables. It NEVER opens
 // or saves a .unity scene and references NO art, so it passes with the packs ABSENT.
@@ -37,10 +38,13 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using UnityEngine;
+using DeNelle.Dungeons;
+using DeNelle.Dungeons.RoomForge;
 using DeNelle.Village;
 
 namespace DeNelle.Editor.Regression
@@ -107,6 +111,7 @@ namespace DeNelle.Editor.Regression
                 Case(failures, "kind-fallback", () => Case5_KindFallback(failures));
                 Case(failures, "wiring", () => Case6_Wiring(failures));
                 Case(failures, "authoring", () => Case7_Authoring(failures, notes));
+                Case(failures, "difficulty-boss", () => Case8_DifficultyAndBossGate(failures));
             }
             finally
             {
@@ -116,7 +121,7 @@ namespace DeNelle.Editor.Regression
             string noteStr = notes.Count > 0 ? " [notes: " + string.Join("; ", notes.ToArray()) + "]" : "";
             if (failures.Count == 0)
             {
-                reason = "DUNGEON ENCOUNTER FAMILY OK - 7/7 cases pass (" + OutpostEnemyGroupSpawner.KnownKinds.Length +
+                reason = "DUNGEON ENCOUNTER FAMILY OK - 8/8 cases pass (" + OutpostEnemyGroupSpawner.KnownKinds.Length +
                          " kinds, every family id real+non-boss, hollow-group stream identical to the retired " +
                          "hardcoded picker, unknown kind flagged not silent, baker+binder write '" +
                          KindFieldName + "')" + noteStr;
@@ -125,6 +130,63 @@ namespace DeNelle.Editor.Regression
             reason = "DUNGEON ENCOUNTER FAMILY FAIL x" + failures.Count + ": " +
                      string.Join(" | ", failures.ToArray()) + noteStr;
             return false;
+        }
+
+        private static void Case8_DifficultyAndBossGate(List<string> failures)
+        {
+            string[] ids = { "dg_starter_loop", "dg_sunken_vault", "dg_bonecrypt", "dg_ember_deep" };
+            int lastTier = 0, lastLevel = 0;
+            foreach (string id in ids)
+            {
+                string path = "Assets/Resources/Data/Canonical/dungeon-layouts/" + id + ".json";
+                var layout = JsonConvert.DeserializeObject<DungeonComposeLayout>(File.ReadAllText(path));
+                if (layout == null) { failures.Add("[difficulty-boss] failed to parse " + id); continue; }
+                if (layout.tier <= lastTier || layout.recommendedLevel <= lastLevel)
+                    failures.Add($"[difficulty-boss] progression is not strictly increasing at {id}: " +
+                                 $"tier={layout.tier}, recommended={layout.recommendedLevel}");
+                lastTier = layout.tier;
+                lastLevel = layout.recommendedLevel;
+
+                foreach (var room in layout.rooms)
+                {
+                    if (room?.encounter == null || !room.encounter.isBoss) continue;
+                    var def = s_catalog?.Find(room.encounter.enemyType);
+                    if (def == null)
+                        failures.Add($"[difficulty-boss] {id} boss id '{room.encounter.enemyType}' is absent from enemies.json");
+                    else if (def.Hp < 800f)
+                        failures.Add($"[difficulty-boss] {id} boss '{room.encounter.enemyType}' has only {def.Hp} base HP");
+                }
+            }
+
+            if (OutpostEnemyGroupSpawner.ThreatScale(6) <= OutpostEnemyGroupSpawner.ThreatScale(1))
+                failures.Add("[difficulty-boss] threat scaling does not increase combat stats");
+
+            var loot = JObject.Parse(File.ReadAllText(
+                "Assets/Resources/Data/Canonical/loot-tables.json"));
+            var deep = loot["tables"]?.FirstOrDefault(t => (string)t["id"] == "dungeon-deepboss");
+            bool guaranteed = deep?["drops"]?.Any(d => (float?)d["chance"] >= 1f &&
+                (int?)d["minCount"] >= 1) == true;
+            if (!guaranteed)
+                failures.Add("[difficulty-boss] dungeon-deepboss can still roll completely empty");
+
+            var state = ScriptableObject.CreateInstance<DungeonRuntimeState>();
+            var go = new GameObject("DungeonBossGateRegression");
+            try
+            {
+                state.StartRun("regression", "entry", Vector3.zero, 1);
+                var exit = go.AddComponent<DungeonExitInteractable>();
+                exit.SetBossGate(state);
+                if (exit.IsBossGateUnlocked)
+                    failures.Add("[difficulty-boss] boss-gated exit starts unlocked");
+                state.MarkBossDefeated();
+                if (!exit.IsBossGateUnlocked)
+                    failures.Add("[difficulty-boss] boss-gated exit did not unlock after boss clear");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(go);
+                UnityEngine.Object.DestroyImmediate(state);
+            }
         }
 
         // Guard each case so one throw becomes a labelled failure, not a dead suite.

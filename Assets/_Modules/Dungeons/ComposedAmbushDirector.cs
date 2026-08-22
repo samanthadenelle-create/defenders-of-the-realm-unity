@@ -97,7 +97,14 @@ namespace DeNelle.Dungeons
         private bool SpawnAmbushNearHero()
         {
             // Prefer an existing OutpostEnemyGroupSpawner so family tables stay consistent.
-            var spawner = FindFirstObjectByType<OutpostEnemyGroupSpawner>();
+            OutpostEnemyGroupSpawner spawner = null;
+            var candidates = FindObjectsByType<OutpostEnemyGroupSpawner>(FindObjectsSortMode.None);
+            for (int i = 0; i < candidates.Length; i++)
+                if (candidates[i] != null && !candidates[i].IsBossGroup)
+                {
+                    spawner = candidates[i];
+                    break;
+                }
             Vector3 centre = _hero.position + _hero.forward * 4f;
             if (NavMesh.SamplePosition(centre, out var hit, 8f, NavMesh.AllAreas))
                 centre = hit.position;

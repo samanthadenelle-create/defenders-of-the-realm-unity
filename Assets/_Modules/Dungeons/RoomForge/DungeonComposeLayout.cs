@@ -24,6 +24,10 @@ namespace DeNelle.Dungeons.RoomForge
         // "Extract" -> "Leave" (owner pin 2026-08-10). Additive - a v1 layout still parses.
         [JsonProperty("version")] public int version = 2;
         [JsonProperty("dungeonId")] public string dungeonId = "untitled";
+        /// <summary>Player-facing guidance and the shared runtime difficulty source.</summary>
+        [JsonProperty("recommendedLevel")] public int recommendedLevel = 1;
+        /// <summary>1-based dungeon tier; drives darkness ambush composition/rate.</summary>
+        [JsonProperty("tier")] public int tier = 1;
         /// <summary>
         /// WO-957: the room instance that carries the layout's ONE true exit (the full
         /// arch + beacon presentation). Null/empty = the entry room, which matches the
@@ -119,6 +123,11 @@ namespace DeNelle.Dungeons.RoomForge
         [JsonProperty("enemyType")] public string enemyType;
         /// <summary>Optional display name for boss intro cards (future HUD).</summary>
         [JsonProperty("displayName")] public string displayName;
+        /// <summary>
+        /// Shared combat threat. One is catalog baseline; each step above one adds a
+        /// conservative eight percent to HP, contact damage and kill rewards.
+        /// </summary>
+        [JsonProperty("threat")] public int threat;
     }
 
     /// <summary>WO-1001 slice 4: one breakable loot prop in a room.</summary>

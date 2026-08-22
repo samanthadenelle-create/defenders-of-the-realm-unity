@@ -791,11 +791,11 @@ namespace DeNelle.Editor.Regression
                              $"({cx},{cz}) cells. RoomsOverlap trusts the DECLARATION, so an under-declared " +
                              "footprint is an overlap gate that cannot see a collision.");
 
-            // Not a failure: RoomPrefabMeta has no vertical-extent field yet, so RoomsOverlap:190 still
-            // treats anything more than half a floor apart in Y as non-overlapping. Correct for a
-            // single-storey room, WRONG for a room that IS two storeys. WO-930 §6 owns the fix.
-            notes.Add("RoomPrefabMeta carries no vertical extent, so RoomsOverlap still cannot see a room " +
-                      "placed on the level INSIDE a two-storey stairwell's volume (WO-930 §6)");
+            float expectedVerticalMax = DungeonBakerChecks.FloorSeparationY +
+                                        RoomForgeCanon.WallHeight + RoomForgeCanon.CeilingThickness;
+            if (Mathf.Abs(meta.VerticalInterval.y - expectedVerticalMax) > 0.01f)
+                failures.Add($"[stairwell-meta] StairwellRoom vertical max={meta.VerticalInterval.y:0.##}, " +
+                             $"expected {expectedVerticalMax:0.##} - the overlap oracle cannot protect its upper half");
         }
 
         // =====================================================================
@@ -1012,6 +1012,12 @@ namespace DeNelle.Editor.Regression
             if (DungeonBakerChecks.RoomsOverlap(ma, Vector3.zero, 0f, mb,
                                                 new Vector3(RoomForgeCanon.Cell, 0f, 0f), 0f, tol))
                 failures.Add("[stack-not-overlap] adjacent rooms sharing a wall must not count as overlapping");
+
+            ma.occupiedLevels = 2;
+            if (!DungeonBakerChecks.RoomsOverlap(ma, Vector3.zero, 0f, mb,
+                                                 new Vector3(0f, sep, 0f), 0f, tol))
+                failures.Add("[stack-not-overlap] a room embedded in a two-storey stairwell's upper " +
+                             "volume was missed - the vertical overlap oracle is blind again");
         }
 
         // =====================================================================

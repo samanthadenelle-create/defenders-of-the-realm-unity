@@ -182,6 +182,7 @@ namespace DeNelle.Editor.RoomForge
             meta.themePalette = "default";
             meta.footprintCells = new Vector2Int(CellsX, CellsZ);
             meta.cellSize = RoomForgeCanon.Cell;
+            meta.occupiedLevels = 2;
 
             BuildLowerFloor(go.transform, hx, hz);
             BuildUpperFloors(go.transform, hx, hz, rise);

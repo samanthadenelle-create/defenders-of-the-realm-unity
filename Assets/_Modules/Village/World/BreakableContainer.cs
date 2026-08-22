@@ -223,7 +223,9 @@ namespace DeNelle.Village
             // Roll the loot. Prefer a WORLD pickup mote (walk-over to collect); if the roll
             // produced nothing OR pickups are disabled, fall back to a direct larder deposit
             // so the open is still paid. ItemPickupSpawner.Spawn no-ops when the lane is off.
-            var lines = ItemDropSystem.RollLines(lootTableId);
+            bool bossTable = string.Equals(LootTableCatalog.Find(lootTableId)?.Source, "boss",
+                System.StringComparison.OrdinalIgnoreCase);
+            var lines = ItemDropSystem.RollLines(lootTableId, includeBossOnly: bossTable);
             if (ItemDropSystem.UseWorldPickups && lines != null && lines.Count > 0)
             {
                 ItemPickupSpawner.Spawn(at, lines);
@@ -231,8 +233,9 @@ namespace DeNelle.Village
             }
             else
             {
-                ItemDropSystem.RollAndDeposit(lootTableId);
-                FlowTrace.Step(Sys, $"{label} opened -> deposited loot to larder (table '{lootTableId}')");
+                int deposited = ItemDropSystem.DepositLines(lines);
+                FlowTrace.Step(Sys, $"{label} opened -> deposited {deposited} item(s) to larder " +
+                    $"from the ONE captured roll (table '{lootTableId}', bossLines={bossTable})");
             }
 
             // The prop STAYS, wearing its open lid. An empty room with a vanished chest

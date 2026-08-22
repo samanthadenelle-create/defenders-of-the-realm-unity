@@ -28,6 +28,7 @@ param(
     [int]$TimeoutMin = 8,
     [switch]$Graphics,  # render WITH a graphics device so the per-panel UI shots are not blank
     [string]$Phases = '',  # optional comma list; driver runs ONLY matching phases (substring, case-insensitive) - fast single-purpose capture runs
+    [string]$Dungeon = '', # optional dungeon/portal id for the DungeonLoop phase
     [int]$Width = 0,    # -Graphics only; 0 => the capture default below
     [int]$Height = 0
 )
@@ -124,6 +125,7 @@ for ($i = 0; $i -lt $Count; $i++) {
     $h = if ($Graphics) { if ($Height -gt 0) { "$Height" } else { '1200' } } else { '600' }
     $args += @('-screen-width', $w, '-screen-height', $h, '--autopilot', "--run=$i", "--seed=$seed")
     if ($Phases -ne '') { $args += "--phases=$Phases" }
+    if ($Dungeon -ne '') { $args += "--dungeon=$Dungeon" }
     # PER-INSTANCE -logFile (WO-1102): with no -logFile every instance targets the ONE default
     # LocalLow Player.log; N>1 contend and Step-level FlowTrace evidence is destroyed (proven
     # 2026-08-16: root Player.log mtime never moved even for -Count 1 mid-diagnosis). Redirect

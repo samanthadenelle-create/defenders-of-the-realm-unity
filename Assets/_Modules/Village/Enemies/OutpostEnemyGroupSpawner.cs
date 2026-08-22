@@ -100,6 +100,8 @@ namespace DeNelle.Village
         [SerializeField] private bool isBoss;
         [Tooltip("Optional fixed enemies.json id for boss/elite. Empty = pick heaviest weight in the family table.")]
         [SerializeField] private string fixedEnemyId = "";
+        [SerializeField] private string bossDisplayName = "";
+        [SerializeField] private int encounterThreat = 1;
 
         private Transform _root;
         private int _counter;
@@ -108,6 +110,13 @@ namespace DeNelle.Village
         // enemies that already spawned (binder-after-Start ordering safety net).
         private readonly System.Collections.Generic.List<EnemyBrain> _spawnedBrains =
             new System.Collections.Generic.List<EnemyBrain>();
+        private readonly HashSet<Enemy> _liveEnemies = new HashSet<Enemy>();
+
+        /// <summary>Raised once when this authored boss group has no living members.</summary>
+        public event System.Action<OutpostEnemyGroupSpawner> BossCleared;
+        public bool IsBossGroup => isBoss;
+        public bool IsBossCleared { get; private set; }
+        public IEnumerable<Enemy> LiveEnemies => _liveEnemies;
 
         /// <summary>True when this spawner owns a room AABB (WO-797).</summary>
         public bool HasRoomArea => areaSize.sqrMagnitude > 0.01f;
@@ -128,7 +137,8 @@ namespace DeNelle.Village
         /// </summary>
         public void ConfigureRoomArea(string room, Bounds area, float wake, float slack,
                                       int min = -1, int max = -1, float formation = -1f,
-                                      string kind = null)
+                                      string kind = null, int threat = 1,
+                                      string displayName = null)
         {
             roomId = room ?? string.Empty;
             if (!string.IsNullOrEmpty(kind)) encounterKind = kind;
@@ -139,6 +149,8 @@ namespace DeNelle.Village
             if (min > 0) minCount = min;
             if (max > 0) maxCount = Mathf.Max(min > 0 ? min : minCount, max);
             if (formation > 0f) formationRadius = formation;
+            encounterThreat = Mathf.Max(1, threat);
+            if (!string.IsNullOrWhiteSpace(displayName)) bossDisplayName = displayName.Trim();
             FlowTrace.Step(Sys, $"room area configured: room '{roomId}' center {areaCenter} " +
                 $"size {areaSize} wake {wakeRadius:F1} slack {areaSlack:F1} kind '{encounterKind}' " +
                 $"boss={isBoss} fixed='{(string.IsNullOrEmpty(fixedEnemyId) ? "-" : fixedEnemyId)}' " +
@@ -224,7 +236,13 @@ namespace DeNelle.Village
                 string id = isBoss
                     ? ResolveBossId(kind, fixedEnemyId, rng)
                     : WeightedIdFor(kind, rng);
-                EnemyDef def = DefFor(id, _counter++);
+                EnemyDef def = DefFor(id, _counter++, encounterThreat);
+                if (isBoss && !string.IsNullOrEmpty(bossDisplayName))
+                {
+                    def.Name = bossDisplayName;
+                    def.DisplayName = bossDisplayName;
+                }
+                if (isBoss) def.Boss = true;
                 EnemyRole role = isBoss ? EnemyRole.MiniBoss : RoleForId(id);
 
                 Vector3 toCenter = center - slot; toCenter.y = 0f;
@@ -260,6 +278,8 @@ namespace DeNelle.Village
                         $"(anchor-leash only, {leashRadius:F1}m) - WO-797 binder/bake did not configure this spawner");
                 }
                 _spawnedBrains.Add(brain);
+                _liveEnemies.Add(enemy);
+                enemy.Died += HandleEnemyDied;
 
                 spawned++;
             }
@@ -267,6 +287,16 @@ namespace DeNelle.Village
             FlowTrace.Step(Sys, $"spawned {spawned} enemies of family kind '{kind}' @ {center} seed {seed} " +
                 $"(rolled count {count}, formation=staggered, minSeparation={minimumSeparation:F1}m) " +
                 (hasArea ? $"room '{roomId}'" : "NO room area"));
+        }
+
+        private void HandleEnemyDied(Enemy enemy)
+        {
+            if (enemy != null) enemy.Died -= HandleEnemyDied;
+            _liveEnemies.Remove(enemy);
+            if (!isBoss || IsBossCleared || _liveEnemies.Count != 0) return;
+            IsBossCleared = true;
+            FlowTrace.Step(Sys, $"boss group CLEARED in room '{roomId}' threat={encounterThreat}");
+            BossCleared?.Invoke(this);
         }
 
         /// <summary>
@@ -536,14 +566,28 @@ namespace DeNelle.Village
 
         // Per-id stat block. enemies.json FIRST (the pre-WO-1001 hand-written numbers had
         // drifted from it); the code fallback below only covers an unreadable catalog.
-        private static EnemyDef DefFor(string id, int n)
+        private static EnemyDef DefFor(string id, int n, int threat)
         {
             EnemyDef fromJson = CatalogDef(id);
-            if (fromJson != null) return Clone(fromJson);
+            EnemyDef result;
+            if (fromJson != null) result = Clone(fromJson);
+            else
+            {
+                FlowTrace.Warn(Sys, $"enemies.json has no def for '{id}' - using the code fallback stat block");
+                result = Fallback(id);
+            }
 
-            FlowTrace.Warn(Sys, $"enemies.json has no def for '{id}' - using the code fallback stat block");
-            return Fallback(id);
+            float scale = ThreatScale(threat);
+            result.Hp *= scale;
+            result.ContactDamage *= scale;
+            result.XpReward = Mathf.RoundToInt(result.XpReward * scale);
+            result.GlimmerReward = Mathf.RoundToInt(result.GlimmerReward * scale);
+            result.CoinReward = Mathf.RoundToInt(result.CoinReward * scale);
+            return result;
         }
+
+        public static float ThreatScale(int threat)
+            => 1f + Mathf.Clamp(threat - 1, 0, 20) * 0.08f;
 
         // Fresh copy so a spawned enemy can never mutate the cached catalog row.
         private static EnemyDef Clone(EnemyDef s)

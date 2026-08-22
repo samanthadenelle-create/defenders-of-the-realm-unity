@@ -30,6 +30,10 @@ namespace DeNelle.Dungeons.RoomForge
         [Tooltip("World units per cell (canon = RoomForgeCanon.Cell, 10 m since WO-922).")]
         public float cellSize = RoomForgeCanon.Cell;
 
+        [Tooltip("Number of composed floor intervals occupied vertically. 0 migrates legacy prefabs " +
+                 "by room kind; ordinary rooms = 1; the two-storey StairwellRoom = 2.")]
+        public int occupiedLevels;
+
         // ── DECLARED VERTICAL SHAFTS (architect review 2026-08-07 §3.2) ──────
         //  A stairwell room's floor has a HOLE in it and its ceiling has a HOLE through it.
         //  Neither can be a single slab covering the footprint, which is what the old
@@ -59,6 +63,21 @@ namespace DeNelle.Dungeons.RoomForge
         /// <summary>World footprint size on XZ.</summary>
         public Vector2 FootprintWorld =>
             new Vector2(footprintCells.x * cellSize, footprintCells.y * cellSize);
+
+        /// <summary>Occupied local-Y interval, including floor and ceiling slabs.</summary>
+        public Vector2 VerticalInterval
+        {
+            get
+            {
+                // Compatibility for stairwell prefabs/scenes baked before occupiedLevels existed.
+                int levels = occupiedLevels > 0 ? occupiedLevels
+                    : (string.Equals(roomId, "StairwellRoom", System.StringComparison.Ordinal) ? 2 : 1);
+                float min = -RoomForgeCanon.FloorSlabThickness;
+                float max = (levels - 1) * DungeonBakerChecks.FloorSeparationY +
+                            RoomForgeCanon.WallHeight + RoomForgeCanon.CeilingThickness;
+                return new Vector2(min, max);
+            }
+        }
 
         /// <summary>True when the given local XZ point falls inside any declared shaft in the set.</summary>
         public static bool InAnyShaft(List<Rect> shafts, float x, float z)

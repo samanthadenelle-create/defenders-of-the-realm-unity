@@ -1570,6 +1570,8 @@ namespace DeNelle.Editor.RoomForge
             // WO-1001 slice 3: boss / fixed elite.
             SetBool(so, "isBoss", enc.isBoss);
             SetString(so, "fixedEnemyId", enc.enemyType ?? "");
+            SetString(so, "bossDisplayName", enc.displayName ?? "");
+            SetInt(so, "encounterThreat", Mathf.Max(1, enc.threat));
             if (enc.isBoss)
             {
                 SetInt(so, "minCount", 1);

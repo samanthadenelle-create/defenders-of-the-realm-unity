@@ -1,6 +1,8 @@
 {
   "version": 2,
   "graphId": "dg_sunken_vault",
+  "recommendedLevel": 5,
+  "tier": 2,
   "entry": "entry",
   "_comment": "WO-930 CONVERSION 2026-08-08: the three StairDown/StairUp PAIRS are replaced by three single StairwellRoom instances (the owner design). Each pair was 2 nodes + 3 edges; each stairwell is 1 node + 2 edges, entering at s_upper_w and leaving at s_lower_e - ORDINARY door sockets, no vertical mate. The old model reported PathPartial with 1/3 ramps whole; the A/B probe (dg_stairwell_probe vs dg_descent_probe) went PathComplete vs PathPartial in one bake. WO-1001 Phase 2A - The Sunken Vault of Elarion. The drowned treasury of the forgotten civilization, masonry half-swallowed by the deep. FOUR LEVELS descending south: each floor runs south from its stairwell to the next StairDown, so floors never self-overlap on their own level and march clear of each other in XZ. Hollow enemies throughout, thickening with depth (walkers up top, warrior/acolyte weight deeper via the group roll). Boss = the Hollow Warden in the BossKeep at the bottom. Oil stones on levels 0, -1 and -3 so the lantern can be topped up roughly every other floor - the gap on -2 is deliberate tension. Extract pads sit on each stairwell landing so the player can bank and leave. Loot: dungeon-chest in the side vaults, dungeon-miniboss on the Warden.",
   "nodes": [
@@ -162,7 +164,7 @@
       "encounter": {
         "kind": "hollow-group",
         "isBoss": true,
-        "enemyType": "hollow-warrior",
+        "enemyType": "hollow-brute",
         "displayName": "The Hollow Warden",
         "min": 1,
         "max": 1,

@@ -141,16 +141,24 @@ namespace DeNelle.Village.Items
         {
             if (!Enabled) return;
             var rolled = LootTableCatalog.Roll(lootTableId, includeBossOnly);
-            if (rolled == null || rolled.Count == 0) return;
+            DepositLines(rolled);
+        }
 
+        /// <summary>Deposit an already-rolled result without rolling the table a second time.</summary>
+        public static int DepositLines(IReadOnlyDictionary<string, int> rolled)
+        {
+            if (rolled == null || rolled.Count == 0) return 0;
             var inv = VillageInventory.Instance;
-            if (inv == null) return; // larder not bootstrapped yet -> drop is lost (rare)
+            if (inv == null) return 0;
 
+            int deposited = 0;
             foreach (var kv in rolled)
             {
                 if (string.IsNullOrEmpty(kv.Key) || kv.Value <= 0) continue;
                 inv.Add(kv.Key, kv.Value);
+                deposited += kv.Value;
             }
+            return deposited;
         }
 
         /// <summary>
