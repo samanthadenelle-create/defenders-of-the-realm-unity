@@ -18,6 +18,31 @@
 //
 // Configured by DungeonController from the crafting-recipes.json placements —
 // the strongly-typed IngredientPlacement carries the ingredient id + position.
+//
+// ── Mote art: SHAPE FAMILIES, not tinted pellets (WO-1132 deliverable 5) ──
+// THE FINDING: every scatter mote was the SAME plain sphere, tinted from the
+// crafting-recipes.json `tint` hex. Those authored tints are largely PASTELS
+// (a9c4ff pale blue, d8cbb0 pale cream, ffe58a pale yellow), so on an unlit
+// sphere in a dark dungeon they all wash out to the SAME WHITE PELLET — the
+// player could not tell a moonbloom from a cloth scrap without walking over it.
+//
+// COLOURBLIND LAW (the owner is red/green colourblind, and this is binding):
+// identity must NEVER rest on hue alone. So the SILHOUETTE carries the meaning
+// and the tint only reinforces it — the same law ComposedPropVisuals states for
+// the composed-dungeon key/lock/trap/oil props, and this file follows that
+// file's idiom deliberately (URP/Lit emissive primitives, colliders stripped).
+//
+// The shape is picked from the per-ingredient `glyph` char that
+// crafting-recipes.json ALREADY authors (CraftingData.CraftingIngredient.Glyph)
+// and that nothing had ever read for the world mote: '|' stalk, '~' droplet,
+// '*' radiating cluster, '=' folded slab, 'T' mushroom, 'Y' forked root,
+// 'b' round-bellied flask, unknown/absent -> the original sphere. Several
+// ingredients share a glyph (five are '*', two are 'T') and that is FINE and
+// intentional: they are the same FAMILY, and the tint separates within it. We
+// do not chase twelve unique silhouettes.
+//
+// Second half of the white-pellet answer: the mote is EMISSIVE. An unlit pastel
+// primitive is invisible at low lantern oil no matter what shape it is.
 // =============================================================================
 
 using UnityEngine;
@@ -121,35 +146,164 @@ namespace DeNelle.Dungeons
         /// <summary>
         /// Builds a runtime ingredient-scatter mote so the WO-749 12-ingredient floor
         /// scatter needs NO scene bake: DungeonController spawns one of these per
-        /// crafting-recipes.json placement that has no scene-authored pickup. The mote
-        /// is a small URP-tinted sphere (bobs/spins); the collected ingredient rides
-        /// the per-run <see cref="DungeonInventory"/> and is banked to the larder on
-        /// exit (DungeonLootGrant). As a static member of this class it may set the
-        /// private mote fields directly — no reflection.
+        /// crafting-recipes.json placement that has no scene-authored pickup. The
+        /// collected ingredient rides the per-run <see cref="DungeonInventory"/> and is
+        /// banked to the larder on exit (DungeonLootGrant). As a static member of this
+        /// class it may set the private mote fields directly — no reflection.
+        /// <para>
+        /// The mote is no longer a bare tinted sphere: <paramref name="glyph"/> (the
+        /// ingredient's authored <c>glyph</c> char) selects a SHAPE FAMILY so the
+        /// silhouette — not the pastel hue — is what tells two ingredients apart. See
+        /// the file header for the white-pellet finding and the colourblind law.
+        /// A null/empty/unrecognised glyph keeps the original sphere, so an ingredient
+        /// authored without one is never worse off than before.
+        /// </para>
         /// </summary>
         public static IngredientPickup CreateRuntime(Transform parent, IngredientPlacement def,
-            DungeonInventory inventory, Transform hero, Color tint)
+            DungeonInventory inventory, Transform hero, Color tint, string glyph = null)
         {
             var root = new GameObject($"IngredientPickup_{(def != null ? def.PickupId : "scatter")}");
             if (parent != null) root.transform.SetParent(parent, false);
 
-            // The visual mote — a small tinted sphere the Keeper walks over.
-            var mote = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            mote.name = "Mote";
+            // The mote BODY root: an empty transform the shape parts hang under, so the
+            // whole silhouette bobs and spins as ONE piece. This is both _moteVisual
+            // (hidden on collect) and _moteSpin (animated) — exactly the roles the bare
+            // sphere used to play, so Configure/AnimateMote/ApplyCollectedVisual are
+            // untouched. Overall footprint is kept to roughly the old 0.4-scale sphere.
+            var mote = new GameObject("Mote");
             mote.transform.SetParent(root.transform, false);
             mote.transform.localPosition = new Vector3(0f, 0.6f, 0f);
-            mote.transform.localScale = Vector3.one * 0.4f;
 
-            // Proximity pickup is a distance check, not a physics event — drop the
-            // primitive collider so the mote never blocks the hero or the NavMesh.
-            var col = mote.GetComponent<Collider>();
+            BuildMoteShape(mote.transform, glyph, tint);
+
+            var pickup = root.AddComponent<IngredientPickup>();
+            pickup._moteVisual = mote;
+            pickup._moteSpin = mote.transform;
+            pickup.Configure(def, inventory, hero);
+            return pickup;
+        }
+
+        // ── Mote shape families (WO-1132 d5) ─────────────────────────────────
+
+        /// <summary>
+        /// Hangs the shape parts for <paramref name="glyph"/> under <paramref name="body"/>.
+        /// One case per family; anything unknown falls through to the original sphere.
+        /// </summary>
+        private static void BuildMoteShape(Transform body, string glyph, Color tint)
+        {
+            char g = string.IsNullOrEmpty(glyph) ? '\0' : glyph[0];
+            switch (g)
+            {
+                case '|':   // dry-reed — a tall thin stalk.
+                    MotePart(body, "Stalk", PrimitiveType.Cylinder, tint,
+                        new Vector3(0f, 0f, 0f), new Vector3(0.07f, 0.26f, 0.07f));
+                    MotePart(body, "Node", PrimitiveType.Cylinder, tint,
+                        new Vector3(0f, 0.06f, 0f), new Vector3(0.12f, 0.02f, 0.12f));
+                    break;
+
+                case '~':   // oil-soaked-cloth / spring water — a tapering droplet.
+                    MotePart(body, "Belly", PrimitiveType.Sphere, tint,
+                        new Vector3(0f, -0.06f, 0f), new Vector3(0.32f, 0.30f, 0.32f));
+                    MotePart(body, "Taper", PrimitiveType.Sphere, tint,
+                        new Vector3(0f, 0.12f, 0f), new Vector3(0.17f, 0.17f, 0.17f));
+                    MotePart(body, "Tip", PrimitiveType.Sphere, tint,
+                        new Vector3(0f, 0.22f, 0f), new Vector3(0.08f, 0.08f, 0.08f));
+                    break;
+
+                case '*':   // blooms + resin + herb — a small radiating shard cluster.
+                {
+                    MotePart(body, "Core", PrimitiveType.Sphere, tint,
+                        Vector3.zero, new Vector3(0.15f, 0.15f, 0.15f));
+                    // Four angled shards: the spiky silhouette is what reads as "*".
+                    for (int i = 0; i < 4; i++)
+                    {
+                        float yaw = i * 90f;
+                        var shard = MotePart(body, $"Shard{i}", PrimitiveType.Cube, tint,
+                            Vector3.zero, new Vector3(0.05f, 0.24f, 0.05f));
+                        shard.transform.localRotation = Quaternion.Euler(0f, yaw, 52f);
+                        shard.transform.localPosition =
+                            shard.transform.localRotation * new Vector3(0f, 0.13f, 0f);
+                    }
+                    break;
+                }
+
+                case '=':   // cloth scrap — a flat folded slab, two offset leaves.
+                    MotePart(body, "LeafLower", PrimitiveType.Cube, tint,
+                        new Vector3(0f, -0.05f, 0.03f), new Vector3(0.40f, 0.05f, 0.26f));
+                    MotePart(body, "LeafUpper", PrimitiveType.Cube, tint,
+                        new Vector3(0f, 0.02f, -0.04f), new Vector3(0.34f, 0.05f, 0.22f));
+                    break;
+
+                case 'T':   // shadowcap / quickfoot — a mushroom: stalk plus domed cap.
+                    MotePart(body, "Stalk", PrimitiveType.Cylinder, tint,
+                        new Vector3(0f, -0.11f, 0f), new Vector3(0.10f, 0.11f, 0.10f));
+                    MotePart(body, "Cap", PrimitiveType.Sphere, tint,
+                        new Vector3(0f, 0.06f, 0f), new Vector3(0.34f, 0.20f, 0.34f));
+                    break;
+
+                case 'Y':   // ironroot — a forked root.
+                    MotePart(body, "Taproot", PrimitiveType.Cylinder, tint,
+                        new Vector3(0f, -0.12f, 0f), new Vector3(0.08f, 0.12f, 0.08f));
+                    MoteFork(body, "ForkA", tint, 34f);
+                    MoteFork(body, "ForkB", tint, -34f);
+                    break;
+
+                case 'b':   // oil flask — a round belly with a narrow neck and a stopper.
+                    MotePart(body, "Belly", PrimitiveType.Sphere, tint,
+                        new Vector3(0f, -0.06f, 0f), new Vector3(0.30f, 0.28f, 0.30f));
+                    MotePart(body, "Neck", PrimitiveType.Cylinder, tint,
+                        new Vector3(0f, 0.13f, 0f), new Vector3(0.10f, 0.10f, 0.10f));
+                    MotePart(body, "Stopper", PrimitiveType.Cube, tint,
+                        new Vector3(0f, 0.24f, 0f), new Vector3(0.13f, 0.06f, 0.13f));
+                    break;
+
+                default:    // no authored glyph — the original sphere, unchanged.
+                    MotePart(body, "Sphere", PrimitiveType.Sphere, tint,
+                        Vector3.zero, Vector3.one * 0.4f);
+                    break;
+            }
+        }
+
+        /// <summary>One angled prong of the 'Y' forked-root silhouette.</summary>
+        private static void MoteFork(Transform body, string name, Color tint, float roll)
+        {
+            var fork = MotePart(body, name, PrimitiveType.Cylinder, tint,
+                Vector3.zero, new Vector3(0.07f, 0.14f, 0.07f));
+            fork.transform.localRotation = Quaternion.Euler(0f, 0f, roll);
+            fork.transform.localPosition =
+                fork.transform.localRotation * new Vector3(0f, 0.14f, 0f);
+        }
+
+        /// <summary>
+        /// One URP-safe, emissive, collider-free primitive of a mote body.
+        /// <para>
+        /// THREE things here are deliberate and must not be "cleaned up":
+        /// (1) the primitive's collider is DESTROYED — pickup is a per-frame distance
+        /// check, never a physics event, so a live collider would only block the hero
+        /// or punch a hole in the NavMesh;
+        /// (2) the material is built from URP/Lit with fallbacks, because
+        /// CreatePrimitive ships the built-in Standard shader which URP renders
+        /// MAGENTA (the "pink floor" lesson);
+        /// (3) it is EMISSIVE — a lit-only pastel is invisible at low lantern oil.
+        /// </para>
+        /// </summary>
+        private static GameObject MotePart(Transform body, string name, PrimitiveType type,
+            Color tint, Vector3 localPos, Vector3 localScale, float emissiveMul = 0.75f)
+        {
+            var go = GameObject.CreatePrimitive(type);
+            go.name = name;
+            go.transform.SetParent(body, false);
+            go.transform.localPosition = localPos;
+            go.transform.localScale = localScale;
+
+            // (1) Distance-check pickup — the mote must never block hero or NavMesh.
+            var col = go.GetComponent<Collider>();
             if (col != null) Destroy(col);
 
-            // CreatePrimitive ships the built-in Standard shader (magenta under URP);
-            // build a URP-compatible tinted material (the "pink floor" URP/Lit lesson).
-            var rend = mote.GetComponent<Renderer>();
+            var rend = go.GetComponent<Renderer>();
             if (rend != null)
             {
+                // (2) URP-safe material construction — never leave the Standard shader on.
                 var shader = Shader.Find("Universal Render Pipeline/Lit")
                              ?? Shader.Find("Universal Render Pipeline/Unlit")
                              ?? Shader.Find("Sprites/Default");
@@ -158,15 +312,16 @@ namespace DeNelle.Dungeons
                     var mat = new Material(shader);
                     if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", tint);
                     if (mat.HasProperty("_Color")) mat.SetColor("_Color", tint);
+                    // (3) Emissive so the mote reads in an unlit dungeon.
+                    mat.EnableKeyword("_EMISSION");
+                    mat.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
+                    if (mat.HasProperty("_EmissionColor"))
+                        mat.SetColor("_EmissionColor", tint * emissiveMul);
                     rend.material = mat;
                 }
+                rend.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             }
-
-            var pickup = root.AddComponent<IngredientPickup>();
-            pickup._moteVisual = mote;
-            pickup._moteSpin = mote.transform;
-            pickup.Configure(def, inventory, hero);
-            return pickup;
+            return go;
         }
 
         // ── Per-frame ────────────────────────────────────────────────────────

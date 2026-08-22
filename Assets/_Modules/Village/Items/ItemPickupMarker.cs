@@ -16,6 +16,26 @@
 //     bobs, or grants when the lane is off. Zero footprint in the build.
 //   * Missing optional art = LogWarning, never error (none required: primitive).
 //
+// -- PER-ITEM IDENTITY: SHAPE, not hue (WO-1132 follow-on, 2026-08-21) --------
+// THE DEFECT: Spawn built ONE hardcoded gold sphere for EVERY drop. A chest that
+// rolled Iron Scrap and one that rolled a Heartwood Bough left identical objects
+// on the floor - the drop carried no identity at all, so a player could only find
+// out what fell by walking over it.
+//
+// THE FIX follows the sibling defect proven the same day on IngredientPickup:
+// the identity data was ALREADY AUTHORED and nothing read it. Every
+// consumables.json / materials.json row carries a `glyph` char (pinned by the
+// [item-identity] oracle) and ItemIdentity.GlyphOf already exposed it. The mote's
+// SILHOUETTE is now built from that glyph via ItemMoteShapes - no new identity
+// table was authored. Hue is deliberately NOT the cue: the owner is red/green
+// colourblind, and the sibling proved that lit pastel primitives all wash to the
+// same pellet anyway. The tint now carries only KIND (consumable / material /
+// unauthored), in three luma-separated values that survive a greyscale pass.
+//
+// A mote carrying MORE THAN ONE distinct item shows its headline item's shape
+// plus one small satellite pip per extra line (capped at 3) - so "a chest full"
+// reads differently from "one herb" without any hue or text.
+//
 // ASCII strings only. Canon: village is Elarion.
 // =============================================================================
 
@@ -36,38 +56,126 @@ namespace DeNelle.Village.Items
             if (!ItemDropSystem.Enabled) return;            // SHIPS DARK.
             if (lines == null || lines.Count == 0) return;
 
-            var go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            go.name = "ItemDropMote";
+            string headline = ResolveHeadlineId(lines);
+            char glyph = ItemMoteShapes.ResolveGlyph(headline);
+            Color tint = ItemMoteShapes.TintFor(headline);
+
+            // An id that no catalog owns still gets a distinct silhouette (hashed), but it
+            // is CONTENT DEBT, so say so once instead of letting it pass silently.
+            if (!ItemMoteShapes.HasAuthoredIdentity(headline))
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Once(
+                    "ItemDrop", "unauthored-drop-id:" + headline,
+                    "drop id '" + headline + "' has no consumables.json/materials.json row - " +
+                    "mote silhouette is hash-derived (family '" + ItemMoteShapes.FamilyName(glyph) +
+                    "'). PO: author the row so the drop gets a real name + glyph.");
+            }
+
+            // ROOT is an EMPTY transform, never a primitive: the shape parts hang under a
+            // body so the whole silhouette bobs/spins as one piece, and the root itself can
+            // never carry a collider. ItemPickupMarker's bob/spin still drives this root, so
+            // the mote sits at exactly the height it always did.
+            var go = new GameObject("ItemDropMote_" +
+                                    (string.IsNullOrEmpty(headline) ? "unknown" : headline));
             go.transform.position = at + Vector3.up * 0.5f;
-            go.transform.localScale = Vector3.one * 0.45f;
 
-            // Mote is a trigger so it never blocks the hero or NavMesh agents.
+            var body = new GameObject("Mote");
+            body.transform.SetParent(go.transform, false);
+
+            var parts = ItemMoteShapes.PartsFor(glyph);
+            for (int i = 0; i < parts.Count; i++)
+                BuildPart(body.transform, parts[i], tint);
+
+            // Multi-line motes read as "more here" by SHAPE - satellite pips, capped so a
+            // fat chest roll never turns into a ball of primitives.
+            int extras = Mathf.Min(lines.Count - 1, 3);
+            for (int i = 0; i < extras; i++)
+            {
+                var rot = Quaternion.Euler(0f, 90f + i * 120f, 0f);
+                BuildPart(body.transform, new MotePartSpec(
+                    "Extra" + i, PrimitiveType.Sphere,
+                    rot * new Vector3(0f, -0.16f, 0.30f), Vector3.one * 0.09f), tint);
+            }
+
+            go.AddComponent<ItemPickupMarker>().Init(lines);
+        }
+
+        /// <summary>
+        /// The item this mote LOOKS like: the largest line, tie-broken by ordinal id so the
+        /// same roll always produces the same silhouette (a dictionary's order is not stable
+        /// and a mote that changed shape between identical rolls would be worse than none).
+        /// </summary>
+        public static string ResolveHeadlineId(Dictionary<string, int> lines)
+        {
+            if (lines == null) return null;
+            string best = null;
+            int bestCount = int.MinValue;
+            foreach (var kv in lines)
+            {
+                if (string.IsNullOrEmpty(kv.Key)) continue;
+                if (kv.Value > bestCount ||
+                    (kv.Value == bestCount && string.CompareOrdinal(kv.Key, best) < 0))
+                {
+                    best = kv.Key;
+                    bestCount = kv.Value;
+                }
+            }
+            return best;
+        }
+
+        /// <summary>
+        /// One URP-safe, emissive, collider-free primitive of the mote body.
+        /// <para>
+        /// THREE things here are deliberate and must not be "cleaned up":
+        /// (1) the primitive's collider is DESTROYED - pickup is a per-frame DISTANCE CHECK
+        /// (ItemPickupMarker.Update), never a physics event, so a live collider would only
+        /// block the hero or punch a hole in the NavMesh;
+        /// (2) the material is built from URP/Lit with fallbacks, because CreatePrimitive
+        /// ships the built-in Standard shader which URP renders MAGENTA (the "pink floor"
+        /// lesson);
+        /// (3) it is EMISSIVE - a lit-only primitive is invisible at low lantern oil, which
+        /// is exactly where a dungeon chest drops.
+        /// </para>
+        /// </summary>
+        private static void BuildPart(Transform body, MotePartSpec spec, Color tint,
+                                      float emissiveMul = 0.75f)
+        {
+            var go = GameObject.CreatePrimitive(spec.Primitive);
+            go.name = spec.Name;
+            go.transform.SetParent(body, false);
+            go.transform.localPosition = spec.LocalPosition;
+            go.transform.localRotation = spec.LocalRotation;
+            go.transform.localScale = spec.LocalScale;
+
+            // (1) Distance-check pickup - the mote must never block hero or NavMesh.
             var col = go.GetComponent<Collider>();
-            if (col != null) col.isTrigger = true;
+            if (col != null)
+            {
+                if (Application.isPlaying) UnityEngine.Object.Destroy(col);
+                else UnityEngine.Object.DestroyImmediate(col);
+            }
 
-            // Cheap loot-gold tint so it reads as loot without any art dependency.
-            // CreatePrimitive ships the built-in Standard shader, which URP cannot
-            // render -> it falls back to Hidden/InternalErrorShader (MAGENTA). Build a
-            // URP-compatible material explicitly (URP/Lit uses "_BaseColor", legacy
-            // "_Color"); Sprites/Default is the always-present last resort. Same class
-            // of fix as the "pink floor" URP/Lit lesson.
             var rend = go.GetComponent<Renderer>();
             if (rend != null)
             {
+                // (2) URP-safe material construction - never leave the Standard shader on.
                 var shader = Shader.Find("Universal Render Pipeline/Lit");
                 if (shader == null) shader = Shader.Find("Universal Render Pipeline/Unlit");
                 if (shader == null) shader = Shader.Find("Sprites/Default");
                 if (shader != null)
                 {
-                    var gold = new Color(1f, 0.84f, 0.32f, 1f);
                     var mat = new Material(shader);
-                    if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", gold);
-                    if (mat.HasProperty("_Color")) mat.SetColor("_Color", gold);
+                    if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", tint);
+                    if (mat.HasProperty("_Color")) mat.SetColor("_Color", tint);
+                    // (3) Emissive so the mote reads in an unlit dungeon.
+                    mat.EnableKeyword("_EMISSION");
+                    mat.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
+                    if (mat.HasProperty("_EmissionColor"))
+                        mat.SetColor("_EmissionColor", tint * emissiveMul);
                     rend.material = mat;
                 }
+                rend.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             }
-
-            go.AddComponent<ItemPickupMarker>().Init(lines);
         }
     }
 

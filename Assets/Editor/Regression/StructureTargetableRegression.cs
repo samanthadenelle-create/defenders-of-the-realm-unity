@@ -137,7 +137,14 @@ namespace DeNelle.Editor.Regression
         {
             "EnemyDamageable",     // the Enemy adapter - the original implementor
             "DragonBoss",          // apex boss, flying layer
-            "BreakableContainer",  // world props
+            // ⛔ BreakableContainer was REMOVED from this ratchet by WO-1132, DELIBERATELY.
+            // Owner ruling 2026-08-21 made the loot chest an OPENABLE prop, not an attackable
+            // one: it no longer implements IDamageable, declares no CombatFaction, and is no
+            // longer relayered to "Enemy". That was not an accidental disappearance - it is
+            // the fix for WO-1047 (a dungeon prop registering as a HOSTILE target), which this
+            // ratchet would otherwise block. DO NOT RE-ADD IT: BreakableContainerChestRegression
+            // [chest-not-hostile] now asserts the OPPOSITE (that it implements neither damage
+            // interface), so the two suites would deadlock against each other.
             "RaidSpire",           // the dual-contract precedent WO-853 extended
             "WallSegment",         // NEW in WO-853
             "Gate",                // NEW in WO-853
