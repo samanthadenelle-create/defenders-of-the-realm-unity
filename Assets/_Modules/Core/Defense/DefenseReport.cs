@@ -27,15 +27,21 @@
 //   DefenseReportContractRegression pins that a GhostSnapshot-sourced record
 //   round-trips identically today, so (c) needs no schema change.
 //
-// ⛔ THE STAKES ARE UNRULED — StakesLedger IS ALL ZERO ON PURPOSE.
-//   What the player LOSES on a failed defence is an owner design call that has not
-//   been made. This build RESOLVES and REPORTS an attack; it TAKES NOTHING. The
-//   basket exists in the wire now (WO-947 shape) so a later ruling plugs in at ONE
-//   method — DefenseReportBuilder.BuildStakes — with no schema change and no second
-//   economy writer. StakesRuleId makes an old report self-describing, so a build that
-//   HAS stakes can never mis-read an interim report as "they took nothing that day".
-//   Do not invent a rule here. Do not "just take 10% of stockpile" (that collides with
-//   the stockpiles-cap-capacity and WO-947 basket rulings).
+// ⛔ THE STAKES ARE RULED (owner 2026-08-22, WO-1139): COLLECTOR LOOTING ONLY, NO BANK
+//   THEFT. "What you have COLLECTED is safe; what is still sitting in the building is at
+//   risk." A broken collector already loses half its UNCOLLECTED pending
+//   (ResourceCollector.OnSiegeDestroyed, RaidLootFraction 0.5, shipped as WO-664) — the
+//   report REPORTS that, it does not compute a second loss. DefenseReportBuilder.BuildStakes
+//   sums the collectors' own LastLootStolen into StakesLedger; ApplyStakes only SEALS it.
+//   ⛔ NOTHING DEBITS THE WALLET FOR A SIEGE, and nothing may: the collector already removed
+//   the resources, so a bank debit charges the player twice for one siege. The superseded
+//   2026-08-21 flat 15%-of-banked take (with a 20%-of-capacity floor) was deleted before it
+//   ever reached a player.
+//   ⛔ CRYSTAL COLLECTORS ARE NEVER ROBBED — enforced twice and independently, at the steal
+//   (ResourceCollector.IsLootable) and at the ledger (StakeRules.IsLootable).
+//   StakesRuleId makes an old report self-describing (pre-stakes records keep
+//   "none.interim.wo1026"), so a stakes-carrying build can never mis-read an interim
+//   report as "they took nothing that day".
 // =============================================================================
 
 using System;
@@ -291,8 +297,9 @@ namespace DeNelle.Core.Defense
         /// <summary>ResourceCollector row — the label carries a production hit.</summary>
         [JsonProperty("coll")] public bool IsCollector;
         /// <summary>Collectors only: pending resources stolen when the collector broke.
-        /// ⚠ This is TODAY'S EXISTING MECHANIC being RECORDED, not a new stake. Do not confuse
-        /// it with <see cref="StakesLedger"/>, which is the unruled loss and is all zero.</summary>
+        /// ⭐ Since the 2026-08-22 ruling this IS the stake — <see cref="StakesLedger"/> is the
+        /// same figures summed and bucketed by resource, not a separate loss. The per-row copy
+        /// says WHICH building was robbed; the ledger says the TOTAL.</summary>
         [JsonProperty("loot")] public int LootStolen;
         /// <summary>Flattened repair cost. Flattened rather than embedding Catalog.ResourceCost
         /// so the wire stays stable if that struct changes.</summary>
@@ -352,37 +359,69 @@ namespace DeNelle.Core.Defense
     }
 
     /// <summary>
-    /// ⛔ WHAT THE ATTACK TOOK — ALL ZERO UNDER THE INTERIM, AND SELF-DESCRIBING ABOUT WHY.
-    /// The buckets are shaped per the WO-947 basket ruling so a later loss ruling has somewhere
-    /// to land with no schema change. THE ONLY PLACE A RULING PLUGS IN IS
-    /// DefenseReportBuilder.BuildStakes.
+    /// ⛔ WHAT THE ATTACK CARRIED OFF — the COLLECTORS' OWN LOOT FIGURES, SUMMED.
+    ///
+    /// <para>These numbers are NOT a second account of the loss. <c>DefenseReportBuilder.BuildStakes</c>
+    /// sums <c>ResourceCollector.LastLootStolen</c> across the collectors that broke during the
+    /// siege — the very field each collector wrote when it lost the resources — so the figure the
+    /// player reads and the figure that was actually lost are ONE VALUE, not two calculations that
+    /// agree today. A report that lies about a loss is worse than no report.</para>
+    ///
+    /// <para>⛔ <b>THE BANK IS NOT PART OF THIS.</b> Owner ruling 2026-08-22: collector looting
+    /// only, no bank theft — <i>"what you have COLLECTED is safe; what is still sitting in the
+    /// building is at risk"</i>. Nothing debits the wallet for a siege, and nothing may: the
+    /// collector already removed the resources from its own pending when it broke, so a wallet
+    /// debit would charge the player twice for one siege.</para>
+    ///
+    /// <para>The buckets are shaped per the WO-947 basket ruling. ⛔ <b>Crystals stay 0 forever</b>
+    /// — the field exists only so the wire shape is complete. A crystal collector is never robbed
+    /// (<c>ResourceCollector.IsLootable</c>) and a crystal bucket can never be written
+    /// (<see cref="StakeRules.IsLootable"/>); a player cannot tell a harvested crystal from a
+    /// purchased one, so a crystal loss reads as losing bought currency.</para>
     /// </summary>
     [Serializable]
     public sealed class StakesLedger
     {
-        /// <summary>0 under the interim.</summary>
+        /// <summary>Wood looted out of broken collectors. 0 when no wood collector broke.</summary>
         [JsonProperty("w")] public int Wood;
-        /// <summary>0 under the interim.</summary>
+        /// <summary>Iron looted out of broken collectors. 0 when no iron collector broke.</summary>
         [JsonProperty("i")] public int Iron;
-        /// <summary>0 under the interim.</summary>
+        /// <summary>Food looted out of broken collectors. 0 when no food collector broke.</summary>
         [JsonProperty("f")] public int Food;
-        /// <summary>0 under the interim.</summary>
+        /// <summary>⛔ ALWAYS 0. A crystal collector is never robbed and a crystal bucket can
+        /// never be written (see <see cref="StakeRules.IsLootable"/>). Pinned by
+        /// SiegeLossStakesRegression.</summary>
         [JsonProperty("c")] public int Crystals;
-        /// <summary>0 under the interim.</summary>
+        /// <summary>⛔ ALWAYS 0. No ruling takes magic; the bucket exists for wire completeness.</summary>
         [JsonProperty("m")] public int Magic;
-        /// <summary>Which ruling produced these numbers. <see cref="InterimRuleId"/> today; a
-        /// future ruling stamps its OWN id. This is what stops a stakes-carrying build from
-        /// mis-reading an interim report as "the player lost nothing that day".</summary>
+        /// <summary>Which ruling produced these numbers — <see cref="InterimRuleId"/> on a
+        /// pre-WO-1139 record, <see cref="StakeRules.RuleId"/> since. This is what stops a
+        /// stakes-carrying build from mis-reading an interim report as "the player lost nothing
+        /// that day".</summary>
         [JsonProperty("rule")] public string StakesRuleId;
 
-        /// <summary>The id stamped while the loss consequence is UNRULED.</summary>
+        /// <summary>
+        /// TRUE once this record's loot has been SEALED onto the report. Additive, default-on-read
+        /// (an older record deserialises to <c>false</c>, which is correct: nothing was ever
+        /// recorded under the interim), so it needs NO SaveSchema bump — v38 stands.
+        ///
+        /// <para>⚠ It does NOT mean "the wallet was debited": nothing debits the wallet for a
+        /// siege (the collector already removed the resources when it broke). It is the
+        /// IDEMPOTENCE latch — <c>ApplyStakes</c> refuses to seal the same record twice, so a
+        /// re-filed or re-opened report cannot re-count a loss.</para>
+        /// </summary>
+        [JsonProperty("ap")] public bool Applied;
+
+        /// <summary>The id stamped while the loss consequence was UNRULED (pre-WO-1139 records).</summary>
         public const string InterimRuleId = "none.interim.wo1026";
 
-        /// <summary>True when every bucket is zero (the interim contract).</summary>
+        /// <summary>True when every bucket is zero — a held defence, or a pre-ruling record.</summary>
         [JsonIgnore]
         public bool IsEmpty => Wood == 0 && Iron == 0 && Food == 0 && Crystals == 0 && Magic == 0;
 
-        /// <summary>The interim ledger: nothing taken, stamped with the interim rule id.</summary>
+        /// <summary>The interim ledger: nothing taken, stamped with the interim rule id. Still the
+        /// default for a record with no stakes on the wire (see <c>DefenseOutcomeRecord.Normalize</c>) —
+        /// an old report must keep describing the ruling it was written under, not inherit this one.</summary>
         public static StakesLedger Interim()
         {
             return new StakesLedger { StakesRuleId = InterimRuleId };
@@ -428,7 +467,9 @@ namespace DeNelle.Core.Defense
         /// polyline on the report plate. Empty on a report written before the path sampler,
         /// which the plate handles by simply drawing no line.</summary>
         [JsonProperty("path")] public List<AttackPathPoint> Path;
-        /// <summary>⛔ ALL ZERO under the interim. See <see cref="StakesLedger"/>.</summary>
+        /// <summary>What the attack actually took — the MEASURED wallet delta, not a second
+        /// account of it. All zero on a held or breached defence, and on any pre-WO-1139 record.
+        /// See <see cref="StakesLedger"/> and <see cref="StakeRules"/>.</summary>
         [JsonProperty("stk")] public StakesLedger ResourcesLost;
 
         /// <summary>
