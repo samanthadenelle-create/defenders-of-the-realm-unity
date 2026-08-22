@@ -1,11 +1,18 @@
 # WORK ORDER 1047 — A dungeon prop is registering as a HOSTILE target, and it renders as a bare orange cube
 
-**Status:** READY - INSTRUMENTED - 2026-08-21 CLI, gate-green (COMPILE_GATE_OK + REGRESSION_OK 234/234).
+**Status:** COMPLETE — OWNER ACCEPTED 2026-08-22 (superseded by WO-1132 implementation; re-verified)
 **Minted:** 2026-08-17 (UI seat) — provenance stack bumped 1047 → 1048 in the same edit
 **Lane:** Dungeon props + hero targeting. Disjoint from the town/UI lanes.
 **Provenance:** owner 2026-08-17: *"target attaches to this item and there is a floating key next to it.
 Something is broken it feels"*, with a dungeon screenshot: an untextured **orange cube** carrying a gold
 shield glyph above it and a gold ground ring, with the target reticle locked to it.
+
+## Completion evidence — 2026-08-22
+
+`BreakableContainer` is no longer an `IDamageable`/`IDamageableStructure`, migrates off the Enemy
+layer, builds the authored chest presentation, and opens through interaction outside combat.
+`BreakableContainerChestRegression.RunStandalone` emitted `CHEST_OK`. No additional runtime change
+was required in this lane.
 
 ---
 

@@ -106,7 +106,8 @@
         },
         "isBoss": false,
         "enemyType": null,
-        "displayName": null
+        "displayName": null,
+        "threat": 0
       },
       "chests": null
     },
@@ -147,7 +148,8 @@
         },
         "isBoss": false,
         "enemyType": null,
-        "displayName": null
+        "displayName": null,
+        "threat": 0
       },
       "chests": [
         {
@@ -236,7 +238,8 @@
         },
         "isBoss": false,
         "enemyType": null,
-        "displayName": null
+        "displayName": null,
+        "threat": 0
       },
       "chests": null
     },
@@ -277,7 +280,8 @@
         },
         "isBoss": false,
         "enemyType": null,
-        "displayName": null
+        "displayName": null,
+        "threat": 0
       },
       "chests": null
     },
@@ -318,7 +322,8 @@
         },
         "isBoss": false,
         "enemyType": null,
-        "displayName": null
+        "displayName": null,
+        "threat": 0
       },
       "chests": null
     },
@@ -346,7 +351,8 @@
         },
         "isBoss": true,
         "enemyType": "troll-overlord",
-        "displayName": "The Ember Warlord"
+        "displayName": "The Ember Warlord",
+        "threat": 0
       },
       "chests": [
         {

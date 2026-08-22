@@ -1,6 +1,8 @@
 {
   "version": 2,
   "dungeonId": "dg_stair_rig",
+  "recommendedLevel": 1,
+  "tier": 1,
   "exitRoomId": "flat_0",
   "cellSize": 1.0,
   "rooms": [

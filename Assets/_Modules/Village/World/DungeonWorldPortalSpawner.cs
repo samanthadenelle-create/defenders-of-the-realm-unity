@@ -25,10 +25,14 @@
 //     it already builds its own PortalVFXController glow, shows the proximity
 //     [Tap/F] prompt + MobileInteractButton, and routes via
 //     SceneManager.LoadScene("Dungeon_" + id). We just place it and Configure() it.
-//   * DUNGEON DATA — Resources/Dungeons/*.asset (DungeonDef) when authored; else an
-//     inline fallback covering only the dungeon scenes that ACTUALLY exist in the
-//     build (Dungeon_HealersCottage, Dungeon_FolksGranary) — identical policy to
-//     DungeonEntranceBootstrap so a fresh clone never routes to a missing scene.
+//   * DUNGEON DATA — code-injected DungeonDefs in LoadDefs(), one per COMPOSED dungeon,
+//     each gated on CanStreamedLevelBeLoaded so an uncomposed graph yields no portal
+//     rather than a door onto a missing scene. Resources/Dungeons/*.asset is still read
+//     first if anything is ever authored there, but as of 2026-08-22 that folder holds
+//     no DungeonDef: the last two (FolksGranary, HealersCottage) were the project's only
+//     legacy ScriptableObject dungeons and were retired in favour of composed graphs.
+//     The old "inline fallback onto Dungeon_HealersCottage / Dungeon_FolksGranary" is
+//     gone with them.
 //   * DISCOVERY — self-contained proximity reveal (mirrors NodeDiscoverySystem's
 //     dim->fade-in approach) so portals are genuinely hidden-until-found WITHOUT
 //     editing NodeDiscoverySystem (which only tracks Mine/Settlement/Camp nodes).
@@ -128,24 +132,38 @@ namespace DeNelle.Village.World
             // the set (~145m on a clear axis) because it is the hardest crawl: 6 floors, orc into
             // troll, and the richest deep-boss table. Yaw 180 faces the castle.
             new AuthoredPortal("dg_ember_deep", new Vector3(0f, 0f, 145f), 180f),
-            // WEST row REMOVED (WO-776, 2026-07-30): Folk's Granary is a contentless stub
-            // (no DungeonController, no layout JSON, zero lore, one canned encounter) — a
-            // real door into a hollow room, and the owner's felt-test walked straight into
-            // it. GATED until the content WO lands (layout + Inn-Keeper boss per
-            // docs/DUNGEON_DESIGNS.md); the scene + FolksGranaryBuilder stay in-repo,
-            // buildable dev-only. Re-add the row here to promote:
-            //   new AuthoredPortal("FolksGranary", new Vector3(-140f, 0f, -20f), 82f),
-            // SOUTH of the walls -- the third compass pull, and the row that puts the
-            // fully-authored Dungeon_HealersCottage back in normal play. When the EAST row
-            // was rerouted to 'dg_starter_loop' the HealersCottage def (Resources/Dungeons/
-            // HealersCottage.asset, DungeonId "HealersCottage") lost its only table row, so
-            // TryGetAuthored returned false every session and the loop logged
-            // "has NO authored world position ... portal not placed" -- the richest dungeon
-            // in the game (lore stones, mini-boss, chests, crafting, checkpoints) was
-            // UNREACHABLE outside the dev overlay. Id is the bare "HealersCottage": it must
-            // equal def.DungeonId for TryGetAuthored, and DungeonPortal.EnterDungeon then
-            // resolves the scene via its "Dungeon_" + id fallback (no scene is named
-            // "HealersCottage").
+            // WEST row: the Granary. RESTORED 2026-08-22 pointing at the COMPOSED
+            // 'dg_folks_granary', not the retired legacy stub.
+            //
+            // History, kept because the seat/yaw below is inherited from it: WO-776
+            // (2026-07-30) removed this row because the legacy 'FolksGranary' was "a
+            // contentless stub ... a real door into a hollow room". The legacy content type
+            // (a Resources/Dungeons ScriptableObject pointing at a hand-built
+            // Dungeon_FolksGranary.unity) is now GONE — owner ruling 2026-08-22: "the last
+            // two break every time, so remove them and create two new ones". The replacement
+            // is a graph composed by GraphDungeonComposer like every dungeon that works.
+            // Same world seat and yaw as the WO-776 template row, so the west compass pull
+            // is unchanged.
+            new AuthoredPortal("dg_folks_granary", new Vector3(-140f, 0f, -20f), 82f),
+            // SOUTH of the walls -- the third compass pull. RE-POINTED 2026-08-22 from the
+            // legacy id "HealersCottage" to the composed 'dg_healers_cottage'.
+            //
+            // ⚠ THE OLD COMMENT HERE CALLED THIS "the richest dungeon in the game (lore
+            // stones, mini-boss, chests, crafting, checkpoints)". THAT WAS FALSE IN THE ONLY
+            // sense that matters, and it is exactly the class CLAUDE.md warns about
+            // (comments lie; verify from the artifact). The owner, 2026-08-22: "it might be
+            // rich but ive never in all the time 5 months ever gotten past room 1 ... so its
+            // not accessable so its worth redoing well with proven method". Content the
+            // player cannot reach is not content — it is a liability that reads as an asset
+            // in review, which is how this one survived five months behind a flattering
+            // sentence. The rebuild target is REACHABILITY: a crawl that resolves entry ->
+            // rooms -> keep -> exit on the proven composer path.
+            //
+            // The id is now the graphId, and the composed scene is named after it
+            // (DungeonBaker writes Assets/Scenes/DungeonCompose/<dungeonId>.unity), so
+            // DungeonPortal.EnterDungeon loads it VERBATIM and never reaches its
+            // "Dungeon_" + id fallback. That fallback used to be load-bearing here, when the
+            // bare id "HealersCottage" had to resolve to Dungeon_HealersCottage.unity.
             //
             // Seat = the EAST row rigidly yaw-rotated +90 deg about the origin,
             // (x,z) -> (z,-x): (140,20) -> (20,-140). Same 141.4m radius, same ~96m walk
@@ -160,7 +178,7 @@ namespace DeNelle.Village.World
             // rejected within 37m of that road line, so the seat is flat and prop-free,
             // 10m clear of the painted road and ~78m outside the r=44..62 moat band.
             // If a headless run reports navmesh-seated=False, retune to (16f, 0f, -140f).
-            new AuthoredPortal("HealersCottage", new Vector3(20f, 0f, -140f), 352f),
+            new AuthoredPortal("dg_healers_cottage", new Vector3(20f, 0f, -140f), 352f),
         };
 
         // ⛔ THE BAND IS AN UPPER LIMIT ONLY — corrected 2026-08-20 (owner: "portal floating in the air").
@@ -1356,16 +1374,13 @@ namespace DeNelle.Village.World
             foreach (var d in all)
             {
                 if (d == null || string.IsNullOrEmpty(d.SceneName)) continue;
-                // WO-776 (2026-07-30): Folk's Granary is DELIBERATELY GATED — a contentless
-                // stub the owner walked into. Skipping the def here (Step, not Warn: this is
-                // by-design, not an anomaly) also prevents the per-boot "NO authored world
-                // position" warning its now-removed portal row would otherwise cause.
-                if (string.Equals(d.DungeonId, "FolksGranary", System.StringComparison.OrdinalIgnoreCase))
-                {
-                    FlowTrace.Step("DungeonPortal",
-                        "def 'FolksGranary' skipped — stub dungeon gated until its content WO lands (WO-776).");
-                    continue;
-                }
+                // The WO-776 "FolksGranary" skip is GONE because the def it skipped is gone:
+                // Resources/Dungeons/FolksGranary.asset and HealersCottage.asset — the only two
+                // legacy ScriptableObject dungeons in the project — were deleted 2026-08-22 and
+                // replaced by composed graphs (dg_folks_granary / dg_healers_cottage, injected
+                // below). This foreach now iterates an empty Resources folder in practice; it is
+                // kept, not deleted, so a future authored DungeonDef still works.
+                //
                 // Only place portals to scenes that are actually loadable (in Build Settings).
                 if (d.SceneExists && UnityEngine.Application.CanStreamedLevelBeLoaded(d.SceneName))
                     built.Add(d);
@@ -1422,14 +1437,35 @@ namespace DeNelle.Village.World
                                   new Color(0.72f, 0.66f, 0.86f)));
             }
 
-            if (built.Count > 0) return built;
+            // 2026-08-22 — the two REPLACEMENTS for the retired legacy ScriptableObject
+            // dungeons, injected on exactly the same pattern as their siblings above.
+            //
+            // ⛔ THE DISPLAY NAME IS NOT OPTIONAL. DungeonPortal.DisplayName falls back to the
+            // RAW ID when no name is authored, so a nameless def puts "dg_healers_cottage" on
+            // the arch prompt and on the realm-map pin. Every id injected in this method
+            // therefore carries an authored, player-facing name. Names ruled by the owner
+            // 2026-08-22 ("healers cottage and grainery"): "Healer's Cottage" and "Granary".
+            // ASCII apostrophe (U+0027) only — canon strings are ASCII-only.
+            const string HealersCottage = "dg_healers_cottage";
+            if (UnityEngine.Application.CanStreamedLevelBeLoaded(HealersCottage)
+                && !built.Exists(x => x != null && string.Equals(x.DungeonId, HealersCottage, System.StringComparison.OrdinalIgnoreCase)))
+            {
+                built.Add(MakeDef(HealersCottage, HealersCottage, "Healer's Cottage", new Color(1f, 0.82f, 0.48f)));
+            }
 
-            // Inline fallback — the two dungeon scenes that exist in the build today.
-            var fb = new List<DungeonDef>(2);
-            if (UnityEngine.Application.CanStreamedLevelBeLoaded("Dungeon_HealersCottage"))
-                fb.Add(MakeDef("HealersCottage", "Dungeon_HealersCottage", "Healer's Cottage", new Color(1f, 0.82f, 0.48f)));
-            // FolksGranary fallback REMOVED (WO-776) — stub dungeon gated; see the def skip above.
-            return fb;
+            const string FolksGranary = "dg_folks_granary";
+            if (UnityEngine.Application.CanStreamedLevelBeLoaded(FolksGranary)
+                && !built.Exists(x => x != null && string.Equals(x.DungeonId, FolksGranary, System.StringComparison.OrdinalIgnoreCase)))
+            {
+                built.Add(MakeDef(FolksGranary, FolksGranary, "Granary", new Color(0.6f, 0.9f, 0.7f)));
+            }
+
+            // No inline fallback any more. It used to name Dungeon_HealersCottage — the legacy
+            // hand-built scene — which is retired; a fallback onto a retired scene is a door
+            // into the exact content the owner could never get past room 1 of. Every dungeon
+            // now comes from the injections above, each gated on CanStreamedLevelBeLoaded, so
+            // an uncomposed graph yields NO portal rather than a portal onto nothing.
+            return built;
         }
 
         private static DungeonDef MakeDef(string id, string scene, string name, Color accent)

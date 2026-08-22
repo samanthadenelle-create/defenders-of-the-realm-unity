@@ -1,0 +1,135 @@
+{
+  "version": 2,
+  "graphId": "dg_healers_cottage",
+  "recommendedLevel": 1,
+  "tier": 1,
+  "entry": "entry",
+  "_comment": "REPLACEMENT for the legacy ScriptableObject dungeon 'HealersCottage' (2026-08-22, owner ruling: 'the last two break every time, so remove them and create two new ones'). The legacy asset pointed at Dungeon_HealersCottage.unity, a hand-built scene the owner never once got past room 1 in five months - content nobody can reach is not content. This is the same crawl re-authored on the PROVEN composer pipeline: one floor, no stairwells (stairwell drift is the dg_bonecrypt/dg_ember_deep abort class), a tree graph with a single spine and two flanking rooms, so entry -> ward -> crossing -> approach -> keep resolves end to end. Gentle tier-1 pacing: two small fights, a reward vault, a lore shrine, one mini-boss.",
+  "nodes": [
+    {
+      "id": "entry",
+      "prefab": "EntryHall"
+    },
+    {
+      "id": "corr1",
+      "prefab": "Straight"
+    },
+    {
+      "id": "ward",
+      "prefab": "CombatChamber",
+      "encounter": {
+        "kind": "hollow-group",
+        "min": 2,
+        "max": 3,
+        "seatMode": "staggered",
+        "formationRadius": 4.2,
+        "confine": {
+          "mode": "room",
+          "slack": 2.0,
+          "returnHome": true,
+          "wakeRadius": 6.0
+        }
+      }
+    },
+    {
+      "id": "crossing",
+      "prefab": "Intersection"
+    },
+    {
+      "id": "herb_vault",
+      "prefab": "RewardVault",
+      "chests": [
+        {
+          "id": "hc-herb-cache",
+          "lootTableId": "dungeon-chest",
+          "visual": "chest",
+          "offset": [0.0, 0.0, 1.4]
+        }
+      ]
+    },
+    {
+      "id": "shrine",
+      "prefab": "LoreShrine"
+    },
+    {
+      "id": "choke",
+      "prefab": "ChokePoint",
+      "encounter": {
+        "kind": "hollow-group",
+        "min": 3,
+        "max": 4,
+        "seatMode": "staggered",
+        "formationRadius": 4.4,
+        "confine": {
+          "mode": "room",
+          "slack": 2.0,
+          "returnHome": true,
+          "wakeRadius": 6.0
+        }
+      }
+    },
+    {
+      "id": "approach",
+      "prefab": "Straight"
+    },
+    {
+      "id": "healers_keep",
+      "prefab": "BossKeep",
+      "encounter": {
+        "kind": "hollow-group",
+        "isBoss": true,
+        "enemyType": "hollow-apprentice",
+        "displayName": "The Blighted Healer",
+        "min": 1,
+        "max": 1,
+        "seatMode": "ring",
+        "formationRadius": 2.0,
+        "confine": {
+          "mode": "room",
+          "slack": 3.0,
+          "returnHome": false,
+          "wakeRadius": 9.0
+        }
+      },
+      "chests": [
+        {
+          "id": "hc-healer-hoard",
+          "lootTableId": "dungeon-miniboss",
+          "visual": "chest",
+          "offset": [0.0, 0.0, 2.0]
+        }
+      ]
+    }
+  ],
+  "edges": [
+    { "from": "entry",    "fromSocket": "n_door_01", "to": "corr1",        "toSocket": "s_door_01" },
+    { "from": "corr1",    "fromSocket": "n_door_01", "to": "ward",         "toSocket": "s_door_01" },
+    { "from": "ward",     "fromSocket": "n_door_01", "to": "crossing",     "toSocket": "s_door_01" },
+    { "from": "crossing", "fromSocket": "w_door_01", "to": "herb_vault",   "toSocket": "s_door_01" },
+    { "from": "crossing", "fromSocket": "e_door_01", "to": "shrine",       "toSocket": "s_door_01" },
+    { "from": "crossing", "fromSocket": "n_door_01", "to": "choke",        "toSocket": "s_door_01" },
+    { "from": "choke",    "fromSocket": "n_door_01", "to": "approach",     "toSocket": "s_door_01" },
+    { "from": "approach", "fromSocket": "n_door_01", "to": "healers_keep", "toSocket": "s_door_01" }
+  ],
+  "rules": {
+    "spineOnly": false,
+    "minShrines": 0,
+    "maxMateDistance": 1.25,
+    "sealUnmated": true,
+    "pacingCombat": 0.6,
+    "pacingLore": 0.2,
+    "pacingReward": 0.2
+  },
+  "oilStones": [
+    { "id": "hc-oil-entry", "roomId": "entry",      "offset": [1.8, 0.0, 0.0], "radius": 2.5 },
+    { "id": "hc-oil-vault", "roomId": "herb_vault", "offset": [-1.8, 0.0, 0.8], "radius": 2.5 }
+  ],
+  "traps": [
+    { "id": "hc-trap-choke", "roomId": "choke", "kind": "grate", "damage": 10.0, "radius": 1.25, "offset": [0.0, 0.0, 0.0] }
+  ],
+  "keys": [],
+  "locks": [],
+  "extracts": [
+    { "id": "hc-extract-back", "roomId": "healers_keep", "offset": [0.0, 0.0, -7.0], "label": "Leave" }
+  ]
+}

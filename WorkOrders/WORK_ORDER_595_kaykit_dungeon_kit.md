@@ -1,10 +1,18 @@
 # WORK ORDER 595 — KayKit modular dungeon kit (24 snappable grid pieces)
 
-**Status:** READY TO IMPLEMENT (design complete; pack present + measured)
+**Status:** COMPLETE — OWNER ACCEPTED 2026-08-22 (owner felt-test may reopen)
 **Date:** 2026-07-01 (overnight)
 **Priority:** P2 — the coherent-dungeon foundation
 **Owner:** Samantha (design) · Author: CLI (from measured catalog) · Implements: CLI
 **Lane:** World/Environment · feeds the chunk-composer north-star + dungeon-outpost-arena primitive.
+
+## Completion evidence — 2026-08-22
+
+The data source now defines exactly 24 non-empty, 4 m-grid chunks and seven atlas themes.
+`DungeonKitBuilder` builds thin wrappers from the real KayKit FBXs, applies themes, creates
+colliders and socket metadata, deduplicates perimeter walls, supports the moving platform, and
+produces a deterministic self-avoiding seeded composition. Gates emitted `DUNGEON_KIT_OK`,
+`DUNGEON_KIT_BUILD_OK 24/24` with `missingParts=0`, and `DUNGEON_KIT_COMPOSE_OK`.
 
 ## Why (owner, 2026-07-01)
 Free-form AI dungeon generation produced incoherent geometry ("Picasso stairs — 3 directions in one

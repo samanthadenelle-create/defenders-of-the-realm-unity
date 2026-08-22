@@ -1,0 +1,306 @@
+{
+  "version": 2,
+  "dungeonId": "dg_healers_cottage",
+  "recommendedLevel": 1,
+  "tier": 1,
+  "exitRoomId": "entry",
+  "cellSize": 1.0,
+  "rooms": [
+    {
+      "prefab": "EntryHall",
+      "instanceId": "entry",
+      "cell": [
+        0,
+        0,
+        0
+      ],
+      "yawDeg": 0.0,
+      "archetype": "hub",
+      "encounter": null,
+      "chests": null
+    },
+    {
+      "prefab": "Straight",
+      "instanceId": "corr1",
+      "cell": [
+        0,
+        0,
+        10
+      ],
+      "yawDeg": 0.0,
+      "archetype": "combat",
+      "encounter": null,
+      "chests": null
+    },
+    {
+      "prefab": "CombatChamber",
+      "instanceId": "ward",
+      "cell": [
+        0,
+        0,
+        25
+      ],
+      "yawDeg": 0.0,
+      "archetype": "combat",
+      "encounter": {
+        "kind": "hollow-group",
+        "min": 2,
+        "max": 3,
+        "seatMode": "staggered",
+        "formationRadius": 4.2,
+        "confine": {
+          "mode": "room",
+          "slack": 2.0,
+          "returnHome": true,
+          "wakeRadius": 6.0
+        },
+        "isBoss": false,
+        "enemyType": null,
+        "displayName": null,
+        "threat": 0
+      },
+      "chests": null
+    },
+    {
+      "prefab": "Intersection",
+      "instanceId": "crossing",
+      "cell": [
+        0,
+        0,
+        40
+      ],
+      "yawDeg": 0.0,
+      "archetype": "combat",
+      "encounter": null,
+      "chests": null
+    },
+    {
+      "prefab": "RewardVault",
+      "instanceId": "herb_vault",
+      "cell": [
+        -10,
+        0,
+        40
+      ],
+      "yawDeg": 270.0,
+      "archetype": "reward",
+      "encounter": null,
+      "chests": [
+        {
+          "id": "hc-herb-cache",
+          "lootTableId": "dungeon-chest",
+          "visual": "chest",
+          "offset": [
+            0.0,
+            0.0,
+            1.4
+          ]
+        }
+      ]
+    },
+    {
+      "prefab": "LoreShrine",
+      "instanceId": "shrine",
+      "cell": [
+        10,
+        0,
+        40
+      ],
+      "yawDeg": 90.00001,
+      "archetype": "lore",
+      "encounter": null,
+      "chests": null
+    },
+    {
+      "prefab": "ChokePoint",
+      "instanceId": "choke",
+      "cell": [
+        0,
+        0,
+        50
+      ],
+      "yawDeg": 0.0,
+      "archetype": "combat",
+      "encounter": {
+        "kind": "hollow-group",
+        "min": 3,
+        "max": 4,
+        "seatMode": "staggered",
+        "formationRadius": 4.4,
+        "confine": {
+          "mode": "room",
+          "slack": 2.0,
+          "returnHome": true,
+          "wakeRadius": 6.0
+        },
+        "isBoss": false,
+        "enemyType": null,
+        "displayName": null,
+        "threat": 0
+      },
+      "chests": null
+    },
+    {
+      "prefab": "Straight",
+      "instanceId": "approach",
+      "cell": [
+        0,
+        0,
+        60
+      ],
+      "yawDeg": 0.0,
+      "archetype": "combat",
+      "encounter": null,
+      "chests": null
+    },
+    {
+      "prefab": "BossKeep",
+      "instanceId": "healers_keep",
+      "cell": [
+        0,
+        0,
+        75
+      ],
+      "yawDeg": 0.0,
+      "archetype": "boss",
+      "encounter": {
+        "kind": "hollow-group",
+        "min": 1,
+        "max": 1,
+        "seatMode": "ring",
+        "formationRadius": 2.0,
+        "confine": {
+          "mode": "room",
+          "slack": 3.0,
+          "returnHome": false,
+          "wakeRadius": 9.0
+        },
+        "isBoss": true,
+        "enemyType": "hollow-apprentice",
+        "displayName": "The Blighted Healer",
+        "threat": 0
+      },
+      "chests": [
+        {
+          "id": "hc-healer-hoard",
+          "lootTableId": "dungeon-miniboss",
+          "visual": "chest",
+          "offset": [
+            0.0,
+            0.0,
+            2.0
+          ]
+        }
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "fromInstance": "entry",
+      "fromSocket": "n_door_01",
+      "toInstance": "corr1",
+      "toSocket": "s_door_01"
+    },
+    {
+      "fromInstance": "corr1",
+      "fromSocket": "n_door_01",
+      "toInstance": "ward",
+      "toSocket": "s_door_01"
+    },
+    {
+      "fromInstance": "ward",
+      "fromSocket": "n_door_01",
+      "toInstance": "crossing",
+      "toSocket": "s_door_01"
+    },
+    {
+      "fromInstance": "crossing",
+      "fromSocket": "n_door_01",
+      "toInstance": "choke",
+      "toSocket": "s_door_01"
+    },
+    {
+      "fromInstance": "crossing",
+      "fromSocket": "e_door_01",
+      "toInstance": "shrine",
+      "toSocket": "s_door_01"
+    },
+    {
+      "fromInstance": "crossing",
+      "fromSocket": "w_door_01",
+      "toInstance": "herb_vault",
+      "toSocket": "s_door_01"
+    },
+    {
+      "fromInstance": "choke",
+      "fromSocket": "n_door_01",
+      "toInstance": "approach",
+      "toSocket": "s_door_01"
+    },
+    {
+      "fromInstance": "approach",
+      "fromSocket": "n_door_01",
+      "toInstance": "healers_keep",
+      "toSocket": "s_door_01"
+    }
+  ],
+  "rules": {
+    "spineOnly": false,
+    "minShrines": 0,
+    "maxMateDistance": 1.25,
+    "sealUnmated": true,
+    "pacingCombat": 0.6,
+    "pacingLore": 0.2,
+    "pacingReward": 0.2
+  },
+  "oilStones": [
+    {
+      "id": "hc-oil-entry",
+      "roomId": "entry",
+      "offset": [
+        1.8,
+        0.0,
+        0.0
+      ],
+      "radius": 2.5
+    },
+    {
+      "id": "hc-oil-vault",
+      "roomId": "herb_vault",
+      "offset": [
+        -1.8,
+        0.0,
+        0.8
+      ],
+      "radius": 2.5
+    }
+  ],
+  "traps": [
+    {
+      "id": "hc-trap-choke",
+      "roomId": "choke",
+      "kind": "grate",
+      "damage": 10.0,
+      "radius": 1.25,
+      "offset": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    }
+  ],
+  "keys": [],
+  "locks": [],
+  "extracts": [
+    {
+      "id": "hc-extract-back",
+      "roomId": "healers_keep",
+      "offset": [
+        0.0,
+        0.0,
+        -7.0
+      ],
+      "label": "Leave"
+    }
+  ]
+}

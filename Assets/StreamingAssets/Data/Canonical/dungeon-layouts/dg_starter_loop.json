@@ -56,7 +56,8 @@
         },
         "isBoss": false,
         "enemyType": null,
-        "displayName": null
+        "displayName": null,
+        "threat": 0
       },
       "chests": null
     },
@@ -108,7 +109,8 @@
         },
         "isBoss": false,
         "enemyType": null,
-        "displayName": null
+        "displayName": null,
+        "threat": 0
       },
       "chests": null
     },
@@ -175,7 +177,8 @@
         },
         "isBoss": false,
         "enemyType": null,
-        "displayName": null
+        "displayName": null,
+        "threat": 0
       },
       "chests": null
     },

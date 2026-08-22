@@ -1,4 +1,4 @@
-**Status:** READY TO IMPLEMENT
+**Status:** DONE 2026-08-22 - owner ruled the SIGN is the wrong question for a symmetrical staff; M3 now asserts VERTICALITY instead. Three-way outcome (Decided/SignAgnostic/Undecidable), no exemption list, no global-sign flip. Gate-green 255/255.
 
 # WORK ORDER 1136 — staff_A has no decidable sheathe orientation (the last 1 of 12)
 

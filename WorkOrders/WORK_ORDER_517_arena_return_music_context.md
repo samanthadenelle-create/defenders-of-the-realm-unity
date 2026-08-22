@@ -1,7 +1,14 @@
 # WORK ORDER 517 — Arena battle-exit music: restore the CONTEXT track, not hardcoded Overworld
 
-**Status:** RCA-DONE / READY (data-proven) · **Silo:** Audio (code) · **Type:** EXISTING (bug) · **Priority:** Med (V2 arena loop)
+**Status:** COMPLETE — OWNER ACCEPTED 2026-08-22 · **Silo:** Audio (code) · **Type:** EXISTING (bug) · **Priority:** Med (V2 arena loop)
 **Source:** owner F8 in `MainCastle_Hall` — *"battle music playing in town after died in arena"* (2026-06-26 preview build).
+
+## Completion evidence — 2026-08-22
+
+Win/loss/flee retain the result-cue delay and then ask `WorldMusicDirector` to re-evaluate the
+hero's actual zone. The bootstrap fallback uses the same position-aware Village/Overworld choice;
+no hardcoded Overworld restore remains. `ArenaReturnMusicRegression.RunStandalone` emitted
+`ARENA_RETURN_MUSIC_OK`.
 
 ## Root cause (PROVEN from the owner's Player.log — not inferred)
 - `BattleArena.Resolve` schedules `RestoreAmbientAfter` which calls **`CoreServices.Audio.PlayMusic(MusicTrack.Overworld)`** — `Assets/_Modules/Village/Arena/BattleArena.cs:1157`. It is **hardcoded to Overworld** on every exit (win/loss/flee).

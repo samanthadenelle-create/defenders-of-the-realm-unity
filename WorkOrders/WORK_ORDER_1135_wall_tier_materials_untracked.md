@@ -1,10 +1,18 @@
-**Status:** READY TO IMPLEMENT
+**Status:** COMPLETE — OWNER ACCEPTED 2026-08-22
 
 # WORK ORDER 1135 — Wall tier materials are not tracked: all three tiers ride embedded FBX materials
 
 **Minted:** 2026-08-21 (CLI, banner bumped 1135 -> 1137 in the SAME edit alongside WO-1136)
 **Lane:** World/Environment (art pipeline). **Class:** EXISTING DEBT, newly made visible.
 **Silo:** Art / walls.
+
+## Completion evidence — 2026-08-22
+
+Tracked URP materials now bind the owner textures for wood, iron, and reinforced steel through
+explicit FBX importer remaps. Colour and grayscale proof captures show three distinct silhouettes
+and value structures, so no new art/product ruling was required. `WALL_TIER_PROOF_OK` and
+`RAID_WALL_MATERIAL_OK` passed. All three generated raid scenes were rebuilt, then all four raid
+scenes were rebaked; `RaidNavBake` reported `DONE — 4/4` with walkable NavMesh geometry.
 
 ## HOW THIS SURFACED
 

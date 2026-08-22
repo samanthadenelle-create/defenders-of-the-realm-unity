@@ -1,6 +1,8 @@
 {
   "version": 2,
   "dungeonId": "dg_descent_probe",
+  "recommendedLevel": 1,
+  "tier": 1,
   "exitRoomId": "entry",
   "cellSize": 1.0,
   "rooms": [
@@ -41,7 +43,8 @@
         },
         "isBoss": false,
         "enemyType": null,
-        "displayName": null
+        "displayName": null,
+        "threat": 0
       },
       "chests": null
     },
@@ -95,7 +98,8 @@
         },
         "isBoss": true,
         "enemyType": "hollow-warrior",
-        "displayName": "Hollow Warden (probe)"
+        "displayName": "Hollow Warden (probe)",
+        "threat": 0
       },
       "chests": [
         {

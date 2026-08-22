@@ -129,7 +129,33 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-08-22 (CLI): main line next free = **1142**.
+> ## ⚠ RECONCILED 2026-08-22 (CLI): main line next free = **1148**.
+> *(**WO-1147** consumed by the MON lane split - the combined monetization ticket became
+> **WO-1146 MON (rewarded ads)** + **WO-1147 MON (purchasing)**, owner ruling "split it".)*
+> *(**WO-1146** consumed by the MON lane - `WORK_ORDER_1146_MON_monetization_activation_purchases_and_ads.md`.)*
+>
+> ### ⭐ THE **MON** LANE - MONETIZATION, DEDICATED AND PRIORITISED (owner 2026-08-22)
+> **MON is a LANE TAG, NOT a number series.** Owner ruling, verbatim: *"add as a tag WO XX - MON"*.
+> A MON ticket takes an ORDINARY number from THIS banner and carries `_MON_` in its filename:
+> `WORK_ORDER_<num>_MON_<slug>.md`. The board renders it **`WO-1146 - MON`**, sorts the lane
+> FIRST, and gives it its own filter chip beside the bucket chips.
+>
+> ⛔ **WHY IT IS A TAG AND NOT ITS OWN SERIES.** A private `MON001` series would have joined the
+> 18 legacy UNNUMBERED files: no sort order and - the real cost - **the duplicate guard would be
+> OFF for exactly the tickets that matter most, and nothing would say so.** `tools/board_build.py`
+> records that same lesson against PROD. One numbering authority; the lane is a tag on top of it.
+>
+> ⚠ A MON file WITHOUT the `WORK_ORDER_` stem is classified a **Doc** by the board and drops out
+> of every Ready sweep. That is how `MON001_...md` was invisible when first authored.
+> *(CLI seat minted **WO-1145** and bumped 1145 -> 1146 in this SAME edit. **1145** = f8-ack.ps1
+> is a HIGH-WATER POINTER, not a per-item queue - acking the newest silently closes every older
+> capture. Reproduced live 2026-08-22: acked 3583 while 3582 was oldest-pending. Same failure as
+> 2026-08-10, which lost the owner's seq 2307 + 2308.)*
+> *(CLI seat minted **WO-1142**, **WO-1143**, **WO-1144** and bumped 1142 -> 1145 in this SAME
+> edit. **1142** = Structures/ArcaneSpire_1 + "arcane tower" fail to resolve, losing a building
+> every boot (80 errors x 8/8 autopilot runs). **1143** = the siege catapult renders oversized and
+> vertical in raids (owner felt-test). **1144** = truncated + colliding HUD labels seen in the
+> same capture. All three from the 2026-08-22 headed autopilot run.)*
 > *(**WO-1141 was minted by the Codex seat WITHOUT bumping this banner in the same edit** -
 > `WORK_ORDER_1141_dungeon_system_audit_verify_and_ship.md` is on disk while the banner still
 > read 1141, so the NEXT mint by either seat would have collided on 1141. Reconciled by the CLI
@@ -242,7 +268,140 @@
 > never as BUILD STATUS** -- "under construction"/"coming soon"/"dev"/"WIP" are BANNED player-facing
 > strings and get a REGRESSION ORACLE, not a comment, because that is the rule most likely to rot.
 > Status READY TO IMPLEMENT, 3 open rulings. No code yet.)*
-> ## âš  RECONCILED 2026-08-17 (UI seat): UI seat next free = **1054**.
+> ## âš  RECONCILED 2026-08-17 (UI seat): UI seat next free = **1063**.
+> *(UI seat minted **WO-1062** and bumped 1062 -> 1063 in this SAME edit. **WO-1062** = THE DUNGEON
+> PORTAL IS A FLAT PLANE and reads differently from every angle - owner shot the SAME Stoneback Tier-2
+> portal from NE/NW/SW and got three different objects. CAUSE IS IN THE CODE'S OWN COMMENT: the owner
+> VFX pick at `DungeonWorldPortalSpawner.cs:223-225` is a MAGIC CIRCLE *"use this rotated"* - a
+> face-on asset stood upright becomes a vertical disc with ONE viewing direction, so NW reads right,
+> SW reads flat and NE collapses to black shards (the unlit back face). ⛔ OWNER RULING 2026-08-22
+> WITH EXACT VALUES: *"two vfs each facing outwards"*, *"one rotated 90 other rotated -90"*, *"put .25
+> between them"* - same CircleVfx key both times, no new tag, ships immediately. THE SW SCREENSHOT IS
+> THE VISUAL REFERENCE; do not re-tune the effect. Edge-on from beside the arch is CORRECT and must
+> not be filled in with a third plane. ⛔ SECOND, STRUCTURAL FINDING - THE MAGENTA PATCH: MagentaGuard
+> scans *"on every scene load"* (`:20-22`) but the spawner builds portals at RUNTIME after load
+> (`:570`), so runtime-spawned objects are NEVER SCANNED - a hole that explains how magenta survives a
+> project with both a global guard and a dedicated Portal fixer. Fix = a public `Scan(GameObject)`
+> entry the spawner calls. Check the break-log for a guard line first: caught-and-recovered vs
+> never-scanned look identical on screen and have different fixes. File
+> `WorkOrders/WORK_ORDER_1062_portal_does_not_read_from_every_angle.md`, READY.)*
+> *(UI seat minted **WO-1061** and bumped 1061 -> 1062 in this SAME edit. **WO-1061** = THE EQUIP
+> DRAWER LISTS NOTHING - owner screenshot 2026-08-22, Thrain (mage) has an Oakheart Staff EQUIPPED and
+> "Change Weapon (Main Hand)" offers him NOTHING, not even the staff he is holding. FUNCTIONAL defect:
+> a core verb is unreachable. ⛔ ONE CANDIDATE IS ALREADY ELIMINATED - an empty `TargetClass` CANNOT
+> cause it: gate (D) in `EquipVM.RebuildCompatible` is guarded by `!string.IsNullOrEmpty(job)`, so a
+> blank class SKIPS the class filter and would show MORE, never fewer. If a seat proposes it, that is
+> backwards. §12 HELD: three candidates, ONE log line separates them - `owned=0` (equipped != owned;
+> the staff was granted to the loadout with no inventory entry - LEADING, because an item you are
+> WEARING should be the guaranteed entry), all `fits=false` (weapon `job` rows never equal this
+> hero's class), or all `offHand=true`. ⛔ DO NOT loosen the class gate to fix it - `GearCatalog.cs:
+> 572-576` records F8 seq-642 Fix B, where the gate hole was *"masked only because the shop/equip UI
+> pre-filters its lists"*; a more permissive UI re-opens it. ⛔ DO NOT special-case the equipped item
+> into the list - that destroys the evidence. ⚠ CANNOT WAIT FOR THE REDESIGN: WO-1133's compare pane
+> consumes THIS query, so an empty result ships that ticket's flagship feature dead. The owner's UX
+> point (*"clicking item opens this new window"*) is already answered by the Armory Rail's permanent
+> pane - do NOT design a better drawer. File `WorkOrders/WORK_ORDER_1061_equip_drawer_lists_nothing.md`,
+> READY TO TRIAGE.)*
+> *(UI seat minted **WO-1059** and **WO-1060** and bumped 1059 -> 1061 in this SAME edit.
+> **WO-1059** = THE HERO PREVIEW RENDER TEXTURE IS BLANK AT THE SOURCE (F8 seq=3585, photographed by
+> the owner same day). The probe names the layer itself: *"blank at the SOURCE, not at the panel. Fix
+> the model/culling, not the RawImage."* BOTH consumers are blank - InventoryPaperDoll (seq=2833) and
+> now EquipmentPanel (seq=3585, via the VIEW GEAR ribbon `InventoryUIBuilder.cs:341`) - so it is the
+> shared `HeroPreviewViewer` rig, not per-panel wiring. Leading candidate is the OPTIONAL `HeroPreview`
+> layer falling back to 31 vs the camera cullingMask; confirm, do not assume. CLOSES WO-1133 D1 and
+> blocks that redesign's GEAR SECTION ONLY.
+> **WO-1060** = THE CLAMP ORACLE, owner-requested *"yes do the clamp oracle"*. FOUR panels in three
+> days (1051/1056/1058 + the equip drawer), every one compile- and regression-green. PROD-008 says no
+> oracle can see orientation because "looks wrong" is not computable - but the moment a layout breaks
+> IS discrete and observable: `ClampMinTouch` GROWING a control. Assert A = the clamp must never fire
+> (record-only instrumentation; do NOT weaken the clamp). Assert B = no two interactive rects may
+> intersect, INCLUDING the shared Close - B is what catches WO-1058, where both controls clear the
+> floor and still overlap. Marker `UI_TOUCH_OK n/n panels`, judged on a FRESH log never the exit code.
+> ⚠ Must measure POST-SCALER (`ElarionUiKit.cs:1057` - raw screen px before the scaler applies, the
+> F8-5 root cause) at >=2 landscape aspects. Panel set DERIVED from the UICaptureLaunch enumeration,
+> never hand-listed. Ships reporting-only with a 4-entry baseline allow-list that may only ever
+> SHRINK, and the mechanism is DELETED when it empties. Files
+> `WorkOrders/WORK_ORDER_1059_hero_preview_render_texture_is_blank_at_source.md` and
+> `WORK_ORDER_1060_touch_clamp_and_overlap_oracle.md`, both READY.)*
+> *(UI seat minted **WO-1058** and bumped 1058 -> 1059 in this SAME edit. **WO-1058** = ONE PRIMARY
+> SLOT PER ROW - "Upgrade" becomes "Finish Now" IN PLACE. Owner request 2026-08-22: *"reuse the same
+> button and make it finish now so you dont have to move"*, plus the ruling *"they can double click
+> and be done / if in hurry and burn the crystals"* - DOUBLE-TAP IS A SANCTIONED FEATURE. ⛔ THE ASK
+> ALSO REMOVES A LIVE HAZARD, and it is arithmetic: the upgrade-candidate `Upgrade` button sits at
+> x 0.76-0.98 (`ManageScreenPanel.cs:725-727`) and the queued row's `Cancel` at x 0.885-0.98 (`:856`)
+> - Cancel is ENTIRELY INSIDE where Upgrade just was, so the very double-tap the owner wants CURRENTLY
+> CANCELS THE JOB SHE JUST QUEUED, while `Finish` sits a third of the row away at 0.455-0.655. Fix: a
+> fixed PRIMARY slot at 0.76-0.98 that is ALWAYS the positive action (Upgrade -> Finish Now, reusing
+> the existing two-line verb/cost CTA so the price is on the face before the finger arrives), with
+> Cancel moved to 0.40-0.55, Move up to 0.57-0.72 (it collided too) and a deliberate 0.72-0.76 gap.
+> ⛔ NO LOCKOUT, NO COOLDOWN, NO CONFIRM on the second tap - the fast path IS the feature; a seat that
+> adds friction has undone the ticket. ClampMinTouch must be a NO-OP. The panel ALSO clips per the
+> WO-1056 class - noted, NOT folded, fix it with that one. File
+> `WorkOrders/WORK_ORDER_1058_one_primary_slot_upgrade_becomes_finish_now.md`, READY.)*
+> *(UI seat minted **WO-1057** and bumped 1057 -> 1058 in this SAME edit. **WO-1057** = "RANDOM VFX
+> STUCK AROUND" (F8 seq=3583) IS UNANSWERABLE - give the loop pool NAMES. ⛔ ROOT FINDING:
+> `VFXManager._activeLoops` is an **int** (`:200`), so the pool knows HOW MANY loops are live and
+> NEVER WHICH. A leaked loop is invisible by construction; the harvested tail carries ZERO `[Flow:Vfx]`
+> lines, which is the finding rather than a gap in the capture. §12 HELD - this WO builds the
+> INSTRUMENT and deliberately does NOT guess at the leak. Fix: a registry keyed by handle carrying
+> type + OWNER + startedAt + position, dumped into the BreakCaptureHarness auto-harvest as
+> `[Flow:Vfx] LOOPS n/m` sorted OLDEST FIRST - age is the leak signal, and one read then names it the
+> way the FloorDiag dump named the pink floor. ⚠ SECOND DEFECT FOUND: `:1113` clamps with
+> `Mathf.Max(0, _activeLoops - freed)` - a clamp only matters if the value CAN go negative, so it
+> hides the very drift it implies; the registry removes it and turns silent drift into a real error.
+> Candidates listed but EXPLICITLY NOT CONCLUDED: RealmStoreBeacon (shipped YESTERDAY by WO-1052 -
+> newest code, not likeliest evidence; do NOT disable it on suspicion), GearAura seats (WO-930 is this
+> symptom verbatim), HarvestAura (one per collector AND per mine = largest persistent population),
+> EnemyAuraVFX on despawn, Poi_* markers. ⛔ A LEAK IS NOT FIXED BY RAISING THE TIER. File
+> `WorkOrders/WORK_ORDER_1057_vfx_loop_registry_and_stuck_loop_dump.md`, READY.)*
+> *(UI seat minted **WO-1056** and bumped 1056 -> 1057 in this SAME edit. **WO-1056** = ARMIES/LOADOUTS
+> PANEL STACKS IN THE SCARCE AXIS - owner screenshot 2026-08-22 shows THREE layers of buttons on one
+> band, the CTA over the body text and the wallet row crossing the panel split. SAME ROOT CAUSE AS
+> WO-1051 AT 3x SCALE, so treat it as a CLASS not an incident. ⚠ NOTE WHAT IS NOT WRONG: this panel
+> resolves `layout.bodyLeft/bodyRight/footer` CORRECTLY (`ArmyMusterPanel.cs:87-99`) - the zone
+> discipline is right; what is missing is arithmetic against the touch floor. THE NUMBERS: canvas ref
+> 1080x1920 match-width -> ~486 units tall in landscape; panel ~437; `FrameCrafting.bodyRight` ~317.
+> `MinTouchPx=112`, so the right well holds TWO interactive rows and is given SEVEN. Every button band
+> is authored `y 0.08` of that well = ~25 units and ClampMinTouch grows it to 112 - a 4.5x inflation -
+> while the two rows sit only ~32 units apart, so they overlap by ~80 units (71% of their height).
+> That IS the stack in the screenshot. ⛔ THE FIX IS NOT NEW NUMBERS: 7 rows x 112 = 784 units and the
+> WHOLE PANEL is 437. Landscape is short and wide - PACK HORIZONTALLY. Budget = THREE bands max:
+> loadout chips as ONE horizontal row (~237 each), roster rows at 112 in the existing scroll zone,
+> and Name/Save/Muster as one action strip (~300 each); `bodyRight` becomes READ-ONLY text. Acceptance
+> is that ClampMinTouch is a NO-OP - if it fires the layout was authored wrong. File
+> `WorkOrders/WORK_ORDER_1056_armies_loadouts_panel_stacks_in_the_scarce_axis.md`, READY.)*
+> *(UI seat minted **WO-1055** and bumped 1055 -> 1056 in this SAME edit. **WO-1055** = "RANGER TOWER
+> STILL ON ITS SIDE", F8 seq=3581. ⚠ FIRST: there is NO `ranger` id in the catalog - the building is
+> `tower_ground_archer` / displayName "Archer Tower", while the VFX keys call it `RangerTower*`. ONE
+> BUILDING, THREE NAMES; needs one owner ruling, not three guesses (the forge/armorer/workshop
+> precedent). ⛔ WHY "STILL": both recent orientation sweeps worked the CATALOG channel - PROD-007
+> (offsets.json is INERT for structures) and the 2026-08-18 axis-bake retirement - but THIS row's
+> correction lives in NEITHER: its row is already (0,0,0)/manual and the -90 is BAKED INTO THE PREFABS
+> by WoodenWatchtowerBuilder. The one channel neither sweep touched. ⛔ THE OBVIOUS FIX IS WRONG: do
+> NOT copy -90 into the row - `ReskinForLevel` never applies the base euler (`StructureFactory.cs:
+> 467-469`, F8-2 2026-07-07) so L2/L3 would stay down, AND the euler lands AFTER the height fit, so
+> the fit measures the SHORT axis (L2 reads 0.519) and scale becomes 9.25x instead of 4.80x - a
+> 1.93x-oversized tower. §12 HELD: three candidates, ONE measurement separates them - WHICH LEVEL is
+> down (L1 only = prefab bake double-applied vs bakeAxisConversion; L2/L3 = tier prefab lost the bake;
+> all three = the mesh conversion). Instrument EXISTS: WoodenWatchtowerBuilder measures aspect,
+> UprightAspectMin=1.2, PROD-008 measured 1.70-1.92 upright vs 0.52-0.59 down. Owner's town shows
+> upgraded structures in the same capture, so L2/L3 LEADS - leading, not concluded. PROD-008 binds:
+> ships with a HEIGHT-FIDELITY assert proven red-before/green-after. File
+> `WorkOrders/WORK_ORDER_1055_ranger_archer_tower_on_its_side.md`, READY TO TRIAGE.)*
+> *(UI seat minted **WO-1054** and bumped 1054 -> 1055 in this SAME edit. **WO-1054** = AN OPTIONAL SFX
+> OVERRIDE MISS RAISES A FALSE ERROR AND TRIPS F8. From F8 capture seq=3577. ⛔ NOTHING IS SILENT:
+> `ProceduralSfx.ForKind` (`AbilityAudioBridge.cs:91`) reads `LoadClip("Sfx/"+kind) ?? Generate(kind)`
+> - the `??` IS the designed fallback and the TODO above it calls the key an OVERRIDE. But it omits
+> the `optional:` arg, so it takes `LoadClip`'s `false` default and lands on `FlowTrace.Fail`
+> (`AudioAssetLoader.cs:197`) saying "REQUIRED by its caller", which is FALSE for this caller. The
+> loader is RIGHT and its default is RIGHT - the CALL SITE failed to declare itself; the param's own
+> doc names "a synth-fallback SFX key" as the canonical case. Fix = `optional: true`, one line.
+> ⚠ NOT one key: the key is `"Sfx/"+kind` over AbilityEffect and only FOUR clips exist in
+> `Resources/Sfx`, so EVERY unauthored effect kind fires once per session. ⛔ Do NOT author a Strike
+> clip (silences one key, leaves the rest) and do NOT flip the loader default (a real missing music
+> track would go silent AND quiet). A false ERROR costs an owner F8 press and teaches every seat to
+> skim past errors - the exact instinct §12/§14 exist to reverse. File
+> `WorkOrders/WORK_ORDER_1054_optional_sfx_miss_raises_false_error.md`, READY.)*
 > *(UI seat minted **WO-1053** and bumped 1053 -> 1054 in this SAME edit. **WO-1053** = BATTLE PACKS +
 > MONTHLY REWARD PACKS - a RENUMBER, not a new ticket: `WORK_ORDER_battle_and_monthly_packs.md` had no
 > number in its filename, so `board_build.py` keyed it **WO-?** and bucketed the owner's TOP PRIORITY

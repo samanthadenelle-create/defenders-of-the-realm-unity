@@ -1,4 +1,4 @@
-**Status:** READY TO IMPLEMENT
+**Status:** DONE 2026-08-22 - control-flow walk replaces the 4-line window; keeps the retired detector executable as a CONTROL (new 6 vs old 1 on the known sites). 27 further hollow passes found and ledgered PER SITE. Gate-green.
 
 # WORK ORDER 1138 — The hollow-pass ratchet only sees 4 lines, so 5 of 6 hollow passes escaped it
 

@@ -1,11 +1,19 @@
 # WORK ORDER 957 — EXIT beacon appears on EVERY stairwell in multi-floor dungeons
 
-**Status:** READY TO IMPLEMENT (PARTIAL - RE-BAKE DONE 2026-08-14: all 7 dungeons re-composed, COMPOSE_ALL_OK 7/7, 13 pads now bake label='Leave' and every layout emits exitRoomId. The code half landed + gated 2026-08-10. REMAINING: exitRoomId is the 'entry' FALLBACK everywhere - WHERE the one true exit sits is still an owner design pick; the per-layout one-beacon regression is still unwritten; Assets/Resources/Dungeon/Exit/ still absent so a PLAYER build takes the primitive-arch fallback. See the 2026-08-14 note at the bottom)
+**Status:** COMPLETE — OWNER ACCEPTED 2026-08-22
 **Minted:** 2026-08-10 (CLI seat, main line — banner bumped 957 → 958 in the same edit)
 **Silo:** Dungeons (exit beacon placement) — companions: WO-1007 (arch → icon), WO-1008 (beacon reads
 as light); this WO is the PLACEMENT bug, those are the PRESENTATION tickets
 **Origin:** owner F8 seq 2287, 2026-08-10 11:20, dg_ember_deep, verbatim: *"Seems to be an exit zone
 at many places, feels like a bu[g]. I see on all stairs."* Corroborated by screenshot
+
+## Completion evidence — 2026-08-22
+
+Every layout now authors one explicit `exitRoomId`; only that room receives the true exit beacon,
+while intermediate stair pads remain quiet traversal pads. Ember Deep terminates at
+`warlord_keep`; the other current layouts deliberately terminate at their entry/return room.
+The exact constructed-layout oracle emitted `DUNGEON_ROOM_OWNERSHIP_OK` after all seven dungeon
+scenes had already been recomposed.
 `flag_20260810-150215_11.png` (seq 2286 frame): the green EXIT arrow standing on a mid-dungeon
 DESCENT stairwell, floors above the actual exit.
 

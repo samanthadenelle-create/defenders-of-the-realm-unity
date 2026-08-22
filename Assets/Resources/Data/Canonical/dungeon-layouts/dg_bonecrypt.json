@@ -82,7 +82,8 @@
         },
         "isBoss": false,
         "enemyType": null,
-        "displayName": null
+        "displayName": null,
+        "threat": 0
       },
       "chests": null
     },
@@ -110,7 +111,8 @@
         },
         "isBoss": false,
         "enemyType": null,
-        "displayName": null
+        "displayName": null,
+        "threat": 0
       },
       "chests": [
         {
@@ -199,7 +201,8 @@
         },
         "isBoss": false,
         "enemyType": null,
-        "displayName": null
+        "displayName": null,
+        "threat": 0
       },
       "chests": null
     },
@@ -303,7 +306,8 @@
         },
         "isBoss": false,
         "enemyType": null,
-        "displayName": null
+        "displayName": null,
+        "threat": 0
       },
       "chests": null
     },
@@ -331,7 +335,8 @@
         },
         "isBoss": true,
         "enemyType": "necromancer",
-        "displayName": "The Bonecrypt Necromancer"
+        "displayName": "The Bonecrypt Necromancer",
+        "threat": 0
       },
       "chests": [
         {

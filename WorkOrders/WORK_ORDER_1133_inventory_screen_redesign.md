@@ -1,4 +1,4 @@
-**Status:** READY TO IMPLEMENT — the design pass is DELIVERED (see "THE DESIGN" below, added 2026-08-21 by the UI seat). CLI implements from it.
+**Status:** PARTIAL 2026-08-22 - the bag is rebuilt and the dead preview box, ribbon, tab row and under-floor cell literal are REMOVED. ⛔ The gear-view PROMOTION is deliberately not shipped: owner F8 seq 3585/3586 proved EquipmentPanel's preview is blank AT THE SOURCE, so promoting it would promote an empty box. Blank-preview cause narrowed to two survivors; not fixed.
 
 # WORK ORDER 1133 — Inventory screen: redesign the Bag, and justify the gear view or cut it
 

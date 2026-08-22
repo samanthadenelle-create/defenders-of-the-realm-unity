@@ -117,7 +117,8 @@
         },
         "isBoss": false,
         "enemyType": null,
-        "displayName": null
+        "displayName": null,
+        "threat": 0
       },
       "chests": null
     },
@@ -145,7 +146,8 @@
         },
         "isBoss": false,
         "enemyType": null,
-        "displayName": null
+        "displayName": null,
+        "threat": 0
       },
       "chests": [
         {
@@ -234,7 +236,8 @@
         },
         "isBoss": false,
         "enemyType": null,
-        "displayName": null
+        "displayName": null,
+        "threat": 0
       },
       "chests": null
     },
@@ -275,7 +278,8 @@
         },
         "isBoss": false,
         "enemyType": null,
-        "displayName": null
+        "displayName": null,
+        "threat": 0
       },
       "chests": null
     },
@@ -303,7 +307,8 @@
         },
         "isBoss": true,
         "enemyType": "hollow-brute",
-        "displayName": "The Hollow Warden"
+        "displayName": "The Hollow Warden",
+        "threat": 0
       },
       "chests": [
         {

@@ -46,6 +46,23 @@ This matters more than a cosmetic misalignment because of owner canon: **no pane
 an X for close** (`ElarionUiKit.cs:858`) — the close *is* that bottom-centre bar. Burying it under
 two CTAs damages the one exit control the screen has.
 
+### ✅ CONFIRMED ON SCREEN 2026-08-22 — the predicted collision, photographed
+
+F8 capture **seq=3578** (`[Main_Castle_Overworld] SCreen needs better`) plus the owner's screenshot
+of the live Daily Chest panel. **The arithmetic in §1 was derived from source before the screenshot
+existed, and the screen matches it exactly:**
+
+- The shared Close bar reads **`lose`** — its leading `C` is covered by the left claim button and its
+  trailing edge by the right one, **occluded from BOTH sides**, leaving only the narrow middle band
+  §1 predicted (~4% of panel width).
+- Both CTAs sit visibly IN FRONT of the Close plate, confirming the later-sibling draw order.
+- The two labels also overhang the body well exactly as §2 defect 2 describes.
+- The **"Watch Ad: Claim 1,000" button wears the Gray face while the ad is available** — §2 defect 5,
+  visible in the same frame.
+
+No further repro is needed. The screenshot is the acceptance baseline: after the fix, `Close` must
+read as the whole word, unobstructed, across its full width.
+
 ### Why it happened — the structural cause, not the typo
 
 `DailyChestController.cs:92` parents every child to **`_modal.chrome.content.transform`**.

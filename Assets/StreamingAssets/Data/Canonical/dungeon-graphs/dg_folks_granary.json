@@ -1,0 +1,173 @@
+{
+  "version": 2,
+  "graphId": "dg_folks_granary",
+  "recommendedLevel": 2,
+  "tier": 1,
+  "entry": "entry",
+  "_comment": "REPLACEMENT for the legacy ScriptableObject dungeon 'FolksGranary' (2026-08-22, owner ruling: 'the last two break every time, so remove them and create two new ones'). The legacy asset pointed at Dungeon_FolksGranary.unity, which WO-776 gated out of play on 2026-07-30 as 'a contentless stub ... a real door into a hollow room'. Re-authored on the PROVEN composer pipeline: one floor, no stairwells, a spine with a dogleg (the dg_starter_loop turn pattern) plus two flanking rooms off the crossing. Slightly longer and meaner than dg_healers_cottage - orc raiders holding the grain floor, a mixed press in the loft corridor, and a warden in the keep.",
+  "nodes": [
+    {
+      "id": "entry",
+      "prefab": "EntryHall"
+    },
+    {
+      "id": "corr1",
+      "prefab": "Straight"
+    },
+    {
+      "id": "threshing_floor",
+      "prefab": "CombatChamber",
+      "encounter": {
+        "kind": "orc-group",
+        "min": 2,
+        "max": 3,
+        "seatMode": "staggered",
+        "formationRadius": 4.4,
+        "confine": {
+          "mode": "room",
+          "slack": 2.0,
+          "returnHome": true,
+          "wakeRadius": 6.0
+        }
+      }
+    },
+    {
+      "id": "crossing",
+      "prefab": "Intersection"
+    },
+    {
+      "id": "grain_vault",
+      "prefab": "RewardVault",
+      "chests": [
+        {
+          "id": "fg-grain-cache",
+          "lootTableId": "dungeon-chest",
+          "visual": "chest",
+          "offset": [0.0, 0.0, 1.4]
+        }
+      ]
+    },
+    {
+      "id": "loft_shrine",
+      "prefab": "LoreShrine"
+    },
+    {
+      "id": "loft_corr",
+      "prefab": "Straight",
+      "encounter": {
+        "kind": "mixed",
+        "min": 3,
+        "max": 4,
+        "seatMode": "staggered",
+        "formationRadius": 4.6,
+        "confine": {
+          "mode": "room",
+          "slack": 2.0,
+          "returnHome": true,
+          "wakeRadius": 6.0
+        }
+      }
+    },
+    {
+      "id": "turn_east",
+      "prefab": "TurnRight"
+    },
+    {
+      "id": "silo_run",
+      "prefab": "Straight",
+      "encounter": {
+        "kind": "orc-group",
+        "min": 3,
+        "max": 4,
+        "seatMode": "staggered",
+        "formationRadius": 4.6,
+        "confine": {
+          "mode": "room",
+          "slack": 2.0,
+          "returnHome": true,
+          "wakeRadius": 6.0
+        }
+      }
+    },
+    {
+      "id": "choke",
+      "prefab": "ChokePoint",
+      "encounter": {
+        "kind": "hollow-group",
+        "min": 2,
+        "max": 3,
+        "seatMode": "staggered",
+        "formationRadius": 4.2,
+        "confine": {
+          "mode": "room",
+          "slack": 2.0,
+          "returnHome": true,
+          "wakeRadius": 6.0
+        }
+      }
+    },
+    {
+      "id": "warden_keep",
+      "prefab": "BossKeep",
+      "encounter": {
+        "kind": "hollow-group",
+        "isBoss": true,
+        "enemyType": "hollow-brute",
+        "displayName": "The Granary Warden",
+        "min": 1,
+        "max": 1,
+        "seatMode": "ring",
+        "formationRadius": 2.0,
+        "confine": {
+          "mode": "room",
+          "slack": 3.0,
+          "returnHome": false,
+          "wakeRadius": 10.0
+        }
+      },
+      "chests": [
+        {
+          "id": "fg-warden-hoard",
+          "lootTableId": "dungeon-miniboss",
+          "visual": "chest",
+          "offset": [0.0, 0.0, 2.0]
+        }
+      ]
+    }
+  ],
+  "edges": [
+    { "from": "entry",           "fromSocket": "n_door_01", "to": "corr1",           "toSocket": "s_door_01" },
+    { "from": "corr1",           "fromSocket": "n_door_01", "to": "threshing_floor", "toSocket": "s_door_01" },
+    { "from": "threshing_floor", "fromSocket": "n_door_01", "to": "crossing",        "toSocket": "s_door_01" },
+    { "from": "crossing",        "fromSocket": "w_door_01", "to": "grain_vault",     "toSocket": "s_door_01" },
+    { "from": "crossing",        "fromSocket": "e_door_01", "to": "loft_shrine",     "toSocket": "s_door_01" },
+    { "from": "crossing",        "fromSocket": "n_door_01", "to": "loft_corr",       "toSocket": "s_door_01" },
+    { "from": "loft_corr",       "fromSocket": "n_door_01", "to": "turn_east",       "toSocket": "s_door_01" },
+    { "from": "turn_east",       "fromSocket": "e_door_01", "to": "silo_run",        "toSocket": "s_door_01" },
+    { "from": "silo_run",        "fromSocket": "n_door_01", "to": "choke",           "toSocket": "s_door_01" },
+    { "from": "choke",           "fromSocket": "n_door_01", "to": "warden_keep",     "toSocket": "s_door_01" }
+  ],
+  "rules": {
+    "spineOnly": false,
+    "minShrines": 0,
+    "maxMateDistance": 1.25,
+    "sealUnmated": true,
+    "pacingCombat": 0.6,
+    "pacingLore": 0.2,
+    "pacingReward": 0.2
+  },
+  "oilStones": [
+    { "id": "fg-oil-entry", "roomId": "entry",       "offset": [1.8, 0.0, 0.0], "radius": 2.5 },
+    { "id": "fg-oil-vault", "roomId": "grain_vault", "offset": [-1.8, 0.0, 0.8], "radius": 2.5 },
+    { "id": "fg-oil-silo",  "roomId": "silo_run",    "offset": [0.0, 0.0, 1.8], "radius": 2.5 }
+  ],
+  "traps": [
+    { "id": "fg-trap-loft",  "roomId": "loft_corr", "kind": "grate", "damage": 12.0, "radius": 1.25, "offset": [0.0, 0.0, 0.0] },
+    { "id": "fg-trap-choke", "roomId": "choke",     "kind": "spike", "damage": 14.0, "radius": 1.4,  "offset": [0.0, 0.0, 0.0] }
+  ],
+  "keys": [],
+  "locks": [],
+  "extracts": [
+    { "id": "fg-extract-back", "roomId": "warden_keep", "offset": [0.0, 0.0, -7.0], "label": "Leave" }
+  ]
+}
