@@ -3,6 +3,7 @@
     "rootNamespace": "DeNelle.Editor",
     "references": [
         "DeNelle.Core",
+        "DeNelle.Cosmetics",
         "DeNelle.Village",
         "DeNelle.Pets",
         "DeNelle.Data",
