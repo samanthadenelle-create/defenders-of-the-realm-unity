@@ -88,7 +88,7 @@ namespace DeNelle.Village
             if (s_cache.TryGetValue(kind, out var cached) && cached != null) return cached;
             // TODO(sfx): drop a CC0 wav at the audio key "Sfx/<Kind>" to override the generated clip
             // (AudioAssetLoader resolves it from Addressables first, then Resources).
-            AudioClip clip = DeNelle.Core.AudioAssetLoader.LoadClip("Sfx/" + kind) ?? Generate(kind);
+            AudioClip clip = DeNelle.Core.AudioAssetLoader.LoadClip("Sfx/" + kind, optional: true) ?? Generate(kind);
             s_cache[kind] = clip;
             return clip;
         }

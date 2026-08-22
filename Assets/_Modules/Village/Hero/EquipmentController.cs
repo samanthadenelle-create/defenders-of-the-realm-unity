@@ -3179,6 +3179,33 @@ namespace DeNelle.Village
             if (!ok || !_sheathedTipScratch.Valid)
             {
                 _sheatheTipWhy = _sheathedTipScratch.Why;
+
+                // ── SYMMETRICAL IS NOT BROKEN (owner ruling WO-1136, 2026-08-22) ────────────────
+                // A `false` here used to mean exactly one thing — "this prop may hang upside down" —
+                // and the Warn below says so in those words. For a mesh whose two ends are measurably
+                // IDENTICAL that sentence is simply untrue: there is no upside down to hang, the
+                // global fallback cannot be wrong about a symmetrical prop, and shouting about it
+                // trains the reader to skim the line that DOES matter. What matters for this prop is
+                // VERTICALITY, so that is what gets measured and logged instead.
+                if (_sheathedTipScratch.Decision ==
+                    WeaponOrientHelper.SheathedSignDecision.SignAgnostic)
+                {
+                    bool upright = WeaponOrientHelper.TrySheathesVertical(
+                        _sheathedTipScratch, out float tiltDeg, out string vWhy);
+                    string head = $"sheathe sign for '{meshKey}' on '{name}': SIGN-AGNOSTIC — the two " +
+                                  "ends are measurably identical, so either way up is the same picture " +
+                                  $"and the global fallback ({_sheatheLongAxisSign:+0;-0}) is harmless " +
+                                  "here. The ruled requirement for this prop is VERTICALITY: ";
+                    if (upright)
+                        FlowTrace.Step("Equip", head + vWhy + " — ok.");
+                    else
+                        FlowTrace.Fail("Equip", head + vWhy + " ⛔ This prop is sheathing ACROSS THE " +
+                            "BODY. Owner ruling WO-1136: a symmetrical prop still has to hang upright. " +
+                            "Fix the SEAT (NormalizeInto / the authored native frame), not the sign — " +
+                            "no sign can rotate a long axis onto the vertical.");
+                    return;
+                }
+
                 FlowTrace.Warn("Equip",
                     $"sheathe sign for '{meshKey}' on '{name}': NOT DERIVABLE — " +
                     $"{(string.IsNullOrEmpty(_sheatheTipWhy) ? "the prop could not be measured" : _sheatheTipWhy)}. " +

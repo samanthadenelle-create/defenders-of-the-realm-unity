@@ -765,7 +765,7 @@ namespace DeNelle.Audio
                 foreach (string path in CombatSfxResourceNames)
                 {
                     var loaded = Guard.Try("Audio", $"load '{path}' (prewarm)",
-                        () => AudioAssetLoader.LoadClip(path), fallback: null);
+                        () => AudioAssetLoader.LoadClip(path, optional: true), fallback: null);
                     if (loaded == null) { missing++; continue; } // no authored clip — synth fallback covers it.
                     if (!clips.Contains(loaded)) clips.Add(loaded);
                 }

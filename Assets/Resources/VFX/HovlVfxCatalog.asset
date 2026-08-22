@@ -651,12 +651,12 @@ MonoBehaviour:
     Recolorable: 1
     IsLoop: 1
   - Key: PP_FleshImpacts
-    Prefab: {fileID: 1096893136476370, guid: 24b82347924701148a13c746edfb6b22, type: 3}
+    Prefab: {fileID: 1096893136476370, guid: 40227cd0102dc5f4eb21080c708a1bbf, type: 3}
     PoolSize: 6
     DefaultScale: 1
     DefaultLifetime: 0
     Recolorable: 1
-    IsLoop: 1
+    IsLoop: 0
   - Key: PP_GoopSpray
     Prefab: {fileID: 1240250018707908, guid: 5656e7ea1f1a75d4c895547ec2b824b3, type: 3}
     PoolSize: 6
@@ -721,12 +721,12 @@ MonoBehaviour:
     Recolorable: 1
     IsLoop: 1
   - Key: PP_MetalImpacts
-    Prefab: {fileID: 1892351807075712, guid: 44be68b4fc4366142a9cd1ae1f761ea4, type: 3}
+    Prefab: {fileID: 1892351807075712, guid: ee5fce071befeda4b823df214dd2e8fa, type: 3}
     PoolSize: 6
     DefaultScale: 1
     DefaultLifetime: 0
     Recolorable: 1
-    IsLoop: 1
+    IsLoop: 0
   - Key: PP_MuzzleFlash
     Prefab: {fileID: 1743301284569550, guid: ad2ab49d0a2a17148bd51c93d977bdbc, type: 3}
     PoolSize: 6
@@ -784,12 +784,12 @@ MonoBehaviour:
     Recolorable: 1
     IsLoop: 0
   - Key: PP_SandImpacts
-    Prefab: {fileID: 1312255355084822, guid: bca9020d2c9c915448fb5263a425faf4, type: 3}
+    Prefab: {fileID: 1312255355084822, guid: 874c8d095784bc840b88e84c72cce948, type: 3}
     PoolSize: 6
     DefaultScale: 1
     DefaultLifetime: 0
     Recolorable: 1
-    IsLoop: 1
+    IsLoop: 0
   - Key: PP_SandSwirlsEffect
     Prefab: {fileID: 1000010715882420, guid: 14d81e2c407975245973a11cdfbeb902, type: 3}
     PoolSize: 6
@@ -833,12 +833,12 @@ MonoBehaviour:
     Recolorable: 1
     IsLoop: 1
   - Key: PP_StoneImpacts
-    Prefab: {fileID: 1341869769842038, guid: 8b7a1ffda5bb7474b8fae646c45ce7b4, type: 3}
+    Prefab: {fileID: 1341869769842038, guid: f75daaf27db40ce43a0ff599f8776e47, type: 3}
     PoolSize: 6
     DefaultScale: 1
     DefaultLifetime: 0
     Recolorable: 1
-    IsLoop: 1
+    IsLoop: 0
   - Key: PP_TinyExplosion
     Prefab: {fileID: 1337198075554910, guid: 25c7aa9ad705fe143a4d71c1c8deb7d4, type: 3}
     PoolSize: 6
@@ -875,12 +875,12 @@ MonoBehaviour:
     Recolorable: 1
     IsLoop: 1
   - Key: PP_WoodImpacts
-    Prefab: {fileID: 1031560401822814, guid: 3c0b5f221ea995442b9d11dc526de1c0, type: 3}
+    Prefab: {fileID: 1031560401822814, guid: 05e9acc051f2f52438573b60d3930524, type: 3}
     PoolSize: 6
     DefaultScale: 1
     DefaultLifetime: 0
     Recolorable: 1
-    IsLoop: 1
+    IsLoop: 0
   - Key: Portal_Threshold_Aura
     Prefab: {fileID: 1641099969701414, guid: e54b957e0a808ec4c8f17c43a15d5025, type: 3}
     PoolSize: 6

@@ -2482,7 +2482,7 @@ namespace DeNelle.Village
                 string sfx = TryGetBundleField(_currentCastKeyword, r => r.sfxImpact);
                 if (!string.IsNullOrEmpty(sfx))
                 {
-                    var clip = DeNelle.Core.AudioAssetLoader.LoadClip("Sfx/" + sfx);
+                    var clip = DeNelle.Core.AudioAssetLoader.LoadClip("Sfx/" + sfx, optional: true);
                     if (clip != null) DeNelle.Core.CoreServices.Audio?.PlaySfx(clip, 0.9f);
                     else DeNelle.Core.Diagnostics.FlowTrace.Once("Vfx", "sfximpact-missing:" + sfx,
                         $"sfxImpact '{sfx}' has no clip at audio key 'Sfx/{sfx}' (AudioAssetLoader: neither " +

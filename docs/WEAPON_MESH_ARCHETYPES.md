@@ -195,6 +195,38 @@ a Warn, keep the authored frame's +L as the head, and let an owner dial override
 > longest vertical, grip lower third."* The owner's 2026-08-19 ruling is the live value: **0.75, not
 > 0.33.** Record the supersession where the old line lives; do not leave two numbers in canon.
 
+### Sheathed: the SIGN is the wrong question for a staff (owner ruling 2026-08-22, WO-1136)
+
+> *"the staff should be longest mesh on Y axis with and placed with staff still verticle not horizontal"*
+
+`staff_A` measures **taper relGap 0.001, grip-origin relGap 0.000** — its two ends are identical to four
+decimals. It is not that the derivation is weak; **the mesh does not encode which end is up**, and a
+symmetrical staff has no upside down to get wrong.
+
+So a mesh now resolves into **three** outcomes, not two
+(`WeaponOrientHelper.SheathedSignDecision`), and the distinction is recorded where it is measured —
+never re-inferred from a null-ish return at a call site:
+
+| Outcome | What was measured | What is then demanded |
+|---|---|---|
+| `Decided` | one end is the hilt | the **sign**, unchanged |
+| `SignAgnostic` | both discriminators **under `SignAgnosticSymmetryEpsilon` (0.02)** — the ends are *identical* | **VERTICALITY**: longest axis on **Y** in the seat frame, carried upright (`TrySheathesVertical`) |
+| `Undecidable` | the ends **differ**, but by less than the 0.15 decision margin | still a **hard failure** — the mesh encodes an up we failed to read |
+
+- The symmetry epsilon is an order of magnitude tighter than the decision margin **on purpose**: the band
+  between them is a real defect and must stay red. Widening it to swallow a named prop would be an
+  exemption list wearing a number's clothes.
+- **A sign-agnostic prop that would hang horizontal still FAILS.** `TrySheathesVertical` refuses when the
+  long axis is not Y, when it sits off vertical, or when there is no long axis at all
+  (`LongAxisDominance < 2` — an axis-aligned box around a tilted prop has near-equal extents, so any
+  verticality claim off it would be noise reported as a measurement).
+- Pinned by `SheathePoseRegression` **M3** (the shipped catalogue) and **M3b** (fixtures that prove the
+  clause can *refuse*, not only accept). ⛔ No mesh name appears in either.
+- ⚠ **Two frames.** The sign is asked in the *authored* frame; verticality is asked in the *seated* frame
+  (after `WeaponBoundsOrient.NormalizeInto`), because that is the frame `ComputeSheathRotation` hangs on
+  the vertical. A raw KayKit FBX is commonly **Z-long** before seating — asserting "Y" against the
+  authored frame would red a prop that plays perfectly.
+
 ---
 
 ## 4. BOW — the existing model, unchanged

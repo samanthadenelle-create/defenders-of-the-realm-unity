@@ -310,6 +310,9 @@ namespace DeNelle.Editor
             // ── CASE M3: every SHIPPED weapon mesh can actually answer ────────────────
             CheckShippedWeaponMeshesResolveASign(failures, log);
 
+            // ── CASE M3b: and M3's sign-agnostic branch can REFUSE, not just accept ───
+            CheckSignAgnosticVerticalClauseHasTeeth(failures, log);
+
             // ── CASES G1-G4: the SHIPPED ComputeSheathRotation, driven for real ───────
             CheckShippedRotation(failures, log);
 
@@ -707,14 +710,50 @@ namespace DeNelle.Editor
         }
 
         // =====================================================================
-        //  M3 — EVERY SHIPPED WEAPON MESH MUST BE ABLE TO ANSWER
+        //  M3 — EVERY SHIPPED WEAPON MESH MUST ANSWER THE QUESTION THAT APPLIES TO IT
         // =====================================================================
         //
         // M1 proves the derivation works on geometry we built. M3 asks the question that actually
         // matters: do the meshes THIS GAME SHIPS answer it? A prop that declines falls back to the
         // one global number, and the owner's report is what that looks like on a phone. So this case
         // walks the shipped weapon props, runs the SHIPPED resolver on each, and FAILS by name on
-        // any that cannot decide — turning "some weapon somewhere hangs upside down" into a list.
+        // any that cannot answer — turning "some weapon somewhere hangs upside down" into a list.
+        //
+        // ── WHAT CHANGED, AND WHY IT IS NARROWER *AND* STRONGER (WO-1136, owner 2026-08-22) ──────
+        //
+        // This case used to demand ONE answer of every mesh: a SIGN. staff_A cannot give one — taper
+        // relGap 0.001, grip-origin relGap 0.000, its two ends identical to four decimals — and no
+        // cleverness extracts a fact the geometry does not contain. Owner ruling, verbatim:
+        //   "the staff should be longest mesh on Y axis with and placed with staff still verticle
+        //    not horizontal"
+        // A symmetrical staff has no upside down, so the SIGN is the wrong question for it. The right
+        // one — and unlike tip direction a measurable one — is VERTICALITY, which is what the player
+        // can actually see and what the shipped `tiltFromVertical` trace already reports.
+        //
+        // So the demand is now per-outcome, and every outcome is still failable:
+        //   • DECIDED       -> assert the sign, exactly as before. Unchanged.
+        //   • SIGN-AGNOSTIC -> the ends are measurably IDENTICAL. No sign is demanded; instead the
+        //                      REAL requirement is asserted: longest axis on Y and carried VERTICAL.
+        //                      A symmetrical prop that would hang horizontal FAILS here.
+        //   • UNDECIDABLE   -> the ends measurably DIFFER but under the decision margin, i.e. the
+        //                      mesh encodes an up we failed to read. Still a hard, named failure.
+        //
+        // ⛔ AND NOT BY EXEMPTION. There is no skip set and no mesh name anywhere in this case — grep
+        // it for "staff" and you will find only this comment. staff_A passes because it MEASURES
+        // symmetrical, Y-longest and vertical; the next symmetrical prop is held to the same three
+        // measurements, and a symmetrical prop that lies across the body is caught, which an
+        // exemption list could never do. (M3b below is the proof that clause has teeth.)
+        //
+        // ⚠ TWO FRAMES, DELIBERATELY. The SIGN is asked in the frame this case has always used: the
+        // prop instantiated raw, exactly as authored. The VERTICALITY question cannot be asked there
+        // — the sheathe pose consumes the SEATED frame (EquipmentController line ~1223 resolves the
+        // sign only AFTER NormalizeInto/SeatHiltLowerHalf, "so it measures the frame the sheathe pose
+        // will actually use"), and a raw KayKit FBX is commonly Z-long before seating. Asserting "Y"
+        // against the authored frame would red a prop that plays perfectly. So the verticality clause
+        // re-seats the instance through the SHIPPED WeaponBoundsOrient.NormalizeInto — the same call
+        // the live melee path makes — and measures that. Which also means this clause now covers the
+        // seat itself: if the align ever stops putting the longest axis on +Y (it regressed exactly
+        // that way once already — WO-970, long axes left on X for a month), this case goes red.
         private const string ShippedWeaponDir = "Assets/Resources/Heroes/Props/Weapons";
 
         private static void CheckShippedWeaponMeshesResolveASign(List<string> failures, StringBuilder log)
@@ -732,7 +771,9 @@ namespace DeNelle.Editor
 
                 probe = new GameObject("ShippedWeaponSignProbe");
                 var undecided = new List<string>();
+                var notVertical = new List<string>();
                 int checked_ = 0;
+                int agnostic = 0;
 
                 foreach (var path in Directory.GetFiles(ShippedWeaponDir))
                 {
@@ -755,12 +796,33 @@ namespace DeNelle.Editor
                         inst.transform.localPosition = Vector3.zero;
                         inst.transform.localRotation = Quaternion.identity;
                         checked_++;
-                        if (!WeaponOrientHelper.TryResolveSheathedTipSign(inst, probe.transform, out var r)
-                            || !r.Valid)
-                            undecided.Add(file + " (" + (string.IsNullOrEmpty(r.Why) ? "no reason given" : r.Why) + ")");
-                        else
+                        bool decided = WeaponOrientHelper.TryResolveSheathedTipSign(
+                                           inst, probe.transform, out var r) && r.Valid;
+                        if (decided)
+                        {
                             log.AppendLine("    M3 " + file.PadRight(20) + " sign=" +
                                            r.BodyUpSign.ToString("+0;-0") + " via " + r.Source);
+                        }
+                        else if (r.Decision == WeaponOrientHelper.SheathedSignDecision.SignAgnostic)
+                        {
+                            // No sign exists to demand. Demand the thing that does: VERTICAL.
+                            // Measured in the SEATED frame (see the two-frames note above), because
+                            // that is the frame ComputeSheathRotation hangs on the vertical.
+                            agnostic++;
+                            if (!TrySeatedVerticality(inst, probe.transform, out float tiltDeg,
+                                                      out string vWhy))
+                                notVertical.Add(file + " (SIGN-AGNOSTIC, and " + vWhy + ")");
+                            else
+                                log.AppendLine("    M3 " + file.PadRight(20) +
+                                               " SIGN-AGNOSTIC (ends identical: taperRelGap=" +
+                                               r.TaperRelGap.ToString("0.####") + " gripRelGap=" +
+                                               r.GripRelGap.ToString("0.####") + ") -> " + vWhy +
+                                               " tilt=" + tiltDeg.ToString("0.#") + "deg");
+                        }
+                        else
+                        {
+                            undecided.Add(file + " (" + (string.IsNullOrEmpty(r.Why) ? "no reason given" : r.Why) + ")");
+                        }
                     }
                     finally
                     {
@@ -772,15 +834,31 @@ namespace DeNelle.Editor
                     failures.Add("M3: no shipped melee weapon meshes were found under " + ShippedWeaponDir +
                                  " to test. This case is the one that asks whether the REAL props can " +
                                  "answer; measuring none of them is not a pass.");
-                else if (undecided.Count > 0)
+                if (undecided.Count > 0)
                     failures.Add("M3: " + undecided.Count + " of " + checked_ + " shipped weapon meshes " +
                                  "cannot resolve a sheathed orientation — " + string.Join("; ", undecided.ToArray()) +
                                  ". Each of these hangs on the ONE global _sheatheLongAxisSign, which is " +
                                  "correct for at most half the catalogue by construction. That is the " +
                                  "owner's 'sword upside down (sheathed)', and flipping the field only " +
-                                 "moves it to the other half.");
-                else
-                    log.AppendLine("  M3 all " + checked_ + " shipped weapon meshes resolve a sign ... ok");
+                                 "moves it to the other half. NOTE these are the AMBIGUOUS-BUT-ASYMMETRIC " +
+                                 "props: their two ends measurably DIFFER, so the mesh does encode an up " +
+                                 "and the derivation failed to read it. A symmetrical prop (a " +
+                                 "quarterstaff) is reported separately and is not this failure.");
+                if (notVertical.Count > 0)
+                    failures.Add("M3: " + notVertical.Count + " of " + checked_ + " shipped weapon meshes " +
+                                 "are SIGN-AGNOSTIC (their two ends are measurably identical, so no sign " +
+                                 "exists to be right about) yet do NOT seat vertical — " +
+                                 string.Join("; ", notVertical.ToArray()) + ". Owner ruling WO-1136: " +
+                                 "\"the staff should be longest mesh on Y axis with and placed with staff " +
+                                 "still verticle not horizontal\". A prop like this hangs ACROSS THE BODY " +
+                                 "— the ~90deg the shipped tiltFromVertical trace names — and no sign can " +
+                                 "repair it, because a sign flips a long axis, it does not rotate one " +
+                                 "onto the vertical. Fix the SEAT (NormalizeInto / the authored native " +
+                                 "frame).");
+                if (undecided.Count == 0 && notVertical.Count == 0 && checked_ > 0)
+                    log.AppendLine("  M3 all " + checked_ + " shipped weapon meshes answer (" +
+                                   (checked_ - agnostic) + " by sign, " + agnostic +
+                                   " sign-agnostic + measured VERTICAL) ... ok");
             }
             catch (Exception e)
             {
@@ -791,6 +869,252 @@ namespace DeNelle.Editor
             {
                 if (probe != null) UnityEngine.Object.DestroyImmediate(probe);
             }
+        }
+
+        /// <summary>
+        /// Seats <paramref name="inst"/> through the SHIPPED melee seat and asks the SHIPPED
+        /// verticality oracle whether the result hangs upright. One helper, used by BOTH M3 (real
+        /// props) and M3b (the fixture that proves the clause can fail) — so the teeth M3b
+        /// demonstrates are literally the teeth M3 bites the catalogue with. A re-implemented copy
+        /// here could pass while the shipped path fails, which is worth nothing.
+        /// </summary>
+        /// <remarks>
+        /// The seat is <c>WeaponBoundsOrient.NormalizeInto(..., GripAnchor.HiltEnd)</c>, which is the
+        /// call EquipmentController makes for melee before it resolves the sheathe sign. Its job is
+        /// to put the LONGEST measured axis on +Y; the oracle then measures whether it did, because
+        /// ComputeSheathRotation hangs grip-local +Y — and nothing else — on the vertical.
+        /// </remarks>
+        private static bool TrySeatedVerticality(GameObject inst, Transform gripRoot,
+                                                 out float tiltDeg, out string why)
+        {
+            WeaponBoundsOrient.NormalizeInto(inst, gripRoot, 1f,
+                                             WeaponBoundsOrient.GripAnchor.HiltEnd);
+            // Re-measure in the seated frame. Only the AXIS/dominance/tilt fields are read here —
+            // the seat moves the grip origin to one end, so a sign the resolver "finds" after
+            // seating is an artefact of the anchor, not of the mesh. The SIGN question stays in the
+            // authored frame where M3 asked it.
+            WeaponOrientHelper.TryResolveSheathedTipSign(inst, gripRoot, out var seated);
+            return WeaponOrientHelper.TrySheathesVertical(seated, out tiltDeg, out why);
+        }
+
+        // =====================================================================
+        //  M3b — THE VERTICALITY CLAUSE MUST BE ABLE TO FAIL
+        // =====================================================================
+        //
+        // M3's sign-agnostic branch is the clause that lets staff_A pass. A clause that lets a prop
+        // pass is worth exactly nothing unless it can also REFUSE one, so this case drives the SAME
+        // helper M3 drives (TrySeatedVerticality) over two fixtures that differ in ONE respect:
+        //
+        //   FIXTURE A: a symmetrical BAR  (mesh 0.05 x 1 x 0.05) -> must be accepted.
+        //   FIXTURE B: a symmetrical SLAB (mesh 0.05 x 1 x 0.98) -> must be REFUSED.
+        //
+        // Both are symmetrical, so both are sign-agnostic; if the branch were an exemption
+        // ("symmetrical props are fine"), B would sail through and this case would go red — which is
+        // precisely why it exists. This is the WO-1136 acceptance clause "a sign-agnostic prop
+        // rotated to lie horizontal FAILS", asserted by the suite instead of argued in a work order.
+        //
+        // ⚠ FIXTURE B FIGHTS THE SEAT ON PURPOSE. TrySeatedVerticality re-seats through the shipped
+        // NormalizeInto, whose whole job is to put the longest axis back on +Y — so a merely rotated
+        // bar would be straightened out and pass, proving nothing. B is therefore built so the seat
+        // CANNOT straighten it: its longest extent and its second-longest are near-equal (a slab),
+        // so there is no long axis to align and the oracle's first clause — the dominance bar —
+        // refuses to make a verticality claim at all. That is the honest failure of a prop that
+        // genuinely cannot be carried upright, and it is the one an axis-aligned box can prove.
+        //
+        // ⛔ AND BOTH FIXTURES ASSERT THEIR OWN PREMISE FIRST (FixtureShapeHolds). On 2026-08-22 both
+        // were built by transform.localScale, which NormalizeInto resets to one by design — so both
+        // arrived at the oracle as the SAME 1x1x1 cube. A went red (correctly: a cube has no long
+        // axis) and B went GREEN while asserting nothing about a slab, because the slab no longer
+        // existed. The lesson is not "clause 1 was too strict" — it was right — it is that a fixture
+        // must prove it is the shape it claims before its verdict is worth reading.
+        private static void CheckSignAgnosticVerticalClauseHasTeeth(List<string> failures, StringBuilder log)
+        {
+            GameObject probe = null;
+            try
+            {
+                probe = new GameObject("SignAgnosticVerticalProbe");
+
+                // FIXTURE A — a symmetrical bar with a real long axis. Sign-agnostic (no taper, ends
+                // identical), and it seats upright.
+                var aSize = new Vector3(0.05f, 1f, 0.05f);
+                bool aVertical = TryProbeSeatedVerticality(probe.transform, aSize,
+                    out float aTilt, out string aWhy, out Vector3 aPre);
+                if (!FixtureShapeHolds(failures, "A", aSize, aPre))
+                {
+                    // premise broken — its verdict is meaningless, so do not report one
+                }
+                else if (!aVertical)
+                    failures.Add("M3b-A: a symmetrical BAR (0.05 x 1 x 0.05) did not read as carried " +
+                                 "vertical after the shipped seat — " + aWhy + " (tilt=" +
+                                 aTilt.ToString("0.#") + "deg). This is the exact shape of staff_A, " +
+                                 "the prop the owner ruled on: \"longest mesh on Y axis ... still " +
+                                 "verticle not horizontal\". If this fails, M3's sign-agnostic branch " +
+                                 "rejects every staff and the ruling is not implemented.");
+                else
+                    log.AppendLine("  M3b-A symmetrical bar seats VERTICAL (tilt=" +
+                                   aTilt.ToString("0.#") + "deg) ................ ok");
+
+                // FIXTURE B — equally symmetrical, but a SLAB: its two largest extents are within a
+                // hair of each other, so no long axis exists for the seat to stand upright. It must
+                // be REFUSED, not waved through for being symmetrical.
+                var bSize = new Vector3(0.05f, 1f, 0.98f);
+                bool bVertical = TryProbeSeatedVerticality(probe.transform, bSize,
+                    out float bTilt, out string bWhy, out Vector3 bPre);
+                if (!FixtureShapeHolds(failures, "B", bSize, bPre))
+                {
+                    // premise broken — its verdict is meaningless, so do not report one
+                }
+                else if (bVertical)
+                    failures.Add("M3b-B: a symmetrical SLAB (0.05 x 1 x 0.98 — no long axis to stand " +
+                                 "up) was ACCEPTED as carried vertical (tilt=" + bTilt.ToString("0.#") +
+                                 "deg, " + bWhy + "). The sign-agnostic branch is passing props for " +
+                                 "being symmetrical rather than for being upright — i.e. it is an " +
+                                 "exemption list wearing a measurement's clothes, which is exactly " +
+                                 "what WO-1136 forbids. staff_A's pass would then mean nothing.");
+                else
+                    log.AppendLine("  M3b-B symmetrical slab is REFUSED (" + bWhy.Split(':')[0] +
+                                   ") ....... ok");
+
+                // And the horizontal case stated in the owner's own terms: a prop whose long axis is
+                // NOT Y in the seat frame must be refused. Asked of the ORACLE directly, with a
+                // hand-built resolution, because the seat's whole job is to prevent this state — the
+                // oracle is the last line that would catch it if the seat ever stopped doing that.
+                var lyingDown = new WeaponOrientHelper.SheathedTipResolution
+                {
+                    Decision = WeaponOrientHelper.SheathedSignDecision.SignAgnostic,
+                    LongAxis = 2,                    // Z — across the body
+                    LongAxisDominance = 20f,         // unambiguously long, just in the wrong direction
+                    LongAxisOffVerticalDeg = 90f
+                };
+                if (WeaponOrientHelper.TrySheathesVertical(lyingDown, out float hTilt, out string hWhy))
+                    failures.Add("M3b-C: a sign-agnostic prop whose long axis is Z — lying ACROSS the " +
+                                 "body at " + hTilt.ToString("0.#") + "deg off vertical — was accepted " +
+                                 "as vertical (" + hWhy + "). ComputeSheathRotation hangs grip-local " +
+                                 "+Y on the vertical and nothing else, so this prop is horizontal on " +
+                                 "the hero and the oracle said it was fine.");
+                else
+                    log.AppendLine("  M3b-C long-axis-Z (horizontal) prop is REFUSED ......... ok");
+
+                // Symmetry of the argument: the SAME oracle must refuse an AMBIGUOUS (not agnostic)
+                // prop whose long axis is not Y too — verticality is a property of the geometry, not
+                // of which bucket the sign landed in.
+                var ambiguousSideways = new WeaponOrientHelper.SheathedTipResolution
+                {
+                    Decision = WeaponOrientHelper.SheathedSignDecision.Undecidable,
+                    LongAxis = 0,
+                    LongAxisDominance = 20f,
+                    LongAxisOffVerticalDeg = 90f
+                };
+                if (WeaponOrientHelper.TrySheathesVertical(ambiguousSideways, out _, out _))
+                    failures.Add("M3b-D: an ambiguous prop whose long axis is X was accepted as " +
+                                 "vertical. The verticality oracle must judge the GEOMETRY, not the " +
+                                 "sign outcome.");
+                else
+                    log.AppendLine("  M3b-D ambiguous + long-axis-X prop is REFUSED .......... ok");
+            }
+            catch (Exception e)
+            {
+                failures.Add("M3b: the sign-agnostic verticality fixtures threw — " + e.GetType().Name +
+                             ": " + e.Message);
+            }
+            finally
+            {
+                if (probe != null) UnityEngine.Object.DestroyImmediate(probe);
+            }
+        }
+
+        /// <summary>Builds a box whose MESH measures <paramref name="meshSize"/> under
+        /// <paramref name="gripRoot"/> and runs it through the same seat+oracle pair M3 uses.
+        /// <paramref name="preSeatSize"/> reports what the fixture actually measured BEFORE the seat,
+        /// so the caller can assert the fixture is the shape it claims to be. Destroyed (mesh
+        /// included) before returning so the next fixture measures only its own geometry.
+        /// <para>
+        /// ⛔ THE SHAPE MUST LIVE IN THE MESH, NOT IN `transform.localScale`. This is the whole
+        /// lesson of the 2026-08-22 red. The first draft built `CreatePrimitive(Cube)` — whose mesh is
+        /// 1x1x1 — and put the bar shape in `localScale = (0.05, 1, 0.05)`. `NormalizeInto`'s FOURTH
+        /// LINE is `prop.transform.localScale = Vector3.one;`, by design: a real prop carries its
+        /// shape in its mesh and the seat owns the scale (it re-scales to targetLength off the
+        /// measured longest axis). So the seat wiped the fixture and handed the oracle a 1x1x1 CUBE.
+        /// The captured proof, one line, and it names the defect exactly:
+        ///   [Flow:Equip] AlignAxes 'VerticalityFixture': meshSize=(1, 1, 1) longAxis=X ...
+        ///   [Flow:Equip] SheatheSign 'VerticalityFixture': ... longest=X(1m) dominance=1 ...
+        /// Dominance 1 on a bar authored 20:1. Clause 1 of TrySheathesVertical was RIGHT to refuse
+        /// it — an object with no long axis has no verticality — and the fixture was the thing that
+        /// was wrong.
+        /// </para>
+        /// <para>
+        /// ⚠ AND IT MADE FIXTURE B A HOLLOW PASS. A and B differ only in size, so once the seat
+        /// flattened both to the same cube their traces came out BYTE-IDENTICAL (reg-staff.log lines
+        /// 17830-17867 vs 17885-17922). B was being "REFUSED" for being a cube, not for being a slab
+        /// — the case was reporting ok while asserting nothing about the thing it was written to
+        /// assert. That is why <paramref name="preSeatSize"/> exists and why the caller checks it:
+        /// a fixture that is not the shape it claims must FAIL LOUDLY, never quietly pass.
+        /// </para>
+        /// <para>
+        /// ⚠ NO ROTATION KNOB, DELIBERATELY. An earlier draft took a localRotation so a fixture could
+        /// be "laid horizontal" — but NormalizeInto zeroes localRotation as its FIRST act and then
+        /// aligns the longest axis back onto +Y, so the knob would have done nothing while looking
+        /// like it did something. Same class of mistake as the scale, caught earlier. The horizontal
+        /// case is proven the two honest ways instead: a SLAB the seat cannot stand up (M3b-B), and
+        /// the oracle asked directly about a long-axis-Z prop (M3b-C).
+        /// </para></summary>
+        private static bool TryProbeSeatedVerticality(Transform gripRoot, Vector3 meshSize,
+                                                      out float tiltDeg, out string why,
+                                                      out Vector3 preSeatSize)
+        {
+            var bar = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            Mesh baked = null;
+            preSeatSize = Vector3.zero;
+            try
+            {
+                bar.name = "VerticalityFixture";
+                bar.transform.SetParent(gripRoot, false);
+                bar.transform.localPosition = Vector3.zero;
+                bar.transform.localRotation = Quaternion.identity;
+                bar.transform.localScale = Vector3.one;
+
+                // Scale the unit cube's VERTICES into a new mesh. ⛔ Never mutate `sharedMesh` in
+                // place — that is Unity's built-in cube, shared by every primitive in the editor.
+                var filter = bar.GetComponent<MeshFilter>();
+                Mesh unit = filter.sharedMesh;
+                var verts = unit.vertices;            // .vertices already returns a copy
+                for (int i = 0; i < verts.Length; i++)
+                    verts[i] = new Vector3(verts[i].x * meshSize.x,
+                                           verts[i].y * meshSize.y,
+                                           verts[i].z * meshSize.z);
+                baked = new Mesh { name = "VerticalityFixtureMesh" };
+                baked.vertices = verts;
+                baked.triangles = unit.triangles;
+                baked.RecalculateNormals();
+                baked.RecalculateBounds();
+                filter.sharedMesh = baked;
+
+                if (WeaponOrientHelper.TryMeasureAxes(bar, gripRoot, out var pre))
+                    preSeatSize = pre.Size;
+                return TrySeatedVerticality(bar, gripRoot, out tiltDeg, out why);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(bar);
+                if (baked != null) UnityEngine.Object.DestroyImmediate(baked);
+            }
+        }
+
+        /// <summary>The fixture's own premise, asserted before its result is believed. A fixture that
+        /// did not reach the helper in the shape the case describes must FAIL — the 2026-08-22 red
+        /// was exactly that state, and the half of it that went unnoticed (fixture B) was a green
+        /// tick over an assertion about a shape that no longer existed.</summary>
+        private static bool FixtureShapeHolds(List<string> failures, string label,
+                                              Vector3 requested, Vector3 measured)
+        {
+            if ((requested - measured).sqrMagnitude <= 1e-4f) return true;
+            failures.Add("M3b-" + label + " FIXTURE PREMISE: the box was authored " + requested +
+                         " but measured " + measured + " in the grip root before seating. The case " +
+                         "below asserts something about a shape that is not the shape under test, so " +
+                         "its verdict — pass OR fail — means nothing. (2026-08-22: the shape was put " +
+                         "in transform.localScale, which NormalizeInto resets to one by design, and " +
+                         "every fixture arrived at the oracle as a 1x1x1 cube.)");
+            return false;
         }
 
         private static void CheckSidesAreOpposite(List<string> failures, StringBuilder log)

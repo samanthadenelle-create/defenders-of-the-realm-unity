@@ -212,7 +212,7 @@ namespace DeNelle.Audio
 
         private static void TryAssignClip(AudioService service, MusicTrack track, string resourceName)
         {
-            var clip = DeNelle.Core.AudioAssetLoader.LoadClip(resourceName);
+            var clip = DeNelle.Core.AudioAssetLoader.LoadClip(resourceName, optional: true);
             // TGVRU V: a clip-resolve MISS was COMPLETELY SILENT — all ~14 music clips could fail to
             // wire with zero signal (the "silent clip" class). Warn on a null so a run self-reports
             // WHICH track has no audio, instead of just playing silence.

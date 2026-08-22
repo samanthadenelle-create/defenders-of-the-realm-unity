@@ -94,7 +94,7 @@ namespace DeNelle.Village
         public static void PlayCastCharge()
         {
             if (s_castChargeClip == null)
-                s_castChargeClip = DeNelle.Core.AudioAssetLoader.LoadClip("Sfx/EnemyCastCharge") ?? GenerateCastCharge();
+                s_castChargeClip = DeNelle.Core.AudioAssetLoader.LoadClip("Sfx/EnemyCastCharge", optional: true) ?? GenerateCastCharge();
             CoreServices.Audio?.PlaySfx(s_castChargeClip, 0.5f);
         }
 

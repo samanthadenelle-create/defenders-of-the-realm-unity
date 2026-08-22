@@ -313,7 +313,7 @@ namespace DeNelle.Village
         /// </summary>
         private static void PlaySfx(string sfxId)
         {
-            var clip = DeNelle.Core.AudioAssetLoader.LoadClip("Sfx/" + sfxId);
+            var clip = DeNelle.Core.AudioAssetLoader.LoadClip("Sfx/" + sfxId, optional: true);
             if (clip == null)
             {
                 FlowTrace.Once(System, "sfx-missing:" + sfxId,

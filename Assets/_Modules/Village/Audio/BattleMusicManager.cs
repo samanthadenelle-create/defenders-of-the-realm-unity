@@ -529,7 +529,7 @@ namespace DeNelle.Village
                 if (string.IsNullOrEmpty(p)) continue;
                 try
                 {
-                    AudioClip clip = DeNelle.Core.AudioAssetLoader.LoadClip(p);
+                    AudioClip clip = DeNelle.Core.AudioAssetLoader.LoadClip(p, optional: true);
                     if (clip != null) return clip;
                 }
                 catch { /* WebGL-safe: never throw out of clip resolution */ }

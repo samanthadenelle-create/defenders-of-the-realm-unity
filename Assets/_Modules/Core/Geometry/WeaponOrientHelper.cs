@@ -163,6 +163,24 @@ namespace DeNelle.Core.Geometry
         /// Used by <see cref="TryResolveSheathedTipSign"/>, which is the device-side path because it
         /// reads bounds, not vertices (the live props ship with Read/Write OFF).</summary>
         private const float GripEndDecisionMargin = 0.15f;
+        /// <summary>Below this relative gap the two ends are treated as MEASURABLY IDENTICAL rather
+        /// than merely undecided — a symmetrical prop (owner ruling WO-1136). It is an order of
+        /// magnitude tighter than <see cref="TaperDecisionMargin"/> ON PURPOSE: the band BETWEEN the
+        /// two is where a prop's ends genuinely differ and we failed to read the difference, and that
+        /// band must stay a hard failure. Widening this constant to swallow a specific prop would be
+        /// an exemption list wearing a number's clothes.
+        /// <para>staff_A, the mesh that forced this: taper relGap 0.001, grip relGap 0.000 — both an
+        /// order of magnitude under this bar, i.e. symmetrical, not merely ambiguous.</para></summary>
+        public const float SignAgnosticSymmetryEpsilon = 0.02f;
+        /// <summary>How many times longer than the second-longest extent the long axis must measure
+        /// before <see cref="TrySheathesVertical"/> will make any claim about verticality. An
+        /// axis-aligned box around a prop tilted 45° has near-equal extents and its "longest axis"
+        /// is a coin flip, so a verticality answer derived from it would be noise reported as a
+        /// measurement. Refuse instead.</summary>
+        public const float VerticalCarryMinAxisDominance = 2f;
+        /// <summary>How far off vertical a sign-agnostic prop's long axis may sit and still count as
+        /// carried upright. The shipped trace calls the failure at ~90 ("lying across the body").</summary>
+        public const float VerticalCarryToleranceDeg = 5f;
         /// <summary>Outer band of a shield half, as a fraction of that half's extent, used to score
         /// "is this face a broad flat surface (smooth) or a small cluster (the handle)".</summary>
         private const float ShieldFaceBand = 0.25f;
@@ -864,11 +882,80 @@ namespace DeNelle.Core.Geometry
         // number about the wrong direction — the class of mistake that produced the flat shield.
         // The caller gets the axis back and can say so when it is not the axis the pose assumes.
 
+        // ── SIGN-AGNOSTIC IS NOT THE SAME THING AS UNDECIDABLE (owner ruling WO-1136, 2026-08-22) ──
+        //
+        // Owner, verbatim: "the staff should be longest mesh on Y axis with and placed with staff
+        // still verticle not horizontal".
+        //
+        // staff_A measures taper relGap 0.001 and grip-origin relGap 0 — its two ends are identical
+        // to four decimals. Before this change that collapsed into the same single failure outcome as
+        // a prop whose ends genuinely DIFFER but not by enough to decide (relGap somewhere between
+        // the symmetry epsilon and the 0.15 decision margin). Those are two different facts about a
+        // mesh and they want two different responses:
+        //   • ends measurably IDENTICAL  -> the mesh HAS no up. There is nothing to get wrong about
+        //     the sign, so demanding one is demanding an answer the geometry does not contain. What
+        //     still matters, and IS measurable, is that it hangs VERTICAL rather than across the body.
+        //   • ends measurably DIFFERENT but under the margin -> the mesh does encode an up and the
+        //     derivation could not read it. That is a real defect and must stay a hard failure.
+        // Collapsing the two is the same discard-the-distinction bug this repo found twice this week
+        // (a loader returning bare null for both "pending" and "absent"). So the distinction is
+        // RECORDED at the point of measurement, never re-inferred at a call site from a null-ish
+        // return value.
+        //
+        // ⛔ THIS IS NOT AN EXEMPTION. staff_A is named in the comments as the evidence and NOWHERE in
+        // a condition — grep this file for it and every hit is prose. Sign-agnostic is a
+        // MEASURED property, and a sign-agnostic prop still has to pass the verticality oracle below
+        // — one lying across the body fails exactly as loudly as an undecidable one.
+
+        /// <summary>What kind of answer the mesh's own geometry was able to give about its ends.</summary>
+        public enum SheathedSignDecision
+        {
+            /// <summary>Nothing usable was measured, OR the two ends measurably DIFFER yet by less
+            /// than the decision margin. The prop encodes an up that we failed to read: a real
+            /// defect, and the caller keeps its serialized fallback.</summary>
+            Undecidable = 0,
+            /// <summary>A sign was measured — one end is the hilt, the other the tip.</summary>
+            Decided,
+            /// <summary>The two ends are measurably IDENTICAL (both discriminators under
+            /// <see cref="SignAgnosticSymmetryEpsilon"/>): a symmetrical prop, e.g. a quarterstaff.
+            /// There is no sign to get wrong. Not a failure — but <see cref="TrySheathesVertical"/>
+            /// still has to pass, because "which way up" being meaningless does not make "lying
+            /// across the body" acceptable.</summary>
+            SignAgnostic
+        }
+
         /// <summary>What the mesh itself says about which end hangs DOWN when it is sheathed.</summary>
         public struct SheathedTipResolution
         {
-            /// <summary>False = nothing decidable was measured; the caller keeps its own fallback.</summary>
+            /// <summary>False = no SIGN was measured; the caller keeps its own fallback. Read
+            /// <see cref="Decision"/> to learn whether that is because the prop is symmetrical
+            /// (nothing to decide) or because it is broken (an up we could not read).</summary>
             public bool Valid;
+            /// <summary>Which of the three outcomes this measurement reached. Always set, including
+            /// on every early-out, so no caller has to infer it from <see cref="Valid"/>.</summary>
+            public SheathedSignDecision Decision;
+            /// <summary>True when vertices were readable and the taper test actually ran. The live
+            /// props ship Read/Write OFF, so on device this is false and the grip-origin gap is the
+            /// only discriminator there is — which is exactly what the symmetry test then judges on.</summary>
+            public bool TaperMeasured;
+            /// <summary>Relative width gap between the two end bands (0 = identical ends). Only
+            /// meaningful when <see cref="TaperMeasured"/>.</summary>
+            public float TaperRelGap;
+            /// <summary>Relative gap between the two ends' distances from the grip origin, as a
+            /// fraction of the long axis (0 = the grip sits exactly mid-prop).</summary>
+            public float GripRelGap;
+            /// <summary>Longest extent divided by the SECOND longest, in the grip root's frame. A
+            /// value near 1 means there is no well-defined long axis, so no claim about verticality
+            /// can be made from an axis-aligned box — the oracle refuses rather than guessing.</summary>
+            public float LongAxisDominance;
+            /// <summary>Angle, in degrees, between the measured long axis and the vertical ONCE THE
+            /// SHEATHE POSE IS APPLIED. The pose maps grip-root-local +Y onto the vertical
+            /// (EquipmentController.ComputeSheathRotation), so this is the angle between the measured
+            /// long axis and grip-local +Y — the number the shipped `tiltFromVertical` trace prints.
+            /// ⚠ QUANTIZED BY CONSTRUCTION: bounds are axis-aligned in the grip frame, so this reads
+            /// 0 or 90 and never 45. <see cref="LongAxisDominance"/> is what catches the in-between
+            /// case, where the box has no long axis to be quantized about.</summary>
+            public float LongAxisOffVerticalDeg;
             /// <summary>Multiplier for body.up that puts this prop's TIP toward the ground:
             /// the value <c>EquipmentController._sheatheLongAxisSign</c> should have carried.</summary>
             public float BodyUpSign;
@@ -885,11 +972,23 @@ namespace DeNelle.Core.Geometry
         /// Resolve, from THIS mesh's own geometry, the sign that hangs its tip downward at the hip.
         /// Never throws; returns false with a stated reason when the prop cannot answer, in which
         /// case the caller must keep its serialized tuning value (§12: the fallback is not stripped).
+        /// <para>
+        /// ⚠ A `false` RETURN IS TWO DIFFERENT FACTS AND THEY ARE NOT INTERCHANGEABLE. Read
+        /// <see cref="SheathedTipResolution.Decision"/>: <see cref="SheathedSignDecision.SignAgnostic"/>
+        /// means the mesh is symmetrical and HAS no sign to give (a quarterstaff — the caller's
+        /// fallback is harmless because either way up is the same picture), while
+        /// <see cref="SheathedSignDecision.Undecidable"/> means the mesh DOES encode an up that we
+        /// could not read (the caller's fallback may well hang it upside down). Both still return
+        /// false, because in neither case did we MEASURE a sign, and manufacturing one would launder
+        /// a guess as a derivation — the thing M1d exists to forbid.
+        /// </para>
         /// </summary>
         public static bool TryResolveSheathedTipSign(GameObject prop, Transform gripRoot,
                                                      out SheathedTipResolution resolution)
         {
             resolution = default;
+            resolution.Decision = SheathedSignDecision.Undecidable;
+            resolution.LongAxisOffVerticalDeg = 90f;   // "unknown" reads as the failure, never as pass
             if (prop == null || gripRoot == null)
             {
                 resolution.Why = "sheathe-sign: no prop / no grip root to measure in.";
@@ -905,6 +1004,13 @@ namespace DeNelle.Core.Geometry
             int a = (s.x >= s.y && s.x >= s.z) ? 0 : (s.y >= s.z ? 1 : 2);
             int p = (a + 1) % 3, q = (a + 2) % 3;
             float length = s[a];
+            // Everything the verticality oracle needs is measured HERE, at the one place that already
+            // has the bounds, and carried on the struct — so no call site re-derives it and no two
+            // call sites can disagree about what this prop's long axis is.
+            resolution.LongAxis = a;
+            float second = Mathf.Max(s[p], s[q]);
+            resolution.LongAxisDominance = second > 1e-6f ? length / second : float.PositiveInfinity;
+            resolution.LongAxisOffVerticalDeg = Vector3.Angle(UnitAxis(a), Vector3.up);
             if (length < 1e-4f)
             {
                 resolution.Why = $"sheathe-sign: degenerate long axis ({length:0.#####} m on " +
@@ -935,6 +1041,8 @@ namespace DeNelle.Core.Geometry
                 }
                 float bigger = Mathf.Max(wLo, wHi);
                 float rel = bigger > 1e-5f ? Mathf.Abs(wLo - wHi) / bigger : 0f;
+                resolution.TaperMeasured = true;
+                resolution.TaperRelGap = rel;
                 if (rel >= TaperDecisionMargin)
                 {
                     hiltAtMin = wLo > wHi;          // the WIDER (non-tapering) end is the hilt
@@ -962,13 +1070,51 @@ namespace DeNelle.Core.Geometry
             {
                 float dLo = Mathf.Abs(lo), dHi = Mathf.Abs(hi);
                 float rel = Mathf.Abs(dLo - dHi) / length;
+                resolution.GripRelGap = rel;
                 if (rel < GripEndDecisionMargin)
                 {
+                    // ── NEITHER TEST DECIDED. Now split the two facts that used to be one (WO-1136).
+                    //    SYMMETRICAL: every discriminator we could actually run came back at
+                    //    essentially ZERO — the ends are the same object. There is no sign to get
+                    //    wrong, so this is not the upside-down defect. (A taper we could not run at
+                    //    all cannot testify either way, so it is simply not counted; on device that
+                    //    leaves the grip gap as the whole of the evidence, which is the same evidence
+                    //    the device path already ships on.)
+                    bool taperSaysSymmetric = !resolution.TaperMeasured
+                                              || resolution.TaperRelGap < SignAgnosticSymmetryEpsilon;
+                    bool gripSaysSymmetric = rel < SignAgnosticSymmetryEpsilon;
+                    string gaps = $"taper" + (resolution.TaperMeasured
+                                      ? $"RelGap={resolution.TaperRelGap:0.####}"
+                                      : "=NOT MEASURABLE (Read/Write off)") +
+                                  $" gripRelGap={rel:0.####} (symmetry bar {SignAgnosticSymmetryEpsilon:0.###}, " +
+                                  $"decision bar {GripEndDecisionMargin:0.##})";
+
+                    if (taperSaysSymmetric && gripSaysSymmetric)
+                    {
+                        resolution.Decision = SheathedSignDecision.SignAgnostic;
+                        resolution.Source = "symmetry";
+                        resolution.Why = why + $"; and the grip origin sits mid-prop on {AxisName(a)} " +
+                            $"(|-end|={dLo:0.####} |+end|={dHi:0.####}). SIGN-AGNOSTIC: {gaps} — the two " +
+                            "ends are measurably IDENTICAL, so this mesh HAS no upside down and no sign " +
+                            "exists to be right or wrong about (owner ruling WO-1136). What still has to " +
+                            "hold is VERTICALITY: longest axis on " +
+                            $"{AxisName(1)} and carried upright — see TrySheathesVertical, which is the " +
+                            "assertion that replaces the sign for props like this one.";
+                        FlowTrace.Step("Equip", $"SheatheSign '{prop.name}': {resolution.Why} " +
+                            $"longest={AxisName(a)}({length:0.####}m) dominance=" +
+                            $"{resolution.LongAxisDominance:0.##} longAxisOffVertical=" +
+                            $"{resolution.LongAxisOffVerticalDeg:0.#}deg.");
+                        return false;   // no SIGN was measured — the caller must not be handed one
+                    }
+
+                    resolution.Decision = SheathedSignDecision.Undecidable;
                     resolution.Why = why + $"; and the grip origin sits mid-prop on {AxisName(a)} " +
                         $"(|-end|={dLo:0.####} |+end|={dHi:0.####} relGap={rel:0.###} < " +
                         $"{GripEndDecisionMargin:0.##}), so neither end is the hilt by proximity either. " +
                         "NOTHING DECIDABLE — the caller's serialized sign stands and this prop may " +
-                        "hang upside down.";
+                        $"hang upside down. And it is NOT merely symmetrical: {gaps}, i.e. the ends DO " +
+                        "measurably differ, so this mesh encodes an up that the derivation failed to " +
+                        "read. That is a real defect, not a staff.";
                     FlowTrace.Warn("Equip", $"SheatheSign '{prop.name}': {resolution.Why}");
                     return false;
                 }
@@ -981,20 +1127,75 @@ namespace DeNelle.Core.Geometry
             // Tip is the end OPPOSITE the hilt. To hang it downward, prop-local +axis must map onto
             // -body.up when the tip is at +axis, and onto +body.up when the tip is at -axis.
             bool tipAtPositive = hiltAtMin;
-            resolution = new SheathedTipResolution
-            {
-                Valid = true,
-                BodyUpSign = tipAtPositive ? -1f : 1f,
-                LongAxis = a,
-                TipAtPositiveEnd = tipAtPositive,
-                Source = source,
-                Why = why
-            };
+            // ⚠ ASSIGN FIELDS, never `resolution = new SheathedTipResolution { … }`. The measured
+            // geometry (the two relGaps, the axis dominance, the seated tilt) was recorded on this
+            // struct on the way down; re-constructing it here would silently blank all of it and the
+            // verticality oracle would then read zeros as facts.
+            resolution.Valid = true;
+            resolution.Decision = SheathedSignDecision.Decided;
+            resolution.BodyUpSign = tipAtPositive ? -1f : 1f;
+            resolution.LongAxis = a;
+            resolution.TipAtPositiveEnd = tipAtPositive;
+            resolution.Source = source;
+            resolution.Why = why;
             FlowTrace.Step("Equip",
                 $"SheatheSign '{prop.name}': size={s:0.####} longest={AxisName(a)}({length:0.####}m) " +
                 $"src={source} {why} -> tip at {(tipAtPositive ? "+" : "-")}{AxisName(a)}, " +
                 $"bodyUpSign={resolution.BodyUpSign:+0;-0} (the sign that hangs the TIP DOWN). " +
                 "This is PER MESH: a single global sign is wrong for half the catalogue by construction.");
+            return true;
+        }
+
+        /// <summary>
+        /// THE ASSERTION THAT REPLACES THE SIGN FOR A SYMMETRICAL PROP (owner ruling WO-1136).
+        /// <para>
+        /// Owner, verbatim: "the staff should be longest mesh on Y axis with and placed with staff
+        /// still verticle not horizontal". So for a prop whose ends are measurably identical the
+        /// question is not WHICH END IS UP — that has no answer and does not need one — it is whether
+        /// the thing hangs UPRIGHT or across the body. That question is measurable, and the player can
+        /// see the difference.
+        /// </para>
+        /// Three clauses, each of which can fail on its own and says which one did:
+        ///   1. a long axis actually exists (dominance ≥ <see cref="VerticalCarryMinAxisDominance"/>);
+        ///   2. it is Y in the grip root's frame — the axis EquipmentController.ComputeSheathRotation
+        ///      maps onto the vertical, so anything else seats sideways no matter what sign is used;
+        ///   3. the resulting angle off vertical is within <see cref="VerticalCarryToleranceDeg"/> —
+        ///      the shipped `tiltFromVertical` trace, computed from bounds instead of a live socket.
+        /// <para>
+        /// ⛔ NO NAME IS CONSULTED. This is measurement all the way down, so a symmetrical prop that
+        /// would lie horizontal fails exactly as hard as an undecidable one — which is the whole point
+        /// of not writing an exemption list.
+        /// </para>
+        /// </summary>
+        public static bool TrySheathesVertical(SheathedTipResolution r, out float tiltDeg, out string why)
+        {
+            tiltDeg = r.LongAxisOffVerticalDeg;
+            if (r.LongAxisDominance < VerticalCarryMinAxisDominance)
+            {
+                why = $"NO LONG AXIS to be vertical about: longest/second={r.LongAxisDominance:0.###} < " +
+                      $"{VerticalCarryMinAxisDominance:0.##}. An axis-aligned box around a prop that is " +
+                      "tilted (or simply not long) has near-equal extents, so whichever axis measures " +
+                      "'longest' is a coin flip and any verticality answer read off it would be noise " +
+                      "reported as a measurement. Refusing to claim one.";
+                return false;
+            }
+            if (r.LongAxis != 1)
+            {
+                why = $"long axis is {AxisName(r.LongAxis)}, NOT Y, in the grip root's frame " +
+                      $"(dominance={r.LongAxisDominance:0.##}). The sheathe pose maps grip-local +Y onto " +
+                      "the vertical, so this prop hangs ACROSS THE BODY — the ~90deg the shipped " +
+                      "tiltFromVertical trace calls out. Owner ruling WO-1136: a staff is the longest " +
+                      "mesh on Y and is placed vertical, not horizontal.";
+                return false;
+            }
+            if (tiltDeg > VerticalCarryToleranceDeg)
+            {
+                why = $"long axis is Y but sits {tiltDeg:0.#}deg off vertical (> " +
+                      $"{VerticalCarryToleranceDeg:0.#}deg).";
+                return false;
+            }
+            why = $"VERTICAL: longest axis is Y (dominance={r.LongAxisDominance:0.##}), " +
+                  $"{tiltDeg:0.#}deg off vertical once the sheathe pose maps grip-local +Y up.";
             return true;
         }
 
