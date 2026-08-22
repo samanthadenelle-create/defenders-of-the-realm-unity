@@ -28,36 +28,18 @@ namespace DeNelle.Editor
         private const string MarkerFail = "STATUS_VFX_MIRROR_FAIL";
         private const string Tag        = "[StatusVfxMirrors] ";
 
-        // source (pack) -> dest (tracked Resources). A null source means the dest is
-        // expected to ALREADY be on disk (hand-staged tracked-pack copies) and only
-        // needs the self-containment verify.
-        public static readonly (string src, string dst)[] Mirrors =
-        {
-            ("Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire & Explosion Effects/Prefabs/BigExplosion.prefab",
-             "Assets/Resources/VFX/Status/BigExplosion.prefab"),
-            (null, "Assets/Resources/VFX/Status/Aura_acceleration.prefab"),
-            (null, "Assets/Resources/VFX/Status/Aura_slowdown.prefab"),
-            (null, "Assets/Resources/VFX/Status/backlight_health_drop.prefab"),
-            (null, "Assets/Resources/VFX/Status/top_down_ice_circle.prefab"),
-            (null, "Assets/Resources/VFX/Status/Character_status_sleep.prefab"),
-            (null, "Assets/Resources/VFX/Status/Hit_light.prefab"),
-            (null, "Assets/Resources/VFX/Markers/Marker8_SafeZoneLoop.prefab"),
-            // Arcane crown (owner pick): Lana is git-TRACKED - hand-staged plain copy, verify-only.
-            (null, "Assets/Resources/VFX/Aura/top_down_bomb_rainbow.prefab"),
-            // Owner tag 2026-08-16 verbatim: ParticlePack FireFlies -> "Tree of Life Aura".
-            // Pack is GITIGNORED; its deps (FireFly.mat etc.) are already in _Shared from the
-            // 08-06 pass, so the art-mirror pass re-links this copy onto them. NOTE for the
-            // verifier: mirroring the PREFAB does not by itself rebind the VFX catalog row -
-            // the WO-1025 audit delta (treeHandle=live) is the proof the key resolves.
-            ("Assets/UnityTechnologies/ParticlePack/EffectExamples/Misc Effects/Prefabs/FireFlies.prefab",
-             "Assets/Resources/VFX/Aura/FireFlies.prefab"),
-            // Owner pick 2026-08-16: "Buff_Light.prefab -> Knight Shield Buff or something".
-            // Spells Pack is GITIGNORED - dependency mirror required (Casting_Fire class).
-            ("Assets/Spells Pack/Particles/Prefabs/Buffs/Buff_Light.prefab",
-             "Assets/Resources/VFX/Buffs/Buff_Light.prefab"),
-            // Owner pick 2026-08-16: Lana starfall -> "Special Ability Mage cast" (tracked, plain copy).
-            (null, "Assets/Resources/VFX/Aura/top_down_starfall_line_blue.prefab"),
-        };
+        /// <summary>
+        /// source (pack) -> dest (tracked Resources). A null source means the dest is
+        /// expected to ALREADY be on disk (hand-staged tracked-pack copies) and only
+        /// needs the self-containment verify.
+        /// <para>
+        /// ⚠ DECLARED IN <see cref="Regression.VfxMirrorPairSet"/>, NOT HERE, for the reason
+        /// SurfaceImpactVfxMirrors already records: the gate that checks whether the CATALOG
+        /// ROWS point at these mirrors lives in DeNelle.EditorRegression, which this assembly
+        /// references ONE WAY. A table declared here would be invisible to that gate and would
+        /// need a hand-copied twin - the exact drift CLAUDE.md keeps paying for.
+        /// </para></summary>
+        public static (string src, string dst)[] Mirrors => Regression.VfxMirrorPairSet.StatusPairs;
 
         [MenuItem("Defenders/VFX/Mirror Status VFX")]
         public static void Run()

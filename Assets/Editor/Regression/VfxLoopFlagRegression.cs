@@ -26,7 +26,19 @@
 //   including PP_BigExplosion / PP_MuzzleFlash / PP_EarthShatter and friends --
 //   rate-0 + burst-at-t0 prefabs that self-terminate in under a second.
 //
-// WHAT IT ASSERTS:
+// WHAT IT ASSERTS -- TWO FACTS ABOUT EVERY ROW, IN ONE PASS:
+//
+//   (A) THE MIRROR JOIN (added 2026-08-22 -- see CheckRowPointsAtMirror below for the
+//       full RCA). A row must not point at a GITIGNORED PACK PREFAB for which a
+//       committed, repaired MIRROR exists on disk. This is the assertion that was
+//       missing when the five PP_*Impacts rows shipped pointing at the unrepaired
+//       pack copies: THIS suite compared each row's flag against the prefab the row
+//       pointed at (both the pack copy, both loop -> green) and
+//       SurfaceImpactVfxRegression asserted the MIRROR was one-shot (it was ->
+//       green). Neither asserted the row POINTS AT the mirror, and the leak lived in
+//       the gap between the two correct assertions.
+//
+//   (B) THE FLAG (the original charter):
 //   For every catalog row (HovlVfxCatalog.asset AND VFXCatalog.asset) whose
 //   prefab RESOLVES and carries a ParticleSystem, the STORED IsLoop equals the
 //   value DERIVED from that prefab's emission. Rows whose prefab is missing (the
@@ -364,6 +376,134 @@ namespace DeNelle.Editor.Regression
         }
 
         // =====================================================================
+        //  THE MIRROR JOIN -- the assertion neither oracle was making
+        // =====================================================================
+        //
+        // WHAT WENT WRONG, and why the fix is a THIRD assertion rather than a
+        // tightening of either existing one.
+        //
+        // On 2026-08-21 the five PP_*Impacts rows in HovlVfxCatalog pointed at the
+        // UNREPAIRED gitignored PACK prefabs while their repaired, committed mirrors sat
+        // on disk beside them (the mirror builder had run; HovlVfxCatalogGenerator.Generate
+        // had not, so VfxMirrorRedirect never got to redirect the rows). Every pack copy is
+        // IsLoop, and HitSurface.cs:221 plays that key fire-and-forget with the returned
+        // VFXHandle DISCARDED -- which per VFXManager.Hovl.cs:399-422 burns one of the 20
+        // global loop slots PERMANENTLY, for the whole session. The owner's live capture:
+        // "active loops 24/24 (cap hit)" 21 times, never recovering, with ~50 orphaned
+        // ParticleSystems still playing after the battle. That is her "random vfx stuck
+        // around".
+        //
+        // ⚠ BOTH ORACLES PASSED GREEN THROUGHOUT, AND NEITHER WAS WRONG:
+        //   * THIS suite compares a row's stored IsLoop against THE PREFAB THAT ROW POINTS
+        //     AT. Row and prefab were both the pack copy; both said loop. Agreement. Green.
+        //   * SurfaceImpactVfxRegression asserts THE MIRROR is one-shot. It was. Green.
+        //   NEITHER ASSERTED THAT THE ROW POINTS AT THE MIRROR. The defect lived exactly in
+        //   the gap between two correct assertions, so no amount of sharpening either one
+        //   reaches it -- only an assertion over the JOIN does, which is this.
+        //
+        // WHY IT LIVES HERE AND NOT IN SurfaceImpactVfxRegression:
+        //   1. The two suites already have a written division of labour, and this is on
+        //      this side of it. That suite's own header says: "This suite asserts the
+        //      PREFAB is one-shot; that suite asserts the ROW agrees." The ROW is this
+        //      suite's charter. A row pointing at the wrong prefab is a fact about the row.
+        //   2. This suite ALREADY walks every row of BOTH catalogs and resolves every
+        //      prefab reference. The join is one extra question asked of an object already
+        //      in hand, in the same pass -- so the two answers about a given row cannot
+        //      drift apart or be run against different catalog states.
+        //   3. The defect class is not surface-specific. Portal, talent-pointer and status
+        //      mirrors are wired the identical way through VfxMirrorRedirect and can rot
+        //      identically. SurfaceImpactVfxRegression is scoped to the five surfaces by
+        //      name and by its layer-count contract; widening it would make its name lie.
+        //
+        // WHAT IT MEASURES (and it is a MEASUREMENT, not a restatement):
+        //   It loads the catalog .asset FROM DISK, takes each row's serialized prefab
+        //   REFERENCE, resolves that reference to an ASSET PATH, and compares that path
+        //   against VfxMirrorPairSet -- the pair table the mirror BUILDERS themselves read.
+        //   It never recomputes the row's GUID from the generator's own path table, which
+        //   would only prove the generator agrees with itself.
+        //
+        //   A row whose prefab path IS a declared mirror SOURCE = FAIL, by name, with both
+        //   paths printed. The one exception is the exception VfxMirrorRedirect itself
+        //   makes: if the declared mirror does not actually LOAD, no redirect was possible,
+        //   and failing would demand a fix that cannot be performed -- so it is reported as
+        //   an unbuilt mirror instead.
+        //
+        // VACUITY IS REPORTED, NOT ASSUMED. On a clean clone the packs are gitignored, so a
+        // source-pointing row resolves to NULL and has no path to test. The summary
+        // therefore always prints how many declared mirrors are loadable here and how many
+        // rows were joined, so a run that COULD NOT have failed says so out loud instead of
+        // reading as a pass. (On the machine that matters -- the one with the packs
+        // imported, where the catalog is generated -- the join is live.)
+        //
+        // POSITIVE CONTROL (prove it can go red): open HovlVfxCatalog.asset and change the
+        // PP_WoodImpacts row's Prefab guid from 05e9acc051f2f52438573b60d3930524 (the mirror
+        // at Assets/Resources/VFX/Impact/WoodImpacts.prefab) to 3c0b5f221ea995442b9d11dc526de1c0
+        // (the pack source) -- i.e. put the catalog back in the exact state that shipped.
+        // Re-run: it must fail naming PP_WoodImpacts and both paths. Change it back.
+
+        private sealed class MirrorJoinStats
+        {
+            public int Joined;          // rows whose prefab resolved to a path we could test
+            public int AtMirror;        // rows already pointing at a declared mirror
+            public int Unresolvable;    // rows whose prefab is null (pack absent) - untestable
+            public int UnbuiltMirror;   // row is at a source whose declared mirror will not load
+        }
+
+        /// <summary>
+        /// One row, one question: does this row point at a declared mirror SOURCE when a
+        /// built mirror exists for it? Appends a failure naming the key and both paths if so.
+        /// Called BEFORE the loop-flag skip on purpose -- a row pointing at a source that
+        /// carries no ParticleSystem is skipped by the flag check but is still a wrong row.
+        /// </summary>
+        private static void CheckRowPointsAtMirror(string catalog, string key, GameObject prefab,
+                                                   List<string> failures, MirrorJoinStats stats)
+        {
+            if (prefab == null) { stats.Unresolvable++; return; }
+
+            string path = AssetDatabase.GetAssetPath(prefab);
+            if (string.IsNullOrEmpty(path)) { stats.Unresolvable++; return; }
+
+            stats.Joined++;
+
+            string mirror;
+            if (!VfxMirrorPairSet.TryMirrorForSource(path, out mirror))
+            {
+                // Not a declared source. Count the ones that are already AT a mirror so the
+                // summary can show the join is doing real work rather than matching nothing.
+                foreach (var (_, dst) in VfxMirrorPairSet.AllPairs())
+                {
+                    if (!string.IsNullOrEmpty(dst) &&
+                        string.Equals(dst, path, System.StringComparison.OrdinalIgnoreCase))
+                    {
+                        stats.AtMirror++;
+                        break;
+                    }
+                }
+                return;
+            }
+
+            if (AssetDatabase.LoadAssetAtPath<GameObject>(mirror) == null)
+            {
+                // Same stance VfxMirrorRedirect takes at its third test: a mirror that is
+                // declared but not on disk cannot be redirected onto, and pointing the row
+                // at a missing asset would trade a fresh-clone break for a break everywhere.
+                stats.UnbuiltMirror++;
+                return;
+            }
+
+            failures.Add(catalog + " '" + key + "': the row points at the UNREPAIRED PACK SOURCE '" +
+                         path + "' while its committed mirror '" + mirror + "' IS on disk. " +
+                         "Nothing redirected it, so the shipped row is the raw pack prefab -- " +
+                         "gitignored (it resolves to NOTHING on a fresh clone) and unrepaired " +
+                         "(demo geometry, colliders, and LOOPING particle systems the mirror strips). " +
+                         "A loop-flagged row played fire-and-forget -- HitSurface.cs:221 discards the " +
+                         "VFXHandle -- permanently burns one of the 20 global loop slots " +
+                         "(VFXManager.Hovl.cs:399-422). FIX: re-run Defenders/VFX/Generate Hovl VFX " +
+                         "Catalog, which applies VfxMirrorRedirect; do NOT hand-edit the .asset, the " +
+                         "next regenerate would undo it.");
+        }
+
+        // =====================================================================
         //  THE ORACLE
         // =====================================================================
 
@@ -377,6 +517,7 @@ namespace DeNelle.Editor.Regression
             var failures = new List<string>();
             int checkedRows = 0, skipped = 0, catalogsFound = 0;
             var notes = new List<string>();
+            var join = new MirrorJoinStats();
 
             // --- HovlVfxCatalog: string-keyed rows (the 135-row catalog) -------------
             var hovl = AssetDatabase.LoadAssetAtPath<HovlVfxCatalog>(HovlCatalogPath);
@@ -394,6 +535,12 @@ namespace DeNelle.Editor.Regression
                 {
                     var row = rows[i];
                     string key = string.IsNullOrEmpty(row.Key) ? ("<row " + i + ">") : row.Key;
+
+                    // THE MIRROR JOIN, before the flag skip: a row pointing at an unrepaired
+                    // pack source is wrong even when its prefab carries no ParticleSystem and
+                    // the flag check below would skip it silently.
+                    CheckRowPointsAtMirror("HovlVfxCatalog", key, row.Prefab, failures, join);
+
                     bool derived;
                     string detail;
                     if (!TryResolveExpected(key, row.Prefab, out derived, out detail))
@@ -429,6 +576,9 @@ namespace DeNelle.Editor.Regression
                 {
                     var e = entries[i];
                     string name = e.Type.ToString();
+
+                    CheckRowPointsAtMirror("VFXCatalog", name, e.Prefab, failures, join);
+
                     bool derived;
                     string detail;
                     if (!TryResolveExpected(name, e.Prefab, out derived, out detail))
@@ -452,12 +602,41 @@ namespace DeNelle.Editor.Regression
                 return false;
             }
 
+            // Mirror-join summary. Printed on PASS as well as FAIL, and deliberately spelling
+            // out how much of the join was live: this suite shipped green for a defect that a
+            // vacuous check would also have been green for, so a run that could not have
+            // failed has to say so rather than look identical to one that could.
+            int pairsTotal, pairsWithSource, mirrorsOnDisk = 0;
+            VfxMirrorPairSet.Count(out pairsTotal, out pairsWithSource);
+            foreach (var (src, dst) in VfxMirrorPairSet.AllPairs())
+            {
+                if (string.IsNullOrEmpty(src) || string.IsNullOrEmpty(dst)) continue;
+                if (AssetDatabase.LoadAssetAtPath<GameObject>(dst) != null) mirrorsOnDisk++;
+            }
+
+            var joinNote = new StringBuilder();
+            joinNote.Append("mirror-join: ").Append(pairsWithSource).Append(" redirectable pair(s) of ")
+                    .Append(pairsTotal).Append(" declared, ").Append(mirrorsOnDisk)
+                    .Append(" mirror(s) loadable here; ").Append(join.Joined)
+                    .Append(" row(s) joined, ").Append(join.AtMirror)
+                    .Append(" already at a mirror, ").Append(join.Unresolvable)
+                    .Append(" unresolvable (prefab null -- gitignored pack absent), ")
+                    .Append(join.UnbuiltMirror).Append(" at a source whose mirror is not built");
+            if (mirrorsOnDisk == 0 || join.Joined == 0)
+                joinNote.Append(" -- ⚠ VACUOUS ON THIS MACHINE: with no loadable mirrors or no " +
+                                "resolvable rows the join had nothing to compare and CANNOT have " +
+                                "failed. It is live on a machine with the art packs imported, " +
+                                "which is the machine the catalog is generated on");
+            notes.Add(joinNote.ToString());
+
             if (failures.Count > 0)
             {
                 var sb = new StringBuilder();
-                sb.Append("vfx-loop-flag FAILED (").Append(failures.Count).Append(" row(s) disagree with their prefab; ")
+                sb.Append("vfx-loop-flag FAILED (").Append(failures.Count)
+                  .Append(" row(s) disagree with their prefab, or point at an unrepaired mirror source; ")
                   .Append(checkedRows).Append(" checked, ").Append(skipped).Append(" skipped): ");
                 sb.Append(string.Join(" | ", failures.ToArray()));
+                sb.Append(" [").Append(string.Join("; ", notes.ToArray())).Append(']');
                 reason = sb.ToString();
                 return false;
             }

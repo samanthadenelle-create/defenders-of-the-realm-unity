@@ -59,13 +59,19 @@ namespace DeNelle.Editor
         private const string MarkerFail = "PORTAL_CIRCLE_VFX_FAIL";
         private const string Tag        = "[PortalCircleVfxMirror] ";
 
-        /// <summary>The owner's verbatim pick (2026-08-16, "use this rotated for the portals").</summary>
-        public const string SrcPath =
-            "Assets/Hovl Studio/Magic circles/Prefabs/Magic circle dark star.prefab";
+        /// <summary>The owner's verbatim pick (2026-08-16, "use this rotated for the portals").
+        /// <para>
+        /// ⚠ DECLARED IN <see cref="Regression.VfxMirrorPairSet"/>, NOT HERE. The gate that
+        /// judges whether the CATALOG ROW actually points at this mirror lives in
+        /// DeNelle.EditorRegression, which this assembly references ONE WAY - a path declared
+        /// here would be invisible to it and would need a hand-copied twin, the exact drift
+        /// this project keeps paying for. Same inversion SurfaceImpactMirrorSet already uses.
+        /// </para></summary>
+        public const string SrcPath = Regression.VfxMirrorPairSet.PortalSrc;
 
         /// <summary>The tracked mirror. Runtime loads it as Resources
         /// "VFX/Portal/PortalCircleDarkStar" (DungeonWorldPortalSpawner) - keep in lockstep.</summary>
-        public const string DstPath = "Assets/Resources/VFX/Portal/PortalCircleDarkStar.prefab";
+        public const string DstPath = Regression.VfxMirrorPairSet.PortalDst;
 
         [MenuItem("Defenders/VFX/Mirror Portal Circle VFX")]
         public static void Run()

@@ -54,13 +54,17 @@ namespace DeNelle.Editor
         private const string MarkerFail = "TALENT_POINTER_VFX_FAIL";
         private const string Tag        = "[TalentPointerVfxMirror] ";
 
-        /// <summary>The owner's verbatim pick (2026-08-16, "for nodes").</summary>
-        public const string SrcPath =
-            "Assets/Hovl Studio/Map track markers VFX/Prefabs/Marker 2 Pointer Loop.prefab";
+        /// <summary>The owner's verbatim pick (2026-08-16, "for nodes").
+        /// <para>
+        /// ⚠ DECLARED IN <see cref="Regression.VfxMirrorPairSet"/>, NOT HERE - see the note on
+        /// PortalCircleVfxMirror.SrcPath. The one-way assembly reference means the gate that
+        /// checks the catalog row against this pair cannot see a table declared in this file.
+        /// </para></summary>
+        public const string SrcPath = Regression.VfxMirrorPairSet.TalentSrc;
 
         /// <summary>The tracked mirror. Runtime loads it as Resources "VFX/UI/TalentNodePointer"
         /// (TalentNodeVfxRig.PointerResourcePath) - keep the two in lockstep.</summary>
-        public const string DstPath = "Assets/Resources/VFX/UI/TalentNodePointer.prefab";
+        public const string DstPath = Regression.VfxMirrorPairSet.TalentDst;
 
         [MenuItem("Defenders/VFX/Mirror Talent Pointer VFX")]
         public static void Run()
