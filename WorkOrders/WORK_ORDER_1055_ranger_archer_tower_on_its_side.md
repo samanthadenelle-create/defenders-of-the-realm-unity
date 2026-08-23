@@ -1,4 +1,19 @@
-**Status:** READY - ROOT CAUSE PROVEN 2026-08-22 (CLI): the Addressables migration made a previously-AMBIGUOUS Resources.Load deterministic and it resolved to the PREFAB (identity root) instead of the FBX (euler 270, the upright correction). preservePrefabRotation now faithfully preserves nothing. Blast radius measured: exactly 3 assets, all three tower tiers. Fix = bake the 270 into the three prefab roots; needs its own R2 push.
+**Status:** DONE 2026-08-22 - owner-verified in game. X+90 applied to the L3 prefab's renderer-bearing child (`DeNelle.Editor.ArcherTowerL3Pitch`). Bounds went `0.59 x 0.58 x 1.00 LYING DOWN` -> `0.59 x 1.00 x 0.58 UPRIGHT`; prefab and model now agree. Evidence: `docs/ui-evidence/structure-pose-2026-08-22/Tower_Wooden_Watchtower_L3__prefab.png`.
+
+> ### WHY THE FIX LANDED ON THE PREFAB CHILD AND NOWHERE ELSE
+> `StructurePoseCapture` measured the two layers separately and they DISAGREED - the FBX
+> rendered UPRIGHT while the wrapper prefab rendered LYING DOWN. The wrapper is the
+> authority, so three earlier asset-layer attempts (re-running the baker,
+> `bakeAxisConversion`, catalog eulers) each moved the number by exactly zero.
+> The catalog cannot reach it either: `ReskinForLevel` does not apply `entry.orientation`
+> because tier models rely on their prefab-native pose, so a catalog euler only ever
+> reaches the BASE visual and L2/L3 stay down.
+>
+> ⚠ `WoodenWatchtowerBuilder` - the tool that would normally regenerate these wrappers -
+> NO LONGER RUNS. It fails on **L1** with "the prefab has no renderer-bearing child ... not
+> the wrapper+model shape this builder authors", i.e. it is broken for a level that looks
+> fine. Repairing it is separate work; this ticket applied the one correction it would have
+> made. Do not assume that builder is available next time.
 
 # WORK ORDER 1055 — Archer Tower is on its side
 
