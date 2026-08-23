@@ -980,11 +980,15 @@ namespace DeNelle.Village
                 bolt.AddComponent<ProjectileMover>().Launch(targetPos, 40f, CanHitAir ? 0.1f : 0.35f,
                     () =>
                     {
-                        boltFx?.StopSoft();
                         VFXManager.Play(impactType, targetPos);   // legacy procedural fallback
                         if (!string.IsNullOrEmpty(impactKey))
                             VFXManager.PlayKey(impactKey, targetPos, default, null, BoltColor);
-                    });
+                    },
+                    // WO-1155: the trail's StopSoft is the mover's RELEASE, not part of the arrival
+                    // payload. A bolt destroyed in flight (scene unload / teardown) never arrives,
+                    // and the followed Hovl host is a POOLED instance that is never destroyed — so
+                    // VFXManager's destroyed-host sweep could never reclaim that loop slot.
+                    () => boltFx?.StopSoft());
             });
             return bolt;
         }

@@ -88,8 +88,19 @@ namespace DeNelle.Data.Tests
                     $"{pack.Sku} must have a SOL price.");
                 Assert.That(pack.AmountFor(CurrencyKind.Usdc), Is.GreaterThan(0d),
                     $"{pack.Sku} must have a USDC price.");
-                Assert.That(pack.AmountFor(CurrencyKind.Skr), Is.GreaterThan(0d),
-                    $"{pack.Sku} must have an SKR price.");
+                // ⛔ SKR IS DELIBERATELY *NOT* ASSERTED POSITIVE HERE (WO-1158). The client no
+                // longer prices the SKR rail at all: the SERVER issues the amount
+                // (api/purchases/quote.js) and PackDef.AmountFor(Skr) returns 0 until it has, for
+                // every SKU except the two pinned CANARIES. Zero is the honest answer to "we have
+                // not been quoted" - callers render it as the WORDS "Price unavailable" and
+                // WalletService.Pay refuses an amount <= 0 outright.
+                //
+                // Asserting > 0 here would demand exactly the thing the WO removed: a client-side
+                // price resolved with no server agreement, which /verify then refuses AFTER the
+                // transfer has settled and the money is gone. What IS still authored, and what this
+                // suite therefore guards, is the USD anchor the quote is derived FROM.
+                Assert.That(pack.AmountLabel(CurrencyKind.Skr), Is.Not.Empty,
+                    $"{pack.Sku} must state its SKR rail in words even when unpriced.");
                 Assert.That(pack.Pricing.Usd, Is.GreaterThan(0d),
                     $"{pack.Sku} must have a USD reference price.");
             }
@@ -117,6 +128,12 @@ namespace DeNelle.Data.Tests
             Assert.That(pack.AmountLabel(CurrencyKind.Usdc), Does.EndWith("USDC"));
             Assert.That(pack.AmountLabel(CurrencyKind.Skr), Does.EndWith("SKR"));
             Assert.That(pack.UsdReference, Does.StartWith("$"));
+            // WO-1158 §5: the DOLLARS carry the "approximately", never the SKR. The player pays
+            // SKR and that amount is exact (the server's quote pins it to the base unit); the
+            // dollar value is what floats, because the rate moves. "~" not the U+2248 glyph -
+            // TMP is ASCII-only here and the pretty character renders as a tofu box on device.
+            Assert.That(pack.UsdApprox, Does.StartWith("~ $"),
+                "the USD anchor must be marked approximate, and in ASCII.");
         }
 
         // =====================================================================

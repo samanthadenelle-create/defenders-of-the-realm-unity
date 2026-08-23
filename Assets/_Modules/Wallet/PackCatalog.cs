@@ -298,25 +298,32 @@ namespace DeNelle.Wallet
                 case CurrencyKind.Sol: return Pricing.Sol;
                 case CurrencyKind.Usdc: return Pricing.Usdc;
                 case CurrencyKind.Skr:
-                    // ⛔ SERVER-VERIFIED SKUs ARE NEVER REPRICED. The backend checks the on-chain
-                    // amount by EXACT EQUALITY against a fixed `amountBaseUnits`
-                    // (api/_lib/purchase-catalog.js), so a client that resolves a DIFFERENT number
-                    // sends a transfer the server then refuses - and /verify runs AFTER settlement,
-                    // so the money is already gone with no entitlement granted. That is the same
-                    // paid-but-not-granted shape as the 6-vs-9 decimals near-miss, arriving by a
-                    // different door.
+                    // ⛔ THE CLIENT DOES NO PRICE ARITHMETIC. WO-1158.
                     //
-                    // The mainnet canary is the live case and it is NOT hypothetical: it is priced
-                    // Usd 0.006 against a server contract of exactly 1_000_000 base units (1 SKR).
-                    // ceil(0.006 / skrPrice) is 1 only while SKR trades ABOVE $0.006. Below that it
-                    // silently becomes 2 and every purchase breaks. A market move is not a deploy -
-                    // nobody would be watching.
+                    // This branch used to read `SkrValuationOracle.SkrForUsd(Pricing.Usd)` - the
+                    // CLIENT resolving a market rate and rounding it into an SKR amount - while the
+                    // BACKEND checked the settled transfer against its own figure. Those two can
+                    // never be made to agree, because they are two different opinions about a
+                    // moving number, and /verify runs AFTER the transfer settles: the moment they
+                    // diverge the player has paid and been granted nothing. The trigger is a MARKET
+                    // MOVE, not a deploy, so nobody would be watching when it fired.
                     //
-                    // The oracle is for DISPLAY and for rails the server does not pin. A price the
-                    // server verifies is a PROTOCOL CONSTANT, not a market quote.
+                    // The SERVER now issues the price (api/purchases/quote.js) and this returns
+                    // whatever it quoted, or ZERO.
+                    //
+                    // ⛔ ZERO IS DELIBERATE AND IT IS THE HONEST ANSWER. It is not "free" and it is
+                    // not "fall back to Pricing.Skr" - the authored `pricing.skr` in packs.json is a
+                    // stale hand-typed figure from before the SKR rail existed at a real rate, and
+                    // rendering it would put a number on screen that nobody will honour. Callers
+                    // turn 0 into the WORDS "Price unavailable" (see AmountLabel) and
+                    // WalletService.Pay refuses an amount <= 0 outright, so the fail is closed on
+                    // both the display and the charge path.
+                    //
+                    // The two CANARIES are the one exception and they keep their authored number:
+                    // their amount IS a protocol constant that the backend pins by exact equality
+                    // (a proof-of-rail, not a sale), so a market rate must never touch it.
                     if (IsServerPinnedSku(Sku)) return Pricing.Skr;
-                    var valued = SkrValuationOracle.SkrForUsd(Pricing.Usd);
-                    return valued > 0d ? valued : Pricing.Skr;
+                    return PurchaseQuoteService.SkrAmountFor(Sku);
                 default: return 0d;
             }
         }
@@ -337,6 +344,31 @@ namespace DeNelle.Wallet
         /// <summary>The USD reference price string, e.g. <c>"$4.99"</c>.</summary>
         public string UsdReference => Pricing != null ? $"${Pricing.Usd:0.00}" : "$0.00";
 
+        /// <summary>
+        /// The USD anchor, MARKED APPROXIMATE - <c>"~ $2.99"</c> (WO-1158 §5, owner ruling
+        /// 2026-08-23: "we should be transparent that price is approx 2.99 or 5.99 or 9.99").
+        ///
+        /// <para>⚠ WHICH NUMBER CARRIES THE "APPROX" IS NOT A WORDING PREFERENCE AND IT IS EASY TO
+        /// GET BACKWARDS. The player pays SKR and the amount charged is EXACT - the server's quote
+        /// pins it to the base unit. What FLOATS is the dollar value, because the rate moves. So the
+        /// SKR is stated precisely (<see cref="AmountLabel"/>) and it is the DOLLARS that get the
+        /// tilde. Printing a flat "$2.99" while charging a rate-derived amount is the misleading
+        /// version, and it is the one a reader assumes.</para>
+        ///
+        /// <para>The SERVER's anchor wins when it differs from the authored one: two prices on one
+        /// screen is worse than a stale one, and the server's is the one the charge is derived from.
+        /// "~" not "≈" on purpose - TMP is ASCII-only here and U+2248 renders as a tofu box.</para>
+        /// </summary>
+        public string UsdApprox
+        {
+            get
+            {
+                double served = PurchaseQuoteService.UsdAnchorFor(Sku);
+                double usd = served > 0d ? served : (Pricing != null ? Pricing.Usd : 0d);
+                return usd > 0d ? $"~ ${usd:0.00}" : string.Empty;
+            }
+        }
+
         /// <summary>Formats one currency rail's amount + symbol, e.g. <c>"60 SKR"</c>.</summary>
         public string AmountLabel(CurrencyKind currency)
         {
@@ -345,7 +377,12 @@ namespace DeNelle.Wallet
             {
                 case CurrencyKind.Sol: return $"{amount:0.###} SOL";
                 case CurrencyKind.Usdc: return $"{amount:0.00} USDC";
-                case CurrencyKind.Skr: return $"{amount:0.##} SKR";
+                // ⛔ NO SERVER QUOTE = NO NUMBER. WORDS, not a zero and not a stale authored
+                // figure: "0 SKR" reads as free and a stale figure reads as a promise. The owner is
+                // RED/GREEN COLOURBLIND, so an unavailable price can never be signalled by a tint -
+                // it says so in text, and the greyscale capture is the acceptance test.
+                case CurrencyKind.Skr: return amount > 0d ? $"{amount:0.######} SKR"
+                                                          : "Price unavailable";
                 default: return amount.ToString("0.##");
             }
         }

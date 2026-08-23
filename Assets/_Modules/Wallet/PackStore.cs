@@ -308,12 +308,23 @@ namespace DeNelle.Wallet
             _wallet = service;
             Render();
             RefreshWalletMirror().Forget();
-            RefreshSkrValuation().Forget();
+            RefreshQuotedPrices().Forget();
         }
 
-        private async UniTaskVoid RefreshSkrValuation()
+        /// <summary>
+        /// Pulls the shelf's SKR figures FROM THE SERVER (WO-1158).
+        ///
+        /// <para>⛔ THIS USED TO CALL <c>SkrValuationOracle.Refresh()</c> - the client fetching a
+        /// market rate and pricing the packs itself, while the backend verified the settled transfer
+        /// against a figure of its own. Two opinions about a moving number, reconciled AFTER the
+        /// money moved. Now the server prices and this only transports.</para>
+        ///
+        /// <para>A refusal repaints nothing: the cards keep whatever honest state they had, which is
+        /// the WORDS "Price unavailable" rather than a number we made up.</para>
+        /// </summary>
+        private async UniTaskVoid RefreshQuotedPrices()
         {
-            if (await SkrValuationOracle.Refresh() && this != null && isActiveAndEnabled)
+            if (await PurchaseQuoteService.RefreshPricesAsync(_wallet) && this != null && isActiveAndEnabled)
                 Render();
         }
 
@@ -964,8 +975,13 @@ namespace DeNelle.Wallet
                 // card and the spotlight can never disagree about what a pack contains.
                 Contents     = DescribeContents(pack),
                 ValueCaption = ValueCaption(pack),
+                // ⛔ TWO NUMBERS, AND THE "APPROX" GOES ON THE DOLLARS (WO-1158 §5, owner ruling
+                // 2026-08-23). The player pays SKR and that amount is EXACT - the server's quote
+                // pins it to the base unit. The DOLLARS float, because the rate moves. A card
+                // showing only "396 SKR" tells a player nothing about what they are spending, and a
+                // store that obscures real-money cost reads as a store with something to hide.
                 PriceMajor   = pack.AmountLabel(_defaultCurrency),
-                PriceMinor   = pack.UsdReference,
+                PriceMinor   = pack.UsdApprox,
                 Badge        = pack.StoreBadge,
                 StateWord    = CardStateWord(pack),
                 Band         = band,
@@ -1346,7 +1362,10 @@ namespace DeNelle.Wallet
             // Only when the wallet mirror actually KNOWS a number. Never computed from an assumed
             // balance: "what you will have left" is a promise, and a promise off a guessed figure is
             // the same lie as a fabricated balance.
-            if (_balanceState == BalanceState.Known)
+            // ⚠ AND ONLY WHEN A PRICE EXISTS. With no server quote AmountFor returns 0 (WO-1158),
+            // and "what you will have left" would print the player's whole balance back at them as
+            // if the pack were free.
+            if (_balanceState == BalanceState.Known && pack.AmountFor(CurrencyKind.Skr) > 0d)
             {
                 double after = _balanceSkr - pack.AmountFor(CurrencyKind.Skr);
                 MakeText(host, StoreStrings.Format(StoreStrings.KeyBalanceAfter, after.ToString("N0")),
@@ -1447,6 +1466,23 @@ namespace DeNelle.Wallet
             }
 
             var rail = SelectedCurrency(pack.Sku);   // SKR canary by default (MON-1147)
+
+            // ⛔ NO SERVER PRICE, NO BUY BUTTON (WO-1158). The client cannot price a pack, so when
+            // the server has not quoted one there is nothing honest to put on the face of a button.
+            // A refusal is a PLATE, never a button (UI-002): nothing here invites a tap that nothing
+            // answers, and the reason is WORDS - the owner is red/green colourblind and a greyed
+            // button carries no meaning in greyscale.
+            if (rail == CurrencyKind.Skr && pack.AmountFor(rail) <= 0d)
+            {
+                FitInto(MakeText(host,
+                    "Price unavailable right now. Nothing has been charged; reopen the store to retry.",
+                    30, ElarionUi.ParchmentDim, FontStyles.Italic,
+                    TextAlignmentOptions.Center, ctaMin, ctaMax), 30);
+                FlowTrace.Warn("Store", $"BuildSpotlightCta '{pack.Sku}': NO server quote for SKR - " +
+                                        "Buy withheld rather than shown against an invented number.");
+                return;
+            }
+
             if (_wallet != null && _wallet.Network == WalletNetwork.Devnet)
                 MakeText(host, "DEVNET - TEST TOKEN", 30, ElarionUi.Gold,
                     FontStyles.Bold, TextAlignmentOptions.Center,
@@ -1920,14 +1956,62 @@ namespace DeNelle.Wallet
                     return PaymentResult.Failure(pack.Sku, currency, recoveryMessage);
                 }
 
+                // =============================================================
+                //  THE SERVER QUOTES THE PRICE (WO-1158) - LAST THING BEFORE THE WALLET
+                // -------------------------------------------------------------
+                // ⛔ THE CLIENT DOES NO PRICE ARITHMETIC. It asks, it transfers exactly what it is
+                // told, and it presents what the server quoted. Before this, the client resolved a
+                // market rate and the backend checked the settled transfer against a constant of its
+                // own - two opinions about a moving number, reconciled AFTER the money moved. The
+                // moment the market shifted, the player paid and was granted nothing.
+                //
+                // ⛔ IT IS FETCHED HERE, NOT AT STORE OPEN, ON PURPOSE. The quote's clock starts the
+                // instant it is issued and the wallet approval that follows is a HUMAN action with
+                // no countdown. Every second between the quote and the prompt is a second of the
+                // player's own expiry budget spent on our UI.
+                //
+                // The two CANARIES come back `pinned` with no rate and no expiry: their amount IS a
+                // protocol constant (a proof-of-rail, not a sale), so nothing here reprices them.
+                SetCommerceState(CommerceState.Verifying,
+                    $"Asking for today's price for {pack.Name}. Nothing has been charged yet.");
+                var quoted = await PurchaseQuoteService.RequestQuoteAsync(pack, _wallet);
+                if (!quoted.Ok)
+                {
+                    // ⛔ FAIL CLOSED. No quote means no sale - never a stale price, never the
+                    // authored one. Charging a made-up number is worse than refusing to sell.
+                    string refusal = string.IsNullOrEmpty(quoted.Error)
+                        ? PurchaseQuoteService.QuoteUnavailableMessage : quoted.Error;
+                    FlowTrace.Warn("Store", $"Purchase '{pack.Sku}' STOPPED before the wallet: no server quote " +
+                                            $"- \"{refusal}\" (player NOT charged).");
+                    SetCommerceState(CommerceState.Failed, refusal);
+                    return PaymentResult.Failure(pack.Sku, currency, refusal);
+                }
+                var quote = quoted.Quote;
+
+                // ── THE CONFIRM STEP: the last screen where a player can still decline ──
+                // ⛔ SO IT MUST BE UNAMBIGUOUS (WO-1158 §5). It states the EXACT SKR that will be
+                // transferred, the approximate dollars behind it, and the rate + SOURCE the figure
+                // came from. Which number carries the "~" is not a wording preference: the SKR is
+                // exact (the quote pins it to the base unit) and the DOLLARS float, because the rate
+                // moves. Every part of it is WORDS and DIGITS - the owner is red/green colourblind,
+                // so no hue carries any of this and the greyscale capture is the acceptance test.
+                string rateLine = quote.Pinned
+                    ? "Fixed test amount - no market rate is used."
+                    : $"at ${(quote.Rate ?? 0d):0.########} per SKR ({quote.RateSource}).";
                 SetCommerceState(CommerceState.AwaitingApproval,
-                    $"{pack.Name}: {pack.AmountLabel(currency)} on {_wallet.NetworkLabel}. Human approval has no countdown.");
+                    $"{pack.Name}: you will send exactly {quote.ExactSkrLabel} " +
+                    $"({quote.UsdApproxLabel}) on {_wallet.NetworkLabel}. {rateLine} " +
+                    "Human approval has no countdown.");
+
                 var result = await _wallet.Pay(pack, currency);
 
                 // A wallet-signed receipt exists before RPC transport completes. Persist it even
                 // when submission response is ambiguous; any retry must reconcile, never pay again.
+                // ⚠ THE QUOTE ID IS PART OF THE RECEIPT. /verify checks the chain against the quote
+                // it ISSUED; a later retry that asked for a fresh quote would be checking a settled
+                // transfer against a price nobody agreed to, with the money already gone.
                 if (!string.IsNullOrEmpty(result.TxSignature))
-                    PurchaseEntitlementVerifier.Remember(pack, result, _wallet);
+                    PurchaseEntitlementVerifier.Remember(pack, result, _wallet, quote.QuoteId);
 
                 if (result.Ok)
                 {

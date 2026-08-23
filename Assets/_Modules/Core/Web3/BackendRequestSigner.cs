@@ -50,6 +50,42 @@ namespace DeNelle.Core.Web3
         public const string BackendBase = "https://defenders-of-the-realm-v2.vercel.app";
 
         private const string NonceUrl = BackendBase + "/api/auth/nonce";
+        private const string SessionUrl = BackendBase + "/api/auth/session";
+
+        // ── WO-1157: the cached session ──────────────────────────────────────────────
+        // Buying one pack used to prompt the wallet THREE times: MWA connect, an auth
+        // signature per backend call, and the transfer. Only the transfer should ever be
+        // seen. The other two are session setup, and a session is what we were missing.
+        //
+        // ⛔ IN MEMORY ONLY, DELIBERATELY. This is a bearer credential: whoever holds it
+        // speaks for the wallet until it expires. MwaSessionStore had to seal its token
+        // with AES-GCM precisely because PlayerPrefs on Android is readable by a backup;
+        // rather than repeat that machinery for a 15-minute token, we simply never write
+        // it down. The cost is one extra signature after an app restart. That is the
+        // right trade for a credential this powerful.
+        //
+        // ⛔ AND IT IS SCOPED TO ONE WALLET. Switching accounts must never inherit the
+        // previous account's session - hence _sessionWallet, checked on every use.
+        private static string   _sessionToken;
+        private static string   _sessionWallet;
+        private static DateTime _sessionExpiresUtc = DateTime.MinValue;
+
+        // Re-sign a little BEFORE the server would reject: a token that expires in flight
+        // becomes a 401 the player experiences as a failed purchase.
+        private static readonly TimeSpan SessionSkew = TimeSpan.FromSeconds(60);
+
+        private static bool SessionUsable(string wallet)
+            => !string.IsNullOrEmpty(_sessionToken)
+            && string.Equals(_sessionWallet, wallet, StringComparison.Ordinal)
+            && DateTime.UtcNow + SessionSkew < _sessionExpiresUtc;
+
+        /// <summary>Drop the cached session. Call on wallet change, sign-out, or a 401.</summary>
+        public static void ClearSession()
+        {
+            _sessionToken = null;
+            _sessionWallet = null;
+            _sessionExpiresUtc = DateTime.MinValue;
+        }
         private const int    RequestTimeoutSeconds = 15;
         private const string GuestWalletPrefix = "guest-local-";
 
@@ -136,6 +172,17 @@ namespace DeNelle.Core.Web3
                 return false;
             }
 
+            // ── WO-1157: try the cached session FIRST ────────────────────────────────────
+            // A usable session is the same proof, established minutes ago from a burned nonce,
+            // and it costs the player NO prompt. This is the line that turns three wallet
+            // prompts per purchase into one (the transfer, which we keep on purpose).
+            //
+            // ⛔ FALLBACK, NOT REPLACEMENT. If a session cannot be obtained - offline, server
+            // older than this client, signing refused - we fall straight through to the
+            // per-request signature below, which still fails CLOSED. No request is ever sent
+            // unauthenticated, and nothing is forced to migrate.
+            if (await TryAttachSession(req, wallet)) return true;
+
             // 1. Fresh single-use nonce bound to this wallet.
             var nonce = await FetchNonceAsync(wallet);
             if (string.IsNullOrEmpty(nonce))
@@ -169,6 +216,103 @@ namespace DeNelle.Core.Web3
             req.SetRequestHeader("X-Nonce", nonce);
             req.SetRequestHeader("X-Signature", signature);
             return true;
+        }
+
+        /// <summary>
+        /// WO-1157. Attach a cached session if we hold a usable one, otherwise mint one from a
+        /// SINGLE signature and attach that. Returns false only when no proof could be obtained,
+        /// and the caller then falls back to the per-request signature path.
+        /// </summary>
+        private static async UniTask<bool> TryAttachSession(UnityWebRequest req, string wallet)
+        {
+            if (!SessionUsable(wallet))
+            {
+                var minted = await MintSessionAsync(wallet);
+                if (!minted) return false;
+            }
+            req.SetRequestHeader("X-Session", _sessionToken);
+            // ⛔ X-Wallet travels alongside so the server can still bind the session to the player
+            // being acted on. The session names the wallet; this lets the server CHECK that claim
+            // rather than take it. Never send a session without it.
+            req.SetRequestHeader("X-Wallet", wallet);
+            return true;
+        }
+
+        /// <summary>
+        /// POST /api/auth/session with one nonce+signature, cache the returned bearer token.
+        /// This is the ONLY place a wallet-signature prompt happens for backend auth.
+        /// </summary>
+        private static async UniTask<bool> MintSessionAsync(string wallet)
+        {
+            var signer = CoreServices.WalletSigner;
+            if (signer == null || !signer.CanSign) return false;
+
+            var nonce = await FetchNonceAsync(wallet);
+            if (string.IsNullOrEmpty(nonce)) return false;
+
+            // Bodyless request, so the canonical message uses the 'load' payload tag - exactly
+            // the shape the server rebuilds for a null payload. These two must not drift.
+            var message = $"dotr-save:v1:{wallet}:{nonce}:load";
+
+            string signature;
+            try { signature = await signer.SignMessageBase58(message); }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[BackendAuth] Session signing failed ({ex.GetType().Name}) - falling back to per-request signing.");
+                return false;
+            }
+            if (string.IsNullOrEmpty(signature)) return false;
+
+            using var req = new UnityWebRequest(SessionUrl, UnityWebRequest.kHttpVerbPOST);
+            req.downloadHandler = new DownloadHandlerBuffer();
+            req.timeout = RequestTimeoutSeconds;
+            req.SetRequestHeader("Accept", "application/json");
+            req.SetRequestHeader("X-Wallet", wallet);
+            req.SetRequestHeader("X-Nonce", nonce);
+            req.SetRequestHeader("X-Signature", signature);
+
+            try { await req.SendWebRequest(); }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[BackendAuth] Session mint threw ({req.responseCode}): {e.GetType().Name}");
+                return false;
+            }
+            if (req.result != UnityWebRequest.Result.Success)
+            {
+                Debug.LogWarning($"[BackendAuth] Session mint failed ({req.responseCode}).");
+                return false;
+            }
+
+            try
+            {
+                var res = JsonConvert.DeserializeObject<SessionResponse>(req.downloadHandler.text);
+                if (res == null || !res.Ok || string.IsNullOrEmpty(res.Token)) return false;
+
+                _sessionToken = res.Token;
+                _sessionWallet = wallet;
+                // Prefer the server's own expiry; fall back to ttlSeconds. ⛔ Never invent one -
+                // a client-guessed expiry that outlives the server's produces a 401 the player
+                // sees as a failed purchase.
+                _sessionExpiresUtc = DateTime.TryParse(res.ExpiresAt, null,
+                        System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal,
+                        out var parsed)
+                    ? parsed
+                    : DateTime.UtcNow.AddSeconds(res.TtlSeconds > 0 ? res.TtlSeconds : 60);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[BackendAuth] Session parse error: {ex.GetType().Name}");
+                return false;
+            }
+        }
+
+        private sealed class SessionResponse
+        {
+            [JsonProperty("ok")]         public bool   Ok         { get; set; }
+            [JsonProperty("token")]      public string Token      { get; set; }
+            [JsonProperty("expiresAt")]  public string ExpiresAt  { get; set; }
+            [JsonProperty("ttlSeconds")] public int    TtlSeconds { get; set; }
         }
 
         /// <summary>

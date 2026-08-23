@@ -517,8 +517,14 @@ namespace DeNelle.Village
                 // its visual child with it). The AoE blast VFX (pooled Impact_ExplosionAether) +
                 // damage/slow land in ApplyBlast, so the shot reads as a cast spell. Stop the
                 // following bolt trail as the shot arrives, then ApplyBlast plays the Hovl impact.
+                // WO-VFX #3: the trail finishes instead of popping — and WO-1155 binds that
+                // StopSoft as the mover's RELEASE (fired by arrival OR teardown), so a bolt
+                // destroyed in flight cannot strand the loop slot. travelKey is HELD today, so
+                // boltFx is null and this costs nothing; it is wired now so the hook lights up
+                // leak-free the moment the owner tags a key.
                 bolt.AddComponent<ProjectileMover>().Launch(impact + Vector3.up * 0.5f, 26f, 0.35f,
-                    () => { boltFx?.StopSoft(); ApplyBlast(primary, impact); });   // WO-VFX #3: trail finishes, no pop
+                    () => ApplyBlast(primary, impact),
+                    () => boltFx?.StopSoft());
             });
 
             if (bolt == null)

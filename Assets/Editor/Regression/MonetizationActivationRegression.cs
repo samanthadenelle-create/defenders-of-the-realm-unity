@@ -68,8 +68,17 @@ namespace DeNelle.Editor.Regression
                     "signed receipt is derived only after transport, leaving a double-charge window", failures);
                 Forbid(solana, "var confirmed = await ConfirmTransaction",
                     "submitted signature is delayed behind client confirmation before durable pending storage", failures);
-                Require(store, "PurchaseEntitlementVerifier.Remember(pack, result, _wallet)",
+                // WO-1158 widened the call to carry the SERVER-ISSUED quote id
+                // (`Remember(pack, result, _wallet, quote.QuoteId)`), so the assertion stops at the
+                // arguments this guard is actually about. The invariant is UNCHANGED: the submitted
+                // signature is persisted before any entitlement handling. Pinning the closing paren
+                // pinned the argument LIST, which is not the rule and broke the moment the receipt
+                // gained a field.
+                Require(store, "PurchaseEntitlementVerifier.Remember(pack, result, _wallet",
                     "submitted signature is not persisted before entitlement handling", failures);
+                Require(store, "PurchaseEntitlementVerifier.Remember(pack, result, _wallet, quote.QuoteId)",
+                    "the persisted receipt omits the server-issued quote id, so a retry would verify " +
+                    "a settled transfer against a price nobody agreed to", failures);
                 RequireOrder(store, "if (!string.IsNullOrEmpty(result.TxSignature))", "if (result.Ok)",
                     "ambiguous signed receipt is persisted only on the success branch", failures);
                 Forbid(solana, "var wallet = Web3.Wallet", "payment revived the dead/implicit Web3 wallet path", failures);

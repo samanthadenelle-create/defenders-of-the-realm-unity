@@ -1,0 +1,339 @@
+'use strict';
+
+// =============================================================================
+// WO-1158 — the server quotes the price. These cases are the proof.
+// -----------------------------------------------------------------------------
+// Every refusal below exists because the alternative is a PAID-BUT-NOT-GRANTED
+// purchase: /verify runs AFTER the transfer settles, so anything it refuses, it
+// refuses with the money already gone. That is why "the oracle is down" has a
+// test at all — inventing a price is not a lesser evil than refusing to sell.
+// =============================================================================
+
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+
+const catalog = require('../api/_lib/purchase-catalog');
+const { _test: verifyTest } = require('../api/purchases/verify');
+
+const wallet = 'Wallet111111111111111111111111111111111111';
+const other = 'Attacker1111111111111111111111111111111111';
+const recipient = 'Treasury11111111111111111111111111111111';
+const recipientAta = 'TreasuryAta111111111111111111111111111111';
+const devnetMint = '3BwWSAUZmyngXDSZiCawEnP7iLgY5ANNopBDz94AB77N';
+const signature = 'S'.repeat(85);
+
+function withEnv(vars, fn) {
+    const old = { ...process.env };
+    Object.assign(process.env, vars);
+    try { return fn(); }
+    finally {
+        for (const key of Object.keys(process.env)) if (!(key in old)) delete process.env[key];
+        Object.assign(process.env, old);
+    }
+}
+
+const DEVNET_ENV = {
+    SOLANA_DEVNET_PURCHASE_RECIPIENT: recipient,
+    SOLANA_DEVNET_PURCHASE_RECIPIENT_ATA: recipientAta,
+    SOLANA_DEVNET_SKR_MINT: devnetMint,
+};
+
+/** A persisted purchase_quotes row, as verify.js reads it back. */
+function quoteRow(over = {}) {
+    return Object.assign({
+        quote_ref: 'a'.repeat(32),
+        wallet, sku: 'impulse-wood-medium', network: 'devnet', currency: 'SKR',
+        amount_base_units: '396000000000', decimals: 9,
+        mint: devnetMint, recipient, recipient_ata: recipientAta,
+        usd_anchor: '2.9900', usd_rate: '0.007559540000', rate_source: catalog.RATE_SOURCE,
+        expires_at: new Date(Date.now() + 300_000).toISOString(),
+        consumed_at: null, consumed_tx: null,
+    }, over);
+}
+
+function transaction({ amount = '396000000000', decimals = 9, blockTime = Math.floor(Date.now() / 1000) } = {}) {
+    return {
+        slot: 42, blockTime,
+        meta: { err: null },
+        transaction: { message: {
+            accountKeys: [{ pubkey: wallet, signer: true, writable: true }],
+            instructions: [{ program: 'spl-token', parsed: { type: 'transferChecked', info: {
+                authority: wallet, destination: recipientAta, mint: devnetMint,
+                source: 'SourceAta111111111111111111111111111111111',
+                tokenAmount: { amount, decimals, uiAmount: 396, uiAmountString: '396' },
+            } } }],
+        } },
+    };
+}
+
+async function readChain(result, contract) {
+    const previous = global.fetch;
+    global.fetch = async () => ({ ok: true, json: async () => ({ jsonrpc: '2.0', result }) });
+    try { return await verifyTest.readFinalizedTransfer('https://rpc.invalid', signature, wallet, contract); }
+    finally { global.fetch = previous; }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  The USD ladder is the ONE authored number, and it must mirror the client
+// ─────────────────────────────────────────────────────────────────────────────
+test('server USD anchors mirror the canonical client packs.json exactly', () => {
+    const streamPath = path.join(__dirname, '..', 'Assets', 'StreamingAssets', 'Data', 'Canonical', 'packs.json');
+    const packs = JSON.parse(fs.readFileSync(streamPath, 'utf8')).packs;
+    const clientSkus = packs.map(p => p.sku).sort();
+    const serverSkus = Object.keys(catalog.USD_ANCHORS).sort();
+    assert.deepEqual(serverSkus, clientSkus, 'the server ladder and packs.json list different SKUs');
+    for (const pack of packs)
+        assert.equal(catalog.USD_ANCHORS[pack.sku], pack.pricing.usd,
+            `${pack.sku}: server USD anchor differs from the client's`);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  The rounding rule — a PRICING DECISION, pinned so a change is deliberate
+// ─────────────────────────────────────────────────────────────────────────────
+test('the rounding rule is ceil-to-whole-SKR and it favours us, exactly as before', () => {
+    // $2.99 at $0.00755954/SKR is 395.53 SKR exactly. The rule charges 396.
+    const q = catalog.quoteAmount(2.99, 0.00755954, 9);
+    assert.equal(q.skr, 396);
+    assert.equal(q.amountBaseUnits, '396000000000');
+    assert.ok(q.skr >= 2.99 / 0.00755954, 'the rule must never charge LESS than spot');
+    assert.ok(q.skr - 2.99 / 0.00755954 < 1, 'and never more than one whole SKR above it');
+    // Exactly-divisible prices are not rounded up a whole token for nothing.
+    assert.equal(catalog.quoteAmount(1, 0.5, 6).skr, 2);
+});
+
+test('base units are integer math, never a float multiply', () => {
+    // 0.1 * 1e9 in float is 100000000.00000001 — BigInt is why this is exact.
+    assert.equal(catalog.quoteAmount(1.99, 0.01, 9).amountBaseUnits, '199000000000');
+    assert.equal(catalog.quoteAmount(49.99, 0.00001, 6).amountBaseUnits, '4999000000000');
+});
+
+test('a nonsense rate or price yields NO quote, never a zero-priced one', () => {
+    for (const bad of [0, -1, NaN, Infinity, null, undefined, '3'])
+        assert.equal(catalog.quoteAmount(2.99, bad, 9), null, `rate ${bad} must not price a pack`);
+    for (const bad of [0, -1, NaN, null])
+        assert.equal(catalog.quoteAmount(bad, 0.01, 9), null, `usd ${bad} must not price a pack`);
+    assert.equal(catalog.quoteAmount(2.99, 0.01, 99), null, 'absurd decimals must not price a pack');
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Decimals come from the mint, per network — never from a sibling network
+// ─────────────────────────────────────────────────────────────────────────────
+test('SKR decimals are 9 on our devnet test mint and 6 on mainnet', () => {
+    assert.deepEqual(catalog.SKR_DECIMALS_BY_NETWORK, { 'devnet': 9, 'mainnet-beta': 6 });
+    withEnv(DEVNET_ENV, () => {
+        assert.equal(catalog.purchaseRail('devnet').decimals, 9);
+        assert.equal(catalog.purchaseRail('devnet').mint, devnetMint);
+    });
+    withEnv({ MAINNET_CANARY_ENABLED: 'true',
+              SOLANA_MAINNET_PURCHASE_RECIPIENT: recipient,
+              SOLANA_MAINNET_PURCHASE_RECIPIENT_ATA: recipientAta }, () => {
+        assert.equal(catalog.purchaseRail('mainnet-beta').decimals, 6);
+        assert.equal(catalog.purchaseRail('mainnet-beta').mint, catalog.MAINNET_SKR_MINT);
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  The canaries are a protocol constant and stay OUT of the quote path
+// ─────────────────────────────────────────────────────────────────────────────
+test('the two canary SKUs keep their fixed amounts and are never quoted', () => {
+    assert.equal(catalog.isPinnedSku('devnet', catalog.DEVNET_CANARY_SKU), true);
+    assert.equal(catalog.isPinnedSku('mainnet-beta', catalog.MAINNET_CANARY_SKU), true);
+    assert.equal(catalog.DEVNET_PACKS['hearth-spark'].amountBaseUnits, 25_000_000_000);
+    assert.equal(catalog.DEVNET_PACKS['hearth-spark'].decimals, 9);
+    assert.equal(catalog.MAINNET_PACKS['mainnet-wood-canary'].amountBaseUnits, 1_000_000);
+    assert.equal(catalog.MAINNET_PACKS['mainnet-wood-canary'].decimals, 6);
+    assert.ok(!catalog.quotableSkus('devnet').includes('hearth-spark'),
+        'the devnet canary must never be repriced from a market rate');
+    assert.ok(catalog.quotableSkus('devnet').includes('impulse-wood-medium'));
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  QUOTE ISSUED
+// ─────────────────────────────────────────────────────────────────────────────
+test('a quote is issued with the exact amount, the rate and the rate source', () => {
+    withEnv(DEVNET_ENV, () => {
+        const built = catalog.buildQuoteBody('devnet', 'impulse-wood-medium',
+            { usdPerSkr: 0.00755954, source: catalog.RATE_SOURCE });
+        assert.deepEqual(built, {
+            sku: 'impulse-wood-medium', network: 'devnet', currency: 'SKR',
+            amountBaseUnits: '396000000000', skrAmount: 396, decimals: 9,
+            mint: devnetMint, recipient, recipientAta,
+            usdAnchor: 2.99, rate: 0.00755954, rateSource: catalog.RATE_SOURCE,
+        });
+    });
+});
+
+test('an unsold SKU is not quotable at any rate', () => {
+    withEnv(DEVNET_ENV, () => {
+        assert.equal(catalog.usdAnchor('free-money'), null);
+        assert.equal(catalog.buildQuoteBody('devnet', 'free-money',
+            { usdPerSkr: 0.01, source: 'x' }), null);
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  ORACLE DOWN — refuse, never invent
+// ─────────────────────────────────────────────────────────────────────────────
+async function rateWith(fetchImpl) {
+    const previous = global.fetch;
+    catalog._resetRateCache();
+    global.fetch = fetchImpl;
+    try { return await catalog.fetchSkrUsdRate(); }
+    finally { global.fetch = previous; catalog._resetRateCache(); }
+}
+
+test('the oracle fails CLOSED: unreachable, non-200, empty and junk all yield no rate', async () => {
+    assert.equal(await rateWith(async () => { throw new Error('ENOTFOUND'); }), null);
+    assert.equal(await rateWith(async () => ({ ok: false, json: async () => [] })), null);
+    assert.equal(await rateWith(async () => ({ ok: true, json: async () => [] })), null);
+    assert.equal(await rateWith(async () => ({ ok: true, json: async () => [{ low_24h: 0 }] })), null);
+    assert.equal(await rateWith(async () => ({ ok: true, json: async () => [{ low_24h: -3 }] })), null);
+    assert.equal(await rateWith(async () => ({ ok: true, json: async () => ({ nope: true }) })), null);
+});
+
+test('no rate means NO quote — never a stale or catalog price', () => {
+    withEnv(DEVNET_ENV, () => {
+        assert.equal(catalog.buildQuoteBody('devnet', 'impulse-wood-medium', null), null);
+        assert.equal(catalog.buildQuoteBody('devnet', 'impulse-wood-medium',
+            { usdPerSkr: 0, source: 'x' }), null);
+    });
+});
+
+test('the rate is cached server-side, not fetched per request', async () => {
+    const previous = global.fetch;
+    catalog._resetRateCache();
+    let calls = 0;
+    global.fetch = async () => { calls += 1; return { ok: true, json: async () => [{ low_24h: 0.0075 }] }; };
+    try {
+        const a = await catalog.fetchSkrUsdRate();
+        const b = await catalog.fetchSkrUsdRate();
+        assert.equal(a.usdPerSkr, 0.0075);
+        assert.equal(b.usdPerSkr, 0.0075);
+        assert.equal(a.source, catalog.RATE_SOURCE, 'which source backed the quote must be recorded');
+        assert.equal(calls, 1, 'a second quote in the cache window must not hit the market again');
+    } finally { global.fetch = previous; catalog._resetRateCache(); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  QUOTE REUSED — single-use, or one good rate is replayed forever
+// ─────────────────────────────────────────────────────────────────────────────
+test('a quote already spent on another payment is REFUSED', () => {
+    const row = quoteRow({ consumed_tx: 'D'.repeat(85), consumed_at: new Date().toISOString() });
+    assert.deepEqual(verifyTest.evaluateQuoteRow(row, wallet, 'impulse-wood-medium', 'devnet', signature),
+        { ok: false, code: 'quote_already_used' });
+});
+
+test('the SAME signature re-verifying its OWN quote is an idempotent retry, not a reuse', () => {
+    const row = quoteRow({ consumed_tx: signature, consumed_at: new Date().toISOString() });
+    assert.deepEqual(verifyTest.evaluateQuoteRow(row, wallet, 'impulse-wood-medium', 'devnet', signature),
+        { ok: true });
+});
+
+test('a quote belonging to another wallet, SKU or network is REFUSED', () => {
+    const row = quoteRow();
+    for (const [w, s, n] of [[other, 'impulse-wood-medium', 'devnet'],
+                             [wallet, 'founders-vow', 'devnet'],
+                             [wallet, 'impulse-wood-medium', 'mainnet-beta']])
+        assert.deepEqual(verifyTest.evaluateQuoteRow(row, w, s, n, signature),
+            { ok: false, code: 'quote_not_yours' });
+});
+
+test('an unknown or unusable quote is REFUSED, never treated as a zero price', () => {
+    assert.deepEqual(verifyTest.evaluateQuoteRow(null, wallet, 'impulse-wood-medium', 'devnet', signature),
+        { ok: false, code: 'quote_unknown' });
+    assert.deepEqual(verifyTest.evaluateQuoteRow(quoteRow({ amount_base_units: '0' }),
+        wallet, 'impulse-wood-medium', 'devnet', signature), { ok: false, code: 'quote_unknown' });
+});
+
+test('a real pack cannot be verified without a well-formed quote id', () => {
+    for (const bad of ['', 'not-a-quote', 'A'.repeat(32), 'a'.repeat(31)])
+        assert.equal(verifyTest.QUOTE_REF_RE.test(bad), false, `${bad} must not pass as a quote id`);
+    assert.equal(verifyTest.QUOTE_REF_RE.test('a'.repeat(32)), true);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  QUOTE EXPIRED
+// ─────────────────────────────────────────────────────────────────────────────
+test('a quote paid AFTER it expired (beyond the settlement grace) is REFUSED', () => {
+    const expiresAt = Date.now();
+    const row = quoteRow({ expires_at: new Date(expiresAt).toISOString() });
+    const late = expiresAt + (catalog.QUOTE_SETTLEMENT_GRACE_SECONDS + 60) * 1000;
+    assert.deepEqual(verifyTest.evaluatePaidQuote(row, late, Date.now()),
+        { ok: false, code: 'quote_expired' });
+});
+
+test('a quote paid in time still verifies even when /verify runs long afterwards', () => {
+    // The player paid one second before expiry; the chain took an hour to
+    // finalize and we are only looking now. blockTime is the honest clock.
+    const expiresAt = Date.now() - 3_600_000;
+    const row = quoteRow({ expires_at: new Date(expiresAt).toISOString() });
+    assert.deepEqual(verifyTest.evaluatePaidQuote(row, expiresAt - 1000, Date.now()), { ok: true });
+});
+
+test('slow wallet approval inside the settlement grace is not punished', () => {
+    const expiresAt = Date.now();
+    const row = quoteRow({ expires_at: new Date(expiresAt).toISOString() });
+    const justLate = expiresAt + (catalog.QUOTE_SETTLEMENT_GRACE_SECONDS - 5) * 1000;
+    assert.deepEqual(verifyTest.evaluatePaidQuote(row, justLate, Date.now()), { ok: true });
+});
+
+test('quotes expire at all — an unexpiring quote is a free option on a volatile asset', () => {
+    assert.ok(catalog.QUOTE_TTL_SECONDS >= 120 && catalog.QUOTE_TTL_SECONDS <= 300,
+        'the ruled window is 2-5 minutes');
+    assert.equal(catalog.quoteOfferable(Date.now() - 1, Date.now()), false);
+    assert.equal(catalog.quoteOfferable(Date.now() + 10_000, Date.now()), true);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  AMOUNT TAMPERED
+// ─────────────────────────────────────────────────────────────────────────────
+test('the verified contract is built from the QUOTE ROW, so the body cannot carry a price', () => {
+    const contract = catalog.contractFromQuoteRow(quoteRow());
+    assert.deepEqual(contract, {
+        network: 'devnet', sku: 'impulse-wood-medium', currency: 'SKR',
+        amountBaseUnits: '396000000000', decimals: 9,
+        mint: devnetMint, recipient, recipientAta,
+    });
+    // There is deliberately no amount/rate/decimals input to this function other
+    // than the persisted row: a client has nowhere to put a number of its own.
+    assert.equal(catalog.contractFromQuoteRow.length, 1);
+});
+
+test('transferring a DIFFERENT amount than quoted is REFUSED', async () => {
+    const contract = catalog.contractFromQuoteRow(quoteRow());
+    assert.equal((await readChain(transaction(), contract)).state, 'verified');
+    // One base unit short, and a whole token short: both are a mismatch.
+    assert.equal((await readChain(transaction({ amount: '395999999999' }), contract)).reason,
+        'transfer_contract_mismatch');
+    assert.equal((await readChain(transaction({ amount: '395000000000' }), contract)).reason,
+        'transfer_contract_mismatch');
+    // Overpaying is ALSO a mismatch: it is not the contract we issued.
+    assert.equal((await readChain(transaction({ amount: '400000000000' }), contract)).reason,
+        'transfer_contract_mismatch');
+    // The 6-vs-9 door: right digits, wrong scale.
+    assert.equal((await readChain(transaction({ decimals: 6 }), contract)).reason,
+        'transfer_contract_mismatch');
+});
+
+test('blockTime is captured so expiry can be judged at the moment of payment', async () => {
+    const contract = catalog.contractFromQuoteRow(quoteRow());
+    const chain = await readChain(transaction({ blockTime: 1_800_000_000 }), contract);
+    assert.equal(chain.state, 'verified');
+    assert.equal(chain.blockTimeMs, 1_800_000_000_000);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Every refusal is WORDED
+// ─────────────────────────────────────────────────────────────────────────────
+test('every quote refusal carries a player-readable reason', () => {
+    for (const code of ['quote_required', 'quote_unknown', 'quote_not_yours',
+                        'quote_already_used', 'quote_expired']) {
+        const message = verifyTest.QUOTE_MESSAGES[code];
+        assert.equal(typeof message, 'string', `${code} has no worded reason`);
+        assert.ok(message.length > 30, `${code}'s reason is too terse to help anyone`);
+    }
+    assert.match(verifyTest.QUOTE_MESSAGES.quote_expired, /do not pay again/i,
+        'a refusal after the money moved must say so');
+});

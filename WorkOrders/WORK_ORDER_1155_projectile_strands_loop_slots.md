@@ -1,4 +1,4 @@
-**Status:** READY TO IMPLEMENT — but DOWNGRADED. The dump was taken 2026-08-23 and it DISPROVED this ticket's original premise. Read §0 before anything else.
+**Status:** FIXED 2026-08-23 — release path built, but ⚠ **UNVERIFIED AT RUNTIME** and the severity was wrong TWICE. Read §0 and §0b before acting on either.
 
 # WORK ORDER 1155 — A projectile torn down in flight strands its VFX loop slot forever
 
@@ -6,6 +6,54 @@
 **Lane:** VFX / lifecycle. **Class:** A LEAK WITH NO RELEASE PATH.
 **Found by:** the WO-1057 lane, 2026-08-23, while verifying the loop registry.
 **Parent:** WO-1057 (the registry that makes this visible). §7 of that ticket anticipated this split.
+
+## ⛔ 0b. SECOND CORRECTION, SAME DAY — §0 IS WRONG FOR THE LOOPS THIS TICKET IS ABOUT
+
+§0 (below) says the stranded slot "comes back on the next frame" via the per-frame sweep. **That is
+true for one population of loops and FALSE for these.** Verified at source, as branch reachability
+rather than inference:
+
+- The travel FX is **never parented to the projectile** — it FOLLOWS it.
+  `RangedAttackVFX.PlayHovlTravel` calls `VFXManager.PlayKey(key, origin, look, `**`null`**`, tint,
+  0f, 0f, mover.transform)` (`RangedAttackVFX.cs:252`): the parent argument is null; the mover is
+  only the follow target. Same shape at `DefenseTower.cs:975`.
+- The host is a **pooled** Hovl instance under the DDOL pool root, detached with `SetParent(null)`.
+  **It is never `Destroy`d.**
+- `PruneDestroyedFromRegistry` removes **only** entries where `kv.Key == null`
+  (`VFXManager.cs:1211-1223`). A live pooled host never satisfies that.
+- The only other removal is `_hovlLoopObjects.Remove(go)` inside `ReturnHovlToPool`
+  (`VFXManager.Hovl.cs:636`) — reachable **only via `Stop()`**.
+
+**So a projectile torn down in flight stranded its slot FOR THE SESSION.** The original ticket's
+"unreclaimable" was right; my §0 "correction" of it was wrong.
+
+**And the device line I corrected it WITH was measuring a different population.**
+`"reclaimed 4 loop slot(s) whose host was destroyed before Stop()"` came from hosts that genuinely
+WERE destroyed. It says nothing about pooled followers, and I read it as though it did.
+
+| loop shape | host destroyed? | reclaimed by the sweep? |
+|---|---|---|
+| parented / destroyed-with-owner | yes | ✅ yes — §0 applies |
+| **pooled follower (these)** | **no** | ⛔ **no — stranded until `Stop()`** |
+
+⚠ **WHY THE INSTRUMENT LOOKED QUIET, which is the part that fooled me:** these records are registered
+with `parent == null`, so they are flagged `Unparented`, and `AuditLoopAges`' orphan branch **can
+never fire for them** (`VFXManager.cs:1305`). They surface only after the 300 s age threshold, and the
+dump never prints `<-- OWNER DESTROYED` for them. **The absence of evidence was a gap in the
+instrument, not evidence of absence** — worth its own follow-up on WO-1057.
+
+**Net:** severity goes back UP. This is player-facing after all — slots accumulate against the cap
+until real effects stop appearing. It is not "tidiness".
+
+⚠ **And the fix is still UNVERIFIED AT RUNTIME.** No WO-1057-format dump exists on disk yet. Take one
+before/after on a gated tree or on device before this closes. Twice now, reasoning about this system
+without a dump has produced a confident wrong answer — do not make it three.
+
+*(Both corrections are left visible, per CLAUDE.md §15. The lesson is not "the ticket changed"; it is
+that I twice supplied a consequence the code did not support, and each time the correction felt like
+diligence. §12 exists for exactly this.)*
+
+---
 
 ## ⛔ 0. CORRECTION 2026-08-23 — THE PREMISE BELOW WAS WRONG, AND THE DUMP IS WHY
 

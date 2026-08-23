@@ -156,6 +156,45 @@ CREATE INDEX IF NOT EXISTS idx_player_data_updated_at
 --   RETURNING nonce;
 -- A zero-row result means missing / already-used / expired / wrong-wallet → 401.
 -- =============================================================================
+-- =============================================================================
+-- 1c. auth_sessions — short-lived wallet bearer tokens (WO-1157).
+-- -----------------------------------------------------------------------------
+-- Endpoint : POST /api/auth/session   (api/auth/session.js — issues, from ONE burned nonce)
+-- Verified : _lib/wallet-auth.verifySession, via the X-Session header
+--
+-- WHY: every authenticated call used to demand a FRESH signature, because the signed
+-- message embeds a single-use nonce AND a hash of the request body. That is excellent
+-- security and a poor purchase: buying one pack prompted the wallet three times —
+-- connect, an auth signature per backend call, and the transfer. The owner, mid-canary:
+-- "i had to verify with wallet 3 times… cant it roll into one transaction like every
+-- other site?" It can: sites cache the SESSION, never the purchase consent.
+--
+-- ⛔ THE TRADEOFF, STATED RATHER THAN HIDDEN. A body-bound signature cannot be replayed
+-- against a different request. A bearer token CAN, until it expires. This is therefore a
+-- deliberate, bounded reduction in security, and the bound IS the justification:
+--   * 15-minute TTL (SESSION_TTL_SECONDS). Do not raise it for convenience.
+--   * bound to ONE wallet; a session for A can never act for B (SESSION_WRONG_WALLET).
+--   * revocable, and pruned on every issue.
+--   * additive — the signature rail is untouched and still authenticates.
+-- Never let this become a permanent login. The window is the whole argument.
+--
+--   token       — random 32-byte base64url bearer credential (PK).
+--   wallet      — the base58 address this session speaks for. NOT a claim the client makes:
+--                 it is copied from the wallet whose signature was verified at issue time.
+--   revoked     — kill switch; a revoked token reports UNKNOWN, not EXPIRED, so a client
+--                 does not sit in a re-signing loop against a credential that is gone.
+--   expires_at  — short TTL. Expiry is a NORMAL state: the client re-signs once and continues.
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS auth_sessions (
+    token      TEXT        PRIMARY KEY,
+    wallet     TEXT        NOT NULL,
+    revoked    BOOLEAN     NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expires_at TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX IF NOT EXISTS auth_sessions_wallet_idx  ON auth_sessions (wallet);
+CREATE INDEX IF NOT EXISTS auth_sessions_expires_idx ON auth_sessions (expires_at);
+
 CREATE TABLE IF NOT EXISTS auth_nonces (
     nonce      TEXT        PRIMARY KEY,             -- random one-time challenge (base64url, 32 bytes)
     wallet     TEXT        NOT NULL,                -- base58 wallet the nonce was issued to
@@ -858,7 +897,17 @@ CREATE TABLE IF NOT EXISTS purchase_entitlements (
     wallet              TEXT NOT NULL,
     sku                 TEXT NOT NULL,
     rail                TEXT NOT NULL CHECK (rail IN ('solana')),
-    network             TEXT NOT NULL CHECK (network IN ('devnet','mainnet')),
+    -- ⚠ 'mainnet-beta' IS THE SPELLING THE CODE SENDS. api/purchases/verify.js takes
+    -- `network` straight off the wire, where it is 'devnet' | 'mainnet-beta' (the
+    -- Solana cluster name; PurchaseEntitlementVerifier.WireNetwork). This CHECK
+    -- used to list 'mainnet' only, so a fresh database built from THIS FILE would
+    -- reject every mainnet insert with the money already moved. Corrected 2026-08-23
+    -- (WO-1158). 'mainnet' is kept for any row an older deployment already wrote.
+    -- MIGRATION on a live table:
+    --   ALTER TABLE purchase_entitlements DROP CONSTRAINT purchase_entitlements_network_check;
+    --   ALTER TABLE purchase_entitlements ADD  CONSTRAINT purchase_entitlements_network_check
+    --       CHECK (network IN ('devnet','mainnet','mainnet-beta'));
+    network             TEXT NOT NULL CHECK (network IN ('devnet','mainnet','mainnet-beta')),
     currency            TEXT NOT NULL CHECK (currency IN ('SOL','USDC','SKR')),
     expected_lamports   BIGINT NOT NULL CHECK (expected_lamports > 0),
     observed_lamports   BIGINT NOT NULL CHECK (observed_lamports > 0),
@@ -868,13 +917,91 @@ CREATE TABLE IF NOT EXISTS purchase_entitlements (
     status              TEXT NOT NULL CHECK (status IN ('verified','fulfilled','manual_review')),
     verified_at         TIMESTAMPTZ NOT NULL,
     fulfilled_at        TIMESTAMPTZ,
+    -- ── WO-1158: WHAT THE PLAYER ACTUALLY BOUGHT, AT WHAT PRICE ──────────────
+    -- Owner requirement, verbatim: "they buy for 3 skr at X price so thats what
+    -- resolves on db". A row that stores only the base-unit amount cannot answer
+    -- "what was this worth?" six months later, and a third-party rate source on
+    -- the money path makes that question inevitable — a disputed charge has to be
+    -- reconstructable from the row alone, never re-derived from today's market.
+    -- All four are NULL on the two CANARY skus, whose amount is a pinned protocol
+    -- constant with no rate behind it (rate_source reads 'server-pinned').
+    quote_ref           TEXT,                        -- the purchase_quotes.quote_ref this settled
+    usd_anchor          NUMERIC(12,4),               -- the authored ladder price, e.g. 2.99
+    usd_rate            NUMERIC(24,12),              -- USD per SKR used to derive the amount
+    rate_source         TEXT,                        -- WHICH oracle, e.g. 'coingecko:seeker:low_24h'
     created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (wallet, tx_signature, sku)
 );
 
+-- MIGRATION for an existing database (idempotent, nullable, safe on a live table):
+--   ALTER TABLE purchase_entitlements ADD COLUMN IF NOT EXISTS quote_ref  TEXT;
+--   ALTER TABLE purchase_entitlements ADD COLUMN IF NOT EXISTS usd_anchor NUMERIC(12,4);
+--   ALTER TABLE purchase_entitlements ADD COLUMN IF NOT EXISTS usd_rate   NUMERIC(24,12);
+--   ALTER TABLE purchase_entitlements ADD COLUMN IF NOT EXISTS rate_source TEXT;
+
 CREATE INDEX IF NOT EXISTS idx_purchase_entitlements_wallet
     ON purchase_entitlements (wallet, created_at DESC);
+
+-- =============================================================================
+-- 16. purchase_quotes — WO-1158. THE SERVER'S OWN PRICE, WRITTEN DOWN.
+-- -----------------------------------------------------------------------------
+-- Issued by POST /api/purchases/quote, spent by POST /api/purchases/verify.
+--
+-- ⛔ WHY A TABLE AND NOT A SIGNED BLOB IN THE CLIENT'S POCKET: a quote must be
+-- SINGLE-USE, and single-use needs somewhere to record that it was used. The
+-- UNIQUE quote_ref plus the conditional UPDATE in verify.js is that record, and
+-- it is the only thing standing between us and one favourable quote being
+-- replayed across many payments.
+--
+-- ⛔ AND IT MUST EXPIRE. An unexpiring quote is a free option on a volatile
+-- asset: a player could sit on a good rate and exercise it after the market
+-- moved. TTL is 5 minutes (purchase-catalog.QUOTE_TTL_SECONDS).
+--
+-- ⚠ EXPIRY IS JUDGED AGAINST THE TRANSACTION'S blockTime, NOT AGAINST WALL CLOCK
+-- AT VERIFY TIME. Wallet approval is a human action with no countdown and chain
+-- finality is not instant, so "now" at verify time would refuse honest players
+-- whose money has already moved. A payment that lands outside the window anyway
+-- is recorded 'manual_review', never discarded.
+--
+-- The two CANARY skus never appear here at all: their amount is a pinned protocol
+-- constant, not a quoted price.
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS purchase_quotes (
+    quote_id            BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    -- The opaque id handed to the client. Random, NOT the serial: an enumerable
+    -- id invites guessing at other players' quotes.
+    quote_ref           TEXT NOT NULL UNIQUE,
+    wallet              TEXT NOT NULL,          -- the PROVEN wallet the quote was issued to
+    sku                 TEXT NOT NULL,
+    network             TEXT NOT NULL CHECK (network IN ('devnet','mainnet-beta')),
+    currency            TEXT NOT NULL CHECK (currency IN ('SKR')),
+    -- ⛔ THE EXACT INTEGER THE CLIENT MUST TRANSFER. Stored as NUMERIC(40,0), not
+    -- BIGINT, because base units at 9 decimals leave far less headroom than they
+    -- look like they do and no price should ever be capped by its column.
+    amount_base_units   NUMERIC(40,0) NOT NULL CHECK (amount_base_units > 0),
+    -- ⛔ READ OFF THE MINT, NEVER OFF A DOC OR A SIBLING NETWORK: devnet test SKR
+    -- is 9, mainnet SKR is 6. Persisted per-quote so a later decimals change can
+    -- never retro-reinterpret an already-issued amount.
+    decimals            SMALLINT NOT NULL CHECK (decimals >= 0 AND decimals <= 18),
+    mint                TEXT NOT NULL,
+    recipient           TEXT NOT NULL,
+    recipient_ata       TEXT NOT NULL,
+    usd_anchor          NUMERIC(12,4) NOT NULL,     -- the authored ladder price (2.99, 4.99, ...)
+    usd_rate            NUMERIC(24,12) NOT NULL,    -- USD per SKR at issue time
+    rate_source         TEXT NOT NULL,              -- WHICH oracle produced usd_rate
+    issued_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expires_at          TIMESTAMPTZ NOT NULL,
+    consumed_at         TIMESTAMPTZ,
+    consumed_tx         TEXT                        -- the signature that spent it
+);
+
+-- The lookup verify.js actually does.
+CREATE INDEX IF NOT EXISTS idx_purchase_quotes_wallet_sku
+    ON purchase_quotes (wallet, sku, issued_at DESC);
+-- Sweeping expired, never-consumed quotes.
+CREATE INDEX IF NOT EXISTS idx_purchase_quotes_expiry
+    ON purchase_quotes (expires_at) WHERE consumed_at IS NULL;
 
 -- =============================================================================
 -- END OF SCHEMA

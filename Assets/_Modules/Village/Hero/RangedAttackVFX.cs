@@ -122,14 +122,18 @@ namespace DeNelle.Village
                 System.Action arrive = suppressOldImpact
                     ? WithLandBurst(targetWorldPos, onArrive)
                     : WithImpactVfx(targetWorldPos, DamageElement.None, WithLandBurst(targetWorldPos, onArrive));
+                System.Action release = null;
                 if (useHovl)
                 {
                     var h = PlayHovlTravel(hovlProjectileKey, origin, targetWorldPos, tint, smover);
-                    var inner = arrive;
                     // WO-VFX #3: soft-stop so the Hovl travel trail finishes instead of popping.
-                    arrive = () => { h?.StopSoft(); inner?.Invoke(); };
+                    // WO-1155: this is the mover's RELEASE, not part of the arrival payload — the
+                    // body is POOLED, so a shot recycled mid-flight would otherwise never stop the
+                    // trail, and its (pooled, never-destroyed) FX host is invisible to
+                    // VFXManager's destroyed-host sweep. Owner releases; the sweep stays a net.
+                    release = () => h?.StopSoft();
                 }
-                smover.Launch(targetWorldPos, _arrowSpeed, _arrowArc, arrive);
+                smover.Launch(targetWorldPos, _arrowSpeed, _arrowArc, arrive, release);
                 return;
             }
 
@@ -173,14 +177,14 @@ namespace DeNelle.Village
                 System.Action arrive = suppressOldImpact
                     ? WithLandBurst(targetWorldPos, onArrive)
                     : WithImpactVfx(targetWorldPos, DamageElement.Aether, WithLandBurst(targetWorldPos, onArrive));
+                System.Action release = null;
                 if (useHovl)
                 {
                     var h = PlayHovlTravel(hovlProjectileKey, origin, targetWorldPos, tint, smover);
-                    var inner = arrive;
-                    // WO-VFX #3: soft-stop so the Hovl travel trail finishes instead of popping.
-                    arrive = () => { h?.StopSoft(); inner?.Invoke(); };
+                    // WO-VFX #3 soft-stop, bound as the mover's RELEASE (WO-1155) — see FireArrow.
+                    release = () => h?.StopSoft();
                 }
-                smover.Launch(targetWorldPos, _orbSpeed, 0f, arrive);
+                smover.Launch(targetWorldPos, _orbSpeed, 0f, arrive, release);
                 return;
             }
 
