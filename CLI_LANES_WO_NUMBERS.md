@@ -129,7 +129,24 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-08-23 (CLI): main line next free = **1160**.
+> ## ⚠ RECONCILED 2026-08-23 (CLI): main line next free = **1162**.
+> *(CLI seat minted **WO-1161** and bumped 1161 -> 1162 in this SAME edit. **1161** = the structure
+> ROLE table - an OPEN, data-authored `role` on every catalog row, resolved through
+> `StructureRoles.By[...]`, so ids stay frozen save keys and adding a building needs NO code.
+> Straightens the crossed cluster from vendors.json (function is the authority): `forge`->"Forge"
+> (sells weapons), `armorer`->"Armorer" (sells armour), `workshop`->"Crafting Station" (not a
+> vendor). Catalog v24 -> v25, both copies. Ruled twice before (WO-707 2026-07-13, the enum
+> 2026-08-17) and never built either time.)*
+>
+> ### superseded: RECONCILED 2026-08-23 (CLI): main line next free = **1161**.
+> *(CLI seat minted **WO-1160** and bumped 1160 -> 1161 in this SAME edit. **1160** = the money
+> path's two NEW endpoints were never deployed to production - `/api/purchases/quote` and
+> `/api/auth/session` both return Vercel `NOT_FOUND` on the domain the game hardcodes, while the
+> older `/api/auth/nonce` and `/api/purchases/verify` answer. Consequence: every store card reads
+> "Price unavailable" (correct fail-closed behaviour) and WO-1157's one-prompt session rail is
+> SILENTLY INERT, falling back to per-call signing. Proven by probe, not inferred.)*
+>
+> ### superseded: RECONCILED 2026-08-23 (CLI): main line next free = **1160**.
 > *(CLI seat minted **WO-1159** and bumped 1159 -> 1160 in this SAME edit. **1159** = GO LIVE —
 > take the four go-live steps FeatureFlags.cs itself prescribes, in order: the unconditional
 > mainnet refusal in SolanaWalletProvider.SendPayment's non-canary branch is replaced by the

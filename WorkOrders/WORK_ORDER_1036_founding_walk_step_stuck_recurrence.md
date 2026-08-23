@@ -4,7 +4,7 @@
 > TRUNCATED capture and is **FALSE**: a watchdog rescues the step (§1b). Left visible rather than
 > silently reworded, because the wrong title is what a skimming seat would have scheduled off.
 
-**Status:** FIXED — AWAITING OWNER FELT-TEST TO CLOSE. Prior status: DONE — audit-verified as shipped (2026-08-21 backlog audit).
+**Status:** CLOSED 2026-08-23 — OWNER FELT-VERIFIED on the go-live Seeker build (owner: *"ftue"* / *"worked"* / *"1036 verified"*). The `founding_walk` beat completed with no dead wait and no silently skipped step; F8 recorded NO_CAPTURE across the run, so the absence of the 245s stall is evidenced, not just unobserved. Prior status: FIXED — AWAITING OWNER FELT-TEST TO CLOSE / DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Minted:** 2026-08-16 (UI seat) — provenance stack bumped 1036 → 1037 in the same edit
 **Lane:** Tutorial V2 / guide gate. ⚠ Interacts with WO-1031's guide despawn — see §4.
 **Priority:** **MEDIUM** (was HIGH — corrected 2026-08-17, see §1b: a watchdog RESCUES the step, so

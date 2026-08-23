@@ -1,6 +1,6 @@
 # WORK ORDER 1037 — Turn "Missing resources" into a pack offer (STUBBED, flag-gated off prod)
 
-**Status:** FIXED — AWAITING OWNER FELT-TEST TO CLOSE. Prior status: DONE — audit-verified as shipped (2026-08-21 backlog audit).
+**Status:** CLOSED 2026-08-23 — OWNER FELT-VERIFIED on the go-live Seeker build (owner: *"1037 see packs"*). The shortfall moment offers packs. ⚠ NOTE for whoever reads this next: this ticket shipped STUBBED and flag-gated; it is now being seen on a build where `RealmStorePurchase` is ON (WO-1159), so the offer surface is live in a way it was not when the ticket was written. The WO-1037 §1 rule it must keep honouring — **smallest sufficient, no upsell at the shortfall moment** — is pinned by `ImpulsePackRegression` case 6, which asserts the resolver refuses an affordable ask rather than returning the LARGE pack. Prior status: FIXED — AWAITING OWNER FELT-TEST TO CLOSE / DONE — audit-verified as shipped (2026-08-21 backlog audit).
 
 > ⚠ THE OLD STATUS LINE WAS STALE BY A DAY. It read *"needs owner ruling on §3 (no pack can currently
 > fulfil this offer)"* — but §3 already carries `⛔ RULED 2026-08-16 — OPTION (b)` with the owner's

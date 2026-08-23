@@ -1,6 +1,6 @@
 # WO-1050 — The Night Market: Realm Pack Store presentation redesign
 
-**Status:** IMPLEMENTED 2026-08-21 - lanes A-E + G shipped; aurora routed through a new ElarionUiKit primitive. Gate-green (COMPILE_GATE_OK; DataRegression 245/247, the 2 failures are ticketed asset gaps WO-1135/1136). Owner felt-verify owed.
+**Status:** CLOSED 2026-08-23 — OWNER FELT-VERIFIED on the go-live Seeker build (owner: *"store loads with packs"*, *"Marketplace verified"*, *"both"*). ⭐ Verified on the FIRST build where the shelf could show real merchandise at all: WO-1159 flipped `RealmStorePurchase` on, so before this the cards read "Coming soon". Prior status: IMPLEMENTED 2026-08-21 - lanes A-E + G shipped; aurora routed through a new ElarionUiKit primitive. Gate-green (COMPILE_GATE_OK; DataRegression 245/247, the 2 failures are ticketed asset gaps WO-1135/1136). Owner felt-verify owed.
 **Minted:** 2026-08-21 (**UI seat** - Claude UI authored The Night Market)
 > **RENUMBERED 1132 -> 1050 on 2026-08-21 (owner instruction).** It was first minted from the CLI
 > MAIN LINE; CLAUDE.md s2 gives the UI seat its own reserved block so the two seats can mint in

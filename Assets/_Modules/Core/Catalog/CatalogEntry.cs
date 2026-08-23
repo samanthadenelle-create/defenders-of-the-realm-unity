@@ -34,6 +34,32 @@ namespace DeNelle.Core.Catalog
         public EntryKind   kind = EntryKind.Cell;
 
         /// <summary>
+        /// WHAT THIS BUILDING IS — an open, data-authored role string (WO-1161).
+        /// Resolve it through <see cref="StructureRoles"/>:
+        /// <c>StructureRoles.By[StructureRole.Armorer].DisplayName</c>.
+        ///
+        /// <para>⛔ THE `id` IS AN OPAQUE SAVE KEY AND THIS FIELD EXISTS SO IT CAN STAY ONE.
+        /// `everBuiltStructureIds`, BaseLayout records, baked scenes, vendors.json and
+        /// dialogues.json all join on `id`, and the game is LIVE on the Solana dApp Store —
+        /// renaming `forge` orphans every existing player's building. The id never moves;
+        /// the ROLE carries the meaning, and the DISPLAY NAME is free to change.</para>
+        ///
+        /// <para>⛔ OPEN VOCABULARY, ON PURPOSE (owner 2026-08-23: "the idea is staying
+        /// fluid" / "if we add a building we do not want to have to manually code it").
+        /// Any string is legal. <see cref="StructureRole"/> only names the few roles CODE
+        /// branches on; a brand-new role resolves with no code change at all.</para>
+        ///
+        /// <para>⛔ FUNCTION IS THE AUTHORITY (owner: "which sells weapons, that is the
+        /// weaponsmith use the JSON data") — assign the role from what the row DOES in
+        /// vendors.json, NEVER from the word currently printed on its tile. Ignoring that
+        /// is how `forge` came to sell weapons while displaying "Armorer".</para>
+        ///
+        /// Absent/empty = unroled, which is exactly how every row behaved before this
+        /// field existed. Nothing regresses by leaving it unset.
+        /// </summary>
+        public string      role;
+
+        /// <summary>
         /// PRESENTATION ONLY (WO-963) — the build palette carousel's authored display order.
         /// LOWER SORTS FIRST; 0 (the default, i.e. the JSON key absent) means UNAUTHORED and
         /// sorts AFTER every authored row, keeping its current relative position — the sort is

@@ -1,6 +1,6 @@
 # WORK ORDER 1030 — Echo task dialogue: the choice list is clipped, and the portrait is a placeholder
 
-**Status:** FIXED — AWAITING OWNER FELT-TEST TO CLOSE. Prior status: IMPLEMENTED 2026-08-16 - pending PO felt-verify (commit `323f3c97f`); see RESULT
+**Status:** CLOSED 2026-08-23 — OWNER FELT-VERIFIED on the go-live Seeker build (owner: *"1030 verified"*). Verified in the live FTUE/Echo flow on the WO-1159 APK; F8 recorded NO_CAPTURE across the run (zero flags, errors or softlocks). Prior status: FIXED — AWAITING OWNER FELT-TEST TO CLOSE / IMPLEMENTED 2026-08-16 - pending PO felt-verify (commit `323f3c97f`); see RESULT
 **Minted:** 2026-08-16 (UI seat) — provenance stack bumped 1030 → 1031 in the same edit
 **Lane:** HUD `DialogueView` presentation + Echo portrait art. Disjoint from every gameplay lane.
 **Provenance:** owner screenshot 2026-08-16 — the "Frost" Echo task prompt in `Main_Castle_Overworld`,
