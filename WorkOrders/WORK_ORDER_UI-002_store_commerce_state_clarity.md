@@ -1,7 +1,7 @@
 # WORK ORDER UI-002 — Store commerce-state clarity and truthful actions
 
 **Series:** UI (intentionally separate from numbered BOARD work)
-**Status:** GUIDANCE + FOUR-LANE SME REVIEW FOLDED 2026-08-22 — READY FOR UI IMPLEMENTATION; four NAMED Core/Wallet dependencies gate parts of it (see the danger-window section)
+**Status:** PARTIAL 2026-08-22 - the card/string work landed with UI-001 (StorePackCard carries state as words not hue; three player-facing strings moved into both canon-strings copies, retiring the hardcoded English at the old PackStore.cs:1331/:1333). ⛔ §4 REMAINS UNSATISFIABLE AS WRITTEN and was deliberately left alone: the BalanceState.Unavailable branch has already DROPPED the bound address and there is no retry control, so "Balance unavailable - retry" would render a button with nothing to tap. That is a commerce decision (PurchaseGate is the sole authority), not a layout one - needs an owner ruling before anyone implements it.
 **Owner lane:** UI / Commerce presentation (security authorities preserved)
 **Date:** 2026-08-22
 **Tracking:** Not tracked on `BOARD.html`. Do not edit or rebuild the board for this document.

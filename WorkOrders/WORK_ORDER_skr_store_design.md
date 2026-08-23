@@ -29,7 +29,7 @@
 # WORK ORDER — SKR Store (Premium Token Economy + Store)
 
 **Type:** DESIGN SPEC (ideas + data schema). **No `.cs` in this WO** — implementation is a follow-up WO.
-**Status:** DRAFT FOR OWNER REVIEW — not yet READY TO IMPLEMENT.
+**Status:** ⛔ RETIRED 2026-08-22 - CONTRADICTS CANON, DO NOT IMPLEMENT. This spec is built on SKR as a balance the game HOLDS, credits, debits, sells in pouches and pays yield from. PackStore.cs forbids exactly that by name: "THE GAME NEVER HOLDS SKR ... There is NO in-game SKR ledger, earn loop or spend loop and there must never be one." SKR is Solana Mobile's GOVERNANCE TOKEN - we never minted it and never hold it; the only real balance is the player's own wallet, read-only. Retire rather than rewrite: its one-sentence shape IS the prohibited thing. Salvageable separately, priced in crystals/real money and folded into the existing packs.json: the tiered cosmetic catalog shape and the recursive grant bag. Its orphan data files (skr_store.json, skr_staking.json) have NO loader and should be deleted so nobody writes one against them.
 **Author lane:** Monetization/Backend (§9 parallel lane — fully isolated).
 **Date:** 2026-06-28
 **Supersedes nothing.** *Layers on top of* the existing `docs/monetization-v2-spec.md` + `Assets/_Modules/Wallet/PackStore.cs` + `packs.json`. Does **not** replace them.

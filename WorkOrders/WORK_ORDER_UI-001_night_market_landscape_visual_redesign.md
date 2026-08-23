@@ -1,7 +1,7 @@
 # WORK ORDER UI-001 — Night Market landscape visual redesign
 
 **Series:** UI (intentionally separate from numbered BOARD work)
-**Status:** REBUILD SPEC v2 RULED 2026-08-22 — **READY FOR CLI REBUILD. Build §R below.** The first delivery’s KEEP list survives; its geometry does not (see DELIVERY REVIEW). WO-1060 oracle lands first so the rebuild is verified by marker, not by another owner device pass.
+**Status:** IMPLEMENTED 2026-08-22 - AWAITING OWNER FELT-VERIFY + CAPTURE. The §R composition pass landed: screen re-authored in reference px on the 2120x978 budget, ONE bottom band, ONE status surface, cards built through StorePackCard. ROOT CAUSE found and fixed - VerticalLayoutGroup.childControlHeight was FALSE, so the layout ignored LayoutElement.preferredHeight entirely and every authored 168/240-unit row resolved to RectTransform's default 100; ClampMinTouch then grew each card back to the 112 floor SYMMETRICALLY ABOUT ITS CENTRE, over its neighbours. One flag behind the card-on-card overlap AND both wrong prices. COMPILE_GATE_OK; NOT yet screenshot-proven - run RunCaptureHeadless and open the three NightMarket PNGs.
 **Owner lane:** UI / Store presentation
 **Date:** 2026-08-22
 **Tracking:** Not tracked on `BOARD.html`. Do not edit or rebuild the board for this document.
