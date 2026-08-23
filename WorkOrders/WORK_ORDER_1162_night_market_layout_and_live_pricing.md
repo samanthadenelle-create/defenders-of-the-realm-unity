@@ -36,7 +36,14 @@ Write the ticket accordingly: this is a **policy change requiring an owner decis
 
 **⚠ CORRECTED — a current capture DOES exist.** Codex reported *"no current Realm Store capture in the workspace"*. One was taken from the owner's device on 2026-08-23 at **2670×1200**, the Seeker's real surface, showing the live three-column Night Market. Use it as the baseline rather than starting from zero. It also independently confirms the "Price unavailable" state above.
 
-**UNVERIFIED — the dead-UXML claim (§1.7).** Codex reports `PackStore.uxml`/`.uss` are dead while the scene builder still references them. Plausible and consistent with CLAUDE.md §8 (*"UXML in builds: does NOT work — always use code-built UI"*), but **the CLI did not finish verifying it** before handoff. **Verify before touching**, and treat a scene-builder reference as load-bearing until proven otherwise.
+**CONFIRMED (sweep completed after handoff) — and Codex UNDERSTATED it.** The pair is real and on disk at `Assets/_Modules/Wallet/UI/PackStore.uxml` + `.uss`, with **four** referencing sites:
+
+- `Assets/Editor/VillageSceneBuilder.cs:223` — a `const string PackStoreUxmlPath` pointing at it. ⚠ That file is the §9 **serialization bottleneck**: only ONE agent/branch touches it at a time.
+- `Assets/_Modules/Wallet/StorePackCard.cs:49` — already names the hazard in a comment: *"the PackStore.uxml/.uss pair still on disk is a **TRAP, not a starting point**"*.
+- `Assets/_Modules/Village/Buildings/MarketplaceInteractor.cs:14` — ⛔ **the dangerous one**: a how-to comment instructing a future developer to *"Add UIDocument to it; assign PackStore.uxml as the Source Asset."* That is live guidance to wire up a path that **does not render in player builds at all** (CLAUDE.md §8). The trap does not merely sit there — it **re-arms itself** by telling the next reader to use it.
+- `Assets/Editor/VillageSceneBuilder.Characters.cs`
+
+So the cleanup is worth doing, and its real deliverable is **deleting the instruction**, not just the files. Sequence it last (§3.5) and keep it off the same branch-moment as any other `VillageSceneBuilder` work.
 
 ---
 
