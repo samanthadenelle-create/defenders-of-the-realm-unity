@@ -254,9 +254,11 @@ namespace DeNelle.Editor.Regression
                     failures.Add("[authored-order] the first Tower row is '" + e.id + "', not " +
                                  "'tower_ground_archer' - the tutorial's defense beat sends the player to the " +
                                  "Defense tab expecting the archer tower to lead it. Either restore the row " +
-                                 "order or author displayOrder on the towers (and MIRROR it in " +
-                                 "CatalogBootstrap.RegisterFallback, which BuildEconomyRegression gate 12 " +
-                                 "deep-compares).");
+                                 "order or author displayOrder on the towers. WO-1137: there is no longer a " +
+                                 "hand-written mirror to keep in step -- CatalogBootstrap.RegisterFallback " +
+                                 "EMBEDS this file verbatim -- but you must re-run " +
+                                 "DeNelle.Editor.CatalogFallbackGenerator.Generate afterwards or " +
+                                 "BuildEconomyRegression gate 12 goes red on staleness.");
                 break;
             }
         }

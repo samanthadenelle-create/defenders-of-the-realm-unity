@@ -3,7 +3,9 @@
 // data spine (structures-catalog.json → CatalogRegistry → StructureFactory /
 // BuildModeController cost boundary → PlacementGrid math → BaseLayout replay →
 // BuildTimerConfig (WO-172/612) → damage-states.json (WO-672 D) → the
-// CatalogBootstrap.RegisterFallback ⇄ catalog parity gate on the JSON-failure path).
+// CatalogBootstrap.RegisterFallback freshness gate on the JSON-failure path — WO-1137
+// turned that path into CODEGEN, so gate 12 stopped proving field parity, which is now
+// true by construction, and started proving the generated copy is not STALE).
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.EditorRegression (editor-only). Style/contract mirrors the
 // other Run(out reason) oracles wired into DataRegression.RunAll:
@@ -127,8 +129,9 @@ namespace DeNelle.Editor
                 CheckTowerSoftcap(entries, created, failures, log);
                 CheckBuildTierDerivation(entries, failures, log);
 
-                // -- 12. FALLBACK/CATALOG PARITY -- the JSON-load-FAILURE path must ship
-                //        the SAME content as the catalog it exists to mirror.
+                // -- 12. FALLBACK FRESHNESS -- the JSON-load-FAILURE path now EMBEDS the catalog
+                //        (WO-1137 codegen), so the only thing left to prove is that the embedded
+                //        copy is not STALE, and that it still registers every row.
                 CheckFallbackParity(entries, failures, log);
             }
             catch (System.Exception ex)
@@ -1368,48 +1371,134 @@ namespace DeNelle.Editor
         }
 
         // =====================================================================
-        //  12. FALLBACK / CATALOG PARITY
+        //  12. FALLBACK FRESHNESS  (was: FALLBACK / CATALOG PARITY)
         //  ---------------------------------------------------------------------
         //  CatalogBootstrap.RegisterFallback is the JSON-load-FAILURE path: when
-        //  structures-catalog.json cannot be read, its hardcoded rows ARE the game's
-        //  content. Nothing asserted that those rows matched the catalog they mirror,
-        //  so they drifted silently and REPEATEDLY:
+        //  structures-catalog.json cannot be READ, its rows ARE the game's content.
+        //
+        //  WHAT THIS GATE USED TO BE, AND WHY IT CHANGED (WO-1137, owner ruling
+        //  2026-08-23). RegisterFallback used to hand-construct THREE of the catalog's
+        //  twenty-eight rows in C# object initializers, and this gate deep-compared every
+        //  public field of those constructed objects against the parsed catalog rows. It
+        //  worked -- it caught real drift, repeatedly:
         //    - placement.footprint 2.5 vs the catalog's 1.75   (fixed 0ac59581)
         //    - visualPrefabPath "PatriciaLight/tower2" -- art from the Defend-the-Tower
         //      module REMOVED 2026-06-09 -- on two of the three rows
-        //    - displayName "Wizard Tower" vs "Ballista", damage 20 vs 30, mustSitOn
-        //      WallWalk vs Ground, and every cost/upgrade/visual-tier field simply absent
-        //  A player who hits the failure path would get a different-looking, differently
-        //  priced, differently placeable town and nobody would know.
+        //    - a missing upgradeTexturePath array, so a fallback-path L3 tower rendered
+        //      untextured
+        //  But it could only ever catch drift AFTER a human authored it, and it was blind
+        //  to the larger defect: three rows out of twenty-eight meant the failure path
+        //  shipped a fundamentally smaller game, silently. A gate cannot fix that.
         //
-        //  METHOD: this is a REAL-OBJECT comparison, not a source-text lint. It invokes
-        //  the private RegisterFallback through reflection against a cleared registry,
-        //  snapshots the CatalogEntry objects it actually constructs, restores the
-        //  registry, then walks EVERY public field of CatalogEntry / RepoProps /
-        //  PlacementRules / OrientationFix (and their arrays + nested structs) by
-        //  reflection against the parsed catalog row. Reflection over the field graph --
-        //  rather than a fixed field list -- means a field added to RepoProps tomorrow is
-        //  covered the day it lands, with no edit here.
+        //  The owner's ruling removed the authoring instead. RegisterFallback now parses
+        //  CatalogFallbackData.Json -- the catalog embedded byte-for-byte as a string
+        //  constant by DeNelle.Editor.CatalogFallbackGenerator -- through the SAME
+        //  ParseAndRegister method the file path uses. Field-level parity is now true BY
+        //  CONSTRUCTION and there is nothing left for a field-compare to disagree about.
         //
-        //  BLIND SPOTS (deliberate, stated):
-        //    - OrientationFix.note is EXCLUDED: it is human annotation, not behaviour.
-        //    - JSON keys with no C# field (the catalog's "_bug22" comment key and its
-        //      stray top-level "canHitAir") are invisible to both sides -- the production
-        //      parse drops them via MissingMemberHandling.Ignore, so parity here matches
-        //      what the game actually loads, which is the property that matters.
-        //    - A fallback row whose id is absent from the catalog is FAILED, not deleted.
+        //  SO THIS GATE BECAME THE ONE THING CODEGEN CAN STILL GET WRONG: FRESHNESS.
+        //  A generated file is only correct until someone edits the source and forgets to
+        //  regenerate. That is the whole remaining failure mode, and it is what this now
+        //  proves, at the same seam, under the same "[fallback-parity]" tag:
+        //    A. the two canonical copies (Resources + StreamingAssets) are byte-identical;
+        //    B. CatalogFallbackData.SourceSha256 equals the SHA-256 of the catalog on disk
+        //       -- i.e. the generated file is NOT STALE;
+        //    C. the embedded string itself still hashes to that same SHA -- i.e. nobody
+        //       hand-edited the generated file (its banner says not to);
+        //    D. the declared row count / schema version match the file; and
+        //    E. RegisterFallback actually REGISTERS every one of those rows, by id, when
+        //       invoked -- so a fallback that compiles but parses to nothing cannot pass.
+        //
+        //  Every failure message names the regeneration command verbatim. A gate whose
+        //  remedy the reader has to go look up is a gate people route around.
         // =====================================================================
-        private static readonly HashSet<string> FallbackParityIgnoredFields =
-            new HashSet<string> { "note" };
+
+        /// <summary>Repo-relative canonical copy the generator reads (CanonicalJson resolves it first).</summary>
+        private const string CanonicalResourcesCopy =
+            "Assets/Resources/Data/Canonical/structures-catalog.json";
+
+        /// <summary>Repo-relative authoring copy. Must stay BYTE-IDENTICAL to the Resources copy.</summary>
+        private const string CanonicalStreamingCopy =
+            "Assets/StreamingAssets/Data/Canonical/structures-catalog.json";
 
         private static void CheckFallbackParity(List<CatalogEntry> entries, List<string> failures, StringBuilder log)
         {
+            string regen = CatalogFallbackData.RegenerateCommand;
+            string repoRoot = System.IO.Path.GetDirectoryName(Application.dataPath);
+
+            string resAbs    = System.IO.Path.Combine(repoRoot, CanonicalResourcesCopy.Replace('/', System.IO.Path.DirectorySeparatorChar));
+            string streamAbs = System.IO.Path.Combine(repoRoot, CanonicalStreamingCopy.Replace('/', System.IO.Path.DirectorySeparatorChar));
+
+            if (!System.IO.File.Exists(resAbs))
+            {
+                failures.Add($"[fallback-parity] {CanonicalResourcesCopy} is MISSING -- the freshness of the " +
+                             "generated fallback cannot be proven, and the runtime read path has nothing to read");
+                return;
+            }
+            if (!System.IO.File.Exists(streamAbs))
+            {
+                failures.Add($"[fallback-parity] {CanonicalStreamingCopy} is MISSING -- the dual-copy invariant " +
+                             "is broken; both canonical copies must exist and be byte-identical");
+                return;
+            }
+
+            byte[] resBytes    = System.IO.File.ReadAllBytes(resAbs);
+            byte[] streamBytes = System.IO.File.ReadAllBytes(streamAbs);
+            string resSha      = Sha256Hex(resBytes);
+            string streamSha   = Sha256Hex(streamBytes);
+
+            // A. dual-copy.
+            if (resSha != streamSha)
+            {
+                failures.Add($"[fallback-parity] the two canonical catalog copies are NOT byte-identical: " +
+                             $"{CanonicalResourcesCopy} sha256={resSha} ({resBytes.Length} bytes) vs " +
+                             $"{CanonicalStreamingCopy} sha256={streamSha} ({streamBytes.Length} bytes). " +
+                             "Reconcile them, then regenerate the fallback: " + regen);
+            }
+
+            // B. STALENESS -- the one thing codegen can still get wrong.
+            if (CatalogFallbackData.SourceSha256 != resSha)
+            {
+                failures.Add($"[fallback-parity] THE GENERATED FALLBACK IS STALE. " +
+                             $"CatalogFallbackData.g.cs was generated from a catalog with " +
+                             $"sha256={CatalogFallbackData.SourceSha256} ({CatalogFallbackData.SourceByteLength} bytes), " +
+                             $"but {CanonicalResourcesCopy} now hashes to {resSha} ({resBytes.Length} bytes). " +
+                             "Until it is regenerated, a runtime failure to READ the catalog would boot the game on " +
+                             "OLD content -- old prices, old models, old footprints -- with nothing on screen saying " +
+                             "so. FIX: run " + regen);
+            }
+
+            // C. the generated file was hand-edited (its banner says DO NOT EDIT).
+            string embedded = CatalogFallbackData.Json;
+            byte[] embeddedBytes = new System.Text.UTF8Encoding(false).GetBytes(embedded);
+            string embeddedSha = Sha256Hex(embeddedBytes);
+            if (embeddedSha != CatalogFallbackData.SourceSha256)
+            {
+                failures.Add($"[fallback-parity] CatalogFallbackData.Json does not hash to its own declared " +
+                             $"SourceSha256 (embedded={embeddedSha} {embeddedBytes.Length} bytes vs declared=" +
+                             $"{CatalogFallbackData.SourceSha256} {CatalogFallbackData.SourceByteLength} bytes) -- " +
+                             "the GENERATED file has been hand-edited, which is exactly what its DO-NOT-EDIT banner " +
+                             "forbids. Edit " + CanonicalResourcesCopy + " instead, then run " + regen);
+            }
+
+            // D. declared shape.
+            if (CatalogFallbackData.SourceRowCount != entries.Count)
+            {
+                failures.Add($"[fallback-parity] CatalogFallbackData declares {CatalogFallbackData.SourceRowCount} " +
+                             $"row(s) but the catalog on disk parses to {entries.Count} -- the generated fallback " +
+                             "does not describe the current catalog. FIX: run " + regen);
+            }
+
+            // E. it actually WORKS. A fallback that compiles but parses to nothing is the
+            //    failure this whole path exists to prevent, so prove it end to end against a
+            //    cleared registry, exactly as the runtime would.
             var method = typeof(CatalogBootstrap).GetMethod(
                 "RegisterFallback", BindingFlags.NonPublic | BindingFlags.Static);
             if (method == null)
             {
-                failures.Add("[fallback-parity] CatalogBootstrap.RegisterFallback is not reflectable (renamed/removed) -- " +
-                             "the JSON-failure path is UNGUARDED and free to drift from the catalog again");
+                failures.Add("[fallback-parity] CatalogBootstrap.RegisterFallback is not reflectable " +
+                             "(renamed/removed) -- the JSON-failure path is UNPROVEN");
+                LogFallbackVerdict(failures, log, 0, entries.Count);
                 return;
             }
 
@@ -1417,10 +1506,13 @@ namespace DeNelle.Editor
             // suites read it, so this gate must leave it byte-for-byte as it found it.
             var snapshot = new List<CatalogEntry>(CatalogRegistry.All());
             List<CatalogEntry> fallbackRows = null;
+            int declaredRows = 0;
             try
             {
                 CatalogRegistry.Clear();
-                method.Invoke(null, null);
+                object[] args = new object[] { 0 };
+                method.Invoke(null, args);
+                declaredRows = (int)args[0];
                 fallbackRows = new List<CatalogEntry>(CatalogRegistry.All());
             }
             catch (System.Exception ex)
@@ -1434,19 +1526,34 @@ namespace DeNelle.Editor
                 foreach (var e in snapshot) CatalogRegistry.Register(e);
             }
 
-            if (fallbackRows == null) return;
-            if (fallbackRows.Count == 0)
+            if (fallbackRows == null)
             {
-                failures.Add("[fallback-parity] RegisterFallback registered ZERO entries -- " +
-                             "a JSON load failure would leave the build palette EMPTY");
+                LogFallbackVerdict(failures, log, 0, entries.Count);
                 return;
             }
 
-            var byId = new Dictionary<string, CatalogEntry>();
-            foreach (var e in entries)
-                if (e != null && !string.IsNullOrEmpty(e.id)) byId[e.id] = e;
+            if (fallbackRows.Count == 0)
+            {
+                failures.Add("[fallback-parity] RegisterFallback registered ZERO entries -- " +
+                             "a JSON read failure would leave the build palette EMPTY. FIX: run " + regen);
+                LogFallbackVerdict(failures, log, 0, entries.Count);
+                return;
+            }
 
-            int before = failures.Count;
+            if (declaredRows != fallbackRows.Count)
+            {
+                failures.Add($"[fallback-parity] the embedded copy holds {declaredRows} row(s) but only " +
+                             $"{fallbackRows.Count} registered -- row(s) were DROPPED while parsing the " +
+                             "EMBEDDED catalog. See the [Flow:Catalog] 'dropped row' lines.");
+            }
+
+            // Id-for-id, both directions. The values cannot differ (same bytes, same parser),
+            // so the ids are the whole remaining surface.
+            var catalogIds  = new HashSet<string>();
+            foreach (var e in entries)
+                if (e != null && !string.IsNullOrEmpty(e.id)) catalogIds.Add(e.id);
+
+            var fallbackIds = new HashSet<string>();
             foreach (var fb in fallbackRows)
             {
                 if (fb == null || string.IsNullOrEmpty(fb.id))
@@ -1454,85 +1561,48 @@ namespace DeNelle.Editor
                     failures.Add("[fallback-parity] RegisterFallback registered a null / id-less entry");
                     continue;
                 }
-                if (!byId.TryGetValue(fb.id, out var cat))
-                {
-                    failures.Add($"[fallback-parity] fallback row '{fb.id}' has NO counterpart in structures-catalog.json -- " +
-                                 "the failure path would offer a structure the loaded game does not have");
-                    continue;
-                }
-                CompareFallbackValue(fb.id, "", fb, cat, failures, 0);
+                fallbackIds.Add(fb.id);
             }
 
-            int drift = failures.Count - before;
-            if (drift == 0)
-                log.AppendLine($"  [fallback-parity] all {fallbackRows.Count} RegisterFallback row(s) field-equal to their " +
-                               "structures-catalog.json counterparts OK");
-            else
-                log.AppendLine($"  [fallback-parity] {drift} field divergence(s) across {fallbackRows.Count} fallback row(s)");
+            foreach (var id in catalogIds)
+                if (!fallbackIds.Contains(id))
+                    failures.Add($"[fallback-parity] catalog row '{id}' is ABSENT from the embedded fallback -- " +
+                                 "the failure path would offer a SMALLER game than the loaded one. FIX: run " + regen);
+
+            foreach (var id in fallbackIds)
+                if (!catalogIds.Contains(id))
+                    failures.Add($"[fallback-parity] embedded fallback row '{id}' has NO counterpart in the catalog -- " +
+                                 "the failure path would offer a structure the loaded game does not have. FIX: run " + regen);
+
+            LogFallbackVerdict(failures, log, fallbackRows.Count, entries.Count);
         }
 
-        /// <summary>
-        /// Reflective deep field-compare of a fallback value against its catalog value.
-        /// Reports id + dotted field path + BOTH values on every divergence.
-        /// </summary>
-        private static void CompareFallbackValue(string id, string path, object fb, object cat,
-                                                 List<string> failures, int depth)
+        private static void LogFallbackVerdict(List<string> failures, StringBuilder log, int fallbackRows, int catalogRows)
         {
-            if (depth > 6) return;   // the CatalogEntry graph is 4 deep; the cap is a cycle guard
+            bool clean = true;
+            foreach (var f in failures)
+                if (f.StartsWith("[fallback-parity]")) { clean = false; break; }
 
-            if (fb == null && cat == null) return;
-            if (fb == null || cat == null)
-            {
-                failures.Add($"[fallback-parity] '{id}' {path}: fallback {FmtParity(fb)} vs catalog {FmtParity(cat)}");
-                return;
-            }
-
-            var t = fb.GetType();
-            if (t != cat.GetType())
-            {
-                failures.Add($"[fallback-parity] '{id}' {path}: type mismatch ({t.Name} vs {cat.GetType().Name})");
-                return;
-            }
-
-            if (t == typeof(float) || t == typeof(double))
-            {
-                double a = System.Convert.ToDouble(fb), b = System.Convert.ToDouble(cat);
-                if (System.Math.Abs(a - b) > 0.0001)
-                    failures.Add($"[fallback-parity] '{id}' {path}: fallback {a} vs catalog {b}");
-                return;
-            }
-
-            if (t.IsPrimitive || t.IsEnum || t == typeof(string))
-            {
-                if (!fb.Equals(cat))
-                    failures.Add($"[fallback-parity] '{id}' {path}: fallback {FmtParity(fb)} vs catalog {FmtParity(cat)}");
-                return;
-            }
-
-            if (t.IsArray)
-            {
-                var a = (System.Array)fb;
-                var b = (System.Array)cat;
-                if (a.Length != b.Length)
-                {
-                    failures.Add($"[fallback-parity] '{id}' {path}: fallback has {a.Length} element(s), catalog has {b.Length}");
-                    return;
-                }
-                for (int i = 0; i < a.Length; i++)
-                    CompareFallbackValue(id, $"{path}[{i}]", a.GetValue(i), b.GetValue(i), failures, depth + 1);
-                return;
-            }
-
-            foreach (var f in t.GetFields(BindingFlags.Public | BindingFlags.Instance))
-            {
-                if (FallbackParityIgnoredFields.Contains(f.Name)) continue;
-                string child = path.Length == 0 ? f.Name : path + "." + f.Name;
-                CompareFallbackValue(id, child, f.GetValue(fb), f.GetValue(cat), failures, depth + 1);
-            }
+            if (clean)
+                log.AppendLine($"  [fallback-parity] embedded fallback is FRESH: {fallbackRows} of {catalogRows} " +
+                               $"catalog row(s) register from CatalogFallbackData " +
+                               $"(sha256={CatalogFallbackData.SourceSha256}, v{CatalogFallbackData.SourceVersion}), " +
+                               "and both canonical copies are byte-identical OK");
+            else
+                log.AppendLine($"  [fallback-parity] FRESHNESS FAILED -- see failures; regenerate with: " +
+                               CatalogFallbackData.RegenerateCommand);
         }
 
-        private static string FmtParity(object v) =>
-            v == null ? "<null>" : (v is string s ? $"\"{s}\"" : v.ToString());
+        private static string Sha256Hex(byte[] bytes)
+        {
+            using (var sha = System.Security.Cryptography.SHA256.Create())
+            {
+                var hash = sha.ComputeHash(bytes);
+                var sb = new StringBuilder(hash.Length * 2);
+                foreach (var b in hash) sb.Append(b.ToString("x2"));
+                return sb.ToString();
+            }
+        }
 
         /// <summary>Flat basket total of a cost (all four slots) -- the comparison scalar for the softcap gates.</summary>
         private static int Total(CoreCost c) => c.wood + c.food + c.iron + c.crystals;
@@ -1546,7 +1616,7 @@ namespace DeNelle.Editor
             {
                 reason = "BUILD ECONOMY OK — catalog parse/ids + dual-copy + cost sanity + tier-monotonic upgrades " +
                          "+ tower contract + placement math + 50% sell refund + BaseLayout replay (data + real factory) " +
-                         "+ build-timer curve + damage-states thresholds + fallback/catalog parity all hold";
+                         "+ build-timer curve + damage-states thresholds + embedded-fallback freshness all hold";
                 Debug.Log("BUILDECON_OK\n" + log);
                 return true;
             }
